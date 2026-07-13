@@ -1,7 +1,35 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 13/07/2026 -- Fix bug reportado por Adrian (verbatim): *"vale tenemos otro
+**Ultima sesion:** 13/07/2026 -- Fix bug reportado por Adrian con captura real desde su movil
+(Chrome Android, rol superadmin/"SA"): *"la app sigue sin funcionar en chrome en el movil / no
+carga las empresas / que le pasa a la pantalla que se ve mal?"*, confirmando ademas que borrar
+los datos del sitio en Chrome movil NO arreglaba el problema. **Diagnostico:** la pantalla
+"Selecciona empresa" se muestra solo si la sesion local (`localStorage`) tiene guardado
+`rol: 'superadmin'` -- SIN volver a verificar con el servidor (`index.html` linea ~6618). Esa
+pantalla llama a `/empresas`, y el backend (`getEmpresas`, `worker.js` linea 5843) SI valida el
+token contra la tabla `sesiones` en D1; si el token ya no es valido (caducado/borrado/no
+coincide), responde 403 "Sin permisos". `apiCall`/`apiCallRaw` solo trataban especialmente el
+401 (logout automatico); el 403 caia en un `!res.ok` mudo que dejaba al usuario atascado en la
+pantalla sin ninguna via de recuperacion. Ademas, `sw.js` cacheaba CUALQUIER respuesta GET,
+incluidas las de error (403/500), sin comprobar `res.ok` -- un fallo puntual de red en obra
+(cobertura movil deficiente) podia quedar "grabado a fuego" en cache y repetirse despues aunque
+el servidor volviera a responder bien. Se verificaron en D1 produccion las sesiones reales de
+superadmin (usuario Adrian, id 3): todas con `rol='superadmin'` correcto, descartando un
+problema de datos -- el fallo es puramente de manejo de errores en el cliente. **Fix (v7.80):**
+(1) `cargarEmpresasAdmin()` ahora trata el 403 igual que el 401 (limpia sesion local + pide
+volver a iniciar sesion) ya que esta pantalla solo aparece para clientes que se creen
+superadmin, por lo que un 403 aqui siempre significa token invalido, no un permiso legitimo
+denegado; (2) cualquier otro error no-OK muestra el codigo HTTP real + boton "Reintentar" en
+vez de un mensaje mudo; (3) `sw.js` ya no cachea respuestas de error (4xx/5xx), solo 2xx.
+Verificado: sync de version por script (7.80 en los 3 archivos), grep de encoding limpio. Solo
+frontend -- no requiere `wrangler deploy`, solo push (GitHub Pages autodespliega). Commit
+`523e3f1`.
+PENDIENTE: confirmacion visual de Adrian en su movil real de que la pantalla ya no se queda
+atascada (reproducir login como superadmin y comprobar que si el token fuera invalido ahora
+fuerza logout en vez de mensaje mudo).
+
+**Sesion anterior a esta:** 13/07/2026 -- Fix bug reportado por Adrian (verbatim): *"vale tenemos otro
 problema,he descubierto que todos los usuarios que usan la app al preguntar a Alejendra
 siemrpe dice mi nombre,no el nombre del usuario.mal"*, aclarado despues con: *"cada usuario
 debe de tener su propio historial por supuesto.y alejandra no debe de decir nada de unos a

@@ -5,11 +5,30 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 13/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.79
+VERSIÓN ACTUAL APP NUEVA: v7.80
 WORKER API: 186b7fa6-a908-4483-a809-d35101a3d498 (seguridad departamentos/documentos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (index.html/sw.js) |  13/07/2026  [v7.80 — Fix "Error al cargar empresas" atascado para superadmin en movil]
+                       Bug reportado por Adrian con captura real desde Chrome Android (rol "SA"):
+                       "la app sigue sin funcionar en chrome en el movil / no carga las empresas".
+                       Confirmado que borrar datos del sitio no lo arreglaba. Causa raiz: la
+                       pantalla "Selecciona empresa" se muestra solo por el rol guardado en
+                       localStorage (sin re-verificar con el servidor); su llamada a /empresas SI
+                       valida el token contra D1 y devuelve 403 si ya no es valido, pero
+                       apiCall/apiCallRaw solo gestionaban logout automatico en 401, no en 403 —
+                       el 403 quedaba mudo y sin salida. Ademas sw.js cacheaba tambien respuestas
+                       de error (4xx/5xx) de la API, pudiendo repetir un fallo puntual de red
+                       (tipico en obra) indefinidamente. Se descartó problema de datos: las
+                       sesiones reales de superadmin en D1 (usuario Adrian) tienen rol='superadmin'
+                       correcto. Fix: (1) cargarEmpresasAdmin() trata 403 igual que 401 (logout +
+                       aviso); (2) otros errores muestran el codigo HTTP real + boton Reintentar;
+                       (3) sw.js solo cachea respuestas GET con res.ok. Verificado: sync version
+                       script (7.80 en los 3 archivos), grep encoding limpio. Solo frontend, sin
+                       wrangler deploy. Commit 523e3f1.
+                       PENDIENTE: confirmacion visual de Adrian en su movil real.
+
   (index.html) |  13/07/2026  [v7.79 — Fix chat de Alejandra heredado entre usuarios en dispositivos compartidos]
                        Bug reportado por Adrian: "todos los usuarios que usan la app al
                        preguntar a Alejandra siempre dice mi nombre, no el nombre del usuario".
