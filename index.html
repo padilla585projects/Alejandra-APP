@@ -4831,17 +4831,21 @@ async function _registrarPushAlejandra(sessionData) {
 }
 
 // Limpia el chat local de Alejandra (historial visual + caché de respuestas).
-// CRÍTICO en dispositivos compartidos (tablet de obra, etc.): estas dos claves
+// CRÍTICO en dispositivos compartidos (tablet de obra, etc.): estas claves
 // viven en localStorage del NAVEGADOR, no del usuario. Si no se limpian al
 // cerrar sesión, el siguiente usuario que inicie sesión en el mismo
 // dispositivo hereda el historial/caché de la persona anterior (incl. su
 // nombre real en los mensajes) hasta que el servidor confirme su propio
 // historial — y si es un usuario nuevo sin historial en servidor, nunca
-// llega a sustituirlo. Ver bug reportado 13/07/2026.
+// llega a sustituirlo. Bug reportado 13/07/2026 (v7.79); ampliado en v7.82
+// para cubrir también 'alejandra_ia_history' (pantalla completa screenIA),
+// que se quedó fuera del fix original.
 function _limpiarChatAlejandraLocal() {
   try { localStorage.removeItem('alejandra_panel_history'); } catch {}
   try { localStorage.removeItem('ale_response_cache'); } catch {}
+  try { localStorage.removeItem('alejandra_ia_history'); } catch {}
   try { if (typeof _alejandraPanelHist !== 'undefined') _alejandraPanelHist = []; } catch {}
+  try { if (typeof iaHistory !== 'undefined') iaHistory = []; } catch {}
 }
 
 function cerrarSesion() {
@@ -11966,7 +11970,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.81';
+const APP_VERSION = '7.82';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

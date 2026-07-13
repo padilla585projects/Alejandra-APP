@@ -9172,6 +9172,7 @@ function _panelSesionCaducada() {
   TOKEN = ''; SESSION = null;
   localStorage.removeItem('panel_token');
   localStorage.removeItem('panel_session');
+  localStorage.removeItem('alejandra_panel_ia_history');
   alert('Tu sesión ha caducado. Vuelve a iniciar sesión.');
   location.reload();
 }
@@ -9605,6 +9606,7 @@ function doLogout() {
   TOKEN = ''; SESSION = null;
   localStorage.removeItem('panel_token');
   localStorage.removeItem('panel_session');
+  localStorage.removeItem('alejandra_panel_ia_history');
   location.reload();
 }
 
