@@ -1,7 +1,20 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 13/07/2026 -- Adrian confirmo que el fix v7.80 funcionaba ("vale ya
+**Ultima sesion:** 13/07/2026 -- README.md reescrito y publicado (commit `f8f7e61`). Estaba
+desactualizado (~3 meses): solo hablaba de inventario/bobinas, sin mencionar RRHH,
+documentacion/calidad, la suite completa de gestion de obra del panel de oficina, ni el agente
+Alejandra (planos tecnicos, vision, Telegram, arquitectura dual de Workers). Reescrito con el
+alcance real actual. Encoding verificado limpio antes de subir.
+PENDIENTE (en pausa, retomar): capturas de pantalla reales para el README con la empresa demo
+ficticia ya creada en D1 produccion (para no exponer datos reales) -- `empresa_id=5`
+"Constructora Demo S.L.", `obra_id=14` "Nave Industrial Demo", `usuario_id=70` "Ana Garcia"
+(encargado), bobinas demo ids 92-94, sesion token `demo_readme_screenshot_9f3a7c` (sesion id
+136). Ya capturadas: pantalla de inicio y listado de inventario de bobinas. Pendientes: chat con
+Alejandra, planos IA, vistas de panel.html. Al terminar: insertar las capturas en el README y
+**borrar** todas las filas demo de D1 (empresa/obra/usuario/bobinas/sesion).
+
+**Sesion anterior a esta:** 13/07/2026 -- Adrian confirmo que el fix v7.80 funcionaba ("vale ya
 funciona"), pero pidio explicitamente que el problema de fondo se solucionara para **todos los
 usuarios**, no solo en la pantalla de superadmin: *"pues tenemos que hacer que no vuelva a
 pasar con ningun usuario"*. Se reviso el fix de v7.80 y se identifico que era un parche local

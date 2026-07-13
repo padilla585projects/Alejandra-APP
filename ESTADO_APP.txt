@@ -10,6 +10,18 @@ WORKER API: 6afd5237-63ba-4336-afaa-8ccd1c1a1fb0 (SEC-15 sesion invalida -> 401 
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (README.md) |  13/07/2026  [docs — reescritura completa, sin cambio de version de app]
+                       README desactualizado (~3 meses): solo cubria inventario/bobinas, sin
+                       mencionar RRHH, documentacion/calidad, la suite de gestion de obra del
+                       panel de oficina, ni el agente Alejandra (planos IA, vision, Telegram,
+                       arquitectura dual de Workers). Reescrito reflejando el alcance real
+                       actual. Encoding verificado limpio. Commit f8f7e61.
+                       PENDIENTE: capturas de pantalla reales (empresa demo ficticia ya creada en
+                       D1 produccion: empresa_id=5, obra_id=14, usuario_id=70, bobinas 92-94,
+                       sesion token demo_readme_screenshot_9f3a7c / id 136 — borrar todo de D1 al
+                       terminar). Capturadas: inicio, inventario bobinas. Pendientes: chat
+                       Alejandra, planos IA, vistas panel.html.
+
   (worker.js/panel.html/index.html/sw.js) |  13/07/2026  [v7.81 — SEC-15: sesion caducada/invalida -> 401 uniforme para TODOS los endpoints y roles]
                        Adrian confirmo que v7.80 funcionaba pero pidio el fix general: "pues
                        tenemos que hacer que no vuelva a pasar con ningun usuario". Causa raiz
