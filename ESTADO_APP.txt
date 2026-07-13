@@ -5,11 +5,32 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 13/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.80
-WORKER API: 186b7fa6-a908-4483-a809-d35101a3d498 (seguridad departamentos/documentos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+VERSIÓN ACTUAL APP NUEVA: v7.81
+WORKER API: 6afd5237-63ba-4336-afaa-8ccd1c1a1fb0 (SEC-15 sesion invalida -> 401 uniforme, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js/panel.html/index.html/sw.js) |  13/07/2026  [v7.81 — SEC-15: sesion caducada/invalida -> 401 uniforme para TODOS los endpoints y roles]
+                       Adrian confirmo que v7.80 funcionaba pero pidio el fix general: "pues
+                       tenemos que hacer que no vuelva a pasar con ningun usuario". Causa raiz
+                       real: getAuth() en worker.js, al recibir un X-Token ya caducado/inexistente
+                       en `sesiones`, caia silenciosamente al fallback anonimo/legacy en vez de
+                       responder "no autenticado"; cada endpoint devolvia su propio codigo
+                       (normalmente 403) de forma inconsistente, y el cliente solo reacciona
+                       automaticamente ante un 401. Ademas panel.html (jefe_de_obra, oficina,
+                       empresa_admin, superadmin via panel) no tenia NINGUN manejo de sesion
+                       caducada. Fix: (1) worker.js SEC-15 — corte centralizado antes de repartir
+                       la peticion: X-Token invalido/caducado -> 401 inmediato para cualquier ruta
+                       protegida; verificado en produccion con curl (token invalido->401, token
+                       valido->200, /health sin token->200 sin cambios); login flows confirmados
+                       sin X-Token (no se autobloquean). Desplegado con wrangler deploy. (2)
+                       panel.html: api()/apiRaw() ahora limpian sesion y fuerzan re-login en 401,
+                       igual que index.html. El fix puntual de v7.80 en cargarEmpresasAdmin() se
+                       mantiene como refuerzo. Verificado: sync version (7.81), node -c worker.js
+                       OK, grep encoding limpio. Commit 7f5d481.
+                       PENDIENTE: confirmacion de Adrian del re-login automatico en panel.html con
+                       sesion real de oficina.
+
   (index.html/sw.js) |  13/07/2026  [v7.80 — Fix "Error al cargar empresas" atascado para superadmin en movil]
                        Bug reportado por Adrian con captura real desde Chrome Android (rol "SA"):
                        "la app sigue sin funcionar en chrome en el movil / no carga las empresas".

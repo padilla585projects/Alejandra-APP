@@ -1,7 +1,35 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 13/07/2026 -- Fix bug reportado por Adrian con captura real desde su movil
+**Ultima sesion:** 13/07/2026 -- Adrian confirmo que el fix v7.80 funcionaba ("vale ya
+funciona"), pero pidio explicitamente que el problema de fondo se solucionara para **todos los
+usuarios**, no solo en la pantalla de superadmin: *"pues tenemos que hacer que no vuelva a
+pasar con ningun usuario"*. Se reviso el fix de v7.80 y se identifico que era un parche local
+(solo en `cargarEmpresasAdmin()`, solo para el 403) sobre un problema de raiz mas general en
+`worker.js`: `getAuth()`, al recibir un `X-Token` que ya no existia o habia caducado en
+`sesiones`, caia silenciosamente al fallback anonimo/legacy en vez de indicar "no autenticado";
+cada uno de los ~100+ endpoints devolvia entonces su propio codigo de error (normalmente 403)
+de forma inconsistente, y el cliente solo reacciona automaticamente (logout + re-login) ante un
+401 -- cualquier otro codigo dejaba al usuario atascado, en cualquier pantalla, con cualquier
+rol. Ademas se descubrio que `panel.html` (usado por `jefe_de_obra`, `oficina`,
+`empresa_admin`, y superadmin via panel) **no tenia NINGUN manejo de sesion caducada** en
+`api()`/`apiRaw()` -- ni siquiera el 401. **Fix (v7.81):** (1) `worker.js` (SEC-15): corte
+centralizado antes de repartir la peticion a cualquier ruta -- si llega `X-Token` y no
+corresponde a ninguna sesion valida en D1, responde 401 de inmediato, para cualquier endpoint y
+cualquier rol; verificado en produccion con curl: token invalido -> 401, token valido
+(superadmin real) -> 200 normal, ruta publica `/health` sin token -> 200 sin cambios; los flujos
+de login (`/verificar`, `/acceso`, `/recuperar-pass`, `/resetear-pass`, `/auth/google/*`) se
+confirmaron como llamados con `fetch()` directo sin `X-Token`, por lo que no se bloquean a si
+mismos. Desplegado con `npx wrangler deploy` (bindings DB y FILES correctos). (2) `panel.html`:
+`api()`/`apiRaw()` ahora limpian `panel_token`/`panel_session` y fuerzan re-login en un 401,
+igual que la app movil. El fix especifico de v7.80 en `cargarEmpresasAdmin()` se mantiene como
+refuerzo (ya redundante en el caso normal, ya que ahora el servidor devuelve 401 directamente en
+vez de 403). Verificado: sync de version por script (7.81 en los 3 archivos), sintaxis de
+`worker.js` valida (`node -c`), grep de encoding limpio. Commit `7f5d481`.
+PENDIENTE: confirmacion de Adrian de que un token invalido en panel.html tambien fuerza
+re-login correctamente (no se pudo probar en vivo con sesion real de oficina en este chat).
+
+**Sesion anterior a esta:** 13/07/2026 -- Fix bug reportado por Adrian con captura real desde su movil
 (Chrome Android, rol superadmin/"SA"): *"la app sigue sin funcionar en chrome en el movil / no
 carga las empresas / que le pasa a la pantalla que se ve mal?"*, confirmando ademas que borrar
 los datos del sitio en Chrome movil NO arreglaba el problema. **Diagnostico:** la pantalla
