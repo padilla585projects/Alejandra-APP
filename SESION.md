@@ -1,7 +1,34 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 13/07/2026 -- README.md reescrito y publicado (commit `f8f7e61`). Estaba
+**Ultima sesion:** 13/07/2026 -- durante la retoma de las capturas de pantalla del README (ver
+entrada anterior), al intentar capturar la pantalla de chat de Alejandra con la sesion demo
+ficticia se descubrieron datos REALES de Adrian (obras reales, bobina real, briefing
+personalizado "Buenos dias, Adrian...") en vez de los del usuario demo. Investigado a fondo
+antes de usar la captura (que NO se guardo ni se uso). **Descartado bug de servidor:** probado
+en vivo con curl `GET /ia-chat-history?usuario_id=70` con el token demo -> `{"ok":true,
+"mensajes":[]}`, confirmando que `getIAChatHistory` en `worker.js` esta correctamente
+delimitado por usuario. **Causa real: hueco en el fix v7.79.** Esa sesion cerro la fuga de
+chat entre usuarios de dispositivos compartidos limpiando `alejandra_panel_history` y
+`ale_response_cache` en `_limpiarChatAlejandraLocal()`, pero el codigo tiene en realidad 3
+implementaciones distintas de historial de chat en localStorage, cada una con su propia clave,
+y el fix solo cubrio una: `alejandra_ia_history` (pantalla completa `screenIA` en index.html,
+la que se abre desde el boton "IA" del nav -- es la que realmente se vio con datos reales) y
+`alejandra_panel_ia_history` (chat del panel de oficina en panel.html) NO se limpiaban ni al
+cerrar sesion ni al forzar logout por sesion caducada (v7.81). En un dispositivo compartido
+esto podia seguir mostrando el historial real de un usuario anterior a uno nuevo sin historial
+aun en servidor -- lo que exactamente vi al inyectar la sesion demo en un navegador que antes
+habia tenido la sesion real de Adrian. **Fix (v7.82):** `_limpiarChatAlejandraLocal()`
+(index.html) ahora tambien borra `alejandra_ia_history` (y vacia la variable en memoria
+`iaHistory`); `doLogout()` y `_panelSesionCaducada()` (panel.html) ahora tambien borran
+`alejandra_panel_ia_history`. Verificado: sync de version por script (7.82 en los 3 archivos),
+grep de encoding en el diff limpio. Solo frontend -- no requiere `wrangler deploy`, solo push
+(GitHub Pages autodespliega). Commit `d69011f`.
+PENDIENTE: antes de repetir la captura del chat, limpiar manualmente esas 2 claves en el
+navegador de pruebas (o simplemente cerrar/reabrir sesion demo ya con el fix desplegado) para
+confirmar que la pantalla ya no muestra datos reales.
+
+**Sesion anterior a esta:** 13/07/2026 -- README.md reescrito y publicado (commit `f8f7e61`). Estaba
 desactualizado (~3 meses): solo hablaba de inventario/bobinas, sin mencionar RRHH,
 documentacion/calidad, la suite completa de gestion de obra del panel de oficina, ni el agente
 Alejandra (planos tecnicos, vision, Telegram, arquitectura dual de Workers). Reescrito con el
