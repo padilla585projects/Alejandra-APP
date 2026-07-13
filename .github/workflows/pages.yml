@@ -35,6 +35,7 @@ jobs:
           cp alejandra-panel.html _site/ 2>/dev/null || true
           cp sw.js _site/ 2>/dev/null || true
           cp .nojekyll _site/ 2>/dev/null || true
+          cp icon-192.png icon-512.png icon.svg _site/ 2>/dev/null || true
           cp -r icons _site/ 2>/dev/null || true
           cp -r fonts _site/ 2>/dev/null || true
           cp -r img _site/ 2>/dev/null || true
