@@ -32,12 +32,15 @@ HISTORIAL DE VERSIONES (resumen reciente):
                        copy) verificados funcionando juntos, sin datos reales filtrados. Obtenida
                        una respuesta de ejemplo limpia y generica ("que puedes hacer por mi") para
                        la captura del chat.
-                       PENDIENTE: no fue posible en esta sesion guardar la captura del navegador
+                       BLOQUEANTE: no fue posible en esta sesion guardar la captura del navegador
                        como archivo de imagen en el repositorio (la herramienta de captura no
                        expone una ruta de disco accesible desde las herramientas de edicion de
-                       esta sesion) — pendiente de que Adrian indique como aportar las imagenes
-                       reales. Quedan tambien por capturar: planos IA, vistas de panel.html. Al
-                       terminar TODAS las capturas: borrar filas demo de D1 (empresa_id=5,
+                       esta sesion). Consultado con Adrian (capturarlas el mismo / README sin
+                       capturas por ahora / otra via) — decision: "lo hacemos mas adelante
+                       entonces". PAUSADO a peticion explicita, retomar en sesion futura. Quedan
+                       tambien por capturar: planos IA, vistas de panel.html. La empresa/obra/
+                       usuario demo en D1 se mantienen intencionadamente hasta retomar esta tarea.
+                       Al terminar TODAS las capturas: borrar filas demo de D1 (empresa_id=5,
                        obra_id=14, usuario_id=70, bobinas 92-94, sesion id 136/token
                        demo_readme_screenshot_9f3a7c, y filas de alejandra_historial del usuario
                        demo).

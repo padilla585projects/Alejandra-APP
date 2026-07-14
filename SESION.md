@@ -27,14 +27,19 @@ cabecera correcta "Tu asistente de obra con IA" -- ambos fixes (v7.82 privacidad
 confirmados funcionando juntos, sin ningun dato real filtrado. Se envio una pregunta generica
 de capacidades ("Resumeme en 2-3 lineas que puedes hacer por mi") y se obtuvo una respuesta
 limpia y generica (sin datos de empresas/obras reales) para usar como captura del chat.
-PENDIENTE: no fue posible en esta sesion guardar la captura de pantalla del navegador como
-archivo de imagen dentro del repositorio (la herramienta de captura del navegador no expone una
-ruta de archivo accesible desde las herramientas de edicion/disco de esta sesion) -- Adrian
-necesita indicar como prefiere aportar las imagenes reales (captura manual suya, u otra via)
-antes de poder insertarlas en el README. Quedan ademas por capturar: planos IA, vistas de
-panel.html. Al terminar TODAS las capturas: **borrar** todas las filas demo de D1
-(empresa_id=5, obra_id=14, usuario_id=70, bobinas 92-94, sesion id 136/token
-`demo_readme_screenshot_9f3a7c`, y cualquier fila de `alejandra_historial` del usuario demo).
+BLOQUEANTE encontrado: no fue posible en esta sesion guardar la captura de pantalla del
+navegador como archivo de imagen dentro del repositorio (la herramienta de captura del
+navegador no expone una ruta de archivo accesible desde las herramientas de edicion/disco de
+esta sesion). Consultado con Adrian via pregunta directa (opciones: capturarlas el mismo /
+dejar el README sin capturas por ahora / explorar otra via) -- **decision de Adrian: "lo hacemos
+mas adelante entonces"**. **PAUSADO A PETICION EXPLICITA -- retomar en una sesion futura.**
+Quedan por capturar: chat Alejandra (ya se valido el contenido, solo falta poder guardarlo como
+archivo), planos IA, vistas de panel.html. La empresa/obra/usuario demo ficticios en D1 se
+**mantienen intencionadamente** hasta retomar esta tarea (no son datos reales, solo ocupan una
+fila de prueba). Al terminar TODAS las capturas e insertarlas en el README: **borrar** todas las
+filas demo de D1 (empresa_id=5, obra_id=14, usuario_id=70, bobinas 92-94, sesion id 136/token
+`demo_readme_screenshot_9f3a7c`, y cualquier fila de `alejandra_historial` del usuario demo que
+se genere al probar).
 
 **Sesion anterior a esta:** 13/07/2026 -- README.md reescrito y publicado (commit `f8f7e61`). Estaba
 desactualizado (~3 meses): solo hablaba de inventario/bobinas, sin mencionar RRHH,
