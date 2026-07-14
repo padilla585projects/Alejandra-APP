@@ -5,11 +5,43 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 13/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.82
+VERSIÓN ACTUAL APP NUEVA: v7.83
 WORKER API: 6afd5237-63ba-4336-afaa-8ccd1c1a1fb0 (SEC-15 sesion invalida -> 401 uniforme, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (index.html/sw.js/version.json) |  13/07/2026  [v7.83 — fix saludo hardcodeado "Hola Adrián" + cabecera de chat enganosa "Solo desarrollador"]
+                       Adrian: "arregla el 2 y luego hz el 3" (2 bugs de copy detectados al
+                       verificar en vivo el fix v7.82, y retomar despues la captura del README).
+                       Bug 1: iaSaludo() (index.html) generaba siempre "Hola Adrián 👋..." con el
+                       nombre hardcodeado, sin importar el usuario real de la sesion — se veia
+                       incluso con la sesion demo del README. Bug 2: la cabecera de screenIA
+                       mostraba el texto estatico "Control total · Solo desarrollador" para TODOS
+                       los roles, no solo desarrollador. Fix: iaSaludo() ahora lee el nombre real
+                       de la sesion activa (getSession()), usa el primer nombre escapado con
+                       _escHtml() y genera "Hola {nombre} 👋..." (o saludo generico si no hay
+                       sesion/nombre); cabecera cambiada a "Tu asistente de obra con IA" (generica
+                       para cualquier rol). Verificado: sync de version por script (7.83 en los 3
+                       archivos), grep de encoding en el diff limpio. Solo frontend — no requiere
+                       wrangler deploy, solo push (GitHub Pages autodespliega). Commit f910222.
+                       Retomada la captura del chat para el README: limpiadas filas de
+                       alejandra_historial del usuario demo (usuario_id=70) en D1 y localStorage
+                       en el navegador de pruebas; confirmado que v7.83 esta en produccion y que
+                       la pantalla de chat ya muestra "Hola Ana 👋..." (usuario demo correcto,
+                       no Adrian) y la cabecera correcta — ambos fixes (v7.82 privacidad + v7.83
+                       copy) verificados funcionando juntos, sin datos reales filtrados. Obtenida
+                       una respuesta de ejemplo limpia y generica ("que puedes hacer por mi") para
+                       la captura del chat.
+                       PENDIENTE: no fue posible en esta sesion guardar la captura del navegador
+                       como archivo de imagen en el repositorio (la herramienta de captura no
+                       expone una ruta de disco accesible desde las herramientas de edicion de
+                       esta sesion) — pendiente de que Adrian indique como aportar las imagenes
+                       reales. Quedan tambien por capturar: planos IA, vistas de panel.html. Al
+                       terminar TODAS las capturas: borrar filas demo de D1 (empresa_id=5,
+                       obra_id=14, usuario_id=70, bobinas 92-94, sesion id 136/token
+                       demo_readme_screenshot_9f3a7c, y filas de alejandra_historial del usuario
+                       demo).
+
   (index.html/panel.html/sw.js/version.json) |  13/07/2026  [v7.82 — cierra hueco en limpieza de chat local en dispositivos compartidos]
                        Descubierto al retomar las capturas de pantalla del README: la pantalla
                        de chat de Alejandra con la sesion demo ficticia mostraba datos REALES de
