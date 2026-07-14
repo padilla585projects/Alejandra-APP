@@ -4483,7 +4483,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <button onclick="irAtras()" style="background:none;border:none;color:#a855f7;cursor:pointer;font-size:22px;line-height:1;padding:0 10px 0 0;flex-shrink:0">←</button>
     <div style="flex:1">
       <div class="ia-header-title">Alejandra IA</div>
-      <div class="ia-header-sub">Control total · Solo desarrollador</div>
+      <div class="ia-header-sub">Tu asistente de obra con IA</div>
     </div>
     <button id="iaTtsBtn" onclick="iaToggleTts()" title="Voz de Alejandra" class="ia-tts-btn">🔇</button>
     <button onclick="iaLimpiarChat()" title="Borrar historial" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">🗑️</button>
@@ -11970,7 +11970,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.82';
+const APP_VERSION = '7.83';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18555,7 +18555,11 @@ window.turnoToggle   = turnoToggle;
   let iaHistory = [];
 
   function iaSaludo() {
-    return '<div class="ia-bubble bot">Hola Adrián 👋 Soy Alejandra. Tengo acceso total a la app. Pregúntame o pídeme que haga algo.</div>';
+    const s = typeof getSession === 'function' ? getSession() : null;
+    const nombreRaw = (s?.nombre || '').trim().split(' ')[0] || '';
+    const nombre = typeof _escHtml === 'function' ? _escHtml(nombreRaw) : nombreRaw;
+    const saludo = nombre ? `Hola ${nombre}` : 'Hola';
+    return `<div class="ia-bubble bot">${saludo} 👋 Soy Alejandra. Pregúntame o pídeme que haga algo relacionado con la obra.</div>`;
   }
 
   // Cargar historial: servidor primero, fallback a localStorage
