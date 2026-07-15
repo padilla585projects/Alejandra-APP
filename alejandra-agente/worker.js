@@ -9898,8 +9898,9 @@ async function enviarFCM(env, fcmToken, titulo, cuerpo, extraData = null) {
   try {
     const accessToken = await getGoogleAccessToken(env);
     // Merge data: defaults + extraData. FCM data debe ser todo strings.
+    // Incluye titulo/cuerpo DENTRO de `data` (no en `notification`, ver abajo).
     const baseData = { tipo: 'alejandra_mensaje', screen: 'chat' };
-    const finalData = { ...baseData, ...(extraData || {}) };
+    const finalData = { ...baseData, ...(extraData || {}), titulo: titulo || 'Alejandra', cuerpo: cuerpo || '' };
     // Asegurar que todos los valores son strings (requisito FCM)
     for (const k of Object.keys(finalData)) finalData[k] = String(finalData[k]);
     const r = await fetch(`https://fcm.googleapis.com/v1/projects/alejandra-ia-app/messages:send`, {
@@ -9911,11 +9912,20 @@ async function enviarFCM(env, fcmToken, titulo, cuerpo, extraData = null) {
       body: JSON.stringify({
         message: {
           token: fcmToken,
-          notification: { title: titulo, body: cuerpo },
+          // Mensaje "solo datos": SIN campo `notification` a nivel superior.
+          // Antes se mandaba notification+data a la vez, lo que permite a
+          // Android auto-mostrar el push por su cuenta en ciertas condiciones
+          // (algunos fabricantes/estados de la app lo hacen incluso en
+          // foreground). Quitando `notification`, el sistema operativo NUNCA
+          // puede mostrar nada por su cuenta: el control es 100% del código
+          // Flutter (notifications_service.dart), tanto en foreground
+          // (onMessage, que ya filtra tipo==='chat_respuesta') como en
+          // background/killed (background handler, que ahora construye la
+          // notificación a partir de data.titulo/data.cuerpo).
           // No usamos click_action porque requiere un intent-filter dedicado en
           // AndroidManifest. Sin él, Android usa el launcher por defecto y abre
           // la actividad principal (MainActivity), lo cual es lo que queremos.
-          android: { priority: 'HIGH', notification: { sound: 'default' } },
+          android: { priority: 'HIGH' },
           data: finalData,
         },
       }),
