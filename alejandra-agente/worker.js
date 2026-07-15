@@ -4005,9 +4005,9 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
 
     // ── Última respuesta ──────────────────────────────────────────────────
     let textoFinal = '';
-    // En móvil, evitamos otra llamada a Anthropic Stream porque el cliente
-    // ya cerró la conexión SSE y los fetch salientes pueden cancelarse al
-    // expirar waitUntil. Usamos el último respAPI que ya tenemos en memoria.
+    // Streaming token-por-token SIEMPRE que el cliente no esté desconectado
+    // (aplica a panel/web Y app_android/pwa). La app Flutter mantiene la conexión SSE abierta
+    // durante todo el procesamiento. Si cortadoPorTimeout, usamos el último respAPI.
     if (getClienteDesconectado() || cortadoPorTimeout) {
       // Extraer texto del último respAPI (sin tools, vendría con stop_reason=end_turn y texto)
       const textoUltimo = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '';
@@ -4027,7 +4027,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       }
       await send({ type: 'text', texto: textoFinal });
     } else {
-      // En panel/web hacemos streaming real token a token
+      // Streaming real token a token (todas las plataformas)
       try {
         let streamResult = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
           await send({ type: 'token', texto: token });
