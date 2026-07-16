@@ -1833,6 +1833,68 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
   }
 };
 
+// ── PHASE 1 (MVP): 4 herramientas de búsqueda en BD ─────────────────────────────
+// Implementadas manualmente (no por agentes) siguiendo protocolo de prepared statements
+// y aislamiento por empresa_id. Prioridad: máxima calidad. (2026-07-16)
+
+const TOOL_BUSCAR_DOCUMENTOS = {
+  name: 'buscar_documentos',
+  description: 'Busca documentos de obra (PSS, ESS, EBSS, planos, EPI, etc.) en la BD por nombre, descripción o tipo. Filtra por estado (vigente/vencido/pendiente) y tipo de documento.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query:  { type: 'string', description: 'Término de búsqueda en nombre o descripción del documento' },
+      tipo:   { type: 'string', enum: ['pss', 'ess', 'ebss', 'plano', 'epi', 'otro'], description: 'Filtrar por tipo de documento (opcional)' },
+      estado: { type: 'string', enum: ['vigente', 'vencido', 'pendiente'], description: 'Filtrar por estado (opcional)' },
+      limit:  { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
+    },
+    required: ['query']
+  }
+};
+
+const TOOL_BUSCAR_TAREAS = {
+  name: 'buscar_tareas',
+  description: 'Busca tareas de obra por descripción, responsable o estado. Filtra por prioridad y estado de finalización.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query:   { type: 'string', description: 'Término de búsqueda en descripción o responsable' },
+      estado:  { type: 'string', enum: ['abierta', 'en_progreso', 'bloqueada', 'completada'], description: 'Filtrar por estado (opcional)' },
+      prioridad: { type: 'string', enum: ['urgente', 'alta', 'normal', 'baja'], description: 'Filtrar por prioridad (opcional)' },
+      limit:   { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
+    },
+    required: ['query']
+  }
+};
+
+const TOOL_CONSULTAR_PERSONAL = {
+  name: 'consultar_personal',
+  description: 'Busca personal por nombre, departamento o puesto. Devuelve nombre, rol, contacto y departamento.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query:      { type: 'string', description: 'Nombre, DNI o palabra clave a buscar' },
+      departamento: { type: 'string', description: 'Filtrar por departamento (opcional, ej: "electrico", "prl")' },
+      activos_solo: { type: 'boolean', description: 'Solo mostrar personal activo (default true)' },
+      limit:      { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
+    },
+    required: ['query']
+  }
+};
+
+const TOOL_CONSULTAR_INVENTARIO = {
+  name: 'consultar_inventario',
+  description: 'Busca materiales en el inventario por nombre, tipo o referencia. Devuelve cantidad disponible, precio y ubicación.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query:   { type: 'string', description: 'Nombre, referencia o palabra clave del material' },
+      limite:  { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
+    },
+    required: ['query']
+  }
+};
+
 // Tools de "capacidades avanzadas" (ver módulo de prompt `capacidades_avanzadas`).
 // Estas 7 herramientas ya tenían su `case` implementado en el switch de ejecución
 // pero no existía el schema TOOL_* correspondiente ni estaban cableadas en
@@ -1953,12 +2015,12 @@ const TOOL_EXPORTAR_DATOS = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -5558,6 +5620,168 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `${rows.length} registro(s):\n${output.substring(0, 6000)}${truncated}`;
       } catch (err) {
         return `Error en consulta BD: ${err.message}`;
+      }
+    }
+
+    // ── PHASE 1 (MVP): 4 herramientas de búsqueda en BD ────────────────────────
+    case 'buscar_documentos': {
+      try {
+        const query = (input.query || '').trim().toUpperCase();
+        if (query.length < 2) return 'La búsqueda requiere al menos 2 caracteres.';
+        const tipo = input.tipo ? input.tipo.toLowerCase() : null;
+        const estado = input.estado ? input.estado.toLowerCase() : null;
+        const limit = Math.min(input.limit || 10, 50);
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+
+        let sql = `SELECT id, titulo, tipo, estado, fecha_emision, fecha_caducidad, elaborado_por, r2_key, notas
+                   FROM documentos_obra
+                   WHERE empresa_id=?
+                   AND (UPPER(titulo) LIKE ? OR UPPER(notas) LIKE ?)`;
+        const params = [eid, `%${query}%`, `%${query}%`];
+
+        if (tipo) {
+          sql += ` AND tipo=?`;
+          params.push(tipo);
+        }
+        if (estado) {
+          sql += ` AND estado=?`;
+          params.push(estado);
+        }
+
+        sql += ` ORDER BY fecha_emision DESC LIMIT ?`;
+        params.push(limit);
+
+        const result = await env.DB.prepare(sql).bind(...params).all();
+        const rows = result.results || [];
+        if (!rows.length) return 'No se encontraron documentos coincidentes.';
+
+        const items = rows.map(r =>
+          `📄 **${r.titulo}** [${r.tipo}]\n` +
+          `   Estado: ${r.estado}${r.fecha_caducidad ? ` | Vence: ${r.fecha_caducidad}` : ''}\n` +
+          `   Elaborado: ${r.elaborado_por || '—'} | Archivo: ${r.r2_key ? '✓' : '✗'}`
+        );
+        return `Encontrados ${rows.length} documentos:\n\n${items.join('\n\n')}`;
+      } catch (err) {
+        return `Error buscando documentos: ${err.message}`;
+      }
+    }
+
+    case 'buscar_tareas': {
+      try {
+        const query = (input.query || '').trim().toUpperCase();
+        if (query.length < 2) return 'La búsqueda requiere al menos 2 caracteres.';
+        const estado = input.estado ? input.estado.toLowerCase() : null;
+        const prioridad = input.prioridad ? input.prioridad.toLowerCase() : null;
+        const limit = Math.min(input.limit || 10, 50);
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+
+        let sql = `SELECT id, titulo, descripcion, estado, prioridad, asignado_a, fecha_limite
+                   FROM tareas_obra
+                   WHERE empresa_id=?
+                   AND (UPPER(descripcion) LIKE ? OR UPPER(asignado_a) LIKE ?)`;
+        const params = [eid, `%${query}%`, `%${query}%`];
+
+        if (estado) {
+          sql += ` AND estado=?`;
+          params.push(estado);
+        }
+        if (prioridad) {
+          sql += ` AND prioridad=?`;
+          params.push(prioridad);
+        }
+
+        sql += ` ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, fecha_limite ASC LIMIT ?`;
+        params.push(limit);
+
+        const result = await env.DB.prepare(sql).bind(...params).all();
+        const rows = result.results || [];
+        if (!rows.length) return 'No se encontraron tareas coincidentes.';
+
+        const items = rows.map(r => {
+          const priIcon = { urgente: '🔴', alta: '🟠', normal: '🟡', baja: '🟢' }[r.prioridad] || '⚪';
+          return `${priIcon} **${r.descripcion}** [${r.estado}]\n` +
+                 `   Responsable: ${r.asignado_a || '—'} | Vence: ${r.fecha_limite || '—'}`;
+        });
+        return `Encontradas ${rows.length} tareas:\n\n${items.join('\n\n')}`;
+      } catch (err) {
+        return `Error buscando tareas: ${err.message}`;
+      }
+    }
+
+    case 'consultar_personal': {
+      try {
+        const query = (input.query || '').trim().toUpperCase();
+        if (query.length < 2) return 'La búsqueda requiere al menos 2 caracteres.';
+        const depto = input.departamento ? input.departamento.toLowerCase() : null;
+        const soloActivos = input.activos_solo !== false; // default true
+        const limit = Math.min(input.limit || 10, 50);
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+
+        let sql = `SELECT id, nombre, apellidos, dni, puesto, departamento, email, telefono, activo
+                   FROM personal
+                   WHERE empresa_id=?
+                   AND (UPPER(nombre) LIKE ? OR UPPER(apellidos) LIKE ? OR UPPER(dni) LIKE ?)`;
+        const params = [eid, `%${query}%`, `%${query}%`, `%${query}%`];
+
+        if (soloActivos) {
+          sql += ` AND activo=1`;
+        }
+        if (depto) {
+          sql += ` AND LOWER(departamento)=?`;
+          params.push(depto);
+        }
+
+        sql += ` ORDER BY nombre, apellidos LIMIT ?`;
+        params.push(limit);
+
+        const result = await env.DB.prepare(sql).bind(...params).all();
+        const rows = result.results || [];
+        if (!rows.length) return 'No se encontró personal coincidente.';
+
+        const items = rows.map(r =>
+          `👤 **${r.nombre} ${r.apellidos || ''}** (${r.puesto})\n` +
+          `   DNI: ${r.dni || '—'} | Depto: ${r.departamento || '—'}\n` +
+          `   📧 ${r.email || '—'} | 📱 ${r.telefono || '—'}\n` +
+          `   Estado: ${r.activo ? '✓ Activo' : '✗ Inactivo'}`
+        );
+        return `Encontrados ${rows.length} registros de personal:\n\n${items.join('\n\n')}`;
+      } catch (err) {
+        return `Error consultando personal: ${err.message}`;
+      }
+    }
+
+    case 'consultar_inventario': {
+      try {
+        const query = (input.query || '').trim().toUpperCase();
+        if (query.length < 2) return 'La búsqueda requiere al menos 2 caracteres.';
+        const limit = Math.min(input.limite || 10, 50);
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+
+        const sql = `SELECT id, material, referencia, fabricante, cantidad, unidad, precio_unitario, proveedor, obra_id, fecha
+                     FROM materiales_obra
+                     WHERE empresa_id=?
+                     AND (UPPER(material) LIKE ? OR UPPER(referencia) LIKE ? OR UPPER(fabricante) LIKE ?)
+                     ORDER BY fecha DESC, material LIMIT ?`;
+        const params = [eid, `%${query}%`, `%${query}%`, `%${query}%`, limit];
+
+        const result = await env.DB.prepare(sql).bind(...params).all();
+        const rows = result.results || [];
+        if (!rows.length) return 'No se encontraron materiales coincidentes.';
+
+        const items = rows.map(r => {
+          const total = r.cantidad * (r.precio_unitario || 0);
+          return `📦 **${r.material}**\n` +
+                 `   Referencia: ${r.referencia || '—'} | Fabricante: ${r.fabricante || '—'}\n` +
+                 `   Cantidad: ${r.cantidad} ${r.unidad} @ ${r.precio_unitario ? r.precio_unitario.toFixed(2) + '€' : '—'} (total: ${total.toFixed(2)}€)\n` +
+                 `   Proveedor: ${r.proveedor || '—'} | Entrada: ${r.fecha || '—'}`;
+        });
+        return `Encontrados ${rows.length} materiales:\n\n${items.join('\n\n')}`;
+      } catch (err) {
+        return `Error consultando inventario: ${err.message}`;
       }
     }
 
