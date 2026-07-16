@@ -709,6 +709,42 @@ const AI_TOOLS = [
       },
       required: ['empresa_id']
     }
+  },
+  {
+    name: 'buscar_equipos',
+    description: 'Consulta información de equipos registrados en la BD (generadores, compresores, motores, etc). Devuelve lista con id, nombre, tipo, modelo, ubicación, estado, próximo mantenimiento y propietario.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', description: 'Filtrar por tipo de equipo (ej: "generador", "compresor", "motor"). Opcional - si se omite trae todos.' },
+        estado: { type: 'string', description: 'Filtrar por estado (ej: "activo", "mantenimiento", "almacenado"). Opcional - si se omite trae todos.' },
+        limit: { type: 'integer', description: 'Máximo de resultados a retornar (default: 15)' }
+      }
+    }
+  },
+  {
+    name: 'consultar_personal',
+    description: 'Consulta información de trabajadores registrados (nombre, rol, contacto, estado). Devuelve lista con id, nombre, rol, departamento, estado, teléfono y email.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        departamento: { type: 'string', description: 'Filtrar por departamento (ej: "electrico", "mecanico", "seguridad"). Opcional - si se omite trae todos.' },
+        estado: { type: 'string', description: 'Filtrar por estado (ej: "activo", "inactivo"). Opcional - si se omite trae todos.' },
+        limit: { type: 'integer', description: 'Máximo de resultados a retornar (default: 20)' }
+      }
+    }
+  },
+  {
+    name: 'consultar_inventario',
+    description: 'Consulta stock de materiales, herramientas y componentes en inventario. Devuelve lista con id, nombre, tipo, cantidad, ubicación, precio unitario y fecha última actualización.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', description: 'Filtrar por tipo de material (ej: "cable", "herramienta", "material", "seguridad"). Opcional - si se omite trae todos.' },
+        query: { type: 'string', description: 'Búsqueda por nombre del material (búsqueda parcial). Opcional.' },
+        limit: { type: 'integer', description: 'Máximo de resultados a retornar (default: 20)' }
+      }
+    }
   }
 ];
 
@@ -1931,6 +1967,48 @@ async function executeAITool(env, toolName, toolInput) {
         q += ' ORDER BY creado_en DESC LIMIT 50';
         const rows = await env.DB.prepare(q).bind(...params).all();
         return JSON.stringify({ ok: true, planos: rows.results || [] });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'buscar_equipos': {
+      try {
+        const { tipo, estado, limit = 15 } = toolInput;
+        let query = 'SELECT id, nombre, tipo, modelo, ubicacion, estado, proximo_mantenimiento, propietario FROM equipos WHERE 1=1';
+        const params = [];
+        if (tipo) { query += ' AND tipo=?'; params.push(tipo); }
+        if (estado) { query += ' AND estado=?'; params.push(estado); }
+        query += ' ORDER BY nombre ASC LIMIT ?';
+        params.push(limit);
+        const result = await env.DB.prepare(query).bind(...params).all();
+        return JSON.stringify({ ok: true, equipos: result.results || [] });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'consultar_personal': {
+      try {
+        const { departamento, estado, limit = 20 } = toolInput;
+        let query = 'SELECT id, nombre, rol, departamento, estado, telefono, email, fecha_inicio FROM personal WHERE 1=1';
+        const params = [];
+        if (departamento) { query += ' AND departamento=?'; params.push(departamento); }
+        if (estado) { query += ' AND estado=?'; params.push(estado); }
+        query += ' ORDER BY nombre ASC LIMIT ?';
+        params.push(limit);
+        const result = await env.DB.prepare(query).bind(...params).all();
+        return JSON.stringify({ ok: true, personal: result.results || [] });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'consultar_inventario': {
+      try {
+        const { tipo, query: searchQuery, limit = 20 } = toolInput;
+        let query = 'SELECT id, nombre, tipo, cantidad, ubicacion, precio_unitario, fecha_actualizacion FROM materiales WHERE 1=1';
+        const params = [];
+        if (tipo) { query += ' AND tipo=?'; params.push(tipo); }
+        if (searchQuery) { query += ' AND nombre LIKE ?'; params.push('%' + searchQuery + '%'); }
+        query += ' ORDER BY nombre ASC LIMIT ?';
+        params.push(limit);
+        const result = await env.DB.prepare(query).bind(...params).all();
+        return JSON.stringify({ ok: true, inventario: result.results || [] });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
