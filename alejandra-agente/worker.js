@@ -2474,6 +2474,10 @@ export default {
         const send   = async (data) => {
           try {
             await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+            // Pequeño yield para permitir que el buffer se vacíe y los tokens se
+            // envíen al cliente casi inmediatamente, en vez de acumularse.
+            // Sin esto, Cloudflare puede buffering muchos write() juntos.
+            await new Promise(resolve => setTimeout(resolve, 0));
           } catch(e) {
             // Fallback: si llegamos aquí, también consideramos cliente desconectado
             clienteDesconectado = true;
