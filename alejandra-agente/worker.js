@@ -1951,14 +1951,67 @@ const TOOL_EXPORTAR_DATOS = {
   }
 };
 
+const TOOL_BUSCAR_PROCEDIMIENTOS = {
+  name: 'buscar_procedimientos',
+  description: 'Busca en la documentación de procedimientos, procesos, normas y checklists de obra. Devuelve título, descripción resumida, pasos y categoría.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query:    { type: 'string', description: 'Término de búsqueda (busca en título y descripción)' },
+      categoria: { type: 'string', description: 'Filtrar por categoría (ej: "montaje", "seguridad", "calidad") - opcional' },
+      limit:    { type: 'number', description: 'Máximo de resultados (default: 10)', default: 10 }
+    },
+    required: ['query']
+  }
+};
+
+const TOOL_CONSULTAR_PUNCH_LIST = {
+  name: 'consultar_punch_list',
+  description: 'Consulta el estado del punch list (checklist de acabados y defectos menores de obra). Devuelve items con estado, responsable y fechas de vencimiento/completado.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      estado: { type: 'string', enum: ['pendiente', 'completado', 'rechazado'], description: 'Filtrar por estado del item - opcional' },
+      limit: { type: 'number', description: 'Máximo de resultados (default: 30)', default: 30 }
+    }
+  }
+};
+
+const TOOL_BUSCAR_PROVEEDORES = {
+  name: 'buscar_proveedores',
+  description: 'Busca proveedores de la red: materiales, equipos de alquiler, servicios especializados. Devuelve contacto, especialidad, teléfono y email.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      especialidad: { type: 'string', description: 'Especialidad del proveedor (ej: "cable", "PEMP", "hormigón", "fontanería") - opcional' },
+      estado:       { type: 'string', enum: ['activo', 'inactivo'], description: 'Filtrar por estado - opcional' },
+      limit:        { type: 'number', description: 'Máximo de resultados (default: 15)', default: 15 }
+    }
+  }
+};
+
+const TOOL_CONSULTAR_PRECIOS = {
+  name: 'consultar_precios',
+  description: 'Consulta precios unitarios de materiales, mano de obra y subcontratas. Devuelve descripción, tipo, precio, IVA y fecha de actualización.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tipo:  { type: 'string', enum: ['material', 'mano_obra', 'subcontrata'], description: 'Tipo de precio - opcional' },
+      query: { type: 'string', description: 'Término de búsqueda (busca en descripción)' },
+      limit: { type: 'number', description: 'Máximo de resultados (default: 20)', default: 20 }
+    },
+    required: ['query']
+  }
+};
+
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -8468,6 +8521,182 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         if (!result.ok) return JSON.stringify({ ok: false, error: result.description || 'Error Telegram sendMessage' });
         return JSON.stringify({ ok: true, msg: 'Mensaje enviado por Telegram.' });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'buscar_procedimientos': {
+      try {
+        const query = (input.query || '').trim();
+        const categoria = input.categoria ? (input.categoria || '').trim() : null;
+        const limit = Math.min(input.limit || 10, 100);
+
+        if (!query) return 'Falta "query" de búsqueda.';
+
+        let sql = 'SELECT id, titulo, descripcion, pasos, categoria, fecha_ultima_actualizacion FROM procedimientos_obra WHERE ';
+        const params = [];
+
+        // Búsqueda por título o descripción
+        sql += '(titulo LIKE ? OR descripcion LIKE ?)';
+        params.push(`%${query}%`, `%${query}%`);
+
+        // Filtro opcional por categoría
+        if (categoria) {
+          sql += ' AND categoria = ?';
+          params.push(categoria);
+        }
+
+        sql += ' ORDER BY fecha_ultima_actualizacion DESC LIMIT ?';
+        params.push(limit);
+
+        const stmt = env.DB.prepare(sql);
+        const result = await stmt.bind(...params).all();
+        const rows = result.results || [];
+
+        if (rows.length === 0) return `No se encontraron procedimientos para "${query}"${categoria ? ` en categoría "${categoria}"` : ''}.`;
+
+        const formatted = rows.map(row => ({
+          id: row.id,
+          titulo: row.titulo,
+          descripcion: row.descripcion,
+          pasos_resumen: row.pasos ? row.pasos.substring(0, 300) + (row.pasos.length > 300 ? '...' : '') : '',
+          categoria: row.categoria,
+          actualizado: row.fecha_ultima_actualizacion
+        }));
+
+        const output = JSON.stringify(formatted, null, 2);
+        return `Se encontraron ${rows.length} procedimiento(s):\n${output}`;
+      } catch (err) {
+        return `Error en buscar_procedimientos: ${err.message}`;
+      }
+    }
+
+    case 'consultar_punch_list': {
+      try {
+        const estado = input.estado ? (input.estado || '').trim() : null;
+        const limit = Math.min(input.limit || 30, 100);
+
+        let sql = 'SELECT id, item, descripcion, estado, responsable, fecha_vencimiento, fecha_completado FROM punch_list WHERE 1=1';
+        const params = [];
+
+        // Filtro opcional por estado
+        if (estado && ['pendiente', 'completado', 'rechazado'].includes(estado)) {
+          sql += ' AND estado = ?';
+          params.push(estado);
+        }
+
+        sql += ' ORDER BY fecha_vencimiento ASC LIMIT ?';
+        params.push(limit);
+
+        const stmt = env.DB.prepare(sql);
+        const result = await stmt.bind(...params).all();
+        const rows = result.results || [];
+
+        if (rows.length === 0) return `No hay items en el punch list${estado ? ` con estado "${estado}"` : ''}.`;
+
+        const formatted = rows.map(row => ({
+          id: row.id,
+          item: row.item,
+          descripcion: row.descripcion,
+          estado: row.estado,
+          responsable: row.responsable,
+          vencimiento: row.fecha_vencimiento,
+          completado: row.fecha_completado
+        }));
+
+        const output = JSON.stringify(formatted, null, 2);
+        return `Se encontraron ${rows.length} item(s) en punch list:\n${output}`;
+      } catch (err) {
+        return `Error en consultar_punch_list: ${err.message}`;
+      }
+    }
+
+    case 'buscar_proveedores': {
+      try {
+        const especialidad = input.especialidad ? (input.especialidad || '').trim() : null;
+        const estado = input.estado ? (input.estado || '').trim() : null;
+        const limit = Math.min(input.limit || 15, 100);
+
+        let sql = 'SELECT id, nombre, especialidad, telefono, email, contacto_principal, estado FROM proveedores WHERE 1=1';
+        const params = [];
+
+        // Filtro opcional por especialidad
+        if (especialidad) {
+          sql += ' AND especialidad LIKE ?';
+          params.push(`%${especialidad}%`);
+        }
+
+        // Filtro opcional por estado
+        if (estado && ['activo', 'inactivo'].includes(estado)) {
+          sql += ' AND estado = ?';
+          params.push(estado);
+        }
+
+        sql += ' ORDER BY nombre ASC LIMIT ?';
+        params.push(limit);
+
+        const stmt = env.DB.prepare(sql);
+        const result = await stmt.bind(...params).all();
+        const rows = result.results || [];
+
+        if (rows.length === 0) return `No se encontraron proveedores${especialidad ? ` de "${especialidad}"` : ''}${estado ? ` con estado "${estado}"` : ''}.`;
+
+        const formatted = rows.map(row => ({
+          id: row.id,
+          nombre: row.nombre,
+          especialidad: row.especialidad,
+          telefono: row.telefono,
+          email: row.email,
+          contacto_principal: row.contacto_principal,
+          estado: row.estado
+        }));
+
+        const output = JSON.stringify(formatted, null, 2);
+        return `Se encontraron ${rows.length} proveedor(es):\n${output}`;
+      } catch (err) {
+        return `Error en buscar_proveedores: ${err.message}`;
+      }
+    }
+
+    case 'consultar_precios': {
+      try {
+        const tipo = input.tipo ? (input.tipo || '').trim() : null;
+        const query = (input.query || '').trim();
+        const limit = Math.min(input.limit || 20, 100);
+
+        if (!query) return 'Falta "query" de búsqueda.';
+
+        let sql = 'SELECT id, descripcion, tipo, precio_unitario, iva, moneda, fecha_actualizacion FROM precios_materiales WHERE descripcion LIKE ?';
+        const params = [query];
+
+        // Filtro opcional por tipo
+        if (tipo && ['material', 'mano_obra', 'subcontrata'].includes(tipo)) {
+          sql += ' AND tipo = ?';
+          params.push(tipo);
+        }
+
+        sql += ' ORDER BY descripcion ASC LIMIT ?';
+        params.push(limit);
+
+        const stmt = env.DB.prepare(sql);
+        const result = await stmt.bind(...params).all();
+        const rows = result.results || [];
+
+        if (rows.length === 0) return `No se encontraron precios para "${query}"${tipo ? ` de tipo "${tipo}"` : ''}.`;
+
+        const formatted = rows.map(row => ({
+          id: row.id,
+          descripcion: row.descripcion,
+          tipo: row.tipo,
+          precio_unitario: row.precio_unitario,
+          iva: row.iva,
+          moneda: row.moneda,
+          actualizado: row.fecha_actualizacion
+        }));
+
+        const output = JSON.stringify(formatted, null, 2);
+        return `Se encontraron ${rows.length} precio(s):\n${output}`;
+      } catch (err) {
+        return `Error en consultar_precios: ${err.message}`;
+      }
     }
 
     default:
