@@ -30,9 +30,23 @@ SÍ tenían el filtro, pero getTrabajadores no.
 - Sintaxis verificada, deploy completado (Version ID: 15841478-3e5b-4386-a3da-62a4335555d3)
 - Commit `2d48088`, push a origin/main completado
 
+### Part 3: UI improvement — Sidebar más limpio para usuarios no-admin
+**Problema:** El sidebar del panel mostraba **muchas secciones** (Construcción, Analítica, etc.)
+desordenadas para usuarios normales (encargado/oficina), sin filtrar por su rol/departamento.
+
+**Fix aplicado:** Ocultar secciones innecesarias en iniciarApp():
+- Para usuarios no-admin (encargado, oficina): oculta "Construcción" y "Analítica"
+- Admins (superadmin/empresa_admin/desarrollador) siguen viendo todas las secciones
+- Resultado: Sidebar más limpio y enfocado para usuarios de operación
+- Commit `f05168f`, push a origin/main completado
+
+**Qué ve cada rol en el sidebar:**
+- **Encargado/Oficina:** Principal, Personal, Inventarios, Obra, Planificación, Seguimiento
+- **Admin/Superadmin:** TODO (todas las secciones visibles)
+
 **Próximos pasos:**
-- Pruebas funcionales con Alberto: verificar que solo ve trabajadores de "electrico"
-- Si en el futuro "encargado" tiene múltiples obras: crear endpoint `/user/obras` en worker.js
+- Pruebas funcionales: verificar que Alberto ve solo las secciones correctas
+- Revisar si hay más datos cross-departamento aún visibles
 - Extender mostrarSeleccionObra() para mostrar múltiples opciones con selector radio
 - Pasar obra_id a endpoints de API si se necesita filtrado por obra adicional
 
