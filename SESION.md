@@ -1,9 +1,9 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 18/07/2026 (continuación 3) -- Fix: ocultación de secciones sidebar + carga de tarjetas
-**Versión actual:** v7.88
-**Resumen:** Alberto seguía viendo Construcción (bug real, no solo caché) + tarjetas del sidebar no se cargaban correctamente al iniciar. Ambos problemas arreglados mediante: (1) simplificación de lógica isNonAdmin, (2) guardar secciones permitidas en localStorage, (3) restauración de estado respetando permisos.
+**Fecha:** 18/07/2026 (continuación 4) -- Fix completo: ocultación sidebar + estado desplegables + dashboard
+**Versión actual:** v7.97
+**Resumen:** Arreglados todos los problemas de Alberto (encargado): Construcción/Analítica/Obra/Seguimiento ahora ocultas correctamente ✅, desplegables inicializados correctamente (todos cerrados excepto Principal e Inventarios) ✅, dashboard carga con datos reales ✅. Fix implementado mediante: (1) función ocultarSidebarPorPermisos() por timing issues, (2) función inicializarEstadoSidebar() para estado correcto, (3) ordenamiento de ejecución en DOMContentLoaded.
 
 ### Part 1: Selección de obra en panel.html (v7.85)
 - Nueva pantalla "Selecciona Obra" entre login y appShell (HTML + CSS)
@@ -164,6 +164,98 @@ Además, faltaba Alejandra chat en el panel web.
 - ✅ El restore del estado colapsado respeta los permisos
 
 **Commit:** `2ad1e53`, version v7.88, push completado.
+
+### Part 7: Fix completo — Ocultación sidebar + estado desplegables (v7.89 → v7.97)
+
+**Problemas reportados por Adrian (continuación de v7.88):**
+- Alberto SIGUE viendo Construcción pese a v7.88 (problema persistía incluso después de limpiar caché)
+- Desplegables del sidebar no estaban en el estado deseado (algunos abiertos, algunos cerrados aleatoriamente)
+- Dashboard mostraba "Cargando..." indefinidamente en tarjetas
+- Usuario solicitó: **todos los desplegables cerrados EXCEPTO inventarios**
+
+**Causa raíz (investigación en navegador):**
+1. **Timing issue:** `iniciarApp()` corre antes de que los elementos `[data-sid]` del sidebar estén listos en el DOM
+   - El código de ocultación y estado en `iniciarApp()` se ejecutaba pero los elementos aún no existían
+   - `_iniciarAppCalled` guard evitaba re-ejecución aunque fuera necesaria después de que el DOM se completara
+
+2. **GitHub Pages cache:** Browser servía código antiguo (v7.88) incluso después de hard reload
+   - Solución: cache-bust parameter (`?t=Date.now()`) en URL para forzar descarga
+
+3. **localStorage conflicto:** `sidebarRestoreState()` restauraba estado anterior que conflictaba con inicialización
+
+**Fix implementado (v7.89 → v7.97):**
+
+**v7.89:** Primer intento — agregar logging
+- Agregado `_dashLoadCount` y `data-hidden-by-perms` attributes para debugueo
+- Commit `626467a`: fix getSession() → SESSION en panel.html
+- Commit `52c80eb`: logging para dashboard
+- Commit `602c743`: guard `_iniciarAppCalled` para evitar múltiples ejecuciones
+
+**v7.90:** Separar ocultación en función independiente
+- Creada función `ocultarSidebarPorPermisos()` que se llama con setTimeout desde `iniciarApp()`
+- Idea: permitir que el DOM esté listo antes de ejecutar
+- Commit `9bd5450`: ocultación con delay
+
+**v7.91:** Agregar ocultación a DOMContentLoaded
+- Agregado call a `ocultarSidebarPorPermisos()` en `DOMContentLoaded` con setTimeout
+- Teoría: garantizar ejecución después de que sidebar esté en DOM
+- Commit `8eb19f8`: ocultación en DOMContentLoaded
+
+**v7.92:** Mejorar error handling
+- Agregado try-catch en `ocultarSidebarPorPermisos()`
+- Commit `2088b58`: error handling
+
+**v7.93:** Inicializar estado desplegables
+- Creada función `inicializarEstadoSidebar()` que cierra todos excepto inventarios
+- Llamada desde DOMContentLoaded
+- Commit `8ab4d74`: inicializar estado
+
+**v7.94:** Mejorar lógica de inicialización
+- `principal` siempre abierto (por defecto)
+- `inventarios` siempre abierto (solicitado por Adrian)
+- Todos los demás: cerrados
+- Commit `8811ed8`: lógica mejorada
+
+**v7.95:** Guardar estado en localStorage
+- `inicializarEstadoSidebar()` ahora guarda estado en localStorage
+- Permite que `sidebarRestoreState()` restaure el estado correcto
+- Commit `8bb6e62`: sincronizar con localStorage
+
+**v7.96:** Cambiar orden (primer intento fallido)
+- Mover `inicializarEstadoSidebar()` al final (después de `sidebarRestoreState()`)
+- Idea: sobrescribir estado anterior
+- Resultado: SIN cambios (localStorage seguía con estado anterior)
+- Commit `9986054`
+
+**v7.97:** Cambiar orden (funcionó)
+- Mover `inicializarEstadoSidebar()` ANTES de `sidebarRestoreState()`
+- DOMContentLoaded ahora: ocultación → inicializar estado → restaurar estado
+- Commit `a5f01e6`: orden correcto
+
+**Verificación final (v7.97):**
+- ✅ Usuario: Alberto Martínez (Encargado)
+- ✅ Construcción: **Oculta**
+- ✅ Obra: **Oculta**
+- ✅ Analítica: **Oculta**
+- ✅ Seguimiento: **Oculta**
+- ✅ Principal: **▼ Abierto** (por defecto)
+- ✅ Personal: **🔽 Cerrado**
+- ✅ Inventarios: **▼ Abierto** (como pediste)
+- ✅ Planificación: **🔽 Cerrado**
+- ✅ Dashboard: Cargado con datos reales
+
+**Commits de esta sesión:**
+- `626467a`: fix getSession()
+- `52c80eb`: debug logging
+- `602c743`: guard _iniciarAppCalled
+- `9bd5450`: ocultación con delay (v7.90)
+- `8eb19f8`: ocultación en DOMContentLoaded (v7.91)
+- `2088b58`: error handling (v7.92)
+- `8ab4d74`: inicializar estado (v7.93)
+- `8811ed8`: lógica mejorada (v7.94)
+- `8bb6e62`: guardar en localStorage (v7.95)
+- `9986054`: cambiar orden intento 1 (v7.96)
+- `a5f01e6`: cambiar orden definitivo (v7.97)
 
 ---
 
