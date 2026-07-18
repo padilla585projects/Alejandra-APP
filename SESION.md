@@ -40,13 +40,42 @@ desordenadas para usuarios normales (encargado/oficina), sin filtrar por su rol/
 - Resultado: Sidebar más limpio y enfocado para usuarios de operación
 - Commit `f05168f`, push a origin/main completado
 
-**Qué ve cada rol en el sidebar:**
-- **Encargado/Oficina:** Principal, Personal, Inventarios, Obra, Planificación, Seguimiento
-- **Admin/Superadmin:** TODO (todas las secciones visibles)
+### Part 4: UI improvement — Ocultar también "Obra" y "Seguimiento" (v7.86)
+**Feedback de Adrian tras probar Part 3:** *"vale,pero todavia que da 'Obra' que sigue
+viendo"* y después *"y 'seguimiento' que tampoco creo ques sea necesario que lo vea"* — las
+secciones `data-sid="obra"` (Obras, Documentos, Incidencias, Pedidos, Mantenimientos) y
+`data-sid="seguimiento"` (Partes Diarios, Diario de Obra, Informes de Campo, Garantías,
+Alquileres Equipo, Entregables, Lecciones Aprendidas, Rendimientos, ATS, Eval. Proveedores,
+Change Orders, Ensayos y Pruebas) seguían visibles para encargado/oficina tras el fix
+anterior, que solo cubría Construcción y Analítica.
+
+**Fix aplicado:** extendido el mismo bloque de `iniciarApp()` (panel.html) — el
+`querySelectorAll` que oculta secciones para `isNonAdmin` ahora incluye también
+`[data-sid="obra"]` y `[data-sid="seguimiento"]`, reutilizando la misma lógica de ocultar
+hermanos hasta la siguiente `.sidebar-section` (sin cambios de lógica, solo se amplió el
+selector).
+
+- Versión sincronizada: v7.86 en `version.json`, `sw.js`, `index.html.APP_VERSION`
+  (verificado con script antes del push).
+- Verificado: bloques `<script>` de `panel.html` extraídos y compilados con `new Function()`
+  sin errores; grep de encoding en el diff limpio (sin coincidencias).
+- Solo frontend (panel.html/index.html/sw.js/version.json) — no requiere `wrangler deploy`,
+  solo push (GitHub Pages autodespliega).
+- Commit `af10802`, push a `origin/main` completado.
+
+**Qué ve cada rol en el sidebar (actualizado):**
+- **Encargado/Oficina:** Principal, Personal, Inventarios, Planificación
+- **Admin/Superadmin:** TODO (todas las secciones visibles, incluidas Construcción,
+  Analítica, Obra y Seguimiento)
 
 **Próximos pasos:**
-- Pruebas funcionales: verificar que Alberto ve solo las secciones correctas
-- Revisar si hay más datos cross-departamento aún visibles
+- Pruebas funcionales: verificar en vivo que Alberto ve solo Principal/Personal/
+  Inventarios/Planificación y nada más
+- Nota sin resolver: la sección "Obra" tenía items (Documentos, Incidencias) que un
+  encargado podría necesitar en su día a día — se ocultó por completo siguiendo la
+  petición explícita de Adrian; si en el futuro hace falta acceso puntual a esos items,
+  revisar si conviene mover solo esos 1-2 items a otra sección visible en vez de ocultar
+  la sección Obra entera
 - Extender mostrarSeleccionObra() para mostrar múltiples opciones con selector radio
 - Pasar obra_id a endpoints de API si se necesita filtrado por obra adicional
 
