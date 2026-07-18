@@ -246,6 +246,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 /* ── SYNC / REMOTE SCAN ── */
 #remoteScanFab{position:fixed;bottom:80px;right:20px;z-index:500;display:none;flex-direction:column;gap:8px;align-items:flex-end}
+#fabAlejandra{position:fixed;bottom:20px;right:20px;z-index:499;background:var(--green);color:#fff;border:none;border-radius:50%;width:56px;height:56px;font-size:24px;box-shadow:0 4px 20px rgba(34,197,94,.4);cursor:pointer;transition:transform .2s,box-shadow .2s;display:none;align-items:center;justify-content:center}
+#fabAlejandra:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(34,197,94,.6)}
+#fabAlejandra:active{transform:scale(0.95)}
 .rs-fab-main{background:var(--accent);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:22px;box-shadow:0 4px 20px rgba(168,85,247,.5);cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative}
 .rs-fab-main:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(168,85,247,.7)}
 .rs-fab-badge{position:absolute;top:-2px;right:-2px;background:var(--green);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid var(--bg)}
@@ -507,23 +510,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="turnos" onclick="navTo('turnos')">
       <span class="nav-icon">📅</span> Turnos
     </button>
-    <button class="nav-item" data-page="epis" onclick="navTo('epis')">
+
+    <div class="sidebar-section nav-seguridad-section" onclick="sidebarToggle(this)" data-sid="seguridad" style="display:none"><span>🔺 Seguridad</span><span class="sec-chevron">▼</span></div>
+    <button class="nav-item nav-seguridad-section" data-page="epis" onclick="navTo('epis')" style="display:none">
       <span class="nav-icon">🦺</span> EPIs
     </button>
-    <button class="nav-item nav-sensitive-data" data-page="carnets" onclick="navTo('carnets')">
+    <button class="nav-item nav-sensitive-data nav-seguridad-section" data-page="carnets" onclick="navTo('carnets')" style="display:none">
       <span class="nav-icon">🪪</span> Carnets
     </button>
-    <button class="nav-item nav-sensitive-data" data-page="reconocimientos" onclick="navTo('reconocimientos')">
+    <button class="nav-item nav-sensitive-data nav-seguridad-section" data-page="reconocimientos" onclick="navTo('reconocimientos')" style="display:none">
       <span class="nav-icon">🏥</span> Reconocimientos
     </button>
-    <button class="nav-item" data-page="documentosObra" onclick="navTo('documentosObra')">
-      <span class="nav-icon">📋</span> Docs. Obra
-    </button>
-    <button class="nav-item" data-page="permisosTrabajo" onclick="navTo('permisosTrabajo')">
+    <button class="nav-item nav-seguridad-section" data-page="permisosTrabajo" onclick="navTo('permisosTrabajo')" style="display:none">
       <span class="nav-icon">📝</span> Permisos Trabajo
-    </button>
-    <button class="nav-item" data-page="inspecciones" onclick="navTo('inspecciones')">
-      <span class="nav-icon">🔍</span> Inspecciones
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="inventarios"><span>📦 Inventarios</span><span class="sec-chevron">▼</span></div>
@@ -565,6 +564,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="nav-item" data-page="mantenimientos" onclick="navTo('mantenimientos')">
       <span class="nav-icon">🔩</span> Mantenimientos
+    </button>
+    <button class="nav-item" data-page="documentosObra" onclick="navTo('documentosObra')">
+      <span class="nav-icon">📋</span> Docs. Obra
+    </button>
+    <button class="nav-item" data-page="inspecciones" onclick="navTo('inspecciones')">
+      <span class="nav-icon">🔍</span> Inspecciones
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="construccion"><span>🏗 Construcción</span><span class="sec-chevron">▼</span></div>
@@ -9762,6 +9767,17 @@ function iniciarApp() {
     document.querySelectorAll('.nav-sensitive-data').forEach(el => el.style.display = 'none');
   }
 
+  // mostrar sección Seguridad solo si el usuario es del departamento de Seguridad
+  const deptActual = getSession().departamento || 'electrico';
+  if (deptActual === 'seguridad') {
+    document.querySelectorAll('.nav-seguridad-section').forEach(el => el.style.display = '');
+  }
+
+  // mostrar FAB de Alejandra cuando hay sesión activa
+  if (SESSION?.usuario_id) {
+    document.getElementById('fabAlejandra').style.display = 'flex';
+  }
+
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
   // Admins (superadmin/empresa_admin) ven TODO
   // Encargado/Oficina: solo secciones relevantes (Principal, Personal, Inventarios, Planificación)
@@ -13493,6 +13509,82 @@ function chatCerrar() {
   clearInterval(chatPolling); chatPolling = null;
 }
 
+let alejandraChatAbierto = false;
+let alejandrPolling = null;
+
+function alejandraFabAbrir() {
+  const panel = document.getElementById('alejandraChatPanel');
+  panel.style.display = 'flex';
+  alejandraChatAbierto = true;
+  cargarAlejandraChat();
+  if (!alejandrPolling) alejandrPolling = setInterval(cargarAlejandraChat, 5000);
+  document.getElementById('fabAlejandra').style.display = 'none';
+}
+
+function alejandraChatCerrar() {
+  document.getElementById('alejandraChatPanel').style.display = 'none';
+  alejandraChatAbierto = false;
+  clearInterval(alejandrPolling); alejandrPolling = null;
+  document.getElementById('fabAlejandra').style.display = 'flex';
+}
+
+async function cargarAlejandraChat() {
+  const usuarioId = SESSION?.usuario_id || null;
+  if (!usuarioId) return;
+  try {
+    const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}`, {
+      headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const msgs = (data.mensajes || []).reverse();
+    const cont = document.getElementById('alejandraMensajes');
+    if (!msgs.length) {
+      cont.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">Hola, pregúntame lo que necesites</div></div>';
+      return;
+    }
+    cont.innerHTML = msgs.map(m => {
+      const esUsuario = m.role === 'user';
+      const clase = esUsuario ? 'user-msg' : 'ia-msg';
+      const bg = esUsuario ? 'var(--accent)' : 'var(--surface2)';
+      const color = esUsuario ? '#000' : 'var(--text)';
+      return `<div style="display:flex;justify-content:${esUsuario ? 'flex-end' : 'flex-start'};margin-bottom:8px">
+        <div style="max-width:85%;padding:10px 14px;border-radius:12px;background:${bg};color:${color};font-size:13px;word-break:break-word;line-height:1.45;border:1px solid ${esUsuario ? 'transparent' : 'var(--border)'}">${m.content || m.text}</div>
+      </div>`;
+    }).join('');
+    cont.scrollTop = cont.scrollHeight;
+  } catch (e) {
+    console.error('Error cargando chat Alejandra:', e);
+  }
+}
+
+async function alejandrEnviar() {
+  const input = document.getElementById('alejandrInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const usuarioId = SESSION?.usuario_id || null;
+  if (!usuarioId) {
+    alert('No hay sesión activa');
+    return;
+  }
+  try {
+    const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+      body: JSON.stringify({ message: msg, usuario_id: usuarioId })
+    });
+    if (!r.ok) {
+      alert('Error al enviar mensaje');
+      return;
+    }
+    cargarAlejandraChat();
+  } catch (e) {
+    console.error('Error enviando mensaje:', e);
+    alert('Error al enviar mensaje');
+  }
+}
+
 // Color de avatar según rol
 function chatRolColor(rol) {
   return { empresa_admin:'#f97316', encargado:'#eab308', jefe_de_obra:'#2563eb',
@@ -17053,6 +17145,26 @@ document.getElementById('wInput').focus();
     📷
     <span class="rs-fab-badge offline" id="rsFabBadge">0</span>
   </button>
+</div>
+
+<!-- ── FAB Alejandra IA ── -->
+<button id="fabAlejandra" class="fab-alejandra" onclick="alejandraFabAbrir()" title="Chat Alejandra IA">
+  ✨
+</button>
+
+<!-- ── Modal Alejandra Chat ── -->
+<div id="alejandraChatPanel" style="display:none;position:fixed;bottom:90px;right:20px;width:380px;height:540px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:498;display:none;flex-direction:column">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--border)">
+    <h3 style="margin:0;font-size:14px;font-weight:700">✨ Alejandra IA</h3>
+    <button onclick="alejandraChatCerrar()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px">✕</button>
+  </div>
+  <div id="alejandraMensajes" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
+    <div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">Hola, pregúntame lo que necesites</div></div>
+  </div>
+  <div style="display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)">
+    <input id="alejandrInput" class="form-input" placeholder="Escribe tu pregunta..." style="flex:1;padding:8px 12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandrEnviar()}">
+    <button class="btn btn-primary" onclick="alejandrEnviar()" style="padding:8px 14px">➤</button>
+  </div>
 </div>
 
 <script>
