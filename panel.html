@@ -9841,6 +9841,39 @@ function iniciarApp() {
   }
   // Escaneo remoto — sync con móvil
   if (typeof rsIniciarSync === 'function') rsIniciarSync();
+
+  // aplicar ocultación de sidebar después de que navegación se complete
+  setTimeout(() => ocultarSidebarPorPermisos(), 100);
+}
+
+function ocultarSidebarPorPermisos() {
+  const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
+  const isNonAdmin = !isAdmin;
+
+  if (isNonAdmin) {
+    const seccionesOcultar = ['construccion', 'analitica', 'obra', 'seguimiento'];
+    let ocultadas = 0;
+    seccionesOcultar.forEach(sid => {
+      const el = document.querySelector(`[data-sid="${sid}"]`);
+      if (el) {
+        el.style.display = 'none';
+        el.setAttribute('data-hidden-by-perms', 'true');
+        ocultadas++;
+        let next = el.nextElementSibling;
+        while (next && !next.classList.contains('sidebar-section')) {
+          next.style.display = 'none';
+          next.setAttribute('data-hidden-by-perms', 'true');
+          next = next.nextElementSibling;
+        }
+      }
+    });
+    if (ocultadas > 0) {
+      console.log(`✓ Ocultadas secciones no-admin: ${seccionesOcultar.filter((sid, i) => document.querySelector(`[data-sid="${sid}"]`)).join(', ')}`);
+      try {
+        localStorage.setItem('alejandra_sidebar_permitted', JSON.stringify(['principal', 'personal', 'seguridad', 'inventarios', 'planificacion']));
+      } catch {}
+    }
+  }
 }
 
 function toggleSidebar() {
