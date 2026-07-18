@@ -8152,19 +8152,25 @@ async function eliminarPersonalExterno(id, request, env) {
 
 // Ã¢"â‚¬Ã¢"â‚¬ Trabajadores (usuarios app + externo) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 async function getTrabajadores(request, env) {
-  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, rol } = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
 
+  // Filtro de departamento para usuarios no-admin
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isDesarrollador || isAdmin;
+  const deptFilter = !isAdminRole && (rol === 'oficina' || rol === 'encargado') ? departamento : null;
+
   let sqlU = 'SELECT id, nombre, rol, departamento, obra_id, NULL as dni, "app" as tipo, foto_r2_key, CASE WHEN telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios WHERE empresa_id=? AND activo=1';
   const paramsU = [empresa_id];
   if (obra_id) { sqlU += ' AND obra_id=?'; paramsU.push(parseInt(obra_id)); }
+  if (deptFilter) { sqlU += ' AND departamento=?'; paramsU.push(deptFilter); }
   sqlU += ' ORDER BY nombre';
 
   let sqlP = 'SELECT id, nombre, NULL as rol, departamento, obra_id, dni, "externo" as tipo, foto_r2_key, 0 as tiene_telegram FROM personal_externo WHERE empresa_id=? AND activo=1';
   const paramsP = [empresa_id];
   if (obra_id) { sqlP += ' AND obra_id=?'; paramsP.push(parseInt(obra_id)); }
+  if (deptFilter) { sqlP += ' AND departamento=?'; paramsP.push(deptFilter); }
   sqlP += ' ORDER BY nombre';
 
   const [ru, rp] = await Promise.all([
