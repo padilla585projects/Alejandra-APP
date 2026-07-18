@@ -9929,24 +9929,34 @@ function sidebarRestoreState() {
 
 function inicializarEstadoSidebar() {
   try {
-    // Inicializar: todos cerrados EXCEPTO inventarios
-    const seccionesPermitidas = JSON.parse(localStorage.getItem('alejandra_sidebar_permitted') || '[]');
-    const seccionesACerrar = seccionesPermitidas.filter(s => s !== 'inventarios');
+    // Inicializar estado de desplegables:
+    // - Todos CERRADOS excepto inventarios
+    // - Principal siempre abierto (es la sección por defecto)
 
     document.querySelectorAll('.sidebar-section[data-sid]').forEach(el => {
       const sid = el.dataset.sid;
+      const estaCerrado = el.classList.contains('sec-collapsed');
 
-      // Si la sección debe estar cerrada y NO está ya cerrada, cerrarla
-      if (seccionesACerrar.includes(sid) && !el.classList.contains('sec-collapsed')) {
+      // principal siempre abierto
+      if (sid === 'principal' && estaCerrado) {
         sidebarToggle(el);
+        return;
       }
 
-      // Si es inventarios y está cerrada, abrirla
-      if (sid === 'inventarios' && el.classList.contains('sec-collapsed')) {
+      // inventarios siempre abierto
+      if (sid === 'inventarios' && estaCerrado) {
+        sidebarToggle(el);
+        return;
+      }
+
+      // Todos los demás: cerrados
+      if (sid !== 'principal' && sid !== 'inventarios' && !estaCerrado) {
         sidebarToggle(el);
       }
     });
-  } catch {}
+  } catch (e) {
+    console.error('Error en inicializarEstadoSidebar:', e);
+  }
 }
 
 // Run after DOM loaded
