@@ -452,7 +452,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="personal"><span>👷 Personal</span><span class="sec-chevron">▼</span></div>
-    <button class="nav-item" data-page="personal" onclick="navTo('personal')">
+    <button class="nav-item nav-sensitive-data" data-page="personal" onclick="navTo('personal')">
       <span class="nav-icon">👷</span> Trabajadores
     </button>
     <button class="nav-item" data-page="fichajes" onclick="navTo('fichajes')">
@@ -468,10 +468,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="epis" onclick="navTo('epis')">
       <span class="nav-icon">🦺</span> EPIs
     </button>
-    <button class="nav-item" data-page="carnets" onclick="navTo('carnets')">
+    <button class="nav-item nav-sensitive-data" data-page="carnets" onclick="navTo('carnets')">
       <span class="nav-icon">🪪</span> Carnets
     </button>
-    <button class="nav-item" data-page="reconocimientos" onclick="navTo('reconocimientos')">
+    <button class="nav-item nav-sensitive-data" data-page="reconocimientos" onclick="navTo('reconocimientos')">
       <span class="nav-icon">🏥</span> Reconocimientos
     </button>
     <button class="nav-item" data-page="documentosObra" onclick="navTo('documentosObra')">
@@ -9642,6 +9642,11 @@ function iniciarApp() {
   // mostrar páginas financieras: todos excepto operario
   if (!hasSessionRole('operario')) {
     document.querySelectorAll('.nav-finance').forEach(el => el.style.display = '');
+  }
+
+  // ocultar datos sensibles para "oficina" (Trabajadores, Carnets, Reconocimientos)
+  if (hasSessionRole('oficina') && !hasSessionRole('superadmin', 'desarrollador', 'empresa_admin')) {
+    document.querySelectorAll('.nav-sensitive-data').forEach(el => el.style.display = 'none');
   }
 
   // mostrar secciones superadmin en página empresa
