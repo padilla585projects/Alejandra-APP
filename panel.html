@@ -9781,16 +9781,29 @@ function iniciarApp() {
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
   // Admins (superadmin/empresa_admin) ven TODO
   // Encargado/Oficina: solo secciones relevantes (Principal, Personal, Inventarios, Planificación)
-  const isNonAdmin = !isAdmin && !hasSessionRole('superadmin', 'desarrollador');
+  const isNonAdmin = !isAdmin;
+  const seccionesPermitidas = isNonAdmin ?
+    ['principal', 'personal', 'seguridad', 'inventarios', 'planificacion'] :
+    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'construccion', 'planificacion', 'seguimiento', 'analitica'];
+
+  // Guardar en localStorage cuáles secciones están permitidas para este usuario
+  try {
+    localStorage.setItem('alejandra_sidebar_permitted', JSON.stringify(seccionesPermitidas));
+  } catch {}
+
   if (isNonAdmin) {
-    // Ocultar: Construcción, Analítica, Obra, Seguimiento, Desarrollador
-    document.querySelectorAll('[data-sid="construccion"], [data-sid="analitica"], [data-sid="obra"], [data-sid="seguimiento"]').forEach(el => {
-      el.style.display = 'none';
-      // También ocultar items bajo esta sección (hermanos hasta la siguiente sección)
-      let next = el.nextElementSibling;
-      while (next && !next.classList.contains('sidebar-section')) {
-        next.style.display = 'none';
-        next = next.nextElementSibling;
+    // Ocultar: Construcción, Analítica, Obra, Seguimiento
+    const seccionesOcultar = ['construccion', 'analitica', 'obra', 'seguimiento'];
+    seccionesOcultar.forEach(sid => {
+      const el = document.querySelector(`[data-sid="${sid}"]`);
+      if (el) {
+        el.style.display = 'none';
+        // También ocultar items bajo esta sección (hermanos hasta la siguiente sección)
+        let next = el.nextElementSibling;
+        while (next && !next.classList.contains('sidebar-section')) {
+          next.style.display = 'none';
+          next = next.nextElementSibling;
+        }
       }
     });
   }
@@ -9847,9 +9860,16 @@ function sidebarToggle(el) {
 function sidebarRestoreState() {
   try {
     const state = JSON.parse(localStorage.getItem(_SIDEBAR_STATE_KEY) || '{}');
+    const permitidas = JSON.parse(localStorage.getItem('alejandra_sidebar_permitted') || '[]');
     document.querySelectorAll('.sidebar-section[data-sid]').forEach(el => {
       const sid = el.dataset.sid;
-      if (state[sid]) { sidebarToggle(el); }
+      // Solo restaurar estado si:
+      // 1. La sección está en la lista de permitidas
+      // 2. La sección está visible (display !== 'none')
+      // 3. El estado guardado indica que debe estar colapsada
+      if (permitidas.includes(sid) && el.style.display !== 'none' && state[sid]) {
+        sidebarToggle(el);
+      }
     });
   } catch {}
 }
