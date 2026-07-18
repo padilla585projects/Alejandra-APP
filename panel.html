@@ -9847,32 +9847,43 @@ function iniciarApp() {
 }
 
 function ocultarSidebarPorPermisos() {
-  const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
-  const isNonAdmin = !isAdmin;
+  try {
+    const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
+    const isNonAdmin = !isAdmin;
 
-  if (isNonAdmin) {
-    const seccionesOcultar = ['construccion', 'analitica', 'obra', 'seguimiento'];
-    let ocultadas = 0;
-    seccionesOcultar.forEach(sid => {
-      const el = document.querySelector(`[data-sid="${sid}"]`);
-      if (el) {
-        el.style.display = 'none';
-        el.setAttribute('data-hidden-by-perms', 'true');
-        ocultadas++;
-        let next = el.nextElementSibling;
-        while (next && !next.classList.contains('sidebar-section')) {
-          next.style.display = 'none';
-          next.setAttribute('data-hidden-by-perms', 'true');
-          next = next.nextElementSibling;
+    if (isNonAdmin) {
+      const seccionesOcultar = ['construccion', 'analitica', 'obra', 'seguimiento'];
+      let ocultadas = 0;
+      let totalItems = 0;
+
+      seccionesOcultar.forEach(sid => {
+        const el = document.querySelector(`[data-sid="${sid}"]`);
+        if (el) {
+          el.style.display = 'none';
+          el.setAttribute('data-hidden-by-perms', 'true');
+          ocultadas++;
+          totalItems++;
+
+          // Ocultar items hermanos hasta la siguiente sección
+          let next = el.nextElementSibling;
+          while (next && !next.classList.contains('sidebar-section')) {
+            next.style.display = 'none';
+            next.setAttribute('data-hidden-by-perms', 'true');
+            totalItems++;
+            next = next.nextElementSibling;
+          }
         }
+      });
+
+      if (ocultadas > 0) {
+        try {
+          localStorage.setItem('alejandra_sidebar_permitted', JSON.stringify(['principal', 'personal', 'seguridad', 'inventarios', 'planificacion']));
+        } catch {}
+        console.log(`✓ Sidebar ocultación: ${ocultadas} secciones, ${totalItems} items totales`);
       }
-    });
-    if (ocultadas > 0) {
-      console.log(`✓ Ocultadas secciones no-admin: ${seccionesOcultar.filter((sid, i) => document.querySelector(`[data-sid="${sid}"]`)).join(', ')}`);
-      try {
-        localStorage.setItem('alejandra_sidebar_permitted', JSON.stringify(['principal', 'personal', 'seguridad', 'inventarios', 'planificacion']));
-      } catch {}
     }
+  } catch (e) {
+    console.error('Error en ocultarSidebarPorPermisos:', e);
   }
 }
 
