@@ -9762,6 +9762,23 @@ function iniciarApp() {
     document.querySelectorAll('.nav-sensitive-data').forEach(el => el.style.display = 'none');
   }
 
+  // ocultar secciones innecesarias del sidebar para usuarios no-admin
+  // Admins (superadmin/empresa_admin) ven TODO
+  // Encargado/Oficina: solo secciones relevantes (Principal, Inventarios, Obra, Planificación, Seguimiento)
+  const isNonAdmin = !isAdmin && !hasSessionRole('superadmin', 'desarrollador');
+  if (isNonAdmin) {
+    // Ocultar: Construcción, Analítica, Desarrollador
+    document.querySelectorAll('[data-sid="construccion"], [data-sid="analitica"]').forEach(el => {
+      el.style.display = 'none';
+      // También ocultar items bajo esta sección (hermanos hasta la siguiente sección)
+      let next = el.nextElementSibling;
+      while (next && !next.classList.contains('sidebar-section')) {
+        next.style.display = 'none';
+        next = next.nextElementSibling;
+      }
+    });
+  }
+
   // mostrar secciones superadmin en página empresa
   if (hasSessionRole('superadmin', 'desarrollador')) {
     document.getElementById('seccionCrearEmpresa').style.display = '';
