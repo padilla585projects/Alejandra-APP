@@ -44,6 +44,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .login-api-row button{padding:12px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;white-space:nowrap;transition:border-color .2s}
 .login-api-row button:hover{border-color:var(--accent);color:var(--accent)}
 
+/* ── OBRA SELECTION ── */
+#obraSeleccionScreen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center}
+#obraSeleccionScreen.visible{display:flex}
+.obra-option{padding:14px 16px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px;font-family:'Poppins',sans-serif;font-weight:500;font-size:14px;color:var(--text)}
+.obra-option:hover{border-color:var(--accent);background:rgba(249,115,22,.05)}
+.obra-option input[type="radio"]{cursor:pointer;width:18px;height:18px;accent-color:var(--accent);flex-shrink:0}
+.obra-option-label{flex:1;display:flex;flex-direction:column;gap:2px;cursor:pointer}
+.obra-option-name{font-weight:600;color:var(--text)}
+.obra-option-details{font-size:12px;color:var(--muted)}
+
 /* ── REGISTRO OVERLAY ── */
 #regOverlay{position:fixed;inset:0;background:var(--bg);z-index:10000;display:none;align-items:center;justify-content:center;padding:24px;overflow-y:auto}
 #regOverlay.open{display:flex}
@@ -412,6 +422,38 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
       </div>
     </details>
+  </div>
+</div>
+
+<!-- ── OBRA SELECTION ── -->
+<div id="obraSeleccionScreen">
+  <div class="login-box" style="max-width:500px">
+    <div class="login-brand">
+      <svg width="56" height="56" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" style="border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.4)">
+        <rect width="512" height="512" rx="90" fill="#0f172a"/>
+        <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+        <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
+      </svg>
+      <div>
+        <div class="login-appname">Selecciona Obra</div>
+        <div class="login-sub">Proyecto de Trabajo</div>
+      </div>
+    </div>
+
+    <div class="login-field">
+      <div class="login-label">Obra Disponible</div>
+      <div id="obraSeleccionContent" style="display:flex;flex-direction:column;gap:8px">
+        <!-- Obra options will be inserted here -->
+      </div>
+    </div>
+
+    <div id="obraSeleccionErr" class="login-err"></div>
+    <button class="login-btn" id="obraSeleccionBtn" onclick="confirmarObraSeleccion()" disabled>CONTINUAR</button>
+    <button class="login-btn" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);margin-top:-8px" onclick="doLogout()">← Volver</button>
   </div>
 </div>
 
@@ -868,6 +910,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <button class="topbar-btn" id="btnNavBack" onclick="navBack()" title="Volver a la página anterior" style="display:none;font-size:12px;gap:4px;align-items:center;padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);white-space:nowrap">← <span id="navBackLabel">Volver</span></button>
       <div class="topbar-title" id="topbarTitle">Dashboard</div>
       <div class="topbar-empresa" id="topbarEmpresa"></div>
+      <div class="topbar-empresa" id="topbarObra" style="color:var(--accent)"></div>
       <div class="topbar-user" id="topbarUser">
         <span>👤</span>
         <span id="topbarName">—</span>
@@ -9603,9 +9646,64 @@ async function doLogin() {
   }
 
   TOKEN = r.token;
-  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: r.roles_extra || [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null };
+  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: r.roles_extra || [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null, obra_id: r.obra_id || null, obra_nombre: r.obra_nombre || null };
   localStorage.setItem('panel_token', TOKEN);
   localStorage.setItem('panel_session', JSON.stringify(SESSION));
+  mostrarSeleccionObra(r);
+}
+
+function mostrarSeleccionObra(loginResponse) {
+  // Ocultar login screen
+  document.getElementById('loginScreen').style.display = 'none';
+  const obraScreen = document.getElementById('obraSeleccionScreen');
+  const contentDiv = document.getElementById('obraSeleccionContent');
+  const errEl = document.getElementById('obraSeleccionErr');
+  const btn = document.getElementById('obraSeleccionBtn');
+
+  errEl.textContent = '';
+  contentDiv.innerHTML = '';
+  btn.disabled = true;
+
+  // Roles que pueden acceder al panel
+  const rol = SESSION.rol;
+  const rolesExtra = SESSION.roles_extra || [];
+
+  // Para "oficina" role: es obligatorio tener obra (si no la tiene, error)
+  // Para "encargado" role: puede tener una o varias obras (por ahora solo una en BD)
+
+  if (!loginResponse.obra_id) {
+    // No tiene obra asignada
+    errEl.textContent = 'No tienes una obra asignada. Contacta al administrador.';
+    return;
+  }
+
+  // Mostrar la obra asignada
+  const obraDiv = document.createElement('div');
+  obraDiv.className = 'obra-option';
+  obraDiv.innerHTML = `
+    <input type="radio" name="obra-select" value="${loginResponse.obra_id}" checked onchange="document.getElementById('obraSeleccionBtn').disabled = false">
+    <div class="obra-option-label">
+      <div class="obra-option-name">${loginResponse.obra_nombre || 'Obra ' + loginResponse.obra_id}</div>
+      <div class="obra-option-details">Proyecto asignado</div>
+    </div>
+  `;
+  contentDiv.appendChild(obraDiv);
+  btn.disabled = false;
+
+  // Mostrar el screen
+  obraScreen.classList.add('visible');
+}
+
+function confirmarObraSeleccion() {
+  const selected = document.querySelector('input[name="obra-select"]:checked');
+  if (!selected) return;
+
+  const obraId = parseInt(selected.value);
+  // El SESSION ya tiene obra_id y obra_nombre del login, pero lo confirmamos aquí
+  // Si en el futuro hay múltiples obras, actualizaremos desde aquí
+
+  // Ocultar y proceder
+  document.getElementById('obraSeleccionScreen').classList.remove('visible');
   iniciarApp();
 }
 
@@ -9621,6 +9719,7 @@ function doLogout() {
 // ── INICIAR APP ────────────────────────────────────────────────
 function iniciarApp() {
   document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('obraSeleccionScreen').classList.remove('visible');
   const shell = document.getElementById('appShell');
   shell.classList.add('visible');
 
@@ -9635,6 +9734,12 @@ function iniciarApp() {
   rolEl.textContent = rolLabels[SESSION.rol] || SESSION.rol;
   rolEl.className = `rol-badge rol-${SESSION.rol}`;
   if (SESSION.empresa_nombre) document.getElementById('topbarEmpresa').textContent = SESSION.empresa_nombre;
+
+  // mostrar obra en topbar si está disponible
+  if (SESSION.obra_nombre) {
+    const topbarObraEl = document.getElementById('topbarObra');
+    if (topbarObraEl) topbarObra.textContent = SESSION.obra_nombre;
+  }
 
   // mostrar sección admin si procede
   const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
