@@ -9971,8 +9971,8 @@ function inicializarEstadoSidebar() {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     ocultarSidebarPorPermisos();   // ocultación por permisos
-    sidebarRestoreState();         // restaurar estado guardado
-    inicializarEstadoSidebar();    // cerrar todos excepto inventarios (sobrescribe)
+    inicializarEstadoSidebar();    // inicializar: cerrar todos excepto inventarios
+    sidebarRestoreState();         // restaurar estado guardado después
   }, 100);
 });
 
