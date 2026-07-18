@@ -9772,7 +9772,7 @@ function iniciarApp() {
   }
 
   // mostrar sección Seguridad solo si el usuario es del departamento de Seguridad
-  const deptActual = getSession().departamento || 'electrico';
+  const deptActual = SESSION.departamento || 'electrico';
   if (deptActual === 'seguridad') {
     document.querySelectorAll('.nav-seguridad-section').forEach(el => el.style.display = '');
   }
