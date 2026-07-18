@@ -1,23 +1,37 @@
 ## ESTADO ACTUAL
 
 **Sesion:** EN CURSO
-**Fecha:** 18/07/2026 -- Selección de obra en panel.html (v7.85)
-**Resumen:** Implementación de pantalla de selección de obra después del login en panel.html:
+**Fecha:** 18/07/2026 -- Obra selection + fix filtro departamentos (v7.85 + SEC-16)
+**Resumen:** Implementación de pantalla de selección de obra + fix de seguridad en filtros de departamento:
 
-**Qué se hizo:**
+### Part 1: Selección de obra en panel.html (v7.85)
 - Nueva pantalla "Selecciona Obra" entre login y appShell (HTML + CSS)
 - Mostrada después de login exitoso, antes de iniciarApp()
 - Para roles "oficina" y "encargado": muestra obra asignada con confirmación
-- SESSION ahora incluye obra_id y obra_nombre (en doLogin)
-- Topbar muestra la obra actual en color naranja (--accent)
+- SESSION ahora incluye obra_id y obra_nombre
+- Topbar muestra la obra actual en color naranja
 - Flujo: login → mostrarSeleccionObra() → confirmarObraSeleccion() → iniciarApp()
-- Funciones nuevas: mostrarSeleccionObra(), confirmarObraSeleccion()
-- Validación de roles integrada con sistema existente de departamentos
 - Versión sincronizada: v7.85 en version.json, sw.js, index.html.APP_VERSION
-- Commit `e59e606`, push a origin/main completado
+- Commit `e59e606`, push completado
+
+### Part 2: Fix seguridad — Filtro departamento en getTrabajadores (SEC-16)
+**Problema:** Alberto (encargado+electrico) podía ver trabajadores de otros departamentos
+(construccion, obra_civil, etc.) en la página "Trabajadores" del panel.
+
+**Causa:** El endpoint `/personal/trabajadores` (función `getTrabajadores`) no tenía filtro
+de departamento para usuarios no-admin. Comparación: getCarnets, getEpisAsignados, etc.
+SÍ tenían el filtro, pero getTrabajadores no.
+
+**Fix aplicado:** Agregado filtro de departamento a getTrabajadores:
+- Para usuarios con rol "oficina" o "encargado": filtra por su departamento
+- Admins (superadmin/empresa_admin/desarrollador) ven todos los departamentos
+- Patrón consistente con los otros 12 endpoints de filtrado
+- Verificación de auditoría: otros 12 endpoints confirmados correctos ✅
+- Sintaxis verificada, deploy completado (Version ID: 15841478-3e5b-4386-a3da-62a4335555d3)
+- Commit `2d48088`, push a origin/main completado
 
 **Próximos pasos:**
-- Pruebas funcionales en producción (login con Alberto/Katherine + flujo obra)
+- Pruebas funcionales con Alberto: verificar que solo ve trabajadores de "electrico"
 - Si en el futuro "encargado" tiene múltiples obras: crear endpoint `/user/obras` en worker.js
 - Extender mostrarSeleccionObra() para mostrar múltiples opciones con selector radio
 - Pasar obra_id a endpoints de API si se necesita filtrado por obra adicional
