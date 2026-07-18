@@ -79,6 +79,49 @@ selector).
 - Extender mostrarSeleccionObra() para mostrar múltiples opciones con selector radio
 - Pasar obra_id a endpoints de API si se necesita filtrado por obra adicional
 
+### Part 5: Reorganización sidebar (Seguridad) + Alejandra FAB (v7.87)
+**Feedback de Adrian:** El sidebar mezclaba items de diferentes departamentos. EPIs, Carnets,
+Permisos de Trabajo y Reconocimientos pertenecen al departamento "Seguridad", no a Personal.
+Además, faltaba Alejandra chat en el panel web.
+
+**Fix aplicado:**
+
+1. **Nueva sección "🔺 Seguridad"** en el sidebar (solo visible si usuario.departamento === 'seguridad'):
+   - EPIs
+   - Carnets
+   - Permisos de Trabajo
+   - Reconocimientos
+   - Lógica: `getSession().departamento` para mostrar/ocultar
+
+2. **Mover a sección "🏗️ Obra":**
+   - Docs. Obra
+   - Inspecciones
+   - (Antes estaban en "Personal")
+
+3. **Personal simplificado** (ahora contiene solo):
+   - Trabajadores
+   - Fichajes
+   - Hojas de Tiempo
+   - Turnos
+
+4. **FAB Alejandra IA** (botón flotante verde, esquina inferior derecha):
+   - Posicionado bajo el FAB de cámara (`bottom:20px;right:20px`)
+   - Modal de chat similar al chat del equipo
+   - Funciones: `alejandraFabAbrir()`, `alejandraChatCerrar()`, `alejandrEnviar()`
+   - Se conecta a `/ia-chat-history` y `/api/chat` de Alejandra
+   - Solo visible si `SESSION?.usuario_id` existe
+
+**Verificación:**
+- Bloques `<script>` de `panel.html` compilados sin errores
+- Encoding limpio (grep sin coincidencias)
+- Versión sincronizada: v7.87 en `version.json`, `sw.js`, `index.html`
+- Commit `01f65ab`, push a `origin/main` completado
+
+**Resultado final:**
+- **Encargado (electrico):** Ve Personal (Fichajes, Hojas, Turnos, Trabajadores) + Inventarios + Planificación + Alejandra FAB
+- **Seguridad:** Ve Seguridad (EPIs, Carnets, Permisos, Reco) + Inventarios + Planificación + Alejandra FAB
+- **Admin:** Ve TODO (todas las secciones)
+
 ---
 
 **Sesion anterior:** 18/07/2026 -- Roles compuestos + filtros de departamento + chat privado Alejandra
