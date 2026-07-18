@@ -1,7 +1,30 @@
 ## ESTADO ACTUAL
 
-**Sesion:** LIBRE
-**Ultima sesion:** 18/07/2026 -- Roles compuestos + filtros de departamento + chat privado Alejandra
+**Sesion:** EN CURSO
+**Fecha:** 18/07/2026 -- Selección de obra en panel.html (v7.85)
+**Resumen:** Implementación de pantalla de selección de obra después del login en panel.html:
+
+**Qué se hizo:**
+- Nueva pantalla "Selecciona Obra" entre login y appShell (HTML + CSS)
+- Mostrada después de login exitoso, antes de iniciarApp()
+- Para roles "oficina" y "encargado": muestra obra asignada con confirmación
+- SESSION ahora incluye obra_id y obra_nombre (en doLogin)
+- Topbar muestra la obra actual en color naranja (--accent)
+- Flujo: login → mostrarSeleccionObra() → confirmarObraSeleccion() → iniciarApp()
+- Funciones nuevas: mostrarSeleccionObra(), confirmarObraSeleccion()
+- Validación de roles integrada con sistema existente de departamentos
+- Versión sincronizada: v7.85 en version.json, sw.js, index.html.APP_VERSION
+- Commit `e59e606`, push a origin/main completado
+
+**Próximos pasos:**
+- Pruebas funcionales en producción (login con Alberto/Katherine + flujo obra)
+- Si en el futuro "encargado" tiene múltiples obras: crear endpoint `/user/obras` en worker.js
+- Extender mostrarSeleccionObra() para mostrar múltiples opciones con selector radio
+- Pasar obra_id a endpoints de API si se necesita filtrado por obra adicional
+
+---
+
+**Sesion anterior:** 18/07/2026 -- Roles compuestos + filtros de departamento + chat privado Alejandra
 **Resumen:** Implementación completa de modelo de roles avanzado (rol + departamento + roles_extra) con:
 - 12 endpoints críticos con filtros de departamento (personal, bobinas, carnets, documentos, permisos, fichajes, turnos, ausencias, etc.)
 - Validación de roles_extra["oficina"] en panel.html para acceso al panel web
