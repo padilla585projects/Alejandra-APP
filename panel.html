@@ -9802,14 +9802,19 @@ function iniciarApp() {
       const el = document.querySelector(`[data-sid="${sid}"]`);
       if (el) {
         el.style.display = 'none';
+        el.setAttribute('data-hidden-by-perms', 'true');  // marca para debugging
         // También ocultar items bajo esta sección (hermanos hasta la siguiente sección)
         let next = el.nextElementSibling;
         while (next && !next.classList.contains('sidebar-section')) {
           next.style.display = 'none';
+          next.setAttribute('data-hidden-by-perms', 'true');
           next = next.nextElementSibling;
         }
       }
     });
+    console.log(`✓ Ocultadas secciones no-admin: ${seccionesOcultar.join(', ')} para usuario ${SESSION.rol} (roles_extra: ${SESSION.roles_extra?.join(', ')})`);
+  } else {
+    console.log(`✗ Usuario es admin (rol=${SESSION.rol}, roles_extra=${SESSION.roles_extra?.join(', ')}), mostrando todo`);
   }
 
   // mostrar secciones superadmin en página empresa
@@ -10314,7 +10319,10 @@ async function checkConexion() {
 }
 
 // ── DASHBOARD ──────────────────────────────────────────────────
+let _dashLoadCount = 0;
 async function cargarDashboard() {
+  _dashLoadCount++;
+  console.log(`📊 cargarDashboard() llamada #${_dashLoadCount}`);
   document.getElementById('dashSub').textContent = 'Actualizando...';
   const [dash, incR, pedR, tareasR, rfisR, defR, obrasOvR, segDR, punchDR, hitosDR] = await Promise.all([
     api('/obra-dashboard'),
