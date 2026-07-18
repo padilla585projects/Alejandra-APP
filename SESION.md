@@ -1,7 +1,17 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 13/07/2026 -- continuacion de la sesion de la fuga de chat local (ver entrada
+**Ultima sesion:** 18/07/2026 -- Roles compuestos + filtros de departamento + chat privado Alejandra
+**Resumen:** Implementación completa de modelo de roles avanzado (rol + departamento + roles_extra) con:
+- 12 endpoints críticos con filtros de departamento (personal, bobinas, carnets, documentos, permisos, fichajes, turnos, ausencias, etc.)
+- Validación de roles_extra["oficina"] en panel.html para acceso al panel web
+- Chat privado Alejandra aislado por usuario_id (tabla chat_mensajes creada + validación de seguridad 403)
+- 3 usuarios de prueba: Alberto (encargado+electrico+["oficina"]), María (oficina+electrico), Carlos (oficina+seguridad)
+- Worker.js limpio (v7.78) con filtros departamento en 12 endpoints
+- Panel.html actualizado (validación roles_extra + chat privado)
+- Deploy a producción completado (v7.84)
+
+**Sesion anterior:** 13/07/2026 -- continuacion de la sesion de la fuga de chat local (ver entrada
 anterior, v7.82): Adrian pidio explicitamente *"arregla el 2 y luego hz el 3"*, refiriendose a 2
 bugs de copy detectados durante la verificacion en vivo del fix v7.82 (marcados como "2" en la
 lista que le presente) y a retomar despues la captura de pantalla del README ("3"). **Bug 1:**

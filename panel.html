@@ -9594,6 +9594,14 @@ async function doLogin() {
     return;
   }
 
+  // Validación adicional: si el rol principal no está permitido, debe tener al menos "oficina" en roles_extra
+  const rolPrincipalPermitido = rolesPermitidos.includes(r.rol);
+  const tieneOficinaEnExtras = (r.roles_extra || []).includes('oficina');
+  if (!rolPrincipalPermitido && !tieneOficinaEnExtras) {
+    errEl.textContent = 'Tu rol no tiene acceso al panel de oficina';
+    return;
+  }
+
   TOKEN = r.token;
   SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: r.roles_extra || [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null };
   localStorage.setItem('panel_token', TOKEN);
@@ -13376,7 +13384,10 @@ function chatRolLabel(rol) {
 }
 
 async function cargarChat() {
-  const r = await api('/chat?limit=60');
+  // Chat privado: filtrar por usuario_id actual
+  const usuarioId = SESSION?.usuario_id || null;
+  const queryParams = `limit=60${usuarioId ? '&usuario_id=' + encodeURIComponent(usuarioId) : ''}`;
+  const r = await api('/chat?' + queryParams);
   const msgs = (r.mensajes || r.data || []).reverse();
   const cont = document.getElementById('chatMensajes');
   if (!msgs.length) {
@@ -13444,7 +13455,14 @@ async function chatEnviar() {
   const msg = input.value.trim();
   if (!msg) return;
   input.value = '';
-  const r = await api('/chat', { method: 'POST', body: JSON.stringify({ mensaje: msg }) });
+  // Chat privado: incluir usuario_id para filtrar conversación
+  const payload = {
+    mensaje: msg,
+    usuario_id: SESSION?.usuario_id || null,
+    empresa_id: SESSION?.empresa_id || null,
+    obra_id: SESSION?.obra_id || null
+  };
+  const r = await api('/chat', { method: 'POST', body: JSON.stringify(payload) });
   if (r.ok) cargarChat();
   else toast('Error al enviar mensaje', 'err');
 }

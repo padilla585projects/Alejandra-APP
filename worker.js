@@ -709,115 +709,6 @@ const AI_TOOLS = [
       },
       required: ['empresa_id']
     }
-  },
-  {
-    name: 'buscar_equipos',
-    description: 'Consulta información de equipos registrados en la BD (generadores, compresores, motores, etc). Devuelve lista con id, nombre, tipo, modelo, ubicación, estado, próximo mantenimiento y propietario.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        tipo: { type: 'string', description: 'Filtrar por tipo de equipo (ej: "generador", "compresor", "motor"). Opcional - si se omite trae todos.' },
-        estado: { type: 'string', description: 'Filtrar por estado (ej: "activo", "mantenimiento", "almacenado"). Opcional - si se omite trae todos.' },
-        limit: { type: 'integer', description: 'Máximo de resultados a retornar (default: 15)' }
-      }
-    }
-  },
-  {
-    name: 'consultar_personal',
-    description: 'Consulta información de trabajadores registrados (nombre, rol, contacto, estado). Devuelve lista con id, nombre, rol, departamento, estado, teléfono y email.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        departamento: { type: 'string', description: 'Filtrar por departamento (ej: "electrico", "mecanico", "seguridad"). Opcional - si se omite trae todos.' },
-        estado: { type: 'string', description: 'Filtrar por estado (ej: "activo", "inactivo"). Opcional - si se omite trae todos.' },
-        limit: { type: 'integer', description: 'Máximo de resultados a retornar (default: 20)' }
-      }
-    }
-  },
-  {
-    name: 'consultar_inventario',
-    description: 'Consulta stock de materiales, herramientas y componentes en inventario. Devuelve lista con id, nombre, tipo, cantidad, ubicación, precio unitario y fecha última actualización.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        tipo: { type: 'string', description: 'Filtrar por tipo de material (ej: "cable", "herramienta", "material", "seguridad"). Opcional - si se omite trae todos.' },
-        query: { type: 'string', description: 'Búsqueda por nombre del material (búsqueda parcial). Opcional.' },
-        limit: { type: 'integer', description: 'Máximo de resultados a retornar (default: 20)' }
-      }
-    }
-  },
-  {
-    name: 'crear_tarea',
-    description: 'Crea una nueva tarea/acción asignada a una persona. INSERT INTO tareas_obra con descripción, responsable, fecha límite, prioridad.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        descripcion: { type: 'string', description: 'Descripción de la tarea (obligatorio)' },
-        responsable: { type: 'string', description: 'Persona responsable (opcional - nombre o email)' },
-        fecha_limite: { type: 'string', description: 'Fecha límite en formato ISO (YYYY-MM-DD) opcional' },
-        prioridad: { type: 'string', enum: ['baja', 'normal', 'alta'], description: 'Prioridad (default: "normal")' },
-        obra_id: { type: 'integer', description: 'ID de la obra asociada (opcional)' }
-      },
-      required: ['descripcion']
-    }
-  },
-  {
-    name: 'actualizar_tarea',
-    description: 'Actualiza el estado de una tarea existente (completada, rechazada, etc). Puede marcar como hecha con timestamp.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        tarea_id: { type: 'integer', description: 'ID de la tarea a actualizar (obligatorio)' },
-        nuevo_estado: { type: 'string', enum: ['pendiente', 'completada', 'rechazada'], description: 'Nuevo estado (obligatorio)' },
-        comentario: { type: 'string', description: 'Comentario opcional (ej: motivo de rechazo)' }
-      },
-      required: ['tarea_id', 'nuevo_estado']
-    }
-  },
-  {
-    name: 'registrar_incidencia',
-    description: 'Registra una incidencia/problema nuevo en la BD. INSERT INTO incidencias con título, descripción, prioridad, tipo, reportado por.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        titulo: { type: 'string', description: 'Título de la incidencia (obligatorio)' },
-        descripcion: { type: 'string', description: 'Descripción detallada (opcional)' },
-        prioridad: { type: 'string', enum: ['baja', 'normal', 'alta', 'crítica'], description: 'Nivel de prioridad (default: "normal")' },
-        tipo: { type: 'string', enum: ['seguridad', 'material', 'otro'], description: 'Tipo de incidencia (default: "otro")' },
-        reportado_por: { type: 'string', description: 'Usuario que reporta (opcional - por defecto usuario actual)' }
-      },
-      required: ['titulo']
-    }
-  },
-  {
-    name: 'guardar_documento',
-    description: 'Registra un documento/archivo en la BD (referencia a archivo ya subido a R2). INSERT INTO documentos.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        nombre: { type: 'string', description: 'Nombre del documento (obligatorio)' },
-        descripcion: { type: 'string', description: 'Descripción opcional' },
-        url: { type: 'string', description: 'URL del archivo en R2 (obligatorio - debe estar subido)' },
-        tipo: { type: 'string', enum: ['imagen', 'pdf', 'otro'], description: 'Tipo de archivo (default: "otro")' },
-        categoria: { type: 'string', description: 'Categoría/clasificación (ej: "mantenimiento", "seguridad")' }
-      },
-      required: ['nombre', 'url']
-    }
-  },
-  {
-    name: 'actualizar_inventario',
-    description: 'Registra entrada/salida de materiales en inventario. UPDATE cantidad + INSERT en movimientos_inventario para auditoría.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        material_id: { type: 'integer', description: 'ID del material (obligatorio)' },
-        cantidad: { type: 'integer', description: 'Cantidad a agregar/restar (obligatorio, positivo o negativo)' },
-        tipo: { type: 'string', enum: ['entrada', 'salida'], description: 'Entrada o salida de inventario (obligatorio)' },
-        motivo: { type: 'string', description: 'Motivo del movimiento (ej: "compra", "uso", "ajuste", "merma")' },
-        responsable: { type: 'string', description: 'Usuario responsable del movimiento (opcional)' }
-      },
-      required: ['material_id', 'cantidad', 'tipo']
-    }
   }
 ];
 
@@ -2040,153 +1931,6 @@ async function executeAITool(env, toolName, toolInput) {
         q += ' ORDER BY creado_en DESC LIMIT 50';
         const rows = await env.DB.prepare(q).bind(...params).all();
         return JSON.stringify({ ok: true, planos: rows.results || [] });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-    }
-
-    case 'buscar_equipos': {
-      try {
-        const { tipo, estado, limit = 15 } = toolInput;
-        let query = 'SELECT id, nombre, tipo, modelo, ubicacion, estado, proximo_mantenimiento, propietario FROM equipos WHERE 1=1';
-        const params = [];
-        if (tipo) { query += ' AND tipo=?'; params.push(tipo); }
-        if (estado) { query += ' AND estado=?'; params.push(estado); }
-        query += ' ORDER BY nombre ASC LIMIT ?';
-        params.push(limit);
-        const result = await env.DB.prepare(query).bind(...params).all();
-        return JSON.stringify({ ok: true, equipos: result.results || [] });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-    }
-
-    case 'consultar_personal': {
-      try {
-        const { departamento, estado, limit = 20 } = toolInput;
-        let query = 'SELECT id, nombre, rol, departamento, estado, telefono, email, fecha_inicio FROM personal WHERE 1=1';
-        const params = [];
-        if (departamento) { query += ' AND departamento=?'; params.push(departamento); }
-        if (estado) { query += ' AND estado=?'; params.push(estado); }
-        query += ' ORDER BY nombre ASC LIMIT ?';
-        params.push(limit);
-        const result = await env.DB.prepare(query).bind(...params).all();
-        return JSON.stringify({ ok: true, personal: result.results || [] });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-    }
-
-    case 'consultar_inventario': {
-      try {
-        const { tipo, query: searchQuery, limit = 20 } = toolInput;
-        let query = 'SELECT id, nombre, tipo, cantidad, ubicacion, precio_unitario, fecha_actualizacion FROM materiales WHERE 1=1';
-        const params = [];
-        if (tipo) { query += ' AND tipo=?'; params.push(tipo); }
-        if (searchQuery) { query += ' AND nombre LIKE ?'; params.push('%' + searchQuery + '%'); }
-        query += ' ORDER BY nombre ASC LIMIT ?';
-        params.push(limit);
-        const result = await env.DB.prepare(query).bind(...params).all();
-        return JSON.stringify({ ok: true, inventario: result.results || [] });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-    }
-
-    case 'crear_tarea': {
-      try {
-        const { descripcion, responsable, fecha_limite, prioridad = 'normal', obra_id } = toolInput;
-        if (!descripcion) return JSON.stringify({ ok: false, error: 'descripcion es obligatoria' });
-        const validPrioridades = ['baja', 'normal', 'alta'];
-        if (!validPrioridades.includes(prioridad)) {
-          return JSON.stringify({ ok: false, error: `prioridad inválida: ${prioridad}. Debe ser uno de: ${validPrioridades.join(', ')}` });
-        }
-        const result = await env.DB.prepare(
-          'INSERT INTO tareas_obra (descripcion, responsable, fecha_limite, prioridad, estado, obra_id, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime("now"))'
-        ).bind(descripcion, responsable || null, fecha_limite || null, prioridad, 'pendiente', obra_id || null).run();
-        const newId = result.meta?.last_row_id;
-        return JSON.stringify({ ok: true, tarea_id: newId, mensaje: `Tarea creada con ID ${newId}` });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-    }
-
-    case 'actualizar_tarea': {
-      try {
-        const { tarea_id, nuevo_estado, comentario } = toolInput;
-        if (!tarea_id) return JSON.stringify({ ok: false, error: 'tarea_id es obligatoria' });
-        if (!nuevo_estado) return JSON.stringify({ ok: false, error: 'nuevo_estado es obligatoria' });
-        const validEstados = ['pendiente', 'completada', 'rechazada'];
-        if (!validEstados.includes(nuevo_estado)) {
-          return JSON.stringify({ ok: false, error: `nuevo_estado inválido: ${nuevo_estado}. Debe ser uno de: ${validEstados.join(', ')}` });
-        }
-        const checkTarea = await env.DB.prepare('SELECT id FROM tareas_obra WHERE id=?').bind(tarea_id).first();
-        if (!checkTarea) return JSON.stringify({ ok: false, error: `Tarea ${tarea_id} no encontrada` });
-        const updateSql = nuevo_estado === 'completada'
-          ? 'UPDATE tareas_obra SET estado=?, fecha_completado=datetime("now"), updated_at=datetime("now") WHERE id=?'
-          : 'UPDATE tareas_obra SET estado=?, updated_at=datetime("now") WHERE id=?';
-        const updateParams = [nuevo_estado, tarea_id];
-        await env.DB.prepare(updateSql).bind(...updateParams).run();
-        if (comentario) {
-          await env.DB.prepare(
-            'INSERT INTO comentarios_tareas (tarea_id, comentario, created_at) VALUES (?, ?, datetime("now"))'
-          ).bind(tarea_id, comentario).run();
-        }
-        return JSON.stringify({ ok: true, mensaje: `Tarea ${tarea_id} actualizada a estado "${nuevo_estado}"` });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-    }
-
-    case 'registrar_incidencia': {
-      try {
-        const { titulo, descripcion, prioridad = 'normal', tipo = 'otro', reportado_por } = toolInput;
-        if (!titulo) return JSON.stringify({ ok: false, error: 'titulo es obligatoria' });
-        const validPrioridades = ['baja', 'normal', 'alta', 'crítica'];
-        const validTipos = ['seguridad', 'material', 'otro'];
-        if (!validPrioridades.includes(prioridad)) {
-          return JSON.stringify({ ok: false, error: `prioridad inválida: ${prioridad}. Debe ser uno de: ${validPrioridades.join(', ')}` });
-        }
-        if (!validTipos.includes(tipo)) {
-          return JSON.stringify({ ok: false, error: `tipo inválido: ${tipo}. Debe ser uno de: ${validTipos.join(', ')}` });
-        }
-        const result = await env.DB.prepare(
-          'INSERT INTO incidencias (titulo, descripcion, prioridad, tipo, estado, reportado_por, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime("now"))'
-        ).bind(titulo, descripcion || null, prioridad, tipo, 'abierta', reportado_por || null).run();
-        const newId = result.meta?.last_row_id;
-        return JSON.stringify({ ok: true, incidencia_id: newId, mensaje: `Incidencia creada con ID ${newId}` });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-    }
-
-    case 'guardar_documento': {
-      try {
-        const { nombre, descripcion, url, tipo = 'otro', categoria } = toolInput;
-        if (!nombre) return JSON.stringify({ ok: false, error: 'nombre es obligatoria' });
-        if (!url) return JSON.stringify({ ok: false, error: 'url es obligatoria' });
-        const validTipos = ['imagen', 'pdf', 'otro'];
-        if (!validTipos.includes(tipo)) {
-          return JSON.stringify({ ok: false, error: `tipo inválido: ${tipo}. Debe ser uno de: ${validTipos.join(', ')}` });
-        }
-        const result = await env.DB.prepare(
-          'INSERT INTO documentos (nombre, descripcion, url, tipo, categoria, uploaded_by, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime("now"))'
-        ).bind(nombre, descripcion || null, url, tipo, categoria || null, 'sistema').run();
-        const newId = result.meta?.last_row_id;
-        return JSON.stringify({ ok: true, documento_id: newId, mensaje: `Documento registrado con ID ${newId}` });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
-    }
-
-    case 'actualizar_inventario': {
-      try {
-        const { material_id, cantidad, tipo, motivo, responsable } = toolInput;
-        if (!material_id) return JSON.stringify({ ok: false, error: 'material_id es obligatoria' });
-        if (cantidad === undefined || cantidad === null) return JSON.stringify({ ok: false, error: 'cantidad es obligatoria' });
-        if (!tipo) return JSON.stringify({ ok: false, error: 'tipo es obligatoria' });
-        const validTipos = ['entrada', 'salida'];
-        if (!validTipos.includes(tipo)) {
-          return JSON.stringify({ ok: false, error: `tipo inválido: ${tipo}. Debe ser uno de: ${validTipos.join(', ')}` });
-        }
-        const checkMaterial = await env.DB.prepare('SELECT id, cantidad FROM materiales WHERE id=?').bind(material_id).first();
-        if (!checkMaterial) return JSON.stringify({ ok: false, error: `Material ${material_id} no encontrado` });
-        const cantidadActual = checkMaterial.cantidad || 0;
-        const cantidadAjuste = tipo === 'entrada' ? cantidad : -cantidad;
-        const nuevaCantidad = cantidadActual + cantidadAjuste;
-        if (nuevaCantidad < 0) {
-          return JSON.stringify({ ok: false, error: `Cantidad resultante negativa. Stock actual: ${cantidadActual}, intenta restar ${cantidad}` });
-        }
-        await env.DB.prepare('UPDATE materiales SET cantidad=?, fecha_actualizacion=datetime("now") WHERE id=?')
-          .bind(nuevaCantidad, material_id).run();
-        await env.DB.prepare(
-          'INSERT INTO movimientos_inventario (material_id, cantidad, tipo, motivo, responsable, fecha) VALUES (?, ?, ?, ?, ?, datetime("now"))'
-        ).bind(material_id, cantidad, tipo, motivo || null, responsable || null).run();
-        return JSON.stringify({ ok: true, nueva_cantidad: nuevaCantidad, mensaje: `Inventario actualizado. Stock nuevo: ${nuevaCantidad}` });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
@@ -4398,28 +4142,7 @@ export default {
           'Cache-Control': 'no-store',
         }});
       }
-      // -- Fin OTA --
-
-      // SEC-15: X-Token invalido/caducado -> 401 uniforme para TODAS las rutas protegidas.
-      // Antes, un X-Token que ya no existia (o habia caducado) en la tabla `sesiones` caia
-      // silenciosamente al fallback anonimo/legacy dentro de getAuth(), y cada endpoint
-      // devolvia su propio error (normalmente 403 "Sin permisos") de forma inconsistente.
-      // El cliente (index.html / panel.html) solo sabe reaccionar de forma automatica
-      // (cerrar sesion local y pedir volver a entrar) ante un 401 -- cualquier otro codigo
-      // dejaba al usuario atascado sin salida en cualquier pantalla, con cualquier rol.
-      // Los flujos de login (/verificar, /acceso, /recuperar-pass, /resetear-pass,
-      // /auth/google/*) se llaman siempre con fetch() directo, sin X-Token, asi que nunca
-      // se bloquean a si mismos con este corte.
-      {
-        const xTokenCheck = request.headers.get('X-Token');
-        if (xTokenCheck) {
-          const sesionValida = await env.DB.prepare(
-            "SELECT 1 FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))"
-          ).bind(xTokenCheck).first().catch(() => undefined);
-          if (!sesionValida) return err('Sesion caducada o invalida. Vuelve a iniciar sesion.', 401);
-        }
-      }
-
+      // â”€â”€ Fin OTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
@@ -8379,11 +8102,17 @@ async function eliminarHorarioObra(id, request, env) {
 
 // Ã¢"â‚¬Ã¢"â‚¬ Personal externo Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 async function getPersonalExterno(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isDesarrollador, departamento, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
-  const { results } = await env.DB.prepare(
-    'SELECT p.*, o.nombre as obra_nombre FROM personal_externo p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.activo = 1 ORDER BY p.nombre'
-  ).bind(empresa_id).all();
+  let sql = 'SELECT p.*, o.nombre as obra_nombre FROM personal_externo p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.activo = 1';
+  const params = [empresa_id];
+  // Filtrar por departamento si es oficina/encargado (no superadmin/desarrollador)
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ' AND p.departamento = ?';
+    params.push(departamento);
+  }
+  sql += ' ORDER BY p.nombre';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
   // foto_r2_key ya viene en SELECT p.* si la columna existe
   return json(results);
 }
@@ -8447,13 +8176,18 @@ async function getTrabajadores(request, env) {
 
 // Ã¢"â‚¬Ã¢"â‚¬ EPIs asignados (NEW-23) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 async function getEpisAsignados(request, env) {
-  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url     = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
   let sql = 'SELECT * FROM epis_asignados WHERE empresa_id=?';
   const params = [empresa_id];
   if (obra_id) { sql += ' AND obra_id=?'; params.push(parseInt(obra_id)); }
+  // Filtrar por departamento si es oficina/encargado
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ' AND departamento = ?';
+    params.push(departamento);
+  }
   sql += ' ORDER BY nombre_trabajador, tipo_epi';
   const rows = await env.DB.prepare(sql).bind(...params).all();
   return json(rows.results);
@@ -8502,13 +8236,18 @@ async function eliminarEpiAsignado(id, request, env) {
 
 // Ã¢"â‚¬Ã¢"â‚¬ Carnets y certificaciones (NEW-19) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 async function getCarnets(request, env) {
-  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
   let sql = 'SELECT * FROM carnets WHERE empresa_id=?';
   const params = [empresa_id];
   if (obra_id) { sql += ' AND obra_id=?'; params.push(parseInt(obra_id)); }
+  // Filtrar por departamento si es oficina/encargado
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ' AND departamento = ?';
+    params.push(departamento);
+  }
   sql += ' ORDER BY nombre_trabajador, tipo';
   const rows = await env.DB.prepare(sql).bind(...params).all();
   return json(rows.results);
@@ -8554,7 +8293,7 @@ async function eliminarCarnet(id, request, env) {
 
 // â”€â”€ Reconocimientos mÃ©dicos (PRL â€” LPRL art. 22) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function getReconocimientos(request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
@@ -8565,6 +8304,11 @@ async function getReconocimientos(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND (obra_id=? OR obra_id IS NULL)`; binds.push(obraAuth); }
   if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
+  // Filtrar por departamento si es oficina/encargado (datos médicos sensibles)
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ` AND departamento = ?`;
+    binds.push(departamento);
+  }
   if (resultado) { sql += ` AND resultado=?`; binds.push(resultado); }
   if (q) { sql += ` AND nombre_trabajador LIKE ?`; binds.push(`%${q}%`); }
   sql += ` ORDER BY fecha_caducidad ASC`;
@@ -8619,7 +8363,7 @@ async function eliminarReconocimiento(id, request, env) {
 
 // â”€â”€ Documentos de obra (PRL â€” RD 1627/1997) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function getDocumentosObra(request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
@@ -8631,6 +8375,11 @@ async function getDocumentosObra(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
   if (obra_id)      { sql += ` AND obra_id=?`;       binds.push(obra_id); }
+  // Filtrar por departamento si es oficina/encargado
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ` AND departamento = ?`;
+    binds.push(departamento);
+  }
   if (tipo)         { sql += ` AND tipo=?`;           binds.push(tipo); }
   if (estado)       { sql += ` AND estado=?`;         binds.push(estado); }
   if (elaborado_por){ sql += ` AND elaborado_por=?`;  binds.push(elaborado_por); }
@@ -8691,7 +8440,7 @@ async function eliminarDocumentoObra(id, request, env) {
 
 // â”€â”€ Permisos de trabajo (PTR) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function getPermisosTrabajo(request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
@@ -8702,6 +8451,11 @@ async function getPermisosTrabajo(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
   if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
+  // Filtrar por departamento si es oficina/encargado
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ` AND departamento = ?`;
+    binds.push(departamento);
+  }
   if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
   if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
   sql += ` ORDER BY fecha_inicio DESC`;
@@ -8753,7 +8507,7 @@ async function eliminarPermisoTrabajo(id, request, env) {
 
 // â”€â”€ Inspecciones de seguridad â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function getInspecciones(request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
@@ -8764,6 +8518,11 @@ async function getInspecciones(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
   if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
+  // Filtrar por departamento si es oficina/encargado
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ` AND departamento = ?`;
+    binds.push(departamento);
+  }
   if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
   if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
   sql += ` ORDER BY fecha DESC`;
@@ -8864,7 +8623,7 @@ async function eliminarEpiRevision(id, request, env) {
 
 // Ã¢"â‚¬Ã¢"â‚¬ Fichajes Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 async function getFichajes(request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth, rol, usuario_id } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, usuario_id, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const fecha      = url.searchParams.get('fecha');
@@ -8893,6 +8652,11 @@ async function getFichajes(request, env) {
     } else if (obra_id) {
       sql += ' AND f.obra_id = ?'; params.push(parseInt(obra_id));
     }
+  }
+  // Filtrar por departamento si es oficina/encargado
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ' AND f.departamento = ?';
+    params.push(departamento);
   }
   if (fecha)     { sql += ' AND f.fecha = ?';        params.push(fecha); }
   if (fecha_ini) { sql += ' AND f.fecha >= ?';       params.push(fecha_ini); }
@@ -11752,7 +11516,7 @@ async function borrarNota(id, request, env) {
 // Ã¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚Â
 
 async function getTurnos(request, env) {
-  const { empresa_id, obra_id: obraAuth } = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
   const url    = new URL(request.url);
   const desde  = url.searchParams.get('desde');
   const hasta  = url.searchParams.get('hasta');
@@ -11764,6 +11528,11 @@ async function getTurnos(request, env) {
   if (desde) { sql += ' AND fecha >= ?'; params.push(desde); }
   if (hasta) { sql += ' AND fecha <= ?'; params.push(hasta); }
   if (obra)  { sql += ' AND obra_id = ?'; params.push(obra); }
+  // Filtrar por departamento si es oficina/encargado
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ' AND departamento = ?';
+    params.push(departamento);
+  }
   sql += ' ORDER BY fecha, nombre_trabajador';
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();
@@ -12016,22 +11785,27 @@ async function buscarGlobal(request, env) {
 
   const obra_id = new URL(request.url).searchParams.get('obra_id') ? parseInt(new URL(request.url).searchParams.get('obra_id')) : null;
 
+  // Construir filtro de departamento si es oficina/encargado
+  const deptFilter = (!auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isDesarrollador && (auth.rol === 'oficina' || auth.rol === 'encargado'))
+    ? ` AND departamento = '${auth.departamento}'`
+    : '';
+
   const [inc, pemp, carr, herr, users, pedidos, obras, tareas, rfisR, deficiencias, actas] = await Promise.all([
     env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
-    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'â€”') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
-    env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1 LIMIT 5`).bind(eid,like).all(),
-    env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ? LIMIT 5`).bind(eid,like).all(),
+    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'-') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?)${deptFilter} LIMIT 5`).bind(eid,like,like).all(),
+    env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1${deptFilter} LIMIT 5`).bind(eid,like).all(),
+    env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ?${deptFilter} LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'obra' as tipo,nombre,codigo as subtipo,CASE WHEN activa=1 THEN 'activa' ELSE 'cerrada' END as estado FROM obras WHERE empresa_id=? AND (nombre LIKE ? OR codigo LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
     // Tareas de obra
-    env.DB.prepare(`SELECT id,'tarea' as tipo,titulo as nombre,estado as subtipo,prioridad as estado FROM tareas_obra WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR asignado_a LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT id,'tarea' as tipo,titulo as nombre,estado as subtipo,prioridad as estado FROM tareas_obra WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR asignado_a LIKE ?)${obra_id?' AND obra_id=?':''}${deptFilter} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
     // RFIs
-    env.DB.prepare(`SELECT id,'rfi' as tipo,titulo as nombre,categoria as subtipo,estado FROM rfis WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT id,'rfi' as tipo,titulo as nombre,categoria as subtipo,estado FROM rfis WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''}${deptFilter} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
     // Deficiencias (punch list)
-    env.DB.prepare(`SELECT id,'deficiencia' as tipo,titulo as nombre,ubicacion as subtipo,estado FROM control_calidad WHERE empresa_id=? AND (titulo LIKE ? OR ubicacion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
-    // Actas de reuniÃ³n
-    env.DB.prepare(`SELECT id,'acta' as tipo,titulo as nombre,tipo as subtipo,estado FROM actas_reunion WHERE empresa_id=? AND (titulo LIKE ? OR asistentes LIKE ? OR acuerdos LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT id,'deficiencia' as tipo,titulo as nombre,ubicacion as subtipo,estado FROM control_calidad WHERE empresa_id=? AND (titulo LIKE ? OR ubicacion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''}${deptFilter} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Actas de reunion
+    env.DB.prepare(`SELECT id,'acta' as tipo,titulo as nombre,tipo as subtipo,estado FROM actas_reunion WHERE empresa_id=? AND (titulo LIKE ? OR asistentes LIKE ? OR acuerdos LIKE ?)${obra_id?' AND obra_id=?':''}${deptFilter} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
   ]);
   return json([
     ...inc.results, ...pemp.results, ...carr.results,
@@ -12945,15 +12719,30 @@ async function borrarFotoObra(id, request, env) {
 // Ã¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚Â
 
 async function getChatMensajes(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, usuario_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
+
   const url    = new URL(request.url);
   const limit  = Math.min(parseInt(url.searchParams.get('limit') || '60'), 100);
   const since  = url.searchParams.get('since') || null;
   const obraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : null;
+  const queryUserId = url.searchParams.get('usuario_id') ? parseInt(url.searchParams.get('usuario_id')) : null;
 
   const conds  = ['cm.empresa_id = ?'];
   const params = [empresa_id];
+
+  // Chat privado: validar que solo se puede ver el propio chat
+  let filtroUsuario = queryUserId || usuario_id;
+  if (filtroUsuario) {
+    const isSuperadmin = auth.isSuperadmin || auth.isDesarrollador;
+    if (queryUserId && !isSuperadmin && queryUserId !== usuario_id) {
+      return err('No puedes ver el chat de otro usuario', 403);
+    }
+    conds.push('cm.usuario_id = ?');
+    params.push(filtroUsuario);
+  }
+
   if (obraId) { conds.push('cm.obra_id = ?'); params.push(obraId); }
   if (since)  { conds.push('cm.created_at > ?'); params.push(since); }
   params.push(limit);
@@ -17898,7 +17687,7 @@ async function ensureEqMedTable(env) {
 }
 
 async function getEquiposMedicion(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   await ensureEqMedTable(env);
   const url = new URL(request.url);
@@ -17909,6 +17698,11 @@ async function getEquiposMedicion(request, env) {
             WHERE em.empresa_id = ?`;
   const params = [empresa_id];
   if (obra_id) { q += ' AND em.obra_id = ?'; params.push(parseInt(obra_id)); }
+  // Filtrar por departamento si es oficina/encargado
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    q += ' AND em.departamento = ?';
+    params.push(departamento);
+  }
   q += ' ORDER BY em.codigo, em.nombre';
   const { results } = await env.DB.prepare(q).bind(...params).all();
   return json({ items: results });
@@ -20251,7 +20045,8 @@ async function ensureAusenciasTable(env) {
 }
 
 async function getAusencias(request, env) {
-  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  const auth = await getEmpresaFromRequest(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isDesarrollador, rol, departamento } = auth;
   await ensureAusenciasTable(env);
   const u = new URL(request.url);
   const usuario_id = u.searchParams.get('usuario_id');
@@ -20263,6 +20058,11 @@ async function getAusencias(request, env) {
   if (usuario_id) { sql += ' AND usuario_id=?'; params.push(usuario_id); }
   if (tipo)       { sql += ' AND tipo=?';        params.push(tipo); }
   if (estado)     { sql += ' AND estado=?';      params.push(estado); }
+  // Filtrar por departamento si es oficina/encargado (datos RRHH sensibles)
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+    sql += ' AND departamento = ?';
+    params.push(departamento);
+  }
   if (mes)        { sql += ' AND (fecha_inicio LIKE ? OR fecha_fin LIKE ?)'; params.push(mes+'%', mes+'%'); }
   sql += ' ORDER BY fecha_inicio DESC';
   const rows = await env.DB.prepare(sql).bind(...params).all();
