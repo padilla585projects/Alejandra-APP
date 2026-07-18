@@ -17089,7 +17089,7 @@ async function getDashboardGlobal(request, env) {
     obrasR, fasesR, hitosR, rfisR, incR, punchR,
     accionR, riesgosR, ncrsR, ocsR, certR, cierreR, instR
   ] = await Promise.all([
-    env.DB.prepare(`SELECT id, nombre, estado, fecha_fin_prevista FROM obras WHERE empresa_id=? AND estado NOT IN ('finalizada','cancelada') ORDER BY nombre`).bind(eid).all(),
+    env.DB.prepare(`SELECT id, nombre, codigo, activa, comunidad FROM obras WHERE empresa_id=? AND activa=1 ORDER BY nombre`).bind(eid).all(),
     env.DB.prepare(`SELECT obra_id, estado, porcentaje FROM fases_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado, fecha, retrasado FROM hitos_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado FROM rfis WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
@@ -17137,7 +17137,7 @@ async function getDashboardGlobal(request, env) {
     const alertas      = hitosRet + rfisAbiertas + aiVencidas + riesgosAltos + ncrsAbiertas + punchAb;
 
     return {
-      id: oid, nombre: o.nombre, estado: o.estado,
+      id: oid, nombre: o.nombre, codigo: o.codigo, activa: o.activa,
       avgAvance, hitosRet, rfisAbiertas, aiVencidas, riesgosAltos,
       ncrsAbiertas, totalCert, ocsValor, cierrePct, punchAb, instPend, alertas
     };

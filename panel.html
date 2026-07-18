@@ -9779,7 +9779,8 @@ function iniciarApp() {
 
   // mostrar FAB de Alejandra cuando hay sesión activa
   if (SESSION?.usuario_id) {
-    document.getElementById('fabAlejandra').style.display = 'flex';
+    const fabEl = document.getElementById('fabAlejandra');
+    if (fabEl) fabEl.style.display = 'flex';
   }
 
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
