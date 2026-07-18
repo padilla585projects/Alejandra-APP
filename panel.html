@@ -9722,7 +9722,11 @@ function doLogout() {
 }
 
 // ── INICIAR APP ────────────────────────────────────────────────
+let _iniciarAppCalled = false;
 function iniciarApp() {
+  if (_iniciarAppCalled) return;  // evitar ejecuciones múltiples
+  _iniciarAppCalled = true;
+
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('obraSeleccionScreen').classList.remove('visible');
   const shell = document.getElementById('appShell');
