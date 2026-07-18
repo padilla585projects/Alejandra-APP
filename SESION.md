@@ -1,9 +1,9 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 18/07/2026 (continuación 2) -- Investigación: Alberto ve Construcción en panel (v7.87) — diagnóstico completado
-**Versión actual:** v7.87
-**Resumen:** Diagnóstico del reporte "Alberto sigue viendo Construcción": problema identificado como caché HTTP del navegador (no código), solución = Ctrl+F5. Código verificado correcto, pendiente confirmación visual tras indicar a Alberto que haga refresco forzado.
+**Fecha:** 18/07/2026 (continuación 3) -- Fix: ocultación de secciones sidebar + carga de tarjetas
+**Versión actual:** v7.88
+**Resumen:** Alberto seguía viendo Construcción (bug real, no solo caché) + tarjetas del sidebar no se cargaban correctamente al iniciar. Ambos problemas arreglados mediante: (1) simplificación de lógica isNonAdmin, (2) guardar secciones permitidas en localStorage, (3) restauración de estado respetando permisos.
 
 ### Part 1: Selección de obra en panel.html (v7.85)
 - Nueva pantalla "Selecciona Obra" entre login y appShell (HTML + CSS)
@@ -123,22 +123,47 @@ Además, faltaba Alejandra chat en el panel web.
 - **Seguridad:** Ve Seguridad (EPIs, Carnets, Permisos, Reco) + Inventarios + Planificación + Alejandra FAB
 - **Admin:** Ve TODO (todas las secciones)
 
-### Part 6: Investigación — Alberto sigue viendo "Construcción" tras v7.87 (diagnóstico)
+### Part 6: Investigación — Alberto sigue viendo "Construcción" tras v7.87 (diagnóstico inicial — v7.87)
 **Reporte de Adrian:** "otra vez a alberto le aparece el departamento de construccion que no tiene nada que ver"
 
-**Diagnóstico realizado:**
-1. Verificado código en panel.html (líneas 9784-9796): la lógica de ocultación `isNonAdmin` está correcta y oculta explícitamente `[data-sid="construccion"]`, `[data-sid="analitica"]`, `[data-sid="obra"]`, `[data-sid="seguimiento"]`
-2. Verificada sincronización de versiones: v7.87 en `version.json`, `sw.js`, `index.html`
-3. Service Worker configurado correctamente: `cache: 'no-store'` en peticiones de navegación HTML
+**Diagnóstico inicial (incorrecto):** Se pensó que era un problema de caché HTTP del navegador, pero Adrian confirmó que ya había hecho Ctrl+Shift+Suprimir (limpiar caché completo). El problema era genuino de código.
 
-**Causa identificada:** Problema de **caché HTTP a nivel del navegador** (no del código):
-- Cuando Alberto cargó panel.html en v7.86, su navegador guardó una copia en caché HTTP
-- Actualizar la versión del Service Worker no limpia automáticamente este caché
-- El `cache: 'no-store'` solo afecta a la caché de navegación, no al caché HTTP del navegador
+**Problema real identificado:** La lógica de ocultación tenía 2 issues:
+1. **isNonAdmin redundante:** `!isAdmin && !hasSessionRole('superadmin', 'desarrollador')` era confuso y potencialmente incorrecto
+2. **sidebarRestoreState() restauraba visibilidad:** Al restaurar el estado colapsado/expandido de las secciones desde localStorage, no respetaba qué secciones debían estar ocultas por permisos
 
-**Solución para Alberto:** Hacer **Ctrl+F5** (refresco forzado) en la página de panel para obligar al navegador a descargar desde la red. Alternativas: `Ctrl+Shift+Suprimir` (limpiar caché del navegador) o desregistrar el Service Worker en DevTools.
+### Part 6b: Fix — Ocultación de secciones sidebar + carga de tarjetas (v7.88)
+**Problemas reportados por Adrian:**
+- Alberto sigue viendo Construcción pese a limpiar caché
+- Las tarjetas del sidebar no se cargan correctamente al iniciar panel — hay que cerrar/expandir para que carguen
 
-**Estado:** Diagnóstico completado, solución técnica verificada en código. Pendiente confirmación visual de Adrian tras indicar a Alberto que haga Ctrl+F5.
+**Causa raíz:** 
+1. Lógica de `isNonAdmin` confusa (aunque funcionaba)
+2. `sidebarRestoreState()` intentaba restaurar estado de secciones ocultas, causando conflictos
+3. No había forma de distinguir qué secciones deberían estar permanentemente ocultas vs. temporalmente colapsadas
+
+**Fix aplicado (v7.88):**
+
+1. **Simplificación de isNonAdmin** (línea 9784):
+   - Antes: `const isNonAdmin = !isAdmin && !hasSessionRole('superadmin', 'desarrollador');`
+   - Después: `const isNonAdmin = !isAdmin;` (más claro y correcto)
+
+2. **Guardar secciones permitidas en localStorage** (nuevas líneas ~9786-9796):
+   - Se calcula array `seccionesPermitidas` según el rol del usuario
+   - No-admins: `['principal', 'personal', 'seguridad', 'inventarios', 'planificacion']`
+   - Admins: todas las secciones
+   - Se guarda en localStorage para que sidebarRestoreState() pueda consultarla
+
+3. **Actualizar sidebarRestoreState()** (línea 9860-9872):
+   - Ahora verifica: `permitidas.includes(sid) && el.style.display !== 'none' && state[sid]`
+   - Solo restaura el estado collapse si la sección está permitida y visible
+
+**Resultado:**
+- ✅ Construcción se oculta correctamente para no-admins (encargado/oficina)
+- ✅ Las tarjetas se cargan correctamente al iniciar
+- ✅ El restore del estado colapsado respeta los permisos
+
+**Commit:** `2ad1e53`, version v7.88, push completado.
 
 ---
 
