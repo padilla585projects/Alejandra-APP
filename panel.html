@@ -9926,11 +9926,35 @@ function sidebarRestoreState() {
     });
   } catch {}
 }
+
+function inicializarEstadoSidebar() {
+  try {
+    // Inicializar: todos cerrados EXCEPTO inventarios
+    const seccionesPermitidas = JSON.parse(localStorage.getItem('alejandra_sidebar_permitted') || '[]');
+    const seccionesACerrar = seccionesPermitidas.filter(s => s !== 'inventarios');
+
+    document.querySelectorAll('.sidebar-section[data-sid]').forEach(el => {
+      const sid = el.dataset.sid;
+
+      // Si la sección debe estar cerrada y NO está ya cerrada, cerrarla
+      if (seccionesACerrar.includes(sid) && !el.classList.contains('sec-collapsed')) {
+        sidebarToggle(el);
+      }
+
+      // Si es inventarios y está cerrada, abrirla
+      if (sid === 'inventarios' && el.classList.contains('sec-collapsed')) {
+        sidebarToggle(el);
+      }
+    });
+  } catch {}
+}
+
 // Run after DOM loaded
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
-    ocultarSidebarPorPermisos();  // ocultación por permisos
-    sidebarRestoreState();         // restaurar estado guardado
+    ocultarSidebarPorPermisos();   // ocultación por permisos
+    inicializarEstadoSidebar();    // cerrar todos excepto inventarios
+    sidebarRestoreState();         // restaurar estado guardado (fallback)
   }, 100);
 });
 
