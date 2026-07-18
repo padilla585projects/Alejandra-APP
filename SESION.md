@@ -1,9 +1,9 @@
 ## ESTADO ACTUAL
 
-**Sesion:** EN CURSO (investigación diagnosticada, en pausa)
-**Fecha:** 18/07/2026 (continuación) -- Investigación: Alberto ve Construcción en panel (v7.87)
+**Sesion:** LIBRE
+**Fecha:** 18/07/2026 (continuación 2) -- Investigación: Alberto ve Construcción en panel (v7.87) — diagnóstico completado
 **Versión actual:** v7.87
-**Resumen:** Diagnóstico del reporte "Alberto sigue viendo Construcción": problema identificado como caché HTTP del navegador (no código), solución = Ctrl+F5
+**Resumen:** Diagnóstico del reporte "Alberto sigue viendo Construcción": problema identificado como caché HTTP del navegador (no código), solución = Ctrl+F5. Código verificado correcto, pendiente confirmación visual tras indicar a Alberto que haga refresco forzado.
 
 ### Part 1: Selección de obra en panel.html (v7.85)
 - Nueva pantalla "Selecciona Obra" entre login y appShell (HTML + CSS)
