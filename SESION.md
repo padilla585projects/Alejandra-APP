@@ -1,9 +1,9 @@
 ## ESTADO ACTUAL
 
-**Sesion:** LIBRE
-**Fecha:** 18/07/2026 -- Panel office: obra selection + sidebar reorganizado + Alejandra FAB (v7.85-v7.87)
+**Sesion:** EN CURSO (investigación diagnosticada, en pausa)
+**Fecha:** 18/07/2026 (continuación) -- Investigación: Alberto ve Construcción en panel (v7.87)
 **Versión actual:** v7.87
-**Resumen:** Implementación de pantalla de selección de obra + reorganización sidebar por departamento + chat Alejandra en panel web:
+**Resumen:** Diagnóstico del reporte "Alberto sigue viendo Construcción": problema identificado como caché HTTP del navegador (no código), solución = Ctrl+F5
 
 ### Part 1: Selección de obra en panel.html (v7.85)
 - Nueva pantalla "Selecciona Obra" entre login y appShell (HTML + CSS)
@@ -122,6 +122,23 @@ Además, faltaba Alejandra chat en el panel web.
 - **Encargado (electrico):** Ve Personal (Fichajes, Hojas, Turnos, Trabajadores) + Inventarios + Planificación + Alejandra FAB
 - **Seguridad:** Ve Seguridad (EPIs, Carnets, Permisos, Reco) + Inventarios + Planificación + Alejandra FAB
 - **Admin:** Ve TODO (todas las secciones)
+
+### Part 6: Investigación — Alberto sigue viendo "Construcción" tras v7.87 (diagnóstico)
+**Reporte de Adrian:** "otra vez a alberto le aparece el departamento de construccion que no tiene nada que ver"
+
+**Diagnóstico realizado:**
+1. Verificado código en panel.html (líneas 9784-9796): la lógica de ocultación `isNonAdmin` está correcta y oculta explícitamente `[data-sid="construccion"]`, `[data-sid="analitica"]`, `[data-sid="obra"]`, `[data-sid="seguimiento"]`
+2. Verificada sincronización de versiones: v7.87 en `version.json`, `sw.js`, `index.html`
+3. Service Worker configurado correctamente: `cache: 'no-store'` en peticiones de navegación HTML
+
+**Causa identificada:** Problema de **caché HTTP a nivel del navegador** (no del código):
+- Cuando Alberto cargó panel.html en v7.86, su navegador guardó una copia en caché HTTP
+- Actualizar la versión del Service Worker no limpia automáticamente este caché
+- El `cache: 'no-store'` solo afecta a la caché de navegación, no al caché HTTP del navegador
+
+**Solución para Alberto:** Hacer **Ctrl+F5** (refresco forzado) en la página de panel para obligar al navegador a descargar desde la red. Alternativas: `Ctrl+Shift+Suprimir` (limpiar caché del navegador) o desregistrar el Service Worker en DevTools.
+
+**Estado:** Diagnóstico completado, solución técnica verificada en código. Pendiente confirmación visual de Adrian tras indicar a Alberto que haga Ctrl+F5.
 
 ---
 
