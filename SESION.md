@@ -1,9 +1,31 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 18/07/2026 (continuación 4) -- Fix completo: ocultación sidebar + estado desplegables + dashboard
-**Versión actual:** v7.97
-**Resumen:** Arreglados todos los problemas de Alberto (encargado): Construcción/Analítica/Obra/Seguimiento ahora ocultas correctamente ✅, desplegables inicializados correctamente (todos cerrados excepto Principal e Inventarios) ✅, dashboard carga con datos reales ✅. Fix implementado mediante: (1) función ocultarSidebarPorPermisos() por timing issues, (2) función inicializarEstadoSidebar() para estado correcto, (3) ordenamiento de ejecución en DOMContentLoaded.
+**Fecha:** 18/07/2026 (continuación 5) -- Fix Dashboard Global: SQL query + null check
+**Versión actual:** v7.98
+**Resumen:** Corregido endpoint `/dashboard-global` en worker.js que hacía referencia a columnas inexistentes en tabla `obras`. Añadido null check para elemento `fabAlejandra` en panel.html. Dashboard Global ahora devuelve datos correctamente ✅. Worker desplegado exitosamente.
+
+### Part 8: Fix Dashboard Global (v7.98)
+**Problema:** El endpoint `/dashboard-global` fallaba con error "no such column: estado".
+
+**Causa:** La función `getDashboardGlobal()` en worker.js intentaba seleccionar columnas que no existen en la tabla `obras`:
+- Línea 17092: `SELECT id, nombre, estado, fecha_fin_prevista FROM obras ...`
+- La tabla `obras` realmente tiene: `id, nombre, codigo, activa, created_at, empresa_id, comunidad`
+- `estado` y `fecha_fin_prevista` no existen
+
+**Fix aplicado:**
+1. Línea 17092: Cambiado query a `SELECT id, nombre, codigo, activa, comunidad FROM obras WHERE empresa_id=? AND activa=1 ORDER BY nombre`
+2. Línea 17140: Cambiado respuesta de `estado: o.estado` a `codigo: o.codigo, activa: o.activa`
+3. panel.html línea 9782: Añadido null check para `fabAlejandra` (elemento puede no estar listo al ejecutar iniciarApp())
+
+**Verificación:**
+- Endpoint GET https://alejandra-app-api.alejandra-app.workers.dev/dashboard-global ahora devuelve JSON válido con 1 obra activa
+- Worker desplegado Version ID: 59d1311e-6956-43c0-aa0a-f6601575aef6
+- Commit 4e1f9c6, push completado
+
+**Versiones actualizadas:** v7.98 en version.json, sw.js, index.html
+
+---
 
 ### Part 1: Selección de obra en panel.html (v7.85)
 - Nueva pantalla "Selecciona Obra" entre login y appShell (HTML + CSS)
