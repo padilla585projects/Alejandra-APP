@@ -1,8 +1,9 @@
 ## ESTADO ACTUAL
 
-**Sesion:** EN CURSO
-**Fecha:** 18/07/2026 -- Obra selection + fix filtro departamentos (v7.85 + SEC-16)
-**Resumen:** Implementación de pantalla de selección de obra + fix de seguridad en filtros de departamento:
+**Sesion:** LIBRE
+**Fecha:** 18/07/2026 -- Panel office: obra selection + sidebar reorganizado + Alejandra FAB (v7.85-v7.87)
+**Versión actual:** v7.87
+**Resumen:** Implementación de pantalla de selección de obra + reorganización sidebar por departamento + chat Alejandra en panel web:
 
 ### Part 1: Selección de obra en panel.html (v7.85)
 - Nueva pantalla "Selecciona Obra" entre login y appShell (HTML + CSS)
@@ -121,6 +122,22 @@ Además, faltaba Alejandra chat en el panel web.
 - **Encargado (electrico):** Ve Personal (Fichajes, Hojas, Turnos, Trabajadores) + Inventarios + Planificación + Alejandra FAB
 - **Seguridad:** Ve Seguridad (EPIs, Carnets, Permisos, Reco) + Inventarios + Planificación + Alejandra FAB
 - **Admin:** Ve TODO (todas las secciones)
+
+---
+
+## PRÓXIMA SESIÓN (en pausa)
+
+**Tarea Grande: Departamentos en Panel Office (Opción A)**
+- Crear pantalla de selección de departamento después de login (como en app móvil)
+- Sidebar dinámico: Electricidad, Mecánica, Seguridad (solo muestra el departamento del usuario)
+- Cada departamento con sus propias secciones (Personal, Inventarios, Obra, etc.)
+- Subdepartamento "oficina" dentro de cada uno (usuarios de oficina filtrados por depto)
+- Backend: Verificar filtros de departamento ya existentes (SEC-16)
+
+**Otras tareas pendientes:**
+- Prueba en vivo: verificar Alberto ve solo Principal/Personal/Inventarios/Planificación
+- Probar Alejandra FAB chat en vivo
+- Extender mostrarSeleccionObra() para múltiples obras con selector radio (si encargado tiene varias)
 
 ---
 
