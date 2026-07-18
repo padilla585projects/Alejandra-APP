@@ -9916,7 +9916,12 @@ function sidebarRestoreState() {
   } catch {}
 }
 // Run after DOM loaded
-document.addEventListener('DOMContentLoaded', () => setTimeout(sidebarRestoreState, 100));
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    ocultarSidebarPorPermisos();  // ocultación por permisos
+    sidebarRestoreState();         // restaurar estado guardado
+  }, 100);
+});
 
 // ── NAVEGACIÓN ─────────────────────────────────────────────────
 const PAGE_TITLES = {
