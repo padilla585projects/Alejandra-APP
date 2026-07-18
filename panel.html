@@ -9764,11 +9764,11 @@ function iniciarApp() {
 
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
   // Admins (superadmin/empresa_admin) ven TODO
-  // Encargado/Oficina: solo secciones relevantes (Principal, Inventarios, Obra, Planificación, Seguimiento)
+  // Encargado/Oficina: solo secciones relevantes (Principal, Personal, Inventarios, Planificación)
   const isNonAdmin = !isAdmin && !hasSessionRole('superadmin', 'desarrollador');
   if (isNonAdmin) {
-    // Ocultar: Construcción, Analítica, Desarrollador
-    document.querySelectorAll('[data-sid="construccion"], [data-sid="analitica"]').forEach(el => {
+    // Ocultar: Construcción, Analítica, Obra, Seguimiento, Desarrollador
+    document.querySelectorAll('[data-sid="construccion"], [data-sid="analitica"], [data-sid="obra"], [data-sid="seguimiento"]').forEach(el => {
       el.style.display = 'none';
       // También ocultar items bajo esta sección (hermanos hasta la siguiente sección)
       let next = el.nextElementSibling;
