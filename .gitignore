@@ -8,6 +8,12 @@ e3/
 e4/
 e5/
 
+# Manifiesto OTA de la app Android (copia local suelta).
+# La fuente de verdad la sirve el worker desde R2 (env.FILES.get('ota/version.json'),
+# endpoint /version). Trackear la copia del repo solo crea una segunda verdad que
+# puede quedar desincronizada — por eso se ignora.
+ota/
+
 # Node
 node_modules/
 
