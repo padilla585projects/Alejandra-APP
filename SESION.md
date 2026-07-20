@@ -18,6 +18,19 @@
 
 **Verificación:** node --check OK; encoding limpio; 8/8 unit de la frase de confirmación PASS. Deploy (Version ID 6b757217). Prueba en producción con tabla temporal real `alejandra_barrier_test` (3 filas): sin la frase → `needs_confirmation` (bloqueado); con `CONFIRMO BORRADO` en el mensaje humano → ejecutó (`changes:3`, verificado 0 filas en D1). El modelo también rechazó por criterio propio varios intentos de framing adversarial ("orden directa", "prueba técnica"). Tabla e historial de prueba limpiados. Solo backend, sin cambio de versión de app.
 
+### Part 11: Confirmación ATADA a la operación exacta (20/07/2026)
+**Contexto:** Adrian: "atala". La barrera de Part 10 era por turno: escribir `CONFIRMO BORRADO` autorizaba cualquier destructivo del turno. Se ató la confirmación a la consulta SQL concreta.
+
+**Diseño:** cada SQL destructivo genera un **código de 6 hex = SHA-256(SQL normalizado)** (espacios colapsados + mayúsculas, tolera reformateos). El humano debe escribir `CONFIRMO BORRADO <código>`. Ese código autoriza SOLO ese SQL exacto; otro SQL → otro código. El código sale en la respuesta de bloqueo (`confirm_code`) para que el modelo lo muestre al humano, pero solo el humano puede teclearlo en su mensaje.
+
+**Cambios en worker.js:**
+1. `humanAutorizaDestructivo()` (booleano) → reemplazado por `extraerCodigosConfirmacion(mensaje)` (devuelve Set de códigos parseados de `CONFIRMO BORRADO <hex6>`) + `codigoConfirmacionSQL(sql)` (async, SHA-256 vía crypto.subtle).
+2. `sql_query` calcula el código del SQL y comprueba `ctx.codigosConfirmados.has(codigo)`; devuelve `confirm_code` en el bloqueo.
+3. Callers pasan `codigosConfirmados: extraerCodigosConfirmacion(msgHumano)`.
+4. Descripción de la tool actualizada (código por operación).
+
+**Verificación:** node --check OK; encoding limpio; 7/7 unit (mismo SQL reformateado→mismo código, SQL distinto→código distinto, extracción, código de otro SQL no autoriza). Deploy Version ID 96827e81. Prueba en producción (tabla real): bloqueo con `confirm_code:AC96F3`; código erróneo BE2331 → sigue bloqueado (3 filas intactas); código correcto AC96F3 → ejecutó (changes:3, 0 filas en D1). Enforcement en código, no en criterio del modelo. Tabla e historial limpiados. Solo backend.
+
 ### Part 9: Endurecimiento seguridad tools de Alejandra (20/07/2026)
 **Contexto:** Adrian pidió auditar las tools de Alejandra para mejorarlas/añadir más ("audita el codigo de las tools"). Se optó por "Seguridad primero (bajo riesgo)".
 

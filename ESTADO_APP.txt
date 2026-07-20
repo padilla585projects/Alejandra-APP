@@ -6,10 +6,22 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: 6b757217-577b-46f5-b2e1-4bafc7000357 (seguridad tools Alejandra: gating dev + anti-SSRF fetch_url + barrera humana anti-borrado en sql_query -frase CONFIRMO BORRADO, no autoconfirmable por el modelo-, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: 96827e81-260c-4bf4-8b8d-56b001552c3b (seguridad tools Alejandra: gating dev + anti-SSRF fetch_url + barrera humana anti-borrado en sql_query con codigo por operacion -CONFIRMO BORRADO <hash6 del SQL>, atada a la consulta exacta y no autoconfirmable por el modelo-, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [barrera humana ATADA a la operacion exacta — codigo por SQL (hash) que solo autoriza esa consulta]
+                       Adrian: "atala". La barrera anterior era por turno (la frase autorizaba
+                       cualquier destructivo del turno). Ahora cada SQL destructivo genera un
+                       codigo de 6 hex = SHA-256(SQL normalizado). El humano debe escribir
+                       'CONFIRMO BORRADO <codigo>' y ese codigo autoriza SOLO ese SQL exacto.
+                       Cambios: extraerCodigosConfirmacion() (Set de codigos del mensaje humano)
+                       + codigoConfirmacionSQL() (crypto.subtle SHA-256); sql_query calcula el
+                       codigo y comprueba ctx.codigosConfirmados; devuelve confirm_code en el
+                       bloqueo para que el modelo lo muestre. Verificado en produccion: bloqueo
+                       con confirm_code AC96F3; codigo erroneo BE2331 -> sigue bloqueado (3 filas
+                       intactas); codigo correcto -> ejecuto (changes:3, 0 filas). Deploy Version
+                       ID 96827e81. Solo backend.
   (worker.js — solo backend)      |  20/07/2026  [barrera humana anti-borrado en sql_query — el modelo ya no puede autoconfirmar operaciones destructivas]
                        Adrian: "haz la barrera". Al probar en produccion la salvaguarda del hito
                        anterior se vio que el modelo podia autoconfirmar poniendo

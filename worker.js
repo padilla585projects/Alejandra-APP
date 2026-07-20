@@ -384,7 +384,7 @@ async function transcribeAudio(env, audioBuffer) {
 const AI_TOOLS = [
   {
     name: 'sql_query',
-    description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total. IMPORTANTE: las operaciones catastroficas (DROP/TRUNCATE/ALTER TABLE, o DELETE/UPDATE sin WHERE) estan bloqueadas por una barrera humana: solo se ejecutan si el usuario humano escribe una frase de confirmacion exacta en su mensaje. Tu NO puedes autoconfirmarlas; si necesitas una, pide al humano que la confirme y espera.',
+    description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total. IMPORTANTE: las operaciones catastroficas (DROP/TRUNCATE/ALTER TABLE, o DELETE/UPDATE sin WHERE) estan bloqueadas por una barrera humana: al intentarlas recibes un codigo unico ligado a esa consulta exacta, y solo se ejecutan si el usuario humano escribe literalmente "CONFIRMO BORRADO <codigo>" en su mensaje. Ese codigo autoriza SOLO ese SQL concreto, no cualquier otro. Tu NO puedes autoconfirmar ni teclear el codigo; muestraselo al humano, explica que borrara, y espera a que lo escriba.',
     input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' } }, required: ['sql'] }
   },
   {
@@ -766,9 +766,26 @@ function esUrlSeguraFetch(rawUrl) {
 // en su propio mensaje. El modelo no puede fabricar el mensaje del usuario, asi
 // que no puede autoconfirmarse.
 const FRASE_CONFIRMACION_DESTRUCTIVA = 'CONFIRMO BORRADO';
-function humanAutorizaDestructivo(mensajeHumano) {
-  if (typeof mensajeHumano !== 'string') return false;
-  return mensajeHumano.toUpperCase().includes(FRASE_CONFIRMACION_DESTRUCTIVA);
+// Extrae los codigos de confirmacion presentes en el mensaje real del humano.
+// Formato exigido: "CONFIRMO BORRADO <CODIGO>" donde <CODIGO> son 6 hex. Devuelve
+// un Set en mayusculas. El modelo no puede inyectar esto: se deriva del mensaje
+// del usuario, no del tool_input que el LLM genera.
+function extraerCodigosConfirmacion(mensajeHumano) {
+  const codigos = new Set();
+  if (typeof mensajeHumano !== 'string') return codigos;
+  const re = /CONFIRMO\s+BORRADO\s+([0-9A-Fa-f]{6})\b/g;
+  let m;
+  while ((m = re.exec(mensajeHumano)) !== null) codigos.add(m[1].toUpperCase());
+  return codigos;
+}
+// Codigo ligado a una operacion SQL concreta: SHA-256 de la consulta normalizada
+// (espacios colapsados + mayusculas), primeros 6 hex. Asi la confirmacion del
+// humano solo autoriza ESE SQL exacto, no cualquier destructivo del turno. La
+// normalizacion tolera reformateos de espacios/mayusculas entre turnos.
+async function codigoConfirmacionSQL(sql) {
+  const norm = String(sql).replace(/\s+/g, ' ').trim().toUpperCase();
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(norm));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 6).toUpperCase();
 }
 
 async function executeAITool(env, toolName, toolInput, ctx = {}) {
@@ -814,9 +831,15 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
         const esDropTruncate = /^\s*(DROP|TRUNCATE|ALTER\s+TABLE)\b/i.test(sql);
         const esDeleteSinWhere = /^\s*DELETE\s+FROM\b/i.test(sql) && !/\bWHERE\b/i.test(sql);
         const esUpdateSinWhere = /^\s*UPDATE\b/i.test(sql) && !/\bWHERE\b/i.test(sql);
-        if ((esDropTruncate || esDeleteSinWhere || esUpdateSinWhere) && ctx.allowDestructive !== true) {
+        if (esDropTruncate || esDeleteSinWhere || esUpdateSinWhere) {
           const motivo = esDropTruncate ? 'DROP/TRUNCATE/ALTER TABLE' : (esDeleteSinWhere ? 'DELETE sin WHERE' : 'UPDATE sin WHERE');
-          return JSON.stringify({ ok: false, needs_confirmation: true, error: `Operacion destructiva bloqueada (${motivo}). Afecta a toda la tabla. NO puedes autoconfirmarla: el usuario humano debe escribir literalmente la frase "${FRASE_CONFIRMACION_DESTRUCTIVA}" en su proximo mensaje para autorizarla. Pideselo, explica que borrara, y espera su respuesta. No reintentes hasta que el humano lo haya escrito.` });
+          // Codigo ligado a ESTE SQL exacto. Solo se ejecuta si el humano escribio
+          // "CONFIRMO BORRADO <codigo>" en su mensaje (ctx.codigosConfirmados).
+          const codigo = await codigoConfirmacionSQL(sql);
+          const codigosOk = ctx.codigosConfirmados instanceof Set ? ctx.codigosConfirmados : new Set();
+          if (!codigosOk.has(codigo)) {
+            return JSON.stringify({ ok: false, needs_confirmation: true, confirm_code: codigo, error: `Operacion destructiva bloqueada (${motivo}). Afecta a toda la tabla. Para autorizar SOLO esta consulta exacta, el usuario humano debe escribir literalmente "CONFIRMO BORRADO ${codigo}" en su proximo mensaje. NO puedes autoconfirmar ni teclear el codigo en su nombre: debe escribirlo el humano. Pideselo mostrando el codigo ${codigo}, explica que borrara, y espera. No reintentes hasta que el humano lo haya escrito.` });
+          }
         }
         if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
           const result = await env.DB.prepare(sql).all();
@@ -2820,7 +2843,7 @@ async function handleDevAI(env, chatId, userMessage) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
         type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input, { dev: true, allowDestructive: humanAutorizaDestructivo(userMessage) })
+        content: await executeAITool(env, tb.name, tb.input, { dev: true, codigosConfirmados: extraerCodigosConfirmacion(userMessage) })
       })));
       messages.push({ role: 'assistant', content: result.content });
       messages.push({ role: 'user', content: toolResults });
@@ -13041,7 +13064,7 @@ async function devAIChat(request, env) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
         type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input, { dev: true, allowDestructive: humanAutorizaDestructivo(message) })
+        content: await executeAITool(env, tb.name, tb.input, { dev: true, codigosConfirmados: extraerCodigosConfirmacion(message) })
       })));
       msgs.push({ role: 'assistant', content: result.content });
       msgs.push({ role: 'user', content: toolResults });
