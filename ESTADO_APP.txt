@@ -6,10 +6,23 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: 65e78297-af3f-4e3c-9229-0154c8a49469 (ROB-CRON: try/catch de robustez en 3 funciones del cron nocturno -cierreAutomaticoJornada guard por fichaje, alertasDiarias envuelve secciones 1-5, recordatorioFixesPendientes red general- para que un fallo no deje el job a medias en silencio; self-audit checkChatHealth ya estaba blindado; previo 7d623860 SEC-08 fix bypass barrera WHERE 1=1; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: d9bcf385-e036-406c-82c8-a540daf586e5 (CRON-23: syncRRHH movido del branch muerto 0 23 al cron 0 18; el trigger 0 23 nunca estuvo registrado en wrangler.toml -tope de 5 crons/cuenta- asi que el sync RRHH nocturno no corria; branch muerto eliminado; previo 65e78297 ROB-CRON: try/catch de robustez en 3 funciones del cron nocturno -cierreAutomaticoJornada guard por fichaje, alertasDiarias envuelve secciones 1-5, recordatorioFixesPendientes red general- para que un fallo no deje el job a medias en silencio; self-audit checkChatHealth ya estaba blindado; previo 7d623860 SEC-08 fix bypass barrera WHERE 1=1; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [CRON-23: fix del cron muerto 0 23 -syncRRHH que nunca corria]
+                       Seguimiento de la nota lateral de ROB-CRON. Confirmado: wrangler.toml solo
+                       declaraba crons 0 7 y 0 18; el handler scheduled tenia un branch 0 23 que
+                       colgaba syncRRHH(env) pero, al no estar el trigger registrado, NUNCA se
+                       ejecutaba (codigo muerto que parecia vivo). Anadir el trigger 0 23 (opcion A)
+                       quedo bloqueado por Cloudflare: "exceeded the limit of 5 cron triggers" -el
+                       plan free limita a 5 triggers POR CUENTA y la cuota ya la consumen otros
+                       Workers-. Fix (opcion B): movido syncRRHH al branch 0 18 (cierre + syncPedidos
+                       ~10 + syncRRHH ~20 = ~30 subrequests, bajo el limite de 50) y borrado el branch
+                       muerto. syncRRHH es red de seguridad; las escrituras ya sincronizan de forma
+                       incremental. Verificado por 2 agentes (sin branch 0 23, syncRRHH 1 vez en 0 18,
+                       crons manejados = declarados, sin mojibake nuevo). Deploy Version ID d9bcf385,
+                       triggers listados 0 7 y 0 18. Solo backend, sin cambio de version de app.
   (worker.js — solo backend)      |  20/07/2026  [ROB-CRON: robustez en 3 funciones del cron nocturno]
                        Auditoria de las 10 funciones del scheduled() (Adrian: "Auditar cron/self-
                        audit"). El self-audit checkChatHealth y la mayoria estaban bien blindados.

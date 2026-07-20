@@ -979,7 +979,24 @@ LEYENDA DE ESTADO:
       añadieron try/catch ASCII, sin tocar líneas con acentos/emojis). Deploy Version ID 65e78297.
     · NOTA detectada (no crítica, fuera de alcance): wrangler solo muestra 2 crons (0 7, 0 18);
       el código maneja también '0 23' (syncRRHH) pero ese trigger no aparece registrado. Revisar
-      si el sync RRHH nocturno se está ejecutando de verdad.
+      si el sync RRHH nocturno se está ejecutando de verdad. [✓ RESUELTO — ver CRON-23 abajo]
+
+[✓] CRON-23 — Inconsistencia código-vs-config: el branch '0 23' (syncRRHH) nunca corría  [HECHO 20/07/2026]
+    · Confirmado: wrangler.toml solo declaraba crons = ["0 7 * * *", "0 18 * * *"]. El handler
+      scheduled tenía un branch event.cron === '0 23 * * *' que colgaba syncRRHH(env) (sync
+      nocturno completo de RRHH), pero al no estar el trigger registrado NUNCA se ejecutaba. Era
+      código muerto que parecía vivo. syncRRHH era el único código exclusivo de ese horario.
+    · Intento inicial (añadir el trigger '0 23' a wrangler.toml) BLOQUEADO por Cloudflare:
+      "exceeded the limit of 5 cron triggers" (code 10072). El plan free limita a 5 triggers
+      POR CUENTA (no por Worker); la cuota ya está consumida por otros Workers de la cuenta.
+    · Fix aplicado (opción B): movida la llamada syncRRHH(env) al branch de las 18:00 (que ya
+      corre cierreAutomaticoJornada + syncPedidos ~10 subrequests; +20 de syncRRHH = ~30 total,
+      bajo el límite de 50). Eliminado el branch muerto '0 23'. syncRRHH es red de seguridad: las
+      escrituras (fichajes/EPIs/carnets/turnos/incidencias/repostajes) ya sincronizan de forma
+      incremental. Comentarios obsoletos actualizados ("3x/día"→"2x/día"; nota de distribución).
+    · Verificado por 2 agentes: sin branch '0 23' restante, syncRRHH 1 sola vez en el branch
+      18:00, crons manejados = crons declarados, sin mojibake nuevo en las líneas añadidas.
+    · Solo backend, sin cambio de versión de app. Deploy OK — triggers listados: 0 7, 0 18.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

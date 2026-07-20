@@ -5577,16 +5577,16 @@ export default {
   async scheduled(event, env, ctx) {
     // Healthcheck en TODOS los crons: Alejandra se autodiagnostica y se autorrepara
     ctx.waitUntil(checkChatHealth(env));
-    // Sync con la red de agentes en cada cron (3x/dÃ­a: 7:00, 18:00, 23:00 UTC)
+    // Sync con la red de agentes en cada cron (2x/dÃ­a: 7:00, 18:00 UTC)
     ctx.waitUntil(networkAgentSync(env));
 
     if (event.cron === '0 18 * * *') {
       ctx.waitUntil(cierreAutomaticoJornada(env));
-      ctx.waitUntil(syncPedidos(env)); // ~10 subrequests, seguro en este slot
-    } else if (event.cron === '0 23 * * *') {
-      // runAutonomousReview() eliminada (ver comentario junto a su antigua definición):
-      // este cron nunca estuvo registrado en wrangler.toml, era código muerto.
-      ctx.waitUntil(syncRRHH(env)); // ~20 subrequests, seguro en este slot
+      ctx.waitUntil(syncPedidos(env)); // ~10 subrequests
+      // Sync nocturno completo de RRHH (red de seguridad; las escrituras ya
+      // sincronizan de forma incremental). Antes colgaba de un cron 0 23 que
+      // nunca estuvo registrado en wrangler.toml (tope de 5 crons/cuenta).
+      ctx.waitUntil(syncRRHH(env)); // ~20 subrequests; ~30 total en este slot, < 50
     } else if (event.cron === '0 7 * * *') {
       // Recordatorio matutino: fixes pendientes > 12h
       ctx.waitUntil(recordatorioFixesPendientes(env));
@@ -5597,8 +5597,9 @@ export default {
     } else {
       ctx.waitUntil(alertasDiarias(env));
     }
-    // syncSheets/syncPedidos/syncRRHH distribuidos 1 por cron para no superar
-    // el limite de 50 subrequests por invocacion (limite Cloudflare Workers free).
+    // Cargas de sync repartidas entre 7:00 (syncSheets ~29) y 18:00
+    // (syncPedidos ~10 + syncRRHH ~20) para no superar el limite de 50
+    // subrequests por invocacion (limite Cloudflare Workers free).
   },};
 
 // Ã¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚Â

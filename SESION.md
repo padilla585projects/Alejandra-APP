@@ -1,11 +1,11 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado
+**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado + fix cron muerto (CRON-23)
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
-**Último worker desplegado:** Version ID `65e78297-af3f-4e3c-9229-0154c8a49469`
+**Último worker desplegado:** Version ID `d9bcf385-e036-406c-82c8-a540daf586e5`
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
@@ -15,7 +15,29 @@
 - `72e1a0a` — fix(robustez): red de seguridad try/catch en processNetworkRequest (SEC-07)
 - `fa7372d` — fix(seguridad): tapa bypass de la barrera con WHERE siempre-cierto (SEC-08)
 - `b35d30d` — chore: ignora ota/ (copia local del manifiesto OTA)
-- (pendiente commit) — fix(robustez): try/catch en 3 funciones del cron nocturno (ROB-CRON)
+- `510a1e0` — fix(robustez): try/catch en 3 funciones del cron nocturno (ROB-CRON)
+- (pendiente commit) — fix(cron): mueve syncRRHH al cron 0 18 y borra el branch muerto 0 23 (CRON-23)
+
+### Part 18: Fix cron muerto — syncRRHH del branch '0 23' que nunca corría (CRON-23) (20/07/2026)
+**Contexto:** seguimiento de la NOTA lateral de Part 17 (ROB-CRON). wrangler.toml solo declaraba
+2 triggers (`0 7`, `0 18`), pero el handler `scheduled` tenía un branch `event.cron === '0 23'`
+que colgaba `syncRRHH(env)` (sync nocturno completo de RRHH). Al no estar el trigger registrado,
+ese branch NUNCA se ejecutaba: código muerto que parecía vivo. Era el único código exclusivo de
+las 23:00.
+
+**Decisión:** intentar añadir el trigger `0 23` (opción A) quedó BLOQUEADO por Cloudflare:
+"exceeded the limit of 5 cron triggers" (code 10072) — el plan free limita a 5 triggers POR
+CUENTA y la cuota ya está consumida por otros Workers. Se optó por la opción B (contemplada como
+fallback): mover `syncRRHH(env)` al branch de las 18:00 y eliminar el branch muerto. Carga del
+slot 18:00: cierre + syncPedidos (~10) + syncRRHH (~20) = ~30 subrequests, bajo el límite de 50.
+syncRRHH es red de seguridad; las escrituras ya sincronizan de forma incremental.
+
+**Verificación:** 2 agentes en paralelo confirmaron: sin branch `0 23` restante; `syncRRHH(env)`
+1 sola vez, dentro del branch `0 18`; crons manejados = crons declarados; ninguna línea añadida
+introduce mojibake nuevo (la corrupcion de la palabra "dia" ya estaba en la línea original que
+se reemplazó). Comentarios
+obsoletos actualizados ("3x/día"→"2x/día"; nota de distribución de cargas). Deploy OK — triggers
+listados: `0 7`, `0 18` (Version ID d9bcf385). Solo backend, sin cambio de versión de app.
 
 ### Part 13: Red de seguridad en executeAITool (robustez tools no-destructivas) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → repasar las tools NO destructivas de Alejandra (calidad/robustez, no seguridad). Auditoría de manejo de errores y casos límite.
