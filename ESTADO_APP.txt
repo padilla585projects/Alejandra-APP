@@ -6,10 +6,19 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: bf94dfd5-8827-482d-b956-f4fb108c49df (validacion de inputs en tools no-destructivas: web_search valida query/TAVILY_API_KEY, memory_save valida campos obligatorios, r2_list aclara truncamiento -returned/truncated/hint en vez de total enganoso-; previo 359a41ce red de seguridad try/catch en executeAITool; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: 0d25d7fb-c8e1-4f6c-84ad-aeb8f1619a7e (red de seguridad try/catch en processNetworkRequest -cara entrante de la red de agentes: el socio siempre recibe respuesta, aunque el handler lance-; previo bf94dfd5 validacion de inputs en tools no-destructivas, 359a41ce red de seguridad en executeAITool; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [red de seguridad en processNetworkRequest — el agente socio siempre recibe respuesta]
+                       Mismo patron de red de seguridad de SEC-05 pero en la cara ENTRANTE de la
+                       red de agentes (Adrian: "Si, aplicar el fix"). Hallazgo: processNetworkRequest
+                       (handler de peticiones de agentes socios: Jarvis, etc.) no tenia try/catch;
+                       si el procesamiento lanzaba (fallo de DB/fetch/parse), el socio quedaba SIN
+                       respuesta -> timeout silencioso. Fix: try/catch que envuelve toda la cadena de
+                       handlers; ante excepcion responde { type:action_response_error, ok:false, error }
+                       al socio via el bloque de envio existente. Camino feliz sin cambios. node --check
+                       OK, encoding limpio. Deploy Version ID 0d25d7fb. Solo backend. (SEC-07)
   (worker.js — solo backend)      |  20/07/2026  [validacion de inputs en tools no-destructivas — fixes menores de calidad]
                        Continuacion de la auditoria (Adrian: "hazlos"). Aplicados los 3 fixes
                        menores que quedaron diferidos en SEC-05: web_search valida que query no

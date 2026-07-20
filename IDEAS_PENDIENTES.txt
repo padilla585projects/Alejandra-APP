@@ -938,6 +938,16 @@ LEYENDA DE ESTADO:
       ahora indica si R2 truncó la página (~1000 máx) y sugiere acotar con prefix.
     · Verificado en producción: r2_list devuelve returned:106, truncated:false. Deploy bf94dfd5.
 
+[✓] SEC-07 — Red de seguridad try/catch en processNetworkRequest (cara entrante)  [HECHO 20/07/2026]
+    · processNetworkRequest (handler de peticiones de agentes socios: Jarvis, etc.) no tenía
+      try/catch: si el procesamiento de una petición lanzaba (fallo de DB/fetch/parse), el
+      agente socio quedaba SIN respuesta → timeout silencioso en su lado.
+    · Fix: try/catch que envuelve toda la cadena de handlers. Ante excepción responde con
+      { type: 'action_response_error', ok:false, error } al socio vía el bloque de envío
+      existente (responseText, fromAgent, collabId están en scope antes del try). Camino
+      feliz sin cambios. Espeja la red SEC-05 pero en la cara entrante de la red de agentes.
+    · Deploy Version ID 0d25d7fb. Solo backend.
+
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================

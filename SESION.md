@@ -5,13 +5,14 @@
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
-**Último worker desplegado:** Version ID `bf94dfd5-8827-482d-b956-f4fb108c49df`
+**Último worker desplegado:** Version ID `0d25d7fb-c8e1-4f6c-84ad-aeb8f1619a7e`
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
 - `f84f873` — docs: actualiza SESION.md con commits y Version ID
 - `9060dd4` — fix(robustez): red de seguridad try/catch en executeAITool
-- (pendiente commit) — fix(robustez): validación de inputs en tools no-destructivas (SEC-06)
+- `8807756` — fix(robustez): validación de inputs en tools no-destructivas (SEC-06)
+- (pendiente commit) — fix(robustez): red de seguridad try/catch en processNetworkRequest (SEC-07)
 
 ### Part 13: Red de seguridad en executeAITool (robustez tools no-destructivas) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → repasar las tools NO destructivas de Alejandra (calidad/robustez, no seguridad). Auditoría de manejo de errores y casos límite.
@@ -31,6 +32,15 @@
 3. `r2_list` — reemplaza el campo `total` (engañoso: era el conteo de la página, R2 trunca en ~1000) por `returned` + `truncated` + `hint`; ahora el modelo sabe si faltan archivos y que debe acotar con `prefix`.
 
 **Verificación:** node --check OK; encoding limpio; diff mínimo (5 insert, 1 del); smoke test en producción (r2_list vía chat → `returned:106`, `truncated:false`). Los guards de web_search/memory_save son early-return que solo disparan con inputs vacíos/faltantes → no afectan el camino feliz. Deploy Version ID bf94dfd5. Solo backend, sin cambio de versión de app.
+
+### Part 15: Red de seguridad en processNetworkRequest (cara entrante de la red) (20/07/2026)
+**Contexto:** Adrian: "seguimos" → "Sí, aplicar el fix". Mismo patrón de red de seguridad de Part 13 (SEC-05), pero en la **cara entrante** de la red de agentes: el handler que procesa peticiones de agentes socios (Jarvis, etc.).
+
+**Hallazgo:** `processNetworkRequest` no tenía try/catch. Si el procesamiento de una petición lanzaba (fallo de DB/fetch/parse), el agente socio quedaba **sin respuesta** → timeout silencioso en su lado. La llamada la hace `networkAgentSync` en un try/catch de bucle, pero ese catch solo protege el bucle, no garantiza respuesta al socio.
+
+**Fix (mínimo, cero riesgo):** try/catch que envuelve toda la cadena de handlers (`agent_hello`, greeting, free_message, etc.). Ante excepción, asigna `responseText = { type:'action_response_error', ok:false, error }` y deja que el bloque de envío existente (`if (responseText) { fetch(GATEWAY + '/api/agents/send', ...) }`) lo mande al socio. `responseText`, `fromAgent`, `collabId` se declaran antes del try → en scope en el catch. El camino feliz no cambia.
+
+**Verificación:** node --check OK; encoding limpio (grep `Ã|Â|â€|ï»¿` en diff → sin match). Deploy Version ID 0d25d7fb, bindings DB + FILES presentes. Solo backend, sin cambio de versión de app. Documentado como SEC-07 en IDEAS_PENDIENTES.txt.
 
 ### Part 10: Barrera humana anti-borrado (20/07/2026)
 **Contexto:** Al probar la salvaguarda de Part 9 en producción, se detectó que el modelo podía autoconfirmar poniendo `confirm_destructive:true` en el tool_input (que él genera). Adrian: "haz la barrera" → que solo el humano pueda confirmar, nunca el modelo.

@@ -3214,6 +3214,7 @@ async function processNetworkRequest(env, msg, secret) {
   };
 
   // â”€â”€ Protocolo agent_hello â€” Norma 1 (IDENTIDAD) â”€â”€
+  try {
   if (content && (content.type === 'agent_hello' || content.type === 'hello')) {
     responseText = JSON.stringify({
       type: 'agent_hello_response',
@@ -3424,6 +3425,13 @@ async function processNetworkRequest(env, msg, secret) {
     actionDetail = `Mensaje libre de ${fromAgent}: ${(typeof content === 'string' ? content : JSON.stringify(content)).slice(0, 100)}`;
     await notifyAdrian('MENSAJE', `Texto libre de ${fromAgent}: ${(typeof content === 'string' ? content : JSON.stringify(content)).slice(0, 200)}`);
     await logNetworkAction('free_message', actionDetail, 'ack_enviado');
+  }
+  } catch (e) {
+    // Red de seguridad (cara entrante): si el procesamiento lanza, responder igualmente
+    // al agente socio con un error estructurado en vez de dejarlo sin respuesta (timeout).
+    const _emsg = e && e.message ? e.message : String(e);
+    responseText = JSON.stringify({ type: 'action_response_error', to: fromAgent, collab_id: collabId, ok: false, error: _emsg });
+    try { await logNetworkAction('error', `Excepcion procesando peticion: ${_emsg}`, 'error'); } catch (_e) {}
   }
 
   // Responder al agente vÃ­a gateway
