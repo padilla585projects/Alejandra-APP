@@ -20,7 +20,7 @@
 - `e2f862d` — fix(cron): mueve syncRRHH al cron 0 18 y elimina el branch muerto 0 23 (CRON-23)
 - `4497f5f` — docs: actualiza Version ID vivo a e8779c87 (redeploy CI) tras verificar el worker desplegado
 - `a65e2da` — docs: verificación end-to-end en prod de la barrera SEC-08
-- (este commit) — feat(seguridad): barrera humana equilibrada en escribir_bd del agente de oficina/app web (SEC-09)
+- `ff57e77` — feat(seguridad): barrera humana equilibrada en escribir_bd del agente de oficina/app web (SEC-09)
 
 ### Part 18: Fix cron muerto — syncRRHH del branch '0 23' que nunca corría (CRON-23) (20/07/2026)
 **Contexto:** seguimiento de la NOTA lateral de Part 17 (ROB-CRON). wrangler.toml solo declaraba
