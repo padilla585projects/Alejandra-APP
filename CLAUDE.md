@@ -133,6 +133,26 @@ npx wrangler tail
 
 ---
 
+## UNA Alejandra, DOS cerebros (CRÍTICO — leer siempre)
+
+> ⚠️ **INCIDENTE 20/07/2026 (SEC-08/SEC-09)**: Se blindó la barrera humana anti-borrado en `worker.js` pero el agente de oficina/app web se quedó SIN blindar durante horas, porque es **código separado**. Casi se deja un flanco abierto.
+
+Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, comparten BD D1). Pero por dentro son **DOS workers con código distinto**, y se le habla desde **3 sitios**:
+
+| Sitio desde el que se habla | Worker que responde | Herramienta de escritura | Barrera destructiva |
+|---|---|---|---|
+| App móvil/web (`index.html`) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
+| Panel de oficina (`panel.html`) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
+| Chat dev del panel + Telegram | `alejandra-app-api` (`worker.js`) | `sql_query`, `run_migration` | 🔒 Estricta (SEC-08) |
+
+**Regla de oro:** toda mejora/fix de **seguridad, tools, permisos o barreras** hay que aplicarla —o decidir conscientemente que no aplica— en **LOS DOS** workers (`worker.js` **y** `alejandra-agente/worker.js`). Si solo se toca uno, quedan descompensados (una Alejandra protegida, la otra no). Antes de cerrar una sesión de seguridad, preguntarse: *"¿esto también afecta al otro cerebro?"*.
+
+**Deploy:** cada worker se despliega por separado.
+- `worker.js` → `npx wrangler deploy` en la raíz (y además hay CI que redeploya al pushear).
+- `alejandra-agente/worker.js` → `npx wrangler deploy` **dentro de** `alejandra-agente/`. **NO tiene CI**: si no se despliega a mano, el cambio no llega a producción aunque esté en GitHub.
+
+---
+
 ## CODIFICACIÓN DE ARCHIVOS (CRÍTICO — leer siempre)
 
 > ⛔ **INCIDENTE 13/05/2026**: Los archivos `panel.html` y `worker.js` se corrompieron por guardarlos con codificación incorrecta. Costó horas arreglarlo. NUNCA debe volver a ocurrir.
@@ -186,7 +206,8 @@ npx wrangler tail
 |---|---|
 | `index.html` | App móvil PWA (toda la lógica frontend en un solo archivo) |
 | `panel.html` | Panel web de oficina |
-| `worker.js` | Backend Cloudflare Worker (API REST + agente IA Alejandra + crons) |
+| `worker.js` | Backend Cloudflare Worker `alejandra-app-api` (API REST + Alejandra "dev" + crons) |
+| `alejandra-agente/worker.js` | Worker SEPARADO `alejandra-agente` (Alejandra de la app web/móvil y del panel de oficina). Ver "UNA Alejandra, DOS cerebros" abajo. Tiene sus propios `lib.js`/`lib.test.js` |
 | `sw.js` | Service Worker (caché offline, push notifications) |
 | `version.json` | `{"v":"X.XX"}` — versión actual (debe coincidir con sw.js e index.html) |
 | `wrangler.toml` | Config Cloudflare (bindings D1 y R2) |
