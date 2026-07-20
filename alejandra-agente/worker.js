@@ -10561,6 +10561,25 @@ async function enviarPushScanRequest(env, sesion, subtipo, contexto, eventoId) {
 // Reutiliza el mismo validarRateLimit() de /api/chat -- KV, ventana de 1 minuto,
 // fail-open si KV falla -- pero con su propio bucket ("admin-auth:ip:...") para
 // no compartir cupo con el rate limit del chat.
+// Push: obtiene la clave publica VAPID desde el worker principal
+// (alejandra-app-api) via Service Binding API_WEB. Fuente unica de verdad: los
+// secrets VAPID viven SOLO en el worker principal (que es quien envia las push);
+// este agente solo guarda suscripciones. Devuelve { pub } o null si no esta
+// configurada o si la llamada falla (el handler responde 503, nunca 500).
+async function getVapidKeys(env) {
+  try {
+    if (!env.API_WEB) return null;
+    const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/push/vapid-public-key');
+    if (!resp.ok) return null;
+    const data = await resp.json().catch(() => null);
+    if (!data || !data.publicKey) return null;
+    return { pub: data.publicKey };
+  } catch (e) {
+    console.error('getVapidKeys error:', e && e.message);
+    return null;
+  }
+}
+
 async function verificarAdminToken(env, token, req) {
   if (!token) return false;
   if (req) {

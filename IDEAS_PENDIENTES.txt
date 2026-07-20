@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 20/07/2026 — paridad de seguridad en el 2º cerebro: gating de nexus_manage + red try/catch en el agente de oficina/app web (SEC-10, ver sección 🔒 SEGURIDAD)
+  Última actualización: 20/07/2026 — fix BUG-PUSH: /push-vapid-key del agente daba 500 (getVapidKeys sin definir) → push automáticas rotas; resuelto vía Service Binding al worker principal. Antes: paridad de seguridad SEC-10.
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1048,6 +1048,28 @@ LEYENDA DE ESTADO:
     · Verificado: 85/85 tests vitest PASS (+3 SEC-10); node --check OK; encoding limpio.
       Deploy manual del agente Version ID b643c514. Aplica la regla de oro de CLAUDE.md:
       todo fix de seguridad va en LOS DOS cerebros (worker.js Y alejandra-agente/worker.js).
+
+[✓] BUG-PUSH — /push-vapid-key del agente daba HTTP 500 → push automáticas rotas  [HECHO 20/07/2026]
+    · Detectado en la prueba web de SEC-10: GET a
+      alejandra-agente.../push-vapid-key devolvía 500 en cada carga de la app.
+    · Causa raíz: el handler (alejandra-agente/worker.js) llamaba a getVapidKeys(env),
+      función que NUNCA estaba definida en el worker agente → ReferenceError → el catch
+      externo lo convertía en 500. Confirmado: el agente no tiene secrets VAPID; los
+      secrets (VAPID_PUBLIC_KEY/PRIVATE_KEY) viven solo en el worker principal, que es
+      quien envía las push. El agente solo guarda suscripciones (push_subscriptions).
+    · Impacto real (peor de lo aparente): en index.html, _registrarPushAlejandra() hace
+      return si !vapidRes.ok, así que el 500 abortaba TODA la suscripción push de los
+      usuarios normales (ni agente ni worker principal). El botón dev de Adrian seguía OK
+      porque usa otra ruta (/dev/vapid-public-key del worker principal).
+    · Fix (Opción A — fuente única de verdad vía Service Binding):
+      - worker.js: nueva ruta pública GET /push/vapid-public-key (sin auth; la public key
+        es pública por diseño) que devuelve { ok, publicKey } o 503 si no configurada.
+      - alejandra-agente/worker.js: implementado getVapidKeys(env) que llama al worker
+        principal por env.API_WEB.fetch(.../push/vapid-public-key), con try/catch (devuelve
+        null → el handler responde 503, nunca 500). Sin duplicar la clave: si el worker
+        principal rota VAPID, el agente sigue correcto.
+    · Verificado en producción: /push-vapid-key ahora HTTP 200 con publicKey; node --check
+      OK en ambos; encoding limpio. Deploy: principal adb8c088, agente b9242d46.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

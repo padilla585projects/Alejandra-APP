@@ -4362,6 +4362,15 @@ export default {
       if (path === '/admin/login-attempts' && method === 'DELETE') return await adminBorrarLoginAttempts(request, env);
       if (path === '/admin/server-logs'   && method === 'DELETE') return await adminBorrarServerLogs(request, env);
 
+      // Push: clave publica VAPID. Publica por diseno (los navegadores la
+      // necesitan para suscribirse), asi que va SIN auth a proposito. El worker
+      // agente la sirve por Service Binding llamando aqui (getVapidKeys() en
+      // alejandra-agente). Los secrets VAPID viven SOLO en este worker principal.
+      if (path === '/push/vapid-public-key' && method === 'GET') {
+        if (!env.VAPID_PUBLIC_KEY) return err('VAPID_PUBLIC_KEY no configurada', 503);
+        return json({ ok: true, publicKey: env.VAPID_PUBLIC_KEY });
+      }
+
       // Ã¢"â‚¬Ã¢"â‚¬ Dev endpoints (superadmin/desarrollador) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
       if (path === '/dev/sql'              && method === 'POST')  return await devSQL(request, env);
       if (path === '/dev/ai-chat'          && method === 'POST')  return await devAIChat(request, env);

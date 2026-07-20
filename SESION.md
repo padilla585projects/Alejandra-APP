@@ -1,12 +1,12 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado + fix cron muerto (CRON-23) + barrera equilibrada en el agente de oficina/app web (SEC-09) + paridad de seguridad en el 2o cerebro (SEC-10: gating nexus_manage + red try/catch)
+**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado + fix cron muerto (CRON-23) + barrera equilibrada en el agente de oficina/app web (SEC-09) + paridad de seguridad en el 2o cerebro (SEC-10: gating nexus_manage + red try/catch) + fix BUG-PUSH (/push-vapid-key daba 500: getVapidKeys sin definir en el agente -> push automaticas rotas)
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
-**Último worker desplegado (web, alejandra-app-api):** Version ID `e8779c87-7806-40ce-8709-2869dbf85292` (redeploy automático por CI al pushear; mismo código que el deploy manual `d9bcf385`)
-**Último agente desplegado (alejandra-agente):** Version ID `b643c514-b02e-43a7-ba91-0e525b185eb6` (deploy manual con SEC-10: gating de nexus_manage + red try/catch en ejecutarTool; el agente NO tiene CI, se despliega a mano con `npx wrangler deploy` desde `alejandra-agente/`)
+**Último worker desplegado (web, alejandra-app-api):** Version ID `adb8c088-d3d5-4523-8d3a-1447573d410f` (deploy manual con BUG-PUSH: nueva ruta pública `GET /push/vapid-public-key`; previo `e8779c87`)
+**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (deploy manual con BUG-PUSH: implementado `getVapidKeys(env)` que lee la public key VAPID del worker principal vía Service Binding `API_WEB`; previo `b643c514` SEC-10; el agente NO tiene CI, se despliega a mano con `npx wrangler deploy` desde `alejandra-agente/`)
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
