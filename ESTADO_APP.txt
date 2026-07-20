@@ -6,10 +6,22 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: 7d623860-e704-47a0-a8ff-4b6911ae3d2b (SEC-08: tapa bypass de la barrera humana -detectarSqlDestructivo ahora exige confirmacion en TODO DELETE/UPDATE, no solo sin WHERE; un WHERE 1=1 afectaba toda la tabla saltandose la barrera-; hallado en security-review del diff; previo 0d25d7fb red de seguridad en processNetworkRequest, bf94dfd5 validacion de inputs; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: 65e78297-af3f-4e3c-9229-0154c8a49469 (ROB-CRON: try/catch de robustez en 3 funciones del cron nocturno -cierreAutomaticoJornada guard por fichaje, alertasDiarias envuelve secciones 1-5, recordatorioFixesPendientes red general- para que un fallo no deje el job a medias en silencio; self-audit checkChatHealth ya estaba blindado; previo 7d623860 SEC-08 fix bypass barrera WHERE 1=1; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [ROB-CRON: robustez en 3 funciones del cron nocturno]
+                       Auditoria de las 10 funciones del scheduled() (Adrian: "Auditar cron/self-
+                       audit"). El self-audit checkChatHealth y la mayoria estaban bien blindados.
+                       3 tenian el patron "fallo silencioso + trabajo a medias": (1) cierreAutomatico
+                       Jornada -bucle de cierre de fichajes sin try/catch por iteracion, un fichaje
+                       que falla dejaba unos cerrados y otros abiertos-; (2) alertasDiarias -secciones
+                       1-5 sin guard, un fallo temprano saltaba TODAS las alertas posteriores incl.
+                       RGPD-; (3) recordatorioFixesPendientes -sin ninguna red-. Fix: try/catch por
+                       fichaje, try/catch envolviendo secciones 1-5, y red general + guard descripcion.
+                       node --check OK, encoding limpio. Deploy Version ID 65e78297. Solo backend.
+                       Nota lateral: wrangler solo registra 2 crons (0 7, 0 18); el codigo maneja
+                       tambien 0 23 (syncRRHH) -revisar si ese trigger existe de verdad.
   (worker.js — solo backend)      |  20/07/2026  [SEC-08: tapa bypass de la barrera humana con WHERE siempre-cierto]
                        security-review formal del diff de seguridad de la sesion (SEC-01..07,
                        Adrian: "security-review del diff"). El diseno central quedo SOLIDO

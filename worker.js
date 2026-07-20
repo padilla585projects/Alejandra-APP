@@ -3485,6 +3485,7 @@ async function isAgentePausado(env) {
 async function recordatorioFixesPendientes(env) {
   const devChatId = env.DEV_CHAT_ID;
   if (!devChatId) return;
+  try {
   const pending = await env.DB.prepare(
     "SELECT id, descripcion, archivo, created_at FROM alejandra_fixes WHERE estado='pendiente' AND created_at < datetime('now', '-12 hours') ORDER BY created_at ASC"
   ).all();
@@ -3493,10 +3494,13 @@ async function recordatorioFixesPendientes(env) {
   let msg = `â³ <b>${n} fix${n > 1 ? 'es' : ''} pendiente${n > 1 ? 's' : ''} de aprobaciÃ³n</b>\n\n`;
   for (const f of pending.results) {
     const horas = Math.floor((Date.now() - new Date(f.created_at + 'Z').getTime()) / 3600000);
-    msg += `â€¢ Fix #${f.id} â€” <i>${f.descripcion.slice(0, 60)}</i>\n  ðŸ“„ <code>${f.archivo}</code> â€” hace ${horas}h\n\n`;
+    msg += `â€¢ Fix #${f.id} â€” <i>${(f.descripcion || '').slice(0, 60)}</i>\n  ðŸ“„ <code>${f.archivo}</code> â€” hace ${horas}h\n\n`;
   }
   msg += 'Revisa el panel DevTools â†’ Agente IA, o los mensajes originales de Telegram.';
   await sendTelegramConBotonesTo(env, devChatId, msg, []);
+  } catch (e) {
+    console.error('Error recordatorioFixesPendientes:', e && e.message);
+  }
 }
 
 // Health check post-deploy: espera 90s, comprueba el worker, auto-revierte si falla
@@ -10019,7 +10023,9 @@ async function cierreAutomaticoJornada(env) {
     if (!abiertos.length) return;
 
     let cerrados = 0;
+    let fallidos = 0;
     for (const f of abiertos) {
+     try {
       const horaSalida = f.horario_salida || '18:00';
       const horas = calcHoras(f.hora_entrada, horaSalida);
       const horas_extra = f.horario_horas_dia ? Math.max(0, Math.round((horas - f.horario_horas_dia)*100)/100) : 0;
@@ -10028,8 +10034,15 @@ async function cierreAutomaticoJornada(env) {
         `UPDATE fichajes SET hora_salida=?, horas_trabajadas=?, horas_extra=?, notas=? WHERE id=?`
       ).bind(horaSalida, horas, horas_extra, notasActual + 'Ã¢Ã‚ÂÂ° Cierre automÃ¡tico', f.id).run();
       cerrados++;
+     } catch (e) {
+       fallidos++;
+       console.error('Error cerrando fichaje ' + f.id + ':', e && e.message);
+     }
     }
 
+    if (fallidos > 0) {
+      await sendTelegram(env, 'AVISO: ' + fallidos + ' fichaje(s) no se pudieron cerrar automaticamente (ver logs). Cerrados OK: ' + cerrados + '.').catch(() => {});
+    }
     if (cerrados > 0) {
       await sendTelegram(env,
         `Ã¢Ã‚ÂÂ° <b>Cierre automÃ¡tico de jornada</b>\nðŸ“… ${hoy}\nâœ… ${cerrados} fichaje${cerrados > 1 ? 's cerrados' : ' cerrado'} automÃ¡ticamente con hora del horario de obra.`
@@ -10360,6 +10373,7 @@ async function alertasDiarias(env) {
     const empLabel = (eid) => empMap[eid] ? ` [${empMap[eid]}]` : '';
 
     // 1. MÃ¡quinas averiadas hace mÃ¡s de 3 dÃ­as sin reparar
+    try {
     const [avPemp, avCarr] = await Promise.all([
       env.DB.prepare(`SELECT matricula, fecha_averia, obra_id, empresa_id FROM pemp WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
       env.DB.prepare(`SELECT matricula, fecha_averia, obra_id, empresa_id FROM carretillas WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
@@ -10480,6 +10494,13 @@ async function alertasDiarias(env) {
     }
 
     // â”€â”€ Tareas de obra vencidas â€” alerta diaria por empresa â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    } catch (e) {
+      // Red de seguridad: si cualquier seccion 1-5 (averias, revisiones, material seg,
+      // carnets, eventos) lanza, no debe abortar las secciones posteriores (tareas
+      // vencidas, RFIs, deficiencias, hitos, RGPD). Se registra y se continua.
+      console.error('alertasDiarias secciones 1-5 error:', e && e.message);
+    }
+
     try {
       const hoyStr = hoy.toISOString().slice(0, 10);
       const { results: empresasConTareas } = await env.DB.prepare(

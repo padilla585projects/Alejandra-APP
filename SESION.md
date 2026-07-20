@@ -5,7 +5,7 @@
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
-**Último worker desplegado:** Version ID `7d623860-e704-47a0-a8ff-4b6911ae3d2b`
+**Último worker desplegado:** Version ID `65e78297-af3f-4e3c-9229-0154c8a49469`
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
@@ -13,7 +13,9 @@
 - `9060dd4` — fix(robustez): red de seguridad try/catch en executeAITool
 - `8807756` — fix(robustez): validación de inputs en tools no-destructivas (SEC-06)
 - `72e1a0a` — fix(robustez): red de seguridad try/catch en processNetworkRequest (SEC-07)
-- (pendiente commit) — fix(seguridad): tapa bypass de la barrera con WHERE siempre-cierto (SEC-08)
+- `fa7372d` — fix(seguridad): tapa bypass de la barrera con WHERE siempre-cierto (SEC-08)
+- `b35d30d` — chore: ignora ota/ (copia local del manifiesto OTA)
+- (pendiente commit) — fix(robustez): try/catch en 3 funciones del cron nocturno (ROB-CRON)
 
 ### Part 13: Red de seguridad en executeAITool (robustez tools no-destructivas) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → repasar las tools NO destructivas de Alejandra (calidad/robustez, no seguridad). Auditoría de manejo de errores y casos límite.
@@ -33,6 +35,20 @@
 3. `r2_list` — reemplaza el campo `total` (engañoso: era el conteo de la página, R2 trunca en ~1000) por `returned` + `truncated` + `hint`; ahora el modelo sabe si faltan archivos y que debe acotar con `prefix`.
 
 **Verificación:** node --check OK; encoding limpio; diff mínimo (5 insert, 1 del); smoke test en producción (r2_list vía chat → `returned:106`, `truncated:false`). Los guards de web_search/memory_save son early-return que solo disparan con inputs vacíos/faltantes → no afectan el camino feliz. Deploy Version ID bf94dfd5. Solo backend, sin cambio de versión de app.
+
+### Part 17: Auditoría de robustez del cron nocturno (ROB-CRON) (20/07/2026)
+**Contexto:** Adrian: "seguimos" → eligió "Auditar cron/self-audit". Revisar las funciones que dispara el cron buscando el mismo hueco de robustez: excepciones no capturadas que rompan el job o lo dejen a medias en silencio.
+
+**Método:** delegada la lectura de las 10 funciones del `scheduled()` (línea ~5573) a un agente de investigación; verificados los hallazgos leyendo el código real. Cada job corre en su propio `ctx.waitUntil`, así que uno no rompe a los demás — el riesgo es interno a cada función.
+
+**Resultado:** El **self-audit (`checkChatHealth`) está BIEN blindado** (try/catch total + `.catch()` en cada DB/Telegram; no tocar). Igual `networkAgentSync`, `briefingMatutino`, `dailyPulse`, `syncSheets/Pedidos/RRHH`. **3 funciones con el patrón "fallo silencioso + trabajo a medias":**
+1. `cierreAutomaticoJornada` (10007): el bucle que cierra fichajes no tenía try/catch por iteración → un fichaje que falla rompía el bucle, dejando unos cerrados y otros abiertos, en silencio. **Fix:** try/catch por fichaje (cuenta `fallidos`, avisa por Telegram si los hay).
+2. `alertasDiarias` (10341): §1-§5 (averías/revisiones/material seg/carnets/eventos) sin guard propio → un fallo temprano saltaba TODAS las alertas posteriores, incluida la limpieza RGPD. **Fix:** try/catch envolviendo §1-§5 (§6+ ya tenían el suyo).
+3. `recordatorioFixesPendientes` (3485): única función sin ninguna red → query o `descripcion` nula la rompían. **Fix:** try/catch general + guard `(f.descripcion || '')`.
+
+**Verificación:** node --check OK; encoding limpio (solo se añadieron `try/catch` ASCII con anclas ASCII, sin reescribir líneas con acentos/emojis — verificado que las líneas mojibake son byte-idénticas en el diff). Deploy Version ID 65e78297. Solo backend, sin cambio de versión de app.
+
+**Hallazgo lateral (no crítico, anotado en IDEAS como ROB-CRON):** `wrangler deploy` solo registra 2 triggers (0 7, 0 18 UTC), pero el código maneja también `'0 23'` (syncRRHH nocturno). Ese trigger no aparece → puede que el sync RRHH de las 23:00 no se ejecute. Revisar wrangler.toml en otra sesión.
 
 ### Part 16: security-review del diff + fix bypass de la barrera (SEC-08) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → eligió "security-review del diff". Revisión de seguridad formal sobre los cambios de worker.js de esta sesión (rango `8be1fe2..HEAD`, 176 inserciones) usando la skill security-review con sub-tareas de identificación + filtrado de falsos positivos.

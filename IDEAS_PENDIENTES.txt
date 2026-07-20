@@ -962,6 +962,25 @@ LEYENDA DE ESTADO:
       Solo backend. El resto de controles (barrera no-autoconfirmable, gating, anti-SSRF, redes
       de seguridad) se revisaron y quedaron SÓLIDOS sin hallazgos.
 
+[✓] ROB-CRON — Robustez de las funciones del cron nocturno (auditoría)  [HECHO 20/07/2026]
+    · Auditadas las 10 funciones que dispara el cron (scheduled, línea ~5573). El self-audit
+      (checkChatHealth) y la mayoría estaban BIEN blindados. 3 tenían el patrón "un fallo se
+      traga en silencio y deja el trabajo a medias":
+      1. cierreAutomaticoJornada: el bucle que cierra fichajes no tenía try/catch POR fichaje →
+         si uno fallaba, se rompía el bucle y quedaban unos cerrados y otros abiertos, en
+         silencio. Fix: try/catch por iteración (cuenta fallidos, avisa por Telegram si los hay).
+      2. alertasDiarias: las secciones §1-§5 (averías, revisiones, material seg, carnets,
+         eventos) no tenían guard propio → un fallo temprano saltaba TODAS las alertas
+         posteriores (incl. tareas vencidas, RFIs y la limpieza RGPD). Fix: try/catch que
+         envuelve §1-§5 (§6+ ya tenían el suyo).
+      3. recordatorioFixesPendientes: única función sin ninguna red → query o descripcion
+         nula podían romperla. Fix: try/catch general + guard (f.descripcion || '').
+    · Solo backend, sin cambio de versión de app. node --check OK, encoding limpio (solo se
+      añadieron try/catch ASCII, sin tocar líneas con acentos/emojis). Deploy Version ID 65e78297.
+    · NOTA detectada (no crítica, fuera de alcance): wrangler solo muestra 2 crons (0 7, 0 18);
+      el código maneja también '0 23' (syncRRHH) pero ese trigger no aparece registrado. Revisar
+      si el sync RRHH nocturno se está ejecutando de verdad.
+
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================
