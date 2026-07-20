@@ -791,8 +791,12 @@ async function codigoConfirmacionOp(descriptor) {
 // Devuelve el motivo (string) o null. Compartido por sql_query y run_migration.
 function detectarSqlDestructivo(sql) {
   if (/^\s*(DROP|TRUNCATE|ALTER\s+TABLE)\b/i.test(sql)) return 'DROP/TRUNCATE/ALTER TABLE';
-  if (/^\s*DELETE\s+FROM\b/i.test(sql) && !/\bWHERE\b/i.test(sql)) return 'DELETE sin WHERE';
-  if (/^\s*UPDATE\b/i.test(sql) && !/\bWHERE\b/i.test(sql)) return 'UPDATE sin WHERE';
+  // Un WHERE trivialmente-cierto (WHERE 1=1, WHERE id>0, WHERE id IS NOT NULL...) afecta a
+  // TODA la tabla igual que sin WHERE, y no se puede distinguir con regex de forma fiable.
+  // Por eso TODO DELETE/UPDATE exige barrera humana, tenga WHERE o no. El codigo va atado
+  // al SQL exacto, asi que la friccion queda acotada a una confirmacion por operacion.
+  if (/^\s*DELETE\s+FROM\b/i.test(sql)) return /\bWHERE\b/i.test(sql) ? 'DELETE (afecta filas)' : 'DELETE sin WHERE (toda la tabla)';
+  if (/^\s*UPDATE\b/i.test(sql)) return /\bWHERE\b/i.test(sql) ? 'UPDATE (afecta filas)' : 'UPDATE sin WHERE (toda la tabla)';
   return null;
 }
 // Barrera humana generica para operaciones destructivas. Si la operacion ya esta
@@ -849,12 +853,13 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       const { sql } = toolInput;
       try {
         const trimmed = sql.trim().toUpperCase();
-        // Barrera humana anti-catastrofe (compartida): DROP/TRUNCATE/ALTER o
-        // DELETE/UPDATE sin WHERE solo se ejecutan si el humano tecleo el codigo
-        // ligado a ESTE SQL exacto. El modelo no puede autoconfirmarse.
+        // Barrera humana anti-catastrofe (compartida): DROP/TRUNCATE/ALTER y TODO
+        // DELETE/UPDATE (con o sin WHERE) solo se ejecutan si el humano tecleo el codigo
+        // ligado a ESTE SQL exacto. El modelo no puede autoconfirmarse. Se exige barrera
+        // aunque haya WHERE porque un WHERE siempre-cierto afecta a toda la tabla.
         const motivoDestructivo = detectarSqlDestructivo(sql);
         if (motivoDestructivo) {
-          const bloqueo = await exigirConfirmacionHumana(ctx, sql, motivoDestructivo, 'Afecta a toda la tabla');
+          const bloqueo = await exigirConfirmacionHumana(ctx, sql, motivoDestructivo, 'Operacion destructiva sobre la BD');
           if (bloqueo) return bloqueo;
         }
         if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {

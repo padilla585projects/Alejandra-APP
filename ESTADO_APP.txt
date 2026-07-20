@@ -6,10 +6,21 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: 0d25d7fb-c8e1-4f6c-84ad-aeb8f1619a7e (red de seguridad try/catch en processNetworkRequest -cara entrante de la red de agentes: el socio siempre recibe respuesta, aunque el handler lance-; previo bf94dfd5 validacion de inputs en tools no-destructivas, 359a41ce red de seguridad en executeAITool; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: 7d623860-e704-47a0-a8ff-4b6911ae3d2b (SEC-08: tapa bypass de la barrera humana -detectarSqlDestructivo ahora exige confirmacion en TODO DELETE/UPDATE, no solo sin WHERE; un WHERE 1=1 afectaba toda la tabla saltandose la barrera-; hallado en security-review del diff; previo 0d25d7fb red de seguridad en processNetworkRequest, bf94dfd5 validacion de inputs; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [SEC-08: tapa bypass de la barrera humana con WHERE siempre-cierto]
+                       security-review formal del diff de seguridad de la sesion (SEC-01..07,
+                       Adrian: "security-review del diff"). El diseno central quedo SOLIDO
+                       (barrera no autoconfirmable por el LLM, gating enforced, anti-SSRF, redes
+                       no fail-open). 1 vuln (confianza 9/10): detectarSqlDestructivo decidia
+                       "destructivo" por AUSENCIA del token WHERE, asi que DELETE FROM t WHERE 1=1
+                       o UPDATE ... WHERE 1=1 (afectan toda la tabla) se saltaban la barrera y una
+                       Alejandra manipulada podia borrar/modificar toda la BD sin que el humano
+                       tecleara el codigo. Afectaba sql_query y run_migration. Fix: TODO DELETE/
+                       UPDATE exige barrera humana, tenga WHERE o no. 7/7 unit tests PASS. Deploy
+                       Version ID 7d623860. Solo backend.
   (worker.js — solo backend)      |  20/07/2026  [red de seguridad en processNetworkRequest — el agente socio siempre recibe respuesta]
                        Mismo patron de red de seguridad de SEC-05 pero en la cara ENTRANTE de la
                        red de agentes (Adrian: "Si, aplicar el fix"). Hallazgo: processNetworkRequest

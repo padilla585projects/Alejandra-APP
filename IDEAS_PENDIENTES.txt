@@ -948,6 +948,20 @@ LEYENDA DE ESTADO:
       feliz sin cambios. Espeja la red SEC-05 pero en la cara entrante de la red de agentes.
     · Deploy Version ID 0d25d7fb. Solo backend.
 
+[✓] SEC-08 — Fix bypass de la barrera con WHERE siempre-cierto (hallazgo de security-review)  [HECHO 20/07/2026]
+    · security-review del diff SEC-01..07 encontró 1 vuln (confianza 9/10): detectarSqlDestructivo
+      decidía "destructivo" por AUSENCIA del token WHERE. Un WHERE trivialmente-cierto
+      (`DELETE FROM bobinas WHERE 1=1`, `UPDATE usuarios SET rol='superadmin' WHERE 1=1`)
+      afecta a toda la tabla pero contenía WHERE → devolvía null → la barrera humana NUNCA
+      se invocaba → una Alejandra manipulada por prompt-injection podía borrar/modificar toda
+      la BD sin que Adrian tecleara CONFIRMO BORRADO. Afectaba a sql_query y run_migration.
+    · Fix: TODO DELETE/UPDATE exige barrera humana, tenga WHERE o no (regex no puede distinguir
+      un WHERE siempre-cierto de forma fiable). El código va atado al SQL exacto → fricción
+      acotada a una confirmación por operación. DROP/TRUNCATE/ALTER seguían cubiertos.
+    · Verificado: 7/7 unit tests de detección PASS (incluye WHERE 1=1). Deploy Version ID 7d623860.
+      Solo backend. El resto de controles (barrera no-autoconfirmable, gating, anti-SSRF, redes
+      de seguridad) se revisaron y quedaron SÓLIDOS sin hallazgos.
+
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================

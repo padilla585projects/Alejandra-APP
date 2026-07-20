@@ -5,14 +5,15 @@
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
-**Último worker desplegado:** Version ID `0d25d7fb-c8e1-4f6c-84ad-aeb8f1619a7e`
+**Último worker desplegado:** Version ID `7d623860-e704-47a0-a8ff-4b6911ae3d2b`
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
 - `f84f873` — docs: actualiza SESION.md con commits y Version ID
 - `9060dd4` — fix(robustez): red de seguridad try/catch en executeAITool
 - `8807756` — fix(robustez): validación de inputs en tools no-destructivas (SEC-06)
-- (pendiente commit) — fix(robustez): red de seguridad try/catch en processNetworkRequest (SEC-07)
+- `72e1a0a` — fix(robustez): red de seguridad try/catch en processNetworkRequest (SEC-07)
+- (pendiente commit) — fix(seguridad): tapa bypass de la barrera con WHERE siempre-cierto (SEC-08)
 
 ### Part 13: Red de seguridad en executeAITool (robustez tools no-destructivas) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → repasar las tools NO destructivas de Alejandra (calidad/robustez, no seguridad). Auditoría de manejo de errores y casos límite.
@@ -32,6 +33,17 @@
 3. `r2_list` — reemplaza el campo `total` (engañoso: era el conteo de la página, R2 trunca en ~1000) por `returned` + `truncated` + `hint`; ahora el modelo sabe si faltan archivos y que debe acotar con `prefix`.
 
 **Verificación:** node --check OK; encoding limpio; diff mínimo (5 insert, 1 del); smoke test en producción (r2_list vía chat → `returned:106`, `truncated:false`). Los guards de web_search/memory_save son early-return que solo disparan con inputs vacíos/faltantes → no afectan el camino feliz. Deploy Version ID bf94dfd5. Solo backend, sin cambio de versión de app.
+
+### Part 16: security-review del diff + fix bypass de la barrera (SEC-08) (20/07/2026)
+**Contexto:** Adrian: "seguimos" → eligió "security-review del diff". Revisión de seguridad formal sobre los cambios de worker.js de esta sesión (rango `8be1fe2..HEAD`, 176 inserciones) usando la skill security-review con sub-tareas de identificación + filtrado de falsos positivos.
+
+**Resultado de la revisión:** El diseño central quedó SÓLIDO — se verificó que la barrera NO es autoconfirmable por el LLM (el código sale del mensaje HTTP humano, nunca del tool_input), el código va atado a la operación (SHA-256), el gating está enforced en ambas entradas, anti-SSRF captura codificaciones de IP, y las redes try/catch no son fail-open. **1 vuln encontrada (confianza 9/10, confirmada por 2 pasadas + lectura directa).**
+
+**Vuln (SEC-08):** `detectarSqlDestructivo` decidía "destructivo" por la AUSENCIA del token `\bWHERE\b`. Un WHERE trivialmente-cierto (`DELETE FROM bobinas WHERE 1=1`, `UPDATE usuarios SET rol='superadmin' WHERE 1=1`) afecta a toda la tabla pero contenía WHERE → devolvía null → la barrera humana nunca se invocaba → una Alejandra manipulada por prompt-injection podía borrar/modificar toda la BD sin que Adrian tecleara el código. Afectaba a `sql_query` y `run_migration`.
+
+**Fix:** TODO DELETE/UPDATE exige barrera humana, tenga WHERE o no (regex no puede distinguir de forma fiable un WHERE siempre-cierto). El código sigue atado al SQL exacto → una confirmación por operación. DROP/TRUNCATE/ALTER ya estaban cubiertos. Motivo devuelto distingue "afecta filas" vs "toda la tabla" solo para el mensaje.
+
+**Verificación:** node --check OK; encoding limpio; 7/7 unit tests de detección PASS (incluye WHERE 1=1, UPDATE con WHERE, SELECT no-bloqueado). Deploy Version ID 7d623860, bindings DB + FILES presentes. Solo backend, sin cambio de versión de app.
 
 ### Part 15: Red de seguridad en processNetworkRequest (cara entrante de la red) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → "Sí, aplicar el fix". Mismo patrón de red de seguridad de Part 13 (SEC-05), pero en la **cara entrante** de la red de agentes: el handler que procesa peticiones de agentes socios (Jarvis, etc.).
