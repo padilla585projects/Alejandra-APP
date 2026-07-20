@@ -16,7 +16,8 @@
 - `fa7372d` — fix(seguridad): tapa bypass de la barrera con WHERE siempre-cierto (SEC-08)
 - `b35d30d` — chore: ignora ota/ (copia local del manifiesto OTA)
 - `510a1e0` — fix(robustez): try/catch en 3 funciones del cron nocturno (ROB-CRON)
-- (pendiente commit) — fix(cron): mueve syncRRHH al cron 0 18 y borra el branch muerto 0 23 (CRON-23)
+- `e2f862d` — fix(cron): mueve syncRRHH al cron 0 18 y elimina el branch muerto 0 23 (CRON-23)
+- `4497f5f` — docs: actualiza Version ID vivo a e8779c87 (redeploy CI) tras verificar el worker desplegado
 
 ### Part 18: Fix cron muerto — syncRRHH del branch '0 23' que nunca corría (CRON-23) (20/07/2026)
 **Contexto:** seguimiento de la NOTA lateral de Part 17 (ROB-CRON). wrangler.toml solo declaraba
@@ -85,6 +86,8 @@ Verificado el código vivo descargado de Cloudflare: syncRRHH dentro del branch 
 **Fix:** TODO DELETE/UPDATE exige barrera humana, tenga WHERE o no (regex no puede distinguir de forma fiable un WHERE siempre-cierto). El código sigue atado al SQL exacto → una confirmación por operación. DROP/TRUNCATE/ALTER ya estaban cubiertos. Motivo devuelto distingue "afecta filas" vs "toda la tabla" solo para el mensaje.
 
 **Verificación:** node --check OK; encoding limpio; 7/7 unit tests de detección PASS (incluye WHERE 1=1, UPDATE con WHERE, SELECT no-bloqueado). Deploy Version ID 7d623860, bindings DB + FILES presentes. Solo backend, sin cambio de versión de app.
+
+**Verificación end-to-end en PRODUCCIÓN (20/07/2026):** tabla temporal `alejandra_sec08_test` (3 filas) creada en D1 remoto. Se pidió a Alejandra por /dev/ai-chat ejecutar `DELETE FROM alejandra_sec08_test WHERE 1=1` SIN el código humano. Resultado real: la barrera se activó ("Operación bloqueada — requiere confirmación humana", código `CONFIRMO BORRADO 9F3C21`, "Yo no puedo confirmarlo por ti"). Ground truth D1: `COUNT(*) = 3`, `changes: 0`, `rows_written: 0` → las 3 filas SOBREVIVIERON. Tabla de prueba eliminada (`DROP TABLE`). Barrera confirmada funcional en prod ✅.
 
 ### Part 15: Red de seguridad en processNetworkRequest (cara entrante de la red) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → "Sí, aplicar el fix". Mismo patrón de red de seguridad de Part 13 (SEC-05), pero en la **cara entrante** de la red de agentes: el handler que procesa peticiones de agentes socios (Jarvis, etc.).
