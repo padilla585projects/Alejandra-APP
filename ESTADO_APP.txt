@@ -6,10 +6,19 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: 359a41ce-1e3b-4652-813a-fdb110e4ce1c (red de seguridad en executeAITool: try/catch externo que garantiza que ninguna tool lance hacia el bucle de tools -un throw no capturado rompia el turno entero-; ahora toda tool devuelve error estructurado; previo 1cf3b78b barrera humana anti-borrado en todas las tools destructivas; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: bf94dfd5-8827-482d-b956-f4fb108c49df (validacion de inputs en tools no-destructivas: web_search valida query/TAVILY_API_KEY, memory_save valida campos obligatorios, r2_list aclara truncamiento -returned/truncated/hint en vez de total enganoso-; previo 359a41ce red de seguridad try/catch en executeAITool; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [validacion de inputs en tools no-destructivas — fixes menores de calidad]
+                       Continuacion de la auditoria (Adrian: "hazlos"). Aplicados los 3 fixes
+                       menores que quedaron diferidos en SEC-05: web_search valida que query no
+                       este vacio y que exista TAVILY_API_KEY (error claro en vez de undefined al
+                       API); memory_save valida tipo/titulo/contenido (evita NULLs en BD); r2_list
+                       reemplaza el campo "total" enganoso (era el conteo de la pagina, R2 trunca
+                       en ~1000) por returned + truncated + hint. Verificado en produccion:
+                       r2_list devuelve returned:106, truncated:false. Deploy Version ID bf94dfd5.
+                       Solo backend.
   (worker.js — solo backend)      |  20/07/2026  [red de seguridad en executeAITool — ninguna tool puede romper el turno del chat]
                        Auditoria de robustez de las tools NO destructivas de Alejandra. Hallazgo:
                        executeAITool no tenia try/catch externo, y 8 tools (list_tables,

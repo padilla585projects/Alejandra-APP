@@ -819,6 +819,8 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
   switch (toolName) {
     case 'web_search': {
       const { query, depth = 'basic' } = toolInput;
+      if (!query || !String(query).trim()) return JSON.stringify({ ok: false, error: 'Falta el parametro query (texto de busqueda)' });
+      if (!env.TAVILY_API_KEY) return JSON.stringify({ ok: false, error: 'web_search no disponible: falta TAVILY_API_KEY en el entorno' });
       try {
         const res = await fetch('https://api.tavily.com/search', {
           method: 'POST',
@@ -1127,7 +1129,8 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       const opts = toolInput.prefix ? { prefix: toolInput.prefix } : {};
       const listed = await env.FILES.list(opts);
       const files = listed.objects.map(o => ({ key: o.key, size: o.size, uploaded: o.uploaded }));
-      return JSON.stringify({ ok: true, files: files.slice(0, 100), total: listed.objects.length });
+      // 'returned' es lo que devuelve esta pagina (R2 trunca en ~1000), NO el total real.
+      return JSON.stringify({ ok: true, files: files.slice(0, 100), returned: listed.objects.length, truncated: !!listed.truncated, hint: listed.truncated ? 'Hay mas archivos de los mostrados: R2 devuelve como maximo ~1000 por pagina. Usa un prefix mas especifico para acotar.' : undefined });
     }
     case 'r2_delete': {
       const key = toolInput.key;
@@ -1210,6 +1213,7 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
     }
     case 'memory_save': {
       const { tipo, titulo, contenido, importancia = 1 } = toolInput;
+      if (!tipo || !titulo || !contenido) return JSON.stringify({ ok: false, error: 'Faltan campos obligatorios: tipo, titulo y contenido' });
       const r = await env.DB.prepare(
         "INSERT INTO alejandra_memoria (tipo, titulo, contenido, importancia) VALUES (?, ?, ?, ?)"
       ).bind(tipo, titulo, contenido, importancia).run();
