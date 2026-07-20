@@ -21,6 +21,8 @@
 - `4497f5f` — docs: actualiza Version ID vivo a e8779c87 (redeploy CI) tras verificar el worker desplegado
 - `a65e2da` — docs: verificación end-to-end en prod de la barrera SEC-08
 - `ff57e77` — feat(seguridad): barrera humana equilibrada en escribir_bd del agente de oficina/app web (SEC-09)
+- `cd55147` — feat(seguridad): SEC-10 — paridad de seguridad en el agente de oficina/app web
+- `e8f10b7` — fix(push): /push-vapid-key del agente daba HTTP 500 — push automaticas rotas (BUG-PUSH)
 
 ### Part 20: Paridad de seguridad en el 2o cerebro — SEC-10 (20/07/2026)
 **Contexto:** tras SEC-09, la sección SEGURIDAD de IDEAS marcaba SEC-01..SEC-07 como "solo
