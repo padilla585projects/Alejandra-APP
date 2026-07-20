@@ -1,11 +1,12 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado + fix cron muerto (CRON-23)
+**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado + fix cron muerto (CRON-23) + barrera equilibrada en el agente de oficina/app web (SEC-09)
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
-**Último worker desplegado:** Version ID `e8779c87-7806-40ce-8709-2869dbf85292` (redeploy automático por CI al pushear; mismo código que el deploy manual `d9bcf385`)
+**Último worker desplegado (web, alejandra-app-api):** Version ID `e8779c87-7806-40ce-8709-2869dbf85292` (redeploy automático por CI al pushear; mismo código que el deploy manual `d9bcf385`)
+**Último agente desplegado (alejandra-agente):** Version ID `cfbdf02b-7dac-4dc2-a9ac-37a9983dc46c` (deploy manual con la barrera SEC-09; el agente NO tiene CI, se despliega a mano con `npx wrangler deploy` desde `alejandra-agente/`)
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
@@ -18,6 +19,8 @@
 - `510a1e0` — fix(robustez): try/catch en 3 funciones del cron nocturno (ROB-CRON)
 - `e2f862d` — fix(cron): mueve syncRRHH al cron 0 18 y elimina el branch muerto 0 23 (CRON-23)
 - `4497f5f` — docs: actualiza Version ID vivo a e8779c87 (redeploy CI) tras verificar el worker desplegado
+- `a65e2da` — docs: verificación end-to-end en prod de la barrera SEC-08
+- (este commit) — feat(seguridad): barrera humana equilibrada en escribir_bd del agente de oficina/app web (SEC-09)
 
 ### Part 18: Fix cron muerto — syncRRHH del branch '0 23' que nunca corría (CRON-23) (20/07/2026)
 **Contexto:** seguimiento de la NOTA lateral de Part 17 (ROB-CRON). wrangler.toml solo declaraba
@@ -42,6 +45,41 @@ listados: `0 7`, `0 18` (deploy manual Version ID d9bcf385; el push posterior di
 `deploy-worker.yml` que redeployó el mismo commit como `e8779c87` = versión viva actual).
 Verificado el código vivo descargado de Cloudflare: syncRRHH dentro del branch 0 18, sin branch
 0 23. Solo backend, sin cambio de versión de app.
+
+### Part 19: Barrera humana equilibrada en el agente de oficina/app web (SEC-09) (20/07/2026)
+**Contexto:** Adrian preguntó "¿y si lo pides desde Alejandra office directamente?". Al investigar
+se descubrió que el chat de Alejandra del panel de oficina (panel.html) Y de la app web/móvil
+(index.html) NO habla con worker.js (alejandra-app-api, donde vive la barrera SEC-08). Ambos
+apuntan a un worker SEPARADO: `alejandra-agente` (alejandra-agente/worker.js). Ese agente tiene su
+propia tool de escritura `escribir_bd` (INSERT/UPDATE/DELETE/REPLACE) SIN barrera humana: solo
+rechazaba DROP/ALTER/TRUNCATE y aplicaba scope multi-empresa (validarScopeEmpresaBD). El
+"dev-bypass" de Adrian ademas se salta el scope de empresa -> como desarrollador podia borrar/
+modificar casi toda la BD sin ningun codigo. Mismo agujero que SEC-08 pero en la otra Alejandra.
+
+**Decisión de alcance (con Adrian):** escribir_bd es una tool de USO DIARIO por muchos usuarios
+(registrar bobinas, marcar tareas resueltas, diario de obra...). Copiar la barrera ESTRICTA del
+worker web (todo DELETE + todo UPDATE pide codigo) la haria insufrible. Se eligio alcance
+EQUILIBRADO: pide "CONFIRMO BORRADO <codigo>" solo para lo catastrofico -> cualquier DELETE, y los
+UPDATE masivos (sin WHERE o con WHERE trivialmente-cierto tipo 1=1). INSERT/REPLACE y UPDATE con
+WHERE real pasan sin friccion. Resumen: tool de experto poco usada (sql_query) -> barrera
+estricta; tool de uso diario (escribir_bd) -> barrera equilibrada.
+
+**Implementación:** helpers puros nuevos en alejandra-agente/lib.js (extraerCodigosConfirmacion,
+codigoConfirmacionOp -- mismo SHA-256 hex6 que el worker web para UX identica, whereEsTrivialmente
+Cierto, detectarEscrituraDestructivaBalanceada) con 25 tests nuevos en lib.test.js. En worker.js:
+import de los 3 helpers, nuevo parametro `codigosConfirmados` en ejecutarTool (default Set vacio),
+y guard en el case 'escribir_bd' tras validarScopeEmpresaBD. El mensaje humano se parsea una vez
+en procesarConNEXUS y procesarConNEXUSStream y se pasa hacia abajo. El cron autonomo
+(ejecutarReflexion) recibe Set vacio -> no puede borrar/UPDATE-masivo solo (correcto).
+
+**Verificación:** 82/82 tests vitest PASS (25 nuevos, incl. regresion WHERE 1=1); node --check OK;
+encoding limpio. Deploy manual Version ID `cfbdf02b` (bindings DB+FILES+KV presentes). Prueba
+end-to-end en PRODUCCIÓN via POST /api/chat (Authorization: Bearer, token de sesion de Adrian,
+tabla temporal alejandra_office_test): (1) DELETE sin codigo -> BLOQUEADO, escribir_bd invocada
+pero devolvio codigo 01AC3D, filas intactas (COUNT=3, ground truth D1). (2) mismo DELETE con
+"CONFIRMO BORRADO 01AC3D" -> EJECUTADO (fila borrada, COUNT=2). (3) UPDATE ... WHERE id=1 rutinario
+-> PASO SIN codigo (equilibrado confirmado). Tabla de prueba eliminada (DROP TABLE). Solo backend
+del agente, sin cambio de version de app.
 
 ### Part 13: Red de seguridad en executeAITool (robustez tools no-destructivas) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → repasar las tools NO destructivas de Alejandra (calidad/robustez, no seguridad). Auditoría de manejo de errores y casos límite.

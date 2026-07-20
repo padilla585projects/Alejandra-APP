@@ -31,6 +31,9 @@ import {
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
+  extraerCodigosConfirmacion,
+  codigoConfirmacionOp,
+  detectarEscrituraDestructivaBalanceada,
 } from './lib.js';
 const EUR_RATE = 0.92;
 
@@ -3958,6 +3961,9 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
     const MAX_ITER = esAdmin ? 12 : 8;
     const herramientasUsadas = [];
+    // Códigos de confirmación tecleados por el HUMANO en su mensaje real (barrera
+    // anti-borrado de escribir_bd). Se extraen del mensaje, nunca del tool_input.
+    const codigosConfirmados = extraerCodigosConfirmacion(mensaje);
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
       const toolBlocks = respAPI.content.filter(b => b.type === 'tool_use');
@@ -3968,7 +3974,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
       for (const tb of toolBlocks) {
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
-        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado);
+        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados);
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // ver_archivo con imágenes devuelve JSON con content blocks para visión
         const content = parseToolResultContent(resultado);
@@ -4089,6 +4095,9 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let MAX_ITER = esAdmin ? 12 : 8;
     if (esCanalMovilProc) MAX_ITER = Math.min(MAX_ITER, esAdmin ? 8 : 4);
     const herramientasUsadas = [];
+    // Códigos de confirmación tecleados por el HUMANO en su mensaje real (barrera
+    // anti-borrado de escribir_bd). Se extraen del mensaje, nunca del tool_input.
+    const codigosConfirmados = extraerCodigosConfirmacion(mensaje);
     // Watchdog para detectar que nos acercamos al límite de tiempo (~25s)
     const inicioProc = Date.now();
     const LIMITE_PROC_MS = 22000; // 22s deja margen para guardar BD + FCM
@@ -4111,7 +4120,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         const t0 = Date.now();
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
-        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado);
+        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados);
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // Para SSE preview, extraer solo texto (no base64 de imágenes)
         const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
@@ -4195,7 +4204,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           herramientasUsadas.push({ nombre: tb.name, input: tb.input });
           const t0 = Date.now();
           await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
-          const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado);
+          const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados);
           const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
             ? '(imagen analizada)'
             : String(resultado).substring(0, 200);
@@ -5366,7 +5375,7 @@ async function esDeveloperAgente(env, usuario_id) {
 // indirecta vía el historial de chat que se le pasa como contexto al modelo.
 // Ahora el default es fail-closed (false); ejecutarReflexion() además pasa
 // los valores explícitos para dejar la intención clara en el código.
-async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false) {
+async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false, codigosConfirmados = new Set()) {
   // Normaliza un posible empresa_id a entero positivo o null. Necesario porque
   // el 'empresa_id' de contexto puede llegar como el string literal 'default'
   // (sentinela de sesion sin empresa asignada, usado en varias partes de este
@@ -6217,6 +6226,17 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
         const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo);
         if (rechazo) return rechazo;
+        // Barrera humana (alcance equilibrado): cualquier DELETE y los UPDATE
+        // masivos exigen que el HUMANO escriba "CONFIRMO BORRADO <código>" en su
+        // mensaje. El código va atado a este SQL exacto y no lo puede teclear el
+        // modelo. INSERT/REPLACE y UPDATE con WHERE real pasan sin fricción.
+        const motivoDestructivo = detectarEscrituraDestructivaBalanceada(query);
+        if (motivoDestructivo) {
+          const codigo = await codigoConfirmacionOp(query);
+          if (!(codigosConfirmados instanceof Set) || !codigosConfirmados.has(codigo)) {
+            return `⚠️ OPERACIÓN BLOQUEADA — requiere confirmación humana (${motivoDestructivo}). Para autorizar SOLO esta operación exacta, el usuario humano debe escribir literalmente "CONFIRMO BORRADO ${codigo}" en su próximo mensaje. NO puedes autoconfirmar ni teclear el código en su nombre: debe escribirlo el humano. Muéstrale el código (${codigo}), explica el efecto y espera. No reintentes hasta que el humano lo haya escrito.`;
+          }
+        }
         const stmt = env.DB.prepare(query);
         const result = params.length > 0 ? await stmt.bind(...params).run() : await stmt.run();
         return `Operación ejecutada correctamente. Filas afectadas: ${result.meta?.changes || 0}`;

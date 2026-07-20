@@ -10,6 +10,10 @@ import {
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
+  extraerCodigosConfirmacion,
+  codigoConfirmacionOp,
+  whereEsTrivialmenteCierto,
+  detectarEscrituraDestructivaBalanceada,
 } from './lib.js';
 
 // ── calcularCosteYProveedor (fix continuación 9) ────────────────────────────
@@ -475,5 +479,101 @@ describe('calcularEsperaReintentoMs', () => {
 
   it('usa 1200 como fallback si el intento excede la tabla de backoff', () => {
     expect(calcularEsperaReintentoMs(5, backoffMs, null)).toBe(1200);
+  });
+});
+
+// ── Barrera humana anti-borrado en escribir_bd (alcance equilibrado) ─────────
+describe('extraerCodigosConfirmacion', () => {
+  it('extrae un código válido de 6 hex del mensaje humano', () => {
+    const s = extraerCodigosConfirmacion('vale, CONFIRMO BORRADO 9F3C21 adelante');
+    expect(s.has('9F3C21')).toBe(true);
+    expect(s.size).toBe(1);
+  });
+
+  it('normaliza a mayúsculas y admite varios códigos', () => {
+    const s = extraerCodigosConfirmacion('CONFIRMO BORRADO abc123 y CONFIRMO BORRADO DEF456');
+    expect(s.has('ABC123')).toBe(true);
+    expect(s.has('DEF456')).toBe(true);
+  });
+
+  it('devuelve Set vacío si no hay frase o el argumento no es string', () => {
+    expect(extraerCodigosConfirmacion('borra la tabla porfa').size).toBe(0);
+    expect(extraerCodigosConfirmacion(null).size).toBe(0);
+    expect(extraerCodigosConfirmacion(undefined).size).toBe(0);
+  });
+
+  it('ignora códigos que no sean exactamente 6 hex', () => {
+    expect(extraerCodigosConfirmacion('CONFIRMO BORRADO 12345').size).toBe(0);   // 5
+    expect(extraerCodigosConfirmacion('CONFIRMO BORRADO ZZZZZZ').size).toBe(0);  // no hex
+  });
+});
+
+describe('codigoConfirmacionOp', () => {
+  it('es determinista y de 6 hex en mayúsculas para el mismo SQL', async () => {
+    const a = await codigoConfirmacionOp('DELETE FROM x WHERE 1=1');
+    const b = await codigoConfirmacionOp('DELETE FROM x WHERE 1=1');
+    expect(a).toBe(b);
+    expect(a).toMatch(/^[0-9A-F]{6}$/);
+  });
+
+  it('ignora diferencias de espaciado y capitalización (normalización)', async () => {
+    const a = await codigoConfirmacionOp('DELETE   FROM x   WHERE 1=1');
+    const b = await codigoConfirmacionOp('delete from x where 1=1');
+    expect(a).toBe(b);
+  });
+
+  it('cambia el código si cambia el SQL (código atado a la operación exacta)', async () => {
+    const a = await codigoConfirmacionOp('DELETE FROM x WHERE id=1');
+    const b = await codigoConfirmacionOp('DELETE FROM x WHERE id=2');
+    expect(a).not.toBe(b);
+  });
+});
+
+describe('whereEsTrivialmenteCierto', () => {
+  it('detecta disfraces siempre-ciertos', () => {
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE 1=1')).toBe(true);
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE 5=5')).toBe(true);
+    expect(whereEsTrivialmenteCierto("UPDATE t SET a=1 WHERE 'x'='x'")).toBe(true);
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE TRUE')).toBe(true);
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE id IS NOT NULL')).toBe(true);
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE id > 0')).toBe(true);
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE (1=1)')).toBe(true);
+  });
+
+  it('NO marca como trivial un WHERE real y acotado', () => {
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE id=?')).toBe(false);
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE num_albaran=632404024')).toBe(false);
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1 WHERE 1=1 AND rol=?')).toBe(false);
+  });
+
+  it('devuelve false si no hay WHERE', () => {
+    expect(whereEsTrivialmenteCierto('UPDATE t SET a=1')).toBe(false);
+  });
+});
+
+describe('detectarEscrituraDestructivaBalanceada', () => {
+  it('bloquea CUALQUIER DELETE (con o sin WHERE)', () => {
+    expect(detectarEscrituraDestructivaBalanceada('DELETE FROM bobinas')).toMatch(/DELETE/);
+    expect(detectarEscrituraDestructivaBalanceada('DELETE FROM bobinas WHERE id=5')).toMatch(/DELETE/);
+    expect(detectarEscrituraDestructivaBalanceada('DELETE FROM bobinas WHERE 1=1')).toMatch(/DELETE/);
+  });
+
+  it('bloquea UPDATE masivo (sin WHERE o con WHERE siempre-cierto)', () => {
+    expect(detectarEscrituraDestructivaBalanceada('UPDATE usuarios SET rol=?')).toMatch(/UPDATE/);
+    expect(detectarEscrituraDestructivaBalanceada("UPDATE usuarios SET rol='superadmin' WHERE 1=1")).toMatch(/UPDATE/);
+  });
+
+  it('PERMITE (null) un UPDATE con WHERE real — sin fricción en el día a día', () => {
+    expect(detectarEscrituraDestructivaBalanceada('UPDATE tareas_alejandra SET estado=? WHERE id=?')).toBeNull();
+    expect(detectarEscrituraDestructivaBalanceada('UPDATE fases_obra SET porcentaje=? WHERE id=? AND empresa_id=?')).toBeNull();
+  });
+
+  it('PERMITE (null) INSERT y REPLACE (no son destructivos)', () => {
+    expect(detectarEscrituraDestructivaBalanceada('INSERT INTO bobinas (id) VALUES (?)')).toBeNull();
+    expect(detectarEscrituraDestructivaBalanceada('REPLACE INTO turnos (id) VALUES (?)')).toBeNull();
+  });
+
+  it('regresión SEC-08: el DELETE ... WHERE 1=1 NO se cuela', () => {
+    expect(detectarEscrituraDestructivaBalanceada('DELETE FROM bobinas WHERE 1=1')).not.toBeNull();
   });
 });

@@ -202,6 +202,84 @@ function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypass
   return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
 }
 
+// ── Barrera humana para escrituras destructivas en escribir_bd ──────────────
+// Misma filosofía que la barrera del worker web (alejandra-app-api): la
+// confirmación NUNCA la controla el modelo (que genera el tool_input) — debe
+// venir del mensaje REAL del humano ("CONFIRMO BORRADO <código>"). El modelo no
+// puede fabricar el mensaje del usuario, así que no puede autoconfirmarse.
+//
+// Alcance EQUILIBRADO (decidido con Adrián): escribir_bd se usa constantemente
+// para escrituras rutinarias (INSERT de registros, UPDATE de una fila concreta),
+// así que exigir código a TODO haría el asistente insufrible. Solo se exige
+// confirmación para lo genuinamente catastrófico: cualquier DELETE, y los UPDATE
+// masivos (sin WHERE o con WHERE trivialmente-cierto). Un UPDATE con WHERE real
+// y los INSERT/REPLACE pasan sin fricción. DROP/ALTER/TRUNCATE ya los rechaza de
+// plano escribir_bd antes de llegar aquí.
+const FRASE_CONFIRMACION_DESTRUCTIVA = 'CONFIRMO BORRADO';
+
+// Extrae los códigos de confirmación del mensaje real del humano. Formato:
+// "CONFIRMO BORRADO <6 hex>". Devuelve un Set en mayúsculas. El modelo no puede
+// inyectar esto: se deriva del mensaje del usuario, no del tool_input del LLM.
+function extraerCodigosConfirmacion(mensajeHumano) {
+  const codigos = new Set();
+  if (typeof mensajeHumano !== 'string') return codigos;
+  const re = /CONFIRMO\s+BORRADO\s+([0-9A-Fa-f]{6})\b/g;
+  let m;
+  while ((m = re.exec(mensajeHumano)) !== null) codigos.add(m[1].toUpperCase());
+  return codigos;
+}
+
+// Código ligado a una operación concreta: SHA-256 del SQL normalizado (espacios
+// colapsados + mayúsculas), primeros 6 hex. Así la confirmación del humano solo
+// autoriza ESA operación exacta. Mismo algoritmo que el worker web para que la
+// experiencia sea idéntica entre las dos Alejandras.
+async function codigoConfirmacionOp(descriptor) {
+  const norm = String(descriptor).replace(/\s+/g, ' ').trim().toUpperCase();
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(norm));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 6).toUpperCase();
+}
+
+// ¿El WHERE de la query es trivialmente-cierto (afecta a toda la tabla igual que
+// sin WHERE)? Detecta un conjunto curado de disfraces obvios: 1=1, 5=5, 'a'='a',
+// TRUE, col IS NOT NULL, col>0, col>=0, col LIKE '%'. No pretende ser exhaustivo
+// (regex no puede distinguir de forma fiable un WHERE siempre-cierto arbitrario):
+// en modo equilibrado el DELETE SIEMPRE pide confirmación, y para UPDATE cerramos
+// los disfraces obvios de "sin filtro". Un WHERE real y acotado (id=?,
+// num_albaran=?) devuelve false y el UPDATE pasa sin fricción.
+function whereEsTrivialmenteCierto(sql) {
+  const mWhere = /\bWHERE\b([\s\S]+)$/i.exec(String(sql || ''));
+  if (!mWhere) return false;
+  let cond = mWhere[1].replace(/;\s*$/, '').trim();
+  while (/^\([\s\S]*\)$/.test(cond)) cond = cond.slice(1, -1).trim();
+  const triviales = [
+    /^(\d+)\s*=\s*\1$/i,                              // 1=1, 5=5
+    /^'([^']*)'\s*=\s*'\1'$/i,                        // 'a'='a'
+    /^true$/i,                                        // WHERE TRUE
+    /^[a-z_][a-z0-9_]*\s+IS\s+NOT\s+NULL$/i,          // col IS NOT NULL
+    /^[a-z_][a-z0-9_]*\s*>\s*0$/i,                    // id > 0
+    /^[a-z_][a-z0-9_]*\s*>=\s*0$/i,                   // id >= 0
+    /^[a-z_][a-z0-9_]*\s+LIKE\s+'%'$/i,               // col LIKE '%'
+  ];
+  return triviales.some((re) => re.test(cond));
+}
+
+// Regla EQUILIBRADA de escritura destructiva para escribir_bd. Devuelve el motivo
+// (string) si la operación exige barrera humana, o null si puede pasar sin
+// fricción. Solo mira INSERT/UPDATE/DELETE/REPLACE (los únicos verbos que
+// escribir_bd permite; DROP/ALTER/TRUNCATE ya están rechazados antes).
+function detectarEscrituraDestructivaBalanceada(query) {
+  const sql = String(query || '').trim();
+  if (/^\s*DELETE\s+FROM\b/i.test(sql)) {
+    return /\bWHERE\b/i.test(sql) ? 'DELETE (borra filas)' : 'DELETE sin WHERE (borra toda la tabla)';
+  }
+  if (/^\s*UPDATE\b/i.test(sql)) {
+    if (!/\bWHERE\b/i.test(sql)) return 'UPDATE sin WHERE (modifica toda la tabla)';
+    if (whereEsTrivialmenteCierto(sql)) return 'UPDATE con filtro siempre-cierto (modifica toda la tabla)';
+    return null; // UPDATE con WHERE real -> pasa sin fricción (modo equilibrado)
+  }
+  return null; // INSERT / REPLACE -> no destructivo
+}
+
 // ── Interruptor dev-bypass (fix continuación 15) ────────────────────────────
 // Adrian pidió poder desactivar, SOLO para sí mismo (dev verificado), el rate
 // limiting del chat y el aislamiento por empresa_id -- sin afectar a ningún
@@ -266,4 +344,9 @@ export {
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
+  FRASE_CONFIRMACION_DESTRUCTIVA,
+  extraerCodigosConfirmacion,
+  codigoConfirmacionOp,
+  whereEsTrivialmenteCierto,
+  detectarEscrituraDestructivaBalanceada,
 };

@@ -961,6 +961,31 @@ LEYENDA DE ESTADO:
     · Verificado: 7/7 unit tests de detección PASS (incluye WHERE 1=1). Deploy Version ID 7d623860.
       Solo backend. El resto de controles (barrera no-autoconfirmable, gating, anti-SSRF, redes
       de seguridad) se revisaron y quedaron SÓLIDOS sin hallazgos.
+    · Verificado end-to-end en PROD (tabla temporal): DELETE ... WHERE 1=1 sin código → bloqueado,
+      filas intactas; con "CONFIRMO BORRADO <cod>" → ejecutado. (worker web, alejandra-app-api).
+
+[✓] SEC-09 — Barrera humana equilibrada en el agente de oficina/app web (escribir_bd)  [HECHO 20/07/2026]
+    · Hallazgo (a raíz de "¿y si lo pides desde Alejandra office?"): el chat de Alejandra del panel
+      de oficina (panel.html) Y de la app web/móvil (index.html) NO usa worker.js sino un worker
+      SEPARADO, `alejandra-agente`. Su tool de escritura `escribir_bd` no tenía barrera humana:
+      solo rechazaba DROP/ALTER/TRUNCATE y aplicaba scope multi-empresa. El dev-bypass de Adrian
+      se salta el scope → como desarrollador podía borrar/modificar casi toda la BD sin código.
+      Mismo agujero que SEC-08 pero en la OTRA Alejandra.
+    · Decisión de alcance (con Adrian): escribir_bd es de USO DIARIO por muchos usuarios (registrar
+      bobinas, marcar tareas resueltas, diario de obra). La barrera ESTRICTA del worker web (todo
+      DELETE + todo UPDATE) la haría insufrible → se eligió alcance EQUILIBRADO: código solo para
+      cualquier DELETE y UPDATE masivo (sin WHERE o con WHERE trivialmente-cierto tipo 1=1).
+      INSERT/REPLACE y UPDATE con WHERE real pasan sin fricción. Regla: tool de experto poco usada
+      (sql_query) → barrera estricta; tool de uso diario (escribir_bd) → barrera equilibrada.
+    · Implementación: helpers puros en alejandra-agente/lib.js (extraerCodigosConfirmacion,
+      codigoConfirmacionOp mismo SHA-256 hex6 que el worker web, whereEsTrivialmenteCierto,
+      detectarEscrituraDestructivaBalanceada) + 25 tests. Guard en case 'escribir_bd' tras el scope
+      de empresa; mensaje humano parseado en procesarConNEXUS/Stream y pasado a ejecutarTool. Cron
+      autónomo (ejecutarReflexion) recibe Set vacío → no puede borrar/UPDATE-masivo solo.
+    · Verificado: 82/82 tests vitest PASS; node --check OK; encoding limpio. Deploy manual del
+      agente Version ID cfbdf02b. End-to-end en PROD (tabla temporal alejandra_office_test):
+      DELETE id=2 sin código → bloqueado (escribir_bd invocada, código 01AC3D, COUNT=3 intacto);
+      con "CONFIRMO BORRADO 01AC3D" → ejecutado (COUNT=2); UPDATE ... WHERE id=1 → pasó sin código.
 
 [✓] ROB-CRON — Robustez de las funciones del cron nocturno (auditoría)  [HECHO 20/07/2026]
     · Auditadas las 10 funciones que dispara el cron (scheduled, línea ~5573). El self-audit
