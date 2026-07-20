@@ -147,9 +147,10 @@ Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, com
 
 **Regla de oro:** toda mejora/fix de **seguridad, tools, permisos o barreras** hay que aplicarla —o decidir conscientemente que no aplica— en **LOS DOS** workers (`worker.js` **y** `alejandra-agente/worker.js`). Si solo se toca uno, quedan descompensados (una Alejandra protegida, la otra no). Antes de cerrar una sesión de seguridad, preguntarse: *"¿esto también afecta al otro cerebro?"*.
 
-**Deploy:** cada worker se despliega por separado.
-- `worker.js` → `npx wrangler deploy` en la raíz (y además hay CI que redeploya al pushear).
-- `alejandra-agente/worker.js` → `npx wrangler deploy` **dentro de** `alejandra-agente/`. **NO tiene CI**: si no se despliega a mano, el cambio no llega a producción aunque esté en GitHub.
+**Deploy:** cada worker se despliega por separado. **Los dos tienen CI** (verificado 20/07/2026 — corrige una nota anterior de este archivo que decía que el agente no tenía CI; era obsoleta).
+- `worker.js` → `npx wrangler deploy` en la raíz para probar en el momento; además hay CI (`.github/workflows/deploy-worker.yml`) que redespliega automáticamente al pushear a `main`.
+- `alejandra-agente/worker.js` → `npx wrangler deploy` **dentro de** `alejandra-agente/` para probar en el momento; además hay CI (`.github/workflows/deploy-alejandra-agente.yml`, dispara con cambios en `alejandra-agente/**`) que corre `lib.test.js`, aplica migraciones D1 y redespliega al pushear a `main`.
+- El deploy manual sigue siendo útil para probar en producción ANTES de pushear/commitear (ver flujo habitual de esta sesión), pero ya no es estrictamente necesario para que el cambio llegue a producción una vez está en GitHub: el push a `main` es suficiente para ambos workers.
 
 ---
 
