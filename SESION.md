@@ -1,9 +1,22 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + fixes de descripciones
+**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado
 **Versión actual:** v7.98
-**Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Corregidas descripciones desactualizadas. Worker desplegado y verificado (/health 200) ✅.
+**Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba la frase `CONFIRMO BORRADO` en su mensaje real. Probado end-to-end en producción. Corregidas descripciones desactualizadas. Worker desplegado y verificado ✅.
+
+### Part 10: Barrera humana anti-borrado (20/07/2026)
+**Contexto:** Al probar la salvaguarda de Part 9 en producción, se detectó que el modelo podía autoconfirmar poniendo `confirm_destructive:true` en el tool_input (que él genera). Adrian: "haz la barrera" → que solo el humano pueda confirmar, nunca el modelo.
+
+**Diseño (clave):** la confirmación se deriva del **mensaje real del humano** que llega en la petición HTTP (`ctx.allowDestructive`), NO de un parámetro del `tool_input` que controla el LLM. El modelo no puede fabricar el mensaje del usuario → no puede autoconfirmarse.
+
+**Cambios en worker.js:**
+1. Nuevo helper `humanAutorizaDestructivo(mensaje)` + constante `FRASE_CONFIRMACION_DESTRUCTIVA = 'CONFIRMO BORRADO'` (case-insensitive, substring).
+2. `sql_query` ahora comprueba `ctx.allowDestructive === true` (antes `toolInput.confirm_destructive`). Mensaje de bloqueo actualizado: instruye al modelo a pedir al humano que escriba la frase y esperar; prohíbe reintentar.
+3. Eliminado `confirm_destructive` del `input_schema` (el modelo ya no lo conoce ni puede ponerlo). Descripción de la tool actualizada.
+4. Los 2 callers derivan el flag del mensaje humano: `handleDevAI` → `humanAutorizaDestructivo(userMessage)`; `devAIChat` → `humanAutorizaDestructivo(message)`. Ambos pasan `{ dev:true, allowDestructive }`.
+
+**Verificación:** node --check OK; encoding limpio; 8/8 unit de la frase de confirmación PASS. Deploy (Version ID 6b757217). Prueba en producción con tabla temporal real `alejandra_barrier_test` (3 filas): sin la frase → `needs_confirmation` (bloqueado); con `CONFIRMO BORRADO` en el mensaje humano → ejecutó (`changes:3`, verificado 0 filas en D1). El modelo también rechazó por criterio propio varios intentos de framing adversarial ("orden directa", "prueba técnica"). Tabla e historial de prueba limpiados. Solo backend, sin cambio de versión de app.
 
 ### Part 9: Endurecimiento seguridad tools de Alejandra (20/07/2026)
 **Contexto:** Adrian pidió auditar las tools de Alejandra para mejorarlas/añadir más ("audita el codigo de las tools"). Se optó por "Seguridad primero (bajo riesgo)".

@@ -384,8 +384,8 @@ async function transcribeAudio(env, audioBuffer) {
 const AI_TOOLS = [
   {
     name: 'sql_query',
-    description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total.',
-    input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' }, confirm_destructive: { type: 'boolean', description: 'Obligatorio true para ejecutar operaciones catastroficas: DROP/TRUNCATE/ALTER TABLE, o DELETE/UPDATE sin clausula WHERE (afectan a toda la tabla).' } }, required: ['sql'] }
+    description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total. IMPORTANTE: las operaciones catastroficas (DROP/TRUNCATE/ALTER TABLE, o DELETE/UPDATE sin WHERE) estan bloqueadas por una barrera humana: solo se ejecutan si el usuario humano escribe una frase de confirmacion exacta en su mensaje. Tu NO puedes autoconfirmarlas; si necesitas una, pide al humano que la confirme y espera.',
+    input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' } }, required: ['sql'] }
   },
   {
     name: 'web_search',
@@ -759,6 +759,18 @@ function esUrlSeguraFetch(rawUrl) {
   return { ok: true };
 }
 
+// == Barrera humana para operaciones destructivas ==
+// La confirmacion NUNCA la controla el modelo (que genera el tool_input): debe
+// venir del mensaje real del humano. Para autorizar un DROP/TRUNCATE/ALTER o un
+// DELETE/UPDATE sin WHERE, el humano tiene que escribir literalmente esta frase
+// en su propio mensaje. El modelo no puede fabricar el mensaje del usuario, asi
+// que no puede autoconfirmarse.
+const FRASE_CONFIRMACION_DESTRUCTIVA = 'CONFIRMO BORRADO';
+function humanAutorizaDestructivo(mensajeHumano) {
+  if (typeof mensajeHumano !== 'string') return false;
+  return mensajeHumano.toUpperCase().includes(FRASE_CONFIRMACION_DESTRUCTIVA);
+}
+
 async function executeAITool(env, toolName, toolInput, ctx = {}) {
   // Defensa en profundidad: bloquear tools peligrosas si el caller no es dev verificado
   if (TOOLS_SOLO_DEV_AITOOL.has(toolName) && ctx.dev !== true) {
@@ -792,17 +804,19 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
     case 'sql_query': {
-      const { sql, confirm_destructive } = toolInput;
+      const { sql } = toolInput;
       try {
         const trimmed = sql.trim().toUpperCase();
-        // Salvaguarda anti-catastrofe: DROP/TRUNCATE, o DELETE/UPDATE sin WHERE,
-        // requieren confirm_destructive:true explicito para ejecutarse.
+        // Barrera humana anti-catastrofe: DROP/TRUNCATE/ALTER, o DELETE/UPDATE sin
+        // WHERE, solo se ejecutan si el HUMANO escribio la frase de confirmacion en
+        // su mensaje (ctx.allowDestructive). El modelo NO puede autoconfirmarse: no
+        // controla este flag, se deriva del mensaje real del usuario en el caller.
         const esDropTruncate = /^\s*(DROP|TRUNCATE|ALTER\s+TABLE)\b/i.test(sql);
         const esDeleteSinWhere = /^\s*DELETE\s+FROM\b/i.test(sql) && !/\bWHERE\b/i.test(sql);
         const esUpdateSinWhere = /^\s*UPDATE\b/i.test(sql) && !/\bWHERE\b/i.test(sql);
-        if ((esDropTruncate || esDeleteSinWhere || esUpdateSinWhere) && confirm_destructive !== true) {
+        if ((esDropTruncate || esDeleteSinWhere || esUpdateSinWhere) && ctx.allowDestructive !== true) {
           const motivo = esDropTruncate ? 'DROP/TRUNCATE/ALTER TABLE' : (esDeleteSinWhere ? 'DELETE sin WHERE' : 'UPDATE sin WHERE');
-          return JSON.stringify({ ok: false, error: `Operacion destructiva bloqueada (${motivo}). Afecta a toda la tabla. Si es intencional, reintenta pasando confirm_destructive:true.`, needs_confirmation: true });
+          return JSON.stringify({ ok: false, needs_confirmation: true, error: `Operacion destructiva bloqueada (${motivo}). Afecta a toda la tabla. NO puedes autoconfirmarla: el usuario humano debe escribir literalmente la frase "${FRASE_CONFIRMACION_DESTRUCTIVA}" en su proximo mensaje para autorizarla. Pideselo, explica que borrara, y espera su respuesta. No reintentes hasta que el humano lo haya escrito.` });
         }
         if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
           const result = await env.DB.prepare(sql).all();
@@ -2806,7 +2820,7 @@ async function handleDevAI(env, chatId, userMessage) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
         type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input, { dev: true })
+        content: await executeAITool(env, tb.name, tb.input, { dev: true, allowDestructive: humanAutorizaDestructivo(userMessage) })
       })));
       messages.push({ role: 'assistant', content: result.content });
       messages.push({ role: 'user', content: toolResults });
@@ -13027,7 +13041,7 @@ async function devAIChat(request, env) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
         type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input, { dev: true })
+        content: await executeAITool(env, tb.name, tb.input, { dev: true, allowDestructive: humanAutorizaDestructivo(message) })
       })));
       msgs.push({ role: 'assistant', content: result.content });
       msgs.push({ role: 'user', content: toolResults });
