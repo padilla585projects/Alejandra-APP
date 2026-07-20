@@ -5,7 +5,7 @@
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
-**Último worker desplegado:** Version ID `d9bcf385-e036-406c-82c8-a540daf586e5`
+**Último worker desplegado:** Version ID `e8779c87-7806-40ce-8709-2869dbf85292` (redeploy automático por CI al pushear; mismo código que el deploy manual `d9bcf385`)
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
@@ -37,7 +37,10 @@ syncRRHH es red de seguridad; las escrituras ya sincronizan de forma incremental
 introduce mojibake nuevo (la corrupcion de la palabra "dia" ya estaba en la línea original que
 se reemplazó). Comentarios
 obsoletos actualizados ("3x/día"→"2x/día"; nota de distribución de cargas). Deploy OK — triggers
-listados: `0 7`, `0 18` (Version ID d9bcf385). Solo backend, sin cambio de versión de app.
+listados: `0 7`, `0 18` (deploy manual Version ID d9bcf385; el push posterior disparó el CI
+`deploy-worker.yml` que redeployó el mismo commit como `e8779c87` = versión viva actual).
+Verificado el código vivo descargado de Cloudflare: syncRRHH dentro del branch 0 18, sin branch
+0 23. Solo backend, sin cambio de versión de app.
 
 ### Part 13: Red de seguridad en executeAITool (robustez tools no-destructivas) (20/07/2026)
 **Contexto:** Adrian: "seguimos" → repasar las tools NO destructivas de Alejandra (calidad/robustez, no seguridad). Auditoría de manejo de errores y casos límite.
