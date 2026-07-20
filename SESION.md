@@ -1,9 +1,20 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 18/07/2026 (continuación 5) -- Fix Dashboard Global: SQL query + null check
+**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + fixes de descripciones
 **Versión actual:** v7.98
-**Resumen:** Corregido endpoint `/dashboard-global` en worker.js que hacía referencia a columnas inexistentes en tabla `obras`. Añadido null check para elemento `fabAlejandra` en panel.html. Dashboard Global ahora devuelve datos correctamente ✅. Worker desplegado exitosamente.
+**Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Corregidas descripciones desactualizadas. Worker desplegado y verificado (/health 200) ✅.
+
+### Part 9: Endurecimiento seguridad tools de Alejandra (20/07/2026)
+**Contexto:** Adrian pidió auditar las tools de Alejandra para mejorarlas/añadir más ("audita el codigo de las tools"). Se optó por "Seguridad primero (bajo riesgo)".
+
+**Cambios en worker.js (todos defensa-en-profundidad, sin cambio de comportamiento para el uso actual):**
+1. **Gating por identidad dev** — nuevo `TOOLS_SOLO_DEV_AITOOL` (Set de 19 tools peligrosas: sql_query, run_migration, direct_fix, propose_fix, repo_*, grep_code, manage_user, r2_delete, fetch_url, network_*, diagnose_user, patrol_logs, send_notification, etc.). `executeAITool(env, tool, input, ctx)` ahora acepta `ctx` y bloquea estas tools salvo `ctx.dev===true`. Los 3 callers funcionales (handleDevAI vía DEV_CHAT_ID, devAIChat vía hasRole superadmin/desarrollador, y el auto-check_encoding interno) pasan `{ dev: true }` → comportamiento idéntico. Segunda capa por si en el futuro se añade un caller sin gate exterior.
+2. **Anti-SSRF en fetch_url** — nuevo `esUrlSeguraFetch()`: bloquea esquemas no http(s) y hosts internos/privados (localhost, 127./10./192.168./172.16-31./169.254./fc00::/fd00::/fe80::, .local, .internal, metadata.google.internal). Reemplaza el débil `url.startsWith('http')`.
+3. **Salvaguarda anti-catástrofe en sql_query** — DROP/TRUNCATE/ALTER TABLE y DELETE/UPDATE sin WHERE ahora requieren `confirm_destructive:true` explícito (añadido al input_schema). Evita borrados accidentales de tablas enteras.
+4. **Descripciones corregidas** — line count worker.js 11000/9000+ → 23500 (real); `version: '5.84'` → '7.98' en app_status.
+
+**Verificación:** node --check OK; grep de encoding en el diff limpio (solo se preservó la corrupción de em-dash preexistente en línea 539, sin tocar esos bytes); 12 casos unit anti-SSRF/gating + 10 casos safeguard SQL → todos PASS. Worker desplegado (Version ID f941d54d-518e-4bde-bc22-2ae1c793ba0d), smoke test /health 200. Sin cambio de versión de app (solo backend worker).
 
 ### Part 8: Fix Dashboard Global (v7.98)
 **Problema:** El endpoint `/dashboard-global` fallaba con error "no such column: estado".

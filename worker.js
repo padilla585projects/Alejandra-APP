@@ -385,7 +385,7 @@ const AI_TOOLS = [
   {
     name: 'sql_query',
     description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total.',
-    input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' } }, required: ['sql'] }
+    input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' }, confirm_destructive: { type: 'boolean', description: 'Obligatorio true para ejecutar operaciones catastroficas: DROP/TRUNCATE/ALTER TABLE, o DELETE/UPDATE sin clausula WHERE (afectan a toda la tabla).' } }, required: ['sql'] }
   },
   {
     name: 'web_search',
@@ -536,7 +536,7 @@ const AI_TOOLS = [
   },
   {
     name: 'repo_read_file',
-    description: 'Lee contenido de un archivo del repo GitHub. Para archivos grandes usa line_start/line_end â€” worker.js tiene ~11000 lineas, lee en bloques de 300-500 a la vez.',
+    description: 'Lee contenido de un archivo del repo GitHub. Para archivos grandes usa line_start/line_end â€” worker.js tiene ~23500 lineas, lee en bloques de 300-500 a la vez.',
     input_schema: {
       type: 'object',
       properties: {
@@ -636,7 +636,7 @@ const AI_TOOLS = [
   },
   {
     name: 'grep_code',
-    description: 'Busca un patrÃ³n de texto en un archivo del repo y devuelve las lÃ­neas que coinciden con contexto. IMPRESCINDIBLE antes de direct_fix o propose_fix â€” localiza exactamente dÃ³nde estÃ¡ el cÃ³digo a cambiar sin leer el archivo entero. Especialmente Ãºtil para worker.js (9000+ lÃ­neas).',
+    description: 'Busca un patrÃ³n de texto en un archivo del repo y devuelve las lÃ­neas que coinciden con contexto. IMPRESCINDIBLE antes de direct_fix o propose_fix â€” localiza exactamente dÃ³nde estÃ¡ el cÃ³digo a cambiar sin leer el archivo entero. Especialmente Ãºtil para worker.js (23500+ lÃ­neas).',
     input_schema: {
       type: 'object',
       properties: {
@@ -720,7 +720,50 @@ async function autoLearn(env, tipo, titulo, contenido, importancia = 2) {
   } catch {}
 }
 
-async function executeAITool(env, toolName, toolInput) {
+// == Gating defensa-en-profundidad: tools solo para identidad dev verificada ==
+// executeAITool() hoy solo se alcanza desde canales ya restringidos a Adrian
+// (handleDevAI via DEV_CHAT_ID en Telegram, y devAIChat con hasRole superadmin/
+// desarrollador en web). Este set es una segunda capa: si en el futuro se anade
+// un caller sin ese gate exterior, estas tools (escritura de codigo/deploy, SQL
+// arbitrario, gestion de usuarios, borrado de ficheros, red de agentes, HTTP
+// libre, divulgacion de codigo/logs/PII) quedan bloqueadas salvo ctx.dev===true.
+const TOOLS_SOLO_DEV_AITOOL = new Set([
+  'sql_query', 'run_migration', 'direct_fix', 'propose_fix',
+  'repo_write_file', 'repo_read_file', 'repo_list_dir', 'grep_code',
+  'manage_user', 'r2_delete', 'fetch_url',
+  'network_sync', 'network_send', 'network_join',
+  'diagnose_user', 'patrol_logs', 'send_notification',
+  'filter_notifications', 'check_deploy_status'
+]);
+
+// == Guard anti-SSRF para fetch_url: bloquea hosts internos/privados y esquemas no http(s) ==
+function esUrlSeguraFetch(rawUrl) {
+  let u;
+  try { u = new URL(rawUrl); } catch { return { ok: false, error: 'URL invalida' }; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok: false, error: 'Solo se permiten URLs http(s)://' };
+  }
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const bloqueado =
+    host === 'localhost' || host === '0.0.0.0' || host === '::1' ||
+    host.endsWith('.local') || host.endsWith('.internal') ||
+    host === 'metadata.google.internal' ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    /^(fc|fd)[0-9a-f]{2}:/.test(host) ||
+    /^fe80:/.test(host);
+  if (bloqueado) return { ok: false, error: 'Host interno/privado no permitido (anti-SSRF)' };
+  return { ok: true };
+}
+
+async function executeAITool(env, toolName, toolInput, ctx = {}) {
+  // Defensa en profundidad: bloquear tools peligrosas si el caller no es dev verificado
+  if (TOOLS_SOLO_DEV_AITOOL.has(toolName) && ctx.dev !== true) {
+    return JSON.stringify({ ok: false, error: `Tool "${toolName}" restringida a desarrollador verificado.` });
+  }
   switch (toolName) {
     case 'web_search': {
       const { query, depth = 'basic' } = toolInput;
@@ -749,9 +792,18 @@ async function executeAITool(env, toolName, toolInput) {
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
     case 'sql_query': {
-      const { sql } = toolInput;
+      const { sql, confirm_destructive } = toolInput;
       try {
         const trimmed = sql.trim().toUpperCase();
+        // Salvaguarda anti-catastrofe: DROP/TRUNCATE, o DELETE/UPDATE sin WHERE,
+        // requieren confirm_destructive:true explicito para ejecutarse.
+        const esDropTruncate = /^\s*(DROP|TRUNCATE|ALTER\s+TABLE)\b/i.test(sql);
+        const esDeleteSinWhere = /^\s*DELETE\s+FROM\b/i.test(sql) && !/\bWHERE\b/i.test(sql);
+        const esUpdateSinWhere = /^\s*UPDATE\b/i.test(sql) && !/\bWHERE\b/i.test(sql);
+        if ((esDropTruncate || esDeleteSinWhere || esUpdateSinWhere) && confirm_destructive !== true) {
+          const motivo = esDropTruncate ? 'DROP/TRUNCATE/ALTER TABLE' : (esDeleteSinWhere ? 'DELETE sin WHERE' : 'UPDATE sin WHERE');
+          return JSON.stringify({ ok: false, error: `Operacion destructiva bloqueada (${motivo}). Afecta a toda la tabla. Si es intencional, reintenta pasando confirm_destructive:true.`, needs_confirmation: true });
+        }
         if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
           const result = await env.DB.prepare(sql).all();
           return JSON.stringify({ ok: true, rows: result.results?.length ?? 0, results: result.results?.slice(0, 50), meta: result.meta });
@@ -808,7 +860,7 @@ async function executeAITool(env, toolName, toolInput) {
           offers: 'Puedo informar del estado de la app industrial, consultar datos de obras/personal/inventario, desplegar cÃ³digo, enviar Telegrams. Disponible 24/7 en Cloudflare Workers.',
           language: ['es'],
           norms_version: '1.0',
-          version: '5.84',
+          version: '7.98',
           features: ['app_status', 'sql_query', 'send_telegram', 'web_search', 'deploy_code', 'fix_code'],
           metadata: { platform: 'Cloudflare Workers', language: 'es', region: 'EU' }
         };
@@ -967,7 +1019,8 @@ async function executeAITool(env, toolName, toolInput) {
       // HTTP request genÃ©rico a cualquier URL externa
       try {
         const { url, method = 'GET', headers = {}, body, timeout_ms = 10000 } = toolInput;
-        if (!url.startsWith('http')) return JSON.stringify({ ok: false, error: 'URL debe empezar por http:// o https://' });
+        const _urlChk = esUrlSeguraFetch(url);
+        if (!_urlChk.ok) return JSON.stringify({ ok: false, error: _urlChk.error });
         // â•â• FILTRO DE PRIVACIDAD â€” no enviar datos sensibles a URLs externas â•â•
         if (body) {
           const SENSITIVE_PATTERNS = [
@@ -1377,7 +1430,7 @@ async function executeAITool(env, toolName, toolInput) {
         autoLearn(env, 'hecho', `direct_fix aplicado: ${descripcion}`, `Archivo: ${archivo} | Commit: ${commitSha} | ${razon}`, 3);
         // Auto-verificar encoding si se tocÃ³ un archivo HTML o JS
         if (archivo.endsWith('.html') || archivo.endsWith('.js')) {
-          executeAITool(env, 'check_encoding', { files: [archivo] }).then(encResult => {
+          executeAITool(env, 'check_encoding', { files: [archivo] }, { dev: true }).then(encResult => {
             try {
               const enc = JSON.parse(encResult);
               if (enc.archivos?.some(a => a.status?.includes('CORRUPTO'))) {
@@ -1526,7 +1579,7 @@ async function executeAITool(env, toolName, toolInput) {
 
     case 'grep_code': {
       // Busca un patrÃ³n de texto en un archivo del repo sin tener que leerlo entero.
-      // Devuelve las lÃ­neas que coinciden con contexto. Imprescindible para worker.js de 9000+ lÃ­neas.
+      // Devuelve las lÃ­neas que coinciden con contexto. Imprescindible para worker.js de 23500+ lÃ­neas.
       const { path, pattern, context_lines = 3 } = toolInput;
       try {
         const getRes = await fetch(
@@ -2000,7 +2053,7 @@ Cuando modificas un archivo en GitHub (con direct_fix, repo_write_file o aplican
 - panel.html, index.html, sw.js, manifest.json, icons/*, version.json â†’ GitHub Pages lo publica en ~30 seg
 - Cualquier otro archivo â†’ solo se guarda en GitHub
 
-IMPORTANTE para editar worker.js (9000+ lÃ­neas):
+IMPORTANTE para editar worker.js (23500+ lÃ­neas):
 - NUNCA lo reescribas entero con repo_write_file â€” usa direct_fix o propose_fix (patch quirÃºrgico).
 - Flujo correcto: grep_code(patrÃ³n) â†’ repo_read_file(lÃ­neas exactas) â†’ direct_fix(oldâ†’new).
 - Si aÃ±ades funciÃ³n nueva: grep_code("^}$", context=2) cerca del final para saber dÃ³nde insertar.
@@ -2161,7 +2214,7 @@ AUTO-DIAGNÃ“STICO:
 - self_audit(): diagnÃ³stico completo â€” schema BD, tablas agente, historial, errores recurrentes. PASO 0 OBLIGATORIO en revisiÃ³n autÃ³noma.
 
 CÃ“DIGO Y REPO (flujo de ingeniero):
-- grep_code(path, pattern, context_lines?): busca texto/regex en un archivo. USA ESTO PRIMERO para localizar cÃ³digo antes de editar. Esencial para worker.js de 9000+ lÃ­neas.
+- grep_code(path, pattern, context_lines?): busca texto/regex en un archivo. USA ESTO PRIMERO para localizar cÃ³digo antes de editar. Esencial para worker.js de 23500+ lÃ­neas.
 - repo_read_file(path, line_start?, line_end?): lee un bloque del archivo. Ãšsalo tras grep_code para leer el contexto completo alrededor del match.
 - repo_list_dir(path?): lista archivos/carpetas de un directorio
 - repo_write_file(path, content, message): crea/reemplaza un archivo completo con commit. Para archivos nuevos pequeÃ±os (workflows, sql, etc.). NUNCA para worker.js entero.
@@ -2753,7 +2806,7 @@ async function handleDevAI(env, chatId, userMessage) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
         type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input)
+        content: await executeAITool(env, tb.name, tb.input, { dev: true })
       })));
       messages.push({ role: 'assistant', content: result.content });
       messages.push({ role: 'user', content: toolResults });
@@ -12974,7 +13027,7 @@ async function devAIChat(request, env) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
         type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input)
+        content: await executeAITool(env, tb.name, tb.input, { dev: true })
       })));
       msgs.push({ role: 'assistant', content: result.content });
       msgs.push({ role: 'user', content: toolResults });

@@ -4,12 +4,31 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 13/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.83
-WORKER API: 6afd5237-63ba-4336-afaa-8ccd1c1a1fb0 (SEC-15 sesion invalida -> 401 uniforme, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+ÚLTIMA ACTUALIZACIÓN: 20/07/2026
+VERSIÓN ACTUAL APP NUEVA: v7.98
+WORKER API: f941d54d-518e-4bde-bc22-2ae1c793ba0d (endurecimiento seguridad tools Alejandra: gating dev + anti-SSRF fetch_url + salvaguarda sql_query destructiva, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [seguridad tools Alejandra — gating dev en executeAITool + anti-SSRF en fetch_url + salvaguarda anti-catastrofe en sql_query]
+                       Adrian: "audita el codigo de las tools ... seguimos y desplegamos todo junto y
+                       probamos". Auditoria de las tools de Alejandra (worker.js) con enfoque
+                       "Seguridad primero (bajo riesgo)". Tres capas de defensa-en-profundidad
+                       (sin cambio de comportamiento en el uso actual — los 3 callers reales ya
+                       estaban restringidos a Adrian y ahora pasan ctx.dev=true):
+                       1) TOOLS_SOLO_DEV_AITOOL (Set de 19 tools peligrosas) + executeAITool(env,
+                          tool, input, ctx) que bloquea salvo ctx.dev===true. Segunda capa por si
+                          se anade un caller futuro sin gate exterior.
+                       2) esUrlSeguraFetch() en fetch_url: bloquea esquemas no-http(s) y hosts
+                          internos/privados (localhost, 127./10./192.168./172.16-31./169.254./
+                          fc00::/fd00::/fe80::, .local, .internal, metadata.google.internal).
+                       3) sql_query: DROP/TRUNCATE/ALTER TABLE y DELETE/UPDATE sin WHERE exigen
+                          confirm_destructive:true. Evita borrar tablas enteras por accidente.
+                       + Correccion de descripciones desactualizadas (line count 11000/9000+ ->
+                       23500 real; version 5.84 -> 7.98). Verificado: node --check OK, encoding
+                       limpio en el diff (preservada corrupcion 'em-dash' preexistente sin tocar),
+                       12+10 casos unit PASS, deploy OK (Version ID f941d54d), smoke /health 200.
+                       Solo backend, sin cambio de version de app.
   (index.html/sw.js/version.json) |  13/07/2026  [v7.83 — fix saludo hardcodeado "Hola Adrián" + cabecera de chat enganosa "Solo desarrollador"]
                        Adrian: "arregla el 2 y luego hz el 3" (2 bugs de copy detectados al
                        verificar en vivo el fix v7.82, y retomar despues la captura del README).
