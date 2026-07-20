@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 20/07/2026 — endurecimiento seguridad tools agente IA Alejandra (ver sección 🔒 SEGURIDAD)
+  Última actualización: 20/07/2026 — paridad de seguridad en el 2º cerebro: gating de nexus_manage + red try/catch en el agente de oficina/app web (SEC-10, ver sección 🔒 SEGURIDAD)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1022,6 +1022,32 @@ LEYENDA DE ESTADO:
     · Verificado por 2 agentes: sin branch '0 23' restante, syncRRHH 1 sola vez en el branch
       18:00, crons manejados = crons declarados, sin mojibake nuevo en las líneas añadidas.
     · Solo backend, sin cambio de versión de app. Deploy OK — triggers listados: 0 7, 0 18.
+
+[✓] SEC-10 — Paridad de seguridad en el agente de oficina/app web (SEC-01 y SEC-05)  [HECHO 20/07/2026]
+    · Auditoría de paridad tras SEC-09: se revisó si el agente separado `alejandra-agente`
+      tenía las mismas protecciones que worker.js (SEC-01 gating, SEC-02 anti-SSRF, SEC-05
+      red try/catch, SEC-07 red del handler de red-de-agentes). Resultado:
+      - SEC-02 YA presente: test_endpoint con allowlist (*.alejandra-app.workers.dev, solo
+        https), más estricto que el denylist de worker.js. Las demás tools que hacen fetch
+        usan endpoints fijos (OpenAI/Gemini/R2), sin superficie SSRF de URL arbitraria.
+      - SEC-07 NO aplica: el agente no participa en red agente-a-agente entrante (no existe
+        processNetworkRequest ni handler de agentes socios aquí).
+      - SEC-01 casi completo: todas las tools peligrosas gateadas MENOS `nexus_manage`
+        (crea/edita/borra "expertos dinámicos" que cambian el enrutado de Alejandra). No
+        estaba en ningún Set → cualquier sesión, o una Alejandra inyectada por prompt en la
+        ruta 'tecnico', podía alterar el comportamiento global del agente sin ser dev. MEDIO.
+      - SEC-05 ausente: ejecutarTool no envolvía su switch en try/catch → un throw no
+        capturado en una tool rechazaba el Promise del turno y rompía el chat entero. MEDIO.
+    · Fix SEC-01: `nexus_manage` añadido a TOOLS_SOLO_DEV_VERIFICADO (lib.js). Verificado
+      ANTES que ningún flujo autónomo lo use: ejecutarReflexion (único cron) ofrece solo 3
+      tools y pasa esDevVerificado=false; nexus_manage solo estaba en el experto 'tecnico'.
+      Gatearlo dev-only no rompe el cron.
+    · Fix SEC-05: try/catch exterior en ejecutarTool que devuelve { ok:false, error, tool }
+      ante cualquier excepción (espeja la red SEC-05 de worker.js). Diff mínimo, sin
+      re-indentar el switch (solo 2 anclas: try antes del switch, catch antes del cierre).
+    · Verificado: 85/85 tests vitest PASS (+3 SEC-10); node --check OK; encoding limpio.
+      Deploy manual del agente Version ID b643c514. Aplica la regla de oro de CLAUDE.md:
+      todo fix de seguridad va en LOS DOS cerebros (worker.js Y alejandra-agente/worker.js).
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

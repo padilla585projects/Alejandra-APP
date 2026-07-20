@@ -14,6 +14,7 @@ import {
   codigoConfirmacionOp,
   whereEsTrivialmenteCierto,
   detectarEscrituraDestructivaBalanceada,
+  TOOLS_SOLO_DEV_VERIFICADO,
 } from './lib.js';
 
 // ── calcularCosteYProveedor (fix continuación 9) ────────────────────────────
@@ -575,5 +576,24 @@ describe('detectarEscrituraDestructivaBalanceada', () => {
 
   it('regresión SEC-08: el DELETE ... WHERE 1=1 NO se cuela', () => {
     expect(detectarEscrituraDestructivaBalanceada('DELETE FROM bobinas WHERE 1=1')).not.toBeNull();
+  });
+});
+
+// == SEC-10 (paridad SEC-01): gating dev-only de nexus_manage ==============
+describe('SEC-10 gating nexus_manage', () => {
+  it('nexus_manage esta en TOOLS_SOLO_DEV_VERIFICADO (regresion del hueco SEC-01)', () => {
+    expect(TOOLS_SOLO_DEV_VERIFICADO.has('nexus_manage')).toBe(true);
+  });
+
+  it('un usuario NO-dev no recibe nexus_manage en la lista de tools ofrecidas', () => {
+    const tools = [{ name: 'consultar_bd' }, { name: 'nexus_manage' }];
+    const filtradas = filtrarToolsPorAuth(tools, true, false).map(t => t.name);
+    expect(filtradas).not.toContain('nexus_manage');
+  });
+
+  it('el desarrollador verificado SI recibe nexus_manage', () => {
+    const tools = [{ name: 'nexus_manage' }];
+    const filtradas = filtrarToolsPorAuth(tools, true, true).map(t => t.name);
+    expect(filtradas).toContain('nexus_manage');
   });
 });

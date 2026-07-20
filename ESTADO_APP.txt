@@ -6,10 +6,22 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: e8779c87-7806-40ce-8709-2869dbf85292 (redeploy automatico por CI deploy-worker.yml al pushear; mismo codigo que el deploy manual d9bcf385) (CRON-23: syncRRHH movido del branch muerto 0 23 al cron 0 18; el trigger 0 23 nunca estuvo registrado en wrangler.toml -tope de 5 crons/cuenta- asi que el sync RRHH nocturno no corria; branch muerto eliminado; previo 65e78297 ROB-CRON: try/catch de robustez en 3 funciones del cron nocturno -cierreAutomaticoJornada guard por fichaje, alertasDiarias envuelve secciones 1-5, recordatorioFixesPendientes red general- para que un fallo no deje el job a medias en silencio; self-audit checkChatHealth ya estaba blindado; previo 7d623860 SEC-08 fix bypass barrera WHERE 1=1; ver historial) · WORKER AGENTE: cfbdf02b-7dac-4dc2-a9ac-37a9983dc46c (SEC-09: barrera humana EQUILIBRADA en escribir_bd -cualquier DELETE y UPDATE masivo exigen "CONFIRMO BORRADO <cod>"; INSERT/REPLACE y UPDATE con WHERE real pasan sin friccion-; cubre panel de oficina Y app web/movil, que comparten este worker; deploy manual, el agente no tiene CI; previo f742e9e8 cliente HTTP puro via Service Binding; previo f2df41f2 sobre commit d9b009e)
+WORKER API: e8779c87-7806-40ce-8709-2869dbf85292 (redeploy automatico por CI deploy-worker.yml al pushear; mismo codigo que el deploy manual d9bcf385) (CRON-23: syncRRHH movido del branch muerto 0 23 al cron 0 18; el trigger 0 23 nunca estuvo registrado en wrangler.toml -tope de 5 crons/cuenta- asi que el sync RRHH nocturno no corria; branch muerto eliminado; previo 65e78297 ROB-CRON: try/catch de robustez en 3 funciones del cron nocturno -cierreAutomaticoJornada guard por fichaje, alertasDiarias envuelve secciones 1-5, recordatorioFixesPendientes red general- para que un fallo no deje el job a medias en silencio; self-audit checkChatHealth ya estaba blindado; previo 7d623860 SEC-08 fix bypass barrera WHERE 1=1; ver historial) · WORKER AGENTE: b643c514-b02e-43a7-ba91-0e525b185eb6 (SEC-10: paridad de seguridad con worker.js -gating dev-only de nexus_manage anadido a TOOLS_SOLO_DEV_VERIFICADO -SEC-01- y red try/catch exterior en ejecutarTool -SEC-05-; auditado: el agente ya tenia SEC-02 -allowlist en test_endpoint, mas estricto que worker.js- y SEC-07 no aplica -sin handler de red de agentes-; verificado que nexus_manage no lo usa ningun flujo autonomo; 85/85 tests; deploy manual; previo cfbdf02b SEC-09: barrera humana EQUILIBRADA en escribir_bd -cualquier DELETE y UPDATE masivo exigen "CONFIRMO BORRADO <cod>"; INSERT/REPLACE y UPDATE con WHERE real pasan sin friccion-; cubre panel de oficina Y app web/movil, que comparten este worker; deploy manual, el agente no tiene CI; previo f742e9e8 cliente HTTP puro via Service Binding; previo f2df41f2 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (alejandra-agente — backend)    |  20/07/2026  [SEC-10: paridad de seguridad — gating nexus_manage + red try/catch]
+                       Auditoria de paridad tras SEC-09 (regla de oro CLAUDE.md: todo fix de
+                       seguridad va en LOS DOS cerebros). Revisadas SEC-01/02/05/07 en el agente:
+                       SEC-02 ya presente (test_endpoint con allowlist, mas estricto que worker.js);
+                       SEC-07 no aplica (sin red agente-a-agente entrante). Dos huecos reales: SEC-01
+                       -nexus_manage sin gate, podia alterar los expertos dinamicos que enrutan a
+                       Alejandra sin ser dev- y SEC-05 -ejecutarTool sin try/catch, un throw rompia
+                       el turno entero del chat-. Fix: nexus_manage anadido a TOOLS_SOLO_DEV_VERIFICADO
+                       (verificado antes que ningun flujo autonomo lo use: ejecutarReflexion ofrece 3
+                       tools con esDevVerificado=false) + try/catch exterior en ejecutarTool. 85/85
+                       tests PASS; node --check OK; encoding limpio; smoke test OK. Deploy manual del
+                       agente b643c514. Solo backend del agente, sin cambio de version de app.
   (alejandra-agente — backend)    |  20/07/2026  [SEC-09: barrera humana equilibrada en escribir_bd del agente]
                        A raiz de "y si lo pides desde Alejandra office?": se descubrio que el chat de
                        Alejandra del panel de oficina (panel.html) Y de la app web/movil (index.html)

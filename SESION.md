@@ -1,12 +1,12 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado + fix cron muerto (CRON-23) + barrera equilibrada en el agente de oficina/app web (SEC-09)
+**Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado + fix cron muerto (CRON-23) + barrera equilibrada en el agente de oficina/app web (SEC-09) + paridad de seguridad en el 2o cerebro (SEC-10: gating nexus_manage + red try/catch)
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
 **Último worker desplegado (web, alejandra-app-api):** Version ID `e8779c87-7806-40ce-8709-2869dbf85292` (redeploy automático por CI al pushear; mismo código que el deploy manual `d9bcf385`)
-**Último agente desplegado (alejandra-agente):** Version ID `cfbdf02b-7dac-4dc2-a9ac-37a9983dc46c` (deploy manual con la barrera SEC-09; el agente NO tiene CI, se despliega a mano con `npx wrangler deploy` desde `alejandra-agente/`)
+**Último agente desplegado (alejandra-agente):** Version ID `b643c514-b02e-43a7-ba91-0e525b185eb6` (deploy manual con SEC-10: gating de nexus_manage + red try/catch en ejecutarTool; el agente NO tiene CI, se despliega a mano con `npx wrangler deploy` desde `alejandra-agente/`)
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
@@ -21,6 +21,25 @@
 - `4497f5f` — docs: actualiza Version ID vivo a e8779c87 (redeploy CI) tras verificar el worker desplegado
 - `a65e2da` — docs: verificación end-to-end en prod de la barrera SEC-08
 - `ff57e77` — feat(seguridad): barrera humana equilibrada en escribir_bd del agente de oficina/app web (SEC-09)
+
+### Part 20: Paridad de seguridad en el 2o cerebro — SEC-10 (20/07/2026)
+**Contexto:** tras SEC-09, la sección SEGURIDAD de IDEAS marcaba SEC-01..SEC-07 como "solo
+worker.js". Por la regla de oro de CLAUDE.md (todo fix de seguridad va en LOS DOS cerebros),
+se auditó el agente `alejandra-agente` contra esas 4 protecciones no-barrera.
+
+**Resultado auditoría:** SEC-02 ya presente (test_endpoint con allowlist, más estricto que el
+denylist de worker.js) y SEC-07 no aplica (el agente no tiene handler de red agente-a-agente).
+Dos huecos reales: (SEC-01) `nexus_manage` sin ningún gate — podía alterar los "expertos
+dinámicos" que enrutan a Alejandra sin ser dev; (SEC-05) `ejecutarTool` sin red try/catch —
+un throw no capturado rompía el turno entero del chat.
+
+**Fix:** `nexus_manage` añadido a TOOLS_SOLO_DEV_VERIFICADO (lib.js) — verificado antes que
+ningún flujo autónomo lo use (ejecutarReflexion ofrece solo 3 tools con esDevVerificado=false;
+nexus_manage solo vivía en el experto 'tecnico'). Y try/catch exterior en ejecutarTool que
+devuelve { ok:false, error, tool } (espeja SEC-05 de worker.js), con diff mínimo sin re-indentar.
+
+**Verificación:** 85/85 tests vitest PASS (+3 SEC-10); node --check OK; encoding limpio; smoke
+test del worker desplegado OK. Deploy manual Version ID `b643c514`.
 
 ### Part 18: Fix cron muerto — syncRRHH del branch '0 23' que nunca corría (CRON-23) (20/07/2026)
 **Contexto:** seguimiento de la NOTA lateral de Part 17 (ROB-CRON). wrangler.toml solo declaraba

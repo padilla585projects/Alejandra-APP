@@ -74,7 +74,7 @@ function calcularCosteYProveedor(modelo, tokensEntrada, tokensSalida) {
 // SQL arbitrario (condicion_sql) que "verificar" ejecuta directamente sin scope de
 // empresa_id -- se restringe a dev verificado, igual que patch_codigo/rollback, en
 // vez de dejarla abierta a cualquier sesión (ver validaciones extra en worker.js).
-const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback', 'test_endpoint', 'configurar_alerta']);
+const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback', 'test_endpoint', 'configurar_alerta', 'nexus_manage']);
 // exportar_datos (fix continuación 14, IDOR/SQLi): exportaba datos de TODAS las
 // empresas sin filtro y con obra_id/fechas concatenados sin parametrizar -- ahora
 // exige sesión como mínimo (el scope real por empresa_id se aplica en worker.js).

@@ -5411,6 +5411,10 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
   // empresa_id se aplica siempre, sin excepción, sin ni siquiera leer esta tabla.
   const bypassEmpresaActivo = esDevVerificado ? (await leerConfigDevBypass(env)).empresaScope : false;
 
+  // SEC-10 (paridad SEC-05): red de seguridad. Si cualquier tool lanza una
+  // excepcion no capturada por su propio try/catch, se devuelve un error
+  // estructurado en vez de rechazar el Promise del turno y romper el chat entero.
+  try {
   switch (nombre) {
 
     case 'pensar': {
@@ -9012,6 +9016,10 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
 
     default:
       return `Tool "${nombre}" no reconocida.`;
+  }
+  } catch (err) {
+    console.error(`ERROR ejecutarTool [${nombre}]:`, err && err.message);
+    return JSON.stringify({ ok: false, error: `Error ejecutando "${nombre}": ${err && err.message ? err.message : String(err)}`, tool: nombre });
   }
 }
 
