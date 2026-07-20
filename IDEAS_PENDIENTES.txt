@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 08/05/2026 — v5.66: auditoría interna agente IA (no afecta a ítems de esta lista)
+  Última actualización: 20/07/2026 — endurecimiento seguridad tools agente IA Alejandra (ver sección 🔒 SEGURIDAD)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -879,6 +879,46 @@ LEYENDA DE ESTADO:
     · Worker: GET/PUT /rgpd/config → retención configurable (X días) por tabla.
     · Worker: POST /rgpd/aplicar-retencion → borra registros antiguos según config.
     · Bugs corregidos en v5.44: columnas incorrectas en queries DSAR, retención fichajes, anonimizado incompleto.
+
+================================================================================
+  🔒 SEGURIDAD (agente IA Alejandra — solo backend worker.js)
+================================================================================
+
+[✓] SEC-01 — Gating defensa-en-profundidad en executeAITool  [HECHO 20/07/2026]
+    · Nuevo Set TOOLS_SOLO_DEV_AITOOL (19 tools peligrosas: sql_query, run_migration,
+      direct_fix, propose_fix, repo_*, grep_code, manage_user, r2_delete, fetch_url,
+      network_*, diagnose_user, patrol_logs, send_notification…).
+    · executeAITool(env, tool, input, ctx) bloquea estas tools salvo ctx.dev===true.
+    · Los 3 callers reales (handleDevAI via DEV_CHAT_ID, devAIChat via hasRole SA/dev,
+      auto-check_encoding interno) pasan { dev:true } → comportamiento idéntico.
+    · Segunda capa por si en el futuro se añade un caller sin gate exterior.
+
+[✓] SEC-02 — Anti-SSRF en fetch_url  [HECHO 20/07/2026]
+    · Nuevo esUrlSeguraFetch(): bloquea esquemas no http(s) y hosts internos/privados
+      (localhost, 127./10./192.168./172.16-31./169.254./fc00::/fd00::/fe80::, .local,
+      .internal, metadata.google.internal). Reemplaza el débil url.startsWith('http').
+
+[✓] SEC-03 — Barrera humana anti-borrado (no autoconfirmable por el modelo)  [HECHO 20/07/2026]
+    · Las operaciones destructivas ya NO las puede autoconfirmar el modelo.
+    · La confirmación se deriva del MENSAJE REAL DEL HUMANO en la petición HTTP
+      (ctx.codigosConfirmados), no de un parámetro del tool_input que controla el LLM.
+    · El humano debe escribir 'CONFIRMO BORRADO <código>' donde <código> = 6 hex =
+      SHA-256(descriptor de operación normalizado). El código ata la autorización a
+      esa operación EXACTA — otra operación → otro código.
+    · Helpers: extraerCodigosConfirmacion(mensaje) + codigoConfirmacionOp(descriptor)
+      + detectarSqlDestructivo(sql) + exigirConfirmacionHumana(ctx, descriptor, motivo, efecto).
+
+[✓] SEC-04 — Barrera humana extendida a todas las tools destructivas  [HECHO 20/07/2026]
+    · Tools protegidas: sql_query (DROP/TRUNCATE/ALTER, DELETE/UPDATE sin WHERE),
+      r2_delete (borrado de archivo R2), run_migration (si algún statement es destructivo
+      — cierra el bypass de sql_query), repo_write_file (sobreescritura entera de archivos
+      críticos: worker.js/index.html/panel.html/sw.js/wrangler.toml), manage_user
+      (delete / change_role a rol elevado = escalada de privilegios / reset_password = toma de cuenta).
+    · No tocadas (ya seguras): direct_fix (patch quirúrgico + Revert), propose_fix
+      (aprobación por Telegram), network_* (dev-gated + filtro SAFE_FIELDS).
+    · Verificado end-to-end en producción con archivo R2 real: sin código → bloqueado y
+      el archivo sobrevivió; con 'CONFIRMO BORRADO 14BA04' → ejecutó y el archivo se borró.
+    · Deploy Version ID 1cf3b78b. Enforcement en código, no en criterio del modelo.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
