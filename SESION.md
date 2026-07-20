@@ -3,7 +3,7 @@
 **Sesion:** LIBRE
 **Fecha:** 20/07/2026 -- Endurecimiento seguridad tools de Alejandra + barrera humana anti-borrado
 **Versión actual:** v7.98
-**Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba la frase `CONFIRMO BORRADO` en su mensaje real. Probado end-to-end en producción. Corregidas descripciones desactualizadas. Worker desplegado y verificado ✅.
+**Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado y verificado ✅.
 
 ### Part 10: Barrera humana anti-borrado (20/07/2026)
 **Contexto:** Al probar la salvaguarda de Part 9 en producción, se detectó que el modelo podía autoconfirmar poniendo `confirm_destructive:true` en el tool_input (que él genera). Adrian: "haz la barrera" → que solo el humano pueda confirmar, nunca el modelo.
@@ -30,6 +30,22 @@
 4. Descripción de la tool actualizada (código por operación).
 
 **Verificación:** node --check OK; encoding limpio; 7/7 unit (mismo SQL reformateado→mismo código, SQL distinto→código distinto, extracción, código de otro SQL no autoriza). Deploy Version ID 96827e81. Prueba en producción (tabla real): bloqueo con `confirm_code:AC96F3`; código erróneo BE2331 → sigue bloqueado (3 filas intactas); código correcto AC96F3 → ejecutó (changes:3, 0 filas en D1). Enforcement en código, no en criterio del modelo. Tabla e historial limpiados. Solo backend.
+
+### Part 12: Misma barrera atada al resto de tools destructivas (20/07/2026)
+**Contexto:** Adrian: "audita las otras tools destructivas igual". La barrera de Part 10/11 solo cubría `sql_query`. Se auditaron todas las tools destructivas y se aplicó la misma barrera humana atada a la operación exacta. Alcance aprobado: Rojos + Naranjas, reutilizando la frase `CONFIRMO BORRADO <código>`.
+
+**Diseño:** se generalizaron los helpers. `codigoConfirmacionSQL` → `codigoConfirmacionOp(descriptor)` (SHA-256 de un descriptor de operación normalizado, no solo SQL). Nuevo `detectarSqlDestructivo(sql)` (DROP/TRUNCATE/ALTER TABLE, DELETE/UPDATE sin WHERE). Nuevo `exigirConfirmacionHumana(ctx, descriptor, motivo, efecto)` que calcula el código, comprueba `ctx.codigosConfirmados` y devuelve el bloqueo `needs_confirmation` con `confirm_code`. Cada tool pasa un descriptor único → código atado a esa operación concreta.
+
+**Tools protegidas (worker.js):**
+1. `sql_query` — refactorizada a los helpers compartidos (mismo comportamiento/código que Part 11).
+2. `r2_delete` — barrera atada a `R2_DELETE <key>` (borrado permanente de archivo R2).
+3. `run_migration` — cierra el bypass de sql_query: si CUALQUIER statement de la migración es destructivo, exige confirmación (atada al SQL completo).
+4. `repo_write_file` — solo para archivos críticos (worker.js/index.html/panel.html/sw.js/wrangler.toml); sobreescritura entera atada a `REPO_WRITE <path>`. Para cambios puntuales el modelo debe usar direct_fix.
+5. `manage_user` — `delete` (borrado permanente), `change_role` a rol elevado (superadmin/desarrollador/empresa_admin = escalada de privilegios), y `reset_password` (toma de cuenta). Cada acción con su descriptor.
+
+**No tocadas (ya seguras):** `direct_fix` (patch quirúrgico, exige old_code exacto, notifica con botón Revert, auto check-encoding); `propose_fix` (requiere aprobación por Telegram, respeta agente pausado); tools `network_*` (dev-gated + filtro SAFE_FIELDS).
+
+**Verificación:** node --check OK; encoding limpio en el diff; unit: `codigoConfirmacionOp` estable (AC96F3 para el SQL de Part 11 → sin regresión) + `detectarSqlDestructivo` 9/9 casos PASS + descriptores distintos → códigos distintos. Deploy Version ID 1cf3b78b. Prueba en producción end-to-end con archivo R2 real (`test-barrera-real.txt`): sin código → bloqueo con `confirm_code:14BA04` y el archivo SOBREVIVIÓ (verificado con r2 object get); con `CONFIRMO BORRADO 14BA04` en el mensaje humano → ejecutó (`ok:true`) y el archivo quedó borrado (verificado: "key does not exist"). Enforcement en código. Artefactos de prueba limpiados. Solo backend, sin cambio de versión de app.
 
 ### Part 9: Endurecimiento seguridad tools de Alejandra (20/07/2026)
 **Contexto:** Adrian pidió auditar las tools de Alejandra para mejorarlas/añadir más ("audita el codigo de las tools"). Se optó por "Seguridad primero (bajo riesgo)".

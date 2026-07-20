@@ -778,14 +778,36 @@ function extraerCodigosConfirmacion(mensajeHumano) {
   while ((m = re.exec(mensajeHumano)) !== null) codigos.add(m[1].toUpperCase());
   return codigos;
 }
-// Codigo ligado a una operacion SQL concreta: SHA-256 de la consulta normalizada
+// Codigo ligado a una operacion concreta: SHA-256 del descriptor normalizado
 // (espacios colapsados + mayusculas), primeros 6 hex. Asi la confirmacion del
-// humano solo autoriza ESE SQL exacto, no cualquier destructivo del turno. La
-// normalizacion tolera reformateos de espacios/mayusculas entre turnos.
-async function codigoConfirmacionSQL(sql) {
-  const norm = String(sql).replace(/\s+/g, ' ').trim().toUpperCase();
+// humano solo autoriza ESA operacion exacta. Para SQL el descriptor es la propia
+// consulta; para otras tools es un string canonico (p.ej. "R2_DELETE <key>").
+async function codigoConfirmacionOp(descriptor) {
+  const norm = String(descriptor).replace(/\s+/g, ' ').trim().toUpperCase();
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(norm));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 6).toUpperCase();
+}
+// Detecta si una sentencia SQL es catastrofica (afecta a toda una tabla).
+// Devuelve el motivo (string) o null. Compartido por sql_query y run_migration.
+function detectarSqlDestructivo(sql) {
+  if (/^\s*(DROP|TRUNCATE|ALTER\s+TABLE)\b/i.test(sql)) return 'DROP/TRUNCATE/ALTER TABLE';
+  if (/^\s*DELETE\s+FROM\b/i.test(sql) && !/\bWHERE\b/i.test(sql)) return 'DELETE sin WHERE';
+  if (/^\s*UPDATE\b/i.test(sql) && !/\bWHERE\b/i.test(sql)) return 'UPDATE sin WHERE';
+  return null;
+}
+// Barrera humana generica para operaciones destructivas. Si la operacion ya esta
+// confirmada por el humano (ctx.codigosConfirmados contiene el codigo del
+// descriptor) devuelve null y la operacion procede. Si no, devuelve el JSON-string
+// de bloqueo listo para return. El codigo se deriva del descriptor y solo el
+// humano puede teclearlo en su mensaje: el modelo no puede autoconfirmarse.
+async function exigirConfirmacionHumana(ctx, descriptor, motivo, efecto = '') {
+  const codigo = await codigoConfirmacionOp(descriptor);
+  const codigosOk = ctx && ctx.codigosConfirmados instanceof Set ? ctx.codigosConfirmados : new Set();
+  if (codigosOk.has(codigo)) return null;
+  return JSON.stringify({
+    ok: false, needs_confirmation: true, confirm_code: codigo,
+    error: `Operacion destructiva bloqueada (${motivo}).${efecto ? ' ' + efecto + '.' : ''} Para autorizar SOLO esta operacion exacta, el usuario humano debe escribir literalmente "CONFIRMO BORRADO ${codigo}" en su proximo mensaje. NO puedes autoconfirmar ni teclear el codigo en su nombre: debe escribirlo el humano. Muestraselo (${codigo}), explica el efecto, y espera. No reintentes hasta que el humano lo haya escrito.`
+  });
 }
 
 async function executeAITool(env, toolName, toolInput, ctx = {}) {
@@ -824,22 +846,13 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       const { sql } = toolInput;
       try {
         const trimmed = sql.trim().toUpperCase();
-        // Barrera humana anti-catastrofe: DROP/TRUNCATE/ALTER, o DELETE/UPDATE sin
-        // WHERE, solo se ejecutan si el HUMANO escribio la frase de confirmacion en
-        // su mensaje (ctx.allowDestructive). El modelo NO puede autoconfirmarse: no
-        // controla este flag, se deriva del mensaje real del usuario en el caller.
-        const esDropTruncate = /^\s*(DROP|TRUNCATE|ALTER\s+TABLE)\b/i.test(sql);
-        const esDeleteSinWhere = /^\s*DELETE\s+FROM\b/i.test(sql) && !/\bWHERE\b/i.test(sql);
-        const esUpdateSinWhere = /^\s*UPDATE\b/i.test(sql) && !/\bWHERE\b/i.test(sql);
-        if (esDropTruncate || esDeleteSinWhere || esUpdateSinWhere) {
-          const motivo = esDropTruncate ? 'DROP/TRUNCATE/ALTER TABLE' : (esDeleteSinWhere ? 'DELETE sin WHERE' : 'UPDATE sin WHERE');
-          // Codigo ligado a ESTE SQL exacto. Solo se ejecuta si el humano escribio
-          // "CONFIRMO BORRADO <codigo>" en su mensaje (ctx.codigosConfirmados).
-          const codigo = await codigoConfirmacionSQL(sql);
-          const codigosOk = ctx.codigosConfirmados instanceof Set ? ctx.codigosConfirmados : new Set();
-          if (!codigosOk.has(codigo)) {
-            return JSON.stringify({ ok: false, needs_confirmation: true, confirm_code: codigo, error: `Operacion destructiva bloqueada (${motivo}). Afecta a toda la tabla. Para autorizar SOLO esta consulta exacta, el usuario humano debe escribir literalmente "CONFIRMO BORRADO ${codigo}" en su proximo mensaje. NO puedes autoconfirmar ni teclear el codigo en su nombre: debe escribirlo el humano. Pideselo mostrando el codigo ${codigo}, explica que borrara, y espera. No reintentes hasta que el humano lo haya escrito.` });
-          }
+        // Barrera humana anti-catastrofe (compartida): DROP/TRUNCATE/ALTER o
+        // DELETE/UPDATE sin WHERE solo se ejecutan si el humano tecleo el codigo
+        // ligado a ESTE SQL exacto. El modelo no puede autoconfirmarse.
+        const motivoDestructivo = detectarSqlDestructivo(sql);
+        if (motivoDestructivo) {
+          const bloqueo = await exigirConfirmacionHumana(ctx, sql, motivoDestructivo, 'Afecta a toda la tabla');
+          if (bloqueo) return bloqueo;
         }
         if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
           const result = await env.DB.prepare(sql).all();
@@ -1116,8 +1129,14 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       return JSON.stringify({ ok: true, files: files.slice(0, 100), total: listed.objects.length });
     }
     case 'r2_delete': {
-      await env.FILES.delete(toolInput.key);
-      return JSON.stringify({ ok: true, deleted: toolInput.key });
+      const key = toolInput.key;
+      if (!key) return JSON.stringify({ ok: false, error: 'Falta key' });
+      // Barrera humana: borrar un archivo de R2 es permanente e irreversible.
+      const bloqueo = await exigirConfirmacionHumana(ctx, `R2_DELETE ${key}`, `borrado permanente de archivo R2: ${key}`, `El archivo se elimina para siempre`);
+      if (bloqueo) return bloqueo;
+      await env.FILES.delete(key);
+      autoLearn(env, 'hecho', `R2 borrado: ${key}`, `Archivo R2 eliminado tras confirmacion humana: ${key}`, 2);
+      return JSON.stringify({ ok: true, deleted: key });
     }
     case 'app_status': {
       const [users, sessions, obras, bobinas, errors, sugerencias] = await Promise.all([
@@ -1146,17 +1165,29 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
           return JSON.stringify({ ok: true, action: 'deactivated' });
         }
         if (action === 'change_role') {
+          // Barrera humana solo si se eleva a un rol con privilegios (escalada).
+          const ROLES_ELEVADOS = new Set(['superadmin', 'desarrollador', 'empresa_admin']);
+          if (ROLES_ELEVADOS.has(String(value || '').toLowerCase())) {
+            const bloqueo = await exigirConfirmacionHumana(ctx, `MANAGE_USER change_role ${user_id} ${value}`, `elevar usuario ${user_id} a rol ${value}`, `Escalada de privilegios`);
+            if (bloqueo) return bloqueo;
+          }
           await env.DB.prepare('UPDATE usuarios SET rol=? WHERE id=?').bind(value, user_id).run();
           return JSON.stringify({ ok: true, action: 'role_changed', new_role: value });
         }
         if (action === 'delete') {
           // value debe ser el empresa_id para evitar borrar el usuario equivocado entre empresas
           if (!value) return JSON.stringify({ ok: false, error: 'Indica empresa_id en el campo value para confirmar la empresa del usuario antes de borrar' });
+          // Barrera humana: el borrado de usuario es permanente.
+          const bloqueo = await exigirConfirmacionHumana(ctx, `MANAGE_USER delete ${user_id} ${value}`, `borrado permanente del usuario ${user_id}`, `Elimina la cuenta de forma irreversible`);
+          if (bloqueo) return bloqueo;
           const res = await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND empresa_id=?').bind(user_id, parseInt(value)).run();
           if ((res.meta?.changes ?? 0) === 0) return JSON.stringify({ ok: false, error: 'Usuario no encontrado o empresa_id incorrecto' });
           return JSON.stringify({ ok: true, action: 'deleted' });
         }
         if (action === 'reset_password') {
+          // Barrera humana: resetear contrasena permite tomar control de la cuenta.
+          const bloqueo = await exigirConfirmacionHumana(ctx, `MANAGE_USER reset_password ${user_id}`, `reset de contrasena del usuario ${user_id}`, `Permite acceder a la cuenta con una nueva contrasena`);
+          if (bloqueo) return bloqueo;
           const hashed = await hashPassword(value || 'temp1234');
           await env.DB.prepare('UPDATE usuarios SET password_hash=? WHERE id=?').bind(hashed, user_id).run();
           return JSON.stringify({ ok: true, action: 'password_reset' });
@@ -1242,6 +1273,15 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
     case 'repo_write_file': {
       const { path, content, message } = toolInput;
       try {
+        // Barrera humana: sobreescribir ENTERO un archivo critico puede arrasar el
+        // codigo (worker.js son ~23500 lineas). Para cambios puntuales existe
+        // direct_fix (patch quirurgico). Exigir confirmacion solo para criticos.
+        const REPO_CRITICOS = new Set(['worker.js', 'index.html', 'panel.html', 'sw.js', 'wrangler.toml']);
+        const pathNorm = String(path || '').replace(/^\.?\//, '');
+        if (REPO_CRITICOS.has(pathNorm)) {
+          const bloqueo = await exigirConfirmacionHumana(ctx, `REPO_WRITE ${pathNorm}`, `sobreescritura completa de ${pathNorm}`, `Reemplaza el archivo entero; para cambios puntuales usa direct_fix`);
+          if (bloqueo) return bloqueo;
+        }
         // Obtener SHA actual del archivo (necesario para updates)
         let sha = null;
         const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
@@ -1493,6 +1533,15 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       const { sql, descripcion } = toolInput;
       try {
         const stmts = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+        // Barrera humana: run_migration ejecuta DDL arbitrario y podria saltarse la
+        // proteccion de sql_query. Si CUALQUIER sentencia es destructiva, exige que
+        // el humano confirme el codigo ligado al SQL completo de la migracion.
+        let motivoMigracion = null;
+        for (const stmt of stmts) { const m = detectarSqlDestructivo(stmt); if (m) { motivoMigracion = m; break; } }
+        if (motivoMigracion) {
+          const bloqueo = await exigirConfirmacionHumana(ctx, sql, `migracion con ${motivoMigracion}`, 'Puede afectar tablas enteras');
+          if (bloqueo) return bloqueo;
+        }
         const results = [];
         for (const stmt of stmts) {
           try {

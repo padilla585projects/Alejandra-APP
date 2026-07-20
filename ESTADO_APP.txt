@@ -6,10 +6,26 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: 96827e81-260c-4bf4-8b8d-56b001552c3b (seguridad tools Alejandra: gating dev + anti-SSRF fetch_url + barrera humana anti-borrado en sql_query con codigo por operacion -CONFIRMO BORRADO <hash6 del SQL>, atada a la consulta exacta y no autoconfirmable por el modelo-, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: 1cf3b78b-f462-4458-8bcd-46d7c063eb44 (barrera humana anti-borrado extendida a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file -archivos criticos- y manage_user -delete/change_role elevado/reset_password-; codigo por operacion -CONFIRMO BORRADO <hash6>- atado a la operacion exacta y no autoconfirmable por el modelo; previo 96827e81 solo cubria sql_query; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [barrera humana EXTENDIDA a todas las tools destructivas — mismo codigo-por-operacion atado]
+                       Adrian: "audita las otras tools destructivas igual". La barrera de los dos
+                       hitos anteriores solo cubria sql_query. Se auditaron todas las tools
+                       destructivas y se aplico la misma barrera atada a la operacion exacta
+                       (alcance aprobado: Rojos + Naranjas, reutilizando 'CONFIRMO BORRADO <cod>').
+                       Helpers generalizados: codigoConfirmacionSQL -> codigoConfirmacionOp(descriptor)
+                       (SHA-256 de descriptor normalizado); nuevo detectarSqlDestructivo(); nuevo
+                       exigirConfirmacionHumana(ctx, descriptor, motivo, efecto). Tools protegidas:
+                       r2_delete (R2_DELETE <key>), run_migration (cierra el bypass de sql_query si
+                       algun statement es destructivo), repo_write_file (solo criticos: worker.js/
+                       index.html/panel.html/sw.js/wrangler.toml), manage_user (delete, change_role
+                       a rol elevado = escalada de privilegios, reset_password = toma de cuenta).
+                       No tocadas (ya seguras): direct_fix, propose_fix, network_*. Verificado en
+                       produccion end-to-end con archivo R2 real: sin codigo -> bloqueo confirm_code
+                       14BA04 y el archivo SOBREVIVIO; con 'CONFIRMO BORRADO 14BA04' -> borrado
+                       (verificado "key does not exist"). Deploy Version ID 1cf3b78b. Solo backend.
   (worker.js — solo backend)      |  20/07/2026  [barrera humana ATADA a la operacion exacta — codigo por SQL (hash) que solo autoriza esa consulta]
                        Adrian: "atala". La barrera anterior era por turno (la frase autorizaba
                        cualquier destructivo del turno). Ahora cada SQL destructivo genera un
