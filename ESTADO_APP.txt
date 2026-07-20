@@ -6,10 +6,23 @@
 
 ÚLTIMA ACTUALIZACIÓN: 20/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.98
-WORKER API: 1cf3b78b-f462-4458-8bcd-46d7c063eb44 (barrera humana anti-borrado extendida a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file -archivos criticos- y manage_user -delete/change_role elevado/reset_password-; codigo por operacion -CONFIRMO BORRADO <hash6>- atado a la operacion exacta y no autoconfirmable por el modelo; previo 96827e81 solo cubria sql_query; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: 359a41ce-1e3b-4652-813a-fdb110e4ce1c (red de seguridad en executeAITool: try/catch externo que garantiza que ninguna tool lance hacia el bucle de tools -un throw no capturado rompia el turno entero-; ahora toda tool devuelve error estructurado; previo 1cf3b78b barrera humana anti-borrado en todas las tools destructivas; ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js — solo backend)      |  20/07/2026  [red de seguridad en executeAITool — ninguna tool puede romper el turno del chat]
+                       Auditoria de robustez de las tools NO destructivas de Alejandra. Hallazgo:
+                       executeAITool no tenia try/catch externo, y 8 tools (list_tables,
+                       app_status, send_notification, r2_list, filter_notifications rama set,
+                       memory_save/read/delete) no capturaban sus excepciones. Un throw no
+                       capturado rechazaba el Promise.all del caller y rompia el turno entero
+                       (el modelo no recibia tool_result -> el usuario veia error generico en vez
+                       de que Alejandra leyera el error y se adaptara). Fix: try/catch externo que
+                       envuelve todo el switch y devuelve { ok:false, error, tool } ante cualquier
+                       excepcion no capturada (+ autoLearn). Cubre tambien cualquier case futuro.
+                       Sin cambio en el camino feliz. Verificado: node --check OK, smoke test
+                       app_status en produccion OK, harness local que prueba el branch catch.
+                       Deploy Version ID 359a41ce. Solo backend.
   (worker.js — solo backend)      |  20/07/2026  [barrera humana EXTENDIDA a todas las tools destructivas — mismo codigo-por-operacion atado]
                        Adrian: "audita las otras tools destructivas igual". La barrera de los dos
                        hitos anteriores solo cubria sql_query. Se auditaron todas las tools

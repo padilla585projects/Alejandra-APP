@@ -5,10 +5,21 @@
 **Versión actual:** v7.98
 **Resumen:** Auditoría y mejora de las tools de Alejandra (worker.js). Añadido gating defensa-en-profundidad en executeAITool, guard anti-SSRF en fetch_url, y salvaguarda anti-catástrofe en sql_query. Después, convertida esa salvaguarda en **barrera humana dura**: las operaciones destructivas ya no las puede autoconfirmar el modelo — requieren que el humano escriba `CONFIRMO BORRADO <código>` en su mensaje real, con el código atado (SHA-256) a la operación exacta. La barrera se extendió a TODAS las tools destructivas: sql_query, r2_delete, run_migration, repo_write_file (archivos críticos) y manage_user (delete / change_role elevado / reset_password). Probado end-to-end en producción. Worker desplegado (Version ID `1cf3b78b`) y verificado ✅. Documentado en IDEAS_PENDIENTES.txt (nueva sección 🔒 SEGURIDAD, SEC-01..SEC-04).
 
-**Último worker desplegado:** Version ID `1cf3b78b-f462-4458-8bcd-46d7c063eb44`
+**Último worker desplegado:** Version ID `359a41ce-1e3b-4652-813a-fdb110e4ce1c`
 **Commits de esta sesión (push a `main` ✅):**
 - `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
 - `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
+- `f84f873` — docs: actualiza SESION.md con commits y Version ID
+- (pendiente commit) — fix(robustez): red de seguridad try/catch en executeAITool
+
+### Part 13: Red de seguridad en executeAITool (robustez tools no-destructivas) (20/07/2026)
+**Contexto:** Adrian: "seguimos" → repasar las tools NO destructivas de Alejandra (calidad/robustez, no seguridad). Auditoría de manejo de errores y casos límite.
+
+**Hallazgo:** `executeAITool` no tenía try/catch externo (el `switch` estaba directo en el cuerpo). 8 tools no-destructivas no capturaban sus excepciones: `list_tables`, `app_status`, `send_notification`, `r2_list`, `filter_notifications` (rama set), `memory_save`, `memory_read`, `memory_delete`. Un throw no capturado (fallo de DB/R2/Telegram) rechazaba el `Promise.all` del caller (líneas 2893 y 13114) y **rompía el turno entero**: el modelo nunca recibía el `tool_result` y el usuario veía un error genérico en vez de que Alejandra leyera el error y se adaptara.
+
+**Fix (mínimo, cero riesgo):** try/catch externo que envuelve todo el `switch`. Ante cualquier excepción no capturada devuelve `{ ok:false, error, tool }` (+ `autoLearn` del error). Ninguna tool puede ya romper el turno, y protege también cualquier `case` futuro. El camino feliz no cambia. (Alcance elegido por Adrian: "Solo la red de seguridad", sin los fixes menores de web_search/memory_save/r2_list — quedan documentados como pendientes.)
+
+**Verificación:** node --check OK; encoding limpio; smoke test en producción (app_status vía chat → datos reales OK, camino feliz intacto); harness local que replica el wrapper prueba que el branch catch devuelve JSON estructurado ante un throw. Deploy Version ID 359a41ce. Solo backend, sin cambio de versión de app.
 
 ### Part 10: Barrera humana anti-borrado (20/07/2026)
 **Contexto:** Al probar la salvaguarda de Part 9 en producción, se detectó que el modelo podía autoconfirmar poniendo `confirm_destructive:true` en el tool_input (que él genera). Adrian: "haz la barrera" → que solo el humano pueda confirmar, nunca el modelo.

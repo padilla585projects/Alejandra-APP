@@ -815,6 +815,7 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
   if (TOOLS_SOLO_DEV_AITOOL.has(toolName) && ctx.dev !== true) {
     return JSON.stringify({ ok: false, error: `Tool "${toolName}" restringida a desarrollador verificado.` });
   }
+  try {
   switch (toolName) {
     case 'web_search': {
       const { query, depth = 'basic' } = toolInput;
@@ -2075,6 +2076,15 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
 
     default:
       return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
+  }
+  } catch (e) {
+    // Red de seguridad: ninguna tool debe lanzar hacia el bucle de tools. Un throw no
+    // capturado rechazaria el Promise.all del caller y romperia el turno entero (el
+    // modelo no recibiria tool_result). Devolvemos siempre un error estructurado para
+    // que el modelo pueda leerlo y adaptarse. Cubre tambien cualquier case futuro.
+    const _emsg = e && e.message ? e.message : String(e);
+    try { autoLearn(env, 'error', `Excepcion no capturada en tool ${toolName}`, `Tool ${toolName} lanzo: ${_emsg}`, 3); } catch (_e) {}
+    return JSON.stringify({ ok: false, error: _emsg, tool: toolName });
   }
 }
 

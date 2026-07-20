@@ -920,6 +920,25 @@ LEYENDA DE ESTADO:
       el archivo sobrevivió; con 'CONFIRMO BORRADO 14BA04' → ejecutó y el archivo se borró.
     · Deploy Version ID 1cf3b78b. Enforcement en código, no en criterio del modelo.
 
+[✓] SEC-05 — Red de seguridad try/catch en executeAITool  [HECHO 20/07/2026]
+    · executeAITool no tenía try/catch externo → 8 tools no-destructivas (list_tables,
+      app_status, send_notification, r2_list, filter_notifications rama set, memory_save/
+      read/delete) podían lanzar excepciones no capturadas por fallo de DB/R2/Telegram.
+    · Un throw no capturado rechazaba el Promise.all del caller y rompía el turno entero:
+      el modelo no recibía tool_result y el usuario veía un error genérico.
+    · Fix: try/catch externo que envuelve todo el switch y devuelve { ok:false, error, tool }
+      ante cualquier excepción. Cubre también cualquier case futuro. Camino feliz sin cambios.
+    · Deploy Version ID 359a41ce. Solo backend.
+
+[ ] SEC-06 — Validación de inputs en tools no-destructivas (fixes menores diferidos)  [PENDIENTE]
+    · Detectado en la auditoría de SEC-05 pero fuera del alcance elegido (solo la red).
+    · web_search: no valida que exista query ni TAVILY_API_KEY (manda undefined al API).
+    · memory_save: no valida que tipo/titulo/contenido estén presentes (NULLs a la BD).
+    · r2_list: el campo "total" engaña — es el conteo de la página devuelta (R2 trunca en
+      1000), no el total real; no indica truncamiento.
+    · Riesgo bajo: la red de seguridad SEC-05 ya evita que estos fallen el turno; esto es
+      pulido de calidad (mensajes de error más claros, no NULLs en BD).
+
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================
