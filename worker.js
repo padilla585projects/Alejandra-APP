@@ -18,7 +18,7 @@ const CORS = {
 // â”€â”€ Precios IA (USD por token) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const AI_PRICES = {
   'claude-sonnet-4-6':    { input: 3/1e6,     output: 15/1e6  },
-  'claude-opus-4-6':      { input: 15/1e6,    output: 75/1e6  },
+  'claude-opus-4-6':      { input: 5/1e6,     output: 25/1e6  },
   'gemini-2.5-flash':     { input: 0.15/1e6,  output: 0.60/1e6 },
   'gemini-2.0-flash-lite':{ input: 0.075/1e6, output: 0.30/1e6 },
 };

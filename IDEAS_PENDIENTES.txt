@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 20/07/2026 — fix BUG-PUSH: /push-vapid-key del agente daba 500 (getVapidKeys sin definir) → push automáticas rotas; resuelto vía Service Binding al worker principal. Antes: paridad de seguridad SEC-10.
+  Última actualización: 21/07/2026 — auditoría de costes/modelos IA (COST-01 fix pricing Opus 4.6; COST-02/03 migraciones descartadas por ahora; COST-04 Batch API pendiente). Antes: fix BUG-PUSH (push automáticas rotas) y paridad de seguridad SEC-10.
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1070,6 +1070,47 @@ LEYENDA DE ESTADO:
         principal rota VAPID, el agente sigue correcto.
     · Verificado en producción: /push-vapid-key ahora HTTP 200 con publicKey; node --check
       OK en ambos; encoding limpio. Deploy: principal adb8c088, agente b9242d46.
+
+================================================================================
+  💰 COSTES Y MODELOS IA (auditoría 21/07/2026 — leer antes de tocar modelos)
+================================================================================
+
+[✓] COST-01 — Bug de tarificación Opus 4.6 en worker.js  [HECHO 21/07/2026]
+    · AI_PRICES['claude-opus-4-6'] tenía { input: 15/1e6, output: 75/1e6 } — ese precio es
+      el de Opus 4.1 (deprecado, retirada 05/08/2026), NO el de Opus 4.6. Precio real actual
+      de Opus 4.6: $5/$25 por 1M tokens. Solo afecta al tracking interno de coste (no rompe
+      nada funcional), pero infla las métricas de gasto reportadas x3.
+    · Fix: { input: 5/1e6, output: 25/1e6 }. Deploy worker principal.
+
+[ ] COST-02 — Migrar buscar_web (gpt-4o-mini) a un modelo más barato — DESCARTADO por ahora
+    · Investigado 21/07/2026: gpt-5.4-nano ($0.20/$1.25, el candidato obvio por precio) NO
+      soporta la tool web_search_preview según la doc oficial de OpenAI
+      (developers.openai.com/api/docs/guides/tools-web-search — solo listan gpt-5.6, gpt-5.5
+      y gpt-4.1/gpt-4.1-mini como compatibles). El más barato de los compatibles,
+      gpt-5.6-luna, cuesta $1.00/$6.00 — MÁS CARO que gpt-4o-mini actual ($0.15/$0.60).
+    · Decisión (con Adrian): dejar gpt-4o-mini tal cual en buscar_web. No hay ahorro real
+      disponible hoy sin arriesgar romper la tool. Nota: gpt-4o-mini no aparece en la pricing
+      page oficial actual (señal ambigua de posible retirada futura, no confirmada en la
+      deprecations page) — vigilar en próximas sesiones por si acaba desapareciendo de verdad.
+
+[ ] COST-03 — Migrar MODEL_EXPERTO (claude-sonnet-4-6) a claude-sonnet-5 — DESCARTADO por ahora
+    · Investigado 21/07/2026: Sonnet 5 cuesta $2/$10 solo hasta el 31/08/2026, luego pasa a
+      $3/$15 — IGUAL que el precio actual de Sonnet 4.6. El ahorro es temporal (~6 semanas) y
+      desaparece. Además el parámetro `effort` en Sonnet 5 viene a 'high' por defecto (Sonnet
+      4.6 no tiene ese concepto) — sin fijarlo explícito más bajo podría salir más caro que
+      4.6 cuando acabe el descuento de lanzamiento. Sonnet 5 no soporta "extended thinking"
+      (Sonnet 4.6 sí) pero el agente no lo usa hoy, así que no es un bloqueante real.
+    · Decisión (con Adrian): no migrar por ahora. Sería mejora de capacidad, no ahorro de
+      coste garantizado. Revisar si en el futuro se fija effort explícito y compensa.
+
+[ ] COST-04 — Batch API para ejecutarReflexion (cron autónomo) — ahorro real pendiente
+    · Candidato serio de ahorro: el cron ejecutarReflexion (autónomo, nocturno/6x-día, sin
+      usuario esperando respuesta en tiempo real) encaja con Batch API de Anthropic: 50% de
+      descuento en input+output, apilable con el prompt caching que YA está implementado
+      (cache_control ephemeral en system prompt y tools) → hasta ~95% de ahorro combinado.
+    · Pendiente: diseñar la migración (async: enviar batch, recoger resultado en la siguiente
+      pasada del cron o vía polling) sin romper el flujo actual de reflexión/aprendizaje.
+      Sesión dedicada a esto en curso (21/07/2026) — ver SESION.md para el diseño.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
