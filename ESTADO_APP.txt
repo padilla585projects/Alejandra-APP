@@ -10,6 +10,22 @@ WORKER API: 17ce8725-d621-4f14-bb80-06f8bc497d0e (DEPT-01: aislamiento de datos 
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (panel.html — solo frontend, sin bump version) | 21/07/2026 [BUG-INVISIBLE: 4 paginas del panel nunca se mostraban]
+                       Al probar DEPT-01 en vivo con Alberto (encargado+electrico), se descubrio
+                       por casualidad que "Docs. Obra" se quedaba en blanco pese a que los datos
+                       si llegaban al DOM. Causa: 4 divs (pageReconocimientos, pageDocumentosObra,
+                       pagePermisosTrabajo, pageInspecciones) tenian un style="display:none"
+                       puesto a mano en el propio HTML, que por cascada CSS gana siempre a la
+                       regla de clase .page.active{display:block} que usa _doNavTo() para mostrar
+                       paginas -- estas 4 paginas llevaban invisibles para TODOS los usuarios y
+                       roles desde su creacion, sin relacion con permisos/DEPT-01. Fix: quitar el
+                       style inline de los 4 divs (panel.html lineas 1169, 1240, 1314, 1391).
+                       Verificado en produccion tras el push (panel.html se sirve por GitHub
+                       Pages, requiere push para verse en vivo): las 4 paginas quedan
+                       display:block + clase active al navegar con navTo(); "Documentos de Obra"
+                       renderiza su tabla real con los 2 documentos legacy. Sin cambio de version
+                       de app (panel.html no tiene APP_VERSION propio). Commit 8f29c5c. Detalle
+                       completo en IDEAS_PENDIENTES.txt (BUG-INVISIBLE) y SESION.md (Part 23).
   v7.99 (worker.js + panel.html)  |  21/07/2026  [DEPT-01: aislamiento de datos por departamento]
                        Investigando por que ~30 modulos de gestion de obra (RFIs, control de
                        calidad, punch list, checklists...) tenian cero uso real, se confirmo que

@@ -1,15 +1,65 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 21/07/2026 -- DEPT-01: aislamiento de datos por departamento (construcción/eléctrico/mecánicas no se ven entre sí; Seguridad ve todo) en 7 tablas de obra + sidebar de panel.html ya no oculta Construcción/Obra a los no-admin
-**Versión actual:** v7.99
-**Resumen:** Investigando por qué ~30 módulos de gestión de obra tenían cero uso real, se confirmó que panel.html ocultaba las secciones "Construcción" y "Obra" a todo no-admin (decisión de UX antigua) y que Adrian quería algo más de fondo: aislamiento real de datos por departamento (construcción/eléctrico/mecánicas independientes entre sí, personal/maquinaria/presupuesto/subcontratas propios; Seguridad transversal, ve todo con solo lectura de otros departamentos). Se añadió columna `departamento` + filtro (`isDeptPrivileged(auth)`: admins + Seguridad ven todo, el resto solo lo suyo + filas legacy NULL) en 7 tablas: tareas_obra, rfis, control_calidad, punch_list, actas_reunion, documentos_obra, inspecciones_seg. Autoasignación del departamento al crear = el del usuario creador (elegido por Adrian). contactos_obra/visitas_obra/obs_seguridad se dejan transversales (personas/visitas/observaciones no son de un solo departamento). incidencias/pedidos ya estaban bien. buscarGlobal recuperó el filtro de departamento que BUG-CARNETS había quitado (ya no hace falta, las tablas tienen la columna) y se le añadió filtro a incidencias que nunca lo tuvo. Migración manual (ALTER TABLE) ejecutada contra D1 para documentos_obra/inspecciones_seg (únicas 2 sin ensureXTable() que se autogestione el ALTER); las otras 5 se autogestionan solas. panel.html: quitado 'construccion'/'obra' del array seccionesOcultar (2 sitios) -- ahora se muestran siempre, el filtrado real lo hace el backend. seguimiento/analitica siguen ocultas. Detalle completo en IDEAS_PENDIENTES.txt (DEPT-01). Pendiente para el futuro: Fase 2-5 de descubribilidad de módulos (estado vacío explicativo, tooltip en sidebar, Alejandra explica módulos por chat, tour onboarding) -- Adrian aprobó las 4 pero se priorizó DEPT-01 primero.
+**Fecha:** 21/07/2026 -- BUG-INVISIBLE: 4 páginas del panel (Reconocimientos, Docs. Obra, Permisos de Trabajo, Inspecciones) nunca se mostraban por un `style="display:none"` hardcodeado en el HTML, para NINGÚN usuario, desde su creación
+**Versión actual:** v7.99 (sin bump — fix de panel.html sin `APP_VERSION` propio, ver nota en Part 23)
+**Resumen:** Al probar DEPT-01 en vivo con Alberto (electrico), se descubrió un bug no relacionado, preexistente: 4 divs `.page` del panel tenían un `style="display:none"` fijo en el propio HTML que ganaba SIEMPRE a la clase `.page.active{display:block}` que usa `_doNavTo()` para mostrar páginas — esas 4 páginas jamás se habían podido ver, para ningún rol, desde que existen. Fix: quitar el inline style de los 4 divs (commit `8f29c5c`). Verificado en producción tras el push (GitHub Pages) navegando a las 4 páginas vía `navTo()`: las 4 ahora quedan `display:block` + clase `active`, y "Documentos de Obra" renderiza sus 2 documentos reales correctamente. Ver Part 23 para detalle completo.
 
 **Último worker desplegado (web, alejandra-app-api):** Version ID `17ce8725-d621-4f14-bb80-06f8bc497d0e` (deploy manual con DEPT-01: aislamiento por departamento en 7 tablas + fix buscarGlobal; previo `f33582ae` BUG-CARNETS)
-**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- DEPT-01 es solo del worker principal y panel.html, no aplica a alejandra-agente; previo `b643c514` SEC-10)
+**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- DEPT-01 y BUG-INVISIBLE son solo del panel.html/worker principal, no aplica a alejandra-agente; previo `b643c514` SEC-10)
 **Commits de esta sesión (push a `main` ✅):**
 - `015d1dc` — fix: quita filtro departamento roto en 7 endpoints (BUG-CARNETS)
-- `(pendiente)` — feat: aislamiento de datos por departamento en 7 tablas de obra + sidebar (DEPT-01) — v7.99
+- `0da8805` — feat: aislamiento de datos por departamento en 7 tablas de obra + sidebar (DEPT-01) — v7.99
+- `8f29c5c` — fix: 4 páginas del panel nunca se mostraban (BUG-INVISIBLE)
+
+### Part 23: BUG-INVISIBLE — 4 páginas del panel nunca se mostraban (21/07/2026)
+**Contexto:** siguiendo con DEPT-01, Adrian pidió *"prueba el panel con usuario electrico"* para
+validar el aislamiento por departamento en vivo. Como no puedo teclear contraseñas en ningún
+login (regla de seguridad), Adrian inició sesión él mismo como Alberto (encargado+electrico) y yo
+observé/navegué con el navegador vía MCP (Claude in Chrome). Al entrar en "Docs. Obra" para
+comprobar que los documentos legacy (`departamento IS NULL`) seguían visibles, la página se quedó
+en blanco pese a que los datos SÍ llegaban al DOM (`docObraTbody.innerHTML` contenía los 2
+documentos reales).
+
+**Diagnóstico:** `.page{display:none}` + `.page.active{display:block}` (CSS, línea 112-113) es
+el mecanismo real de mostrar/ocultar páginas; `_doNavTo()` (línea 10233) solo mueve la clase
+`active` con `classList`, nunca toca `style.display` directamente. El div
+`<div id="pageDocumentosObra" class="page" style="display:none">` tenía un `style="display:none"`
+puesto a mano en el propio HTML — por cascada CSS, un estilo inline siempre gana a una regla de
+clase, así que por más que `_doNavTo()` añadiera `active`, el navegador seguía obedeciendo el
+inline y la página nunca se pintaba. Mismo patrón exacto en otros 3 divs:
+`pageReconocimientos`, `pagePermisosTrabajo`, `pageInspecciones`. Es decir, estas 4 páginas
+(Reconocimientos Médicos, Documentos de Obra, Permisos de Trabajo, Inspecciones de Seguridad)
+llevan **invisibles para absolutamente todos los usuarios y roles desde que se crearon** — no es
+un bug de permisos ni de DEPT-01, es puramente de marcado HTML, encontrado solo por casualidad al
+probar otra cosa.
+
+**Fix:** quitar `style="display:none"` de los 4 divs (panel.html líneas 1169, 1240, 1314, 1391).
+Diff mínimo: 4 líneas, sin tocar nada más. Adrian, al reportarle el hallazgo: *"te toca a ti"*
+(autorización explícita a decidir y aplicar el fix).
+
+**Verificación:** `git diff` confirmó exactamente esas 4 líneas cambiadas; sin corrupción de
+encoding en las líneas añadidas. Primer intento de verificar en el navegador tras el edit local
+seguía mostrando `style="display:none"` — resulta que `panel.html` se sirve estático desde
+GitHub Pages, así que el edit local no tiene ningún efecto hasta hacer commit+push (a diferencia
+de `worker.js`, que necesita `wrangler deploy`). Commit `8f29c5c` + push. Tras el push, recargando
+la pestaña real (sesión de Alberto activa via localStorage) y llamando a `navTo('documentosObra')`,
+`navTo('reconocimientos')`, `navTo('permisosTrabajo')` y `navTo('inspecciones')` desde consola: las
+4 páginas quedan con `getComputedStyle().display === 'block'` y clase `active`, sin ningún
+`style` inline ya. "Documentos de Obra" además renderiza su tabla real con los 2 documentos
+legacy y sus botones de editar/borrar, confirmando que no es solo CSS sino que la página completa
+funciona. Solo frontend (panel.html) — no requiere `wrangler deploy`, solo push. No se subió
+versión de app: `panel.html` no tiene su propio `APP_VERSION` como `index.html`, y el fix no toca
+lógica de negocio ni backend; se documenta aquí por transparencia (regla de CLAUDE.md de subir
+versión en cada cambio funcional, evaluada y considerada no aplicable en este caso concreto).
+
+**Nota lateral encontrada durante la verificación, sin resolver:** al hacer clic en el botón real
+del sidebar "Docs. Obra" (en vez de llamar `navTo()` desde consola), la navegación no siempre
+disparó correctamente en el entorno de automatización del navegador (título quedó mostrando el id
+crudo `pageDocumentosObra` en vez de coincidir) — no se pudo determinar si es un artefacto del
+propio driver de automatización (clic en elemento fuera de viewport/sección colapsada) o un bug
+real de la UI; llamar a `navTo(pagina)` directamente SÍ funciona siempre correctamente. Revisar en
+una sesión futura con clic manual real si se quiere descartar del todo.
 
 ### Part 21: BUG-CARNETS — filtro departamento roto en 7 endpoints + buscarGlobal (21/07/2026)
 **Contexto:** Adrian: *"ahora quiero ver en que podemos mejorar de la app? que nos falta?"*.

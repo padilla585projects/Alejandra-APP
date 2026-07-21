@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 21/07/2026 — BUG-CARNETS: fix de 7 endpoints con filtro departamento roto (500 en carnets/reconocimientos/documentos_obra/permisos_trabajo/inspecciones_seg/turnos/ausencias) + fallo silencioso en buscarGlobal, hallados en auditoría abierta de "qué falta en la app". Antes: auditoría de costes/modelos IA completa (COST-01 fix pricing Opus 4.6, único ahorro real aplicado; COST-02/03/04 investigados y descartados).
+  Última actualización: 21/07/2026 — BUG-INVISIBLE: 4 páginas del panel (Reconocimientos, Docs. Obra, Permisos de Trabajo, Inspecciones) nunca se mostraban para ningún usuario por un style="display:none" hardcodeado en el HTML, hallado por casualidad al probar DEPT-01 en vivo. Antes: DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1239,6 +1239,42 @@ LEYENDA DE ESTADO:
       explicativo, tooltip en el nombre del botón del sidebar, que Alejandra explique los
       módulos por chat, tour de onboarding) — Adrian aprobó las 4 vías pero se priorizó este
       trabajo de aislamiento de departamentos primero.
+
+================================================================================
+  🐛 BUG-INVISIBLE — 4 páginas del panel nunca se mostraban  [HECHO 21/07/2026]
+================================================================================
+
+[✓] BUG-INVISIBLE — style="display:none" hardcodeado bloqueaba 4 páginas para siempre
+    [HECHO 21/07/2026]
+    · Origen: al probar DEPT-01 en vivo con Alberto (encargado+electrico) — Adrian pidió
+      *"prueba el panel con usuario electrico"* — se descubrió por casualidad, navegando a
+      "Docs. Obra" para comprobar que los documentos legacy seguían visibles, que la página se
+      quedaba completamente en blanco pese a que los datos SÍ llegaban al DOM.
+    · Causa: panel.html usa `.page{display:none}` + `.page.active{display:block}` (CSS) como
+      mecanismo de mostrar/ocultar páginas; `_doNavTo()` solo mueve la clase `active` con
+      `classList`, nunca toca `style.display`. Pero 4 divs tenían un `style="display:none"`
+      puesto A MANO en el propio HTML (`pageReconocimientos`, `pageDocumentosObra`,
+      `pagePermisosTrabajo`, `pageInspecciones`) — un estilo inline gana siempre a una regla de
+      clase por cascada CSS, así que por mucho que `_doNavTo()` añadiera `active`, esas 4
+      páginas nunca se pintaban. Bug de marcado HTML puro, sin relación con roles/permisos/
+      DEPT-01 — llevaban invisibles para TODOS los usuarios y roles desde su creación.
+    · Fix: quitar el `style="display:none"` de los 4 divs (panel.html líneas 1169, 1240, 1314,
+      1391). Diff mínimo, sin tocar nada más. Autorizado por Adrian ("te toca a ti") tras
+      reportarle el hallazgo con la explicación técnica completa.
+    · Verificación: git diff confirmó exactamente esas 4 líneas; sin corrupción de encoding.
+      Tras el push (panel.html se sirve por GitHub Pages, requiere push para verse en vivo, no
+      basta con guardar el archivo local), se confirmó en el navegador real (sesión de Alberto)
+      que las 4 páginas quedan con `getComputedStyle().display:'block'` + clase `active` al
+      navegar con `navTo()`; "Documentos de Obra" además renderiza su tabla real con los 2
+      documentos legacy y botones de editar/borrar funcionales.
+    · Sin cambio de versión de app: panel.html no tiene `APP_VERSION` propio como index.html;
+      fix puramente de frontend sin lógica de negocio ni backend tocados.
+    · Nota lateral sin resolver: el clic real sobre el botón del sidebar "Docs. Obra" no siempre
+      disparó la navegación correctamente en el entorno de automatización del navegador (podría
+      ser un artefacto del propio driver, sección colapsada fuera de viewport); llamar a
+      `navTo(pagina)` directamente sí funciona siempre. Revisar con clic manual en una sesión
+      futura si se quiere descartar del todo.
+    · Reportado/arreglado: 21/07/2026 — hallado como efecto colateral de probar DEPT-01 en vivo.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
