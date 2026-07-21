@@ -1180,6 +1180,67 @@ LEYENDA DE ESTADO:
       auditoría (UX/negocio/técnica), que quedan pendientes de retomar en otra sesión.
 
 ================================================================================
+  🔒 DEPT-01 — Aislamiento de datos por departamento  [HECHO 21/07/2026]
+================================================================================
+
+[✓] DEPT-01 — Construcción/eléctrico/mecánicas no deben verse entre sí; Seguridad ve todo
+    [HECHO v7.99]
+    · Origen: al investigar por qué ~30 módulos de "gestión de obra" (RFIs, control de
+      calidad, punch list, checklists...) tenían cero uso real en producción, se encontraron
+      dos causas: (1) el sidebar de panel.html ocultaba las secciones "Construcción" y "Obra"
+      completas a cualquier no-admin desde hace meses (decisión de UX para simplificar el menú
+      del encargado Alberto, ver SESION.md histórico); (2) Adrian aclaró el motivo de fondo:
+      *"el tema de los filtros tenemos que mirarlo bien porque ahi departamentos independientes
+      unos de otros.cada uno con su personal,maquinaria,presupuesto,subcontratas...etc por eso
+      construccion no debe verlo el de electricidad ni mecanicas y viceversa. pero Seguridad si
+      debe ver todo porques es la seguridad de obra"*. No bastaba con volver a mostrar las
+      secciones — había que aislar los datos de verdad por departamento en el backend.
+    · Alcance acordado con Adrian (scope de tablas decidido por Claude tras revisar schemas;
+      nivel de acceso de Seguridad y método de asignación elegidos por Adrian vía preguntas):
+      - Seguridad: solo lectura de otros departamentos (elegido por Adrian).
+      - Asignación de departamento a un registro nuevo: automático, el del usuario que lo crea
+        (elegido por Adrian).
+      - Grupo A (se añade columna `departamento`, autoasignación al crear, filtro en
+        GET/UPDATE/DELETE salvo privilegiados): `tareas_obra`, `rfis`, `control_calidad`,
+        `punch_list`, `actas_reunion`, `documentos_obra`, `inspecciones_seg` (7 tablas).
+      - Grupo B (se dejan transversales, SIN filtro de departamento — personas/visitas/
+        observaciones de seguridad no pertenecen a un solo departamento): `contactos_obra`,
+        `visitas_obra`, `obs_seguridad`.
+      - Grupo C (ya tenían columna `departamento` y filtro correcto, sin cambios):
+        `incidencias`, `pedidos`.
+    · Implementación en worker.js: nuevo helper `isDeptPrivileged(auth)` — true si
+      superadmin/empresa_admin/desarrollador o `auth.isSeguridad` (departamento === 'seguridad');
+      estos ven/editan TODOS los departamentos, el resto solo el suyo (+ filas legacy con
+      `departamento IS NULL`, por compatibilidad con datos previos a la migración). Patrón
+      aplicado en los 7 endpoints del Grupo A: GET añade
+      `AND (departamento=? OR departamento IS NULL)`; CREATE inserta
+      `departamento = auth.departamento || null`; UPDATE/DELETE añaden el mismo guard a su WHERE.
+      También se corrigió `buscarGlobal()` para reinstaurar el filtro de departamento en
+      tareas_obra/rfis/control_calidad/actas_reunion (que BUG-CARNETS había dejado sin filtrar
+      por no tener aún la columna) y se añadió filtro a la consulta de `incidencias` dentro de
+      buscarGlobal, que nunca lo había tenido pese a tener la columna.
+    · Migración de BD: `tareas_obra`, `rfis`, `control_calidad`, `punch_list`, `actas_reunion`
+      ya tienen función `ensureXTable(env)` que se autogestiona el ALTER TABLE (con
+      .catch(()=>{})) — no requirió migración manual. `documentos_obra` e `inspecciones_seg` NO
+      tienen esa función, así que se ejecutó `ALTER TABLE ... ADD COLUMN departamento TEXT`
+      directo contra producción D1 vía MCP (verificado con sqlite_master que la columna quedó
+      creada en ambas). Migración capturada también en `migrate_dept01_construccion.sql` por
+      convención del proyecto.
+    · panel.html: se quitó `'construccion'` y `'obra'` del array `seccionesOcultar` (dos sitios:
+      `iniciarApp()` y `ocultarSidebarPorPermisos()`) — ahora esas secciones se muestran siempre
+      a todos los roles; el filtrado real de qué ve cada uno lo hace el backend por
+      departamento. `seguimiento` y `analitica` se mantienen ocultas (sin cambios, fuera de
+      alcance de esta tarea).
+    · Verificación: node --check worker.js OK; grep de encoding en líneas añadidas del diff
+      limpio (Ã|Â|â€|ï»¿ sin coincidencias en líneas +); columnas nuevas confirmadas en D1 vía
+      sqlite_master; deploy worker principal Version ID `17ce8725-d621-4f14-bb80-06f8bc497d0e`;
+      health check post-deploy OK (200, `{"ok":true}`).
+    · Pendiente para el futuro: retomar Fase 2-5 de descubribilidad de módulos (estado vacío
+      explicativo, tooltip en el nombre del botón del sidebar, que Alejandra explique los
+      módulos por chat, tour de onboarding) — Adrian aprobó las 4 vías pero se priorizó este
+      trabajo de aislamiento de departamentos primero.
+
+================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================
 

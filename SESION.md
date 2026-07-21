@@ -1,15 +1,15 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 21/07/2026 -- BUG-CARNETS: auditoría abierta de "qué falta en la app" (Adrian pidió las 4 vías: técnica/UX/negocio/salud producción) → se priorizó salud de producción por acceso directo a D1; encontrado y arreglado un bug sistémico de filtro departamento roto en 7 endpoints + 1 fallo silencioso en buscarGlobal
-**Versión actual:** v7.98 (sin cambio de versión de app -- solo backend)
-**Resumen:** Cruzando logs reales de producción (tabla `logs`) contra el código se detectó que /carnets era el error #1 más frecuente (42 ocurrencias, 500). Causa raíz: `getCarnets()` aplicaba `AND departamento = ?` para oficina/encargado, pero la tabla `carnets` nunca tuvo columna departamento -> SQLITE_ERROR sin capturar -> 500. Se auditó el patrón completo (`AND departamento = ?`) contra el schema real de D1 vía MCP en TODO worker.js. Confirmadas 7 tablas con el mismo bug (500): carnets, reconocimientos_medicos, documentos_obra, permisos_trabajo, inspecciones_seg, turnos (coincide con otro error real ya visto en logs: GET /turnos -> 500, 18/07) y ausencias (tabla se crea sobre la marcha, aún no había explotado en logs). Además una 8ª variante distinta en `buscarGlobal`: mismo filtro roto contra 4 tablas sin departamento, pero envuelto en `.catch()` -> no daba 500, simplemente el buscador global devolvía 0 resultados de tareas/RFIs/deficiencias/actas a oficina/encargado en silencio; aprovechado también para parametrizar un bind que iba interpolado directo en el SQL (bajo riesgo, valor de sesión no de input libre, pero mala práctica). Fix "rápido" elegido por Adrian sobre "fix completo con migración": se quita el filtro roto en los 7 endpoints (comentario explicativo BUG-CARNETS con fecha) y se corrige buscarGlobal. Efecto: oficina/encargado ven ahora TODOS los registros de su empresa en esas 7 tablas (como superadmin), en vez de un 500 -- downgrade de scoping, no fuga entre empresas (empresa_id intacto). Detalle completo en IDEAS_PENDIENTES.txt (BUG-CARNETS). Quedan pendientes de retomar (deprioritizados por Adrian a favor de este bug confirmado): 10 sugerencias/quejas de usuarios sin resolver en la tabla `sugerencias` (2 marcadas como más graves), auditoría técnica de código, y análisis de funciones de negocio que faltan.
+**Fecha:** 21/07/2026 -- DEPT-01: aislamiento de datos por departamento (construcción/eléctrico/mecánicas no se ven entre sí; Seguridad ve todo) en 7 tablas de obra + sidebar de panel.html ya no oculta Construcción/Obra a los no-admin
+**Versión actual:** v7.99
+**Resumen:** Investigando por qué ~30 módulos de gestión de obra tenían cero uso real, se confirmó que panel.html ocultaba las secciones "Construcción" y "Obra" a todo no-admin (decisión de UX antigua) y que Adrian quería algo más de fondo: aislamiento real de datos por departamento (construcción/eléctrico/mecánicas independientes entre sí, personal/maquinaria/presupuesto/subcontratas propios; Seguridad transversal, ve todo con solo lectura de otros departamentos). Se añadió columna `departamento` + filtro (`isDeptPrivileged(auth)`: admins + Seguridad ven todo, el resto solo lo suyo + filas legacy NULL) en 7 tablas: tareas_obra, rfis, control_calidad, punch_list, actas_reunion, documentos_obra, inspecciones_seg. Autoasignación del departamento al crear = el del usuario creador (elegido por Adrian). contactos_obra/visitas_obra/obs_seguridad se dejan transversales (personas/visitas/observaciones no son de un solo departamento). incidencias/pedidos ya estaban bien. buscarGlobal recuperó el filtro de departamento que BUG-CARNETS había quitado (ya no hace falta, las tablas tienen la columna) y se le añadió filtro a incidencias que nunca lo tuvo. Migración manual (ALTER TABLE) ejecutada contra D1 para documentos_obra/inspecciones_seg (únicas 2 sin ensureXTable() que se autogestione el ALTER); las otras 5 se autogestionan solas. panel.html: quitado 'construccion'/'obra' del array seccionesOcultar (2 sitios) -- ahora se muestran siempre, el filtrado real lo hace el backend. seguimiento/analitica siguen ocultas. Detalle completo en IDEAS_PENDIENTES.txt (DEPT-01). Pendiente para el futuro: Fase 2-5 de descubribilidad de módulos (estado vacío explicativo, tooltip en sidebar, Alejandra explica módulos por chat, tour onboarding) -- Adrian aprobó las 4 pero se priorizó DEPT-01 primero.
 
-**Último worker desplegado (web, alejandra-app-api):** Version ID `f33582ae-e758-4592-87be-31fefdf91ff3` (deploy manual con BUG-CARNETS: quita filtro departamento roto en 7 endpoints + fix buscarGlobal; previo `06a3ff0d` COST-01)
-**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- BUG-CARNETS es solo del worker principal, no aplica a alejandra-agente; previo `b643c514` SEC-10)
+**Último worker desplegado (web, alejandra-app-api):** Version ID `17ce8725-d621-4f14-bb80-06f8bc497d0e` (deploy manual con DEPT-01: aislamiento por departamento en 7 tablas + fix buscarGlobal; previo `f33582ae` BUG-CARNETS)
+**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- DEPT-01 es solo del worker principal y panel.html, no aplica a alejandra-agente; previo `b643c514` SEC-10)
 **Commits de esta sesión (push a `main` ✅):**
 - `015d1dc` — fix: quita filtro departamento roto en 7 endpoints (BUG-CARNETS)
-- `(pendiente)` — docs: SESION.md + IDEAS_PENDIENTES.txt con detalle BUG-CARNETS (este commit)
+- `(pendiente)` — feat: aislamiento de datos por departamento en 7 tablas de obra + sidebar (DEPT-01) — v7.99
 
 ### Part 21: BUG-CARNETS — filtro departamento roto en 7 endpoints + buscarGlobal (21/07/2026)
 **Contexto:** Adrian: *"ahora quiero ver en que podemos mejorar de la app? que nos falta?"*.
@@ -47,6 +47,52 @@ tocado (este bug es exclusivo de las tablas/endpoints del worker principal).
 de usuarios sin resolver en la tabla `sugerencias` (2 marcadas como más graves: "no puedes volver
 a la app" tras abrir el chat de Alejandra; problemas de barra inferior/iconos tapando contenido);
 auditoría técnica de código; análisis de funciones de negocio que faltan. Retomar en otra sesión.
+
+### Part 22: DEPT-01 — aislamiento de datos por departamento (21/07/2026)
+**Contexto:** investigando por qué ~30 módulos de gestión de obra (RFIs, control de calidad,
+punch list, checklists...) tenían cero uso real en producción pese a estar completos, se encontró
+que `panel.html` ocultaba enteras las secciones "Construcción" y "Obra" a cualquier no-admin
+(decisión de UX de hace meses para simplificar el sidebar del encargado Alberto). Al plantear
+revertir esa ocultación, Adrian frenó con el motivo real de fondo: *"el tema de los filtros
+tenemos que mirarlo bien porque ahi departamentos independientes unos de otros.cada uno con su
+personal,maquinaria,presupuesto,subcontratas...etc por eso construccion no debe verlo el de
+electricidad ni mecanicas y viceversa. pero Seguridad si debe ver todo porques es la seguridad de
+obra"*. También aclaró que aplica igual en el panel de oficina ("Alejandra Office"), sobre todo
+para la parte de ingeniería de cada departamento.
+
+**Alcance acordado:** Adrian dejó el scope de tablas a criterio de Claude ("Todavía no lo sé,
+decide tú una vez veas el resto") tras revisar los schemas reales de D1; eligió "solo lectura de
+otros departamentos" para Seguridad y "automático: el del usuario que lo crea" para la asignación
+de departamento a un registro nuevo. Resultado: Grupo A con columna `departamento` nueva y
+filtro real (`tareas_obra`, `rfis`, `control_calidad`, `punch_list`, `actas_reunion`,
+`documentos_obra`, `inspecciones_seg`); Grupo B transversal sin filtro (`contactos_obra`,
+`visitas_obra`, `obs_seguridad` — personas/visitas/observaciones no son de un solo departamento);
+Grupo C sin cambios, ya correcto (`incidencias`, `pedidos`).
+
+**Implementación:** nuevo helper `isDeptPrivileged(auth)` en `worker.js` (admins de siempre +
+Seguridad ven/editan todo; el resto solo su departamento + filas legacy `departamento IS NULL`).
+Aplicado en GET/CREATE/UPDATE/DELETE de las 7 tablas del Grupo A. `buscarGlobal` recuperó el
+filtro de departamento en tareas_obra/rfis/control_calidad/actas_reunion (que BUG-CARNETS había
+quitado por falta de columna, ya resuelta) y se le añadió filtro a `incidencias`, que nunca lo
+tuvo pese a tener la columna desde siempre. Migración: 5 de las 7 tablas se autogestionan el
+`ALTER TABLE` vía su función `ensureXTable(env)` existente; `documentos_obra` e `inspecciones_seg`
+no tienen esa función, así que se ejecutó el `ALTER TABLE ADD COLUMN departamento TEXT` a mano
+contra D1 vía MCP (verificado con `sqlite_master`) y se guardó en
+`migrate_dept01_construccion.sql`. `panel.html`: quitado `'construccion'`/`'obra'` del array
+`seccionesOcultar` en los dos sitios donde aparecía — ahora se muestran siempre, el filtrado real
+lo hace el backend por departamento.
+
+**Verificación:** `node --check worker.js` OK; grep de encoding solo en líneas añadidas del diff
+(`Ã|Â|â€|ï»¿`, sin coincidencias); columnas nuevas confirmadas en D1 vía `sqlite_master`; deploy
+manual Version ID `17ce8725-d621-4f14-bb80-06f8bc497d0e` (bindings DB+FILES presentes); health
+check post-deploy OK. Versión de app subida a v7.99 (version.json/sw.js/index.html sincronizados)
+por tocar frontend (panel.html) además del backend. `alejandra-agente` NO tocado (aislamiento por
+departamento no aplica a su alcance actual).
+
+**Pendiente:** retomar Fase 2-5 de descubribilidad de módulos (estado vacío explicativo, tooltip
+en el nombre del botón del sidebar, que Alejandra explique los módulos por chat, tour de
+onboarding) — Adrian aprobó las 4 vías vía pregunta multiSelect pero se priorizó DEPT-01 primero
+por ser el requisito más urgente ("el tema de los filtros tenemos que mirarlo bien").
 
 ### Part 20: Paridad de seguridad en el 2o cerebro — SEC-10 (20/07/2026)
 **Contexto:** tras SEC-09, la sección SEGURIDAD de IDEAS marcaba SEC-01..SEC-07 como "solo
