@@ -8560,11 +8560,11 @@ async function getDocumentosObra(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
   if (obra_id)      { sql += ` AND obra_id=?`;       binds.push(obra_id); }
-  // BUG-CARNETS (21/07/2026): documentos_obra no tiene columna departamento -> este filtro
-  // causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Quitado hasta que
-  // se implemente el flujo completo (columna + captura al crear + backfill). Mismo bug que
-  // getCarnets()/getReconocimientos(). Mientras tanto, oficina/encargado ven todos los
-  // documentos de su empresa, igual que superadmin/empresa_admin.
+  // DEPT-01 (21/07/2026): columna departamento añadida (migración manual, ver
+  // migrate_dept01_construccion.sql). Antes esto era BUG-CARNETS (filtro roto -> 500); ahora
+  // filtra de verdad por departamento salvo admins/Seguridad, que ven todos.
+  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
+  if (!_isPriv && departamento) { sql += ` AND (departamento=? OR departamento IS NULL)`; binds.push(departamento); }
   if (tipo)         { sql += ` AND tipo=?`;           binds.push(tipo); }
   if (estado)       { sql += ` AND estado=?`;         binds.push(estado); }
   if (elaborado_por){ sql += ` AND elaborado_por=?`;  binds.push(elaborado_por); }
@@ -8574,7 +8574,7 @@ async function getDocumentosObra(request, env) {
 }
 
 async function crearDocumentoObra(request, env) {
-  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  const { empresa_id, nombre, rol, obra_id: obraAuth, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   const b = await request.json();
@@ -8582,16 +8582,18 @@ async function crearDocumentoObra(request, env) {
   if (!b.titulo)  return err('Falta titulo', 400);
   if (!b.obra_id && !obraAuth) return err('Falta obra_id', 400);
   const r = await env.DB.prepare(
-    `INSERT INTO documentos_obra (empresa_id, obra_id, tipo, titulo, estado, fecha_emision, fecha_caducidad, elaborado_por, aprobado_por, r2_key, notas, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO documentos_obra (empresa_id, obra_id, tipo, titulo, estado, fecha_emision, fecha_caducidad, elaborado_por, aprobado_por, r2_key, notas, created_by, departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(empresa_id, b.obra_id||obraAuth, b.tipo, b.titulo, b.estado||'pendiente',
     b.fecha_emision||null, b.fecha_caducidad||null, b.elaborado_por||null, b.aprobado_por||null,
-    b.r2_key||null, b.notas||null, nombre).run();
+    b.r2_key||null, b.notas||null, nombre,
+    departamento || null // DEPT-01
+  ).run();
   return json({ ok: true, id: r.meta?.last_row_id });
 }
 
 async function actualizarDocumentoObra(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, isSuperadmin, isEmpresaAdmin, isDesarrollador, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   const b = await request.json();
@@ -8600,12 +8602,15 @@ async function actualizarDocumentoObra(id, request, env) {
   for (const c of campos) { if (b[c] !== undefined) { sets.push(`${c}=?`); vals.push(b[c]); } }
   if (!sets.length) return err('Sin campos', 400);
   vals.push(id, empresa_id);
-  await env.DB.prepare(`UPDATE documentos_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
+  let deptGuard = '';
+  if (!_isPriv && departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; vals.push(departamento); }
+  await env.DB.prepare(`UPDATE documentos_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?${deptGuard}`).bind(...vals).run();
   return json({ ok: true });
 }
 
 async function eliminarDocumentoObra(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, isSuperadmin, isEmpresaAdmin, isDesarrollador, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   // Si el doc tiene r2_key en esquemas/ (generado por IA), borrar tambiÃ©n de R2
@@ -8619,7 +8624,11 @@ async function eliminarDocumentoObra(id, request, env) {
       }
     } catch {} // Non-fatal: borrar el registro de BD aunque R2 falle
   }
-  await env.DB.prepare(`DELETE FROM documentos_obra WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
+  const params = [id, empresa_id];
+  let deptGuard = '';
+  if (!_isPriv && departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(departamento); }
+  await env.DB.prepare(`DELETE FROM documentos_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -8703,11 +8712,11 @@ async function getInspecciones(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
   if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
-  // BUG-CARNETS (21/07/2026): inspecciones_seg no tiene columna departamento -> este filtro
-  // causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Quitado hasta que
-  // se implemente el flujo completo (columna + captura al crear + backfill). Mismo bug que
-  // getCarnets()/getReconocimientos(). Mientras tanto, oficina/encargado ven todas las
-  // inspecciones de su empresa, igual que superadmin/empresa_admin.
+  // DEPT-01 (21/07/2026): columna departamento añadida (migración manual, ver
+  // migrate_dept01_construccion.sql). Antes esto era BUG-CARNETS (filtro roto -> 500); ahora
+  // filtra de verdad por departamento salvo admins/Seguridad, que ven todas.
+  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
+  if (!_isPriv && departamento) { sql += ` AND (departamento=? OR departamento IS NULL)`; binds.push(departamento); }
   if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
   if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
   sql += ` ORDER BY fecha DESC`;
@@ -8716,7 +8725,7 @@ async function getInspecciones(request, env) {
 }
 
 async function crearInspeccion(request, env) {
-  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  const { empresa_id, nombre, rol, obra_id: obraAuth, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   const b = await request.json();
@@ -8727,18 +8736,20 @@ async function crearInspeccion(request, env) {
   const obsMen = hallazgos.filter(h => h.gravedad === 'baja').length;
   const conf   = hallazgos.filter(h => !h.gravedad || h.gravedad === 'ok').length;
   const r = await env.DB.prepare(
-    `INSERT INTO inspecciones_seg (empresa_id, obra_id, tipo, inspector, fecha, areas_inspeccionadas, hallazgos, conformidades, no_conformidades, obs_menores, puntuacion, estado, proxima_inspeccion, notas, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO inspecciones_seg (empresa_id, obra_id, tipo, inspector, fecha, areas_inspeccionadas, hallazgos, conformidades, no_conformidades, obs_menores, puntuacion, estado, proxima_inspeccion, notas, created_by, departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(empresa_id, b.obra_id||obraAuth||null, b.tipo||'periodica', b.inspector, b.fecha,
     b.areas_inspeccionadas ? JSON.stringify(b.areas_inspeccionadas) : null,
     JSON.stringify(hallazgos), conf, noConf, obsMen,
     b.puntuacion||null, b.estado||'abierta', b.proxima_inspeccion||null,
-    b.notas||null, nombre).run();
+    b.notas||null, nombre,
+    departamento || null // DEPT-01
+  ).run();
   return json({ ok: true, id: r.meta?.last_row_id });
 }
 
 async function actualizarInspeccion(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, isSuperadmin, isEmpresaAdmin, isDesarrollador, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   const b = await request.json();
@@ -8749,15 +8760,22 @@ async function actualizarInspeccion(id, request, env) {
   if (b.areas_inspeccionadas !== undefined) { sets.push(`areas_inspeccionadas=?`); vals.push(JSON.stringify(b.areas_inspeccionadas)); }
   if (!sets.length) return err('Sin campos', 400);
   vals.push(id, empresa_id);
-  await env.DB.prepare(`UPDATE inspecciones_seg SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
+  let deptGuard = '';
+  if (!_isPriv && departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; vals.push(departamento); }
+  await env.DB.prepare(`UPDATE inspecciones_seg SET ${sets.join(',')} WHERE id=? AND empresa_id=?${deptGuard}`).bind(...vals).run();
   return json({ ok: true });
 }
 
 async function eliminarInspeccion(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, isSuperadmin, isEmpresaAdmin, isDesarrollador, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
-  await env.DB.prepare(`DELETE FROM inspecciones_seg WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
+  const params = [id, empresa_id];
+  let deptGuard = '';
+  if (!_isPriv && departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(departamento); }
+  await env.DB.prepare(`DELETE FROM inspecciones_seg WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -11988,35 +12006,30 @@ async function buscarGlobal(request, env) {
 
   const obra_id = new URL(request.url).searchParams.get('obra_id') ? parseInt(new URL(request.url).searchParams.get('obra_id')) : null;
 
-  // Filtro de departamento por oficina/encargado: SOLO para tablas que sí tienen columna
-  // departamento (herramientas, usuarios, pedidos). BUG-CARNETS (21/07/2026): antes se aplicaba
-  // también a tareas_obra/rfis/control_calidad/actas_reunion, que NO tienen esa columna -> esas
-  // 4 consultas fallaban con SQLITE_ERROR y el .catch(()=>({results:[]})) lo tragaba en
-  // silencio, así que oficina/encargado nunca veían tareas/RFIs/deficiencias/actas en el
-  // buscador global, sin ningún error visible. Se quita el filtro de esas 4 tablas hasta que
-  // tengan columna departamento. Además se parametriza el bind (antes se interpolaba
-  // auth.departamento directo en el SQL).
-  const deptFilter = (!auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isDesarrollador && (auth.rol === 'oficina' || auth.rol === 'encargado'))
-    ? ' AND departamento = ?'
-    : '';
+  // Filtro de departamento: SOLO para tablas que tienen columna departamento. Privilegiados
+  // (admins + Seguridad, ver isDeptPrivileged) ven todo. DEPT-01 (21/07/2026): tareas_obra/rfis/
+  // control_calidad/actas_reunion ya tienen columna departamento (antes no la tenían — ver
+  // histórico BUG-CARNETS más abajo — así que se reincorpora su filtro).
+  const _priv = isDeptPrivileged(auth);
+  const deptFilter = (!_priv && auth.departamento) ? ' AND (departamento = ? OR departamento IS NULL)' : '';
   const deptBind = deptFilter ? [auth.departamento] : [];
 
   const [inc, pemp, carr, herr, users, pedidos, obras, tareas, rfisR, deficiencias, actas] = await Promise.all([
-    env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ? LIMIT 5`).bind(eid,like).all(),
+    env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ?${deptFilter} LIMIT 5`).bind(eid,like,...deptBind).all(),
     env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'-') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?)${deptFilter} LIMIT 5`).bind(eid,like,like,...deptBind).all(),
     env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1${deptFilter} LIMIT 5`).bind(eid,like,...deptBind).all(),
     env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ?${deptFilter} LIMIT 5`).bind(eid,like,...deptBind).all(),
     env.DB.prepare(`SELECT id,'obra' as tipo,nombre,codigo as subtipo,CASE WHEN activa=1 THEN 'activa' ELSE 'cerrada' END as estado FROM obras WHERE empresa_id=? AND (nombre LIKE ? OR codigo LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
-    // Tareas de obra (sin columna departamento -> sin deptFilter)
-    env.DB.prepare(`SELECT id,'tarea' as tipo,titulo as nombre,estado as subtipo,prioridad as estado FROM tareas_obra WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR asignado_a LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
-    // RFIs (sin columna departamento -> sin deptFilter)
-    env.DB.prepare(`SELECT id,'rfi' as tipo,titulo as nombre,categoria as subtipo,estado FROM rfis WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
-    // Deficiencias / punch list (sin columna departamento -> sin deptFilter)
-    env.DB.prepare(`SELECT id,'deficiencia' as tipo,titulo as nombre,ubicacion as subtipo,estado FROM control_calidad WHERE empresa_id=? AND (titulo LIKE ? OR ubicacion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
-    // Actas de reunion (sin columna departamento -> sin deptFilter)
-    env.DB.prepare(`SELECT id,'acta' as tipo,titulo as nombre,tipo as subtipo,estado FROM actas_reunion WHERE empresa_id=? AND (titulo LIKE ? OR asistentes LIKE ? OR acuerdos LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Tareas de obra (DEPT-01: ya tiene columna departamento)
+    env.DB.prepare(`SELECT id,'tarea' as tipo,titulo as nombre,estado as subtipo,prioridad as estado FROM tareas_obra WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR asignado_a LIKE ?)${deptFilter}${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...deptBind,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // RFIs (DEPT-01: ya tiene columna departamento)
+    env.DB.prepare(`SELECT id,'rfi' as tipo,titulo as nombre,categoria as subtipo,estado FROM rfis WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR numero LIKE ?)${deptFilter}${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...deptBind,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Deficiencias / control de calidad (DEPT-01: ya tiene columna departamento)
+    env.DB.prepare(`SELECT id,'deficiencia' as tipo,titulo as nombre,ubicacion as subtipo,estado FROM control_calidad WHERE empresa_id=? AND (titulo LIKE ? OR ubicacion LIKE ? OR numero LIKE ?)${deptFilter}${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...deptBind,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Actas de reunion (DEPT-01: ya tiene columna departamento)
+    env.DB.prepare(`SELECT id,'acta' as tipo,titulo as nombre,tipo as subtipo,estado FROM actas_reunion WHERE empresa_id=? AND (titulo LIKE ? OR asistentes LIKE ? OR acuerdos LIKE ?)${deptFilter}${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...deptBind,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
   ]);
   return json([
     ...inc.results, ...pemp.results, ...carr.results,
@@ -13810,6 +13823,16 @@ async function ensureTareasObraTable(env) {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`).run();
+  // DEPT-01 (21/07/2026): aislamiento por departamento — cada departamento (electrico,
+  // mecanicas, construccion...) solo ve/edita sus propias tareas. Seguridad ve todo (solo lectura
+  // en departamentos ajenos). Columna nueva, tabla vacía en producción -> sin backfill necesario.
+  await env.DB.prepare(`ALTER TABLE tareas_obra ADD COLUMN departamento TEXT`).run().catch(() => {});
+}
+
+// DEPT-01: true si el usuario ve/edita TODOS los departamentos (admins de siempre + Seguridad,
+// que por su función de seguridad de la obra necesita visión transversal). El resto solo ve lo suyo.
+function isDeptPrivileged(auth) {
+  return !!(auth.isSuperadmin || auth.isEmpresaAdmin || auth.isDesarrollador || auth.isSeguridad);
 }
 
 async function getTareasObra(request, env) {
@@ -13825,6 +13848,9 @@ async function getTareasObra(request, env) {
   if (obraId) { q += ` AND obra_id=?`; params.push(parseInt(obraId)); }
   if (estado) { q += ` AND estado=?`; params.push(estado); }
   if (asignado) { q += ` AND asignado_a=?`; params.push(asignado); }
+  // DEPT-01: fuera de admins/Seguridad, cada uno ve solo las tareas de su propio departamento
+  // (o sin asignar, por si son de antes de este cambio / creadas sin departamento).
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, fecha_limite ASC NULLS LAST, created_at DESC`;
   const r = await env.DB.prepare(q).bind(...params).all();
   return json(r.results || []);
@@ -13837,14 +13863,15 @@ async function crearTareaObra(request, env) {
   const b = await request.json();
   if (!b.titulo?.trim()) return err('El tÃ­tulo es obligatorio', 400);
   const r = await env.DB.prepare(
-    `INSERT INTO tareas_obra (obra_id, empresa_id, titulo, descripcion, asignado_a, fase_id, estado, prioridad, fecha_limite, ubicacion, notas, created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO tareas_obra (obra_id, empresa_id, titulo, descripcion, asignado_a, fase_id, estado, prioridad, fecha_limite, ubicacion, notas, created_by, departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     b.obra_id || null, auth.empresa_id, b.titulo.trim(),
     b.descripcion || null, b.asignado_a || null, b.fase_id || null,
     b.estado || 'pendiente', b.prioridad || 'normal',
     b.fecha_limite || null, b.ubicacion || null, b.notas || null,
-    auth.usuario_nombre || auth.usuario_id || 'sistema'
+    auth.usuario_nombre || auth.usuario_id || 'sistema',
+    auth.departamento || null // DEPT-01: departamento del que crea la tarea, automático
   ).run();
   return json({ ok: true, id: r.meta?.last_row_id });
 }
@@ -13866,14 +13893,20 @@ async function actualizarTareaObra(id, request, env) {
   if (!sets.length) return err('Nada que actualizar', 400);
   sets.push("updated_at=datetime('now')");
   params.push(id, auth.empresa_id);
-  await env.DB.prepare(`UPDATE tareas_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  // DEPT-01: no-privilegiados solo pueden editar tareas de su propio departamento (o sin dept).
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`UPDATE tareas_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarTareaObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM tareas_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM tareas_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -13993,6 +14026,8 @@ async function ensureRfisTable(env) {
     impacto_coste   INTEGER DEFAULT 0,
     created_at      TEXT DEFAULT (datetime('now'))
   )`).run().catch(() => {});
+  // DEPT-01 (21/07/2026): aislamiento por departamento, ver ensureTareasObraTable() para contexto.
+  await env.DB.prepare(`ALTER TABLE rfis ADD COLUMN departamento TEXT`).run().catch(() => {});
 }
 
 async function getRfis(request, env) {
@@ -14006,6 +14041,7 @@ async function getRfis(request, env) {
   const params = [auth.empresa_id];
   if (obra_id) { q += ` AND obra_id=?`;  params.push(parseInt(obra_id)); }
   if (estado)  { q += ` AND estado=?`;   params.push(estado); }
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY CASE estado WHEN 'abierta' THEN 0 WHEN 'en_revision' THEN 1 WHEN 'respondida' THEN 2 ELSE 3 END,
                  CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
                  created_at DESC`;
@@ -14043,8 +14079,8 @@ async function crearRfi(request, env) {
     }
   } catch {}
   const { meta } = await env.DB.prepare(
-    `INSERT INTO rfis (obra_id, empresa_id, numero, titulo, categoria, descripcion, estado, prioridad, creado_por, asignado_a, fecha_limite, impacto_plazo, impacto_coste)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO rfis (obra_id, empresa_id, numero, titulo, categoria, descripcion, estado, prioridad, creado_por, asignado_a, fecha_limite, impacto_plazo, impacto_coste, departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     obraId,
     auth.empresa_id,
@@ -14058,7 +14094,8 @@ async function crearRfi(request, env) {
     b.asignado_a || null,
     b.fecha_limite || null,
     b.impacto_plazo ? 1 : 0,
-    b.impacto_coste ? 1 : 0
+    b.impacto_coste ? 1 : 0,
+    auth.departamento || null // DEPT-01
   ).run();
   return json({ ok: true, id: meta.last_row_id, numero }, 201);
 }
@@ -14082,14 +14119,19 @@ async function actualizarRfi(id, request, env) {
   }
   if (!sets.length) return err('Nada que actualizar', 400);
   params.push(id, auth.empresa_id);
-  await env.DB.prepare(`UPDATE rfis SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`UPDATE rfis SET ${sets.join(',')} WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarRfi(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM rfis WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM rfis WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -14243,6 +14285,7 @@ async function ensureActasTable(env) {
     'ALTER TABLE actas_reunion ADD COLUMN pendientes TEXT',
     'ALTER TABLE actas_reunion ADD COLUMN redactor TEXT',
     'ALTER TABLE actas_reunion ADD COLUMN updated_at TEXT',
+    'ALTER TABLE actas_reunion ADD COLUMN departamento TEXT', // DEPT-01 (21/07/2026)
   ]) { await env.DB.prepare(col).run().catch(()=>{}); }
 }
 
@@ -14257,6 +14300,7 @@ async function getActasReunion(request, env) {
   const p = [auth.empresa_id];
   if (obraId) { q += ' AND obra_id=?'; p.push(parseInt(obraId)); }
   if (tipo)   { q += ' AND tipo=?'; p.push(tipo); }
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ' AND (departamento=? OR departamento IS NULL)'; p.push(auth.departamento); }
   q += ' ORDER BY fecha DESC, created_at DESC LIMIT 50';
   const { results: actas } = await env.DB.prepare(q).bind(...p).all();
   return json({ actas: actas || [] });
@@ -14283,14 +14327,15 @@ async function crearActaReunion(request, env) {
   const pendStr  = typeof b.pendientes  === 'object' ? JSON.stringify(b.pendientes)  : b.pendientes||null;
   const { meta } = await env.DB.prepare(`
     INSERT INTO actas_reunion (obra_id,empresa_id,numero,titulo,tipo,fecha,hora,lugar,convocante,asistentes,
-      resumen,acuerdos,proxima_reunion,estado,orden_dia,puntos_tratados,pendientes,redactor)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      resumen,acuerdos,proxima_reunion,estado,orden_dia,puntos_tratados,pendientes,redactor,departamento)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(obraId, auth.empresa_id, numero, b.titulo,
     b.tipo||'coordinacion', b.fecha||null, b.hora||null, b.lugar||null,
     b.convocante||b.redactor||null,
     asistStr, b.resumen||b.puntos_tratados||null,
     b.acuerdos||null, b.proxima_reunion||null, b.estado||'borrador',
-    b.orden_dia||null, b.puntos_tratados||null, pendStr, b.redactor||null
+    b.orden_dia||null, b.puntos_tratados||null, pendStr, b.redactor||null,
+    auth.departamento || null // DEPT-01
   ).run();
   return json({ ok: true, id: meta?.last_row_id, numero });
 }
@@ -14313,14 +14358,19 @@ async function actualizarActaReunion(id, request, env) {
   }
   if (sets.filter(s=>!s.includes("datetime(")).length === 0) return err('Nada que actualizar', 400);
   params.push(id, auth.empresa_id);
-  await env.DB.prepare(`UPDATE actas_reunion SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`UPDATE actas_reunion SET ${sets.join(',')} WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarActaReunion(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM actas_reunion WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM actas_reunion WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 async function getActaReunionById(id, request, env) {
@@ -14349,6 +14399,7 @@ async function ensureCalidadTable(env) {
     resuelto_por TEXT, notas_resolucion TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`).run().catch(()=>{});
+  await env.DB.prepare(`ALTER TABLE control_calidad ADD COLUMN departamento TEXT`).run().catch(()=>{}); // DEPT-01 (21/07/2026)
 }
 
 async function getControlCalidad(request, env) {
@@ -14364,6 +14415,7 @@ async function getControlCalidad(request, env) {
   if (obraId) { q += ' AND obra_id=?'; p.push(parseInt(obraId)); }
   if (estado) { q += ' AND estado=?'; p.push(estado); }
   if (cat)    { q += ' AND categoria=?'; p.push(cat); }
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ' AND (departamento=? OR departamento IS NULL)'; p.push(auth.departamento); }
   q += ` ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
                   CASE estado WHEN 'abierto' THEN 0 WHEN 'en_reparacion' THEN 1 WHEN 'resuelto' THEN 2 ELSE 3 END,
                   created_at DESC LIMIT 100`;
@@ -14397,11 +14449,12 @@ async function crearDeficiencia(request, env) {
     }
   } catch {}
   const { meta } = await env.DB.prepare(
-    `INSERT INTO control_calidad (obra_id,empresa_id,numero,titulo,descripcion,ubicacion,categoria,prioridad,estado,responsable,fecha_limite)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO control_calidad (obra_id,empresa_id,numero,titulo,descripcion,ubicacion,categoria,prioridad,estado,responsable,fecha_limite,departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(obraId, auth.empresa_id, numero, b.titulo,
     b.descripcion||null, b.ubicacion||null, b.categoria||'otro',
-    b.prioridad||'normal', 'abierto', b.responsable||null, b.fecha_limite||null
+    b.prioridad||'normal', 'abierto', b.responsable||null, b.fecha_limite||null,
+    auth.departamento || null // DEPT-01
   ).run();
   return json({ ok: true, id: meta?.last_row_id, numero });
 }
@@ -14422,14 +14475,19 @@ async function actualizarDeficiencia(id, request, env) {
   }
   if (!sets.length) return err('Nada que actualizar', 400);
   params.push(id, auth.empresa_id);
-  await env.DB.prepare(`UPDATE control_calidad SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`UPDATE control_calidad SET ${sets.join(',')} WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarDeficiencia(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM control_calidad WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM control_calidad WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -14926,6 +14984,7 @@ async function ensurePunchListTable(env) {
     creado_por TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`).run();
+  await env.DB.prepare(`ALTER TABLE punch_list ADD COLUMN departamento TEXT`).run().catch(()=>{}); // DEPT-01 (21/07/2026)
 }
 async function getPunchList(request, env) {
   const auth = await getAuth(request, env);
@@ -14942,6 +15001,7 @@ async function getPunchList(request, env) {
   if (obraId)    { sql += ' AND p.obra_id=?';    params.push(obraId); }
   if (estado)    { sql += ' AND p.estado=?';     params.push(estado); }
   if (categoria) { sql += ' AND p.categoria=?';  params.push(categoria); }
+  if (!isDeptPrivileged(auth) && auth.departamento) { sql += ' AND (p.departamento=? OR p.departamento IS NULL)'; params.push(auth.departamento); }
   sql += ' ORDER BY p.created_at DESC';
   const hoy = new Date().toISOString().slice(0,10);
   const { results } = await env.DB.prepare(sql).bind(...params).all();
@@ -14965,13 +15025,14 @@ async function crearPunchItem(request, env) {
   if (last?.[0]?.numero) { const m = last[0].numero.match(/(\d+)$/); if (m) seq = parseInt(m[1]) + 1; }
   const numero = `PL-${year}-${String(seq).padStart(4,'0')}`;
   const { meta } = await env.DB.prepare(
-    `INSERT INTO punch_list (empresa_id,obra_id,numero,descripcion,categoria,ubicacion,responsable,prioridad,estado,fecha_limite,notas_resolucion,foto_key,creado_por)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO punch_list (empresa_id,obra_id,numero,descripcion,categoria,ubicacion,responsable,prioridad,estado,fecha_limite,notas_resolucion,foto_key,creado_por,departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     auth.empresa_id, b.obra_id||null, numero, b.descripcion,
     b.categoria||'acabados', b.ubicacion||null, b.responsable||null,
     b.prioridad||'media', b.estado||'abierto', b.fecha_limite||null,
-    b.notas_resolucion||null, b.foto_key||null, auth.nombre||auth.email||null
+    b.notas_resolucion||null, b.foto_key||null, auth.nombre||auth.email||null,
+    auth.departamento || null // DEPT-01
   ).run();
   return json({ ok: true, id: meta.last_row_id, numero });
 }
@@ -14981,24 +15042,30 @@ async function actualizarPunchItem(id, request, env) {
   await ensurePunchListTable(env);
   const b = await request.json();
   const fechaCierre = b.estado === 'cerrado' ? (b.fecha_cierre || new Date().toISOString().slice(0,10)) : null;
+  const params = [
+    b.descripcion||null, b.categoria||null, b.ubicacion||null, b.responsable||null,
+    b.prioridad||null, b.estado||null, b.fecha_limite||null, fechaCierre,
+    b.notas_resolucion||null, b.foto_key||null, id, auth.empresa_id
+  ];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   await env.DB.prepare(
     `UPDATE punch_list SET descripcion=COALESCE(?,descripcion), categoria=COALESCE(?,categoria),
      ubicacion=COALESCE(?,ubicacion), responsable=COALESCE(?,responsable),
      prioridad=COALESCE(?,prioridad), estado=COALESCE(?,estado),
      fecha_limite=COALESCE(?,fecha_limite), fecha_cierre=?,
      notas_resolucion=COALESCE(?,notas_resolucion), foto_key=COALESCE(?,foto_key)
-     WHERE id=? AND empresa_id=?`
-  ).bind(
-    b.descripcion||null, b.categoria||null, b.ubicacion||null, b.responsable||null,
-    b.prioridad||null, b.estado||null, b.fecha_limite||null, fechaCierre,
-    b.notas_resolucion||null, b.foto_key||null, id, auth.empresa_id
-  ).run();
+     WHERE id=? AND empresa_id=?${deptGuard}`
+  ).bind(...params).run();
   return json({ ok: true });
 }
 async function eliminarPunchItem(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM punch_list WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM punch_list WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 

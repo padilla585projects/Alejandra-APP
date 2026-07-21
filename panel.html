@@ -9787,8 +9787,11 @@ function iniciarApp() {
   // Admins (superadmin/empresa_admin) ven TODO
   // Encargado/Oficina: solo secciones relevantes (Principal, Personal, Inventarios, Planificación)
   const isNonAdmin = !isAdmin;
+  // DEPT-01 (21/07/2026): Construcción y Obra ya NO se ocultan a los no-admin —
+  // el backend (worker.js) filtra su contenido por departamento (cada uno ve
+  // solo lo suyo; Seguridad ve todo). Seguimiento y Analítica siguen ocultas.
   const seccionesPermitidas = isNonAdmin ?
-    ['principal', 'personal', 'seguridad', 'inventarios', 'planificacion'] :
+    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'construccion', 'planificacion'] :
     ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'construccion', 'planificacion', 'seguimiento', 'analitica'];
 
   // Guardar en localStorage cuáles secciones están permitidas para este usuario
@@ -9797,8 +9800,9 @@ function iniciarApp() {
   } catch {}
 
   if (isNonAdmin) {
-    // Ocultar: Construcción, Analítica, Obra, Seguimiento
-    const seccionesOcultar = ['construccion', 'analitica', 'obra', 'seguimiento'];
+    // Ocultar: Analítica, Seguimiento (DEPT-01: Construcción y Obra ya no se ocultan,
+    // el filtrado real es por departamento en el backend)
+    const seccionesOcultar = ['analitica', 'seguimiento'];
     seccionesOcultar.forEach(sid => {
       const el = document.querySelector(`[data-sid="${sid}"]`);
       if (el) {
@@ -9853,7 +9857,8 @@ function ocultarSidebarPorPermisos() {
     const isNonAdmin = !isAdmin;
 
     if (isNonAdmin) {
-      const seccionesOcultar = ['construccion', 'analitica', 'obra', 'seguimiento'];
+      // DEPT-01 (21/07/2026): Construcción y Obra ya no se ocultan, ver comentario arriba
+      const seccionesOcultar = ['analitica', 'seguimiento'];
       let ocultadas = 0;
       let totalItems = 0;
 
