@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 21/07/2026 — auditoría de costes/modelos IA completa (COST-01 fix pricing Opus 4.6, único ahorro real aplicado; COST-02/03/04 investigados y descartados por no dar ahorro real hoy). Antes: fix BUG-PUSH (push automáticas rotas) y paridad de seguridad SEC-10.
+  Última actualización: 21/07/2026 — BUG-CARNETS: fix de 7 endpoints con filtro departamento roto (500 en carnets/reconocimientos/documentos_obra/permisos_trabajo/inspecciones_seg/turnos/ausencias) + fallo silencioso en buscarGlobal, hallados en auditoría abierta de "qué falta en la app". Antes: auditoría de costes/modelos IA completa (COST-01 fix pricing Opus 4.6, único ahorro real aplicado; COST-02/03/04 investigados y descartados).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1123,6 +1123,61 @@ LEYENDA DE ESTADO:
       -briefings, alertas, monitorización- son todos de cara al usuario/tiempo-sensibles).
       Si en el futuro se añade un job realmente async y de alto volumen, revisar Batch API
       entonces.
+
+================================================================================
+  🐛 BUG-CARNETS — Filtro departamento roto en 7 endpoints  [HECHO 21/07/2026]
+================================================================================
+
+[✓] BUG-CARNETS — Filtro "AND departamento = ?" sin columna departamento  [HECHO 21/07/2026]
+    · Origen: auditoría de "qué falta en la app" pedida por Adrian → se detectó que /carnets
+      era el error #1 más frecuente en producción (42 ocurrencias, GET /carnets?limit=200 →
+      500). Causa: getCarnets() aplica "AND departamento = ?" para rol oficina/encargado, pero
+      la tabla `carnets` nunca tuvo columna departamento → SQLITE_ERROR: no such column →
+      excepción sin capturar → 500. El patrón se copió de getEpisAsignados() (que sí tiene la
+      columna) sin comprobar el schema de cada tabla destino.
+    · Auditados TODOS los usos de "AND departamento = ?" en worker.js contra el schema real de
+      D1 (MCP directo). Confirmadas 7 tablas SIN columna departamento, con el filtro roto:
+      1. carnets (getCarnets, ~línea 8424)
+      2. reconocimientos_medicos (getReconocimientos, ~línea 8481)
+      3. documentos_obra (getDocumentosObra, ~línea 8550)
+      4. permisos_trabajo (getPermisosTrabajo, ~línea 8627)
+      5. inspecciones_seg (getInspecciones, ~línea 8694)
+      6. turnos (getTurnos, ~línea 11720) — esta es la que coincide con OTRO error real ya
+         visto en logs: GET /turnos?desde=...&hasta=... → 500 (18/07/2026)
+      7. ausencias (getAusencias, ~línea 20249) — tabla se crea sobre la marcha con
+         ensureAusenciasTable(); su CREATE TABLE tampoco tiene departamento, así que aún no
+         había explotado en logs (bomba de tiempo pendiente de que alguien la usara)
+    · Además, variante DISTINTA (no 500, fallo silencioso) en buscarGlobal (~línea 11980): el
+      buscador global aplicaba el mismo filtro a tareas_obra/rfis/control_calidad/
+      actas_reunion (tampoco tienen departamento), pero esas 4 consultas van envueltas en
+      .catch(()=>({results:[]})) → nunca daban 500, simplemente el buscador global le devolvía
+      SIEMPRE 0 resultados de tareas/RFIs/deficiencias/actas a oficina/encargado, sin ningún
+      error visible. Se aprovechó para arreglar también un problema de calidad de código
+      relacionado: el deptFilter se interpolaba directo en el string SQL
+      (` AND departamento = '${auth.departamento}'`) en vez de ir parametrizado como el resto
+      del código — bajo riesgo real (el valor viene del propio usuario autenticado en sesión,
+      no de input libre), pero se corrigió de paso ya que se tocaba esa línea.
+    · Confirmadas SIN bug (sí tienen columna departamento, filtro funciona bien): carnets NO
+      (era el bug), epis_asignados, usuarios, pedidos, personal_externo, carpetas, docs_dept,
+      docs_notas, incidencias, sugerencias, herramientas. getObraDashboard revisada entera:
+      solo usa el filtro contra pedidos/incidencias (ambas con columna) → sin bug.
+    · Fix (alcance "fix rápido" elegido por Adrian sobre "fix completo" con migración): se
+      quita el bloque `if (...) { sql += ' AND departamento = ?'; ... }` en los 6 endpoints de
+      500, dejando comentario explicativo BUG-CARNETS con fecha. En buscarGlobal se quita el
+      deptFilter de las 4 consultas sin columna y se parametriza el bind en las 3 que sí lo
+      llevan (herramientas/usuarios/pedidos). Efecto: oficina/encargado ahora ven TODOS los
+      carnets/documentos/permisos/inspecciones/turnos/ausencias de su empresa (igual que
+      superadmin/empresa_admin), en vez de un 500. Es un downgrade de scoping (menos filtrado
+      por departamento), no una fuga entre empresas — el filtro empresa_id se mantiene intacto
+      en los 7 endpoints.
+    · Pendiente para el futuro (fix completo, NO implementado esta sesión): añadir columna
+      departamento a las 7 tablas (migración + captura del campo al crear cada registro +
+      backfill de las filas existentes) para recuperar el scoping fino sin volver al 500.
+    · Verificación: node --check worker.js OK; grep de encoding en el diff limpio (Ã|Â|â€|ï»¿
+      sin coincidencias); deploy worker principal Version ID (ver SESION.md).
+    · Reportado/investigado: 21/07/2026 — Adrian pidió auditoría abierta de "qué falta en la
+      app"; se priorizó este bug confirmado en producción sobre el resto de hallazgos de la
+      auditoría (UX/negocio/técnica), que quedan pendientes de retomar en otra sesión.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

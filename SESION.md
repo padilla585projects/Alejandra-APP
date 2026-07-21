@@ -1,28 +1,52 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 21/07/2026 -- Auditoría de modelos IA y costes: fix pricing Opus 4.6 (COST-01, único ahorro real aplicado); evaluadas y descartadas migraciones buscar_web/MODEL_EXPERTO (COST-02/03) y Batch API para ejecutarReflexion (COST-04)
+**Fecha:** 21/07/2026 -- BUG-CARNETS: auditoría abierta de "qué falta en la app" (Adrian pidió las 4 vías: técnica/UX/negocio/salud producción) → se priorizó salud de producción por acceso directo a D1; encontrado y arreglado un bug sistémico de filtro departamento roto en 7 endpoints + 1 fallo silencioso en buscarGlobal
 **Versión actual:** v7.98 (sin cambio de versión de app -- solo backend)
-**Resumen:** Adrian pidió revisar modelos OpenAI/Anthropic en uso, nuevos modelos disponibles, deprecaciones, y cómo ahorrar coste (Anthropic "muy caro"). Auditoría con fuentes oficiales (platform.claude.com, developers.openai.com) tras detectar que WebSearch traía resultados poco fiables de agregadores SEO. Hallazgo real corregido: AI_PRICES['claude-opus-4-6'] en worker.js tenía el precio de Opus 4.1 (deprecado) en vez del de Opus 4.6 real ($5/$25, no $15/$75) -- fix desplegado (Version ID `06a3ff0d`). Las otras 3 vías propuestas se investigaron a fondo y se DESCARTARON, todas por no dar ahorro real: (COST-02) buscar_web a gpt-5.4-nano -- no soporta la tool web_search_preview, y el barato que sí la soporta sale más caro que gpt-4o-mini actual; (COST-03) MODEL_EXPERTO a claude-sonnet-5 -- mismo precio que Sonnet 4.6 tras el 31/08/2026, ahorro solo temporal, y effort=high por defecto sin fijar podría salir más caro; (COST-04) Batch API para ejecutarReflexion -- se descubrió al verificar el código que ejecutarReflexion NO es un cron automático (corrige un resumen de sesión anterior impreciso): es un botón manual del panel dev con UX síncrona "resultado en 30-60s", incompatible con la latencia de Batch API (minutos-24h) y de volumen demasiado bajo para que el ahorro compense la complejidad. Detalle completo de las 4 decisiones en IDEAS_PENDIENTES.txt (COST-01..COST-04). Sesión cerrada sin más trabajo pendiente de esta tarea.
+**Resumen:** Cruzando logs reales de producción (tabla `logs`) contra el código se detectó que /carnets era el error #1 más frecuente (42 ocurrencias, 500). Causa raíz: `getCarnets()` aplicaba `AND departamento = ?` para oficina/encargado, pero la tabla `carnets` nunca tuvo columna departamento -> SQLITE_ERROR sin capturar -> 500. Se auditó el patrón completo (`AND departamento = ?`) contra el schema real de D1 vía MCP en TODO worker.js. Confirmadas 7 tablas con el mismo bug (500): carnets, reconocimientos_medicos, documentos_obra, permisos_trabajo, inspecciones_seg, turnos (coincide con otro error real ya visto en logs: GET /turnos -> 500, 18/07) y ausencias (tabla se crea sobre la marcha, aún no había explotado en logs). Además una 8ª variante distinta en `buscarGlobal`: mismo filtro roto contra 4 tablas sin departamento, pero envuelto en `.catch()` -> no daba 500, simplemente el buscador global devolvía 0 resultados de tareas/RFIs/deficiencias/actas a oficina/encargado en silencio; aprovechado también para parametrizar un bind que iba interpolado directo en el SQL (bajo riesgo, valor de sesión no de input libre, pero mala práctica). Fix "rápido" elegido por Adrian sobre "fix completo con migración": se quita el filtro roto en los 7 endpoints (comentario explicativo BUG-CARNETS con fecha) y se corrige buscarGlobal. Efecto: oficina/encargado ven ahora TODOS los registros de su empresa en esas 7 tablas (como superadmin), en vez de un 500 -- downgrade de scoping, no fuga entre empresas (empresa_id intacto). Detalle completo en IDEAS_PENDIENTES.txt (BUG-CARNETS). Quedan pendientes de retomar (deprioritizados por Adrian a favor de este bug confirmado): 10 sugerencias/quejas de usuarios sin resolver en la tabla `sugerencias` (2 marcadas como más graves), auditoría técnica de código, y análisis de funciones de negocio que faltan.
 
-**Último worker desplegado (web, alejandra-app-api):** Version ID `06a3ff0d-016e-4703-a5ae-69315faea69e` (deploy manual con COST-01: fix pricing AI_PRICES claude-opus-4-6 $15/$75 -> $5/$25; previo `adb8c088` BUG-PUSH)
-**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión todavía -- COST-04 en diseño; deploy manual con BUG-PUSH: implementado `getVapidKeys(env)` que lee la public key VAPID del worker principal vía Service Binding `API_WEB`; previo `b643c514` SEC-10; el agente SÍ tiene CI -- ver corrección en CLAUDE.md 20/07/2026 -- se despliega también a mano con `npx wrangler deploy` desde `alejandra-agente/` para probar antes de pushear)
+**Último worker desplegado (web, alejandra-app-api):** Version ID `f33582ae-e758-4592-87be-31fefdf91ff3` (deploy manual con BUG-CARNETS: quita filtro departamento roto en 7 endpoints + fix buscarGlobal; previo `06a3ff0d` COST-01)
+**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- BUG-CARNETS es solo del worker principal, no aplica a alejandra-agente; previo `b643c514` SEC-10)
 **Commits de esta sesión (push a `main` ✅):**
-- `efb1417` — feat(seguridad): barrera humana extendida a todas las tools destructivas (worker.js + SESION.md + ESTADO_APP.txt)
-- `a1def0b` — docs: sección 🔒 SEGURIDAD en IDEAS_PENDIENTES.txt (SEC-01..SEC-04)
-- `f84f873` — docs: actualiza SESION.md con commits y Version ID
-- `9060dd4` — fix(robustez): red de seguridad try/catch en executeAITool
-- `8807756` — fix(robustez): validación de inputs en tools no-destructivas (SEC-06)
-- `72e1a0a` — fix(robustez): red de seguridad try/catch en processNetworkRequest (SEC-07)
-- `fa7372d` — fix(seguridad): tapa bypass de la barrera con WHERE siempre-cierto (SEC-08)
-- `b35d30d` — chore: ignora ota/ (copia local del manifiesto OTA)
-- `510a1e0` — fix(robustez): try/catch en 3 funciones del cron nocturno (ROB-CRON)
-- `e2f862d` — fix(cron): mueve syncRRHH al cron 0 18 y elimina el branch muerto 0 23 (CRON-23)
-- `4497f5f` — docs: actualiza Version ID vivo a e8779c87 (redeploy CI) tras verificar el worker desplegado
-- `a65e2da` — docs: verificación end-to-end en prod de la barrera SEC-08
-- `ff57e77` — feat(seguridad): barrera humana equilibrada en escribir_bd del agente de oficina/app web (SEC-09)
-- `cd55147` — feat(seguridad): SEC-10 — paridad de seguridad en el agente de oficina/app web
-- `e8f10b7` — fix(push): /push-vapid-key del agente daba HTTP 500 — push automaticas rotas (BUG-PUSH)
+- `015d1dc` — fix: quita filtro departamento roto en 7 endpoints (BUG-CARNETS)
+- `(pendiente)` — docs: SESION.md + IDEAS_PENDIENTES.txt con detalle BUG-CARNETS (este commit)
+
+### Part 21: BUG-CARNETS — filtro departamento roto en 7 endpoints + buscarGlobal (21/07/2026)
+**Contexto:** Adrian: *"ahora quiero ver en que podemos mejorar de la app? que nos falta?"*.
+Eligió las 4 vías a la vez (técnica/UX/negocio/salud producción). Se empezó por salud de
+producción por tener acceso directo a D1 vía MCP — cruzar logs reales contra el código da
+hallazgos concretos, no hipotéticos.
+
+**Hallazgo:** `/carnets` era el error #1 más frecuente en producción (42 ocurrencias, 500).
+`getCarnets()` aplicaba `AND departamento = ?` para oficina/encargado copiando el patrón de
+`getEpisAsignados()`, pero la tabla `carnets` nunca tuvo columna `departamento` -> `SQLITE_ERROR:
+no such column` sin capturar -> 500. Al buscar el mismo patrón (`AND departamento = ?`) en todo
+`worker.js` y verificar cada tabla contra el schema real de D1, aparecieron 6 instancias más:
+`reconocimientos_medicos`, `documentos_obra`, `permisos_trabajo`, `inspecciones_seg`, `turnos`
+(coincide con otro error real ya visto: `GET /turnos -> 500`, 18/07) y `ausencias` (tabla lazy,
+aún sin explotar en logs). Además una 8ª variante distinta en `buscarGlobal`: mismo filtro roto
+contra `tareas_obra`/`rfis`/`control_calidad`/`actas_reunion`, pero envuelto en
+`.catch(()=>({results:[]}))` -> nunca daba 500, simplemente el buscador global devolvía 0
+resultados de esos 4 tipos a oficina/encargado, en silencio, sin ningún error visible.
+
+**Alcance del fix (elegido por Adrian, "fix rápido" sobre "fix completo con migración"):** se
+quita el bloque roto en los 7 endpoints con comentario explicativo BUG-CARNETS + fecha, y en
+`buscarGlobal` se quita el filtro de las 4 tablas sin columna y se parametriza el bind
+(`auth.departamento` iba interpolado directo en el SQL antes, ahora va por `?`). Efecto:
+oficina/encargado ven ahora TODOS los registros de su empresa en esas 7 tablas (como
+superadmin/empresa_admin), no un 500 — downgrade de scoping, no fuga entre empresas
+(`empresa_id` intacto en los 7). Pendiente para el futuro: columna `departamento` real en las 7
+tablas (migración + captura + backfill) para recuperar el scoping fino.
+
+**Verificación:** `node --check worker.js` OK; grep de encoding en el diff limpio (`Ã|Â|â€|ï»¿`
+sin coincidencias); deploy manual Version ID `f33582ae-e758-4592-87be-31fefdf91ff3` (bindings DB
++ FILES presentes). Solo backend worker.js, sin cambio de versión de app. `alejandra-agente` NO
+tocado (este bug es exclusivo de las tablas/endpoints del worker principal).
+
+**Pendiente (deprioritizado por Adrian a favor de este bug confirmado):** 10 sugerencias/quejas
+de usuarios sin resolver en la tabla `sugerencias` (2 marcadas como más graves: "no puedes volver
+a la app" tras abrir el chat de Alejandra; problemas de barra inferior/iconos tapando contenido);
+auditoría técnica de código; análisis de funciones de negocio que faltan. Retomar en otra sesión.
 
 ### Part 20: Paridad de seguridad en el 2o cerebro — SEC-10 (20/07/2026)
 **Contexto:** tras SEC-09, la sección SEGURIDAD de IDEAS marcaba SEC-01..SEC-07 como "solo
