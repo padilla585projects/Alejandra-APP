@@ -8429,11 +8429,10 @@ async function getCarnets(request, env) {
   let sql = 'SELECT * FROM carnets WHERE empresa_id=?';
   const params = [empresa_id];
   if (obra_id) { sql += ' AND obra_id=?'; params.push(parseInt(obra_id)); }
-  // Filtrar por departamento si es oficina/encargado
-  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
-    sql += ' AND departamento = ?';
-    params.push(departamento);
-  }
+  // BUG-CARNETS (21/07/2026): la tabla carnets no tiene columna departamento -> este filtro
+  // causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Quitado hasta que
+  // se implemente el flujo completo (columna + captura al crear + backfill). Mientras tanto,
+  // oficina/encargado ven todos los carnets de su empresa, igual que superadmin/empresa_admin.
   sql += ' ORDER BY nombre_trabajador, tipo';
   const rows = await env.DB.prepare(sql).bind(...params).all();
   return json(rows.results);
@@ -8490,11 +8489,11 @@ async function getReconocimientos(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND (obra_id=? OR obra_id IS NULL)`; binds.push(obraAuth); }
   if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
-  // Filtrar por departamento si es oficina/encargado (datos médicos sensibles)
-  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
-    sql += ` AND departamento = ?`;
-    binds.push(departamento);
-  }
+  // BUG-CARNETS (21/07/2026): la tabla reconocimientos_medicos no tiene columna departamento ->
+  // este filtro causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Mismo
+  // bug que en getCarnets(). Quitado hasta que se implemente el flujo completo (columna +
+  // captura al crear + backfill). Mientras tanto, oficina/encargado ven todos los
+  // reconocimientos de su empresa, igual que superadmin/empresa_admin.
   if (resultado) { sql += ` AND resultado=?`; binds.push(resultado); }
   if (q) { sql += ` AND nombre_trabajador LIKE ?`; binds.push(`%${q}%`); }
   sql += ` ORDER BY fecha_caducidad ASC`;
@@ -8561,11 +8560,11 @@ async function getDocumentosObra(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
   if (obra_id)      { sql += ` AND obra_id=?`;       binds.push(obra_id); }
-  // Filtrar por departamento si es oficina/encargado
-  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
-    sql += ` AND departamento = ?`;
-    binds.push(departamento);
-  }
+  // BUG-CARNETS (21/07/2026): documentos_obra no tiene columna departamento -> este filtro
+  // causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Quitado hasta que
+  // se implemente el flujo completo (columna + captura al crear + backfill). Mismo bug que
+  // getCarnets()/getReconocimientos(). Mientras tanto, oficina/encargado ven todos los
+  // documentos de su empresa, igual que superadmin/empresa_admin.
   if (tipo)         { sql += ` AND tipo=?`;           binds.push(tipo); }
   if (estado)       { sql += ` AND estado=?`;         binds.push(estado); }
   if (elaborado_por){ sql += ` AND elaborado_por=?`;  binds.push(elaborado_por); }
@@ -8637,11 +8636,11 @@ async function getPermisosTrabajo(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
   if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
-  // Filtrar por departamento si es oficina/encargado
-  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
-    sql += ` AND departamento = ?`;
-    binds.push(departamento);
-  }
+  // BUG-CARNETS (21/07/2026): permisos_trabajo no tiene columna departamento -> este filtro
+  // causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Quitado hasta que
+  // se implemente el flujo completo (columna + captura al crear + backfill). Mismo bug que
+  // getCarnets()/getReconocimientos(). Mientras tanto, oficina/encargado ven todos los
+  // permisos de su empresa, igual que superadmin/empresa_admin.
   if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
   if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
   sql += ` ORDER BY fecha_inicio DESC`;
@@ -8704,11 +8703,11 @@ async function getInspecciones(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
   if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
-  // Filtrar por departamento si es oficina/encargado
-  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
-    sql += ` AND departamento = ?`;
-    binds.push(departamento);
-  }
+  // BUG-CARNETS (21/07/2026): inspecciones_seg no tiene columna departamento -> este filtro
+  // causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Quitado hasta que
+  // se implemente el flujo completo (columna + captura al crear + backfill). Mismo bug que
+  // getCarnets()/getReconocimientos(). Mientras tanto, oficina/encargado ven todas las
+  // inspecciones de su empresa, igual que superadmin/empresa_admin.
   if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
   if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
   sql += ` ORDER BY fecha DESC`;
@@ -11731,11 +11730,12 @@ async function getTurnos(request, env) {
   if (desde) { sql += ' AND fecha >= ?'; params.push(desde); }
   if (hasta) { sql += ' AND fecha <= ?'; params.push(hasta); }
   if (obra)  { sql += ' AND obra_id = ?'; params.push(obra); }
-  // Filtrar por departamento si es oficina/encargado
-  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
-    sql += ' AND departamento = ?';
-    params.push(departamento);
-  }
+  // BUG-CARNETS (21/07/2026): turnos no tiene columna departamento -> este filtro causaba 500
+  // (SQLITE_ERROR: no such column) para todo oficina/encargado. Esto era el error real en
+  // producción: GET /turnos?desde=...&hasta=... -> 500 (18/07/2026). Quitado hasta que se
+  // implemente el flujo completo (columna + captura al crear + backfill). Mismo bug que
+  // getCarnets()/getReconocimientos(). Mientras tanto, oficina/encargado ven todos los turnos
+  // de su empresa, igual que superadmin/empresa_admin.
   sql += ' ORDER BY fecha, nombre_trabajador';
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();
@@ -11988,27 +11988,35 @@ async function buscarGlobal(request, env) {
 
   const obra_id = new URL(request.url).searchParams.get('obra_id') ? parseInt(new URL(request.url).searchParams.get('obra_id')) : null;
 
-  // Construir filtro de departamento si es oficina/encargado
+  // Filtro de departamento por oficina/encargado: SOLO para tablas que sí tienen columna
+  // departamento (herramientas, usuarios, pedidos). BUG-CARNETS (21/07/2026): antes se aplicaba
+  // también a tareas_obra/rfis/control_calidad/actas_reunion, que NO tienen esa columna -> esas
+  // 4 consultas fallaban con SQLITE_ERROR y el .catch(()=>({results:[]})) lo tragaba en
+  // silencio, así que oficina/encargado nunca veían tareas/RFIs/deficiencias/actas en el
+  // buscador global, sin ningún error visible. Se quita el filtro de esas 4 tablas hasta que
+  // tengan columna departamento. Además se parametriza el bind (antes se interpolaba
+  // auth.departamento directo en el SQL).
   const deptFilter = (!auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isDesarrollador && (auth.rol === 'oficina' || auth.rol === 'encargado'))
-    ? ` AND departamento = '${auth.departamento}'`
+    ? ' AND departamento = ?'
     : '';
+  const deptBind = deptFilter ? [auth.departamento] : [];
 
   const [inc, pemp, carr, herr, users, pedidos, obras, tareas, rfisR, deficiencias, actas] = await Promise.all([
     env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
-    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'-') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?)${deptFilter} LIMIT 5`).bind(eid,like,like).all(),
-    env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1${deptFilter} LIMIT 5`).bind(eid,like).all(),
-    env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ?${deptFilter} LIMIT 5`).bind(eid,like).all(),
+    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'-') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?)${deptFilter} LIMIT 5`).bind(eid,like,like,...deptBind).all(),
+    env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1${deptFilter} LIMIT 5`).bind(eid,like,...deptBind).all(),
+    env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ?${deptFilter} LIMIT 5`).bind(eid,like,...deptBind).all(),
     env.DB.prepare(`SELECT id,'obra' as tipo,nombre,codigo as subtipo,CASE WHEN activa=1 THEN 'activa' ELSE 'cerrada' END as estado FROM obras WHERE empresa_id=? AND (nombre LIKE ? OR codigo LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
-    // Tareas de obra
-    env.DB.prepare(`SELECT id,'tarea' as tipo,titulo as nombre,estado as subtipo,prioridad as estado FROM tareas_obra WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR asignado_a LIKE ?)${obra_id?' AND obra_id=?':''}${deptFilter} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
-    // RFIs
-    env.DB.prepare(`SELECT id,'rfi' as tipo,titulo as nombre,categoria as subtipo,estado FROM rfis WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''}${deptFilter} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
-    // Deficiencias (punch list)
-    env.DB.prepare(`SELECT id,'deficiencia' as tipo,titulo as nombre,ubicacion as subtipo,estado FROM control_calidad WHERE empresa_id=? AND (titulo LIKE ? OR ubicacion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''}${deptFilter} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
-    // Actas de reunion
-    env.DB.prepare(`SELECT id,'acta' as tipo,titulo as nombre,tipo as subtipo,estado FROM actas_reunion WHERE empresa_id=? AND (titulo LIKE ? OR asistentes LIKE ? OR acuerdos LIKE ?)${obra_id?' AND obra_id=?':''}${deptFilter} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Tareas de obra (sin columna departamento -> sin deptFilter)
+    env.DB.prepare(`SELECT id,'tarea' as tipo,titulo as nombre,estado as subtipo,prioridad as estado FROM tareas_obra WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR asignado_a LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // RFIs (sin columna departamento -> sin deptFilter)
+    env.DB.prepare(`SELECT id,'rfi' as tipo,titulo as nombre,categoria as subtipo,estado FROM rfis WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Deficiencias / punch list (sin columna departamento -> sin deptFilter)
+    env.DB.prepare(`SELECT id,'deficiencia' as tipo,titulo as nombre,ubicacion as subtipo,estado FROM control_calidad WHERE empresa_id=? AND (titulo LIKE ? OR ubicacion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Actas de reunion (sin columna departamento -> sin deptFilter)
+    env.DB.prepare(`SELECT id,'acta' as tipo,titulo as nombre,tipo as subtipo,estado FROM actas_reunion WHERE empresa_id=? AND (titulo LIKE ? OR asistentes LIKE ? OR acuerdos LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
   ]);
   return json([
     ...inc.results, ...pemp.results, ...carr.results,
@@ -20261,11 +20269,13 @@ async function getAusencias(request, env) {
   if (usuario_id) { sql += ' AND usuario_id=?'; params.push(usuario_id); }
   if (tipo)       { sql += ' AND tipo=?';        params.push(tipo); }
   if (estado)     { sql += ' AND estado=?';      params.push(estado); }
-  // Filtrar por departamento si es oficina/encargado (datos RRHH sensibles)
-  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
-    sql += ' AND departamento = ?';
-    params.push(departamento);
-  }
+  // BUG-CARNETS (21/07/2026): ausencias no tiene columna departamento -> este filtro causaba
+  // 500 (SQLITE_ERROR: no such column) para todo oficina/encargado en cuanto la tabla se creara
+  // (se crea sobre la marcha via ensureAusenciasTable, por eso aún no aparecía en logs). Quitado
+  // hasta que se implemente el flujo completo (columna + captura al crear + backfill). Mismo bug
+  // que getCarnets()/getReconocimientos(). Mientras tanto, oficina/encargado ven todas las
+  // ausencias de su empresa, igual que superadmin/empresa_admin (datos RRHH sensibles: revisar
+  // si se quiere restringir esto de otra forma más adelante).
   if (mes)        { sql += ' AND (fecha_inicio LIKE ? OR fecha_fin LIKE ?)'; params.push(mes+'%', mes+'%'); }
   sql += ' ORDER BY fecha_inicio DESC';
   const rows = await env.DB.prepare(sql).bind(...params).all();
