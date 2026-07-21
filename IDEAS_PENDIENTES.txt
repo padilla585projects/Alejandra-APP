@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 21/07/2026 — auditoría de costes/modelos IA (COST-01 fix pricing Opus 4.6; COST-02/03 migraciones descartadas por ahora; COST-04 Batch API pendiente). Antes: fix BUG-PUSH (push automáticas rotas) y paridad de seguridad SEC-10.
+  Última actualización: 21/07/2026 — auditoría de costes/modelos IA completa (COST-01 fix pricing Opus 4.6, único ahorro real aplicado; COST-02/03/04 investigados y descartados por no dar ahorro real hoy). Antes: fix BUG-PUSH (push automáticas rotas) y paridad de seguridad SEC-10.
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1103,14 +1103,26 @@ LEYENDA DE ESTADO:
     · Decisión (con Adrian): no migrar por ahora. Sería mejora de capacidad, no ahorro de
       coste garantizado. Revisar si en el futuro se fija effort explícito y compensa.
 
-[ ] COST-04 — Batch API para ejecutarReflexion (cron autónomo) — ahorro real pendiente
-    · Candidato serio de ahorro: el cron ejecutarReflexion (autónomo, nocturno/6x-día, sin
-      usuario esperando respuesta en tiempo real) encaja con Batch API de Anthropic: 50% de
-      descuento en input+output, apilable con el prompt caching que YA está implementado
-      (cache_control ephemeral en system prompt y tools) → hasta ~95% de ahorro combinado.
-    · Pendiente: diseñar la migración (async: enviar batch, recoger resultado en la siguiente
-      pasada del cron o vía polling) sin romper el flujo actual de reflexión/aprendizaje.
-      Sesión dedicada a esto en curso (21/07/2026) — ver SESION.md para el diseño.
+[✓] COST-04 — Batch API para ejecutarReflexion — DESCARTADO, sin caso de uso real  [investigado 21/07/2026]
+    · Hipótesis inicial (basada en un resumen de sesión anterior impreciso): "ejecutarReflexion
+      es un cron autónomo nocturno/6x-día" → encajaría con Batch API (50% descuento, apilable
+      con el prompt caching ya implementado, hasta ~95% de ahorro combinado).
+    · Verificado en el código real (21/07/2026): FALSO. ejecutarReflexion(env) (worker.js
+      línea ~9118) solo se llama desde POST /api/reflexion (línea ~2526), endpoint protegido
+      por verificarAdminToken. NO está enganchado al scheduled() del cron (revisado completo,
+      línea ~3314 — no aparece). Quien lo dispara es el botón manual "🔄 Lanzar reflexión" en
+      alejandra-panel.html (línea ~1516), con UX síncrona: "puede tardar 30-60 segundos" y
+      polling a los 15s esperando resultado.
+    · Por qué Batch API no encaja: (1) Batch no tiene SLA de minutos — puede tardar de minutos
+      a 24h, rompería la UX actual de "resultado en <1 min"; (2) no es alto volumen — es manual
+      y poco frecuente (solo cuando Adrian pulsa el botón), el ahorro absoluto sería
+      insignificante frente a la complejidad de convertirlo en máquina de estados async
+      (submit → poll en otro ciclo → continuar tool-loop → guardar memoria).
+    · Decisión (con Adrian): cerrado sin implementar. No hay ningún flujo async de alto volumen
+      en el código hoy que encaje con Batch API (los crons automáticos 6x/día que sí corren
+      -briefings, alertas, monitorización- son todos de cara al usuario/tiempo-sensibles).
+      Si en el futuro se añade un job realmente async y de alto volumen, revisar Batch API
+      entonces.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

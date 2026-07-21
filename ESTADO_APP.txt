@@ -22,9 +22,14 @@ HISTORIAL DE VERSIONES (resumen reciente):
                        -gpt-5.6-luna $1/$6- sale mas caro que gpt-4o-mini actual $0.15/$0.60;
                        MODEL_EXPERTO a claude-sonnet-5: mismo precio que Sonnet 4.6 tras el
                        31/08/2026, ahorro solo temporal, y effort=high por defecto sin fijar podria
-                       salir mas caro). Detalle completo en IDEAS_PENDIENTES.txt (COST-01..COST-04).
-                       Queda en curso COST-04 (Batch API para ejecutarReflexion, ahorro real
-                       identificado, ~95% combinado con el prompt caching ya existente).
+                       salir mas caro), y despues DESCARTADO tambien COST-04 (Batch API para
+                       ejecutarReflexion): al verificar el codigo real se vio que ejecutarReflexion
+                       NO es un cron automatico -corrige un resumen de sesion anterior impreciso
+                       que decia "nocturno/6x-dia"- sino un boton manual del panel dev con UX
+                       sincrona "resultado en 30-60s"; incompatible con la latencia de Batch API
+                       -minutos a 24h- y de volumen demasiado bajo para que el ahorro compense la
+                       complejidad. Detalle completo en IDEAS_PENDIENTES.txt (COST-01..COST-04).
+                       Unico ahorro real conseguido esta sesion: COST-01.
                        Verificado: node --check OK; encoding limpio. Deploy Version ID 06a3ff0d.
                        Solo backend, sin cambio de version de app.
   (worker.js + alejandra-agente) |  20/07/2026  [BUG-PUSH: /push-vapid-key daba HTTP 500 -> push automaticas rotas]
