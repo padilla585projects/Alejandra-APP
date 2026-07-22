@@ -1,9 +1,49 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 22/07/2026 -- INV-04: limpieza masiva de corrupción de encoding (mojibake) en worker.js
-**Versión actual:** v8.00 (sin cambio — solo worker.js, sin bump de app móvil ni de panel.html)
-**Resumen:** worker.js tenía corrupción de encoding (mojibake: UTF-8 mal releído como CP1252 y regrabado) en prácticamente todo el archivo, incluyendo **system prompts en producción** que Alejandra usa realmente (ej. "AdriÃ¡n" en vez de "Adrián"). Se construyó un script automático de reversión (algoritmo de "rachas no-ASCII máximas" + reversión greedy multi-pase), se aplicó sobre una copia, se revisó con el usuario y se aplicó al archivo real. 1.399 líneas corregidas de 23.872. Ver Part 31 para el detalle completo.
+**Fecha:** 23/07/2026 -- NEW-XXX: nuevas tools de Alejandra `generar_grafico` y `preguntar_usuario` (ambos workers) — COMPLETADO
+**Versión actual:** v8.01 (version.json/sw.js/index.html sincronizados)
+**Resumen:** A petición de Adrián, se añadieron dos capacidades nuevas a Alejandra en LOS DOS workers: (1) `generar_grafico` — gráficos de datos (barra/línea/tarta/dona/radar) renderizados por QuickChart.io, embebidos como `<img>` directamente en la respuesta de chat (funciona en panel.html/index.html sin tocar frontend, porque ya insertan el contenido del mensaje como HTML crudo); (2) `preguntar_usuario` — mecanismo estructurado para que Alejandra pregunte cuando algo no está claro en flujos autónomos/crons (se guarda pendiente en D1, se notifica por Telegram, se reengancha en el siguiente ciclo de reflexión). Ambos workers desplegados y verificados. Ver Part 32 para el detalle completo, y `IDEAS_PENDIENTES.txt` (sección NEW-XXX) para el resumen definitivo.
+
+### Part 32: NEW-XXX — `generar_grafico` + `preguntar_usuario` en ambos workers (23/07/2026) [COMPLETADO]
+
+**Contexto:** Adrián preguntó si Alejandra tenía tools para generar gráficos de datos "chulos" como los de este chat, y capacidad de preguntar cuando algo no le quede claro. Investigación confirmó que NINGUNA de las dos existía en `worker.js` ni en `alejandra-agente/worker.js`. Adrián confirmó explícitamente: implementar AMBAS, en LOS DOS workers ("ambas en los dos"). Dos decisiones de diseño confirmadas vía AskUserQuestion: (1) usar QuickChart.io para renderizar los gráficos como imagen; (2) para `preguntar_usuario` en flujos autónomos, guardar la pregunta y reengancharse en el siguiente ciclo de análisis (los Workers son stateless, no pueden "esperar" de verdad).
+
+**Diseño final (más simple que lo explorado inicialmente):** en vez de proxy vía Service Binding (como `generar_plano`, que sí necesita un solo sitio porque llama a Claude/Gemini), aquí la lógica es pura (construir config de Chart.js + URL de QuickChart, o insertar una fila en D1) y ambos workers comparten la misma base D1 `alejandra-db` — así que se duplicó la lógica tal cual en los dos, sin proxy.
+
+**`generar_grafico`:**
+- Tool nueva en ambos workers con el mismo `input_schema` (`tipo`: bar/line/pie/doughnut/radar, `titulo`, `labels`, `datasets`).
+- Helpers puros `_construirChartConfig()` (arma una config Chart.js válida con paleta fija de 8 colores) y `_quickChartUrl()` (URL-encode a `https://quickchart.io/chart?c=...`), duplicados idénticos en los dos workers.
+- Cada llamada guarda un registro en la tabla D1 `graficos` (lazy-create con `_ensureGraficosTable`, mismo patrón que `_ensurePlanosTable`) para historial.
+- El `tool_result` incluye `html_embed` con la etiqueta `<img src="...quickchart...">` ya lista — se instruye a la IA (en la `description` de la tool) a incluirla literalmente en su respuesta, nunca a describir el gráfico en vez de mostrarlo.
+- **Sin cambios de frontend**: verificado que `panel.html` (~línea 13959, `cargarAlejandraChat()`) e `index.html` (~líneas 18584/18602) insertan `m.content` directamente como `innerHTML` (sin sanitizar ni escapar) — una etiqueta `<img>` dentro del texto de respuesta se renderiza tal cual en los dos clientes, sin tocar ni una línea de esos archivos.
+- Probado en producción: la URL de QuickChart generada por `_construirChartConfig`/`_quickChartUrl` devuelve `200 image/png`, 20KB de imagen real.
+
+**`preguntar_usuario`:**
+- Tool nueva pensada específicamente para cuando NO hay un usuario esperando respuesta en ese momento (crons, reflexión autónoma) — en conversación interactiva normal, Alejandra ya podía (y sigue pudiendo) preguntar directamente en su texto sin ninguna tool; la `description` de la tool lo deja explícito para que el modelo no la use de forma redundante en chat normal.
+- Guarda la pregunta en la tabla D1 compartida `alejandra_preguntas` (`_ensurePreguntasTable`, lazy-create): `pregunta`, `opciones_json` (opcional, para respuesta rápida), `contexto`, `origen` (interactivo/autonomo), `estado` (pendiente/respondida), `telegram_chat_id`/`telegram_message_id`, `consumida`.
+- **worker.js (raíz)**: notifica por Telegram con botones inline si hay `opciones` (`callback_data: preg_responder:<id>:<idx>`), resuelto en el `callback_query` dispatch existente (mismo patrón que `fix_apply`/`fix_reject`, insertado justo después de `fix_reject`). Si Adrián responde con texto libre haciendo *reply* al mensaje original de Telegram, se correla por `update.message.reply_to_message.message_id` contra `telegram_message_id` guardado (insertado en `handleTelegramWebhook`, antes de los comandos `/parar` etc.).
+- **alejandra-agente/worker.js**: no tiene webhook de `callback_query` propio (verificado, no existe ningún manejo de ese tipo en el archivo) — notifica en texto plano vía `enviarPorTelegram()` ya existente. La respuesta se resuelve o bien desde worker.js (comparten la misma D1) o directamente en el siguiente ciclo de `ejecutarReflexion()`: ahora, al empezar, consulta `alejandra_preguntas` con `usuario_id='reflexion' AND estado='respondida' AND consumida=0` (las incluye en el prompt de reflexión como "Respuestas de Adrián a preguntas que le hiciste..." y las marca `consumida=1`), y también las `pendiente` sin responder (para recordarle a la IA que no las repita en bucle).
+- `TOOL_PREGUNTAR_USUARIO` añadida al array de tools hardcodeado de `ejecutarReflexion()` (línea ~9309, junto a `TOOL_MEMORY_SAVE`/`TOOL_MEMORY_READ`/`TOOL_PROPOSE_MEJORA`) — sin esto, aunque estuviera en `TOOLS_POR_EXPERTO.reflexion`, el ciclo de reflexión nunca la habría visto (usa una lista de tools propia hardcodeada, no `TOOLS_POR_EXPERTO`).
+
+**Seguridad:** ambas tools añadidas a `TOOLS_REQUIEREN_SESION` en `alejandra-agente/lib.js` (exigen sesión como mínimo en el chat normal — `generar_grafico` expone datos agregados de la empresa vía URL pública de QuickChart, aunque no muy sensibles; `preguntar_usuario` sin sesión permitiría spam de notificaciones a Adrián por Telegram). El flujo de reflexión autónoma sigue pudiendo usarlas porque `ejecutarReflexion()` llama a `ejecutarTool()` directamente con su propia lista de tools, sin pasar por `filtrarToolsPorAuth()` — mismo patrón preexistente que ya aplicaba a `propose_mejora`.
+
+**`TOOLS_POR_EXPERTO` (alejandra-agente):** `TOOL_GENERAR_GRAFICO` y `TOOL_PREGUNTAR_USUARIO` añadidas a `app`, `tecnico`, `completo` e `ingenieria`; `TOOL_PREGUNTAR_USUARIO` además a `reflexion`.
+
+**Verificación:**
+- `node --check` OK en `worker.js`, `alejandra-agente/worker.js` y `alejandra-agente/lib.js`.
+- `git diff` sin patrones de corrupción de encoding (`Ã|Â|â€|ï»¿`).
+- `alejandra-agente/lib.test.js`: 85/85 tests OK (incluyendo el `TOOLS_REQUIEREN_SESION` ampliado).
+- Tablas `graficos` y `alejandra_preguntas` creadas manualmente en D1 de producción (además de quedar con lazy-create en el código, por si acaso).
+- `wrangler deploy` en la raíz: Version ID `9d48123a-74b2-4065-acc8-2449e6a1d117`, `/health` → `{"ok":true}`.
+- `wrangler deploy` en `alejandra-agente/`: Version ID `29c05980-6a67-4d01-9bff-385bbeb9b0ac`, `/health` → `{"status":"ok",...}`.
+- Prueba end-to-end de `_construirChartConfig`/`_quickChartUrl`: la URL de QuickChart generada responde `200 image/png` con contenido real.
+
+**Versión de app:** subida a v8.01 (`version.json`, `sw.js`, `index.html` sincronizados) por ser un cambio funcional del backend, aunque no se tocó ningún frontend (regla de CLAUDE.md — subir versión en cada cambio funcional incluso si "solo" cambia backend).
+
+**Pendiente para el futuro (bajo prioridad, no bloqueante):** no hay UI dedicada en panel.html/index.html para ver el historial de gráficos ni las preguntas pendientes/respondidas — hoy todo se gestiona por Telegram y consultas D1 directas. Las tablas ya están listas si se quiere construir esa pantalla más adelante.
+
+**Archivos modificados:** `worker.js`, `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `version.json`, `sw.js`, `index.html` (solo `APP_VERSION`), `ESTADO_APP.txt`, `IDEAS_PENDIENTES.txt`, `SESION.md`. Sin cambios funcionales en `panel.html`.
 
 ### Part 31: INV-04 — Limpieza de corrupción de encoding (mojibake) en worker.js (22/07/2026)
 **Contexto:** Se detectó que `worker.js` tenía corrupción de encoding (mojibake) extendida a prácticamente todo el archivo (14.500 líneas), no solo en un par de comentarios decorativos como se creía. Origen root-caused vía `git log -S` al commit `61a7d77` ("APEX Agent", reescritura masiva), aunque algunos separadores decorativos venían corruptos desde bastante antes (commit `4a53fd8`, primera vez que se escribió `// ── Crypto helpers (PBKDF2) ──...` ya con una capa de corrupción previa). Crítico: la corrupción alcanzaba **system prompts que Alejandra usa en producción** (ej. "Sincroniza con la red de agentes IA de AdriÃ¡n" en vez de "Adrián").

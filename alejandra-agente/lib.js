@@ -106,7 +106,13 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   'consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo', 'exportar_datos', 'listar_esquemas', 'borrar_esquema',
   'historico_materiales', 'generar_informe', 'analizar_archivo', 'marcar_plano', 'enviar_email', 'enviar_telegram_informe',
   'crear_tarea_background', 'ver_tareas', 'completar_tarea', 'enviar_push', 'iniciar_conversacion', 'controlar_app',
-  'subir_archivo', 'enviar_notificacion'
+  'subir_archivo', 'enviar_notificacion',
+  // NEW-XXX (22/07/2026): generar_grafico expone datos agregados de la empresa
+  // (aunque no muy sensibles) via una URL publica de QuickChart -- se exige
+  // sesion como minimo, igual que el resto de tools de datos de esta lista.
+  // preguntar_usuario queda ligada a un usuario_id concreto; sin sesion
+  // cualquiera podria generar spam de notificaciones a Adrian por Telegram.
+  'generar_grafico', 'preguntar_usuario'
 ]);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {

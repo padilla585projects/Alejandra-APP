@@ -1255,6 +1255,101 @@ const TOOL_BORRAR_ESQUEMA = {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════
+// MODULO GRAFICOS / PREGUNTAS (NEW-XXX, 22/07/2026). Logica pura,
+// duplicada tal cual en worker.js (raiz): ambos comparten la misma BD
+// D1 (alejandra-db), no hace falta proxy via Service Binding porque no
+// hay llamada a Claude/Gemini de por medio (a diferencia de generar_plano).
+async function _ensureGraficosTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS graficos (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id        INTEGER NOT NULL,
+      usuario_id        INTEGER,
+      tipo              TEXT    NOT NULL,
+      titulo            TEXT    NOT NULL,
+      chart_config_json TEXT    NOT NULL,
+      quickchart_url    TEXT    NOT NULL,
+      creado_en         TEXT    DEFAULT (datetime('now'))
+    )
+  `).run();
+}
+async function _ensurePreguntasTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS alejandra_preguntas (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id          INTEGER,
+      usuario_id          TEXT,
+      origen              TEXT    NOT NULL DEFAULT 'interactivo',
+      pregunta            TEXT    NOT NULL,
+      opciones_json       TEXT,
+      contexto            TEXT,
+      estado              TEXT    NOT NULL DEFAULT 'pendiente',
+      respuesta           TEXT,
+      telegram_chat_id    TEXT,
+      telegram_message_id TEXT,
+      consumida           INTEGER NOT NULL DEFAULT 0,
+      creado_en           TEXT    DEFAULT (datetime('now')),
+      respondido_en       TEXT
+    )
+  `).run();
+}
+const _GRAFICO_COLORES = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#84cc16'];
+function _construirChartConfig({ tipo, titulo, labels, datasets }) {
+  const esCircular = tipo === 'pie' || tipo === 'doughnut';
+  const chartDatasets = (datasets || []).map((ds, i) => {
+    const color = _GRAFICO_COLORES[i % _GRAFICO_COLORES.length];
+    return {
+      label: ds.label || `Serie ${i + 1}`,
+      data: ds.data || [],
+      backgroundColor: esCircular ? (labels || []).map((_, j) => _GRAFICO_COLORES[j % _GRAFICO_COLORES.length]) : color,
+      borderColor: color,
+      borderWidth: 1
+    };
+  });
+  return {
+    type: tipo,
+    data: { labels: labels || [], datasets: chartDatasets },
+    options: { plugins: { title: { display: true, text: titulo || '' }, legend: { display: (chartDatasets.length > 1) || esCircular } } }
+  };
+}
+function _quickChartUrl(config) {
+  return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(config))}&backgroundColor=white&width=600&height=400`;
+}
+
+const TOOL_GENERAR_GRAFICO = {
+  name: 'generar_grafico',
+  description: 'Genera un grafico visual (barras, lineas, tarta, dona o radar) a partir de datos que ya tengas o hayas calculado. Usalo cuando mostrar los numeros en una tabla o en texto sea menos claro que verlos representados visualmente. El resultado es una imagen: incluye SIEMPRE en tu respuesta al usuario la etiqueta <img> exacta que te devuelva la tool (campo html_embed) para que se vea el grafico en el chat -- no la describas con palabras en vez de mostrarla, y no inventes tus propias etiquetas.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tipo: { type: 'string', enum: ['bar', 'line', 'pie', 'doughnut', 'radar'], description: 'bar: comparar cantidades entre categorias. line: evolucion en el tiempo. pie/doughnut: proporcion de un total (pocas categorias). radar: comparar varias magnitudes a la vez.' },
+      titulo: { type: 'string', description: 'Titulo descriptivo del grafico' },
+      labels: { type: 'array', items: { type: 'string' }, description: 'Etiquetas del eje X o de cada porcion' },
+      datasets: {
+        type: 'array',
+        items: { type: 'object', properties: { label: { type: 'string' }, data: { type: 'array', items: { type: 'number' } } }, required: ['data'] },
+        description: 'Una o varias series de datos a representar'
+      }
+    },
+    required: ['tipo', 'titulo', 'labels', 'datasets']
+  }
+};
+
+const TOOL_PREGUNTAR_USUARIO = {
+  name: 'preguntar_usuario',
+  description: 'Formula una pregunta de aclaracion estructurada cuando te falta informacion clave para continuar y NO hay un usuario esperando tu respuesta en ese momento (por ejemplo: durante tu auto-analisis/reflexion periodica). La pregunta queda guardada y se avisa a Adrian por Telegram; cuando la responda, la retomaras en tu siguiente ciclo de analisis. NO uses esta tool en una conversacion normal donde el usuario esta escribiendote ahora mismo: en ese caso simplemente pregunta en tu propia respuesta de texto, sin necesidad de ninguna tool.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      pregunta: { type: 'string', description: 'La pregunta, en lenguaje sencillo y directo' },
+      opciones: { type: 'array', items: { type: 'string' }, description: 'Opciones de respuesta rapida (opcional)' },
+      contexto: { type: 'string', description: 'Breve contexto de por que surge la pregunta' }
+    },
+    required: ['pregunta']
+  }
+};
+
 const TOOL_GENERAR_PLANO = {
   name: 'generar_plano',
   description: `Genera un plano tecnico profesional SVG con IA (Gemini/Claude). Tipos disponibles:
@@ -2100,12 +2195,12 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS]
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -7038,6 +7133,60 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
       }
     }
 
+    case 'generar_grafico': {
+      try {
+        const { tipo, titulo, labels, datasets } = input;
+        const tiposValidos = ['bar', 'line', 'pie', 'doughnut', 'radar'];
+        if (!tipo || !tiposValidos.includes(tipo)) return JSON.stringify({ error: 'tipo invalido. Valores permitidos: ' + tiposValidos.join(', ') });
+        if (!titulo || !Array.isArray(labels) || !Array.isArray(datasets) || datasets.length === 0) {
+          return JSON.stringify({ error: 'Faltan campos: titulo, labels (array) y datasets (array no vacio) son obligatorios' });
+        }
+        await _ensureGraficosTable(env);
+        const config = _construirChartConfig({ tipo, titulo, labels, datasets });
+        const quickchartUrl = _quickChartUrl(config);
+        const eidGrafico = resolverEid(empresa_id) || 1;
+        const r = await env.DB.prepare(
+          'INSERT INTO graficos (empresa_id, usuario_id, tipo, titulo, chart_config_json, quickchart_url) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(eidGrafico, (usuario_id && usuario_id !== 'reflexion') ? usuario_id : null, tipo, titulo, JSON.stringify(config), quickchartUrl).run();
+        const id = r.meta?.last_row_id;
+        const htmlEmbed = `<img src="${quickchartUrl}" alt="${titulo.replace(/"/g, '')}" style="max-width:100%;border-radius:8px;margin:6px 0">`;
+        return JSON.stringify({ ok: true, id, url: quickchartUrl, html_embed: htmlEmbed, mensaje: `Grafico "${titulo}" generado con ID ${id}. Incluye la etiqueta de html_embed en tu respuesta para mostrarlo.` });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error generando grafico: ' + e.message });
+      }
+    }
+
+    case 'preguntar_usuario': {
+      try {
+        const { pregunta, opciones, contexto } = input;
+        if (!pregunta) return JSON.stringify({ error: 'pregunta requerida' });
+        await _ensurePreguntasTable(env);
+        const origen = (usuario_id === 'reflexion' || usuario_id === 'system') ? 'autonomo' : 'interactivo';
+        const opcionesJson = Array.isArray(opciones) && opciones.length ? JSON.stringify(opciones) : null;
+        const eidPreg = resolverEid(empresa_id);
+        const r = await env.DB.prepare(
+          'INSERT INTO alejandra_preguntas (empresa_id, usuario_id, origen, pregunta, opciones_json, contexto) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(eidPreg || null, usuario_id ? String(usuario_id) : null, origen, pregunta, opcionesJson, contexto || null).run();
+        const id = r.meta?.last_row_id;
+        // Este worker no tiene webhook de callback_query propio (a diferencia de
+        // worker.js raiz), asi que se avisa en texto plano por el canal de Telegram
+        // que ya usa enviarPorTelegram(); la respuesta de Adrian se correla desde
+        // worker.js (que si tiene webhook) o se retoma en el proximo ciclo de reflexion.
+        if (env.TELEGRAM_BOT_TOKEN) {
+          const opcionesTxt = (opciones && opciones.length) ? `\nOpciones: ${opciones.join(' / ')}` : '';
+          await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, `❓ Necesito una aclaración${contexto ? ` (${contexto})` : ''}:\n${pregunta}${opcionesTxt}\n\n<code>#pregunta${id}</code>`).catch(() => {});
+        }
+        return JSON.stringify({
+          ok: true, id, estado: 'pendiente',
+          mensaje: origen === 'autonomo'
+            ? `Pregunta #${id} enviada a Adrian por Telegram. Se retomara en el proximo ciclo de analisis.`
+            : `Pregunta #${id} registrada. Responde tambien en tu propia respuesta al usuario si esta esperando ahora mismo.`
+        });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error registrando pregunta: ' + e.message });
+      }
+    }
+
     case 'editar_plano': {
       try {
         const { plano_id, busqueda, empresa_id: eid_plano, cambios } = input;
@@ -9137,13 +9286,37 @@ async function ejecutarReflexion(env) {
       }
     }
 
+    // NEW-XXX (22/07/2026): preguntas pendientes/respondidas de un ciclo de
+    // reflexion anterior (tool preguntar_usuario) -- "reengancharse en el
+    // siguiente analisis" segun lo acordado. Las respondidas y aun no
+    // consumidas se incluyen una vez y se marcan consumidas; las pendientes
+    // sin respuesta se recuerdan para que no se vuelvan a preguntar en bucle.
+    let preguntasTexto = '';
+    try {
+      await _ensurePreguntasTable(env);
+      const respondidas = await env.DB.prepare(
+        "SELECT id, pregunta, respuesta FROM alejandra_preguntas WHERE usuario_id='reflexion' AND estado='respondida' AND consumida=0 ORDER BY respondido_en ASC LIMIT 10"
+      ).all();
+      if (respondidas.results?.length) {
+        preguntasTexto += `\n\nRespuestas de Adrián a preguntas que le hiciste en un análisis anterior:\n${respondidas.results.map(p => `- P: ${p.pregunta}\n  R: ${p.respuesta}`).join('\n')}`;
+        const ids = respondidas.results.map(p => p.id);
+        await env.DB.prepare(`UPDATE alejandra_preguntas SET consumida=1 WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).run().catch(() => {});
+      }
+      const pendientes = await env.DB.prepare(
+        "SELECT pregunta FROM alejandra_preguntas WHERE usuario_id='reflexion' AND estado='pendiente' ORDER BY creado_en ASC LIMIT 5"
+      ).all();
+      if (pendientes.results?.length) {
+        preguntasTexto += `\n\nPreguntas que ya le hiciste a Adrián y sigue sin responder (no las repitas, espera su respuesta):\n${pendientes.results.map(p => `- ${p.pregunta}`).join('\n')}`;
+      }
+    } catch (_) {}
+
     const resumen = `Últimas ${pares.length} conversaciones (app+panel+telegram) y ${memoria.results?.length||0} registros en memoria.
 
 Conversaciones recientes:
 ${pares.slice(-10).join('\n---\n')}
 
 Memoria actual:
-${(memoria.results||[]).map(m=>`[${m.tipo}] ${m.titulo}`).join('\n')}`;
+${(memoria.results||[]).map(m=>`[${m.tipo}] ${m.titulo}`).join('\n')}${preguntasTexto}`;
 
     const reflexionPrompt = buildSystemPrompt(['base','tecnica','nexus','evolucion','reflexion','formato']);
 
@@ -9157,7 +9330,7 @@ ${(memoria.results||[]).map(m=>`[${m.tipo}] ${m.titulo}`).join('\n')}`;
 Datos:\n${resumen}`
     }];
 
-    const tools = [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA];
+    const tools = [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_PREGUNTAR_USUARIO];
     let respAPI = await llamarAnthropic(env, messages, tools, MODEL_EXPERTO, 2048, reflexionPrompt);
 
     // Ejecutar tools si las usa

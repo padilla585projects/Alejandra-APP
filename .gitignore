@@ -34,3 +34,4 @@ CLAVES.txt
 NUEVA_CUENTA.txt
 *.env
 .env*
+backups/

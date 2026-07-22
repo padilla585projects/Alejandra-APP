@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/07/2026 — INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 23/07/2026 — NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1644,6 +1644,64 @@ LEYENDA DE ESTADO:
     · Alcance: solo `worker.js` (backend), requirió y recibió `wrangler deploy` manual. No aplica
       a `alejandra-agente/worker.js` (lógica de endpoints REST del worker principal, no de las
       tools del agente).
+
+================================================================================
+  💡 NEW-XXX — Tools generar_grafico + preguntar_usuario en los dos "cerebros"  [HECHO v8.01]
+================================================================================
+
+[✓] NEW-XXX — Alejandra puede generar gráficos de datos y preguntar cuando algo no le queda claro
+    [HECHO 23/07/2026]
+    · Origen: Adrian preguntó si Alejandra tenía tools para generar gráficos con datos "chulos"
+      como los que se muestran en este propio chat, y capacidad de preguntar cuando algo no está
+      claro. Investigado: NINGUNA de las dos existía en ninguno de los dos workers. Confirmado por
+      Adrian: implementar AMBAS, en LOS DOS workers ("ambas en los dos").
+    · generar_grafico: tool que construye una config de Chart.js (bar/line/pie/doughnut/radar) a
+      partir de los datos que decida la IA y la renderiza como imagen vía QuickChart.io (decisión
+      confirmada por Adrian sobre las alternativas). El tool_result incluye `html_embed` con una
+      etiqueta `<img>` ya lista — se instruye a la IA a incluirla literalmente en su respuesta.
+      Funciona sin ningún cambio de frontend: tanto `panel.html` (línea ~13959) como `index.html`
+      (línea ~18584/18602) insertan `m.content` como HTML crudo en el chat, así que una etiqueta
+      `<img>` dentro del texto de la respuesta se renderiza tal cual, igual en los dos clientes.
+      Historial guardado en tabla D1 `graficos` (lazy-create, igual patrón que `_ensurePlanosTable`).
+    · preguntar_usuario: tool para cuando la IA necesita aclaración y NO hay un usuario esperando en
+      ese momento (crons/reflexión autónoma). Decisión confirmada por Adrian: la pregunta se guarda
+      (tabla D1 `alejandra_preguntas`, compartida por ambos workers) y se retoma en el SIGUIENTE
+      ciclo de análisis, en vez de intentar bloquear la ejecución (los Workers son stateless).
+      En conversación interactiva normal la IA sigue preguntando directamente en su texto, sin tool
+      (ya funcionaba así) — la tool solo se ofrece como opción, con la instrucción explícita de no
+      usarla si hay alguien esperando respuesta ahora mismo.
+    · worker.js (raíz): notifica por Telegram con botones inline (`callback_data:
+      preg_responder:<id>:<idx>`) si hay opciones, resuelto en el `callback_query` existente (mismo
+      patrón que `fix_apply`/`fix_reject`); si Adrian responde con texto libre (reply al mensaje
+      original de Telegram), se correla por `reply_to_message.message_id` contra
+      `telegram_message_id` guardado.
+    · alejandra-agente/worker.js: no tiene webhook de `callback_query` propio, así que notifica en
+      texto plano vía `enviarPorTelegram()` ya existente; la respuesta se resuelve desde worker.js
+      (comparten la misma D1 `alejandra-db`) o se retoma directamente en el siguiente ciclo de
+      `ejecutarReflexion()`, que ahora consulta preguntas `respondida` y no `consumida` al empezar
+      (las incluye en el prompt y las marca `consumida=1`) y recuerda las `pendiente` sin responder
+      para no volver a preguntar lo mismo en bucle.
+    · Ambas tools son lógica pura (sin llamada a Claude/Gemini de por medio) y están duplicadas tal
+      cual en los dos workers — a diferencia de `generar_plano`, NO hace falta proxy vía Service
+      Binding porque no hay nada que solo sepa hacer un worker.
+    · Seguridad: `generar_grafico` y `preguntar_usuario` añadidas a `TOOLS_REQUIEREN_SESION` en
+      `alejandra-agente/lib.js` (exigen sesión como mínimo, igual que el resto de tools de datos/
+      notificación de esa lista) — pero SÍ alcanzables desde el flujo de reflexión autónoma
+      (`ejecutarReflexion`, que llama a `ejecutarTool` directamente con una lista de tools propia,
+      sin pasar por `filtrarToolsPorAuth`), igual que ya ocurría con `propose_mejora`.
+    · Verificación: `node --check` OK en los dos workers y en `lib.js`; `lib.test.js` 85/85 tests
+      OK; sin corrupción de encoding en el diff; probado en producción que la URL de QuickChart
+      generada devuelve un PNG válido (`200 image/png`); tablas `graficos` y `alejandra_preguntas`
+      creadas en D1 de producción. Deploy: worker.js Version ID
+      `9d48123a-74b2-4065-acc8-2449e6a1d117`, alejandra-agente Version ID
+      `29c05980-6a67-4d01-9bff-385bbeb9b0ac`, `/health` 200 en los dos.
+    · Alcance: los dos workers (`worker.js` y `alejandra-agente/worker.js` + `alejandra-agente/lib.js`).
+      Sin cambios en `panel.html`/`index.html` (no hacía falta, ver arriba) — versión de app subida
+      igualmente a v8.01 por ser un cambio funcional, aunque sea solo backend.
+    · Pendiente sin resolver (bajo prioridad, flagged para futura sesión): no hay UI dedicada en
+      panel.html/index.html para ver el historial de gráficos generados ni las preguntas pendientes/
+      respondidas — hoy solo se gestionan por Telegram y quedan en D1. Si en el futuro se quiere una
+      pantalla de "preguntas de Alejandra" en el panel, las tablas ya están listas para consultarlas.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

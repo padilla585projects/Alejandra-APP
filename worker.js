@@ -716,6 +716,47 @@ const AI_TOOLS = [
       },
       required: ['empresa_id']
     }
+  },
+  {
+    name: 'generar_grafico',
+    description: 'Genera un grafico visual (barras, lineas, tarta, dona o radar) a partir de datos que ya tengas o hayas calculado (por ejemplo tras usar consultar_bd, analyze_trends o historico_materiales). Usalo cuando mostrar los numeros en una tabla o en texto sea menos claro que verlos representados visualmente. El resultado es una imagen: incluye SIEMPRE en tu respuesta al usuario la etiqueta <img> exacta que te devuelva la tool (campo html_embed) para que se vea el grafico en el chat -- no la describas con palabras en vez de mostrarla, y no inventes tus propias etiquetas.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['bar', 'line', 'pie', 'doughnut', 'radar'], description: 'bar: comparar cantidades entre categorias. line: evolucion en el tiempo. pie/doughnut: proporcion de un total (pocas categorias). radar: comparar varias magnitudes a la vez.' },
+        titulo: { type: 'string', description: 'Titulo descriptivo del grafico' },
+        labels: { type: 'array', items: { type: 'string' }, description: 'Etiquetas del eje X o de cada porcion (ej: ["Enero","Febrero","Marzo"])' },
+        datasets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: 'Nombre de esta serie de datos' },
+              data: { type: 'array', items: { type: 'number' }, description: 'Valores numericos, mismo orden y longitud que labels' }
+            },
+            required: ['data']
+          },
+          description: 'Una o varias series de datos a representar'
+        },
+        empresa_id: { type: 'integer', description: 'ID de la empresa (para guardar el historial del grafico)' },
+        usuario_id: { type: 'integer', description: 'ID del usuario que lo solicita (opcional)' }
+      },
+      required: ['tipo', 'titulo', 'labels', 'datasets', 'empresa_id']
+    }
+  },
+  {
+    name: 'preguntar_usuario',
+    description: 'Formula una pregunta de aclaracion estructurada cuando te falta informacion clave para continuar y NO hay un usuario esperando tu respuesta en ese momento (por ejemplo: durante una revision nocturna automatica, un cron, o cualquier analisis que hagas por tu cuenta sin que nadie te este hablando). La pregunta queda guardada y se avisa a Adrian por Telegram; cuando la responda, la retomaras en tu siguiente ciclo de analisis. NO uses esta tool en una conversacion normal donde el usuario esta escribiendote ahora mismo: en ese caso simplemente pregunta en tu propia respuesta de texto, sin necesidad de ninguna tool.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pregunta: { type: 'string', description: 'La pregunta, en lenguaje sencillo y directo' },
+        opciones: { type: 'array', items: { type: 'string' }, description: 'Opciones de respuesta rapida (opcional). Si la pregunta es de si/no o de eleccion entre pocas alternativas, inclúyelas aqui para que Adrian pueda responder con un boton en Telegram.' },
+        contexto: { type: 'string', description: 'Breve contexto de por que surge la pregunta (que estabas analizando)' },
+        empresa_id: { type: 'integer', description: 'ID de empresa relacionada (opcional)' }
+      },
+      required: ['pregunta']
+    }
   }
 ];
 
@@ -2087,6 +2128,73 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
         q += ' ORDER BY creado_en DESC LIMIT 50';
         const rows = await env.DB.prepare(q).bind(...params).all();
         return JSON.stringify({ ok: true, planos: rows.results || [] });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'generar_grafico': {
+      try {
+        const { tipo, titulo, labels, datasets, empresa_id, usuario_id } = toolInput;
+        const tiposValidos = ['bar', 'line', 'pie', 'doughnut', 'radar'];
+        if (!tipo || !tiposValidos.includes(tipo)) return JSON.stringify({ ok: false, error: 'tipo invalido. Valores permitidos: ' + tiposValidos.join(', ') });
+        if (!titulo || !Array.isArray(labels) || !Array.isArray(datasets) || datasets.length === 0) {
+          return JSON.stringify({ ok: false, error: 'Faltan campos: titulo, labels (array) y datasets (array no vacio) son obligatorios' });
+        }
+        if (!empresa_id) return JSON.stringify({ ok: false, error: 'empresa_id requerido' });
+        await _ensureGraficosTable(env);
+        const config = _construirChartConfig({ tipo, titulo, labels, datasets });
+        const quickchartUrl = _quickChartUrl(config);
+        const r = await env.DB.prepare(
+          'INSERT INTO graficos (empresa_id, usuario_id, tipo, titulo, chart_config_json, quickchart_url) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(empresa_id, usuario_id || null, tipo, titulo, JSON.stringify(config), quickchartUrl).run();
+        const id = r.meta?.last_row_id;
+        const htmlEmbed = `<img src="${quickchartUrl}" alt="${titulo.replace(/"/g, '')}" style="max-width:100%;border-radius:8px;margin:6px 0">`;
+        return JSON.stringify({ ok: true, id, url: quickchartUrl, html_embed: htmlEmbed, mensaje: `Grafico "${titulo}" generado con ID ${id}. Incluye la etiqueta de html_embed en tu respuesta para mostrarlo.` });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'preguntar_usuario': {
+      try {
+        const { pregunta, opciones, contexto, empresa_id } = toolInput;
+        if (!pregunta) return JSON.stringify({ ok: false, error: 'pregunta requerida' });
+        await _ensurePreguntasTable(env);
+        const origen = (ctx && (ctx.autonomo || ctx.usuario_id === 'reflexion' || ctx.canal === 'cron')) ? 'autonomo' : 'interactivo';
+        const opcionesJson = Array.isArray(opciones) && opciones.length ? JSON.stringify(opciones) : null;
+        const r = await env.DB.prepare(
+          'INSERT INTO alejandra_preguntas (empresa_id, usuario_id, origen, pregunta, opciones_json, contexto) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(empresa_id || null, (ctx && ctx.usuario_id) || null, origen, pregunta, opcionesJson, contexto || null).run();
+        const id = r.meta?.last_row_id;
+
+        const devChatId = env.DEV_CHAT_ID || env.TELEGRAM_CHAT_ID;
+        let telegramMsgId = null;
+        if (devChatId && env.TELEGRAM_BOT_TOKEN) {
+          const textoMsg = `❓ <b>Alejandra necesita una aclaracion</b>${contexto ? `\n🧭 ${contexto}` : ''}\n\n${pregunta}${id ? `\n\n<code>#pregunta${id}</code>` : ''}`;
+          try {
+            let resp;
+            if (Array.isArray(opciones) && opciones.length) {
+              const botones = opciones.map((op, i) => ([{ text: op.slice(0, 60), callback_data: `preg_responder:${id}:${i}` }]));
+              resp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: devChatId, text: textoMsg, parse_mode: 'HTML', reply_markup: { inline_keyboard: botones } })
+              });
+            } else {
+              resp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: devChatId, text: textoMsg, parse_mode: 'HTML' })
+              });
+            }
+            const data = await resp.json().catch(() => null);
+            telegramMsgId = data?.result?.message_id || null;
+          } catch (_) {}
+        }
+        if (telegramMsgId) {
+          await env.DB.prepare('UPDATE alejandra_preguntas SET telegram_chat_id=?, telegram_message_id=? WHERE id=?').bind(String(devChatId), String(telegramMsgId), id).run().catch(() => {});
+        }
+        return JSON.stringify({
+          ok: true, id, estado: 'pendiente',
+          mensaje: origen === 'autonomo'
+            ? `Pregunta #${id} enviada a Adrian por Telegram. Cuando la responda, se retomara en el proximo analisis.`
+            : `Pregunta #${id} registrada. Responde tambien en tu propia respuesta al usuario si esta esperando ahora mismo.`
+        });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
@@ -3621,6 +3729,20 @@ async function handleTelegramWebhook(request, env, ctx) {
         }
       }
     }
+    // Respuesta en texto libre a una pregunta de aclaracion pendiente (preguntar_usuario):
+    // Adrián responde con "Responder" (reply) al mensaje original de Telegram, se correla
+    // por message_id y se guarda para que Alejandra la retome en su siguiente ciclo.
+    const replyToId = update.message.reply_to_message?.message_id;
+    if (replyToId && texto) {
+      const pregPendiente = await env.DB.prepare(
+        "SELECT id FROM alejandra_preguntas WHERE telegram_message_id=? AND estado='pendiente'"
+      ).bind(String(replyToId)).first().catch(() => null);
+      if (pregPendiente) {
+        await env.DB.prepare("UPDATE alejandra_preguntas SET estado='respondida', respuesta=?, respondido_en=datetime('now') WHERE id=?").bind(texto, pregPendiente.id).run();
+        await sendTelegram(env, `✅ Respuesta guardada para la pregunta #${pregPendiente.id}. La tendré en cuenta en el próximo análisis.`);
+        return new Response('OK');
+      }
+    }
     // Comandos de control del agente autónomo
     if (texto === '/parar' || texto === '/parar_agente') {
       await env.DB.prepare("INSERT OR REPLACE INTO alejandra_config (key, value, updated_at) VALUES ('agente_activo', '0', CURRENT_TIMESTAMP)").run();
@@ -3739,6 +3861,21 @@ async function handleTelegramWebhook(request, env, ctx) {
       if (fix) autoLearn(env, 'contexto', `Fix rechazado #${fixId}: ${fix.descripcion.slice(0,60)}`, `Fix rechazado por Adrián. Mi propuesta: ${fix.razon?.slice(0,200)}. Revisar enfoque.`, 3);
       await _tgAnswerCQ(env, cq.id, '❌ Fix rechazado');
       await _tgEditMsg(env, chatId, msgId, orig + '\n\n❌ <b>RECHAZADO</b> — guardado en memoria para aprender.');
+    }
+    // ── Respuesta a pregunta de aclaracion de Alejandra (preguntar_usuario) ──
+    else if (accion === 'preg_responder') {
+      const [pregId, opcionIdx] = partes;
+      const preg = await env.DB.prepare('SELECT * FROM alejandra_preguntas WHERE id=?').bind(parseInt(pregId)).first().catch(() => null);
+      if (!preg || preg.estado !== 'pendiente') {
+        await _tgAnswerCQ(env, cq.id, preg?.estado === 'respondida' ? 'Ya fue respondida' : 'Pregunta no encontrada');
+        return new Response('OK');
+      }
+      let opciones = [];
+      try { opciones = preg.opciones_json ? JSON.parse(preg.opciones_json) : []; } catch (_) {}
+      const respuesta = opciones[parseInt(opcionIdx)] ?? `Opción ${opcionIdx}`;
+      await env.DB.prepare("UPDATE alejandra_preguntas SET estado='respondida', respuesta=?, respondido_en=datetime('now') WHERE id=?").bind(respuesta, parseInt(pregId)).run();
+      await _tgAnswerCQ(env, cq.id, '✅ Respuesta guardada');
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>Respondido:</b> ${respuesta}`);
     }
     else if (accion === 'fix_revert') {
       const fixId = parseInt(partes[0]);
@@ -22315,6 +22452,86 @@ async function _ensurePlanosTable(env) {
     )
   `).run();
   await env.DB.prepare(`ALTER TABLE planos ADD COLUMN circuitos_json TEXT`).run().catch(() => {});
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MODULO GRAFICOS — visualizacion de datos via QuickChart.io
+// MODULO PREGUNTAS — cola de aclaraciones para flujos autonomos/cron
+// (NEW-XXX, 22/07/2026). Logica pura (sin llamadas a Claude), duplicada
+// tal cual en alejandra-agente/worker.js: ambos workers comparten la
+// misma BD D1 (alejandra-db), por lo que no hace falta proxy via
+// Service Binding como en generar_plano.
+// ═══════════════════════════════════════════════════════════════════
+
+async function _ensureGraficosTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS graficos (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id        INTEGER NOT NULL,
+      usuario_id        INTEGER,
+      tipo              TEXT    NOT NULL,
+      titulo            TEXT    NOT NULL,
+      chart_config_json TEXT    NOT NULL,
+      quickchart_url    TEXT    NOT NULL,
+      creado_en         TEXT    DEFAULT (datetime('now'))
+    )
+  `).run();
+}
+
+async function _ensurePreguntasTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS alejandra_preguntas (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id          INTEGER,
+      usuario_id          TEXT,
+      origen              TEXT    NOT NULL DEFAULT 'interactivo',
+      pregunta            TEXT    NOT NULL,
+      opciones_json        TEXT,
+      contexto            TEXT,
+      estado              TEXT    NOT NULL DEFAULT 'pendiente',
+      respuesta           TEXT,
+      telegram_chat_id     TEXT,
+      telegram_message_id TEXT,
+      consumida           INTEGER NOT NULL DEFAULT 0,
+      creado_en           TEXT    DEFAULT (datetime('now')),
+      respondido_en       TEXT
+    )
+  `).run();
+}
+
+// Paleta fija (mismo estilo que los graficos del dashboard en panel.html/index.html)
+// para que los graficos generados por la IA no desentonen visualmente.
+const _GRAFICO_COLORES = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#84cc16'];
+
+// Construye una config de Chart.js valida a partir de los datos que decide la IA.
+// tipo: 'bar' | 'line' | 'pie' | 'doughnut' | 'radar'
+// datasets: [{ label, data: number[] }]
+function _construirChartConfig({ tipo, titulo, labels, datasets }) {
+  const esCircular = tipo === 'pie' || tipo === 'doughnut';
+  const chartDatasets = (datasets || []).map((ds, i) => {
+    const color = _GRAFICO_COLORES[i % _GRAFICO_COLORES.length];
+    return {
+      label: ds.label || `Serie ${i + 1}`,
+      data: ds.data || [],
+      backgroundColor: esCircular ? (labels || []).map((_, j) => _GRAFICO_COLORES[j % _GRAFICO_COLORES.length]) : color,
+      borderColor: color,
+      borderWidth: 1
+    };
+  });
+  return {
+    type: tipo,
+    data: { labels: labels || [], datasets: chartDatasets },
+    options: {
+      plugins: {
+        title: { display: true, text: titulo || '' },
+        legend: { display: (chartDatasets.length > 1) || esCircular }
+      }
+    }
+  };
+}
+
+function _quickChartUrl(config) {
+  return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(config))}&backgroundColor=white&width=600&height=400`;
 }
 
 // Autenticacion dual para endpoints de planos: sesion normal (X-Token) para
