@@ -1,9 +1,27 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 22/07/2026 -- INV-02: auditoría completa de filtrado por departamento en Inventarios (worker.js) tras el pendiente de ORG-01/INV-01 — 2 fugas reales encontradas y corregidas (/carretillas, /alertas-stock)
+**Fecha:** 22/07/2026 -- INV-03: alineado `isDeptPrivileged()` en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02
 **Versión actual:** v8.00 (sin cambio — solo worker.js, sin bump de app móvil ni de panel.html)
-**Resumen:** Continuando el pendiente detectado en ORG-01 (filtrado por departamento en Inventarios; INV-01 ya había resuelto "Bobinas" en el sidebar), se auditó cada endpoint backend de Inventarios contra el patrón `isDeptPrivileged`. Ver Part 29 para el detalle completo.
+**Resumen:** Tras INV-02 (2 fugas de datos entre departamentos corregidas en /carretillas y /alertas-stock), se alineó la inconsistencia menor flagged en esa sesión: bobinas/pemp/carretillas/herramientas usaban un `isAdminRole` local que no incluía `isDesarrollador`/`isSeguridad`, a diferencia del resto del backend (tareas_obra, rfis, etc. usan `isDeptPrivileged()` desde DEPT-01). Ahora los 4 endpoints usan `isDeptPrivileged(auth) || isJefeObra` para el filtro de departamento. Ver Part 30 para el detalle completo.
+
+### Part 30: INV-03 — Alinear isDeptPrivileged() en los 4 endpoints de Inventarios restantes (worker.js) (22/07/2026)
+**Contexto:** INV-02 dejó flagged que `getBobinas`/`getPemp`/`getCarretillas`/`getHerramientas` calculaban su propio `isAdminRole` local (`isSuperadmin || isEmpresaAdmin || isJefeObra`) sin incluir `isDesarrollador`/`isSeguridad`, mientras que el resto de módulos (tareas_obra, rfis, documentos de obra...) usan el helper compartido `isDeptPrivileged(auth)` desde DEPT-01. No era una fuga de seguridad (los roles con menos privilegios veían MENOS, no más), pero sí una inconsistencia: un `desarrollador` o `seguridad` no tenía visión transversal de departamento en estos 4 endpoints concretos, a diferencia de todo el resto del backend.
+
+**Cambios:**
+- `getBobinas`, `getPemp`, `getCarretillas`, `getHerramientas`: cada función ahora captura el objeto `auth` completo (antes solo desestructuraba campos sueltos) y usa `const isAdminRole = isDeptPrivileged(auth) || isJefeObra;` en vez de `isSuperadmin || isEmpresaAdmin || isJefeObra`. Se mantiene `isJefeObra` fuera del helper porque solo aplica al scoping de departamento, no al de obra (ver comentario existente en `getBobinas`).
+- `getHerramientas`: el flag `todos=1` (para ver todos los departamentos explícitamente) ahora también usa `isDeptPrivileged(auth)` en vez de `isSuperadmin || isEmpresaAdmin`.
+- El scoping de OBRA (`obraFilter`/`isUnrestrictedAdmin`) no se tocó — sigue siendo solo `isSuperadmin || isEmpresaAdmin`, ya que esta sesión solo trataba la visión transversal de DEPARTAMENTO, no de obra.
+- `getAlertasStock` (ya arreglado en INV-02) no se tocó — ya incluía `isDesarrollador`/`isSeguridad` en su cálculo local de `privilegiado`, aunque no reutiliza literalmente el helper; se dejó así por no introducir un tercer cambio sin necesidad, ya estaba correcto en la práctica.
+
+**Verificación:** `node --check worker.js` OK; sin corrupción de encoding nueva en el diff. Deploy: `npx wrangler deploy` OK, Version ID `a227da11-e4ee-4f18-b9d8-2a4d4f17d3a7`, bindings DB+FILES presentes, `/health` 200. Smoke test en producción: `/bobinas`, `/carretillas` sin auth → `[]` (sin cambio de comportamiento); `/herramientas` sin auth → `{"ok":false,"error":"No autorizado"}` (sin cambio).
+
+**Pendiente (no tocado esta sesión):**
+- `/repostajes` sigue sin columna `departamento` ni filtro — necesitaría migración de esquema.
+- Corrupción de encoding preexistente en comentarios decorativos cerca de estas mismas funciones (líneas 6180-6182, 6325-6327, 7653) — no introducida por mí, fuera de alcance, pendiente de sesión de housekeeping.
+- `getAlertasStock` podría refactorizarse para llamar literalmente a `isDeptPrivileged(auth)` en vez de repetir la condición inline — cosmético, no urgente.
+
+**Alcance y despliegue:** Solo `worker.js` (backend REST del worker principal, usado por panel/app web). No aplica a `alejandra-agente/worker.js` — esta lógica vive en endpoints REST de inventario, no en las tools del agente conversacional.
 
 ### Part 29: INV-02 — Auditoría y fix de filtrado por departamento en endpoints de Inventarios (worker.js) (22/07/2026)
 **Contexto:** Retomando el pendiente flagged en ORG-01 ("la sección Inventarios se muestra igual a cualquier oficio sin filtrar por departamento"), tras confirmar que INV-01 ya había ocultado el botón "Bobinas" del sidebar para no-electricistas, se auditó el BACKEND real de los 7 endpoints que sirven la sección Inventarios (`/bobinas`, `/pemp`, `/carretillas`, `/herramientas`, `/repostajes`, `/inventario-seg`, `/alertas-stock`) para comprobar si de verdad filtran por departamento para roles no-admin, o si solo se ocultaba el botón sin proteger el dato en el servidor.

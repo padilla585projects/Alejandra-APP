@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/07/2026 — INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 22/07/2026 — INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1608,6 +1608,39 @@ LEYENDA DE ESTADO:
       - Las 4 rutas de inventario (`bobinas`/`pemp`/`carretillas`/`herramientas`) siguen sin usar
         el helper compartido `isDeptPrivileged()` de DEPT-01 (usan su propio `isAdminRole` con
         `isJefeObra` pero sin `isDesarrollador`/`isSeguridad`) — inconsistencia menor, no es fuga.
+    · Alcance: solo `worker.js` (backend), requirió y recibió `wrangler deploy` manual. No aplica
+      a `alejandra-agente/worker.js` (lógica de endpoints REST del worker principal, no de las
+      tools del agente).
+
+[✓] INV-03 — Alinear isDeptPrivileged() en bobinas/pemp/carretillas/herramientas
+    [HECHO 22/07/2026]
+    · Pendiente flagged por la propia sesión INV-02: `getBobinas`/`getPemp`/`getCarretillas`/
+      `getHerramientas` calculaban su propio `isAdminRole` local (`isSuperadmin || isEmpresaAdmin
+      || isJefeObra`), sin incluir `isDesarrollador`/`isSeguridad`, a diferencia de todo el resto
+      del backend (tareas_obra, rfis, documentos_obra...) que usa el helper compartido
+      `isDeptPrivileged(auth)` desde DEPT-01. No era una fuga de seguridad (los roles con menos
+      privilegio veían MENOS, no más), pero sí una inconsistencia: `desarrollador`/`seguridad` no
+      tenían visión transversal de departamento en estos 4 endpoints concretos.
+    · Corregido: las 4 funciones ahora capturan el objeto `auth` completo (antes solo desestructuraban
+      campos sueltos) y usan `isAdminRole = isDeptPrivileged(auth) || isJefeObra` en vez del cálculo
+      local. `isJefeObra` se mantiene fuera del helper a propósito, porque solo aplica al scoping de
+      departamento, no al de obra. El flag `todos=1` de `getHerramientas` también pasa a usar
+      `isDeptPrivileged(auth)` en vez de `isSuperadmin || isEmpresaAdmin`.
+    · El scoping de OBRA (`obraFilter`/`isUnrestrictedAdmin`) no se tocó — sigue siendo solo
+      `isSuperadmin || isEmpresaAdmin`, esta sesión solo trataba la visión de DEPARTAMENTO.
+      `getAlertasStock` (ya arreglado en INV-02) tampoco se tocó — ya incluía
+      `isDesarrollador`/`isSeguridad` en su cálculo local, aunque no reutiliza literalmente el helper.
+    · Verificación: `node --check worker.js` OK; sin corrupción de encoding nueva en el diff.
+      Deploy: `wrangler deploy` OK, Version ID `a227da11-e4ee-4f18-b9d8-2a4d4f17d3a7`, `/health` 200;
+      smoke test en producción sin regresiones (`/bobinas`, `/carretillas` sin auth → `[]`;
+      `/herramientas` sin auth → `No autorizado`, igual que antes).
+    · Pendiente detectado y NO corregido, bajo prioridad (flagged para sesión futura):
+      - `/repostajes` sin columna `departamento` ni gate de rol — necesitaría migración de schema.
+      - Corrupción de encoding PREEXISTENTE (no introducida en esta sesión) en comentarios
+        decorativos de `worker.js` cerca de estas mismas funciones (líneas 6180-6182, 6325-6327,
+        7653) — limpiar en una sesión de housekeeping de encoding dedicada.
+      - `getAlertasStock` podría refactorizarse para llamar literalmente a `isDeptPrivileged(auth)`
+        en vez de repetir la condición inline — cosmético, no urgente.
     · Alcance: solo `worker.js` (backend), requirió y recibió `wrangler deploy` manual. No aplica
       a `alejandra-agente/worker.js` (lógica de endpoints REST del worker principal, no de las
       tools del agente).

@@ -6182,7 +6182,8 @@ async function eliminarObra(id, request, env) {
 // Ã¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚Â
 
 async function getBobinas(request, env) {
-  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, departamento, empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, departamento, empresa_id } = auth;
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
@@ -6192,7 +6193,9 @@ async function getBobinas(request, env) {
   // superadmin/empresa_admin pueden ver todas las obras (sin restricciÃ³n de obraId de sesiÃ³n)
   // jefe_de_obra se incluye en isAdminRole solo para el dept scoping (no para obra scoping)
   const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
-  const isAdminRole = isUnrestrictedAdmin || isJefeObra;
+  // INV-03 (22/07/2026): isDeptPrivileged() añade desarrollador/seguridad a la vision
+  // transversal de departamento, igual que en tareas_obra/rfis/etc (DEPT-01)
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra;
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   // Admins: dept filter solo si se pasa explÃ­citamente (?departamento=X); operarios: siempre su dept
   const deptParam = url.searchParams.get('departamento');
@@ -6327,14 +6330,17 @@ async function eliminarBobina(codigo, request, env, ctx) {
 // Ã¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚Â
 
 async function getPemp(request, env) {
-  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, isSeguridad, departamento, empresa_id } = auth;
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
   const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
-  const isAdminRole = isUnrestrictedAdmin || isJefeObra;
+  // INV-03 (22/07/2026): isDeptPrivileged() añade desarrollador/seguridad a la vision
+  // transversal de departamento, igual que en tareas_obra/rfis/etc (DEPT-01)
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra;
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   const deptParam = url.searchParams.get('departamento');
   // Non-admin roles always see only their own department (ignore query param override)
@@ -6493,14 +6499,17 @@ async function eliminarPemp(matricula, request, env, ctx) {
 // Ã¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚ÂÃ¢â€¢Ã‚Â
 
 async function getCarretillas(request, env) {
-  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, isSeguridad, departamento, empresa_id } = auth;
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
   const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
-  const isAdminRole = isUnrestrictedAdmin || isJefeObra;
+  // INV-03 (22/07/2026): isDeptPrivileged() añade desarrollador/seguridad a la vision
+  // transversal de departamento, igual que en tareas_obra/rfis/etc (DEPT-01)
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra;
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   const deptParam = url.searchParams.get('departamento');
   // INV-02 (22/07/2026): antes el query param ganaba incluso para no-admin,
@@ -8003,11 +8012,14 @@ async function eliminarKit(id, request, env, ctx) {
 }
 
 async function getHerramientas(request, env) {
-  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
-  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
-  const todos = url.searchParams.get('todos') === '1' && (isSuperadmin || isEmpresaAdmin);
+  // INV-03 (22/07/2026): isDeptPrivileged() añade desarrollador/seguridad a la vision
+  // transversal de departamento, igual que en tareas_obra/rfis/etc (DEPT-01)
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra;
+  const todos = url.searchParams.get('todos') === '1' && isDeptPrivileged(auth);
   const deptParam = url.searchParams.get('departamento');
   // Non-admin roles always see only their own department (ignore query param override)
   const deptFilter = !isAdminRole ? departamento : (deptParam || (todos ? null : departamento));
