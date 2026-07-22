@@ -4,12 +4,45 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 21/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.99
-WORKER API: 17ce8725-d621-4f14-bb80-06f8bc497d0e (DEPT-01: aislamiento de datos por departamento en 7 tablas de obra -tareas_obra, rfis, control_calidad, punch_list, actas_reunion, documentos_obra, inspecciones_seg-; nuevo helper isDeptPrivileged-auth- -admins + Seguridad ven todo, el resto solo su departamento-; autoasignacion del departamento al crear = el del usuario creador; buscarGlobal recupera filtro de departamento en 4 tablas -ya resuelto BUG-CARNETS- y lo anade a incidencias; migracion manual ALTER TABLE contra D1 para documentos_obra/inspecciones_seg -unicas 2 tablas sin ensureXTable- capturada en migrate_dept01_construccion.sql; previo 015d1dc/f33582ae BUG-CARNETS: quita filtro departamento roto en 7 endpoints -carnets, reconocimientos_medicos, documentos_obra, permisos_trabajo, inspecciones_seg, turnos, ausencias- que daba 500 por columna departamento inexistente, mas fix de fallo silencioso en buscarGlobal; previo 06a3ff0d COST-01: fix pricing AI_PRICES claude-opus-4-6) · WORKER AGENTE: b9242d46-be9a-4038-84f6-ce2a00ca503c (sin cambios en DEPT-01 -aislamiento por departamento es solo del worker principal y panel.html-; BUG-PUSH: implementado getVapidKeys(env) -que faltaba y causaba ReferenceError->500 en /push-vapid-key, rompiendo las push automaticas de usuarios-; lee la public key VAPID del worker principal via Service Binding API_WEB con try/catch -null->503, nunca 500-; fuente unica de verdad, sin duplicar la clave; previo b643c514 SEC-10: paridad de seguridad con worker.js -gating dev-only de nexus_manage anadido a TOOLS_SOLO_DEV_VERIFICADO -SEC-01- y red try/catch exterior en ejecutarTool -SEC-05-; auditado: el agente ya tenia SEC-02 -allowlist en test_endpoint, mas estricto que worker.js- y SEC-07 no aplica -sin handler de red de agentes-; verificado que nexus_manage no lo usa ningun flujo autonomo; 85/85 tests; deploy manual; previo cfbdf02b SEC-09: barrera humana EQUILIBRADA en escribir_bd -cualquier DELETE y UPDATE masivo exigen "CONFIRMO BORRADO <cod>"; INSERT/REPLACE y UPDATE con WHERE real pasan sin friccion-; cubre panel de oficina Y app web/movil, que comparten este worker; deploy manual, el agente no tiene CI; previo f742e9e8 cliente HTTP puro via Service Binding; previo f2df41f2 sobre commit d9b009e)
+ÚLTIMA ACTUALIZACIÓN: 22/07/2026
+VERSIÓN ACTUAL APP NUEVA: v8.00
+WORKER API: db6b7928-843e-4c9f-9530-2f45a815800e (ROLES-01: coherencia de permisos por rol en incidencias -getIncidencias, crearIncidencia, actualizarIncidencia, eliminarIncidencia-; jefe_de_obra y oficina pasan a tener gestion completa -cambiar estado/asignar/resolver/eliminar-, igual que encargado; se quita a jefe_de_obra el bypass sin_dept=1 que le permitia ver incidencias de otros departamentos -unico rol no-privilegiado que lo tenia-, dejando ese bypass solo para isDeptPrivileged -SA/EA/desarrollador/Seguridad-, coherente con el diseno original de DEPT-01; verificado que crearBobina/crearPemp/crearCarretilla ya vinculan el departamento desde la sesion -auth.departamento-, nunca desde el body, asi que operario ya solo puede crear en su propio departamento sin cambio de codigo; operario mantiene su capacidad de crear incidencias -decision consciente de Adrian, documentado como intencional-; previo 17ce8725 DEPT-01: aislamiento de datos por departamento en 7 tablas de obra -tareas_obra, rfis, control_calidad, punch_list, actas_reunion, documentos_obra, inspecciones_seg-; nuevo helper isDeptPrivileged-auth- -admins + Seguridad ven todo, el resto solo su departamento-; autoasignacion del departamento al crear = el del usuario creador; buscarGlobal recupera filtro de departamento en 4 tablas -ya resuelto BUG-CARNETS- y lo anade a incidencias; migracion manual ALTER TABLE contra D1 para documentos_obra/inspecciones_seg -unicas 2 tablas sin ensureXTable- capturada en migrate_dept01_construccion.sql; previo 015d1dc/f33582ae BUG-CARNETS: quita filtro departamento roto en 7 endpoints -carnets, reconocimientos_medicos, documentos_obra, permisos_trabajo, inspecciones_seg, turnos, ausencias- que daba 500 por columna departamento inexistente, mas fix de fallo silencioso en buscarGlobal; previo 06a3ff0d COST-01: fix pricing AI_PRICES claude-opus-4-6) · WORKER AGENTE: b9242d46-be9a-4038-84f6-ce2a00ca503c (sin cambios en DEPT-01 -aislamiento por departamento es solo del worker principal y panel.html-; BUG-PUSH: implementado getVapidKeys(env) -que faltaba y causaba ReferenceError->500 en /push-vapid-key, rompiendo las push automaticas de usuarios-; lee la public key VAPID del worker principal via Service Binding API_WEB con try/catch -null->503, nunca 500-; fuente unica de verdad, sin duplicar la clave; previo b643c514 SEC-10: paridad de seguridad con worker.js -gating dev-only de nexus_manage anadido a TOOLS_SOLO_DEV_VERIFICADO -SEC-01- y red try/catch exterior en ejecutarTool -SEC-05-; auditado: el agente ya tenia SEC-02 -allowlist en test_endpoint, mas estricto que worker.js- y SEC-07 no aplica -sin handler de red de agentes-; verificado que nexus_manage no lo usa ningun flujo autonomo; 85/85 tests; deploy manual; previo cfbdf02b SEC-09: barrera humana EQUILIBRADA en escribir_bd -cualquier DELETE y UPDATE masivo exigen "CONFIRMO BORRADO <cod>"; INSERT/REPLACE y UPDATE con WHERE real pasan sin friccion-; cubre panel de oficina Y app web/movil, que comparten este worker; deploy manual, el agente no tiene CI; previo f742e9e8 cliente HTTP puro via Service Binding; previo f2df41f2 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  v8.00 (worker.js + index.html)  |  22/07/2026  [ROLES-01: coherencia de permisos por rol]
+                       Adrian pidio revisar el tema de los roles ("revisemos el tema de los
+                       roles"). Auditoria del codigo real (getAuth/hasRole/isDeptPrivileged)
+                       encontro 3 incoherencias frente a la doc de roles: (1) jefe_de_obra y
+                       oficina podian CREAR incidencias pero no cambiarles el estado ni
+                       cerrarlas (403); (2) jefe_de_obra era el UNICO rol no-privilegiado que
+                       podia ver incidencias de otros departamentos via sin_dept=1 -bypass que
+                       encargado nunca tuvo-, rompiendo el aislamiento estricto que DEPT-01
+                       establecio para el resto de tablas de obra; (3) no habia ningun check de
+                       rol al crear bobinas/PEMP/carretillas -solo se validaba la empresa-.
+                       Decisiones de Adrian: jefe_de_obra/oficina pasan a gestion completa de
+                       incidencias -igual que encargado-; se quita el bypass sin_dept=1 a
+                       jefe_de_obra -queda solo para isDeptPrivileged: SA/EA/desarrollador/
+                       Seguridad-; operario puede crear bobinas/PEMP/carretillas pero SOLO en su
+                       propio departamento -verificado que crearBobina/crearPemp/crearCarretilla
+                       ya vinculan el departamento desde auth.departamento -sesion-, nunca desde
+                       el body, luego no requirio cambio de codigo-; operario mantiene su
+                       capacidad de crear incidencias -intencional, documentado-. Cambios en
+                       worker.js: getIncidencias -sin_dept=1 gateado por isDeptPrivileged-,
+                       crearIncidencia -isPrivileged = isDeptPrivileged-auth- en vez de lista de
+                       roles-, actualizarIncidencia y eliminarIncidencia -puedeGestionar ahora
+                       incluye isJefeObra e isOficina-. Cambio en index.html: renderIncidencias
+                       -puedeGestionar incluye jefe_de_obra/oficina/desarrollador-. panel.html no
+                       requirio cambios -su frontend ya dejaba editar a jefe_de_obra/oficina; el
+                       403 venia solo del backend-. alejandra-agente/worker.js no aplica -sus
+                       tools -consultar_bd/escribir_bd- no tienen gating por rol de endpoint,
+                       solo por empresa_id-. Fuera de alcance -detectado, no tocado sin mas
+                       confirmacion-: mismo patron de permisos incoherentes en eventos de
+                       calendario -puedeEditar/puedeEliminar- y en varios checks de fichajes/
+                       inventario -rol === 'oficina' || rol === 'encargado'-. Verificado:
+                       node --check worker.js OK, sin corrupcion de encoding nueva, deploy OK
+                       -Version ID db6b7928-843e-4c9f-9530-2f45a815800e-, smoke test curl OK.
+                       Detalle completo en IDEAS_PENDIENTES.txt (ROLES-01) y SESION.md.
   (panel.html — solo frontend, sin bump version) | 21/07/2026 [BUG-INVISIBLE: 4 paginas del panel nunca se mostraban]
                        Al probar DEPT-01 en vivo con Alberto (encargado+electrico), se descubrio
                        por casualidad que "Docs. Obra" se quedaba en blanco pese a que los datos

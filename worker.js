@@ -11221,17 +11221,16 @@ async function eliminarEvento(id, request, env) {
 
 async function getIncidencias(request, env) {
   const auth = await getAuth(request, env);
-  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra, isDesarrollador } = auth;
+  const { empresa_id, departamento } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   let sql = 'SELECT i.*, o.nombre as obra_nombre FROM incidencias i LEFT JOIN obras o ON i.obra_id = o.id WHERE i.empresa_id = ?';
   const params = [empresa_id];
-  // sin_dept=1 Ã¢â€ â€™ admins/jefes pueden ver todas las incidencias sin filtrar por dept
-  const sinDept = url.searchParams.get('sin_dept') === '1' && (isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador);
+  // DEPT-01: sin_dept=1 solo para roles con vision transversal (isDeptPrivileged: SA/EA/desarrollador/Seguridad)
+  const sinDept = url.searchParams.get('sin_dept') === '1' && isDeptPrivileged(auth);
   if (!sinDept) {
-    // Non-admin roles forced to their own dept; admins can filter via param
-    const isAdminIncidencias = isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador;
-    const dept = isAdminIncidencias ? (url.searchParams.get('departamento') || departamento) : departamento;
+    // Roles sin vision transversal forzados a su propio dept; los privilegiados pueden filtrar por param
+    const dept = isDeptPrivileged(auth) ? (url.searchParams.get('departamento') || departamento) : departamento;
     if (dept) { sql += ' AND i.departamento = ?'; params.push(dept); }
   }
   const estado = url.searchParams.get('estado');
@@ -11245,13 +11244,14 @@ async function getIncidencias(request, env) {
 
 async function crearIncidencia(request, env, ctx) {
   const auth = await getAuth(request, env);
-  const { empresa_id, obra_id, departamento, nombre, rol } = auth;
+  const { empresa_id, obra_id, departamento, nombre } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { titulo, descripcion, tipo = 'otro', gravedad = 'media', asignado_a, fecha } = body;
   if (!titulo?.trim()) return err('El tÃ­tulo es obligatorio', 400);
-  // Solo SA/EA/jefe_obra/oficina pueden crear incidencias en un dept distinto al propio
-  const isPrivileged = ['superadmin', 'empresa_admin', 'jefe_de_obra', 'oficina', 'desarrollador'].includes(rol);
+  // DEPT-01: solo roles con vision transversal (isDeptPrivileged: SA/EA/desarrollador/Seguridad)
+  // pueden crear incidencias en un departamento distinto al propio; jefe_de_obra/oficina van igual que encargado.
+  const isPrivileged = isDeptPrivileged(auth);
   let dept = body.departamento || departamento || 'electrico';
   if (!isPrivileged && body.departamento && departamento && body.departamento !== departamento) {
     return err('No puedes crear incidencias en otro departamento', 403);
@@ -11271,9 +11271,12 @@ async function crearIncidencia(request, env, ctx) {
 }
 
 async function actualizarIncidencia(id, request, env, ctx) {
-  const { empresa_id, nombre, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  const puedeGestionar = rol === 'encargado' || rol === 'empresa_admin' || rol === 'superadmin';
+  // Gestion completa (cambiar estado/asignar/resolver): encargado, jefe_de_obra, oficina y admins --
+  // los roles con capacidad de gestion operativa dentro de su propio ambito (obra/departamento)
+  const puedeGestionar = auth.isEncargado || auth.isJefeObra || auth.isOficina || auth.isEmpresaAdmin || auth.isSuperadmin;
   const body = await request.json().catch(() => ({}));
   const inc = await env.DB.prepare('SELECT * FROM incidencias WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!inc) return err('Incidencia no encontrada', 404);
@@ -11300,9 +11303,11 @@ async function actualizarIncidencia(id, request, env, ctx) {
 }
 
 async function eliminarIncidencia(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  if (rol !== 'superadmin' && rol !== 'empresa_admin' && rol !== 'encargado') return err('Sin permisos', 403);
+  // Misma gestion completa que actualizarIncidencia: encargado, jefe_de_obra, oficina y admins
+  if (!(auth.isSuperadmin || auth.isEmpresaAdmin || auth.isEncargado || auth.isJefeObra || auth.isOficina)) return err('Sin permisos', 403);
   // Borrar fotos de R2 primero
   const { results: fotos } = await env.DB.prepare('SELECT r2_key FROM incidencia_fotos WHERE incidencia_id = ? AND empresa_id = ?').bind(id, empresa_id).all();
   await Promise.all(fotos.map(f => env.FILES.delete(f.r2_key)));

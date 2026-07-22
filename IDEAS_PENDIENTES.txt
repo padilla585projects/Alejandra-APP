@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 21/07/2026 — BUG-INVISIBLE: 4 páginas del panel (Reconocimientos, Docs. Obra, Permisos de Trabajo, Inspecciones) nunca se mostraban para ningún usuario por un style="display:none" hardcodeado en el HTML, hallado por casualidad al probar DEPT-01 en vivo. Antes: DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 22/07/2026 — ROLES-01: coherencia de permisos de jefe_de_obra/oficina en incidencias (gestión completa) + aislamiento estricto por departamento (se quita el bypass cross-dept que solo tenía jefe_de_obra) — v8.00. Antes: BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1275,6 +1275,61 @@ LEYENDA DE ESTADO:
       `navTo(pagina)` directamente sí funciona siempre. Revisar con clic manual en una sesión
       futura si se quiere descartar del todo.
     · Reportado/arreglado: 21/07/2026 — hallado como efecto colateral de probar DEPT-01 en vivo.
+
+================================================================================
+  🔐 ROLES-01 — Coherencia de permisos por rol (incidencias + aislamiento dept)  [HECHO v8.00]
+================================================================================
+
+[✓] ROLES-01 — jefe_de_obra/oficina sin gestión de incidencias + bypass cross-dept solo en jefe_de_obra
+    [HECHO 22/07/2026 — v8.00]
+    · Origen: Adrian pidió "revisemos el tema de los roles" tras el cierre de BUG-INVISIBLE. Se hizo
+      una auditoría completa (sin tocar código) de qué puede hacer cada rol hoy en worker.js/panel.html/
+      index.html, y se detectaron 4 incoherencias entre el código real y la documentación de CLAUDE.md.
+      Adrian decidió qué comportamiento es el correcto para cada una:
+        1) jefe_de_obra y oficina podían CREAR incidencias pero nunca cambiarles el estado ni cerrarlas
+           (puedeGestionar en actualizarIncidencia/eliminarIncidencia solo incluía encargado/empresa_admin/
+           superadmin) → decisión: darles gestión completa, igual que encargado.
+        2) crearBobina/crearPemp/crearCarretilla no tenían ningún check de rol, solo de empresa → decisión:
+           está bien que operario pueda crear (reportar entradas de inventario), pero SOLO en su propio
+           departamento. Verificado que esto YA se cumplía: las 3 funciones toman el departamento siempre
+           de `auth.departamento` (sesión), nunca de lo que envíe el cliente en el body — sin cambio
+           necesario.
+        3) el bypass de ver incidencias de otros departamentos (`sin_dept=1`) NO lo tenía encargado como
+           se pensaba en un primer análisis (error del sub-agente de investigación, corregido tras leer el
+           código real) sino jefe_de_obra → decisión: aislamiento estricto, solo superadmin/empresa_admin/
+           desarrollador/Seguridad (el patrón `isDeptPrivileged()` que ya usa DEPT-01 en tareas_obra) ven
+           cross-departamento. Se quita el privilegio especial de jefe_de_obra.
+        4) operario puede crear incidencias (no documentado en CLAUDE.md, que dice "solo lectura/scan")
+           → decisión: mantenerlo, es útil que un operario reporte un problema aunque el resto de su rol
+           sea de solo lectura. Se documenta aquí como comportamiento intencional (no requiere cambio de
+           código, ya funcionaba así).
+    · Fix en worker.js (funciones de incidencias, líneas ~11222-11317):
+        - getIncidencias(): `sin_dept=1` y el filtro de departamento ahora usan `isDeptPrivileged(auth)`
+          (helper ya existente de DEPT-01) en vez de una lista de roles hardcodeada que incluía
+          jefe_de_obra.
+        - crearIncidencia(): `isPrivileged` (permite crear en un dept distinto al propio) ahora también
+          usa `isDeptPrivileged(auth)` en vez de `['superadmin','empresa_admin','jefe_de_obra','oficina',
+          'desarrollador']` — jefe_de_obra/oficina ya no pueden crear incidencias fuera de su departamento.
+        - actualizarIncidencia(): `puedeGestionar` ahora incluye `auth.isJefeObra` y `auth.isOficina`
+          además de encargado/empresa_admin/superadmin.
+        - eliminarIncidencia(): mismo criterio que actualizarIncidencia (antes solo superadmin/
+          empresa_admin/encargado podían borrar).
+    · Fix en index.html: `renderIncidencias()` tenía el mismo `puedeGestionar` desactualizado (sin
+      jefe_de_obra/oficina/desarrollador) controlando si se muestran los botones de editar/borrar en la
+      app móvil — alineado con el backend.
+    · panel.html no necesitó cambios: el `canEdit` de la tabla de incidencias YA incluía jefe_de_obra/
+      oficina desde antes (el bug era solo que el backend los rechazaba con 403 pese a que el frontend
+      les dejaba intentarlo).
+    · Sin migración de BD. Deploy de worker.js verificado en producción tras el push (Version ID
+      `db6b7928-843e-4c9f-9530-2f45a815800e`); smoke test `curl /incidencias` responde `200 []` sin
+      errores 500.
+    · Fuera de alcance, detectado pero NO tocado (mismo patrón de "solo encargado/empresa_admin/
+      superadmin, sin jefe_de_obra/oficina" en otras funciones: eventos de calendario ~línea 11194/11214,
+      y varios `rol === 'oficina' || rol === 'encargado'` en fichajes/inventario ~líneas 8290/8342/8373/
+      8860/17985). Se decidió no tocarlos en esta sesión para no ampliar el alcance sin confirmación
+      explícita de Adrian; revisar en una futura sesión de coherencia de roles si procede.
+    · No aplica a alejandra-agente/worker.js: sus herramientas (`consultar_bd`/`escribir_bd`) no pasan
+      por los endpoints REST de incidencias con gating por rol, solo por scope de empresa_id.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

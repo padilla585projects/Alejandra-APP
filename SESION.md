@@ -1,16 +1,48 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 21/07/2026 -- BUG-INVISIBLE: 4 páginas del panel (Reconocimientos, Docs. Obra, Permisos de Trabajo, Inspecciones) nunca se mostraban por un `style="display:none"` hardcodeado en el HTML, para NINGÚN usuario, desde su creación
-**Versión actual:** v7.99 (sin bump — fix de panel.html sin `APP_VERSION` propio, ver nota en Part 23)
-**Resumen:** Al probar DEPT-01 en vivo con Alberto (electrico), se descubrió un bug no relacionado, preexistente: 4 divs `.page` del panel tenían un `style="display:none"` fijo en el propio HTML que ganaba SIEMPRE a la clase `.page.active{display:block}` que usa `_doNavTo()` para mostrar páginas — esas 4 páginas jamás se habían podido ver, para ningún rol, desde que existen. Fix: quitar el inline style de los 4 divs (commit `8f29c5c`). Verificado en producción tras el push (GitHub Pages) navegando a las 4 páginas vía `navTo()`: las 4 ahora quedan `display:block` + clase `active`, y "Documentos de Obra" renderiza sus 2 documentos reales correctamente. Ver Part 23 para detalle completo.
+**Fecha:** 22/07/2026 -- ROLES-01: coherencia de permisos de jefe_de_obra/oficina en incidencias (gestión completa) + aislamiento estricto por departamento (se quita el bypass cross-dept que solo tenía jefe_de_obra)
+**Versión actual:** v8.00 (worker.js + index.html)
+**Resumen:** Adrian pidió revisar el tema de los roles. Auditoría del código real encontró 3 incoherencias: jefe_de_obra/oficina podían crear incidencias pero no gestionarlas (cambiar estado/cerrar); jefe_de_obra era el único rol no-privilegiado con bypass `sin_dept=1` para ver incidencias de otros departamentos (rompía el aislamiento de DEPT-01); no había check de rol al crear bobinas/PEMP/carretillas. Decisiones de Adrian: jefe_de_obra/oficina pasan a gestión completa de incidencias; se quita el bypass a jefe_de_obra (queda solo para `isDeptPrivileged`: SA/EA/desarrollador/Seguridad); operario solo puede crear inventario en su propio departamento (ya lo hacía así, sin cambio de código); operario mantiene su capacidad de crear incidencias (intencional). Ver Part 24 para detalle completo.
 
-**Último worker desplegado (web, alejandra-app-api):** Version ID `17ce8725-d621-4f14-bb80-06f8bc497d0e` (deploy manual con DEPT-01: aislamiento por departamento en 7 tablas + fix buscarGlobal; previo `f33582ae` BUG-CARNETS)
-**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- DEPT-01 y BUG-INVISIBLE son solo del panel.html/worker principal, no aplica a alejandra-agente; previo `b643c514` SEC-10)
-**Commits de esta sesión (push a `main` ✅):**
-- `015d1dc` — fix: quita filtro departamento roto en 7 endpoints (BUG-CARNETS)
-- `0da8805` — feat: aislamiento de datos por departamento en 7 tablas de obra + sidebar (DEPT-01) — v7.99
-- `8f29c5c` — fix: 4 páginas del panel nunca se mostraban (BUG-INVISIBLE)
+**Último worker desplegado (web, alejandra-app-api):** Version ID `db6b7928-843e-4c9f-9530-2f45a815800e` (deploy manual con ROLES-01: coherencia de permisos por rol en incidencias; previo `17ce8725` DEPT-01)
+**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- ROLES-01 es solo del worker principal/index.html, no aplica a alejandra-agente; previo `b643c514` SEC-10)
+**Commits de esta sesión (pendiente de push):**
+- (pendiente) — fix: coherencia de permisos por rol en incidencias + aislamiento estricto por departamento (ROLES-01) — v8.00
+
+### Part 24: ROLES-01 — Coherencia de permisos por rol (incidencias + aislamiento dept) (22/07/2026)
+**Contexto:** Adrian: *"revisemos el tema de los roles"* → aclarado como documentar/explicar los roles actuales y sus permisos reales en el código. La auditoría (lectura directa de `getAuth`/`hasRole`/`isDeptPrivileged` y de los endpoints de incidencias/inventario) encontró 3 incoherencias frente a la doc de roles de CLAUDE.md, y Adrian respondió *"vale que arreglamos entonces ahi que ser coherentes"* — pasar de documentar a corregir.
+
+**Incoherencias encontradas:**
+1. `jefe_de_obra` y `oficina` podían CREAR incidencias pero `actualizarIncidencia`/`eliminarIncidencia` solo dejaban a `encargado`/`empresa_admin`/`superadmin` → 403 al intentar cambiar estado o cerrar una incidencia que ellos mismos podían abrir.
+2. `getIncidencias` dejaba a `jefe_de_obra` pasar `sin_dept=1` para ver incidencias de TODOS los departamentos — el único rol no-privilegiado con ese bypass (ni `encargado` ni `oficina` lo tenían), rompiendo el aislamiento estricto que DEPT-01 estableció para el resto de tablas de obra (donde solo `isDeptPrivileged`: SA/EA/desarrollador/Seguridad ven todo).
+3. `crearBobina`/`crearPemp`/`crearCarretilla` no tenían ningún check de rol (solo se validaba `empresa_id`), así que en teoría un `operario` (doc: "solo lectura/scan") podía crear registros de inventario.
+
+**Decisiones de Adrian (recogidas por AskUserQuestion):**
+- jefe_de_obra/oficina pasan a tener gestión completa de incidencias, igual que encargado.
+- operario SÍ puede crear bobinas/PEMP/carretillas, pero solo en su propio departamento — verificado leyendo el código real que `crearBobina`/`crearPemp`/`crearCarretilla` YA vinculan el departamento desde `auth.departamento` (sesión), nunca desde `body.departamento`, así que no hizo falta ningún cambio de código para esto.
+- Se quita el bypass `sin_dept=1` a jefe_de_obra (queda reservado a `isDeptPrivileged`), alineado con el diseño original de DEPT-01.
+- operario mantiene su capacidad de crear incidencias (reportar un problema) — mantenerlo y documentarlo como intencional, aunque CLAUDE.md dice "solo lectura/scan".
+
+**Nota de proceso:** un sub-agente de investigación reportó inicialmente que el bypass cross-dept lo tenía `encargado`; al leer el código real antes de implementar se confirmó que el rol real era `jefe_de_obra` (encargado nunca lo tuvo). Se avisó a Adrian del error del sub-agente antes de aplicar el fix al rol correcto.
+
+**Cambios en worker.js:**
+- `getIncidencias` (línea ~11222): `sin_dept=1` ahora gateado por `isDeptPrivileged(auth)` en vez de una lista de roles que incluía `isJefeObra`.
+- `crearIncidencia` (línea ~11246): `isPrivileged` ahora es `isDeptPrivileged(auth)` en vez de `['superadmin','empresa_admin','jefe_de_obra','oficina','desarrollador'].includes(rol)` — solo los roles con visión transversal pueden crear en un departamento distinto al propio.
+- `actualizarIncidencia` (línea ~11274): `puedeGestionar` ahora incluye `auth.isJefeObra || auth.isOficina` además de encargado/empresa_admin/superadmin.
+- `eliminarIncidencia` (línea ~11306): mismo criterio de gestión completa que actualizarIncidencia.
+
+**Cambios en index.html:**
+- `renderIncidencias` (línea ~13529): `puedeGestionar` ahora es `['encargado','jefe_de_obra','oficina','empresa_admin','superadmin','desarrollador'].includes(s?.rol)` en vez de solo 3 roles.
+- `APP_VERSION`: `7.99` → `8.00`.
+
+**panel.html:** no requirió cambios — su frontend (`canEdit` en `cargarIncidencias`) ya incluía jefe_de_obra/oficina; el 403 venía solo del backend, ya corregido.
+
+**alejandra-agente/worker.js:** no aplica — sus tools (`consultar_bd`/`escribir_bd`) no tienen gating por rol de endpoint tipo REST, solo scoping por `empresa_id`. Confirmado con grep, sin cambios necesarios (regla "UNA Alejandra, DOS cerebros" de CLAUDE.md evaluada conscientemente).
+
+**Fuera de alcance, detectado pero NO tocado (sin más confirmación de Adrian):** mismo patrón de permisos incoherentes en eventos de calendario (`puedeEditar`/`puedeEliminar`, líneas ~11194/11214, mismo criterio "solo encargado/empresa_admin/superadmin") y en varios checks `rol === 'oficina' || rol === 'encargado'` de fichajes/inventario (líneas ~5945, 8290, 8342, 8373, 8860, 17985). Documentado en IDEAS_PENDIENTES.txt para revisión futura.
+
+**Verificación:** `node --check worker.js` OK; `git diff` sin corrupción de encoding nueva (grep `Ã|Â|â€|ï»¿` solo coincide con líneas preexistentes ya conocidas); deploy manual Version ID `db6b7928-843e-4c9f-9530-2f45a815800e` (bindings DB+FILES presentes); smoke test `curl /incidencias` sin auth → `200 []` (no crash; reveló además un problema preexistente de fallback legado con `empresa_id:1` sin headers, flagged por separado vía spawn_task, NO corregido en esta sesión — pendiente de investigación futura).
 
 ### Part 23: BUG-INVISIBLE — 4 páginas del panel nunca se mostraban (21/07/2026)
 **Contexto:** siguiendo con DEPT-01, Adrian pidió *"prueba el panel con usuario electrico"* para

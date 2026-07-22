@@ -11970,7 +11970,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.99';
+const APP_VERSION = '8.00';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13536,7 +13536,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       return;
     }
     const s = getSession();
-    const puedeGestionar = s?.rol === 'encargado' || s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    const puedeGestionar = ['encargado', 'jefe_de_obra', 'oficina', 'empresa_admin', 'superadmin', 'desarrollador'].includes(s?.rol);
     const puedeEliminar  = puedeGestionar;
     const gravedadColor  = { baja: '#22c55e', media: '#f59e0b', alta: '#ef4444' };
     const estadoIcon     = { abierta: '🔴', en_progreso: '🟠', resuelta: '✅' };
