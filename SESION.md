@@ -7,8 +7,8 @@
 
 **Último worker desplegado (web, alejandra-app-api):** Version ID `db6b7928-843e-4c9f-9530-2f45a815800e` (deploy manual con ROLES-01: coherencia de permisos por rol en incidencias; previo `17ce8725` DEPT-01)
 **Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- ROLES-01 es solo del worker principal/index.html, no aplica a alejandra-agente; previo `b643c514` SEC-10)
-**Commits de esta sesión (pendiente de push):**
-- (pendiente) — fix: coherencia de permisos por rol en incidencias + aislamiento estricto por departamento (ROLES-01) — v8.00
+**Commits de esta sesión (push a `main` ✅):**
+- `048b344` — fix: coherencia de permisos por rol en incidencias + aislamiento estricto por departamento (ROLES-01) — v8.00
 
 ### Part 24: ROLES-01 — Coherencia de permisos por rol (incidencias + aislamiento dept) (22/07/2026)
 **Contexto:** Adrian: *"revisemos el tema de los roles"* → aclarado como documentar/explicar los roles actuales y sus permisos reales en el código. La auditoría (lectura directa de `getAuth`/`hasRole`/`isDeptPrivileged` y de los endpoints de incidencias/inventario) encontró 3 incoherencias frente a la doc de roles de CLAUDE.md, y Adrian respondió *"vale que arreglamos entonces ahi que ser coherentes"* — pasar de documentar a corregir.
