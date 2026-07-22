@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/07/2026 — AYUDA-01: descubribilidad de módulos (tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding) implementada en todo el sidebar de panel.html. Antes: SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 22/07/2026 — ORG-01: sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra. Antes: AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1465,6 +1465,61 @@ LEYENDA DE ESTADO:
     · Pendiente: ninguno explícito. Si en el futuro se quiere el estado vacío explicativo
       por-página real (en vez del banner genérico), revisar los ~90 puntos de renderizado
       "sin datos" uno a uno.
+
+================================================================================
+  🗂️ ORG-01 — Sidebar organizado por rol/departamento + filtrado real de documentos  [HECHO v8.00]
+================================================================================
+
+[✓] ORG-01 — encargado/operario ven ~35 botones en vez de 62, planos/fotos filtrados por departamento
+    [HECHO 22/07/2026]
+    · Origen: Adrian preguntó, con el caso real de Alberto (encargado de eléctricos), si de
+      verdad un encargado necesita ver tantos paneles en el sidebar. Auditoría confirmó 62
+      botones para un encargado no-admin, con "Planificación" (30 ítems) mezclando tareas de
+      campo con herramientas de gestión de proyecto (RFIs, submittals, presupuestos, contratos,
+      cierre de obra) que nunca debería necesitar un encargado de oficio. Adrian también pidió
+      que cada encargado/operario vea documentos/planos/fotos de obra de SU departamento
+      ("cada uno en su departamento claro").
+    · Nuevo tercer nivel de permisos en panel.html: hasta ahora solo existía admin/no-admin
+      (encargado, jefe_de_obra y oficina veían el mismo sidebar). Ahora `ocultarItemsPorOficio()`
+      oculta 27 `data-page` de PM/oficina técnica dentro de Obra/Construcción/Planificación SOLO
+      para encargado/operario sin roles de gestión de obra mezclados; jefe_de_obra/oficina
+      mantienen el set completo (verificado en preview que no pierden ningún ítem).
+    · Se listan los 27 ítems ocultos y los que se mantienen en SESION.md (Part 27) — resumen:
+      se ocultan `obras`/`documentos` (gestión multi-obra/doc. general de empresa), 5 ítems de
+      coordinación técnica en Construcción (`rfis`, `calidad`, `contactosObra`, `visitasObra`,
+      `actasReunion`) y 20 ítems de presupuestos/contratos/cronogramas de oficina técnica en
+      Planificación. Se mantienen: incidencias, pedidos, mantenimientos, documentosObra,
+      inspecciones, fotosObra (Obra); tareas, seguridadObra, punchList (Construcción);
+      calendario, planSemanal, instruccionesObra, accionItems, centroAlertas, planosObra,
+      entregasMaterial, equiposMedicion, itpObra, ncrsObra (Planificación).
+    · `fotosObra` (Galería de Fotos) se movió de la sección "Diario y Campo" (oculta del todo
+      para no-admin) a "Obra" (siempre visible) — antes ni encargados ni jefes de obra podían
+      verla; ahora todos pueden, filtrada por departamento (ver abajo).
+    · Backend (`worker.js`): `documentosObra` ya estaba bien filtrado por departamento desde
+      DEPT-01, sin cambios. `getPlanosObra` NO tenía ningún filtro por departamento -solo
+      `disciplina`, texto libre elegido al subir el plano-: se añadió `DISCIPLINA_DEPT_MAP`
+      -electrico→electrico, mecanico/fontaneria/climatizacion→mecanicas, civil→obra_civil,
+      seguridad→seguridad; disciplinas sin dueño -arquitectura, estructural, general- se
+      consideran transversales y se ven siempre-, aplicado solo sin privilegio
+      (`isDeptPrivileged`: admin/desarrollador/Seguridad ven todo). `listarFotosObra` antes
+      filtraba por departamento SOLO si el frontend lo pedía por query string -cualquiera podía
+      ver fotos de cualquier departamento pidiendo la URL sin ese parámetro-; ahora se fuerza
+      siempre el departamento de la sesión salvo privilegio.
+    · Verificación: `node --check worker.js` OK; 3 `<script>` de panel.html compilan sin error;
+      preview con sesión simulada confirma que un encargado de departamento `electrico` tiene
+      exactamente los 27 ítems esperados ocultos -ni uno más ni uno menos- y un `jefe_de_obra`
+      del mismo departamento no tiene ninguno oculto; `fotosObra` aparece una única vez en el
+      DOM; `git diff` sin corrupción de encoding nueva. Deploy de `worker.js` hecho:
+      Version ID `65e8e7cc-2c86-4d1c-a26b-43809445b9bf`, `/health` 200 tras el deploy.
+    · Alcance: `panel.html` (frontend) + `worker.js` (backend, requirió `wrangler deploy`
+      manual). No se tocó `index.html`/`sw.js` -sin bump de versión de app móvil-. No aplica a
+      `alejandra-agente/worker.js` -esta lógica vive en endpoints REST del panel/app web, no en
+      las herramientas del agente-.
+    · Pendiente detectado y NO implementado, flagged aparte (spawn_task): la sección
+      "Inventarios" del sidebar (bobinas, PEMP, carretillas, repostajes, herramientas,
+      alertasStock) se muestra igual a cualquier oficio sin filtrar por departamento -un
+      encargado de carpintería ve "Bobinas"/"PEMP", que son de eléctricos-. No estaba dentro de
+      lo pedido explícitamente en esta sesión; revisar y confirmar con Adrian antes de tocarlo.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

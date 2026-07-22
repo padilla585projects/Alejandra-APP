@@ -12873,7 +12873,8 @@ async function ensureFotosObraExtended(env) {
   ]) { await env.DB.prepare(col).run().catch(()=>{}); }
 }
 async function listarFotosObra(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, departamento } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   await ensureFotosObraExtended(env);
   const url    = new URL(request.url);
@@ -12885,7 +12886,17 @@ async function listarFotosObra(request, env) {
   const conds  = ['empresa_id = ?'];
   const params = [empresa_id];
   if (obraId) { conds.push('obra_id = ?');        params.push(obraId); }
-  if (dept)   { conds.push('departamento = ?');    params.push(dept); }
+  // ORG-01 (22/07/2026): antes el filtro de departamento era opcional (solo si el
+  // frontend lo pedía por query string), así que cualquiera veía fotos de todos
+  // los departamentos. Ahora, sin privilegio (admin/desarrollador/Seguridad), se
+  // fuerza siempre al departamento propio de la sesión -o sin departamento
+  // asignado a la foto, que se considera compartida-, ignorando lo que pida la
+  // query string. Con privilegio, se respeta el filtro ?departamento= si viene.
+  if (!isDeptPrivileged(auth) && departamento) {
+    conds.push('(departamento = ? OR departamento IS NULL)'); params.push(departamento);
+  } else if (dept) {
+    conds.push('departamento = ?'); params.push(dept);
+  }
   if (tag)    { conds.push('tags LIKE ?');         params.push(`%${tag}%`); }
   if (fecha)  { conds.push('fecha_foto = ?');      params.push(fecha); }
   params.push(limit);
@@ -14873,6 +14884,21 @@ async function ensurePlanosObraTable(env) {
     updated_at TEXT DEFAULT (datetime('now'))
   )`).run();
 }
+// ORG-01 (22/07/2026): planos_obra no tiene columna "departamento" propia, solo
+// "disciplina" (texto libre elegido al subir el plano). Para que cada oficio vea
+// los planos de lo suyo sin tocar el schema, se mapea disciplina -> departamento(s)
+// dueños de esa disciplina. Las disciplinas que no aparecen en el mapa (p.ej.
+// "arquitectura", "estructural", "general") son transversales y se ven siempre,
+// sin restringir por departamento: son planos base que cualquier oficio puede
+// necesitar de contexto (no tienen un departamento "propietario" natural).
+const DISCIPLINA_DEPT_MAP = {
+  electrico:     ['electrico'],
+  mecanico:      ['mecanicas'],
+  fontaneria:    ['mecanicas'],
+  climatizacion: ['mecanicas'],
+  civil:         ['obra_civil'],
+  seguridad:     ['seguridad'],
+};
 async function getPlanosObra(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
@@ -14890,6 +14916,20 @@ async function getPlanosObra(request, env) {
   const params = [auth.empresa_id];
   if (obraId)     { sql += ' AND p.obra_id=?';     params.push(obraId); }
   if (disciplina) { sql += ' AND p.disciplina=?';  params.push(disciplina); }
+  // ORG-01: sin privilegio (admin/desarrollador/Seguridad), solo ver planos de
+  // disciplinas transversales (sin dueño en DISCIPLINA_DEPT_MAP) o de la(s)
+  // disciplina(s) que pertenecen al departamento propio.
+  if (!isDeptPrivileged(auth) && auth.departamento) {
+    const propias = Object.keys(DISCIPLINA_DEPT_MAP).filter(disc => DISCIPLINA_DEPT_MAP[disc].includes(auth.departamento));
+    const transversales = Object.keys(DISCIPLINA_DEPT_MAP).length
+      ? `p.disciplina NOT IN (${Object.keys(DISCIPLINA_DEPT_MAP).map(() => '?').join(',')})`
+      : '1=1';
+    const placeholders = propias.map(() => '?').join(',');
+    sql += propias.length
+      ? ` AND (${transversales} OR p.disciplina IN (${placeholders}))`
+      : ` AND (${transversales})`;
+    params.push(...Object.keys(DISCIPLINA_DEPT_MAP), ...propias);
+  }
   sql += ' ORDER BY p.disciplina, p.area_piso, p.nombre, p.revision DESC';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json({ planos: results||[] });

@@ -589,6 +589,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="inspecciones" onclick="navTo('inspecciones')">
       <span class="nav-icon">🔍</span> Inspecciones
     </button>
+    <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
+      <span class="nav-icon">📷</span> Galería de Fotos
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="construccion"><span>🏗 Construcción</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="tareas" onclick="navTo('tareas')">
@@ -740,9 +743,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="nav-item" data-page="fieldReports" onclick="navTo('fieldReports')">
       <span class="nav-icon">📝</span> Informes de Campo
-    </button>
-    <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
-      <span class="nav-icon">📷</span> Galería de Fotos
     </button>
     <button class="nav-item" data-page="correspondencia" onclick="navTo('correspondencia')">
       <span class="nav-icon">✉️</span> Correspondencia
@@ -9739,6 +9739,43 @@ function doLogout() {
 
 // ── INICIAR APP ────────────────────────────────────────────────
 let _iniciarAppCalled = false;
+// ORG-01 (22/07/2026): dentro de las secciones "Obra", "Construcción" y
+// "Planificación" -que se muestran enteras a cualquier no-admin- hay una mezcla
+// de botones operativos de campo (tareas, incidencias, inspecciones...) y de
+// gestión de proyecto/oficina técnica (RFIs, submittals, presupuestos,
+// contratos, cierre de obra...). Un encargado de oficio u operario no necesita
+// estos últimos -son cosa de jefe_de_obra/oficina/admin-, así que se ocultan
+// item a item (no la sección entera, que sigue viéndose con lo que sí aplica).
+const ITEMS_OCULTOS_OFICIO = [
+  // Obra: gestión multi-obra y documentación general de empresa, no de campo
+  'obras', 'documentos',
+  // Construcción: coordinación técnica/contractual, no operativo del día a día
+  'rfis', 'calidad', 'contactosObra', 'visitasObra', 'actasReunion',
+  // Planificación: presupuestos, contratos, cronogramas de oficina técnica
+  'presupuesto', 'fases', 'hitos', 'costesObra', 'contratosObra', 'ordenesCompra',
+  'submittals', 'finanzasObra', 'cronogramaObra', 'transmittals', 'controlCalidad',
+  'presupuestoSov', 'ordenesCambio', 'riesgosObra', 'obraDashboard', 'informeObra',
+  'subcontratas', 'registroAmbiental', 'cierreObra', 'certificaciones',
+];
+function ocultarItemsPorOficio() {
+  // Solo aplica a encargado/operario "puros" -sin ningún rol de gestión de obra
+  // ni admin mezclado en roles_extra-, para no restringir por error a alguien
+  // con doble rol.
+  const esOficio = hasSessionRole('encargado', 'operario') &&
+    !hasSessionRole('superadmin', 'empresa_admin', 'desarrollador', 'jefe_de_obra', 'oficina');
+  if (!esOficio) return;
+  let ocultados = 0;
+  ITEMS_OCULTOS_OFICIO.forEach(page => {
+    const el = document.querySelector(`.nav-item[data-page="${page}"]`);
+    if (el) {
+      el.style.display = 'none';
+      el.setAttribute('data-hidden-by-perms', 'true');
+      ocultados++;
+    }
+  });
+  if (ocultados > 0) console.log(`✓ Ocultados ${ocultados} items de gestión de obra/PM para encargado/operario (ORG-01)`);
+}
+
 function iniciarApp() {
   if (_iniciarAppCalled) return;  // evitar ejecuciones múltiples
   _iniciarAppCalled = true;
@@ -9838,6 +9875,7 @@ function iniciarApp() {
   } else {
     console.log(`✗ Usuario es admin (rol=${SESSION.rol}, roles_extra=${SESSION.roles_extra?.join(', ')}), mostrando todo`);
   }
+  ocultarItemsPorOficio();
 
   // mostrar secciones superadmin en página empresa
   if (hasSessionRole('superadmin', 'desarrollador')) {
@@ -9909,6 +9947,7 @@ function ocultarSidebarPorPermisos() {
         console.log(`✓ Sidebar ocultación: ${ocultadas} secciones, ${totalItems} items totales`);
       }
     }
+    ocultarItemsPorOficio();
   } catch (e) {
     console.error('Error en ocultarSidebarPorPermisos:', e);
   }
