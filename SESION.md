@@ -1,9 +1,29 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 22/07/2026 -- INV-03: alineado `isDeptPrivileged()` en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02
+**Fecha:** 22/07/2026 -- INV-04: limpieza masiva de corrupción de encoding (mojibake) en worker.js
 **Versión actual:** v8.00 (sin cambio — solo worker.js, sin bump de app móvil ni de panel.html)
-**Resumen:** Tras INV-02 (2 fugas de datos entre departamentos corregidas en /carretillas y /alertas-stock), se alineó la inconsistencia menor flagged en esa sesión: bobinas/pemp/carretillas/herramientas usaban un `isAdminRole` local que no incluía `isDesarrollador`/`isSeguridad`, a diferencia del resto del backend (tareas_obra, rfis, etc. usan `isDeptPrivileged()` desde DEPT-01). Ahora los 4 endpoints usan `isDeptPrivileged(auth) || isJefeObra` para el filtro de departamento. Ver Part 30 para el detalle completo.
+**Resumen:** worker.js tenía corrupción de encoding (mojibake: UTF-8 mal releído como CP1252 y regrabado) en prácticamente todo el archivo, incluyendo **system prompts en producción** que Alejandra usa realmente (ej. "AdriÃ¡n" en vez de "Adrián"). Se construyó un script automático de reversión (algoritmo de "rachas no-ASCII máximas" + reversión greedy multi-pase), se aplicó sobre una copia, se revisó con el usuario y se aplicó al archivo real. 1.399 líneas corregidas de 23.872. Ver Part 31 para el detalle completo.
+
+### Part 31: INV-04 — Limpieza de corrupción de encoding (mojibake) en worker.js (22/07/2026)
+**Contexto:** Se detectó que `worker.js` tenía corrupción de encoding (mojibake) extendida a prácticamente todo el archivo (14.500 líneas), no solo en un par de comentarios decorativos como se creía. Origen root-caused vía `git log -S` al commit `61a7d77` ("APEX Agent", reescritura masiva), aunque algunos separadores decorativos venían corruptos desde bastante antes (commit `4a53fd8`, primera vez que se escribió `// ── Crypto helpers (PBKDF2) ──...` ya con una capa de corrupción previa). Crítico: la corrupción alcanzaba **system prompts que Alejandra usa en producción** (ej. "Sincroniza con la red de agentes IA de AdriÃ¡n" en vez de "Adrián").
+
+**Enfoque:** por instrucción explícita del usuario ("script automático + revisión"), se construyó un script Node (`fixfinal4.js`, fuera del repo) que:
+1. Detecta rachas máximas de caracteres no-ASCII (`/[^\x00-\x7F]+/g`) — evita tener que curar listas de caracteres permitidos, que en iteraciones previas fallaban por casos borde.
+2. Revierte cada racha reinterpretando sus caracteres como bytes CP1252 y redecodificando como UTF-8, de forma "greedy" (repite mientras siga funcionando) para manejar rachas con 1 o 2 pasadas de corrupción sin necesidad de adivinar la profundidad.
+3. Repara aparte los separadores decorativos que el roundtrip simple no puede revertir por pérdida de información en bytes indefinidos de CP1252 (0x81/0x8D/0x8F/0x90/0x9D):
+   - 84 separadores `══` (doble línea) — patrón uniforme detectado y reconstruido.
+   - 3.067 fragmentos de separadores `──` con título (ej. `// ── Crypto helpers (PBKDF2) ──...`) — la unidad de 6 caracteres corrupta se sustituye por un único `─`, verificada contra el original limpio en el commit `4a53fd8`.
+   - 6 símbolos sueltos corregidos a mano tras verificar el contexto real en el archivo: `←` (comentario sobre email de dominio), `⏳` (icono de fichaje pendiente), `⏰` ×2 (avisos de cierre automático de jornada / recordatorio), `±` (rango de minutos de retraso).
+4. Deja intactos a propósito 21 fragmentos que son **ejemplos deliberados de mojibake** dentro del propio código de autodiagnóstico de Alejandra (comentarios/strings tipo `// Ã³ = ó corrupta`, `grep_code(archivo, "Ã|Â|â€")`) — no son corrupción real, son documentación que describe el patrón de corrupción para que la propia IA lo detecte.
+
+**Resultado:** 1.399 líneas de 23.872 cambiadas. Se generó un diff completo, se resumió por categorías y se mostró al usuario para su revisión antes de tocar el archivo real (autorización explícita recibida antes de aplicar).
+
+**Verificación:** `node --check worker.js` OK. Diff revisado línea a línea por categorías (sin BOM, sin caracteres de reemplazo U+FFFD). Deploy: `npx wrangler deploy` OK, Version ID `20cace05-2d93-4680-a3d8-e11ef36d911a`, bindings DB+FILES presentes, `/health` → 200.
+
+**Pendiente (no tocado esta sesión):**
+- `alejandra-agente/worker.js` (el otro "cerebro") no se auditó por corrupción de encoding — si se sospecha que también la tiene, sería una sesión aparte (INV-05).
+- `/repostajes` sigue sin columna `departamento` ni filtro — necesitaría migración de esquema.
 
 ### Part 30: INV-03 — Alinear isDeptPrivileged() en los 4 endpoints de Inventarios restantes (worker.js) (22/07/2026)
 **Contexto:** INV-02 dejó flagged que `getBobinas`/`getPemp`/`getCarretillas`/`getHerramientas` calculaban su propio `isAdminRole` local (`isSuperadmin || isEmpresaAdmin || isJefeObra`) sin incluir `isDesarrollador`/`isSeguridad`, mientras que el resto de módulos (tareas_obra, rfis, documentos de obra...) usan el helper compartido `isDeptPrivileged(auth)` desde DEPT-01. No era una fuga de seguridad (los roles con menos privilegios veían MENOS, no más), pero sí una inconsistencia: un `desarrollador` o `seguridad` no tenía visión transversal de departamento en estos 4 endpoints concretos, a diferencia de todo el resto del backend.
