@@ -4,12 +4,40 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 22/07/2026 — SIDEBAR-01 (reorganizacion sidebar panel.html, ver historial abajo)
+ÚLTIMA ACTUALIZACIÓN: 22/07/2026 — AYUDA-01 (descubribilidad de modulos en todo el sidebar de panel.html, ver historial abajo)
 VERSIÓN ACTUAL APP NUEVA: v8.00
 WORKER API: db6b7928-843e-4c9f-9530-2f45a815800e (ROLES-01: coherencia de permisos por rol en incidencias -getIncidencias, crearIncidencia, actualizarIncidencia, eliminarIncidencia-; jefe_de_obra y oficina pasan a tener gestion completa -cambiar estado/asignar/resolver/eliminar-, igual que encargado; se quita a jefe_de_obra el bypass sin_dept=1 que le permitia ver incidencias de otros departamentos -unico rol no-privilegiado que lo tenia-, dejando ese bypass solo para isDeptPrivileged -SA/EA/desarrollador/Seguridad-, coherente con el diseno original de DEPT-01; verificado que crearBobina/crearPemp/crearCarretilla ya vinculan el departamento desde la sesion -auth.departamento-, nunca desde el body, asi que operario ya solo puede crear en su propio departamento sin cambio de codigo; operario mantiene su capacidad de crear incidencias -decision consciente de Adrian, documentado como intencional-; previo 17ce8725 DEPT-01: aislamiento de datos por departamento en 7 tablas de obra -tareas_obra, rfis, control_calidad, punch_list, actas_reunion, documentos_obra, inspecciones_seg-; nuevo helper isDeptPrivileged-auth- -admins + Seguridad ven todo, el resto solo su departamento-; autoasignacion del departamento al crear = el del usuario creador; buscarGlobal recupera filtro de departamento en 4 tablas -ya resuelto BUG-CARNETS- y lo anade a incidencias; migracion manual ALTER TABLE contra D1 para documentos_obra/inspecciones_seg -unicas 2 tablas sin ensureXTable- capturada en migrate_dept01_construccion.sql; previo 015d1dc/f33582ae BUG-CARNETS: quita filtro departamento roto en 7 endpoints -carnets, reconocimientos_medicos, documentos_obra, permisos_trabajo, inspecciones_seg, turnos, ausencias- que daba 500 por columna departamento inexistente, mas fix de fallo silencioso en buscarGlobal; previo 06a3ff0d COST-01: fix pricing AI_PRICES claude-opus-4-6) · WORKER AGENTE: b9242d46-be9a-4038-84f6-ce2a00ca503c (sin cambios en DEPT-01 -aislamiento por departamento es solo del worker principal y panel.html-; BUG-PUSH: implementado getVapidKeys(env) -que faltaba y causaba ReferenceError->500 en /push-vapid-key, rompiendo las push automaticas de usuarios-; lee la public key VAPID del worker principal via Service Binding API_WEB con try/catch -null->503, nunca 500-; fuente unica de verdad, sin duplicar la clave; previo b643c514 SEC-10: paridad de seguridad con worker.js -gating dev-only de nexus_manage anadido a TOOLS_SOLO_DEV_VERIFICADO -SEC-01- y red try/catch exterior en ejecutarTool -SEC-05-; auditado: el agente ya tenia SEC-02 -allowlist en test_endpoint, mas estricto que worker.js- y SEC-07 no aplica -sin handler de red de agentes-; verificado que nexus_manage no lo usa ningun flujo autonomo; 85/85 tests; deploy manual; previo cfbdf02b SEC-09: barrera humana EQUILIBRADA en escribir_bd -cualquier DELETE y UPDATE masivo exigen "CONFIRMO BORRADO <cod>"; INSERT/REPLACE y UPDATE con WHERE real pasan sin friccion-; cubre panel de oficina Y app web/movil, que comparten este worker; deploy manual, el agente no tiene CI; previo f742e9e8 cliente HTTP puro via Service Binding; previo f2df41f2 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (panel.html — solo frontend, sin bump version) | 22/07/2026 [AYUDA-01: descubribilidad de modulos, todo el sidebar]
+                       Retomado el pendiente de "ayuda/descubribilidad" dejado abierto al cerrar
+                       SIDEBAR-01. Preguntado directamente, Adrian confirmo las 4 vias aprobadas
+                       en DEPT-01 -tooltip, estado vacio explicativo, Alejandra por chat, tour de
+                       onboarding-, dijo "hazlo todos por el orden que quieras" sobre el orden y
+                       "Todo el sidebar" sobre el alcance -las ~113 paginas, no solo las 5
+                       secciones nuevas de SIDEBAR-01-, y autorizo con "dale con todo pon modo
+                       auto". Se construyo un diccionario unico AYUDA_SECCIONES -data-page ->
+                       descripcion corta- reutilizado en 3 de las 4 vias, mas AYUDA_GRUPOS
+                       -data-sid -> descripcion de grupo- para el tour. Via 1 -tooltip-:
+                       inicializarAyudaSidebar() pone .title en cada nav-item. Via 2 -estado
+                       vacio explicativo-: adaptada a un banner contextual dismisseable
+                       -#ayudaBanner- que cambia de texto por seccion al navegar y se recuerda
+                       cerrado por localStorage -decision propia: tocar los ~90 puntos de
+                       "sin datos" por pagina individualmente era demasiado riesgo para una sola
+                       sesion-. Via 3 -Alejandra por chat-: alejandrEnviar() ahora manda
+                       canal:'panel' y pantalla:<texto> al agente, reutilizando un mecanismo
+                       pantalla/canal que alejandra-agente/worker.js ya tenia implementado para
+                       la app movil pero que el panel nunca usaba -no se toco
+                       alejandra-agente/worker.js-. Via 4 -tour de onboarding-:
+                       iniciarTourSidebar() recorre solo las secciones visibles para el rol
+                       actual, se lanza una vez por usuario y se puede relanzar con el nuevo
+                       boton "?" de la topbar. Verificado en preview: 100% de cobertura de
+                       tooltips, banner persiste su cierre por seccion, tour respeta el
+                       filtrado por rol, 3 scripts compilan sin error, encoding limpio. Solo
+                       panel.html -no requiere wrangler deploy, solo push-, sin cambio de
+                       version de app. Detalle completo en SESION.md (Part 26) e
+                       IDEAS_PENDIENTES.txt (AYUDA-01).
   (panel.html — solo frontend, sin bump version) | 22/07/2026 [SIDEBAR-01: reorganizacion del sidebar de panel.html]
                        Adrian pidio ordenar el sidebar desordenado de Alejandra Office y retomar
                        el pendiente de "ayuda/descubribilidad" de modulos que quedo abierto al

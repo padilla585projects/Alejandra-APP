@@ -931,10 +931,18 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       </div>
       <span class="sync-chip" id="syncChip" style="display:none" onclick="_manualSync()" title="Clic para actualizar ahora"></span>
       <button class="topbar-btn" id="btnBuscar" onclick="abrirBusqueda()" title="Búsqueda global" style="display:none">🔍</button>
+      <button class="topbar-btn" onclick="iniciarTourSidebar(true)" title="Ver tour de las secciones del panel">❓</button>
       <button class="topbar-btn" onclick="notifAbrir()" style="position:relative" title="Notificaciones">
         🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:9px;padding:1px 5px;border-radius:10px">0</span>
       </button>
       <div class="conn-dot" id="connDot" title="Estado conexión"></div>
+    </div>
+
+    <!-- AYUDA-01: banner contextual con la descripción de la sección activa -->
+    <div id="ayudaBanner" style="display:none;align-items:center;gap:10px;margin:14px 20px 0;padding:10px 14px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);border-radius:10px;font-family:'Poppins',sans-serif;font-size:13px;color:var(--text)">
+      <span style="font-size:16px">💡</span>
+      <span id="ayudaBannerTexto" style="flex:1"></span>
+      <button onclick="ayudaBannerCerrar()" title="Entendido, no mostrar más para esta sección" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0 4px">✕</button>
     </div>
 
     <!-- CONTENT PAGES -->
@@ -9843,6 +9851,7 @@ function iniciarApp() {
   // responsive toggle
   if (window.innerWidth <= 900) document.getElementById('btnMenuToggle').style.display = '';
 
+  inicializarAyudaSidebar();
   checkConexion();
   setInterval(checkConexion, 30000);
   iniciarPollingNotif();
@@ -9858,6 +9867,9 @@ function iniciarApp() {
 
   // aplicar ocultación de sidebar después de que navegación se complete
   setTimeout(() => ocultarSidebarPorPermisos(), 100);
+  // AYUDA-01: tour de onboarding, solo la primera vez y con la visibilidad de
+  // sidebar ya resuelta (para no señalar secciones ocultas para este usuario)
+  setTimeout(() => iniciarTourSidebar(false), 700);
 }
 
 function ocultarSidebarPorPermisos() {
@@ -10093,6 +10105,217 @@ const PAGE_TITLES = {
     planos: '📐 Planos Técnicos IA',
 };
 
+// AYUDA-01 (22/07/2026): descripción corta de cada sección para tooltips del sidebar,
+// banner contextual de la página y contexto que recibe Alejandra en el chat.
+// Se reutiliza el mismo texto en las 3 vías para no mantener 3 copias distintas.
+const AYUDA_SECCIONES = {
+  dashboard: 'Resumen general de la obra: incidencias, pedidos y tareas recientes de un vistazo.',
+  globalDashboard: 'Vista comparativa de todas las obras de la empresa a la vez (solo admins/finanzas).',
+  obraDetalle: 'Cuadro de mando completo de una obra concreta: avance, alertas y datos clave.',
+  personal: 'Ficha de cada trabajador: datos, obra asignada, departamento y documentación.',
+  fichajes: 'Registro de entradas y salidas del personal (control horario).',
+  timesheets: 'Horas trabajadas desglosadas por actividad y código de coste.',
+  turnos: 'Planificación de turnos de trabajo del personal.',
+  ausencias: 'Vacaciones, bajas y permisos solicitados por el personal.',
+  horariosObra: 'Horario oficial de trabajo de cada obra (entrada, salida, descansos).',
+  formacionObra: 'Registro de formaciones y cursos de PRL realizados por el personal.',
+  epis: 'Equipos de Protección Individual entregados a cada trabajador.',
+  carnets: 'Carnets y acreditaciones profesionales del personal (grúa, PRL, carretillero…).',
+  reconocimientos: 'Reconocimientos médicos del personal y sus fechas de vigencia.',
+  permisosTrabajo: 'Permisos de trabajo (trabajos en altura, espacios confinados, etc.) antes de empezar una tarea.',
+  ats: 'Análisis de riesgo de una tarea concreta antes de ejecutarla (Job Hazard Analysis).',
+  accidentes: 'Registro e investigación de accidentes e incidentes de seguridad.',
+  bobinas: 'Inventario de bobinas de cable: entradas, salidas y stock disponible.',
+  pemp: 'Inventario de plataformas elevadoras (PEMP): estado, ubicación y revisiones.',
+  carretillas: 'Inventario de carretillas elevadoras: estado, ubicación y revisiones.',
+  repostajes: 'Registro de repostajes de combustible de vehículos y maquinaria.',
+  herramientas: 'Inventario de herramientas: quién las tiene y su estado.',
+  seguridad: 'Stock de material de seguridad (EPIs, señalización) disponible en almacén.',
+  alertasStock: 'Avisos automáticos cuando un material o EPI está por debajo del mínimo.',
+  obras: 'Listado de obras de la empresa: alta, datos generales y estado.',
+  documentos: 'Documentación general de la empresa (no ligada a una obra concreta).',
+  incidencias: 'Incidencias reportadas en obra: seguimiento hasta su cierre.',
+  pedidos: 'Pedidos de material a proveedores: estado y seguimiento.',
+  mantenimientos: 'Mantenimientos programados y realizados sobre equipos y maquinaria.',
+  documentosObra: 'Documentación legacy asociada a una obra concreta (versión anterior de Docs).',
+  inspecciones: 'Inspecciones de seguridad realizadas en obra y sus hallazgos.',
+  tareas: 'Tareas de obra: asignación, estado y seguimiento de avance.',
+  rfis: 'Solicitudes de información (RFI) a proyecto/dirección facultativa y sus respuestas.',
+  calidad: 'Control de calidad de los trabajos ejecutados en obra.',
+  seguridadObra: 'Observaciones e incidencias de seguridad específicas de esta obra.',
+  punchList: 'Lista de pendientes/defectos a resolver antes de cerrar la obra.',
+  contactosObra: 'Directorio de contactos de la obra: cliente, dirección facultativa, subcontratas…',
+  visitasObra: 'Registro de visitas de personas externas a la obra.',
+  actasReunion: 'Actas de las reuniones de seguimiento de obra.',
+  presupuesto: 'Presupuesto general de la obra (solo admins/finanzas).',
+  fases: 'Fases de la obra representadas en un diagrama de Gantt.',
+  hitos: 'Hitos clave de la obra (entregas, certificaciones) y sus fechas.',
+  planosObra: 'Planos técnicos asociados a la obra.',
+  costesObra: 'Control de costes reales frente a presupuesto (solo admins/finanzas).',
+  contratosObra: 'Contratos firmados relacionados con la obra.',
+  ordenesCompra: 'Órdenes de compra emitidas a proveedores.',
+  submittals: 'Aprobaciones de materiales/equipos antes de instalarlos en obra.',
+  centroAlertas: 'Todas las alertas activas de la obra en un solo sitio.',
+  finanzasObra: 'Análisis financiero detallado de la obra (solo admins/finanzas).',
+  cronogramaObra: 'Cronograma general de ejecución de la obra.',
+  calendario: 'Calendario con los eventos y fechas importantes de la obra.',
+  transmittals: 'Registro de envíos formales de documentación a terceros.',
+  controlCalidad: 'Control de calidad / QA-QC de la obra con seguimiento de no conformidades.',
+  ncrsObra: 'No conformidades detectadas y su plan de resolución.',
+  itpObra: 'Plan de Inspección y Ensayo (ITP) de la obra.',
+  equiposMedicion: 'Equipos de medición usados en obra y su estado de calibración.',
+  entregasMaterial: 'Albaranes de entrega de material recibido en obra.',
+  presupuestoSov: 'Presupuesto detallado por partidas (Schedule of Values).',
+  ordenesCambio: 'Cambios sobre el proyecto original y su impacto en coste/plazo.',
+  riesgosObra: 'Registro de riesgos identificados en la obra y su mitigación.',
+  obraDashboard: 'Panel visual con los indicadores clave de esta obra.',
+  accionItems: 'Puntos de acción abiertos en la obra y sus responsables.',
+  informeObra: 'Informe de estado de obra generado para compartir con el cliente.',
+  planSemanal: 'Planificación de trabajos de la semana (lookahead).',
+  instruccionesObra: 'Instrucciones formales dadas por dirección facultativa/cliente.',
+  subcontratas: 'Registro de subcontratas que trabajan en la obra.',
+  registroAmbiental: 'Registro de gestión ambiental de la obra (residuos, vertidos, ruido).',
+  cierreObra: 'Checklist de cierre de obra antes de la entrega final.',
+  certificaciones: 'Certificaciones de obra ejecutada para facturación al cliente.',
+  partesPanel: 'Partes de trabajo diarios rellenados por los equipos en obra.',
+  diarioObra: 'Diario de obra: registro cronológico de lo ocurrido cada día.',
+  fieldReports: 'Informes de campo con hallazgos y seguimiento técnico.',
+  fotosObra: 'Galería de fotos de la obra organizadas por fecha.',
+  correspondencia: 'Correspondencia formal enviada/recibida relacionada con la obra.',
+  actasReplanteo: 'Actas de replanteo inicial de la obra (LOE art. 8).',
+  registroHormigonado: 'Registro de cada hormigonado realizado (EHE-08).',
+  cubicacionesObra: 'Mediciones y cubicaciones de obra ejecutada.',
+  flujoCaja: 'Previsión de entradas y salidas de caja de la obra (solo admins/finanzas).',
+  facturasProveedor: 'Facturas recibidas de proveedores y su estado de pago.',
+  cobrosCliente: 'Cobros pendientes y realizados del cliente.',
+  catalogoPrecios: 'Catálogo de precios unitarios usado para presupuestar.',
+  panelVencimientos: 'Fechas de vencimiento próximas (contratos, seguros, certificados…).',
+  licitaciones: 'Seguimiento de licitaciones/ofertas en curso.',
+  comparativosOferta: 'Comparativa de ofertas de distintos proveedores para una misma partida.',
+  gastosDietas: 'Gastos y dietas del personal en desplazamiento.',
+  changeOrders: 'Solicitudes de cambio sobre el alcance original de la obra.',
+  proveedoresGestion: 'Ficha de cada proveedor: datos, condiciones y valoración.',
+  evaluacionesProv: 'Evaluaciones periódicas de desempeño de proveedores.',
+  caeDocumentacion: 'Documentación CAE de subcontratas (Coordinación de Actividades Empresariales).',
+  libroSubcontratacion: 'Libro de subcontratación exigido por la Ley 32/2006.',
+  solicitudesMat: 'Solicitudes de material pendientes de gestionar.',
+  consumosMaterial: 'Consumo real de material registrado en obra.',
+  ordenesTrabajo: 'Órdenes de trabajo emitidas a equipos o subcontratas.',
+  partesMaquinaria: 'Partes diarios de uso de maquinaria.',
+  flotaVehiculos: 'Flota de vehículos de empresa: asignación y mantenimiento.',
+  alquileres: 'Equipos alquilados a terceros y su periodo de alquiler.',
+  residuos: 'Gestión de residuos de obra según normativa (RD 105/2008).',
+  licenciasObra: 'Permisos y licencias administrativas necesarias para la obra.',
+  segurosObra: 'Pólizas de seguro vinculadas a la obra.',
+  garantias: 'Garantías de materiales/trabajos y sus fechas de vencimiento.',
+  ensayos: 'Ensayos y pruebas de materiales realizados en obra.',
+  rendimientos: 'Seguimiento de productividad/rendimiento de los equipos de trabajo.',
+  lecciones: 'Lecciones aprendidas documentadas para futuras obras.',
+  entregables: 'Entregables del proyecto y su estado de entrega.',
+  graficas: 'Gráficas con la evolución de los indicadores de la obra.',
+  escandalloPrecios: 'Desglose de cómo se compone el precio de cada partida.',
+  cronogramaPagos: 'Calendario de pagos previstos y realizados.',
+  rdpRegistros: 'Registro Diario de Prevención exigido por la Ley 31/1995.',
+  planos: 'Generación de planos técnicos con ayuda de IA.',
+  usuarios: 'Gestión de usuarios de la empresa: altas, roles y permisos.',
+  empresa: 'Datos generales de la empresa y su configuración.',
+  logs: 'Registro de actividad relevante del sistema (solo admins).',
+  privacidad: 'Configuración de privacidad y protección de datos.',
+  devtools: 'Herramientas de desarrollador y acceso a Alejandra IA (solo desarrollador).',
+};
+
+// AYUDA-01: tooltip de cada botón del sidebar, generado desde AYUDA_SECCIONES.
+function inicializarAyudaSidebar() {
+  document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
+    const desc = AYUDA_SECCIONES[btn.getAttribute('data-page')];
+    if (desc) btn.title = desc;
+  });
+}
+
+// AYUDA-01: banner contextual con la descripción de la sección activa, se oculta
+// permanentemente por sección una vez el usuario le da a "✕" (localStorage por navegador).
+function _actualizarAyudaBanner(page) {
+  const cont = document.getElementById('ayudaBanner');
+  if (!cont) return;
+  const desc = AYUDA_SECCIONES[page];
+  let vista = false;
+  try { vista = localStorage.getItem('ayuda_vista_' + page) === '1'; } catch {}
+  if (!desc || vista) { cont.style.display = 'none'; return; }
+  document.getElementById('ayudaBannerTexto').textContent = desc;
+  cont.dataset.page = page;
+  cont.style.display = 'flex';
+}
+function ayudaBannerCerrar() {
+  const cont = document.getElementById('ayudaBanner');
+  const page = cont?.dataset.page;
+  if (page) { try { localStorage.setItem('ayuda_vista_' + page, '1'); } catch {} }
+  if (cont) cont.style.display = 'none';
+}
+
+// AYUDA-01: descripción corta de cada GRUPO del sidebar (data-sid), para el tour de onboarding.
+const AYUDA_GRUPOS = {
+  principal: 'Resumen general y accesos rápidos: dashboard y chat del equipo.',
+  personal: 'Trabajadores, fichajes, turnos y todo lo relacionado con RRHH.',
+  seguridad: 'PRL: EPIs, carnets, reconocimientos, ATS y accidentes.',
+  inventarios: 'Stock de materiales y equipos: bobinas, PEMP, herramientas…',
+  obra: 'Gestión general de la obra activa: documentos, incidencias, pedidos.',
+  construccion: 'Seguimiento técnico de la construcción: tareas, RFIs, calidad.',
+  planificacion: 'Planificación, finanzas y control avanzado de la obra.',
+  diarioCampo: 'Documentación del día a día en obra: partes, diario, fotos.',
+  finanzas: 'Finanzas de la obra: caja, facturas, cobros (solo admins/finanzas).',
+  proveedores: 'Proveedores y subcontratas: gestión, CAE, órdenes de trabajo.',
+  maquinaria: 'Maquinaria, vehículos y equipos de la obra.',
+  calidadCierre: 'Calidad, garantías, seguros y cierre de la obra.',
+  analitica: 'Gráficas, informes y otras herramientas de análisis.',
+};
+
+// AYUDA-01: tour de onboarding — recorre las secciones visibles del sidebar la
+// primera vez (o bajo demanda desde el botón "?" de la topbar).
+let _tourPasos = [];
+let _tourIdx = 0;
+function iniciarTourSidebar(forzado) {
+  try { if (!forzado && localStorage.getItem('tour_sidebar_visto') === '1') return; } catch {}
+  _tourPasos = Array.from(document.querySelectorAll('.sidebar-section[data-sid]'))
+    .filter(el => el.offsetParent !== null);
+  if (!_tourPasos.length) return;
+  _tourIdx = 0;
+  _tourMostrarPaso();
+}
+function _tourMostrarPaso() {
+  _tourQuitarOverlay();
+  const el = _tourPasos[_tourIdx];
+  if (!el) return _tourFinalizar();
+  const desc = AYUDA_GRUPOS[el.getAttribute('data-sid')] || '';
+  const rect = el.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.id = 'tourPopover';
+  const top = Math.min(rect.bottom + 8, window.innerHeight - 160);
+  pop.style.cssText = `position:fixed;top:${top}px;left:${Math.min(rect.left, window.innerWidth - 300)}px;z-index:2000;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.4);padding:14px;width:270px;font-family:'Poppins',sans-serif`;
+  pop.innerHTML = `
+    <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--accent);margin-bottom:6px">${el.textContent.trim()} (${_tourIdx + 1}/${_tourPasos.length})</div>
+    <div style="font-size:13px;color:var(--text);margin-bottom:12px;line-height:1.4">${desc}</div>
+    <div style="display:flex;justify-content:space-between;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="_tourFinalizar()">Saltar</button>
+      <button class="btn btn-primary btn-sm" onclick="_tourSiguiente()">${_tourIdx === _tourPasos.length - 1 ? 'Terminar' : 'Siguiente →'}</button>
+    </div>`;
+  document.body.appendChild(pop);
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.style.outline = '2px solid var(--accent)';
+  el.style.outlineOffset = '2px';
+}
+function _tourQuitarOverlay() {
+  document.getElementById('tourPopover')?.remove();
+  document.querySelectorAll('.sidebar-section[data-sid]').forEach(el => { el.style.outline = ''; });
+}
+function _tourSiguiente() {
+  _tourIdx++;
+  _tourMostrarPaso();
+}
+function _tourFinalizar() {
+  _tourQuitarOverlay();
+  try { localStorage.setItem('tour_sidebar_visto', '1'); } catch {}
+}
+
 const PAGE_LOADERS = {
   dashboard: cargarDashboard,
   globalDashboard: (...args) => cargarGlobalDashboard(...args),
@@ -10253,6 +10476,7 @@ function _doNavTo(page) {
   document.getElementById('topbarTitle').textContent = PAGE_TITLES[page] || page;
   if (window.innerWidth <= 900) document.getElementById('sidebar').classList.remove('open');
   _updateBackBtn();
+  _actualizarAyudaBanner(page);
   if (PAGE_LOADERS[page]) PAGE_LOADERS[page]();
   _startSync(page);  // arrancar auto-refresh para la nueva página
 }
@@ -13707,10 +13931,18 @@ async function alejandrEnviar() {
     return;
   }
   try {
+    // AYUDA-01: se informa a Alejandra de en qué sección del panel está el usuario
+    // (mismo mecanismo "pantalla" que ya usa la app móvil), para que pueda explicarla
+    // si pregunta "¿qué es esto?" sin que el usuario tenga que decirle el nombre.
+    const tituloActual = (PAGE_TITLES[currentPage] || currentPage || '').replace(/^[^\wÁÉÍÓÚáéíóúñÑ]+/, '').trim();
+    const descActual = AYUDA_SECCIONES[currentPage];
+    const pantallaActual = currentPage
+      ? `Panel Office > ${tituloActual}${descActual ? ' — ' + descActual : ''}`
+      : null;
     const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-      body: JSON.stringify({ message: msg, usuario_id: usuarioId })
+      body: JSON.stringify({ message: msg, usuario_id: usuarioId, canal: 'panel', pantalla: pantallaActual })
     });
     if (!r.ok) {
       alert('Error al enviar mensaje');

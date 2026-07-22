@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/07/2026 — SIDEBAR-01: reorganización del sidebar de panel.html (ex-"Seguimiento" dividida en 5 secciones independientes + RRHH/Seguridad movidos a sus secciones existentes) — v8.00. Antes: ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 22/07/2026 — AYUDA-01: descubribilidad de módulos (tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding) implementada en todo el sidebar de panel.html. Antes: SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1262,10 +1262,10 @@ LEYENDA DE ESTADO:
       limpio (Ã|Â|â€|ï»¿ sin coincidencias en líneas +); columnas nuevas confirmadas en D1 vía
       sqlite_master; deploy worker principal Version ID `17ce8725-d621-4f14-bb80-06f8bc497d0e`;
       health check post-deploy OK (200, `{"ok":true}`).
-    · Pendiente para el futuro: retomar Fase 2-5 de descubribilidad de módulos (estado vacío
-      explicativo, tooltip en el nombre del botón del sidebar, que Alejandra explique los
-      módulos por chat, tour de onboarding) — Adrian aprobó las 4 vías pero se priorizó este
-      trabajo de aislamiento de departamentos primero.
+    · [✓ HECHO 22/07/2026, ver AYUDA-01] Pendiente para el futuro: retomar Fase 2-5 de
+      descubribilidad de módulos (estado vacío explicativo, tooltip en el nombre del botón del
+      sidebar, que Alejandra explique los módulos por chat, tour de onboarding) — Adrian aprobó
+      las 4 vías pero se priorizó este trabajo de aislamiento de departamentos primero.
 
 ================================================================================
   🐛 BUG-INVISIBLE — 4 páginas del panel nunca se mostraban  [HECHO 21/07/2026]
@@ -1417,6 +1417,54 @@ LEYENDA DE ESTADO:
       mismo pero no llegó a concretar formato/alcance en esta sesión; retomar en una sesión futura
       preguntándole directamente qué formato quiere (tooltip, estado vacío explicativo, chat de
       Alejandra, tour de onboarding) antes de tocar código.
+
+================================================================================
+  💡 AYUDA-01 — Descubribilidad de módulos en todo el sidebar  [HECHO v8.00]
+================================================================================
+
+[✓] AYUDA-01 — 4 vías de ayuda/descubribilidad implementadas para las ~113 páginas del sidebar
+    [HECHO 22/07/2026]
+    · Origen: pendiente dejado abierto al cerrar SIDEBAR-01 (y antes, DEPT-01). Preguntado
+      directamente por las 4 vías que ya había aprobado por multiSelect en DEPT-01 (tooltip,
+      estado vacío explicativo, Alejandra lo explica por chat, tour de onboarding), Adrian
+      respondió "hazlo todos por el orden que quieras"; sobre el alcance, "Todo el sidebar"
+      (no solo las 5 secciones nuevas de SIDEBAR-01); instrucción final: "dale con todo pon
+      modo auto".
+    · `AYUDA_SECCIONES`: diccionario único `data-page → descripción corta`, con entrada para
+      cada uno de los ~113 `data-page` del sidebar (cobertura 100% verificada contra el DOM
+      real). Fuente única reutilizada en 3 de las 4 vías.
+    · Vía 1 (tooltip): `inicializarAyudaSidebar()` pone `.title` en cada `.nav-item[data-page]`.
+    · Vía 2 (estado vacío explicativo) — ADAPTADA: se detectaron ~90 puntos de código distintos
+      donde cada página renderiza su "sin datos" (Tabulator `placeholder`, `<tr>` ad-hoc,
+      `.empty-state`); tocarlos uno a uno era demasiado riesgo/esfuerzo para una sola sesión.
+      Decisión propia (bajo autorización de modo auto): un banner contextual dismisseable
+      (`#ayudaBanner`) encima de `#content`, actualizado en cada `navTo()` vía
+      `_actualizarAyudaBanner(page)`, que el usuario cierra con "✕" y que se recuerda cerrado
+      por sección en `localStorage` (`ayuda_vista_<page>`). Mismo propósito, un solo punto de
+      código en vez de ~90.
+    · Vía 3 (Alejandra por chat): se descubrió que `alejandra-agente/worker.js` ya soportaba un
+      parámetro `pantalla`/`canal` en `/api/chat` (usado hasta ahora solo por `index.html`, la
+      app móvil), que mete el contexto de pantalla en el system prompt de Alejandra vía
+      `construirMessages()`. El panel nunca lo usaba. `alejandrEnviar()` ahora manda
+      `canal: 'panel'` y `pantalla: <título + descripción de AYUDA_SECCIONES>` — reutiliza
+      infraestructura ya desplegada; NO se tocó `alejandra-agente/worker.js`.
+    · Vía 4 (tour de onboarding): `AYUDA_GRUPOS` (data-sid → descripción de grupo, 13 entradas)
+      + `iniciarTourSidebar()`/`_tourMostrarPaso()`/`_tourSiguiente()`/`_tourFinalizar()`.
+      Recorre solo las secciones visibles para el rol/departamento de la sesión actual. Se
+      lanza automáticamente una vez por usuario (`localStorage.tour_sidebar_visto`) y se puede
+      relanzar bajo demanda con un nuevo botón "❓" en la topbar.
+    · Verificación en preview (sesión simulada vía `localStorage.panel_session` + reload, rol
+      superadmin): 100% de cobertura de tooltips; banner cambia de texto al navegar y persiste
+      su cierre por sección; botón "❓" relanza el tour incluso con el flag "visto" puesto; tour
+      respeta el filtrado por rol; 3 `<script>` de panel.html compilan sin error
+      (`new Function()`); `git diff` sin corrupción de encoding nueva.
+    · Solo frontend (panel.html) — no requiere `wrangler deploy`, solo push. Sin cambio de
+      versión de app (panel.html no tiene `APP_VERSION` propio). No aplica la regla "UNA
+      Alejandra, DOS cerebros" (no es cambio de seguridad/permisos, solo el panel empezando a
+      mandar un parámetro que el otro lado ya sabía procesar).
+    · Pendiente: ninguno explícito. Si en el futuro se quiere el estado vacío explicativo
+      por-página real (en vez del banner genérico), revisar los ~90 puntos de renderizado
+      "sin datos" uno a uno.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
