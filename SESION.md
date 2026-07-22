@@ -9,7 +9,7 @@
 **Último agente desplegado (alejandra-agente):** sin cambios esta sesión (AYUDA-01 solo reutiliza el parámetro `pantalla` ya existente, no toca `alejandra-agente/worker.js`) — sigue Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (previo `b643c514` SEC-10)
 **Commits de esta sesión (push a `main` ✅):**
 - `76418ea` — fix: reorganiza sidebar de panel.html, ex-"Seguimiento" en 5 secciones + RRHH/Seguridad a secciones existentes (SIDEBAR-01)
-- (pendiente de hash) — feat: descubribilidad de módulos — tooltips, banner contextual, contexto de pantalla para Alejandra y tour de onboarding en todo el sidebar (AYUDA-01)
+- `f78c455` — feat: descubribilidad de módulos — tooltips, banner contextual, contexto de pantalla para Alejandra y tour de onboarding en todo el sidebar (AYUDA-01)
 
 ### Sesión en paralelo (SEC-16, 22/07/2026)
 **Resumen:** Adrian reportó (verificado con curl en producción) que una petición SIN ningún header de auth a un endpoint como /incidencias devolvía 200 [] en vez de 403. Causa: la rama "fallback legacy headers" de getAuth() (worker.js ~línea 118-150) devolvía siempre `empresa_id: 1` y `rol: rol || 'operario'` por defecto, aunque no viniera ningún header identificativo. Fix: `hasLegacyIdentity = isAdmin || !!(usuario && rol)` — sin identidad legacy reconocible, empresa_id/rol quedan a null para que los ~200 checks `!empresa_id` bloqueen correctamente. Verificado en producción tras deploy: `curl` sin headers a /incidencias ahora devuelve 403. Ver SEC-16 en IDEAS_PENDIENTES.txt para detalle completo. No solapa con SIDEBAR-01 (worker.js vs. panel.html, sesiones distintas fusionadas por rebase).
