@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/07/2026 — ROLES-01: coherencia de permisos de jefe_de_obra/oficina en incidencias (gestión completa) + aislamiento estricto por departamento (se quita el bypass cross-dept que solo tenía jefe_de_obra) — v8.00. Antes: BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 22/07/2026 — SIDEBAR-01: reorganización del sidebar de panel.html (ex-"Seguimiento" dividida en 5 secciones independientes + RRHH/Seguridad movidos a sus secciones existentes) — v8.00. Antes: ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1357,6 +1357,66 @@ LEYENDA DE ESTADO:
       explícita de Adrian; revisar en una futura sesión de coherencia de roles si procede.
     · No aplica a alejandra-agente/worker.js: sus herramientas (`consultar_bd`/`escribir_bd`) no pasan
       por los endpoints REST de incidencias con gating por rol, solo por scope de empresa_id.
+
+================================================================================
+  🗂️ SIDEBAR-01 — Reorganización del sidebar de panel.html (ex-"Seguimiento")  [HECHO v8.00]
+================================================================================
+
+[✓] SIDEBAR-01 — sección "Seguimiento" (40 items, mezcla de temas) reorganizada en grupos coherentes
+    [HECHO 22/07/2026]
+    · Origen: Adrian preguntó qué más se podía mejorar, mencionando el "lío con todos los paneles en
+      Alejandra Office" y retomando el pendiente de DEPT-01 de descubribilidad de módulos. Al revisar
+      el sidebar se encontró que "📓 Seguimiento" tenía 40 botones en fila totalmente heterogéneos:
+      finanzas, RRHH, seguridad, maquinaria, documentación de campo, proveedores, calidad/cierre —
+      todo mezclado bajo un solo desplegable.
+    · Al plantear agrupar en subsecciones, Adrian preguntó "la sección de Seguimiento porque?" — se
+      confirmó que panel.html no soporta anidamiento real de 2 niveles en el sidebar (cada
+      `.sidebar-section` es un desplegable de nivel único; `sidebarToggle()` mueve hermanos hasta la
+      siguiente `.sidebar-section`). Decisión final de Adrian: eliminar "Seguimiento" del todo y dejar
+      5 secciones nuevas independientes al mismo nivel que el resto.
+    · Grupos nuevos (todo top-level, mismos botones/badges/onclick que antes, solo reordenados):
+        - 📓 Diario y Campo (`diarioCampo`): partesPanel, diarioObra, fieldReports, fotosObra,
+          correspondencia, actasReplanteo, registroHormigonado, cubicacionesObra.
+        - 💰 Finanzas de Obra (`finanzas`): flujoCaja, facturasProveedor, cobrosCliente,
+          catalogoPrecios, panelVencimientos, licitaciones, comparativosOferta, gastosDietas,
+          changeOrders.
+        - 🏭 Proveedores y Subcontratas (`proveedores`): proveedoresGestion, evaluacionesProv,
+          caeDocumentacion, libroSubcontratacion, solicitudesMat, consumosMaterial, ordenesTrabajo.
+        - 🚜 Maquinaria y Equipos (`maquinaria`): partesMaquinaria, flotaVehiculos, alquileres,
+          residuos.
+        - 🛡️ Calidad y Cierre (`calidadCierre`): licenciasObra, segurosObra, garantias, ensayos,
+          rendimientos, lecciones, entregables.
+    · Adrian pidió explícitamente que los items de RRHH y de Seguridad NO fueran parte de estos grupos
+      nuevos ("'personal y Seguridad' esos fuera, independientes"), sino que se movieran a las
+      secciones ya existentes: ausencias/horariosObra/formacionObra → sección "Personal" (justo tras
+      el botón Turnos); ats/accidentes → sección "Seguridad" existente, con la misma clase
+      `nav-seguridad-section` + `style="display:none"` que ya usan sus otros items (visibilidad
+      gateada por `SESSION.departamento === 'seguridad'`, NO por rol de admin).
+    · Cambios en el JS de permisos (dos sitios, `iniciarApp()` y `ocultarSidebarPorPermisos()`):
+      `seccionesPermitidas`/`seccionesOcultar` ahora usan los 5 `data-sid` nuevos
+      (`diarioCampo`,`finanzas`,`proveedores`,`maquinaria`,`calidadCierre`) en vez de `seguimiento` —
+      siguen ocultos para no-admin exactamente igual que "Seguimiento" lo estaba antes (sin cambio de
+      comportamiento de permisos, solo de nombres/agrupación).
+    · Efecto secundario real a tener en cuenta: `ats`/`accidentes` antes eran visibles para CUALQUIER
+      admin dentro de "Seguimiento" sin importar su departamento de sesión; ahora, al vivir dentro de
+      la sección "Seguridad", solo se ven si `departamento === 'seguridad'`, igual que el resto de esa
+      sección. Cambio de comportamiento aceptado como parte de la decisión de Adrian de mover esos
+      items a la sección existente en vez de crear una "Seguridad de Obra" aparte.
+    · Verificación: recuento de botones por sección confirmado en el DOM (diarioCampo:8, finanzas:9,
+      proveedores:7, maquinaria:4, calidadCierre:7, personal:+3, seguridad:+2) sin pérdida de ningún
+      `data-page` de los 40 originales; los 3 `<script>` de panel.html compilan sin error
+      (`new Function()`); `git diff` sin corrupción de encoding nueva. Probado en el preview con sesión
+      real (vía localStorage + reload, no inyección directa de `window.SESSION` — esa vía dio un falso
+      positivo porque `SESSION` es `let` de módulo, no propiedad de `window`): superadmin ve las 5
+      secciones nuevas + Personal; `encargado` de departamento `seguridad` ve solo "Seguridad" (con
+      ats/accidentes incluidos) y no ve las 5 secciones nuevas (correcto, son admin-only).
+    · Solo frontend (panel.html) — no requiere `wrangler deploy`, solo push (GitHub Pages
+      autodespliega). Sin cambio de versión de app (panel.html no tiene `APP_VERSION` propio).
+    · Pendiente sin resolver (parte del pedido original de Adrian, aún sin definir): texto/ayuda de
+      descubribilidad de módulos (qué hace cada sección y cómo se usa) — Adrian quiso explicarlo él
+      mismo pero no llegó a concretar formato/alcance en esta sesión; retomar en una sesión futura
+      preguntándole directamente qué formato quiere (tooltip, estado vacío explicativo, chat de
+      Alejandra, tour de onboarding) antes de tocar código.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

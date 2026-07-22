@@ -510,6 +510,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="turnos" onclick="navTo('turnos')">
       <span class="nav-icon">📅</span> Turnos
     </button>
+    <button class="nav-item" data-page="ausencias" onclick="navTo('ausencias')">
+      <span class="nav-icon">📅</span> Ausencias y Permisos
+      <span class="nav-badge" id="ausenciasBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="horariosObra" onclick="navTo('horariosObra')">
+      <span class="nav-icon">⏰</span> Horarios de Obra
+    </button>
+    <button class="nav-item" data-page="formacionObra" onclick="navTo('formacionObra')">
+      <span class="nav-icon">🎓</span> Formación de Obra
+      <span class="nav-badge" id="formacionBadge" style="display:none">0</span>
+    </button>
 
     <div class="sidebar-section nav-seguridad-section" onclick="sidebarToggle(this)" data-sid="seguridad" style="display:none"><span>🔺 Seguridad</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-seguridad-section" data-page="epis" onclick="navTo('epis')" style="display:none">
@@ -523,6 +534,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="nav-item nav-seguridad-section" data-page="permisosTrabajo" onclick="navTo('permisosTrabajo')" style="display:none">
       <span class="nav-icon">📝</span> Permisos Trabajo
+    </button>
+    <button class="nav-item nav-seguridad-section" data-page="ats" onclick="navTo('ats')" style="display:none">
+      <span class="nav-icon">🔍</span> ATS / Análisis Riesgo
+    </button>
+    <button class="nav-item nav-seguridad-section" data-page="accidentes" onclick="navTo('accidentes')" style="display:none">
+      <span class="nav-icon">🚨</span> Accidentes / Incidentes
+      <span class="nav-badge" id="accidentesBadge" style="display:none">0</span>
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="inventarios"><span>📦 Inventarios</span><span class="sec-chevron">▼</span></div>
@@ -713,7 +731,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-badge" id="certBadge" style="display:none">!</span>
     </button>
 
-    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="diarioCampo"><span>📓 Diario y Campo</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
       <span class="nav-icon">📋</span> Partes Diarios
     </button>
@@ -723,91 +741,29 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="fieldReports" onclick="navTo('fieldReports')">
       <span class="nav-icon">📝</span> Informes de Campo
     </button>
-    <button class="nav-item" data-page="garantias" onclick="navTo('garantias')">
-      <span class="nav-icon">🛡️</span> Garantías
-      <span class="nav-badge" id="garantiasBadge" style="display:none">0</span>
+    <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
+      <span class="nav-icon">📷</span> Galería de Fotos
     </button>
-    <button class="nav-item" data-page="alquileres" onclick="navTo('alquileres')">
-      <span class="nav-icon">🏗️</span> Alquileres Equipo
-      <span class="nav-badge" id="alquileresBadge" style="display:none">0</span>
+    <button class="nav-item" data-page="correspondencia" onclick="navTo('correspondencia')">
+      <span class="nav-icon">✉️</span> Correspondencia
+      <span class="nav-badge" id="corrBadge" style="display:none">!</span>
     </button>
-    <button class="nav-item" data-page="entregables" onclick="navTo('entregables')">
-      <span class="nav-icon">📦</span> Entregables
-      <span class="nav-badge" id="entregablesBadge" style="display:none">0</span>
+    <button class="nav-item" data-page="actasReplanteo" onclick="navTo('actasReplanteo')">
+      <span class="nav-icon">📐</span> Acta de Replanteo
+      <span class="nav-badge" id="repBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="lecciones" onclick="navTo('lecciones')">
-      <span class="nav-icon">💡</span> Lecciones Aprendidas
+    <button class="nav-item" data-page="registroHormigonado" onclick="navTo('registroHormigonado')">
+      <span class="nav-icon">🏗️</span> Registro Hormigonado
+      <span class="nav-badge" id="hormigBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="rendimientos" onclick="navTo('rendimientos')">
-      <span class="nav-icon">📈</span> Rendimientos
+    <button class="nav-item" data-page="cubicacionesObra" onclick="navTo('cubicacionesObra')">
+      <span class="nav-icon">📏</span> Cubicaciones
+      <span class="nav-badge" id="cubicBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="ats" onclick="navTo('ats')">
-      <span class="nav-icon">🔍</span> ATS / Análisis Riesgo
-    </button>
-    <button class="nav-item" data-page="evaluacionesProv" onclick="navTo('evaluacionesProv')">
-      <span class="nav-icon">⭐</span> Eval. Proveedores
-      <span class="nav-badge" id="evProvBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="changeOrders" onclick="navTo('changeOrders')">
-      <span class="nav-icon">🔄</span> Cambios / Change Orders
-      <span class="nav-badge" id="coBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="ensayos" onclick="navTo('ensayos')">
-      <span class="nav-icon">🧪</span> Ensayos y Pruebas
-      <span class="nav-badge" id="ensayosBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="residuos" onclick="navTo('residuos')">
-      <span class="nav-icon">♻️</span> Gestión Residuos
-    </button>
-    <button class="nav-item" data-page="partesMaquinaria" onclick="navTo('partesMaquinaria')">
-      <span class="nav-icon">🚜</span> Partes Maquinaria
-    </button>
-    <button class="nav-item" data-page="consumosMaterial" onclick="navTo('consumosMaterial')">
-      <span class="nav-icon">📦</span> Consumos Material
-    </button>
-    <button class="nav-item" data-page="accidentes" onclick="navTo('accidentes')">
-      <span class="nav-icon">🚨</span> Accidentes / Incidentes
-      <span class="nav-badge" id="accidentesBadge" style="display:none">0</span>
-    </button>
+
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="finanzas"><span>💰 Finanzas de Obra</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-finance" data-page="flujoCaja" onclick="navTo('flujoCaja')" style="display:none">
       <span class="nav-icon">💰</span> Flujo de Caja
-    </button>
-    <button class="nav-item" data-page="solicitudesMat" onclick="navTo('solicitudesMat')">
-      <span class="nav-icon">📋</span> Solicitudes Material
-      <span class="nav-badge" id="solMatBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="ausencias" onclick="navTo('ausencias')">
-      <span class="nav-icon">📅</span> Ausencias y Permisos
-      <span class="nav-badge" id="ausenciasBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="ordenesTrabajo" onclick="navTo('ordenesTrabajo')">
-      <span class="nav-icon">🔧</span> Órdenes de Trabajo
-      <span class="nav-badge" id="otBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="caeDocumentacion" onclick="navTo('caeDocumentacion')">
-      <span class="nav-icon">🛡️</span> CAE / Docs Subcontratas
-      <span class="nav-badge" id="caeBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item nav-finance" data-page="comparativosOferta" onclick="navTo('comparativosOferta')" style="display:none">
-      <span class="nav-icon">🔖</span> Comparativo Ofertas
-      <span class="nav-badge" id="cofBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="licenciasObra" onclick="navTo('licenciasObra')">
-      <span class="nav-icon">📜</span> Permisos y Licencias
-      <span class="nav-badge" id="licObraBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="catalogoPrecios" onclick="navTo('catalogoPrecios')">
-      <span class="nav-icon">💵</span> Catálogo de Precios
-    </button>
-    <button class="nav-item" data-page="segurosObra" onclick="navTo('segurosObra')">
-      <span class="nav-icon">🏥</span> Seguros de Obra
-      <span class="nav-badge" id="segurosBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="horariosObra" onclick="navTo('horariosObra')">
-      <span class="nav-icon">⏰</span> Horarios de Obra
-    </button>
-    <button class="nav-item" data-page="proveedoresGestion" onclick="navTo('proveedoresGestion')">
-      <span class="nav-icon">🏭</span> Proveedores
     </button>
     <button class="nav-item nav-finance" data-page="facturasProveedor" style="display:none" onclick="navTo('facturasProveedor')">
       <span class="nav-icon">🧾</span> Facturas Proveedores
@@ -817,6 +773,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">💳</span> Cobros de Clientes
       <span class="nav-badge" id="cobrosBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="catalogoPrecios" onclick="navTo('catalogoPrecios')">
+      <span class="nav-icon">💵</span> Catálogo de Precios
+    </button>
     <button class="nav-item" data-page="panelVencimientos" onclick="navTo('panelVencimientos')">
       <span class="nav-icon">⏰</span> Panel de Vencimientos
       <span class="nav-badge" id="vencBadge" style="display:none">0</span>
@@ -825,40 +784,89 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏆</span> Licitaciones
       <span class="nav-badge" id="licitBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="cubicacionesObra" onclick="navTo('cubicacionesObra')">
-      <span class="nav-icon">📏</span> Cubicaciones
-      <span class="nav-badge" id="cubicBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="actasReplanteo" onclick="navTo('actasReplanteo')">
-      <span class="nav-icon">📐</span> Acta de Replanteo
-      <span class="nav-badge" id="repBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="formacionObra" onclick="navTo('formacionObra')">
-      <span class="nav-icon">🎓</span> Formación de Obra
-      <span class="nav-badge" id="formacionBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="registroHormigonado" onclick="navTo('registroHormigonado')">
-      <span class="nav-icon">🏗️</span> Registro Hormigonado
-      <span class="nav-badge" id="hormigBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="libroSubcontratacion" onclick="navTo('libroSubcontratacion')">
-      <span class="nav-icon">📖</span> Libro Subcontratación
-      <span class="nav-badge" id="libroSubBadge" style="display:none">0</span>
-    </button>
-    <button class="nav-item" data-page="flotaVehiculos" onclick="navTo('flotaVehiculos')">
-      <span class="nav-icon">🚗</span> Flota de Vehículos
-      <span class="nav-badge" id="flotaBadge" style="display:none">0</span>
+    <button class="nav-item nav-finance" data-page="comparativosOferta" onclick="navTo('comparativosOferta')" style="display:none">
+      <span class="nav-icon">🔖</span> Comparativo Ofertas
+      <span class="nav-badge" id="cofBadge" style="display:none">0</span>
     </button>
     <button class="nav-item" data-page="gastosDietas" onclick="navTo('gastosDietas')">
       <span class="nav-icon">🧳</span> Gastos y Dietas
       <span class="nav-badge" id="gastosBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
-      <span class="nav-icon">📷</span> Galería de Fotos
+    <button class="nav-item" data-page="changeOrders" onclick="navTo('changeOrders')">
+      <span class="nav-icon">🔄</span> Cambios / Change Orders
+      <span class="nav-badge" id="coBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="correspondencia" onclick="navTo('correspondencia')">
-      <span class="nav-icon">✉️</span> Correspondencia
-      <span class="nav-badge" id="corrBadge" style="display:none">!</span>
+
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="proveedores"><span>🏭 Proveedores y Subcontratas</span><span class="sec-chevron">▼</span></div>
+    <button class="nav-item" data-page="proveedoresGestion" onclick="navTo('proveedoresGestion')">
+      <span class="nav-icon">🏭</span> Proveedores
+    </button>
+    <button class="nav-item" data-page="evaluacionesProv" onclick="navTo('evaluacionesProv')">
+      <span class="nav-icon">⭐</span> Eval. Proveedores
+      <span class="nav-badge" id="evProvBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="caeDocumentacion" onclick="navTo('caeDocumentacion')">
+      <span class="nav-icon">🛡️</span> CAE / Docs Subcontratas
+      <span class="nav-badge" id="caeBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="libroSubcontratacion" onclick="navTo('libroSubcontratacion')">
+      <span class="nav-icon">📖</span> Libro Subcontratación
+      <span class="nav-badge" id="libroSubBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="solicitudesMat" onclick="navTo('solicitudesMat')">
+      <span class="nav-icon">📋</span> Solicitudes Material
+      <span class="nav-badge" id="solMatBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="consumosMaterial" onclick="navTo('consumosMaterial')">
+      <span class="nav-icon">📦</span> Consumos Material
+    </button>
+    <button class="nav-item" data-page="ordenesTrabajo" onclick="navTo('ordenesTrabajo')">
+      <span class="nav-icon">🔧</span> Órdenes de Trabajo
+      <span class="nav-badge" id="otBadge" style="display:none">0</span>
+    </button>
+
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="maquinaria"><span>🚜 Maquinaria y Equipos</span><span class="sec-chevron">▼</span></div>
+    <button class="nav-item" data-page="partesMaquinaria" onclick="navTo('partesMaquinaria')">
+      <span class="nav-icon">🚜</span> Partes Maquinaria
+    </button>
+    <button class="nav-item" data-page="flotaVehiculos" onclick="navTo('flotaVehiculos')">
+      <span class="nav-icon">🚗</span> Flota de Vehículos
+      <span class="nav-badge" id="flotaBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="alquileres" onclick="navTo('alquileres')">
+      <span class="nav-icon">🏗️</span> Alquileres Equipo
+      <span class="nav-badge" id="alquileresBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="residuos" onclick="navTo('residuos')">
+      <span class="nav-icon">♻️</span> Gestión Residuos
+    </button>
+
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="calidadCierre"><span>🛡️ Calidad y Cierre</span><span class="sec-chevron">▼</span></div>
+    <button class="nav-item" data-page="licenciasObra" onclick="navTo('licenciasObra')">
+      <span class="nav-icon">📜</span> Permisos y Licencias
+      <span class="nav-badge" id="licObraBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="segurosObra" onclick="navTo('segurosObra')">
+      <span class="nav-icon">🏥</span> Seguros de Obra
+      <span class="nav-badge" id="segurosBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="garantias" onclick="navTo('garantias')">
+      <span class="nav-icon">🛡️</span> Garantías
+      <span class="nav-badge" id="garantiasBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="ensayos" onclick="navTo('ensayos')">
+      <span class="nav-icon">🧪</span> Ensayos y Pruebas
+      <span class="nav-badge" id="ensayosBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="rendimientos" onclick="navTo('rendimientos')">
+      <span class="nav-icon">📈</span> Rendimientos
+    </button>
+    <button class="nav-item" data-page="lecciones" onclick="navTo('lecciones')">
+      <span class="nav-icon">💡</span> Lecciones Aprendidas
+    </button>
+    <button class="nav-item" data-page="entregables" onclick="navTo('entregables')">
+      <span class="nav-icon">📦</span> Entregables
+      <span class="nav-badge" id="entregablesBadge" style="display:none">0</span>
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="analitica"><span>📈 Analítica</span><span class="sec-chevron">▼</span></div>
@@ -9789,10 +9797,11 @@ function iniciarApp() {
   const isNonAdmin = !isAdmin;
   // DEPT-01 (21/07/2026): Construcción y Obra ya NO se ocultan a los no-admin —
   // el backend (worker.js) filtra su contenido por departamento (cada uno ve
-  // solo lo suyo; Seguridad ve todo). Seguimiento y Analítica siguen ocultas.
+  // solo lo suyo; Seguridad ve todo). Analítica y los 5 grupos que antes eran
+  // "Seguimiento" (SIDEBAR-01, 22/07/2026) siguen ocultos para no-admin.
   const seccionesPermitidas = isNonAdmin ?
     ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'construccion', 'planificacion'] :
-    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'construccion', 'planificacion', 'seguimiento', 'analitica'];
+    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'construccion', 'planificacion', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre', 'analitica'];
 
   // Guardar en localStorage cuáles secciones están permitidas para este usuario
   try {
@@ -9800,9 +9809,9 @@ function iniciarApp() {
   } catch {}
 
   if (isNonAdmin) {
-    // Ocultar: Analítica, Seguimiento (DEPT-01: Construcción y Obra ya no se ocultan,
-    // el filtrado real es por departamento en el backend)
-    const seccionesOcultar = ['analitica', 'seguimiento'];
+    // Ocultar: Analítica y los 5 grupos ex-Seguimiento (DEPT-01: Construcción y Obra
+    // ya no se ocultan, el filtrado real es por departamento en el backend)
+    const seccionesOcultar = ['analitica', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre'];
     seccionesOcultar.forEach(sid => {
       const el = document.querySelector(`[data-sid="${sid}"]`);
       if (el) {
@@ -9858,7 +9867,7 @@ function ocultarSidebarPorPermisos() {
 
     if (isNonAdmin) {
       // DEPT-01 (21/07/2026): Construcción y Obra ya no se ocultan, ver comentario arriba
-      const seccionesOcultar = ['analitica', 'seguimiento'];
+      const seccionesOcultar = ['analitica', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre'];
       let ocultadas = 0;
       let totalItems = 0;
 
