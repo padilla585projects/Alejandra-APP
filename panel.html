@@ -6700,7 +6700,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <option value="en_proceso">En proceso</option>
               <option value="cerrada">Cerrada</option>
             </select>
-            <button class="btn btn-primary" onclick="abrirModalNcr()">+ Nueva NCR</button>
+            <button class="btn btn-primary" onclick="abrirModalNcrQa()">+ Nueva NCR</button>
             <button class="btn btn-secondary" onclick="cargarNCRs()">🔄</button>
           </div>
           <div id="ncrKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
@@ -6780,10 +6780,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
       </div>
 
-      <!-- MODAL: NCR -->
-      <div id="modalNcr" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+      <!-- MODAL: NCR (Calidad) -->
+      <div id="modalNcrQa" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-box" style="max-width:620px">
-          <div class="modal-head"><span id="modalNcrTitulo">Nueva NCR</span><button class="modal-close" onclick="document.getElementById('modalNcr').style.display='none'">✕</button></div>
+          <div class="modal-head"><span id="modalNcrQaTitulo">Nueva NCR</span><button class="modal-close" onclick="document.getElementById('modalNcrQa').style.display='none'">✕</button></div>
           <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
             <div><label class="form-label">Descripcion *</label><textarea class="form-input" id="fnDescripcion" rows="3" style="resize:vertical"></textarea></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -6811,8 +6811,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="document.getElementById('modalNcr').style.display='none'">Cancelar</button>
-            <button class="btn btn-primary" onclick="guardarNcr()">Guardar NCR</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('modalNcrQa').style.display='none'">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarNcrQa()">Guardar NCR</button>
           </div>
         </div>
       </div>
@@ -11983,6 +11983,7 @@ async function cargarObrasPanel() {
   try {
     const r = await api('/obras');
     _panelObras = Array.isArray(r) ? r : (r.obras || r.data || r || []);
+    window._obrasPanel = _panelObras;
     const opt = _panelObras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
     ['filtroObraBobinas','filtroObraPemp','filtroObraCarretillas','filtroObraPedidos'].forEach(id => {
       const el = document.getElementById(id);
@@ -13538,10 +13539,8 @@ function abrirModalUsuario() {
 }
 
 // ── OBRAS (para selects de usuario) ───────────────────────────
-async function cargarObrasPanel() {
-  const r = await api('/mi-empresa');
-  if (r.obras) window._obrasPanel = r.obras;
-}
+// NOTA: cargarObrasPanel() está definida más arriba (línea ~11975) y ya
+// rellena window._obrasPanel además de los selects de inventario/presupuesto.
 
 // ── INVITACIONES ──────────────────────────────────────────────
 async function cargarInvitaciones() {
@@ -22598,33 +22597,34 @@ function filtrarAusencias() {
 }
 
 function calcularDiasHabiles() {
-  const fi = document.getElementById('ausModalFechaInicio')?.value;
-  const ff = document.getElementById('ausModalFechaFin')?.value;
+  const fi = document.getElementById('ausFechaIni')?.value;
+  const ff = document.getElementById('ausFechaFin')?.value;
   if (!fi || !ff) return;
   const d1 = new Date(fi), d2 = new Date(ff);
-  if (d2 < d1) { document.getElementById('ausModalDiasHabiles').value = 0; return; }
+  if (d2 < d1) { document.getElementById('ausDiasHab').value = 0; return; }
   let dias = 0, cur = new Date(d1);
   while (cur <= d2) {
     const dow = cur.getDay();
     if (dow !== 0 && dow !== 6) dias++;
     cur.setDate(cur.getDate() + 1);
   }
-  document.getElementById('ausModalDiasHabiles').value = dias;
+  document.getElementById('ausDiasHab').value = dias;
 }
 
 function abrirModalAus(d = {}) {
   const m = document.getElementById('modalAus');
   m._ausId = d.id || null;
-  document.getElementById('ausModalTrabajador').value       = d.nombre_trabajador || '';
-  document.getElementById('ausModalTipo').value             = d.tipo              || 'vacaciones';
-  document.getElementById('ausModalEstado').value           = d.estado            || 'pendiente';
-  document.getElementById('ausModalFechaInicio').value      = d.fecha_inicio      || '';
-  document.getElementById('ausModalFechaFin').value         = d.fecha_fin         || '';
-  document.getElementById('ausModalDiasHabiles').value      = d.dias_habiles      || '';
-  document.getElementById('ausModalAprobadoPor').value      = d.aprobado_por      || '';
-  document.getElementById('ausModalFechaAprobacion').value  = d.fecha_aprobacion  || '';
-  document.getElementById('ausModalMotivo').value           = d.motivo            || '';
-  document.getElementById('ausModalNotas').value            = d.notas             || '';
+  document.getElementById('modalAusTitulo').textContent      = d.id ? 'Editar Ausencia' : 'Nueva Ausencia';
+  document.getElementById('ausNombre').value       = d.nombre_trabajador || '';
+  document.getElementById('ausTipo').value         = d.tipo              || 'vacaciones';
+  document.getElementById('ausEstado').value       = d.estado            || 'pendiente';
+  document.getElementById('ausFechaIni').value     = d.fecha_inicio      || '';
+  document.getElementById('ausFechaFin').value     = d.fecha_fin         || '';
+  document.getElementById('ausDiasHab').value      = d.dias_habiles      || '';
+  document.getElementById('ausAprobador').value    = d.aprobado_por      || '';
+  document.getElementById('ausFechaApro').value    = d.fecha_aprobacion  || '';
+  document.getElementById('ausMotivo').value       = d.motivo            || '';
+  document.getElementById('ausNotas').value        = d.notas             || '';
   m.style.display = 'flex';
 }
 
@@ -22637,16 +22637,16 @@ async function guardarAus() {
   const m   = document.getElementById('modalAus');
   const id  = m._ausId;
   const body = {
-    nombre_trabajador:  document.getElementById('ausModalTrabajador').value.trim(),
-    tipo:               document.getElementById('ausModalTipo').value,
-    estado:             document.getElementById('ausModalEstado').value,
-    fecha_inicio:       document.getElementById('ausModalFechaInicio').value,
-    fecha_fin:          document.getElementById('ausModalFechaFin').value,
-    dias_habiles:       parseInt(document.getElementById('ausModalDiasHabiles').value) || null,
-    aprobado_por:       document.getElementById('ausModalAprobadoPor').value.trim(),
-    fecha_aprobacion:   document.getElementById('ausModalFechaAprobacion').value,
-    motivo:             document.getElementById('ausModalMotivo').value.trim(),
-    notas:              document.getElementById('ausModalNotas').value.trim()
+    nombre_trabajador:  document.getElementById('ausNombre').value.trim(),
+    tipo:               document.getElementById('ausTipo').value,
+    estado:             document.getElementById('ausEstado').value,
+    fecha_inicio:       document.getElementById('ausFechaIni').value,
+    fecha_fin:          document.getElementById('ausFechaFin').value,
+    dias_habiles:       parseInt(document.getElementById('ausDiasHab').value) || null,
+    aprobado_por:       document.getElementById('ausAprobador').value.trim(),
+    fecha_aprobacion:   document.getElementById('ausFechaApro').value,
+    motivo:             document.getElementById('ausMotivo').value.trim(),
+    notas:              document.getElementById('ausNotas').value.trim()
   };
   if (!body.nombre_trabajador) return showToast('El nombre del trabajador es obligatorio', 'warning');
   if (!body.fecha_inicio || !body.fecha_fin) return showToast('Las fechas son obligatorias', 'warning');
@@ -26962,17 +26962,17 @@ async function cargarNCRs() {
           ${n.accion_correctiva ? `<div style="font-size:12px;color:var(--primary);margin-top:4px">🔧 ${n.accion_correctiva}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <button class="btn btn-secondary btn-sm" onclick="editarNcr(${n.id})">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarNcr(${n.id})">🗑</button>
+          <button class="btn btn-secondary btn-sm" onclick="editarNcrQa(${n.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarNcrQa(${n.id})">🗑</button>
         </div>
       </div>
     </div>`;
   }).join('')}</div>`;
 }
 
-function abrirModalNcr() {
+function abrirModalNcrQa() {
   _ncrEditId = null;
-  document.getElementById('modalNcrTitulo').textContent = 'Nueva NCR';
+  document.getElementById('modalNcrQaTitulo').textContent = 'Nueva NCR';
   document.getElementById('fnDescripcion').value = '';
   document.getElementById('fnGravedad').value = 'moderado';
   document.getElementById('fnResponsable').value = '';
@@ -26980,15 +26980,15 @@ function abrirModalNcr() {
   document.getElementById('fnAccion').value = '';
   document.getElementById('fnEstado').value = 'abierta';
   if (document.getElementById('fnObra')?.options.length <= 1) poblarSelectObras('fnObra');
-  document.getElementById('modalNcr').style.display = 'flex';
+  document.getElementById('modalNcrQa').style.display = 'flex';
 }
 
-async function editarNcr(id) {
+async function editarNcrQa(id) {
   const r = await api(`/ncrs-obra?`); // get all, find by id
   const ncr = (r?.ncrs || []).find(n => n.id === id);
   if (!ncr) return showToast('NCR no encontrada', 'error');
   _ncrEditId = id;
-  document.getElementById('modalNcrTitulo').textContent = `Editar ${ncr.numero||'NCR'}`;
+  document.getElementById('modalNcrQaTitulo').textContent = `Editar ${ncr.numero||'NCR'}`;
   document.getElementById('fnDescripcion').value = ncr.descripcion || '';
   document.getElementById('fnGravedad').value = ncr.gravedad || 'moderado';
   document.getElementById('fnResponsable').value = ncr.responsable || '';
@@ -26996,10 +26996,10 @@ async function editarNcr(id) {
   document.getElementById('fnAccion').value = ncr.accion_correctiva || '';
   document.getElementById('fnEstado').value = ncr.estado || 'abierta';
   if (document.getElementById('fnObra')?.options.length <= 1) poblarSelectObras('fnObra');
-  document.getElementById('modalNcr').style.display = 'flex';
+  document.getElementById('modalNcrQa').style.display = 'flex';
 }
 
-async function guardarNcr() {
+async function guardarNcrQa() {
   const desc = document.getElementById('fnDescripcion').value.trim();
   if (!desc) return showToast('La descripcion es obligatoria', 'error');
   const body = {
@@ -27015,13 +27015,13 @@ async function guardarNcr() {
   const method = _ncrEditId ? 'PUT' : 'POST';
   const r = await api(url, method, body);
   if (r?.ok || r?.id) {
-    document.getElementById('modalNcr').style.display = 'none';
+    document.getElementById('modalNcrQa').style.display = 'none';
     showToast(_ncrEditId ? 'NCR actualizada ✅' : `NCR creada ✅${r.numero ? ` (${r.numero})` : ''}`, 'success');
     cargarNCRs();
   } else showToast(r?.error || 'Error al guardar', 'error');
 }
 
-async function eliminarNcr(id) {
+async function eliminarNcrQa(id) {
   if (!confirm('¿Eliminar esta NCR?')) return;
   const r = await api(`/ncrs-obra/${id}`, 'DELETE');
   if (r?.ok) { showToast('NCR eliminada', 'success'); cargarNCRs(); }
@@ -27122,12 +27122,12 @@ function abrirModalNcr(ncr = null) {
   document.getElementById('ncrEstado').value = ncr?.estado || 'abierta';
   document.getElementById('ncrNotas').value = ncr?.notas || '';
   document.getElementById('btnElimNcr').style.display = ncr ? '' : 'none';
-  document.getElementById('modalNcr').classList.add('show');
+  document.getElementById('modalNcr').classList.add('open');
 }
 
 function editarNcr(ncr) { abrirModalNcr(typeof ncr === 'string' ? JSON.parse(ncr) : ncr); }
 
-function cerrarModalNcr() { document.getElementById('modalNcr').classList.remove('show'); }
+function cerrarModalNcr() { document.getElementById('modalNcr').classList.remove('open'); }
 
 async function guardarNcr() {
   const id  = document.getElementById('ncrId').value;
@@ -28425,12 +28425,13 @@ async function abrirModalOC(id = null) {
   }
   const isEdit = !!id;
   const obrasOpts = await _getObrasOpts();
+  document.getElementById('modalOC')?.remove();
   const modalHtml = `
-    <div class="modal" id="modalOC" style="display:flex">
-      <div class="modal-content" style="max-width:700px">
+    <div class="modal-overlay" id="modalOC" style="display:flex" onclick="if(event.target===this)cerrarModalOC()">
+      <div class="modal" style="max-width:700px">
         <div class="modal-header">
           <span class="modal-title">${isEdit?'✏️ Editar':'+ Nueva'} Orden de Cambio</span>
-          <button class="modal-close" onclick="cerrarModal('modalOC')">✕</button>
+          <button class="modal-close" onclick="cerrarModalOC()">✕</button>
         </div>
         <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <label style="grid-column:1/-1">Titulo *
@@ -28469,12 +28470,16 @@ async function abrirModalOC(id = null) {
             <textarea class="form-input" id="ocNotas" rows="2" style="resize:vertical">${d.notas||''}</textarea></label>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="cerrarModal('modalOC')">Cancelar</button>
+          <button class="btn btn-secondary" onclick="cerrarModalOC()">Cancelar</button>
           <button class="btn btn-primary" onclick="guardarOC(${id||0})">Guardar</button>
         </div>
       </div>
     </div>`;
-  abrirModal(modalHtml);
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function cerrarModalOC() {
+  document.getElementById('modalOC')?.remove();
 }
 
 async function guardarOC(id) {
@@ -28500,7 +28505,7 @@ async function guardarOC(id) {
   const method = id ? 'PUT' : 'POST';
   const r = await api(url, method, body);
   if (r?.ok || r?.id) {
-    cerrarModal('modalOC');
+    cerrarModalOC();
     showToast(id ? 'OC actualizada ✅' : `OC creada ✅ (${r.numero||''})`, 'success');
     tblOC = null;
     cargarOrdenesCambio();
@@ -29391,7 +29396,7 @@ function renderPlanosCards() {
       const esColor = ESTADO_PLANO_COLOR[p.estado] || 'var(--text)';
       const icono   = p.archivo_mime?.includes('pdf') ? '📄' : (p.archivo_mime?.startsWith('image') ? '🖼' : '📁');
       const sizeKB  = p.archivo_size ? Math.round(p.archivo_size/1024) : null;
-      html += `<div class="card" style="padding:14px;cursor:pointer;border-top:3px solid ${esColor};position:relative" onclick="verPlano(${p.id})">
+      html += `<div class="card" style="padding:14px;cursor:pointer;border-top:3px solid ${esColor};position:relative" onclick="verPlanoObra(${p.id})">
         <div style="font-size:28px;margin-bottom:8px;text-align:center">${icono}</div>
         <div style="font-weight:600;font-size:13px;margin-bottom:4px;word-break:break-word">${esc(p.nombre)}</div>
         <div style="font-size:11px;color:var(--muted)">${p.area_piso ? '📍 ' + esc(p.area_piso) + ' · ' : ''}Rev. ${esc(p.revision||'A')}</div>
@@ -29428,7 +29433,7 @@ function renderPlanosTabla() {
         }},
         { title:'Subido',     field:'created_at', width:100, formatter: c => (c.getValue()||'').slice(0,10) },
         { title:'Acc.', field:'id', hozAlign:'center', width:80, headerSort:false,
-          formatter: c => `<button class="tbl-btn" onclick="verPlano(${c.getValue()})">👁</button><button class="tbl-btn" onclick="abrirModalEditarPlano(${c.getValue()})">✏️</button><button class="tbl-btn" onclick="eliminarPlano(${c.getValue()})">🗑</button>` },
+          formatter: c => `<button class="tbl-btn" onclick="verPlanoObra(${c.getValue()})">👁</button><button class="tbl-btn" onclick="abrirModalEditarPlano(${c.getValue()})">✏️</button><button class="tbl-btn" onclick="eliminarPlano(${c.getValue()})">🗑</button>` },
       ]
     });
   } else {
@@ -29436,7 +29441,7 @@ function renderPlanosTabla() {
   }
 }
 
-async function verPlano(id) {
+async function verPlanoObra(id) {
   const p = _planosData.find(x => x.id === id);
   if (!p || !p.archivo_key) { toast('Este plano no tiene archivo adjunto', 'err'); return; }
   const sess = await api('/sesion');
@@ -32197,8 +32202,8 @@ function filtrarCronogramaPagos() {
     { title:'Estado', field:'estado', width:100, hozAlign:'center',
       formatter: c => '<span style="background:'+(CP_ESTADO_COLOR[c.getValue()]||'#6b7280')+';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px">'+c.getValue()+'</span>' },
     { title:'', field:'id', width:90, hozAlign:'center', headerSort:false,
-      formatter: c => '<button class="btn btn-sm btn-secondary" onclick="editarCp('+c.getValue()+')">✏️</button> '
-                    + '<button class="btn btn-sm btn-secondary" style="color:#dc2626" onclick="eliminarCp('+c.getValue()+')">🗑️</button>' }
+      formatter: c => '<button class="btn btn-sm btn-secondary" onclick="editarCpg('+c.getValue()+')">✏️</button> '
+                    + '<button class="btn btn-sm btn-secondary" style="color:#dc2626" onclick="eliminarCpg('+c.getValue()+')">🗑️</button>' }
   ];
 
   if (tblCp) { tblCp.replaceData(rows); }
@@ -32215,7 +32220,7 @@ function filtrarCronogramaPagos() {
   }
 }
 
-function abrirModalCp(id) {
+function abrirModalCpg(id) {
   ['cpDesc','cpRef','cpCliente','cpNotas'].forEach(f => document.getElementById(f).value = '');
   document.getElementById('cpImportePrev').value = '0';
   document.getElementById('cpImporteCob').value  = '0';
@@ -32225,14 +32230,14 @@ function abrirModalCp(id) {
   document.getElementById('cpFormaPago').value   = '';
   document.getElementById('cpFechaPrev').value   = new Date().toISOString().slice(0,10);
   poblarSelectObras('cpObra');
-  document.getElementById('modalCpTitle').textContent = id ? 'Editar hito de pago' : 'Nuevo hito de pago';
-  document.getElementById('modalCp').dataset.id = id || '';
-  document.getElementById('modalCp').style.display = 'flex';
+  document.getElementById('modalCpgTitle').textContent = id ? 'Editar hito de pago' : 'Nuevo hito de pago';
+  document.getElementById('modalCpg').dataset.id = id || '';
+  document.getElementById('modalCpg').style.display = 'flex';
 }
 
-function editarCp(id) {
+function editarCpg(id) {
   const r = _cpgData.find(x => x.id===id); if (!r) return;
-  abrirModalCp(id);
+  abrirModalCpg(id);
   setTimeout(() => {
     document.getElementById('cpDesc').value        = r.descripcion;
     document.getElementById('cpTipo').value        = r.tipo;
@@ -32249,8 +32254,8 @@ function editarCp(id) {
   }, 50);
 }
 
-async function guardarCp() {
-  const id   = document.getElementById('modalCp').dataset.id;
+async function guardarCpg() {
+  const id   = document.getElementById('modalCpg').dataset.id;
   const body = {
     descripcion:       document.getElementById('cpDesc').value,
     obra_id:           document.getElementById('cpObra').value,
@@ -32275,12 +32280,12 @@ async function guardarCp() {
     const d = await res.json();
     if (!res.ok) return toast(d.error||'Error','error');
     toast(id ? 'Hito actualizado' : 'Hito creado','ok');
-    cerrarModalCp();
+    cerrarModalCpg();
     cargarCronogramaPagos();
   } catch(e) { toast('Error de red','error'); }
 }
 
-async function eliminarCp(id) {
+async function eliminarCpg(id) {
   if (!confirm('¿Eliminar este hito de pago?')) return;
   const res = await apiFetch('/cronograma-pagos/'+id,{ method:'DELETE' });
   const d   = await res.json();
@@ -32288,7 +32293,7 @@ async function eliminarCp(id) {
   else toast(d.error||'Error','error');
 }
 
-function cerrarModalCp() { document.getElementById('modalCp').style.display='none'; }
+function cerrarModalCpg() { document.getElementById('modalCpg').style.display='none'; }
 
 // ═══════════════════════════════════════════════════════
 // NEW-116: REGISTRO DIARIO DE PREVENCIÓN (RdP)

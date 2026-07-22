@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/07/2026 — ORG-01: sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra. Antes: AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 22/07/2026 — BOTONES-01: fix de botones rotos en panel.html por colisiones de nombre de función/id (Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel). Antes: ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1528,6 +1528,49 @@ LEYENDA DE ESTADO:
       preview con sesión simulada: carpintería no ve Bobinas pero sí PEMP/Carretillas;
       electricista y superadmin sí ven Bobinas. Ver Part 28 (INV-01) en SESION.md para detalle
       completo. Commit `9e7d3cd`, push a `main`.
+
+[✓] BOTONES-01 — "+ Nueva Ausencia" y otros botones de panel.html no funcionaban
+    [HECHO 22/07/2026]
+    · Reportado por Adrian: "cuando itento crear un evento en cualquier pagina de 'personal' los
+      botones no funcionan. Revisa en las demas por si acaso. que los botones esten conectados".
+    · Bug reportado (Ausencias): `abrirModalAus`/`guardarAus`/`calcularDiasHabiles` usaban ids de
+      DOM inexistentes (`ausModalTrabajador`, etc.) en vez de los reales (`ausNombre`, `ausTipo`,
+      `ausEstado`, `ausFechaIni`, `ausFechaFin`, `ausDiasHab`, `ausAprobador`, `ausFechaApro`,
+      `ausMotivo`, `ausNotas`) — TypeError silencioso que abortaba el modal sin ningún error
+      visible. Corregidas las 3 funciones.
+    · Auditoría "por si acaso" (escaneo de funciones y de ids de DOM duplicados en las ~32.000
+      líneas de panel.html — cuando dos `function X` comparten nombre, la última declarada gana
+      y la primera queda muerta sin error; cuando dos elementos comparten `id`, `getElementById`
+      siempre resuelve al primero) encontró 4 bugs más del mismo tipo, todos corregidos:
+      - NCR ("+ Nueva NCR"): dos implementaciones (Calidad vs standalone "No Conformidades",
+        NEW-72) con los mismos nombres de función y el mismo id de modal `modalNcr` — ambos
+        botones rotos. Renombrada la de Calidad a sufijo `*Qa`. Además la standalone tenía un bug
+        propio: `classList.add('show')` cuando el CSS solo reconoce `.modal-overlay.open`,
+        corregido a `'open'`.
+      - Catálogo de Precios Unitarios ("+ Nuevo Precio"): tapado por una función incompleta
+        "Cronograma de Pagos" (NEW-115, sin HTML propio) que reusaba los mismos nombres.
+        Renombrada Cronograma de Pagos a sufijo `*Cpg`.
+      - Órdenes de Cambio ("+ Nueva OC"): dos páginas con el mismo id `pageOrdenesCambio` y las
+        mismas funciones; la que sobrevivía llamaba al modal genérico `abrirModal()` con el
+        número de argumentos equivocado y la clase CSS equivocada (`.modal` en vez de
+        `.modal-overlay`). Reescrito `abrirModalOC`/`cerrarModalOC` para construir su propio
+        modal autocontenido.
+      - `verPlano`: dos funciones distintas con el mismo nombre (Planos de Obra vs Planos IA); la
+        de Planos de Obra (abre el archivo subido) quedaba tapada por la de Planos IA (visor
+        SVG). Renombrada a `verPlanoObra`.
+      - `cargarObrasPanel`: dos definiciones; la trivial ganaba y dejaba 7 `<select>` de obra
+        (Bobinas, PEMP, Carretillas, Pedidos, Presupuesto, Fases, Partes) sin rellenar en toda la
+        app. Fusionadas en una sola función.
+    · Verificación: los 3 `<script>` de panel.html compilan sin error tras cada cambio; live-test
+      en preview local (sesión simulada) confirma que los 4 modales corregidos abren realmente
+      (`display:flex`); `git diff` sin corrupción de encoding nueva.
+    · Pendiente detectado y NO corregido, bajo prioridad (flagged para sesión futura): Escandallo
+      de Precios (NEW-114) y Registro Diario de Prevención (NEW-116) tienen toda la lógica JS
+      pero CERO página/modal HTML — lanzarían error al navegar a ellas; Cronograma de Pagos
+      (ahora `*Cpg`) sigue sin página/modal HTML propio, la feature en sí no está construida;
+      la implementación antigua de Órdenes de Cambio (HTML ~línea 8173, JS 17872-17983) queda
+      como código muerto inofensivo, pendiente de limpieza en una sesión de housekeeping.
+    · Alcance: solo `panel.html` (frontend), sin bump de versión de app ni deploy de worker.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
