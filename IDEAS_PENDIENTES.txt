@@ -1515,11 +1515,19 @@ LEYENDA DE ESTADO:
       manual). No se tocó `index.html`/`sw.js` -sin bump de versión de app móvil-. No aplica a
       `alejandra-agente/worker.js` -esta lógica vive en endpoints REST del panel/app web, no en
       las herramientas del agente-.
-    · Pendiente detectado y NO implementado, flagged aparte (spawn_task): la sección
-      "Inventarios" del sidebar (bobinas, PEMP, carretillas, repostajes, herramientas,
-      alertasStock) se muestra igual a cualquier oficio sin filtrar por departamento -un
-      encargado de carpintería ve "Bobinas"/"PEMP", que son de eléctricos-. No estaba dentro de
-      lo pedido explícitamente en esta sesión; revisar y confirmar con Adrian antes de tocarlo.
+    · [✓] INV-01 — Pendiente detectado aquí, resuelto en tarea aparte (spawn_task) el mismo día
+      [HECHO, sin bump v — solo panel.html]: se investigó el backend antes de tocar nada y se
+      confirmó que `getBobinas`/`getPemp`/`getCarretillas`/`getHerramientas` YA filtran por
+      departamento para no-admin desde antes de ORG-01 -el hallazgo de "Inventarios no filtra
+      nada" era parcialmente incorrecto-. De los 7 ítems de "Inventarios", solo "Bobinas" es
+      realmente exclusivo de un oficio (`_HOME_TRADE_MODS`, único `soloElectrico:true`); PEMP y
+      Carretillas SÍ son comunes a cualquier departamento, así que ocultarlas a todos los
+      no-electricistas habría sido un error. Adrian confirmó (AskUserQuestion): ocultar solo
+      "Bobinas" a no-electricistas. Implementado en panel.html (`nav-electrico-section`,
+      revelado en `iniciarApp()` solo si admin o `departamento === 'electrico'`). Verificado en
+      preview con sesión simulada: carpintería no ve Bobinas pero sí PEMP/Carretillas;
+      electricista y superadmin sí ven Bobinas. Ver Part 28 (INV-01) en SESION.md para detalle
+      completo. Commit `9e7d3cd`, push a `main`.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
