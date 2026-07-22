@@ -6503,7 +6503,10 @@ async function getCarretillas(request, env) {
   const isAdminRole = isUnrestrictedAdmin || isJefeObra;
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   const deptParam = url.searchParams.get('departamento');
-  const deptFilter = deptParam || (!isAdminRole ? departamento : null);
+  // INV-02 (22/07/2026): antes el query param ganaba incluso para no-admin,
+  // permitiendo ver carretillas de otro departamento pidiendo ?departamento=X.
+  // Non-admin roles always see only their own department (ignore query param override)
+  const deptFilter = !isAdminRole ? departamento : (deptParam || null);
 
   let sql = 'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = ?';
   const params = [empresa_id];
@@ -7590,39 +7593,59 @@ async function actualizarTipoCable(id, request, env) {
 }
 
 async function getAlertasStock(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra, isDesarrollador, isAdmin, isSeguridad } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
 
-  // 1. Herramientas: tipos con menos disponibles que el mÃ­nimo
-  const { results: herramientas } = await env.DB.prepare(`
-    SELECT t.id, t.nombre, t.stock_minimo,
+  // INV-02 (22/07/2026): antes esta ruta no filtraba por departamento en absoluto
+  // -cualquier rol/departamento veia el stock bajo de TODOS los departamentos-.
+  // Mismo criterio que bobinas/pemp/herramientas: privilegiados ven todo, el resto
+  // solo su propio departamento (o, para bobinas, solo si es electrico -material
+  // exclusivo de electricistas, ver INV-01-).
+  const privilegiado = !!(isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador || isSeguridad);
+  const deptFilter = !privilegiado ? departamento : null;
+
+  // 1. Herramientas: tipos con menos disponibles que el minimo
+  let sqlHerr = `SELECT t.id, t.nombre, t.stock_minimo,
            COUNT(CASE WHEN h.estado = 'disponible' THEN 1 END) as disponibles
     FROM tipos_herramienta t
-    LEFT JOIN herramientas h ON h.tipo_id = t.id AND h.empresa_id = t.empresa_id
-    WHERE t.empresa_id = ? AND t.stock_minimo > 0
+    LEFT JOIN herramientas h ON h.tipo_id = t.id AND h.empresa_id = t.empresa_id`;
+  const paramsHerr = [];
+  if (deptFilter) { sqlHerr += ' AND h.departamento = ?'; paramsHerr.push(deptFilter); }
+  sqlHerr += ` WHERE t.empresa_id = ? AND t.stock_minimo > 0
     GROUP BY t.id
-    HAVING disponibles < t.stock_minimo
-  `).bind(empresa_id).all();
+    HAVING disponibles < t.stock_minimo`;
+  paramsHerr.push(empresa_id);
+  const { results: herramientas } = await env.DB.prepare(sqlHerr).bind(...paramsHerr).all();
 
-  // 2. Inventario seg: items modo='cantidad' con stock bajo mÃ­nimo
-  const { results: seguridad } = await env.DB.prepare(`
-    SELECT id, nombre, tipo_material, cantidad_disponible, stock_minimo
-    FROM inventario_seg
-    WHERE empresa_id = ? AND modo = 'cantidad' AND stock_minimo > 0
-      AND cantidad_disponible < stock_minimo AND estado != 'baja'
-  `).bind(empresa_id).all();
+  // 2. Inventario seg: items modo='cantidad' con stock bajo minimo — mismo gate
+  // de acceso que getInventarioSeg (solo Seguridad/admin ven inventario de seguridad)
+  let seguridad = [];
+  if (isSuperadmin || isAdmin || isSeguridad || isEmpresaAdmin) {
+    const r = await env.DB.prepare(`
+      SELECT id, nombre, tipo_material, cantidad_disponible, stock_minimo
+      FROM inventario_seg
+      WHERE empresa_id = ? AND modo = 'cantidad' AND stock_minimo > 0
+        AND cantidad_disponible < stock_minimo AND estado != 'baja'
+    `).bind(empresa_id).all();
+    seguridad = r.results;
+  }
 
-  // 3. Bobinas: tipos_cable con menos bobinas activas que el mÃ­nimo
-  const { results: bobinas } = await env.DB.prepare(`
-    SELECT tc.id, tc.nombre, tc.stock_minimo,
-           COUNT(b.id) as total_bobinas
-    FROM tipos_cable tc
-    LEFT JOIN bobinas b ON b.tipo_cable = tc.nombre AND b.empresa_id = tc.empresa_id
-      AND b.estado NOT IN ('Dado de baja', 'baja')
-    WHERE tc.empresa_id = ? AND tc.stock_minimo > 0
-    GROUP BY tc.id
-    HAVING total_bobinas < tc.stock_minimo
-  `).bind(empresa_id).all();
+  // 3. Bobinas: tipos_cable con menos bobinas activas que el minimo — material
+  // exclusivo de electricistas (ver INV-01), solo visible para ese departamento o privilegiados
+  let bobinas = [];
+  if (privilegiado || departamento === 'electrico') {
+    const r = await env.DB.prepare(`
+      SELECT tc.id, tc.nombre, tc.stock_minimo,
+             COUNT(b.id) as total_bobinas
+      FROM tipos_cable tc
+      LEFT JOIN bobinas b ON b.tipo_cable = tc.nombre AND b.empresa_id = tc.empresa_id
+        AND b.estado NOT IN ('Dado de baja', 'baja')
+      WHERE tc.empresa_id = ? AND tc.stock_minimo > 0
+      GROUP BY tc.id
+      HAVING total_bobinas < tc.stock_minimo
+    `).bind(empresa_id).all();
+    bobinas = r.results;
+  }
 
   return json({ herramientas, seguridad, bobinas });
 }

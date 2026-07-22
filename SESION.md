@@ -1,9 +1,32 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 22/07/2026 -- BOTONES-01: "+ Nueva Ausencia" (y otros botones de Personal) no funcionaban por colisiones de nombre de función/id en panel.html; auditoría completa del archivo y varios fixes más
-**Versión actual:** v8.00 (sin cambio — solo panel.html, sin bump de app móvil ni de worker.js)
-**Resumen:** Adrian reportó que al intentar crear un evento en cualquier página de "Personal" los botones no funcionaban, y pidió revisar el resto "por si acaso" para comprobar que los botones estén conectados. Ver Part 28 para el detalle completo.
+**Fecha:** 22/07/2026 -- INV-02: auditoría completa de filtrado por departamento en Inventarios (worker.js) tras el pendiente de ORG-01/INV-01 — 2 fugas reales encontradas y corregidas (/carretillas, /alertas-stock)
+**Versión actual:** v8.00 (sin cambio — solo worker.js, sin bump de app móvil ni de panel.html)
+**Resumen:** Continuando el pendiente detectado en ORG-01 (filtrado por departamento en Inventarios; INV-01 ya había resuelto "Bobinas" en el sidebar), se auditó cada endpoint backend de Inventarios contra el patrón `isDeptPrivileged`. Ver Part 29 para el detalle completo.
+
+### Part 29: INV-02 — Auditoría y fix de filtrado por departamento en endpoints de Inventarios (worker.js) (22/07/2026)
+**Contexto:** Retomando el pendiente flagged en ORG-01 ("la sección Inventarios se muestra igual a cualquier oficio sin filtrar por departamento"), tras confirmar que INV-01 ya había ocultado el botón "Bobinas" del sidebar para no-electricistas, se auditó el BACKEND real de los 7 endpoints que sirven la sección Inventarios (`/bobinas`, `/pemp`, `/carretillas`, `/herramientas`, `/repostajes`, `/inventario-seg`, `/alertas-stock`) para comprobar si de verdad filtran por departamento para roles no-admin, o si solo se ocultaba el botón sin proteger el dato en el servidor.
+
+**Resultado de la auditoría:**
+- `/bobinas`, `/pemp`, `/herramientas`: correctamente filtrados — no-admin siempre ve solo su propio departamento, ignorando cualquier `?departamento=` de query string.
+- `/inventario-seg`: sin columna `departamento` (inventario único de EPIs de empresa), pero correctamente gateado por rol (`isSuperadmin||isAdmin||isSeguridad||isEmpresaAdmin`) — solo Seguridad/admin lo ven, el resto recibe 403. Correcto tal cual.
+- **`/carretillas` — BUG real:** a diferencia de bobinas/pemp/herramientas, el parámetro `?departamento=` de la URL tenía prioridad incluso para roles no-admin (`deptFilter = deptParam || (!isAdminRole ? departamento : null)`), permitiendo a cualquier encargado/operario pedir `GET /carretillas?departamento=electrico` y ver carretillas de otro departamento saltándose su propia restricción.
+- **`/alertas-stock` — BUG real, más grave:** no filtraba por departamento en absoluto y ni siquiera comprobaba el rol (solo exigía `empresa_id`) — cualquier encargado de cualquier oficio veía las alertas de stock bajo de TODOS los departamentos (herramientas, EPIs de seguridad y bobinas), revelando el inventario de otros oficios.
+- `/repostajes`: sin columna `departamento` en el schema y sin gate de rol — bajo impacto (va ligado a un equipo concreto, no a un departamento directamente), flagged para revisión futura si se quiere aplicar scoping (requeriría migración).
+
+**Fix aplicado:**
+- `getCarretillas` (worker.js ~línea 6505): corregido para usar el mismo patrón que bobinas/pemp/herramientas — `deptFilter = !isAdminRole ? departamento : (deptParam || null)`, non-admin ya no puede saltarse su departamento vía query string.
+- `getAlertasStock` (worker.js ~línea 7592): añadido `departamento` y flags de auth (`isSuperadmin`, `isEmpresaAdmin`, `isJefeObra`, `isDesarrollador`, `isAdmin`, `isSeguridad`) al destructure; nuevo `privilegiado` (mismo criterio ampliado que `isDeptPrivileged` + `isJefeObra`, para alinearse con el resto de endpoints de Inventarios). Sub-consulta de herramientas ahora filtra por `h.departamento` para no-privilegiados; sub-consulta de EPIs de seguridad solo se ejecuta si el usuario tiene el mismo gate de rol que `/inventario-seg`; sub-consulta de bobinas solo se ejecuta si el departamento es `electrico` o el usuario es privilegiado (material exclusivo de electricistas, mismo criterio que INV-01).
+
+**Verificación:** `node --check worker.js` OK; `git diff` sin corrupción de encoding nueva en las líneas añadidas (se detectó y se dejó sin tocar corrupción de encoding PREEXISTENTE en comentarios decorativos cercanos —`mÃ­nimo`, separadores `Ã¢...`— en `getAlertasStock`/`getInventarioSeg`, fuera del alcance de esta sesión; flagged para housekeeping futuro). Deploy: `npx wrangler deploy` OK, Version ID `394df126-7f9a-4e2f-a14f-cc473aaece77`, bindings DB+FILES presentes, `/health` 200 tras el deploy. Smoke test en producción: `/alertas-stock` sin auth → `{"ok":false,"error":"No autorizado"}` (sigue exigiendo sesión, sin regresión).
+
+**Pendiente, detectado pero NO corregido en esta sesión (bajo prioridad, flagged para revisión futura):**
+- `/repostajes`: sin columna `departamento`, sin gate de rol — necesitaría migración de schema si se quiere aplicar aislamiento por departamento.
+- Corrupción de encoding preexistente en comentarios decorativos de `worker.js` cerca de `getAlertasStock`/`getInventarioSeg` (separadores `Ã¢...`, palabras como `mÃ­nimo`) — no introducida en esta sesión, no se tocó por estar fuera del diff relevante; limpiar en una sesión de housekeeping de encoding.
+- Las 4 rutas de inventario (`bobinas`/`pemp`/`carretillas`/`herramientas`) siguen sin usar el helper compartido `isDeptPrivileged()` de DEPT-01 (usan su propio `isAdminRole` con `isJefeObra` pero sin `isDesarrollador`/`isSeguridad`) — inconsistencia menor, no es una fuga (más bien deja a desarrollador/Seguridad más restringidos de lo que deberían en estas 4 tablas concretas), evaluar alinear en el futuro.
+
+**Alcance y despliegue:** solo `worker.js` (backend) — requirió y recibió `wrangler deploy` manual, además del deploy automático de CI al pushear a `main`. No se tocó `panel.html`/`index.html`/`sw.js`, sin bump de versión de app. No aplica a `alejandra-agente/worker.js` (esta lógica vive en los endpoints REST del worker principal usados por panel/app web, no en las tools del agente).
 
 ### Part 28: BOTONES-01 — Botones de Ausencias/NCR/Catálogo de Precios/Órdenes de Cambio rotos por colisiones de nombre en panel.html (22/07/2026)
 **Contexto:** Adrian: *"cuando itento crear un evento en cualquier pagina de 'personal' los botones no funcionan. Revisa en las demas por si acaso. que los botones esten conectados"*.

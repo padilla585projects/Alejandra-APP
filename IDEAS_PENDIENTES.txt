@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/07/2026 — BOTONES-01: fix de botones rotos en panel.html por colisiones de nombre de función/id (Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel). Antes: ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 22/07/2026 — INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -1571,6 +1571,46 @@ LEYENDA DE ESTADO:
       la implementación antigua de Órdenes de Cambio (HTML ~línea 8173, JS 17872-17983) queda
       como código muerto inofensivo, pendiente de limpieza en una sesión de housekeeping.
     · Alcance: solo `panel.html` (frontend), sin bump de versión de app ni deploy de worker.
+
+[✓] INV-02 — 2 fugas reales de datos entre departamentos en endpoints de Inventarios
+    [HECHO 22/07/2026]
+    · Retomado el pendiente flagged en ORG-01 ("Inventarios se muestra igual a cualquier oficio
+      sin filtrar por departamento"; INV-01 ya había ocultado el botón "Bobinas" del sidebar para
+      no-electricistas). Esta sesión auditó el BACKEND real de los 7 endpoints de Inventarios
+      (`/bobinas`, `/pemp`, `/carretillas`, `/herramientas`, `/repostajes`, `/inventario-seg`,
+      `/alertas-stock`) para comprobar si de verdad filtran por departamento, no solo si se oculta
+      el botón del sidebar.
+    · `/bobinas`, `/pemp`, `/herramientas`: ya filtraban correctamente. `/inventario-seg`: sin
+      columna `departamento` pero correctamente gateado por rol (solo Seguridad/admin).
+    · BUG real 1 — `getCarretillas`: el parámetro `?departamento=` de la URL ganaba incluso para
+      roles no-admin, permitiendo a cualquier encargado/operario pedir carretillas de otro
+      departamento por URL. Corregido: mismo patrón que bobinas/pemp/herramientas (no-admin
+      ignora el query param, siempre ve solo su propio departamento).
+    · BUG real 2 (más grave) — `getAlertasStock`: no filtraba por departamento en absoluto ni
+      comprobaba el rol (solo exigía `empresa_id`) — cualquier encargado de cualquier oficio veía
+      las alertas de stock bajo de TODOS los departamentos (herramientas, EPIs de seguridad,
+      bobinas). Corregido: herramientas filtra por departamento para no-privilegiados; EPIs de
+      seguridad solo se calculan si el usuario tiene el mismo gate de rol que `/inventario-seg`;
+      bobinas solo si el departamento es `electrico` o el usuario es privilegiado (mismo criterio
+      que INV-01).
+    · Verificación: `node --check worker.js` OK; encoding limpio en líneas añadidas (se detectó
+      pero NO se tocó corrupción PREEXISTENTE de encoding en comentarios decorativos cercanos —
+      `mÃ­nimo`, separadores `Ã¢...`— en `getAlertasStock`/`getInventarioSeg`, fuera de alcance,
+      flagged abajo para housekeeping futuro). Deploy: `wrangler deploy` OK, Version ID
+      `394df126-7f9a-4e2f-a14f-cc473aaece77`, `/health` 200; smoke test en producción confirma
+      que `/alertas-stock` sigue exigiendo sesión sin regresión.
+    · Pendiente detectado y NO corregido, bajo prioridad (flagged para sesión futura):
+      - `/repostajes` sin columna `departamento` ni gate de rol — necesitaría migración de schema
+        si se quiere aplicar aislamiento por departamento.
+      - Corrupción de encoding PREEXISTENTE (no introducida en esta sesión) en comentarios
+        decorativos de `worker.js` cerca de `getAlertasStock`/`getInventarioSeg` — limpiar en una
+        sesión de housekeeping de encoding dedicada.
+      - Las 4 rutas de inventario (`bobinas`/`pemp`/`carretillas`/`herramientas`) siguen sin usar
+        el helper compartido `isDeptPrivileged()` de DEPT-01 (usan su propio `isAdminRole` con
+        `isJefeObra` pero sin `isDesarrollador`/`isSeguridad`) — inconsistencia menor, no es fuga.
+    · Alcance: solo `worker.js` (backend), requirió y recibió `wrangler deploy` manual. No aplica
+      a `alejandra-agente/worker.js` (lógica de endpoints REST del worker principal, no de las
+      tools del agente).
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
