@@ -1071,6 +1071,33 @@ LEYENDA DE ESTADO:
     · Verificado en producción: /push-vapid-key ahora HTTP 200 con publicKey; node --check
       OK en ambos; encoding limpio. Deploy: principal adb8c088, agente b9242d46.
 
+[✓] SEC-16 — getAuth() rama legacy daba empresa_id:1/rol:'operario' a peticiones SIN NINGÚN
+    header de auth (CRÍTICO)  [HECHO 22/07/2026 — pendiente de deploy]
+    · Detectado por Adrian: `curl` a /incidencias sin ningún header (ni X-Token, ni
+      X-Admin-Code, ni X-Rol) devolvía 200 [] en vez de 403. Causa: la rama "2. Fallback
+      legacy headers" de getAuth() (worker.js ~línea 118-150) devolvía siempre
+      `empresa_id: 1` y `rol: rol || 'operario'` por defecto, aunque NINGÚN header
+      identificativo viniera en la petición.
+    · Impacto: ~200 endpoints en worker.js solo comprueban
+      `if (!empresa_id) return err('No autorizado', 403)` como barrera. Como empresa_id
+      nunca era null/undefined en la rama legacy, cualquier petición anónima (sin login,
+      sin token) pasaba esa barrera como si fuera un operario válido de la empresa 1.
+      El CORS del worker no protege nada aquí (solo aplica a fetch desde navegador, no a
+      curl/clientes HTTP directos).
+    · Investigado quién depende de la rama legacy antes de tocar nada: index.html/panel.html
+      siempre usan X-Token tras /verificar (el fallback legacy de index.html es código
+      muerto en la práctica); alejandra-agente → worker.js usa X-Internal-Secret verificado
+      aparte o endpoints públicos intencionados (/push/vapid-public-key); GitHub Actions y
+      Google Sheets no llaman a estos endpoints protegidos. Nadie legítimo depende hoy del
+      default empresa_id:1 sin headers.
+    · Fix: nueva variable `hasLegacyIdentity = isAdmin || !!(usuario && rol)` (requiere
+      X-Admin-Code válido, o X-Usuario + X-Rol juntos). Si no hay identidad legacy
+      reconocible → `empresa_id: null`, `rol: null`, `roles: []`, para que los checks
+      `!empresa_id` existentes bloqueen correctamente peticiones anónimas.
+    · Verificado: node --check OK; encoding limpio (sin caracteres corruptos en las líneas
+      añadidas). Pendiente: deploy a producción (npx wrangler deploy) y push a main —
+      confirmar con Adrian antes de cada paso.
+
 ================================================================================
   💰 COSTES Y MODELOS IA (auditoría 21/07/2026 — leer antes de tocar modelos)
 ================================================================================

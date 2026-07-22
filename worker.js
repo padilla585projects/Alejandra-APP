@@ -128,6 +128,13 @@ async function getAuth(request, env) {
   // Sin esto cualquier peticiÃ³n podrÃ­a enviar "X-Rol: superadmin" y obtener acceso total.
   const isSuperadmin   = isAdmin;
   const isEmpresaAdmin = isAdmin;
+  // SEC-16: una petición sin X-Token, sin X-Admin-Code y sin (X-Usuario + X-Rol) no
+  // identifica a nadie. Antes se le asignaba empresa_id: 1 / rol: 'operario' por
+  // defecto, lo que colaba cualquier request anónima por los ~200 checks
+  // `if (!empresa_id) return err('No autorizado', 403)` repartidos por la API.
+  // Ahora, sin identidad legacy reconocible, empresa_id/rol quedan a null para que
+  // esos checks bloqueen correctamente.
+  const hasLegacyIdentity = isAdmin || !!(usuario && rol);
   return {
     isAdmin,
     isSuperadmin,
@@ -137,8 +144,8 @@ async function getAuth(request, env) {
     isOficina:     isAdmin ? false : rol === 'oficina',
     isDesarrollador: false, // nunca por legacy headers
     isSeguridad: departamento === 'seguridad',
-    rol: isAdmin ? 'superadmin' : (rol || 'operario'),
-    roles: [isAdmin ? 'superadmin' : (rol || 'operario')],
+    rol: hasLegacyIdentity ? (isAdmin ? 'superadmin' : rol) : null,
+    roles: hasLegacyIdentity ? [isAdmin ? 'superadmin' : rol] : [],
     obraId: obraId ? parseInt(obraId) : null,
     obra_id: obraId ? parseInt(obraId) : null,
     usuario_id: null,
@@ -146,7 +153,7 @@ async function getAuth(request, env) {
     nombre: usuario || '',
     codigo: codigo || '',
     departamento,
-    empresa_id: 1,
+    empresa_id: hasLegacyIdentity ? 1 : null,
   };
 }
 

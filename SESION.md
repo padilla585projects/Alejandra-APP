@@ -1,13 +1,17 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 22/07/2026 -- ROLES-01: coherencia de permisos de jefe_de_obra/oficina en incidencias (gestión completa) + aislamiento estricto por departamento (se quita el bypass cross-dept que solo tenía jefe_de_obra)
-**Versión actual:** v8.00 (worker.js + index.html)
-**Resumen:** Adrian pidió revisar el tema de los roles. Auditoría del código real encontró 3 incoherencias: jefe_de_obra/oficina podían crear incidencias pero no gestionarlas (cambiar estado/cerrar); jefe_de_obra era el único rol no-privilegiado con bypass `sin_dept=1` para ver incidencias de otros departamentos (rompía el aislamiento de DEPT-01); no había check de rol al crear bobinas/PEMP/carretillas. Decisiones de Adrian: jefe_de_obra/oficina pasan a gestión completa de incidencias; se quita el bypass a jefe_de_obra (queda solo para `isDeptPrivileged`: SA/EA/desarrollador/Seguridad); operario solo puede crear inventario en su propio departamento (ya lo hacía así, sin cambio de código); operario mantiene su capacidad de crear incidencias (intencional). Ver Part 24 para detalle completo.
+**Fecha:** 22/07/2026 -- SEC-16: getAuth() rama legacy daba empresa_id:1/rol:'operario' a peticiones SIN NINGÚN header de auth (curl sin headers pasaba `if (!empresa_id)` en ~200 endpoints). Antes: ROLES-01 (coherencia de permisos jefe_de_obra/oficina en incidencias + aislamiento estricto por departamento).
+**Versión actual:** v8.00 (sin bump — fix solo de worker.js, sin cambio observable en frontend)
+**Resumen:** Adrian reportó (verificado con curl en producción) que una petición SIN ningún header de auth a un endpoint como /incidencias devolvía 200 [] en vez de 403. Causa: la rama "fallback legacy headers" de getAuth() (worker.js ~línea 118-150) devolvía siempre `empresa_id: 1` y `rol: rol || 'operario'` por defecto, aunque no viniera ningún header identificativo. Investigado antes de tocar nada quién depende de esa rama (index.html/panel.html siempre usan X-Token tras /verificar; alejandra-agente usa X-Internal-Secret o endpoints públicos intencionados; nadie legítimo depende del default sin headers). Fix: `hasLegacyIdentity = isAdmin || !!(usuario && rol)` — sin identidad legacy reconocible, empresa_id/rol quedan a null para que los ~200 checks `!empresa_id` bloqueen correctamente. Verificado en producción tras deploy: `curl` sin headers a /incidencias ahora devuelve 403. Ver SEC-16 en IDEAS_PENDIENTES.txt para detalle completo.
 
-**Último worker desplegado (web, alejandra-app-api):** Version ID `db6b7928-843e-4c9f-9530-2f45a815800e` (deploy manual con ROLES-01: coherencia de permisos por rol en incidencias; previo `17ce8725` DEPT-01)
-**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- ROLES-01 es solo del worker principal/index.html, no aplica a alejandra-agente; previo `b643c514` SEC-10)
+**Último worker desplegado (web, alejandra-app-api):** Version ID `226a0ff1-9b89-4686-bb9f-a286cdd4cf22` (deploy manual con SEC-16: fix getAuth() legacy sin headers; previo `db6b7928` ROLES-01)
+**Último agente desplegado (alejandra-agente):** Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (sin cambios esta sesión -- SEC-16 es solo del worker principal, no aplica a alejandra-agente; previo `b643c514` SEC-10)
 **Commits de esta sesión (push a `main` ✅):**
+- `402199d` — fix: getAuth() legacy fallback ya no da empresa_id:1 a peticiones sin ningun header (SEC-16)
+
+### Sesión anterior (ROLES-01, 22/07/2026)
+**Resumen:** Adrian pidió revisar el tema de los roles. Auditoría del código real encontró 3 incoherencias: jefe_de_obra/oficina podían crear incidencias pero no gestionarlas (cambiar estado/cerrar); jefe_de_obra era el único rol no-privilegiado con bypass `sin_dept=1` para ver incidencias de otros departamentos (rompía el aislamiento de DEPT-01); no había check de rol al crear bobinas/PEMP/carretillas. Decisiones de Adrian: jefe_de_obra/oficina pasan a gestión completa de incidencias; se quita el bypass a jefe_de_obra (queda solo para `isDeptPrivileged`: SA/EA/desarrollador/Seguridad); operario solo puede crear inventario en su propio departamento (ya lo hacía así, sin cambio de código); operario mantiene su capacidad de crear incidencias (intencional). Ver Part 24 para detalle completo.
 - `048b344` — fix: coherencia de permisos por rol en incidencias + aislamiento estricto por departamento (ROLES-01) — v8.00
 
 ### Part 24: ROLES-01 — Coherencia de permisos por rol (incidencias + aislamiento dept) (22/07/2026)
