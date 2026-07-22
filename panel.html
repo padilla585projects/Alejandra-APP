@@ -544,7 +544,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="inventarios"><span>📦 Inventarios</span><span class="sec-chevron">▼</span></div>
-    <button class="nav-item" data-page="bobinas" onclick="navTo('bobinas')">
+    <button class="nav-item nav-electrico-section" data-page="bobinas" onclick="navTo('bobinas')" style="display:none">
       <span class="nav-icon">⚡</span> Bobinas
     </button>
     <button class="nav-item" data-page="pemp" onclick="navTo('pemp')">
@@ -9828,6 +9828,13 @@ function iniciarApp() {
   const deptActual = SESSION.departamento || 'electrico';
   if (deptActual === 'seguridad') {
     document.querySelectorAll('.nav-seguridad-section').forEach(el => el.style.display = '');
+  }
+
+  // INV-01 (22/07/2026): "Bobinas" es material exclusivo de electricistas (ver
+  // _HOME_TRADE_MODS, soloElectrico:true) — se oculta a otros departamentos, ya
+  // que para ellos el backend siempre devolvería la lista vacía
+  if (isAdmin || deptActual === 'electrico') {
+    document.querySelectorAll('.nav-electrico-section').forEach(el => el.style.display = '');
   }
 
   // mostrar FAB de Alejandra cuando hay sesión activa

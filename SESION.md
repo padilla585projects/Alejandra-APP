@@ -5,7 +5,7 @@
 **Versión actual:** v8.00 (sin bump de app móvil — cambios en panel.html y worker.js, index.html/sw.js no tocados)
 **Resumen:** Adrian preguntó si de verdad un encargado de un oficio (caso concreto: Alberto) necesita ver tantos botones en el sidebar. Auditoría real: un encargado no-admin veía 62 botones, muchos de gestión de proyecto/PM (RFIs, submittals, presupuestos, contratos, cierre de obra...) que son cosa de jefe_de_obra/oficina, no de un encargado de campo. Adrian además pidió explícitamente que cada encargado/operario pueda ver documentos/planos/fotos de obra **de su propio departamento**. Implementado: (1) nuevo tercer nivel de permisos en el sidebar -antes solo admin/no-admin-: `ocultarItemsPorOficio()` oculta 27 botones de PM/oficina técnica dentro de Obra/Construcción/Planificación SOLO para encargado/operario "puros" (sin roles_extra de jefe_de_obra/oficina/admin); jefe_de_obra/oficina mantienen el set completo que ya tenían. (2) Se movió el botón "Galería de Fotos" (`fotosObra`) de la sección "Diario y Campo" (oculta para no-admin) a la sección "Obra" (siempre visible), porque antes ni encargados ni jefes de obra podían verlo. (3) Backend (`worker.js`): `getPlanosObra` no tenía NINGÚN filtro por departamento (solo por disciplina, texto libre); se añadió `DISCIPLINA_DEPT_MAP` que cruza disciplina↔departamento -electrico, mecanico/fontaneria/climatizacion→mecanicas, civil→obra_civil, seguridad→seguridad- y sin privilegio -admin/desarrollador/Seguridad- solo se ven las disciplinas propias + las transversales sin dueño -arquitectura, estructural, general-. `listarFotosObra` filtraba por departamento SOLO si el frontend lo pedía por query string -cualquiera podía ver fotos de cualquier departamento pidiendo la URL sin ese parámetro-; ahora se fuerza siempre el departamento de la sesión salvo privilegio. `documentosObra` ya estaba bien -filtrado por departamento desde DEPT-01-, no se tocó. Deploy de worker.js hecho y verificado (`/health` 200). Ver Part 27 para detalle completo, incluida la clasificación ítem a ítem de qué se oculta y por qué.
 
-**Pendiente detectado, fuera de esta sesión (flagged, no implementado):** la sección "Inventarios" (bobinas, PEMP, carretillas, herramientas...) se muestra igual a cualquier oficio, sin filtrar por departamento -un encargado de carpintería ve "Bobinas" y "PEMP", que son de eléctricos-. Se lanzó una tarea aparte para revisarlo (spawn_task), no se tocó en ORG-01 porque no era parte de lo pedido explícitamente.
+**Pendiente detectado en ORG-01, resuelto en la tarea aparte que se lanzó (spawn_task):** la sección "Inventarios" (bobinas, PEMP, carretillas, herramientas...) se mostraba igual a cualquier oficio, sin filtrar por departamento -un encargado de carpintería veía "Bobinas" y "PEMP", que son de eléctricos-. Ver Part 28 (INV-01): solo "Bobinas" resultó ser realmente exclusivo de electricistas, PEMP/Carretillas/Herramientas ya se dejan visibles para todos (el backend ya las filtraba por departamento).
 
 **Último worker desplegado (web, alejandra-app-api):** Version ID `65e8e7cc-2c86-4d1c-a26b-43809445b9bf` (ORG-01: filtrado real por departamento en planos_obra -DISCIPLINA_DEPT_MAP- y fotos_obra -antes opcional, ahora forzado-; previo `226a0ff1` SEC-16; previo `db6b7928` ROLES-01)
 **Último agente desplegado (alejandra-agente):** sin cambios esta sesión (ORG-01 no toca `alejandra-agente/worker.js` — no hay lógica de negocio ni permisos compartidos con ese worker) — sigue Version ID `b9242d46-be9a-4038-84f6-ce2a00ca503c` (previo `b643c514` SEC-10)
@@ -13,6 +13,7 @@
 - `76418ea` — fix: reorganiza sidebar de panel.html, ex-"Seguimiento" en 5 secciones + RRHH/Seguridad a secciones existentes (SIDEBAR-01)
 - `f78c455` — feat: descubribilidad de módulos — tooltips, banner contextual, contexto de pantalla para Alejandra y tour de onboarding en todo el sidebar (AYUDA-01)
 - `5b01aa4` — feat: sidebar de panel.html organizado por rol/departamento (encargado/operario ven menos ítems de PM) + filtrado real por departamento en planos y fotos de obra (ORG-01)
+- `9e7d3cd` — fix: oculta "Bobinas" del sidebar de Inventarios a departamentos no-electricistas (INV-01)
 
 ### Sesión en paralelo (SEC-16, 22/07/2026)
 **Resumen:** Adrian reportó (verificado con curl en producción) que una petición SIN ningún header de auth a un endpoint como /incidencias devolvía 200 [] en vez de 403. Causa: la rama "fallback legacy headers" de getAuth() (worker.js ~línea 118-150) devolvía siempre `empresa_id: 1` y `rol: rol || 'operario'` por defecto, aunque no viniera ningún header identificativo. Fix: `hasLegacyIdentity = isAdmin || !!(usuario && rol)` — sin identidad legacy reconocible, empresa_id/rol quedan a null para que los ~200 checks `!empresa_id` bloqueen correctamente. Verificado en producción tras deploy: `curl` sin headers a /incidencias ahora devuelve 403. Ver SEC-16 en IDEAS_PENDIENTES.txt para detalle completo. No solapa con SIDEBAR-01 (worker.js vs. panel.html, sesiones distintas fusionadas por rebase).
@@ -58,7 +59,45 @@
 
 **Alcance y despliegue:** `panel.html` (frontend, GitHub Pages, sin `APP_VERSION` propio) + `worker.js` (backend, requiere y recibió `wrangler deploy` manual además del deploy automático de CI al pushear a `main`). No se tocó `index.html`/`sw.js`, así que no hace falta bump de versión de la app móvil.
 
-**Pendiente, detectado pero NO implementado en esta sesión (flagged con `spawn_task` para revisión aparte):** la sección "Inventarios" del sidebar (bobinas, PEMP, carretillas, repostajes, herramientas, alertasStock) se muestra igual a cualquier encargado/operario sin filtrar por departamento -un encargado de carpintería ve "Bobinas"/"PEMP", que son de electricistas-. No estaba dentro de lo pedido explícitamente en esta sesión (Adrian preguntó por Obra/Construcción/Planificación y por documentos/planos/fotos); queda para revisión y confirmación en una sesión futura si procede aplicar el mismo criterio.
+**Pendiente, detectado pero NO implementado en esta sesión (flagged con `spawn_task` para revisión aparte):** la sección "Inventarios" del sidebar (bobinas, PEMP, carretillas, repostajes, herramientas, alertasStock) se muestra igual a cualquier encargado/operario sin filtrar por departamento -un encargado de carpintería ve "Bobinas"/"PEMP", que son de electricistas-. Resuelto en la tarea aparte lanzada por spawn_task, ver Part 28 (INV-01): solo "Bobinas" resultó exclusivo de un oficio.
+
+### Part 28: INV-01 — Oculta "Bobinas" del sidebar a departamentos no-electricistas (22/07/2026)
+**Contexto:** hallazgo reportado como tarea propia: la sección "Inventarios" del sidebar (bobinas,
+pemp, carretillas, repostajes, herramientas, seguridad, alertasStock) se mostraba igual a
+cualquier encargado/operario no-admin, sin filtrar por departamento/oficio — ej. un encargado de
+"carpinteria" veía "Bobinas" (cable eléctrico), material propio de electricistas.
+
+**Investigación antes de tocar código:** el backend (`worker.js`) YA filtra por departamento en
+`getBobinas`, `getPemp`, `getCarretillas` y `getHerramientas` para roles no-admin (`deptFilter =
+!isAdminRole ? departamento : ...`) — el hallazgo original de que "Inventarios no filtra nada" era
+parcialmente incorrecto. `getRepostajes`/`getAlertasStock`/`getInventarioSeg` sí son transversales
+a toda la empresa por diseño (alertas de stock agregadas, material de seguridad compartido).
+Además, solo "Bobinas" es realmente exclusivo de un oficio — así lo confirma el propio código
+(`_HOME_TRADE_MODS`, panel.html ~línea 9437: único ítem marcado `soloElectrico: true`). PEMP y
+Carretillas SÍ son comunes a cualquier departamento (obra civil, albañilería, carpintería,
+mecánicas...), así que ocultarlas a todos los no-electricistas habría quitado funcionalidad real
+a otros oficios.
+
+**Decisión de Adrian (recogida por AskUserQuestion):** ocultar solo "Bobinas" a no-electricistas;
+dejar PEMP/Carretillas/Herramientas visibles para todos (el backend ya las filtra por
+departamento).
+
+**Implementación (panel.html):** botón `data-page="bobinas"` ([panel.html:547](panel.html:547))
+ahora oculto por defecto (`nav-electrico-section`, `style="display:none"`), revelado en
+`iniciarApp()` ([panel.html:9796](panel.html:9796)) solo si `isAdmin` (superadmin/empresa_admin/
+desarrollador) o `departamento === 'electrico'` — mismo patrón que ya usa la sección "Seguridad"
+(`nav-seguridad-section`).
+
+**Verificación:** en preview, simulando sesión vía `localStorage.panel_session`+`panel_token`+
+reload: encargado de "carpinteria" no ve Bobinas pero sí PEMP/Carretillas; encargado "electrico"
+ve Bobinas; superadmin con departamento "carpinteria" ve Bobinas igualmente (admin ve todo, sin
+depender de su departamento). Los 3 bloques `<script>` compilan sin error (`node -e "new
+Function(...)"`). Sin corrupción de encoding nueva (grep `Ã|Â|â€|ï»¿` sin coincidencias en el
+diff).
+
+**Alcance y despliegue:** solo `panel.html` (frontend estático de GitHub Pages) — no requiere
+`wrangler deploy`, solo push. Sin cambio de versión de app (panel.html no tiene `APP_VERSION`
+propio, mismo criterio que Part 25/23/26). No se tocó `worker.js` ni `alejandra-agente/worker.js`.
 
 ### Part 26: AYUDA-01 — Descubribilidad de módulos en todo el sidebar (22/07/2026)
 **Contexto:** al cierre de SIDEBAR-01 (Part 25) quedó pendiente y sin definir la "descubribilidad de módulos" que Adrian pidió originalmente en DEPT-01 (Part 22). Retomada en esta sesión: preguntado directamente, Adrian confirmó las 4 vías que ya había aprobado por multiSelect en DEPT-01 (tooltip en el botón del sidebar, estado vacío explicativo, Alejandra lo explica por chat, tour de onboarding) y, ante la pregunta de por cuál empezar, respondió *"hazlo todos por el orden que quieras"*. Sobre el alcance (¿las 5 secciones nuevas de SIDEBAR-01 o todo el sidebar?) contestó *"Todo el sidebar"* (~113 `data-page` en total). Instrucción final: *"dale con todo pon modo auto"* — autorización para implementar las 4 vías completas sin más confirmaciones intermedias.
