@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 23/07/2026 — PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 23/07/2026 — ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -34,6 +34,28 @@ LEYENDA DE ESTADO:
       que el color coincida con los datos reales capitalizados (antes salía "muted" siempre).
     · Sin cambios en worker.js — los 3 endpoints PUT ya aceptaban "estado" genéricamente.
     · Reportado y resuelto: 23/07/2026 — Adrián
+
+[✓] ESCANEO-REMOTO-COMPLETO — El escaneo remoto no hacía nada útil con la foto (solo un toast efímero)  [HECHO v8.06]
+    · Adrián: "tenemos la opción de escaneo remoto pero no podemos hacer nada con él, es
+      ilógico no? terminemos el trabajo en condiciones" → "pero no solo se puede enviar
+      albaranes, tenemos que cubrir todas las opciones que hay en esta función" → confirmado
+      vía AskUserQuestion: "Todos los tipos en un plan único".
+    · Cubre los 6 tipos del selector de escaneo: documento, factura, albaran, foto_obra,
+      bobina, plano.
+    · worker.js: nuevo router `_procesarScanResultado` (disparado sin bloquear la respuesta
+      vía `ctx.waitUntil` desde `syncCrearEvento`) sube la foto a R2 y crea una fila en la
+      nueva tabla `escaneos_remotos`; documento/factura/albaran van a Documentos (pendiente,
+      con extracción IA vía Gemini si es posible); foto_obra a Galería; plano a Planos
+      (borrador); bobina se queda pendiente de revisión humana (nunca crea bobinas reales
+      solo). Nuevos endpoints: GET /escaneos-remotos, GET /escaneos-remotos/:id/imagen,
+      PATCH /escaneos-remotos/:id.
+    · panel.html: nuevo botón flotante "📥 Escaneos pendientes" con badge y modal de revisión
+      (miniatura, tipo, contexto, acciones "Revisar y guardar" / "Descartar"); integrado en
+      `cargarNotificaciones()` como una fuente más.
+    · index.html: toast de confirmación ahora es específico por tipo de escaneo.
+    · Decisión consciente: no se tocó `alejandra-agente/worker.js` (no es un cambio de
+      seguridad/barrera, solo de enrutamiento de datos).
+    · Resuelto: 23/07/2026 — Adrián
 
 [✓] PENDIENTE-SCAN-MOVIL — Escaneo remoto desde el móvil no funcionó (Alberto)  [HECHO v8.04]
     · Adrián reportó: "no ha funcionado que alberto pueda escanear con el móvil desde

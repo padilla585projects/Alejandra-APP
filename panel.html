@@ -14154,7 +14154,7 @@ document.addEventListener('click', e => {
 });
 
 async function cargarNotificaciones() {
-  const [alertasR, pedidosR, carnetR, rfisR, subcR, hitosR, punchNR, segObsNR] = await Promise.all([
+  const [alertasR, pedidosR, carnetR, rfisR, subcR, hitosR, punchNR, segObsNR, escaneosR] = await Promise.all([
     api('/alertas-stock'),
     api('/pedidos?limit=50'),
     api('/carnets?limit=200'),
@@ -14163,6 +14163,7 @@ async function cargarNotificaciones() {
     api('/hitos-obra').catch(() => ({})),
     api('/punch-list?estado=abierto').catch(() => ({})),
     api('/obs-seguridad?estado=abierta').catch(() => ({})),
+    api('/escaneos-remotos?estado=pendiente').catch(() => ({})),
   ]);
   notificaciones = [];
 
@@ -14253,6 +14254,14 @@ async function cargarNotificaciones() {
     texto: segVenc.slice(0, 2).map(o => o.descripcion?.slice(0,30)).join(', '), nav: 'seguridadObra'
   });
 
+  // Fix ESCANEO-ROUTER (23/07/2026): escaneos remotos (móvil) pendientes de revisar
+  // — sobre todo "bobina", que necesita confirmación humana antes de crear datos reales.
+  const escaneosPend = (escaneosR?.items || []);
+  if (escaneosPend.length) notificaciones.push({
+    tipo: 'warn', icono: '📥', titulo: `${escaneosPend.length} escaneo${escaneosPend.length > 1 ? 's' : ''} remoto${escaneosPend.length > 1 ? 's' : ''} pendiente${escaneosPend.length > 1 ? 's' : ''}`,
+    texto: 'Fotos escaneadas desde el móvil que necesitan revisión', accion: "rsAbrirPendientes()"
+  });
+
   // Actualizar badge
   const badge = document.getElementById('notifBadge');
   if (notificaciones.length > 0) {
@@ -14272,7 +14281,7 @@ function renderNotificaciones() {
     return;
   }
   lista.innerHTML = notificaciones.map(n => `
-    <div onclick="notifCerrar();navTo('${n.nav}')" style="padding:12px;border-radius:10px;margin-bottom:6px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+    <div onclick="notifCerrar();${n.accion || ("navTo('" + n.nav + "')")}" style="padding:12px;border-radius:10px;margin-bottom:6px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <span style="font-size:20px;flex-shrink:0">${n.icono}</span>
       <div>
         <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:${n.tipo === 'danger' ? 'var(--red)' : 'var(--yellow)'}">${n.titulo}</div>
@@ -16252,6 +16261,18 @@ async function _registrarPushDeveloper() {
     } catch {}
   }
 
+  // Fix ESCANEO-ROUTER (23/07/2026): el destino real de cada foto ya lo decide el
+  // servidor (worker.js, _procesarScanResultado) según el subtipo. Este mensaje solo
+  // informa dónde fue a parar, para que no quede como "recibido" sin más explicación.
+  const _RS_DESTINO_MSG = {
+    documento:  '📄 Guardado en Documentos, pendiente de revisar.',
+    factura:    '🧾 Guardada en Documentos, pendiente de revisar.',
+    albaran:    '📋 Guardado en Documentos, pendiente de revisar. Alejandra está intentando leer los datos.',
+    foto_obra:  '🏗️ Añadida a la Galería de la obra.',
+    plano:      '📐 Guardado en Planos como borrador, pendiente de revisar.',
+    bobina:     '🔌 Pendiente de revisar y confirmar en "📥 Escaneos pendientes" antes de crear la bobina.',
+  };
+
   function _rsProcesarEvento(ev) {
     const datos = typeof ev.datos === 'string' ? JSON.parse(ev.datos || '{}') : (ev.datos || {});
     if (ev.tipo === 'scan_resultado' || ev.tipo === 'foto_resultado') {
@@ -16260,7 +16281,10 @@ async function _registrarPushDeveloper() {
         _rsScanPendiente = null;
         rsCerrarScanModal();
       }
-      _rsToast('📸 Escaneo recibido', datos.descripcion || 'Se ha recibido una foto del móvil');
+      const msg = _RS_DESTINO_MSG[datos.subtipo] || datos.descripcion || 'Se ha recibido una foto del móvil.';
+      _rsToast('📸 Escaneo recibido', msg);
+      // Refrescar el contador de "Escaneos pendientes" (sobre todo relevante para bobina)
+      if (typeof rsActualizarBadgePendientes === 'function') setTimeout(rsActualizarBadgePendientes, 1500);
     } else if (ev.tipo === 'scan_cancelado') {
       if (_rsScanPendiente) {
         _rsScanPendiente = null;
@@ -16386,12 +16410,112 @@ async function _registrarPushDeveloper() {
     }).catch(() => {});
   };
 
+  // ═══ ESCANEOS PENDIENTES (23/07/2026) ═══════════════════════════════════════
+  // Fix ESCANEO-ROUTER: antes el resultado de "Escanear con el móvil" solo generaba
+  // un toast efímero y no había ningún sitio para revisarlo después. Ahora el
+  // servidor ya reparte cada foto a su pantalla real (Documentos/Galería/Planos),
+  // pero el tipo "Bobina/Material" necesita confirmación humana antes de crear
+  // bobinas reales (mismo criterio que ya usa el escáner de bobinas normal) — este
+  // panel es donde se revisan esos pendientes (y cualquier otro que falle su enrutado
+  // automático y se quede sin destino).
+  let _rsPendientesCache = [];
+
+  const RS_TIPO_ICO = { documento:'📄', factura:'🧾', albaran:'📋', foto_obra:'🏗️', bobina:'🔌', plano:'📐' };
+  const RS_TIPO_LBL = { documento:'Documento', factura:'Factura', albaran:'Albarán', foto_obra:'Foto de obra', bobina:'Bobina/Material', plano:'Plano' };
+
+  async function rsActualizarBadgePendientes() {
+    try {
+      const r = await fetch(API + '/escaneos-remotos?estado=pendiente', { headers: _rsApiHeaders() });
+      const d = await r.json();
+      _rsPendientesCache = d.items || [];
+      const btn = document.getElementById('rsPendientesBtn');
+      const badge = document.getElementById('rsPendientesBadge');
+      if (!btn || !badge) return;
+      const n = _rsPendientesCache.length;
+      btn.style.display = n > 0 ? 'flex' : 'none';
+      badge.textContent = n > 9 ? '9+' : String(n);
+    } catch {}
+  }
+
+  window.rsAbrirPendientes = async function() {
+    const overlay = document.createElement('div');
+    overlay.className = 'rs-scan-overlay';
+    overlay.id = 'rsPendOverlay';
+    overlay.innerHTML = `
+      <div class="rs-scan-modal" style="max-width:520px;text-align:left">
+        <h3 style="text-align:center">📥 Escaneos pendientes</h3>
+        <div class="sub" style="text-align:center">Fotos escaneadas desde el móvil que necesitan tu revisión</div>
+        <div id="rsPendList" style="max-height:60vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+          <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">Cargando...</div>
+        </div>
+        <button onclick="document.getElementById('rsPendOverlay').remove()" class="btn btn-secondary" style="width:100%">Cerrar</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    await rsActualizarBadgePendientes();
+    rsRenderPendientes();
+  };
+
+  function rsRenderPendientes() {
+    const cont = document.getElementById('rsPendList');
+    if (!cont) return;
+    if (!_rsPendientesCache.length) {
+      cont.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">✅ Sin escaneos pendientes</div>';
+      return;
+    }
+    cont.innerHTML = _rsPendientesCache.map(it => {
+      const ico = RS_TIPO_ICO[it.subtipo] || '📎';
+      const lbl = RS_TIPO_LBL[it.subtipo] || it.subtipo;
+      const imgUrl = API + '/escaneos-remotos/' + it.id + '/imagen?token=' + encodeURIComponent(TOKEN);
+      const accionBtn = it.subtipo === 'bobina'
+        ? `<button onclick="rsRevisarBobina(${it.id})" class="btn btn-primary" style="font-size:11px;padding:5px 10px">🔍 Revisar y guardar</button>`
+        : `<button onclick="window.open('${imgUrl}','_blank')" class="btn btn-secondary" style="font-size:11px;padding:5px 10px">👁 Ver imagen</button>`;
+      return `
+        <div style="display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:10px;padding:8px;background:var(--surface2)">
+          <img src="${imgUrl}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0" onerror="this.style.display='none'">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:700">${ico} ${lbl}</div>
+            <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it.contexto || 'Sin contexto'}</div>
+            <div style="font-size:10px;color:var(--muted)">${String(it.created_at||'').slice(0,16).replace('T',' ')}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+            ${accionBtn}
+            <button onclick="rsDescartarPendiente(${it.id})" class="btn btn-secondary" style="font-size:11px;padding:5px 10px">🗑 Descartar</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  window.rsRevisarBobina = function(id) {
+    const item = _rsPendientesCache.find(x => x.id === id);
+    if (!item) return;
+    let bobinas = [];
+    try { bobinas = JSON.parse(item.datos_extraidos || '{}').bobinas || []; } catch {}
+    if (!bobinas.length) { toast('Alejandra no pudo extraer bobinas de esta imagen. Descártala y repite el escaneo.', 'err'); return; }
+    document.getElementById('rsPendOverlay')?.remove();
+    if (typeof sbAbrirConDatos === 'function') sbAbrirConDatos(bobinas, id);
+  };
+
+  window.rsDescartarPendiente = async function(id) {
+    try {
+      await fetch(API + '/escaneos-remotos/' + id, {
+        method: 'PATCH', headers: _rsApiHeaders(), body: JSON.stringify({ estado: 'descartado' })
+      });
+      _rsPendientesCache = _rsPendientesCache.filter(x => x.id !== id);
+      rsRenderPendientes();
+      rsActualizarBadgePendientes();
+    } catch { toast('Error al descartar', 'err'); }
+  };
+
   // ── Exponer inicio de sync para llamar desde iniciarApp() ──
   window.rsIniciarSync = rsIniciarSync;
+  window.rsActualizarBadgePendientes = rsActualizarBadgePendientes;
 
   // Auto-iniciar si ya hay sesión (el auto-login ocurre antes de esta IIFE)
   if (typeof TOKEN !== 'undefined' && TOKEN && typeof SESSION !== 'undefined' && SESSION) {
     rsIniciarSync();
+    rsActualizarBadgePendientes();
+    setInterval(rsActualizarBadgePendientes, 30000);
   }
 })();
 </script>
@@ -17207,6 +17331,7 @@ document.getElementById('wInput').focus();
 // ── SCAN ALBARÁN BOBINAS (panel web) ────────────────────────────────────────
 (function() {
   let _sbData = null;
+  let _sbEscaneoRemotoId = null; // Fix ESCANEO-ROUTER: id en escaneos_remotos si venimos de "Escaneos pendientes"
 
   function abrirScanBobinasPanel() {
     const modal = document.getElementById('modalScanBobinas');
@@ -17221,6 +17346,7 @@ document.getElementById('wInput').focus();
     document.getElementById('sbFileInput').value = '';
     _sbFiles = [];
     _sbData = null;
+    _sbEscaneoRemotoId = null;
     const info = document.getElementById('sbObraInfo');
     const selGroup = document.getElementById('sbObraSelGroup');
     if (SESSION?.obra_id) {
@@ -17428,6 +17554,16 @@ document.getElementById('wInput').focus();
       const r = await api('/bobinas/batch', { method: 'POST', body: JSON.stringify({ bobinas }) });
       if (!r.ok && r.importadas === undefined) throw new Error(r.error || 'Error');
       toast(`✅ ${r.importadas} nuevas${r.actualizadas ? ` · ${r.actualizadas} actualizadas` : ''}${r.duplicadas ? ` · ${r.duplicadas} sin cambios` : ''}`, 'ok');
+      // Fix ESCANEO-ROUTER: si veníamos de "Escaneos pendientes", marcar ese escaneo
+      // remoto como confirmado para que desaparezca de la lista de pendientes.
+      if (_sbEscaneoRemotoId) {
+        fetch(API + '/escaneos-remotos/' + _sbEscaneoRemotoId, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN },
+          body: JSON.stringify({ estado: 'confirmado', destino_tipo: 'bobinas' })
+        }).catch(() => {});
+        if (typeof rsActualizarBadgePendientes === 'function') rsActualizarBadgePendientes();
+        _sbEscaneoRemotoId = null;
+      }
       cerrarScanBobinas();
       if (typeof cargarBobinas === 'function') cargarBobinas();
     } catch(e) {
@@ -17437,11 +17573,21 @@ document.getElementById('wInput').focus();
     }
   }
 
+  // Fix ESCANEO-ROUTER (23/07/2026): abre el modal directamente en la pantalla de
+  // revisión (paso 3), prellenada con bobinas ya extraídas por Alejandra desde un
+  // escaneo remoto pendiente, sin pasar por /scan-bobinas otra vez.
+  function sbAbrirConDatos(bobinas, escaneoRemotoId) {
+    abrirScanBobinasPanel();
+    _sbEscaneoRemotoId = escaneoRemotoId || null;
+    sbMostrarReview({ bobinas });
+  }
+
   window.abrirScanBobinasPanel = abrirScanBobinasPanel;
   window.cerrarScanBobinas     = cerrarScanBobinas;
   window.sbPreviewFiles        = sbPreviewFiles;
   window.sbEnviar              = sbEnviar;
   window.sbImportar            = sbImportar;
+  window.sbAbrirConDatos       = sbAbrirConDatos;
   window.sbVolver              = () => {
     document.getElementById('sbStep3').style.display = 'none';
     document.getElementById('sbStep1').style.display = '';
@@ -17595,6 +17741,14 @@ document.getElementById('wInput').focus();
 </div>
 <!-- ── FAB Escaneo Remoto ── -->
 <div id="remoteScanFab">
+  <!-- Fix ESCANEO-ROUTER (23/07/2026): antes no había ningún sitio para revisar los
+       escaneos ya recibidos (solo un toast que desaparecía). Este botón solo se ve
+       cuando hay algo pendiente de revisar (sobre todo bobinas, que necesitan
+       confirmación humana antes de crear datos reales). -->
+  <button id="rsPendientesBtn" class="rs-fab-main" onclick="rsAbrirPendientes()" title="Escaneos pendientes de revisar" style="display:none;background:var(--surface2);border:1px solid var(--accent)">
+    📥
+    <span class="rs-fab-badge" id="rsPendientesBadge">0</span>
+  </button>
   <div class="rs-fab-label" id="rsFabLabel">📱 Sin móvil conectado</div>
   <button class="rs-fab-main" onclick="rsAbrirScanModal()" title="Escanear con el móvil">
     📷

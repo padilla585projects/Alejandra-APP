@@ -1,9 +1,13 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 23/07/2026 -- Fix escaneo remoto móvil (ping no se reenganchaba en segundo plano) en index.html — COMPLETADO
-**Versión actual:** v8.04 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Continuando la investigación de "no ha funcionado que alberto pueda escanear con el móvil desde alejandra office", se hizo una prueba en vivo real con el HTC U11 de Alberto (ADB + Chrome DevTools Protocol, con autorización explícita de Adrián en cada paso más invasivo). Se confirmó la causa raíz: el `setInterval` del ping de escaneo remoto muere cuando Android pone la app en segundo plano, y nunca se reengancha al volver a primer plano porque `_onAppVisible()` no reiniciaba el ciclo de sync. Arreglado en Part 35 con `rmReconectarSync()`. Commit `bc41f57`, v8.04. Sigue pendiente: (1) validar en uso real con Alberto que el fix funciona fuera del test forzado por CDP; (2) el bug de la barra superior del móvil (iconos casi invisibles/desajustados en pantallas estrechas) fue reportado por Adrián a mitad de sesión — diagnosticado (el nombre de obra se ve empujado a ancho ~0 por flexbox en viewports de 360px) pero el plan de fix propuesto (4 puntos) NO fue confirmado ni descartado; queda abierto para la próxima sesión.
+**Fecha:** 23/07/2026 -- Escaneo remoto COMPLETO: router para los 6 tipos + revisión en panel — COMPLETADO
+**Versión actual:** v8.06 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Adrián señaló que el escaneo remoto (móvil→Office) no servía para nada práctico más allá de un toast efímero: "tenemos la opción de escaneo remoto pero no podemos hacer nada con él, es ilógico no? terminemos el trabajo en condiciones", y luego amplió el alcance a los 6 tipos del selector ("pero no solo se puede enviar albaranes, tenemos que cubrir todas las opciones que hay en esta función"), confirmado vía AskUserQuestion como plan único. Se construyó un router completo en `worker.js` que sube la foto a R2 y la enruta a la pantalla real correspondiente según subtipo (Documentos/Galería/Planos ya existentes, más un nuevo módulo de revisión para bobinas que requieren confirmación humana antes de crear datos reales), con extracción de datos vía Gemini para los tipos documentales. Ver Part 36. Commit pendiente de esta sesión, v8.06. Sigue pendiente: probar en real con el móvil de Alberto (o cualquier usuario) los 6 tipos de escaneo de punta a punta ahora que hay un destino real para cada uno.
+
+### Part 35 (nota tardía): Fix header móvil — nombre de obra invisible en pantallas estrechas (23/07/2026) [COMPLETADO, v8.05]
+
+Adrián reportó a mitad de la sesión anterior que la barra superior del móvil tenía los iconos casi invisibles y desajustados. Diagnóstico: en viewports de ~360px CSS-px, `.obra-label` quedaba con ancho casi nulo por flexbox, ya que el resto de elementos fijos del header (logo, chip de usuario, 4 iconos de campana, punto de conexión) consumían casi todo el espacio disponible. Fix aplicado en `index.html`: `min-width:70px` en `.obra-label` + bloque `@media (max-width:400px)` que reduce ancho/padding de `.user-chip` y padding de `.notif-bell`/gap del header. Versión 8.05. Commit `9f3a697` (esta entrada de `SESION.md` se añade ahora porque no se había documentado en su momento).
 
 ### Part 35: Fix escaneo remoto móvil — ping no se reenganchaba en segundo plano (23/07/2026) [COMPLETADO]
 
@@ -26,6 +30,30 @@
 - Validar con Alberto en uso real (abrir la app, mandarla a segundo plano y volver varias veces, luego intentar un escaneo remoto de verdad desde Office) ahora que v8.04 está desplegado — el test de esta sesión forzó el reenganche por CDP, no probó el flujo completo Office → push → escaneo con el fix ya puesto.
 - Bug de la barra superior del móvil reportado a mitad de sesión ("primero arreglemos la barra superios que no se ven los iconos apenas y estan desajustados"): diagnosticado (el nombre de obra `.obra-label` queda con ancho casi nulo en viewports de 360px CSS-px porque el resto de elementos fijos del header —logo, chip de usuario, 4 iconos de campana, punto de conexión— consumen casi todo el espacio) pero el plan de 4 puntos propuesto no fue confirmado ni descartado por Adrián. Retomar en la próxima sesión.
 - Unificar las dos cuentas "Alberto" (usuario_id 46 y 51) en D1 — no urgente, solo limpieza de datos.
+
+### Part 36: Escaneo remoto COMPLETO — router para los 6 tipos + revisión en panel (23/07/2026) [COMPLETADO]
+
+**Contexto:** tras resolver en Part 35 (v8.04) por qué el móvil de Alberto no lograba conectar el escaneo remoto, Adrián se dio cuenta de un problema más profundo: aunque el escaneo llegara a Office, no había NADA que hacer con él — "tenemos la opción de escaneo remoto pero no podemos hacer nada con él, es ilógico no? terminemos el trabajo en condiciones". Al plantear un plan solo para albaranes, Adrián amplió el alcance: "pero no solo se puede enviar albaranes, tenemos que cubrir todas las opciones que hay en esta función" (los 6 tipos del selector: documento, factura, albaran, foto_obra, bobina, plano). Confirmado vía AskUserQuestion: "Todos los tipos en un plan único (recomendado)".
+
+**Diagnóstico:** el flujo de escaneo remoto (`panel.html` FAB 📷 ↔ `index.html` receptor ↔ `worker.js` `/sync/ping`, `/sync/evento`, `/sync/eventos`) funcionaba de extremo a extremo a nivel de transporte, pero el resultado final (`scan_resultado`) solo generaba un toast efímero en Office respaldado por un blob base64 en memoria y en la tabla genérica `sync_eventos` (no pensada para persistencia real de archivos) — la foto nunca se subía a R2 ni se enrutaba a ninguna pantalla real (Documentos/Galería/Planos/Bobinas), y Alejandra nunca entraba en el flujo pese a existir ya un prompt de sistema `asistente_escaneo` sin usar en `alejandra-agente/worker.js`.
+
+**Fix aplicado:**
+- **`worker.js`:**
+  - Nueva tabla `escaneos_remotos` (creada de forma perezosa vía `ensureEscaneosRemotosTable`): `id, empresa_id, obra_id, usuario_id, subtipo, contexto, r2_key, estado (pendiente/confirmado/descartado), datos_extraidos, destino_tipo, destino_id, created_at`.
+  - `syncCrearEvento` ahora recibe `ctx` y, cuando el evento es `scan_resultado` con imagen, lanza `_procesarScanResultado` vía `ctx.waitUntil` (no bloquea ni arriesga la respuesta HTTP al móvil; todo el bloque va en try/catch para no perder nunca el evento original en `sync_eventos`).
+  - `_procesarScanResultado`: decodifica la imagen, la sube a R2 (`e{empresa}/escaneos/{obra}/{ts}_{subtipo}.jpg`), inserta la fila en `escaneos_remotos`, y enruta según subtipo:
+    - `foto_obra` → INSERT directo en `fotos_obra` (Galería), confirmado.
+    - `plano` → INSERT en `planos_obra` con `estado='borrador'` (pantalla Planos ya existente), confirmado.
+    - `documento`/`factura`/`albaran` → intenta extracción con `callGemini` (proveedor/importe/num_documento/fecha/resumen, sin bloquear si falla) e inserta en `documentos_obra` con `estado='pendiente'` (pantalla Documentos ya existente), confirmado.
+    - `bobina` → intenta extracción con `callGemini` (mismo formato que `scanBobinas`), pero se queda **pendiente** — nunca crea bobinas reales sin revisión humana.
+  - Nuevos endpoints: `GET /escaneos-remotos` (filtra por empresa/obra/estado/subtipo), `GET /escaneos-remotos/:id/imagen` (sirve la foto desde R2), `PATCH /escaneos-remotos/:id` (cambia estado/destino, bloqueado para operario).
+- **`panel.html`:** nuevo botón flotante "📥" (`#rsPendientesBtn`) con badge de pendientes, modal de revisión (`rsAbrirPendientes`/`rsRenderPendientes`) con miniatura vía `/escaneos-remotos/:id/imagen?token=`, tipo/contexto/fecha, y acciones "🔍 Revisar y guardar" (solo bobina, reutiliza el scanner de bobinas existente vía `sbAbrirConDatos` → `sbImportar` ya con PATCH final a `confirmado`), "👁 Ver imagen" (resto de tipos) y "🗑 Descartar" (todos). Integrado en `cargarNotificaciones()` como una fuente más de notificaciones (sin tabla nueva, mismo patrón de agregación en vivo ya usado en toda la app). Toast de `_rsProcesarEvento` ahora usa `_RS_DESTINO_MSG` para decir a dónde fue cada escaneo en vez del genérico "Se ha recibido una foto del móvil".
+- **`index.html`:** `_rmProcesarFoto` ahora muestra un toast específico por subtipo (`_RM_DESTINO_MSG`), en vez del genérico "📸 Escaneo enviado a Office".
+- **Decisión consciente:** no se tocó `alejandra-agente/worker.js` — esto es un cambio de enrutamiento de datos, no de seguridad/tools/permisos/barreras, así que no aplica la regla "UNA Alejandra, DOS cerebros".
+
+**Verificación:** versiones sincronizadas v8.06 (`version.json`/`sw.js`/`index.html`); `node --check worker.js` → sintaxis OK; bloques `<script>` de `panel.html` e `index.html` verificados con `new Function(...)` → sin errores; sin corrupción de encoding en el diff; `npx wrangler deploy` desplegado correctamente con bindings D1 (`alejandra-db`) y R2 (`alejandra-app-files`).
+
+**Pendiente relacionado:** probar en real los 6 tipos de escaneo de punta a punta (con el móvil de Alberto o cualquier otro usuario) ahora que cada tipo tiene un destino real; validar que la extracción con Gemini de albaranes/facturas/bobinas da resultados útiles con fotos reales de campo (no solo en pruebas controladas).
 
 ### Part 33: Fix UX — sidebar "Obra" siempre abierto por defecto (23/07/2026) [COMPLETADO]
 

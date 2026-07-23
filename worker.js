@@ -5595,8 +5595,17 @@ export default {
 
       // ── Sync dispositivos / escaneo remoto ──────────────────────────────
       if (path === '/sync/ping'    && method === 'POST') return await syncPing(request, env);
-      if (path === '/sync/evento'  && method === 'POST') return await syncCrearEvento(request, env);
+      if (path === '/sync/evento'  && method === 'POST') return await syncCrearEvento(request, env, ctx);
       if (path === '/sync/eventos' && method === 'GET')  return await syncGetEventos(request, env);
+
+      // ── Escaneos remotos móvil→panel: router a Documentos/Galería/Planos/Bobinas ──
+      if (path === '/escaneos-remotos' && method === 'GET') return await listarEscaneosRemotos(request, env);
+      if (path.startsWith('/escaneos-remotos/')) {
+        const parts = path.split('/');
+        const erId = parseInt(parts[2]);
+        if (parts[3] === 'imagen' && method === 'GET') return await getEscaneoRemotoImagen(erId, request, env);
+        if (!parts[3] && method === 'PATCH') return await actualizarEscaneoRemoto(erId, request, env);
+      }
 
       // ── Chat interno (NEW-08) ─────────────────────────────────────────────
       if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
@@ -13491,7 +13500,7 @@ async function syncPing(request, env) {
   }
 }
 
-async function syncCrearEvento(request, env) {
+async function syncCrearEvento(request, env, ctx) {
   const s = await getAuth(request, env);
   if (!s) return err('Sin permiso', 401);
   try {
@@ -13504,10 +13513,195 @@ async function syncCrearEvento(request, env) {
     const r = await env.DB.prepare(
       "INSERT INTO sync_eventos (usuario_id, empresa_id, tipo, origen, datos) VALUES (?,?,?,?,?)"
     ).bind(uid, empId, tipo, origen, datos).run();
+    // Fix ESCANEO-ROUTER (23/07/2026): además de guardar el evento genérico (arriba,
+    // sin tocar — se mantiene por compatibilidad con el polling existente del panel),
+    // repartimos la foto a su pantalla real según el subtipo. No debe bloquear ni
+    // poder tumbar la respuesta al móvil si falla (por eso ctx.waitUntil + catch).
+    if (tipo === 'scan_resultado' && body.datos?.imagen_base64) {
+      const tarea = _procesarScanResultado(env, s, body.datos).catch(e => console.error('[escaneo-router]', e.message));
+      if (ctx?.waitUntil) ctx.waitUntil(tarea); else await tarea;
+    }
     return json({ ok: true, evento_id: r.meta?.last_row_id || null });
   } catch (e) {
     return json({ ok: false, error: e.message });
   }
+}
+
+async function ensureEscaneosRemotosTable(env) {
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS escaneos_remotos (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id      INTEGER NOT NULL,
+      obra_id         INTEGER,
+      usuario_id      TEXT,
+      subtipo         TEXT,
+      contexto        TEXT,
+      r2_key          TEXT,
+      estado          TEXT DEFAULT 'pendiente',
+      datos_extraidos TEXT,
+      destino_tipo    TEXT,
+      destino_id      INTEGER,
+      created_at      TEXT DEFAULT (datetime('now'))
+    )`).run();
+  } catch {} // ya existe
+}
+
+// Fix ESCANEO-ROUTER (23/07/2026): hasta ahora "Escanear con el móvil" (los 6 tipos del
+// selector RS_TIPOS/RM_TIPOS: documento/factura/albaran/foto_obra/bobina/plano) solo
+// guardaba la foto como blob base64 dentro de sync_eventos (buzón genérico efímero, se
+// perdía al recargar el panel) — no iba a NINGÚN sitio revisable. Adrián reportó
+// "no sé dónde va ese escaneo, no me sale nada, ni Alejandra me dice nada".
+// Esta función reparte cada foto, según su subtipo, a la pantalla real que YA EXISTE
+// para ese tipo de dato (Documentos/Galería/Planos/Bobinas), subiendo la imagen a R2
+// (mismo patrón que fotos_obra/planos_obra: e{empresa}/.../archivo) en vez de dejarla
+// en base64 dentro de un evento de sync. Registro de trazabilidad en `escaneos_remotos`.
+async function _procesarScanResultado(env, s, datos) {
+  await ensureEscaneosRemotosTable(env);
+  const empresa_id = s.empresa_id;
+  const obra_id    = s.obra_id || s.obraId || null;
+  const usuario_id = String(s.usuario_id || s.nombre || '');
+  const subtipo    = String(datos.subtipo || 'documento');
+  const contexto   = (datos.contexto || '').toString().trim().slice(0, 300) || null;
+  const ts = Date.now();
+
+  let bytes;
+  try {
+    const b64raw = String(datos.imagen_base64).replace(/^data:image\/\w+;base64,/, '');
+    const bin = atob(b64raw);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } catch (e) { return; } // imagen corrupta, nada que enrutar
+
+  const r2Key = `e${empresa_id}/escaneos/${obra_id || 0}/${ts}_${subtipo}.jpg`;
+  try {
+    await env.FILES.put(r2Key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+  } catch (e) { return; } // sin R2 no hay nada que enrutar
+
+  const insertR = await env.DB.prepare(
+    `INSERT INTO escaneos_remotos (empresa_id, obra_id, usuario_id, subtipo, contexto, r2_key, estado)
+     VALUES (?,?,?,?,?,?,'pendiente')`
+  ).bind(empresa_id, obra_id, usuario_id, subtipo, contexto, r2Key).run();
+  const escaneoId = insertR.meta?.last_row_id;
+  if (!escaneoId) return;
+
+  const b64 = String(datos.imagen_base64).replace(/^data:image\/\w+;base64,/, '');
+  const marcarConfirmado = (destino_tipo, destino_id) => env.DB.prepare(
+    `UPDATE escaneos_remotos SET estado='confirmado', destino_tipo=?, destino_id=? WHERE id=?`
+  ).bind(destino_tipo, destino_id || null, escaneoId).run();
+  const guardarExtraccion = (json) => env.DB.prepare(
+    `UPDATE escaneos_remotos SET datos_extraidos=? WHERE id=?`
+  ).bind(json, escaneoId).run();
+
+  try {
+    if (subtipo === 'foto_obra') {
+      // Destino: Galería (fotos_obra) — no necesita revisión, es solo una foto de obra.
+      const r = await env.DB.prepare(
+        `INSERT INTO fotos_obra (empresa_id, obra_id, r2_key, nombre, mime_type, comentario, subido_por)
+         VALUES (?,?,?,?,?,?,?)`
+      ).bind(empresa_id, obra_id, r2Key, `escaneo_${ts}.jpg`, 'image/jpeg', contexto, usuario_id).run();
+      await marcarConfirmado('fotos_obra', r.meta?.last_row_id);
+
+    } else if (subtipo === 'plano') {
+      // Destino: Planos, como 'borrador' pendiente de revisión (estado nativo de planos_obra).
+      await ensurePlanosObraTable(env);
+      const r = await env.DB.prepare(
+        `INSERT INTO planos_obra (empresa_id, obra_id, nombre, disciplina, revision, estado, archivo_key, archivo_nombre, archivo_mime, subido_por)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`
+      ).bind(empresa_id, obra_id, contexto || 'Plano escaneado (móvil)', 'general', 'A', 'borrador', r2Key, `escaneo_${ts}.jpg`, 'image/jpeg', usuario_id).run();
+      await marcarConfirmado('planos_obra', r.meta?.last_row_id);
+
+    } else if (subtipo === 'documento' || subtipo === 'factura' || subtipo === 'albaran') {
+      // Destino: Documentos, como 'pendiente' (estado nativo de documentos_obra).
+      // Extra: Alejandra (Gemini vision, mismo proveedor IA ya usado en scan-bobinas)
+      // intenta extraer proveedor/importe/nº documento automáticamente. No bloquea el
+      // guardado si falla — es un extra, no un requisito.
+      let notas = null;
+      try {
+        const etiqueta = subtipo === 'albaran' ? 'albarán de entrega' : subtipo;
+        const prompt = `Analiza esta imagen de un/a ${etiqueta}. Responde SOLO con JSON válido sin texto adicional:\n{"proveedor":"...","importe":"...","num_documento":"...","fecha":"YYYY-MM-DD","resumen":"breve resumen del contenido"}\nSi un dato no aparece o no está claro, pon null.`;
+        const gemResult = await callGemini(env, {
+          contents: [{ parts: [{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+        }, 'scan-remoto-documento');
+        if (gemResult.ok) {
+          const texto = gemResult.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const jm = texto.match(/\{[\s\S]*\}/);
+          if (jm) notas = jm[0];
+        }
+      } catch {} // extracción IA es un extra, no bloquea el guardado del documento
+      const titulo = contexto || `Escaneo ${subtipo} ${new Date(ts).toISOString().slice(0, 10)}`;
+      const r = await env.DB.prepare(
+        `INSERT INTO documentos_obra (empresa_id, obra_id, tipo, titulo, estado, r2_key, notas, created_by)
+         VALUES (?,?,?,?,?,?,?,?)`
+      ).bind(empresa_id, obra_id, subtipo, titulo, 'pendiente', r2Key, notas, usuario_id).run();
+      await marcarConfirmado('documentos_obra', r.meta?.last_row_id);
+      if (notas) await guardarExtraccion(notas);
+
+    } else if (subtipo === 'bobina') {
+      // Bobina requiere confirmación humana antes de crear/tocar bobinas reales (misma
+      // cautela que ya usa /scan-bobinas + /bobinas/batch) -> queda 'pendiente', con los
+      // datos ya extraídos por IA listos para revisar en Office (pantalla Bobinas).
+      try {
+        const prompt = `Analiza esta imagen de un documento de bobinas de cable eléctrico (albarán o hoja de control manuscrita). Extrae cada bobina. Responde SOLO con JSON válido sin texto adicional:\n{"bobinas":[{"codigo":"...","proveedor":"...","tipo_cable":"...","num_albaran":null,"metros":0,"fecha_recepcion":"YYYY-MM-DD","notas":null}]}\nSi un campo no está claro o no aparece, pon null. El código/matrícula es el campo más importante.`;
+        const gemResult = await callGemini(env, {
+          contents: [{ parts: [{ inline_data: { mime_type: 'image/jpeg', data: b64 } }, { text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+        }, 'scan-remoto-bobina');
+        if (gemResult.ok) {
+          const texto = gemResult.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const jm = texto.match(/\{[\s\S]*\}/);
+          if (jm) await guardarExtraccion(jm[0]);
+        }
+      } catch {} // sin extracción IA, queda igualmente pendiente para revisar a mano
+    }
+    // subtipo desconocido: queda 'pendiente' sin destino automático, revisable en /escaneos-remotos
+  } catch (e) {
+    // Si falla el enrutado a la tabla destino, no se pierde nada: la imagen ya está en
+    // R2 y el registro en escaneos_remotos queda 'pendiente' para revisar/reintentar.
+  }
+}
+
+async function listarEscaneosRemotos(request, env) {
+  const s = await getAuth(request, env);
+  if (!s?.empresa_id) return err('No autorizado', 403);
+  await ensureEscaneosRemotosTable(env);
+  const url = new URL(request.url);
+  const estado  = url.searchParams.get('estado');
+  const subtipo = url.searchParams.get('subtipo');
+  let q = 'SELECT * FROM escaneos_remotos WHERE empresa_id = ?';
+  const binds = [s.empresa_id];
+  if ((s.obra_id || s.obraId) && !s.isSuperadmin && !s.isEmpresaAdmin) { q += ' AND obra_id = ?'; binds.push(s.obra_id || s.obraId); }
+  if (estado)  { q += ' AND estado = ?';  binds.push(estado); }
+  if (subtipo) { q += ' AND subtipo = ?'; binds.push(subtipo); }
+  q += ' ORDER BY created_at DESC LIMIT 100';
+  const rows = await env.DB.prepare(q).bind(...binds).all();
+  return json({ ok: true, items: rows.results || [] });
+}
+
+async function getEscaneoRemotoImagen(id, request, env) {
+  const s = await getAuth(request, env);
+  if (!s?.empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM escaneos_remotos WHERE id = ? AND empresa_id = ?').bind(id, s.empresa_id).first();
+  if (!meta) return err('Escaneo no encontrado', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Imagen no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
+async function actualizarEscaneoRemoto(id, request, env) {
+  const s = await getAuth(request, env);
+  if (!s?.empresa_id) return err('No autorizado', 403);
+  if (s.rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json().catch(() => ({}));
+  const campos = ['estado', 'destino_tipo', 'destino_id'];
+  const sets = []; const vals = [];
+  for (const c of campos) { if (b[c] !== undefined) { sets.push(`${c}=?`); vals.push(b[c]); } }
+  if (!sets.length) return err('Sin campos', 400);
+  vals.push(id, s.empresa_id);
+  await env.DB.prepare(`UPDATE escaneos_remotos SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
 }
 
 async function syncGetEventos(request, env) {

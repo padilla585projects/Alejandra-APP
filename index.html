@@ -11984,7 +11984,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.05';
+const APP_VERSION = '8.06';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -17604,6 +17604,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (overlay) overlay.remove();
   }
 
+  const _RM_DESTINO_MSG = {
+    documento:  '📄 Guardado en Documentos, pendiente de revisar en Office.',
+    factura:    '🧾 Guardada en Documentos, pendiente de revisar en Office.',
+    albaran:    '📋 Guardado en Documentos. Alejandra está intentando leer los datos.',
+    foto_obra:  '🏗️ Añadida a la Galería de la obra.',
+    plano:      '📐 Guardado en Planos como borrador, pendiente de revisar.',
+    bobina:     '🔌 Enviado — Alejandra está leyendo los datos, revísalo en Office antes de guardar.',
+  };
+
   async function _rmProcesarFoto(file) {
     if (!file || !_rmPendiente) return;
     const btn = document.getElementById('rmBtnCapturar');
@@ -17631,7 +17640,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         })
       });
 
-      toast('📸 Escaneo enviado a Office', 'ok');
+      const msgDestino = _RM_DESTINO_MSG[_rmPendiente.subtipo] || 'Escaneo enviado a Office';
+      toast(msgDestino, 'ok');
       if (navigator.vibrate) navigator.vibrate(100);
     } catch (e) {
       toast('Error al enviar: ' + e.message, 'err');
