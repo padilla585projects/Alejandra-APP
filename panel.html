@@ -10003,8 +10003,10 @@ function sidebarRestoreState() {
 function inicializarEstadoSidebar() {
   try {
     // Inicializar estado de desplegables:
-    // - Todos CERRADOS excepto inventarios
+    // - Todos CERRADOS excepto inventarios y obra
     // - Principal siempre abierto (es la sección por defecto)
+    // - Obra siempre abierto (v8.02): contiene "Pedidos", que quedaba oculto
+    //   al estar la sección plegada por defecto y usuarios no la encontraban
 
     const estadoDeseado = {};
 
@@ -10021,6 +10023,14 @@ function inicializarEstadoSidebar() {
 
       // inventarios siempre abierto
       if (sid === 'inventarios') {
+        estadoDeseado[sid] = false;  // no colapsado
+        if (estaCerrado) sidebarToggle(el);
+        return;
+      }
+
+      // obra siempre abierto (contiene "Pedidos" — se reportó que quedaba
+      // escondido al estar la sección plegada por defecto; v8.02)
+      if (sid === 'obra') {
         estadoDeseado[sid] = false;  // no colapsado
         if (estaCerrado) sidebarToggle(el);
         return;

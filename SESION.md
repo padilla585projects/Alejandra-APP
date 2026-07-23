@@ -1,9 +1,21 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 23/07/2026 -- NEW-XXX: nuevas tools de Alejandra `generar_grafico` y `preguntar_usuario` (ambos workers) — COMPLETADO
-**Versión actual:** v8.01 (version.json/sw.js/index.html sincronizados)
-**Resumen:** A petición de Adrián, se añadieron dos capacidades nuevas a Alejandra en LOS DOS workers: (1) `generar_grafico` — gráficos de datos (barra/línea/tarta/dona/radar) renderizados por QuickChart.io, embebidos como `<img>` directamente en la respuesta de chat (funciona en panel.html/index.html sin tocar frontend, porque ya insertan el contenido del mensaje como HTML crudo); (2) `preguntar_usuario` — mecanismo estructurado para que Alejandra pregunte cuando algo no está claro en flujos autónomos/crons (se guarda pendiente en D1, se notifica por Telegram, se reengancha en el siguiente ciclo de reflexión). Ambos workers desplegados y verificados. Ver Part 32 para el detalle completo, y `IDEAS_PENDIENTES.txt` (sección NEW-XXX) para el resumen definitivo.
+**Fecha:** 23/07/2026 -- Fix UX: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" — COMPLETADO
+**Versión actual:** v8.02 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Adrián reportó "no encuentro la sección de pedidos de material en alejandra office". Investigación en `panel.html`: NO era un bug de permisos por rol (tanto "📦 Pedidos" bajo la sección "Obra" como "🛒 Órdenes Compra" bajo "Planificación" son visibles para todos los roles, sin clases `nav-finance`/`nav-admin`/etc.). La causa real es UX: `inicializarEstadoSidebar()` colapsa TODAS las secciones del sidebar al cargar excepto "Principal" e "Inventarios" — "Obra" (que contiene "Pedidos") quedaba plegada por defecto y el usuario nunca hacía clic en el encabezado para desplegarla. Ver Part 33 para el detalle del fix.
+
+### Part 33: Fix UX — sidebar "Obra" siempre abierto por defecto (23/07/2026) [COMPLETADO]
+
+**Contexto:** Adrián no encontraba ninguna forma de pedir material en el panel de oficina. Confirmó por AskUserQuestion que no sabía cuál de las dos pantallas buscaba, y que probó con roles encargado/jefe_de_obra y oficina.
+
+**Diagnóstico:** en `panel.html`, sidebar tiene dos pantallas de pedidos: `pagePedidos` (simple, botón "📦 Pedidos", `data-sid="obra"`, línea 580) y `pageOrdenesCompra` (formal NEW-74, botón "🛒 Órdenes Compra", `data-sid="planificacion"`, línea 648). Ninguna tiene clase de bloqueo por rol (`nav-finance`, `nav-admin`, etc.), y ambas secciones (`obra`, `planificacion`) están en `seccionesPermitidas` para no-admin (línea ~9855) — por tanto son visibles para cualquier rol. El problema real: `inicializarEstadoSidebar()` (línea ~10003) colapsa todas las secciones del sidebar salvo "principal" e "inventarios" en cada carga de página, así que "Obra" (y "Planificación") aparecían plegadas y sin ítems visibles hasta hacer clic manual en el encabezado.
+
+**Fix aplicado** (elegido por Adrián vía AskUserQuestion, opción recomendada): se añadió `obra` a la lista de secciones siempre abiertas en `inicializarEstadoSidebar()`, mismo patrón que `inventarios`/`principal` (bloque `if (sid === 'obra') { estadoDeseado[sid] = false; ... }`). "Planificación" (con "Órdenes Compra") se deja plegada como estaba, por decisión explícita de Adrián (no quería alargar el sidebar de más).
+
+**Verificación:** versiones sincronizadas (8.02 en `version.json`/`sw.js`/`index.html`), sin corrupción de encoding en el diff.
+
+**Nota:** no se detectó ningún bug de permisos/roles en esto — es puramente un problema de descubribilidad de UI (sección colapsada por defecto). Si en el futuro se reciben más reportes de "no encuentro X" en el sidebar, revisar primero si la sección correspondiente está en la lista de "siempre abiertas" de `inicializarEstadoSidebar()`.
 
 ### Part 32: NEW-XXX — `generar_grafico` + `preguntar_usuario` en ambos workers (23/07/2026) [COMPLETADO]
 
