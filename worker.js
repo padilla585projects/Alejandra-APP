@@ -7580,11 +7580,14 @@ async function crearPedido(request, env, ctx) {
 }
 
 async function actualizarPedido(id, request, env, ctx) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isJefeObra, isOficina, isEncargado, isDesarrollador } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  // Solo encargado/admin pueden cambiar el estado
-  if (body.estado !== undefined && !isSuperadmin && !isEmpresaAdmin && !isEncargado) {
+  // PEDIDOS-01 (24/07/2026): ampliado a jefe_de_obra/oficina/desarrollador — el panel
+  // (canEdit en cargarPedidos, panel.html) ya mostraba el desplegable de estado editable
+  // a estos roles, pero el backend los rechazaba con 403. Alineado con el mismo set de
+  // roles de gestión usado en enviarPedidoPorEmail.
+  if (body.estado !== undefined && !isSuperadmin && !isEmpresaAdmin && !isJefeObra && !isOficina && !isEncargado && !isDesarrollador) {
     return err('Sin permiso para cambiar el estado', 403);
   }
   const campos = [], vals = [];

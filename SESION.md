@@ -1,9 +1,17 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- Ocultar "Construcción" para electrico/mecanicas + Pedidos como sección propia + email + Excel — COMPLETADO
-**Versión actual:** v8.08 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Adrián: "sigo diciendo que porque los electrico o mecanicos tienen que ver el panel de construccion de alejandra office" + pidió un flujo completo de Pedidos ("quiero un nuevo panel con los pedidos,tenerlo a mano... mandar por correo tambien... vamos a planificarlo bien"). Tras investigar se vio que el flujo de Pedidos (app+office+CRUD) ya existía casi entero; se planificó con AskUserQuestion y el usuario confirmó con "dale". Ver Part 38.
+**Fecha:** 24/07/2026 -- Fix permiso cambio de estado en Pedidos (jefe_de_obra/oficina/desarrollador) — COMPLETADO
+**Versión actual:** v8.09 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Continuación de Part 38. Adrián: "ahi que arreglar lo de los permisos" — el panel (`canEdit` en `cargarPedidos`, panel.html) ya mostraba el desplegable de estado editable a jefe_de_obra/oficina/desarrollador, pero `actualizarPedido` en worker.js solo lo permitía a superadmin/empresa_admin/encargado, dando 403. Ampliado el permiso en worker.js al mismo set de roles, alineado con `enviarPedidoPorEmail`. Ver Part 39.
+
+### Part 39: Fix permiso cambio de estado en Pedidos (24/07/2026) [COMPLETADO]
+
+**Contexto:** issue detectado en Part 38 pero dejado fuera de alcance a propósito. Adrián pidió arreglarlo: "ahi que arreglar lo de los permisos".
+
+**Cambio en `worker.js`:** `actualizarPedido(id, request, env, ctx)` — el check de permiso para cambiar `body.estado` se amplía de `isSuperadmin || isEmpresaAdmin || isEncargado` a también incluir `isJefeObra || isOficina || isDesarrollador`, alineado con el `canEdit` que ya usa `panel.html` y con el set de roles usado en `enviarPedidoPorEmail` (Part 38). Sin cambios en `panel.html` (ya estaba bien) ni en `alejandra-agente/worker.js` (no es cambio de barrera destructiva, solo amplía quién puede cambiar un estado de gestión).
+
+**Verificación:** `node --check worker.js` OK; versiones sincronizadas v8.09; sin corrupción de encoding; `npx wrangler deploy` con bindings D1/R2 OK.
 
 ### Part 38: Ocultar Construcción para electrico/mecanicas + Pedidos sección propia + envío por email + export Excel (24/07/2026) [COMPLETADO]
 
