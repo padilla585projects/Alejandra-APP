@@ -1,9 +1,9 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 23/07/2026 -- Fix UX: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" — COMPLETADO
-**Versión actual:** v8.02 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Adrián reportó "no encuentro la sección de pedidos de material en alejandra office". Investigación en `panel.html`: NO era un bug de permisos por rol (tanto "📦 Pedidos" bajo la sección "Obra" como "🛒 Órdenes Compra" bajo "Planificación" son visibles para todos los roles, sin clases `nav-finance`/`nav-admin`/etc.). La causa real es UX: `inicializarEstadoSidebar()` colapsa TODAS las secciones del sidebar al cargar excepto "Principal" e "Inventarios" — "Obra" (que contiene "Pedidos") quedaba plegada por defecto y el usuario nunca hacía clic en el encabezado para desplegarla. Ver Part 33 para el detalle del fix.
+**Fecha:** 23/07/2026 -- Fix edición de estados en Inventario (bobinas/PEMP/carretillas) en panel.html — COMPLETADO
+**Versión actual:** v8.03 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Adrián reportó dos cosas más: (1) "en el inventario de alejandra office no se pueden editar los estados de nada, maquinas rotas, bobinas". Confirmado: bobinas/PEMP/carretillas no tenían editor de estado en la tabla (solo herramientas lo tenía), y de propina se encontró un bug ya existente — el guardado de "Long. actual" en bobinas usaba `row.id` en vez de `row.codigo`, y el backend busca por `codigo`, así que ya fallaba silenciosamente. Arreglado en Part 34. (2) "no ha funcionado que alberto pueda escanear con el móvil desde alejandra office" — investigado, la función existe y está bien conectada (panel.html ↔ index.html ↔ worker.js `/sync/*`), pero depende de que el móvil tenga la app abierta en primer plano en ese momento exacto (sin aviso push que lo despierte); pendiente de confirmar con Alberto antes de tocar código, ver IDEAS_PENDIENTES.txt.
 
 ### Part 33: Fix UX — sidebar "Obra" siempre abierto por defecto (23/07/2026) [COMPLETADO]
 
@@ -16,6 +16,28 @@
 **Verificación:** versiones sincronizadas (8.02 en `version.json`/`sw.js`/`index.html`), sin corrupción de encoding en el diff.
 
 **Nota:** no se detectó ningún bug de permisos/roles en esto — es puramente un problema de descubribilidad de UI (sección colapsada por defecto). Si en el futuro se reciben más reportes de "no encuentro X" en el sidebar, revisar primero si la sección correspondiente está en la lista de "siempre abiertas" de `inicializarEstadoSidebar()`.
+
+### Part 34: Fix edición de estados en Inventario — bobinas/PEMP/carretillas (23/07/2026) [COMPLETADO]
+
+**Contexto:** Adrián reportó "en el inventario de alejandra office no se pueden editar los estados de nada, maquinas rotas, bobinas...etc".
+
+**Diagnóstico:** en `panel.html`, la tabla de Herramientas (línea ~12263) ya tenía `editor:'select'` en la columna "Estado" con guardado vía `guardarCampoHerramienta()` → `PUT /herramientas/:id`. Bobinas, PEMP y Carretillas NO: sus columnas "Estado" solo tenían `formatter` (solo lectura). PEMP y Carretillas ni siquiera tenían una función `guardarCampoX()` para persistir cambios de la tabla.
+
+**Bug adicional encontrado de regalo:** el único campo ya editable en Bobinas ("Long. actual") guardaba con `PUT /bobinas/${row.id}` — pero `editarBobina()` en `worker.js` busca la bobina por columna `codigo` (`WHERE codigo = ?`), que es un campo TEXT distinto del `id INTEGER AUTOINCREMENT` interno (confirmado en `schema_completo.sql` línea 26-27). Con `row.id` el PUT nunca encontraba la bobina → guardado fallando silenciosamente (toast "Error al guardar") desde que existe esa función, sin que nadie lo hubiera reportado.
+
+**Wrinkle de casing:** `editarPemp`/`editarCarretilla` en `worker.js` solo reconocen los valores capitalizados `'Averiada'`/`'Disponible'` para disparar `fecha_averia`/`fecha_reparacion` automáticas y notificación por Telegram — es el mismo casing que ya envía `index.html` (app móvil) desde su modal de edición. Pero el `formatter` de la tabla en `panel.html` comprobaba minúsculas (`averiado`/`disponible`/`mantenimiento`) para elegir el color del badge — con datos reales capitalizados, el badge caía siempre al color "muted" por defecto (bug cosmético preexistente, no reportado hasta ahora).
+
+**Fix aplicado:**
+- `guardarCampoBobina()`: cambia `row.id` → `row.codigo`.
+- Bobinas: añadido editor de estado (`disponible`/`asignada`/`agotada`, minúsculas — bobinas no usa el casing capitalizado, su lógica de fechas es distinta).
+- PEMP: añadido editor de estado (`Disponible`/`Averiada`, capitalizado a propósito para no romper `editarPemp`) + nueva función `guardarCampoPemp()` → `PUT /pemp/:matricula`. `canEdit` añadido (no existía en `cargarPemp()`).
+- Carretillas: mismo patrón, `guardarCampoCarretilla()` → `PUT /carretillas/:matricula`.
+- Formatter de PEMP/Carretillas normalizado a minúscula antes de mirar el mapa de colores (`String(v||'').toLowerCase()`) para que el badge coincida con los valores reales capitalizados que ya escribe `index.html`.
+- No se tocó `worker.js` — los tres endpoints PUT (`editarBobina`, `editarPemp`, `editarCarretilla`) ya aceptaban el campo `estado` de forma genérica, no hizo falta desplegar nada de backend.
+
+**Verificación:** sintaxis de los `<script>` de `panel.html` comprobada con `node -e "new Function(...)"` sobre cada bloque (`ALL OK`); sin corrupción de encoding en el diff; versiones sincronizadas v8.03.
+
+**Pendiente relacionado (NO tocado en esta sesión):** el escaneo remoto desde el móvil (Alberto) — investigado pero no arreglado, ver `IDEAS_PENDIENTES.txt`. Adrián eligió primero preguntarle a Alberto si tenía la app abierta en primer plano en el momento del escaneo, antes de decidir si hace falta implementar aviso push.
 
 ### Part 32: NEW-XXX — `generar_grafico` + `preguntar_usuario` en ambos workers (23/07/2026) [COMPLETADO]
 

@@ -12060,11 +12060,14 @@ async function cargarBobinas() {
         editor: canEdit ? 'number' : false,
         cellEdited: c => guardarCampoBobina(c.getRow().getData(), 'longitud_actual', c.getValue()) },
       { title: 'Estado', field: 'estado', width: 110,
+        editor: canEdit ? 'select' : false,
+        editorParams: { values: ['disponible','asignada','agotada'] },
         formatter: c => {
           const v = c.getValue();
           const cls = { disponible:'ok', asignada:'warn', agotada:'danger' }[v] || 'muted';
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
-        }
+        },
+        cellEdited: c => guardarCampoBobina(c.getRow().getData(), 'estado', c.getValue())
       },
       { title: 'Dept.', field: 'departamento', width: 110, formatter: fmtDept },
       { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140 },
@@ -12080,8 +12083,11 @@ async function cargarBobinas() {
   };
 }
 
+// Nota (23/07/2026): antes usaba row.id, pero el backend (editarBobina) busca
+// por "codigo" (campo distinto del id autoincremental interno) — con row.id
+// el PUT nunca encontraba la bobina y el guardado fallaba silenciosamente.
 async function guardarCampoBobina(row, campo, valor) {
-  const r = await api(`/bobinas/${row.id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  const r = await api(`/bobinas/${row.codigo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
   if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
 }
 
@@ -12113,6 +12119,7 @@ async function cargarPemp() {
   const r = await api('/pemp?' + _invParams('filtroDepPemp', 'filtroObraPemp'));
   const data = toArr(r, 'pemp');
   if (tblPemp) { tblPemp.replaceData(data); return; }
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
   tblPemp = new Tabulator('#tblPemp', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
     placeholder: '<div class="empty-state"><div class="empty-icon">🚜</div><div class="empty-text">Sin PEMPs</div></div>',
@@ -12121,11 +12128,18 @@ async function cargarPemp() {
       { title: 'Tipo', field: 'tipo', sorter: 'string', minWidth: 160 },
       { title: 'Marca', field: 'marca', minWidth: 120 },
       { title: 'Estado', field: 'estado', width: 110,
+        // NOTA: valores capitalizados ("Disponible"/"Averiada") a propósito — el
+        // backend (editarPemp) solo dispara fecha_averia/fecha_reparacion y las
+        // notificaciones de Telegram con ese casing exacto, igual que ya envía
+        // la app móvil (index.html). Si se guarda en minúscula, esa lógica no salta.
+        editor: canEdit ? 'select' : false,
+        editorParams: { values: ['Disponible','Averiada'] },
         formatter: c => {
           const v = c.getValue();
-          const cls = { disponible:'ok', averiado:'danger', mantenimiento:'warn' }[v] || 'muted';
+          const cls = { disponible:'ok', averiado:'danger', mantenimiento:'warn' }[String(v||'').toLowerCase()] || 'muted';
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
-        }
+        },
+        cellEdited: c => guardarCampoPemp(c.getRow().getData().matricula, 'estado', c.getValue())
       },
       { title: 'ITV', field: 'fecha_itv', width: 110, formatter: c => fmtFecha(c.getValue()) },
       { title: 'Revisión', field: 'fecha_proxima_revision', width: 110, formatter: c => fmtFecha(c.getValue()) },
@@ -12138,12 +12152,18 @@ async function cargarPemp() {
   };
 }
 
+async function guardarCampoPemp(matricula, campo, valor) {
+  const r = await api(`/pemp/${matricula}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+}
+
 // ── CARRETILLAS ────────────────────────────────────────────────
 let tblCarretillas = null;
 async function cargarCarretillas() {
   const r = await api('/carretillas?' + _invParams('filtroDepCarretillas', 'filtroObraCarretillas'));
   const data = toArr(r, 'carretillas');
   if (tblCarretillas) { tblCarretillas.replaceData(data); return; }
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
   tblCarretillas = new Tabulator('#tblCarretillas', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
     placeholder: '<div class="empty-state"><div class="empty-icon">🛺</div><div class="empty-text">Sin carretillas</div></div>',
@@ -12153,11 +12173,16 @@ async function cargarCarretillas() {
       { title: 'Energía', field: 'energia', width: 110 },
       { title: 'Marca', field: 'marca', minWidth: 120 },
       { title: 'Estado', field: 'estado', width: 110,
+        // Mismo criterio que PEMP: valores capitalizados para no romper la
+        // lógica de fecha_averia/fecha_reparacion de editarCarretilla.
+        editor: canEdit ? 'select' : false,
+        editorParams: { values: ['Disponible','Averiada'] },
         formatter: c => {
           const v = c.getValue();
-          const cls = { disponible:'ok', averiado:'danger', mantenimiento:'warn' }[v] || 'muted';
+          const cls = { disponible:'ok', averiado:'danger', mantenimiento:'warn' }[String(v||'').toLowerCase()] || 'muted';
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
-        }
+        },
+        cellEdited: c => guardarCampoCarretilla(c.getRow().getData().matricula, 'estado', c.getValue())
       },
       { title: 'ITV', field: 'fecha_itv', width: 110, formatter: c => fmtFecha(c.getValue()) },
     ]
@@ -12165,6 +12190,11 @@ async function cargarCarretillas() {
   document.getElementById('searchCarretillas').oninput = function() {
     tblCarretillas.setFilter([{field:'matricula',type:'like',value:this.value},{field:'tipo',type:'like',value:this.value}],'or');
   };
+}
+
+async function guardarCampoCarretilla(matricula, campo, valor) {
+  const r = await api(`/carretillas/${matricula}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
 }
 
 // ── HERRAMIENTAS ───────────────────────────────────────────────

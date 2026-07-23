@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 23/07/2026 — BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 23/07/2026 — BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores) + PENDIENTE-SCAN-MOVIL (escaneo remoto no funcionó para Alberto, pendiente de confirmar causa). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -15,6 +15,47 @@ LEYENDA DE ESTADO:
 ================================================================================
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
+
+[✓] BUG-INV-ESTADO — No se pueden editar estados en Inventario (bobinas/PEMP/carretillas) de Alejandra Office  [HECHO v8.03]
+    · Adrián reportó "en el inventario de alejandra office no se pueden editar los estados
+      de nada, maquinas rotas, bobinas...etc".
+    · Solo Herramientas tenía editor de estado en la tabla; bobinas/PEMP/carretillas eran
+      de solo lectura (formatter sin editor), y PEMP/carretillas ni siquiera tenían función
+      de guardado.
+    · De regalo se encontró un bug YA EXISTENTE e independiente: el guardado de "Long. actual"
+      en bobinas usaba PUT /bobinas/{row.id}, pero el backend busca la bobina por "codigo"
+      (campo distinto del id interno) — el guardado fallaba en silencio desde que existe esa
+      función, nadie lo había reportado.
+    · Fix: guardarCampoBobina ahora usa row.codigo; editor de estado añadido a las 3 tablas
+      (bobinas en minúscula, PEMP/carretillas en capitalizado "Disponible"/"Averiada" — mismo
+      casing que ya usa index.html, necesario para que editarPemp/editarCarretilla disparen
+      bien fecha_averia/fecha_reparacion y el aviso de Telegram); nuevas funciones
+      guardarCampoPemp/guardarCampoCarretilla; badge de estado normalizado a minúscula para
+      que el color coincida con los datos reales capitalizados (antes salía "muted" siempre).
+    · Sin cambios en worker.js — los 3 endpoints PUT ya aceptaban "estado" genéricamente.
+    · Reportado y resuelto: 23/07/2026 — Adrián
+
+[ ] PENDIENTE-SCAN-MOVIL — Escaneo remoto desde el móvil no funcionó (Alberto)
+    · Adrián reportó: "no ha funcionado que alberto pueda escanear con el móvil desde
+      alejandra office,que esa funcion se implemento hace tiempo".
+    · Investigado: la función SÍ existe y está bien conectada — panel.html (FAB "escanear
+      con el móvil", líneas ~16138-16366) ↔ index.html (receptor, líneas ~17450-17650) ↔
+      worker.js (/sync/ping, /sync/evento, /sync/eventos).
+    · Causa más probable: un dispositivo se marca "activo" solo si hizo ping en los últimos
+      60 segundos, y el móvil solo puede pingear/sondear mientras la app está ABIERTA y en
+      PRIMER PLANO — en iOS/Android el navegador suspende esos temporizadores casi de
+      inmediato al bloquear pantalla o pasar la app a segundo plano. Si Alberto no tenía el
+      móvil con la app abierta en pantalla en el momento exacto, Office muestra "Sin móvil
+      conectado" y no deja iniciar el escaneo. No hay ningún push que "despierte" el móvil
+      para este flujo (aunque sí existe infraestructura de push para el chat de Alejandra).
+    · Decisión de Adrián (23/07/2026): confirmar primero con Alberto si tenía la app
+      abierta/pantalla encendida en ese momento y si le salió algún error, antes de decidir
+      si hace falta implementar un aviso push real para "despertar" el escaneo remoto.
+    · Si se confirma esta causa, el fix propuesto es: al pedir un escaneo desde Office, enviar
+      también una notificación push nativa (como ya existe para el chat de Alejandra IA) que
+      abra directamente el flujo de escaneo en el móvil aunque esté en segundo plano — cambio
+      en worker.js (o alejandra-agente/worker.js, a decidir cuál) + sw.js + index.html.
+    · Reportado: 23/07/2026 — Adrián
 
 [✓] BUG-SIDEBAR-OBRA — Sección "Obra" del panel arrancaba colapsada, ocultando "Pedidos"  [HECHO v8.02]
     · Adrián reportó "no encuentro la sección de pedidos de material en alejandra office".
