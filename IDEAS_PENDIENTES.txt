@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 23/07/2026 — ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 23/07/2026 — BUG-HEADER-MOVIL-v2 + BUG-BUSQUEDA-BOBINAS resueltos (v8.07): header rediseñado con clamp() fluido (ver sección de errores) y bobinas añadida a la búsqueda global. Antes: ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -15,6 +15,28 @@ LEYENDA DE ESTADO:
 ================================================================================
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
+
+[✓] BUG-HEADER-MOVIL-v2 — Barra superior móvil seguía mal tras v8.05  [HECHO v8.07]
+    · Adrián: "revisa otra vez la barra superior de la app, los iconos estan fatal" — el fix
+      de v8.05 (Part 35, solo .user-chip/.notif-bell en @media max-width:400px) no bastaba.
+    · Causa raíz real (confirmada en vivo con ADB+CDP sobre el móvil, a 360px CSS-px):
+      .dept-pill (icono ⚡, flex-shrink:0) nunca se tocó en el fix anterior; junto a
+      .obra-label necesitan 119px de mínimo cuando .header-center solo tenía 96px
+      asignados por flexbox → recorte asimétrico del icono de departamento.
+    · Adrián preguntó "no se puede autoajustar la barra depende del tamaño de la pantalla?"
+      → en vez de otro parche de breakpoint fijo, header rediseñado con clamp() para
+      escalado fluido continuo (header, .header-center, .obra-label, .user-chip,
+      .notif-bell, .dept-pill, #deptPillIcon). Se elimina el @media fijo anterior.
+    · Ver SESION.md Part 37. Pendiente: re-medir en vivo tras el deploy de GitHub Pages.
+
+[✓] BUG-BUSQUEDA-BOBINAS — Búsqueda global no encontraba bobinas  [HECHO v8.07]
+    · Adrián probó la lupa nueva de la barra superior: "busque bobinas para probar y no
+      mostro resultados". Confirmado en vivo (CDP) que el botón/modal/API funcionan bien
+      con otras queries (ej. "getafe") — el bug era que buscarGlobal() en worker.js nunca
+      incluía la tabla bobinas (la entidad principal de la app) en su Promise.all.
+    · Fix: nueva query sobre bobinas (codigo/tipo/proveedor con LIKE), mismo patrón
+      deptFilter/deptBind que pemp/herramientas, añadida al array de resultados.
+    · Ver SESION.md Part 37. Pendiente: probar "bobinas" en vivo tras el deploy.
 
 [✓] BUG-INV-ESTADO — No se pueden editar estados en Inventario (bobinas/PEMP/carretillas) de Alejandra Office  [HECHO v8.03]
     · Adrián reportó "en el inventario de alejandra office no se pueden editar los estados

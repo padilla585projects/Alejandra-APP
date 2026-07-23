@@ -12207,7 +12207,7 @@ async function buscarGlobal(request, env) {
   const deptFilter = (!_priv && auth.departamento) ? ' AND (departamento = ? OR departamento IS NULL)' : '';
   const deptBind = deptFilter ? [auth.departamento] : [];
 
-  const [inc, pemp, carr, herr, users, pedidos, obras, tareas, rfisR, deficiencias, actas] = await Promise.all([
+  const [inc, pemp, carr, herr, users, pedidos, obras, tareas, rfisR, deficiencias, actas, bobinasR] = await Promise.all([
     env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ?${deptFilter} LIMIT 5`).bind(eid,like,...deptBind).all(),
     env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
@@ -12223,11 +12223,14 @@ async function buscarGlobal(request, env) {
     env.DB.prepare(`SELECT id,'deficiencia' as tipo,titulo as nombre,ubicacion as subtipo,estado FROM control_calidad WHERE empresa_id=? AND (titulo LIKE ? OR ubicacion LIKE ? OR numero LIKE ?)${deptFilter}${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...deptBind,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
     // Actas de reunion (DEPT-01: ya tiene columna departamento)
     env.DB.prepare(`SELECT id,'acta' as tipo,titulo as nombre,tipo as subtipo,estado FROM actas_reunion WHERE empresa_id=? AND (titulo LIKE ? OR asistentes LIKE ? OR acuerdos LIKE ?)${deptFilter}${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...deptBind,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Bobinas (BUG-BUSQUEDA-BOBINAS 23/07/2026: faltaba la entidad principal de la app en la busqueda global)
+    env.DB.prepare(`SELECT id,'bobina' as tipo,codigo as nombre,tipo as subtipo,estado FROM bobinas WHERE empresa_id=? AND (codigo LIKE ? OR tipo LIKE ? OR proveedor LIKE ?)${deptFilter} LIMIT 5`).bind(eid,like,like,like,...deptBind).all().catch(()=>({results:[]})),
   ]);
   return json([
     ...inc.results, ...pemp.results, ...carr.results,
     ...herr.results, ...users.results, ...pedidos.results, ...obras.results,
     ...tareas.results, ...rfisR.results, ...deficiencias.results, ...actas.results,
+    ...bobinasR.results,
   ]);
 }
 

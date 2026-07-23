@@ -1,9 +1,29 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 23/07/2026 -- Escaneo remoto COMPLETO: router para los 6 tipos + revisión en panel — COMPLETADO
-**Versión actual:** v8.06 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Adrián señaló que el escaneo remoto (móvil→Office) no servía para nada práctico más allá de un toast efímero: "tenemos la opción de escaneo remoto pero no podemos hacer nada con él, es ilógico no? terminemos el trabajo en condiciones", y luego amplió el alcance a los 6 tipos del selector ("pero no solo se puede enviar albaranes, tenemos que cubrir todas las opciones que hay en esta función"), confirmado vía AskUserQuestion como plan único. Se construyó un router completo en `worker.js` que sube la foto a R2 y la enruta a la pantalla real correspondiente según subtipo (Documentos/Galería/Planos ya existentes, más un nuevo módulo de revisión para bobinas que requieren confirmación humana antes de crear datos reales), con extracción de datos vía Gemini para los tipos documentales. Ver Part 36. Commit pendiente de esta sesión, v8.06. Sigue pendiente: probar en real con el móvil de Alberto (o cualquier usuario) los 6 tipos de escaneo de punta a punta ahora que hay un destino real para cada uno.
+**Fecha:** 23/07/2026 -- Fix header móvil fluido (clamp) + bug búsqueda global sin bobinas — COMPLETADO
+**Versión actual:** v8.07 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Adrián insistió en que la barra superior seguía fatal pese al fix v8.05 ("revisa otra vez la barra superior de la app, los iconos estan fatal"). Investigación en vivo con ADB+CDP sobre el móvil real (autorizado: "haz captura por adb") encontró la causa raíz real: `.dept-pill` (icono ⚡, `flex-shrink:0`) nunca se tuvo en cuenta en el media query anterior, y junto a `.obra-label` necesitan 119px cuando `.header-center` solo tenía 96px a 360px CSS-px, provocando el recorte. Adrián preguntó "no se puede autoajustar la barra depende del tamaño de la pantalla?" — en vez de otro parche de breakpoint fijo, se rediseñó el header con `clamp()` para escalado fluido continuo. A la vez, investigando el icono de lupa nuevo (búsqueda global), Adrián reportó "no funciona" → probado en vivo con "getafe" SÍ funcionaba, pero con "busque bobinas para probar y no mostro resultados" se encontró que `buscarGlobal` en `worker.js` nunca incluía la tabla `bobinas` (la entidad principal de la app). Adrián confirmó ambos fixes juntos: "si dale con los dos". Ver Part 37.
+
+### Part 37: Fix header móvil fluido (clamp) + búsqueda global sin bobinas (23/07/2026) [COMPLETADO]
+
+**Contexto:** tras cerrar Part 36 (escaneo remoto completo, v8.06), Adrián reportó que la barra superior seguía mal ("revisa otra vez la barra superior de la app, los iconos estan fatal"), indicando que el fix de Part 35 (v8.05, solo `.user-chip`/`.notif-bell` en un `@media (max-width:400px)`) era insuficiente.
+
+**Diagnóstico (header):** en vez de adivinar por captura, se abrió la app en el móvil real vía ADB (`adb shell screencap`) y se inspeccionó en vivo con Chrome DevTools Protocol (`adb forward tcp:9333 localabstract:chrome_devtools_remote` + WebSocket nativo de Node, autorizado: "haz captura por adb"). Midiendo `getBoundingClientRect()`/`getComputedStyle()` reales a 360px CSS-px (dispositivo 1440x2560 @ 640dpi, dpr=4) se confirmó que `.dept-pill` (icono ⚡, `flex-shrink:0`, ancho fijo ~45px) nunca había sido tocado por el fix anterior, y junto a `.obra-label` (`min-width:70px`) sumaban 119px de mínimo necesario mientras `.header-center` solo tenía 96px asignados por flexbox — un déficit de 23px que `overflow:hidden` recortaba de forma asimétrica (el icono ⚡ cortado por el borde izquierdo, nombre de obra doblemente truncado).
+
+**Cambio de enfoque:** Adrián preguntó "no se puede autoajustar la barra depende del tamaño de la pantalla?", rechazando implícitamente otro parche de valores fijos. Se rediseñó con `clamp(min, preferred_vw, max)` en vez de un `@media` de umbral único, para que padding/gap/anchos de `header`, `.header-center`, `.obra-label`, `.user-chip`, `.notif-bell`, `.dept-pill` y `#deptPillIcon` escalen de forma continua con el ancho de viewport.
+
+**Diagnóstico (búsqueda):** mientras se investigaba el header, Adrián preguntó por el icono de lupa nuevo en la barra superior y luego reportó "no funciona". Probado en vivo por CDP (clic real, escritura, llamada a la API) con la query "getafe" → funcionaba correctamente (botón, modal y `/buscar` sin errores). Adrián precisó el síntoma real: "busque bobinas para probar y no mostro resultados". Se leyó `buscarGlobal` en `worker.js` completa: hace `Promise.all` sobre incidencias/pemp/carretillas/herramientas/usuarios/pedidos/obras/tareas_obra/rfis/control_calidad/actas_reunion, pero **nunca** sobre `bobinas` — la entidad principal de toda la app.
+
+**Fix aplicado:**
+- **`index.html`:** CSS del header reescrito con `clamp()` (bloque `/* ── HEADER ── */`, líneas ~54-68): `header` (padding/gap), `.header-center` (gap), `.obra-label` (`min-width`), `.user-chip` (padding/`max-width`), `.notif-bell` (padding), `.dept-pill` (padding), `#deptPillIcon` (`font-size`). Se elimina el `@media (max-width:400px)` fijo — ya no hace falta, los valores escalan solos. `APP_VERSION` → `'8.07'`.
+- **`worker.js`:** nueva query en `buscarGlobal` sobre `bobinas` (`codigo`/`tipo`/`proveedor` con LIKE, mismo patrón `deptFilter`/`deptBind` que `pemp`/`herramientas`, `LIMIT 5`, con `.catch(()=>({results:[]}))` como el resto de tablas añadidas tras el bloque original), destructurada como `bobinasR` y añadida al array final devuelto.
+- **`sw.js`/`version.json`:** `8.07`.
+- Sin cambios en `alejandra-agente/worker.js` — no es un cambio de seguridad/tools/permisos/barreras.
+
+**Verificación:** `node --check worker.js` OK; bloques `<script>` de `index.html` verificados con `new Function(...)` (3 bloques, todos OK); versiones sincronizadas v8.07; sin corrupción de encoding en el diff; `npx wrangler deploy` desplegado con bindings D1 (`alejandra-db`) y R2 (`alejandra-app-files`) OK.
+
+**Pendiente relacionado:** re-medir el header en vivo con ADB/CDP tras el deploy de GitHub Pages para confirmar que el déficit de espacio a 360px CSS-px queda realmente resuelto (no solo verificado por aritmética manual); probar la búsqueda de "bobinas" en vivo tras el deploy del worker (ya en producción, pendiente de prueba real por Adrián).
 
 ### Part 35 (nota tardía): Fix header móvil — nombre de obra invisible en pantallas estrechas (23/07/2026) [COMPLETADO, v8.05]
 
