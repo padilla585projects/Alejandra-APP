@@ -1,9 +1,31 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 23/07/2026 -- Fix edición de estados en Inventario (bobinas/PEMP/carretillas) en panel.html — COMPLETADO
-**Versión actual:** v8.03 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Adrián reportó dos cosas más: (1) "en el inventario de alejandra office no se pueden editar los estados de nada, maquinas rotas, bobinas". Confirmado: bobinas/PEMP/carretillas no tenían editor de estado en la tabla (solo herramientas lo tenía), y de propina se encontró un bug ya existente — el guardado de "Long. actual" en bobinas usaba `row.id` en vez de `row.codigo`, y el backend busca por `codigo`, así que ya fallaba silenciosamente. Arreglado en Part 34. (2) "no ha funcionado que alberto pueda escanear con el móvil desde alejandra office" — investigado, la función existe y está bien conectada (panel.html ↔ index.html ↔ worker.js `/sync/*`), pero depende de que el móvil tenga la app abierta en primer plano en ese momento exacto (sin aviso push que lo despierte); pendiente de confirmar con Alberto antes de tocar código, ver IDEAS_PENDIENTES.txt.
+**Fecha:** 23/07/2026 -- Fix escaneo remoto móvil (ping no se reenganchaba en segundo plano) en index.html — COMPLETADO
+**Versión actual:** v8.04 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Continuando la investigación de "no ha funcionado que alberto pueda escanear con el móvil desde alejandra office", se hizo una prueba en vivo real con el HTC U11 de Alberto (ADB + Chrome DevTools Protocol, con autorización explícita de Adrián en cada paso más invasivo). Se confirmó la causa raíz: el `setInterval` del ping de escaneo remoto muere cuando Android pone la app en segundo plano, y nunca se reengancha al volver a primer plano porque `_onAppVisible()` no reiniciaba el ciclo de sync. Arreglado en Part 35 con `rmReconectarSync()`. Commit `bc41f57`, v8.04. Sigue pendiente: (1) validar en uso real con Alberto que el fix funciona fuera del test forzado por CDP; (2) el bug de la barra superior del móvil (iconos casi invisibles/desajustados en pantallas estrechas) fue reportado por Adrián a mitad de sesión — diagnosticado (el nombre de obra se ve empujado a ancho ~0 por flexbox en viewports de 360px) pero el plan de fix propuesto (4 puntos) NO fue confirmado ni descartado; queda abierto para la próxima sesión.
+
+### Part 35: Fix escaneo remoto móvil — ping no se reenganchaba en segundo plano (23/07/2026) [COMPLETADO]
+
+**Contexto:** Continuación de "no ha funcionado que alberto pueda escanear con el móvil desde alejandra office" (dejado pendiente en Part 34). Adrián confirmó que Alberto estaba listo para una prueba en vivo ("Sí, listo para probar ahora").
+
+**Diagnóstico:** se abrió la app en el HTC U11 real de Alberto vía ADB (`adb shell am start`, dispositivo en `D:\Android\Sdk\platform-tools\adb.exe`, no en la ruta de `%LOCALAPPDATA%` que resultó ser un punto de montaje roto) y se monitorizó `sync_dispositivos` en D1 producción en casi tiempo real con `wrangler d1 execute alejandra-db --remote`. Con la app abierta y visible en el móvil, Office seguía marcando "sin móvil conectado". Se conectó Chrome DevTools Protocol sobre el móvil (`adb forward tcp:9222 localabstract:chrome_devtools_remote` + WebSocket nativo de Node) para inspeccionar el estado de la sesión sin exponer tokens (solo flags booleanos: `hasSession`, `hasToken`, `rol`). Un ping manual disparado por CDP contra `/sync/ping` funcionó (200 OK, con autorización explícita de Adrián: "Autorizas la inspección CDP igualmente"), pero el ping automático (el `setInterval` de `_rmHacerPing`) llevaba tiempo sin ejecutarse solo. Forzar `rmIniciarSync()` por CDP (autorizado explícitamente por Adrián: "usemos el movil de alberto no pasa nada") reactivó el ping al instante — prueba directa de que el intervalo estaba muerto, no que hubiera un fallo de red o de sesión. Causa raíz: Android/Chrome congela o mata el `setInterval` en segundo plano para ahorrar batería, y `_onAppVisible()` (el handler de `visibilitychange` que refresca pantalla/badges al volver a primer plano) nunca reenganchaba el ciclo de sync — solo `iniciarApp()` lo arrancaba, y esa función solo corre una vez al inicio de sesión, no en cada vuelta a primer plano (no hay recarga de página en un cambio de pestaña/app en segundo plano de Android).
+
+**Nota lateral (no es la causa del bug):** se descubrió que existen dos cuentas "Alberto" en producción (usuario_id 46 "Alberto Martínez" y usuario_id 51 "Alberto") — confirmado por Adrián que son la misma persona real. Queda como limpieza de datos pendiente, no se tocó en esta sesión.
+
+**Fix aplicado (`index.html`, v8.04):**
+- Nueva función `rmReconectarSync()` (junto a `rmDetenerSync()`, dentro de la IIFE de escaneo remoto): hace `rmDetenerSync(); rmIniciarSync();` sin fiarse de si el intervalo "parece" seguir vivo.
+- Se llama desde `_onAppVisible()` en cada vuelta a primer plano (después del refresco de pantalla/badges existente).
+- Se añadió `console.error` (sin exponer tokens) en los catch antes silenciosos de `_rmHacerPing()` y `_rmPollEventos()`, para poder diagnosticar fallos futuros sin repetir toda esta investigación.
+- Exportada también como `window.rmReconectarSync`.
+- Sin cambios en `worker.js` ni en `alejandra-agente/worker.js`.
+
+**Verificación:** sintaxis de los `<script>` de `index.html` comprobada con `node -e "new Function(...)"` sobre cada bloque (ALL OK); versiones sincronizadas v8.04 (`version.json`/`sw.js`/`index.html`); sin corrupción de encoding en el diff. Commit `bc41f57`, pusheado a `origin/main`.
+
+**Pendiente relacionado:**
+- Validar con Alberto en uso real (abrir la app, mandarla a segundo plano y volver varias veces, luego intentar un escaneo remoto de verdad desde Office) ahora que v8.04 está desplegado — el test de esta sesión forzó el reenganche por CDP, no probó el flujo completo Office → push → escaneo con el fix ya puesto.
+- Bug de la barra superior del móvil reportado a mitad de sesión ("primero arreglemos la barra superios que no se ven los iconos apenas y estan desajustados"): diagnosticado (el nombre de obra `.obra-label` queda con ancho casi nulo en viewports de 360px CSS-px porque el resto de elementos fijos del header —logo, chip de usuario, 4 iconos de campana, punto de conexión— consumen casi todo el espacio) pero el plan de 4 puntos propuesto no fue confirmado ni descartado por Adrián. Retomar en la próxima sesión.
+- Unificar las dos cuentas "Alberto" (usuario_id 46 y 51) en D1 — no urgente, solo limpieza de datos.
 
 ### Part 33: Fix UX — sidebar "Obra" siempre abierto por defecto (23/07/2026) [COMPLETADO]
 
