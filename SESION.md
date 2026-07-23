@@ -1,9 +1,36 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 23/07/2026 -- Fix header móvil fluido (clamp) + bug búsqueda global sin bobinas — COMPLETADO
-**Versión actual:** v8.07 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Adrián insistió en que la barra superior seguía fatal pese al fix v8.05 ("revisa otra vez la barra superior de la app, los iconos estan fatal"). Investigación en vivo con ADB+CDP sobre el móvil real (autorizado: "haz captura por adb") encontró la causa raíz real: `.dept-pill` (icono ⚡, `flex-shrink:0`) nunca se tuvo en cuenta en el media query anterior, y junto a `.obra-label` necesitan 119px cuando `.header-center` solo tenía 96px a 360px CSS-px, provocando el recorte. Adrián preguntó "no se puede autoajustar la barra depende del tamaño de la pantalla?" — en vez de otro parche de breakpoint fijo, se rediseñó el header con `clamp()` para escalado fluido continuo. A la vez, investigando el icono de lupa nuevo (búsqueda global), Adrián reportó "no funciona" → probado en vivo con "getafe" SÍ funcionaba, pero con "busque bobinas para probar y no mostro resultados" se encontró que `buscarGlobal` en `worker.js` nunca incluía la tabla `bobinas` (la entidad principal de la app). Adrián confirmó ambos fixes juntos: "si dale con los dos". Ver Part 37.
+**Fecha:** 24/07/2026 -- Ocultar "Construcción" para electrico/mecanicas + Pedidos como sección propia + email + Excel — COMPLETADO
+**Versión actual:** v8.08 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Adrián: "sigo diciendo que porque los electrico o mecanicos tienen que ver el panel de construccion de alejandra office" + pidió un flujo completo de Pedidos ("quiero un nuevo panel con los pedidos,tenerlo a mano... mandar por correo tambien... vamos a planificarlo bien"). Tras investigar se vio que el flujo de Pedidos (app+office+CRUD) ya existía casi entero; se planificó con AskUserQuestion y el usuario confirmó con "dale". Ver Part 38.
+
+### Part 38: Ocultar Construcción para electrico/mecanicas + Pedidos sección propia + envío por email + export Excel (24/07/2026) [COMPLETADO]
+
+**Contexto:** dos peticiones en un mismo mensaje. (1) Queja recurrente: el panel "🏗️ Construcción" (RFIs, calidad, actas) sigue visible para electricistas/mecánicos aunque el backend siempre lo filtra por departamento y lo deja vacío. (2) Flujo de Pedidos: Adrián quería que "Pedidos" estuviera más a mano, poder enviarlos por correo (a proveedor o a un email concreto) y exportarlos en Excel con buen formato. Confirmado el alcance con 4 preguntas (AskUserQuestion): ocultar solo la sección Construcción, email híbrido proveedor-o-manual, Excel con formato bonito, Pedidos como sección propia de primer nivel. Usuario: "dale".
+
+**Cambios en `panel.html`:**
+- Sidebar: "Pedidos" sale de dentro de "Obra" y pasa a ser su propia sección de primer nivel (`data-sid="pedidosSec"`), justo antes de "Construcción".
+- Nueva función `ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin)`: oculta la sección `[data-sid="construccion"]` y sus items (mismo patrón de recorrido `nextElementSibling` que ya usa `ocultarSidebarPorPermisos`) para departamentos `electrico`/`mecanicas`. Admins y `seguridad` la siguen viendo. Se llama desde `iniciarApp()` (carga inicial) y desde `ocultarSidebarPorPermisos()` (tras cada navegación, para que sobreviva a los re-renders).
+- `seccionesPermitidas` (en `iniciarApp()`) actualizado con `'pedidosSec'` en ambas ramas (admin y no-admin).
+- `inicializarEstadoSidebar()`: `pedidosSec` añadido a las secciones que empiezan siempre abiertas (mismo motivo histórico que `obra` en v8.02 — que no se pierda colapsada por defecto).
+- `verDetallePedido()`: nuevo botón "📧 Enviar por correo" en el pie del modal.
+- Nueva función `abrirModalEnviarPedido(p)`: intenta prellenar el email buscando `p.proveedor` en `/proveedores` (por nombre, case-insensitive); si no hay match, el campo queda vacío y editable. Envía `POST /pedidos/:id/email` con `{to, asunto, mensaje_extra}`.
+- Nueva función `exportarPedidosExcel()` (mismo estilo que `exportarBobinasExcel()`: ExcelJS, cabecera azul `#2563EB`, filas zebra, autofiltro, colores por estado). Nuevo botón "⬇ Excel" en la barra de herramientas de la página Pedidos.
+
+**Cambios en `worker.js`:**
+- Nueva ruta `POST /pedidos/:id/email` → nueva función `enviarPedidoPorEmail(id, request, env)`.
+- Permiso: rol de gestión amplio (superadmin/empresa_admin/jefe_de_obra/oficina/encargado/desarrollador) — más amplio que `actualizarPedido` (solo encargado/admin) para que quien vea el botón en el panel pueda usarlo, alineado con el `canEdit` que ya usa `panel.html` para decidir si mostrar la edición de estado.
+- Construye un email HTML con los datos del pedido (descripción, referencia, cantidad/unidad, proveedor, obra, estado, solicitado por, notas) y lo envía reutilizando `enviarEmailResend()` (ya existente, usado hasta ahora solo para recuperación de contraseña).
+- **Aviso ya comunicado a Adrián**: el remitente `noreply@resend.dev` es el dominio sandbox de Resend — sin dominio propio verificado, es probable que Resend solo permita enviar a la propia cuenta verificada y no a proveedores reales de terceros. Código escrito igualmente; pendiente verificar un dominio propio en Resend para que la entrega a terceros funcione en producción.
+- Sin cambios en `alejandra-agente/worker.js` — no es un cambio de seguridad/tools/permisos/barreras (es una feature de negocio, no toca la barrera destructiva ni los dos cerebros).
+
+**Verificación:** `node --check worker.js` OK; bloques `<script>` de `panel.html` (3) e `index.html` (3) verificados con `new Function(...)`, todos OK; versiones sincronizadas v8.08; sin corrupción de encoding en el diff; `npx wrangler deploy` desplegado con bindings D1 (`alejandra-db`) y R2 (`alejandra-app-files`) OK.
+
+**Pendiente relacionado:**
+- Verificar un dominio propio en Resend (Cloudflare → Resend) para que el envío de pedidos por email llegue realmente a proveedores externos (el sandbox actual probablemente solo entrega a la cuenta propia).
+- Idealmente verificar en vivo (ADB/CDP o similar) que Construcción queda oculta para electrico/mecanicas y que Pedidos aparece como sección propia bien visible.
+- Issue preexistente detectado pero NO tocado a propósito (fuera de alcance de esta sesión): `panel.html`'s `cargarPedidos()` calcula `canEdit` con un set de roles (incluye `jefe_de_obra`/`oficina`/`desarrollador`) más amplio que el que permite `actualizarPedido` en `worker.js` para cambiar el campo `estado` (solo superadmin/empresa_admin/encargado) — esos roles verían un desplegable editable que el backend rechazaría con 403. Anotado para una futura sesión de permisos de Pedidos.
 
 ### Part 37: Fix header móvil fluido (clamp) + búsqueda global sin bobinas (23/07/2026) [COMPLETADO]
 

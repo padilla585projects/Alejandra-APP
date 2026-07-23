@@ -577,9 +577,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="incidencias" onclick="navTo('incidencias')">
       <span class="nav-icon">⚠️</span> Incidencias
     </button>
-    <button class="nav-item" data-page="pedidos" onclick="navTo('pedidos')">
-      <span class="nav-icon">📦</span> Pedidos
-    </button>
     <button class="nav-item" data-page="mantenimientos" onclick="navTo('mantenimientos')">
       <span class="nav-icon">🔩</span> Mantenimientos
     </button>
@@ -591,6 +588,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
+    </button>
+
+    <!-- PEDIDOS-01 (24/07/2026): seccion propia de primer nivel, antes vivia
+         dentro de "Obra" y se perdia/quedaba poco a mano; Adrian: "quiero un
+         nuevo panel con los pedidos,tenerlo a mano" -->
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="pedidosSec"><span>📦 Pedidos</span><span class="sec-chevron">▼</span></div>
+    <button class="nav-item" data-page="pedidos" onclick="navTo('pedidos')">
+      <span class="nav-icon">📦</span> Pedidos
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="construccion"><span>🏗 Construcción</span><span class="sec-chevron">▼</span></div>
@@ -1708,6 +1713,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-primary" onclick="abrirModalPedido()">+ Nuevo pedido</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblPedidos,'pedidos')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="exportarPDFPedidos()">📄 PDF</button>
+          <button class="btn btn-secondary" onclick="exportarPedidosExcel()">⬇ Excel</button>
           <button class="btn btn-secondary" onclick="tblPedidos=null;cargarPedidos()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblPedidos"></div></div>
@@ -9418,6 +9424,94 @@ async function exportarBobinasExcel() {
   toast('Excel generado', 'ok');
 }
 
+// PEDIDOS-01 (24/07/2026): export "bonito" a Excel de Pedidos, mismo estilo
+// que exportarBobinasExcel() — Adrian: "los pedidos que se puedan... en excel".
+async function exportarPedidosExcel() {
+  if (!tblPedidos) return toast('Carga los pedidos primero', 'err');
+  const rows = tblPedidos.getData('active');
+  if (!rows.length) return toast('Sin datos que exportar', 'err');
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Alejandra APP';
+  const ws = wb.addWorksheet('Pedidos', { views: [{ state: 'frozen', ySplit: 2 }] });
+
+  const accent = '2563EB';
+  const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: accent } };
+  const headerFont = { bold: true, color: { argb: 'FFFFFF' }, size: 11, name: 'Calibri' };
+  const borderThin = { top: {style:'thin',color:{argb:'D0D0D0'}}, bottom: {style:'thin',color:{argb:'D0D0D0'}}, left: {style:'thin',color:{argb:'D0D0D0'}}, right: {style:'thin',color:{argb:'D0D0D0'}} };
+
+  ws.mergeCells('A1:K1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `PEDIDOS — ${new Date().toLocaleDateString('es-ES')}`;
+  titleCell.font = { bold: true, size: 14, color: { argb: accent }, name: 'Calibri' };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 32;
+
+  const cols = [
+    { header: 'Descripción', key: 'descripcion', width: 30 },
+    { header: 'Referencia', key: 'referencia', width: 14 },
+    { header: 'Cantidad', key: 'cantidad', width: 10 },
+    { header: 'Unidad', key: 'unidad', width: 10 },
+    { header: 'Proveedor', key: 'proveedor', width: 18 },
+    { header: 'Estado', key: 'estado', width: 12 },
+    { header: 'Departamento', key: 'departamento', width: 14 },
+    { header: 'Obra', key: 'obra_nombre', width: 22 },
+    { header: 'Solicitado por', key: 'solicitado_por', width: 16 },
+    { header: 'Fecha solicitud', key: 'fecha_solicitud', width: 14 },
+    { header: 'Notas', key: 'notas', width: 28 },
+  ];
+  ws.columns = cols;
+  const headerRow = ws.getRow(2);
+  cols.forEach((c, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = c.header;
+    cell.fill = headerFill;
+    cell.font = headerFont;
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = borderThin;
+  });
+  headerRow.height = 24;
+
+  const estadoColors = { entregado: '22C55E', aprobado: '3B82F6', pendiente: 'F59E0B', cancelado: 'EF4444' };
+  rows.forEach((p, idx) => {
+    const r = ws.addRow({
+      descripcion: p.descripcion || '',
+      referencia: p.referencia || '',
+      cantidad: p.cantidad ?? '',
+      unidad: p.unidad || '',
+      proveedor: p.proveedor || '',
+      estado: p.estado || '',
+      departamento: p.departamento || '',
+      obra_nombre: p.obra_nombre || '',
+      solicitado_por: p.solicitado_por || '',
+      fecha_solicitud: (p.fecha_solicitud || p.created_at || '').slice(0, 10),
+      notas: p.notas || '',
+    });
+    const zebra = idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF';
+    r.eachCell({ includeEmpty: true }, (cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: zebra } };
+      cell.border = borderThin;
+      cell.font = { size: 10, name: 'Calibri' };
+      cell.alignment = { vertical: 'middle' };
+    });
+    const estCell = r.getCell(6);
+    const ec = estadoColors[(p.estado || '').toLowerCase()];
+    if (ec) { estCell.font = { size: 10, name: 'Calibri', bold: true, color: { argb: ec } }; }
+    r.getCell(1).font = { size: 10, name: 'Calibri', bold: true };
+  });
+
+  ws.autoFilter = { from: 'A2', to: `K${rows.length + 2}` };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pedidos_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Excel generado', 'ok');
+}
+
 // ── CATÁLOGO DEPARTAMENTOS + SUBMÓDULOS (sync con index.html) ─
 const _DEPTS_CATALOG = {
   electrico:   { icon: '⚡',  name: 'Eléctrico',          desc: 'Tendido de cable · Plataformas · Carretillas',  template: 'trade'     },
@@ -9776,6 +9870,24 @@ function ocultarItemsPorOficio() {
   if (ocultados > 0) console.log(`✓ Ocultados ${ocultados} items de gestión de obra/PM para encargado/operario (ORG-01)`);
 }
 
+// CONSTR-01 (24/07/2026): oculta la sección completa "Construcción" (y sus
+// items) para electrico/mecanicas — ver comentario en iniciarApp(). Reutilizada
+// también desde ocultarSidebarPorPermisos() para que sobreviva a la
+// re-aplicación de permisos tras cada navegación.
+function ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin) {
+  if (isAdmin || (deptActual !== 'electrico' && deptActual !== 'mecanicas')) return;
+  const el = document.querySelector('[data-sid="construccion"]');
+  if (!el) return;
+  el.style.display = 'none';
+  el.setAttribute('data-hidden-by-perms', 'true');
+  let next = el.nextElementSibling;
+  while (next && !next.classList.contains('sidebar-section')) {
+    next.style.display = 'none';
+    next.setAttribute('data-hidden-by-perms', 'true');
+    next = next.nextElementSibling;
+  }
+}
+
 function iniciarApp() {
   if (_iniciarAppCalled) return;  // evitar ejecuciones múltiples
   _iniciarAppCalled = true;
@@ -9837,6 +9949,15 @@ function iniciarApp() {
     document.querySelectorAll('.nav-electrico-section').forEach(el => el.style.display = '');
   }
 
+  // CONSTR-01 (24/07/2026): la sección "Construcción" (RFIs, calidad, actas...)
+  // es coordinación técnica de obra civil; para electricistas/mecánicos el
+  // backend siempre filtra por departamento y devuelve todo vacío — Adrian:
+  // "sigo diciendo que porque los electrico o mecanicos tienen que ver el
+  // panel de construccion de alejandra office". Se oculta directamente para
+  // esos 2 departamentos (obra_civil y seguridad la siguen viendo, igual que
+  // los admins).
+  ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin);
+
   // mostrar FAB de Alejandra cuando hay sesión activa
   if (SESSION?.usuario_id) {
     const fabEl = document.getElementById('fabAlejandra');
@@ -9852,8 +9973,8 @@ function iniciarApp() {
   // solo lo suyo; Seguridad ve todo). Analítica y los 5 grupos que antes eran
   // "Seguimiento" (SIDEBAR-01, 22/07/2026) siguen ocultos para no-admin.
   const seccionesPermitidas = isNonAdmin ?
-    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'construccion', 'planificacion'] :
-    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'construccion', 'planificacion', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre', 'analitica'];
+    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'pedidosSec', 'construccion', 'planificacion'] :
+    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'pedidosSec', 'construccion', 'planificacion', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre', 'analitica'];
 
   // Guardar en localStorage cuáles secciones están permitidas para este usuario
   try {
@@ -9954,6 +10075,7 @@ function ocultarSidebarPorPermisos() {
         console.log(`✓ Sidebar ocultación: ${ocultadas} secciones, ${totalItems} items totales`);
       }
     }
+    ocultarSeccionConstruccionSiNoAplica(SESSION.departamento || 'electrico', isAdmin);
     ocultarItemsPorOficio();
   } catch (e) {
     console.error('Error en ocultarSidebarPorPermisos:', e);
@@ -10003,10 +10125,13 @@ function sidebarRestoreState() {
 function inicializarEstadoSidebar() {
   try {
     // Inicializar estado de desplegables:
-    // - Todos CERRADOS excepto inventarios y obra
+    // - Todos CERRADOS excepto inventarios, obra y pedidosSec
     // - Principal siempre abierto (es la sección por defecto)
-    // - Obra siempre abierto (v8.02): contiene "Pedidos", que quedaba oculto
+    // - Obra siempre abierto (v8.02): contenía "Pedidos", que quedaba oculto
     //   al estar la sección plegada por defecto y usuarios no la encontraban
+    // - PEDIDOS-01 (24/07/2026): "Pedidos" ahora es su propia sección de
+    //   primer nivel (antes vivía dentro de "Obra") — sigue abierta por
+    //   defecto por el mismo motivo: que quede a mano sin tener que desplegar.
 
     const estadoDeseado = {};
 
@@ -10028,9 +10153,15 @@ function inicializarEstadoSidebar() {
         return;
       }
 
-      // obra siempre abierto (contiene "Pedidos" — se reportó que quedaba
-      // escondido al estar la sección plegada por defecto; v8.02)
+      // obra siempre abierto (v8.02)
       if (sid === 'obra') {
+        estadoDeseado[sid] = false;  // no colapsado
+        if (estaCerrado) sidebarToggle(el);
+        return;
+      }
+
+      // pedidosSec siempre abierto (PEDIDOS-01)
+      if (sid === 'pedidosSec') {
         estadoDeseado[sid] = false;  // no colapsado
         if (estaCerrado) sidebarToggle(el);
         return;
@@ -13253,7 +13384,44 @@ function verDetallePedido(p) {
       </div>
     </div>
   `, null);
-  document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>';
+  document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="abrirModalEnviarPedido(' + JSON.stringify(p).replace(/"/g,'&quot;') + ')">📧 Enviar por correo</button><button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>';
+}
+
+// PEDIDOS-01 (24/07/2026): modal para enviar un pedido por correo — Adrian:
+// "mandar por correo tambien...al proovedor que pueden ser diferentes o a un
+// mail concreto". Se intenta rellenar el email automáticamente buscando el
+// proveedor por nombre en /proveedores; si no hay match, el campo queda vacío
+// y editable para poner cualquier dirección a mano.
+async function abrirModalEnviarPedido(p) {
+  let emailSugerido = '';
+  try {
+    const r = await api('/proveedores');
+    const lista = r.proveedores || r.data || r || [];
+    if (p.proveedor && Array.isArray(lista)) {
+      const match = lista.find(x => (x.nombre || '').trim().toLowerCase() === p.proveedor.trim().toLowerCase());
+      if (match?.email) emailSugerido = match.email;
+    }
+  } catch (e) { /* sin bloqueo si falla la búsqueda de proveedor */ }
+
+  abrirModal(`📧 Enviar pedido #${p.id} por correo`, `
+    <div class="form-group"><div class="form-label">Email de destino *</div>
+      <input class="form-input" id="mEmailTo" type="email" value="${emailSugerido}" placeholder="proveedor@ejemplo.com">
+      ${p.proveedor && !emailSugerido ? `<div style="font-size:12px;color:var(--text-muted,#888);margin-top:4px">No se encontró email guardado para "${p.proveedor}" — puedes escribirlo a mano.</div>` : ''}
+    </div>
+    <div class="form-group"><div class="form-label">Asunto</div><input class="form-input" id="mEmailAsunto" value="Pedido #${p.id} — ${(p.descripcion||'').slice(0,60)}"></div>
+    <div class="form-group"><div class="form-label">Mensaje adicional (opcional)</div><textarea class="form-input" id="mEmailExtra" rows="3" placeholder="Añade una nota para el proveedor..." style="resize:vertical"></textarea></div>
+  `, async () => {
+    const to = document.getElementById('mEmailTo').value.trim();
+    if (!to) { toast('Indica un email de destino', 'err'); return; }
+    const body = {
+      to,
+      asunto: document.getElementById('mEmailAsunto').value.trim(),
+      mensaje_extra: document.getElementById('mEmailExtra').value.trim(),
+    };
+    const r = await api(`/pedidos/${p.id}/email`, { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Email enviado ✓', 'ok'); }
+    else toast(r.error || 'Error al enviar el email', 'err');
+  });
 }
 
 function abrirModalPedido() {

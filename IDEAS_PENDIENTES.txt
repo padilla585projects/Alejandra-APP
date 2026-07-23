@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 23/07/2026 — BUG-HEADER-MOVIL-v2 + BUG-BUSQUEDA-BOBINAS resueltos (v8.07): header rediseñado con clamp() fluido (ver sección de errores) y bobinas añadida a la búsqueda global. Antes: ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 24/07/2026 — CONSTR-01 + PEDIDOS-01 resueltos (v8.08): sección "Construcción" oculta para electrico/mecanicas (ver sección de errores) + Pedidos promovido a sección propia + envío por email + export Excel (ver sección de mejoras). Antes: BUG-HEADER-MOVIL-v2 + BUG-BUSQUEDA-BOBINAS resueltos (v8.07): header rediseñado con clamp() fluido (ver sección de errores) y bobinas añadida a la búsqueda global. Antes: ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -15,6 +15,21 @@ LEYENDA DE ESTADO:
 ================================================================================
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
+
+[✓] CONSTR-01 — Sección "Construcción" visible (y vacía) para electrico/mecanicas  [HECHO v8.08]
+    · Adrián: "sigo diciendo que porque los electrico o mecanicos tienen que ver el panel
+      de construccion de alejandra office" — el backend siempre filtraba tareas_obra/rfis/
+      control_calidad/actas_reunion por departamento (DEPT-01), dejando la sección vacía
+      y confusa para esos 2 departamentos, pero la sección seguía visible en el sidebar.
+    · Fix: nueva ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin) en panel.html,
+      llamada desde iniciarApp() y ocultarSidebarPorPermisos(); oculta [data-sid=
+      "construccion"] y sus items para electrico/mecanicas. Admins y seguridad la siguen
+      viendo (mismo criterio que INV-01 para bobinas).
+    · [ ] Pendiente: issue preexistente detectado pero NO tocado (fuera de alcance) —
+      panel.html's cargarPedidos() calcula canEdit con roles (incl. jefe_de_obra/oficina/
+      desarrollador) más amplios que actualizarPedido en worker.js (solo superadmin/
+      empresa_admin/encargado) para cambiar `estado`; esos roles ven un desplegable que el
+      backend rechaza con 403. Retomar en una sesión de permisos de Pedidos.
 
 [✓] BUG-HEADER-MOVIL-v2 — Barra superior móvil seguía mal tras v8.05  [HECHO v8.07]
     · Adrián: "revisa otra vez la barra superior de la app, los iconos estan fatal" — el fix
@@ -440,6 +455,24 @@ LEYENDA DE ESTADO:
 ================================================================================
   🔧 MEJORAS (solo app nueva, salvo indicación contraria)
 ================================================================================
+
+[✓] PEDIDOS-01 — Pedidos como sección propia + envío por email + export Excel  [HECHO v8.08]
+    · Adrián: "quiero un nuevo panel con los pedidos,tenerlo a mano...mandar por correo
+      tambien...vamos a planificarlo bien". Investigado: el flujo completo de Pedidos
+      (app: creación por cualquier rol incl. operario; office: CRUD, CSV, PDF) ya existía.
+    · Sidebar: "Pedidos" sale de dentro de "Obra" y pasa a ser sección propia de primer
+      nivel (data-sid="pedidosSec"), siempre abierta por defecto.
+    · Email: nueva ruta POST /pedidos/:id/email en worker.js → enviarPedidoPorEmail(),
+      reutiliza enviarEmailResend() ya existente; nuevo botón "📧 Enviar por correo" en
+      verDetallePedido() con email prellenado buscando el proveedor en /proveedores
+      (híbrido: prellenado o manual, según lo pedido). Permiso: rol de gestión amplio
+      (superadmin/empresa_admin/jefe_de_obra/oficina/encargado/desarrollador).
+    · [ ] Nota: dominio remitente noreply@resend.dev es el sandbox de Resend — sin dominio
+      propio verificado, probablemente Resend no entregue a proveedores reales de
+      terceros. Pendiente verificar un dominio propio en Resend.
+    · Excel: nueva exportarPedidosExcel() en panel.html (mismo estilo que
+      exportarBobinasExcel: ExcelJS, cabecera azul, zebra, autofiltro, colores por
+      estado) + botón "⬇ Excel" en la página Pedidos.
 
 [✓] MEJ-01 — Rediseño completo de la sección Pedidos  [HECHO v4.31]
     · Campo "referencia" — ya existía en tabla y modal.

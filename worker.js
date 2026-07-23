@@ -4689,6 +4689,9 @@ export default {
         if (parts[3] === 'albaranes') {
           if (method === 'GET')  return await getAlbaranesPedido(pid, request, env);
           if (method === 'POST') return await subirAlbaranPedido(pid, request, env);
+        } else if (parts[3] === 'email') {
+          // PEDIDOS-01 (24/07/2026): enviar el pedido por correo (a proveedor u otro destino)
+          if (method === 'POST') return await enviarPedidoPorEmail(pid, request, env);
         } else {
           if (method === 'PUT')    return await actualizarPedido(pid, request, env, ctx);
           if (method === 'DELETE') return await eliminarPedido(pid, request, env, ctx);
@@ -7620,6 +7623,50 @@ async function eliminarPedido(id, request, env, ctx) {
   const pedido = await env.DB.prepare('SELECT departamento FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   await env.DB.prepare('DELETE FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', pedido?.departamento), empresa_id));
+  return json({ ok: true });
+}
+
+// PEDIDOS-01 (24/07/2026): envío de un pedido por correo (a proveedor o a un
+// email concreto) — Adrian: "mandar por correo tambien". Permiso alineado con
+// el "canEdit" de panel.html (rol de gestión), no solo encargado/admin como en
+// actualizarPedido, para que quien vea el botón en el panel pueda usarlo.
+async function enviarPedidoPorEmail(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isJefeObra, isOficina, isEncargado, isDesarrollador } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  const puedeEnviar = isSuperadmin || isEmpresaAdmin || isJefeObra || isOficina || isEncargado || isDesarrollador;
+  if (!puedeEnviar) return err('Sin permiso', 403);
+
+  const body = await request.json().catch(() => ({}));
+  const to = (body.to || '').trim();
+  if (!to) return err('Falta el email de destino');
+
+  const pedido = await env.DB.prepare(
+    'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.id = ? AND p.empresa_id = ?'
+  ).bind(id, empresa_id).first();
+  if (!pedido) return err('Pedido no encontrado', 404);
+
+  const asunto = (body.asunto || `Pedido #${pedido.id} — ${pedido.descripcion || ''}`).slice(0, 200);
+  const extra = (body.mensaje_extra || '').trim();
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:600px;margin:0 auto">
+      <h2 style="color:#2563EB;margin-bottom:4px">📦 Pedido #${pedido.id}</h2>
+      <p style="color:#666;margin-top:0">${pedido.obra_nombre ? `Obra: <b>${pedido.obra_nombre}</b>` : ''}</p>
+      ${extra ? `<p>${extra.replace(/\n/g, '<br>')}</p>` : ''}
+      <table style="border-collapse:collapse;width:100%;margin-top:12px">
+        <tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f5f7fb"><b>Descripción</b></td><td style="padding:6px 10px;border:1px solid #ddd">${pedido.descripcion || '—'}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f5f7fb"><b>Referencia</b></td><td style="padding:6px 10px;border:1px solid #ddd">${pedido.referencia || '—'}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f5f7fb"><b>Cantidad</b></td><td style="padding:6px 10px;border:1px solid #ddd">${pedido.cantidad ?? '—'} ${pedido.unidad || ''}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f5f7fb"><b>Proveedor</b></td><td style="padding:6px 10px;border:1px solid #ddd">${pedido.proveedor || '—'}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f5f7fb"><b>Estado</b></td><td style="padding:6px 10px;border:1px solid #ddd">${pedido.estado || '—'}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f5f7fb"><b>Solicitado por</b></td><td style="padding:6px 10px;border:1px solid #ddd">${pedido.solicitado_por || '—'}</td></tr>
+        ${pedido.notas ? `<tr><td style="padding:6px 10px;border:1px solid #ddd;background:#f5f7fb"><b>Notas</b></td><td style="padding:6px 10px;border:1px solid #ddd">${pedido.notas}</td></tr>` : ''}
+      </table>
+      <p style="color:#999;font-size:12px;margin-top:20px">Enviado desde Alejandra App</p>
+    </div>`;
+
+  const ok = await enviarEmailResend(env, { to, subject: asunto, html });
+  if (!ok) return err('No se pudo enviar el email (revisa RESEND_API_KEY o el dominio remitente)', 500);
   return json({ ok: true });
 }
 
