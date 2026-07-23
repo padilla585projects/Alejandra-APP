@@ -5408,6 +5408,10 @@ function _onAppVisible() {
   _APP_SCREEN_REFRESH[name]?.();
   checkNotifBadge?.();
   checkChatBadge?.();
+  // Fix BUG-SCAN-PING (23/07/2026): reenganchar el ping de escaneo remoto
+  // por si Android congeló/mató su setInterval mientras la app estaba en
+  // segundo plano (ver comentario junto a rmReconectarSync).
+  if (typeof rmReconectarSync === 'function') rmReconectarSync();
 }
 
 async function iniciarApp() {
@@ -11970,7 +11974,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.03';
+const APP_VERSION = '8.04';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -17475,6 +17479,18 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     _rmPingInterval = null; _rmPollInterval = null;
   }
 
+  // Fix BUG-SCAN-PING (23/07/2026): Android/Chrome puede congelar o matar el
+  // setInterval del ping cuando la app pasa un rato en segundo plano, y al
+  // volver a primer plano NO se reejecuta iniciarApp() (no hay recarga),
+  // así que el ping quedaba muerto para siempre aunque la app se viera abierta.
+  // Se llama desde _onAppVisible en cada vuelta a primer plano para
+  // reenganchar el ciclo de sync siempre, sin fiarse de si el intervalo
+  // "parece" seguir vivo.
+  function rmReconectarSync() {
+    rmDetenerSync();
+    rmIniciarSync();
+  }
+
   async function _rmHacerPing() {
     try {
       const s = getSession();
@@ -17484,7 +17500,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         headers: _rmHeaders(),
         body: JSON.stringify({ tipo: 'app', nombre: s.nombre || 'Móvil' })
       });
-    } catch {}
+    } catch (e) { console.error('[rm] ping falló:', e?.message || e); }
   }
 
   async function _rmPollEventos() {
@@ -17501,7 +17517,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       for (const ev of (d.eventos || [])) {
         _rmProcesarEvento(ev);
       }
-    } catch {}
+    } catch (e) { console.error('[rm] poll eventos falló:', e?.message || e); }
   }
 
   function _rmProcesarEvento(ev) {
@@ -17648,6 +17664,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // Exponer
   window.rmIniciarSync = rmIniciarSync;
   window.rmDetenerSync = rmDetenerSync;
+  window.rmReconectarSync = rmReconectarSync;
 })();
 
 // ── CHECKLIST PRE-USO EQUIPOS (NEW-21) ───────────────────────────────────────
