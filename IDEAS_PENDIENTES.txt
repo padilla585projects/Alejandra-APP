@@ -51,10 +51,37 @@ LEYENDA DE ESTADO:
     · Decisión de Adrián (23/07/2026): confirmar primero con Alberto si tenía la app
       abierta/pantalla encendida en ese momento y si le salió algún error, antes de decidir
       si hace falta implementar un aviso push real para "despertar" el escaneo remoto.
-    · Si se confirma esta causa, el fix propuesto es: al pedir un escaneo desde Office, enviar
-      también una notificación push nativa (como ya existe para el chat de Alejandra IA) que
-      abra directamente el flujo de escaneo en el móvil aunque esté en segundo plano — cambio
-      en worker.js (o alejandra-agente/worker.js, a decidir cuál) + sw.js + index.html.
+    · ACTUALIZACIÓN 23/07/2026 (misma sesión): Adrián confirmó que Alberto SÍ tenía la app
+      abierta y aun así Office decía "Sin móvil conectado" — descarta (al menos como única
+      causa) la hipótesis de "app en segundo plano". Se consultó D1 de producción en directo:
+        - Tabla `sync_eventos`: 0 filas en TODO el histórico — nunca se llegó a enviar ni un
+          solo `scan_request`. Esto confirma que el fallo ocurre ANTES de pulsar "Escanear"
+          en Office, en el propio chequeo de "¿hay móvil conectado?" (rsAbrirScanModal en
+          panel.html, que bloquea con toast si `_rsDispositivos` no trae ningún tipo='app').
+        - Tabla `sync_dispositivos`: el último ping de un móvil de Alberto (usuario_id=46,
+          "Alberto Martínez") es del 18/07 — 5 días antes del intento reportado, no de ese
+          mismo momento. Hay otro usuario "Alberto" (usuario_id=51) con último ping del
+          29/06, aún más viejo. O sea: cuando probaron, el ping del móvil de Alberto NO
+          llegó al servidor (o no se guardó), a pesar de -según Adrián- tener la app abierta.
+        - Los 3 puntos de fetch implicados (`_rmHacerPing`/`_rmPollEventos` en index.html,
+          `_rsHacerPing`/`_rsPollEventos` en panel.html) usan `catch {}` vacío — CUALQUIER
+          fallo (token inválido, red, CORS, excepción del backend) se traga en silencio, sin
+          log ni aviso visible. Esto hace imposible diagnosticar a distancia cuál de las
+          causas es sin una prueba en vivo.
+    · PRÓXIMO PASO ACORDADO: hacer una prueba en vivo (Alberto abre la app y la deja en
+      primer plano mientras se consulta `sync_dispositivos` en D1 en tiempo real via
+      `npx wrangler d1 execute alejandra-db --remote`) para ver si el ping llega o no.
+      Si NO llega → problema del lado del móvil (sesión/token/red). Si llega pero Office no
+      lo detecta → bug del lado de Office (el polling de `_rsDispositivos`, o el filtro
+      `empresa_id`/`usuario_id` de `syncPing`/`GET /sync/eventos`). Sesión pausada aquí,
+      pendiente de retomar con Adrián y Alberto disponibles a la vez.
+    · Si se confirma la causa, el fix propuesto sigue siendo: al pedir un escaneo desde
+      Office, enviar también una notificación push nativa (como ya existe para el chat de
+      Alejandra IA) que abra directamente el flujo de escaneo en el móvil aunque esté en
+      segundo plano — cambio en worker.js (o alejandra-agente/worker.js, a decidir cuál) +
+      sw.js + index.html. Además, sería sensato añadir logging mínimo (console.error) en los
+      3 puntos con catch{} vacío mencionados arriba, para que la próxima vez se pueda
+      diagnosticar sin necesidad de consultar D1 a mano.
     · Reportado: 23/07/2026 — Adrián
 
 [✓] BUG-SIDEBAR-OBRA — Sección "Obra" del panel arrancaba colapsada, ocultando "Pedidos"  [HECHO v8.02]
