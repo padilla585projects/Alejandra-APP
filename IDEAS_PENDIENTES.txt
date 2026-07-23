@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 23/07/2026 — BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores) + PENDIENTE-SCAN-MOVIL (escaneo remoto no funcionó para Alberto, pendiente de confirmar causa). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 23/07/2026 — PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -35,7 +35,7 @@ LEYENDA DE ESTADO:
     · Sin cambios en worker.js — los 3 endpoints PUT ya aceptaban "estado" genéricamente.
     · Reportado y resuelto: 23/07/2026 — Adrián
 
-[ ] PENDIENTE-SCAN-MOVIL — Escaneo remoto desde el móvil no funcionó (Alberto)
+[✓] PENDIENTE-SCAN-MOVIL — Escaneo remoto desde el móvil no funcionó (Alberto)  [HECHO v8.04]
     · Adrián reportó: "no ha funcionado que alberto pueda escanear con el móvil desde
       alejandra office,que esa funcion se implemento hace tiempo".
     · Investigado: la función SÍ existe y está bien conectada — panel.html (FAB "escanear
@@ -82,7 +82,40 @@ LEYENDA DE ESTADO:
       sw.js + index.html. Además, sería sensato añadir logging mínimo (console.error) en los
       3 puntos con catch{} vacío mencionados arriba, para que la próxima vez se pueda
       diagnosticar sin necesidad de consultar D1 a mano.
-    · Reportado: 23/07/2026 — Adrián
+    · CAUSA RAÍZ CONFIRMADA (23/07/2026, misma sesión, prueba en vivo real): con permiso de
+      Adrián, se usó el HTC U11 real de Alberto (abierto vía ADB `am start`, con su sesión ya
+      logueada) + Chrome DevTools Protocol (vía `adb forward` al puerto de depuración remota)
+      para observar la app en vivo SIN modificar su sesión al principio:
+        - Un ping manual (mismo fetch que hace _rmHacerPing) funcionó al instante (200 OK,
+          token válido, red/CORS correctos) y actualizó sync_dispositivos en el momento.
+        - Pero el ping AUTOMÁTICO (el setInterval de 30s que debería estar corriendo solo
+          desde que se abrió la app) llevaba parado sin repetirse ni una sola vez durante
+          los ~11 minutos previos, con la app visiblemente abierta y en primer plano
+          (document.visibilityState:'visible', hidden:false).
+        - Al forzar `window.rmIniciarSync()` a mano (con autorización expresa de Adrián:
+          "usemos el movil de alberto no pasa nada"), el ping volvió a repetirse solo cada
+          30s sin problema durante los minutos siguientes.
+        - Conclusión: `rmIniciarSync()` se llama correctamente al arrancar la app
+          (iniciarApp(), línea ~5482), pero si Android/Chrome congela o mata el setInterval
+          mientras la app pasa un rato en segundo plano (ahorro de batería), al volver a
+          primer plano NO se re-ejecuta iniciarApp() (no hay recarga completa) — así que el
+          ping quedaba muerto para siempre aunque Alberto viera la app abierta y usable.
+          El listener existente de `visibilitychange` (_onAppVisible) solo refrescaba datos
+          de pantalla/badges, nunca reenganchaba el ciclo de sync remoto.
+        - Nota aparte: se detectó que "Alberto Martínez" (usuario_id=46) y "Alberto"
+          (usuario_id=51) son la MISMA persona con dos cuentas duplicadas en el sistema —
+          no es la causa del bug, pero convendría unificarlas en otro momento (limpieza de
+          datos, no urgente).
+    · FIX APLICADO (v8.04, index.html): nueva función `rmReconectarSync()` en el IIFE de
+      escaneo remoto (para/reinicia el ciclo de ping+poll sin fiarse de si el intervalo
+      "parece" seguir vivo); se llama desde `_onAppVisible` en cada vuelta a primer plano,
+      así que aunque el setInterval haya muerto en segundo plano, se reengancha solo al
+      volver a abrir/mirar la app. Además se añadió `console.error` (sin exponer tokens) en
+      los catch vacíos de `_rmHacerPing`/`_rmPollEventos` para diagnosticar futuros fallos
+      sin necesitar todo este proceso de ADB/CDP.
+    · Pendiente de verificar con Alberto en un uso real (no solo la prueba técnica) que
+      Office ya lo detecta como conectado tras este fix.
+    · Reportado: 23/07/2026 — Adrián. Resuelto: 23/07/2026 — misma sesión.
 
 [✓] BUG-SIDEBAR-OBRA — Sección "Obra" del panel arrancaba colapsada, ocultando "Pedidos"  [HECHO v8.02]
     · Adrián reportó "no encuentro la sección de pedidos de material en alejandra office".
