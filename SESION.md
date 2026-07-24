@@ -2,10 +2,10 @@
 
 **Sesion:** EN CURSO
 **Fecha:** 24/07/2026 -- Ajuste DEPT-02: Inventario de Seguridad no debe aparecer en el menú de Electricidad. Principio confirmado: primero cada departamento ve lo suyo; después se revisan los roles con vista ampliada.
-**Versión actual:** v8.15 (version.json/sw.js/index.html sincronizados)
+**Versión actual:** v8.16 (version.json/sw.js/index.html sincronizados)
 **Resumen:** Part 46 fija el principio de visibilidad por departamento: Electricidad no ve inventario de Seguridad. Después se revisarán los roles con vista ampliada.
 
-### Part 46: Inventario de Seguridad aislado por departamento (24/07/2026) [EN CURSO, v8.15]
+### Part 46: Inventario de Seguridad aislado por departamento (24/07/2026) [EN CURSO, v8.16]
 
 **Decisión de producto:** antes de definir qué roles ven más, cada departamento debe ver exclusivamente sus propios módulos. Se detectó que el botón “Seguridad” dentro de Material y maquinaria era inventario/EPI del departamento de Seguridad, pero aparecía a Alberto (Encargado eléctrico).
 

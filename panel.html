@@ -9941,8 +9941,11 @@ function ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin) {
 // DEPT-02 (24/07/2026): el inventario de Seguridad (EPIs y material de ese
 // departamento) no forma parte del trabajo de Electricidad, Mecánicas u otros
 // oficios. Los administradores y el departamento de Seguridad sí lo conservan.
-function mostrarInventarioSeguridadSiAplica(deptActual, isAdmin) {
-  if (!isAdmin && deptActual !== 'seguridad') return;
+function mostrarInventarioSeguridadSiAplica(deptActual) {
+  // Para esta vista cuenta el rol activo, no roles extra conservados en la
+  // cuenta. La ampliación de accesos para roles mixtos se decidirá aparte.
+  const esAdminActivo = ['superadmin', 'empresa_admin', 'desarrollador'].includes(SESSION?.rol);
+  if (!esAdminActivo && deptActual !== 'seguridad') return;
   document.querySelectorAll('.nav-inventario-seguridad').forEach(el => {
     el.style.display = '';
     el.removeAttribute('data-hidden-by-perms');
@@ -10009,7 +10012,7 @@ function iniciarApp() {
   if (isAdmin || deptActual === 'electrico') {
     document.querySelectorAll('.nav-electrico-section').forEach(el => el.style.display = '');
   }
-  mostrarInventarioSeguridadSiAplica(deptActual, isAdmin);
+  mostrarInventarioSeguridadSiAplica(deptActual);
 
   // CONSTR-01 (24/07/2026): la sección "Construcción" (RFIs, calidad, actas...)
   // es coordinación técnica de obra civil; para electricistas/mecánicos el
@@ -10139,7 +10142,7 @@ function ocultarSidebarPorPermisos() {
       }
     }
     ocultarSeccionConstruccionSiNoAplica(SESSION.departamento || 'electrico', isAdmin);
-    mostrarInventarioSeguridadSiAplica(SESSION.departamento || 'electrico', isAdmin);
+    mostrarInventarioSeguridadSiAplica(SESSION.departamento || 'electrico');
     ocultarItemsPorOficio();
     organizarSidebarEncargado();
   } catch (e) {
