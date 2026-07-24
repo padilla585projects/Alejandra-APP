@@ -1,7 +1,7 @@
 ## ESTADO ACTUAL
 
-**Sesion:** EN CURSO
-**Fecha:** 24/07/2026 -- ROLES-02 iniciado: estructura futura de Project Manager, Jefe de obra multiobra, Encargado, Oficial, Almacenero e Ingeniería. Desarrollador conserva acceso total. No hay cuentas nuevas aún.
+**Sesion:** LIBRE
+**Fecha:** 24/07/2026 -- ROLES-02 completado v8.17: roles acumulables, Office por rol Oficina y obras múltiples para Project Manager/Jefe de obra. Siguiente: crear cuentas futuras y revisar Ingeniería.
 **Versión actual:** v8.16 (version.json/sw.js/index.html sincronizados)
 **Resumen:** Part 46 fija el principio de visibilidad por departamento: Electricidad no ve inventario de Seguridad. Después se revisarán los roles con vista ampliada.
 

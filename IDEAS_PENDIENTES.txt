@@ -22,6 +22,10 @@
     · Validado con Alberto: los roles extra no reabren el acceso mientras su rol activo
       es Encargado.
 
+[✓ HECHO v8.17] ROLES-02 — Roles acumulables y varias obras
+    · Office solo con rol acumulado Oficina; Desarrollador/Superadmin total.
+    · Project Manager y Jefe de obra admiten varias obras asignadas.
+
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
 ================================================================================
