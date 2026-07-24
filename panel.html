@@ -19213,11 +19213,68 @@ async function cargarPartesPanel() {
       { title: 'Personal', field: 'personal', width: 100, hozAlign: 'center', formatter: (cell) => {
         try { return (JSON.parse(cell.getValue()||'[]').filter(x=>x.nombre).length) + ' pers.'; } catch { return '—'; }
       }},
+      // PARTES-01 (24/07/2026): la tabla era de solo lectura — no había forma de abrir un
+      // parte, ni de ver personal/material/firmas, ni de borrarlo desde oficina.
+      { title: 'Acciones', field: 'id', width: 130, hozAlign: 'center', headerSort: false, formatter: cell => {
+          const id = cell.getRow().getData().id;
+          return `<div style="display:flex;gap:6px;justify-content:center">
+            <button onclick="parteVerPanel(${id})" class="btn btn-secondary btn-sm" title="Ver parte">👁</button>
+            <button onclick="parteBorrarPanel(${id})" class="btn btn-danger btn-sm" title="Borrar parte">🗑</button>
+          </div>`;
+        }
+      },
     ]
   });
   document.getElementById('searchPartes')?.addEventListener('input', (e) => {
-    if (tblPartes) tblPartes.setFilter([{field:'descripcion',type:'like',value:e.target.value},{field:'obra',type:'like',value:e.target.value}]);
+    // PARTES-01: un array plano de filtros en Tabulator se combina con AND, así que el
+    // buscador solo encontraba filas cuya descripción Y obra contuvieran el texto — es
+    // decir, casi nada. El array anidado es el OR.
+    if (tblPartes) tblPartes.setFilter([[
+      {field:'descripcion', type:'like', value:e.target.value},
+      {field:'obra',        type:'like', value:e.target.value},
+      {field:'fecha',       type:'like', value:e.target.value},
+    ]]);
   });
+}
+
+// PARTES-01: detalle completo de un parte desde oficina (personal, material y firmas, que
+// hasta ahora solo eran visibles imprimiendo desde el móvil).
+async function parteVerPanel(id) {
+  const p = await api(`/partes-trabajo/${id}`);
+  if (!p || p.error) { toast('Error al cargar el parte', 'error'); return; }
+  const jsonSeguro = (v) => { try { const a = JSON.parse(v||'[]'); return Array.isArray(a)?a:[]; } catch { return []; } };
+  const pers = jsonSeguro(p.personal).filter(r => r.horas || r.nombre);
+  const mat  = jsonSeguro(p.material).filter(r => r.uds  || r.material);
+  const campo = (etiq, val) => val ? `<div style="margin-bottom:10px"><div class="form-label">${etiq}</div><div style="white-space:pre-wrap">${escHtml(String(val))}</div></div>` : '';
+  const tabla = (titulo, filas, c1, c2) => filas.length ? `
+    <div style="margin-bottom:14px"><div class="form-label">${titulo}</div>
+      <table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        ${filas.map(r => `<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px;width:80px;opacity:.7">${escHtml(String(r[c1]||''))}</td><td style="padding:4px 8px">${escHtml(String(r[c2]||''))}</td></tr>`).join('')}
+      </table></div>` : '';
+  const firma = (etiq, src) => src ? `<div><div class="form-label">${etiq}</div><img src="${escHtml(src)}" style="width:100%;border:1px solid var(--border);border-radius:8px;background:#fff"></div>` : '';
+  const html = `
+    ${campo('Fecha', fmtFecha(p.fecha))}
+    ${campo('Cliente', p.cliente)}
+    ${campo('Encargado', p.nombre_encargado)}
+    ${campo('Dirección', p.direccion)}
+    ${campo('Obra', p.obra)}
+    ${campo('Descripción de trabajos', p.descripcion)}
+    ${tabla('Personal', pers, 'horas', 'nombre')}
+    ${tabla('Material', mat, 'uds', 'material')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px">
+      ${firma('Firma cliente', p.firma_cliente)}
+      ${firma('Firma responsable', p.firma_responsable)}
+    </div>
+    <div style="font-size:12px;opacity:.7">Creado por ${escHtml(p.creado_por||'—')}${p.created_at?' el '+escHtml(p.created_at.slice(0,16)):''}
+    ${p.updated_at?`<br>✏️ Modificado ${escHtml(p.updated_at.slice(0,16))}${p.modificado_por?' por '+escHtml(p.modificado_por):''}`:''}</div>`;
+  abrirModal(`📋 Parte de trabajo — ${fmtFecha(p.fecha)}`, html);
+}
+
+async function parteBorrarPanel(id) {
+  if (!confirm('¿Borrar este parte de trabajo?')) return;
+  const r = await api(`/partes-trabajo/${id}`, { method: 'DELETE' });
+  if (r && !r.error) { toast('Parte borrado'); tblPartes = null; cargarPartesPanel(); }
+  else toast('Error al borrar', 'error');
 }
 
 // ── CORRESPONDENCIA DE OBRA ──────────────────────────────────────

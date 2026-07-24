@@ -1,9 +1,49 @@
 ## ESTADO ACTUAL
 
-**Sesion:** EN CURSO
-**Fecha:** 24/07/2026 -- Unificación de cuentas duplicadas de Alberto (COMPLETADO) + pendiente: sugerencia #208 (Partes de trabajo)
-**Versión actual:** v8.09 (version.json/sw.js/index.html sincronizados — sin cambio de versión, la unificación es solo datos)
-**Resumen:** Sesión de limpieza de datos y revisión del log de sugerencias. (1) Unificadas las cuentas duplicadas de Alberto en D1 producción, cuenta canónica id=46 con email y contraseña intactos y acceso a Office ya funcional (ver Part 40). (2) Revisado el log de sugerencias: solo queda pendiente la #208, reportada por Adrián el 24/07 — botones que no funcionan en Partes de trabajo y partes que no se pueden volver a ver ni modificar tras guardarlos. Siguiente paso de la sesión.
+**Sesion:** LIBRE
+**Fecha:** 24/07/2026 -- Unificación de cuentas de Alberto + Partes de trabajo arreglado y completado (sugerencia #208) — COMPLETADO
+**Versión actual:** v8.10 (version.json/sw.js/index.html sincronizados)
+**Resumen:** (1) Unificadas las cuentas duplicadas de Alberto en D1 producción, cuenta canónica id=46 con email y contraseña intactos y acceso a Office ya funcional (Part 40). (2) Resuelta la sugerencia #208: las tablas Personal y Material del parte eran inservibles (ReferenceError silencioso en todos sus botones y oninput, así que además todos los partes se guardaban con esas dos tablas vacías), y no existía forma de ver ni editar un parte guardado (faltaba el endpoint PUT en la API). Añadidos ver detalle en app y panel, edición con trazabilidad, y acceso para encargados —que hasta ahora recibían 403 en todo el módulo— con el aislamiento por departamento de DEPT-01 (Part 41).
+
+### Part 41: Partes de trabajo — botones rotos, ver/editar y permisos (24/07/2026) [COMPLETADO, v8.10]
+
+**Contexto:** Adrián pidió revisar el log de sugerencias de la app. La única pendiente era la #208 (24/07/2026, obra CPD Getafe): *"En la sección partes de trabajos ahí botones que no funcionan.cuandi guardas el parte no se puede volver a ver ni a modificar"*. Alcance confirmado vía AskUserQuestion: hacerlo todo (arreglar + ver + editar + permisos), con los partes firmados editables pero dejando rastro.
+
+**Diagnóstico 1 — los botones rotos (causa raíz):** `_partePersonal` y `_parteMaterial` se declaran con `let` en `index.html` (~13309), dentro del bloque `if ('serviceWorker' in navigator) {` que abre en ~12135 y cierra en ~17227 (verificado: ningún cierre en columna 0 entre medias). Los botones y los `oninput` de esas dos tablas manipulaban los arrays desde atributos inline, que se evalúan en ámbito **global**, donde esas variables no existen — `ReferenceError` silencioso en cada pulsación. Todas las funciones del módulo sí se re-exportaban a `window` (13515-13524); los dos arrays nunca. **El daño real no eran los botones sino los `oninput`:** lo tecleado en Personal y Material jamás llegaba al array, así que `parteGuardar` enviaba siempre `personal: []` y `material: []`. Es la misma familia que BOTONES-01, pero por scope en vez de por colisión de nombres.
+
+**Diagnóstico 2 — no se puede ver ni editar:** no era un fallo sino funcionalidad inexistente. En la app un parte guardado solo permitía imprimir (ventana nueva) o borrar; en el panel la tabla era de solo lectura, sin ver/editar/borrar, con personal y material reducidos a un recuento y las firmas inaccesibles. Y en `worker.js` no había `PUT`/`PATCH` para partes: un parte guardado era **inmodificable desde cualquier cliente**.
+
+**Diagnóstico 3 (hallazgo lateral) — permisos:** los 4 endpoints exigían `isAdmin || isSuperadmin || isEmpresaAdmin`. En `getPartesTrabajo` incluso se desestructuraba `isEncargado` sin usarlo, señal de permiso a medias. Es decir: el encargado —justo quien rellena los partes en obra— recibía **403 en todo el módulo**.
+
+**Cambios en `worker.js`:**
+- Nuevo helper `puedeGestionarPartes(auth)` (superadmin/empresa_admin/admin/encargado/jefe_de_obra/oficina/desarrollador; operario fuera a propósito), aplicado a los 4 handlers.
+- Nuevo `PUT`/`PATCH /partes-trabajo/:id` → `actualizarParteTrabajo`, que solo toca los campos presentes en el body (así el panel puede editar sin borrar las firmas que solo captura la app) y sella `updated_at`/`modificado_por`.
+- Nuevas columnas `updated_at` y `modificado_por` en `partes_trabajo`: añadidas al `CREATE TABLE` de la migración, al endpoint de migración, y de forma perezosa vía `ensurePartesTrabajoCols`. Aplicadas también a mano en D1 producción.
+- **DEPT-01 aplicado a los 4 endpoints**: al abrir el módulo a encargado/jefe_de_obra/oficina había que aislar por departamento, o un encargado de eléctrico pasaría a ver (y editar y borrar) los partes de mecánicas. Se filtra en el listado y se comprueba en detalle/edición/borrado, incluyendo los partes sin departamento por compatibilidad. Sin esto, arreglar los permisos habría abierto una fuga entre departamentos.
+
+**Cambios en `index.html` (v8.10):**
+- Los `onclick`/`oninput` de Personal y Material pasan por funciones exportadas (`parteAddPersonal`, `parteDelPersonal`, `parteSetPersonal` y sus gemelas de material) en vez de tocar los arrays. Se exportan funciones y **no** los arrays a propósito: `parteNuevo`/`parteEditar` los reasignan, y una referencia global al array viejo quedaría desincronizada.
+- Nueva pantalla `screenPartesDetalle` + `parteVer(id)`/`parteRenderDetalle(p)`: muestra fecha, cliente, encargado, dirección, obra, descripción, tablas de personal y material, ambas firmas y la trazabilidad de creación/modificación.
+- Edición: `_parteEditId`, `parteEditar(p)` (rellena el formulario y repinta las firmas guardadas en el canvas), título del formulario dinámico, y `parteGuardar` haciendo `PUT` en vez de `POST` cuando se edita. Un canvas vacío al editar significa "no he vuelto a firmar", no "borra la firma".
+- Lista: botón 👁 Ver, tarjeta clicable, aviso de "modificado por", `esc()` en todo lo interpolado (antes se metía `descripcion`/`obra` sin escapar) y `_parteJSON()` tolerante en vez de `JSON.parse` suelto, que rompía la lista entera con un solo registro corrupto.
+- `parteBorrar` sale de la pantalla de detalle en vez de recargar una lista que no está visible, y `parteGuardar` muestra el error real del worker en vez de un mensaje genérico.
+
+**Cambios en `panel.html`:**
+- Columna "Acciones" en la tabla de partes con 👁 ver y 🗑 borrar (`btn btn-secondary/danger btn-sm`, idioma del archivo).
+- `parteVerPanel(id)`: modal con el parte completo, incluidas firmas y trazabilidad — hasta ahora esa información solo era visible imprimiendo desde el móvil. `parteBorrarPanel(id)`.
+- Buscador arreglado: `setFilter` con array plano combina con **AND**, así que solo encontraba filas cuya descripción *y* obra contuvieran el texto (o sea, casi nada). Cambiado a array anidado (OR) y añadida la fecha, que el placeholder ya prometía.
+- Se usaron los helpers reales del archivo tras comprobarlos uno a uno: `escHtml` (no existe `escapeHtml`), `abrirModal`, `fmtFecha`, `toast`. Verificado que ninguna función nueva está duplicada (BOTONES-01).
+
+**Sin cambios en `alejandra-agente/worker.js`:** revisado a propósito según la regla "UNA Alejandra, DOS cerebros". Es una feature de negocio y un permiso de gestión, no una barrera destructiva ni una tool del agente; el otro cerebro no expone partes de trabajo.
+
+**Verificación:** `node --check worker.js` OK; los 3 bloques `<script>` de `index.html` y los 3 de `panel.html` verificados con `new Function(...)`, sin errores; versiones sincronizadas v8.10; sin corrupción de encoding en el diff; `npx wrangler deploy` con bindings D1 y R2 OK. **Probado en navegador real** (servidor estático local, sin necesidad de login): pulsando los botones reales, "+ Añadir" pasa de 1 a 3 filas, la "×" borra, y lo tecleado llega al array — `parteGuardar` envía `personal:[{horas:"8h",nombre:"Alberto"}]` y `material:[{uds:"25",material:"Cable 3x2.5"}]` donde antes iba vacío, con cero errores en consola. El flujo ver → editar → guardar abre el detalle con personal y material, carga el formulario con título "Editar parte" y las 2 filas, y guarda con **PUT** conservando el personal. En el panel, `parteVerPanel` abre el modal con todos los campos. En producción, `PUT`/`PATCH /partes-trabajo/:id` responden 403 sin credenciales donde antes daban 404 (la ruta existe y está protegida).
+
+**Pendiente relacionado:**
+- Probar el ciclo completo en producción con una cuenta real de encargado (Alberto) ahora que ya no recibe 403: crear un parte con personal y material, reabrirlo, editarlo y comprobar que la trazabilidad queda registrada.
+- La edición vive en la app; el panel de oficina permite ver, imprimir y borrar pero no editar (haría falta construir allí el formulario completo). Decidir si merece la pena.
+- `GET /partes-trabajo` sigue con `LIMIT 100` sin paginación: con el tiempo el panel dejará de ver los partes antiguos.
+- La tabla `partes_trabajo` no tiene índices ni FKs y no está en `schema_completo.sql`.
+- `/partes-maquinaria` (módulo distinto, NEW-89) no comprueba rol en ninguno de sus 4 handlers: cualquier usuario autenticado puede crear, editar y borrar partes de maquinaria de su empresa. No tocado en esta sesión por estar fuera de alcance.
 
 ### Part 40: Unificación de cuentas duplicadas de Alberto (24/07/2026) [COMPLETADO]
 

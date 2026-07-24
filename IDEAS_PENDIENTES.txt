@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/07/2026 — DATA-ALBERTO resuelto (solo datos, sin cambio de versión): unificadas las cuentas duplicadas de Alberto en D1 producción (ver sección de errores). Antes: PEDIDOS-02 resuelto (v8.09): fix permiso cambio de estado en Pedidos, ahora jefe_de_obra/oficina/desarrollador también pueden (ver sección de errores). Antes: CONSTR-01 + PEDIDOS-01 resueltos (v8.08): sección "Construcción" oculta para electrico/mecanicas (ver sección de errores) + Pedidos promovido a sección propia + envío por email + export Excel (ver sección de mejoras). Antes: BUG-HEADER-MOVIL-v2 + BUG-BUSQUEDA-BOBINAS resueltos (v8.07): header rediseñado con clamp() fluido (ver sección de errores) y bobinas añadida a la búsqueda global. Antes: ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 24/07/2026 — PARTES-01 resuelto (v8.10): sugerencia #208, botones muertos en las tablas Personal/Material (que además hacían que los partes se guardaran vacíos) + ver y editar partes guardados + acceso para encargados con aislamiento por departamento (ver sección de errores). Antes: DATA-ALBERTO resuelto (solo datos, sin cambio de versión): unificadas las cuentas duplicadas de Alberto en D1 producción (ver sección de errores). Antes: PEDIDOS-02 resuelto (v8.09): fix permiso cambio de estado en Pedidos, ahora jefe_de_obra/oficina/desarrollador también pueden (ver sección de errores). Antes: CONSTR-01 + PEDIDOS-01 resueltos (v8.08): sección "Construcción" oculta para electrico/mecanicas (ver sección de errores) + Pedidos promovido a sección propia + envío por email + export Excel (ver sección de mejoras). Antes: BUG-HEADER-MOVIL-v2 + BUG-BUSQUEDA-BOBINAS resueltos (v8.07): header rediseñado con clamp() fluido (ver sección de errores) y bobinas añadida a la búsqueda global. Antes: ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -15,6 +15,48 @@ LEYENDA DE ESTADO:
 ================================================================================
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
+
+[✓] PARTES-01 — Partes de trabajo: botones muertos, sin ver ni editar, y 403 para encargados
+    [HECHO v8.10]  (sugerencia #208 del log de la app)
+    · Adrián, sugerencia #208 (24/07/2026, CPD Getafe): "En la sección partes de trabajos ahí
+      botones que no funcionan.cuandi guardas el parte no se puede volver a ver ni a modificar".
+    · CAUSA RAÍZ (botones): _partePersonal/_parteMaterial se declaran con `let` en index.html
+      (~13309), dentro del bloque `if ('serviceWorker' in navigator)` que abre en ~12135 y
+      cierra en ~17227. Los botones "+ Añadir", las "×" y los `oninput` de esas tablas tocaban
+      los arrays desde atributos inline, que se evalúan en ámbito GLOBAL → ReferenceError
+      silencioso en cada pulsación. Las funciones del módulo sí se exportaban a window
+      (13515-13524); los dos arrays nunca. Misma familia que BOTONES-01 pero por scope.
+    · LO GRAVE no eran los botones sino los `oninput`: lo tecleado en Personal y Material nunca
+      llegaba al array, así que TODOS los partes se guardaban con esas dos tablas vacías.
+    · Segunda mitad del reporte: ver/editar no estaba roto, no existía. En la app un parte
+      guardado solo se podía imprimir o borrar; en el panel la tabla era de solo lectura; y en
+      worker.js no había PUT/PATCH, así que un parte era inmodificable desde cualquier cliente.
+    · Hallazgo lateral: los 4 endpoints exigían admin (en getPartesTrabajo se desestructuraba
+      `isEncargado` sin usarlo), así que el encargado —quien rellena los partes en obra—
+      recibía 403 en todo el módulo.
+    · Fix worker.js: helper puedeGestionarPartes() aplicado a los 4 handlers (superadmin/
+      empresa_admin/admin/encargado/jefe_de_obra/oficina/desarrollador; operario fuera), nuevo
+      PUT/PATCH /partes-trabajo/:id con actualización parcial por campos presentes, columnas
+      updated_at/modificado_por (migración + ensurePartesTrabajoCols + ALTER en producción), y
+      DEPT-01 aplicado a listado/detalle/edición/borrado — sin esto, ampliar el permiso habría
+      dejado a un encargado de eléctrico ver y borrar los partes de mecánicas.
+    · Fix index.html: handlers enrutados por funciones exportadas (parteAdd/Del/SetPersonal y
+      gemelas de material) en vez de exponer los arrays (parteNuevo/parteEditar los reasignan);
+      nueva pantalla screenPartesDetalle con parteVer()/parteRenderDetalle() incluidas firmas;
+      edición completa (_parteEditId, parteEditar, PUT al guardar, firmas repintadas en canvas
+      y conservadas si no se vuelve a firmar); esc() en la lista y _parteJSON() tolerante.
+    · Fix panel.html: columna Acciones (ver/borrar), modal de detalle completo con firmas y
+      trazabilidad, y buscador arreglado (setFilter con array plano combina con AND, así que
+      casi nunca encontraba nada → array anidado = OR, y añadida la fecha).
+    · Verificado en navegador real sin login: "+ Añadir" 1→3 filas, "×" borra, y parteGuardar
+      envía personal/material con datos donde antes iban vacíos; ver→editar→guardar usa PUT.
+    · Reportado: 24/07/2026 — Adrián (sugerencia #208). Resuelto: 24/07/2026.
+    · Pendiente derivado: /partes-maquinaria (NEW-89, módulo distinto) NO comprueba rol en sus
+      4 handlers — cualquier usuario autenticado puede crear/editar/borrar partes de maquinaria
+      de su empresa. Fuera de alcance de esta sesión, pero conviene revisarlo.
+    · Pendiente derivado: GET /partes-trabajo sigue con LIMIT 100 sin paginación; la tabla no
+      tiene índices ni FKs y no está en schema_completo.sql; el panel permite ver/imprimir/
+      borrar pero no editar (la edición vive en la app).
 
 [✓] DATA-ALBERTO — Cuentas duplicadas de Alberto unificadas  [HECHO 24/07/2026, solo datos]
     · Pendiente arrastrado desde Part 35 (PENDIENTE-SCAN-MOVIL): se detectó que "Alberto

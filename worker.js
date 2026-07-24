@@ -5348,6 +5348,7 @@ export default {
       if (path.startsWith('/partes-trabajo/')) {
         const _ptid = parseInt(path.split('/partes-trabajo/')[1]);
         if (method === 'GET')    return await getParteTrabajo(_ptid, request, env);
+        if (method === 'PUT' || method === 'PATCH') return await actualizarParteTrabajo(_ptid, request, env);
         if (method === 'DELETE') return await eliminarParteTrabajo(_ptid, request, env);
       }
       // ── Hitos de obra (NEW-39) ──────────────────────────────────────────────
@@ -12691,10 +12692,18 @@ async function runMigrations(request, env) {
       firma_responsable TEXT,
       departamento      TEXT,
       creado_por        TEXT,
-      created_at        TEXT DEFAULT (datetime('now'))
+      created_at        TEXT DEFAULT (datetime('now')),
+      updated_at        TEXT,
+      modificado_por    TEXT
     )`).run();
     results.push('partes_trabajo: creada');
   } catch(e) { results.push('partes_trabajo: ' + e.message); }
+  // PARTES-01: columnas de trazabilidad para tablas ya existentes (el CREATE de arriba solo
+  // aplica a instalaciones nuevas). Ver también ensurePartesTrabajoCols.
+  try { await env.DB.prepare('ALTER TABLE partes_trabajo ADD COLUMN updated_at TEXT').run(); results.push('partes_trabajo.updated_at: añadida'); }
+  catch { results.push('partes_trabajo.updated_at: ya existe'); }
+  try { await env.DB.prepare('ALTER TABLE partes_trabajo ADD COLUMN modificado_por TEXT').run(); results.push('partes_trabajo.modificado_por: añadida'); }
+  catch { results.push('partes_trabajo.modificado_por: ya existe'); }
   // Seguridad: expiración de sesiones (CRIT-3)
   try {
     await env.DB.prepare('ALTER TABLE sesiones ADD COLUMN expires_at TEXT').run();
@@ -12836,32 +12845,71 @@ async function runMigrations(request, env) {
 // PARTES DE TRABAJO (NEW-16)
 // ══════════════════════════════════════════════════════════════════════════════
 
+// PARTES-01 (24/07/2026): hasta ahora los 4 endpoints exigían isAdmin/isSuperadmin/
+// isEmpresaAdmin, así que el encargado —justo quien rellena los partes en obra desde la
+// app— recibía 403 en todo el módulo. En getPartesTrabajo incluso se desestructuraba
+// `isEncargado` sin llegar a usarlo, señal de que el permiso se quedó a medias. Se unifica
+// aquí el criterio para los 4 handlers, con el mismo set de roles de gestión que ya usan
+// Pedidos (PEDIDOS-02) y el canEdit de panel.html. El operario queda fuera a propósito.
+function puedeGestionarPartes(auth) {
+  return !!(auth.isAdmin || auth.isSuperadmin || auth.isEmpresaAdmin ||
+            auth.isEncargado || auth.isJefeObra || auth.isOficina || auth.isDesarrollador);
+}
+
+// PARTES-01: columnas de trazabilidad de edición. La tabla nació sin ellas porque no
+// existía endpoint de modificación (ver actualizarParteTrabajo). Se añaden de forma
+// perezosa, mismo patrón que ensureEscaneosRemotosTable, para no depender de correr la
+// migración a mano en producción.
+let _partesColsOk = false;
+async function ensurePartesTrabajoCols(env) {
+  if (_partesColsOk) return;
+  try { await env.DB.prepare('ALTER TABLE partes_trabajo ADD COLUMN updated_at TEXT').run(); } catch {}
+  try { await env.DB.prepare('ALTER TABLE partes_trabajo ADD COLUMN modificado_por TEXT').run(); } catch {}
+  _partesColsOk = true;
+}
+
 async function getPartesTrabajo(request, env) {
-  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
-  if (!isAdmin && !isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!puedeGestionarPartes(auth)) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   let sql = 'SELECT * FROM partes_trabajo WHERE empresa_id = ?';
   const params = [empresa_id];
   if (obra_id) { sql += ' AND obra_id = ?'; params.push(parseInt(obra_id)); }
+  // DEPT-01: al abrir el módulo a encargado/jefe_de_obra/oficina (PARTES-01) hay que aplicar
+  // el mismo aislamiento por departamento que el resto de tablas de obra; si no, un encargado
+  // de eléctrico pasaría a ver los partes de mecánicas. Se incluyen los partes sin
+  // departamento por compatibilidad con los creados antes de este criterio.
+  if (!isDeptPrivileged(auth) && auth.departamento) {
+    sql += " AND (departamento = ? OR departamento IS NULL OR departamento = '')";
+    params.push(auth.departamento);
+  }
   sql += ' ORDER BY fecha DESC, id DESC LIMIT 100';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
 }
 
 async function getParteTrabajo(id, request, env) {
-  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
-  if (!isAdmin && !isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!puedeGestionarPartes(auth)) return err('No autorizado', 403);
   const parte = await env.DB.prepare(
     'SELECT * FROM partes_trabajo WHERE id = ? AND empresa_id = ?'
   ).bind(id, empresa_id).first();
   if (!parte) return err('No encontrado', 404);
+  // DEPT-01: mismo aislamiento que en el listado — sin esto bastaría con adivinar un id
+  // para leer el parte de otro departamento, firmas incluidas.
+  if (!isDeptPrivileged(auth) && auth.departamento && parte.departamento && parte.departamento !== auth.departamento) {
+    return err('No encontrado', 404);
+  }
   return json(parte);
 }
 
 async function crearParteTrabajo(request, env) {
-  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin, nombre, obra_id: obraAuth, departamento } = await getAuth(request, env);
-  if (!isAdmin && !isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre, obra_id: obraAuth, departamento } = auth;
+  if (!puedeGestionarPartes(auth)) return err('No autorizado', 403);
   const body = await request.json();
   const ahora = new Date().toISOString().slice(0,19).replace('T',' ');
   const r = await env.DB.prepare(
@@ -12888,9 +12936,60 @@ async function crearParteTrabajo(request, env) {
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
+// PARTES-01: un parte guardado era inmodificable — no existía PUT/PATCH en la API, así que
+// ni la app ni el panel podían ofrecer edición (sugerencia #208 de Adrián: "cuandi guardas
+// el parte no se puede volver a ver ni a modificar"). Se permite editar también los partes
+// ya firmados, pero dejando rastro en updated_at/modificado_por (decisión de Adrián).
+async function actualizarParteTrabajo(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre } = auth;
+  if (!puedeGestionarPartes(auth)) return err('No autorizado', 403);
+  await ensurePartesTrabajoCols(env);
+  const actual = await env.DB.prepare(
+    'SELECT id, departamento FROM partes_trabajo WHERE id = ? AND empresa_id = ?'
+  ).bind(id, empresa_id).first();
+  if (!actual) return err('No encontrado', 404);
+  // DEPT-01: no se puede modificar un parte de otro departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento && actual.departamento && actual.departamento !== auth.departamento) {
+    return err('No encontrado', 404);
+  }
+  const body = await request.json();
+  const ahora = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  // Solo se tocan los campos presentes en el body: así el panel puede editar cuatro campos
+  // sin borrar las firmas que solo captura la app.
+  const campos = [];
+  const params = [];
+  const set = (col, val) => { campos.push(`${col} = ?`); params.push(val); };
+  if (body.fecha            !== undefined) set('fecha', body.fecha || '');
+  if (body.cliente          !== undefined) set('cliente', body.cliente || '');
+  if (body.nombre_encargado !== undefined) set('nombre_encargado', body.nombre_encargado || '');
+  if (body.direccion        !== undefined) set('direccion', body.direccion || '');
+  if (body.obra             !== undefined) set('obra', body.obra || '');
+  if (body.descripcion      !== undefined) set('descripcion', body.descripcion || '');
+  if (body.personal         !== undefined) set('personal', JSON.stringify(body.personal || []));
+  if (body.material         !== undefined) set('material', JSON.stringify(body.material || []));
+  if (body.firma_cliente    !== undefined) set('firma_cliente', body.firma_cliente || null);
+  if (body.firma_responsable!== undefined) set('firma_responsable', body.firma_responsable || null);
+  if (body.obra_id          !== undefined) set('obra_id', body.obra_id || null);
+  if (!campos.length) return err('Nada que actualizar', 400);
+  set('updated_at', ahora);
+  set('modificado_por', nombre || '');
+  params.push(id, empresa_id);
+  await env.DB.prepare(
+    `UPDATE partes_trabajo SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`
+  ).bind(...params).run();
+  return json({ ok: true, id });
+}
+
 async function eliminarParteTrabajo(id, request, env) {
-  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
-  if (!isAdmin && !isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!puedeGestionarPartes(auth)) return err('No autorizado', 403);
+  // DEPT-01: mismo aislamiento que en lectura y edición.
+  if (!isDeptPrivileged(auth) && auth.departamento) {
+    const p = await env.DB.prepare('SELECT departamento FROM partes_trabajo WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+    if (p && p.departamento && p.departamento !== auth.departamento) return err('No encontrado', 404);
+  }
   await env.DB.prepare('DELETE FROM partes_trabajo WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }

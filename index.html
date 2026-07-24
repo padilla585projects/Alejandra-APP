@@ -1174,7 +1174,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
   <div id="screenPartesForm" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);position:sticky;top:0;z-index:10;flex-shrink:0">
       <button onclick="navTo('partes')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0">← Volver</button>
-      <div style="flex:1;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Nuevo parte</div>
+      <div id="partesFormTitulo" style="flex:1;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Nuevo parte</div>
       <button onclick="parteGuardar()" style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer">💾 Guardar</button>
     </div>
     <div style="padding:16px;overflow-y:auto;flex:1;max-width:600px;width:100%">
@@ -1210,7 +1210,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       <div style="margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Personal</div>
-          <button onclick="_partePersonal.push({horas:'',nombre:''});parteRenderPersonal()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">+ Añadir</button>
+          <button onclick="parteAddPersonal()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">+ Añadir</button>
         </div>
         <table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden">
           <thead><tr style="background:var(--surface)">
@@ -1225,7 +1225,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       <div style="margin-bottom:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Material</div>
-          <button onclick="_parteMaterial.push({uds:'',material:''});parteRenderMaterial()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Añadir</button>
+          <button onclick="parteAddMaterial()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">+ Añadir</button>
         </div>
         <table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden">
           <thead><tr style="background:var(--surface)">
@@ -1250,6 +1250,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- DETALLE DE PARTE GUARDADO (PARTES-01) -->
+  <div id="screenPartesDetalle" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);position:sticky;top:0;z-index:10;flex-shrink:0">
+      <button onclick="navTo('partes')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0">← Volver</button>
+      <div style="flex:1;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Parte de trabajo</div>
+      <button onclick="parteEditarActual()" style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer">✏️ Editar</button>
+    </div>
+    <div id="screenPartesDetalleBody" style="padding:16px;overflow-y:auto;flex:1;max-width:600px;width:100%"></div>
   </div>
 
   <!-- INCIDENCIAS (NEW-22) -->
@@ -11982,7 +11992,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.09';
+const APP_VERSION = '8.10';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13308,6 +13318,25 @@ if ('serviceWorker' in navigator) {
   // ══════════════════════════════════════════════════════
   let _partePersonal = [{horas:'',nombre:''}];
   let _parteMaterial = [{uds:'',material:''}];
+  let _parteEditId   = null;  // PARTES-01: id del parte en edición (null = alta nueva)
+  let _parteVisto    = null;  // PARTES-01: parte abierto en la pantalla de detalle
+
+  // PARTES-01 (24/07/2026, sugerencia #208 de Adrián: "En la sección partes de trabajos ahí
+  // botones que no funcionan"). Las tablas de Personal y Material eran inservibles: sus
+  // botones y sus oninput manipulaban _partePersonal/_parteMaterial directamente desde
+  // atributos inline, que se evalúan en ámbito GLOBAL, mientras que estas variables viven
+  // en el bloque `if ('serviceWorker' in navigator)` de más arriba. Cada pulsación lanzaba
+  // un ReferenceError silencioso. Lo peor no eran los botones: los oninput fallaban igual,
+  // así que lo tecleado nunca llegaba al array y todos los partes se guardaban con Personal
+  // y Material vacíos. Se enrutan ahora por funciones exportadas a window (como el resto del
+  // módulo), en vez de exponer los arrays: reasignarlos en parteNuevo/parteEditar dejaría
+  // colgada cualquier referencia global previa.
+  function parteAddPersonal() { _partePersonal.push({horas:'',nombre:''}); parteRenderPersonal(); }
+  function parteAddMaterial() { _parteMaterial.push({uds:'',material:''}); parteRenderMaterial(); }
+  function parteDelPersonal(i) { _partePersonal.splice(i,1); parteRenderPersonal(); }
+  function parteDelMaterial(i) { _parteMaterial.splice(i,1); parteRenderMaterial(); }
+  function parteSetPersonal(i, campo, valor) { if (_partePersonal[i]) _partePersonal[i][campo] = valor; }
+  function parteSetMaterial(i, campo, valor) { if (_parteMaterial[i]) _parteMaterial[i][campo] = valor; }
 
   async function partesCargar() {
     const c = document.getElementById('screenPartesLista');
@@ -13320,31 +13349,46 @@ if ('serviceWorker' in navigator) {
     const partes = await res.json();
     if (!partes.length) { c.innerHTML = '<div class="empty-state">Sin partes. Pulsa + para crear uno.</div>'; return; }
     c.innerHTML = partes.map(p => {
-      const pers = JSON.parse(p.personal || '[]').filter(r => r.nombre);
-      const mat  = JSON.parse(p.material  || '[]').filter(r => r.material);
+      const pers = _parteJSON(p.personal).filter(r => r.nombre);
+      const mat  = _parteJSON(p.material).filter(r => r.material);
       const fecha = (p.fecha || '').split('-').reverse().join('/');
+      const editado = p.updated_at
+        ? `<div style="font-size:10px;color:var(--muted);margin-bottom:8px">✏️ Modificado ${esc(p.updated_at.slice(0,16))}${p.modificado_por?' por '+esc(p.modificado_por):''}</div>`
+        : '';
       return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:15px">${fecha}</span>
-          <span style="font-size:12px;color:var(--muted)">${p.obra || ''}</span>
-        </div>
-        <div style="font-size:13px;color:var(--text);margin-bottom:6px">${(p.descripcion||'Sin descripción').slice(0,80)}${(p.descripcion||'').length>80?'…':''}</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-          ${pers.length?`<span style="font-size:11px;color:var(--muted)">👷 ${pers.map(r=>r.nombre).join(', ')}</span>`:''}
-          ${mat.length?`<span style="font-size:11px;color:var(--muted)">📦 ${mat.length} material${mat.length!==1?'es':''}</span>`:''}
+        <div onclick="parteVer(${p.id})" style="cursor:pointer">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:15px">${esc(fecha)}</span>
+            <span style="font-size:12px;color:var(--muted)">${esc(p.obra || '')}</span>
+          </div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:6px">${esc((p.descripcion||'Sin descripción').slice(0,80))}${(p.descripcion||'').length>80?'…':''}</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+            ${pers.length?`<span style="font-size:11px;color:var(--muted)">👷 ${esc(pers.map(r=>r.nombre).join(', '))}</span>`:''}
+            ${mat.length?`<span style="font-size:11px;color:var(--muted)">📦 ${mat.length} material${mat.length!==1?'es':''}</span>`:''}
+          </div>
+          ${editado}
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button onclick="parteVerImprimir(${p.id})" style="padding:6px 12px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Imprimir</button>
+          <button onclick="parteVer(${p.id})" style="padding:6px 12px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">👁 Ver</button>
+          <button onclick="parteVerImprimir(${p.id})" style="padding:6px 12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🖨️</button>
           <button onclick="parteBorrar(${p.id})" style="padding:6px 10px;background:#ef444415;color:#ef4444;border:1px solid #ef444430;border-radius:8px;font-size:12px;cursor:pointer">🗑️</button>
         </div>
       </div>`;
     }).join('');
   }
 
+  // PARTES-01: personal/material se guardan como JSON en TEXT; un valor corrupto rompía
+  // toda la lista porque el JSON.parse iba suelto dentro del map.
+  function _parteJSON(v) {
+    try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch { return []; }
+  }
+
   function parteNuevo() {
     const s = getSession();
+    _parteEditId = null;
     _partePersonal = [{horas:'',nombre:''}];
     _parteMaterial = [{uds:'',material:''}];
+    document.getElementById('partesFormTitulo').textContent = 'Nuevo parte';
     document.getElementById('parteFecha').value        = new Date().toISOString().slice(0,10);
     document.getElementById('parteCliente').value      = '';
     document.getElementById('parteNombreEnc').value    = s?.nombre || '';
@@ -13358,16 +13402,107 @@ if ('serviceWorker' in navigator) {
     showScreen('partesForm');
   }
 
+  // PARTES-01: segunda mitad de la sugerencia #208 — "cuandi guardas el parte no se puede
+  // volver a ver ni a modificar". Antes solo existían imprimir y borrar.
+  async function parteVer(id) {
+    const res = await apiCall(`/partes-trabajo/${id}`);
+    if (!res.ok) { toast('Error al cargar el parte'); return; }
+    _parteVisto = await res.json();
+    parteRenderDetalle(_parteVisto);
+    showScreen('partesDetalle');
+  }
+
+  function parteRenderDetalle(p) {
+    const body = document.getElementById('screenPartesDetalleBody');
+    if (!body) return;
+    const pers = _parteJSON(p.personal);
+    const mat  = _parteJSON(p.material);
+    const fecha = (p.fecha || '').split('-').reverse().join('/');
+    const campo = (etiq, val) => val
+      ? `<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">${etiq}</div>
+         <div style="font-size:14px;color:var(--text);white-space:pre-wrap">${esc(val)}</div></div>` : '';
+    const tabla = (titulo, filas, c1, c2) => filas.length
+      ? `<div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${titulo}</div>
+          <table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+            ${filas.map(r => `<tr style="border-top:1px solid var(--border)">
+              <td style="padding:6px 10px;font-size:13px;width:80px;color:var(--muted)">${esc(r[c1]||'')}</td>
+              <td style="padding:6px 10px;font-size:13px">${esc(r[c2]||'')}</td></tr>`).join('')}
+          </table>
+        </div>` : '';
+    const firma = (etiq, src) => src
+      ? `<div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${etiq}</div>
+         <img src="${esc(src)}" style="width:100%;border:1px solid var(--border);border-radius:10px;background:#fff"></div>` : '';
+    body.innerHTML = `
+      ${campo('Fecha', fecha)}
+      ${campo('Cliente', p.cliente)}
+      ${campo('Encargado', p.nombre_encargado)}
+      ${campo('Dirección', p.direccion)}
+      ${campo('Obra', p.obra)}
+      ${campo('Descripción de trabajos', p.descripcion)}
+      ${tabla('Personal', pers.filter(r=>r.horas||r.nombre), 'horas', 'nombre')}
+      ${tabla('Material', mat.filter(r=>r.uds||r.material), 'uds', 'material')}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        ${firma('Firma cliente', p.firma_cliente)}
+        ${firma('Firma responsable', p.firma_responsable)}
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:16px">
+        Creado por ${esc(p.creado_por||'—')}${p.created_at?' el '+esc(p.created_at.slice(0,16)):''}
+        ${p.updated_at?`<br>✏️ Modificado ${esc(p.updated_at.slice(0,16))}${p.modificado_por?' por '+esc(p.modificado_por):''}`:''}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="parteVerImprimir(${p.id})" style="flex:1;padding:10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir</button>
+        <button onclick="parteBorrar(${p.id})" style="padding:10px 14px;background:#ef444415;color:#ef4444;border:1px solid #ef444430;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🗑️ Borrar</button>
+      </div>`;
+  }
+
+  function parteEditarActual() { if (_parteVisto) parteEditar(_parteVisto); }
+
+  function parteEditar(p) {
+    _parteEditId = p.id;
+    _partePersonal = _parteJSON(p.personal);
+    _parteMaterial = _parteJSON(p.material);
+    if (!_partePersonal.length) _partePersonal = [{horas:'',nombre:''}];
+    if (!_parteMaterial.length) _parteMaterial = [{uds:'',material:''}];
+    document.getElementById('partesFormTitulo').textContent = 'Editar parte';
+    document.getElementById('parteFecha').value       = p.fecha || '';
+    document.getElementById('parteCliente').value     = p.cliente || '';
+    document.getElementById('parteNombreEnc').value   = p.nombre_encargado || '';
+    document.getElementById('parteDireccion').value   = p.direccion || '';
+    document.getElementById('parteObra').value        = p.obra || '';
+    document.getElementById('parteDescripcion').value = p.descripcion || '';
+    parteRenderPersonal();
+    parteRenderMaterial();
+    parteLimpiarFirma('parteCanvasCli');
+    parteLimpiarFirma('parteCanvasResp');
+    showScreen('partesForm');
+    // Las firmas viven en un canvas: se repintan las guardadas para no perderlas al editar
+    // (si el usuario no vuelve a firmar, parteGuardar reenvía la imagen original).
+    parteIniciarFirma('parteCanvasCli');
+    parteIniciarFirma('parteCanvasResp');
+    _partePintarFirma('parteCanvasCli',  p.firma_cliente);
+    _partePintarFirma('parteCanvasResp', p.firma_responsable);
+  }
+
+  function _partePintarFirma(canvasId, dataUrl) {
+    if (!dataUrl) return;
+    const c = document.getElementById(canvasId);
+    if (!c) return;
+    const img = new Image();
+    img.onload = () => c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    img.src = dataUrl;
+  }
+
   function parteRenderPersonal() {
     document.getElementById('partePersonalBody').innerHTML = _partePersonal.map((r,i) => `
       <tr style="border-top:1px solid var(--border)">
-        <td style="padding:6px 8px"><input type="text" value="${r.horas}" placeholder="7h"
-          oninput="_partePersonal[${i}].horas=this.value"
+        <td style="padding:6px 8px"><input type="text" value="${esc(r.horas)}" placeholder="7h"
+          oninput="parteSetPersonal(${i},'horas',this.value)"
           style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px"></td>
-        <td style="padding:6px 8px"><input type="text" value="${r.nombre}" placeholder="Nombre"
-          oninput="_partePersonal[${i}].nombre=this.value"
+        <td style="padding:6px 8px"><input type="text" value="${esc(r.nombre)}" placeholder="Nombre"
+          oninput="parteSetPersonal(${i},'nombre',this.value)"
           style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px"></td>
-        <td style="padding:6px 4px;text-align:center"><button onclick="_partePersonal.splice(${i},1);parteRenderPersonal()"
+        <td style="padding:6px 4px;text-align:center"><button onclick="parteDelPersonal(${i})"
           style="background:#ef444415;color:#ef4444;border:1px solid #ef444430;border-radius:6px;padding:3px 7px;cursor:pointer;font-size:13px">×</button></td>
       </tr>`).join('');
   }
@@ -13375,13 +13510,13 @@ if ('serviceWorker' in navigator) {
   function parteRenderMaterial() {
     document.getElementById('parteMaterialBody').innerHTML = _parteMaterial.map((r,i) => `
       <tr style="border-top:1px solid var(--border)">
-        <td style="padding:6px 8px"><input type="text" value="${r.uds}" placeholder="1"
-          oninput="_parteMaterial[${i}].uds=this.value"
+        <td style="padding:6px 8px"><input type="text" value="${esc(r.uds)}" placeholder="1"
+          oninput="parteSetMaterial(${i},'uds',this.value)"
           style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px"></td>
-        <td style="padding:6px 8px"><input type="text" value="${r.material}" placeholder="Material"
-          oninput="_parteMaterial[${i}].material=this.value"
+        <td style="padding:6px 8px"><input type="text" value="${esc(r.material)}" placeholder="Material"
+          oninput="parteSetMaterial(${i},'material',this.value)"
           style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px"></td>
-        <td style="padding:6px 4px;text-align:center"><button onclick="_parteMaterial.splice(${i},1);parteRenderMaterial()"
+        <td style="padding:6px 4px;text-align:center"><button onclick="parteDelMaterial(${i})"
           style="background:#ef444415;color:#ef4444;border:1px solid #ef444430;border-radius:6px;padding:3px 7px;cursor:pointer;font-size:13px">×</button></td>
       </tr>`).join('');
   }
@@ -13430,17 +13565,37 @@ if ('serviceWorker' in navigator) {
       obra_id:     s?.obra_id    || null,
       departamento: s?.departamento || null,
     };
-    const res = await apiCall('/partes-trabajo', { method:'POST', body: JSON.stringify(data) });
-    if (!res.ok) { toast('Error al guardar el parte'); return; }
-    toast('✅ Parte guardado');
+    // PARTES-01: al editar, un canvas vacío significa "no he vuelto a firmar", no "borra la
+    // firma" — se conserva la que ya tenía el parte.
+    if (_parteEditId && _parteVisto && _parteVisto.id === _parteEditId) {
+      if (!data.firma_cliente)     data.firma_cliente     = _parteVisto.firma_cliente || null;
+      if (!data.firma_responsable) data.firma_responsable = _parteVisto.firma_responsable || null;
+    }
+    const res = _parteEditId
+      ? await apiCall(`/partes-trabajo/${_parteEditId}`, { method:'PUT',  body: JSON.stringify(data) })
+      : await apiCall('/partes-trabajo',                 { method:'POST', body: JSON.stringify(data) });
+    if (!res.ok) {
+      const detalle = await res.json().catch(() => null);
+      toast(detalle?.error || (_parteEditId ? 'Error al modificar el parte' : 'Error al guardar el parte'));
+      return;
+    }
+    toast(_parteEditId ? '✅ Parte modificado' : '✅ Parte guardado');
+    _parteEditId = null;
     navTo('partes');
   }
 
   async function parteBorrar(id) {
     if (!confirm('¿Borrar este parte de trabajo?')) return;
     const res = await apiCall(`/partes-trabajo/${id}`, { method:'DELETE' });
-    if (res.ok) { toast('Parte borrado'); partesCargar(); }
-    else toast('Error al borrar');
+    if (!res.ok) { toast('Error al borrar'); return; }
+    toast('Parte borrado');
+    // Si se borra desde la pantalla de detalle hay que salir de ella, no solo recargar.
+    if (document.getElementById('screenPartesDetalle')?.classList.contains('active')) {
+      _parteVisto = null;
+      navTo('partes');
+    } else {
+      partesCargar();
+    }
   }
 
   async function parteVerImprimir(id) {
@@ -13516,6 +13671,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.parteNuevo        = parteNuevo;
   window.parteRenderPersonal = parteRenderPersonal;
   window.parteRenderMaterial = parteRenderMaterial;
+  window.parteAddPersonal  = parteAddPersonal;
+  window.parteAddMaterial  = parteAddMaterial;
+  window.parteDelPersonal  = parteDelPersonal;
+  window.parteDelMaterial  = parteDelMaterial;
+  window.parteSetPersonal  = parteSetPersonal;
+  window.parteSetMaterial  = parteSetMaterial;
+  window.parteVer          = parteVer;
+  window.parteEditar       = parteEditar;
+  window.parteEditarActual = parteEditarActual;
   window.parteIniciarFirma = parteIniciarFirma;
   window.parteLimpiarFirma = parteLimpiarFirma;
   window.parteGuardar      = parteGuardar;
