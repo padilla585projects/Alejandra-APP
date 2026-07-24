@@ -203,10 +203,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
 .pill-orange{background:rgba(249,115,22,.15);color:var(--accent)}
 .stock-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .stock-meta-pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:12px;color:var(--muted)}
-.stock-actions-row{display:flex;gap:6px}
-.btn-sm{padding:6px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:all .2s}
+.stock-actions-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.btn-sm{min-width:0;padding:8px 4px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:all .2s;white-space:nowrap}
 .btn-sm:hover{border-color:var(--accent);color:var(--accent)}
 .btn-sm.danger:hover{border-color:var(--red);color:var(--red)}
+@media (min-width:600px){.stock-actions-row{grid-template-columns:repeat(6,minmax(0,1fr))}}
 .filter-chip{padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;cursor:pointer;white-space:nowrap;transition:all .2s}
 .filter-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
 .revision-warn{display:inline-flex;align-items:center;gap:4px;background:rgba(249,115,22,.15);color:var(--accent);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:10px}
@@ -11992,7 +11993,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.11';
+const APP_VERSION = '8.12';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

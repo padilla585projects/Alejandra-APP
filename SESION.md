@@ -1,9 +1,15 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- Recuperados módulos NEW-85..NEW-91 + permisos de Maquinaria + paginación real de Partes de trabajo — COMPLETADO
-**Versión actual:** v8.11 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Part 42 cierra dos hallazgos posteriores a PARTES-01: nueve módulos completos devolvían 500 por los helpers ausentes `getAuthContext` y `jsonResp`, y los Partes de trabajo desaparecían al superar 100 registros. Los módulos ya operan y el operario no puede escribir; la app y Office recuperan todos los partes mediante paginación en bloques.
+**Fecha:** 24/07/2026 -- Fix UI: acciones de tarjetas Inventario/PEMP/Carretillas adaptadas a móvil — COMPLETADO
+**Versión actual:** v8.12 (version.json/sw.js/index.html sincronizados)
+**Resumen:** La captura de Adrián mostró que las acciones de inventario desbordaban a la derecha en móvil y cortaban Editar/Borrar. Part 43 sustituye la fila rígida por una cuadrícula responsive de 3 columnas; en pantallas desde 600px mantiene 6 columnas.
+
+### Part 43: Fix UI acciones de tarjetas Inventario en móvil (24/07/2026) [COMPLETADO, v8.12]
+
+**Reporte:** captura de Android en Inventario, tarjeta PEMP/Carretillas: Dev., repostaje/carga, Check, Mant., Editar y Borrar sumaban más ancho que la tarjeta. `.stock-actions-row` era `display:flex` sin wrap y `.btn-sm` tenía padding horizontal fijo; el último botón se salía de pantalla.
+
+**Fix:** `.stock-actions-row` pasa a grid de 3 columnas, con botones encogibles y `white-space:nowrap`; las seis acciones se distribuyen en dos filas sin clipping. Media query desde 600px: 6 columnas para conservar una sola fila en pantalla ancha. Aplica también a las tarjetas de bobinas (3 acciones en una fila).
 
 ### Part 42: Recuperar módulos NEW-85..NEW-91 + paginación Partes (24/07/2026) [COMPLETADO, v8.11]
 

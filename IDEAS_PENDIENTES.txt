@@ -16,6 +16,12 @@ LEYENDA DE ESTADO:
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
 
+[✓] UI-INVENTARIO-ACCIONES — Botones de tarjetas cortados en móvil  [HECHO v8.12]
+    · Captura Android: la fila de acciones de PEMP/Carretillas (Dev., carga, Check, Mant.,
+      Editar, Borrar) desbordaba horizontalmente y ocultaba los últimos botones.
+    · Fix: cuadrícula responsive de 3 columnas en móvil y 6 desde 600px; ningún botón
+      desborda y los tres de Bobinas siguen en una sola fila.
+
 [✓] MODULOS-91 / PARTES-02 — Nueve módulos Office devolvían 500 + partes antiguos invisibles  [HECHO v8.11]
     · Causa: los 36 handlers de Evaluaciones, Órdenes de cambio, Ensayos, Residuos,
       Maquinaria, Consumos, Accidentes, Flujo de caja y Solicitudes llamaban a los helpers
