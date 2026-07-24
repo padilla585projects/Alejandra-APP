@@ -1,9 +1,31 @@
 ## ESTADO ACTUAL
 
-**Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- Fix permiso cambio de estado en Pedidos (jefe_de_obra/oficina/desarrollador) — COMPLETADO
-**Versión actual:** v8.09 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Continuación de Part 38. Adrián: "ahi que arreglar lo de los permisos" — el panel (`canEdit` en `cargarPedidos`, panel.html) ya mostraba el desplegable de estado editable a jefe_de_obra/oficina/desarrollador, pero `actualizarPedido` en worker.js solo lo permitía a superadmin/empresa_admin/encargado, dando 403. Ampliado el permiso en worker.js al mismo set de roles, alineado con `enviarPedidoPorEmail`. Ver Part 39.
+**Sesion:** EN CURSO
+**Fecha:** 24/07/2026 -- Unificación de cuentas duplicadas de Alberto (COMPLETADO) + pendiente: sugerencia #208 (Partes de trabajo)
+**Versión actual:** v8.09 (version.json/sw.js/index.html sincronizados — sin cambio de versión, la unificación es solo datos)
+**Resumen:** Sesión de limpieza de datos y revisión del log de sugerencias. (1) Unificadas las cuentas duplicadas de Alberto en D1 producción, cuenta canónica id=46 con email y contraseña intactos y acceso a Office ya funcional (ver Part 40). (2) Revisado el log de sugerencias: solo queda pendiente la #208, reportada por Adrián el 24/07 — botones que no funcionan en Partes de trabajo y partes que no se pueden volver a ver ni modificar tras guardarlos. Siguiente paso de la sesión.
+
+### Part 40: Unificación de cuentas duplicadas de Alberto (24/07/2026) [COMPLETADO]
+
+**Contexto:** pendiente arrastrado desde Part 35, donde se descubrió de pasada que "Alberto Martínez" (usuario_id=46) y "Alberto" (usuario_id=51) eran la misma persona. Adrián: "primero unificamos a Alberto con su email y contraseña que acceda a office tambien".
+
+**Auditoría en D1 producción:** 5 filas con nombre "Alberto" (ids 1, 12, 46, 50, 51). Solo 46 y 51 realmente activas; 50 era cuenta de prueba (`alberto@test.local`, ya con `codigo='_del_50'` pero `activo=1`), y 1/12 restos antiguos ya inactivos. Se recorrieron las ~50 tablas con columnas que referencian usuarios: ninguna de las dos cuentas tenía fichajes, carnets, EPIs, turnos, chat ni memoria de Alejandra — solo `sesiones` (8 en la 46, 2 caducadas en la 51) y `sync_dispositivos` (2 en la 46, 1 en la 51).
+
+**Hallazgo sobre el acceso a Office:** no hacía falta ningún cambio de rol ni de código. El rol `encargado` ya está en `rolesPermitidos` de `doLogin()` (`panel.html` ~9748) y el login del panel es email + contraseña, que la cuenta 46 ya tenía. La 51 no podía entrar simplemente porque no tiene email. El histórico de `sesiones` confirma que la 46 ya había entrado en Office (varias sesiones con `rol='oficina'`).
+
+**Decisiones de Adrián (vía AskUserQuestion):** mantener el código `Manolete2026` de la cuenta 46 (no mover el `98765` de la 51) y no tocar la contraseña existente.
+
+**Cambios aplicados en D1 (con backup previo de las filas afectadas en el scratchpad de la sesión):**
+- `DELETE FROM sesiones WHERE usuario_id=51` — 2 sesiones, ambas caducadas desde junio.
+- `DELETE FROM sync_dispositivos WHERE usuario_id='51'` — su fila era `tipo='app'` y habría chocado con el `UNIQUE(usuario_id, tipo)` de la 46 si se reasignaba; la 46 ya tiene sus propios dispositivos `app` y `office` con pings más recientes.
+- `UPDATE usuarios SET activo=0, codigo='_del_51' WHERE id=51` — misma convención `_del_N` que ya usa el borrado lógico de la app, y libera el código 98765.
+- `UPDATE usuarios SET activo=0 WHERE id=50` — cuenta de prueba.
+
+**Sin cambios de código:** es limpieza de datos pura. No toca seguridad/tools/permisos/barreras, así que no aplica la regla "UNA Alejandra, DOS cerebros"; no requiere deploy ni subida de versión.
+
+**Verificación:** consulta final sobre `usuarios` confirma una única cuenta activa de Alberto (id 46, `Manolete2026`, `amartinezc@levitec.es`, rol encargado, obra 1, dept electrico) y las otras 4 con `activo=0` y código `_del_*`.
+
+**Pendiente relacionado:** que Alberto confirme en uso real que entra en Office con `amartinezc@levitec.es` y su contraseña actual (no se ha podido probar el login porque la contraseña no está en manos de esta sesión, y no debe estarlo).
 
 ### Part 39: Fix permiso cambio de estado en Pedidos (24/07/2026) [COMPLETADO]
 

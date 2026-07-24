@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/07/2026 — PEDIDOS-02 resuelto (v8.09): fix permiso cambio de estado en Pedidos, ahora jefe_de_obra/oficina/desarrollador también pueden (ver sección de errores). Antes: CONSTR-01 + PEDIDOS-01 resueltos (v8.08): sección "Construcción" oculta para electrico/mecanicas (ver sección de errores) + Pedidos promovido a sección propia + envío por email + export Excel (ver sección de mejoras). Antes: BUG-HEADER-MOVIL-v2 + BUG-BUSQUEDA-BOBINAS resueltos (v8.07): header rediseñado con clamp() fluido (ver sección de errores) y bobinas añadida a la búsqueda global. Antes: ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
+  Última actualización: 24/07/2026 — DATA-ALBERTO resuelto (solo datos, sin cambio de versión): unificadas las cuentas duplicadas de Alberto en D1 producción (ver sección de errores). Antes: PEDIDOS-02 resuelto (v8.09): fix permiso cambio de estado en Pedidos, ahora jefe_de_obra/oficina/desarrollador también pueden (ver sección de errores). Antes: CONSTR-01 + PEDIDOS-01 resueltos (v8.08): sección "Construcción" oculta para electrico/mecanicas (ver sección de errores) + Pedidos promovido a sección propia + envío por email + export Excel (ver sección de mejoras). Antes: BUG-HEADER-MOVIL-v2 + BUG-BUSQUEDA-BOBINAS resueltos (v8.07): header rediseñado con clamp() fluido (ver sección de errores) y bobinas añadida a la búsqueda global. Antes: ESCANEO-REMOTO-COMPLETO resuelto (v8.06): router para los 6 tipos de escaneo + revision en panel (ver sección de errores). Antes: PENDIENTE-SCAN-MOVIL resuelto (v8.04): causa raíz confirmada en vivo con el móvil real de Alberto (setInterval del ping muerto tras segundo plano, nunca se reenganchaba) + fix rmReconectarSync() (ver sección de errores). Antes: BUG-INV-ESTADO: editor de estado añadido a bobinas/PEMP/carretillas en Inventario de Alejandra Office (ver sección de errores). Antes: BUG-SIDEBAR-OBRA: sección "Obra" del panel arrancaba colapsada y ocultaba "Pedidos" (ver sección de errores). Antes: NEW-XXX: tools generar_grafico + preguntar_usuario en los dos workers (ver sección dedicada). Antes: INV-03: alineado isDeptPrivileged() en bobinas/pemp/carretillas/herramientas (worker.js), tras INV-02: fix de 2 fugas reales de datos entre departamentos en Inventarios (/carretillas, /alertas-stock), auditoría completa del pendiente de ORG-01/INV-01. Antes: BOTONES-01 (fix de botones rotos en panel.html por colisiones de nombre de función/id: Ausencias, NCR, Catálogo de Precios, Órdenes de Cambio, verPlano, cargarObrasPanel), ORG-01 (sidebar de panel.html organizado de verdad por rol/departamento (encargado/operario ven ~35 botones en vez de 62) + filtrado real por departamento en planos y fotos de obra), AYUDA-01 (descubribilidad de módulos: tooltips, banner contextual, contexto de pantalla para Alejandra, tour de onboarding), SIDEBAR-01 (reorganización del sidebar de panel.html), ROLES-01 (coherencia de permisos jefe_de_obra/oficina), BUG-INVISIBLE (4 páginas del panel nunca se mostraban), DEPT-01 (aislamiento por departamento en 7 tablas de obra) y BUG-CARNETS (fix de 7 endpoints con filtro departamento roto).
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -15,6 +15,33 @@ LEYENDA DE ESTADO:
 ================================================================================
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
+
+[✓] DATA-ALBERTO — Cuentas duplicadas de Alberto unificadas  [HECHO 24/07/2026, solo datos]
+    · Pendiente arrastrado desde Part 35 (PENDIENTE-SCAN-MOVIL): se detectó que "Alberto
+      Martínez" (usuario_id=46) y "Alberto" (usuario_id=51) eran la misma persona real.
+      Adrián: "primero unificamos a Alberto con su email y contraseña que acceda a office
+      tambien".
+    · Auditoría en D1 producción: 5 filas con nombre "Alberto" (ids 1, 12, 46, 50, 51).
+      Solo 46 y 51 estaban activas de verdad; 50 era una cuenta de prueba
+      (alberto@test.local, ya con codigo '_del_50' pero activo=1); 1 y 12 ya inactivas.
+      Ninguna de las dos cuentas reales tenía fichajes, carnets, EPIs, turnos, chat ni
+      memoria de Alejandra colgando — solo sesiones y sync_dispositivos.
+    · Cuenta canónica elegida: 46 (Alberto Martínez, amartinezc@levitec.es, código
+      Manolete2026, contraseña ya establecida). Decisión de Adrián: mantener su código
+      Manolete2026 y NO tocar la contraseña existente.
+    · Acceso a Office: no hacía falta ningún cambio de rol — 'encargado' ya está en
+      rolesPermitidos de doLogin() (panel.html ~9748) y el login del panel es email +
+      contraseña, que la 46 ya tiene. La 51 no podía entrar simplemente porque no tenía
+      email. El histórico de `sesiones` confirma que la 46 ya había entrado en Office.
+    · Cambios aplicados en D1 (backup previo de las filas en scratchpad de la sesión):
+      DELETE de las 2 sesiones caducadas de la 51 (última de mayo/2026), DELETE de su fila
+      en sync_dispositivos (tipo 'app', ping del 23/07, chocaba con el UNIQUE(usuario_id,
+      tipo) de la 46 si se reasignaba), UPDATE usuarios SET activo=0, codigo='_del_51'
+      (misma convención '_del_N' que ya usaba el borrado lógico de la app) y UPDATE
+      usuarios SET activo=0 en la 50 de prueba.
+    · Sin cambios de código en ningún archivo — es limpieza de datos pura, no toca los dos
+      cerebros de Alejandra ni requiere deploy ni subida de versión.
+    · Reportado: 23/07/2026 — Adrián. Resuelto: 24/07/2026.
 
 [✓] CONSTR-01 — Sección "Construcción" visible (y vacía) para electrico/mecanicas  [HECHO v8.08]
     · Adrián: "sigo diciendo que porque los electrico o mecanicos tienen que ver el panel
