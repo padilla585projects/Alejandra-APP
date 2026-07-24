@@ -9756,7 +9756,7 @@ async function doLogin() {
   }
 
   TOKEN = r.token;
-  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: r.roles_extra || [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null, obra_id: r.obra_id || null, obra_nombre: r.obra_nombre || null, obras_asignadas: r.obras_asignadas || (r.obra_id ? [r.obra_id] : []) };
+  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: r.roles_extra || [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null, departamento: r.departamento || 'electrico', obra_id: r.obra_id || null, obra_nombre: r.obra_nombre || null, obras_asignadas: r.obras_asignadas || (r.obra_id ? [r.obra_id] : []) };
   localStorage.setItem('panel_token', TOKEN);
   localStorage.setItem('panel_session', JSON.stringify(SESSION));
   mostrarSeleccionObra(r);
@@ -16343,7 +16343,7 @@ if ('serviceWorker' in navigator) {
           return;
         }
         TOKEN = d.token;
-        SESSION = { nombre: d.nombre, rol: d.rol, roles_extra: d.roles_extra || [], empresa_id: d.empresa_id, empresa_nombre: d.empresa_nombre, usuario_id: d.usuario_id || null, obras_asignadas: d.obras_asignadas || [] };
+        SESSION = { nombre: d.nombre, rol: d.rol, roles_extra: d.roles_extra || [], empresa_id: d.empresa_id, empresa_nombre: d.empresa_nombre, usuario_id: d.usuario_id || null, departamento: d.departamento || 'electrico', obra_id: d.obra_id || null, obra_nombre: d.obra_nombre || null, obras_asignadas: d.obras_asignadas || (d.obra_id ? [d.obra_id] : []) };
         localStorage.setItem('panel_token', TOKEN);
         localStorage.setItem('panel_session', JSON.stringify(SESSION));
         iniciarApp();

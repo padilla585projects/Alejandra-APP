@@ -1,9 +1,9 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- ROLES-02 completado v8.17: roles acumulables, Office por rol Oficina y obras múltiples para Project Manager/Jefe de obra. Siguiente: crear cuentas futuras y revisar Ingeniería.
-**Versión actual:** v8.17 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Part 47 implementa roles acumulables y varias obras para Project Manager/Jefe de obra. Office requiere el rol acumulado Oficina; Desarrollador y Superadmin mantienen acceso total.
+**Fecha:** 24/07/2026 -- FIX-INGENIERIA-01 completado v8.18: Office ya conserva departamento, obra y obras asignadas en el login por credenciales y Google. Auditoría: Ingeniería no existe aún como departamento; el equivalente actual es Oficina técnica (`oficina`).
+**Versión actual:** v8.18 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Corregido el fallback erróneo a Eléctrico del sidebar para cualquier cuenta de Office no eléctrica. Siguiente: decidir si Ingeniería será un departamento nuevo o una cuenta con departamento Oficina técnica, y crear las cuentas futuras.
 
 ### Part 47: Roles acumulables y varias obras (24/07/2026) [COMPLETADO, v8.17]
 

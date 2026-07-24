@@ -30,6 +30,13 @@
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
 ================================================================================
 
+ [✓ HECHO v8.18] FIX-INGENIERIA-01 — Office conserva el departamento de la sesión
+    · Los accesos por credenciales y Google descartaban `departamento` al guardar
+      `panel_session`; el sidebar aplicaba el fallback Eléctrico para cualquier cuenta.
+    · La auditoría confirma que Ingeniería no es aún un departamento: el equivalente
+      existente es Oficina técnica (`oficina`). Crear un departamento nuevo requiere
+      una decisión de producto antes de ampliar el catálogo.
+
 LEYENDA DE ESTADO:
   [ ]  Pendiente
   [~]  En progreso
