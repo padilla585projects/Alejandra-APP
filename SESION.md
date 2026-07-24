@@ -1,9 +1,17 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- Fix UI: acciones de tarjetas Inventario/PEMP/Carretillas adaptadas a móvil — COMPLETADO
-**Versión actual:** v8.12 (version.json/sw.js/index.html sincronizados)
-**Resumen:** La captura de Adrián mostró que las acciones de inventario desbordaban a la derecha en móvil y cortaban Editar/Borrar. Part 43 sustituye la fila rígida por una cuadrícula responsive de 3 columnas; en pantallas desde 600px mantiene 6 columnas.
+**Fecha:** 24/07/2026 -- Fix navegación: botón físico Atrás vuelve dentro de la PWA antes de salir — COMPLETADO
+**Versión actual:** v8.13 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Part 44 corrige el botón Atrás de Android/PWA: tras restauraciones, la app podía tener `history.state.alejandra` pero no una entrada guardia, así que el sistema salía antes de navegar a la pantalla previa. Se crea siempre una base y guardia al iniciar, IA entra en el historial interno y el doble Atrás en raíz se entrega correctamente al sistema.
+
+### Part 44: Fix botón físico Atrás Android/PWA (24/07/2026) [COMPLETADO, v8.13]
+
+**Reporte:** al navegar por paneles de la app, el botón físico Atrás a veces no regresaba a la pantalla previa y salía de la PWA.
+
+**Causa:** `iniciarApp()` solo hacía `history.pushState()` cuando no había `history.state.alejandra`. En PWA restaurada podía existir ese state sin una entrada posterior que capturar: el primer Atrás quedaba en manos de Android. Además `navTo('ia')` usaba `_applyScreen` y no añadía IA al `_navHistory`.
+
+**Fix:** `asegurarHistorialAtras()` sustituye la comprobación débil por una entrada base (`replaceState`) y una guardia (`pushState`) por carga de la app. El handler de doble Atrás vuelve al historial real desde la base para cerrar/salir como se espera. Navegar, volver y abrir subpantallas reinicia el intento de salida; IA usa `showScreen`, por tanto vuelve a la página previa.
 
 ### Part 43: Fix UI acciones de tarjetas Inventario en móvil (24/07/2026) [COMPLETADO, v8.12]
 

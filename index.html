@@ -5461,8 +5461,10 @@ async function iniciarApp() {
   updateNavPermisos(s);
   // Resetear historial de navegación al iniciar sesión
   _navHistory = [];
-  // Asegura que el botón físico de atrás (Android) no cierre la app
-  if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
+  // Asegura una entrada guardia incluso si Android restauró la PWA con un state anterior.
+  // Comprobar solo history.state aquí era insuficiente: podía existir el state pero no una
+  // entrada posterior que capturar, de modo que el primer Atrás salía de la app.
+  asegurarHistorialAtras();
 
   // Campana de notificaciones
   const btnNotif = document.getElementById('btnNotif');
@@ -6535,6 +6537,23 @@ async function checkConnection() {
 // ══════════════════════════════════════════════════════
 // ── Historial de navegación (stack tipo Android) ─────────────────────────────
 let _navHistory = [];
+let _backPressedOnce = false;
+let _backPressTimer  = null;
+let _historialAtrasInicializado = false;
+
+function resetearIntentoSalida() {
+  _backPressedOnce = false;
+  if (_backPressTimer) { clearTimeout(_backPressTimer); _backPressTimer = null; }
+}
+
+function asegurarHistorialAtras() {
+  if (_historialAtrasInicializado) return;
+  // La entrada base conserva la URL actual; la guardia, situada encima, garantiza que el
+  // primer Atrás genere popstate dentro de la PWA en vez de entregarse a Android.
+  history.replaceState({ ...(history.state || {}), alejandra: 1, base: true }, '');
+  history.pushState({ alejandra: 1, guard: true }, '');
+  _historialAtrasInicializado = true;
+}
 
 function _applyScreen(name) {
   // Cerrar paneles flotantes (chat Alejandra, chat empresa) al cambiar de pantalla
@@ -6589,6 +6608,7 @@ function _applyScreen(name) {
 }
 
 function showScreen(name) {
+  resetearIntentoSalida();
   // Guardar pantalla actual en el historial antes de cambiar
   const cur = document.querySelector('.screen.active');
   if (cur?.id) {
@@ -6609,6 +6629,7 @@ function actualizarBtnAtras() {
 }
 
 function irAtras() {
+  resetearIntentoSalida();
   try { closeCamera(); } catch {}
   try { segCloseCamera(); } catch {}
   const fabFichaje = document.getElementById('btnNuevoFichaje');
@@ -6630,6 +6651,7 @@ function irAtras() {
 }
 
 function navTo(target) {
+  resetearIntentoSalida();
   // Si el chat de Alejandra está abierto, cerrarlo al navegar
   const _aleP = document.getElementById('alejandraPanel');
   const _aleChatAbierto = _aleP && _aleP.style.display === 'flex';
@@ -6653,7 +6675,7 @@ function navTo(target) {
     // Si el chat estaba abierto, solo cerrarlo (ya se cerró arriba), no navegar
     if (_aleChatAbierto) return;
     if (document.getElementById('screenIA')?.classList.contains('active')) { irAtras(); return; }
-    _applyScreen('ia'); document.getElementById('iaInput')?.focus(); return;
+    showScreen('ia'); document.getElementById('iaInput')?.focus(); return;
   }
   // El resto son pantallas raíz: limpiar historial para que atrás = "salir de la app"
   _navHistory = [];
@@ -11993,7 +12015,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.12';
+const APP_VERSION = '8.13';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -12100,9 +12122,6 @@ document.addEventListener('visibilitychange', () => {
 })();
 
 // Botón físico "Atrás" en Android — navega dentro de la app en vez de cerrarla
-let _backPressedOnce = false;
-let _backPressTimer  = null;
-
 window.addEventListener('popstate', function() {
   const s = getSession();
   if (!s) return;
@@ -12130,10 +12149,12 @@ window.addEventListener('popstate', function() {
   } else {
     // Sin historial: estamos en una pantalla raíz
     if (_backPressedOnce) {
-      // Segunda pulsación en <2.5s → dejar que el navegador cierre/salga
+      // Segunda pulsación en <2.5s: ya estamos en la entrada base; retroceder una vez más
+      // entrega el control al sistema y conserva el gesto esperado de doble pulsación.
       clearTimeout(_backPressTimer);
       _backPressedOnce = false;
-      return; // NO re-empujamos estado → el navegador retrocede de verdad
+      setTimeout(() => history.back(), 0);
+      return;
     }
     toast('Pulsa atrás de nuevo para salir');
     _backPressedOnce = true;

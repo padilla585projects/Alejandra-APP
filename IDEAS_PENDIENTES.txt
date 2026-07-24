@@ -16,6 +16,12 @@ LEYENDA DE ESTADO:
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
 
+[✓] NAV-ATRAS-PWA — Botón físico Atrás salía de la app desde paneles internos  [HECHO v8.13]
+    · Causa: al restaurar la PWA podía existir history.state sin una entrada guardia; Android
+      recibía el primer Atrás. IA tampoco se añadía al historial interno.
+    · Fix: base + entrada guardia al iniciar, doble Atrás controlado desde raíz y IA pasa por
+      showScreen(), con retorno a la página anterior.
+
 [✓] UI-INVENTARIO-ACCIONES — Botones de tarjetas cortados en móvil  [HECHO v8.12]
     · Captura Android: la fila de acciones de PEMP/Carretillas (Dev., carga, Check, Mant.,
       Editar, Borrar) desbordaba horizontalmente y ocultaba los últimos botones.
