@@ -1,11 +1,11 @@
 ## ESTADO ACTUAL
 
-**Sesion:** EN CURSO
-**Fecha:** 24/07/2026 -- Reorganización de Alejandra Office para el rol Encargado (departamento eléctrico): menú prioritario de obra, visibilidad por rol y documentación. No tocar datos ni permisos de backend.
+**Sesion:** LIBRE
+**Fecha:** 24/07/2026 -- Menú de Alejandra Office reorganizado y validado para el rol Encargado (departamento eléctrico). Siguiente: revisar el rol de Oficina.
 **Versión actual:** v8.14 (version.json/sw.js/index.html sincronizados)
 **Resumen:** Part 45 reorganiza Alejandra Office para el rol Encargado: el menú pasa a estar centrado en la jornada de obra y no en gestión de oficina. Los módulos siguen intactos para los demás roles.
 
-### Part 45: Menú de trabajo de Encargado eléctrico en Alejandra Office (24/07/2026) [EN CURSO, v8.14]
+### Part 45: Menú de trabajo de Encargado eléctrico en Alejandra Office (24/07/2026) [COMPLETADO, v8.14]
 
 **Decisión de producto:** se revisó Office en una sesión real de Alberto (rol Encargado, departamento eléctrico). El lateral mostraba 54 accesos: tres dashboards, cuatro pantallas de planificación y módulos económicos/contractuales que no ayudan a dirigir una cuadrilla. Adrián confirmó que el sistema debe organizarse por rol, empezando por Encargado.
 
@@ -19,7 +19,7 @@
 
 **Oculto para Encargado:** dashboards globales/duplicados, calendario y alertas duplicadas del encabezado, QA/QC especializado, presupuestos, costes, contratos, certificaciones, riesgos, cambios, proveedores, gestión multiobra y cierre de obra. Los accesos solo se ocultan del lateral; no se borra ningún dato ni módulo.
 
-**Pendiente de cierre:** validar el resultado visual con la sesión real de Alberto tras publicar en GitHub Pages, completar los archivos de estado y dejar la sesión en LIBRE.
+**Validación en producción:** tras publicar el commit `f2c6644`, se recargó Alejandra Office con la sesión real de Alberto. El menú muestra exactamente cuatro bloques y 28 accesos operativos: Hoy en obra (6), Personal (7), Material y maquinaria (10) y Documentación y control (5). Ya no aparecen los dashboards duplicados, finanzas, contratos, calidad de oficina ni planificación corporativa. Sin errores de interfaz observados. La siguiente revisión será el rol Oficina, en una sesión independiente.
 
 ### Part 44: Fix botón físico Atrás Android/PWA (24/07/2026) [COMPLETADO, v8.13]
 

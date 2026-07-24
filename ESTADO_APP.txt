@@ -4,9 +4,9 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-RESUMEN DE REANUDACIÓN (v8.14, pendiente de commit): Part 45 reorganiza Alejandra Office para el rol Encargado eléctrico. El lateral deja arriba la jornada de obra (plan, partes, tareas e incidencias), agrupa material/maquinaria y documentación/control, y oculta gestión económica/contractual sin borrar módulos ni tocar backend. La vista usa el rol activo principal para evitar que roles extra de oficina vuelvan a abrir el menú completo.
+RESUMEN DE REANUDACIÓN (v8.14, commit f2c6644): Part 45 reorganiza Alejandra Office para el rol Encargado eléctrico. El lateral deja arriba la jornada de obra (plan, partes, tareas e incidencias), agrupa material/maquinaria y documentación/control, y oculta gestión económica/contractual sin borrar módulos ni tocar backend. La vista usa el rol activo principal para evitar que roles extra de oficina vuelvan a abrir el menú completo. Validado con la sesión real de Alberto en producción; siguiente rol a revisar: Oficina.
 
-ÚLTIMA ACTUALIZACIÓN v8.14 (24/07/2026): Office reorganizado para Encargado eléctrico. Bloques visibles: Hoy en obra, Personal, Material y maquinaria, y Documentación y control. Partes diarios se recupera junto al plan semanal; pedidos y entregas se integran con el material. Frontend solamente, pendiente de validación visual y publicación.
+ÚLTIMA ACTUALIZACIÓN v8.14 (24/07/2026): Office reorganizado para Encargado eléctrico. Bloques visibles: Hoy en obra, Personal, Material y maquinaria, y Documentación y control. Partes diarios se recupera junto al plan semanal; pedidos y entregas se integran con el material. Frontend solamente; publicado y validado visualmente con Alberto en GitHub Pages.
 
 ÚLTIMA ACTUALIZACIÓN v8.11 (24/07/2026): recuperados 9 módulos de Office que devolvían 500 por helpers ausentes (`getAuthContext` y `jsonResp`) y bloqueada la escritura a operario. Partes de trabajo ya usa limit/offset y ambas interfaces recuperan todos los registros, no solo los primeros 100.
 
