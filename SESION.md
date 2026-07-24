@@ -2,8 +2,15 @@
 
 **Sesion:** LIBRE
 **Fecha:** 24/07/2026 -- ROLES-02 completado v8.17: roles acumulables, Office por rol Oficina y obras múltiples para Project Manager/Jefe de obra. Siguiente: crear cuentas futuras y revisar Ingeniería.
-**Versión actual:** v8.16 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Part 46 fija el principio de visibilidad por departamento: Electricidad no ve inventario de Seguridad. Después se revisarán los roles con vista ampliada.
+**Versión actual:** v8.17 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Part 47 implementa roles acumulables y varias obras para Project Manager/Jefe de obra. Office requiere el rol acumulado Oficina; Desarrollador y Superadmin mantienen acceso total.
+
+### Part 47: Roles acumulables y varias obras (24/07/2026) [COMPLETADO, v8.17]
+
+- Añadidos Project Manager y Almacenero a la interfaz de Office; Oficial se presenta de forma compatible con el rol interno existente.
+- Office exige el rol acumulado `oficina`, salvo Superadmin y Desarrollador.
+- Nueva tabla `usuario_obras`, API protegida para asignar obras y selector que cambia la obra activa de sesión.
+- Worker desplegado y cambios publicados: commits `8a569d7` y `3a0ab4e`.
 
 ### Part 46: Inventario de Seguridad aislado por departamento (24/07/2026) [EN CURSO, v8.16]
 
