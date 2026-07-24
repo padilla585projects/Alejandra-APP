@@ -1,9 +1,15 @@
 ## ESTADO ACTUAL
 
-**Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- Menú de Alejandra Office reorganizado y validado para el rol Encargado (departamento eléctrico). Siguiente: revisar el rol de Oficina.
-**Versión actual:** v8.14 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Part 45 reorganiza Alejandra Office para el rol Encargado: el menú pasa a estar centrado en la jornada de obra y no en gestión de oficina. Los módulos siguen intactos para los demás roles.
+**Sesion:** EN CURSO
+**Fecha:** 24/07/2026 -- Ajuste DEPT-02: Inventario de Seguridad no debe aparecer en el menú de Electricidad. Principio confirmado: primero cada departamento ve lo suyo; después se revisan los roles con vista ampliada.
+**Versión actual:** v8.15 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Part 46 fija el principio de visibilidad por departamento: Electricidad no ve inventario de Seguridad. Después se revisarán los roles con vista ampliada.
+
+### Part 46: Inventario de Seguridad aislado por departamento (24/07/2026) [EN CURSO, v8.15]
+
+**Decisión de producto:** antes de definir qué roles ven más, cada departamento debe ver exclusivamente sus propios módulos. Se detectó que el botón “Seguridad” dentro de Material y maquinaria era inventario/EPI del departamento de Seguridad, pero aparecía a Alberto (Encargado eléctrico).
+
+**Cambio:** el acceso queda oculto por defecto y solo se muestra al departamento `seguridad` o a administradores (`superadmin`, `empresa_admin`, `desarrollador`). No se elimina el inventario ni se cambia el backend. Esta regla es la referencia para auditar los restantes módulos departamento por departamento.
 
 ### Part 45: Menú de trabajo de Encargado eléctrico en Alejandra Office (24/07/2026) [COMPLETADO, v8.14]
 
