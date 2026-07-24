@@ -1,9 +1,25 @@
 ## ESTADO ACTUAL
 
-**Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- Fix navegación: botón físico Atrás vuelve dentro de la PWA antes de salir — COMPLETADO
-**Versión actual:** v8.13 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Part 44 corrige el botón Atrás de Android/PWA: tras restauraciones, la app podía tener `history.state.alejandra` pero no una entrada guardia, así que el sistema salía antes de navegar a la pantalla previa. Se crea siempre una base y guardia al iniciar, IA entra en el historial interno y el doble Atrás en raíz se entrega correctamente al sistema.
+**Sesion:** EN CURSO
+**Fecha:** 24/07/2026 -- Reorganización de Alejandra Office para el rol Encargado (departamento eléctrico): menú prioritario de obra, visibilidad por rol y documentación. No tocar datos ni permisos de backend.
+**Versión actual:** v8.14 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Part 45 reorganiza Alejandra Office para el rol Encargado: el menú pasa a estar centrado en la jornada de obra y no en gestión de oficina. Los módulos siguen intactos para los demás roles.
+
+### Part 45: Menú de trabajo de Encargado eléctrico en Alejandra Office (24/07/2026) [EN CURSO, v8.14]
+
+**Decisión de producto:** se revisó Office en una sesión real de Alberto (rol Encargado, departamento eléctrico). El lateral mostraba 54 accesos: tres dashboards, cuatro pantallas de planificación y módulos económicos/contractuales que no ayudan a dirigir una cuadrilla. Adrián confirmó que el sistema debe organizarse por rol, empezando por Encargado.
+
+**Nueva vista Encargado:**
+- **Hoy en obra:** Dashboard, chat, plan semanal, partes diarios, tareas e incidencias.
+- **Personal:** trabajadores, fichajes, hojas de tiempo, turnos, ausencias, horarios y formación.
+- **Material y maquinaria:** bobinas, herramientas, PEMP, carretillas, mantenimientos, repostajes, pedidos, entregas y alertas de stock.
+- **Documentación y control:** documentos de obra, planos, fotos, instrucciones, inspecciones y seguridad asociada.
+
+**Regla de permisos de interfaz:** la selección se decide por `SESSION.rol` activo. Si una cuenta conserva roles extra de oficina para auditoría, al entrar como `encargado` sigue viendo el espacio de trabajo de Encargado. No se eliminan pantallas ni se cambia el backend: Jefe de Obra, Oficina y administradores mantienen su menú completo.
+
+**Oculto para Encargado:** dashboards globales/duplicados, calendario y alertas duplicadas del encabezado, QA/QC especializado, presupuestos, costes, contratos, certificaciones, riesgos, cambios, proveedores, gestión multiobra y cierre de obra. Los accesos solo se ocultan del lateral; no se borra ningún dato ni módulo.
+
+**Pendiente de cierre:** validar el resultado visual con la sesión real de Alberto tras publicar en GitHub Pages, completar los archivos de estado y dejar la sesión en LIBRE.
 
 ### Part 44: Fix botón físico Atrás Android/PWA (24/07/2026) [COMPLETADO, v8.13]
 

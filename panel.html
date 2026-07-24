@@ -491,7 +491,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="obraDetalle" onclick="navTo('obraDetalle')">
       <span class="nav-icon">🏗</span> Cuadro de Mando Obra
     </button>
-    <button class="nav-item" onclick="chatAbrir()" style="position:relative">
+    <button class="nav-item" id="navChatEquipo" onclick="chatAbrir()" style="position:relative">
       <span class="nav-icon">💬</span> Chat del equipo
       <span class="nav-badge" id="chatBadgeSidebar" style="display:none">0</span>
     </button>
@@ -9833,13 +9833,10 @@ function doLogout() {
 
 // ── INICIAR APP ────────────────────────────────────────────────
 let _iniciarAppCalled = false;
-// ORG-01 (22/07/2026): dentro de las secciones "Obra", "Construcción" y
-// "Planificación" -que se muestran enteras a cualquier no-admin- hay una mezcla
-// de botones operativos de campo (tareas, incidencias, inspecciones...) y de
-// gestión de proyecto/oficina técnica (RFIs, submittals, presupuestos,
-// contratos, cierre de obra...). Un encargado de oficio u operario no necesita
-// estos últimos -son cosa de jefe_de_obra/oficina/admin-, así que se ocultan
-// item a item (no la sección entera, que sigue viéndose con lo que sí aplica).
+// ORG-02 (24/07/2026): vista de trabajo de Encargado. Un encargado eléctrico
+// necesita resolver la jornada, no navegar por gestión económica o contractual.
+// Las páginas siguen existiendo para Oficina/Jefe de Obra/Admin; aquí solo se
+// seleccionan y agrupan las que corresponden al trabajo de campo.
 const ITEMS_OCULTOS_OFICIO = [
   // Obra: gestión multi-obra y documentación general de empresa, no de campo
   'obras', 'documentos',
@@ -9850,13 +9847,15 @@ const ITEMS_OCULTOS_OFICIO = [
   'submittals', 'finanzasObra', 'cronogramaObra', 'transmittals', 'controlCalidad',
   'presupuestoSov', 'ordenesCambio', 'riesgosObra', 'obraDashboard', 'informeObra',
   'subcontratas', 'registroAmbiental', 'cierreObra', 'certificaciones',
+  // Duplicados o pantallas de empresa que no ayudan a dirigir una cuadrilla.
+  'globalDashboard', 'obraDetalle', 'calendario', 'equiposMedicion', 'itpObra',
+  'ncrsObra', 'accionItems', 'centroAlertas',
 ];
 function ocultarItemsPorOficio() {
-  // Solo aplica a encargado/operario "puros" -sin ningún rol de gestión de obra
-  // ni admin mezclado en roles_extra-, para no restringir por error a alguien
-  // con doble rol.
-  const esOficio = hasSessionRole('encargado', 'operario') &&
-    !hasSessionRole('superadmin', 'empresa_admin', 'desarrollador', 'jefe_de_obra', 'oficina');
+  // Se decide por el rol activo principal. Una cuenta puede conservar otros
+  // permisos para auditoría, pero si entra como Encargado debe ver su espacio
+  // de trabajo de obra, no el menú de Oficina.
+  const esOficio = SESSION?.rol === 'encargado' || SESSION?.rol === 'operario';
   if (!esOficio) return;
   let ocultados = 0;
   ITEMS_OCULTOS_OFICIO.forEach(page => {
@@ -9868,6 +9867,57 @@ function ocultarItemsPorOficio() {
     }
   });
   if (ocultados > 0) console.log(`✓ Ocultados ${ocultados} items de gestión de obra/PM para encargado/operario (ORG-01)`);
+}
+
+function organizarSidebarEncargado() {
+  if (SESSION?.rol !== 'encargado') return;
+
+  const seccion = sid => document.querySelector(`.sidebar-section[data-sid="${sid}"]`);
+  const item = page => document.querySelector(`.nav-item[data-page="${page}"]`);
+  const moverDespues = (ancla, page) => {
+    const boton = item(page);
+    if (!ancla || !boton) return ancla;
+    boton.style.display = '';
+    boton.removeAttribute('data-hidden-by-perms');
+    ancla.insertAdjacentElement('afterend', boton);
+    return boton;
+  };
+  const ocultarSeccion = sid => {
+    const cabecera = seccion(sid);
+    if (!cabecera) return;
+    cabecera.style.display = 'none';
+    cabecera.setAttribute('data-hidden-by-perms', 'true');
+    let siguiente = cabecera.nextElementSibling;
+    while (siguiente && !siguiente.classList.contains('sidebar-section')) {
+      siguiente.style.display = 'none';
+      siguiente.setAttribute('data-hidden-by-perms', 'true');
+      siguiente = siguiente.nextElementSibling;
+    }
+  };
+  const renombrar = (sid, texto) => {
+    const cabecera = seccion(sid);
+    const etiqueta = cabecera?.querySelector('span:first-child');
+    if (etiqueta) etiqueta.textContent = texto;
+  };
+
+  renombrar('principal', '☀️ Hoy en obra');
+  renombrar('inventarios', '⚡ Material y maquinaria');
+  renombrar('obra', '📁 Documentación y control');
+
+  let hoy = document.getElementById('navChatEquipo');
+  ['planSemanal', 'partesPanel', 'tareas', 'incidencias'].forEach(page => { hoy = moverDespues(hoy, page); });
+
+  let material = seccion('inventarios');
+  ['bobinas', 'herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'].forEach(page => { material = moverDespues(material, page); });
+
+  let control = seccion('obra');
+  ['documentosObra', 'planosObra', 'fotosObra', 'instruccionesObra', 'inspecciones'].forEach(page => { control = moverDespues(control, page); });
+
+  // Partes Diarios era útil para el encargado pero quedaba dentro de una
+  // sección de oficina oculta. Se recupera arriba, junto al plan de la jornada.
+  ocultarSeccion('pedidosSec');
+  ocultarSeccion('planificacion');
+  ocultarSeccion('diarioCampo');
 }
 
 // CONSTR-01 (24/07/2026): oculta la sección completa "Construcción" (y sus
@@ -10004,6 +10054,7 @@ function iniciarApp() {
     console.log(`✗ Usuario es admin (rol=${SESSION.rol}, roles_extra=${SESSION.roles_extra?.join(', ')}), mostrando todo`);
   }
   ocultarItemsPorOficio();
+  organizarSidebarEncargado();
 
   // mostrar secciones superadmin en página empresa
   if (hasSessionRole('superadmin', 'desarrollador')) {
@@ -10077,6 +10128,7 @@ function ocultarSidebarPorPermisos() {
     }
     ocultarSeccionConstruccionSiNoAplica(SESSION.departamento || 'electrico', isAdmin);
     ocultarItemsPorOficio();
+    organizarSidebarEncargado();
   } catch (e) {
     console.error('Error en ocultarSidebarPorPermisos:', e);
   }
