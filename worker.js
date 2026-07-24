@@ -171,6 +171,29 @@ function hasRole(auth, ...rols) {
   return rols.some(r => arr.includes(r));
 }
 
+// ROLES-02: obra_id continúa siendo la obra principal de todos los usuarios.
+// Project Manager y Jefe de obra pueden sumar obras mediante usuario_obras.
+async function ensureUsuarioObrasTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS usuario_obras (
+    usuario_id INTEGER NOT NULL,
+    obra_id INTEGER NOT NULL,
+    empresa_id INTEGER NOT NULL,
+    asignado_por INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (usuario_id, obra_id)
+  )`).run();
+}
+
+async function getObrasAsignadasUsuario(env, usuarioId, empresaId, obraPrincipal) {
+  const base = obraPrincipal ? [obraPrincipal] : [];
+  if (!usuarioId || !empresaId) return base;
+  await ensureUsuarioObrasTable(env);
+  const { results } = await env.DB.prepare(
+    'SELECT obra_id FROM usuario_obras WHERE usuario_id = ? AND empresa_id = ?'
+  ).bind(usuarioId, empresaId).all();
+  return [...new Set([...base, ...(results || []).map(r => r.obra_id)])];
+}
+
 // MODULOS-91 (24/07/2026): getAuthContext() nunca estuvo definida en este archivo, pero la
 // llaman 36 handlers de 9 módulos completos (evaluaciones de proveedores NEW-85, órdenes de
 // cambio NEW-86, ensayos de materiales NEW-87, residuos NEW-88, partes de maquinaria NEW-89,
@@ -4503,6 +4526,7 @@ export default {
       if (path === '/sesiones'    && method === 'GET')  return await getSesionesActivas(request, env);
       if (path === '/sesiones/cerrar-todas' && method === 'POST') return await cerrarTodasSesiones(request, env);
       if (path === '/sesion/departamento'   && method === 'PUT')  return await actualizarSesionDepartamento(request, env);
+      if (path === '/sesion/obra'           && method === 'PUT')  return await actualizarSesionObra(request, env);
       if (path === '/empresas/registro'  && method === 'POST') return await registrarEmpresa(request, env);
       if (path === '/empresas'           && method === 'GET')  return await getEmpresas(request, env);
       if (path === '/superadmin/empresa' && method === 'POST') return await superadminSeleccionarEmpresa(request, env);
@@ -4621,6 +4645,8 @@ export default {
       // ── Usuarios ──────────────────────────────────────────────────────────
       if (path === '/usuarios'    && method === 'GET')    return await getUsuarios(request, env);
       if (path === '/usuarios'    && method === 'POST')   return await crearUsuario(request, env);
+      if (/^\/usuarios\/\d+\/obras$/.test(path) && method === 'GET') return await listarObrasUsuario(path.split('/')[2], request, env);
+      if (/^\/usuarios\/\d+\/obras$/.test(path) && method === 'PUT') return await actualizarObrasUsuario(path.split('/')[2], request, env);
       if (path.startsWith('/usuarios/') && method === 'DELETE') {
         return await eliminarUsuario(path.split('/usuarios/')[1], request, env);
       }
@@ -6020,7 +6046,9 @@ async function verificarAcceso(request, env) {
       env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
       const empRow = u.empresa_id ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(u.empresa_id).first().catch(() => null) : null;
       const rolesExtra = (() => { try { return u.roles_extra ? JSON.parse(u.roles_extra) : []; } catch { return []; } })();
-      return json({ ok: true, nombre: u.nombre, rol: u.rol, roles_extra: rolesExtra, obra_id: u.obra_id, obra_nombre: u.obra_nombre, departamento: dept, token, empresa_id: u.empresa_id || 1, empresa_nombre: empRow?.nombre || '', usuario_id: u.id });
+      const obras_asignadas = ['project_manager', 'jefe_de_obra'].includes(u.rol)
+        ? await getObrasAsignadasUsuario(env, u.id, u.empresa_id || 1, u.obra_id) : (u.obra_id ? [u.obra_id] : []);
+      return json({ ok: true, nombre: u.nombre, rol: u.rol, roles_extra: rolesExtra, obra_id: u.obra_id, obra_nombre: u.obra_nombre, obras_asignadas, departamento: dept, token, empresa_id: u.empresa_id || 1, empresa_nombre: empRow?.nombre || '', usuario_id: u.id });
     } catch(e) { return err('Error en login: ' + e.message, 500); }
   }
 
@@ -6064,6 +6092,8 @@ async function verificarAcceso(request, env) {
       env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
       const rolesExtraCod = (() => { try { return usuario.roles_extra ? JSON.parse(usuario.roles_extra) : []; } catch { return []; } })();
       const empRowCod = usuario.empresa_id ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(usuario.empresa_id).first().catch(() => null) : null;
+      const obras_asignadas = ['project_manager', 'jefe_de_obra'].includes(usuario.rol)
+        ? await getObrasAsignadasUsuario(env, usuario.id, usuario.empresa_id || 1, usuario.obra_id) : (usuario.obra_id ? [usuario.obra_id] : []);
       return json({
         ok: true,
         nombre: usuario.nombre,
@@ -6071,6 +6101,7 @@ async function verificarAcceso(request, env) {
         roles_extra: rolesExtraCod,
         obra_id: usuario.obra_id,
         obra_nombre: usuario.obra_nombre,
+        obras_asignadas,
         departamento: usuario.departamento || 'electrico',
         token,
         empresa_id: usuario.empresa_id || 1,
@@ -6109,6 +6140,26 @@ async function actualizarSesionDepartamento(request, env) {
   if (!departamento || !validos.includes(departamento)) return err('Departamento inválido', 400);
   await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
   return json({ ok: true });
+}
+
+async function actualizarSesionObra(request, env) {
+  const token = request.headers.get('X-Token');
+  if (!token) return err('No autorizado', 403);
+  const auth = await getAuth(request, env);
+  if (!auth?.usuario_id || !auth.empresa_id) return err('No autorizado', 403);
+  const { obra_id } = await request.json().catch(() => ({}));
+  const nuevaObra = Number(obra_id);
+  if (!Number.isInteger(nuevaObra)) return err('Obra inválida', 400);
+  const usuario = await env.DB.prepare('SELECT rol, obra_id FROM usuarios WHERE id = ? AND empresa_id = ?').bind(auth.usuario_id, auth.empresa_id).first();
+  if (!usuario) return err('Usuario no encontrado', 404);
+  const permitidas = ['project_manager', 'jefe_de_obra'].includes(usuario.rol)
+    ? await getObrasAsignadasUsuario(env, auth.usuario_id, auth.empresa_id, usuario.obra_id)
+    : (usuario.obra_id ? [usuario.obra_id] : []);
+  if (!permitidas.includes(nuevaObra)) return err('No tienes acceso a esta obra', 403);
+  const obra = await env.DB.prepare('SELECT id, nombre FROM obras WHERE id = ? AND empresa_id = ?').bind(nuevaObra, auth.empresa_id).first();
+  if (!obra) return err('Obra no encontrada', 404);
+  await env.DB.prepare('UPDATE sesiones SET obra_id = ?, obra_nombre = ? WHERE token = ? AND usuario_id = ?').bind(obra.id, obra.nombre, token, auth.usuario_id).run();
+  return json({ ok: true, obra_id: obra.id, obra_nombre: obra.nombre });
 }
 
 async function cerrarSesionServidor(request, env) {
@@ -6895,6 +6946,31 @@ async function getUsuarios(request, env) {
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
+}
+
+async function listarObrasUsuario(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth || !hasRole(auth, 'superadmin', 'empresa_admin', 'desarrollador')) return err('Sin permiso', 403);
+  const user = await env.DB.prepare('SELECT id, rol, obra_id, empresa_id FROM usuarios WHERE id = ?').bind(id).first();
+  if (!user || (!auth.isSuperadmin && user.empresa_id !== auth.empresa_id)) return err('Usuario no encontrado', 404);
+  const obras = await getObrasAsignadasUsuario(env, user.id, user.empresa_id, user.obra_id);
+  return json({ ok: true, usuario_id: user.id, rol: user.rol, obras_asignadas: obras });
+}
+
+async function actualizarObrasUsuario(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth || !hasRole(auth, 'superadmin', 'empresa_admin', 'desarrollador')) return err('Sin permiso', 403);
+  const body = await request.json().catch(() => ({}));
+  const obras = [...new Set((body.obras || []).map(Number).filter(Number.isInteger))];
+  const user = await env.DB.prepare('SELECT id, rol, obra_id, empresa_id FROM usuarios WHERE id = ?').bind(id).first();
+  if (!user || (!auth.isSuperadmin && user.empresa_id !== auth.empresa_id)) return err('Usuario no encontrado', 404);
+  if (!['project_manager', 'jefe_de_obra'].includes(user.rol)) return err('Solo aplica a Project Manager y Jefe de obra', 400);
+  const validas = obras.length ? await env.DB.prepare(`SELECT id FROM obras WHERE empresa_id = ? AND id IN (${obras.map(() => '?').join(',')})`).bind(user.empresa_id, ...obras).all() : { results: [] };
+  if ((validas.results || []).length !== obras.length) return err('Una obra no pertenece a la empresa', 400);
+  await ensureUsuarioObrasTable(env);
+  await env.DB.prepare('DELETE FROM usuario_obras WHERE usuario_id = ? AND empresa_id = ?').bind(user.id, user.empresa_id).run();
+  for (const obraId of obras) await env.DB.prepare('INSERT INTO usuario_obras (usuario_id, obra_id, empresa_id, asignado_por) VALUES (?,?,?,?)').bind(user.id, obraId, user.empresa_id, auth.usuario_id || null).run();
+  return json({ ok: true, obras_asignadas: await getObrasAsignadasUsuario(env, user.id, user.empresa_id, user.obra_id) });
 }
 
 async function crearUsuario(request, env) {
