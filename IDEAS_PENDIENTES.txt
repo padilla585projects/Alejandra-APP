@@ -14,11 +14,13 @@
       permisos extra. No se borra ningún módulo ni se tocan permisos de backend.
     · Ver SESION.md Part 45 para el mapa completo y las pantallas ocultas.
 
-[✓ HECHO v8.15] DEPT-02 — Inventario de Seguridad solo para su departamento
+[✓ HECHO v8.16] DEPT-02 — Inventario de Seguridad solo para su departamento
     · Regla acordada: primero cada departamento ve exclusivamente lo suyo; después
       se decidirán los roles con vista ampliada.
     · El acceso al inventario/EPI de Seguridad queda visible solo para Seguridad
-      y administradores, nunca para el encargado eléctrico. No se borra ningún dato.
+      y administradores activos, nunca para el encargado eléctrico. No se borra ningún dato.
+    · Validado con Alberto: los roles extra no reabren el acceso mientras su rol activo
+      es Encargado.
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.

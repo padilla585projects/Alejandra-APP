@@ -1,7 +1,7 @@
 ## ESTADO ACTUAL
 
-**Sesion:** EN CURSO
-**Fecha:** 24/07/2026 -- Ajuste DEPT-02: Inventario de Seguridad no debe aparecer en el menú de Electricidad. Principio confirmado: primero cada departamento ve lo suyo; después se revisan los roles con vista ampliada.
+**Sesion:** LIBRE
+**Fecha:** 24/07/2026 -- DEPT-02 completado y validado: Electricidad no ve inventario de Seguridad, incluso si la cuenta tiene permisos extra. Siguiente: auditar módulos por departamento y después definir vistas ampliadas por rol.
 **Versión actual:** v8.16 (version.json/sw.js/index.html sincronizados)
 **Resumen:** Part 46 fija el principio de visibilidad por departamento: Electricidad no ve inventario de Seguridad. Después se revisarán los roles con vista ampliada.
 
@@ -10,6 +10,8 @@
 **Decisión de producto:** antes de definir qué roles ven más, cada departamento debe ver exclusivamente sus propios módulos. Se detectó que el botón “Seguridad” dentro de Material y maquinaria era inventario/EPI del departamento de Seguridad, pero aparecía a Alberto (Encargado eléctrico).
 
 **Cambio:** el acceso queda oculto por defecto y solo se muestra al departamento `seguridad` o a administradores (`superadmin`, `empresa_admin`, `desarrollador`). No se elimina el inventario ni se cambia el backend. Esta regla es la referencia para auditar los restantes módulos departamento por departamento.
+
+**Corrección y validación:** la primera versión usaba roles extra para detectar administración; la sesión de Alberto conserva uno y por eso el botón seguía visible. En v8.16 se usa exclusivamente `SESSION.rol` activo. Recarga real de Office: el botón existe pero está oculto (`visible: false`) para Alberto Encargado eléctrico.
 
 ### Part 45: Menú de trabajo de Encargado eléctrico en Alejandra Office (24/07/2026) [COMPLETADO, v8.14]
 
