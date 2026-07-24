@@ -19190,11 +19190,34 @@ function renderGanttFases() {
 
 // ── PARTES DIARIOS (panel) ────────────────────────────────────────
 let tblPartes = null, _partesData = [];
+async function obtenerTodosPartesPanel(obraId) {
+  const partes = [];
+  let offset = 0;
+  let total = Infinity;
+  const filtroObra = obraId ? `obra_id=${encodeURIComponent(obraId)}&` : '';
+  while (offset < total) {
+    const r = await apiRaw(`/partes-trabajo?${filtroObra}limit=200&offset=${offset}`);
+    if (!r.ok) throw new Error(`Error ${r.status}`);
+    const lote = await r.json();
+    if (!Array.isArray(lote)) throw new Error('Respuesta de partes inválida');
+    partes.push(...lote);
+    const totalCabecera = Number(r.headers.get('X-Total-Count'));
+    total = Number.isFinite(totalCabecera) ? totalCabecera : partes.length;
+    if (!lote.length) break;
+    offset += lote.length;
+  }
+  return partes;
+}
+
 async function cargarPartesPanel() {
   if (document.getElementById('filterPartesObra')?.options.length <= 1) poblarSelectObras('filterPartesObra');
   const obraId = document.getElementById('filterPartesObra')?.value || '';
-  const r = await api('/partes-trabajo' + (obraId ? `?obra_id=${obraId}` : ''));
-  _partesData = Array.isArray(r) ? r : (r?.partes || r?.data || []);
+  try { _partesData = await obtenerTodosPartesPanel(obraId); }
+  catch (e) {
+    panelLog('error', 'API GET /partes-trabajo → error al paginar', e.message || '');
+    toast('Error al cargar los partes', 'error');
+    return;
+  }
   const total = _partesData.length;
   document.getElementById('partesResumen').innerHTML = [
     { label: 'Total partes', val: total, cls: '' },
@@ -19225,7 +19248,7 @@ async function cargarPartesPanel() {
       },
     ]
   });
-  document.getElementById('searchPartes')?.addEventListener('input', (e) => {
+  document.getElementById('searchPartes').oninput = (e) => {
     // PARTES-01: un array plano de filtros en Tabulator se combina con AND, así que el
     // buscador solo encontraba filas cuya descripción Y obra contuvieran el texto — es
     // decir, casi nada. El array anidado es el OR.
@@ -19234,7 +19257,7 @@ async function cargarPartesPanel() {
       {field:'obra',        type:'like', value:e.target.value},
       {field:'fecha',       type:'like', value:e.target.value},
     ]]);
-  });
+  };
 }
 
 // PARTES-01: detalle completo de un parte desde oficina (personal, material y firmas, que

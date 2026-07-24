@@ -16,6 +16,15 @@ LEYENDA DE ESTADO:
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
 
+[✓] MODULOS-91 / PARTES-02 — Nueve módulos Office devolvían 500 + partes antiguos invisibles  [HECHO v8.11]
+    · Causa: los 36 handlers de Evaluaciones, Órdenes de cambio, Ensayos, Residuos,
+      Maquinaria, Consumos, Accidentes, Flujo de caja y Solicitudes llamaban a los helpers
+      inexistentes getAuthContext/jsonResp. Todos fallaban antes de ejecutar su lógica.
+    · También: Partes de trabajo tenía LIMIT 100 fijo sin offset; los anteriores desaparecían
+      del móvil y Office al superar el centenar.
+    · Fix: helpers compatibles, GET autenticado, escritura vetada a operario; limit/offset
+      con cabeceras y carga paginada de todos los registros en ambas interfaces.
+
 [✓] PARTES-01 — Partes de trabajo: botones muertos, sin ver ni editar, y 403 para encargados
     [HECHO v8.10]  (sugerencia #208 del log de la app)
     · Adrián, sugerencia #208 (24/07/2026, CPD Getafe): "En la sección partes de trabajos ahí

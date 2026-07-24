@@ -8,6 +8,7 @@ const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Code, X-Obra-Id, X-Departamento, X-Token',
+  'Access-Control-Expose-Headers': 'X-Total-Count, X-Limit, X-Offset',
   'Vary': 'Origin',
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
@@ -40,11 +41,18 @@ function randomHex(bytes = 16) {
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function json(data, status = 200) {
+function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json', ...CORS, ...extraHeaders },
   });
+}
+
+// Compatibilidad de los módulos NEW-85..NEW-91: fueron escritos usando jsonResp(),
+// pero el helper nunca llegó a este worker. Mantener el alias evita duplicar la
+// construcción de respuestas y conserva el mismo contrato que el resto de la API.
+function jsonResp(data, status = 200) {
+  return json(data, status);
 }
 
 function err(msg, status = 400) {
@@ -161,6 +169,22 @@ function hasRole(auth, ...rols) {
   if (!auth) return false;
   const arr = auth.roles || [auth.rol];
   return rols.some(r => arr.includes(r));
+}
+
+// MODULOS-91 (24/07/2026): getAuthContext() nunca estuvo definida en este archivo, pero la
+// llaman 36 handlers de 9 módulos completos (evaluaciones de proveedores NEW-85, órdenes de
+// cambio NEW-86, ensayos de materiales NEW-87, residuos NEW-88, partes de maquinaria NEW-89,
+// consumos de material NEW-90, accidentes, flujo de caja y solicitudes de material NEW-91).
+// El resultado: TODOS esos endpoints devolvían 500 "getAuthContext is not defined" a
+// cualquier usuario, siempre — módulos enteros caídos en producción sin que ningún log lo
+// señalase como tal (parecían simplemente vacíos). Se define como alias de getAuth(), que
+// ya calcula lo que estos handlers destructuran (empresa_id, rol). De paso se añadió el
+// permiso que faltaba por completo en los 36 handlers (ninguno comprobaba rol: cualquier
+// usuario autenticado, incluido operario, podía crear/editar/borrar en cualquiera de los 9
+// módulos) — mismo criterio "no operario" que ya usan decenas de endpoints de gestión en
+// este archivo.
+async function getAuthContext(request, env) {
+  return await getAuth(request, env);
 }
 
 // ── Telegram ─────────────────────────────────────────────────────────────────
@@ -12874,6 +12898,12 @@ async function getPartesTrabajo(request, env) {
   if (!puedeGestionarPartes(auth)) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
+  // PARTES-02: LIMIT 100 fijo, sin forma de pedir más — con el tiempo el panel y la app
+  // dejan de ver los partes antiguos sin ningún aviso, no hay error, solo desaparecen tras
+  // la fila 100. Se añade limit/offset opcionales (mismo idioma que el resto de listados
+  // paginados del archivo) sin tocar el comportamiento por defecto de quien no los use.
+  const limit  = Math.min(parseInt(url.searchParams.get('limit') || '100') || 100, 500);
+  const offset = Math.max(parseInt(url.searchParams.get('offset') || '0') || 0, 0);
   let sql = 'SELECT * FROM partes_trabajo WHERE empresa_id = ?';
   const params = [empresa_id];
   if (obra_id) { sql += ' AND obra_id = ?'; params.push(parseInt(obra_id)); }
@@ -12885,9 +12915,14 @@ async function getPartesTrabajo(request, env) {
     sql += " AND (departamento = ? OR departamento IS NULL OR departamento = '')";
     params.push(auth.departamento);
   }
-  sql += ' ORDER BY fecha DESC, id DESC LIMIT 100';
+  const { total } = await env.DB.prepare(`SELECT COUNT(*) AS total FROM (${sql})`).bind(...params).first();
+  sql += ' ORDER BY fecha DESC, id DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
   const { results } = await env.DB.prepare(sql).bind(...params).all();
-  return json(results);
+  // Se devuelve el array tal cual (compatibilidad con index.html/panel.html, que esperan un
+  // array plano) pero con la paginación en cabeceras HTTP — así ningún cliente existente se
+  // rompe, y uno nuevo puede usar X-Total-Count para saber si hay más de 100.
+  return json(results, 200, { 'X-Total-Count': String(total), 'X-Limit': String(limit), 'X-Offset': String(offset) });
 }
 
 async function getParteTrabajo(id, request, env) {
@@ -19388,6 +19423,7 @@ async function ensureEvaluacionesProvTable(env) {
 
 async function getEvaluacionesProv(request, env) {
   const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id  = url.searchParams.get('obra_id');
   const tipo     = url.searchParams.get('tipo');
@@ -19406,7 +19442,8 @@ async function getEvaluacionesProv(request, env) {
 }
 
 async function crearEvaluacionProv(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureEvaluacionesProvTable(env);
   const anio = new Date().getFullYear();
@@ -19443,7 +19480,8 @@ async function crearEvaluacionProv(request, env) {
 }
 
 async function actualizarEvaluacionProv(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureEvaluacionesProvTable(env);
   const q   = Number(d.nota_calidad||3);
@@ -19475,7 +19513,8 @@ async function actualizarEvaluacionProv(id, request, env) {
 }
 
 async function eliminarEvaluacionProv(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureEvaluacionesProvTable(env);
   await env.DB.prepare(`DELETE FROM evaluaciones_proveedores WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
@@ -19510,6 +19549,7 @@ async function ensureChangeOrdersTable(env) {
 
 async function getChangeOrders(request, env) {
   const { empresa_id } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url    = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const estado  = url.searchParams.get('estado');
@@ -19526,7 +19566,8 @@ async function getChangeOrders(request, env) {
 }
 
 async function crearChangeOrder(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureChangeOrdersTable(env);
   const anio = new Date().getFullYear();
@@ -19555,7 +19596,8 @@ async function crearChangeOrder(request, env) {
 }
 
 async function actualizarChangeOrder(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureChangeOrdersTable(env);
   await env.DB.prepare(
@@ -19579,7 +19621,8 @@ async function actualizarChangeOrder(id, request, env) {
 }
 
 async function eliminarChangeOrder(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureChangeOrdersTable(env);
   await env.DB.prepare(`DELETE FROM solicitudes_cambio WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
@@ -19617,6 +19660,7 @@ async function ensureEnsayosTable(env) {
 
 async function getEnsayos(request, env) {
   const { empresa_id } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id    = url.searchParams.get('obra_id');
   const tipo       = url.searchParams.get('tipo');
@@ -19633,7 +19677,8 @@ async function getEnsayos(request, env) {
 }
 
 async function crearEnsayo(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureEnsayosTable(env);
   const anio = new Date().getFullYear();
@@ -19673,7 +19718,8 @@ async function crearEnsayo(request, env) {
 }
 
 async function actualizarEnsayo(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureEnsayosTable(env);
   const vm = parseFloat(d.valor_medido);
@@ -19706,7 +19752,8 @@ async function actualizarEnsayo(id, request, env) {
 }
 
 async function eliminarEnsayo(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureEnsayosTable(env);
   await env.DB.prepare(`DELETE FROM ensayos_materiales WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
@@ -19739,6 +19786,7 @@ async function ensureResiduosTable(env) {
 
 async function getResiduos(request, env) {
   const { empresa_id } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const destino = url.searchParams.get('destino');
@@ -19755,7 +19803,8 @@ async function getResiduos(request, env) {
 }
 
 async function crearResiduo(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureResiduosTable(env);
   const anio = new Date().getFullYear();
@@ -19782,7 +19831,8 @@ async function crearResiduo(request, env) {
 }
 
 async function actualizarResiduo(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureResiduosTable(env);
   await env.DB.prepare(
@@ -19803,7 +19853,8 @@ async function actualizarResiduo(id, request, env) {
 }
 
 async function eliminarResiduo(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureResiduosTable(env);
   await env.DB.prepare(`DELETE FROM residuos_obra WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
@@ -19842,6 +19893,7 @@ async function ensurePartesMaquinariaTable(env) {
 
 async function getPartesMaquinaria(request, env) {
   const { empresa_id } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id  = url.searchParams.get('obra_id');
   const maquina  = url.searchParams.get('maquina');
@@ -19858,7 +19910,8 @@ async function getPartesMaquinaria(request, env) {
 }
 
 async function crearParteMaquinaria(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensurePartesMaquinariaTable(env);
   const anio = new Date().getFullYear();
@@ -19895,7 +19948,8 @@ async function crearParteMaquinaria(request, env) {
 }
 
 async function actualizarParteMaquinaria(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensurePartesMaquinariaTable(env);
   const hIni = parseFloat(d.horas_inicio); const hFin = parseFloat(d.horas_fin);
@@ -19926,7 +19980,8 @@ async function actualizarParteMaquinaria(id, request, env) {
 }
 
 async function eliminarParteMaquinaria(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensurePartesMaquinariaTable(env);
   await env.DB.prepare(`DELETE FROM partes_maquinaria WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
@@ -19958,6 +20013,7 @@ async function ensureConsumosMaterialTable(env) {
 
 async function getConsumosMaterial(request, env) {
   const { empresa_id } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const tipo    = url.searchParams.get('tipo');
@@ -19972,7 +20028,8 @@ async function getConsumosMaterial(request, env) {
 }
 
 async function crearConsumoMaterial(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureConsumosMaterialTable(env);
   const anio = new Date().getFullYear();
@@ -20001,7 +20058,8 @@ async function crearConsumoMaterial(request, env) {
 }
 
 async function actualizarConsumoMaterial(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureConsumosMaterialTable(env);
   const cant  = Number(d.cantidad||0);
@@ -20024,7 +20082,8 @@ async function actualizarConsumoMaterial(id, request, env) {
 }
 
 async function eliminarConsumoMaterial(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureConsumosMaterialTable(env);
   await env.DB.prepare(`DELETE FROM consumos_material WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
@@ -20065,6 +20124,7 @@ async function ensureAccidentesTable(env) {
 
 async function getAccidentes(request, env) {
   const { empresa_id } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id  = url.searchParams.get('obra_id');
   const tipo     = url.searchParams.get('tipo');
@@ -20081,7 +20141,8 @@ async function getAccidentes(request, env) {
 }
 
 async function crearAccidente(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureAccidentesTable(env);
   const anio = new Date().getFullYear();
@@ -20112,7 +20173,8 @@ async function crearAccidente(request, env) {
 }
 
 async function actualizarAccidente(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureAccidentesTable(env);
   await env.DB.prepare(
@@ -20137,7 +20199,8 @@ async function actualizarAccidente(id, request, env) {
 }
 
 async function eliminarAccidente(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureAccidentesTable(env);
   await env.DB.prepare(`DELETE FROM accidentes_incidentes WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
@@ -20168,6 +20231,7 @@ async function ensureFlujoCajaTable(env) {
 
 async function getFlujoCaja(request, env) {
   const { empresa_id } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const tipo    = url.searchParams.get('tipo');
@@ -20184,7 +20248,8 @@ async function getFlujoCaja(request, env) {
 }
 
 async function crearFlujoCaja(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureFlujoCajaTable(env);
   const anio = new Date().getFullYear();
@@ -20210,7 +20275,8 @@ async function crearFlujoCaja(request, env) {
 }
 
 async function actualizarFlujoCaja(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureFlujoCajaTable(env);
   await env.DB.prepare(
@@ -20231,7 +20297,8 @@ async function actualizarFlujoCaja(id, request, env) {
 }
 
 async function eliminarFlujoCaja(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureFlujoCajaTable(env);
   await env.DB.prepare(`DELETE FROM flujo_caja WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
@@ -20262,6 +20329,7 @@ async function ensureSolicitudesMaterialTable(env) {
 
 async function getSolicitudesMaterial(request, env) {
   const { empresa_id } = await getAuthContext(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id  = url.searchParams.get('obra_id');
   const estado   = url.searchParams.get('estado');
@@ -20276,7 +20344,8 @@ async function getSolicitudesMaterial(request, env) {
 }
 
 async function crearSolicitudMaterial(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureSolicitudesMaterialTable(env);
   const anio = new Date().getFullYear();
@@ -20302,7 +20371,8 @@ async function crearSolicitudMaterial(request, env) {
 }
 
 async function actualizarSolicitudMaterial(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureSolicitudesMaterialTable(env);
   const lineas = typeof d.lineas === 'string' ? d.lineas : JSON.stringify(d.lineas || []);
@@ -20322,7 +20392,8 @@ async function actualizarSolicitudMaterial(id, request, env) {
 }
 
 async function eliminarSolicitudMaterial(id, request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureSolicitudesMaterialTable(env);
   await env.DB.prepare(`DELETE FROM solicitudes_material WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });

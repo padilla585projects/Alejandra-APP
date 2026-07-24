@@ -1,9 +1,22 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- Unificación de cuentas de Alberto + Partes de trabajo arreglado y completado (sugerencia #208) — COMPLETADO
-**Versión actual:** v8.10 (version.json/sw.js/index.html sincronizados)
-**Resumen:** (1) Unificadas las cuentas duplicadas de Alberto en D1 producción, cuenta canónica id=46 con email y contraseña intactos y acceso a Office ya funcional (Part 40). (2) Resuelta la sugerencia #208: las tablas Personal y Material del parte eran inservibles (ReferenceError silencioso en todos sus botones y oninput, así que además todos los partes se guardaban con esas dos tablas vacías), y no existía forma de ver ni editar un parte guardado (faltaba el endpoint PUT en la API). Añadidos ver detalle en app y panel, edición con trazabilidad, y acceso para encargados —que hasta ahora recibían 403 en todo el módulo— con el aislamiento por departamento de DEPT-01 (Part 41).
+**Fecha:** 24/07/2026 -- Recuperados módulos NEW-85..NEW-91 + permisos de Maquinaria + paginación real de Partes de trabajo — COMPLETADO
+**Versión actual:** v8.11 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Part 42 cierra dos hallazgos posteriores a PARTES-01: nueve módulos completos devolvían 500 por los helpers ausentes `getAuthContext` y `jsonResp`, y los Partes de trabajo desaparecían al superar 100 registros. Los módulos ya operan y el operario no puede escribir; la app y Office recuperan todos los partes mediante paginación en bloques.
+
+### Part 42: Recuperar módulos NEW-85..NEW-91 + paginación Partes (24/07/2026) [COMPLETADO, v8.11]
+
+**Contexto:** tras cerrar PARTES-01 se detectó que los 4 endpoints de Partes de Maquinaria no comprobaban rol. Al revisar el bloque se halló una causa mayor: sus 36 handlers, repartidos en 9 módulos, llamaban a `getAuthContext()` y respondían con `jsonResp()`, dos helpers que no existían en `worker.js`. En producción todos devolvían 500 antes de llegar a la lógica. Módulos afectados: Evaluaciones de proveedores, Órdenes de cambio, Ensayos, Residuos, Partes de maquinaria, Consumos de material, Accidentes, Flujo de caja y Solicitudes de material.
+
+**Cambios:**
+- Nuevos helpers de compatibilidad `getAuthContext()` (delegado a `getAuth()`) y `jsonResp()` (delegado a `json()`).
+- Los 9 GET exigen identidad autenticada; los 27 POST/PUT/DELETE bloquean al rol `operario` con 403, mismo criterio ya usado en gestión. No aplica al segundo worker `alejandra-agente`: son endpoints REST exclusivos de `worker.js`, no tools del agente.
+- `json()` ahora admite cabeceras adicionales, y CORS expone las cabeceras de paginación.
+- `/partes-trabajo` acepta `limit` (máximo 500) y `offset`, informa `X-Total-Count`, `X-Limit` y `X-Offset`. App móvil y Office consumen todas las páginas en lotes de 200; Office mantiene su paginación local de Tabulator a 20 filas.
+- El input de búsqueda de Partes en Office se asigna mediante `oninput`, evitando listeners duplicados al refrescar.
+
+**Verificación y deploy:** `node --check worker.js` OK; `wrangler deploy --dry-run` OK con bindings D1/R2; deploy manual Worker Version ID `b8cb7a4e-b51a-4c8e-9288-568ab2523084`. En producción, los 9 GET de una obra inexistente responden 200 (antes 500), `/partes-trabajo?limit=2` expone `X-Total-Count: 0`, y POST de un operario a `/partes-maquinaria` responde 403 sin escribir datos.
 
 ### Part 41: Partes de trabajo — botones rotos, ver/editar y permisos (24/07/2026) [COMPLETADO, v8.10]
 

@@ -11992,7 +11992,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.10';
+const APP_VERSION = '8.11';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13338,15 +13338,34 @@ if ('serviceWorker' in navigator) {
   function parteSetPersonal(i, campo, valor) { if (_partePersonal[i]) _partePersonal[i][campo] = valor; }
   function parteSetMaterial(i, campo, valor) { if (_parteMaterial[i]) _parteMaterial[i][campo] = valor; }
 
+  async function _partesObtenerTodas(q) {
+    const todas = [];
+    const sep = q ? '&' : '?';
+    let offset = 0;
+    let total = Infinity;
+    while (offset < total) {
+      const res = await apiCall(`/partes-trabajo${q}${sep}limit=200&offset=${offset}`);
+      if (!res.ok) throw new Error('No se pudieron cargar los partes');
+      const lote = await res.json();
+      if (!Array.isArray(lote)) throw new Error('Respuesta de partes inválida');
+      todas.push(...lote);
+      const totalCabecera = Number(res.headers.get('X-Total-Count'));
+      total = Number.isFinite(totalCabecera) ? totalCabecera : todas.length;
+      if (!lote.length) break;
+      offset += lote.length;
+    }
+    return todas;
+  }
+
   async function partesCargar() {
     const c = document.getElementById('screenPartesLista');
     if (!c) return;
     c.innerHTML = '<div class="empty-state">Cargando...</div>';
     const s = getSession();
     const q = s?.obra_id ? `?obra_id=${s.obra_id}` : '';
-    const res = await apiCall('/partes-trabajo' + q);
-    if (!res.ok) { c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>'; return; }
-    const partes = await res.json();
+    let partes;
+    try { partes = await _partesObtenerTodas(q); }
+    catch { c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>'; return; }
     if (!partes.length) { c.innerHTML = '<div class="empty-state">Sin partes. Pulsa + para crear uno.</div>'; return; }
     c.innerHTML = partes.map(p => {
       const pers = _parteJSON(p.personal).filter(r => r.nombre);
