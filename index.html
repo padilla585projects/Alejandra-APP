@@ -5573,7 +5573,7 @@ const _DEPTS_CATALOG = {
   carpinteria: { icon: '🪟',  name: 'Carpintería',        desc: 'Madera, aluminio y PVC',                        template: 'trade'     },
   telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
   almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
-  oficina:     { icon: '📐',  name: 'Oficina técnica',    desc: 'Planning, mediciones y documentación',          template: 'trade'     },
+  ingenieria:  { icon: '📐',  name: 'Ingeniería',          desc: 'Planificación, mediciones y documentación técnica', template: 'trade'  },
 };
 const DEPT_INFO = Object.fromEntries(Object.entries(_DEPTS_CATALOG).map(([k, v]) => [k, { icon: v.icon, name: v.name }]));
 
@@ -5675,7 +5675,7 @@ function setupHomeModules() {
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
   const mostrarBobinas = dept === 'electrico';
-  const esOficinaTecnica = dept === 'oficina';
+  const esOficinaTecnica = dept === 'ingenieria';
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
   if (cardP) cardP.style.display = esOficinaTecnica ? 'none' : 'flex';
   if (cardC) cardC.style.display = esOficinaTecnica ? 'none' : 'flex';
@@ -12015,7 +12015,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.18';
+const APP_VERSION = '8.19';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

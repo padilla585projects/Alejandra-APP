@@ -30,7 +30,14 @@
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
 ================================================================================
 
- [✓ HECHO v8.18] FIX-INGENIERIA-01 — Office conserva el departamento de la sesión
+ [✓ HECHO v8.19] INGENIERIA-01 — Departamento de Ingeniería y panel técnico unificado
+    · `ingenieria` sustituye a Oficina técnica como departamento; el rol `oficina` sigue
+      siendo un permiso de acceso y no se modifica.
+    · La sección Ingeniería reúne coordinación técnica, RFIs, planos, planificación,
+      calidad, contratos, cronogramas, cambios, riesgos e instrucciones de obra.
+    · Migración D1 aplicada para datos heredados de `oficina` (sin registros actuales).
+
+[✓ HECHO v8.18] FIX-INGENIERIA-01 — Office conserva el departamento de la sesión
     · Los accesos por credenciales y Google descartaban `departamento` al guardar
       `panel_session`; el sidebar aplicaba el fallback Eléctrico para cualquier cuenta.
     · La auditoría confirma que Ingeniería no es aún un departamento: el equivalente

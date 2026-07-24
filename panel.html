@@ -9529,7 +9529,7 @@ const _DEPTS_CATALOG = {
   carpinteria: { icon: '🪟',  name: 'Carpintería',        desc: 'Madera, aluminio y PVC',                        template: 'trade'     },
   telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
   almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
-  oficina:     { icon: '📐',  name: 'Oficina técnica',    desc: 'Planning, mediciones y documentación',          template: 'trade'     },
+  ingenieria:  { icon: '📐',  name: 'Ingeniería',          desc: 'Planificación, mediciones y documentación técnica', template: 'trade'  },
 };
 const _ALL_DEPTS = Object.keys(_DEPTS_CATALOG);
 const _HOME_TRADE_MODS = [
@@ -9915,6 +9915,38 @@ function organizarSidebarEncargado() {
   ocultarSeccion('diarioCampo');
 }
 
+// INGENIERIA-01: el departamento de Ingeniería reúne la coordinación técnica
+// que antes estaba repartida entre Construcción y Planificación. El rol oficina
+// se mantiene como permiso; esta vista se decide solo por el departamento activo.
+function organizarSidebarIngenieria() {
+  if (SESSION?.departamento !== 'ingenieria') return;
+  const seccion = sid => document.querySelector(`.sidebar-section[data-sid="${sid}"]`);
+  const item = page => document.querySelector(`.nav-item[data-page="${page}"]`);
+  const ingenieria = seccion('construccion');
+  if (!ingenieria) return;
+  const etiqueta = ingenieria.querySelector('span:first-child');
+  if (etiqueta) etiqueta.textContent = '📐 Ingeniería';
+  let ancla = ingenieria;
+  [
+    'tareas', 'rfis', 'calidad', 'punchList', 'contactosObra', 'visitasObra', 'actasReunion',
+    'fases', 'hitos', 'planosObra', 'contratosObra', 'ordenesCompra', 'submittals',
+    'cronogramaObra', 'transmittals', 'controlCalidad', 'ncrsObra', 'itpObra',
+    'equiposMedicion', 'ordenesCambio', 'riesgosObra', 'planSemanal', 'instruccionesObra'
+  ].forEach(page => {
+    const boton = item(page);
+    if (!boton) return;
+    boton.style.display = '';
+    boton.removeAttribute('data-hidden-by-perms');
+    ancla.insertAdjacentElement('afterend', boton);
+    ancla = boton;
+  });
+  const planificacion = seccion('planificacion');
+  if (planificacion) {
+    planificacion.style.display = 'none';
+    planificacion.setAttribute('data-hidden-by-perms', 'true');
+  }
+}
+
 // CONSTR-01 (24/07/2026): oculta la sección completa "Construcción" (y sus
 // items) para electrico/mecanicas — ver comentario en iniciarApp(). Reutilizada
 // también desde ocultarSidebarPorPermisos() para que sobreviva a la
@@ -10066,6 +10098,7 @@ function iniciarApp() {
   }
   ocultarItemsPorOficio();
   organizarSidebarEncargado();
+  organizarSidebarIngenieria();
 
   // mostrar secciones superadmin en página empresa
   if (hasSessionRole('superadmin', 'desarrollador')) {
@@ -10141,6 +10174,7 @@ function ocultarSidebarPorPermisos() {
     mostrarInventarioSeguridadSiAplica(SESSION.departamento || 'electrico');
     ocultarItemsPorOficio();
     organizarSidebarEncargado();
+    organizarSidebarIngenieria();
   } catch (e) {
     console.error('Error en ocultarSidebarPorPermisos:', e);
   }

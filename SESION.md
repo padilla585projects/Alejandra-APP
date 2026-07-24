@@ -1,9 +1,9 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- FIX-INGENIERIA-01 completado v8.18: Office ya conserva departamento, obra y obras asignadas en el login por credenciales y Google. Auditoría: Ingeniería no existe aún como departamento; el equivalente actual es Oficina técnica (`oficina`).
-**Versión actual:** v8.18 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Corregido el fallback erróneo a Eléctrico del sidebar para cualquier cuenta de Office no eléctrica. Siguiente: decidir si Ingeniería será un departamento nuevo o una cuenta con departamento Oficina técnica, y crear las cuentas futuras.
+**Fecha:** 24/07/2026 -- INGENIERIA-01 completado v8.19: creado `ingenieria` en sustitución del departamento Oficina técnica; el rol `oficina` no cambia. Migración D1 ejecutada, Worker desplegado y panel técnico agrupado.
+**Versión actual:** v8.19 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Ingeniería reúne los paneles técnicos de Construcción y Planificación. Siguiente: crear las cuentas futuras con departamento Ingeniería y rol Oficina si necesitan acceso a Alejandra Office.
 
 ### Part 47: Roles acumulables y varias obras (24/07/2026) [COMPLETADO, v8.17]
 

@@ -6136,7 +6136,7 @@ async function actualizarSesionDepartamento(request, env) {
   // SEC-14: lista completa de departamentos válidos (debe reflejar _DEPTS_CATALOG en index.html).
   // Antes solo tenía 4 de 11 — cambiar a "oficina" (u otros 6) fallaba en silencio aquí y
   // dejaba el departamento de la sesión desactualizado en D1.
-  const validos = ['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil', 'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'oficina'];
+  const validos = ['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil', 'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'ingenieria'];
   if (!departamento || !validos.includes(departamento)) return err('Departamento inválido', 400);
   await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
   return json({ ok: true });
