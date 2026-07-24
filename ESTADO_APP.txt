@@ -4,6 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+RESUMEN DE REANUDACIÓN (v8.13, commit 1fb7337): Part 40 unificó las cuentas de Alberto; Part 41 arregló Partes de trabajo; Part 42 recuperó nueve módulos Office y paginación; Part 43 corrigió acciones de inventario en móvil; Part 44 estabilizó el botón físico Atrás de Android/PWA. Worker desplegado en la versión b8cb7a4e-b51a-4c8e-9288-568ab2523084 (v8.11); v8.12 y v8.13 solo cambian frontend y se publican desde GitHub Pages.
+
 ÚLTIMA ACTUALIZACIÓN v8.13 (24/07/2026): fix del botón físico Atrás de Android/PWA. Se crea siempre una entrada guardia al iniciar, se respeta el doble Atrás para salir desde raíz y la pantalla IA vuelve al panel anterior.
 
 ÚLTIMA ACTUALIZACIÓN v8.11 (24/07/2026): recuperados 9 módulos de Office que devolvían 500 por helpers ausentes (`getAuthContext` y `jsonResp`) y bloqueada la escritura a operario. Partes de trabajo ya usa limit/offset y ambas interfaces recuperan todos los registros, no solo los primeros 100.
