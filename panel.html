@@ -265,6 +265,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #fabChatEquipo{position:fixed;bottom:20px;left:20px;z-index:499;background:#2563eb;color:#fff;border:none;border-radius:50%;width:56px;height:56px;font-size:24px;box-shadow:0 4px 20px rgba(37,99,235,.4);cursor:pointer;transition:transform .2s,box-shadow .2s;display:none;align-items:center;justify-content:center}
 #fabChatEquipo:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(37,99,235,.6)}
 #fabChatEquipo:active{transform:scale(0.95)}
+/* CHAT-NOTIF-01 (25/07/2026): Adrián le escribió a Alberto en pleno testing en vivo y no
+   se enteró — no había ningún aviso de mensaje privado nuevo. Badge rojo + parpadeo en el
+   FAB del chat y en el ítem del sidebar. */
+.fab-badge{position:absolute;top:-4px;right:-4px;background:var(--red,#ef4444);color:#fff;border-radius:50%;min-width:20px;height:20px;padding:0 4px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;border:2px solid var(--bg);animation:chatBadgePulse 1.2s ease-in-out infinite}
+@keyframes chatBadgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+#fabChatEquipo.chat-nuevo{animation:chatFabBlink 1s ease-in-out infinite}
+@keyframes chatFabBlink{0%,100%{box-shadow:0 4px 20px rgba(37,99,235,.4)}50%{box-shadow:0 4px 28px 6px rgba(37,99,235,.9)}}
 .rs-fab-main{background:var(--accent);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:22px;box-shadow:0 4px 20px rgba(168,85,247,.5);cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative}
 .rs-fab-main:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(168,85,247,.7)}
 .rs-fab-badge{position:absolute;top:-2px;right:-2px;background:var(--green);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid var(--bg)}
@@ -14875,12 +14882,61 @@ function chatAbrir() {
   panel.style.display = 'flex';
   chatAbierto = true;
   chatMostrarContactos();
+  _chatMarcarLeido();
 }
 function chatCerrar() {
   document.getElementById('chatPanel').style.display = 'none';
   chatAbierto = false;
   clearInterval(chatPolling); chatPolling = null;
 }
+
+// CHAT-NOTIF-01 (25/07/2026): "le he mandado un mensaje a alberto pero no lo ve" — el
+// mensaje SÍ llegaba bien (comprobado en D1), lo que faltaba era avisar de que había uno
+// nuevo sin tener esa conversación abierta. Sin estado de lectura en BD: se guarda en
+// localStorage la última vez que ESTE navegador abrió el chat, y se compara contra
+// /chat/no-leidos cada 20s (independiente de si el panel de chat está abierto o no).
+let _chatUltimaLectura = localStorage.getItem('chat_ultima_lectura') || null;
+let _chatNoLeidosPrev = 0;
+function _chatMarcarLeido() {
+  document.getElementById('fabChatBadge').style.display = 'none';
+  document.getElementById('fabChatEquipo')?.classList.remove('chat-nuevo');
+  const badgeSb = document.getElementById('chatBadgeSidebar');
+  if (badgeSb) badgeSb.style.display = 'none';
+  _chatNoLeidosPrev = 0;
+  api('/chat/no-leidos').then(r => {
+    if (r?.ahora) { _chatUltimaLectura = r.ahora; localStorage.setItem('chat_ultima_lectura', r.ahora); }
+  });
+}
+function _chatPitido() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880; gain.gain.value = 0.08;
+    osc.start(); osc.stop(ctx.currentTime + 0.15);
+    setTimeout(() => ctx.close(), 300);
+  } catch {}
+}
+async function _chatComprobarNoLeidos() {
+  if (!SESSION?.usuario_id) return;
+  if (!_chatUltimaLectura) { _chatMarcarLeido(); return; }
+  const r = await api('/chat/no-leidos?desde=' + encodeURIComponent(_chatUltimaLectura));
+  if (!r || typeof r.count !== 'number') return;
+  // No se mueve la baseline aquí a propósito: hasta que el usuario abra el chat
+  // (_chatMarcarLeido), el contador debe seguir sumando los mismos mensajes.
+  if (r.count > 0 && !chatAbierto) {
+    const badge = document.getElementById('fabChatBadge');
+    const fab = document.getElementById('fabChatEquipo');
+    const badgeSb = document.getElementById('chatBadgeSidebar');
+    if (badge) { badge.textContent = r.count > 9 ? '9+' : r.count; badge.style.display = 'flex'; }
+    fab?.classList.add('chat-nuevo');
+    if (badgeSb) { badgeSb.textContent = r.count > 9 ? '9+' : r.count; badgeSb.style.display = 'inline-flex'; }
+    if (r.count > _chatNoLeidosPrev) _chatPitido();
+  }
+  _chatNoLeidosPrev = r.count;
+}
+setInterval(_chatComprobarNoLeidos, 20000);
+setTimeout(_chatComprobarNoLeidos, 4000);
 
 function chatMostrarContactos() {
   clearInterval(chatPolling); chatPolling = null;
@@ -18795,7 +18851,7 @@ document.getElementById('wInput').focus();
 </div>
 
 <!-- ── FAB Chat del equipo (SCAN-04c) ── -->
-<button id="fabChatEquipo" onclick="chatAbrir()" title="Chat del equipo">💬</button>
+<button id="fabChatEquipo" onclick="chatAbrir()" title="Chat del equipo">💬<span id="fabChatBadge" class="fab-badge" style="display:none">0</span></button>
 
 <!-- ── FAB Alejandra IA ── -->
 <button id="fabAlejandra" class="fab-alejandra" onclick="alejandraFabAbrir()" title="Chat Alejandra IA">

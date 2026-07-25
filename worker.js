@@ -5686,6 +5686,11 @@ export default {
       // ── Chat interno (NEW-08) ─────────────────────────────────────────────
       if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
       if (path === '/chat' && method === 'POST')   return await enviarChatMensaje(request, env);
+      // CHAT-NOTIF-01 (25/07/2026): Adrián le mandó un mensaje privado a Alberto en pleno
+      // testing en vivo y no se enteró — no había forma de saber que había un mensaje
+      // nuevo sin tener esa conversación concreta abierta. Endpoint ligero para el badge:
+      // cuántos mensajes privados (destinatario_id = yo) han llegado desde una fecha.
+      if (path === '/chat/no-leidos' && method === 'GET') return await getChatNoLeidos(request, env);
       if (path.startsWith('/chat/') && method === 'DELETE') {
         const cmid = parseInt(path.split('/chat/')[1]);
         return await borrarChatMensaje(cmid, request, env);
@@ -13786,6 +13791,26 @@ async function enviarChatMensaje(request, env) {
     'INSERT INTO chat_mensajes (empresa_id, obra_id, usuario_id, usuario_nombre, rol, mensaje, destinatario_id) VALUES (?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id, usuario_id || null, nombre || 'Usuario', rol || '', mensaje, destinatario_id).run();
   return json({ ok: true });
+}
+
+// CHAT-NOTIF-01 (25/07/2026): cuenta mensajes PRIVADOS dirigidos a mí, llegados después de
+// `desde`. No hay estado de lectura en BD — el cliente guarda su última lectura conocida en
+// localStorage. Para evitar desajustes de formato/zona horaria entre el reloj del navegador
+// y created_at (TEXT DEFAULT datetime('now')), esta respuesta siempre incluye `ahora` — la
+// hora del propio D1 en el mismo formato — para que el cliente la use como próxima baseline
+// en vez de generar la suya con new Date().
+async function getChatNoLeidos(request, env) {
+  const { empresa_id, usuario_id } = await getAuth(request, env);
+  if (!empresa_id || !usuario_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const desde = url.searchParams.get('desde');
+  const nowRow = await env.DB.prepare("SELECT datetime('now') as ahora").first();
+  const ahora = nowRow?.ahora || null;
+  if (!desde) return json({ count: 0, ahora });
+  const row = await env.DB.prepare(
+    'SELECT COUNT(*) as c FROM chat_mensajes WHERE empresa_id = ? AND destinatario_id = ? AND created_at > ?'
+  ).bind(empresa_id, usuario_id, desde).first();
+  return json({ count: row?.c || 0, ahora });
 }
 
 async function borrarChatMensaje(id, request, env) {
