@@ -17350,6 +17350,37 @@ async function _registrarPushDeveloper() {
     setInterval(rsActualizarBadgePendientes, 30000);
   }
 })();
+
+// AUTO-UPDATE (25/07/2026): en pleno testing en vivo con Alberto, Adrián: "podíamos
+// hacer que se recargue la web sola después de una actualización no?" — el panel de
+// Office nunca comprobaba si había una versión nueva desplegada; cada fix se quedaba
+// sin llegar hasta que alguien recargaba a mano. Mismo patrón que index.html
+// (checkVersionAndUpdate), simplificado porque panel.html no tiene Service Worker
+// que desregistrar. No se compara contra una constante fija (evita un 5º archivo que
+// mantener sincronizado en cada deploy, ver CLAUDE.md): la primera lectura de
+// version.json fija la base, y solo se recarga si luego cambia frente a esa base.
+let _panelVersionBase = null;
+let _panelActualizando = false;
+async function _checkPanelVersion() {
+  if (_panelActualizando) return;
+  try {
+    const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const j = await res.json();
+    if (!j.v) return;
+    if (_panelVersionBase === null) { _panelVersionBase = j.v; return; }
+    if (j.v !== _panelVersionBase) {
+      _panelActualizando = true;
+      toast('🔄 Nueva versión v' + j.v + ' disponible — recargando...', 'ok');
+      setTimeout(() => location.reload(), 4000);
+    }
+  } catch {}
+}
+_checkPanelVersion();
+setInterval(_checkPanelVersion, 2 * 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') _checkPanelVersion();
+});
 </script>
 
 <!-- ═══ ALEJANDRA IA — CHAT FLOTANTE (solo desarrollador) ═══ -->
