@@ -13708,6 +13708,16 @@ async function borrarFotoObra(id, request, env) {
 // CHAT INTERNO (NEW-08)
 // ══════════════════════════════════════════════════════════════════════════════
 
+// CHAT-01 (25/07/2026): el chat nunca funcionó como chat de verdad. enviarChatMensaje()
+// guarda el usuario_id de quien ESCRIBE, pero getChatMensajes() filtraba siempre por UN
+// SOLO usuario_id (por defecto, el tuyo propio si no se pasaba ?usuario_id=) — así que
+// cada usuario solo veía SUS PROPIOS mensajes, nunca los de nadie más. Explica de golpe
+// tres síntomas que reportó Adrián en la misma sesión: nunca se veían nombres de otras
+// personas (nunca llegaban mensajes ajenos), no había forma de dirigirse a alguien
+// concreto, y "elegir destinatario" no existía. Confirmado por AskUserQuestion: modelo de
+// chat privado 1 a 1 + canal "Todos" (broadcast), con selector de contacto.
+// Nueva columna `destinatario_id` (NULL = mensaje al canal "Todos" del equipo/obra; un id
+// = mensaje privado a esa persona). `con` en la query decide qué hilo se muestra.
 async function getChatMensajes(request, env) {
   const auth = await getAuth(request, env);
   const { empresa_id, usuario_id } = auth;
@@ -13717,20 +13727,21 @@ async function getChatMensajes(request, env) {
   const limit  = Math.min(parseInt(url.searchParams.get('limit') || '60'), 100);
   const since  = url.searchParams.get('since') || null;
   const obraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : null;
-  const queryUserId = url.searchParams.get('usuario_id') ? parseInt(url.searchParams.get('usuario_id')) : null;
+  const conRaw = url.searchParams.get('con');
+  const con = conRaw && conRaw !== 'todos' ? parseInt(conRaw) : null;
 
   const conds  = ['cm.empresa_id = ?'];
   const params = [empresa_id];
 
-  // Chat privado: validar que solo se puede ver el propio chat
-  let filtroUsuario = queryUserId || usuario_id;
-  if (filtroUsuario) {
-    const isSuperadmin = auth.isSuperadmin || auth.isDesarrollador;
-    if (queryUserId && !isSuperadmin && queryUserId !== usuario_id) {
-      return err('No puedes ver el chat de otro usuario', 403);
-    }
-    conds.push('cm.usuario_id = ?');
-    params.push(filtroUsuario);
+  if (con) {
+    // Hilo privado: solo los mensajes intercambiados entre tú y "con", en cualquier
+    // dirección. No hace falta comprobación extra de permisos — la condición ya limita a
+    // conversaciones de las que formas parte.
+    conds.push('((cm.usuario_id = ? AND cm.destinatario_id = ?) OR (cm.usuario_id = ? AND cm.destinatario_id = ?))');
+    params.push(usuario_id, con, con, usuario_id);
+  } else {
+    // Canal "Todos": mensajes de equipo/obra, sin destinatario concreto.
+    conds.push('cm.destinatario_id IS NULL');
   }
 
   if (obraId) { conds.push('cm.obra_id = ?'); params.push(obraId); }
@@ -13758,9 +13769,11 @@ async function enviarChatMensaje(request, env) {
   if (!mensaje) return err('Mensaje vacío', 400);
   if (mensaje.length > 500) return err('Mensaje demasiado largo (máx 500 caracteres)', 400);
   const obra_id = body.obra_id || auth.obra_id || null;
+  // CHAT-01: destinatario_id nulo = mensaje al canal "Todos"; con valor = mensaje privado.
+  const destinatario_id = body.destinatario_id ? parseInt(body.destinatario_id) : null;
   await env.DB.prepare(
-    'INSERT INTO chat_mensajes (empresa_id, obra_id, usuario_id, usuario_nombre, rol, mensaje) VALUES (?,?,?,?,?,?)'
-  ).bind(empresa_id, obra_id, usuario_id || null, nombre || 'Usuario', rol || '', mensaje).run();
+    'INSERT INTO chat_mensajes (empresa_id, obra_id, usuario_id, usuario_nombre, rol, mensaje, destinatario_id) VALUES (?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obra_id, usuario_id || null, nombre || 'Usuario', rol || '', mensaje, destinatario_id).run();
   return json({ ok: true });
 }
 
