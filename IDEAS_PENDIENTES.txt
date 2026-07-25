@@ -318,6 +318,22 @@ LEYENDA DE ESTADO:
       DATA-ALBERTO.
     · Reportado y resuelto: 25/07/2026 — durante la verificación de SEG-02.
 
+[✓] DATA-OFICINA-01 — Alberto y Katherine sin roles_extra, riesgo de perder acceso a Office
+    [HECHO 25/07/2026, solo datos]
+    · Detectado al probar producción con la cuenta real de Alberto (id 46): `roles_extra`
+      en D1 estaba a NULL. `puedeEntrarOffice()` (panel.html) exige `oficina` en
+      roles/roles_extra para entrar — sin él, un login nuevo a Office fallaría con "Tu rol
+      no tiene acceso al panel de oficina". Ahora mismo seguía entrando solo porque tenía
+      una sesión de Office ya abierta desde antes (histórico de `sesiones` muestra una fila
+      con `rol='oficina'` de julio), válida hasta el 23/08 — en cuanto esa sesión caduque o
+      la borre, se quedaría fuera.
+    · Adrián confirmó restaurarlo para Alberto, y pidió lo mismo para Katherine (id 45),
+      que también lo necesita para poder usar el nuevo Registro de Seguridad desde Office.
+    · Cambio en D1: `UPDATE usuarios SET roles_extra='["oficina"]' WHERE id IN (46,45)`.
+      Sin cambios de código — el propio `puedeEntrarOffice()` ya contempla roles_extra,
+      no hacía falta tocar nada más.
+    · Reportado y resuelto: 25/07/2026 — durante la verificación en producción de Alberto.
+
 [✓] CONSTR-01 — Sección "Construcción" visible (y vacía) para electrico/mecanicas  [HECHO v8.08]
     · Adrián: "sigo diciendo que porque los electrico o mecanicos tienen que ver el panel
       de construccion de alejandra office" — el backend siempre filtraba tareas_obra/rfis/
