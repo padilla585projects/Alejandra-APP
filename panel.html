@@ -933,6 +933,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
 
     <div class="sidebar-section nav-dev-section" style="display:none">Desarrollador</div>
+    <!-- SCAN-04 (25/07/2026): el chat DevTools IA vivía en un botón flotante morado que se
+         tapaba con el de Alejandra normal ("las dos burbujas iguales") — Adrián: "mejor
+         tenemos un apartado para dev en el lateral izquierdo no? lo metemos... el primero".
+         Se mueve aquí, delante de DevTools, en vez de un botón flotante. -->
+    <button class="nav-item nav-dev" id="btnDevAI" onclick="toggleAIChat()" style="display:none">
+      <span class="nav-icon">🤖</span> Chat DevTools IA
+    </button>
     <button class="nav-item nav-dev" data-page="devtools" onclick="navTo('devtools')" style="display:none">
       <span class="nav-icon">🛠️</span> DevTools
     </button>
@@ -17586,16 +17593,15 @@ document.addEventListener('visibilitychange', () => {
 
 <!-- ═══ ALEJANDRA IA — CHAT FLOTANTE (solo desarrollador) ═══ -->
 <style>
-/* SCAN-04 (25/07/2026): #aiFloatBtn (chat DevTools IA, solo desarrollador/superadmin —
-   showAIBtn()) y #fabAlejandra (chat normal de Alejandra, para cualquier sesión) están casi
-   en la misma esquina (bottom:24/right:24 vs bottom:20/right:20, ambos ~52-56px) — para una
-   cuenta desarrollador, que ve los dos, se tapaban entre sí. Se sube #aiFloatBtn por encima
-   de #fabAlejandra, mismo patrón de apilado vertical que ya usa #remoteScanFab (bottom:80px)
-   sobre #fabAlejandra (bottom:20px). Se sube el panel del chat la misma distancia para que
-   siga abriéndose justo encima de su botón. */
-#aiFloatBtn{position:fixed;bottom:150px;right:24px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#f97316,#a855f7);border:none;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 20px rgba(249,115,22,.5);z-index:9000;transition:transform .2s}
-#aiFloatBtn:hover{transform:scale(1.1)}
-#aiChatPanel{position:fixed;bottom:212px;right:24px;width:360px;height:500px;max-width:calc(100vw - 32px);max-height:calc(100vh - 100px);background:#162032;border:1px solid #334155;border-radius:16px;display:none;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6);z-index:9001;overflow:hidden;transition:all .25s ease}
+/* SCAN-04 (25/07/2026): #aiFloatBtn (chat DevTools IA) y #fabAlejandra estaban casi en la
+   misma esquina y se tapaban entre sí para desarrollador, que ve los dos. Se probó subir
+   #aiFloatBtn por encima de #fabAlejandra, pero seguía viéndose como "dos burbujas iguales" —
+   Adrián: "el chat morado lo sacamos de ahí" — primero se pensó en la barra superior, luego
+   mejor "un apartado para dev en el lateral izquierdo", el primero antes de DevTools. Se
+   quita #aiFloatBtn del stack flotante (ver #btnDevAI en el sidebar, sección Desarrollador,
+   showAIBtn() ahora lo controla a él) — con eso fuera, desarrollador queda con el mismo par
+   de flotantes (Alejandra + Chat equipo) que cualquier otro rol, sin apilado especial. */
+#aiChatPanel{position:fixed;top:56px;right:16px;width:360px;height:500px;max-width:calc(100vw - 32px);max-height:calc(100vh - 100px);background:#162032;border:1px solid #334155;border-radius:16px;display:none;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6);z-index:9001;overflow:hidden;transition:all .25s ease}
 #aiChatPanel.fullscreen{top:0;left:0;right:0;bottom:0;width:100%;height:100%;max-width:100%;max-height:100%;border-radius:0;border:none}
 @media(max-width:420px){#aiChatPanel{right:8px;left:8px;width:auto;bottom:80px}}
 #aiChatPanel.open{display:flex}
@@ -17627,7 +17633,6 @@ document.addEventListener('visibilitychange', () => {
 #aiImagePreview button{background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0 4px}
 </style>
 
-<button id="aiFloatBtn" title="Hablar con Alejandra IA" onclick="toggleAIChat()">🤖</button>
 <div id="aiChatPanel">
   <div id="aiChatHeader">
     <span>Alejandra IA</span>
@@ -17701,8 +17706,11 @@ document.addEventListener('visibilitychange', () => {
     } catch {}
   })();
 
+  // SCAN-04: el botón vive ahora en el sidebar (#btnDevAI, junto a DevTools) — su
+  // visibilidad ya la controla iniciarApp() vía .nav-dev, esto es solo un refuerzo por si
+  // showAIBtn() se dispara antes de que esa parte de iniciarApp() haya corrido.
   function showAIBtn() {
-    const btn = document.getElementById('aiFloatBtn');
+    const btn = document.getElementById('btnDevAI');
     if (!btn) return;
     const rol = (typeof SESSION !== 'undefined' ? SESSION?.rol : null)
              || JSON.parse(localStorage.getItem('panel_session') || 'null')?.rol;
@@ -34869,7 +34877,6 @@ function makeDraggable(id) {
   el.addEventListener('click', e => { if (el._suprimirClick) { e.stopPropagation(); e.preventDefault(); } }, true);
 }
 makeDraggable('fabAlejandra');
-makeDraggable('aiFloatBtn');
 makeDraggable('fabChatEquipo');
 
 </script>
