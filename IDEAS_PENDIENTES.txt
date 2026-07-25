@@ -2333,6 +2333,39 @@ LEYENDA DE ESTADO:
         haga falta es ahora solo una entrada nueva en _MENU_ROL_DEPT_CONFIG (panel.html),
         gracias al refactor de INGENIERIA-02.
 
+[✓] SEG-02-GALERIA — Registro de Seguridad permite elegir foto de galería, no solo hacer foto
+    [HECHO 25/07/2026, v8.41]
+    · Adrián probando en vivo en su HTC (por ADB, con permiso — él mismo escribe sus
+      credenciales en el dispositivo, Claude solo navega/mira capturas): "también podemos
+      agregar imagen que tengamos en el móvil no solo hacer foto". Se quita
+      capture="environment" de los 2 inputs de foto de SEG-02 (alta + añadir al detalle),
+      sin tocar otros inputs que sí necesitan cámara en vivo a propósito (escaneo de
+      albaranes). Confirmado con foto real subida desde el HTC.
+
+[✓] HEADER-COMPACTO-01/02/04 — Serie de fixes de UI móvil a partir de capturas reales del HTC
+    [HECHO 25/07/2026, v8.42→v8.45]
+    · v8.42: barra superior demasiado apretada — se libera espacio quitando el emoji
+      redundante del chip de usuario y achicando el punto de conexión, subiendo tamaños
+      de letra/iconos que sí hay que leer.
+    · v8.43: nombre de obra autoajustable (_autoFitTexto, reduce tamaño de letra en pasos
+      de 0.5px) en vez de truncar siempre igual.
+    · v8.44: la franja naranja de la barra de estado de Android (theme-color #f97316) se
+      cambia a #162032 (navy de la cabecera) para que combine — confirmado en captura real.
+    · v8.45: se quita el chip "SA"; el logo del header lleva un anillo de color
+      (superadmin/desarrollador) en su lugar. El <select> nativo de obra de superadmin
+      seguía truncando pese a más espacio (v8.43 no bastaba) — se envuelve para mostrar un
+      span auto-ajustable encima, confirmado en captura real: "CPD Getafe ▾" completo.
+
+[✓] BUG-DEPTGRID-01 — "Chat del equipo" montado encima de Obra Civil/Pintura en Selecciona departamento
+    [HECHO 25/07/2026, v8.46]
+    · Adrián: "mira un bug" / "as visto la tarjeta de chat interno montado encima de las
+      demás". .dept-grid tenía height:100%, fijando su caja a la altura de una pantalla;
+      con el catálogo de departamentos extra cargado el contenido real es más alto y se
+      desborda SIN mover la caja del grid — el siguiente hermano en el HTML (Chat del
+      equipo) se posicionaba donde terminaba esa caja de 100%, no donde terminaba el
+      contenido real. Se quita height:100% (#appContent ya hace de scroll único de toda
+      la pantalla). Reproducido y verificado con getBoundingClientRect() antes/después.
+
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================
