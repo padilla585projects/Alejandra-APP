@@ -9968,10 +9968,14 @@ function ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin) {
 // DEPT-02 (24/07/2026): el inventario de Seguridad (EPIs y material de ese
 // departamento) no forma parte del trabajo de Electricidad, Mecánicas u otros
 // oficios. Los administradores y el departamento de Seguridad sí lo conservan.
+// ROLES-03 (25/07/2026): decisión pendiente de DEPT-02 resuelta — Project Manager
+// pasa a tener vista ampliada (ve el inventario de todos los departamentos), pero
+// solo lectura: no se añade a canEdit de cargarSeguridad() ni al gate de escritura
+// de crearItemSeg/moverItemSeg en worker.js.
 function mostrarInventarioSeguridadSiAplica(deptActual) {
   // Para esta vista cuenta el rol activo, no roles extra conservados en la
-  // cuenta. La ampliación de accesos para roles mixtos se decidirá aparte.
-  const esAdminActivo = ['superadmin', 'empresa_admin', 'desarrollador'].includes(SESSION?.rol);
+  // cuenta.
+  const esAdminActivo = ['superadmin', 'empresa_admin', 'desarrollador', 'project_manager'].includes(SESSION?.rol);
   if (!esAdminActivo && deptActual !== 'seguridad') return;
   document.querySelectorAll('.nav-inventario-seguridad').forEach(el => {
     el.style.display = '';
@@ -10134,6 +10138,12 @@ function iniciarApp() {
 }
 
 function ocultarSidebarPorPermisos() {
+  // SEG-01 (25/07/2026): DOMContentLoaded llama a esta función incondicionalmente 100ms
+  // después de cargar la página, incluso sin sesión iniciada — SESSION es null en ese
+  // momento. Más abajo se lee SESSION.departamento directamente, lo que lanzaba un
+  // TypeError en cada carga de la pantalla de login (atrapado por el try/catch de abajo,
+  // así que no rompía nada visible, pero ensuciaba la consola siempre).
+  if (!SESSION) return;
   try {
     const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
     const isNonAdmin = !isAdmin;
@@ -12649,9 +12659,15 @@ function filtrarSeguridad() {
   if (!tblSeguridad) return;
   const val = document.getElementById('filterSeguridad').value;
   tblSeguridad.clearFilter();
-  if (val === 'agotado') tblSeguridad.setFilter('cantidad','<=',0);
-  if (val === 'bajo') tblSeguridad.setFilter([{field:'cantidad',type:'>',value:0}]);
-  if (val === 'ok') tblSeguridad.setFilter('cantidad','>',5);
+  // SEG-01 (25/07/2026): usaba un campo `cantidad` que nunca existió en los datos
+  // (la API guarda cantidad_disponible/cantidad_total), así que este filtro nunca
+  // filtraba nada de verdad. De paso, "bajo"/"ok" comparaban con un umbral fijo (0 / 5)
+  // en vez del stock_minimo propio de cada ítem — se sustituye por función de filtro
+  // (Tabulator admite comparar dos campos de la misma fila), coherente con el cálculo
+  // de KPIs de cargarSeguridad() justo debajo.
+  if (val === 'agotado') tblSeguridad.setFilter(d => (d.cantidad_disponible || 0) <= 0);
+  if (val === 'bajo')    tblSeguridad.setFilter(d => (d.cantidad_disponible || 0) > 0 && (d.cantidad_disponible || 0) <= (d.stock_minimo || 0));
+  if (val === 'ok')      tblSeguridad.setFilter(d => (d.cantidad_disponible || 0) > (d.stock_minimo || 0));
 }
 
 async function cargarSeguridad() {
@@ -12659,8 +12675,13 @@ async function cargarSeguridad() {
   const data = toArr(r, 'items');
 
   const total = data.length;
-  const agotados = data.filter(i => (i.cantidad || 0) <= 0).length;
-  const bajos = data.filter(i => (i.cantidad || 0) > 0 && (i.cantidad || 0) <= (i.stock_minimo || 0)).length;
+  // SEG-01: `i.cantidad` no existe en los datos reales (la API devuelve
+  // cantidad_disponible/cantidad_total) → siempre undefined → (undefined||0)=0 →
+  // TODOS los ítems contaban como agotados, ninguno como stock bajo real, y la celda
+  // "Stock"/badge "Estado" de la tabla mostraban 0 y "Agotado" siempre, sin importar
+  // el stock real. Corregido al campo real.
+  const agotados = data.filter(i => (i.cantidad_disponible || 0) <= 0).length;
+  const bajos = data.filter(i => (i.cantidad_disponible || 0) > 0 && (i.cantidad_disponible || 0) <= (i.stock_minimo || 0)).length;
   const proxCad = data.filter(i => { const d = diasParaCaducar(i.fecha_caducidad); return d !== null && d >= 0 && d <= 30; }).length;
   document.getElementById('segResumen').innerHTML = [
     { icon:'🔺', value: total, label:'Ítems totales', cls:'' },
@@ -12682,9 +12703,9 @@ async function cargarSeguridad() {
       { title: 'Código', field: 'codigo', width: 100 },
       { title: 'Nombre', field: 'nombre', sorter:'string', minWidth: 180 },
       { title: 'Tipo', field: 'tipo_material', minWidth: 130 },
-      { title: 'Stock', field: 'cantidad', width: 80, hozAlign:'center', sorter:'number',
+      { title: 'Stock', field: 'cantidad_disponible', width: 80, hozAlign:'center', sorter:'number',
         editor: canEdit ? 'number' : false,
-        cellEdited: c => guardarCampoSeg(c.getRow().getData().id, 'cantidad', c.getValue()),
+        cellEdited: c => guardarCampoSeg(c.getRow().getData().id, 'cantidad_disponible', c.getValue()),
         formatter: c => {
           const cant = c.getValue() || 0;
           const min = c.getRow().getData().stock_minimo || 0;
@@ -12693,7 +12714,7 @@ async function cargarSeguridad() {
         }
       },
       { title: 'Mín.', field: 'stock_minimo', width: 70, hozAlign:'center' },
-      { title: 'Estado', field: 'cantidad', width: 120,
+      { title: 'Estado', field: 'cantidad_disponible', width: 120,
         formatter: c => {
           const cant = c.getValue() || 0;
           const min = c.getRow().getData().stock_minimo || 0;
@@ -12716,8 +12737,11 @@ async function cargarSeguridad() {
 }
 
 async function guardarCampoSeg(id, campo, valor) {
-  const r = await api(`/inventario-seg/${id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
-  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+  // SEG-01: moverItemSeg (worker.js) exige `accion` en el body ('editar' para tocar campos
+  // sueltos) y sin ella caía siempre en 400 "Acción no reconocida" — editar cualquier
+  // celda de esta tabla no guardaba nunca, con o sin permiso, sin importar el rol.
+  const r = await api(`/inventario-seg/${id}`, { method: 'PUT', body: JSON.stringify({ accion: 'editar', [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast(r.error || 'Error al guardar', 'err');
 }
 
 // ── ALERTAS DE STOCK (NEW-73) ──────────────────────────────────

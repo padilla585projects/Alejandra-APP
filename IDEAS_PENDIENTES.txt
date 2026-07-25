@@ -26,6 +26,52 @@
     · Office solo con rol acumulado Oficina; Desarrollador/Superadmin total.
     · Project Manager y Jefe de obra admiten varias obras asignadas.
 
+[✓ HECHO v8.20] ROLES-03 — Project Manager con vista ampliada del Inventario de Seguridad
+    · Decisión pendiente de DEPT-02: "primero cada departamento ve exclusivamente lo suyo;
+      después se decidirán los roles con vista ampliada". Adrián: "vale seguimos con lo
+      roles" → confirmado que se refería a esto → eligió Project Manager (respuesta libre,
+      no estaba entre las 3 opciones ofrecidas: Jefe de obra / Oficina / Ninguno).
+    · Solo lectura: Project Manager ve el inventario de todos los departamentos, pero no
+      puede crear/editar/dar de baja material de Seguridad (ese permiso sigue igual:
+      superadmin/empresa_admin/desarrollador/Seguridad).
+    · worker.js: nuevo flag isProjectManager en getAuth(); añadido solo al gate de lectura
+      de getInventarioSeg(). panel.html: 'project_manager' añadido a
+      mostrarInventarioSeguridadSiAplica() (rol activo de la sesión).
+    · Probado en navegador real (sin login) simulando 5 roles: Project Manager y superadmin
+      ven el ítem del sidebar, encargado/oficina/jefe_de_obra no.
+    · Al verificar esto en el navegador aparecieron varios bugs más del mismo módulo,
+      arreglados en el momento (Adrián: "arregla el bug antes, no dejes bugs para luego") →
+      ver SEG-01 justo debajo.
+
+[✓ HECHO v8.20] SEG-01 — Inventario de Seguridad: Stock/Ubicación/KPIs rotos de raíz
+    · Encontrados al verificar ROLES-03 en el navegador; arreglados en la misma sesión
+      (instrucción de Adrián: no dejar bugs encontrados para después).
+    · Editar el Stock no guardaba para NADIE: guardarCampoSeg() (panel.html) hacía PUT
+      /inventario-seg/:id con {cantidad: valor}, sin campo `accion`; moverItemSeg()
+      (worker.js) exige `accion` (editar/salida/devolucion/baja) y sin ella devolvía
+      siempre 400 "Acción no reconocida". Y aun con accion:'editar', esa rama no tocaba
+      ninguna columna de cantidad.
+    · KPIs/columna "Stock"/badge "Estado" siempre mal: cargarSeguridad() leía `i.cantidad`,
+      campo que NO EXISTE (la tabla tiene cantidad_total/cantidad_disponible) →
+      (undefined||0)=0 siempre → TODOS los ítems contaban como "Agotados" sin importar el
+      stock real. filtrarSeguridad() tenía el mismo campo inexistente, y "bajo"/"ok"
+      comparaban con umbral fijo (0/5) en vez del stock_minimo de cada ítem.
+    · "Ubicación" se pedía en el alta y se tiraba siempre: la tabla inventario_seg no tenía
+      esa columna. El "Stock actual" del alta tampoco se guardaba (crearItemSeg esperaba
+      `cantidad_total`, el formulario mandaba `cantidad` → se creaba siempre con
+      cantidad_total=1 pasara lo que pasara el usuario).
+    · Fix worker.js: crearItemSeg acepta cantidad_total O cantidad (compatibilidad),
+      nueva columna ubicacion (migración perezosa ensureInventarioSegUbicacion), rama
+      'editar' de moverItemSeg ahora acepta ubicacion y cantidad_disponible.
+    · Fix panel.html: cargarSeguridad/filtrarSeguridad pasan a cantidad_disponible, filtro
+      bajo/ok compara contra stock_minimo por fila, guardarCampoSeg añade accion:'editar',
+      ocultarSidebarPorPermisos() con `if (!SESSION) return;` (quita el TypeError inofensivo
+      pero ruidoso al cargar sin sesión).
+    · Probado en navegador con datos simulados (stock real 0/1/20, mínimos 2/3/2): KPIs
+      exactos, Ubicación mostrando datos reales, filtro "agotado" aislando la fila
+      correcta, PUT de edición con el payload exacto que exige el backend. Cero errores.
+    · Ver SESION.md Part 49.
+
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
 ================================================================================

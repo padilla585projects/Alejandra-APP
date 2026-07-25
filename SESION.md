@@ -1,9 +1,54 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 24/07/2026 -- INGENIERIA-01 completado v8.19: creado `ingenieria` en sustitución del departamento Oficina técnica; el rol `oficina` no cambia. Migración D1 ejecutada, Worker desplegado y panel técnico agrupado.
-**Versión actual:** v8.19 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Ingeniería reúne los paneles técnicos de Construcción y Planificación. Siguiente: crear las cuentas futuras con departamento Ingeniería y rol Oficina si necesitan acceso a Alejandra Office.
+**Fecha:** 25/07/2026 -- ROLES-03 + SEG-01 completados v8.20: Project Manager con vista ampliada (solo lectura) del Inventario de Seguridad, y arreglados de raíz 3 bugs reales del módulo (edición de Stock no guardaba para nadie, Ubicación nunca se persistía, KPIs/columna/filtro leían un campo inexistente) encontrados al verificar el fix de roles en el navegador.
+**Versión actual:** v8.20 (version.json/sw.js/index.html sincronizados)
+**Resumen:** Adrián pidió retomar "lo de los roles". Confirmado por AskUserQuestion que se refería a la decisión que quedó pendiente al cerrar DEPT-02 (v8.16): qué roles, además de Seguridad y los admins, deberían ver el inventario de Seguridad de todos los departamentos. Adrián eligió Project Manager (respuesta libre, no una de las opciones ofrecidas). Al verificar el resultado en el navegador aparecieron un aviso de acceso ("no puedo acceder a alejandra" — pestaña muerta apuntando a un servidor de pruebas ya parado, resuelto navegando a producción) y varios bugs reales del módulo de Seguridad; Adrián pidió expresamente no dejarlos para después ("arregla el bug antes, no dejes bugs para luego. según se encuentren se arregla") — instrucción de trabajo guardada en memoria. Ver Part 48.
+
+### Part 48: Project Manager — vista ampliada del Inventario de Seguridad (25/07/2026) [COMPLETADO, v8.20]
+
+**Contexto:** DEPT-02 (v8.16) restringió el Inventario de Seguridad (EPIs) a Seguridad + superadmin/empresa_admin/desarrollador, dejando anotado como decisión pendiente qué roles mixtos merecerían una vista ampliada. Adrián: "vale seguimos con lo roles" → confirmado con AskUserQuestion que era esta decisión → segunda pregunta con las opciones Jefe de obra / Oficina / Ninguno, y Adrián respondió con texto libre: **Project Manager** (rol que no estaba entre las opciones ofrecidas, dado de alta en v8.17 como cuenta independiente de Jefe de obra).
+
+**Alcance decidido:** vista ampliada = solo lectura (ver el inventario de todos los departamentos), no gestión. No se le da a Project Manager alta/edición/baja de material de Seguridad — ese permiso se queda igual que hoy (superadmin/empresa_admin/desarrollador/Seguridad), coherente con que ni siquiera Seguridad puede borrar ítems (solo superadmin/empresa_admin).
+
+**Cambios en `worker.js`:**
+- Nuevo flag `isProjectManager` en `getAuth()` (las dos ramas: token D1 y legacy headers), mismo patrón que `isJefeObra`/`isOficina`.
+- `getInventarioSeg()` (única función de lectura del módulo) amplía su gate con `isProjectManager`. `crearItemSeg`, `moverItemSeg`, `eliminarItemSeg` y `addTipoMaterialSeg` sin cambios — siguen sin admitir a Project Manager, a propósito.
+
+**Cambios en `panel.html`:**
+- `mostrarInventarioSeguridadSiAplica()`: `project_manager` añadido a la lista de roles activos que ven el ítem del sidebar `.nav-inventario-seguridad`. Mismo criterio que ya usaba la función (rol *activo* de la sesión, no roles extra acumulados).
+- No se tocó `canEdit` en `cargarSeguridad()` (línea ~12677): esa lista ya era más permisiva de lo que hacía falta (por rol, sin comprobar departamento) pero decidimos a propósito no añadir `project_manager` ahí, para no darle edición de stock por la puerta de atrás.
+
+**Sin cambios en `alejandra-agente/worker.js`:** no es una barrera destructiva, tools ni permisos del agente — es un permiso de visibilidad de un módulo de negocio del worker principal.
+
+**Verificación:** `node --check worker.js` OK; 3 bloques `<script>` de `index.html` y 3 de `panel.html` verificados con `new Function(...)`, sin errores; versiones sincronizadas v8.20; sin corrupción de encoding; `npx wrangler deploy` con bindings D1/R2 OK. En producción, `GET /inventario-seg` sin credenciales sigue devolviendo 403 (comportamiento sin cambios para anónimos) y `/health` responde 200. Probado en navegador real (servidor estático local, sin login): simulados 5 roles distintos llamando a `mostrarInventarioSeguridadSiAplica()` con el DOM real — Project Manager y superadmin ven el ítem del sidebar, encargado/oficina/jefe_de_obra no, los 5 casos correctos.
+
+### Part 49: SEG-01 — Inventario de Seguridad: Stock, Ubicación y KPIs rotos de raíz (25/07/2026) [COMPLETADO, v8.20]
+
+**Contexto:** al verificar en el navegador que el fix de ROLES-03 funcionaba, apareció un error de consola inofensivo (`ocultarSidebarPorPermisos` con `SESSION` null antes de login). Al investigarlo antes de decidir si tocarlo, Adrián cortó por lo sano: "arregla el bug antes,no dejes bugs para luego.segun se encuentren se arregla" — instrucción general para el resto de la sesión (y guardada en memoria para el futuro). Tirando del hilo de ese bug se descubrieron varios más, todos en el mismo módulo (Inventario de Seguridad), causados por un desajuste sistemático de nombres de campo entre `panel.html` y `worker.js`.
+
+**Bugs encontrados y confirmados trazando el código (no solo sospechados):**
+1. **Editar el Stock no guardaba para nadie.** `guardarCampoSeg()` hacía `PUT /inventario-seg/:id` con `{cantidad: valor}`, sin campo `accion`. `moverItemSeg()` exige `accion` (`editar`/`salida`/`devolucion`/`baja`) y sin ella devuelve siempre 400 "Acción no reconocida" — daba igual el rol.
+2. **Aun con `accion:'editar'`, la rama no tocaba ninguna cantidad.** Esa rama solo actualizaba `estado`/`destino_actual`/`notas`/`stock_minimo`, nunca `cantidad_disponible`.
+3. **KPIs, columna "Stock" y badge "Estado" siempre mal.** `cargarSeguridad()` leía `i.cantidad`, un campo que **no existe** en la tabla (`inventario_seg` tiene `cantidad_total`/`cantidad_disponible`, no `cantidad`). `(undefined||0)` es siempre `0` → **todos los ítems contaban como "Agotados"** en los KPIs y en el badge de estado, sin importar el stock real. El filtro rápido (`filtrarSeguridad`) tenía el mismo campo inexistente, y además "bajo"/"ok" comparaban con un umbral fijo (0/5) en vez del `stock_minimo` propio de cada ítem.
+4. **"Ubicación" se pedía en el alta y se tiraba siempre.** El formulario de creación manda `ubicacion`, pero la tabla `inventario_seg` no tenía esa columna — ni `crearItemSeg` la insertaba ni se guardaba en ningún sitio, aunque la tabla del panel ya tenía una columna "Ubicación" lista (siempre vacía).
+5. **El "Stock actual" del formulario de alta tampoco se guardaba.** `abrirModalSeguridad()` manda `cantidad`, pero `crearItemSeg()` desestructuraba `cantidad_total` (con default `1`) — cualquier valor tecleado se ignoraba y el ítem se creaba siempre con `cantidad_total=1`.
+
+**Fix en `worker.js`:**
+- `crearItemSeg`: acepta `body.cantidad_total ?? body.cantidad` (compatibilidad con el nombre que ya manda el frontend), añade `ubicacion` al INSERT.
+- Nueva migración perezosa `ensureInventarioSegUbicacion()` (`ALTER TABLE inventario_seg ADD COLUMN ubicacion TEXT`), llamada desde `crearItemSeg` y `moverItemSeg`.
+- `moverItemSeg`, rama `accion==='editar'`: añadidos `ubicacion` y `cantidad_disponible` (con `Math.max(0, ...)`) a los campos editables.
+
+**Fix en `panel.html`:**
+- `cargarSeguridad()`: KPIs, columna "Stock" (`field`) y badge "Estado" pasan de `cantidad` a `cantidad_disponible`.
+- `filtrarSeguridad()`: mismo cambio de campo, y "bajo"/"ok" pasan de umbral fijo a función de filtro que compara `cantidad_disponible` contra el `stock_minimo` de cada fila (Tabulator admite comparar dos campos de la misma fila con una función).
+- `guardarCampoSeg()`: añade `accion: 'editar'` al body del PUT; también propaga `r.error` en el toast de fallo en vez de un mensaje genérico.
+- `ocultarSidebarPorPermisos()`: `if (!SESSION) return;` al principio — elimina el TypeError que disparaba `DOMContentLoaded` en cada carga sin sesión.
+- No se tocó `abrirModalSeguridad()` (el body ya funciona ahora gracias a la compatibilidad añadida en `crearItemSeg`).
+
+**Verificación:** `node --check worker.js` OK; 3+3 bloques `<script>` sin errores; sin corrupción de encoding. **Probado en navegador real con datos simulados** (3 ítems con stock real: 0, 1 y 20 unidades, mínimos 2/3/2): KPIs exactos (3 totales, 1 agotado, 1 con stock bajo, coincide con los datos), columna "Ubicación" mostrando los valores reales en vez de vacíos, filtro "agotado" aislando exactamente la fila correcta, y `guardarCampoSeg(2, 'cantidad_disponible', 7)` enviando `{accion:'editar', cantidad_disponible:7}` — el payload exacto que `moverItemSeg` necesita. Cero errores de consola durante toda la prueba, incluida la carga sin sesión.
+
+**Sin cambios en `alejandra-agente/worker.js`:** son bugs de datos/UI de un módulo de negocio, no tocan seguridad, tools ni permisos del agente.
 
 ### Part 47: Roles acumulables y varias obras (24/07/2026) [COMPLETADO, v8.17]
 

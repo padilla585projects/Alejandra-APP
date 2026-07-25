@@ -108,6 +108,7 @@ async function getAuth(request, env) {
           isEncargado: roles.includes('encargado'),
           isJefeObra: roles.includes('jefe_de_obra'),
           isOficina: roles.includes('oficina'),
+          isProjectManager: roles.includes('project_manager'),
           isSeguridad: departamento === 'seguridad',
           rol: sesion.rol,
           roles,
@@ -150,6 +151,7 @@ async function getAuth(request, env) {
     isEncargado:   isAdmin ? false : rol === 'encargado',
     isJefeObra:    isAdmin ? false : rol === 'jefe_de_obra',
     isOficina:     isAdmin ? false : rol === 'oficina',
+    isProjectManager: isAdmin ? false : rol === 'project_manager',
     isDesarrollador: false, // nunca por legacy headers
     isSeguridad: departamento === 'seguridad',
     rol: hasLegacyIdentity ? (isAdmin ? 'superadmin' : rol) : null,
@@ -10223,8 +10225,12 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getInventarioSeg(request, env) {
-  const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
+  // ROLES-03 (25/07/2026): decisión pendiente de DEPT-02 ("primero cada departamento ve
+  // exclusivamente lo suyo; después se decidirán los roles con vista ampliada"). Adrián pidió
+  // vista ampliada (ver el inventario de Seguridad de todos los departamentos, no solo el
+  // suyo) para Project Manager — solo lectura, no se le da alta/mover/baja de material.
+  const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, isProjectManager, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isSeguridad && !isEmpresaAdmin && !isProjectManager) return err('No autorizado', 403);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   let sql = 'SELECT * FROM inventario_seg WHERE empresa_id = ?';
@@ -10244,21 +10250,37 @@ async function buscarItemSeg(codigo, request, env) {
   return json({ ok: true, data: item, historial: hist.results });
 }
 
+// SEG-01 (25/07/2026): la columna `ubicacion` no existía en `inventario_seg` — el
+// formulario de alta (panel.html, abrirModalSeguridad) la pide y la envía, pero
+// crearItemSeg la ignoraba en silencio: se perdía siempre, sin error visible.
+let _invSegUbicacionOk = false;
+async function ensureInventarioSegUbicacion(env) {
+  if (_invSegUbicacionOk) return;
+  try { await env.DB.prepare('ALTER TABLE inventario_seg ADD COLUMN ubicacion TEXT').run(); } catch {}
+  _invSegUbicacionOk = true;
+}
+
 async function crearItemSeg(request, env, ctx) {
   const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, usuario, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas, stock_minimo = 0 } = body;
+  // SEG-01: el formulario de alta manda `cantidad` (campo "Stock actual"), no
+  // `cantidad_total` — con el nombre antiguo el stock introducido se descartaba y el
+  // ítem se creaba siempre con cantidad_total=1. Se acepta cualquiera de los dos
+  // nombres, por si queda algún cliente viejo en caché.
+  const { tipo_material, modo = 'individual', codigo, nombre, fecha_entrada, fecha_caducidad, notas, stock_minimo = 0, ubicacion } = body;
+  const cantidad_total = Number(body.cantidad_total ?? body.cantidad ?? 1) || 1;
   if (!tipo_material) return err('Falta tipo_material');
   if (modo === 'individual' && !codigo) return err('Falta el código identificador');
   const cod = codigo ? codigo.trim().toUpperCase() : null;
   const fecha = fecha_entrada || fechaEspana();
   const reg = usuario || '';
+  await ensureInventarioSegUbicacion(env);
   try {
     const r = await env.DB.prepare(
-      `INSERT INTO inventario_seg (tipo_material, modo, codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, notas, registrado_por, empresa_id, stock_minimo)
-       VALUES (?, ?, ?, ?, ?, ?, 'disponible', ?, ?, ?, ?, ?, ?)`
-    ).bind(tipo_material, modo, cod, nombre || tipo_material, cantidad_total, cantidad_total, fecha, fecha_caducidad || null, notas || '', reg, empresa_id, parseInt(stock_minimo) || 0).run();
+      `INSERT INTO inventario_seg (tipo_material, modo, codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, notas, registrado_por, empresa_id, stock_minimo, ubicacion)
+       VALUES (?, ?, ?, ?, ?, ?, 'disponible', ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(tipo_material, modo, cod, nombre || tipo_material, cantidad_total, cantidad_total, fecha, fecha_caducidad || null, notas || '', reg, empresa_id, parseInt(stock_minimo) || 0, ubicacion || null).run();
     const id = r.meta.last_row_id;
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, fecha) VALUES (?, ?, ?, ?, ?)').bind(id, 'entrada', cantidad_total, reg, fecha).run();
     if (fecha_caducidad) {
@@ -10276,6 +10298,7 @@ async function moverItemSeg(id, request, env, ctx) {
   const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, usuario, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
   if (!empresa_id) return err('No autorizado', 403);
+  await ensureInventarioSegUbicacion(env);
   const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!item) return err('Item no encontrado', 404);
   const body = await request.json().catch(() => ({}));
@@ -10284,12 +10307,22 @@ async function moverItemSeg(id, request, env, ctx) {
 
   // Edición directa de campos del item (sin movimiento)
   if (accion === 'editar') {
-    const { estado: nuevoEstado, destino_actual, notas: nuevasNotas, stock_minimo: nuevoMin } = body;
+    const { estado: nuevoEstado, destino_actual, notas: nuevasNotas, stock_minimo: nuevoMin, ubicacion: nuevaUbic } = body;
     const campos = [], vals = [];
     if (nuevoEstado !== undefined)   { campos.push('estado = ?');         vals.push(nuevoEstado); }
     if (destino_actual !== undefined) { campos.push('destino_actual = ?'); vals.push(destino_actual || null); }
     if (nuevasNotas !== undefined)    { campos.push('notas = ?');          vals.push(nuevasNotas || ''); }
     if (nuevoMin !== undefined)       { campos.push('stock_minimo = ?');   vals.push(parseInt(nuevoMin) || 0); }
+    if (nuevaUbic !== undefined)      { campos.push('ubicacion = ?');      vals.push(nuevaUbic || null); }
+    // SEG-01: guardarCampoSeg() en panel.html (celda editable "Stock" de la tabla) envía
+    // cantidad_disponible desde el 25/07/2026; antes enviaba `cantidad` a secas y esta
+    // rama nunca la manejaba, así que la edición inline del stock nunca guardaba nada
+    // (moverItemSeg caía siempre en 'Acción no reconocida' por faltar `accion`, y aun
+    // arreglando eso, esta rama tampoco tocaba ninguna columna de cantidad).
+    if (body.cantidad_disponible !== undefined) {
+      const nuevaCant = Math.max(0, parseInt(body.cantidad_disponible) || 0);
+      campos.push('cantidad_disponible = ?'); vals.push(nuevaCant);
+    }
     if (campos.length) {
       vals.push(id, empresa_id);
       await env.DB.prepare(`UPDATE inventario_seg SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
