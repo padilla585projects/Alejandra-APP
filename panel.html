@@ -223,6 +223,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 
+/* BUG-TABLA-01 (25/07/2026): con layout:'fitData' (ver cargarBobinas) las tablas
+   anchas scrollean en horizontal — Adrián: "el scroll lateral que se vea un
+   poquito más la barra para moverla", la de 6px por defecto costaba de agarrar
+   con el ratón. Solo se engorda la barra horizontal del propio scroll interno de
+   Tabulator, no la vertical de la página. */
+.tabulator .tabulator-tableholder::-webkit-scrollbar{height:12px}
+.tabulator .tabulator-tableholder::-webkit-scrollbar-thumb{background:var(--muted);border-radius:6px}
+.tabulator .tabulator-tableholder::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+
 /* Tabulator override inside panel */
 .tabulator-editing input,.tabulator-editing select{background:var(--surface2) !important;color:var(--text) !important;border:1px solid var(--accent) !important;padding:4px 8px !important;font-family:'Poppins',sans-serif !important}
 
@@ -10235,18 +10244,22 @@ function iniciarApp() {
   // BUG-FAB-01 (25/07/2026): este bloque se ejecuta de forma síncrona mientras el
   // parser aún no ha llegado al HTML de los botones (están más abajo en el body,
   // fuera de este <script>) cuando iniciarApp() se llama para una sesión YA
-  // guardada (recarga de página, línea ~16921) — getElementById devolvía null en
-  // silencio y el FAB se quedaba oculto para siempre (el guard _iniciarAppCalled
-  // impide reintentarlo). Con login nuevo por Google sí funcionaba porque esa
-  // llamada llega async, con el DOM ya completo. Se difiere con setTimeout(0)
-  // para que corra después de que el parser termine el documento.
+  // guardada (recarga de página) — getElementById devolvía null en silencio y el
+  // FAB se quedaba oculto para siempre (el guard _iniciarAppCalled impide
+  // reintentarlo). Un setTimeout(0) no bastó (seguía disparándose antes de que el
+  // resto de <script> del documento — con más trabajo síncrono propio — terminara
+  // de parsear/ejecutar). Se usa window.addEventListener('load', ...), que solo
+  // dispara cuando el documento entero (y sus recursos) está listo, con fallback
+  // inmediato si el evento 'load' ya pasó para cuando se llega aquí.
   if (SESSION?.usuario_id) {
-    setTimeout(() => {
+    const _mostrarFabs = () => {
       const fabEl = document.getElementById('fabAlejandra');
       if (fabEl) fabEl.style.display = 'flex';
       const fabChat = document.getElementById('fabChatEquipo');
       if (fabChat) fabChat.style.display = 'flex';
-    }, 0);
+    };
+    if (document.readyState === 'complete') _mostrarFabs();
+    else window.addEventListener('load', _mostrarFabs);
   }
 
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
