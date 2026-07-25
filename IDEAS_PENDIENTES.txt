@@ -2272,7 +2272,7 @@ LEYENDA DE ESTADO:
       pantalla de "preguntas de Alejandra" en el panel, las tablas ya están listas para consultarlas.
 
 ================================================================================
-  💡 SCAN/CHAT-NOTIF/ARCHIVO-BOBINAS/FILTRO-OBRA — Segunda tanda de bugs en vivo con Alberto  [HECHO v8.28→v8.36]
+  💡 SCAN/CHAT-NOTIF/ARCHIVO-BOBINAS/FILTRO-OBRA/SYNC-INV/CHAT-MOVIL — Segunda tanda de bugs en vivo con Alberto + pendientes  [HECHO v8.28→v8.38]
 ================================================================================
 
 [✓] SCAN-04c/BUG-TABLA-01/BUG-FAB-01 — Bobinas: fila desplegada, FAB invisible tras recargar,
@@ -2289,13 +2289,25 @@ LEYENDA DE ESTADO:
       se borra); filtro de obra oculto para roles que el backend ya ignoraba; aviso de mensajes
       de chat privados sin leer (badge+parpadeo+pitido, nuevo /chat/no-leidos); chat DevTools IA
       movido del botón flotante al sidebar (sección Desarrollador).
+
+[✓] SYNC-INV-01 — Sincronización en tiempo real de inventarios app↔Office
+    [HECHO 25/07/2026, v8.37]
+    · Adrián: "revisa que todos los cambios de inventarios se hagan en tiempo real entre app y
+      office". Office ya tenía auto-refresh cada 60s desde antes de esta sesión (sin bug ahí);
+      la app móvil no tenía NINGÚN polling para la pantalla de Bobinas/PEMP/Carretillas —
+      añadido con el mismo intervalo, reutilizando la infraestructura genérica que ya usan
+      Pedidos/Incidencias/Personal. Ver SESION.md Part 58 para el detalle técnico.
+
+[✓] CHAT-MOVIL-01 — Chat privado 1 a 1 + aviso de no-leídos en la app móvil (paridad con Office)
+    [HECHO 25/07/2026, v8.38]
+    · Último pendiente grande de Part 57/58: la app móvil solo tenía el canal "Todos", sin
+      selector de contacto. Se replica el patrón de dos vistas de panel.html (lista de
+      contactos ↔ hilo activo) y el aviso de mensajes privados sin leer que ya existía en
+      Office (/chat/no-leidos). Ver SESION.md Part 58 para el detalle técnico.
+
     · Pendiente sin resolver (flagged para futura sesión, ver también SESION.md Part 58):
-      - "revisa que todos los cambios de inventarios se hagan en tiempo real entre app y office"
-        (pedido por Adrián, nunca investigado).
       - "quiero quitar columnas del inventario que no valen y añadir otras" (pedido por Adrián,
         nunca especificó cuáles — preguntar antes de tocar la tabla).
-      - Chat interno en la app móvil (index.html) sigue sin selector de contacto privado 1 a 1
-        ni el aviso de no-leídos — ambos solo se construyeron en Office.
       - 4 cuentas "Alberto" en D1 (ids 1, 12, 46, 50, 51), solo el 46 activo — sin limpiar.
 
 ================================================================================
