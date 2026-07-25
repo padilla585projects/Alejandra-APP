@@ -10243,24 +10243,12 @@ function iniciarApp() {
   // mostrar FAB de Alejandra y del chat del equipo cuando hay sesión activa
   // BUG-FAB-01 (25/07/2026): este bloque se ejecuta de forma síncrona mientras el
   // parser aún no ha llegado al HTML de los botones (están más abajo en el body,
-  // fuera de este <script>) cuando iniciarApp() se llama para una sesión YA
-  // guardada (recarga de página) — getElementById devolvía null en silencio y el
-  // FAB se quedaba oculto para siempre (el guard _iniciarAppCalled impide
-  // reintentarlo). Un setTimeout(0) no bastó (seguía disparándose antes de que el
-  // resto de <script> del documento — con más trabajo síncrono propio — terminara
-  // de parsear/ejecutar). Se usa window.addEventListener('load', ...), que solo
-  // dispara cuando el documento entero (y sus recursos) está listo, con fallback
-  // inmediato si el evento 'load' ya pasó para cuando se llega aquí.
-  if (SESSION?.usuario_id) {
-    const _mostrarFabs = () => {
-      const fabEl = document.getElementById('fabAlejandra');
-      if (fabEl) fabEl.style.display = 'flex';
-      const fabChat = document.getElementById('fabChatEquipo');
-      if (fabChat) fabChat.style.display = 'flex';
-    };
-    if (document.readyState === 'complete') _mostrarFabs();
-    else window.addEventListener('load', _mostrarFabs);
-  }
+  // fuera de este <script>), así que getElementById devolvía null en silencio.
+  // Dos intentos previos (setTimeout(0), window.addEventListener('load')) seguían
+  // fallando en algunos casos (p.ej. desarrollador). La versión fiable —mismo
+  // patrón que showAIBtn(), reintentar cada 3s indefinidamente— vive en
+  // _mostrarFabsEquipo(), más abajo en este archivo.
+  if (typeof _mostrarFabsEquipo === 'function') _mostrarFabsEquipo();
 
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
   // Admins (superadmin/empresa_admin) ven TODO
@@ -17905,6 +17893,29 @@ document.getElementById('wInput').focus();
   document.addEventListener('sessionReady', showAIBtn);
   setTimeout(showAIBtn, 1500);
   setInterval(showAIBtn, 3000);
+
+  // BUG-FAB-01 (25/07/2026): el intento anterior (setTimeout(0) en iniciarApp(), luego
+  // window.addEventListener('load', ...)) seguía fallando para desarrollador — Adrián:
+  // "en modo desarrollador... tengo dos botones de alejandra IA, pero ninguno del Chat
+  // interno". Se copia el patrón de showAIBtn() de arriba, que sí es fiable: reintentar
+  // cada 3s de forma indefinida es más robusto que depender de un único evento de ciclo
+  // de vida cuyo timing exacto no se controla del todo en esta página.
+  function _mostrarFabsEquipo() {
+    const rol = (typeof SESSION !== 'undefined' ? SESSION?.rol : null)
+             || JSON.parse(localStorage.getItem('panel_session') || 'null')?.rol;
+    const usuarioId = (typeof SESSION !== 'undefined' ? SESSION?.usuario_id : null)
+             || JSON.parse(localStorage.getItem('panel_session') || 'null')?.usuario_id;
+    if (!rol || !usuarioId) return;
+    const fabEl = document.getElementById('fabAlejandra');
+    if (fabEl) fabEl.style.display = 'flex';
+    const fabChat = document.getElementById('fabChatEquipo');
+    if (fabChat) fabChat.style.display = 'flex';
+  }
+  window._mostrarFabsEquipo = _mostrarFabsEquipo;
+  _mostrarFabsEquipo();
+  document.addEventListener('sessionReady', _mostrarFabsEquipo);
+  setTimeout(_mostrarFabsEquipo, 1500);
+  setInterval(_mostrarFabsEquipo, 3000);
 })();
 
 // ── SCAN PARTE SEMANAL (panel web) ──────────────────────────────────────────
