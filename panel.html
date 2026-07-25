@@ -34822,13 +34822,15 @@ async function eliminarPlanoId(id, titulo) {
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
-// SCAN-04b (25/07/2026): Adrián pidió que los botones flotantes se puedan mover, además de
-// separarlos (ya hecho antes en esta misma sesión). Aplica solo a los dos botones de chat
-// IA (#fabAlejandra, #aiFloatBtn) — son botones sueltos y simples; #remoteScanFab es un
-// contenedor con varios sub-botones dentro, y arrastrar el contenedor sin romper el click
-// de sus hijos necesita más cuidado del que da tiempo a probar bien ahora mismo, así que se
-// deja fuera a propósito. La posición se recuerda por navegador (localStorage), no por
-// usuario ni servidor.
+// SCAN-04b (25/07/2026): Adrián pidió que los botones flotantes se puedan mover. La
+// posición se recuerda por navegador (localStorage), no por usuario ni servidor.
+// makeDraggable('remoteScanFab') (25/07/2026, más abajo): #remoteScanFab es un contenedor
+// con varios sub-botones dentro (pendientes/escanear), se dejó fuera a propósito por miedo
+// a romper el click de sus hijos al arrastrar el contenedor entero. Revisado: start()/
+// move()/stop() solo marcan `moved` (y por tanto solo suprimen el siguiente click) cuando
+// el puntero se desplaza más de 4px — un click normal en un botón hijo (sin arrastre)
+// nunca activa esa rama, así que el onclick del botón llega intacto. Es seguro aplicarlo
+// igual que a los demás FABs.
 function makeDraggable(id) {
   const el = document.getElementById(id);
   if (!el || el._dragInit) return;
@@ -34878,6 +34880,7 @@ function makeDraggable(id) {
 }
 makeDraggable('fabAlejandra');
 makeDraggable('fabChatEquipo');
+makeDraggable('remoteScanFab');
 
 </script>
 
