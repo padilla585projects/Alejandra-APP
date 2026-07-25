@@ -291,6 +291,33 @@ LEYENDA DE ESTADO:
       cerebros de Alejandra ni requiere deploy ni subida de versión.
     · Reportado: 23/07/2026 — Adrián. Resuelto: 24/07/2026.
 
+[✓] DATA-KATHERINE — Cuentas duplicadas de Katherine unificadas  [HECHO 25/07/2026, solo datos]
+    · Detectado al verificar SEG-02 (Registro de Seguridad) contra la cuenta real de
+      Katherine: 4 filas con nombre "Katherine" en D1 (ids 8, 39, 42, 45).
+    · Auditoría: 39 y 42 ya inactivas, sin datos en ninguna tabla (sesiones, fichajes,
+      sync_dispositivos, carnets, epis_asignados, turnos, chat_mensajes) — no tocadas.
+    · La 8 (katherine@test.local) tenía actividad real (sesión y chat del 18/07/2026) pero
+      un código `_del_8` a medias — la marca que usa el propio borrado de la app
+      (`codigo='_del_'||id`, worker.js:7043/7047) pero SIN completar: seguía activa, con
+      email y contraseña, cuando ese flujo también debería poner activo=0 y vaciar
+      email/password_hash. La 45 (Katherine El Souki, katherineelsouki@gmail.com) tenía el
+      nombre y email reales pero sin password_hash y un código `g_pend_...` de alta con
+      Google sin completar aparentemente — pero revisando el flujo de aprobación
+      (worker.js:3837) esa cuenta SÍ estaba aprobada (activo=1, rol/departamento
+      correctos); el código pendiente es solo un resto cosmético, no funcional, y al ser
+      cuenta de Google no necesita contraseña.
+    · Contradicción no resoluble solo con los datos: preguntado a Adrián por
+      AskUserQuestion cuál era la cuenta real → confirmó la 45 (Katherine El Souki).
+    · Cambios aplicados en D1 (resultados capturados en la sesión antes de tocar nada):
+      DELETE de la sesión de la 8 (id 152, última actividad 18/07), y completado el
+      borrado de la 8 con el mismo UPDATE que usa el propio endpoint de borrado de
+      usuarios (activo=0, email=NULL, password_hash=NULL, codigo se queda '_del_8' —
+      ya coincidía). La 45 no necesitó ningún cambio, ya estaba correctamente configurada.
+    · Sin cambios de código en ningún archivo — limpieza de datos pura, no toca los dos
+      cerebros de Alejandra ni requiere deploy ni subida de versión. Mismo patrón que
+      DATA-ALBERTO.
+    · Reportado y resuelto: 25/07/2026 — durante la verificación de SEG-02.
+
 [✓] CONSTR-01 — Sección "Construcción" visible (y vacía) para electrico/mecanicas  [HECHO v8.08]
     · Adrián: "sigo diciendo que porque los electrico o mecanicos tienen que ver el panel
       de construccion de alejandra office" — el backend siempre filtraba tareas_obra/rfis/

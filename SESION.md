@@ -1,9 +1,9 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Fecha:** 25/07/2026 -- SEG-02 completado v8.22: nuevo módulo "Registro de Seguridad" (fotos + hilo de comentarios de todo el departamento, informe PDF/email/compartir), en app y Office.
+**Fecha:** 25/07/2026 -- DATA-KATHERINE resuelto (solo datos, sin cambio de versión): unificadas las cuentas duplicadas de Katherine en D1 producción tras verificar SEG-02.
 **Versión actual:** v8.22 (version.json/sw.js/index.html sincronizados)
-**Resumen:** Sesión larga sobre roles y departamentos. (1) ORG-03/ORG-04/ROLES-04 (v8.21): menú de Office propio para Mecánicas y Seguridad (Técnico/Recursos Preventivos), rol Ingeniero dado de alta, catálogo de roles completado en 6 sitios donde faltaban project_manager/almacenero/ingeniero (incluido un desplegable de departamento desactualizado desde INGENIERIA-01 que aún ofrecía "Oficina técnica"). (2) SEG-02 (v8.22): Adrián pidió una función para que Seguridad suba fotos de incidencias/estados de obra con comentarios de todo el departamento, verificable desde app y Office, con informe descargable/enviable por email/compartible por WhatsApp — "lo que hace un departamento de seguridad". Confirmado por AskUserQuestion: módulo nuevo e independiente (no dentro de Incidencias), visible para todo el departamento de Seguridad + admins, informe en PDF vía ventana de impresión. Ver Parts 50-53.
+**Resumen:** Sesión larga sobre roles y departamentos. (1) ORG-03/ORG-04/ROLES-04 (v8.21): menú de Office propio para Mecánicas y Seguridad (Técnico/Recursos Preventivos), rol Ingeniero dado de alta, catálogo de roles completado en 6 sitios donde faltaban project_manager/almacenero/ingeniero (incluido un desplegable de departamento desactualizado desde INGENIERIA-01 que aún ofrecía "Oficina técnica"). (2) SEG-02 (v8.22): Adrián pidió una función para que Seguridad suba fotos de incidencias/estados de obra con comentarios de todo el departamento, verificable desde app y Office, con informe descargable/enviable por email/compartible por WhatsApp — "lo que hace un departamento de seguridad". Confirmado por AskUserQuestion: módulo nuevo e independiente (no dentro de Incidencias), visible para todo el departamento de Seguridad + admins, informe en PDF vía ventana de impresión. (3) DATA-KATHERINE: al pedir Adrián verificar con la cuenta real de Katherine, se encontraron 4 cuentas con ese nombre en D1; unificadas en la cuenta real (Katherine El Souki) tras resolver una contradicción en los datos que no se podía inferir sola (ver Part 54). Ver Parts 50-54.
 
 ### Part 48: Project Manager — vista ampliada del Inventario de Seguridad (25/07/2026) [COMPLETADO, v8.20]
 
@@ -49,6 +49,18 @@
 **Verificación:** `node --check worker.js` OK; 3+3 bloques `<script>` sin errores; sin corrupción de encoding. **Probado en navegador real con datos simulados** (3 ítems con stock real: 0, 1 y 20 unidades, mínimos 2/3/2): KPIs exactos (3 totales, 1 agotado, 1 con stock bajo, coincide con los datos), columna "Ubicación" mostrando los valores reales en vez de vacíos, filtro "agotado" aislando exactamente la fila correcta, y `guardarCampoSeg(2, 'cantidad_disponible', 7)` enviando `{accion:'editar', cantidad_disponible:7}` — el payload exacto que `moverItemSeg` necesita. Cero errores de consola durante toda la prueba, incluida la carga sin sesión.
 
 **Sin cambios en `alejandra-agente/worker.js`:** son bugs de datos/UI de un módulo de negocio, no tocan seguridad, tools ni permisos del agente.
+
+### Part 54: DATA-KATHERINE — Cuentas duplicadas de Katherine unificadas (25/07/2026) [COMPLETADO, solo datos]
+
+**Contexto:** Adrián pidió verificar SEG-02 con la cuenta real de Katherine. Auditoría en D1 producción: 4 filas con nombre "Katherine" (ids 8, 39, 42, 45). Las ids 39 y 42 ya estaban inactivas y sin ningún dato asociado (sesiones, fichajes, sync_dispositivos, carnets, epis_asignados, turnos, chat_mensajes) — no se tocaron.
+
+**La contradicción:** la id 8 (`katherine@test.local`) tenía actividad real reciente (sesión y mensaje de chat del 18/07/2026) pero un código `_del_8` — la misma marca que usa el propio endpoint de borrado de usuarios (`codigo='_del_'||id`, `worker.js:7043`/`7047`), que también debería poner `activo=0` y vaciar email/contraseña. En la 8 ninguna de esas dos cosas se había hecho: seguía activa, con email de prueba y contraseña. La id 45 (Katherine El Souki, `katherineelsouki@gmail.com`) tenía el nombre y el email reales, pero sin contraseña y con un código `g_pend_...` de alta con Google aparentemente sin terminar — y su última sesión (13/07) era más antigua que la de la 8.
+
+Revisando el flujo de aprobación de altas por Google (`worker.js:3837`), se confirmó que la 45 SÍ estaba aprobada de verdad (`activo=1`, rol y departamento correctos); el código `g_pend_` es solo un resto cosmético que ese endpoint no limpia, y al ser cuenta de Google no necesita contraseña para entrar. Aun así, la contradicción (actividad real en la cuenta de pruebas vs. datos reales en la cuenta con alta a medias) no se podía resolver solo mirando la base de datos — se preguntó a Adrián por AskUserQuestion cuál era la cuenta real. Confirmó: la 45.
+
+**Cambios aplicados en D1** (resultados capturados en la sesión antes de tocar nada, mismo patrón que DATA-ALBERTO): `DELETE` de la sesión activa de la 8 (id 152, última actividad 18/07), y completado su borrado con el mismo `UPDATE` que usa el endpoint real de borrado (`activo=0, email=NULL, password_hash=NULL`; `codigo` se queda `_del_8`, ya coincidía). La 45 no necesitó ningún cambio — ya estaba correctamente configurada y funcional.
+
+**Sin cambios de código en ningún archivo:** limpieza de datos pura, no toca los dos cerebros de Alejandra, no requiere deploy ni subida de versión.
 
 ### Part 53: SEG-02 — Registro de Seguridad: fotos + comentarios del departamento + informe (25/07/2026) [COMPLETADO, v8.22]
 
