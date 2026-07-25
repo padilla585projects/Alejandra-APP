@@ -10232,11 +10232,21 @@ function iniciarApp() {
   ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin);
 
   // mostrar FAB de Alejandra y del chat del equipo cuando hay sesión activa
+  // BUG-FAB-01 (25/07/2026): este bloque se ejecuta de forma síncrona mientras el
+  // parser aún no ha llegado al HTML de los botones (están más abajo en el body,
+  // fuera de este <script>) cuando iniciarApp() se llama para una sesión YA
+  // guardada (recarga de página, línea ~16921) — getElementById devolvía null en
+  // silencio y el FAB se quedaba oculto para siempre (el guard _iniciarAppCalled
+  // impide reintentarlo). Con login nuevo por Google sí funcionaba porque esa
+  // llamada llega async, con el DOM ya completo. Se difiere con setTimeout(0)
+  // para que corra después de que el parser termine el documento.
   if (SESSION?.usuario_id) {
-    const fabEl = document.getElementById('fabAlejandra');
-    if (fabEl) fabEl.style.display = 'flex';
-    const fabChat = document.getElementById('fabChatEquipo');
-    if (fabChat) fabChat.style.display = 'flex';
+    setTimeout(() => {
+      const fabEl = document.getElementById('fabAlejandra');
+      if (fabEl) fabEl.style.display = 'flex';
+      const fabChat = document.getElementById('fabChatEquipo');
+      if (fabChat) fabChat.style.display = 'flex';
+    }, 0);
   }
 
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
@@ -12471,12 +12481,16 @@ async function cargarBobinas() {
   }
   if (tblBobinas) { tblBobinas.replaceData(data); return; }
   tblBobinas = new Tabulator('#tblBobinas', {
-    // SCAN-02: con las columnas nuevas (Long., Registrado por, Acciones) la tabla dejó de
-    // caber con 'fitColumns' a secas — se añade responsiveLayout:'collapse' (mismo patrón
-    // que ya usan otras tablas del panel, ej. Partes de trabajo) para que las columnas
-    // menos prioritarias se plieguen en una fila expandible en vez de aplastarse todas.
+    // SCAN-02/BUG-TABLA-01 (25/07/2026): con las columnas nuevas (Long., Registrado por,
+    // Acciones) la tabla dejó de caber con 'fitColumns' a secas. Se probó
+    // responsiveLayout:'collapse' pero en producción "Registrado por" salía siempre
+    // desplegado como una fila extra debajo de CADA bobina en vez de plegarse tras un
+    // icono "+" — Adrián: "sigue sin verse todas las columnas dentro de la pantalla" /
+    // "mira el cuadro algo pasa". Se quita el collapse: con layout:'fitData' cada columna
+    // conserva su ancho fijo/minWidth y la tabla scrollea en horizontal si no cabe, en
+    // vez de ocultar u ocupar una fila entera por columna.
     // resizableColumns permite arrastrar el borde de cada columna para ajustarla a mano.
-    data, layout: 'fitColumns', responsiveLayout: 'collapse', resizableColumns: true,
+    data, layout: 'fitData', resizableColumns: true,
     pagination: 'local', paginationSize: 20,
     placeholder: '<div class="empty-state"><div class="empty-icon">⚡</div><div class="empty-text">Sin bobinas</div></div>',
     columns: [
