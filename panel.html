@@ -10058,6 +10058,22 @@ const _MENU_ROL_DEPT_CONFIG = {
       icono: '🔺',
       material: ['herramientas', 'alertasStock'],
     },
+    // INGENIERIA-02 (25/07/2026): antes vivía aparte en organizarSidebarIngenieria(),
+    // gateada solo por departamento (sin distinguir encargado/operario) — Adrián pidió
+    // alinearla al mismo patrón rol+departamento del resto. Sin 'material' (Ingeniería no
+    // tiene inventario propio) ni 'controlObra' (sus páginas de documentación van dentro
+    // de su propia sección, no en "Documentación y control"). Lista íntegra, la misma que
+    // ya tenía la función anterior.
+    ingenieria: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '📐 Ingeniería',
+        paginas: ['tareas', 'rfis', 'calidad', 'punchList', 'contactosObra', 'visitasObra', 'actasReunion',
+                  'fases', 'hitos', 'planosObra', 'contratosObra', 'ordenesCompra', 'submittals',
+                  'cronogramaObra', 'transmittals', 'controlCalidad', 'ncrsObra', 'itpObra',
+                  'equiposMedicion', 'ordenesCambio', 'riesgosObra', 'planSemanal', 'instruccionesObra'],
+      },
+    },
   },
   // ORG-05 (25/07/2026): Adrián pidió completar Operario también en Eléctrico y
   // Mecánicas, igual que ya tiene Encargado — mismo bloque de "Material y maquinaria"
@@ -10090,6 +10106,35 @@ const _MENU_ROL_DEPT_CONFIG = {
       // explícitamente por Adrián para Recursos Preventivos; asunción razonable por
       // privacidad, a revisar si hace falta acceso real a esos dos módulos.
       ocultarSensiblesSeguridad: true,
+    },
+    // INGENIERIA-02: subconjunto reducido, enfocado a ejecución de campo — sin las páginas
+    // más administrativas/contractuales (contratos, órdenes de compra, submittals,
+    // transmittals, riesgos, actas, contactos/visitas de obra), que se dejan para
+    // encargado. Igual que el resto de subconjuntos "operario" de este archivo: asunción
+    // razonable, no confirmada campo a campo con Adrián — revisar si un operario de
+    // Ingeniería necesita alguna de las excluidas.
+    ingenieria: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '📐 Ingeniería',
+        paginas: ['tareas', 'rfis', 'calidad', 'punchList', 'planosObra', 'cronogramaObra',
+                  'controlCalidad', 'itpObra', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+  },
+  // INGENIERIA-02: el rol "ingeniero" (distinto de encargado/operario, ver el <select> de
+  // roles del panel) es quien de verdad usa el departamento Ingeniería a diario — mismo
+  // menú íntegro que encargado.ingenieria.
+  ingeniero: {
+    ingenieria: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '📐 Ingeniería',
+        paginas: ['tareas', 'rfis', 'calidad', 'punchList', 'contactosObra', 'visitasObra', 'actasReunion',
+                  'fases', 'hitos', 'planosObra', 'contratosObra', 'ordenesCompra', 'submittals',
+                  'cronogramaObra', 'transmittals', 'controlCalidad', 'ncrsObra', 'itpObra',
+                  'equiposMedicion', 'ordenesCambio', 'riesgosObra', 'planSemanal', 'instruccionesObra'],
+      },
     },
   },
 };
@@ -10129,18 +10174,43 @@ function _organizarSidebarRolDept(config) {
     if (etiqueta) etiqueta.textContent = texto;
   };
 
-  renombrar('principal', '☀️ Hoy en obra');
-  renombrar('inventarios', `${config.icono} Material y maquinaria`);
-  renombrar('obra', '📁 Documentación y control');
+  // INGENIERIA-02 (25/07/2026): Adrián: "alineamos Ingeniería al patrón rol+departamento
+  // del resto". Antes Ingeniería tenía su propia función aparte (organizarSidebarIngenieria,
+  // solo por departamento, sin distinguir encargado/operario) — se integra aquí como un
+  // tercer departamento en _MENU_ROL_DEPT_CONFIG. Como su forma no encaja con "Material y
+  // maquinaria"/"Documentación y control" (no tiene inventario, y su lista de páginas va
+  // en una sección propia, no en 'obra'), 'material'/'controlObra'/'hoyEnObra' pasan a ser
+  // condicionales: si el config no los define (o los pone a `false`), esa sección
+  // correspondiente no se toca (Ingeniería) — si no se definen, se usa exactamente el
+  // comportamiento de siempre (Eléctrico/Mecánicas/Seguridad, sin cambios).
+  if (config.hoyEnObra !== false) {
+    renombrar('principal', '☀️ Hoy en obra');
+    let hoy = document.getElementById('navChatEquipo');
+    (config.hoyEnObra || ['planSemanal', 'partesPanel', 'tareas', 'incidencias']).forEach(page => { hoy = moverDespues(hoy, page); });
+  }
 
-  let hoy = document.getElementById('navChatEquipo');
-  ['planSemanal', 'partesPanel', 'tareas', 'incidencias'].forEach(page => { hoy = moverDespues(hoy, page); });
+  if (config.material) {
+    renombrar('inventarios', `${config.icono} Material y maquinaria`);
+    let material = seccion('inventarios');
+    config.material.forEach(page => { material = moverDespues(material, page); });
+  } else {
+    // Departamento sin inventario propio (p.ej. Ingeniería): no dejar la cabecera de
+    // sección "Material y maquinaria" visible y vacía.
+    ocultarSeccion('inventarios');
+  }
 
-  let material = seccion('inventarios');
-  config.material.forEach(page => { material = moverDespues(material, page); });
+  if (config.controlObra !== false) {
+    renombrar('obra', '📁 Documentación y control');
+    let control = seccion('obra');
+    (config.controlObra || ['documentosObra', 'planosObra', 'fotosObra', 'instruccionesObra', 'inspecciones']).forEach(page => { control = moverDespues(control, page); });
+  }
 
-  let control = seccion('obra');
-  ['documentosObra', 'planosObra', 'fotosObra', 'instruccionesObra', 'inspecciones'].forEach(page => { control = moverDespues(control, page); });
+  // Sección propia con lista de páginas a medida (Ingeniería: RFIs, calidad, contratos...).
+  if (config.seccionExtra) {
+    renombrar(config.seccionExtra.sid, config.seccionExtra.etiqueta);
+    let extra = seccion(config.seccionExtra.sid);
+    config.seccionExtra.paginas.forEach(page => { extra = moverDespues(extra, page); });
+  }
 
   // Partes Diarios era útil para el encargado pero quedaba dentro de una
   // sección de oficina oculta. Se recupera arriba, junto al plan de la jornada.
@@ -10167,8 +10237,14 @@ function _organizarSidebarRolDept(config) {
 // INGENIERIA-01: el departamento de Ingeniería reúne la coordinación técnica
 // que antes estaba repartida entre Construcción y Planificación. El rol oficina
 // se mantiene como permiso; esta vista se decide solo por el departamento activo.
+// INGENIERIA-02 (25/07/2026): con encargado/operario/ingeniero ya cubiertos vía
+// _MENU_ROL_DEPT_CONFIG (mismo patrón rol+departamento del resto), esta función pasa a
+// ser solo una red de seguridad para cualquier OTRO rol en Ingeniería que pueda existir
+// hoy o mañana (p.ej. jefe_de_obra) y que no tenga entrada propia en el config — evita
+// que se quede con el sidebar de "construcción" sin curar solo por no estar en la lista.
 function organizarSidebarIngenieria() {
   if (SESSION?.departamento !== 'ingenieria') return;
+  if (_MENU_ROL_DEPT_CONFIG[SESSION?.rol]?.ingenieria) return; // ya gestionado por organizarSidebarEncargado()
   const seccion = sid => document.querySelector(`.sidebar-section[data-sid="${sid}"]`);
   const item = page => document.querySelector(`.nav-item[data-page="${page}"]`);
   const ingenieria = seccion('construccion');
