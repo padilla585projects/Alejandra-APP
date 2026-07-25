@@ -2305,10 +2305,33 @@ LEYENDA DE ESTADO:
       contactos ↔ hilo activo) y el aviso de mensajes privados sin leer que ya existía en
       Office (/chat/no-leidos). Ver SESION.md Part 58 para el detalle técnico.
 
+[✓] "#remoteScanFab no es arrastrable" — ahora sí
+    [HECHO 25/07/2026, v8.39]
+    · Se había dejado fuera de SCAN-04b (Part 57) por miedo a romper el click de sus
+      sub-botones. Revisado makeDraggable(): solo suprime el siguiente click si hubo
+      arrastre real (>4px) — un click normal llega intacto. Aplicado igual que al resto.
+
+[✓] INGENIERIA-02 — Ingeniería alineada al patrón rol+departamento del resto
+    [HECHO 25/07/2026, v8.40]
+    · Adrián eligió alinearlo (frente a dejarlo como estaba). Antes un único menú para
+      cualquier rol del departamento; ahora encargado/ingeniero ven la lista completa,
+      operario ve un subconjunto reducido de ejecución de campo (asunción razonable, sin
+      confirmar campo a campo). Red de seguridad conservada para roles sin entrada propia.
+      Ver SESION.md Part 58 para el detalle técnico.
+
+    · Sugerencias de la app revisadas (Part 58): la #208 sigue siendo la última (38 en
+      total) — nada pendiente por ahora.
     · Pendiente sin resolver (flagged para futura sesión, ver también SESION.md Part 58):
       - "quiero quitar columnas del inventario que no valen y añadir otras" (pedido por Adrián,
         nunca especificó cuáles — preguntar antes de tocar la tabla).
-      - 4 cuentas "Alberto" en D1 (ids 1, 12, 46, 50, 51), solo el 46 activo — sin limpiar.
+      - 4 cuentas "Alberto" en D1 (ids 1, 12, 46, 50, 51), solo el 46 activo. Adrián confirmó
+        que sí quiere limpiarlas, pero es un borrado permanente que tiene que hacer él mismo
+        desde Office → Usuarios (Claude no borra datos permanentemente) — pendiente de que
+        lo haga.
+      - Departamentos sin cuentas reales todavía (Obra Civil, Albañilería, Pintura,
+        Carpintería, Telecom, Almacén): sin menú propio a propósito — añadir uno cuando
+        haga falta es ahora solo una entrada nueva en _MENU_ROL_DEPT_CONFIG (panel.html),
+        gracias al refactor de INGENIERIA-02.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
