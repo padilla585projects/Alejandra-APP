@@ -249,6 +249,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #fabAlejandra{position:fixed;bottom:20px;right:20px;z-index:499;background:var(--green);color:#fff;border:none;border-radius:50%;width:56px;height:56px;font-size:24px;box-shadow:0 4px 20px rgba(34,197,94,.4);cursor:pointer;transition:transform .2s,box-shadow .2s;display:none;align-items:center;justify-content:center}
 #fabAlejandra:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(34,197,94,.6)}
 #fabAlejandra:active{transform:scale(0.95)}
+/* SCAN-04c (25/07/2026): el chat interno (CHAT-01) solo se abría desde un botón dentro
+   del sidebar — nada flotante, a diferencia de los dos chats de Alejandra. Adrián: "faltaría
+   un botón flotante para chat interno no?". Se coloca en la esquina opuesta (izquierda) para
+   no complicar más el apilado ya resuelto en la derecha (fabAlejandra/aiFloatBtn). */
+#fabChatEquipo{position:fixed;bottom:20px;left:20px;z-index:499;background:#2563eb;color:#fff;border:none;border-radius:50%;width:56px;height:56px;font-size:24px;box-shadow:0 4px 20px rgba(37,99,235,.4);cursor:pointer;transition:transform .2s,box-shadow .2s;display:none;align-items:center;justify-content:center}
+#fabChatEquipo:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(37,99,235,.6)}
+#fabChatEquipo:active{transform:scale(0.95)}
 .rs-fab-main{background:var(--accent);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:22px;box-shadow:0 4px 20px rgba(168,85,247,.5);cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative}
 .rs-fab-main:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(168,85,247,.7)}
 .rs-fab-badge{position:absolute;top:-2px;right:-2px;background:var(--green);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid var(--bg)}
@@ -10224,10 +10231,12 @@ function iniciarApp() {
   // los admins).
   ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin);
 
-  // mostrar FAB de Alejandra cuando hay sesión activa
+  // mostrar FAB de Alejandra y del chat del equipo cuando hay sesión activa
   if (SESSION?.usuario_id) {
     const fabEl = document.getElementById('fabAlejandra');
     if (fabEl) fabEl.style.display = 'flex';
+    const fabChat = document.getElementById('fabChatEquipo');
+    if (fabChat) fabChat.style.display = 'flex';
   }
 
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
@@ -18571,6 +18580,9 @@ document.getElementById('wInput').focus();
     <span class="rs-fab-badge offline" id="rsFabBadge">0</span>
   </button>
 </div>
+
+<!-- ── FAB Chat del equipo (SCAN-04c) ── -->
+<button id="fabChatEquipo" onclick="chatAbrir()" title="Chat del equipo">💬</button>
 
 <!-- ── FAB Alejandra IA ── -->
 <button id="fabAlejandra" class="fab-alejandra" onclick="alejandraFabAbrir()" title="Chat Alejandra IA">
@@ -34589,6 +34601,7 @@ function makeDraggable(id) {
 }
 makeDraggable('fabAlejandra');
 makeDraggable('aiFloatBtn');
+makeDraggable('fabChatEquipo');
 
 </script>
 
