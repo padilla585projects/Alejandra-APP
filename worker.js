@@ -6476,11 +6476,16 @@ async function crearBobina(request, env, ctx) {
   const obraFinal = body.obra_id ? parseInt(body.obra_id) : obraId;
   const fecha = fechaEspana();
   const reg = registrado_por || usuario || '';
+  // SCAN-02: el modal "Nueva bobina" del panel de Office pide "Longitud inicial (m)" y la
+  // manda como `longitud_inicial` en el body, pero esta función nunca la leía — se perdía
+  // siempre en silencio. Se acepta longitud_inicial o longitud.
+  const longitudRaw = body.longitud_inicial !== undefined ? body.longitud_inicial : body.longitud;
+  const longitud = longitudRaw !== undefined && longitudRaw !== null && longitudRaw !== '' ? parseFloat(longitudRaw) : null;
 
   try {
     await env.DB.prepare(
-      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran, departamento, empresa_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null, departamento, empresa_id).run();
+      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran, departamento, empresa_id, longitud) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null, departamento, empresa_id, longitud).run();
 
     ctx.waitUntil(Promise.all([
       syncSheets(env, 'Elec-Bobinas', empresa_id),
@@ -6497,7 +6502,12 @@ async function crearBobina(request, env, ctx) {
 
 async function editarBobina(codigo, request, env, ctx) {
   const { obraId, isSuperadmin, empresa_id } = await getAuth(request, env);
-  const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
+  if (!empresa_id) return err('No autorizado', 403);
+  // SCAN-01: el SELECT no filtraba por empresa_id, y el check de obra_id se saltaba entero
+  // si obraId era falsy (null/0) para CUALQUIER rol no-superadmin — un empresa_admin/
+  // oficina/encargado sin obra fija en sesión podía editar la bobina de otra empresa con
+  // solo saber el código. Se añade empresa_id al SELECT y al UPDATE.
+  const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ? AND empresa_id = ?').bind(codigo, empresa_id).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
   if (obraId && !isSuperadmin && bobina.obra_id !== obraId) return err('No autorizado', 403);
 
@@ -6509,32 +6519,44 @@ async function editarBobina(codigo, request, env, ctx) {
   const obra_id    = body.obra_id    !== undefined ? (body.obra_id ? parseInt(body.obra_id) : null) : bobina.obra_id;
   const num_albaran  = body.num_albaran  !== undefined ? body.num_albaran  : bobina.num_albaran;
   const departamento = body.departamento !== undefined ? body.departamento : bobina.departamento;
+  // SCAN-02: la longitud (columna real `longitud`, sin sufijo) nunca se podía editar desde
+  // aquí — el panel de Office la llamaba `longitud_actual` (campo inexistente) y esta
+  // función tampoco la tocaba aunque se hubiera llamado bien. Se acepta longitud O
+  // longitud_actual por compatibilidad con clientes ya en caché.
+  const longitudRaw = body.longitud !== undefined ? body.longitud : body.longitud_actual;
+  const longitud = longitudRaw !== undefined ? (longitudRaw === null || longitudRaw === '' ? null : parseFloat(longitudRaw)) : bobina.longitud;
 
   await env.DB.prepare(
-    'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ?, num_albaran = ?, departamento = ? WHERE codigo = ?'
-  ).bind(proveedor, tipo_cable, notas, estado, obra_id, num_albaran || null, departamento, codigo).run();
+    'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ?, num_albaran = ?, departamento = ?, longitud = ? WHERE codigo = ? AND empresa_id = ?'
+  ).bind(proveedor, tipo_cable, notas, estado, obra_id, num_albaran || null, departamento, longitud, codigo, empresa_id).run();
 
   ctx?.waitUntil(syncSheets(env, 'Elec-Bobinas', empresa_id));
   return json({ ok: true, mensaje: `Bobina ${codigo} actualizada` });
 }
 
 async function devolverBobina(codigo, request, env, ctx) {
+  // SCAN-01 (25/07/2026): esta función no comprobaba autenticación en absoluto en la rama
+  // "el item ya existe" (solo la de auto-creación llamaba getAuth), y ningún SELECT/UPDATE
+  // filtraba por empresa_id — cualquier request sin token podía devolver la bobina de OTRA
+  // empresa con solo saber/adivinar el código. getAuth() se mueve al principio y se exige
+  // empresa_id en las dos ramas.
+  const { obraId, empresa_id: eid } = await getAuth(request, env);
+  if (!eid) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { notas, devuelto_por } = body;
   const fecha = fechaEspana();
 
-  let bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
+  let bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ? AND empresa_id = ?').bind(codigo, eid).first();
 
   if (!bobina) {
-    // Auto-crear como devuelta si no existe
-    const { obraId, empresa_id: eid } = await getAuth(request, env);
+    // Auto-crear como devuelta si no existe (en la empresa del usuario)
     await env.DB.prepare(
       `INSERT INTO bobinas (codigo, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
-    bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
+    ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
+    bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ? AND empresa_id = ?').bind(codigo, eid).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env, 'Elec-Bobinas', eid || 1),
+      syncSheets(env, 'Elec-Bobinas', eid),
       registrarHistorial(env, { obra_id: bobina?.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `Bobina ${codigo} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -6543,11 +6565,11 @@ async function devolverBobina(codigo, request, env, ctx) {
   if (bobina.estado === 'devuelta') return err(`Bobina ${codigo} ya fue devuelta el ${bobina.fecha_devolucion}`, 409);
 
   await env.DB.prepare(
-    'UPDATE bobinas SET estado = ?, fecha_devolucion = ?, notas = ?, devuelto_por = ? WHERE codigo = ?'
-  ).bind('devuelta', fecha, notas || bobina.notas || '', devuelto_por || '', codigo).run();
+    'UPDATE bobinas SET estado = ?, fecha_devolucion = ?, notas = ?, devuelto_por = ? WHERE codigo = ? AND empresa_id = ?'
+  ).bind('devuelta', fecha, notas || bobina.notas || '', devuelto_por || '', codigo, eid).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env, 'Elec-Bobinas', bobina.empresa_id),
+    syncSheets(env, 'Elec-Bobinas', eid),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>Bobina devuelta</b>\n📖 ${codigo}\n👤 ${devuelto_por || '—'}`),
   ]));
@@ -6691,22 +6713,25 @@ async function editarPemp(matricula, request, env, ctx) {
 }
 
 async function devolverPemp(matricula, request, env, ctx) {
+  // SCAN-01: mismo fix que devolverBobina — getAuth() al principio, empresa_id exigido y
+  // filtrado en SELECT/UPDATE (antes sin auth ni scoping en la rama "ya existe").
+  const { obraId, departamento, empresa_id: eid } = await getAuth(request, env);
+  if (!eid) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { notas, devuelto_por } = body;
   const fecha = fechaEspana();
 
-  let pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
+  let pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ? AND empresa_id = ?').bind(matricula, eid).first();
 
   if (!pemp) {
-    // Auto-crear como devuelta si no existe
-    const { obraId, departamento, empresa_id: eid } = await getAuth(request, env);
+    // Auto-crear como devuelta si no existe (en la empresa del usuario)
     await env.DB.prepare(
       `INSERT INTO pemp (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
-    pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
+    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
+    pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ? AND empresa_id = ?').bind(matricula, eid).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env, tabForDept('pemp', departamento), eid || 1),
+      syncSheets(env, tabForDept('pemp', departamento), eid),
       registrarHistorialPemp(env, { obra_id: pemp?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `PEMP ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -6715,11 +6740,11 @@ async function devolverPemp(matricula, request, env, ctx) {
   if (pemp.estado === 'devuelta') return err(`PEMP ${matricula} ya fue devuelta el ${pemp.fecha_devolucion}`, 409);
 
   await env.DB.prepare(
-    'UPDATE pemp SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ?'
-  ).bind('devuelta', fecha, devuelto_por || '', notas || pemp.notas || '', matricula).run();
+    'UPDATE pemp SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ? AND empresa_id = ?'
+  ).bind('devuelta', fecha, devuelto_por || '', notas || pemp.notas || '', matricula, eid).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env, tabForDept('pemp', pemp.departamento), pemp.empresa_id),
+    syncSheets(env, tabForDept('pemp', pemp.departamento), eid),
     registrarHistorialPemp(env, { obra_id: pemp.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>PEMP devuelta</b>\n📖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
@@ -6861,22 +6886,24 @@ async function editarCarretilla(matricula, request, env, ctx) {
 }
 
 async function devolverCarretilla(matricula, request, env, ctx) {
+  // SCAN-01: mismo fix que devolverBobina/devolverPemp.
+  const { obraId, departamento, empresa_id: eid } = await getAuth(request, env);
+  if (!eid) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { notas, devuelto_por } = body;
   const fecha = fechaEspana();
 
-  let carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
+  let carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ? AND empresa_id = ?').bind(matricula, eid).first();
 
   if (!carretilla) {
-    // Auto-crear como devuelta si no existe
-    const { obraId, departamento, empresa_id: eid } = await getAuth(request, env);
+    // Auto-crear como devuelta si no existe (en la empresa del usuario)
     await env.DB.prepare(
       `INSERT INTO carretillas (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
-    carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
+    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
+    carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ? AND empresa_id = ?').bind(matricula, eid).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env, tabForDept('carretilla', departamento), eid || 1),
+      syncSheets(env, tabForDept('carretilla', departamento), eid),
       registrarHistorialCarretillas(env, { obra_id: carretilla?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `Carretilla ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -6885,11 +6912,11 @@ async function devolverCarretilla(matricula, request, env, ctx) {
   if (carretilla.estado === 'devuelta') return err(`Carretilla ${matricula} ya fue devuelta el ${carretilla.fecha_devolucion}`, 409);
 
   await env.DB.prepare(
-    'UPDATE carretillas SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ?'
-  ).bind('devuelta', fecha, devuelto_por || '', notas || carretilla.notas || '', matricula).run();
+    'UPDATE carretillas SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ? AND empresa_id = ?'
+  ).bind('devuelta', fecha, devuelto_por || '', notas || carretilla.notas || '', matricula, eid).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env, tabForDept('carretilla', carretilla.departamento), carretilla.empresa_id),
+    syncSheets(env, tabForDept('carretilla', carretilla.departamento), eid),
     registrarHistorialCarretillas(env, { obra_id: carretilla.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>Carretilla devuelta</b>\n📖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));

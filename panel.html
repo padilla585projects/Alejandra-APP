@@ -9325,15 +9325,32 @@ window.onunhandledrejection = e => {
   panelLog('warn', `Promise sin manejar: ${e.reason?.message || e.reason}`, '');
 };
 
+// SCAN-03 (25/07/2026): fechaEspana() en worker.js guarda con
+// `new Date().toLocaleString('es-ES', {...})`, que produce texto tipo
+// "25/7/2026, 11:22:29" (formato español, no ISO) — `new Date("25/7/2026...")` no lo
+// parsea de forma fiable (día/mes ambiguo para el motor JS) y devolvía "Invalid Date" en
+// toda fecha guardada por ese helper (fecha_entrada, fecha_devolucion... de bobinas/pemp/
+// carretillas y más). Se añade un parseo manual de ese formato antes de caer a new Date().
+function _parseFechaBackend(v) {
+  if (!v) return null;
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(v).trim());
+  if (m) {
+    const [, d, mo, y, h, mi, s] = m;
+    return new Date(+y, +mo - 1, +d, +h, +mi, +(s || 0));
+  }
+  const d = new Date(v);
+  return isNaN(d) ? null : d;
+}
+
 function fmtFecha(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
+  const d = _parseFechaBackend(iso);
+  if (!d) return '—';
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function fmtHora(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
+  const d = _parseFechaBackend(iso);
+  if (!d) return '—';
   return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 }
 
@@ -12427,49 +12444,108 @@ async function cargarBobinas() {
     tipoSel.innerHTML = '<option value="">🔌 Tipo cable</option>' + tipos.map(t => `<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
   }
   if (tblBobinas) { tblBobinas.replaceData(data); return; }
-  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
   tblBobinas = new Tabulator('#tblBobinas', {
-    data, layout: 'fitColumns',
+    // SCAN-02: con las columnas nuevas (Long., Registrado por, Acciones) la tabla dejó de
+    // caber con 'fitColumns' a secas — se añade responsiveLayout:'collapse' (mismo patrón
+    // que ya usan otras tablas del panel, ej. Partes de trabajo) para que las columnas
+    // menos prioritarias se plieguen en una fila expandible en vez de aplastarse todas.
+    // resizableColumns permite arrastrar el borde de cada columna para ajustarla a mano.
+    data, layout: 'fitColumns', responsiveLayout: 'collapse', resizableColumns: true,
     pagination: 'local', paginationSize: 20,
     placeholder: '<div class="empty-state"><div class="empty-icon">⚡</div><div class="empty-text">Sin bobinas</div></div>',
     columns: [
-      { title: 'Código', field: 'codigo', sorter: 'string', width: 120 },
-      { title: 'Tipo cable', field: 'tipo_cable', sorter: 'string', minWidth: 160 },
-      { title: 'Proveedor', field: 'proveedor', sorter: 'string', minWidth: 140 },
-      { title: 'Long. ini (m)', field: 'longitud_inicial', width: 110, hozAlign: 'right', sorter: 'number' },
-      { title: 'Long. actual', field: 'longitud_actual', width: 110, hozAlign: 'right', sorter: 'number',
-        editor: canEdit ? 'number' : false,
-        cellEdited: c => guardarCampoBobina(c.getRow().getData(), 'longitud_actual', c.getValue()) },
-      { title: 'Estado', field: 'estado', width: 110,
-        editor: canEdit ? 'select' : false,
-        editorParams: { values: ['disponible','asignada','agotada'] },
+      { title: 'Código', field: 'codigo', sorter: 'string', width: 120, resizable: true },
+      { title: 'Tipo cable', field: 'tipo_cable', sorter: 'string', minWidth: 160, resizable: true, responsive: 0 },
+      { title: 'Proveedor', field: 'proveedor', sorter: 'string', minWidth: 140, resizable: true, responsive: 2 },
+      // SCAN-02 (25/07/2026): "Long. ini (m)" / "Long. actual" apuntaban a longitud_inicial
+      // y longitud_actual, dos campos que NUNCA existieron en la API (la tabla solo tiene
+      // una columna `longitud`) — las dos columnas salían siempre en blanco, y editar
+      // "Long. actual" no guardaba nada aunque el toast dijera "Guardado ✓". Se sustituyen
+      // por una única columna real, editable desde el modal de gestión (no inline: Adrián
+      // pidió un modal por bobina para cambiar el estado, y el mismo modal cubre la
+      // longitud).
+      { title: 'Long. (m)', field: 'longitud', width: 100, hozAlign: 'right', sorter: 'number', resizable: true, responsive: 1,
+        formatter: c => c.getValue() != null ? c.getValue() : '—' },
+      { title: 'Estado', field: 'estado', width: 110, resizable: true, responsive: 0,
+        // SCAN-02: los valores ofrecidos aquí (disponible/asignada/agotada) no eran los
+        // reales — crearBobina() guarda 'activa' y devolverBobina() 'devuelta'; editar
+        // inline con estos valores solo servía para desincronizar el estado real del que
+        // usa el resto de la app (filtros de la app móvil, badges, Telegram). El cambio de
+        // estado ahora vive en el modal de gestión, con los valores reales.
         formatter: c => {
           const v = c.getValue();
-          const cls = { disponible:'ok', asignada:'warn', agotada:'danger' }[v] || 'muted';
+          const cls = { activa:'ok', disponible:'ok', devuelta:'muted', agotada:'danger' }[v] || 'warn';
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
-        },
-        cellEdited: c => guardarCampoBobina(c.getRow().getData(), 'estado', c.getValue())
+        }
       },
-      { title: 'Dept.', field: 'departamento', width: 110, formatter: fmtDept },
-      { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140 },
-      { title: 'Fecha entrada', field: 'fecha_entrada', width: 120, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Dept.', field: 'departamento', width: 110, resizable: true, responsive: 2, formatter: fmtDept },
+      { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140, resizable: true, responsive: 1 },
+      { title: 'Fecha entrada', field: 'fecha_entrada', width: 120, resizable: true, responsive: 3, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Registrado por', field: 'registrado_por', minWidth: 130, resizable: true, responsive: 3, formatter: c => c.getValue() || '—' },
+      { title: 'Acciones', field: 'codigo', width: 110, hozAlign: 'center', headerSort: false, responsive: 0,
+        formatter: c => '<button class="btn btn-secondary btn-sm">✏️ Gestionar</button>',
+        cellClick: (e, c) => abrirModalGestionBobina(c.getRow().getData()) },
     ]
   });
   document.getElementById('searchBobinas').oninput = function() {
-    tblBobinas.setFilter([
+    tblBobinas.setFilter([[
       {field:'codigo',type:'like',value:this.value},
       {field:'tipo_cable',type:'like',value:this.value},
       {field:'proveedor',type:'like',value:this.value},
-    ], 'or');
+    ]]);
   };
 }
 
-// Nota (23/07/2026): antes usaba row.id, pero el backend (editarBobina) busca
-// por "codigo" (campo distinto del id autoincremental interno) — con row.id
-// el PUT nunca encontraba la bobina y el guardado fallaba silenciosamente.
-async function guardarCampoBobina(row, campo, valor) {
-  const r = await api(`/bobinas/${row.codigo}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
-  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+// SCAN-02: modal único por bobina para cambiar longitud/estado, y devolver con el flujo
+// correcto (Devuelto por + notas, vía POST /bobinas/:codigo/devolver) en vez del editor de
+// celda que nunca guardaba nada. Pedido explícitamente por Adrián: "quiero un modal en el
+// inventario cada bobina para cambiarla de estado".
+function abrirModalGestionBobina(row) {
+  // Valores reales vistos en producción: 'activa' (crearBobina), 'devuelta'
+  // (devolverBobina); 'disponible'/'en obra'/etc. aparecen como texto libre histórico —
+  // se deja "Otro" para no bloquear un valor no previsto.
+  const estadosConocidos = ['activa', 'disponible', 'en obra', 'agotada', 'devuelta'];
+  const estadoActual = row.estado || 'activa';
+  const opciones = estadosConocidos.includes(estadoActual) ? estadosConocidos : [estadoActual, ...estadosConocidos];
+  abrirModal(`✏️ ${escHtml(row.codigo)} — ${escHtml(row.tipo_cable || '')}`, `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      ${escHtml(row.proveedor || '—')} · Obra: ${escHtml(row.obra_nombre || '—')} · Entrada: ${fmtFecha(row.fecha_entrada)}
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Longitud (m)</div><input class="form-input" id="mBobLong" type="number" value="${row.longitud ?? ''}"></div>
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-input" id="mBobEstado" onchange="document.getElementById('mBobDevolucion').style.display=this.value==='devuelta'?'block':'none'">
+          ${opciones.map(o => `<option value="${o}"${o===estadoActual?' selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div id="mBobDevolucion" style="display:${estadoActual==='devuelta'?'block':'none'}">
+      <div class="form-group"><div class="form-label">Devuelto por</div><input class="form-input" id="mBobDevueltoPor" placeholder="${escHtml(SESSION?.nombre||'')}" value="${row.devuelto_por||''}"></div>
+      <div class="form-group"><div class="form-label">Notas de devolución</div><textarea class="form-input" id="mBobDevNotas" rows="2"></textarea></div>
+    </div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mBobNotas" rows="2">${escHtml(row.notas||'')}</textarea></div>
+  `, async () => {
+    const nuevoEstado = document.getElementById('mBobEstado').value;
+    const longitud = document.getElementById('mBobLong').value;
+    const notas = document.getElementById('mBobNotas').value.trim();
+
+    // Pasar a 'devuelta' desde otro estado usa el endpoint dedicado (fecha_devolucion +
+    // devuelto_por); cualquier otro cambio usa la edición genérica.
+    if (nuevoEstado === 'devuelta' && estadoActual !== 'devuelta') {
+      const devuelto_por = document.getElementById('mBobDevueltoPor').value.trim() || SESSION?.nombre || '';
+      const devNotas = document.getElementById('mBobDevNotas').value.trim() || notas;
+      const r = await api(`/bobinas/${row.codigo}/devolver`, { method: 'PUT', body: JSON.stringify({ devuelto_por, notas: devNotas }) });
+      if (!r.ok) { toast(r.error || 'Error al devolver', 'err'); return; }
+      cerrarModal(); toast('Bobina devuelta ✓', 'ok'); tblBobinas = null; cargarBobinas();
+      return;
+    }
+
+    const body = { estado: nuevoEstado, notas };
+    if (longitud !== '') body.longitud = parseFloat(longitud);
+    const r = await api(`/bobinas/${row.codigo}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Bobina actualizada ✓', 'ok'); tblBobinas = null; cargarBobinas(); }
+    else toast(r.error || 'Error al guardar', 'err');
+  });
 }
 
 function abrirModalBobina() {
@@ -12478,18 +12554,27 @@ function abrirModalBobina() {
       <div class="form-group"><div class="form-label">Código</div><input class="form-input" id="mCod" placeholder="BOB-001"></div>
       <div class="form-group"><div class="form-label">Longitud inicial (m)</div><input class="form-input" id="mLong" type="number" placeholder="500"></div>
     </div>
-    <div class="form-group"><div class="form-label">Tipo de cable</div><input class="form-input" id="mTipo" placeholder="RV-K 3x2.5mm²"></div>
-    <div class="form-group"><div class="form-label">Proveedor</div><input class="form-input" id="mProv" placeholder="Prysmian"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo de cable</div><input class="form-input" id="mTipo" placeholder="RV-K 3x2.5mm²"></div>
+      <div class="form-group"><div class="form-label">Proveedor</div><input class="form-input" id="mProv" placeholder="Prysmian"></div>
+    </div>
+    <!-- SCAN-02: la app móvil (index.html, registrarItem) ya pide num_albaran y notas al
+         registrar una bobina por escaneo; el modal de Office se había quedado corto
+         frente a ella. -->
+    <div class="form-group"><div class="form-label">Nº albarán</div><input class="form-input" id="mAlbaran" placeholder="Opcional"></div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mNotas" rows="2" placeholder="Opcional"></textarea></div>
   `, async () => {
     const body = {
       codigo: document.getElementById('mCod').value.trim(),
-      longitud_inicial: parseFloat(document.getElementById('mLong').value),
+      longitud_inicial: parseFloat(document.getElementById('mLong').value) || null,
       tipo_cable: document.getElementById('mTipo').value.trim(),
       proveedor: document.getElementById('mProv').value.trim(),
+      num_albaran: document.getElementById('mAlbaran').value.trim() || null,
+      notas: document.getElementById('mNotas').value.trim() || null,
     };
     if (!body.codigo) { toast('El código es obligatorio', 'err'); return; }
     const r = await api('/bobinas', { method: 'POST', body: JSON.stringify(body) });
-    if (r.ok) { cerrarModal(); toast('Bobina creada ✓', 'ok'); cargarBobinas(); }
+    if (r.ok) { cerrarModal(); toast('Bobina creada ✓', 'ok'); tblBobinas = null; cargarBobinas(); }
     else toast(r.error || 'Error al crear', 'err');
   });
 }
