@@ -14788,7 +14788,12 @@ async function cargarChat() {
   const usuarioId = SESSION?.usuario_id || null;
   const queryParams = `limit=60${usuarioId ? '&usuario_id=' + encodeURIComponent(usuarioId) : ''}`;
   const r = await api('/chat?' + queryParams);
-  const msgs = (r.mensajes || r.data || []).reverse();
+  // SCAN-05 (25/07/2026): getChatMensajes() en worker.js ya devuelve los mensajes en
+  // orden cronológico (más antiguos primero) tanto en la carga inicial (ORDER BY DESC +
+  // .reverse() en el propio backend) como en el polling incremental con `since` (ORDER BY
+  // ASC directo) — este .reverse() extra en el frontend los volvía a invertir, mostrando
+  // los mensajes nuevos arriba en vez de abajo.
+  const msgs = r.mensajes || r.data || [];
   const cont = document.getElementById('chatMensajes');
   if (!msgs.length) {
     cont.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-text">Sin mensajes aún</div></div>';
