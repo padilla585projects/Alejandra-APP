@@ -5686,6 +5686,11 @@ function renderHeader() {
       document.getElementById('headerObraLabel').style.display = 'none';
       document.getElementById('headerObraSelect').style.display = 'block';
       cargarObrasHeader();
+      // El <select> nativo no se puede auto-ajustar por JS como el texto de obraLabel
+      // (_autoFitTexto) — se le cede hueco extra encogiendo el chip de usuario, que no
+      // necesita tanto espacio como el nombre de la obra.
+      const chip = document.getElementById('headerUserChip');
+      if (chip) chip.style.maxWidth = 'clamp(40px,12vw,80px)';
     } else {
       document.getElementById('headerObraLabel').style.display = 'none';
       document.getElementById('headerObraSelect').style.display = 'none';
@@ -5695,10 +5700,27 @@ function renderHeader() {
     if (s.obra_nombre) {
       obraLabel.textContent = '🏗 ' + s.obra_nombre;
       obraLabel.style.display = 'block';
+      _autoFitTexto(obraLabel);
     } else {
       obraLabel.style.display = 'none';
     }
     document.getElementById('headerObraSelect').style.display = 'none';
+  }
+}
+
+// HEADER-COMPACTO-02 (25/07/2026): Adrián: "podemos hacerla flexible y autoajustable,
+// así el nombre de obra se ajusta solo". En vez de truncar siempre a un tamaño de letra
+// fijo (cortando obras con nombre largo en "CPD Get..."), se reduce el tamaño de letra
+// en pasos pequeños hasta que el texto quepa entero sin recortar — solo si el nombre es
+// TAN largo que ni al tamaño mínimo cabe, se deja el corte con "…" como último recurso
+// (ya lo hace el CSS con text-overflow:ellipsis).
+function _autoFitTexto(el, maxPx = 12.5, minPx = 9) {
+  if (!el) return;
+  el.style.fontSize = maxPx + 'px';
+  let size = maxPx;
+  while (el.scrollWidth > el.clientWidth && size > minPx) {
+    size -= 0.5;
+    el.style.fontSize = size + 'px';
   }
 }
 
@@ -12347,7 +12369,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.42';
+const APP_VERSION = '8.43';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
