@@ -5438,6 +5438,16 @@ const _APP_SCREEN_REFRESH = {
   incidencias: () => typeof cargarIncidencias   === 'function' && cargarIncidencias(),
   obraDashboard:()=> typeof cargarObraDashboard === 'function' && cargarObraDashboard(),
   calendario:  () => typeof calCargar           === 'function' && calCargar(),
+  // SYNC-INV-01 (25/07/2026): Adrián pidió revisar si los inventarios (Bobinas/PEMP/
+  // Carretillas) se sincronizan en tiempo real entre app y Office. Office ya tenía
+  // auto-refresh cada 60s (SYNC_INTERVALS en panel.html) desde antes; la app NO tenía
+  // nada — 'module' (pantalla compartida por los 3) no estaba en este mapa. Se limita a
+  // refrescar el sub-tab "stock", nunca "scan" (no interrumpir mientras hay cámara
+  // abierta o un formulario a medio rellenar).
+  module: () => {
+    const stockPanel = document.getElementById('modPanelStock');
+    if (stockPanel?.classList.contains('active') && typeof cargarStock === 'function') cargarStock();
+  },
 };
 
 // Polling de secciones activas (detectar cambios del panel admin en tiempo real)
@@ -5447,6 +5457,7 @@ const _APP_SECTION_POLL_SECS = {
   incidencias: 60,
   personal:    30,   // operarios fichan → jefe mobile lo ve en ≤30s
   obraDashboard: 30,
+  module:      60,   // Bobinas/PEMP/Carretillas — mismo intervalo que Office (SYNC-INV-01)
 };
 
 function _startAppSectionPoll(screenName) {
@@ -6833,6 +6844,12 @@ function navTo(target) {
   } else if (target === 'scan') {
     showModTab('scan');
   }
+
+  // SYNC-INV-01 (25/07/2026): scan/stock/historial manejan la pantalla #screenModule a
+  // mano más arriba, sin pasar por _applyScreen() — así que nunca llegaban a
+  // _startAppSectionPoll(), y el registro 'module' añadido en _APP_SCREEN_REFRESH nunca
+  // se disparaba. Se llama aquí explícitamente.
+  _startAppSectionPoll('module');
 
   updateModuleUI();
   actualizarBtnAtras();
@@ -12200,7 +12217,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.36';
+const APP_VERSION = '8.37';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
