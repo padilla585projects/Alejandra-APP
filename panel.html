@@ -1531,8 +1531,41 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="tblBobinas && tblBobinas.print(true,true)">🖨️ Imprimir</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblBobinas,'bobinas')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarBobinas()">🔄 Actualizar</button>
+          <!-- ARCHIVO-BOBINAS-01: registro completo de altas/devoluciones, sin límite de
+               tiempo — las devueltas con más de 7 días se ocultan del inventario activo
+               pero siguen consultables aquí para siempre. -->
+          <button class="btn btn-secondary" style="background:#0ea5e9;color:#fff;border-color:#0ea5e9" onclick="abrirHistorialBobinas()">📜 Historial</button>
         </div>
         <div class="tbl-wrap"><div id="tblBobinas"></div></div>
+      </div>
+
+      <!-- ARCHIVO-BOBINAS-01 (25/07/2026): historial completo de bobinas (altas +
+           devoluciones), siempre disponible aunque la bobina ya se haya ocultado del
+           inventario activo por antigüedad. -->
+      <div class="modal-overlay" id="modalHistorialBobinas" onclick="if(event.target===this)cerrarHistorialBobinas()">
+        <div class="modal" style="max-width:900px;width:95%">
+          <div class="modal-header">
+            <h3>📜 Historial de bobinas</h3>
+            <button class="modal-close" onclick="cerrarHistorialBobinas()">×</button>
+          </div>
+          <div class="modal-body">
+            <p style="color:var(--muted);font-size:12px;margin-bottom:10px">
+              Registro completo de altas y devoluciones. Las bobinas devueltas hace más de
+              <span id="histBobDiasArchivo">7</span> días ya no aparecen en el inventario
+              activo, pero quedan aquí para siempre.
+            </p>
+            <div class="tbl-toolbar">
+              <select class="tbl-search" id="filtroAccionHistBobinas" style="min-width:160px" onchange="cargarHistorialBobinas()">
+                <option value="">Todas las acciones</option>
+                <option value="devolucion">Solo devoluciones</option>
+              </select>
+              <button class="btn btn-secondary" onclick="tblHistorialBobinas && tblHistorialBobinas.print(true,true)">🖨️ Imprimir / PDF</button>
+              <button class="btn btn-secondary" onclick="exportarTabla(tblHistorialBobinas,'historial_bobinas')">⬇ CSV</button>
+              <button class="btn btn-secondary" onclick="cargarHistorialBobinas()">🔄 Actualizar</button>
+            </div>
+            <div class="tbl-wrap"><div id="tblHistorialBobinas"></div></div>
+          </div>
+        </div>
       </div>
 
       <!-- PEMP -->
@@ -12448,9 +12481,23 @@ async function cargarObrasPanel() {
     _panelObras = Array.isArray(r) ? r : (r.obras || r.data || r || []);
     window._obrasPanel = _panelObras;
     const opt = _panelObras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+    // FILTRO-OBRA-01 (25/07/2026): Adrián: "el modal de filtrado por obra... ese no hace
+    // falta no? en el rol de encargado o oficial" + "en los demás roles debería de
+    // autorellenarse porque ya has elegido obra antes no?". El backend (getBobinas() etc.
+    // en worker.js) ya ignora este parámetro para cualquiera que no sea
+    // superadmin/empresa_admin — isUnrestrictedAdmin = isSuperadmin||isEmpresaAdmin,
+    // el resto de roles siempre queda forzado a su obraId de sesión. El selector con
+    // "Todas las obras" les daba a entender que podían cambiar de obra cuando en
+    // realidad no tenía ningún efecto. Se oculta para ellos, y para
+    // superadmin/empresa_admin se preselecciona la obra ya elegida al entrar en vez de
+    // dejarlo en blanco.
+    const puedeElegirObra = hasSessionRole('superadmin', 'empresa_admin');
     ['filtroObraBobinas','filtroObraPemp','filtroObraCarretillas','filtroObraPedidos'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.innerHTML = '<option value="">🏗 Todas las obras</option>' + opt;
+      if (!el) return;
+      if (!puedeElegirObra) { el.style.display = 'none'; return; }
+      el.innerHTML = '<option value="">🏗 Todas las obras</option>' + opt;
+      if (SESSION?.obra_id) el.value = String(SESSION.obra_id);
     });
     // Selects de obra para nuevos módulos (presupuesto, fases, partes)
     ['presObraId','fasesObraId','filterPartesObra'].forEach(id => {
@@ -12478,13 +12525,29 @@ function _invParams(idDept, idObra, extraParams = '') {
 const DEPT_LABEL = { electrico:'⚡ Eléctrico', mecanicas:'🔧 Mecánicas', seguridad:'🔺 Seguridad', personal:'👷 Personal' };
 const fmtDept = c => DEPT_LABEL[c.getValue()] || c.getValue() || '—';
 
+// ARCHIVO-BOBINAS-01 (25/07/2026): Adrián: "me gustaría que se archivara en algún lado
+// por si algún día tenemos que tirar del listado" + "podemos dejar las bobinas
+// devueltas unos días en la lista y luego automáticamente se pasen al archivo". No se
+// borra nada nunca (registrarHistorial() en worker.js ya guarda cada devolución en la
+// tabla `historial`, consultable en /historial-bobinas para siempre) — esto solo oculta
+// del inventario activo las devueltas con más de N días, para que la lista de trabajo
+// no se llene de bobinas ya cerradas. Se ven siempre en el botón "📜 Historial".
+const BOBINAS_DIAS_ANTES_DE_ARCHIVAR = 7;
+function _bobinaEstaArchivada(b) {
+  if (b.estado !== 'devuelta' || !b.fecha_devolucion) return false;
+  const f = _parseFechaBackend(b.fecha_devolucion);
+  if (!f) return false;
+  const dias = (Date.now() - f.getTime()) / 86400000;
+  return dias > BOBINAS_DIAS_ANTES_DE_ARCHIVAR;
+}
+
 let tblBobinas = null;
 async function cargarBobinas() {
   const prov = document.getElementById('filtroProvBobinas')?.value || '';
   const tipo = document.getElementById('filtroTipoBobinas')?.value || '';
   const extra = [prov && `proveedor=${encodeURIComponent(prov)}`, tipo && `tipo_cable=${encodeURIComponent(tipo)}`].filter(Boolean).join('&');
   const r = await api('/bobinas?' + _invParams('filtroDepBobinas', 'filtroObraBobinas', extra));
-  const data = toArr(r, 'bobinas');
+  const data = toArr(r, 'bobinas').filter(b => !_bobinaEstaArchivada(b));
   // Poblar selectores con valores únicos presentes en los datos
   const provSel = document.getElementById('filtroProvBobinas');
   if (provSel) {
@@ -12584,6 +12647,44 @@ function _bobinasAplicarFiltros() {
     ]);
   }
   tblBobinas.setFilter(filtros.length ? filtros : []);
+}
+
+// ARCHIVO-BOBINAS-01 (25/07/2026): "que podamos verlo en cualquier momento en la app y
+// en office" + "por supuesto imprimirlo o enviarlo" — usa el endpoint /historial que ya
+// existía en worker.js (registrarHistorial() ya guardaba cada devolución, solo faltaba
+// una pantalla para consultarlo). "Enviarlo" se resuelve con Imprimir/PDF (el mismo
+// patrón que ya usa el resto de la app) — desde el diálogo de impresión se puede
+// guardar como PDF y compartirlo por email/WhatsApp.
+let tblHistorialBobinas = null;
+function abrirHistorialBobinas() {
+  const span = document.getElementById('histBobDiasArchivo');
+  if (span) span.textContent = BOBINAS_DIAS_ANTES_DE_ARCHIVAR;
+  document.getElementById('modalHistorialBobinas').classList.add('open');
+  cargarHistorialBobinas();
+}
+function cerrarHistorialBobinas() {
+  document.getElementById('modalHistorialBobinas').classList.remove('open');
+}
+async function cargarHistorialBobinas() {
+  const accion = document.getElementById('filtroAccionHistBobinas')?.value || '';
+  const qs = ['limit=500', accion && `accion=${encodeURIComponent(accion)}`].filter(Boolean).join('&');
+  const r = await api('/historial?' + qs);
+  const data = Array.isArray(r) ? r : toArr(r, 'historial');
+  if (tblHistorialBobinas) { tblHistorialBobinas.replaceData(data); return; }
+  tblHistorialBobinas = new Tabulator('#tblHistorialBobinas', {
+    data, layout: 'fitData', resizableColumns: true,
+    pagination: 'local', paginationSize: 30,
+    placeholder: '<div class="empty-state"><div class="empty-icon">📜</div><div class="empty-text">Sin movimientos registrados</div></div>',
+    columns: [
+      { title: 'Fecha', field: 'fecha', width: 150, resizable: true, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Bobina', field: 'bobina_codigo', width: 120, resizable: true },
+      { title: 'Acción', field: 'accion', width: 120, resizable: true,
+        formatter: c => c.getValue() === 'devolucion' ? '📤 Devolución' : (c.getValue() || '—') },
+      { title: 'Usuario', field: 'usuario', minWidth: 140, resizable: true, formatter: c => c.getValue() || '—' },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 130, resizable: true, formatter: c => c.getValue() || '—' },
+      { title: 'Notas', field: 'notas', minWidth: 200, resizable: true, formatter: c => c.getValue() || '—' },
+    ]
+  });
 }
 
 // SCAN-02: modal único por bobina para cambiar longitud/estado, y devolver con el flujo

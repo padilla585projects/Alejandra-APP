@@ -7345,7 +7345,12 @@ async function getHistorial(request, env) {
   const accion = url.searchParams.get('accion');
 
   // INNER JOIN para filtrar por empresa via bobinas (historial no tiene empresa_id)
-  let sql = `SELECT h.*, b.departamento FROM historial h INNER JOIN bobinas b ON h.bobina_codigo = b.codigo AND b.empresa_id = ? WHERE 1=1`;
+  // ARCHIVO-BOBINAS-01 (25/07/2026): se añade LEFT JOIN obras para obra_nombre — la
+  // pantalla de Historial en panel.html/index.html lo necesita para mostrar la obra
+  // en vez de solo el id.
+  let sql = `SELECT h.*, b.departamento, o.nombre AS obra_nombre FROM historial h
+             INNER JOIN bobinas b ON h.bobina_codigo = b.codigo AND b.empresa_id = ?
+             LEFT JOIN obras o ON o.id = h.obra_id WHERE 1=1`;
   const params = [empresa_id || 1];
   if (obraId) { sql += ' AND h.obra_id = ?'; params.push(obraId); }
   if (accion) { sql += ' AND h.accion = ?';  params.push(accion); }
