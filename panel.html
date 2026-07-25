@@ -1507,10 +1507,28 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <select class="tbl-search" id="filtroTipoBobinas" style="min-width:140px" onchange="cargarBobinas()">
             <option value="">🔌 Tipo cable</option>
           </select>
+          <!-- BOBINAS-FILTRO-01 (25/07/2026): Adrián: "falta el filtrado por albarán y por
+               estado para poder imprimirlo" — solo había Proveedor/Tipo cable; el buscador
+               general encontraba el albarán pero no dejaba aislar una lista exacta para
+               imprimir. Igual que Proveedor/Tipo, filtran en cliente (ver
+               _bobinasAplicarFiltros) para no perder la paginación cargada. -->
+          <select class="tbl-search" id="filtroEstadoBobinas" style="min-width:130px" onchange="_bobinasAplicarFiltros()">
+            <option value="">🚦 Estado</option>
+            <option value="activa">Activa</option>
+            <option value="disponible">Disponible</option>
+            <option value="en obra">En obra</option>
+            <option value="agotada">Agotada</option>
+            <option value="devuelta">Devuelta</option>
+          </select>
+          <select class="tbl-search" id="filtroAlbaranBobinas" style="min-width:140px" onchange="_bobinasAplicarFiltros()">
+            <option value="">📋 Nº albarán</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalBobina()">+ Nueva bobina</button>
           <button class="btn btn-secondary" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6" onclick="abrirScanBobinasPanel()">📷 Escanear albarán</button>
           <button class="btn btn-secondary" onclick="exportarBobinasExcel()">📊 Excel</button>
-          <button class="btn btn-secondary" onclick="tblBobinas && tblBobinas.print(false,true)">🖨️ Imprimir</button>
+          <!-- BOBINAS-FILTRO-01: print(true, true) para imprimir TODAS las filas que
+               cumplan el filtro activo, no solo la página de 20 visible en pantalla. -->
+          <button class="btn btn-secondary" onclick="tblBobinas && tblBobinas.print(true,true)">🖨️ Imprimir</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblBobinas,'bobinas')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarBobinas()">🔄 Actualizar</button>
         </div>
@@ -12480,6 +12498,15 @@ async function cargarBobinas() {
     const tipos = [...new Set(data.map(b => b.tipo_cable).filter(Boolean))].sort();
     tipoSel.innerHTML = '<option value="">🔌 Tipo cable</option>' + tipos.map(t => `<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
   }
+  // BOBINAS-FILTRO-01: Nº albarán como selector de valores exactos (mismo patrón que
+  // Proveedor/Tipo cable) — permite aislar todas las bobinas de un albarán concreto
+  // para imprimir, en vez de depender del buscador de texto libre.
+  const albSel = document.getElementById('filtroAlbaranBobinas');
+  if (albSel) {
+    const cur = albSel.value;
+    const albaranes = [...new Set(data.map(b => b.num_albaran).filter(Boolean))].sort();
+    albSel.innerHTML = '<option value="">📋 Nº albarán</option>' + albaranes.map(a => `<option value="${a}"${a===cur?' selected':''}>${a}</option>`).join('');
+  }
   if (tblBobinas) { tblBobinas.replaceData(data); return; }
   tblBobinas = new Tabulator('#tblBobinas', {
     // SCAN-02/BUG-TABLA-01 (25/07/2026): con las columnas nuevas (Long., Registrado por,
@@ -12532,15 +12559,31 @@ async function cargarBobinas() {
         cellClick: (e, c) => abrirModalGestionBobina(c.getRow().getData()) },
     ]
   });
-  document.getElementById('searchBobinas').oninput = function() {
-    // SCAN-06: se busca también por num_albaran, a petición de Adrián.
-    tblBobinas.setFilter([[
-      {field:'codigo',type:'like',value:this.value},
-      {field:'tipo_cable',type:'like',value:this.value},
-      {field:'proveedor',type:'like',value:this.value},
-      {field:'num_albaran',type:'like',value:this.value},
-    ]]);
-  };
+  document.getElementById('searchBobinas').oninput = _bobinasAplicarFiltros;
+  _bobinasAplicarFiltros();
+}
+
+// BOBINAS-FILTRO-01 (25/07/2026): antes solo existía el buscador de texto libre
+// (SCAN-06); Adrián: "falta el filtrado por albarán y por estado para poder
+// imprimirlo". Se combinan en AND: estado exacto + albarán exacto (si están
+// puestos) + la búsqueda de texto libre en OR entre código/tipo/proveedor/albarán.
+function _bobinasAplicarFiltros() {
+  if (!tblBobinas) return;
+  const q = document.getElementById('searchBobinas')?.value || '';
+  const estado = document.getElementById('filtroEstadoBobinas')?.value || '';
+  const albaran = document.getElementById('filtroAlbaranBobinas')?.value || '';
+  const filtros = [];
+  if (estado) filtros.push({ field: 'estado', type: '=', value: estado });
+  if (albaran) filtros.push({ field: 'num_albaran', type: '=', value: albaran });
+  if (q) {
+    filtros.push([
+      { field: 'codigo', type: 'like', value: q },
+      { field: 'tipo_cable', type: 'like', value: q },
+      { field: 'proveedor', type: 'like', value: q },
+      { field: 'num_albaran', type: 'like', value: q },
+    ]);
+  }
+  tblBobinas.setFilter(filtros.length ? filtros : []);
 }
 
 // SCAN-02: modal único por bobina para cambiar longitud/estado, y devolver con el flujo
