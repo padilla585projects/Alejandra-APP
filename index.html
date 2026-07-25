@@ -317,7 +317,18 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
 .obra-bar-n{font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:var(--accent);min-width:24px;text-align:right}
 
 /* ── DEPT SELECTOR ── */
-.dept-grid{display:flex;flex-direction:column;gap:14px;padding:16px;height:100%}
+/* BUG-DEPTGRID-01 (25/07/2026): Adrián en el HTC: "mira un bug" — la tarjeta "Chat del
+   equipo" (justo después de .dept-grid en el HTML) se montaba encima de Obra Civil/
+   Pintura. Causa: height:100% fijaba la caja del grid a la altura de la pantalla, pero
+   con el catálogo de departamentos extra cargado (Obra Civil, Pintura, Carpintería...)
+   el contenido real es más alto y se desbordaba SIN mover la caja del grid — el
+   siguiente hermano en el HTML (Chat del equipo) se posicionaba justo donde terminaba
+   esa caja de 100%, no donde terminaba el contenido real, montándose encima de las
+   últimas tarjetas desbordadas. #appContent ya tiene overflow-y:auto y hace de scroll
+   único de toda la pantalla — el grid solo tiene que crecer con su contenido, no fijarse
+   a una altura de pantalla.
+*/
+.dept-grid{display:flex;flex-direction:column;gap:14px;padding:16px}
 .dept-card{background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:0 24px;display:flex;align-items:center;gap:22px;cursor:pointer;transition:all .2s;flex:1;min-height:90px}
 .dept-card:active{transform:scale(0.97);opacity:.9}
 .dept-card:hover{border-color:var(--accent)}
@@ -12408,7 +12419,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.45';
+const APP_VERSION = '8.46';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
