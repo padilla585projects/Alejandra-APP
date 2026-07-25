@@ -72,6 +72,73 @@
       correcta, PUT de edición con el payload exacto que exige el backend. Cero errores.
     · Ver SESION.md Part 49.
 
+[✓ HECHO v8.21] ORG-03 — Menú de Office propio para Mecánicas
+    · Adrián: "ahora tenemos que arreglar los demás departamentos con sus roles que esten
+      bien como hemos echo con Electricas". organizarSidebarEncargado() (ORG-02, v8.14)
+      solo comprobaba SESSION.rol, sin mirar departamento: un encargado de Mecánicas veía
+      "Bobinas" (cable eléctrico, no aplica) y la etiqueta "⚡ Material y maquinaria" con
+      el rayo fijo, igual que Eléctrico.
+    · Confirmado por AskUserQuestion: menú propio por departamento (no genérico por rol),
+      empezando por Mecánicas.
+    · Lógica común extraída a función parametrizada por icono + módulos de "Material y
+      maquinaria". Mecánicas: 🔧, mismo bloque que Eléctrico sin bobinas (PEMP/Carretillas/
+      Herramientas ya compartidos entre ambos departamentos en toda la app).
+    · Probado en navegador replicando el orden de carga real: Eléctrico sin regresión
+      (bobinas visible, ⚡), Mecánicas oculta bobinas correctamente (🔧). Solo panel.html,
+      sin tocar worker.js — no requiere wrangler deploy.
+    · Ver SESION.md Part 50.
+
+[✓ HECHO v8.21] ORG-04 — Menú de Office propio para Seguridad (Técnico / Recursos Preventivos)
+    · Seguridad ya tenía su propia sección en el sidebar (EPIs/Carnets/Reconocimientos/
+      Permisos de Trabajo/ATS/Accidentes), revelada por departamento — no hacía falta
+      moverla, solo curar el resto del sidebar sin ocultarla.
+    · _MENU_ROL_DEPT_CONFIG generalizado a rol+departamento (antes solo encargado): rama
+      `encargado.seguridad` (Técnico) y nueva rama `operario.seguridad` (Recursos
+      Preventivos) — confirmado por Adrián que Operario también necesita menú propio.
+    · Recursos Preventivos oculta Carnets y Reconocimientos (nav-sensitive-data, datos
+      personales/médicos de otros trabajadores) — mismo criterio de privacidad que ya
+      aplica el panel a Oficina sin admin. Asunción razonable NO confirmada explícitamente
+      por Adrián; revisar si RP necesita esos dos módulos en la práctica.
+    · Operario en Eléctrico/Mecánicas sigue sin menú propio, a propósito — sin
+      confirmación de contenido para esos casos.
+    · Probado en navegador: Técnico ve 6 ítems de Seguridad, RP ve 4 (sin Carnets/
+      Reconocimientos), sin regresión en Eléctrico/Mecánicas. Cero errores.
+    · Ver SESION.md Part 51.
+
+[✓ HECHO v8.21] ROLES-04 — Nombres por departamento (Técnico/RP) + catálogo de roles completo
+    · Adrián: en Seguridad, Encargado se llama "Técnico" y Operario "Recursos Preventivos"
+      (RP) — ej. "Katherine en seguridad sería un Recurso Preventivo (RP)". Confirmado por
+      AskUserQuestion: MISMO rol interno (encargado/operario, mismos permisos backend),
+      solo cambia el nombre visible — coherente con "cada departamento tiene los mismos
+      roles de Eléctricos".
+    · Nuevo helper rolLabelPorDepto(rol, departamento), sustituye al mapa fijo del topbar
+      y se aplica también en invitaciones, badges de Rol/Roles extra de la tabla Usuarios
+      y el modal de roles extra.
+    · BUG LATERAL CONFIRMADO Y ARREGLADO (no dejado para después): project_manager y
+      almacenero (roles reales desde ROLES-02, v8.17) faltaban en 5 de 7 selectores de rol
+      del panel (editor de Rol en tabla Usuarios, modal "Nuevo usuario", modal "Nuevo
+      trabajador", filtro de tabla Usuarios). Añadidos ahí, junto con el nuevo rol
+      "ingeniero".
+    · BUG LATERAL #2, más serio: el modal "Nuevo trabajador" (abrirModalPersonal) tenía el
+      desplegable de Departamento escrito a mano con <option value="oficina">Oficina
+      técnica</option> — ese departamento NO EXISTE desde INGENIERIA-01 (v8.19), sustituido
+      por "ingenieria" (confirmado contra validos[] en worker.js). Tampoco ofrecía
+      "ingenieria". Cualquier alta desde ese modal con "Oficina técnica" habría guardado un
+      departamento inválido. Sustituido por el catálogo real _DEPTS_CATALOG/_ALL_DEPTS, ya
+      usado correctamente por abrirModalUsuario() — quedan sincronizados por construcción.
+    · Rol "ingeniero" dado de alta en los 7 selectores, color de badge propio (#ec4899),
+      acceso a Office igual que Encargado (necesita el rol acumulado oficina, sin cambios
+      en puedeEntrarOffice() — ya funcionaba para cualquier rol con oficina en
+      roles_extra). organizarSidebarIngenieria() (INGENIERIA-01) sigue gateado por
+      departamento, no por rol — no necesitó cambios.
+    · Probado en navegador: rolLabelPorDepto('encargado','seguridad')→"Técnico",
+      ('operario','seguridad')→"Recursos Preventivos"; modal "Nuevo trabajador" ya ofrece
+      los 11 departamentos reales (incluida Ingeniería, sin "Oficina técnica"); fila
+      simulada de Katherine (operario/seguridad) renderiza badge "Recursos Preventivos".
+      Cero errores.
+    · Sin cambios en worker.js ni alejandra-agente/worker.js: capa de nombres/selectores UI.
+    · Ver SESION.md Part 52.
+
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
 ================================================================================

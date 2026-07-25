@@ -8396,6 +8396,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <option value="jefe_de_obra">Jefe de obra</option>
             <option value="oficina">Oficina</option>
             <option value="operario">Operario</option>
+            <option value="project_manager">Project Manager</option>
+            <option value="almacenero">Almacenero</option>
+            <option value="ingeniero">Ingeniero</option>
           </select>
           <button class="btn btn-primary" onclick="abrirModalUsuario()">+ Nuevo usuario</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblUsuarios,'usuarios')">⬇ CSV</button>
@@ -9846,6 +9849,24 @@ const ITEMS_OCULTOS_OFICIO = [
   'globalDashboard', 'obraDetalle', 'calendario', 'equiposMedicion', 'itpObra',
   'ncrsObra', 'accionItems', 'centroAlertas',
 ];
+// ROLES-04 (25/07/2026): terminología propia de la empresa por departamento. Adrián: en
+// Seguridad, el puesto de Encargado se llama "Técnico" y el de Operario "Recursos
+// Preventivos" (RP) -p.ej. Katherine. El rol interno (permisos, backend, valor guardado en
+// BD) sigue siendo 'encargado'/'operario' en TODOS los departamentos -confirmado por
+// Adrián: "cada departamento tiene los mismos roles de Eléctricos"-; esto es solo una capa
+// de nombres visibles, sin tocar worker.js ni ningún check de permisos.
+const _ROL_LABEL_BASE = {
+  superadmin: 'Super Admin', empresa_admin: 'Admin', desarrollador: 'Desarrollador',
+  project_manager: 'Project Manager', jefe_de_obra: 'Jefe de Obra', almacenero: 'Almacenero',
+  encargado: 'Encargado', operario: 'Operario', oficina: 'Oficina', ingeniero: 'Ingeniero',
+};
+const _ROL_LABEL_POR_DEPTO = {
+  seguridad: { encargado: 'Técnico', operario: 'Recursos Preventivos' },
+};
+function rolLabelPorDepto(rol, departamento) {
+  return _ROL_LABEL_POR_DEPTO[departamento]?.[rol] || _ROL_LABEL_BASE[rol] || rol;
+}
+
 function ocultarItemsPorOficio() {
   // Se decide por el rol activo principal. Una cuenta puede conservar otros
   // permisos para auditoría, pero si entra como Encargado debe ver su espacio
@@ -9864,9 +9885,70 @@ function ocultarItemsPorOficio() {
   if (ocultados > 0) console.log(`✓ Ocultados ${ocultados} items de gestión de obra/PM para encargado/operario (ORG-01)`);
 }
 
-function organizarSidebarEncargado() {
-  if (SESSION?.rol !== 'encargado') return;
+// ORG-03/ORG-04 (25/07/2026): organizarSidebarEncargado() original solo comprobaba
+// SESSION.rol==='encargado' — aplicaba el MISMO menú (con "bobinas", específico de cable
+// eléctrico, y la etiqueta "⚡ Material y maquinaria" con el rayo fijo) a un encargado de
+// Mecánicas o de cualquier otro departamento, e ignoraba por completo a Operario. Adrián
+// pidió un menú propio por departamento -y por rol dentro del departamento-, igual que ya
+// tiene Ingeniería, empezando por Mecánicas y siguiendo por Seguridad. Se extrae la lógica
+// común a _organizarSidebarRolDept(), parametrizada por rol/departamento/icono/módulos, y
+// organizarSidebarEncargado() (nombre conservado por compatibilidad con sus llamadas desde
+// iniciarApp()/ocultarSidebarPorPermisos()) pasa a ser el enrutador por
+// SESSION.rol+SESSION.departamento. Departamentos/roles aún sin menú propio siguen viendo
+// el sidebar completo sin curar, a propósito — no hay confirmación de que tengan cuentas
+// reales usándolos.
+const _MENU_ROL_DEPT_CONFIG = {
+  encargado: {
+    electrico: {
+      icono: '⚡',
+      // 'bobinas' (cable eléctrico) es exclusivo de Eléctrico en toda la app — ver
+      // index.html (mostrarBobinas = dept==='electrico', cfgBobinasSection) y panel.html
+      // (filtro soloElectrico). No debe aparecer en el menú de otro departamento.
+      material: ['bobinas', 'herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'],
+    },
+    mecanicas: {
+      icono: '🔧',
+      // Mismo bloque que Eléctrico sin 'bobinas': PEMP/Carretillas/Herramientas ya son
+      // compartidos entre electrico y mecanicas en toda la app (cfgPempSection,
+      // cfgCarrSection, cfgHerrSection), bobinas no.
+      material: ['herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'],
+    },
+    seguridad: {
+      // Adrián: en Seguridad, Encargado se llama "Técnico" (ver rolLabelPorDepto). La
+      // sección propia "🔺 Seguridad" (EPIs/Carnets/Reconocimientos/Permisos de
+      // Trabajo/ATS/Accidentes) ya existe y se revela por departamento en iniciarApp()
+      // -no hace falta moverla, solo no ocultarla-; aquí solo se cura el resto del
+      // sidebar. 'herramientas' es compartido con Seguridad (cfgHerrSection);
+      // bobinas/pemp/carretillas no aplican a este departamento.
+      icono: '🔺',
+      material: ['herramientas', 'alertasStock'],
+    },
+  },
+  operario: {
+    // Recursos Preventivos (Katherine, por ejemplo) es el mismo rol 'operario' por
+    // dentro, con nombre y menú propios en Seguridad. Sin confirmación todavía para
+    // Operario en otros departamentos: se deja sin curar (mismo criterio que
+    // departamentos sin config).
+    seguridad: {
+      icono: '🔺',
+      material: ['herramientas', 'alertasStock'],
+      // Carnets y Reconocimientos médicos son datos personales/sensibles de OTROS
+      // trabajadores (nav-sensitive-data) — mismo criterio que ya aplica el resto del
+      // panel para 'oficina' sin admin (ver ocultarSidebarPorPermisos). No confirmado
+      // explícitamente por Adrián para Recursos Preventivos; asunción razonable por
+      // privacidad, a revisar si hace falta acceso real a esos dos módulos.
+      ocultarSensiblesSeguridad: true,
+    },
+  },
+};
 
+function organizarSidebarEncargado() {
+  const config = _MENU_ROL_DEPT_CONFIG[SESSION?.rol]?.[SESSION?.departamento];
+  if (!config) return; // rol/departamento sin menú propio todavía: se deja el sidebar completo
+  _organizarSidebarRolDept(config);
+}
+
+function _organizarSidebarRolDept(config) {
   const seccion = sid => document.querySelector(`.sidebar-section[data-sid="${sid}"]`);
   const item = page => document.querySelector(`.nav-item[data-page="${page}"]`);
   const moverDespues = (ancla, page) => {
@@ -9896,14 +9978,14 @@ function organizarSidebarEncargado() {
   };
 
   renombrar('principal', '☀️ Hoy en obra');
-  renombrar('inventarios', '⚡ Material y maquinaria');
+  renombrar('inventarios', `${config.icono} Material y maquinaria`);
   renombrar('obra', '📁 Documentación y control');
 
   let hoy = document.getElementById('navChatEquipo');
   ['planSemanal', 'partesPanel', 'tareas', 'incidencias'].forEach(page => { hoy = moverDespues(hoy, page); });
 
   let material = seccion('inventarios');
-  ['bobinas', 'herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'].forEach(page => { material = moverDespues(material, page); });
+  config.material.forEach(page => { material = moverDespues(material, page); });
 
   let control = seccion('obra');
   ['documentosObra', 'planosObra', 'fotosObra', 'instruccionesObra', 'inspecciones'].forEach(page => { control = moverDespues(control, page); });
@@ -9913,6 +9995,13 @@ function organizarSidebarEncargado() {
   ocultarSeccion('pedidosSec');
   ocultarSeccion('planificacion');
   ocultarSeccion('diarioCampo');
+
+  if (config.ocultarSensiblesSeguridad) {
+    document.querySelectorAll('.nav-sensitive-data.nav-seguridad-section').forEach(el => {
+      el.style.display = 'none';
+      el.setAttribute('data-hidden-by-perms', 'true');
+    });
+  }
 }
 
 // INGENIERIA-01: el departamento de Ingeniería reúne la coordinación técnica
@@ -9995,13 +10084,9 @@ function iniciarApp() {
   // topbar usuario
   document.getElementById('topbarName').textContent = SESSION.nombre;
   const rolEl = document.getElementById('topbarRol');
-  const rolLabels = {
-    superadmin: 'Super Admin', empresa_admin: 'Admin',
-    project_manager: 'Project Manager', jefe_de_obra: 'Jefe de Obra',
-    encargado: 'Encargado', almacenero: 'Almacenero', oficina: 'Oficina',
-    desarrollador: 'Desarrollador'
-  };
-  rolEl.textContent = rolLabels[SESSION.rol] || SESSION.rol;
+  // ROLES-04: rolLabelPorDepto() sustituye al mapa fijo — mismo rol interno, nombre
+  // visible distinto en Seguridad (Técnico/Recursos Preventivos).
+  rolEl.textContent = rolLabelPorDepto(SESSION.rol, SESSION.departamento);
   rolEl.className = `rol-badge rol-${SESSION.rol}`;
   if (SESSION.empresa_nombre) document.getElementById('topbarEmpresa').textContent = SESSION.empresa_nombre;
 
@@ -11268,23 +11353,20 @@ function abrirModalPersonal() {
           <option value="encargado">Encargado</option>
           <option value="oficina">Oficina</option>
           <option value="jefe_de_obra">Jefe de obra</option>
+          <option value="project_manager">Project Manager</option>
+          <option value="almacenero">Almacenero</option>
+          <option value="ingeniero">Ingeniero</option>
           <option value="empresa_admin">Admin</option>
         </select>
       </div>
       <div class="form-group"><div class="form-label">Departamento</div>
-        <select class="form-select" id="mDept">
-          <option value="electrico">Eléctrico</option>
-          <option value="mecanicas">Mecánicas</option>
-          <option value="seguridad">Seguridad</option>
-          <option value="personal">Personal</option>
-          <option value="obra_civil">Obra Civil</option>
-          <option value="albanileria">Albañilería</option>
-          <option value="pintura">Pintura</option>
-          <option value="carpinteria">Carpintería</option>
-          <option value="telecom">Telecom</option>
-          <option value="almacen">Almacén</option>
-          <option value="oficina">Oficina técnica</option>
-        </select>
+        <!-- ROLES-04 (25/07/2026): esta lista estaba escrita a mano y quedó desactualizada
+             tras INGENIERIA-01 (v8.19) — seguía ofreciendo 'oficina' ("Oficina técnica"),
+             que ya NO es un departamento válido (ver validos[] en worker.js), y nunca llegó
+             a incluir 'ingenieria'. Se sustituye por el catálogo real _DEPTS_CATALOG, la
+             misma fuente que ya usa abrirModalUsuario(), para que no se desincronicen otra
+             vez. -->
+        <select class="form-select" id="mDept">${_ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('')}</select>
       </div>
     </div>
   `, async () => {
@@ -13733,11 +13815,17 @@ async function cargarUsuarios() {
       { title: 'Email', field: 'email', minWidth: 180 },
       { title: 'Rol', field: 'rol', width: 150,
         editor: canEdit ? 'select' : false,
-        editorParams: { values: { operario:'Operario', encargado:'Encargado', jefe_de_obra:'Jefe de obra', oficina:'Oficina', empresa_admin:'Admin' } },
+        // ROLES-04: project_manager/almacenero ya existían desde v8.17 pero faltaban en
+        // este selector (no se podía asignar el rol principal desde aquí, solo por API o
+        // como rol extra); añadidos junto con el nuevo rol ingeniero.
+        editorParams: { values: { operario:'Operario', encargado:'Encargado', jefe_de_obra:'Jefe de obra', oficina:'Oficina', empresa_admin:'Admin', project_manager:'Project Manager', almacenero:'Almacenero', ingeniero:'Ingeniero' } },
         formatter: c => {
           const v = c.getValue();
-          const color = { empresa_admin:'var(--accent)', encargado:'var(--yellow)', jefe_de_obra:'var(--blue)', oficina:'var(--green)', operario:'var(--muted)', desarrollador:'#a855f7' }[v] || 'var(--muted)';
-          return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:20px">${v || '—'}</span>`;
+          const color = { empresa_admin:'var(--accent)', encargado:'var(--yellow)', jefe_de_obra:'var(--blue)', oficina:'var(--green)', operario:'var(--muted)', desarrollador:'#a855f7', project_manager:'#f97316', almacenero:'#14b8a6', ingeniero:'#ec4899' }[v] || 'var(--muted)';
+          // ROLES-04: etiqueta por departamento (Técnico/Recursos Preventivos en Seguridad),
+          // color sigue por el valor real de rol para que se reconozca a simple vista.
+          const label = rolLabelPorDepto(v, c.getRow().getData().departamento);
+          return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:20px">${label || '—'}</span>`;
         },
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'rol', c.getValue()) },
       { title: 'Roles extra', field: 'roles_extra', minWidth: 160,
@@ -13745,8 +13833,9 @@ async function cargarUsuarios() {
           let extras = [];
           try { if (c.getValue()) extras = JSON.parse(c.getValue()); } catch {}
           if (!extras.length) return canEdit ? '<span style="color:var(--muted);font-size:11px">+ añadir</span>' : '<span style="color:var(--muted)">—</span>';
-          const colors = { empresa_admin:'var(--accent)', encargado:'var(--yellow)', jefe_de_obra:'var(--blue)', oficina:'var(--green)', desarrollador:'#a855f7' };
-          return extras.map(r => { const col = colors[r] || 'var(--muted)'; return `<span style="background:${col}22;color:${col};border:1px solid ${col}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 7px;border-radius:20px;margin-right:3px">${r}</span>`; }).join('');
+          const colors = { empresa_admin:'var(--accent)', encargado:'var(--yellow)', jefe_de_obra:'var(--blue)', oficina:'var(--green)', desarrollador:'#a855f7', project_manager:'#f97316', almacenero:'#14b8a6', ingeniero:'#ec4899' };
+          const depto = c.getRow().getData().departamento;
+          return extras.map(r => { const col = colors[r] || 'var(--muted)'; return `<span style="background:${col}22;color:${col};border:1px solid ${col}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 7px;border-radius:20px;margin-right:3px">${rolLabelPorDepto(r, depto)}</span>`; }).join('');
         },
         cellClick: canEdit ? (e, c) => editarRolesExtra(c.getRow().getData()) : undefined },
       { title: 'Dpto.', field: 'departamento', width: 140,
@@ -13796,11 +13885,13 @@ async function editarObrasAsignadas(id) {
 function editarRolesExtra(row) {
   let extras = [];
   try { if (row.roles_extra) extras = JSON.parse(row.roles_extra); } catch {}
-  const opciones = ['operario', 'encargado', 'almacenero', 'jefe_de_obra', 'project_manager', 'oficina', 'empresa_admin'];
+  const opciones = ['operario', 'encargado', 'almacenero', 'jefe_de_obra', 'project_manager', 'oficina', 'empresa_admin', 'ingeniero'];
+  // ROLES-04: nombre visible por departamento (Técnico/Recursos Preventivos en Seguridad)
+  // en vez del valor de rol en crudo.
   const checks = opciones.map(r => `
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:7px 0;border-bottom:1px solid var(--border)">
       <input type="checkbox" id="rex_${r}" ${extras.includes(r) ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--accent)">
-      <span style="font-size:13px">${r}</span>
+      <span style="font-size:13px">${rolLabelPorDepto(r, row.departamento)}</span>
     </label>`).join('');
   abrirModal(`🎭 Roles extra — ${row.nombre}`, `
     <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Roles adicionales al rol principal (${row.rol})</p>
@@ -13859,6 +13950,9 @@ function abrirModalUsuario() {
           <option value="encargado">Encargado</option>
           <option value="oficina">Oficina</option>
           <option value="jefe_de_obra">Jefe de obra</option>
+          <option value="project_manager">Project Manager</option>
+          <option value="almacenero">Almacenero</option>
+          <option value="ingeniero">Ingeniero</option>
           <option value="empresa_admin">Admin</option>
         </select>
       </div>
@@ -13904,7 +13998,7 @@ async function cargarInvitaciones() {
   cont.innerHTML = activas.map(inv => {
     const expira = new Date(inv.expira_at + 'Z');
     const restante = Math.max(0, Math.round((expira - Date.now()) / 60000));
-    const rolLabel = { operario:'Operario', encargado:'Encargado', oficina:'Oficina', jefe_de_obra:'Jefe de obra', empresa_admin:'Admin' }[inv.rol] || inv.rol;
+    const rolLabel = rolLabelPorDepto(inv.rol, inv.departamento); // ROLES-04
     const deptInfo = _DEPTS_CATALOG[inv.departamento];
     const deptLabel = deptInfo ? deptInfo.icon + ' ' + deptInfo.name : (inv.departamento || '—');
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -13939,6 +14033,7 @@ function abrirModalInvitacion() {
           <option value="project_manager">Project Manager</option>
           <option value="encargado">Encargado</option>
           <option value="almacenero">Almacenero</option>
+          <option value="ingeniero">Ingeniero</option>
           <option value="oficina">Oficina</option>
           <option value="jefe_de_obra">Jefe de obra</option>
           <option value="empresa_admin">Admin</option>
