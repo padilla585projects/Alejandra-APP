@@ -3058,8 +3058,12 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <textarea id="segRegDescripcion" rows="3" placeholder="Qué se ha observado..." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box;resize:vertical"></textarea>
           <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Foto</label>
           <div id="segRegFotoPreviewWrap" style="display:none;margin-bottom:10px"><img id="segRegFotoPreview" style="max-width:100%;border-radius:8px"></div>
-          <button onclick="document.getElementById('segRegCamInput').click()" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);margin-bottom:14px">📷 Hacer foto</button>
-          <input type="file" id="segRegCamInput" accept="image/*" capture="environment" style="display:none" onchange="segRegPreviewFoto(this.files)">
+          <!-- SEG-02-GALERIA (25/07/2026): Adrián probando en el HTC: "también podemos
+               agregar imagen que tengamos en el móvil, no solo hacer foto". El atributo
+               capture="environment" fuerza la cámara directamente y no deja elegir de la
+               galería — se quita para que el selector nativo ofrezca las dos opciones. -->
+          <button onclick="document.getElementById('segRegCamInput').click()" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);margin-bottom:14px">📷 Hacer foto o elegir de galería</button>
+          <input type="file" id="segRegCamInput" accept="image/*" style="display:none" onchange="segRegPreviewFoto(this.files)">
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segRegModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
             <button onclick="segRegGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
@@ -8113,8 +8117,9 @@ function segRegRenderDetalle(reg) {
     <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Registrado por ${esc(reg.creado_por||'—')}</div>
     <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Fotos</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${fotosHtml || '<span style="font-size:12px;color:var(--muted)">Sin fotos</span>'}</div>
-    <input type="file" id="segRegDetalleFotoInput" accept="image/*" capture="environment" style="display:none" onchange="segRegAnadirFotoDetalle(this.files)">
-    <button onclick="document.getElementById('segRegDetalleFotoInput').click()" style="padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text);margin-bottom:16px">📷 Añadir foto</button>
+    <!-- SEG-02-GALERIA: mismo fix que segRegCamInput más arriba. -->
+    <input type="file" id="segRegDetalleFotoInput" accept="image/*" style="display:none" onchange="segRegAnadirFotoDetalle(this.files)">
+    <button onclick="document.getElementById('segRegDetalleFotoInput').click()" style="padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text);margin-bottom:16px">📷 Añadir foto o elegir de galería</button>
     <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Comentarios</div>
     <div style="margin-bottom:10px">${comentariosHtml}</div>
     <div style="display:flex;gap:8px">
@@ -12333,7 +12338,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.40';
+const APP_VERSION = '8.41';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
