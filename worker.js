@@ -5515,6 +5515,26 @@ export default {
         if (method === 'DELETE') return await borrarFotoIncidencia(fid, request, env);
       }
 
+      // ── Registro de Seguridad (SEG-02) — fotos + comentarios del departamento ──
+      if (path === '/seg-registros' && method === 'GET')  return await getSegRegistros(request, env);
+      if (path === '/seg-registros' && method === 'POST') return await crearSegRegistro(request, env);
+      if (path.startsWith('/seg-registros/')) {
+        const parts = path.split('/');
+        const rid = parseInt(parts[2]);
+        if (parts[3] === 'fotos' && method === 'POST') return await subirFotoSegRegistro(rid, request, env);
+        if (parts[3] === 'comentarios' && method === 'POST') return await crearComentarioSegRegistro(rid, request, env);
+        if (parts[3] === 'email' && method === 'POST') return await enviarSegRegistroPorEmail(rid, request, env);
+        if (!parts[3]) {
+          if (method === 'GET')    return await getSegRegistro(rid, request, env);
+          if (method === 'DELETE') return await eliminarSegRegistro(rid, request, env);
+        }
+      }
+      if (path.startsWith('/seg-registro-fotos/')) {
+        const fid = parseInt(path.split('/seg-registro-fotos/')[1]);
+        if (method === 'GET')    return await getFotoSegRegistro(fid, request, env);
+        if (method === 'DELETE') return await borrarFotoSegRegistro(fid, request, env);
+      }
+
       // ── Archivos / R2 ────────────────────────────────────────────────────
       if (path === '/archivos' && method === 'GET')  return await listarArchivos(request, env);
       if (path === '/archivos' && method === 'POST') return await subirArchivo(request, env);
@@ -11737,6 +11757,225 @@ async function borrarFotoIncidencia(id, request, env) {
   if (!meta) return err('Foto no encontrada', 404);
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM incidencia_fotos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// REGISTRO DE SEGURIDAD (SEG-02, 25/07/2026) — fotos + explicación + hilo de
+// comentarios de todo el departamento de Seguridad. Adrián: "en seguridad
+// deberiamos de tener una funcion solo para subir fotos de incidencias o estados
+// de la obra donde luego se puedan verificar desde la app y el office por
+// cualquiera del departamento de seguridad. donde se pueda hacer comentarios".
+// Confirmado por AskUserQuestion: módulo nuevo e independiente (no dentro de
+// Incidencias, que tiene su propio flujo formal de estado/gravedad/asignación),
+// visible y comentable por todo el departamento de Seguridad + admins, informe en
+// PDF vía ventana de impresión (mismo patrón que Partes de trabajo/Informe de
+// obra). Mismo criterio de permisos que el Inventario de EPIs (DEPT-02): sin
+// isProjectManager a propósito, esa vista ampliada solo se pidió para el
+// inventario, no para este módulo.
+// ══════════════════════════════════════════════════════════════════════════════
+
+function puedeVerSegRegistros(auth) {
+  return !!(auth.isSuperadmin || auth.isEmpresaAdmin || auth.isDesarrollador || auth.isSeguridad);
+}
+
+let _segRegistrosOk = false;
+async function ensureSegRegistrosTables(env) {
+  if (_segRegistrosOk) return;
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS seg_registros (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id  INTEGER NOT NULL,
+    obra_id     INTEGER,
+    titulo      TEXT NOT NULL,
+    descripcion TEXT,
+    creado_por  TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS seg_registro_fotos (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id     INTEGER NOT NULL,
+    registro_id    INTEGER NOT NULL,
+    r2_key         TEXT NOT NULL,
+    nombre_archivo TEXT,
+    mime_type      TEXT,
+    subido_por     TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS seg_registro_comentarios (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id     INTEGER NOT NULL,
+    registro_id    INTEGER NOT NULL,
+    usuario_id     TEXT,
+    usuario_nombre TEXT,
+    mensaje        TEXT NOT NULL,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  _segRegistrosOk = true;
+}
+
+async function getSegRegistros(request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  await ensureSegRegistrosTables(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  let sql = `SELECT r.*, o.nombre as obra_nombre,
+    (SELECT COUNT(*) FROM seg_registro_fotos f WHERE f.registro_id=r.id) as num_fotos,
+    (SELECT COUNT(*) FROM seg_registro_comentarios c WHERE c.registro_id=r.id) as num_comentarios
+    FROM seg_registros r LEFT JOIN obras o ON r.obra_id = o.id WHERE r.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND r.obra_id = ?'; params.push(parseInt(obra_id)); }
+  sql += ' ORDER BY r.created_at DESC LIMIT 300';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function crearSegRegistro(request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, nombre } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  await ensureSegRegistrosTables(env);
+  const body = await request.json().catch(() => ({}));
+  if (!body.titulo?.trim()) return err('El título es obligatorio', 400);
+  const r = await env.DB.prepare(
+    'INSERT INTO seg_registros (empresa_id, obra_id, titulo, descripcion, creado_por) VALUES (?,?,?,?,?)'
+  ).bind(empresa_id, body.obra_id || obraAuth || null, body.titulo.trim(), body.descripcion || null, nombre || '').run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function getSegRegistro(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  await ensureSegRegistrosTables(env);
+  const reg = await env.DB.prepare(
+    'SELECT r.*, o.nombre as obra_nombre FROM seg_registros r LEFT JOIN obras o ON r.obra_id=o.id WHERE r.id=? AND r.empresa_id=?'
+  ).bind(id, empresa_id).first();
+  if (!reg) return err('No encontrado', 404);
+  const fotos = await env.DB.prepare('SELECT * FROM seg_registro_fotos WHERE registro_id=? AND empresa_id=? ORDER BY created_at ASC').bind(id, empresa_id).all();
+  const comentarios = await env.DB.prepare('SELECT * FROM seg_registro_comentarios WHERE registro_id=? AND empresa_id=? ORDER BY created_at ASC').bind(id, empresa_id).all();
+  return json({ ...reg, fotos: fotos.results, comentarios: comentarios.results });
+}
+
+async function eliminarSegRegistro(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  await ensureSegRegistrosTables(env);
+  const { results: fotos } = await env.DB.prepare('SELECT r2_key FROM seg_registro_fotos WHERE registro_id=? AND empresa_id=?').bind(id, empresa_id).all();
+  await Promise.all(fotos.map(f => env.FILES.delete(f.r2_key)));
+  await env.DB.prepare('DELETE FROM seg_registro_fotos WHERE registro_id=? AND empresa_id=?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM seg_registro_comentarios WHERE registro_id=? AND empresa_id=?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM seg_registros WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function subirFotoSegRegistro(registro_id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre: userNombre, rol } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  await ensureSegRegistrosTables(env);
+  const reg = await env.DB.prepare('SELECT id FROM seg_registros WHERE id=? AND empresa_id=?').bind(registro_id, empresa_id).first();
+  if (!reg) return err('Registro no encontrado', 404);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta el archivo', 400);
+  if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+  if (!allowed.includes(mime)) return err('Solo se permiten imágenes', 400);
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = `e${empresa_id}/seg-registros/${registro_id}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
+  const r = await env.DB.prepare(
+    'INSERT INTO seg_registro_fotos (empresa_id, registro_id, r2_key, nombre_archivo, mime_type, subido_por) VALUES (?,?,?,?,?,?)'
+  ).bind(empresa_id, registro_id, r2Key, file.name, mime, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function getFotoSegRegistro(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM seg_registro_fotos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': meta.mime_type || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
+async function borrarFotoSegRegistro(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const meta = await env.DB.prepare('SELECT * FROM seg_registro_fotos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  await env.FILES.delete(meta.r2_key);
+  await env.DB.prepare('DELETE FROM seg_registro_fotos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function crearComentarioSegRegistro(registro_id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, usuario_id, nombre } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  await ensureSegRegistrosTables(env);
+  const reg = await env.DB.prepare('SELECT id FROM seg_registros WHERE id=? AND empresa_id=?').bind(registro_id, empresa_id).first();
+  if (!reg) return err('Registro no encontrado', 404);
+  const body = await request.json().catch(() => ({}));
+  if (!body.mensaje?.trim()) return err('El comentario no puede estar vacío', 400);
+  const r = await env.DB.prepare(
+    'INSERT INTO seg_registro_comentarios (empresa_id, registro_id, usuario_id, usuario_nombre, mensaje) VALUES (?,?,?,?,?)'
+  ).bind(empresa_id, registro_id, usuario_id ? String(usuario_id) : null, nombre || '', body.mensaje.trim()).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+// Email de texto (título, descripción, obra, hilo de comentarios) — sin fotos
+// embebidas a propósito: /seg-registro-fotos/:id exige sesión autenticada, y no
+// hay en todo el proyecto un precedente de exponer una imagen protegida por token
+// dentro de un email externo (riesgo de fuga del token de sesión al destinatario).
+// El informe con fotos vive en el PDF, generado dentro de la sesión autenticada.
+async function enviarSegRegistroPorEmail(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const to = (body.to || '').trim();
+  if (!to) return err('Falta el email de destino');
+  const reg = await env.DB.prepare(
+    'SELECT r.*, o.nombre as obra_nombre FROM seg_registros r LEFT JOIN obras o ON r.obra_id=o.id WHERE r.id=? AND r.empresa_id=?'
+  ).bind(id, empresa_id).first();
+  if (!reg) return err('Registro no encontrado', 404);
+  const comentarios = await env.DB.prepare('SELECT * FROM seg_registro_comentarios WHERE registro_id=? AND empresa_id=? ORDER BY created_at ASC').bind(id, empresa_id).all();
+  const asunto = (body.asunto || `Registro de Seguridad — ${reg.titulo}`).slice(0, 200);
+  const comentariosHtml = comentarios.results.length
+    ? `<h3 style="margin-top:20px">Comentarios</h3>` + comentarios.results.map(c =>
+        `<p style="margin:4px 0;padding:8px;background:#f5f7fb;border-radius:6px"><b>${c.usuario_nombre || '—'}</b> <span style="color:#999;font-size:11px">${(c.created_at || '').slice(0, 16)}</span><br>${(c.mensaje || '').replace(/\n/g, '<br>')}</p>`
+      ).join('')
+    : '';
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:600px;margin:0 auto">
+      <h2 style="color:#ef4444;margin-bottom:4px">🔺 ${reg.titulo}</h2>
+      <p style="color:#666;margin-top:0">${reg.obra_nombre ? `Obra: <b>${reg.obra_nombre}</b> — ` : ''}${(reg.created_at || '').slice(0, 16)}</p>
+      ${reg.descripcion ? `<p>${reg.descripcion.replace(/\n/g, '<br>')}</p>` : ''}
+      <p style="color:#999;font-size:12px">Registrado por ${reg.creado_por || '—'}</p>
+      ${comentariosHtml}
+      <p style="color:#999;font-size:12px;margin-top:20px">Enviado desde Alejandra App — Registro de Seguridad</p>
+    </div>`;
+  const ok = await enviarEmailResend(env, { to, subject: asunto, html });
+  if (!ok) return err('No se pudo enviar el email (revisa RESEND_API_KEY o el dominio remitente)', 500);
   return json({ ok: true });
 }
 

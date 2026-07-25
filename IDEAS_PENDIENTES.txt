@@ -139,6 +139,41 @@
     · Sin cambios en worker.js ni alejandra-agente/worker.js: capa de nombres/selectores UI.
     · Ver SESION.md Part 52.
 
+[✓ HECHO v8.22] SEG-02 — Registro de Seguridad: fotos + comentarios del departamento + informe
+    · Adrián: "en seguridad deberiamos de tener una funcion solo para subir fotos de
+      incidencias o estados de la obra donde luego se puedan verificar desde la app y el
+      office por cualquiera del departamento de seguridad. donde se pueda hacer
+      comentarios". Ampliado: informe con fotos+explicación, enviable por email,
+      compartible por WhatsApp, descargable — "lo que hace un departamento de seguridad".
+    · Investigado antes de construir: nada existente cubría esto (Galería solo admite un
+      comentario fijo por foto, Incidencias no tiene hilo de comentarios, los módulos de
+      Seguridad no admiten fotos ni comentarios, no hay precedente de comentarios
+      múltiples con FK a un registro en todo el proyecto).
+    · Confirmado por AskUserQuestion: módulo nuevo e independiente (no dentro de
+      Incidencias), visible/comentable por todo el departamento de Seguridad + admins
+      (mismo criterio que DEPT-02, sin isProjectManager a propósito), informe en PDF vía
+      ventana de impresión.
+    · worker.js: 3 tablas nuevas (seg_registros, seg_registro_fotos con FK a
+      incidencia_fotos como modelo, seg_registro_comentarios con FK y autoría estilo
+      chat_mensajes), 8 endpoints nuevos. Email de texto sin fotos embebidas a propósito
+      (decisión de seguridad: no hay precedente de exponer una imagen protegida por token
+      dentro de un email externo — riesgo de fuga del token de sesión).
+    · panel.html: página nueva "📷 Registro de Seguridad" en la sección lateral 🔺
+      Seguridad, con lista+detalle+Imprimir/Email/Compartir. index.html: pestaña nueva
+      dentro de la pantalla de Seguridad existente, con captura de cámara — sin
+      imprimir/email/compartir en móvil a propósito (eso vive en Office).
+    · BUG LATERAL ENCONTRADO Y ARREGLADO (no dejado para después): la sección "🔺
+      Seguridad" del sidebar de Office solo se revelaba si el departamento ACTIVO era
+      Seguridad — ni un admin la veía si su departamento activo era otro, inconsistente
+      con "🔺 Bobinas" (INV-01, que sí incluye isAdmin). Sin este fix el nuevo módulo no
+      habría llegado a los admins pese a estar confirmado como "Seguridad + admins".
+    · Probado en navegador (Office y app móvil, con datos simulados): admin con
+      departamento activo distinto de Seguridad ve el módulo (confirma el fix), detalle
+      con fotos/descripción/comentarios/autor correcto en ambas interfaces, comentario
+      nuevo se envía con el payload esperado. Cero errores. Los 8 endpoints responden 403
+      sin credenciales en producción (confirmadas registradas y protegidas).
+    · Ver SESION.md Part 53.
+
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
 ================================================================================

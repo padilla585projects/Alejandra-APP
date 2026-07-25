@@ -2588,6 +2588,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <div class="module-info"><div class="module-name">Inspecciones</div><div class="module-desc">Inspecciones periódicas de seguridad</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" data-module="seg_registro" onclick="segSelTab('registro')">
+        <div class="module-emoji">📷</div>
+        <div class="module-info"><div class="module-name">Registro de Seguridad</div><div class="module-desc">Fotos de incidencias y comentarios del equipo</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -3001,6 +3006,47 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segInspModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
             <button onclick="segInspGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar inspección</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB REGISTRO DE SEGURIDAD (SEG-02, 25/07/2026) ── -->
+    <!-- Adrián: fotos de incidencias/estados de obra + comentarios de todo el
+         departamento, verificable desde la app y Office. Módulo nuevo e
+         independiente (no dentro de Incidencias), confirmado por AskUserQuestion. -->
+    <div id="segPanelRegistro" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);flex:1">📷 Registro de Seguridad</div>
+        <button onclick="segRegNuevo()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0">+ Nuevo</button>
+      </div>
+      <div id="segRegLista" style="flex:1;overflow-y:auto;padding:10px 14px"></div>
+
+      <!-- Detalle (fotos + comentarios) -->
+      <div id="segRegDetallePanel" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9998;flex-direction:column">
+        <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+          <button onclick="document.getElementById('segRegDetallePanel').style.display='none'" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+          <div id="segRegDetalleTitulo" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;flex:1">—</div>
+        </div>
+        <div id="segRegDetalleBody" style="flex:1;overflow-y:auto;padding:14px"></div>
+      </div>
+
+      <!-- Nuevo registro -->
+      <div id="segRegModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;margin-bottom:16px">Nuevo registro de Seguridad</div>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Título *</label>
+          <input id="segRegTitulo" type="text" placeholder="Ej: Andamio sin protección colectiva" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Descripción</label>
+          <textarea id="segRegDescripcion" rows="3" placeholder="Qué se ha observado..." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box;resize:vertical"></textarea>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Foto</label>
+          <div id="segRegFotoPreviewWrap" style="display:none;margin-bottom:10px"><img id="segRegFotoPreview" style="max-width:100%;border-radius:8px"></div>
+          <button onclick="document.getElementById('segRegCamInput').click()" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);margin-bottom:14px">📷 Hacer foto</button>
+          <input type="file" id="segRegCamInput" accept="image/*" capture="environment" style="display:none" onchange="segRegPreviewFoto(this.files)">
+          <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('segRegModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
+            <button onclick="segRegGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
           </div>
         </div>
       </div>
@@ -7418,6 +7464,7 @@ function segSelTab(tab) {
   document.getElementById('segPanelDocsObra').style.display        = tab === 'docsObra'          ? 'flex' : 'none';
   document.getElementById('segPanelPermisos').style.display        = tab === 'permisos'          ? 'flex' : 'none';
   document.getElementById('segPanelInspecciones').style.display    = tab === 'inspecciones'      ? 'flex' : 'none';
+  document.getElementById('segPanelRegistro').style.display        = tab === 'registro'          ? 'flex' : 'none';
   if (tab === 'inventario')       segCargarInv();
   if (tab === 'resumen')          segCargarResumen();
   if (tab === 'herramientas')     segHerrCargar();
@@ -7425,6 +7472,7 @@ function segSelTab(tab) {
   if (tab === 'docsObra')         segDocCargar();
   if (tab === 'permisos')         segPermCargar();
   if (tab === 'inspecciones')     segInspCargar();
+  if (tab === 'registro')         segRegCargar();
   if (tab === 'home')             applyModulosConfig();
 }
 
@@ -7922,6 +7970,143 @@ async function segInspGuardar() {
     if (d.ok) { document.getElementById('segInspModal').style.display = 'none'; segInspCargar(); toast('✅ Inspección guardada', 'ok'); }
     else toast('Error: ' + (d.error || 'desconocido'), 'err');
   } catch(e) { toast('Error de red', 'err'); }
+}
+
+// ── Registro de Seguridad (SEG-02, 25/07/2026) ────────────────────────────────
+// Fotos de incidencias/estados de obra + hilo de comentarios de todo el
+// departamento. El informe completo (PDF/email/compartir) vive en Office;
+// aquí en móvil el foco es capturar rápido en el momento y poder comentar.
+let _segRegFotoPendiente = null; // File elegido antes de crear el registro
+
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function segRegCargar() {
+  const lista = document.getElementById('segRegLista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
+  const s = getSession();
+  const q = s?.obra_id ? `?obra_id=${s.obra_id}` : '';
+  try {
+    const r = await apiCall('/seg-registros' + q);
+    if (!r.ok) { lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; return; }
+    const regs = await r.json();
+    if (!Array.isArray(regs) || !regs.length) { lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin registros. Pulsa + Nuevo para crear el primero.</div>'; return; }
+    lista.innerHTML = regs.map(reg => `
+      <div onclick="segRegVer(${reg.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer">
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:13px">${esc(reg.titulo)}</span>
+          <span style="font-size:11px;color:var(--muted);flex-shrink:0">${(reg.created_at||'').slice(0,10).split('-').reverse().join('/')}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((reg.descripcion||'').slice(0,80))}</div>
+        <div style="display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--muted)">
+          <span>📷 ${reg.num_fotos||0}</span><span>💬 ${reg.num_comentarios||0}</span>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error(e); lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; }
+}
+
+function segRegNuevo() {
+  document.getElementById('segRegTitulo').value = '';
+  document.getElementById('segRegDescripcion').value = '';
+  document.getElementById('segRegFotoPreviewWrap').style.display = 'none';
+  _segRegFotoPendiente = null;
+  document.getElementById('segRegModal').style.display = 'flex';
+}
+
+function segRegPreviewFoto(files) {
+  const file = files?.[0];
+  if (!file) return;
+  _segRegFotoPendiente = file;
+  const img = document.getElementById('segRegFotoPreview');
+  img.src = URL.createObjectURL(file);
+  document.getElementById('segRegFotoPreviewWrap').style.display = 'block';
+}
+
+async function segRegGuardar() {
+  const titulo = document.getElementById('segRegTitulo').value.trim();
+  if (!titulo) return toast('⚠️ El título es obligatorio', 'err');
+  const s = getSession();
+  const body = { titulo, descripcion: document.getElementById('segRegDescripcion').value.trim() || null, obra_id: s?.obra_id || null };
+  try {
+    const r = await apiCall('/seg-registros', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!d.ok) { toast('Error: ' + (d.error || 'desconocido'), 'err'); return; }
+    if (_segRegFotoPendiente) await segRegSubirFoto(d.id, _segRegFotoPendiente);
+    document.getElementById('segRegModal').style.display = 'none';
+    toast('✅ Registro creado', 'ok');
+    segRegCargar();
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+async function segRegSubirFoto(id, file) {
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const r = await apiCallRaw(`/seg-registros/${id}/fotos`, { method: 'POST', body: form });
+    const d = await r.json();
+    if (!d.ok) toast('Error al subir la foto: ' + (d.error||''), 'err');
+    return d.ok;
+  } catch { toast('Error de red al subir la foto', 'err'); return false; }
+}
+
+let _segRegVistoId = null;
+async function segRegVer(id) {
+  try {
+    const r = await apiCall(`/seg-registros/${id}`);
+    if (!r.ok) { toast('Error al cargar el registro', 'err'); return; }
+    const reg = await r.json();
+    _segRegVistoId = id;
+    segRegRenderDetalle(reg);
+    document.getElementById('segRegDetallePanel').style.display = 'flex';
+  } catch { toast('Error de red', 'err'); }
+}
+
+function segRegRenderDetalle(reg) {
+  document.getElementById('segRegDetalleTitulo').textContent = reg.titulo;
+  const fotosHtml = (reg.fotos || []).map(f =>
+    `<img src="${getAPI()}/seg-registro-fotos/${f.id}?token=${encodeURIComponent(getSession()?.token||'')}" onclick="window.open(this.src,'_blank')"
+      style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`
+  ).join('');
+  const comentariosHtml = (reg.comentarios || []).length
+    ? reg.comentarios.map(c => `
+        <div style="padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:12px">${esc(c.usuario_nombre||'—')}</b><span style="font-size:10px;color:var(--muted)">${(c.created_at||'').slice(0,16).replace('T',' ')}</span></div>
+          <div style="font-size:13px;white-space:pre-wrap">${esc(c.mensaje)}</div>
+        </div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted);font-style:italic">Sin comentarios todavía</div>';
+  document.getElementById('segRegDetalleBody').innerHTML = `
+    ${reg.obra_nombre ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">🏗 ${esc(reg.obra_nombre)}</div>` : ''}
+    <div style="font-size:13px;white-space:pre-wrap;margin-bottom:12px">${esc(reg.descripcion||'—')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Registrado por ${esc(reg.creado_por||'—')}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Fotos</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${fotosHtml || '<span style="font-size:12px;color:var(--muted)">Sin fotos</span>'}</div>
+    <input type="file" id="segRegDetalleFotoInput" accept="image/*" capture="environment" style="display:none" onchange="segRegAnadirFotoDetalle(this.files)">
+    <button onclick="document.getElementById('segRegDetalleFotoInput').click()" style="padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text);margin-bottom:16px">📷 Añadir foto</button>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Comentarios</div>
+    <div style="margin-bottom:10px">${comentariosHtml}</div>
+    <div style="display:flex;gap:8px">
+      <input id="segRegComentarioInput" type="text" placeholder="Escribe un comentario..." style="flex:1;padding:9px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px" onkeydown="if(event.key==='Enter')segRegComentar()">
+      <button onclick="segRegComentar()" style="padding:9px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer">Enviar</button>
+    </div>`;
+}
+
+async function segRegAnadirFotoDetalle(files) {
+  const file = files?.[0];
+  if (!file || !_segRegVistoId) return;
+  const ok = await segRegSubirFoto(_segRegVistoId, file);
+  if (ok) segRegVer(_segRegVistoId);
+}
+
+async function segRegComentar() {
+  const input = document.getElementById('segRegComentarioInput');
+  const mensaje = input?.value.trim();
+  if (!mensaje || !_segRegVistoId) return;
+  try {
+    const r = await apiCall(`/seg-registros/${_segRegVistoId}/comentarios`, { method: 'POST', body: JSON.stringify({ mensaje }) });
+    const d = await r.json();
+    if (!d.ok) { toast('Error: ' + (d.error||''), 'err'); return; }
+    segRegVer(_segRegVistoId);
+  } catch { toast('Error de red', 'err'); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12015,7 +12200,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.21';
+const APP_VERSION = '8.22';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

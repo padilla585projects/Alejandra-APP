@@ -542,6 +542,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🚨</span> Accidentes / Incidentes
       <span class="nav-badge" id="accidentesBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item nav-seguridad-section" data-page="segRegistros" onclick="navTo('segRegistros')" style="display:none">
+      <span class="nav-icon">📷</span> Registro de Seguridad
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="inventarios"><span>📦 Inventarios</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-electrico-section" data-page="bobinas" onclick="navTo('bobinas')" style="display:none">
@@ -1785,6 +1788,23 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       </div>
 
       <!-- PARTES DIARIOS (panel) -->
+      <!-- REGISTRO DE SEGURIDAD (SEG-02) -->
+      <div class="page" id="pageSegRegistros">
+        <div class="page-title">📷 Registro de Seguridad</div>
+        <div class="page-sub">Fotos de incidencias o estados de la obra, con hilo de comentarios de todo el departamento</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:18px">
+          <select class="tbl-search" id="filterSegRegObra" style="min-width:200px" onchange="cargarSegRegistros()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalSegRegistro()">📷 Nuevo registro</button>
+          <button class="btn btn-secondary" onclick="cargarSegRegistros()">🔄 Actualizar</button>
+        </div>
+        <div id="segRegistrosList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
+        <div id="segRegistrosVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
+          📷 Sin registros todavía.<br><small>Crea el primero con el botón de arriba.</small>
+        </div>
+      </div>
+
       <div class="page" id="pagePartesPanel">
         <div class="page-title">📋 Partes Diarios de Obra</div>
         <div class="page-sub">Registro diario de actividades, personal y materiales en obra</div>
@@ -10117,9 +10137,14 @@ function iniciarApp() {
     document.querySelectorAll('.nav-sensitive-data').forEach(el => el.style.display = 'none');
   }
 
-  // mostrar sección Seguridad solo si el usuario es del departamento de Seguridad
+  // mostrar sección Seguridad si el usuario es del departamento de Seguridad
+  // SEG-02 (25/07/2026): añadido "|| isAdmin" — antes un admin cuyo departamento
+  // activo NO fuera Seguridad no veía esta sección en absoluto (inconsistente con
+  // "🔺 Bobinas"/nav-electrico-section, que sí incluye isAdmin, ver INV-01 más
+  // abajo). Hacía falta para que el nuevo Registro de Seguridad, confirmado como
+  // "todo el departamento de Seguridad + admins", llegue realmente a los admins.
   const deptActual = SESSION.departamento || 'electrico';
-  if (deptActual === 'seguridad') {
+  if (isAdmin || deptActual === 'seguridad') {
     document.querySelectorAll('.nav-seguridad-section').forEach(el => el.style.display = '');
   }
 
@@ -10404,6 +10429,7 @@ const PAGE_TITLES = {
   presupuesto: '💶 Presupuesto de Obra',
   fases: '📅 Fases de Obra',
   partesPanel: '📋 Partes Diarios',
+  segRegistros: '📷 Registro de Seguridad',
   hitos: '🏁 Hitos de Obra',
   diarioObra: '📓 Diario de Obra',
   correspondencia: '✉️ Correspondencia',
@@ -10558,6 +10584,7 @@ const AYUDA_SECCIONES = {
   cierreObra: 'Checklist de cierre de obra antes de la entrega final.',
   certificaciones: 'Certificaciones de obra ejecutada para facturación al cliente.',
   partesPanel: 'Partes de trabajo diarios rellenados por los equipos en obra.',
+  segRegistros: 'Fotos de incidencias o estados de la obra con hilo de comentarios de todo el departamento de Seguridad.',
   diarioObra: 'Diario de obra: registro cronológico de lo ocurrido cada día.',
   fieldReports: 'Informes de campo con hallazgos y seguimiento técnico.',
   fotosObra: 'Galería de fotos de la obra organizadas por fecha.',
@@ -10733,6 +10760,7 @@ const PAGE_LOADERS = {
   presupuesto: (...a) => cargarPresupuesto(...a),
   fases: (...a) => cargarFases(...a),
   partesPanel: (...a) => cargarPartesPanel(...a),
+  segRegistros: (...a) => cargarSegRegistros(...a),
   hitos: (...a) => cargarHitos(...a),
   diarioObra: (...a) => cargarDiarioObra(...a),
   correspondencia: (...a) => cargarCorrespondencia(...a),
@@ -10891,6 +10919,7 @@ const SYNC_INTERVALS = {
   presupuesto: 120,
   fases: 120,
   partesPanel: 60,
+  segRegistros: 60,
   hitos: 120,
   diarioObra: 120,
   correspondencia: 120,
@@ -12824,6 +12853,190 @@ async function guardarCampoSeg(id, campo, valor) {
   // celda de esta tabla no guardaba nunca, con o sin permiso, sin importar el rol.
   const r = await api(`/inventario-seg/${id}`, { method: 'PUT', body: JSON.stringify({ accion: 'editar', [campo]: valor }) });
   if (r.ok) toast('Guardado ✓', 'ok'); else toast(r.error || 'Error al guardar', 'err');
+}
+
+// ── REGISTRO DE SEGURIDAD (SEG-02, 25/07/2026) ──────────────────
+// Adrián: "en seguridad deberiamos de tener una funcion solo para subir fotos de
+// incidencias o estados de la obra donde luego se puedan verificar desde la app y
+// el office por cualquiera del departamento de seguridad. donde se pueda hacer
+// comentarios". Módulo nuevo e independiente (confirmado por AskUserQuestion), no
+// dentro de Incidencias. Cada entrada: título+descripción+fotos+hilo de
+// comentarios de todo el departamento; informe en PDF vía ventana de impresión,
+// envío por email y compartir (navigator.share, cae a WhatsApp si el navegador lo
+// soporta — mismo patrón que index.html usa para compartir el resumen de stock).
+let _segRegData = [];
+
+async function cargarSegRegistros() {
+  if (document.getElementById('filterSegRegObra')?.options.length <= 1) poblarSelectObras('filterSegRegObra');
+  const obraId = document.getElementById('filterSegRegObra')?.value || '';
+  const r = await api('/seg-registros' + (obraId ? `?obra_id=${obraId}` : ''));
+  _segRegData = Array.isArray(r) ? r : [];
+  const cont = document.getElementById('segRegistrosList');
+  const vacio = document.getElementById('segRegistrosVacio');
+  if (!_segRegData.length) { cont.innerHTML = ''; vacio.style.display = ''; return; }
+  vacio.style.display = 'none';
+  cont.innerHTML = _segRegData.map(reg => `
+    <div onclick="segRegVer(${reg.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-weight:700;font-size:14px">${escHtml(reg.titulo)}</span>
+        <span style="font-size:11px;color:var(--muted)">${fmtFecha(reg.created_at)}</span>
+      </div>
+      ${reg.obra_nombre ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">🏗 ${escHtml(reg.obra_nombre)}</div>` : ''}
+      <div style="font-size:12px;color:var(--muted);white-space:pre-wrap;max-height:40px;overflow:hidden">${escHtml((reg.descripcion || '').slice(0, 100))}</div>
+      <div style="display:flex;gap:12px;margin-top:10px;font-size:11px;color:var(--muted)">
+        <span>📷 ${reg.num_fotos || 0}</span>
+        <span>💬 ${reg.num_comentarios || 0}</span>
+        <span style="margin-left:auto">${escHtml(reg.creado_por || '—')}</span>
+      </div>
+    </div>`).join('');
+}
+
+function abrirModalSegRegistro() {
+  const obraOpts = (window._obrasPanel || []).map(o => `<option value="${o.id}">${escHtml(o.nombre)}</option>`).join('');
+  abrirModal('📷 Nuevo registro de Seguridad', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mSegRegTitulo" placeholder="Ej: Andamio sin protección colectiva"></div>
+    <div class="form-group"><div class="form-label">Obra</div><select class="form-input" id="mSegRegObra"><option value="">— Sin obra —</option>${obraOpts}</select></div>
+    <div class="form-group"><div class="form-label">Descripción</div><textarea class="form-input" id="mSegRegDesc" rows="4" placeholder="Qué se ha observado..."></textarea></div>
+    <div class="form-group"><div class="form-label">Foto (opcional, se pueden añadir más después)</div><input class="form-input" id="mSegRegFoto" type="file" accept="image/*"></div>
+  `, async () => {
+    const titulo = document.getElementById('mSegRegTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      obra_id: document.getElementById('mSegRegObra').value || null,
+      descripcion: document.getElementById('mSegRegDesc').value.trim(),
+    };
+    const r = await api('/seg-registros', { method: 'POST', body: JSON.stringify(body) });
+    if (!r.ok) { toast(r.error || 'Error al crear', 'err'); return; }
+    const file = document.getElementById('mSegRegFoto')?.files[0];
+    if (file) await segRegSubirFotoArchivo(r.id, file);
+    cerrarModal(); toast('Registro creado ✓', 'ok'); cargarSegRegistros();
+  });
+}
+
+async function segRegSubirFotoArchivo(id, file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const resp = await apiRaw(`/seg-registros/${id}/fotos`, { method: 'POST', body: fd });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) toast(data.error || 'Error al subir la foto', 'err');
+  return resp.ok;
+}
+
+async function segRegVer(id) {
+  const reg = await api(`/seg-registros/${id}`);
+  if (!reg || reg.error) { toast('Error al cargar el registro', 'error'); return; }
+  segRegRenderDetalle(reg);
+}
+
+function segRegRenderDetalle(reg) {
+  const fotosHtml = (reg.fotos || []).map(f =>
+    `<img src="${API}/seg-registro-fotos/${f.id}?token=${encodeURIComponent(TOKEN)}" onclick="window.open(this.src,'_blank')"
+      style="width:90px;height:90px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--border)">`
+  ).join('');
+  const comentariosHtml = (reg.comentarios || []).length
+    ? reg.comentarios.map(c => `
+        <div style="padding:8px 10px;background:var(--bg);border-radius:8px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:12px">${escHtml(c.usuario_nombre || '—')}</b><span style="font-size:10px;color:var(--muted)">${fmtFechaHora(c.created_at)}</span></div>
+          <div style="font-size:13px;white-space:pre-wrap">${escHtml(c.mensaje)}</div>
+        </div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted);font-style:italic">Sin comentarios todavía</div>';
+
+  const html = `
+    ${reg.obra_nombre ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">🏗 ${escHtml(reg.obra_nombre)}</div>` : ''}
+    <div style="font-size:13px;white-space:pre-wrap;margin-bottom:12px">${escHtml(reg.descripcion || '—')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Registrado por ${escHtml(reg.creado_por || '—')} — ${fmtFecha(reg.created_at)}</div>
+    <div class="form-label">Fotos</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${fotosHtml || '<span style="font-size:12px;color:var(--muted)">Sin fotos</span>'}</div>
+    <div style="margin-bottom:16px">
+      <input type="file" id="segRegNuevaFoto" accept="image/*" style="display:none" onchange="segRegAnadirFoto(${reg.id}, this)">
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('segRegNuevaFoto').click()">📷 Añadir foto</button>
+    </div>
+    <div class="form-label">Comentarios</div>
+    <div style="max-height:220px;overflow-y:auto;margin-bottom:10px">${comentariosHtml}</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <input class="form-input" id="segRegNuevoComentario" placeholder="Escribe un comentario..." onkeydown="if(event.key==='Enter'){segRegComentar(${reg.id})}">
+      <button class="btn btn-primary btn-sm" onclick="segRegComentar(${reg.id})">Enviar</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-secondary" onclick="segRegImprimir(${reg.id})">🖨️ Informe / PDF</button>
+      <button class="btn btn-secondary" onclick="segRegAbrirEmail(${reg.id})">✉️ Email</button>
+      <button class="btn btn-secondary" onclick="segRegCompartir(${reg.id})">📤 Compartir</button>
+      <button class="btn btn-danger" onclick="segRegBorrar(${reg.id})">🗑 Borrar</button>
+    </div>`;
+  abrirModal(`📷 ${escHtml(reg.titulo)}`, html);
+}
+
+async function segRegAnadirFoto(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const ok = await segRegSubirFotoArchivo(id, file);
+  if (ok) { toast('Foto añadida ✓', 'ok'); segRegVer(id); }
+}
+
+async function segRegComentar(id) {
+  const input = document.getElementById('segRegNuevoComentario');
+  const mensaje = input?.value.trim();
+  if (!mensaje) return;
+  const r = await api(`/seg-registros/${id}/comentarios`, { method: 'POST', body: JSON.stringify({ mensaje }) });
+  if (!r.ok) { toast(r.error || 'Error al comentar', 'err'); return; }
+  segRegVer(id); // recarga el detalle con el comentario nuevo
+}
+
+async function segRegBorrar(id) {
+  if (!confirm('¿Borrar este registro y todas sus fotos y comentarios?')) return;
+  const r = await api(`/seg-registros/${id}`, { method: 'DELETE' });
+  if (r.ok) { cerrarModal(); toast('Registro borrado'); cargarSegRegistros(); }
+  else toast(r.error || 'Error al borrar', 'err');
+}
+
+function segRegAbrirEmail(id) {
+  abrirModal('✉️ Enviar registro por email', `
+    <div class="form-group"><div class="form-label">Email destino *</div><input class="form-input" id="mSegRegEmailTo" type="email" placeholder="destinatario@ejemplo.com"></div>
+    <div class="form-group"><div class="form-label">Mensaje adicional</div><textarea class="form-input" id="mSegRegEmailMsg" rows="2"></textarea></div>
+    <div style="font-size:11px;color:var(--muted)">El email incluye título, descripción y comentarios. Las fotos no se adjuntan por email (requieren sesión); usa "Informe / PDF" para verlas.</div>
+  `, async () => {
+    const to = document.getElementById('mSegRegEmailTo').value.trim();
+    if (!to) { toast('Indica un email', 'err'); return; }
+    const r = await api(`/seg-registros/${id}/email`, { method: 'POST', body: JSON.stringify({ to, mensaje_extra: document.getElementById('mSegRegEmailMsg').value.trim() }) });
+    if (r.ok) { toast('Email enviado ✓', 'ok'); cerrarModal(); }
+    else toast(r.error || 'Error al enviar', 'err');
+  });
+}
+
+async function segRegCompartir(id) {
+  const reg = await api(`/seg-registros/${id}`);
+  if (!reg || reg.error) { toast('Error al cargar', 'err'); return; }
+  const texto = `🔺 ${reg.titulo}\n${reg.obra_nombre ? 'Obra: ' + reg.obra_nombre + '\n' : ''}${reg.descripcion || ''}\n\nRegistrado por ${reg.creado_por || '—'} — ${fmtFecha(reg.created_at)}`;
+  try {
+    if (navigator.share) { await navigator.share({ title: reg.titulo, text: texto }); return; }
+  } catch (e) { if (e?.name === 'AbortError') return; }
+  window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+}
+
+function segRegImprimir(id) {
+  const reg = _segRegData.find(r => r.id === id);
+  api(`/seg-registros/${id}`).then(full => {
+    const fotosImg = (full.fotos || []).map(f =>
+      `<img src="${API}/seg-registro-fotos/${f.id}?token=${encodeURIComponent(TOKEN)}" style="width:100%;max-width:260px;border-radius:8px;margin:6px">`
+    ).join('');
+    const comentariosHtml = (full.comentarios || []).map(c =>
+      `<p style="margin:6px 0;padding:8px;background:#f5f5f5;border-radius:6px"><b>${escHtml(c.usuario_nombre || '—')}</b> <span style="color:#999;font-size:11px">${(c.created_at || '').slice(0, 16)}</span><br>${escHtml(c.mensaje).replace(/\n/g, '<br>')}</p>`
+    ).join('') || '<p style="color:#999">Sin comentarios</p>';
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>${escHtml(full.titulo)}</title><meta charset="utf-8"></head>
+      <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:700px;margin:20px auto">
+        <h1 style="color:#ef4444">🔺 ${escHtml(full.titulo)}</h1>
+        <p style="color:#666">${full.obra_nombre ? 'Obra: <b>' + escHtml(full.obra_nombre) + '</b> — ' : ''}${fmtFecha(full.created_at)}</p>
+        <p style="white-space:pre-wrap">${escHtml(full.descripcion || '')}</p>
+        <p style="color:#999;font-size:12px">Registrado por ${escHtml(full.creado_por || '—')}</p>
+        <div style="display:flex;flex-wrap:wrap">${fotosImg}</div>
+        <h3>Comentarios</h3>
+        ${comentariosHtml}
+        <script>window.onload = () => setTimeout(() => window.print(), 400);<\/script>
+      </body></html>`);
+    win.document.close();
+  });
 }
 
 // ── ALERTAS DE STOCK (NEW-73) ──────────────────────────────────
