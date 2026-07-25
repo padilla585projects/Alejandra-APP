@@ -69,7 +69,14 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;fon
 header{background:var(--surface);border-bottom:2px solid var(--accent);padding:clamp(4px,1.5vw,6px) clamp(6px,2.5vw,10px);display:flex;align-items:center;gap:clamp(3px,1.2vw,6px);flex-shrink:0;z-index:100;min-height:44px}
 .btn-atras{background:none;border:none;color:var(--text);font-size:20px;padding:0 2px;cursor:pointer;flex-shrink:0;line-height:1;font-family:'Montserrat',sans-serif;font-weight:900;display:none;opacity:.8;transition:opacity .2s}
 .btn-atras:hover{opacity:1}
-.header-logo{display:flex;align-items:center;flex-shrink:0}
+.header-logo{display:flex;align-items:center;flex-shrink:0;position:relative}
+/* HEADER-COMPACTO-04 (25/07/2026): Adrián: "quita el icono de SA y podemos cambiar el
+   icono de la app para diferenciar el acceso admin o desarrollador así nos ahorramos
+   un hueco". Se quita el chip de usuario (mostraba SA/Encargado/etc, redundante con lo
+   que ya sabes que eres) y en su lugar el propio logo lleva un anillo de color para
+   superadmin/desarrollador — sin texto, sin ocupar hueco extra en la fila. */
+.header-logo.rol-superadmin .logo-svg{outline:2px solid #f97316;outline-offset:2px;border-radius:10px}
+.header-logo.rol-desarrollador .logo-svg{outline:2px solid #a855f7;outline-offset:2px;border-radius:10px}
 .header-center{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;gap:clamp(2px,1vw,4px);overflow:hidden}
 /* HEADER-COMPACTO-01 (25/07/2026): Adrián probando en su HTC real: "la barra superior
    está muy compactada, apenas se ven bien los iconos o letras". El header ya usaba
@@ -80,6 +87,12 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
    más pequeño) para poder subir el tamaño de letra de lo que sí hay que leer. */
 .obra-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12.5px;color:var(--accent);letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:clamp(50px,18vw,90px)}
 .obra-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12.5px;padding:3px 6px;cursor:pointer;max-width:220px;min-width:80px;flex:1}
+/* HEADER-COMPACTO-04: ver comentario junto a #headerObraSelectWrap en el HTML. El
+   <select> real queda invisible pero clicable encima; debajo se ve el span con
+   auto-ajuste (mismo aspecto que .obra-label, con flecha ▾ para que siga pareciendo
+   un desplegable). */
+.obra-select-wrap{position:relative;flex:1;min-width:clamp(50px,18vw,90px);display:flex;align-items:center}
+.obra-select-native{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
 .user-chip{display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:clamp(2px,1vw,3px) clamp(6px,2.5vw,10px);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12.5px;color:var(--text);white-space:nowrap;max-width:clamp(50px,18vw,110px);overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
 .conn-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .4s,box-shadow .4s}
 .conn-dot.ok{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.7)}
@@ -590,7 +603,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
 ══════════════════════════════════════════ -->
 <header id="mainHeader" style="display:none">
   <button class="btn-atras" id="btnAtrasHeader" onclick="irAtras()" title="Atrás">←</button>
-  <div class="header-logo">
+  <div class="header-logo" id="headerLogo">
     <svg class="logo-svg" width="32" height="32" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="512" height="512" rx="90" fill="#0f172a"/>
       <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
@@ -606,13 +619,21 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       <span id="deptPillIcon"></span>
     </div>
     <span class="obra-label" id="headerObraLabel"></span>
-    <select class="obra-select" id="headerObraSelect" style="display:none" onchange="onObraSelectChange(this.value)"></select>
+    <!-- HEADER-COMPACTO-04 (25/07/2026): el <select> nativo de superadmin seguía
+         truncando ("CPD Ge...") aunque se le diera más ancho — un <select> no deja
+         auto-ajustar el tamaño de letra de la opción seleccionada por JS como sí se
+         puede hacer con un texto normal (_autoFitTexto). Se envuelve en un contenedor:
+         el <select> real se hace invisible pero ocupa todo el hueco (sigue recibiendo
+         el toque y abriendo el desplegable nativo de siempre), y debajo se ve un span
+         normal con el nombre + auto-ajuste, sincronizado a mano en cargarObrasHeader()
+         y onObraSelectChange(). -->
+    <div class="obra-select-wrap" id="headerObraSelectWrap" style="display:none">
+      <span class="obra-label" id="headerObraSelectLabel">Todas las obras ▾</span>
+      <select class="obra-select-native" id="headerObraSelect" onchange="onObraSelectChange(this.value)"></select>
+    </div>
   </div>
-  <!-- HEADER-COMPACTO-01: se quita el emoji 👤 (redundante con el nombre/iniciales que ya
-       muestra el chip) para liberar hueco en la fila y poder subir el tamaño de letra. -->
-  <div class="user-chip" id="headerUserChip">
-    <span id="headerUserName">—</span>
-  </div>
+  <!-- HEADER-COMPACTO-04: el chip de usuario (SA/Encargado/etc) se quita — ver el anillo
+       de color en #headerLogo, que ahora marca superadmin/desarrollador sin ocupar hueco. -->
   <button class="notif-bell" id="btnBuscar" onclick="abrirBusqueda()" style="display:none" title="Buscar">🔍</button>
   <button class="notif-bell" id="btnChat" onclick="chatAbrir()" style="display:none" title="Chat del equipo">
     💬<span class="notif-badge" id="chatBadge" style="display:none">0</span>
@@ -5673,10 +5694,14 @@ function renderHeader() {
   const s = getSession();
   if (!s) return;
 
-  const nameEl = document.getElementById('headerUserName');
-  nameEl.textContent = (s.rol === 'superadmin' || s.rol === 'encargado' || s.rol === 'empresa_admin')
-    ? rolLabel(s.rol)
-    : (s.nombre || '—');
+  // HEADER-COMPACTO-04: sin chip de usuario — el logo lleva un anillo de color para
+  // superadmin/desarrollador (ver CSS .header-logo.rol-*), sin ocupar hueco en la fila.
+  const logo = document.getElementById('headerLogo');
+  if (logo) {
+    logo.classList.remove('rol-superadmin', 'rol-desarrollador');
+    if (s.rol === 'superadmin' || s.rol === 'desarrollador') logo.classList.add('rol-' + s.rol);
+    logo.title = (s.rol === 'superadmin' || s.rol === 'empresa_admin' || s.rol === 'encargado') ? rolLabel(s.rol) : (s.nombre || '');
+  }
 
   const deptPill = document.getElementById('deptPill');
   if (s.departamento) {
@@ -5690,16 +5715,11 @@ function renderHeader() {
   if (s.rol === 'superadmin') {
     if (s.departamento) {
       document.getElementById('headerObraLabel').style.display = 'none';
-      document.getElementById('headerObraSelect').style.display = 'block';
+      document.getElementById('headerObraSelectWrap').style.display = 'flex';
       cargarObrasHeader();
-      // El <select> nativo no se puede auto-ajustar por JS como el texto de obraLabel
-      // (_autoFitTexto) — se le cede hueco extra encogiendo el chip de usuario, que no
-      // necesita tanto espacio como el nombre de la obra.
-      const chip = document.getElementById('headerUserChip');
-      if (chip) chip.style.maxWidth = 'clamp(40px,12vw,80px)';
     } else {
       document.getElementById('headerObraLabel').style.display = 'none';
-      document.getElementById('headerObraSelect').style.display = 'none';
+      document.getElementById('headerObraSelectWrap').style.display = 'none';
     }
   } else {
     const obraLabel = document.getElementById('headerObraLabel');
@@ -5710,7 +5730,7 @@ function renderHeader() {
     } else {
       obraLabel.style.display = 'none';
     }
-    document.getElementById('headerObraSelect').style.display = 'none';
+    document.getElementById('headerObraSelectWrap').style.display = 'none';
   }
 }
 
@@ -6617,7 +6637,19 @@ async function cargarObrasHeader() {
     const s = getSession();
     sel.innerHTML = '<option value="">Todas las obras</option>' +
       obras.map(o => `<option value="${o.id}" ${s.obra_id == o.id ? 'selected' : ''}>${o.nombre}</option>`).join('');
+    _actualizarObraSelectLabel();
   } catch {}
+}
+
+// HEADER-COMPACTO-04: sincroniza el span visible (con auto-ajuste) con la opción
+// seleccionada del <select> real e invisible.
+function _actualizarObraSelectLabel() {
+  const sel = document.getElementById('headerObraSelect');
+  const label = document.getElementById('headerObraSelectLabel');
+  if (!sel || !label) return;
+  const texto = sel.options[sel.selectedIndex]?.text || 'Todas las obras';
+  label.textContent = texto + ' ▾';
+  _autoFitTexto(label);
 }
 
 function onObraSelectChange(obraId) {
@@ -6625,6 +6657,7 @@ function onObraSelectChange(obraId) {
   if (!s) return;
   const sel = document.getElementById('headerObraSelect');
   const obraName = sel.options[sel.selectedIndex]?.text || '';
+  _actualizarObraSelectLabel();
   s.obra_id = obraId ? parseInt(obraId) : null;
   s.obra_nombre = obraId ? obraName : null;
   setSession(s);
@@ -12375,7 +12408,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.44';
+const APP_VERSION = '8.45';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
