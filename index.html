@@ -8,7 +8,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Alejandra — Inventario · Maquinaria · Control</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#f97316">
+<!-- HEADER-COMPACTO-03 (25/07/2026): Adrián en su HTC: "¿por qué se ve la franja naranja
+     en la parte superior? ¿no debería esconderse?" — la barra de estado de Android toma
+     este color, no la cabecera de la app. Con #f97316 quedaba una franja naranja brillante
+     justo encima de la cabecera oscura de la app, muy visible y descolocada. Se cambia a
+     var(--surface) (#162032, el mismo fondo que la cabecera) para que la barra de estado
+     se funda con la app en vez de marcar una franja de color aparte. -->
+<meta name="theme-color" content="#162032">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12369,7 +12375,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.43';
+const APP_VERSION = '8.44';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
