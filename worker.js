@@ -6943,27 +6943,33 @@ async function eliminarCarretilla(matricula, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function transferirRecurso(tabla, id, request, env) {
-  const { isSuperadmin, isAdmin, isEncargado } = await getAuth(request, env);
+  // SCAN-01b (25/07/2026): igual que los 3 devolverX(), esta función no filtraba por
+  // empresa_id en ningún SELECT/UPDATE — un encargado de CUALQUIER empresa podía
+  // transferir la bobina/PEMP/carretilla de OTRA empresa con solo saber/adivinar el
+  // código o id (el check de rol pasa igual, ya que isEncargado no implica misma
+  // empresa). Detectado al auditar el resto de endpoints de bobinas tras SCAN-01.
+  const { isSuperadmin, isAdmin, isEncargado, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEncargado) return err('No autorizado', 403);
+  if (!empresa_id) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
   const nueva_obra_id = body.nueva_obra_id;
   if (!nueva_obra_id) return err('Falta nueva_obra_id');
 
-  // Verificar que la nueva obra existe
-  const obra = await env.DB.prepare('SELECT id FROM obras WHERE id = ? AND activa = 1').bind(nueva_obra_id).first();
+  // Verificar que la nueva obra existe y pertenece a la misma empresa
+  const obra = await env.DB.prepare('SELECT id FROM obras WHERE id = ? AND activa = 1 AND empresa_id = ?').bind(nueva_obra_id, empresa_id).first();
   if (!obra) return err(`Obra ${nueva_obra_id} no encontrada o inactiva`, 404);
 
   // Para bobinas la PK es codigo; para pemp y carretillas es id numérico
   let registro;
   if (tabla === 'bobinas') {
-    registro = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(id).first();
+    registro = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ? AND empresa_id = ?').bind(id, empresa_id).first();
     if (!registro) return err(`Bobina ${id} no encontrada`, 404);
-    await env.DB.prepare('UPDATE bobinas SET obra_id = ? WHERE codigo = ?').bind(nueva_obra_id, id).run();
+    await env.DB.prepare('UPDATE bobinas SET obra_id = ? WHERE codigo = ? AND empresa_id = ?').bind(nueva_obra_id, id, empresa_id).run();
   } else {
-    registro = await env.DB.prepare(`SELECT * FROM ${tabla} WHERE id = ?`).bind(id).first();
+    registro = await env.DB.prepare(`SELECT * FROM ${tabla} WHERE id = ? AND empresa_id = ?`).bind(id, empresa_id).first();
     if (!registro) return err(`Registro ${id} no encontrado`, 404);
-    await env.DB.prepare(`UPDATE ${tabla} SET obra_id = ? WHERE id = ?`).bind(nueva_obra_id, id).run();
+    await env.DB.prepare(`UPDATE ${tabla} SET obra_id = ? WHERE id = ? AND empresa_id = ?`).bind(nueva_obra_id, id, empresa_id).run();
   }
 
   return json({ ok: true, mensaje: `Recurso transferido a obra ${nueva_obra_id}` });

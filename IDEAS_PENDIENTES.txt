@@ -191,6 +191,49 @@
       sigue viendo esos 3 ítems sin cambios (regresión comprobada). Cero errores.
     · Ver SESION.md Part 56.
 
+[✓ HECHO v8.24-v8.27] SCAN-01..06 + CHAT-01 — Pruebas en vivo con Alberto: bobinas y chat rotos
+    · Adrián y Alberto probando Office en producción metiendo bobinas; problemas reportados
+      uno tras otro en tiempo real, arreglados y desplegados según llegaban (v8.24→v8.27).
+    · SCAN-01 (CRÍTICO): devolverBobina/Pemp/Carretilla referenciaban la columna
+      devuelto_por, que NO EXISTÍA en ninguna de las 3 tablas — devolver fallaba SIEMPRE
+      con 500, en app y Office. Añadida la columna. De paso: ninguna de las 3 comprobaba
+      autenticación en la rama "ya existe", ni filtraba por empresa_id — cualquiera podía
+      devolver la bobina de OTRA empresa sabiendo el código (confirmado con curl anónimo
+      real). Corregido. Mismo agujero encontrado y arreglado en transferirRecurso().
+    · SCAN-02: editarBobina() no tocaba la columna `longitud`, crearBobina() tampoco la
+      guardaba al crear, y Office llamaba a longitud_actual/longitud_inicial -campos que
+      no existen-. El editor de Estado inline ofrecía valores (disponible/asignada/
+      agotada) que no son los reales (activa/devuelta). Pedido explícito de Adrián:
+      "quiero un modal en el inventario cada bobina para cambiarla de estado" → sustituidos
+      los editores de celda rotos por un modal de gestión (longitud+estado+devolución
+      correcta). Alta completada con nº albarán y notas.
+    · SCAN-03: fechaEspana() (worker.js) guarda fechas en formato español no-ISO
+      ("25/7/2026, 11:22:29") — new Date() no lo parseaba, "Invalid Date" en todo Office.
+      Parseo manual añadido en fmtFecha/fmtHora (parche en el formateador, no en el
+      origen — pendiente valorar migrar fechaEspana() a ISO).
+    · SCAN-04/04b: #fabAlejandra y #aiFloatBtn (chat normal vs DevTools IA) casi en la
+      misma esquina, se tapaban para cuentas desarrollador. Apilados verticalmente, y
+      luego hechos arrastrables (posición en localStorage) a petición de Adrián.
+      #remoteScanFab se deja fuera a propósito (contenedor con sub-botones).
+    · SCAN-05: chat interno mostraba mensajes nuevos arriba — el backend ya devuelve orden
+      cronológico, panel.html aplicaba un .reverse() extra que lo invertía. Quitado.
+    · CHAT-01 (el hallazgo más grande): el chat nunca fue un chat de verdad —
+      getChatMensajes() filtraba siempre por UN SOLO usuario_id (por defecto el propio),
+      así que cada usuario solo veía SUS PROPIOS mensajes. Explicaba de golpe "no veo
+      nombres de otros", "cómo hablo con Alberto" y "quiero elegir destinatario".
+      Confirmado por AskUserQuestion: privado 1 a 1 + canal "Todos", notificaciones push
+      confirmadas pero pospuestas ("primero que funcione"). Nueva columna
+      destinatario_id; getChatMensajes acepta `con` (ausente/'todos'=canal equipo, id=
+      hilo privado). panel.html: panel de chat con lista de contactos (reutiliza
+      /personal/trabajadores) + hilo activo. App móvil cae a "Todos" automáticamente sin
+      romperse; sin selector de contacto propio todavía (pendiente).
+    · SCAN-06: columna Nº albarán añadida a la tabla de Bobinas (ya se pedía en el alta,
+      no se mostraba); buscador ahora también filtra por ese campo.
+    · Cada fix probado aislado (curl directo a producción, sintaxis, sin duplicados) y
+      desplegado de inmediato. En un punto se detectó frontend escrito pero no subido a
+      git, dejando producción sirviendo código viejo un rato — corregido subiendo enseguida.
+    · Ver SESION.md Part 57.
+
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
 ================================================================================
