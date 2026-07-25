@@ -2272,6 +2272,33 @@ LEYENDA DE ESTADO:
       pantalla de "preguntas de Alejandra" en el panel, las tablas ya están listas para consultarlas.
 
 ================================================================================
+  💡 SCAN/CHAT-NOTIF/ARCHIVO-BOBINAS/FILTRO-OBRA — Segunda tanda de bugs en vivo con Alberto  [HECHO v8.28→v8.36]
+================================================================================
+
+[✓] SCAN-04c/BUG-TABLA-01/BUG-FAB-01 — Bobinas: fila desplegada, FAB invisible tras recargar,
+    filtros de Estado/Nº albarán, historial + archivado, chat DevTools reubicado
+    [HECHO 25/07/2026, v8.28→v8.36]
+    · Ver SESION.md Part 58 para el detalle versión a versión (9 versiones en la misma sesión).
+    · Resumen: tabla de Bobinas se veía rota en producción (fila "Registrado por" desplegada
+      bajo cada fila — capturado en pantalla real por Adrián) por responsiveLayout:'collapse'
+      de Tabulator; el FAB de Alejandra/chat interno no aparecía tras recargar la página
+      (2 intentos de fix fallidos hasta copiar el patrón de reintento cada 3s de showAIBtn());
+      añadidos filtros de Estado y Nº albarán + impresión que ahora respeta el filtro completo
+      (antes solo la página de 20 visible); historial de bobinas visible en Office (ya existía
+      en la app móvil) + archivado automático de VISTA para devueltas con más de 7 días (nada
+      se borra); filtro de obra oculto para roles que el backend ya ignoraba; aviso de mensajes
+      de chat privados sin leer (badge+parpadeo+pitido, nuevo /chat/no-leidos); chat DevTools IA
+      movido del botón flotante al sidebar (sección Desarrollador).
+    · Pendiente sin resolver (flagged para futura sesión, ver también SESION.md Part 58):
+      - "revisa que todos los cambios de inventarios se hagan en tiempo real entre app y office"
+        (pedido por Adrián, nunca investigado).
+      - "quiero quitar columnas del inventario que no valen y añadir otras" (pedido por Adrián,
+        nunca especificó cuáles — preguntar antes de tocar la tabla).
+      - Chat interno en la app móvil (index.html) sigue sin selector de contacto privado 1 a 1
+        ni el aviso de no-leídos — ambos solo se construyeron en Office.
+      - 4 cuentas "Alberto" en D1 (ids 1, 12, 46, 50, 51), solo el 46 activo — sin limpiar.
+
+================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================
 
