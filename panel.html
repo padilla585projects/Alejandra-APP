@@ -9944,11 +9944,28 @@ const _MENU_ROL_DEPT_CONFIG = {
       material: ['herramientas', 'alertasStock'],
     },
   },
+  // ORG-05 (25/07/2026): Adrián pidió completar Operario también en Eléctrico y
+  // Mecánicas, igual que ya tiene Encargado — mismo bloque de "Material y maquinaria"
+  // que su Encargado (un operario de campo no necesita ver MENOS material del que
+  // maneja, solo menos gestión/administración). A diferencia de Recursos Preventivos
+  // (que solo oculta Carnets/Reconocimientos, propios de Seguridad), aquí se oculta
+  // TODO lo sensible (ocultarSensibles, selector .nav-sensitive-data sin acotar),
+  // incluida la lista general de Trabajadores — mismo criterio que ya usa el panel
+  // para 'oficina' sin admin. Asunción razonable, no confirmada campo a campo con
+  // Adrián; a revisar si algún operario necesita ver esa lista.
   operario: {
+    electrico: {
+      icono: '⚡',
+      material: ['bobinas', 'herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'],
+      ocultarSensibles: true,
+    },
+    mecanicas: {
+      icono: '🔧',
+      material: ['herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'],
+      ocultarSensibles: true,
+    },
     // Recursos Preventivos (Katherine, por ejemplo) es el mismo rol 'operario' por
-    // dentro, con nombre y menú propios en Seguridad. Sin confirmación todavía para
-    // Operario en otros departamentos: se deja sin curar (mismo criterio que
-    // departamentos sin config).
+    // dentro, con nombre y menú propios en Seguridad.
     seguridad: {
       icono: '🔺',
       material: ['herramientas', 'alertasStock'],
@@ -10018,6 +10035,14 @@ function _organizarSidebarRolDept(config) {
 
   if (config.ocultarSensiblesSeguridad) {
     document.querySelectorAll('.nav-sensitive-data.nav-seguridad-section').forEach(el => {
+      el.style.display = 'none';
+      el.setAttribute('data-hidden-by-perms', 'true');
+    });
+  }
+  // ORG-05: selector sin acotar a Seguridad — también oculta "Trabajadores" (Personal),
+  // a diferencia de ocultarSensiblesSeguridad que solo toca Carnets/Reconocimientos.
+  if (config.ocultarSensibles) {
+    document.querySelectorAll('.nav-sensitive-data').forEach(el => {
       el.style.display = 'none';
       el.setAttribute('data-hidden-by-perms', 'true');
     });
