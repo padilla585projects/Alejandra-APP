@@ -9404,7 +9404,33 @@ function _panelSesionCaducada() {
   location.reload();
 }
 
+// PREVIEW-ADMIN-03 (26/07/2026): Adrián: "sí claro todos tienen que tenerlo" — en vez de
+// añadir un <select> de departamento a cada página (Personal, Incidencias, Tareas,
+// Herramientas...), se centraliza aquí: toda petición GET manda ?departamento=X cuando un
+// admin está previsualizando un departamento (topbarDeptoSelect), sin tocar página por
+// página. El backend ya soporta este parámetro para admins en la mayoría de listados
+// (isAdminRole ? deptParam : departamento); si una ruta no lo usa, el parámetro de más se
+// ignora sin más. Excepción de Almacén (ver PREVIEW-ADMIN-02, "solo queremos ver pedidos e
+// inventarios de los otros departamentos") ya vive en _deptoPreviewParam() para que se
+// respete también aquí.
+function _deptoPreviewParam() {
+  if (!SESSION || !hasSessionRole('superadmin', 'empresa_admin', 'desarrollador')) return null;
+  if (!SESSION.departamento || SESSION.departamento === 'almacen') return null;
+  return SESSION.departamento;
+}
+function _conDeptoPreview(path, method) {
+  if (method && method !== 'GET') return path;
+  const depto = _deptoPreviewParam();
+  if (!depto) return path;
+  const [base, query = ''] = path.split('?');
+  const params = new URLSearchParams(query);
+  if (!params.has('departamento')) params.set('departamento', depto);
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
 function api(path, opts = {}) {
+  path = _conDeptoPreview(path, opts.method);
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (TOKEN) headers['X-Token'] = TOKEN;
   return fetch(API + path, { ...opts, headers })
@@ -10654,8 +10680,16 @@ function ocultarSidebarPorPermisos() {
   try {
     const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
     const isNonAdmin = !isAdmin;
+    // PREVIEW-ADMIN-04 (26/07/2026): Adrián: "pongo almacén y sigo viendo todo el panel
+    // lateral" — un admin previsualizando un departamento (topbarDeptoSelect) seguía
+    // viendo Analítica/Finanzas/Proveedores/Maquinaria/Calidad y Cierre y siempre la
+    // sección Construcción, porque esas dos ramas de ocultación solo se activaban para
+    // roles NO-admin de verdad. Se trata la previsualización como si fuera ese rol para
+    // estos dos puntos, sin tocar el resto de permisos reales de admin.
+    const previsualizandoDepto = isAdmin && !!SESSION.departamento &&
+      !!_MENU_ROL_DEPT_CONFIG['encargado']?.[SESSION.departamento];
 
-    if (isNonAdmin) {
+    if (isNonAdmin || previsualizandoDepto) {
       // DEPT-01 (21/07/2026): Construcción y Obra ya no se ocultan, ver comentario arriba
       const seccionesOcultar = ['analitica', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre'];
       let ocultadas = 0;
@@ -10687,7 +10721,7 @@ function ocultarSidebarPorPermisos() {
         console.log(`✓ Sidebar ocultación: ${ocultadas} secciones, ${totalItems} items totales`);
       }
     }
-    ocultarSeccionConstruccionSiNoAplica(SESSION.departamento || 'electrico', isAdmin);
+    ocultarSeccionConstruccionSiNoAplica(SESSION.departamento || 'electrico', isAdmin && !previsualizandoDepto);
     mostrarInventarioSeguridadSiAplica(SESSION.departamento || 'electrico');
     ocultarItemsPorOficio();
     organizarSidebarEncargado();
