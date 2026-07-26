@@ -10366,6 +10366,20 @@ function _organizarSidebarRolDept(config) {
     renombrar('inventarios', `${config.icono} Material y maquinaria`);
     let material = seccion('inventarios');
     config.material.forEach(page => { material = moverDespues(material, page); });
+    // PREVIEW-ADMIN-06 (26/07/2026): "Repostajes" no tiene clase propia como "bobinas"
+    // (nav-electrico-section) o el stock de Seguridad (nav-inventario-seguridad) — sin
+    // esto, cualquier departamento sin 'repostajes' en su lista (p.ej. Almacén) lo veía
+    // igualmente, porque en el HTML no tiene ningún display:none por defecto. config.material
+    // pasa a actuar como lista permitida para todo lo que vive nativamente en "Inventarios":
+    // lo que no esté en la lista se oculta explícitamente.
+    ['bobinas', 'pemp', 'carretillas', 'repostajes', 'herramientas', 'alertasStock'].forEach(page => {
+      if (config.material.includes(page)) return;
+      const el = item(page);
+      if (el) {
+        el.style.display = 'none';
+        el.setAttribute('data-hidden-by-perms', 'true');
+      }
+    });
   } else {
     // Departamento sin inventario propio (p.ej. Ingeniería): no dejar la cabecera de
     // sección "Material y maquinaria" visible y vacía.
@@ -10475,11 +10489,16 @@ function ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin) {
 // pasa a tener vista ampliada (ve el inventario de todos los departamentos), pero
 // solo lectura: no se añade a canEdit de cargarSeguridad() ni al gate de escritura
 // de crearItemSeg/moverItemSeg en worker.js.
-function mostrarInventarioSeguridadSiAplica(deptActual) {
+// PREVIEW-ADMIN-06 (26/07/2026): "siguen cosas que no debe ver el almacenero" — con
+// Almacén previsualizado seguía apareciendo el stock de material de Seguridad, porque
+// esta función decidía solo por el rol REAL (esAdminActivo), sin enterarse de que había
+// una previsualización de departamento activa. Se le pasa previsualizandoDepto para que
+// se comporte como el departamento previsualizado, igual que el resto de reveals.
+function mostrarInventarioSeguridadSiAplica(deptActual, previsualizandoDepto) {
   // Para esta vista cuenta el rol activo, no roles extra conservados en la
   // cuenta.
   const esAdminActivo = ['superadmin', 'empresa_admin', 'desarrollador', 'project_manager'].includes(SESSION?.rol);
-  if (!esAdminActivo && deptActual !== 'seguridad') return;
+  if ((!esAdminActivo || previsualizandoDepto) && deptActual !== 'seguridad') return;
   document.querySelectorAll('.nav-inventario-seguridad').forEach(el => {
     el.style.display = '';
     el.removeAttribute('data-hidden-by-perms');
@@ -10546,6 +10565,17 @@ function iniciarApp() {
     document.querySelectorAll('.nav-dev, .nav-dev-section').forEach(el => el.style.display = '');
   }
 
+  // PREVIEW-ADMIN-05 (26/07/2026): Adrián: "solo debe ver cosas relacionadas con el
+  // trabajo de un almacenero" / "más fácil" — en vez de parchear cada "isAdmin ||" suelto
+  // uno a uno (Bobinas, Seguridad, Finanzas... quién sabe cuántos más), se calcula UNA vez
+  // "verComoAdmin": isAdmin real, pero rebajado a false en cuanto hay una previsualización
+  // de departamento activa. A partir de aquí, todo lo que decide qué ve cada departamento
+  // usa verComoAdmin en vez de isAdmin — isAdmin en sí se deja intacto para lo que sí debe
+  // seguir siendo siempre-admin (secciones Admin/Desarrollador, el propio selector).
+  const previsualizandoDepto = isAdmin && !!SESSION.departamento &&
+    !!_MENU_ROL_DEPT_CONFIG['encargado']?.[SESSION.departamento];
+  const verComoAdmin = isAdmin && !previsualizandoDepto;
+
   // mostrar páginas financieras: todos excepto operario
   if (!hasSessionRole('operario')) {
     document.querySelectorAll('.nav-finance').forEach(el => el.style.display = '');
@@ -10563,17 +10593,17 @@ function iniciarApp() {
   // abajo). Hacía falta para que el nuevo Registro de Seguridad, confirmado como
   // "todo el departamento de Seguridad + admins", llegue realmente a los admins.
   const deptActual = SESSION.departamento || 'electrico';
-  if (isAdmin || deptActual === 'seguridad') {
+  if (verComoAdmin || deptActual === 'seguridad') {
     document.querySelectorAll('.nav-seguridad-section').forEach(el => el.style.display = '');
   }
 
   // INV-01 (22/07/2026): "Bobinas" es material exclusivo de electricistas (ver
   // _HOME_TRADE_MODS, soloElectrico:true) — se oculta a otros departamentos, ya
   // que para ellos el backend siempre devolvería la lista vacía
-  if (isAdmin || deptActual === 'electrico') {
+  if (verComoAdmin || deptActual === 'electrico') {
     document.querySelectorAll('.nav-electrico-section').forEach(el => el.style.display = '');
   }
-  mostrarInventarioSeguridadSiAplica(deptActual);
+  mostrarInventarioSeguridadSiAplica(deptActual, previsualizandoDepto);
 
   // CONSTR-01 (24/07/2026): la sección "Construcción" (RFIs, calidad, actas...)
   // es coordinación técnica de obra civil; para electricistas/mecánicos el
@@ -10582,7 +10612,7 @@ function iniciarApp() {
   // panel de construccion de alejandra office". Se oculta directamente para
   // esos 2 departamentos (obra_civil y seguridad la siguen viendo, igual que
   // los admins).
-  ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin);
+  ocultarSeccionConstruccionSiNoAplica(deptActual, verComoAdmin);
 
   // mostrar FAB de Alejandra y del chat del equipo cuando hay sesión activa
   // BUG-FAB-01 (25/07/2026): este bloque se ejecuta de forma síncrona mientras el
@@ -10597,7 +10627,9 @@ function iniciarApp() {
   // ocultar secciones innecesarias del sidebar para usuarios no-admin
   // Admins (superadmin/empresa_admin) ven TODO
   // Encargado/Oficina: solo secciones relevantes (Principal, Personal, Inventarios, Planificación)
-  const isNonAdmin = !isAdmin;
+  // PREVIEW-ADMIN-05: usa verComoAdmin, no isAdmin — durante una previsualización
+  // de departamento el admin debe ver exactamente lo que ve ese rol, no "todo".
+  const isNonAdmin = !verComoAdmin;
   // DEPT-01 (21/07/2026): Construcción y Obra ya NO se ocultan a los no-admin —
   // el backend (worker.js) filtra su contenido por departamento (cada uno ve
   // solo lo suyo; Seguridad ve todo). Analítica y los 5 grupos que antes eran
@@ -10722,7 +10754,7 @@ function ocultarSidebarPorPermisos() {
       }
     }
     ocultarSeccionConstruccionSiNoAplica(SESSION.departamento || 'electrico', isAdmin && !previsualizandoDepto);
-    mostrarInventarioSeguridadSiAplica(SESSION.departamento || 'electrico');
+    mostrarInventarioSeguridadSiAplica(SESSION.departamento || 'electrico', previsualizandoDepto);
     ocultarItemsPorOficio();
     organizarSidebarEncargado();
     organizarSidebarIngenieria();
