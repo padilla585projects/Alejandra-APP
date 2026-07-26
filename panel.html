@@ -939,7 +939,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🔒</span> Privacidad
     </button>
 
-    <div class="sidebar-section nav-dev-section" style="display:none">Desarrollador</div>
+    <div class="sidebar-section nav-dev-section" onclick="sidebarToggle(this)" data-sid="dev" style="display:none"><span>🛠️ Desarrollador</span><span class="sec-chevron">▼</span></div>
     <!-- SCAN-04 (25/07/2026): el chat DevTools IA vivía en un botón flotante morado que se
          tapaba con el de Alejandra normal ("las dos burbujas iguales") — Adrián: "mejor
          tenemos un apartado para dev en el lateral izquierdo no? lo metemos... el primero".
@@ -10834,7 +10834,7 @@ function iniciarApp() {
   // departamento concreto).
   const seccionesPermitidas = isNonAdmin ?
     ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'pedidosSec', 'construccion'] :
-    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'pedidosSec', 'construccion', 'planificacion', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre', 'analitica'];
+    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'pedidosSec', 'construccion', 'planificacion', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre', 'analitica', 'admin', 'dev'];
 
   // Guardar en localStorage cuáles secciones están permitidas para este usuario
   try {
