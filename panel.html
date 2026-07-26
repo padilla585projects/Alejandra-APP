@@ -10337,6 +10337,11 @@ function construirDirectorioDepartamentos() {
     if (DENTRO_DE_OBRA_CIVIL.includes(deptKey)) return;
     const cfg = _MENU_ROL_DEPT_CONFIG.encargado[deptKey];
     const paginas = [...(cfg.material || []), ...(cfg.seccionExtra?.paginas || [])];
+    // PREVIEW-ADMIN-08: el stock de material de Seguridad (data-page="seguridad",
+    // nav-inventario-seguridad) no está en config.material de seguridad porque su reveal
+    // vive aparte (mostrarInventarioSeguridadSiAplica) — en el directorio se mete
+    // explícitamente en su bloque, que es donde le corresponde.
+    if (deptKey === 'seguridad') paginas.push('seguridad');
     if (!paginas.length) return;
     const catalogo = _DEPTS_CATALOG[deptKey];
 
@@ -10559,6 +10564,13 @@ function ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin) {
 // una previsualización de departamento activa. Se le pasa previsualizandoDepto para que
 // se comporte como el departamento previsualizado, igual que el resto de reveals.
 function mostrarInventarioSeguridadSiAplica(deptActual, previsualizandoDepto) {
+  // PREVIEW-ADMIN-08 (26/07/2026): Adrián: "¿por qué Almacén tiene submenú Seguridad?" —
+  // en modo directorio (Todos los departamentos) el stock de Seguridad vive CLONADO
+  // dentro del bloque "🔺 Seguridad"; esta función, llamada de nuevo por
+  // ocultarSidebarPorPermisos() 100ms después, re-revelaba el botón ORIGINAL (oculto
+  // junto con su sección Inventarios), que quedaba huérfano pegado visualmente al último
+  // bloque del directorio (Almacén). Si el directorio está construido, no tocar nada.
+  if (document.querySelector('.sidebar-section[data-sid="dept-seguridad"]')) return;
   // Para esta vista cuenta el rol activo, no roles extra conservados en la
   // cuenta.
   const esAdminActivo = ['superadmin', 'empresa_admin', 'desarrollador', 'project_manager'].includes(SESSION?.rol);
@@ -10877,7 +10889,10 @@ function sidebarRestoreState() {
       // 1. La sección está en la lista de permitidas
       // 2. La sección está visible (display !== 'none')
       // 3. El estado guardado indica que debe estar colapsada
-      if (permitidas.includes(sid) && el.style.display !== 'none' && state[sid]) {
+      // SIDEBAR-COLAPSO-02 (26/07/2026): + 4. NO está ya colapsada — sidebarToggle es un
+      // toggle, no un set: llamarlo sobre una sección que inicializarEstadoSidebar acababa
+      // de colapsar la VOLVÍA A ABRIR (por eso "no se contraían" pese a v8.48).
+      if (permitidas.includes(sid) && el.style.display !== 'none' && state[sid] && !el.classList.contains('sec-collapsed')) {
         sidebarToggle(el);
       }
     });
@@ -10887,25 +10902,18 @@ function sidebarRestoreState() {
 function inicializarEstadoSidebar() {
   try {
     // SIDEBAR-COLAPSO-01 (25/07/2026): Adrián: "es incómodo tener tantas pantallas
-    // abiertas" / "quiero que se escondan todas las categorías menos inventario" /
-    // "me refiero a que se contraigan" (colapsadas, no ocultas del todo — siguen ahí,
-    // un clic las abre). Antes 'principal'/'obra'/'pedidosSec' se forzaban siempre
-    // abiertas además de 'inventarios' — se quita esa excepción, solo 'inventarios'
-    // se mantiene abierta por defecto.
+    // abiertas" / "me refiero a que se contraigan" (colapsadas, no ocultas del todo —
+    // siguen ahí, un clic las abre).
+    // SIDEBAR-COLAPSO-02 (26/07/2026): Adrián: "que se contraigan todos los menús por
+    // defecto al abrir Alejandra Office" — se quita también la excepción que dejaba
+    // 'inventarios' abierta: TODAS las secciones arrancan colapsadas.
     const estadoDeseado = {};
 
     document.querySelectorAll('.sidebar-section[data-sid]').forEach(el => {
       const sid = el.dataset.sid;
       const estaCerrado = el.classList.contains('sec-collapsed');
 
-      // inventarios siempre abierto
-      if (sid === 'inventarios') {
-        estadoDeseado[sid] = false;  // no colapsado
-        if (estaCerrado) sidebarToggle(el);
-        return;
-      }
-
-      // Todos los demás: cerrados
+      // Todas cerradas por defecto
       estadoDeseado[sid] = true;     // colapsado
       if (!estaCerrado) sidebarToggle(el);
     });
@@ -10923,7 +10931,7 @@ function inicializarEstadoSidebar() {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     ocultarSidebarPorPermisos();   // ocultación por permisos
-    inicializarEstadoSidebar();    // inicializar: cerrar todos excepto inventarios
+    inicializarEstadoSidebar();    // inicializar: todas las secciones colapsadas
     sidebarRestoreState();         // restaurar estado guardado después
   }, 100);
 });
