@@ -10235,8 +10235,19 @@ const _MENU_ROL_DEPT_CONFIG = {
   },
 };
 
+// PREVIEW-ADMIN-01 (25/07/2026): Adrián probando como superadmin: "¿cómo veo a qué
+// pertenece, cuál es de Mecánicas o Electricidad, Telecom, Construcción?" — los admins
+// veían el sidebar completo sin agrupar a propósito (ven todo), pero eso les impedía
+// distinguir/probar cómo lo ve cada departamento. Elegido: "que el sidebar se reorganice
+// también para mí según el departamento que elija arriba". Si el rol no tiene su propio
+// config (superadmin/empresa_admin/desarrollador) pero SÍ hay un departamento
+// seleccionado, se usa el menú de encargado de ese departamento como vista previa —
+// el más completo de los dos roles curados, para no esconder nada de más al admin.
 function organizarSidebarEncargado() {
-  const config = _MENU_ROL_DEPT_CONFIG[SESSION?.rol]?.[SESSION?.departamento];
+  let config = _MENU_ROL_DEPT_CONFIG[SESSION?.rol]?.[SESSION?.departamento];
+  if (!config && hasSessionRole('superadmin', 'empresa_admin', 'desarrollador') && SESSION?.departamento) {
+    config = _MENU_ROL_DEPT_CONFIG['encargado']?.[SESSION.departamento];
+  }
   if (!config) return; // rol/departamento sin menú propio todavía: se deja el sidebar completo
   _organizarSidebarRolDept(config);
 }
