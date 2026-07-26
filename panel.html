@@ -10660,44 +10660,20 @@ function sidebarRestoreState() {
 
 function inicializarEstadoSidebar() {
   try {
-    // Inicializar estado de desplegables:
-    // - Todos CERRADOS excepto inventarios, obra y pedidosSec
-    // - Principal siempre abierto (es la sección por defecto)
-    // - Obra siempre abierto (v8.02): contenía "Pedidos", que quedaba oculto
-    //   al estar la sección plegada por defecto y usuarios no la encontraban
-    // - PEDIDOS-01 (24/07/2026): "Pedidos" ahora es su propia sección de
-    //   primer nivel (antes vivía dentro de "Obra") — sigue abierta por
-    //   defecto por el mismo motivo: que quede a mano sin tener que desplegar.
-
+    // SIDEBAR-COLAPSO-01 (25/07/2026): Adrián: "es incómodo tener tantas pantallas
+    // abiertas" / "quiero que se escondan todas las categorías menos inventario" /
+    // "me refiero a que se contraigan" (colapsadas, no ocultas del todo — siguen ahí,
+    // un clic las abre). Antes 'principal'/'obra'/'pedidosSec' se forzaban siempre
+    // abiertas además de 'inventarios' — se quita esa excepción, solo 'inventarios'
+    // se mantiene abierta por defecto.
     const estadoDeseado = {};
 
     document.querySelectorAll('.sidebar-section[data-sid]').forEach(el => {
       const sid = el.dataset.sid;
       const estaCerrado = el.classList.contains('sec-collapsed');
 
-      // principal siempre abierto
-      if (sid === 'principal') {
-        estadoDeseado[sid] = false;  // no colapsado
-        if (estaCerrado) sidebarToggle(el);
-        return;
-      }
-
       // inventarios siempre abierto
       if (sid === 'inventarios') {
-        estadoDeseado[sid] = false;  // no colapsado
-        if (estaCerrado) sidebarToggle(el);
-        return;
-      }
-
-      // obra siempre abierto (v8.02)
-      if (sid === 'obra') {
-        estadoDeseado[sid] = false;  // no colapsado
-        if (estaCerrado) sidebarToggle(el);
-        return;
-      }
-
-      // pedidosSec siempre abierto (PEDIDOS-01)
-      if (sid === 'pedidosSec') {
         estadoDeseado[sid] = false;  // no colapsado
         if (estaCerrado) sidebarToggle(el);
         return;
