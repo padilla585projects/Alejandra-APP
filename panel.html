@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Alejandra Office</title>
+<!-- FAVICON-404-01 (26/07/2026): sin <link rel="icon"> el navegador pide /favicon.ico por
+     su cuenta y sale 404 en consola — inofensivo, pero Adrián: "no quiero errores". Se
+     apunta al icono de la app que ya existe (mismo que usa el manifest de index.html). -->
+<link rel="icon" type="image/png" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" rel="stylesheet">
@@ -970,6 +974,25 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div class="topbar-title" id="topbarTitle">Dashboard</div>
       <div class="topbar-empresa" id="topbarEmpresa"></div>
       <div class="topbar-empresa" id="topbarObra" style="color:var(--accent)"></div>
+      <!-- PREVIEW-ADMIN-01 (26/07/2026): Adrián: "cómo veo a qué pertenece, cuál es de
+           Mecánicas o Electricidad, Telecom, Construcción?" — el sidebar ya se reorganiza
+           por departamento para admins (v8.50), pero Office nunca tuvo un selector de
+           departamento (solo existía en la app móvil) — sin él, esa función no tenía forma
+           de activarse. Solo visible para roles admin (encargado/operario ya tienen su
+           departamento fijo de sesión, no eligen). -->
+      <select id="topbarDeptoSelect" class="tbl-search" style="display:none;min-width:170px;padding:6px 10px;font-size:12px" onchange="cambiarDeptoAdmin(this.value)" title="Ver el sidebar como lo vería este departamento">
+        <option value="">📁 Todos los departamentos</option>
+        <option value="electrico">⚡ Eléctrico</option>
+        <option value="mecanicas">🔧 Mecánicas</option>
+        <option value="seguridad">🔺 Seguridad</option>
+        <option value="ingenieria">📐 Ingeniería</option>
+        <option value="obra_civil">🏗️ Obra Civil</option>
+        <option value="albanileria">🧱 Albañilería</option>
+        <option value="pintura">🎨 Pintura</option>
+        <option value="carpinteria">🪟 Carpintería</option>
+        <option value="telecom">🌐 Telecom</option>
+        <option value="almacen">📦 Almacén</option>
+      </select>
       <div class="topbar-user" id="topbarUser">
         <span>👤</span>
         <span id="topbarName">—</span>
@@ -9972,6 +9995,18 @@ function doLogout() {
   location.reload();
 }
 
+// PREVIEW-ADMIN-01 (26/07/2026): cambia el departamento "activo" de un admin desde el
+// topbar, solo para ver/probar cómo queda el sidebar de cada departamento (v8.50) — no
+// afecta a permisos reales, un admin sigue viendo/pudiendo todo, esto es puramente una
+// vista previa. Recarga en vez de re-ejecutar la reorganización a mano para partir
+// siempre de un sidebar limpio (evita estados intermedios de pruebas anteriores).
+function cambiarDeptoAdmin(depto) {
+  if (!SESSION) return;
+  SESSION.departamento = depto || null;
+  localStorage.setItem('panel_session', JSON.stringify(SESSION));
+  location.reload();
+}
+
 // ── INICIAR APP ────────────────────────────────────────────────
 let _iniciarAppCalled = false;
 // ORG-02 (24/07/2026): vista de trabajo de Encargado. Un encargado eléctrico
@@ -10453,6 +10488,14 @@ function iniciarApp() {
   const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
   if (isAdmin) {
     document.querySelectorAll('.nav-admin, .nav-admin-section').forEach(el => el.style.display = '');
+  }
+
+  // PREVIEW-ADMIN-01: selector de departamento en el topbar, solo para admins — encargado/
+  // operario tienen su departamento fijo de sesión, no eligen.
+  const deptoSelEl = document.getElementById('topbarDeptoSelect');
+  if (deptoSelEl) {
+    deptoSelEl.style.display = isAdmin ? '' : 'none';
+    if (isAdmin) deptoSelEl.value = SESSION.departamento || '';
   }
 
   // mostrar sección dev para superadmin y desarrollador
