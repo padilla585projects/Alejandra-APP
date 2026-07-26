@@ -951,6 +951,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🛠️</span> DevTools
     </button>
 
+    <!-- SIDEBAR-FOOTER-01 (26/07/2026): Adrián: "esconde el número de versión en la parte
+         de abajo... eso no debe esconderse nunca" — al colapsar "Desarrollador" (la última
+         sección), sidebarToggle()/ocultarSeccion() recorren hermanos "hasta la siguiente
+         .sidebar-section" y, como no hay ninguna después, se llevaban por delante el pie
+         entero (Cerrar sesión + versión). Este centinela invisible (sin data-sid, no lo
+         tocan inicializarEstadoSidebar()/sidebarRestoreState()) solo existe para que ese
+         barrido pare aquí. -->
+    <div class="sidebar-section" style="display:none !important;height:0;padding:0;margin:0;border:0"></div>
     <div style="flex:1"></div>
     <div style="padding:12px 8px;border-top:1px solid var(--border)">
       <button class="nav-item" onclick="doLogout()">
@@ -18243,7 +18251,13 @@ document.addEventListener('visibilitychange', () => {
     if (!btn) return;
     const rol = (typeof SESSION !== 'undefined' ? SESSION?.rol : null)
              || JSON.parse(localStorage.getItem('panel_session') || 'null')?.rol;
-    if (rol && ['desarrollador','superadmin'].includes(rol)) btn.style.display = 'flex';
+    if (!rol || !['desarrollador','superadmin'].includes(rol)) return;
+    // SIDEBAR-FOOTER-01 (26/07/2026): Adrián: "algo pasa cuando abro y escondo el panel de
+    // Desarrollador" — este reintento (cada 3s indefinidamente) forzaba display:'flex' sin
+    // mirar si el usuario había colapsado la sección "Desarrollador", así que el botón
+    // reaparecía solo aunque la flecha siguiera cerrada. Se respeta el estado de plegado.
+    const sec = document.querySelector('[data-sid="dev"]');
+    btn.style.display = (sec && sec.classList.contains('sec-collapsed')) ? 'none' : '';
   }
   window.showAIBtn = showAIBtn;
 
