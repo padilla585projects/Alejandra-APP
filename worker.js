@@ -4487,14 +4487,22 @@ export default {
       if (path === '/setup-telegram-webhook' && method === 'GET')  return await setupTelegramWebhook(request, env);
 
       // ── Rutas públicas (sin auth) ──────────────────────────────────────────
-      if (path === '/health'      && method === 'GET')  return new Response(JSON.stringify({ ok: true, ts: Date.now() }), { headers: { 'Content-Type': 'application/json' } });
+      // BUG-CORS-HEALTH-01 (26/07/2026): esta ruta devolvía una Response a mano con solo
+      // Content-Type, sin pasar por json() (que añade Access-Control-Allow-Origin) — la
+      // única ruta de todo el worker sin cabecera CORS. checkConexion()/cargarDashboard()
+      // en panel.html llaman a /health primero; sin CORS el navegador bloqueaba la
+      // respuesta entera (net::ERR_FAILED), dejando el punto de conexión en rojo y
+      // Adrián viendo ~100 errores en consola en plena sesión en vivo.
+      if (path === '/health'      && method === 'GET')  return json({ ok: true, ts: Date.now() });
 
       // ── OTA App Flutter ────────────────────────────────────────────────────
       if (path === '/version' && method === 'GET') {
         const obj = await env.FILES.get('ota/version.json');
-        if (!obj) return new Response(JSON.stringify({ error: 'no version' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        // BUG-CORS-HEALTH-01: mismo patrón que /health, sin cabecera CORS — se añade por
+        // consistencia aunque hoy no se haya reportado (el cliente OTA de Flutter no la exige).
+        if (!obj) return new Response(JSON.stringify({ error: 'no version' }), { status: 404, headers: { 'Content-Type': 'application/json', ...CORS } });
         const text = await obj.text();
-        return new Response(text, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+        return new Response(text, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS } });
       }
       if (path === '/apk/download' && method === 'GET') {
         const obj = await env.FILES.get('apk/alejandra_ia_latest.apk');
