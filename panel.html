@@ -952,6 +952,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <button class="nav-item" onclick="doLogout()">
         <span class="nav-icon">🚪</span> Cerrar sesión
       </button>
+      <!-- VERSION-VISIBLE-01 (25/07/2026): Adrián: "en Alejandra Office no sale versión de
+           nada" — sin ningún indicador visible no había forma de comprobar si el navegador
+           tenía cargada la última versión o una vieja en caché. Texto puesto por
+           _checkPanelVersion() (ya existía, comprobaba la versión para el auto-reload). -->
+      <div id="panelVersionTag" style="text-align:center;font-size:10px;color:var(--muted);padding:6px 0 0;font-family:'Poppins',sans-serif">v…</div>
     </div>
   </nav>
 
@@ -17740,6 +17745,8 @@ async function _checkPanelVersion() {
     if (!res.ok) return;
     const j = await res.json();
     if (!j.v) return;
+    const tag = document.getElementById('panelVersionTag');
+    if (tag) tag.textContent = 'v' + j.v;
     if (_panelVersionBase === null) { _panelVersionBase = j.v; return; }
     if (j.v !== _panelVersionBase) {
       _panelActualizando = true;
