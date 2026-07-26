@@ -918,7 +918,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="planos" onclick="navTo('planos')">
       <span class="nav-icon">📐</span> Planos IA
     </button>
-    <div class="sidebar-section nav-admin-section" onclick="sidebarToggle(this)" data-sid="admin" style="display:none">Admin</div>
+    <!-- BUG-SIDEBAR-ADMIN-01 (25/07/2026): Adrián: "ahí un departamento que se llama admin
+     que no tiene el mismo estilo de los demás" — le faltaba el <span> del texto y el
+     <span class="sec-chevron"> que sí tienen el resto de cabeceras de sección. -->
+<div class="sidebar-section nav-admin-section" onclick="sidebarToggle(this)" data-sid="admin" style="display:none"><span>⚙️ Admin</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-admin" data-page="usuarios" onclick="navTo('usuarios')" style="display:none">
       <span class="nav-icon">👤</span> Usuarios
     </button>
