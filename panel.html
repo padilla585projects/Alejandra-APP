@@ -10074,6 +10074,59 @@ const _MENU_ROL_DEPT_CONFIG = {
                   'equiposMedicion', 'ordenesCambio', 'riesgosObra', 'planSemanal', 'instruccionesObra'],
       },
     },
+    // DEPT-CONSTR-03 (25/07/2026): Adrián: "Albañilería, Pintura, Carpintería se mete
+    // dentro de Construcción" (Obra Civil ya vivía ahí de facto — ocultarSeccionConstruccion
+    // SiNoAplica() nunca le ocultaba esa sección). Los 4 comparten el mismo cuadro de
+    // coordinación de obra que Ingeniería, con su propio icono/etiqueta — pero un
+    // subconjunto más de "cuadrilla de obra" que de oficina técnica (sin
+    // contratos/compras/submittals/transmittals/riesgos, eso se queda para Ingeniería).
+    // Ninguno tiene cuentas reales todavía (confirmado por Adrián) — asunción razonable
+    // sobre qué necesita cada gremio, a revisar en cuanto haya un usuario real.
+    obra_civil: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '🏗️ Obra Civil',
+        paginas: ['tareas', 'rfis', 'calidad', 'punchList', 'actasReunion', 'planosObra',
+                  'cronogramaObra', 'controlCalidad', 'itpObra', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+    albanileria: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '🧱 Albañilería',
+        paginas: ['tareas', 'rfis', 'calidad', 'punchList', 'actasReunion', 'planosObra',
+                  'cronogramaObra', 'controlCalidad', 'itpObra', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+    pintura: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '🎨 Pintura',
+        paginas: ['tareas', 'rfis', 'calidad', 'punchList', 'actasReunion', 'planosObra',
+                  'cronogramaObra', 'controlCalidad', 'itpObra', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+    carpinteria: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '🪟 Carpintería',
+        paginas: ['tareas', 'rfis', 'calidad', 'punchList', 'actasReunion', 'planosObra',
+                  'cronogramaObra', 'controlCalidad', 'itpObra', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+    // DEPT-CONSTR-03: Telecom y Almacén, en cambio, "departamentos aparte" (Adrián) — mismo
+    // menú de material que Mecánicas (sin bobinas, exclusiva de Eléctrico).
+    telecom: {
+      icono: '🌐',
+      material: ['herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'],
+    },
+    // Almacén: logística/recepción/control de stock (ver _DEPTS_CATALOG) — se prioriza el
+    // material relacionado con pedidos y existencias; pemp/carretillas se incluyen porque
+    // también son quienes mueven/almacenan ese equipo, a revisar con un usuario real.
+    almacen: {
+      icono: '📦',
+      material: ['herramientas', 'pemp', 'carretillas', 'pedidos', 'entregasMaterial', 'alertasStock'],
+    },
   },
   // ORG-05 (25/07/2026): Adrián pidió completar Operario también en Eléctrico y
   // Mecánicas, igual que ya tiene Encargado — mismo bloque de "Material y maquinaria"
@@ -10120,6 +10173,46 @@ const _MENU_ROL_DEPT_CONFIG = {
         paginas: ['tareas', 'rfis', 'calidad', 'punchList', 'planosObra', 'cronogramaObra',
                   'controlCalidad', 'itpObra', 'planSemanal', 'instruccionesObra'],
       },
+    },
+    // DEPT-CONSTR-03: mismo subconjunto reducido que ingenieria.operario, para los 4
+    // gremios que Adrián agrupó dentro de Construcción.
+    obra_civil: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '🏗️ Obra Civil',
+        paginas: ['tareas', 'calidad', 'punchList', 'planosObra', 'controlCalidad', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+    albanileria: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '🧱 Albañilería',
+        paginas: ['tareas', 'calidad', 'punchList', 'planosObra', 'controlCalidad', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+    pintura: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '🎨 Pintura',
+        paginas: ['tareas', 'calidad', 'punchList', 'planosObra', 'controlCalidad', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+    carpinteria: {
+      hoyEnObra: false, controlObra: false,
+      seccionExtra: {
+        sid: 'construccion', etiqueta: '🪟 Carpintería',
+        paginas: ['tareas', 'calidad', 'punchList', 'planosObra', 'controlCalidad', 'planSemanal', 'instruccionesObra'],
+      },
+    },
+    telecom: {
+      icono: '🌐',
+      material: ['herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'],
+      ocultarSensibles: true,
+    },
+    almacen: {
+      icono: '📦',
+      material: ['herramientas', 'pemp', 'carretillas', 'pedidos', 'entregasMaterial', 'alertasStock'],
+      ocultarSensibles: true,
     },
   },
   // INGENIERIA-02: el rol "ingeniero" (distinto de encargado/operario, ver el <select> de
@@ -10273,11 +10366,16 @@ function organizarSidebarIngenieria() {
 }
 
 // CONSTR-01 (24/07/2026): oculta la sección completa "Construcción" (y sus
-// items) para electrico/mecanicas — ver comentario en iniciarApp(). Reutilizada
+// items) para departamentos que no la usan — ver comentario en iniciarApp(). Reutilizada
 // también desde ocultarSidebarPorPermisos() para que sobreviva a la
 // re-aplicación de permisos tras cada navegación.
+// DEPT-CONSTR-03 (25/07/2026): con Obra Civil/Albañilería/Pintura/Carpintería/Ingeniería
+// ya curando esta sección vía seccionExtra (_MENU_ROL_DEPT_CONFIG), y Adrián separando
+// Telecom/Almacén como "departamentos aparte" (usan el menú de material, no Construcción),
+// la lista de quién la ve pasa a ser la excepción en vez de "todo menos 2 departamentos".
 function ocultarSeccionConstruccionSiNoAplica(deptActual, isAdmin) {
-  if (isAdmin || (deptActual !== 'electrico' && deptActual !== 'mecanicas')) return;
+  const VEN_CONSTRUCCION = ['obra_civil', 'albanileria', 'pintura', 'carpinteria', 'seguridad', 'ingenieria'];
+  if (isAdmin || VEN_CONSTRUCCION.includes(deptActual)) return;
   const el = document.querySelector('[data-sid="construccion"]');
   if (!el) return;
   el.style.display = 'none';
