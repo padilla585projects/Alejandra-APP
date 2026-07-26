@@ -10309,6 +10309,63 @@ const _MENU_ROL_DEPT_CONFIG = {
 // config (superadmin/empresa_admin/desarrollador) pero SÍ hay un departamento
 // seleccionado, se usa el menú de encargado de ese departamento como vista previa —
 // el más completo de los dos roles curados, para no esconder nada de más al admin.
+// PREVIEW-ADMIN-07 (26/07/2026): Adrián: "cuando seleccione todos los departamentos quiero
+// ver menús por departamento y en cada uno los suyo. Cuando elija un departamento en el
+// selector, se quitará todo y solo saldrá el departamento que elija" — hasta ahora "Todos
+// los departamentos" mostraba el sidebar plano genérico (Inventarios/Construcción
+// mezclando el material y las páginas de TODOS los gremios sin distinguir de quién es cada
+// cosa). Se construye un bloque por departamento (mismo icono/etiqueta que su vista
+// individual, mismas páginas que su config.material/seccionExtra.paginas), con clones de
+// los botones reales — cloneNode conserva el onclick="navTo(...)", así que funcionan igual
+// que el original sin tener que mover el único botón físico a varios sitios a la vez. Las
+// secciones planas que quedan reemplazadas por estos bloques ("Inventarios", "Construcción",
+// "Pedidos") se ocultan para no duplicar contenido sin agrupar. Solo se construye para el
+// admin real SIN departamento elegido — nunca durante una previsualización ni para
+// encargados/operarios reales (organizarSidebarEncargado() ya cubre esos casos).
+function construirDirectorioDepartamentos() {
+  const anclaInventarios = document.querySelector('.sidebar-section[data-sid="inventarios"]');
+  if (!anclaInventarios) return;
+  const padre = anclaInventarios.parentNode;
+
+  Object.keys(_MENU_ROL_DEPT_CONFIG.encargado).forEach(deptKey => {
+    const cfg = _MENU_ROL_DEPT_CONFIG.encargado[deptKey];
+    const paginas = [...(cfg.material || []), ...(cfg.seccionExtra?.paginas || [])];
+    if (!paginas.length) return;
+    const catalogo = _DEPTS_CATALOG[deptKey];
+
+    const header = document.createElement('div');
+    header.className = 'sidebar-section';
+    header.dataset.sid = `dept-${deptKey}`;
+    header.setAttribute('onclick', 'sidebarToggle(this)');
+    header.innerHTML = `<span>${catalogo?.icon || cfg.icono || '📁'} ${catalogo?.name || deptKey}</span><span class="sec-chevron">▼</span>`;
+    padre.insertBefore(header, anclaInventarios);
+
+    paginas.forEach(page => {
+      const original = document.querySelector(`.nav-item[data-page="${page}"]`);
+      if (!original) return;
+      const clone = original.cloneNode(true);
+      clone.style.display = '';
+      clone.removeAttribute('data-hidden-by-perms');
+      clone.classList.add('nav-item-directorio-clone');
+      padre.insertBefore(clone, anclaInventarios);
+    });
+  });
+
+  // Las secciones planas quedan reemplazadas por los bloques por departamento de arriba.
+  ['inventarios', 'construccion', 'pedidosSec'].forEach(sid => {
+    const cabecera = document.querySelector(`.sidebar-section[data-sid="${sid}"]`);
+    if (!cabecera) return;
+    cabecera.style.display = 'none';
+    cabecera.setAttribute('data-hidden-by-perms', 'true');
+    let next = cabecera.nextElementSibling;
+    while (next && !next.classList.contains('sidebar-section')) {
+      next.style.display = 'none';
+      next.setAttribute('data-hidden-by-perms', 'true');
+      next = next.nextElementSibling;
+    }
+  });
+}
+
 function organizarSidebarEncargado() {
   let config = _MENU_ROL_DEPT_CONFIG[SESSION?.rol]?.[SESSION?.departamento];
   if (!config && hasSessionRole('superadmin', 'empresa_admin', 'desarrollador') && SESSION?.departamento) {
@@ -10529,9 +10586,17 @@ function iniciarApp() {
     if (topbarObraEl) topbarObra.textContent = SESSION.obra_nombre;
   }
 
-  // mostrar sección admin si procede
+  // PREVIEW-ADMIN-07 (26/07/2026): calculado aquí arriba (antes vivía más abajo, tras la
+  // sección Admin) para poder usarlo también al decidir si se muestra "⚙️ Admin" — Adrián:
+  // esa sección "solo Todos los departamentos" (junto con Finanzas/Proveedores/Maquinaria/
+  // Calidad y Cierre/Analítica/Planificación/Diario y Campo, ver más abajo).
   const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
-  if (isAdmin) {
+  const previsualizandoDepto = isAdmin && !!SESSION.departamento &&
+    !!_MENU_ROL_DEPT_CONFIG['encargado']?.[SESSION.departamento];
+  const verComoAdmin = isAdmin && !previsualizandoDepto;
+
+  // mostrar sección admin si procede (solo fuera de previsualización — ver comentario arriba)
+  if (verComoAdmin) {
     document.querySelectorAll('.nav-admin, .nav-admin-section').forEach(el => el.style.display = '');
   }
 
@@ -10567,14 +10632,12 @@ function iniciarApp() {
 
   // PREVIEW-ADMIN-05 (26/07/2026): Adrián: "solo debe ver cosas relacionadas con el
   // trabajo de un almacenero" / "más fácil" — en vez de parchear cada "isAdmin ||" suelto
-  // uno a uno (Bobinas, Seguridad, Finanzas... quién sabe cuántos más), se calcula UNA vez
-  // "verComoAdmin": isAdmin real, pero rebajado a false en cuanto hay una previsualización
-  // de departamento activa. A partir de aquí, todo lo que decide qué ve cada departamento
-  // usa verComoAdmin en vez de isAdmin — isAdmin en sí se deja intacto para lo que sí debe
-  // seguir siendo siempre-admin (secciones Admin/Desarrollador, el propio selector).
-  const previsualizandoDepto = isAdmin && !!SESSION.departamento &&
-    !!_MENU_ROL_DEPT_CONFIG['encargado']?.[SESSION.departamento];
-  const verComoAdmin = isAdmin && !previsualizandoDepto;
+  // uno a uno (Bobinas, Seguridad, Finanzas... quién sabe cuántos más), se usa UNA sola
+  // bandera "verComoAdmin" (calculada arriba, junto a isAdmin): isAdmin real, pero
+  // rebajado a false en cuanto hay una previsualización de departamento activa. A partir
+  // de aquí, todo lo que decide qué ve cada departamento usa verComoAdmin en vez de
+  // isAdmin — isAdmin en sí se deja intacto para lo que sí debe seguir siendo
+  // siempre-admin (el propio selector).
 
   // mostrar páginas financieras: todos excepto operario
   if (!hasSessionRole('operario')) {
@@ -10614,6 +10677,12 @@ function iniciarApp() {
   // los admins).
   ocultarSeccionConstruccionSiNoAplica(deptActual, verComoAdmin);
 
+  // PREVIEW-ADMIN-07: en "Todos los departamentos" (admin real, sin previsualización), el
+  // sidebar se reorganiza en un bloque por departamento en vez del plano genérico.
+  if (verComoAdmin && !SESSION.departamento) {
+    construirDirectorioDepartamentos();
+  }
+
   // mostrar FAB de Alejandra y del chat del equipo cuando hay sesión activa
   // BUG-FAB-01 (25/07/2026): este bloque se ejecuta de forma síncrona mientras el
   // parser aún no ha llegado al HTML de los botones (están más abajo en el body,
@@ -10634,8 +10703,11 @@ function iniciarApp() {
   // el backend (worker.js) filtra su contenido por departamento (cada uno ve
   // solo lo suyo; Seguridad ve todo). Analítica y los 5 grupos que antes eran
   // "Seguimiento" (SIDEBAR-01, 22/07/2026) siguen ocultos para no-admin.
+  // PREVIEW-ADMIN-07: "Planificación" se mueve a "solo Todos los departamentos" (ver
+  // clasificación de Adrián de qué secciones no-departamentales se ocultan al elegir un
+  // departamento concreto).
   const seccionesPermitidas = isNonAdmin ?
-    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'pedidosSec', 'construccion', 'planificacion'] :
+    ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'pedidosSec', 'construccion'] :
     ['principal', 'personal', 'seguridad', 'inventarios', 'obra', 'pedidosSec', 'construccion', 'planificacion', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre', 'analitica'];
 
   // Guardar en localStorage cuáles secciones están permitidas para este usuario
@@ -10645,8 +10717,9 @@ function iniciarApp() {
 
   if (isNonAdmin) {
     // Ocultar: Analítica y los 5 grupos ex-Seguimiento (DEPT-01: Construcción y Obra
-    // ya no se ocultan, el filtrado real es por departamento en el backend)
-    const seccionesOcultar = ['analitica', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre'];
+    // ya no se ocultan, el filtrado real es por departamento en el backend), más
+    // Planificación (PREVIEW-ADMIN-07: no pertenece a ningún departamento concreto).
+    const seccionesOcultar = ['analitica', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre', 'planificacion'];
     seccionesOcultar.forEach(sid => {
       const el = document.querySelector(`[data-sid="${sid}"]`);
       if (el) {
@@ -10722,8 +10795,9 @@ function ocultarSidebarPorPermisos() {
       !!_MENU_ROL_DEPT_CONFIG['encargado']?.[SESSION.departamento];
 
     if (isNonAdmin || previsualizandoDepto) {
-      // DEPT-01 (21/07/2026): Construcción y Obra ya no se ocultan, ver comentario arriba
-      const seccionesOcultar = ['analitica', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre'];
+      // DEPT-01 (21/07/2026): Construcción y Obra ya no se ocultan, ver comentario arriba.
+      // PREVIEW-ADMIN-07: Planificación se suma a la lista (no es de ningún departamento).
+      const seccionesOcultar = ['analitica', 'diarioCampo', 'finanzas', 'proveedores', 'maquinaria', 'calidadCierre', 'planificacion'];
       let ocultadas = 0;
       let totalItems = 0;
 
@@ -10748,7 +10822,7 @@ function ocultarSidebarPorPermisos() {
 
       if (ocultadas > 0) {
         try {
-          localStorage.setItem('alejandra_sidebar_permitted', JSON.stringify(['principal', 'personal', 'seguridad', 'inventarios', 'planificacion']));
+          localStorage.setItem('alejandra_sidebar_permitted', JSON.stringify(['principal', 'personal', 'seguridad', 'inventarios']));
         } catch {}
         console.log(`✓ Sidebar ocultación: ${ocultadas} secciones, ${totalItems} items totales`);
       }
