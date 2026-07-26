@@ -10327,7 +10327,14 @@ function construirDirectorioDepartamentos() {
   if (!anclaInventarios) return;
   const padre = anclaInventarios.parentNode;
 
+  // PREVIEW-ADMIN-08 (26/07/2026): Adrián: "Obra Civil es el departamento y dentro
+  // metemos todos los que tienen que ver con eso" — Albañilería/Pintura/Carpintería no
+  // son bloques propios del directorio, viven dentro de Obra Civil (sus configs son
+  // idénticas a la de obra_civil, así que el bloque de Obra Civil ya muestra sus páginas).
+  const DENTRO_DE_OBRA_CIVIL = ['albanileria', 'pintura', 'carpinteria'];
+
   Object.keys(_MENU_ROL_DEPT_CONFIG.encargado).forEach(deptKey => {
+    if (DENTRO_DE_OBRA_CIVIL.includes(deptKey)) return;
     const cfg = _MENU_ROL_DEPT_CONFIG.encargado[deptKey];
     const paginas = [...(cfg.material || []), ...(cfg.seccionExtra?.paginas || [])];
     if (!paginas.length) return;
