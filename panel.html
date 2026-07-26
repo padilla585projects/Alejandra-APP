@@ -10497,6 +10497,23 @@ function iniciarApp() {
     deptoSelEl.style.display = isAdmin ? '' : 'none';
     if (isAdmin) deptoSelEl.value = SESSION.departamento || '';
   }
+  // PREVIEW-ADMIN-02 (26/07/2026): "vale lo veo, pero ahora debería filtrarse todo por
+  // departamento no?" — hasta ahora el selector solo reorganizaba el sidebar (etiquetas),
+  // los datos seguían sin filtrar para admins (el backend ya soporta ?departamento=X para
+  // ellos, pero nada lo mandaba). Se preselecciona el filtro de departamento que ya existe
+  // en Bobinas/PEMP/Carretillas/Pedidos con el departamento elegido arriba — en cuanto el
+  // admin entra en esas páginas, cargan ya filtradas. EXCEPCIÓN explícita de Adrián: "en
+  // almacén solo queremos ver pedidos e inventarios de los otros departamentos" — al
+  // previsualizar Almacén estos 4 filtros se dejan en "Todos", no se fuerzan.
+  // Personal/Incidencias/Tareas/Herramientas no tienen un filtro de departamento propio
+  // todavía, así que el modo previsualización no les afecta por ahora.
+  if (isAdmin) {
+    const deptoPreview = (SESSION.departamento && SESSION.departamento !== 'almacen') ? SESSION.departamento : '';
+    ['filtroDepBobinas', 'filtroDepPemp', 'filtroDepCarretillas', 'filtroDepPedidos'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = deptoPreview;
+    });
+  }
 
   // mostrar sección dev para superadmin y desarrollador
   if (hasSessionRole('superadmin', 'desarrollador')) {
