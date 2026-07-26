@@ -10571,6 +10571,21 @@ function _organizarSidebarRolDept(config) {
     renombrar(config.seccionExtra.sid, config.seccionExtra.etiqueta);
     let extra = seccion(config.seccionExtra.sid);
     config.seccionExtra.paginas.forEach(page => { extra = moverDespues(extra, page); });
+    // OBRA-SOBRA-02 (26/07/2026): Adrián: "me refiero también a Seguridad de Obra, que
+    // ahí no pinta nada" — "Seguridad de Obra" es nativo de la sección Construcción
+    // (junto con Tareas/RFIs/Calidad/Punch List/Contactos/Visitas/Actas) pero ni
+    // Ingeniería ni Obra Civil la incluyen en su lista; al no tener clase protectora
+    // propia (mismo patrón que "Repostajes" en Inventarios, ver PREVIEW-ADMIN-06) se
+    // quedaba visible para cualquiera. config.seccionExtra.paginas pasa a actuar como
+    // lista permitida también para todo lo nativo de "Construcción".
+    ['tareas', 'rfis', 'calidad', 'seguridadObra', 'punchList', 'contactosObra', 'visitasObra', 'actasReunion'].forEach(page => {
+      if (config.seccionExtra.paginas.includes(page)) return;
+      const el = item(page);
+      if (el) {
+        el.style.display = 'none';
+        el.setAttribute('data-hidden-by-perms', 'true');
+      }
+    });
   }
 
   // Partes Diarios era útil para el encargado pero quedaba dentro de una
