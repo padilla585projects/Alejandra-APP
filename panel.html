@@ -10841,6 +10841,18 @@ function iniciarApp() {
     localStorage.setItem('alejandra_sidebar_permitted', JSON.stringify(seccionesPermitidas));
   } catch {}
 
+  // SIDEBAR-FLICKER-01 (26/07/2026): Adrián: "en el departamento de Ingeniería falta todo
+  // el tema de planificación (planos)" — Fases/Hitos/Planos de Obra/Cronograma viven por
+  // defecto dentro de la sección "Planificación" y organizarSidebarEncargado() los MUEVE
+  // a su bloque propio ("📐 Ingeniería") vía seccionExtra — pero el hide-loop de abajo
+  // ocultaba "Planificación" (y a quien todavía fuera su hermano en el DOM, incluidos esos
+  // 4 ítems) ANTES de que se movieran, así que quedaban ocultos hasta que la reorganización
+  // los rescataba (parpadeo). Se invierte el orden: reorganizar primero, ocultar después —
+  // así "Planificación" solo arrastra consigo lo que de verdad se queda ahí.
+  ocultarItemsPorOficio();
+  organizarSidebarEncargado();
+  organizarSidebarIngenieria();
+
   if (isNonAdmin) {
     // Ocultar: Analítica y los 5 grupos ex-Seguimiento (DEPT-01: Construcción y Obra
     // ya no se ocultan, el filtrado real es por departamento en el backend), más
@@ -10864,9 +10876,6 @@ function iniciarApp() {
   } else {
     console.log(`✗ Usuario es admin (rol=${SESSION.rol}, roles_extra=${SESSION.roles_extra?.join(', ')}), mostrando todo`);
   }
-  ocultarItemsPorOficio();
-  organizarSidebarEncargado();
-  organizarSidebarIngenieria();
 
   // mostrar secciones superadmin en página empresa
   if (hasSessionRole('superadmin', 'desarrollador')) {
@@ -10920,6 +10929,16 @@ function ocultarSidebarPorPermisos() {
     const previsualizandoDepto = isAdmin && !!SESSION.departamento &&
       !!_MENU_ROL_DEPT_CONFIG['encargado']?.[SESSION.departamento];
 
+    // SIDEBAR-FLICKER-01: reorganizar (mover Fases/Hitos/Planos/Cronograma a su bloque
+    // propio) ANTES de ocultar Planificación — si no, el hide-loop de abajo se los lleva
+    // por delante mientras todavía son sus hermanos en el DOM (ver comentario en
+    // iniciarApp()).
+    ocultarSeccionConstruccionSiNoAplica(SESSION.departamento || 'electrico', isAdmin && !previsualizandoDepto);
+    mostrarInventarioSeguridadSiAplica(SESSION.departamento || 'electrico', previsualizandoDepto);
+    ocultarItemsPorOficio();
+    organizarSidebarEncargado();
+    organizarSidebarIngenieria();
+
     if (isNonAdmin || previsualizandoDepto) {
       // DEPT-01 (21/07/2026): Construcción y Obra ya no se ocultan, ver comentario arriba.
       // PREVIEW-ADMIN-07: Planificación se suma a la lista (no es de ningún departamento).
@@ -10953,11 +10972,6 @@ function ocultarSidebarPorPermisos() {
         console.log(`✓ Sidebar ocultación: ${ocultadas} secciones, ${totalItems} items totales`);
       }
     }
-    ocultarSeccionConstruccionSiNoAplica(SESSION.departamento || 'electrico', isAdmin && !previsualizandoDepto);
-    mostrarInventarioSeguridadSiAplica(SESSION.departamento || 'electrico', previsualizandoDepto);
-    ocultarItemsPorOficio();
-    organizarSidebarEncargado();
-    organizarSidebarIngenieria();
   } catch (e) {
     console.error('Error en ocultarSidebarPorPermisos:', e);
   }
