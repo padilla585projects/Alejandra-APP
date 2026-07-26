@@ -9414,8 +9414,15 @@ function _panelSesionCaducada() {
 // inventarios de los otros departamentos") ya vive en _deptoPreviewParam() para que se
 // respete también aquí.
 function _deptoPreviewParam() {
-  if (!SESSION || !hasSessionRole('superadmin', 'empresa_admin', 'desarrollador')) return null;
-  if (!SESSION.departamento || SESSION.departamento === 'almacen') return null;
+  if (!SESSION) return null;
+  // ALMACEN-FILTRO-01 (26/07/2026): en la vista de Almacén (previsualización admin o
+  // usuario real del departamento almacén) manda el filtro elegido en el modal, si hay
+  // uno — así TODOS los módulos de material (Herramientas, Repostajes, Mantenimientos,
+  // Alertas...) reciben ?departamento=X sin tocarlos uno a uno. Sin filtro elegido,
+  // Almacén ve todo (su excepción de siempre).
+  if (SESSION.departamento === 'almacen') return window._filtroDeptAlmacen || null;
+  if (!hasSessionRole('superadmin', 'empresa_admin', 'desarrollador')) return null;
+  if (!SESSION.departamento) return null;
   return SESSION.departamento;
 }
 function _conDeptoPreview(path, method) {
@@ -10363,6 +10370,10 @@ function abrirModalFiltroDeptAlmacen() {
 }
 
 function aplicarFiltroDeptAlmacen(dep, txt) {
+  // Filtro global: _deptoPreviewParam() lo inyecta como ?departamento=X en TODAS las
+  // peticiones GET de api() mientras la vista activa sea Almacén — cubre Herramientas,
+  // Repostajes, Mantenimientos, Alertas Stock... sin filtro propio por página.
+  window._filtroDeptAlmacen = dep || null;
   const lbl = document.getElementById('lblFiltroDeptAlmacen');
   if (lbl) lbl.textContent = dep ? `Filtrar: ${txt}` : 'Filtrar: Todos';
   ['filtroDepBobinas', 'filtroDepPemp', 'filtroDepCarretillas', 'filtroDepPedidos'].forEach(id => {
@@ -10372,6 +10383,11 @@ function aplicarFiltroDeptAlmacen(dep, txt) {
     // dispara el onchange propio de cada filtro (recarga su tabla)
     el.dispatchEvent(new Event('change'));
   });
+  // Recargar los módulos sin filtro propio que ya estén abiertos (su tabla existe)
+  try { if (typeof tblHerramientas !== 'undefined' && tblHerramientas) cargarHerramientas(); } catch {}
+  try { if (typeof tblRepostajes !== 'undefined' && tblRepostajes) cargarRepostajes(); } catch {}
+  try { if (typeof tblMantenimientos !== 'undefined' && tblMantenimientos) cargarMantenimientos(); } catch {}
+  try { if (typeof cargarAlertasStock === 'function') cargarAlertasStock(); } catch {}
   const modal = document.getElementById('modalFiltroDeptAlmacen');
   if (modal) modal.style.display = 'none';
 }

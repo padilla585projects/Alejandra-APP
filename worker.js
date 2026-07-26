@@ -6455,7 +6455,11 @@ async function getBobinas(request, env) {
   const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
   // INV-03 (22/07/2026): isDeptPrivileged() añade desarrollador/seguridad a la vision
   // transversal de departamento, igual que en tareas_obra/rfis/etc (DEPT-01)
-  const isAdminRole = isDeptPrivileged(auth) || isJefeObra;
+  // ALMACEN-FILTRO-01 (26/07/2026): el departamento Almacén gestiona el stock físico de
+  // todos los departamentos — visión transversal de LECTURA en inventarios, acotable
+  // con ?departamento= (modal de filtro del panel). Solo lectura: los gates de
+  // escritura/borrado no usan isAdminRole.
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra || auth.departamento === 'almacen';
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   // Admins: dept filter solo si se pasa explícitamente (?departamento=X); operarios: siempre su dept
   const deptParam = url.searchParams.get('departamento');
@@ -6622,7 +6626,11 @@ async function getPemp(request, env) {
   const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
   // INV-03 (22/07/2026): isDeptPrivileged() añade desarrollador/seguridad a la vision
   // transversal de departamento, igual que en tareas_obra/rfis/etc (DEPT-01)
-  const isAdminRole = isDeptPrivileged(auth) || isJefeObra;
+  // ALMACEN-FILTRO-01 (26/07/2026): el departamento Almacén gestiona el stock físico de
+  // todos los departamentos — visión transversal de LECTURA en inventarios, acotable
+  // con ?departamento= (modal de filtro del panel). Solo lectura: los gates de
+  // escritura/borrado no usan isAdminRole.
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra || auth.departamento === 'almacen';
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   const deptParam = url.searchParams.get('departamento');
   // Non-admin roles always see only their own department (ignore query param override)
@@ -6794,7 +6802,11 @@ async function getCarretillas(request, env) {
   const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
   // INV-03 (22/07/2026): isDeptPrivileged() añade desarrollador/seguridad a la vision
   // transversal de departamento, igual que en tareas_obra/rfis/etc (DEPT-01)
-  const isAdminRole = isDeptPrivileged(auth) || isJefeObra;
+  // ALMACEN-FILTRO-01 (26/07/2026): el departamento Almacén gestiona el stock físico de
+  // todos los departamentos — visión transversal de LECTURA en inventarios, acotable
+  // con ?departamento= (modal de filtro del panel). Solo lectura: los gates de
+  // escritura/borrado no usan isAdminRole.
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra || auth.departamento === 'almacen';
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   const deptParam = url.searchParams.get('departamento');
   // INV-02 (22/07/2026): antes el query param ganaba incluso para no-admin,
@@ -7980,8 +7992,12 @@ async function getAlertasStock(request, env) {
   // Mismo criterio que bobinas/pemp/herramientas: privilegiados ven todo, el resto
   // solo su propio departamento (o, para bobinas, solo si es electrico -material
   // exclusivo de electricistas, ver INV-01-).
-  const privilegiado = !!(isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador || isSeguridad);
-  const deptFilter = !privilegiado ? departamento : null;
+  // ALMACEN-FILTRO-01 (26/07/2026): Almacén ve las alertas de todos los departamentos
+  // (gestiona el stock físico de todos) y, como los privilegiados, puede acotar con
+  // ?departamento= (modal de filtro del panel).
+  const privilegiado = !!(isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador || isSeguridad) || departamento === 'almacen';
+  const deptSel = privilegiado ? (new URL(request.url).searchParams.get('departamento') || null) : null;
+  const deptFilter = !privilegiado ? departamento : deptSel;
 
   // 1. Herramientas: tipos con menos disponibles que el minimo
   let sqlHerr = `SELECT t.id, t.nombre, t.stock_minimo,
@@ -7999,7 +8015,10 @@ async function getAlertasStock(request, env) {
   // 2. Inventario seg: items modo='cantidad' con stock bajo minimo — mismo gate
   // de acceso que getInventarioSeg (solo Seguridad/admin ven inventario de seguridad)
   let seguridad = [];
-  if (isSuperadmin || isAdmin || isSeguridad || isEmpresaAdmin) {
+  // ALMACEN-FILTRO-01: Almacén también ve el stock bajo de material de Seguridad; con un
+  // ?departamento= concreto que no sea Seguridad, estas alertas se omiten.
+  if ((isSuperadmin || isAdmin || isSeguridad || isEmpresaAdmin || departamento === 'almacen') &&
+      (!deptSel || deptSel === 'seguridad')) {
     const r = await env.DB.prepare(`
       SELECT id, nombre, tipo_material, cantidad_disponible, stock_minimo
       FROM inventario_seg
@@ -8012,7 +8031,8 @@ async function getAlertasStock(request, env) {
   // 3. Bobinas: tipos_cable con menos bobinas activas que el minimo — material
   // exclusivo de electricistas (ver INV-01), solo visible para ese departamento o privilegiados
   let bobinas = [];
-  if (privilegiado || departamento === 'electrico') {
+  // ALMACEN-FILTRO-01: con ?departamento= concreto que no sea Eléctrico, sin bobinas.
+  if ((privilegiado && (!deptSel || deptSel === 'electrico')) || (!privilegiado && departamento === 'electrico')) {
     const r = await env.DB.prepare(`
       SELECT tc.id, tc.nombre, tc.stock_minimo,
              COUNT(b.id) as total_bobinas
@@ -8388,7 +8408,11 @@ async function getHerramientas(request, env) {
   const url = new URL(request.url);
   // INV-03 (22/07/2026): isDeptPrivileged() añade desarrollador/seguridad a la vision
   // transversal de departamento, igual que en tareas_obra/rfis/etc (DEPT-01)
-  const isAdminRole = isDeptPrivileged(auth) || isJefeObra;
+  // ALMACEN-FILTRO-01 (26/07/2026): el departamento Almacén gestiona el stock físico de
+  // todos los departamentos — visión transversal de LECTURA en inventarios, acotable
+  // con ?departamento= (modal de filtro del panel). Solo lectura: los gates de
+  // escritura/borrado no usan isAdminRole.
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra || auth.departamento === 'almacen';
   const todos = url.searchParams.get('todos') === '1' && isDeptPrivileged(auth);
   const deptParam = url.searchParams.get('departamento');
   // Non-admin roles always see only their own department (ignore query param override)
@@ -13441,6 +13465,18 @@ async function getMantenimientos(request, env) {
   const vals  = [empresa_id];
   if (tipo_equipo) { conds.push('tipo_equipo = ?'); vals.push(tipo_equipo); }
   if (matricula)   { conds.push('matricula = ?');   vals.push(matricula); }
+  // ALMACEN-FILTRO-01 (26/07/2026): filtro por departamento — historial_mantenimientos no
+  // tiene columna departamento; se resuelve por la matrícula del equipo (PEMP/carretilla).
+  const deptParam = url.searchParams.get('departamento');
+  if (deptParam) {
+    conds.push(`(
+      EXISTS (SELECT 1 FROM pemp p WHERE p.empresa_id = historial_mantenimientos.empresa_id
+              AND p.departamento = ? AND p.matricula = historial_mantenimientos.matricula)
+      OR EXISTS (SELECT 1 FROM carretillas c WHERE c.empresa_id = historial_mantenimientos.empresa_id
+              AND c.departamento = ? AND c.matricula = historial_mantenimientos.matricula)
+    )`);
+    vals.push(deptParam, deptParam);
+  }
   const { results } = await env.DB.prepare(
     `SELECT * FROM historial_mantenimientos WHERE ${conds.join(' AND ')} ORDER BY fecha_mant DESC, id DESC LIMIT 100`
   ).bind(...vals).all();
@@ -13847,6 +13883,21 @@ async function getRepostajes(request, env) {
   const params = [empresa_id];
   if (equipoTipo) { sql += ' AND equipo_tipo = ?'; params.push(equipoTipo); }
   if (equipoId)   { sql += ' AND equipo_id = ?';   params.push(equipoId); }
+  // ALMACEN-FILTRO-01 (26/07/2026): filtro por departamento — la tabla repostajes no
+  // tiene columna departamento; se resuelve a través del equipo (equipo_id guarda
+  // matrícula, código o id del PEMP/carretilla, ver abrirRepostaje() en index.html).
+  const deptParam = new URL(request.url).searchParams.get('departamento');
+  if (deptParam) {
+    sql += ` AND (
+      (equipo_tipo = 'pemp' AND EXISTS (
+        SELECT 1 FROM pemp p WHERE p.empresa_id = repostajes.empresa_id AND p.departamento = ?
+          AND (p.matricula = repostajes.equipo_id OR CAST(p.id AS TEXT) = repostajes.equipo_id)))
+      OR (equipo_tipo = 'carretilla' AND EXISTS (
+        SELECT 1 FROM carretillas c WHERE c.empresa_id = repostajes.empresa_id AND c.departamento = ?
+          AND (c.matricula = repostajes.equipo_id OR CAST(c.id AS TEXT) = repostajes.equipo_id)))
+    )`;
+    params.push(deptParam, deptParam);
+  }
   sql += ' ORDER BY fecha DESC, id DESC LIMIT ?';
   params.push(limit);
   const { results } = await env.DB.prepare(sql).bind(...params).all();
