@@ -2366,6 +2366,19 @@ LEYENDA DE ESTADO:
       contenido real. Se quita height:100% (#appContent ya hace de scroll único de toda
       la pantalla). Reproducido y verificado con getBoundingClientRect() antes/después.
 
+[✓] DEPT-CONSTR-03 — Roles por departamento completos: los 6 que faltaban ya tienen menú en Office
+    [HECHO 25/07/2026, v8.47]
+    · Adrián: "quiero terminar con los roles por departamentos". Decisión explícita: "Albañilería,
+      pintura, Carpintería se mete dentro de Construcción. Telecom y almacen departamentos
+      aparte." Obra Civil/Albañilería/Pintura/Carpintería comparten el patrón de Ingeniería
+      (seccionExtra sobre 'construccion', RFIs/calidad/tareas/actas/planos, subconjunto
+      reducido para operario); Telecom/Almacén van con menú de material como Mecánicas (sin
+      bobinas). ocultarSeccionConstruccionSiNoAplica() pasa de "ocultar solo para
+      electrico/mecanicas" a una lista explícita de quién SÍ la ve. Ninguno tiene cuentas
+      reales todavía — asunción razonable sobre qué necesita cada gremio, a revisar con el
+      primer usuario real de cada uno. Ver SESION.md Part 58 para el detalle técnico completo.
+    · Con esto queda cerrada la checklist "roles por departamento" que venía de Parts 50-58.
+
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================
