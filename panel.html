@@ -10189,12 +10189,21 @@ const _MENU_ROL_DEPT_CONFIG = {
       icono: '🌐',
       material: ['herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'],
     },
-    // Almacén: logística/recepción/control de stock (ver _DEPTS_CATALOG) — se prioriza el
-    // material relacionado con pedidos y existencias; pemp/carretillas se incluyen porque
-    // también son quienes mueven/almacenan ese equipo, a revisar con un usuario real.
+    // ALMACEN-FILTRO-01 (26/07/2026): Adrián: "el almacén es solo para material" + "tiene
+    // que salir el material y filtrarlo por departamentos con un modal" + los pedidos "eso
+    // va a una pestaña solo para eso" — Almacén ve TODO el material de todos los
+    // departamentos (incluidas bobinas y el stock de Seguridad, él gestiona el almacén
+    // físico de todos) y lo acota con el modal de departamento (filtroDeptModal). Pedidos
+    // y Entregas van en su propia sección "📥 Pedidos" (seccionExtra), no mezclados con el
+    // material. soloMaterial oculta el resto del sidebar (Hoy en obra, Personal,
+    // Documentación...).
     almacen: {
       icono: '📦',
-      material: ['herramientas', 'pemp', 'carretillas', 'pedidos', 'entregasMaterial', 'alertasStock'],
+      hoyEnObra: false, controlObra: false,
+      material: ['bobinas', 'herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'seguridad', 'alertasStock'],
+      seccionExtra: { sid: 'pedidosSec', etiqueta: '📥 Pedidos', paginas: ['pedidos', 'entregasMaterial'] },
+      soloMaterial: true,
+      filtroDeptModal: true,
     },
   },
   // ORG-05 (25/07/2026): Adrián pidió completar Operario también en Eléctrico y
@@ -10278,9 +10287,15 @@ const _MENU_ROL_DEPT_CONFIG = {
       material: ['herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'pedidos', 'entregasMaterial', 'alertasStock'],
       ocultarSensibles: true,
     },
+    // ALMACEN-FILTRO-01: mismo menú "solo material" + modal de departamento que su
+    // Encargado — el operario de almacén mueve el mismo stock.
     almacen: {
       icono: '📦',
-      material: ['herramientas', 'pemp', 'carretillas', 'pedidos', 'entregasMaterial', 'alertasStock'],
+      hoyEnObra: false, controlObra: false,
+      material: ['bobinas', 'herramientas', 'pemp', 'carretillas', 'mantenimientos', 'repostajes', 'seguridad', 'alertasStock'],
+      seccionExtra: { sid: 'pedidosSec', etiqueta: '📥 Pedidos', paginas: ['pedidos', 'entregasMaterial'] },
+      soloMaterial: true,
+      filtroDeptModal: true,
       ocultarSensibles: true,
     },
   },
@@ -10309,6 +10324,58 @@ const _MENU_ROL_DEPT_CONFIG = {
 // config (superadmin/empresa_admin/desarrollador) pero SÍ hay un departamento
 // seleccionado, se usa el menú de encargado de ese departamento como vista previa —
 // el más completo de los dos roles curados, para no esconder nada de más al admin.
+// ALMACEN-FILTRO-01 (26/07/2026): modal de filtro por departamento para la vista de
+// Almacén — Adrián: "tiene que salir el material y filtrarlo por departamentos con un
+// modal". Elegir un departamento preselecciona los filtros de departamento existentes
+// (Bobinas/PEMP/Carretillas/Pedidos, los únicos módulos con ese filtro propio) y dispara
+// su recarga; "Todos" los limpia.
+function abrirModalFiltroDeptAlmacen() {
+  let modal = document.getElementById('modalFiltroDeptAlmacen');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modalFiltroDeptAlmacen';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+    const caja = document.createElement('div');
+    caja.style.cssText = 'background:#1b2537;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:18px 20px;min-width:280px;max-width:90vw;';
+    caja.innerHTML = '<div style="font-weight:700;margin-bottom:10px;color:#fff;">Filtrar material por departamento</div>';
+    const OPCIONES = [
+      ['', '📁 Todos los departamentos'],
+      ['electrico', '⚡ Eléctrico'],
+      ['mecanicas', '🔧 Mecánicas'],
+      ['seguridad', '🔺 Seguridad'],
+      ['obra_civil', '🏗️ Obra Civil'],
+      ['telecom', '🌐 Telecom'],
+      ['almacen', '📦 Almacén'],
+    ];
+    OPCIONES.forEach(([val, txt]) => {
+      const b = document.createElement('button');
+      b.className = 'nav-item';
+      b.style.cssText = 'display:block;width:100%;text-align:left;margin:4px 0;';
+      b.textContent = txt;
+      b.addEventListener('click', () => aplicarFiltroDeptAlmacen(val, txt));
+      caja.appendChild(b);
+    });
+    modal.appendChild(caja);
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+}
+
+function aplicarFiltroDeptAlmacen(dep, txt) {
+  const lbl = document.getElementById('lblFiltroDeptAlmacen');
+  if (lbl) lbl.textContent = dep ? `Filtrar: ${txt}` : 'Filtrar: Todos';
+  ['filtroDepBobinas', 'filtroDepPemp', 'filtroDepCarretillas', 'filtroDepPedidos'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = dep;
+    // dispara el onchange propio de cada filtro (recarga su tabla)
+    el.dispatchEvent(new Event('change'));
+  });
+  const modal = document.getElementById('modalFiltroDeptAlmacen');
+  if (modal) modal.style.display = 'none';
+}
+
 // PREVIEW-ADMIN-07 (26/07/2026): Adrián: "cuando seleccione todos los departamentos quiero
 // ver menús por departamento y en cada uno los suyo. Cuando elija un departamento en el
 // selector, se quitará todo y solo saldrá el departamento que elija" — hasta ahora "Todos
@@ -10434,6 +10501,21 @@ function _organizarSidebarRolDept(config) {
   if (config.material) {
     renombrar('inventarios', `${config.icono} Material y maquinaria`);
     let material = seccion('inventarios');
+    // ALMACEN-FILTRO-01 (26/07/2026): botón que abre el modal de filtro por departamento
+    // (Adrián: "tiene que salir el material y filtrarlo por departamentos con un modal").
+    if (config.filtroDeptModal && material) {
+      let btnFiltro = document.getElementById('btnFiltroDeptAlmacen');
+      if (!btnFiltro) {
+        btnFiltro = document.createElement('button');
+        btnFiltro.id = 'btnFiltroDeptAlmacen';
+        btnFiltro.className = 'nav-item';
+        btnFiltro.setAttribute('onclick', 'abrirModalFiltroDeptAlmacen()');
+        btnFiltro.innerHTML = '<span class="nav-icon">🔎</span> <span id="lblFiltroDeptAlmacen">Filtrar: Todos</span>';
+      }
+      btnFiltro.style.display = '';
+      material.insertAdjacentElement('afterend', btnFiltro);
+      material = btnFiltro;
+    }
     config.material.forEach(page => { material = moverDespues(material, page); });
     // PREVIEW-ADMIN-06 (26/07/2026): "Repostajes" no tiene clase propia como "bobinas"
     // (nav-electrico-section) o el stock de Seguridad (nav-inventario-seguridad) — sin
@@ -10470,9 +10552,18 @@ function _organizarSidebarRolDept(config) {
 
   // Partes Diarios era útil para el encargado pero quedaba dentro de una
   // sección de oficina oculta. Se recupera arriba, junto al plan de la jornada.
-  ocultarSeccion('pedidosSec');
+  // ALMACEN-FILTRO-01: si la seccionExtra ES pedidosSec (Almacén), no ocultarla —
+  // se acaba de rellenar con Pedidos/Entregas.
+  if (config.seccionExtra?.sid !== 'pedidosSec') ocultarSeccion('pedidosSec');
   ocultarSeccion('planificacion');
   ocultarSeccion('diarioCampo');
+
+  // ALMACEN-FILTRO-01: Adrián: "el almacén es solo para material" / "todo lo demás fuera
+  // cuando selecciones almacén" — se oculta el resto del sidebar (Hoy en obra, Personal,
+  // Documentación y control).
+  if (config.soloMaterial) {
+    ['principal', 'personal', 'obra'].forEach(ocultarSeccion);
+  }
 
   if (config.ocultarSensiblesSeguridad) {
     document.querySelectorAll('.nav-sensitive-data.nav-seguridad-section').forEach(el => {
