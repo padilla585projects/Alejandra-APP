@@ -10557,6 +10557,13 @@ function _organizarSidebarRolDept(config) {
     renombrar('obra', '📁 Documentación y control');
     let control = seccion('obra');
     (config.controlObra || ['documentosObra', 'planosObra', 'fotosObra', 'instruccionesObra', 'inspecciones']).forEach(page => { control = moverDespues(control, page); });
+  } else {
+    // OBRA-SOBRA-01 (26/07/2026): Adrián: "mira las secciones de Ingeniería... una
+    // sobra" — "Obra" (Documentación y control genérica) se quedaba visible con sus
+    // páginas por defecto para cualquier departamento con controlObra:false (su
+    // documentación ya vive en su propia sección extra), mismo patrón que ya tenía
+    // "Inventarios" cuando config.material es undefined (ocultarSeccion('inventarios')).
+    ocultarSeccion('obra');
   }
 
   // Sección propia con lista de páginas a medida (Ingeniería: RFIs, calidad, contratos...).
