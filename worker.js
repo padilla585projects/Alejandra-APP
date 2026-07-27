@@ -1964,8 +1964,10 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
           soluciones.push({ accion: 'Aprobar usuario', tool: 'sql_query', sql: `UPDATE usuarios SET aprobado=1 WHERE id=${user.id}` });
         }
 
+        // SEC-AUDIT-06 (27/07/2026): "success" nunca existió en login_attempts — esta
+        // comprobación llevaba rota en silencio desde siempre (catch(()=>null) la ocultaba).
         const loginAttempts = await env.DB.prepare(
-          "SELECT COUNT(*) as n FROM login_attempts WHERE email=? AND success=0 AND created_at > datetime('now','-1 hour')"
+          "SELECT COUNT(*) as n FROM login_attempts WHERE email=? AND created_at > datetime('now','-1 hour')"
         ).bind(user.email).first().catch(() => null);
         if (loginAttempts && loginAttempts.n >= 5) {
           problemas.push(`Login BLOQUEADO por intentos fallidos (${loginAttempts.n} en última hora)`);
@@ -2060,8 +2062,13 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
         if (toolInput.include_security !== false) {
           security = { logins_fallidos: [], rutas_403: [], sesiones_sospechosas: [] };
           try {
+            // SEC-AUDIT-06 (27/07/2026): "success" nunca existió en login_attempts (solo
+            // ip/motivo/created_at, ahora +email) — esta consulta llevaba rota en
+            // silencio (catch vacío) desde siempre. La tabla ya solo contiene intentos
+            // (fallidos, o "intento" muy efímeros de logins en curso), no hace falta el
+            // filtro. email ahora sí se registra (antes tampoco existía la columna).
             const failedLogins = await env.DB.prepare(
-              `SELECT email, COUNT(*) as n, MAX(created_at) as ultimo FROM login_attempts WHERE success=0 AND created_at > datetime('now', '-${hours} hours') GROUP BY email HAVING n >= 3 ORDER BY n DESC LIMIT 10`
+              `SELECT email, COUNT(*) as n, MAX(created_at) as ultimo FROM login_attempts WHERE email IS NOT NULL AND created_at > datetime('now', '-${hours} hours') GROUP BY email HAVING n >= 3 ORDER BY n DESC LIMIT 10`
             ).all();
             security.logins_fallidos = (failedLogins.results || []).map(r => ({ email: r.email, intentos: r.n, ultimo: r.ultimo }));
           } catch {}
@@ -3222,9 +3229,13 @@ async function nexusWatchers(env) {
   const watcherErrors = [];
 
   // 1. UserAccessWatcher — logins bloqueados en la última hora
+  // SEC-AUDIT-06 (27/07/2026): "success" nunca existió en login_attempts — este watcher
+  // (parte del sistema de auto-vigilancia de Alejandra) llevaba roto en silencio desde
+  // siempre, ver comentario igual en nexusWatchers más abajo y en el análisis de
+  // seguridad de la tool diagnosticar_usuario.
   try {
     const blocked = await env.DB.prepare(
-      "SELECT email, COUNT(*) as n FROM login_attempts WHERE success=0 AND created_at > datetime('now','-1 hour') GROUP BY email HAVING n >= 5"
+      "SELECT email, COUNT(*) as n FROM login_attempts WHERE email IS NOT NULL AND created_at > datetime('now','-1 hour') GROUP BY email HAVING n >= 5"
     ).all();
     for (const row of (blocked.results || [])) {
       alerts.push({ watcher: 'UserAccess', severity: 'HIGH', msg: `Login bloqueado: ${row.email} (${row.n} intentos fallidos en 1h)` });
@@ -3337,9 +3348,10 @@ async function nexusWatchers(env) {
   } catch(e) { watcherErrors.push('DeployCorrelation: ' + e.message); }
 
   // 8. SecurityWatcher — fuerza bruta / acceso sospechoso
+  // SEC-AUDIT-06: mismo fix que UserAccessWatcher más arriba.
   try {
     const bruteForce = await env.DB.prepare(
-      "SELECT email, COUNT(*) as n FROM login_attempts WHERE success=0 AND created_at > datetime('now','-30 minutes') GROUP BY email HAVING n >= 10"
+      "SELECT email, COUNT(*) as n FROM login_attempts WHERE email IS NOT NULL AND created_at > datetime('now','-30 minutes') GROUP BY email HAVING n >= 10"
     ).all();
     for (const bf of (bruteForce.results || [])) {
       alerts.push({ watcher: 'Security', severity: 'CRITICAL', msg: `Posible fuerza bruta: ${bf.email} — ${bf.n} intentos en 30min` });
@@ -6170,9 +6182,32 @@ async function resetearPass(request, env) {
 }
 
 async function verificarAcceso(request, env, ctx) {
-  // ── Rate limiting: máx 10 intentos por IP en 15 minutos ─────────────────
   const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const body = await request.json().catch(() => ({}));
+  const codigo = body.codigo || body.code || '';
+  const obraRef = body.obra_id || body.obra || null;
+  const emailInputRL = (body.email || '').trim().toLowerCase() || null;
+
+  // SEC-AUDIT-06 (27/07/2026, confirmado con pentest de estrés): antes el rate-limit
+  // hacía SELECT COUNT primero y el INSERT de cada intento fallido ocurría MUCHO más
+  // tarde, dentro de cada rama de fallo — con peticiones concurrentes de verdad, todas
+  // leían el mismo recuento bajo antes de que ninguna hubiera insertado la suya. 40
+  // peticiones de login en paralelo dejaron pasar 15 como intentos normales (401) antes
+  // de que el bloqueo (límite declarado: 10) surtiera efecto. Fix: se inserta ESTE
+  // intento primero, incondicionalmente, y el recuento se hace incluyéndolo — D1 sirve
+  // como único escritor primario y serializa los INSERT, así que el recuento que ve
+  // cada petición ya refleja los intentos concurrentes que se hayan serializado antes.
+  // email añadido a login_attempts (antes solo ip/motivo) para que el análisis de
+  // seguridad de Alejandra (SELECT ... GROUP BY email) pueda agrupar de verdad —
+  // estaba silenciosamente roto por falta de esta columna (ver logins_fallidos).
+  await env.DB.prepare(`ALTER TABLE login_attempts ADD COLUMN email TEXT`).run().catch(() => {});
+  const registrarFallo = async (motivo) => {
+    try {
+      await env.DB.prepare('INSERT INTO login_attempts (ip, motivo, email) VALUES (?, ?, ?)').bind(ip, motivo, emailInputRL).run();
+    } catch (_) {}
+  };
   try {
+    await env.DB.prepare('INSERT INTO login_attempts (ip, motivo, email) VALUES (?, ?, ?)').bind(ip, 'intento', emailInputRL).run();
     const windowStart = new Date(Date.now() - 15 * 60 * 1000).toISOString().replace('T', ' ').split('.')[0];
     const { cnt } = await env.DB.prepare(
       "SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND created_at > ?"
@@ -6184,17 +6219,6 @@ async function verificarAcceso(request, env, ctx) {
     }
     if (cnt >= 10) return err('Demasiados intentos. Espera 15 minutos.', 429);
   } catch (_) {}
-
-  const body = await request.json().catch(() => ({}));
-  const codigo = body.codigo || body.code || '';
-  const obraRef = body.obra_id || body.obra || null;
-
-  // Helper: registrar intento fallido
-  const registrarFallo = async (motivo) => {
-    try {
-      await env.DB.prepare('INSERT INTO login_attempts (ip, motivo) VALUES (?, ?)').bind(ip, motivo).run();
-    } catch (_) {}
-  };
 
   // 1.5 Login por email + contraseña (empresa_admin y usuarios con email)
   const emailInput = (body.email || '').trim().toLowerCase();
