@@ -7266,8 +7266,13 @@ async function crearUsuario(request, env) {
   if (!isSuperadmin && !isAdmin && !isEmpresaAdmin && !isEncargado) return err('No autorizado', 403);
 
   const body = await request.json();
-  const { nombre, codigo, rol, obra_id, departamento: deptBody } = body;
-  if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y código');
+  const { rol, obra_id, departamento: deptBody } = body;
+  // SEC-AUDIT-07 (27/07/2026): fuzzing con nombre/codigo no-string (ej. numero) provocaba
+  // "nombre?.trim is not a function" (500 sin manejar) — se exige string explícitamente
+  // en vez de asumir el tipo del JSON de entrada.
+  const nombre = typeof body.nombre === 'string' ? body.nombre : '';
+  const codigo = typeof body.codigo === 'string' ? body.codigo : '';
+  if (!nombre.trim() || !codigo.trim()) return err('Faltan nombre y código');
 
   const obraFinal = obra_id ? parseInt(obra_id) : obraId;
   const deptFinal = deptBody || 'electrico';
