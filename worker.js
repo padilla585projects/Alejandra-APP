@@ -47,6 +47,14 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+// SEC-AUDIT-07 (27/07/2026): pentest de fuzzing en vivo — cualquier campo de un body JSON
+// puede llegar con un tipo inesperado (número, objeto, array, null) en vez del string que
+// el código asume, y llamar ".trim()" directamente sobre ese valor lanza un TypeError sin
+// manejar (500 genérico) en vez de una validación limpia. safeStr() normaliza cualquier
+// valor no-string a '' — así "!campo?.trim()" sigue rechazando el campo exactamente igual
+// que si faltara, sin poder romper el worker. No-op para valores que ya son string.
+function safeStr(v) { return typeof v === 'string' ? v : ''; }
+
 // Genera N bytes aleatorios criptográficamente seguros como string hex
 function randomHex(bytes = 16) {
   const arr = new Uint8Array(bytes);
@@ -486,7 +494,7 @@ async function transcribeAudio(env, audioBuffer) {
       }
     );
     const data = await resp.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    return safeStr(data.candidates?.[0]?.content?.parts?.[0]?.text).trim() || null;
   } catch { return null; }
 }
 
@@ -1052,7 +1060,7 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
     case 'sql_query': {
       const { sql } = toolInput;
       try {
-        const trimmed = sql.trim().toUpperCase();
+        const trimmed = safeStr(sql).trim().toUpperCase();
         // Barrera humana anti-catastrofe (compartida): DROP/TRUNCATE/ALTER y TODO
         // DELETE/UPDATE (con o sin WHERE) solo se ejecutan si el humano tecleo el codigo
         // ligado a ESTE SQL exacto. El modelo no puede autoconfirmarse. Se exige barrera
@@ -1752,7 +1760,7 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       // Útil para migraciones que no requieren wrangler CLI.
       const { sql, descripcion } = toolInput;
       try {
-        const stmts = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+        const stmts = sql.split(';').map(s => safeStr(s).trim()).filter(s => s.length > 0);
         // Barrera humana: run_migration ejecuta DDL arbitrario y podria saltarse la
         // proteccion de sql_query. Si CUALQUIER sentencia es destructiva, exige que
         // el humano confirme el codigo ligado al SQL completo de la migracion.
@@ -4539,7 +4547,7 @@ async function bobinasBatch(request, env, ctx) {
       errores++;
       continue;
     }
-    const codigo = b.codigo.trim().toUpperCase();
+    const codigo = safeStr(b.codigo).trim().toUpperCase();
     const obraFinal = b.obra_id ? parseInt(b.obra_id) : obraId;
     try {
       const existing = await env.DB.prepare(
@@ -6065,7 +6073,7 @@ async function recuperarPass(request, env) {
   // Buscar usuario por email (activo)
   const usuario = await env.DB.prepare(
     `SELECT id, nombre, empresa_id FROM usuarios WHERE email=? AND activo=1 LIMIT 1`
-  ).bind(email.trim().toLowerCase()).first();
+  ).bind(safeStr(email).trim().toLowerCase()).first();
 
   // Respuesta siempre igual para no revelar si el email existe (seguridad)
   const okMsg = json({ ok: true, mensaje: 'Si ese email existe recibirás un enlace en breve' });
@@ -6155,7 +6163,7 @@ async function recuperarPass(request, env) {
 </html>`;
 
   const enviado = await enviarEmailResend(env, {
-    to: email.trim().toLowerCase(),
+    to: safeStr(email).trim().toLowerCase(),
     subject: '📐 Restablecer contraseña — Alejandra Office',
     html,
   });
@@ -6266,7 +6274,7 @@ async function verificarAcceso(request, env, ctx) {
   if (!codigo) return err('Falta el código');
 
   // 1. ¿Es superadmin?
-  if (env.ADMIN_CODE && timingSafeEqual(codigo.trim(), env.ADMIN_CODE)) {
+  if (env.ADMIN_CODE && timingSafeEqual(safeStr(codigo).trim(), env.ADMIN_CODE)) {
     const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true, empresa_id: 1 });
     env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
     return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token });
@@ -6276,7 +6284,7 @@ async function verificarAcceso(request, env, ctx) {
   try {
     const usuario = await env.DB.prepare(
       'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE u.codigo = ? AND u.activo = 1'
-    ).bind(codigo.trim()).first();
+    ).bind(safeStr(codigo).trim()).first();
 
     if (usuario) {
       // Si se pasa obra de referencia, verificar que coincide
@@ -6328,7 +6336,7 @@ async function verificarAcceso(request, env, ctx) {
   try {
     const obra = await env.DB.prepare(
       'SELECT * FROM obras WHERE (codigo = ? OR LOWER(nombre) = LOWER(?)) AND activa = 1'
-    ).bind(codigo.trim().toUpperCase(), codigo.trim()).first();
+    ).bind(safeStr(codigo).trim().toUpperCase(), safeStr(codigo).trim()).first();
     if (obra) {
       const token = await crearSesion(env, { nombre: obra.nombre, rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, departamento: 'electrico', es_admin: false, empresa_id: 1 });
       env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
@@ -6415,15 +6423,15 @@ async function cerrarTodasSesiones(request, env) {
 async function registrarEmpresa(request, env) {
   const body = await request.json().catch(() => ({}));
   const { empresa_nombre, sector, admin_nombre, email, password, obra_nombre, departamentos, modulos_config } = body;
-  if (!empresa_nombre?.trim() || !email?.trim() || !password || !admin_nombre?.trim())
+  if (!safeStr(empresa_nombre).trim() || !safeStr(email).trim() || !password || !safeStr(admin_nombre).trim())
     return err('Faltan datos obligatorios (empresa, nombre, email, contraseña)');
   if (password.length < 8) return err('La contraseña debe tener al menos 8 caracteres');
 
-  const emailClean = email.trim().toLowerCase();
+  const emailClean = safeStr(email).trim().toLowerCase();
   const existing = await env.DB.prepare('SELECT id FROM usuarios WHERE LOWER(email) = ? LIMIT 1').bind(emailClean).first();
   if (existing) return err('Este email ya está registrado', 409);
 
-  const slug = empresa_nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const slug = safeStr(empresa_nombre).trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   const hash = await hashPassword(password);
 
   const deptsJSON = (Array.isArray(departamentos) && departamentos.length) ? JSON.stringify(departamentos) : null;
@@ -6432,35 +6440,35 @@ async function registrarEmpresa(request, env) {
   // Crear empresa
   const empResult = await env.DB.prepare(
     'INSERT INTO empresas (nombre, slug, email, plan, activa, departamentos, modulos_config) VALUES (?, ?, ?, ?, 1, ?, ?)'
-  ).bind(empresa_nombre.trim(), slug, emailClean, 'basic', deptsJSON, modsJSON).run();
+  ).bind(safeStr(empresa_nombre).trim(), slug, emailClean, 'basic', deptsJSON, modsJSON).run();
   const empresa_id = empResult.meta.last_row_id;
   if (!empresa_id) return err('Error al crear la empresa, intenta de nuevo');
 
   // Crear primera obra (opcional)
   let obra_id = null, obra_nombre_final = null;
-  if (obra_nombre?.trim()) {
+  if (safeStr(obra_nombre).trim()) {
     const codObra = randomHex(4).toUpperCase(); // 8 chars hex criptográficamente seguro
     const obraResult = await env.DB.prepare(
       'INSERT INTO obras (nombre, codigo, activa, empresa_id) VALUES (?, ?, 1, ?)'
-    ).bind(obra_nombre.trim(), codObra, empresa_id).run();
+    ).bind(safeStr(obra_nombre).trim(), codObra, empresa_id).run();
     obra_id = obraResult.meta.last_row_id;
-    obra_nombre_final = obra_nombre.trim();
+    obra_nombre_final = safeStr(obra_nombre).trim();
   }
 
   // Crear usuario admin
   const codAdmin = 'ADM_' + randomHex(6).toUpperCase(); // 12 chars hex criptográficamente seguro
   await env.DB.prepare(
     'INSERT INTO usuarios (nombre, codigo, email, password_hash, rol, departamento, activo, empresa_id, obra_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)'
-  ).bind(admin_nombre.trim(), codAdmin, emailClean, hash, 'empresa_admin', 'electrico', empresa_id, obra_id).run();
+  ).bind(safeStr(admin_nombre).trim(), codAdmin, emailClean, hash, 'empresa_admin', 'electrico', empresa_id, obra_id).run();
 
   const adminUser = await env.DB.prepare('SELECT id FROM usuarios WHERE LOWER(email) = ? LIMIT 1').bind(emailClean).first();
   const token = await crearSesion(env, {
-    nombre: admin_nombre.trim(), rol: 'empresa_admin', obra_id, obra_nombre: obra_nombre_final,
+    nombre: safeStr(admin_nombre).trim(), rol: 'empresa_admin', obra_id, obra_nombre: obra_nombre_final,
     departamento: null, es_admin: false, usuario_id: adminUser.id, empresa_id,
   });
 
   await sendTelegram(env, `🏢 <b>Nueva empresa:</b> ${empresa_nombre}\n👤 ${admin_nombre} (${emailClean})\n🏗 Obra: ${obra_nombre_final || '—'}`);
-  return json({ ok: true, token, rol: 'empresa_admin', nombre: admin_nombre.trim(), empresa_nombre: empresa_nombre.trim(), empresa_id, obra_id, obra_nombre: obra_nombre_final });
+  return json({ ok: true, token, rol: 'empresa_admin', nombre: safeStr(admin_nombre).trim(), empresa_nombre: safeStr(empresa_nombre).trim(), empresa_id, obra_id, obra_nombre: obra_nombre_final });
 }
 
 async function getEmpresas(request, env) {
@@ -6502,13 +6510,13 @@ async function updateMiEmpresa(request, env) {
   if (!auth.empresa_id || (!hasRole(auth, 'empresa_admin') && !auth.isSuperadmin)) return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   const { nombre, email, telefono, direccion, cif, departamentos, informe_semanal, informe_dia, modulos_config } = body;
-  if (!nombre?.trim()) return err('Falta el nombre de la empresa');
+  if (!safeStr(nombre).trim()) return err('Falta el nombre de la empresa');
   const campos = ['nombre = ?'];
-  const vals   = [nombre.trim()];
-  if (email             !== undefined) { campos.push('email = ?');             vals.push(email?.trim()       || null); }
-  if (telefono          !== undefined) { campos.push('telefono = ?');          vals.push(telefono?.trim()    || null); }
-  if (direccion         !== undefined) { campos.push('direccion = ?');         vals.push(direccion?.trim()   || null); }
-  if (cif               !== undefined) { campos.push('cif = ?');               vals.push(cif?.trim()         || null); }
+  const vals   = [safeStr(nombre).trim()];
+  if (email             !== undefined) { campos.push('email = ?');             vals.push(safeStr(email).trim()       || null); }
+  if (telefono          !== undefined) { campos.push('telefono = ?');          vals.push(safeStr(telefono).trim()    || null); }
+  if (direccion         !== undefined) { campos.push('direccion = ?');         vals.push(safeStr(direccion).trim()   || null); }
+  if (cif               !== undefined) { campos.push('cif = ?');               vals.push(safeStr(cif).trim()         || null); }
   if (departamentos     !== undefined) {
     const val = departamentos ? JSON.stringify(Array.isArray(departamentos) ? departamentos : departamentos) : null;
     campos.push('departamentos = ?'); vals.push(val);
@@ -6584,11 +6592,11 @@ async function crearObra(request, env) {
   // no-string (ej. número) disparaba "codigo?.trim is not a function" (500 sin manejar).
   const nombre = typeof bodyObra.nombre === 'string' ? bodyObra.nombre : '';
   const codigo = typeof bodyObra.codigo === 'string' ? bodyObra.codigo : '';
-  if (!nombre.trim() || !codigo.trim()) return err('Faltan nombre y código');
+  if (!safeStr(nombre).trim() || !safeStr(codigo).trim()) return err('Faltan nombre y código');
   try {
     const r = await env.DB.prepare('INSERT INTO obras (nombre, codigo, empresa_id) VALUES (?, ?, ?)')
-      .bind(nombre.trim(), codigo.trim().toUpperCase(), empresa_id).run();
-    return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), codigo: codigo.trim().toUpperCase() }, 201);
+      .bind(safeStr(nombre).trim(), safeStr(codigo).trim().toUpperCase(), empresa_id).run();
+    return json({ ok: true, id: r.meta.last_row_id, nombre: safeStr(nombre).trim(), codigo: safeStr(codigo).trim().toUpperCase() }, 201);
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
     throw e;
@@ -6685,12 +6693,12 @@ async function crearBobina(request, env, ctx) {
   try {
     await env.DB.prepare(
       'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran, departamento, empresa_id, longitud) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null, departamento, empresa_id, longitud).run();
+    ).bind(safeStr(codigo).trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null, departamento, empresa_id, longitud).run();
 
     ctx.waitUntil(Promise.all([
       syncSheets(env, 'Elec-Bobinas', empresa_id),
-      registrarHistorial(env, { obra_id: obraFinal, bobina_codigo: codigo.trim().toUpperCase(), accion: 'entrada', usuario: reg, notas: notas || '' }),
-      sendTelegram(env, `📦 <b>Nueva bobina registrada</b>\n📖 ${codigo.trim().toUpperCase()}\n📌 ${tipo_cable}  📦 ${proveedor}\n👤 ${reg}`),
+      registrarHistorial(env, { obra_id: obraFinal, bobina_codigo: safeStr(codigo).trim().toUpperCase(), accion: 'entrada', usuario: reg, notas: notas || '' }),
+      sendTelegram(env, `📦 <b>Nueva bobina registrada</b>\n📖 ${safeStr(codigo).trim().toUpperCase()}\n📌 ${tipo_cable}  📦 ${proveedor}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, mensaje: `Bobina ${codigo} registrada` }, 201);
@@ -6753,7 +6761,7 @@ async function devolverBobina(codigo, request, env, ctx) {
     await env.DB.prepare(
       `INSERT INTO bobinas (codigo, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
+    ).bind(safeStr(codigo).trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
     bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ? AND empresa_id = ?').bind(codigo, eid).first();
     ctx.waitUntil(Promise.all([
       syncSheets(env, 'Elec-Bobinas', eid),
@@ -6842,12 +6850,15 @@ async function crearPemp(request, env, ctx) {
   const { obraId, usuario, departamento, empresa_id } = await getAuth(request, env);
   const body = await request.json();
   const {
-    matricula, tipo, marca, proveedor, energia, estado = 'activa',
+    tipo, marca, proveedor, energia, estado = 'activa',
     fecha_entrada, registrado_por, notas,
     fecha_ultima_revision, fecha_proxima_revision,
   } = body;
-
-  if (!matricula) return err('Falta el campo: matricula');
+  // SEC-AUDIT-07 (27/07/2026): matricula no-string (ej. número) pasaba el check '!matricula'
+  // (99 es truthy) y acababa guardando una fila real con matrícula vacía tras el safeStr()
+  // del fix de fuzzing anterior — se exige string explícitamente antes de aceptar el alta.
+  const matricula = typeof body.matricula === 'string' ? body.matricula : '';
+  if (!matricula.trim()) return err('Falta el campo: matricula');
 
   const obraFinal = body.obra_id ? parseInt(body.obra_id) : obraId;
   const fecha = fecha_entrada || fechaEspana();
@@ -6860,7 +6871,7 @@ async function crearPemp(request, env, ctx) {
          fecha_ultima_revision, fecha_proxima_revision, obra_id, departamento, empresa_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      matricula.trim().toUpperCase(), tipo || '', marca || '', proveedor || '', energia || '',
+      safeStr(matricula).trim().toUpperCase(), tipo || '', marca || '', proveedor || '', energia || '',
       estado, fecha, reg, notas || '',
       fecha_ultima_revision || null, fecha_proxima_revision || null,
       obraFinal || null, departamento, empresa_id
@@ -6871,10 +6882,10 @@ async function crearPemp(request, env, ctx) {
     ctx.waitUntil(Promise.all([
       syncSheets(env, tabForDept('pemp', departamento), empresa_id),
       registrarHistorialPemp(env, {
-        obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
+        obra_id: obraFinal, matricula: safeStr(matricula).trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `🏗 <b>Nueva PEMP registrada</b>\n📖 ${matricula.trim().toUpperCase()}\n📧 ${tipo || '—'}  🏭 ${marca || '—'}  ⚡ ${energia || '—'}\n👤 ${reg}`),
+      sendTelegram(env, `🏗 <b>Nueva PEMP registrada</b>\n📖 ${safeStr(matricula).trim().toUpperCase()}\n📧 ${tipo || '—'}  🏭 ${marca || '—'}  ⚡ ${energia || '—'}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `PEMP ${matricula} registrada` }, 201);
@@ -6941,7 +6952,7 @@ async function devolverPemp(matricula, request, env, ctx) {
     await env.DB.prepare(
       `INSERT INTO pemp (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
+    ).bind(safeStr(matricula).trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
     pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ? AND empresa_id = ?').bind(matricula, eid).first();
     ctx.waitUntil(Promise.all([
       syncSheets(env, tabForDept('pemp', departamento), eid),
@@ -7027,12 +7038,15 @@ async function crearCarretilla(request, env, ctx) {
   const { obraId, usuario, departamento, empresa_id } = await getAuth(request, env);
   const body = await request.json();
   const {
-    matricula, tipo, marca, proveedor, energia, estado = 'activa',
+    tipo, marca, proveedor, energia, estado = 'activa',
     fecha_entrada, registrado_por, notas,
     fecha_ultima_revision, fecha_proxima_revision,
   } = body;
-
-  if (!matricula) return err('Falta el campo: matricula');
+  // SEC-AUDIT-07 (27/07/2026): matricula no-string (ej. número) pasaba el check '!matricula'
+  // (99 es truthy) y acababa guardando una fila real con matrícula vacía tras el safeStr()
+  // del fix de fuzzing anterior — se exige string explícitamente antes de aceptar el alta.
+  const matricula = typeof body.matricula === 'string' ? body.matricula : '';
+  if (!matricula.trim()) return err('Falta el campo: matricula');
 
   const obraFinal = body.obra_id ? parseInt(body.obra_id) : obraId;
   const fecha = fecha_entrada || fechaEspana();
@@ -7045,7 +7059,7 @@ async function crearCarretilla(request, env, ctx) {
          fecha_ultima_revision, fecha_proxima_revision, obra_id, departamento, empresa_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      matricula.trim().toUpperCase(), tipo || '', marca || '', proveedor || '', energia || '',
+      safeStr(matricula).trim().toUpperCase(), tipo || '', marca || '', proveedor || '', energia || '',
       estado, fecha, reg, notas || '',
       fecha_ultima_revision || null, fecha_proxima_revision || null,
       obraFinal || null, departamento, empresa_id
@@ -7056,10 +7070,10 @@ async function crearCarretilla(request, env, ctx) {
     ctx.waitUntil(Promise.all([
       syncSheets(env, tabForDept('carretilla', departamento), empresa_id),
       registrarHistorialCarretillas(env, {
-        obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
+        obra_id: obraFinal, matricula: safeStr(matricula).trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `🚜 <b>Nueva carretilla registrada</b>\n📖 ${matricula.trim().toUpperCase()}\n📧 ${tipo || '—'}  ⚡ ${energia || '—'}\n👤 ${reg}`),
+      sendTelegram(env, `🚜 <b>Nueva carretilla registrada</b>\n📖 ${safeStr(matricula).trim().toUpperCase()}\n📧 ${tipo || '—'}  ⚡ ${energia || '—'}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `Carretilla ${matricula} registrada` }, 201);
@@ -7122,7 +7136,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
     await env.DB.prepare(
       `INSERT INTO carretillas (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
+    ).bind(safeStr(matricula).trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid).run();
     carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ? AND empresa_id = ?').bind(matricula, eid).first();
     ctx.waitUntil(Promise.all([
       syncSheets(env, tabForDept('carretilla', departamento), eid),
@@ -7279,7 +7293,7 @@ async function crearUsuario(request, env) {
   // en vez de asumir el tipo del JSON de entrada.
   const nombre = typeof body.nombre === 'string' ? body.nombre : '';
   const codigo = typeof body.codigo === 'string' ? body.codigo : '';
-  if (!nombre.trim() || !codigo.trim()) return err('Faltan nombre y código');
+  if (!safeStr(nombre).trim() || !safeStr(codigo).trim()) return err('Faltan nombre y código');
 
   const obraFinal = obra_id ? parseInt(obra_id) : obraId;
   const deptFinal = deptBody || 'electrico';
@@ -7318,8 +7332,8 @@ async function crearUsuario(request, env) {
   try {
     const r = await env.DB.prepare(
       'INSERT INTO usuarios (nombre, codigo, rol, obra_id, departamento, activo, empresa_id) VALUES (?, ?, ?, ?, ?, 1, ?)'
-    ).bind(nombre.trim(), codigo.trim(), rolFinal, obraFinal || null, deptFinal, empresa_id).run();
-    return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), rol: rolFinal, departamento: deptFinal, codigo: codigo.trim() }, 201);
+    ).bind(safeStr(nombre).trim(), safeStr(codigo).trim(), rolFinal, obraFinal || null, deptFinal, empresa_id).run();
+    return json({ ok: true, id: r.meta.last_row_id, nombre: safeStr(nombre).trim(), rol: rolFinal, departamento: deptFinal, codigo: safeStr(codigo).trim() }, 201);
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
     throw e;
@@ -7499,10 +7513,10 @@ async function addCatalogo(tabla, request, env) {
   if (!auth.empresa_id) return err('No autorizado', 403);
   if (!hasRole(auth, 'encargado', 'empresa_admin', 'jefe_de_obra', 'oficina', 'superadmin', 'desarrollador')) return err('Sin permisos', 403);
   const { nombre } = await request.json();
-  if (!nombre?.trim()) return err('Falta el nombre');
+  if (!safeStr(nombre).trim()) return err('Falta el nombre');
   try {
-    const r = await env.DB.prepare(`INSERT INTO ${tabla} (nombre, empresa_id) VALUES (?, ?)`).bind(nombre.trim(), auth.empresa_id).run();
-    return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim() }, 201);
+    const r = await env.DB.prepare(`INSERT INTO ${tabla} (nombre, empresa_id) VALUES (?, ?)`).bind(safeStr(nombre).trim(), auth.empresa_id).run();
+    return json({ ok: true, id: r.meta.last_row_id, nombre: safeStr(nombre).trim() }, 201);
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err(`"${nombre}" ya existe`, 409);
     throw e;
@@ -7732,7 +7746,7 @@ async function guardarSugerencia(request, env) {
   try {
     const body = await request.json().catch(() => ({}));
     const { texto, categoria, usuario, obra, foto } = body;
-    if (!texto || !texto.trim()) return err('El texto de la sugerencia es obligatorio');
+    if (!texto || !safeStr(texto).trim()) return err('El texto de la sugerencia es obligatorio');
     // Intentar obtener departamento y empresa_id del token (silencioso si no hay sesión)
     let departamento = null, empresa_id_sug = 1;
     try {
@@ -7743,13 +7757,13 @@ async function guardarSugerencia(request, env) {
     const fotoVal = (foto && typeof foto === 'string' && foto.startsWith('data:image/')) ? foto : null;
     const rSug = await env.DB.prepare(
       'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id, estado, foto) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug, 'pendiente', fotoVal).run();
+    ).bind(safeStr(texto).trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug, 'pendiente', fotoVal).run();
     const ideaId = rSug.meta?.last_row_id;
     const catIcon = { mejora: '📧', error: '🐛', nuevo: '✨', otro: '💬' };
     const icon = catIcon[categoria] || '💬';
     const tgMsg = `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
       `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n\n` +
-      `${texto.trim().slice(0, 400)}`;
+      `${safeStr(texto).trim().slice(0, 400)}`;
     const botonesIdea = ideaId ? [[
       { text: '📄 En progreso', callback_data: `idea_prog:${ideaId}` },
       { text: '✅ Resuelto',    callback_data: `idea_done:${ideaId}` },
@@ -7840,7 +7854,7 @@ async function borrarTodasSugerencias(request, env) {
 
 async function buscarMaquina(matricula, request, env) {
   const { empresa_id } = await getAuth(request, env);
-  const mat = matricula.trim().toUpperCase();
+  const mat = safeStr(matricula).trim().toUpperCase();
 
   const [pemp, carretilla, bobina] = await Promise.all([
     env.DB.prepare(
@@ -8020,13 +8034,13 @@ async function crearPedido(request, env, ctx) {
   // Todos los roles (incluido operario) pueden crear pedidos
   const body = await request.json().catch(() => ({}));
   const { descripcion, referencia, cantidad, unidad, proveedor, obra_id, solicitado_por, notas } = body;
-  if (!descripcion?.trim()) return err('La descripción es obligatoria');
+  if (!safeStr(descripcion).trim()) return err('La descripción es obligatoria');
   const dept = departamento || 'electrico';
   const r = await env.DB.prepare(
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
+  ).bind(empresa_id, obra_id||null, dept, referencia||null, safeStr(descripcion).trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept), empresa_id));
-  await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${descripcion.trim().slice(0,200)}`);
+  await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${safeStr(descripcion).trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
@@ -8216,11 +8230,11 @@ async function crearTipoHerramienta(request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   const { nombre } = await request.json().catch(() => ({}));
-  if (!nombre?.trim()) return err('Falta el nombre');
+  if (!safeStr(nombre).trim()) return err('Falta el nombre');
   const r = await env.DB.prepare(
     'INSERT INTO tipos_herramienta (nombre, empresa_id) VALUES (?, ?)'
-  ).bind(nombre.trim(), empresa_id).run();
-  return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim() }, 201);
+  ).bind(safeStr(nombre).trim(), empresa_id).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre: safeStr(nombre).trim() }, 201);
 }
 
 async function eliminarTipoHerramienta(id, request, env) {
@@ -8597,14 +8611,14 @@ async function crearKit(request, env, ctx) {
   if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   const { numero_kit, nombre, obra_id, asignado_a, num_componentes, notas } = body;
-  if (!numero_kit?.trim()) return err('Falta el número de kit');
+  if (!safeStr(numero_kit).trim()) return err('Falta el número de kit');
   const dept = departamento || 'electrico';
   const ahora = AHORA();
   const r = await env.DB.prepare(
     'INSERT INTO kits_herramientas (empresa_id, numero_kit, nombre, obra_id, departamento, asignado_a, num_componentes, notas, fecha_alta, fecha_asignacion) VALUES (?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, numero_kit.trim(), nombre?.trim() || null, obra_id || null, dept,
-    asignado_a?.trim() || null, num_componentes || 0, notas?.trim() || null, ahora,
-    asignado_a?.trim() ? ahora : null
+  ).bind(empresa_id, safeStr(numero_kit).trim(), safeStr(nombre).trim() || null, obra_id || null, dept,
+    safeStr(asignado_a).trim() || null, num_componentes || 0, safeStr(notas).trim() || null, ahora,
+    safeStr(asignado_a).trim() ? ahora : null
   ).run();
   await registrarHistorialKitHerr(env, empresa_id, r.meta.last_row_id, null, 'alta', null, 'disponible', userNombre || rol, 'Kit creado');
   ctx?.waitUntil(syncSheets(env, 'Kits', empresa_id));
@@ -8622,17 +8636,17 @@ async function actualizarKit(id, request, env, ctx) {
   const campos = []; const vals = [];
   const ahora = AHORA();
 
-  if (body.numero_kit  !== undefined) { campos.push('numero_kit = ?');   vals.push(body.numero_kit.trim()); }
-  if (body.nombre      !== undefined) { campos.push('nombre = ?');        vals.push(body.nombre?.trim() || null); }
+  if (body.numero_kit  !== undefined) { campos.push('numero_kit = ?');   vals.push(safeStr(body.numero_kit).trim()); }
+  if (body.nombre      !== undefined) { campos.push('nombre = ?');        vals.push(safeStr(body.nombre).trim() || null); }
   if (body.obra_id     !== undefined) { campos.push('obra_id = ?');       vals.push(body.obra_id || null); }
   if (body.departamento!== undefined) { campos.push('departamento = ?');  vals.push(body.departamento); }
   if (body.num_componentes !== undefined) { campos.push('num_componentes = ?'); vals.push(body.num_componentes); }
-  if (body.notas       !== undefined) { campos.push('notas = ?');         vals.push(body.notas?.trim() || null); }
+  if (body.notas       !== undefined) { campos.push('notas = ?');         vals.push(safeStr(body.notas).trim() || null); }
 
   // Asignación
   if (body.asignado_a !== undefined) {
-    campos.push('asignado_a = ?'); vals.push(body.asignado_a?.trim() || null);
-    if (body.asignado_a?.trim() && !kit.asignado_a) {
+    campos.push('asignado_a = ?'); vals.push(safeStr(body.asignado_a).trim() || null);
+    if (safeStr(body.asignado_a).trim() && !kit.asignado_a) {
       campos.push('fecha_asignacion = ?'); vals.push(ahora);
       campos.push('fecha_devolucion = ?'); vals.push(null);
     }
@@ -8750,9 +8764,9 @@ async function crearHerramienta(request, env, ctx) {
   const ahora = AHORA();
   const r = await env.DB.prepare(
     'INSERT INTO herramientas (empresa_id, kit_id, tipo_id, marca, modelo, numero_serie, departamento, obra_id, asignado_a, alimentacion, notas, fecha_alta, fecha_asignacion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, kit_id || null, tipo_id || null, marca?.trim() || null, modelo?.trim() || null,
-    numero_serie?.trim() || null, dept, obra_id || null, asignado_a?.trim() || null,
-    alimentacion || 'bateria', notas?.trim() || null, ahora, asignado_a?.trim() ? ahora : null
+  ).bind(empresa_id, kit_id || null, tipo_id || null, safeStr(marca).trim() || null, safeStr(modelo).trim() || null,
+    safeStr(numero_serie).trim() || null, dept, obra_id || null, safeStr(asignado_a).trim() || null,
+    alimentacion || 'bateria', safeStr(notas).trim() || null, ahora, safeStr(asignado_a).trim() ? ahora : null
   ).run();
   const hid = r.meta.last_row_id;
   await registrarHistorialHerr(env, empresa_id, hid, kit_id || null, 'alta', null, 'disponible', userNombre || rol, 'Herramienta registrada');
@@ -8785,21 +8799,21 @@ async function actualizarHerramienta(id, request, env, ctx) {
 
   if (body.kit_id      !== undefined) { campos.push('kit_id = ?');      vals.push(body.kit_id || null); }
   if (body.tipo_id     !== undefined) { campos.push('tipo_id = ?');     vals.push(body.tipo_id || null); }
-  if (body.marca       !== undefined) { campos.push('marca = ?');       vals.push(body.marca?.trim() || null); }
-  if (body.modelo      !== undefined) { campos.push('modelo = ?');      vals.push(body.modelo?.trim() || null); }
-  if (body.numero_serie!== undefined) { campos.push('numero_serie = ?');vals.push(body.numero_serie?.trim() || null); }
+  if (body.marca       !== undefined) { campos.push('marca = ?');       vals.push(safeStr(body.marca).trim() || null); }
+  if (body.modelo      !== undefined) { campos.push('modelo = ?');      vals.push(safeStr(body.modelo).trim() || null); }
+  if (body.numero_serie!== undefined) { campos.push('numero_serie = ?');vals.push(safeStr(body.numero_serie).trim() || null); }
   if (body.departamento!== undefined) { campos.push('departamento = ?');vals.push(body.departamento); }
   if (body.obra_id     !== undefined) { campos.push('obra_id = ?');     vals.push(body.obra_id || null); }
   if (body.alimentacion!== undefined) { campos.push('alimentacion = ?');vals.push(body.alimentacion); }
-  if (body.notas       !== undefined) { campos.push('notas = ?');       vals.push(body.notas?.trim() || null); }
+  if (body.notas       !== undefined) { campos.push('notas = ?');       vals.push(safeStr(body.notas).trim() || null); }
 
   // Asignación / devolución
   if (body.asignado_a !== undefined) {
-    campos.push('asignado_a = ?'); vals.push(body.asignado_a?.trim() || null);
-    if (body.asignado_a?.trim() && !h.asignado_a) {
+    campos.push('asignado_a = ?'); vals.push(safeStr(body.asignado_a).trim() || null);
+    if (safeStr(body.asignado_a).trim() && !h.asignado_a) {
       campos.push('fecha_asignacion = ?'); vals.push(ahora);
       campos.push('fecha_devolucion = ?'); vals.push(null);
-    } else if (!body.asignado_a?.trim() && h.asignado_a) {
+    } else if (!safeStr(body.asignado_a).trim() && h.asignado_a) {
       campos.push('fecha_devolucion = ?'); vals.push(ahora);
     }
   }
@@ -9002,9 +9016,9 @@ async function crearPersonalExterno(request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const { nombre, dni, obra_id, notas } = await request.json().catch(() => ({}));
-  if (!nombre?.trim()) return err('Falta el nombre');
+  if (!safeStr(nombre).trim()) return err('Falta el nombre');
   const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas) VALUES (?,?,?,?,?)')
-    .bind(empresa_id, nombre.trim(), dni?.trim()||null, obra_id||null, notas?.trim()||null).run();
+    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -9013,11 +9027,11 @@ async function actualizarPersonalExterno(id, request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   const campos = []; const vals = [];
-  if (body.nombre   !== undefined) { campos.push('nombre=?');   vals.push(body.nombre.trim()); }
-  if (body.dni      !== undefined) { campos.push('dni=?');      vals.push(body.dni?.trim()||null); }
+  if (body.nombre   !== undefined) { campos.push('nombre=?');   vals.push(safeStr(body.nombre).trim()); }
+  if (body.dni      !== undefined) { campos.push('dni=?');      vals.push(safeStr(body.dni).trim()||null); }
   if (body.obra_id  !== undefined) { campos.push('obra_id=?');  vals.push(body.obra_id||null); }
   if (body.activo   !== undefined) { campos.push('activo=?');   vals.push(body.activo); }
-  if (body.notas    !== undefined) { campos.push('notas=?');    vals.push(body.notas?.trim()||null); }
+  if (body.notas    !== undefined) { campos.push('notas=?');    vals.push(safeStr(body.notas).trim()||null); }
   if (!campos.length) return json({ ok: true });
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE personal_externo SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
@@ -9608,7 +9622,7 @@ async function crearFichaje(request, env, ctx) {
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT departamento FROM usuarios WHERE id=?), (SELECT departamento FROM personal_externo WHERE id=?), 'electrico'))`
   ).bind(empresa_id, usuario_id||null, personal_externo_id||null, obra_id||obraAuth||null, fecha,
     hora_entrada||null, hora_salida||null, horas, horas_extra, minutos_retraso,
-    estadoFinal, motivo?.trim()||null, notas?.trim()||null, encargadoNombre||rol,
+    estadoFinal, safeStr(motivo).trim()||null, safeStr(notas).trim()||null, encargadoNombre||rol,
     usuario_id||null, personal_externo_id||null
   ).run();
   ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
@@ -9624,8 +9638,8 @@ async function actualizarFichaje(id, request, env, ctx) {
   if (body.hora_salida  !== undefined) { campos.push('hora_salida=?');  vals.push(body.hora_salida||null); }
   if (body.obra_id      !== undefined) { campos.push('obra_id=?');      vals.push(body.obra_id||null); }
   if (body.estado       !== undefined) { campos.push('estado=?');       vals.push(body.estado); }
-  if (body.motivo       !== undefined) { campos.push('motivo=?');       vals.push(body.motivo?.trim()||null); }
-  if (body.notas        !== undefined) { campos.push('notas=?');        vals.push(body.notas?.trim()||null); }
+  if (body.motivo       !== undefined) { campos.push('motivo=?');       vals.push(safeStr(body.motivo).trim()||null); }
+  if (body.notas        !== undefined) { campos.push('notas=?');        vals.push(safeStr(body.notas).trim()||null); }
 
   // Recalcular horas, horas_extra y retraso si cambian las horas o el estado
   const ESTADOS_NO_TRABAJO = ['baja', 'vacaciones', 'festivo', 'ausencia'];
@@ -10509,7 +10523,7 @@ async function handleOCR(request, env) {
 
     const lineas = textoCompleto
       .split('\n')
-      .map(l => l.trim().toUpperCase().replace(/[^A-Z0-9\-\/]/g, ''))
+      .map(l => safeStr(l).trim().toUpperCase().replace(/[^A-Z0-9\-\/]/g, ''))
       .filter(l => l.length >= 3 && !UI_WORDS.has(l));
 
     const patronBobina = /^[A-Z]{1,4}[-\/]?[0-9]{3,}[A-Z]{0,2}$/;
@@ -10560,7 +10574,7 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
       input_tokens: gemResult.data.usageMetadata?.promptTokenCount || 0,
       output_tokens: gemResult.data.usageMetadata?.candidatesTokenCount || 0,
     });
-    return json({ codigo: gemResult.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NO_LEIDO', modelo: gemResult.model });
+    return json({ codigo: safeStr(gemResult.data.candidates?.[0]?.content?.parts?.[0]?.text).trim() || 'NO_LEIDO', modelo: gemResult.model });
   }
 
   // Fallback a Cloud Vision si Gemini está agotado
@@ -10604,7 +10618,7 @@ async function getInventarioSeg(request, env) {
 async function buscarItemSeg(codigo, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
-  const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE codigo = ? AND empresa_id = ?').bind(codigo.trim().toUpperCase(), empresa_id).first();
+  const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE codigo = ? AND empresa_id = ?').bind(safeStr(codigo).trim().toUpperCase(), empresa_id).first();
   if (!item) return json({ ok: false, error: 'No encontrado' }, 404);
   const hist = await env.DB.prepare('SELECT * FROM movimientos_seg WHERE item_id = ? ORDER BY fecha DESC LIMIT 10').bind(item.id).all();
   return json({ ok: true, data: item, historial: hist.results });
@@ -10632,7 +10646,7 @@ async function crearItemSeg(request, env, ctx) {
   const cantidad_total = Number(body.cantidad_total ?? body.cantidad ?? 1) || 1;
   if (!tipo_material) return err('Falta tipo_material');
   if (modo === 'individual' && !codigo) return err('Falta el código identificador');
-  const cod = codigo ? codigo.trim().toUpperCase() : null;
+  const cod = codigo ? safeStr(codigo).trim().toUpperCase() : null;
   const fecha = fecha_entrada || fechaEspana();
   const reg = usuario || '';
   await ensureInventarioSegUbicacion(env);
@@ -10752,10 +10766,14 @@ async function addTipoMaterialSeg(request, env) {
   const { isSuperadmin, isSeguridad, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  const { nombre, tipo = 'individual', descripcion } = body;
-  if (!nombre) return err('Falta el nombre');
+  const { tipo = 'individual', descripcion } = body;
+  // SEC-AUDIT-07 (27/07/2026): nombre no-string (ej. número) pasaba el check '!nombre'
+  // (truthy) y acababa guardando una fila real con nombre vacío tras el safeStr() del fix
+  // de fuzzing anterior — se exige string explícitamente antes de aceptar el alta.
+  const nombre = typeof body.nombre === 'string' ? body.nombre : '';
+  if (!nombre.trim()) return err('Falta el nombre');
   try {
-    await env.DB.prepare('INSERT INTO tipos_material_seg (nombre, tipo, descripcion, empresa_id) VALUES (?, ?, ?, ?)').bind(nombre.trim(), tipo, descripcion || '', empresa_id).run();
+    await env.DB.prepare('INSERT INTO tipos_material_seg (nombre, tipo, descripcion, empresa_id) VALUES (?, ?, ?, ?)').bind(safeStr(nombre).trim(), tipo, descripcion || '', empresa_id).run();
     return json({ ok: true, mensaje: `Tipo "${nombre}" añadido` }, 201);
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return err(`El tipo "${nombre}" ya existe`, 409);
@@ -11907,13 +11925,13 @@ async function crearEvento(request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { titulo, descripcion, tipo = 'otro', fecha, hora, recordatorio_dias = 1 } = body;
-  if (!titulo?.trim()) return err('El título es obligatorio', 400);
+  if (!safeStr(titulo).trim()) return err('El título es obligatorio', 400);
   if (!fecha) return err('La fecha es obligatoria', 400);
   const dept     = body.departamento || departamento || 'electrico';
   const obraFinal = body.obra_id || obra_id || null;
   const r = await env.DB.prepare(
     'INSERT INTO eventos_calendario (empresa_id, obra_id, departamento, titulo, descripcion, tipo, fecha, hora, recordatorio_dias, creado_por) VALUES (?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, obraFinal, dept, titulo.trim(), descripcion || null, tipo, fecha, hora || null, parseInt(recordatorio_dias) || 0, nombre || null).run();
+  ).bind(empresa_id, obraFinal, dept, safeStr(titulo).trim(), descripcion || null, tipo, fecha, hora || null, parseInt(recordatorio_dias) || 0, nombre || null).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -11926,7 +11944,7 @@ async function actualizarEvento(id, request, env) {
   const puedeEditar = rol === 'encargado' || rol === 'empresa_admin' || rol === 'superadmin' || ev.creado_por === nombre;
   if (!puedeEditar) return err('Sin permisos', 403);
   const campos = [], vals = [];
-  if (body.titulo)       { campos.push('titulo=?');       vals.push(body.titulo.trim()); }
+  if (body.titulo)       { campos.push('titulo=?');       vals.push(safeStr(body.titulo).trim()); }
   if (body.descripcion !== undefined) { campos.push('descripcion=?'); vals.push(body.descripcion || null); }
   if (body.tipo)         { campos.push('tipo=?');         vals.push(body.tipo); }
   if (body.fecha)        { campos.push('fecha=?');        vals.push(body.fecha); }
@@ -11983,7 +12001,7 @@ async function crearIncidencia(request, env, ctx) {
   // SEC-AUDIT-07 (27/07/2026): mismo bug de confusión de tipos que crearUsuario — titulo
   // no-string (ej. número) disparaba "titulo?.trim is not a function" (500 sin manejar).
   const titulo = typeof body.titulo === 'string' ? body.titulo : '';
-  if (!titulo.trim()) return err('El título es obligatorio', 400);
+  if (!safeStr(titulo).trim()) return err('El título es obligatorio', 400);
   // DEPT-01: solo roles con vision transversal (isDeptPrivileged: SA/EA/desarrollador/Seguridad)
   // pueden crear incidencias en un departamento distinto al propio; jefe_de_obra/oficina van igual que encargado.
   const isPrivileged = isDeptPrivileged(auth);
@@ -11996,10 +12014,10 @@ async function crearIncidencia(request, env, ctx) {
   const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
   const r = await env.DB.prepare(
     'INSERT INTO incidencias (empresa_id, obra_id, departamento, titulo, descripcion, tipo, gravedad, estado, reportado_por, asignado_a, fecha) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, obraFinal, dept, titulo.trim(), descripcion || null, tipo, gravedad, 'abierta', nombre || null, asignado_a || null, fechaFinal).run();
+  ).bind(empresa_id, obraFinal, dept, safeStr(titulo).trim(), descripcion || null, tipo, gravedad, 'abierta', nombre || null, asignado_a || null, fechaFinal).run();
   if (gravedad === 'alta') {
     const gravedadIcon = { baja: '🟢', media: '🟠', alta: '📴' };
-    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\n📋 ${titulo.trim()}\n${descripcion ? '📝 ' + descripcion.slice(0,200) + '\n' : ''}👤 ${nombre || '—'}`);
+    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\n📋 ${safeStr(titulo).trim()}\n${descripcion ? '📝 ' + descripcion.slice(0,200) + '\n' : ''}👤 ${nombre || '—'}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
@@ -12019,7 +12037,7 @@ async function actualizarIncidencia(id, request, env, ctx) {
   if ((body.estado || body.asignado_a !== undefined || body.resolucion !== undefined) && !puedeGestionar)
     return err('Sin permisos', 403);
   const campos = [], vals = [];
-  if (body.titulo)       { campos.push('titulo=?');       vals.push(body.titulo.trim()); }
+  if (body.titulo)       { campos.push('titulo=?');       vals.push(safeStr(body.titulo).trim()); }
   if (body.descripcion !== undefined) { campos.push('descripcion=?'); vals.push(body.descripcion || null); }
   if (body.tipo)         { campos.push('tipo=?');         vals.push(body.tipo); }
   if (body.gravedad)     { campos.push('gravedad=?');     vals.push(body.gravedad); }
@@ -12182,10 +12200,10 @@ async function crearSegRegistro(request, env) {
   if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
   await ensureSegRegistrosTables(env);
   const body = await request.json().catch(() => ({}));
-  if (!body.titulo?.trim()) return err('El título es obligatorio', 400);
+  if (!safeStr(body.titulo).trim()) return err('El título es obligatorio', 400);
   const r = await env.DB.prepare(
     'INSERT INTO seg_registros (empresa_id, obra_id, titulo, descripcion, creado_por) VALUES (?,?,?,?,?)'
-  ).bind(empresa_id, body.obra_id || obraAuth || null, body.titulo.trim(), body.descripcion || null, nombre || '').run();
+  ).bind(empresa_id, body.obra_id || obraAuth || null, safeStr(body.titulo).trim(), body.descripcion || null, nombre || '').run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -12277,10 +12295,10 @@ async function crearComentarioSegRegistro(registro_id, request, env) {
   const reg = await env.DB.prepare('SELECT id FROM seg_registros WHERE id=? AND empresa_id=?').bind(registro_id, empresa_id).first();
   if (!reg) return err('Registro no encontrado', 404);
   const body = await request.json().catch(() => ({}));
-  if (!body.mensaje?.trim()) return err('El comentario no puede estar vacío', 400);
+  if (!safeStr(body.mensaje).trim()) return err('El comentario no puede estar vacío', 400);
   const r = await env.DB.prepare(
     'INSERT INTO seg_registro_comentarios (empresa_id, registro_id, usuario_id, usuario_nombre, mensaje) VALUES (?,?,?,?,?)'
-  ).bind(empresa_id, registro_id, usuario_id ? String(usuario_id) : null, nombre || '', body.mensaje.trim()).run();
+  ).bind(empresa_id, registro_id, usuario_id ? String(usuario_id) : null, nombre || '', safeStr(body.mensaje).trim()).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -12422,7 +12440,7 @@ async function crearCarpeta(request, env) {
   const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const { obra_id, departamento: deptBody, nombre, parent_id } = await request.json().catch(() => ({}));
   const deptFinal = !isAdminRole ? departamento : (deptBody || departamento);
-  if (!obra_id || !deptFinal || !nombre?.trim()) return err('Faltan datos', 400);
+  if (!obra_id || !deptFinal || !safeStr(nombre).trim()) return err('Faltan datos', 400);
   if (parent_id) {
     const parent = await env.DB.prepare('SELECT departamento FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(parent_id), empresa_id).first();
     if (!parent) return err('Carpeta padre no encontrada', 404);
@@ -12430,12 +12448,12 @@ async function crearCarpeta(request, env) {
   }
   const existe = await env.DB.prepare(
     'SELECT id FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND UPPER(nombre) = UPPER(?) AND (parent_id IS NULL OR parent_id = 0)'
-  ).bind(empresa_id, parseInt(obra_id), deptFinal, nombre.trim()).first();
+  ).bind(empresa_id, parseInt(obra_id), deptFinal, safeStr(nombre).trim()).first();
   if (existe) return err('Ya existe una carpeta con ese nombre', 409);
   const r = await env.DB.prepare(
     'INSERT INTO carpetas (empresa_id, obra_id, departamento, nombre, creado_por, parent_id) VALUES (?,?,?,?,?,?)'
-  ).bind(empresa_id, parseInt(obra_id), deptFinal, nombre.trim(), userNombre || rol, parent_id ? parseInt(parent_id) : null).run();
-  return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim() }, 201);
+  ).bind(empresa_id, parseInt(obra_id), deptFinal, safeStr(nombre).trim(), userNombre || rol, parent_id ? parseInt(parent_id) : null).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre: safeStr(nombre).trim() }, 201);
 }
 
 async function borrarCarpeta(id, request, env) {
@@ -12563,9 +12581,9 @@ async function editarDocDept(id, request, env) {
   const sets = [], params = [];
 
   if (body.nombre !== undefined) {
-    if (!body.nombre?.trim()) return err('El nombre es obligatorio', 400);
+    if (!safeStr(body.nombre).trim()) return err('El nombre es obligatorio', 400);
     sets.push('nombre = ?', 'descripcion = ?');
-    params.push(body.nombre.trim(), body.descripcion?.trim() || null);
+    params.push(safeStr(body.nombre).trim(), safeStr(body.descripcion).trim() || null);
   }
 
   if (body.carpeta_id !== undefined) {
@@ -12593,11 +12611,11 @@ async function renombrarCarpeta(id, request, env) {
   if (rol === 'operario') return err('Sin permisos', 403);
   const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const { nombre } = await request.json().catch(() => ({}));
-  if (!nombre?.trim()) return err('El nombre es obligatorio', 400);
+  if (!safeStr(nombre).trim()) return err('El nombre es obligatorio', 400);
   const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!carpeta) return err('Carpeta no encontrada', 404);
   if (!isAdminRole && carpeta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
-  await env.DB.prepare('UPDATE carpetas SET nombre = ? WHERE id = ? AND empresa_id = ?').bind(nombre.trim(), id, empresa_id).run();
+  await env.DB.prepare('UPDATE carpetas SET nombre = ? WHERE id = ? AND empresa_id = ?').bind(safeStr(nombre).trim(), id, empresa_id).run();
   return json({ ok: true });
 }
 
@@ -12646,7 +12664,7 @@ async function crearNota(request, env) {
   if (rol === 'operario') return err('Sin permisos', 403);
   const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const { titulo, contenido, carpeta_id, obra_id, departamento: dept_param } = await request.json().catch(() => ({}));
-  if (!titulo?.trim()) return err('El título es obligatorio', 400);
+  if (!safeStr(titulo).trim()) return err('El título es obligatorio', 400);
   let obraIdFinal = parseInt(obra_id || obraId || 0) || null;
   let deptFinal   = !isAdminRole ? departamento : (dept_param || departamento || null);
   if (carpeta_id) {
@@ -12659,7 +12677,7 @@ async function crearNota(request, env) {
   const r = await env.DB.prepare(
     'INSERT INTO docs_notas (empresa_id, obra_id, departamento, carpeta_id, titulo, contenido, creado_por, updated_at) VALUES (?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obraIdFinal, deptFinal, carpeta_id ? parseInt(carpeta_id) : null,
-    titulo.trim(), contenido || '', userNombre || rol, AHORA()).run();
+    safeStr(titulo).trim(), contenido || '', userNombre || rol, AHORA()).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -12669,12 +12687,12 @@ async function editarNota(id, request, env) {
   if (rol === 'operario') return err('Sin permisos', 403);
   const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const { titulo, contenido } = await request.json().catch(() => ({}));
-  if (!titulo?.trim()) return err('El título es obligatorio', 400);
+  if (!safeStr(titulo).trim()) return err('El título es obligatorio', 400);
   const nota = await env.DB.prepare('SELECT * FROM docs_notas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!nota) return err('Nota no encontrada', 404);
   if (!isAdminRole && nota.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
   await env.DB.prepare('UPDATE docs_notas SET titulo = ?, contenido = ?, updated_at = ? WHERE id = ? AND empresa_id = ?')
-    .bind(titulo.trim(), contenido || '', AHORA(), id, empresa_id).run();
+    .bind(safeStr(titulo).trim(), contenido || '', AHORA(), id, empresa_id).run();
   return json({ ok: true });
 }
 
@@ -13786,7 +13804,7 @@ async function crearMantenimiento(request, env) {
     empresa_id,
     tipo_equipo || 'pemp',
     equipo_id ? parseInt(equipo_id) : null,
-    matricula.trim().toUpperCase(),
+    safeStr(matricula).trim().toUpperCase(),
     obraFinal || null,
     fecha_mant,
     tipo_mant || 'preventivo',
@@ -13803,11 +13821,11 @@ async function crearMantenimiento(request, env) {
     // mantenimiento con la matrícula de un equipo de OTRA empresa y sobrescribir su
     // fecha_ultima_revision.
     await env.DB.prepare(`UPDATE ${tabla} SET fecha_ultima_revision = ? WHERE matricula = ? AND empresa_id = ?`)
-      .bind(fecha_mant, matricula.trim().toUpperCase(), empresa_id).run().catch(() => {});
+      .bind(fecha_mant, safeStr(matricula).trim().toUpperCase(), empresa_id).run().catch(() => {});
   }
 
   await sendTelegram(env,
-    `📧 <b>Mantenimiento registrado</b>\n📖 ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\n📅 ${fecha_mant}\n👤 ${realizado_por || usuario || '—'}${descripcion ? '\n📝 ' + descripcion : ''}`
+    `📧 <b>Mantenimiento registrado</b>\n📖 ${safeStr(matricula).trim().toUpperCase()} (${tipo_mant || 'preventivo'})\n📅 ${fecha_mant}\n👤 ${realizado_por || usuario || '—'}${descripcion ? '\n📝 ' + descripcion : ''}`
   );
 
   return json({ ok: true, id: r.meta.last_row_id, mensaje: 'Mantenimiento registrado' }, 201);
@@ -13881,7 +13899,7 @@ async function crearPreguntaChecklist(request, env) {
   if (!tipo_equipo || !pregunta) return err('Faltan campos', 400);
   const r = await env.DB.prepare(
     'INSERT INTO checklist_plantillas (empresa_id, tipo_equipo, pregunta, orden) VALUES (?,?,?,?)'
-  ).bind(empresa_id, tipo_equipo, pregunta.trim(), orden || 0).run();
+  ).bind(empresa_id, tipo_equipo, safeStr(pregunta).trim(), orden || 0).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -14096,7 +14114,9 @@ async function enviarChatMensaje(request, env) {
   const { empresa_id, usuario_id, nombre, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  const mensaje = (body.mensaje || '').trim();
+  // SEC-AUDIT-07 (27/07/2026): mensaje no-string (ej. número) disparaba
+  // "(body.mensaje || \"\").trim is not a function" (500 sin manejar).
+  const mensaje = safeStr(body.mensaje).trim();
   if (!mensaje) return err('Mensaje vacío', 400);
   if (mensaje.length > 500) return err('Mensaje demasiado largo (máx 500 caracteres)', 400);
   const obra_id = body.obra_id || auth.obra_id || null;
@@ -14706,7 +14726,7 @@ async function devSQL(request, env) {
   if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const { sql } = await request.json().catch(() => ({}));
   if (!sql) return err('Falta SQL', 400);
-  const trimmed = sql.trim().toUpperCase();
+  const trimmed = safeStr(sql).trim().toUpperCase();
   if (!trimmed.startsWith('SELECT') && !trimmed.startsWith('PRAGMA')) {
     return err('Solo se permiten consultas SELECT o PRAGMA', 403);
   }
@@ -15012,7 +15032,7 @@ async function crearFaseObra(request, env) {
   await ensureFasesObraTable(env);
   const b = await request.json().catch(()=>({}));
   const obra_id = b.obra_id || auth.obra_id;
-  if (!obra_id || !b.nombre?.trim()) return err('Faltan datos obligatorios', 400);
+  if (!obra_id || !safeStr(b.nombre).trim()) return err('Faltan datos obligatorios', 400);
   // Calcular siguiente orden
   const maxOrden = await env.DB.prepare(
     `SELECT COALESCE(MAX(orden),0) as m FROM fases_obra WHERE empresa_id=? AND obra_id=?`
@@ -15020,7 +15040,7 @@ async function crearFaseObra(request, env) {
   const r = await env.DB.prepare(`
     INSERT INTO fases_obra (obra_id, empresa_id, nombre, descripcion, fecha_inicio_plan, fecha_fin_plan, responsable, orden)
     VALUES (?,?,?,?,?,?,?,?)
-  `).bind(obra_id, auth.empresa_id, b.nombre.trim(), b.descripcion||null, b.fecha_inicio_plan||null, b.fecha_fin_plan||null, b.responsable||null, (maxOrden?.m||0)+1).run();
+  `).bind(obra_id, auth.empresa_id, safeStr(b.nombre).trim(), b.descripcion||null, b.fecha_inicio_plan||null, b.fecha_fin_plan||null, b.responsable||null, (maxOrden?.m||0)+1).run();
   return json({ ok: true, id: r.meta?.last_row_id });
 }
 
@@ -15095,14 +15115,14 @@ async function crearEntradaDiario(request, env) {
   await ensureDiarioObraTable(env);
   const b = await request.json().catch(()=>({}));
   const obra_id = b.obra_id || auth.obra_id;
-  if (!obra_id || !b.trabajos?.trim()) return err('Faltan datos obligatorios (trabajos)', 400);
+  if (!obra_id || !safeStr(b.trabajos).trim()) return err('Faltan datos obligatorios (trabajos)', 400);
   const fecha = b.fecha || new Date().toISOString().slice(0,10);
   const r = await env.DB.prepare(`
     INSERT INTO diario_obra (obra_id, empresa_id, fecha, clima, temperatura, trabajos, personal_presente, equipos_activos, incidencias_dia, visitantes, observaciones, creado_por)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
   `).bind(
     obra_id, auth.empresa_id, fecha,
-    b.clima||null, b.temperatura||null, b.trabajos.trim(),
+    b.clima||null, b.temperatura||null, safeStr(b.trabajos).trim(),
     parseInt(b.personal_presente)||0,
     b.equipos_activos||null, b.incidencias_dia||null,
     b.visitantes||null, b.observaciones||null,
@@ -15191,12 +15211,12 @@ async function crearTareaObra(request, env) {
   if (!auth.empresa_id) return err('No autorizado', 403);
   await ensureTareasObraTable(env);
   const b = await request.json();
-  if (!b.titulo?.trim()) return err('El título es obligatorio', 400);
+  if (!safeStr(b.titulo).trim()) return err('El título es obligatorio', 400);
   const r = await env.DB.prepare(
     `INSERT INTO tareas_obra (obra_id, empresa_id, titulo, descripcion, asignado_a, fase_id, estado, prioridad, fecha_limite, ubicacion, notas, created_by, departamento)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
-    b.obra_id || null, auth.empresa_id, b.titulo.trim(),
+    b.obra_id || null, auth.empresa_id, safeStr(b.titulo).trim(),
     b.descripcion || null, b.asignado_a || null, b.fase_id || null,
     b.estado || 'pendiente', b.prioridad || 'normal',
     b.fecha_limite || null, b.ubicacion || null, b.notas || null,
@@ -15288,13 +15308,13 @@ async function crearPartidaPresupuesto(request, env) {
   await ensurePresupuestoObraTable(env);
   const b = await request.json();
   if (!b.obra_id) return err('obra_id requerido', 400);
-  if (!b.descripcion?.trim()) return err('La descripción es obligatoria', 400);
+  if (!safeStr(b.descripcion).trim()) return err('La descripción es obligatoria', 400);
   const r = await env.DB.prepare(
     `INSERT INTO presupuesto_obra (obra_id, empresa_id, categoria, descripcion, importe_previsto, importe_real, unidades, unidad, proveedor, notas)
      VALUES (?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     parseInt(b.obra_id), auth.empresa_id,
-    b.categoria || 'Otros', b.descripcion.trim(),
+    b.categoria || 'Otros', safeStr(b.descripcion).trim(),
     parseFloat(b.importe_previsto) || 0, parseFloat(b.importe_real) || 0,
     parseFloat(b.unidades) || 1, b.unidad || 'ud',
     b.proveedor || null, b.notas || null
@@ -18845,13 +18865,13 @@ async function crearVisitaObra(request, env) {
   await ensureVisitasObraTable(env);
   const body = await request.json().catch(() => ({}));
   const { nombre: nombreV, fecha, hora_entrada, hora_salida, empresa_visitante, rol = 'otro', proposito, areas_visitadas, observaciones, autorizado_por } = body;
-  if (!nombreV?.trim()) return err('El nombre del visitante es obligatorio', 400);
+  if (!safeStr(nombreV).trim()) return err('El nombre del visitante es obligatorio', 400);
   if (!fecha) return err('La fecha es obligatoria', 400);
   const obraFinal = body.obra_id ?? obra_id ?? null;
   const r = await env.DB.prepare(
     `INSERT INTO visitas_obra (empresa_id, obra_id, fecha, hora_entrada, hora_salida, nombre, empresa_visitante, rol, proposito, areas_visitadas, observaciones, autorizado_por, creado_por)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(empresa_id, obraFinal, fecha, hora_entrada || null, hora_salida || null, nombreV.trim(), empresa_visitante || null, rol, proposito || null, areas_visitadas || null, observaciones || null, autorizado_por || nombre || null, nombre || null).run();
+  ).bind(empresa_id, obraFinal, fecha, hora_entrada || null, hora_salida || null, safeStr(nombreV).trim(), empresa_visitante || null, rol, proposito || null, areas_visitadas || null, observaciones || null, autorizado_por || nombre || null, nombre || null).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -18862,7 +18882,7 @@ async function actualizarVisitaObra(id, request, env) {
   const v = await env.DB.prepare('SELECT * FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!v) return err('Visita no encontrada', 404);
   const campos = [], vals = [];
-  if (body.nombre !== undefined)           { campos.push('nombre=?');            vals.push(body.nombre?.trim()||v.nombre); }
+  if (body.nombre !== undefined)           { campos.push('nombre=?');            vals.push(safeStr(body.nombre).trim()||v.nombre); }
   if (body.fecha !== undefined)            { campos.push('fecha=?');             vals.push(body.fecha||v.fecha); }
   if (body.hora_entrada !== undefined)     { campos.push('hora_entrada=?');      vals.push(body.hora_entrada||null); }
   if (body.hora_salida !== undefined)      { campos.push('hora_salida=?');       vals.push(body.hora_salida||null); }
@@ -21880,13 +21900,13 @@ async function crearProveedorGestion(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.nombre?.trim()) return err('El nombre del proveedor es obligatorio');
+  if (!safeStr(body.nombre).trim()) return err('El nombre del proveedor es obligatorio');
   const r = await env.DB.prepare(`
     INSERT INTO proveedores_gestion
       (empresa_id,nombre,cif,tipo,categoria,contacto_nombre,contacto_cargo,telefono,email,web,
        direccion,ciudad,cp,pais,activo,valoracion,homologado,fecha_homologacion,notas,created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.nombre.trim(), body.cif||null, body.tipo||'proveedor', body.categoria||null,
+    .bind(empresa_id, safeStr(body.nombre).trim(), body.cif||null, body.tipo||'proveedor', body.categoria||null,
           body.contacto_nombre||null, body.contacto_cargo||null, body.telefono||null, body.email||null,
           body.web||null, body.direccion||null, body.ciudad||null, body.cp||null, body.pais||'España',
           body.activo===false?0:1, body.valoracion||null, body.homologado?1:0,
@@ -21899,14 +21919,14 @@ async function actualizarProveedorGestion(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.nombre?.trim()) return err('El nombre es obligatorio');
+  if (!safeStr(body.nombre).trim()) return err('El nombre es obligatorio');
   await env.DB.prepare(`
     UPDATE proveedores_gestion SET
       nombre=?,cif=?,tipo=?,categoria=?,contacto_nombre=?,contacto_cargo=?,telefono=?,email=?,web=?,
       direccion=?,ciudad=?,cp=?,pais=?,activo=?,valoracion=?,homologado=?,fecha_homologacion=?,notas=?,
       updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(body.nombre.trim(), body.cif||null, body.tipo||'proveedor', body.categoria||null,
+    .bind(safeStr(body.nombre).trim(), body.cif||null, body.tipo||'proveedor', body.categoria||null,
           body.contacto_nombre||null, body.contacto_cargo||null, body.telefono||null, body.email||null,
           body.web||null, body.direccion||null, body.ciudad||null, body.cp||null, body.pais||'España',
           body.activo===false?0:1, body.valoracion||null, body.homologado?1:0,
@@ -22001,7 +22021,7 @@ async function crearFacturaProveedor(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.numero_factura?.trim()) return err('El número de factura es obligatorio');
+  if (!safeStr(body.numero_factura).trim()) return err('El número de factura es obligatorio');
   if (!body.fecha_factura)          return err('La fecha de factura es obligatoria');
   if (body.importe_base === undefined || body.importe_base === null) return err('El importe base es obligatorio');
   const r = await env.DB.prepare(`
@@ -22011,7 +22031,7 @@ async function crearFacturaProveedor(request, env) {
        referencia_pago,concepto,categoria,notas,archivo_url,created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .bind(empresa_id, body.obra_id||null, body.proveedor_id||null, body.proveedor_nombre||null,
-          body.orden_compra_id||null, body.numero_factura.trim(), body.fecha_factura,
+          body.orden_compra_id||null, safeStr(body.numero_factura).trim(), body.fecha_factura,
           body.fecha_vencimiento||null, parseFloat(body.importe_base)||0, parseFloat(body.iva_pct)||21,
           body.estado||'pendiente_pago', body.fecha_pago||null, body.metodo_pago||null,
           body.referencia_pago||null, body.concepto||null, body.categoria||null,
@@ -22024,7 +22044,7 @@ async function actualizarFacturaProveedor(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.numero_factura?.trim()) return err('El número de factura es obligatorio');
+  if (!safeStr(body.numero_factura).trim()) return err('El número de factura es obligatorio');
   await env.DB.prepare(`
     UPDATE facturas_proveedor SET
       obra_id=?,proveedor_id=?,proveedor_nombre=?,orden_compra_id=?,numero_factura=?,
@@ -22033,7 +22053,7 @@ async function actualizarFacturaProveedor(id, request, env) {
       updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
     .bind(body.obra_id||null, body.proveedor_id||null, body.proveedor_nombre||null,
-          body.orden_compra_id||null, body.numero_factura.trim(), body.fecha_factura,
+          body.orden_compra_id||null, safeStr(body.numero_factura).trim(), body.fecha_factura,
           body.fecha_vencimiento||null, parseFloat(body.importe_base)||0, parseFloat(body.iva_pct)||21,
           body.estado||'pendiente_pago', body.fecha_pago||null, body.metodo_pago||null,
           body.referencia_pago||null, body.concepto||null, body.categoria||null,
@@ -22256,7 +22276,7 @@ async function crearLicitacion(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.nombre?.trim()) return err('El nombre de la licitación es obligatorio');
+  if (!safeStr(body.nombre).trim()) return err('El nombre de la licitación es obligatorio');
   const r = await env.DB.prepare(`
     INSERT INTO licitaciones
       (empresa_id,nombre,cliente,expediente,tipo_obra,provincia,presupuesto_base,nuestra_oferta,
@@ -22264,7 +22284,7 @@ async function crearLicitacion(request, env) {
        responsable,competidores,criterios_adj,puntuacion_tecnica,puntuacion_economica,
        motivo_perdida,notas,obra_id,created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.nombre.trim(), body.cliente||null, body.expediente||null,
+    .bind(empresa_id, safeStr(body.nombre).trim(), body.cliente||null, body.expediente||null,
           body.tipo_obra||null, body.provincia||null, parseFloat(body.presupuesto_base)||0,
           parseFloat(body.nuestra_oferta)||0, parseFloat(body.margen_pct)||null,
           body.estado||'prospectando', parseInt(body.probabilidad)||50,
@@ -22280,7 +22300,7 @@ async function actualizarLicitacion(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.nombre?.trim()) return err('El nombre es obligatorio');
+  if (!safeStr(body.nombre).trim()) return err('El nombre es obligatorio');
   await env.DB.prepare(`
     UPDATE licitaciones SET
       nombre=?,cliente=?,expediente=?,tipo_obra=?,provincia=?,presupuesto_base=?,nuestra_oferta=?,
@@ -22288,7 +22308,7 @@ async function actualizarLicitacion(id, request, env) {
       fecha_adjudicacion=?,responsable=?,competidores=?,criterios_adj=?,puntuacion_tecnica=?,
       puntuacion_economica=?,motivo_perdida=?,notas=?,obra_id=?,updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(body.nombre.trim(), body.cliente||null, body.expediente||null, body.tipo_obra||null,
+    .bind(safeStr(body.nombre).trim(), body.cliente||null, body.expediente||null, body.tipo_obra||null,
           body.provincia||null, parseFloat(body.presupuesto_base)||0, parseFloat(body.nuestra_oferta)||0,
           parseFloat(body.margen_pct)||null, body.estado||'prospectando', parseInt(body.probabilidad)||50,
           body.fecha_presentacion||null, body.fecha_apertura||null, body.fecha_adjudicacion||null,
@@ -22382,7 +22402,7 @@ async function crearGastoDieta(request, env) {
   const { empresa_id, nombre: createdBy, usuario_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.nombre_trabajador?.trim()) return err('El nombre del trabajador es obligatorio');
+  if (!safeStr(body.nombre_trabajador).trim()) return err('El nombre del trabajador es obligatorio');
   if (!body.fecha)                     return err('La fecha es obligatoria');
   // Calculate total
   const km_import = (parseFloat(body.km)||0) * (parseFloat(body.precio_km)||0.26);
@@ -22396,7 +22416,7 @@ async function crearGastoDieta(request, env) {
        dieta_media_dia,dieta_completa,alojamiento,peajes,parking,otros,total,
        estado,aprobado_por,fecha_aprobacion,pagado,fecha_pago,notas,created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.usuario_id||usuario_id||null, body.nombre_trabajador.trim(),
+    .bind(empresa_id, body.usuario_id||usuario_id||null, safeStr(body.nombre_trabajador).trim(),
           body.obra_id||null, body.fecha, body.tipo||'dieta', body.concepto||null,
           parseFloat(body.km)||0, parseFloat(body.precio_km)||0.26,
           parseFloat(body.dieta_media_dia)||0, parseFloat(body.dieta_completa)||0,
@@ -22413,7 +22433,7 @@ async function actualizarGastoDieta(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.nombre_trabajador?.trim()) return err('El nombre del trabajador es obligatorio');
+  if (!safeStr(body.nombre_trabajador).trim()) return err('El nombre del trabajador es obligatorio');
   const km_import = (parseFloat(body.km)||0) * (parseFloat(body.precio_km)||0.26);
   const total = km_import +
     (parseFloat(body.dieta_media_dia)||0) + (parseFloat(body.dieta_completa)||0) +
@@ -22426,7 +22446,7 @@ async function actualizarGastoDieta(id, request, env) {
       total=?,estado=?,aprobado_por=?,fecha_aprobacion=?,pagado=?,fecha_pago=?,
       notas=?,updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(body.nombre_trabajador.trim(), body.obra_id||null, body.fecha, body.tipo||'dieta',
+    .bind(safeStr(body.nombre_trabajador).trim(), body.obra_id||null, body.fecha, body.tipo||'dieta',
           body.concepto||null, parseFloat(body.km)||0, parseFloat(body.precio_km)||0.26,
           parseFloat(body.dieta_media_dia)||0, parseFloat(body.dieta_completa)||0,
           parseFloat(body.alojamiento)||0, parseFloat(body.peajes)||0,
@@ -22518,7 +22538,7 @@ async function crearVehiculo(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.matricula?.trim()) return err('La matrícula es obligatoria');
+  if (!safeStr(body.matricula).trim()) return err('La matrícula es obligatoria');
   try {
     const r = await env.DB.prepare(`
       INSERT INTO flota_vehiculos
@@ -22527,7 +22547,7 @@ async function crearVehiculo(request, env) {
          fecha_seguro,prox_renovacion_seguro,aseguradora,poliza_seguro,fecha_revision,
          prox_revision,estado,combustible,notas,activo,created_by)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(empresa_id, body.matricula.trim().toUpperCase(), body.tipo||'furgoneta',
+      .bind(empresa_id, safeStr(body.matricula).trim().toUpperCase(), body.tipo||'furgoneta',
             body.marca||null, body.modelo||null, body.color||null, body.anno_fabricacion||null,
             body.bastidor||null, body.asignado_a||null, body.obra_id||null,
             parseInt(body.km_actual)||0, parseInt(body.km_ultimo_servicio)||0,
@@ -22547,7 +22567,7 @@ async function actualizarVehiculo(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.matricula?.trim()) return err('La matrícula es obligatoria');
+  if (!safeStr(body.matricula).trim()) return err('La matrícula es obligatoria');
   await env.DB.prepare(`
     UPDATE flota_vehiculos SET
       matricula=?,tipo=?,marca=?,modelo=?,color=?,anno_fabricacion=?,bastidor=?,asignado_a=?,
@@ -22555,7 +22575,7 @@ async function actualizarVehiculo(id, request, env) {
       fecha_seguro=?,prox_renovacion_seguro=?,aseguradora=?,poliza_seguro=?,fecha_revision=?,
       prox_revision=?,estado=?,combustible=?,notas=?,activo=?,updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(body.matricula.trim().toUpperCase(), body.tipo||'furgoneta', body.marca||null,
+    .bind(safeStr(body.matricula).trim().toUpperCase(), body.tipo||'furgoneta', body.marca||null,
           body.modelo||null, body.color||null, body.anno_fabricacion||null, body.bastidor||null,
           body.asignado_a||null, body.obra_id||null, parseInt(body.km_actual)||0,
           parseInt(body.km_ultimo_servicio)||0, parseInt(body.km_proximo_servicio)||0,
@@ -22639,8 +22659,8 @@ async function crearEntradaLibro(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.subcontratista?.trim()) return err('El nombre de la subcontrata es obligatorio');
-  if (!body.actividad?.trim())      return err('La actividad es obligatoria');
+  if (!safeStr(body.subcontratista).trim()) return err('El nombre de la subcontrata es obligatorio');
+  if (!safeStr(body.actividad).trim())      return err('La actividad es obligatoria');
   if (!body.fecha_inicio)           return err('La fecha de inicio es obligatoria');
   if (!body.obra_id)                return err('La obra es obligatoria');
   const nivel = parseInt(body.nivel) || 1;
@@ -22657,8 +22677,8 @@ async function crearEntradaLibro(request, env) {
        regimen_especial,observaciones,estado,created_by)
     SELECT ?,?,COALESCE((SELECT MAX(numero_entrada) FROM libro_subcontratacion WHERE empresa_id=? AND obra_id=?),0)+1,
        ?,?,?,?,?,?,?,?,?,?,?,?,?`)
-    .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, nivel, body.subcontratista.trim(),
-          body.nif_subcontratista||null, body.actividad.trim(),
+    .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, nivel, safeStr(body.subcontratista).trim(),
+          body.nif_subcontratista||null, safeStr(body.actividad).trim(),
           body.fecha_inicio, body.fecha_fin||null, parseInt(body.num_trabajadores)||0,
           body.responsable_seguridad||null, body.autorizado_por||null,
           body.regimen_especial?1:0, body.observaciones||null,
@@ -22672,8 +22692,8 @@ async function actualizarEntradaLibro(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.subcontratista?.trim()) return err('El nombre de la subcontrata es obligatorio');
-  if (!body.actividad?.trim())      return err('La actividad es obligatoria');
+  if (!safeStr(body.subcontratista).trim()) return err('El nombre de la subcontrata es obligatorio');
+  if (!safeStr(body.actividad).trim())      return err('La actividad es obligatoria');
   const nivel = parseInt(body.nivel) || 1;
   if (nivel > 3) return err('La Ley 32/2006 prohíbe más de 3 niveles de subcontratación', 422);
   await env.DB.prepare(`
@@ -22682,7 +22702,7 @@ async function actualizarEntradaLibro(id, request, env) {
       num_trabajadores=?,responsable_seguridad=?,autorizado_por=?,regimen_especial=?,
       observaciones=?,estado=?,updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(nivel, body.subcontratista.trim(), body.nif_subcontratista||null, body.actividad.trim(),
+    .bind(nivel, safeStr(body.subcontratista).trim(), body.nif_subcontratista||null, safeStr(body.actividad).trim(),
           body.fecha_inicio, body.fecha_fin||null, parseInt(body.num_trabajadores)||0,
           body.responsable_seguridad||null, body.autorizado_por||null,
           body.regimen_especial?1:0, body.observaciones||null, body.estado||'activo',
@@ -22765,8 +22785,8 @@ async function crearPartHormigonado(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.elemento_hormigonado?.trim()) return err('El elemento hormigonado es obligatorio');
-  if (!body.tipo_hormigon?.trim())        return err('El tipo de hormigón es obligatorio');
+  if (!safeStr(body.elemento_hormigonado).trim()) return err('El elemento hormigonado es obligatorio');
+  if (!safeStr(body.tipo_hormigon).trim())        return err('El tipo de hormigón es obligatorio');
   if (!body.fecha_hormigonado)            return err('La fecha de hormigonado es obligatoria');
   if (!body.obra_id)                      return err('La obra es obligatoria');
   // SEC-AUDIT-05 (27/07/2026): CONFIRMADO con pentest real — 15 peticiones concurrentes
@@ -22784,7 +22804,7 @@ async function crearPartHormigonado(request, env) {
     SELECT ?,?,COALESCE((SELECT MAX(numero_parte) FROM registro_hormigonado WHERE empresa_id=? AND obra_id=?),0)+1,
       ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`)
     .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, body.fecha_hormigonado,
-          body.elemento_hormigonado.trim(), body.tipo_hormigon.trim(),
+          safeStr(body.elemento_hormigonado).trim(), safeStr(body.tipo_hormigon).trim(),
           body.consistencia||null, body.tamanio_maximo_arido||null,
           body.aditivos||null, body.suministrador||null, body.albaran_numero||null,
           body.hora_inicio_vertido||null, body.hora_fin_vertido||null,
@@ -22805,8 +22825,8 @@ async function actualizarPartHormigonado(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.elemento_hormigonado?.trim()) return err('El elemento hormigonado es obligatorio');
-  if (!body.tipo_hormigon?.trim())        return err('El tipo de hormigón es obligatorio');
+  if (!safeStr(body.elemento_hormigonado).trim()) return err('El elemento hormigonado es obligatorio');
+  if (!safeStr(body.tipo_hormigon).trim())        return err('El tipo de hormigón es obligatorio');
   await env.DB.prepare(`
     UPDATE registro_hormigonado SET
       fecha_hormigonado=?,elemento_hormigonado=?,tipo_hormigon=?,consistencia=?,
@@ -22816,7 +22836,7 @@ async function actualizarPartHormigonado(id, request, env) {
       num_probetas_tomadas=?,resultado_probetas=?,observaciones=?,estado=?,
       updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(body.fecha_hormigonado, body.elemento_hormigonado.trim(), body.tipo_hormigon.trim(),
+    .bind(body.fecha_hormigonado, safeStr(body.elemento_hormigonado).trim(), safeStr(body.tipo_hormigon).trim(),
           body.consistencia||null, body.tamanio_maximo_arido||null,
           body.aditivos||null, body.suministrador||null, body.albaran_numero||null,
           body.hora_inicio_vertido||null, body.hora_fin_vertido||null,
@@ -22910,9 +22930,9 @@ async function crearFormacionObra(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.titulo?.trim())          return err('El título de la formación es obligatorio');
+  if (!safeStr(body.titulo).trim())          return err('El título de la formación es obligatorio');
   if (!body.fecha_formacion)         return err('La fecha es obligatoria');
-  if (!body.tipo_formacion?.trim())  return err('El tipo de formación es obligatorio');
+  if (!safeStr(body.tipo_formacion).trim())  return err('El tipo de formación es obligatorio');
   // SEC-AUDIT-05 (27/07/2026): mismo fix atomico que registro_hormigonado/
   // libro_subcontratacion — numero calculado dentro del propio INSERT.
   const r = await env.DB.prepare(`
@@ -22923,7 +22943,7 @@ async function crearFormacionObra(request, env) {
     SELECT ?,?,COALESCE((SELECT MAX(numero) FROM formacion_obra WHERE empresa_id=?),0)+1,
       ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`)
     .bind(empresa_id, body.obra_id||null, empresa_id, body.fecha_formacion,
-          body.tipo_formacion||'toolbox-talk', body.titulo.trim(),
+          body.tipo_formacion||'toolbox-talk', safeStr(body.titulo).trim(),
           body.descripcion||null, body.instructor||null, body.empresa_formadora||null,
           parseFloat(body.duracion_horas)||1, body.lugar||null,
           parseInt(body.participantes_count)||0, body.participantes_lista||null,
@@ -22938,7 +22958,7 @@ async function actualizarFormacionObra(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.titulo?.trim())  return err('El título es obligatorio');
+  if (!safeStr(body.titulo).trim())  return err('El título es obligatorio');
   await env.DB.prepare(`
     UPDATE formacion_obra SET
       obra_id=?,fecha_formacion=?,tipo_formacion=?,titulo=?,descripcion=?,
@@ -22947,7 +22967,7 @@ async function actualizarFormacionObra(id, request, env) {
       observaciones=?,updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
     .bind(body.obra_id||null, body.fecha_formacion, body.tipo_formacion||'toolbox-talk',
-          body.titulo.trim(), body.descripcion||null, body.instructor||null,
+          safeStr(body.titulo).trim(), body.descripcion||null, body.instructor||null,
           body.empresa_formadora||null, parseFloat(body.duracion_horas)||1,
           body.lugar||null, parseInt(body.participantes_count)||0,
           body.participantes_lista||null, body.certificado_numero||null,
@@ -23177,7 +23197,7 @@ async function crearCubicacion(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.descripcion?.trim()) return err('La descripción de la partida es obligatoria');
+  if (!safeStr(body.descripcion).trim()) return err('La descripción de la partida es obligatoria');
   if (!body.fecha_medicion)      return err('La fecha de medición es obligatoria');
   if (!body.obra_id)             return err('La obra es obligatoria');
   const qc = parseFloat(body.cantidad_contratada) || 0;
@@ -23193,7 +23213,7 @@ async function crearCubicacion(request, env) {
     SELECT ?,?,COALESCE((SELECT MAX(numero) FROM cubicaciones_obra WHERE empresa_id=? AND obra_id=?),0)+1,
       ?,?,?,?,?,?,?,?,?,?,?,?,?`)
     .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, body.fecha_medicion,
-          body.descripcion.trim(), body.capitulo||null, body.partida||null,
+          safeStr(body.descripcion).trim(), body.capitulo||null, body.partida||null,
           body.unidad||'ud', qc, qe,
           parseFloat(body.precio_unitario)||0,
           body.porcentaje_ejecucion!=null ? parseFloat(body.porcentaje_ejecucion) : pct,
@@ -23208,7 +23228,7 @@ async function actualizarCubicacion(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.descripcion?.trim()) return err('La descripción es obligatoria');
+  if (!safeStr(body.descripcion).trim()) return err('La descripción es obligatoria');
   const qc = parseFloat(body.cantidad_contratada) || 0;
   const qe = parseFloat(body.cantidad_ejecutada)  || 0;
   const pct = body.porcentaje_ejecucion != null
@@ -23221,7 +23241,7 @@ async function actualizarCubicacion(id, request, env) {
       porcentaje_ejecucion=?,medidor=?,estado=?,observaciones=?,
       updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(body.fecha_medicion, body.descripcion.trim(), body.capitulo||null,
+    .bind(body.fecha_medicion, safeStr(body.descripcion).trim(), body.capitulo||null,
           body.partida||null, body.unidad||'ud', qc, qe,
           parseFloat(body.precio_unitario)||0, pct,
           body.medidor||null, body.estado||'borrador',
@@ -23308,16 +23328,16 @@ async function crearEscandallo(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.codigo?.trim())      return err('El código es obligatorio');
-  if (!body.descripcion?.trim()) return err('La descripción es obligatoria');
-  const dup = await env.DB.prepare('SELECT id FROM escandallo_precios WHERE empresa_id=? AND codigo=?').bind(empresa_id, body.codigo.trim().toUpperCase()).first();
+  if (!safeStr(body.codigo).trim())      return err('El código es obligatorio');
+  if (!safeStr(body.descripcion).trim()) return err('La descripción es obligatoria');
+  const dup = await env.DB.prepare('SELECT id FROM escandallo_precios WHERE empresa_id=? AND codigo=?').bind(empresa_id, safeStr(body.codigo).trim().toUpperCase()).first();
   if (dup) return err('Ya existe un escandallo con ese código', 409);
   const r = await env.DB.prepare(`
     INSERT INTO escandallo_precios
       (empresa_id,obra_id,codigo,descripcion,unidad,capitulo,tipo_partida,rendimiento,coef_empresa,
        precio_material,precio_mano_obra,precio_maquinaria,gastos_generales,beneficio_indust,estado,notas,created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.obra_id||null, body.codigo.trim().toUpperCase(), body.descripcion.trim(),
+    .bind(empresa_id, body.obra_id||null, safeStr(body.codigo).trim().toUpperCase(), safeStr(body.descripcion).trim(),
           body.unidad||'ud', body.capitulo||null, body.tipo_partida||'compuesta',
           parseFloat(body.rendimiento)||1, parseFloat(body.coef_empresa)||1,
           parseFloat(body.precio_material)||0, parseFloat(body.precio_mano_obra)||0,
@@ -23332,14 +23352,14 @@ async function actualizarEscandallo(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.descripcion?.trim()) return err('La descripción es obligatoria');
+  if (!safeStr(body.descripcion).trim()) return err('La descripción es obligatoria');
   await env.DB.prepare(`
     UPDATE escandallo_precios SET
       obra_id=?,descripcion=?,unidad=?,capitulo=?,tipo_partida=?,rendimiento=?,coef_empresa=?,
       precio_material=?,precio_mano_obra=?,precio_maquinaria=?,gastos_generales=?,beneficio_indust=?,
       estado=?,notas=?,updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(body.obra_id||null, body.descripcion.trim(), body.unidad||'ud', body.capitulo||null,
+    .bind(body.obra_id||null, safeStr(body.descripcion).trim(), body.unidad||'ud', body.capitulo||null,
           body.tipo_partida||'compuesta', parseFloat(body.rendimiento)||1, parseFloat(body.coef_empresa)||1,
           parseFloat(body.precio_material)||0, parseFloat(body.precio_mano_obra)||0,
           parseFloat(body.precio_maquinaria)||0, parseFloat(body.gastos_generales)||0.13,
@@ -23427,7 +23447,7 @@ async function crearHitoPago(request, env) {
   const { empresa_id, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.descripcion?.trim()) return err('La descripción del hito es obligatoria');
+  if (!safeStr(body.descripcion).trim()) return err('La descripción del hito es obligatoria');
   if (!body.fecha_prevista)      return err('La fecha prevista es obligatoria');
   if (!body.obra_id)             return err('La obra es obligatoria');
   // SEC-AUDIT-05 (27/07/2026): mismo fix atomico que registro_hormigonado/formacion_obra/
@@ -23438,7 +23458,7 @@ async function crearHitoPago(request, env) {
        importe_previsto,importe_cobrado,estado,forma_pago,referencia,cliente_nombre,notas,created_by)
     SELECT ?,?,COALESCE((SELECT MAX(numero_hito) FROM cronograma_pagos WHERE empresa_id=? AND obra_id=?),0)+1,
       ?,?,?,?,?,?,?,?,?,?,?,?`)
-    .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, body.descripcion.trim(),
+    .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, safeStr(body.descripcion).trim(),
           body.tipo||'certificacion', body.fecha_prevista, body.fecha_cobro||null,
           parseFloat(body.importe_previsto)||0, parseFloat(body.importe_cobrado)||0,
           body.estado||'pendiente', body.forma_pago||null, body.referencia||null,
@@ -23452,7 +23472,7 @@ async function actualizarHitoPago(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.descripcion?.trim()) return err('La descripción es obligatoria');
+  if (!safeStr(body.descripcion).trim()) return err('La descripción es obligatoria');
   // Auto-set fecha_cobro when marking as cobrado
   const fechaCobro = body.estado === 'cobrado' && !body.fecha_cobro
     ? new Date().toISOString().slice(0,10)
@@ -23464,7 +23484,7 @@ async function actualizarHitoPago(id, request, env) {
       forma_pago=?,referencia=?,cliente_nombre=?,notas=?,
       updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
-    .bind(body.descripcion.trim(), body.tipo||'certificacion', body.fecha_prevista,
+    .bind(safeStr(body.descripcion).trim(), body.tipo||'certificacion', body.fecha_prevista,
           fechaCobro, parseFloat(body.importe_previsto)||0, parseFloat(body.importe_cobrado)||0,
           body.estado||'pendiente', body.forma_pago||null, body.referencia||null,
           body.cliente_nombre||null, body.notas||null, id, empresa_id).run();
@@ -23535,7 +23555,7 @@ async function getRdpRegistros(request, env) {
     total:          results.length,
     firmados:       results.filter(r => r.firmado === 1).length,
     borradores:     results.filter(r => r.estado === 'borrador').length,
-    con_incidencia: results.filter(r => r.incidencias?.trim()).length,
+    con_incidencia: results.filter(r => safeStr(r.incidencias).trim()).length,
     trabajadores_hoy: results[0]?.trabajadores_presentes || 0
   };
   return json({ data: results, stats });
@@ -23548,7 +23568,7 @@ async function crearRdpRegistro(request, env) {
   const body = await request.json().catch(() => ({}));
   if (!body.fecha)        return err('La fecha es obligatoria');
   if (!body.obra_id)      return err('La obra es obligatoria');
-  if (!body.actividades?.trim()) return err('Las actividades del día son obligatorias');
+  if (!safeStr(body.actividades).trim()) return err('Las actividades del día son obligatorias');
   // Check no hay registro para esa fecha en esa obra
   const existe = await env.DB.prepare('SELECT id FROM rdp_registros WHERE empresa_id=? AND obra_id=? AND fecha=?').bind(empresa_id, body.obra_id, body.fecha).first();
   if (existe) return err('Ya existe un registro RdP para esa fecha en esta obra', 409);
@@ -23566,7 +23586,7 @@ async function crearRdpRegistro(request, env) {
     .bind(empresa_id, body.obra_id, body.fecha, empresa_id, body.obra_id,
           parseInt(body.trabajadores_presentes)||0,
           body.condiciones_meteo||'buenas',
-          body.actividades.trim(),
+          safeStr(body.actividades).trim(),
           body.riesgos_detectados||null,
           body.medidas_preventivas||null,
           body.equipos_utilizados||null,
@@ -23587,7 +23607,7 @@ async function actualizarRdpRegistro(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  if (!body.actividades?.trim()) return err('Las actividades del día son obligatorias');
+  if (!safeStr(body.actividades).trim()) return err('Las actividades del día son obligatorias');
   await env.DB.prepare(`
     UPDATE rdp_registros SET
       fecha=?,trabajadores_presentes=?,condiciones_meteo=?,
@@ -23597,7 +23617,7 @@ async function actualizarRdpRegistro(id, request, env) {
       estado=?,observaciones=?,updated_at=datetime('now')
     WHERE id=? AND empresa_id=?`)
     .bind(body.fecha, parseInt(body.trabajadores_presentes)||0,
-          body.condiciones_meteo||'buenas', body.actividades.trim(),
+          body.condiciones_meteo||'buenas', safeStr(body.actividades).trim(),
           body.riesgos_detectados||null, body.medidas_preventivas||null,
           body.equipos_utilizados||null, body.incidencias||null,
           body.visitas_externas||null, body.responsable_nombre||null,
@@ -24771,7 +24791,7 @@ async function _llamarAnthropicPlanoStream(env, userMsg, systemPrompt, maxTokens
       } catch (_) {}
     }
   }
-  return acumulado.trim();
+  return safeStr(acumulado).trim();
 }
 
 async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos = [] }) {
@@ -25264,7 +25284,7 @@ async function actualizarPlanoSvg(request, env, path) {
   try { body = await request.json(); } catch { return err('JSON invalido', 400); }
   const { svg_data } = body;
   if (!svg_data || typeof svg_data !== 'string') return err('svg_data requerido', 400);
-  if (!svg_data.trim().startsWith('<svg') && !svg_data.trim().startsWith('<?xml')) return err('svg_data no es un SVG valido', 400);
+  if (!safeStr(svg_data).trim().startsWith('<svg') && !safeStr(svg_data).trim().startsWith('<?xml')) return err('svg_data no es un SVG valido', 400);
   await _ensurePlanosTable(env);
   const row = await env.DB.prepare('SELECT id FROM planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!row) return err('Plano no encontrado', 404);
