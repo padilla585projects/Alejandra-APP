@@ -22713,10 +22713,11 @@ async function crearPartHormigonado(request, env) {
   if (!body.tipo_hormigon?.trim())        return err('El tipo de hormigón es obligatorio');
   if (!body.fecha_hormigonado)            return err('La fecha de hormigonado es obligatoria');
   if (!body.obra_id)                      return err('La obra es obligatoria');
-  const last = await env.DB.prepare(
-    `SELECT MAX(numero_parte) as mx FROM registro_hormigonado WHERE empresa_id=? AND obra_id=?`
-  ).bind(empresa_id, body.obra_id).first();
-  const numero = (last?.mx || 0) + 1;
+  // SEC-AUDIT-05 (27/07/2026): CONFIRMADO con pentest real — 15 peticiones concurrentes
+  // (curl en paralelo, no una a una) produjeron numero_parte duplicado masivamente (el
+  // número 3 se repitió 7 veces) en este registro legal (EHE-08, hormigonado). Mismo fix
+  // que libro_subcontratacion (SEC-AUDIT-02): el número se calcula DENTRO de la misma
+  // sentencia INSERT (subconsulta), atómico en D1 — sin ventana entre leer y escribir.
   const r = await env.DB.prepare(`
     INSERT INTO registro_hormigonado
       (empresa_id,obra_id,numero_parte,fecha_hormigonado,elemento_hormigonado,tipo_hormigon,
@@ -22724,8 +22725,9 @@ async function crearPartHormigonado(request, env) {
        hora_inicio_vertido,hora_fin_vertido,volumen_m3,temperatura_ambiente,temperatura_hormigon,
        condiciones_climaticas,presencia_tecnico_laboratorio,num_probetas_tomadas,
        resultado_probetas,observaciones,estado,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.obra_id, numero, body.fecha_hormigonado,
+    SELECT ?,?,COALESCE((SELECT MAX(numero_parte) FROM registro_hormigonado WHERE empresa_id=? AND obra_id=?),0)+1,
+      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`)
+    .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, body.fecha_hormigonado,
           body.elemento_hormigonado.trim(), body.tipo_hormigon.trim(),
           body.consistencia||null, body.tamanio_maximo_arido||null,
           body.aditivos||null, body.suministrador||null, body.albaran_numero||null,
@@ -22738,7 +22740,8 @@ async function crearPartHormigonado(request, env) {
           parseInt(body.num_probetas_tomadas)||0,
           body.resultado_probetas||null, body.observaciones||null,
           body.estado||'completado', createdBy||null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+  const numeroRow = await env.DB.prepare('SELECT numero_parte FROM registro_hormigonado WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: numeroRow?.numero_parte }, 201);
 }
 
 async function actualizarPartHormigonado(id, request, env) {
@@ -22854,24 +22857,24 @@ async function crearFormacionObra(request, env) {
   if (!body.titulo?.trim())          return err('El título de la formación es obligatorio');
   if (!body.fecha_formacion)         return err('La fecha es obligatoria');
   if (!body.tipo_formacion?.trim())  return err('El tipo de formación es obligatorio');
-  const last = await env.DB.prepare(
-    `SELECT MAX(numero) as mx FROM formacion_obra WHERE empresa_id=?`
-  ).bind(empresa_id).first();
-  const numero = (last?.mx || 0) + 1;
+  // SEC-AUDIT-05 (27/07/2026): mismo fix atomico que registro_hormigonado/
+  // libro_subcontratacion — numero calculado dentro del propio INSERT.
   const r = await env.DB.prepare(`
     INSERT INTO formacion_obra
       (empresa_id,obra_id,numero,fecha_formacion,tipo_formacion,titulo,descripcion,
        instructor,empresa_formadora,duracion_horas,lugar,participantes_count,
        participantes_lista,certificado_numero,fecha_vencimiento,estado,observaciones,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.obra_id||null, numero, body.fecha_formacion,
+    SELECT ?,?,COALESCE((SELECT MAX(numero) FROM formacion_obra WHERE empresa_id=?),0)+1,
+      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`)
+    .bind(empresa_id, body.obra_id||null, empresa_id, body.fecha_formacion,
           body.tipo_formacion||'toolbox-talk', body.titulo.trim(),
           body.descripcion||null, body.instructor||null, body.empresa_formadora||null,
           parseFloat(body.duracion_horas)||1, body.lugar||null,
           parseInt(body.participantes_count)||0, body.participantes_lista||null,
           body.certificado_numero||null, body.fecha_vencimiento||null,
           body.estado||'realizado', body.observaciones||null, createdBy||null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+  const numeroRow = await env.DB.prepare('SELECT numero FROM formacion_obra WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: numeroRow?.numero }, 201);
 }
 
 async function actualizarFormacionObra(id, request, env) {
@@ -22971,10 +22974,6 @@ async function crearActaReplanteo(request, env) {
   const body = await request.json().catch(() => ({}));
   if (!body.fecha_replanteo) return err('La fecha de replanteo es obligatoria');
   if (!body.obra_id)         return err('La obra es obligatoria');
-  const last = await env.DB.prepare(
-    `SELECT MAX(numero) as mx FROM actas_replanteo WHERE empresa_id=?`
-  ).bind(empresa_id).first();
-  const numero = (last?.mx || 0) + 1;
   // Calcular fecha fin prevista si tenemos inicio y plazo
   let fechaFin = body.fecha_fin_prevista || null;
   if (!fechaFin && body.fecha_inicio_plazo && body.plazo_ejecucion_dias) {
@@ -22982,6 +22981,7 @@ async function crearActaReplanteo(request, env) {
     d.setDate(d.getDate() + parseInt(body.plazo_ejecucion_dias));
     fechaFin = d.toISOString().slice(0, 10);
   }
+  // SEC-AUDIT-05 (27/07/2026): mismo fix atomico que registro_hormigonado/formacion_obra.
   const r = await env.DB.prepare(`
     INSERT INTO actas_replanteo
       (empresa_id,obra_id,numero,fecha_replanteo,estado,
@@ -22989,8 +22989,9 @@ async function crearActaReplanteo(request, env) {
        descripcion_terreno,condiciones_terreno,firmante_promotor,firmante_df,firmante_constructor,
        fecha_inicio_plazo,plazo_ejecucion_dias,fecha_fin_prevista,reservas,observaciones,
        estado_firma,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.obra_id, numero, body.fecha_replanteo,
+    SELECT ?,?,COALESCE((SELECT MAX(numero) FROM actas_replanteo WHERE empresa_id=?),0)+1,
+      ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`)
+    .bind(empresa_id, body.obra_id, empresa_id, body.fecha_replanteo,
           body.estado||'conforme',
           body.alineaciones_verificadas?1:0, body.cotas_verificadas?1:0,
           body.acceso_obra_disponible?1:0, body.suministros_disponibles?1:0,
@@ -22999,7 +23000,8 @@ async function crearActaReplanteo(request, env) {
           body.fecha_inicio_plazo||null, parseInt(body.plazo_ejecucion_dias)||null,
           fechaFin, body.reservas||null, body.observaciones||null,
           body.estado_firma||'pendiente', createdBy||null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+  const numeroRow = await env.DB.prepare('SELECT numero FROM actas_replanteo WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: numeroRow?.numero }, 201);
 }
 
 async function actualizarActaReplanteo(id, request, env) {
@@ -23122,27 +23124,27 @@ async function crearCubicacion(request, env) {
   if (!body.descripcion?.trim()) return err('La descripción de la partida es obligatoria');
   if (!body.fecha_medicion)      return err('La fecha de medición es obligatoria');
   if (!body.obra_id)             return err('La obra es obligatoria');
-  const last = await env.DB.prepare(
-    `SELECT MAX(numero) as mx FROM cubicaciones_obra WHERE empresa_id=? AND obra_id=?`
-  ).bind(empresa_id, body.obra_id).first();
-  const numero = (last?.mx || 0) + 1;
   const qc = parseFloat(body.cantidad_contratada) || 0;
   const qe = parseFloat(body.cantidad_ejecutada)  || 0;
   const pct = qc > 0 ? ((qe / qc) * 100).toFixed(2) : null;
+  // SEC-AUDIT-05 (27/07/2026): mismo fix atomico que registro_hormigonado/formacion_obra/
+  // actas_replanteo.
   const r = await env.DB.prepare(`
     INSERT INTO cubicaciones_obra
       (empresa_id,obra_id,numero,fecha_medicion,descripcion,capitulo,partida,unidad,
        cantidad_contratada,cantidad_ejecutada,precio_unitario,porcentaje_ejecucion,
        medidor,estado,observaciones,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.obra_id, numero, body.fecha_medicion,
+    SELECT ?,?,COALESCE((SELECT MAX(numero) FROM cubicaciones_obra WHERE empresa_id=? AND obra_id=?),0)+1,
+      ?,?,?,?,?,?,?,?,?,?,?,?,?`)
+    .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, body.fecha_medicion,
           body.descripcion.trim(), body.capitulo||null, body.partida||null,
           body.unidad||'ud', qc, qe,
           parseFloat(body.precio_unitario)||0,
           body.porcentaje_ejecucion!=null ? parseFloat(body.porcentaje_ejecucion) : pct,
           body.medidor||null, body.estado||'borrador',
           body.observaciones||null, createdBy||null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+  const numeroRow = await env.DB.prepare('SELECT numero FROM cubicaciones_obra WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: numeroRow?.numero }, 201);
 }
 
 async function actualizarCubicacion(id, request, env) {
@@ -23372,19 +23374,21 @@ async function crearHitoPago(request, env) {
   if (!body.descripcion?.trim()) return err('La descripción del hito es obligatoria');
   if (!body.fecha_prevista)      return err('La fecha prevista es obligatoria');
   if (!body.obra_id)             return err('La obra es obligatoria');
-  const last = await env.DB.prepare('SELECT MAX(numero_hito) as mx FROM cronograma_pagos WHERE empresa_id=? AND obra_id=?').bind(empresa_id, body.obra_id).first();
-  const numero_hito = (last?.mx || 0) + 1;
+  // SEC-AUDIT-05 (27/07/2026): mismo fix atomico que registro_hormigonado/formacion_obra/
+  // actas_replanteo/cubicaciones_obra.
   const r = await env.DB.prepare(`
     INSERT INTO cronograma_pagos
       (empresa_id,obra_id,numero_hito,descripcion,tipo,fecha_prevista,fecha_cobro,
        importe_previsto,importe_cobrado,estado,forma_pago,referencia,cliente_nombre,notas,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.obra_id, numero_hito, body.descripcion.trim(),
+    SELECT ?,?,COALESCE((SELECT MAX(numero_hito) FROM cronograma_pagos WHERE empresa_id=? AND obra_id=?),0)+1,
+      ?,?,?,?,?,?,?,?,?,?,?,?`)
+    .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, body.descripcion.trim(),
           body.tipo||'certificacion', body.fecha_prevista, body.fecha_cobro||null,
           parseFloat(body.importe_previsto)||0, parseFloat(body.importe_cobrado)||0,
           body.estado||'pendiente', body.forma_pago||null, body.referencia||null,
           body.cliente_nombre||null, body.notas||null, createdBy||null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero_hito }, 201);
+  const numeroRow = await env.DB.prepare('SELECT numero_hito FROM cronograma_pagos WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero_hito: numeroRow?.numero_hito }, 201);
 }
 
 async function actualizarHitoPago(id, request, env) {
@@ -23489,20 +23493,21 @@ async function crearRdpRegistro(request, env) {
   if (!body.fecha)        return err('La fecha es obligatoria');
   if (!body.obra_id)      return err('La obra es obligatoria');
   if (!body.actividades?.trim()) return err('Las actividades del día son obligatorias');
-  // Auto-numero_dia dentro de la obra
-  const last = await env.DB.prepare('SELECT MAX(numero_dia) as mx FROM rdp_registros WHERE empresa_id=? AND obra_id=?').bind(empresa_id, body.obra_id).first();
-  const numero_dia = (last?.mx || 0) + 1;
   // Check no hay registro para esa fecha en esa obra
   const existe = await env.DB.prepare('SELECT id FROM rdp_registros WHERE empresa_id=? AND obra_id=? AND fecha=?').bind(empresa_id, body.obra_id, body.fecha).first();
   if (existe) return err('Ya existe un registro RdP para esa fecha en esta obra', 409);
+  // SEC-AUDIT-05 (27/07/2026): mismo fix atomico que los otros registros numerados. Nota:
+  // numero_dia es la 4ª columna aquí (tras fecha), no la 3ª como en el resto — la
+  // subconsulta COALESCE va en su sitio exacto en el SELECT.
   const r = await env.DB.prepare(`
     INSERT INTO rdp_registros
       (empresa_id,obra_id,fecha,numero_dia,trabajadores_presentes,condiciones_meteo,
        actividades,riesgos_detectados,medidas_preventivas,equipos_utilizados,
        incidencias,visitas_externas,responsable_nombre,responsable_cargo,
        firmado,estado,observaciones,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.obra_id, body.fecha, numero_dia,
+    SELECT ?,?,?,COALESCE((SELECT MAX(numero_dia) FROM rdp_registros WHERE empresa_id=? AND obra_id=?),0)+1,
+      ?,?,?,?,?,?,?,?,?,?,?,?,?,?`)
+    .bind(empresa_id, body.obra_id, body.fecha, empresa_id, body.obra_id,
           parseInt(body.trabajadores_presentes)||0,
           body.condiciones_meteo||'buenas',
           body.actividades.trim(),
@@ -23517,7 +23522,8 @@ async function crearRdpRegistro(request, env) {
           body.estado||'borrador',
           body.observaciones||null,
           createdBy||null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero_dia }, 201);
+  const numeroRow = await env.DB.prepare('SELECT numero_dia FROM rdp_registros WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero_dia: numeroRow?.numero_dia }, 201);
 }
 
 async function actualizarRdpRegistro(id, request, env) {
