@@ -4595,12 +4595,16 @@ export default {
       if (xAdminCode && env.ADMIN_CODE && !timingSafeEqual(xAdminCode, env.ADMIN_CODE)) {
         const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
         try {
+          // SEC-AUDIT-06 (27/07/2026): mismo bug de carrera que el login (ver
+          // verificarAcceso) y peor aún — el INSERT ni siquiera se esperaba (sin
+          // `await`), así que la respuesta podía salir antes de que el intento quedara
+          // registrado. Se inserta PRIMERO (esperado) y se cuenta incluyéndolo.
           const win = new Date(Date.now() - 15 * 60 * 1000).toISOString().replace('T',' ').split('.')[0];
+          await env.DB.prepare('INSERT INTO login_attempts (ip, motivo) VALUES (?, ?)').bind(ip, 'admin_brute').run().catch(() => {});
           const row = await env.DB.prepare(
             "SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND motivo = 'admin_brute' AND created_at > ?"
           ).bind(ip, win).first().catch(() => ({ cnt: 0 }));
           const cnt = row?.cnt ?? 0;
-          env.DB.prepare('INSERT INTO login_attempts (ip, motivo) VALUES (?, ?)').bind(ip, 'admin_brute').run().catch(() => {});
           // ALERTA-ATAQUE-01 (26/07/2026): Adrián: "quiero que cuando Alejandra detecte el
           // ataque me avise por Telegram" — se avisa justo en el intento que dispara el
           // bloqueo (cnt === 5, no en cada intento posterior ya bloqueado, para no saturar
