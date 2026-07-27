@@ -1367,6 +1367,11 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
             if (bloqueo) return bloqueo;
           }
           await env.DB.prepare('UPDATE usuarios SET rol=? WHERE id=?').bind(value, user_id).run();
+          // SEC-AUDIT-02 (26/07/2026): sin esto, las sesiones activas del usuario seguían
+          // con el rol ANTIGUO hasta caducar (hasta 30 días) — un cambio de rol (subir o
+          // BAJAR privilegios) no surtía efecto real hasta el siguiente login. Se fuerza
+          // a re-loguearse para que el rol nuevo aplique de inmediato.
+          await env.DB.prepare('DELETE FROM sesiones WHERE usuario_id=?').bind(user_id).run().catch(() => {});
           return JSON.stringify({ ok: true, action: 'role_changed', new_role: value });
         }
         if (action === 'delete') {
@@ -1385,6 +1390,11 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
           if (bloqueo) return bloqueo;
           const hashed = await hashPassword(value || 'temp1234');
           await env.DB.prepare('UPDATE usuarios SET password_hash=? WHERE id=?').bind(hashed, user_id).run();
+          // SEC-AUDIT-02: a diferencia del flujo de "olvidé mi contraseña" (que sí borra
+          // las sesiones, ver reset_password_confirm), este reset vía Alejandra dev no
+          // invalidaba las sesiones existentes — si la cuenta estaba comprometida, el
+          // token de sesión robado seguía siendo válido hasta 30 días pese al reset.
+          await env.DB.prepare('DELETE FROM sesiones WHERE usuario_id=?').bind(user_id).run().catch(() => {});
           return JSON.stringify({ ok: true, action: 'password_reset' });
         }
         return JSON.stringify({ ok: false, error: 'Acción no reconocida' });
@@ -22514,24 +22524,26 @@ async function crearEntradaLibro(request, env) {
   if (!body.obra_id)                return err('La obra es obligatoria');
   const nivel = parseInt(body.nivel) || 1;
   if (nivel > 3) return err('La Ley 32/2006 prohíbe más de 3 niveles de subcontratación', 422);
-  // Auto-number within obra
-  const last = await env.DB.prepare(
-    `SELECT MAX(numero_entrada) as mx FROM libro_subcontratacion WHERE empresa_id=? AND obra_id=?`
-  ).bind(empresa_id, body.obra_id).first();
-  const numero = (last?.mx || 0) + 1;
+  // SEC-AUDIT-02 (26/07/2026): antes se leía MAX(numero_entrada) y se insertaba en dos
+  // pasos separados — dos peticiones casi simultáneas podían leer el mismo MAX y acabar
+  // con dos entradas con el MISMO número consecutivo en un registro legal (Ley 32/2006).
+  // El número ahora se calcula DENTRO de la misma sentencia INSERT (subconsulta), una
+  // única operación atómica en D1 — no hay ventana entre leer y escribir.
   const r = await env.DB.prepare(`
     INSERT INTO libro_subcontratacion
       (empresa_id,obra_id,numero_entrada,nivel,subcontratista,nif_subcontratista,actividad,
        fecha_inicio,fecha_fin,num_trabajadores,responsable_seguridad,autorizado_por,
        regimen_especial,observaciones,estado,created_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(empresa_id, body.obra_id, numero, nivel, body.subcontratista.trim(),
+    SELECT ?,?,COALESCE((SELECT MAX(numero_entrada) FROM libro_subcontratacion WHERE empresa_id=? AND obra_id=?),0)+1,
+       ?,?,?,?,?,?,?,?,?,?,?,?,?`)
+    .bind(empresa_id, body.obra_id, empresa_id, body.obra_id, nivel, body.subcontratista.trim(),
           body.nif_subcontratista||null, body.actividad.trim(),
           body.fecha_inicio, body.fecha_fin||null, parseInt(body.num_trabajadores)||0,
           body.responsable_seguridad||null, body.autorizado_por||null,
           body.regimen_especial?1:0, body.observaciones||null,
           body.estado||'activo', createdBy||null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+  const numeroRow = await env.DB.prepare('SELECT numero_entrada FROM libro_subcontratacion WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: numeroRow?.numero_entrada }, 201);
 }
 
 async function actualizarEntradaLibro(id, request, env) {
