@@ -14987,7 +14987,7 @@ async function devAICostes(request, env) {
       unificado
     });
   } catch (e) {
-    return json({ ok: false, error: String(e.message) }, { status: 500 });
+    return json({ ok: false, error: String(e.message) }, 500);
   }
 }
 
@@ -15418,23 +15418,18 @@ async function crearRfi(request, env) {
   if (!b.titulo) return err('titulo requerido', 400);
   // Generar numero correlativo RFI-XXX por obra
   const obraId = b.obra_id ? parseInt(b.obra_id) : null;
-  let numero = 'RFI-001';
-  try {
-    const last = await env.DB.prepare(
-      `SELECT numero FROM rfis WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
-    ).bind(...(obraId ? [auth.empresa_id, obraId] : [auth.empresa_id])).first();
-    if (last && last.numero) {
-      const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
-      numero = 'RFI-' + String(n + 1).padStart(3, '0');
-    }
-  } catch {}
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 (SELECT+INSERT en dos
+  // pasos, sin transacción) — el número se calcula dentro del propio INSERT, atómico en D1.
+  // "obra_id IS ?" en vez de "=?" para que el mismo bind funcione tanto si obraId es un
+  // entero como si es null (comportamiento de IS con NULL, a diferencia de =).
   const { meta } = await env.DB.prepare(
     `INSERT INTO rfis (obra_id, empresa_id, numero, titulo, categoria, descripcion, estado, prioridad, creado_por, asignado_a, fecha_limite, impacto_plazo, impacto_coste, departamento)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'RFI-' || printf('%03d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,5) AS INTEGER)) FROM rfis WHERE empresa_id=? AND obra_id IS ?),0)+1), ?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
     obraId,
     auth.empresa_id,
-    numero,
+    auth.empresa_id,
+    obraId,
     b.titulo,
     b.categoria || 'otro',
     b.descripcion || null,
@@ -15447,7 +15442,8 @@ async function crearRfi(request, env) {
     b.impacto_coste ? 1 : 0,
     auth.departamento || null // DEPT-01
   ).run();
-  return json({ ok: true, id: meta.last_row_id, numero }, 201);
+  const rfiRow = await env.DB.prepare('SELECT numero FROM rfis WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: rfiRow?.numero }, 201);
 }
 
 async function actualizarRfi(id, request, env) {
@@ -15554,22 +15550,14 @@ async function crearOrdenCambio(request, env) {
   const b = await request.json();
   if (!b.titulo) return err('titulo requerido', 400);
   const obraId = b.obra_id ? parseInt(b.obra_id) : null;
-  // Número correlativo OC-XXX por obra
-  let numero = 'OC-001';
-  try {
-    const last = await env.DB.prepare(
-      `SELECT numero FROM ordenes_cambio WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
-    ).bind(...(obraId ? [auth.empresa_id, obraId] : [auth.empresa_id])).first();
-    if (last?.numero) {
-      const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
-      numero = 'OC-' + String(n + 1).padStart(3, '0');
-    }
-  } catch {}
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1.
   const { meta } = await env.DB.prepare(
     `INSERT INTO ordenes_cambio (obra_id,empresa_id,numero,titulo,descripcion,rfi_id,estado,categoria,coste_adicional,dias_extension,solicitado_por,fecha_propuesta,notas)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'OC-' || printf('%03d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,4) AS INTEGER)) FROM ordenes_cambio WHERE empresa_id=? AND obra_id IS ?),0)+1), ?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    obraId, auth.empresa_id, numero,
+    obraId, auth.empresa_id,
+    auth.empresa_id, obraId,
     b.titulo, b.descripcion || null,
     b.rfi_id ? parseInt(b.rfi_id) : null,
     b.estado || 'propuesta',
@@ -15580,7 +15568,8 @@ async function crearOrdenCambio(request, env) {
     b.fecha_propuesta || new Date().toISOString().slice(0,10),
     b.notas || null
   ).run();
-  return json({ ok: true, id: meta.last_row_id, numero }, 201);
+  const ocRow = await env.DB.prepare('SELECT numero FROM ordenes_cambio WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: ocRow?.numero }, 201);
 }
 
 async function actualizarOrdenCambio(id, request, env) {
@@ -15663,23 +15652,17 @@ async function crearActaReunion(request, env) {
   const b = await request.json().catch(()=>({}));
   if (!b.titulo) return err('Título obligatorio', 400);
   const obraId = b.obra_id ? parseInt(b.obra_id) : null;
-  let numero = 'ACTA-001';
-  try {
-    const last = await env.DB.prepare(
-      `SELECT numero FROM actas_reunion WHERE empresa_id=? ORDER BY id DESC LIMIT 1`
-    ).bind(auth.empresa_id).first();
-    if (last?.numero) {
-      const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
-      numero = 'ACTA-' + String(n + 1).padStart(3, '0');
-    }
-  } catch {}
   const asistStr = typeof b.asistentes === 'object' ? JSON.stringify(b.asistentes) : b.asistentes||null;
   const pendStr  = typeof b.pendientes  === 'object' ? JSON.stringify(b.pendientes)  : b.pendientes||null;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1.
   const { meta } = await env.DB.prepare(`
     INSERT INTO actas_reunion (obra_id,empresa_id,numero,titulo,tipo,fecha,hora,lugar,convocante,asistentes,
       resumen,acuerdos,proxima_reunion,estado,orden_dia,puntos_tratados,pendientes,redactor,departamento)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(obraId, auth.empresa_id, numero, b.titulo,
+    SELECT ?,?, 'ACTA-' || printf('%03d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,6) AS INTEGER)) FROM actas_reunion WHERE empresa_id=?),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
+  ).bind(obraId, auth.empresa_id,
+    auth.empresa_id,
+    b.titulo,
     b.tipo||'coordinacion', b.fecha||null, b.hora||null, b.lugar||null,
     b.convocante||b.redactor||null,
     asistStr, b.resumen||b.puntos_tratados||null,
@@ -15687,7 +15670,8 @@ async function crearActaReunion(request, env) {
     b.orden_dia||null, b.puntos_tratados||null, pendStr, b.redactor||null,
     auth.departamento || null // DEPT-01
   ).run();
-  return json({ ok: true, id: meta?.last_row_id, numero });
+  const actaRow = await env.DB.prepare('SELECT numero FROM actas_reunion WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta?.last_row_id, numero: actaRow?.numero });
 }
 
 async function actualizarActaReunion(id, request, env) {
@@ -15788,25 +15772,20 @@ async function crearDeficiencia(request, env) {
   const b = await request.json().catch(()=>({}));
   if (!b.titulo) return err('Título obligatorio', 400);
   const obraId = b.obra_id ? parseInt(b.obra_id) : null;
-  let numero = 'DEF-001';
-  try {
-    const last = await env.DB.prepare(
-      `SELECT numero FROM control_calidad WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
-    ).bind(...(obraId ? [auth.empresa_id, obraId] : [auth.empresa_id])).first();
-    if (last?.numero) {
-      const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
-      numero = 'DEF-' + String(n + 1).padStart(3, '0');
-    }
-  } catch {}
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1.
   const { meta } = await env.DB.prepare(
     `INSERT INTO control_calidad (obra_id,empresa_id,numero,titulo,descripcion,ubicacion,categoria,prioridad,estado,responsable,fecha_limite,departamento)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(obraId, auth.empresa_id, numero, b.titulo,
+     SELECT ?,?, 'DEF-' || printf('%03d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,5) AS INTEGER)) FROM control_calidad WHERE empresa_id=? AND obra_id IS ?),0)+1), ?,?,?,?,?,?,?,?,?`
+  ).bind(obraId, auth.empresa_id,
+    auth.empresa_id, obraId,
+    b.titulo,
     b.descripcion||null, b.ubicacion||null, b.categoria||'otro',
     b.prioridad||'normal', 'abierto', b.responsable||null, b.fecha_limite||null,
     auth.departamento || null // DEPT-01
   ).run();
-  return json({ ok: true, id: meta?.last_row_id, numero });
+  const defRow = await env.DB.prepare('SELECT numero FROM control_calidad WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta?.last_row_id, numero: defRow?.numero });
 }
 
 async function actualizarDeficiencia(id, request, env) {
@@ -15966,25 +15945,39 @@ async function crearCorrespondencia(request, env) {
   await ensureCorrespondenciaTable(env);
   const b = await request.json().catch(() => ({}));
   if (!b.asunto || !b.fecha) return err('asunto y fecha son obligatorios');
-  // Auto-generate numero if not provided
-  let numero = b.numero;
-  if (!numero) {
-    const { results: last } = await env.DB.prepare(
-      `SELECT numero FROM correspondencia WHERE empresa_id=? AND tipo=? ORDER BY id DESC LIMIT 1`
-    ).bind(auth.empresa_id, b.tipo||'saliente').all().catch(() => ({ results: [] }));
-    const prefix = (b.tipo||'sal').slice(0,3).toUpperCase();
-    const lastNum = last?.[0]?.numero ? parseInt((last[0].numero.match(/\d+/) || ['0'])[0]) : 0;
-    numero = `${prefix}-${new Date().getFullYear()}-${String(lastNum + 1).padStart(4,'0')}`;
+  const tipo = b.tipo || 'saliente';
+  let meta;
+  if (b.numero) {
+    // Número explícito del llamante: sin auto-generación, no hay condición de carrera que cerrar.
+    ({ meta } = await env.DB.prepare(
+      `INSERT INTO correspondencia (empresa_id, obra_id, numero, tipo, asunto, emisor, receptor, fecha, referencia, estado, respuesta_requerida, fecha_respuesta_limite, notas)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      auth.empresa_id, b.obra_id||null, b.numero, tipo, b.asunto,
+      b.emisor||null, b.receptor||null, b.fecha, b.referencia||null,
+      b.estado||'enviada', b.respuesta_requerida?1:0, b.fecha_respuesta_limite||null, b.notas||null
+    ).run());
+  } else {
+    // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+    // dentro del propio INSERT. El prefijo depende de `tipo` (dato del llamante), así que se
+    // calcula en JS y se pasa como parámetro en vez de ir literal en el SQL. SUBSTR(numero,-4)
+    // toma siempre los últimos 4 dígitos de "PREFIJO-AÑO-NNNN" sea cual sea la longitud del
+    // prefijo — igual que el código original, la secuencia NO se reinicia por año, solo por tipo.
+    const prefix = tipo.slice(0,3).toUpperCase();
+    const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
+    ({ meta } = await env.DB.prepare(
+      `INSERT INTO correspondencia (empresa_id, obra_id, numero, tipo, asunto, emisor, receptor, fecha, referencia, estado, respuesta_requerida, fecha_respuesta_limite, notas)
+       SELECT ?,?, ? || '-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM correspondencia WHERE empresa_id=? AND tipo=?),0)+1), ?,?,?,?,?,?,?,?,?,?`
+    ).bind(
+      auth.empresa_id, b.obra_id||null, prefix, year,
+      auth.empresa_id, tipo,
+      tipo, b.asunto,
+      b.emisor||null, b.receptor||null, b.fecha, b.referencia||null,
+      b.estado||'enviada', b.respuesta_requerida?1:0, b.fecha_respuesta_limite||null, b.notas||null
+    ).run());
   }
-  const { meta } = await env.DB.prepare(
-    `INSERT INTO correspondencia (empresa_id, obra_id, numero, tipo, asunto, emisor, receptor, fecha, referencia, estado, respuesta_requerida, fecha_respuesta_limite, notas)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(
-    auth.empresa_id, b.obra_id||null, numero, b.tipo||'saliente', b.asunto,
-    b.emisor||null, b.receptor||null, b.fecha, b.referencia||null,
-    b.estado||'enviada', b.respuesta_requerida?1:0, b.fecha_respuesta_limite||null, b.notas||null
-  ).run();
-  return json({ ok: true, id: meta.last_row_id, numero });
+  const corrRow = await env.DB.prepare('SELECT numero FROM correspondencia WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: corrRow?.numero });
 }
 async function actualizarCorrespondencia(id, request, env) {
   const auth = await getAuth(request, env);
@@ -16399,25 +16392,23 @@ async function crearPunchItem(request, env) {
   await ensurePunchListTable(env);
   const b = await request.json();
   if (!b.descripcion) return err('descripcion requerida', 400);
-  // Auto-número: PL-YYYY-NNNN
-  const year = new Date().getFullYear();
-  const { results: last } = await env.DB.prepare(
-    `SELECT numero FROM punch_list WHERE empresa_id=? AND numero LIKE 'PL-${year}-%' ORDER BY id DESC LIMIT 1`
-  ).bind(auth.empresa_id).all();
-  let seq = 1;
-  if (last?.[0]?.numero) { const m = last[0].numero.match(/(\d+)$/); if (m) seq = parseInt(m[1]) + 1; }
-  const numero = `PL-${year}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (PL-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const { meta } = await env.DB.prepare(
     `INSERT INTO punch_list (empresa_id,obra_id,numero,descripcion,categoria,ubicacion,responsable,prioridad,estado,fecha_limite,notas_resolucion,foto_key,creado_por,departamento)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'PL-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM punch_list WHERE empresa_id=? AND numero LIKE 'PL-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    auth.empresa_id, b.obra_id||null, numero, b.descripcion,
+    auth.empresa_id, b.obra_id||null, year,
+    auth.empresa_id, year,
+    b.descripcion,
     b.categoria||'acabados', b.ubicacion||null, b.responsable||null,
     b.prioridad||'media', b.estado||'abierto', b.fecha_limite||null,
     b.notas_resolucion||null, b.foto_key||null, auth.nombre||auth.email||null,
     auth.departamento || null // DEPT-01
   ).run();
-  return json({ ok: true, id: meta.last_row_id, numero });
+  const plRow = await env.DB.prepare('SELECT numero FROM punch_list WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: plRow?.numero });
 }
 async function actualizarPunchItem(id, request, env) {
   const auth = await getAuth(request, env);
@@ -16693,22 +16684,23 @@ async function crearContratoObra(request, env) {
   await ensureContratosObraTable(env);
   const b = await request.json();
   if (!b.titulo) return err('titulo requerido', 400);
-  // Auto-numero: CONT-YYYY-NNNN
-  const year = new Date().getFullYear();
-  const { results: cntR } = await env.DB.prepare(
-    `SELECT COUNT(*)+1 as n FROM contratos_obra WHERE empresa_id=? AND substr(numero,6,4)=?`
-  ).bind(auth.empresa_id, String(year)).all();
-  const num = `CONT-${year}-${String(cntR[0]?.n||1).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (CONT-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1. Se mantiene COUNT(*) (no MAX) igual que
+  // el código original, solo se cierra la ventana de carrera entre leer y escribir.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
     INSERT INTO contratos_obra (empresa_id, obra_id, numero, tipo, titulo, contratista, contacto_id,
       importe_original, importe_actual, estado, fecha_firma, fecha_inicio, fecha_fin, descripcion, notas)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(auth.empresa_id, b.obra_id||null, num, b.tipo||'subcontrata', b.titulo,
+    SELECT ?,?, 'CONT-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM contratos_obra WHERE empresa_id=? AND numero LIKE 'CONT-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?
+  `).bind(auth.empresa_id, b.obra_id||null, year,
+          auth.empresa_id, year,
+          b.tipo||'subcontrata', b.titulo,
           b.contratista||null, b.contacto_id||null,
           b.importe_original||0, b.importe_original||0,
           b.estado||'borrador', b.fecha_firma||null, b.fecha_inicio||null, b.fecha_fin||null,
           b.descripcion||null, b.notas||null).run();
-  return json({ ok: true, id: r.meta?.last_row_id, numero: num });
+  const contRow = await env.DB.prepare('SELECT numero FROM contratos_obra WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta?.last_row_id, numero: contRow?.numero });
 }
 async function actualizarContratoObra(id, request, env) {
   const auth = await getAuth(request, env);
@@ -16799,20 +16791,21 @@ async function crearSubmittal(request, env) {
   await ensureSubmittalsTable(env);
   const b = await request.json();
   if (!b.titulo) return err('titulo requerido', 400);
-  const year = new Date().getFullYear();
-  const { results: cntR } = await env.DB.prepare(
-    `SELECT COUNT(*)+1 as n FROM submittals WHERE empresa_id=? AND substr(numero,5,4)=?`
-  ).bind(auth.empresa_id, String(year)).all();
-  const num = `SUB-${year}-${String(cntR[0]?.n||1).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
     INSERT INTO submittals (empresa_id, obra_id, numero, tipo, titulo, descripcion, especificacion,
       fabricante, modelo, estado, prioridad, responsable, revisor, revision, fecha_envio, fecha_limite, notas)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(auth.empresa_id, b.obra_id||null, num, b.tipo||'material', b.titulo,
+    SELECT ?,?, 'SUB-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM submittals WHERE empresa_id=? AND numero LIKE 'SUB-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?
+  `).bind(auth.empresa_id, b.obra_id||null, year,
+          auth.empresa_id, year,
+          b.tipo||'material', b.titulo,
           b.descripcion||null, b.especificacion||null, b.fabricante||null, b.modelo||null,
           b.estado||'pendiente', b.prioridad||'normal', b.responsable||auth.nombre||null,
           b.revisor||null, b.revision||'A', b.fecha_envio||null, b.fecha_limite||null, b.notas||null).run();
-  return json({ ok: true, id: r.meta?.last_row_id, numero: num });
+  const subRow = await env.DB.prepare('SELECT numero FROM submittals WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta?.last_row_id, numero: subRow?.numero });
 }
 async function actualizarSubmittal(id, request, env) {
   const auth = await getAuth(request, env);
@@ -17107,21 +17100,22 @@ async function crearTransmittal(request, env) {
   await ensureTransmittalsTable(env);
   const b = await request.json();
   if (!b.asunto) return err('asunto requerido', 400);
-  const year = new Date().getFullYear();
-  const { results: cntR } = await env.DB.prepare(
-    `SELECT COUNT(*)+1 as n FROM transmittals_obra WHERE empresa_id=? AND substr(numero,7,4)=?`
-  ).bind(auth.empresa_id, String(year)).all();
-  const num = `TRANS-${year}-${String(cntR[0]?.n||1).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
     INSERT INTO transmittals_obra (empresa_id, obra_id, numero, asunto, de_quien, para_quien,
       fecha_envio, fecha_limite, tipo, estado, referencia, documentos, notas)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(auth.empresa_id, b.obra_id||null, num, b.asunto,
+    SELECT ?,?, 'TRANS-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM transmittals_obra WHERE empresa_id=? AND numero LIKE 'TRANS-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?
+  `).bind(auth.empresa_id, b.obra_id||null, year,
+          auth.empresa_id, year,
+          b.asunto,
           b.de_quien||auth.nombre||null, b.para_quien||null,
           b.fecha_envio||new Date().toISOString().slice(0,10), b.fecha_limite||null,
           b.tipo||'envio', b.estado||'enviado',
           b.referencia||null, b.documentos||null, b.notas||null).run();
-  return json({ ok: true, id: r.meta?.last_row_id, numero: num }, 201);
+  const transRow = await env.DB.prepare('SELECT numero FROM transmittals_obra WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta?.last_row_id, numero: transRow?.numero }, 201);
 }
 async function actualizarTransmittal(id, request, env) {
   const auth = await getAuth(request, env);
@@ -17360,17 +17354,15 @@ async function actualizarChecklistEjecucion(id, request, env) {
       `SELECT id FROM ncrs_obra WHERE ejecucion_id=? AND empresa_id=? AND descripcion=?`
     ).bind(id, auth.empresa_id, item.descripcion||item.id||'Item').first();
     if (!exists) {
-      const yr = new Date().getFullYear();
-      const { results: countR } = await env.DB.prepare(
-        `SELECT COUNT(*)+1 as n FROM ncrs_obra WHERE empresa_id=? AND substr(numero,5,4)=?`
-      ).bind(auth.empresa_id, String(yr)).all();
-      const n = countR?.[0]?.n || 1;
-      const numero = `NCR-${yr}-${String(n).padStart(4,'0')}`;
+      // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+      // dentro del propio INSERT, atómico en D1.
+      const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
       const gravedad = item.gravedad || 'moderado';
       await env.DB.prepare(`
         INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado)
-        VALUES (?,?,?,?,?,?,'abierta')
-      `).bind(auth.empresa_id, obraId, id, numero,
+        SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,'abierta'
+      `).bind(auth.empresa_id, obraId, id, yr,
+              auth.empresa_id, yr,
               item.descripcion || ('Item '+item.id), gravedad).run();
     }
   }
@@ -17414,19 +17406,18 @@ async function crearNcr(request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await ensureQATablas(env);
   const b = await request.json();
-  const yr = new Date().getFullYear();
-  const { results: countR } = await env.DB.prepare(
-    `SELECT COUNT(*)+1 as n FROM ncrs_obra WHERE empresa_id=? AND substr(numero,5,4)=?`
-  ).bind(auth.empresa_id, String(yr)).all();
-  const n = countR?.[0]?.n || 1;
-  const numero = `NCR-${yr}-${String(n).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1.
+  const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const { meta } = await env.DB.prepare(`
     INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado, responsable, fecha_limite, notas)
-    VALUES (?,?,?,?,?,?,?,?,?,?)
-  `).bind(auth.empresa_id, b.obra_id||null, b.ejecucion_id||null, numero,
+    SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,?,?,?,?
+  `).bind(auth.empresa_id, b.obra_id||null, b.ejecucion_id||null, yr,
+          auth.empresa_id, yr,
           b.descripcion||'Sin descripcion', b.gravedad||'moderado', b.estado||'abierta',
           b.responsable||null, b.fecha_limite||null, b.notas||null).run();
-  return json({ ok: true, id: meta.last_row_id, numero });
+  const ncrRow = await env.DB.prepare('SELECT numero FROM ncrs_obra WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: ncrRow?.numero });
 }
 
 async function actualizarNcr(id, request, env) {
@@ -17532,28 +17523,44 @@ async function crearEntregaMaterial(request, env) {
   const cantPedida   = parseFloat(b.cantidad_pedida)   || 0;
   const precioUnit   = parseFloat(b.precio_unitario)   || 0;
   const importeTotal = cantPedida * precioUnit;
-  // Auto-number pedido
-  const yr = new Date().getFullYear();
-  const { results: cnt } = await env.DB.prepare(
-    `SELECT COUNT(*)+1 as n FROM entregas_material WHERE empresa_id=? AND substr(numero_pedido,4,4)=?`
-  ).bind(auth.empresa_id, String(yr)).all();
-  const n = cnt?.[0]?.n || 1;
-  const numeroPedido = b.numero_pedido || `PED-${yr}-${String(n).padStart(4,'0')}`;
-  const { meta } = await env.DB.prepare(`
-    INSERT INTO entregas_material
-      (empresa_id, obra_id, fase_id, numero_pedido, descripcion, proveedor, contacto_prov,
-       unidad, cantidad_pedida, cantidad_recibida, precio_unitario, importe_total,
-       fecha_pedido, fecha_entrega_prevista, estado, ubicacion_obra, notas)
-    VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)
-  `).bind(
-    auth.empresa_id, b.obra_id||null, b.fase_id||null, numeroPedido,
-    b.descripcion||'Material', b.proveedor||null, b.contacto_prov||null,
-    b.unidad||'ud', cantPedida, precioUnit, importeTotal,
-    b.fecha_pedido||new Date().toISOString().slice(0,10),
-    b.fecha_entrega_prevista||null, b.estado||'pendiente',
-    b.ubicacion_obra||null, b.notas||null
-  ).run();
-  return json({ ok: true, id: meta.last_row_id, numero: numeroPedido });
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT cuando no viene explícito del llamante.
+  const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
+  let meta;
+  if (b.numero_pedido) {
+    ({ meta } = await env.DB.prepare(`
+      INSERT INTO entregas_material
+        (empresa_id, obra_id, fase_id, numero_pedido, descripcion, proveedor, contacto_prov,
+         unidad, cantidad_pedida, cantidad_recibida, precio_unitario, importe_total,
+         fecha_pedido, fecha_entrega_prevista, estado, ubicacion_obra, notas)
+      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)
+    `).bind(
+      auth.empresa_id, b.obra_id||null, b.fase_id||null, b.numero_pedido,
+      b.descripcion||'Material', b.proveedor||null, b.contacto_prov||null,
+      b.unidad||'ud', cantPedida, precioUnit, importeTotal,
+      b.fecha_pedido||new Date().toISOString().slice(0,10),
+      b.fecha_entrega_prevista||null, b.estado||'pendiente',
+      b.ubicacion_obra||null, b.notas||null
+    ).run());
+  } else {
+    ({ meta } = await env.DB.prepare(`
+      INSERT INTO entregas_material
+        (empresa_id, obra_id, fase_id, numero_pedido, descripcion, proveedor, contacto_prov,
+         unidad, cantidad_pedida, cantidad_recibida, precio_unitario, importe_total,
+         fecha_pedido, fecha_entrega_prevista, estado, ubicacion_obra, notas)
+      SELECT ?,?,?, 'PED-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM entregas_material WHERE empresa_id=? AND numero_pedido LIKE 'PED-'||?||'-%'),0)+1), ?,?,?,?,?,0,?,?,?,?,?,?,?
+    `).bind(
+      auth.empresa_id, b.obra_id||null, b.fase_id||null, yr,
+      auth.empresa_id, yr,
+      b.descripcion||'Material', b.proveedor||null, b.contacto_prov||null,
+      b.unidad||'ud', cantPedida, precioUnit, importeTotal,
+      b.fecha_pedido||new Date().toISOString().slice(0,10),
+      b.fecha_entrega_prevista||null, b.estado||'pendiente',
+      b.ubicacion_obra||null, b.notas||null
+    ).run());
+  }
+  const entRow = await env.DB.prepare('SELECT numero_pedido FROM entregas_material WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: entRow?.numero_pedido });
 }
 
 async function actualizarEntregaMaterial(id, request, env) {
@@ -17802,32 +17809,53 @@ async function crearRiesgo(request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await ensureRiesgosTable(env);
   const b = await request.json();
-  const yr = new Date().getFullYear();
-  const { results: cnt } = await env.DB.prepare(
-    `SELECT COUNT(*)+1 as n FROM riesgos_obra WHERE empresa_id=? AND substr(numero,6,4)=?`
-  ).bind(auth.empresa_id, String(yr)).all();
-  const n = cnt?.[0]?.n || 1;
-  const numero = b.numero || `RIESGO-${yr}-${String(n).padStart(3,'0')}`;
+  const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const score = calcRiskScore(b.probabilidad||'media', b.impacto||'medio');
-  const { meta } = await env.DB.prepare(`
-    INSERT INTO riesgos_obra
-      (empresa_id, obra_id, numero, titulo, descripcion, categoria,
-       probabilidad, impacto, score, estado, propietario,
-       plan_mitigacion, plan_contingencia,
-       fecha_identificacion, fecha_revision, coste_estimado, dias_impacto, notas)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(
-    auth.empresa_id, b.obra_id||null, numero,
-    b.titulo||'Riesgo', b.descripcion||null, b.categoria||'general',
-    b.probabilidad||'media', b.impacto||'medio', score,
-    b.estado||'activo', b.propietario||null,
-    b.plan_mitigacion||null, b.plan_contingencia||null,
-    b.fecha_identificacion||new Date().toISOString().slice(0,10),
-    b.fecha_revision||null,
-    parseFloat(b.coste_estimado)||0, parseInt(b.dias_impacto)||0,
-    b.notas||null
-  ).run();
-  return json({ ok: true, id: meta.last_row_id, numero, score, nivel: riskLevel(score) });
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT cuando no viene explícito del llamante.
+  let meta;
+  if (b.numero) {
+    ({ meta } = await env.DB.prepare(`
+      INSERT INTO riesgos_obra
+        (empresa_id, obra_id, numero, titulo, descripcion, categoria,
+         probabilidad, impacto, score, estado, propietario,
+         plan_mitigacion, plan_contingencia,
+         fecha_identificacion, fecha_revision, coste_estimado, dias_impacto, notas)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).bind(
+      auth.empresa_id, b.obra_id||null, b.numero,
+      b.titulo||'Riesgo', b.descripcion||null, b.categoria||'general',
+      b.probabilidad||'media', b.impacto||'medio', score,
+      b.estado||'activo', b.propietario||null,
+      b.plan_mitigacion||null, b.plan_contingencia||null,
+      b.fecha_identificacion||new Date().toISOString().slice(0,10),
+      b.fecha_revision||null,
+      parseFloat(b.coste_estimado)||0, parseInt(b.dias_impacto)||0,
+      b.notas||null
+    ).run());
+  } else {
+    ({ meta } = await env.DB.prepare(`
+      INSERT INTO riesgos_obra
+        (empresa_id, obra_id, numero, titulo, descripcion, categoria,
+         probabilidad, impacto, score, estado, propietario,
+         plan_mitigacion, plan_contingencia,
+         fecha_identificacion, fecha_revision, coste_estimado, dias_impacto, notas)
+      SELECT ?,?, 'RIESGO-' || ? || '-' || printf('%03d', COALESCE((SELECT COUNT(*) FROM riesgos_obra WHERE empresa_id=? AND numero LIKE 'RIESGO-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+    `).bind(
+      auth.empresa_id, b.obra_id||null, yr,
+      auth.empresa_id, yr,
+      b.titulo||'Riesgo', b.descripcion||null, b.categoria||'general',
+      b.probabilidad||'media', b.impacto||'medio', score,
+      b.estado||'activo', b.propietario||null,
+      b.plan_mitigacion||null, b.plan_contingencia||null,
+      b.fecha_identificacion||new Date().toISOString().slice(0,10),
+      b.fecha_revision||null,
+      parseFloat(b.coste_estimado)||0, parseInt(b.dias_impacto)||0,
+      b.notas||null
+    ).run());
+  }
+  const riesgoRow = await env.DB.prepare('SELECT numero FROM riesgos_obra WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: riesgoRow?.numero, score, nivel: riskLevel(score) });
 }
 
 async function actualizarRiesgo(id, request, env) {
@@ -17922,25 +17950,40 @@ async function crearAccionItem(request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await ensureAccionItemsTable(env);
   const b = await request.json();
-  const yr = new Date().getFullYear();
-  const { results: cnt } = await env.DB.prepare(
-    `SELECT COUNT(*)+1 as n FROM accion_items WHERE empresa_id=? AND substr(numero,4,4)=?`
-  ).bind(auth.empresa_id, String(yr)).all();
-  const n = cnt?.[0]?.n || 1;
-  const numero = b.numero || `AI-${yr}-${String(n).padStart(4,'0')}`;
-  const { meta } = await env.DB.prepare(`
-    INSERT INTO accion_items
-      (empresa_id, obra_id, acta_id, numero, descripcion, responsable,
-       fecha_limite, prioridad, estado, categoria, notas)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(
-    auth.empresa_id, b.obra_id||null, b.acta_id||null, numero,
-    b.descripcion||'Punto de accion',
-    b.responsable||null, b.fecha_limite||null,
-    b.prioridad||'normal', b.estado||'abierto',
-    b.categoria||'general', b.notas||null
-  ).run();
-  return json({ ok: true, id: meta.last_row_id, numero });
+  const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT cuando no viene explícito del llamante.
+  let meta;
+  if (b.numero) {
+    ({ meta } = await env.DB.prepare(`
+      INSERT INTO accion_items
+        (empresa_id, obra_id, acta_id, numero, descripcion, responsable,
+         fecha_limite, prioridad, estado, categoria, notas)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    `).bind(
+      auth.empresa_id, b.obra_id||null, b.acta_id||null, b.numero,
+      b.descripcion||'Punto de accion',
+      b.responsable||null, b.fecha_limite||null,
+      b.prioridad||'normal', b.estado||'abierto',
+      b.categoria||'general', b.notas||null
+    ).run());
+  } else {
+    ({ meta } = await env.DB.prepare(`
+      INSERT INTO accion_items
+        (empresa_id, obra_id, acta_id, numero, descripcion, responsable,
+         fecha_limite, prioridad, estado, categoria, notas)
+      SELECT ?,?,?, 'AI-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM accion_items WHERE empresa_id=? AND numero LIKE 'AI-'||?||'-%'),0)+1), ?,?,?,?,?,?,?
+    `).bind(
+      auth.empresa_id, b.obra_id||null, b.acta_id||null, yr,
+      auth.empresa_id, yr,
+      b.descripcion||'Punto de accion',
+      b.responsable||null, b.fecha_limite||null,
+      b.prioridad||'normal', b.estado||'abierto',
+      b.categoria||'general', b.notas||null
+    ).run());
+  }
+  const aiRow = await env.DB.prepare('SELECT numero FROM accion_items WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: aiRow?.numero });
 }
 
 async function actualizarAccionItem(id, request, env) {
@@ -18126,23 +18169,24 @@ async function crearInstruccionObra(request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await ensureInstruccionesTable(env);
   const b = await request.json();
-  const yr = new Date().getFullYear();
-  const { results: cnt } = await env.DB.prepare(
-    `SELECT COUNT(*) as n FROM instrucciones_obra WHERE empresa_id=? AND obra_id=? AND numero LIKE 'IST-${yr}-%'`
-  ).bind(auth.empresa_id, b.obra_id).all();
-  const num = `IST-${yr}-${String((cnt[0]?.n || 0) + 1).padStart(3, '0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1.
+  const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const { meta } = await env.DB.prepare(
     `INSERT INTO instrucciones_obra (empresa_id,obra_id,numero,titulo,descripcion,destinatario,emitido_por,prioridad,estado,fecha_emision,fecha_respuesta_limite,notas_respuesta,rfi_id)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'IST-' || ? || '-' || printf('%03d', COALESCE((SELECT COUNT(*) FROM instrucciones_obra WHERE empresa_id=? AND obra_id=? AND numero LIKE 'IST-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    auth.empresa_id, b.obra_id, num, b.titulo,
+    auth.empresa_id, b.obra_id, yr,
+    auth.empresa_id, b.obra_id, yr,
+    b.titulo,
     b.descripcion || null, b.destinatario || null, b.emitido_por || null,
     b.prioridad || 'normal', b.estado || 'emitida',
     b.fecha_emision || new Date().toISOString().slice(0,10),
     b.fecha_respuesta_limite || null, b.notas_respuesta || null,
     b.rfi_id || null
   ).run();
-  return json({ ok: true, id: meta.last_row_id, numero: num });
+  const istRow = await env.DB.prepare('SELECT numero FROM instrucciones_obra WHERE id=?').bind(meta.last_row_id).first();
+  return json({ ok: true, id: meta.last_row_id, numero: istRow?.numero });
 }
 
 async function actualizarInstruccionObra(id, request, env) {
@@ -18966,22 +19010,18 @@ async function crearOrdenCompra(request, env) {
   const body = await request.json();
   const { proveedor, descripcion, obra_id, fecha_emision, fecha_entrega, estado = 'borrador', notas } = body;
   if (!proveedor) return err('Proveedor requerido', 400);
-  const year = new Date().getFullYear();
-  const { results: last } = await env.DB.prepare(
-    `SELECT numero FROM ordenes_compra WHERE empresa_id = ? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `OC-${year}-%`).all();
-  let seq = 1;
-  if (last.length > 0) {
-    const parts = last[0].numero.split('-');
-    seq = parseInt(parts[parts.length - 1]) + 1;
-  }
-  const numero = `OC-${year}-${String(seq).padStart(4, '0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
     INSERT INTO ordenes_compra (empresa_id, obra_id, numero, proveedor, descripcion, fecha_emision, fecha_entrega, estado, notas)
-    VALUES (?,?,?,?,?,?,?,?,?)
-  `).bind(empresa_id, obra_id || null, numero, proveedor, descripcion || null,
+    SELECT ?,?, 'OC-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM ordenes_compra WHERE empresa_id=? AND numero LIKE 'OC-'||?||'-%'),0)+1), ?,?,?,?,?,?
+  `).bind(empresa_id, obra_id || null, year,
+          empresa_id, year,
+          proveedor, descripcion || null,
           fecha_emision || null, fecha_entrega || null, estado, notas || null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+  const ocRow2 = await env.DB.prepare('SELECT numero FROM ordenes_compra WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: ocRow2?.numero }, 201);
 }
 
 async function actualizarOrdenCompra(id, request, env) {
@@ -19482,22 +19522,17 @@ async function crearFieldReport(request, env) {
   const { obra_id, fecha, preparado_por, estado='borrador', clima_manana, clima_tarde, temperatura,
           trabajadores_presentes=0, equipos_presentes, trabajo_realizado, materiales_recibidos, issues, visitas, observaciones } = body;
   if (!fecha) return err('Fecha requerida', 400);
-  // Auto-number: FR-YYYY-NNNN
-  const year = new Date().getFullYear();
-  const { results: last } = await env.DB.prepare(
-    `SELECT numero FROM field_reports WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `FR-${year}-%`).all();
-  let seq = 1;
-  if (last.length > 0) {
-    const parts = last[0].numero.split('-');
-    seq = parseInt(parts[parts.length-1]) + 1;
-  }
-  const numero = `FR-${year}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (FR-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
     INSERT INTO field_reports (empresa_id, obra_id, numero, fecha, preparado_por, estado, clima_manana, clima_tarde, temperatura, trabajadores_presentes, equipos_presentes, trabajo_realizado, materiales_recibidos, issues, visitas, observaciones)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(empresa_id, obra_id||null, numero, fecha, preparado_por||null, estado, clima_manana||null, clima_tarde||null, temperatura||null, trabajadores_presentes, equipos_presentes||null, trabajo_realizado||null, materiales_recibidos||null, issues||null, visitas||null, observaciones||null).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+    SELECT ?,?, 'FR-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM field_reports WHERE empresa_id=? AND numero LIKE 'FR-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?
+  `).bind(empresa_id, obra_id||null, year,
+          empresa_id, year,
+          fecha, preparado_por||null, estado, clima_manana||null, clima_tarde||null, temperatura||null, trabajadores_presentes, equipos_presentes||null, trabajo_realizado||null, materiales_recibidos||null, issues||null, visitas||null, observaciones||null).run();
+  const frRow = await env.DB.prepare('SELECT numero FROM field_reports WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: frRow?.numero }, 201);
 }
 
 async function actualizarFieldReport(id, request, env) {
@@ -19577,15 +19612,6 @@ async function crearGarantia(request, env) {
   const b = await request.json();
   if (!b.item) return err('El campo item es requerido', 400);
 
-  // Auto-numero GAR-YYYY-NNNN
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM garantias WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `GAR-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `GAR-${anio}-${String(seq).padStart(4,'0')}`;
-
   // Calcular fecha_fin si se da inicio + duracion
   let fecha_fin = b.fecha_fin || null;
   if (!fecha_fin && b.fecha_inicio && b.duracion_meses) {
@@ -19594,13 +19620,17 @@ async function crearGarantia(request, env) {
     fecha_fin = d.toISOString().slice(0,10);
   }
 
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (GAR-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO garantias (empresa_id,obra_id,numero,item,fabricante,proveedor,numero_serie,numero_certificado,tipo,fecha_instalacion,fecha_inicio,fecha_fin,duracion_meses,estado,contacto_soporte,descripcion,notas,submittal_id)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'GAR-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM garantias WHERE empresa_id=? AND numero LIKE 'GAR-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
     empresa_id,
     b.obra_id ? parseInt(b.obra_id) : null,
-    numero,
+    anio,
+    empresa_id, anio,
     b.item,
     b.fabricante || null,
     b.proveedor  || null,
@@ -19617,7 +19647,8 @@ async function crearGarantia(request, env) {
     b.notas || null,
     b.submittal_id ? parseInt(b.submittal_id) : null
   ).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+  const garRow = await env.DB.prepare('SELECT numero FROM garantias WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: garRow?.numero }, 201);
 }
 
 async function actualizarGarantia(id, request, env) {
@@ -19711,21 +19742,17 @@ async function crearAlquiler(request, env) {
   await ensureAlquileresTable(env);
   const b = await request.json();
   if (!b.equipo || !b.fecha_entrada) return err('equipo y fecha_entrada son requeridos', 400);
-  // Auto-numero ALQ-YYYY-NNNN
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM alquileres WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `ALQ-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `ALQ-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (ALQ-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO alquileres (empresa_id,obra_id,numero,equipo,tipo,proveedor,matricula,operador,fecha_entrada,fecha_salida_prev,fecha_salida_real,tarifa_dia,tarifa_semana,tarifa_mes,modo_tarifa,coste_total,estado,motivo_fin,observaciones)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'ALQ-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM alquileres WHERE empresa_id=? AND numero LIKE 'ALQ-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
     empresa_id,
     b.obra_id ? parseInt(b.obra_id) : null,
-    numero,
+    anio,
+    empresa_id, anio,
     b.equipo,
     b.tipo || 'maquinaria',
     b.proveedor || null,
@@ -19743,7 +19770,8 @@ async function crearAlquiler(request, env) {
     b.motivo_fin || null,
     b.observaciones || null
   ).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+  const alqRow = await env.DB.prepare('SELECT numero FROM alquileres WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: alqRow?.numero }, 201);
 }
 
 async function actualizarAlquiler(id, request, env) {
@@ -19820,21 +19848,17 @@ async function crearEntregable(request, env) {
   await ensureEntregablesTable(env);
   const b = await request.json();
   if (!b.titulo) return err('titulo es requerido', 400);
-  // Auto-number ETG-YYYY-NNNN
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM entregables WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `ETG-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `ETG-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (ETG-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO entregables (empresa_id,obra_id,numero,titulo,tipo,descripcion,responsable,fecha_limite,fecha_entrega,estado,revision,notas)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'ETG-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM entregables WHERE empresa_id=? AND numero LIKE 'ETG-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?`
   ).bind(
     empresa_id,
     b.obra_id ? parseInt(b.obra_id) : null,
-    numero,
+    anio,
+    empresa_id, anio,
     b.titulo,
     b.tipo || 'documentacion',
     b.descripcion || null,
@@ -19845,7 +19869,8 @@ async function crearEntregable(request, env) {
     b.revision || null,
     b.notas || null
   ).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+  const etgRow = await env.DB.prepare('SELECT numero FROM entregables WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: etgRow?.numero }, 201);
 }
 
 async function actualizarEntregable(id, request, env) {
@@ -19920,20 +19945,18 @@ async function crearLeccion(request, env) {
   await ensureLeccionesTable(env);
   const b = await request.json();
   if (!b.titulo || !b.leccion) return err('titulo y leccion son requeridos', 400);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM lecciones_aprendidas WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `LL-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `LL-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (LL-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO lecciones_aprendidas (empresa_id,obra_id,numero,titulo,categoria,fase,impacto,descripcion_problema,causa_raiz,leccion,recomendacion,autor,estado)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'LL-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM lecciones_aprendidas WHERE empresa_id=? AND numero LIKE 'LL-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?`
   ).bind(
     empresa_id,
     b.obra_id ? parseInt(b.obra_id) : null,
-    numero, b.titulo,
+    anio,
+    empresa_id, anio,
+    b.titulo,
     b.categoria || 'tecnica',
     b.fase || 'ejecucion',
     b.impacto || 'medio',
@@ -19944,7 +19967,8 @@ async function crearLeccion(request, env) {
     b.autor || nombre || null,
     b.estado || 'borrador'
   ).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+  const llRow = await env.DB.prepare('SELECT numero FROM lecciones_aprendidas WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: llRow?.numero }, 201);
 }
 
 async function actualizarLeccion(id, request, env) {
@@ -20051,7 +20075,7 @@ async function crearRendimiento(request, env) {
     b.responsable || nombre || null,
     b.observaciones || null
   ).run();
-  return json({ ok: true, id: r.meta.last_row_id }, { status: 201 });
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
 async function actualizarRendimiento(id, request, env) {
@@ -20128,20 +20152,18 @@ async function crearAts(request, env) {
   await ensureAtsTable(env);
   const b = await request.json();
   if (!b.tarea || !b.fecha) return err('tarea y fecha son requeridos', 400);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM ats_jha WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `ATS-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `ATS-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (ATS-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO ats_jha (empresa_id,obra_id,numero,fecha,hora_inicio,tarea,ubicacion,responsable,trabajadores,peligros,controles,epis,estado,observaciones,firmado_por)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'ATS-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM ats_jha WHERE empresa_id=? AND numero LIKE 'ATS-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
     empresa_id,
     b.obra_id ? parseInt(b.obra_id) : null,
-    numero, b.fecha,
+    anio,
+    empresa_id, anio,
+    b.fecha,
     b.hora_inicio || null,
     b.tarea,
     b.ubicacion || null,
@@ -20154,7 +20176,8 @@ async function crearAts(request, env) {
     b.observaciones || null,
     b.firmado_por || nombre || null
   ).run();
-  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+  const atsRow = await env.DB.prepare('SELECT numero FROM ats_jha WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, numero: atsRow?.numero }, 201);
 }
 
 async function actualizarAts(id, request, env) {
@@ -20241,13 +20264,9 @@ async function crearEvaluacionProv(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureEvaluacionesProvTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM evaluaciones_proveedores WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `EV-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `EV-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (EV-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const q      = Number(d.nota_calidad||3);
   const p      = Number(d.nota_plazo||3);
   const c      = Number(d.nota_coste||3);
@@ -20260,9 +20279,10 @@ async function crearEvaluacionProv(request, env) {
       evaluador,fecha_evaluacion,periodo_ini,periodo_fin,
       nota_calidad,nota_plazo,nota_coste,nota_seguridad,nota_comunicacion,
       puntuacion_total,recomendado,estado,observaciones,puntos_fuertes,puntos_mejora)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'EV-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM evaluaciones_proveedores WHERE empresa_id=? AND numero LIKE 'EV-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
     d.proveedor, d.tipo_proveedor||'subcontratista', d.trabajo_descripcion||null,
     d.evaluador||null, d.fecha_evaluacion,
     d.periodo_ini||null, d.periodo_fin||null,
@@ -20271,7 +20291,8 @@ async function crearEvaluacionProv(request, env) {
     d.estado||'borrador',
     d.observaciones||null, d.puntos_fuertes||null, d.puntos_mejora||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero, puntuacion_total: total }, 201);
+  const evRow = await env.DB.prepare('SELECT numero FROM evaluaciones_proveedores WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: evRow?.numero, puntuacion_total: total }, 201);
 }
 
 async function actualizarEvaluacionProv(id, request, env) {
@@ -20365,29 +20386,27 @@ async function crearChangeOrder(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureChangeOrdersTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM solicitudes_cambio WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `CO-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `CO-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (CO-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO solicitudes_cambio
      (empresa_id,obra_id,numero,titulo,tipo,origen,solicitado_por,
       fecha_solicitud,fecha_respuesta_limite,fecha_aprobacion,
       descripcion,justificacion,impacto_coste,impacto_plazo_dias,
       estado,aprobado_por,referencias,notas)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'CO-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM solicitudes_cambio WHERE empresa_id=? AND numero LIKE 'CO-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
     d.titulo, d.tipo||'mixta', d.origen||'cliente', d.solicitado_por||null,
     d.fecha_solicitud, d.fecha_respuesta_limite||null, d.fecha_aprobacion||null,
     d.descripcion||null, d.justificacion||null,
     Number(d.impacto_coste||0), Number(d.impacto_plazo_dias||0),
     d.estado||'pendiente', d.aprobado_por||null, d.referencias||null, d.notas||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+  const coRow = await env.DB.prepare('SELECT numero FROM solicitudes_cambio WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: coRow?.numero }, 201);
 }
 
 async function actualizarChangeOrder(id, request, env) {
@@ -20476,13 +20495,9 @@ async function crearEnsayo(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureEnsayosTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM ensayos_materiales WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `ENS-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `ENS-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (ENS-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   // Auto-resultado si hay valor medido y límites definidos
   let resultado = d.resultado || 'pendiente';
   const vm = parseFloat(d.valor_medido);
@@ -20499,9 +20514,10 @@ async function crearEnsayo(request, env) {
       proveedor,fecha_ensayo,realizado_por,laboratorio,norma_referencia,
       valor_medido,unidad_medida,valor_minimo,valor_maximo,
       resultado,observaciones,certificado_ref,accion_correctiva)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'ENS-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM ensayos_materiales WHERE empresa_id=? AND numero LIKE 'ENS-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
     d.tipo_ensayo||'resistencia_aislamiento', d.material, d.descripcion||null,
     d.ubicacion||null, d.lote_muestra||null, d.proveedor||null,
     d.fecha_ensayo, d.realizado_por||null, d.laboratorio||null, d.norma_referencia||null,
@@ -20509,7 +20525,8 @@ async function crearEnsayo(request, env) {
     isNaN(vmin)?null:vmin, isNaN(vmax)?null:vmax,
     resultado, d.observaciones||null, d.certificado_ref||null, d.accion_correctiva||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero, resultado }, 201);
+  const ensRow = await env.DB.prepare('SELECT numero FROM ensayos_materiales WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: ensRow?.numero, resultado }, 201);
 }
 
 async function actualizarEnsayo(id, request, env) {
@@ -20602,27 +20619,26 @@ async function crearResiduo(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureResiduosTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM residuos_obra WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `RES-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `RES-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (RES-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO residuos_obra
      (empresa_id,obra_id,numero,fecha,codigo_ler,descripcion_residuo,estado_fisico,
       cantidad,unidad,origen,destino,gestor_autorizado,numero_autorizacion,
       albaran_numero,estado,observaciones)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'RES-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM residuos_obra WHERE empresa_id=? AND numero LIKE 'RES-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero, d.fecha,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
+    d.fecha,
     d.codigo_ler||null, d.descripcion_residuo, d.estado_fisico||'solido',
     Number(d.cantidad||0), d.unidad||'kg', d.origen||'instalacion', d.destino||'reciclaje',
     d.gestor_autorizado||null, d.numero_autorizacion||null,
     d.albaran_numero||null, d.estado||'registrado', d.observaciones||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+  const resRow = await env.DB.prepare('SELECT numero FROM residuos_obra WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: resRow?.numero }, 201);
 }
 
 async function actualizarResiduo(id, request, env) {
@@ -20709,13 +20725,9 @@ async function crearParteMaquinaria(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensurePartesMaquinariaTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM partes_maquinaria WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `PMA-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `PMA-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (PMA-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   // Auto-calculate hours worked and fuel consumption
   const hIni = parseFloat(d.horas_inicio); const hFin = parseFloat(d.horas_fin);
   const hTrab = !isNaN(hIni) && !isNaN(hFin) ? Math.max(0, hFin - hIni) : (parseFloat(d.horas_trabajadas)||null);
@@ -20730,16 +20742,19 @@ async function crearParteMaquinaria(request, env) {
       horas_inicio,horas_fin,horas_trabajadas,combustible_inicio,combustible_fin,
       combustible_repostado,consumo_litros,tareas_realizadas,ubicacion_trabajo,
       incidencias,estado_maquina,coste_hora,coste_total,observaciones)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'PMA-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM partes_maquinaria WHERE empresa_id=? AND numero LIKE 'PMA-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero, d.fecha,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
+    d.fecha,
     d.maquina, d.tipo_maquina||'otros', d.matricula||null, d.operador||null,
     isNaN(hIni)?null:hIni, isNaN(hFin)?null:hFin, hTrab,
     isNaN(cIni)?null:cIni, isNaN(cFin)?null:cFin, cRep, cLit,
     d.tareas_realizadas||null, d.ubicacion_trabajo||null, d.incidencias||null,
     d.estado_maquina||'trabajando', costH, costT, d.observaciones||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero, horas_trabajadas: hTrab, consumo_litros: cLit, coste_total: costT }, 201);
+  const pmaRow = await env.DB.prepare('SELECT numero FROM partes_maquinaria WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: pmaRow?.numero, horas_trabajadas: hTrab, consumo_litros: cLit, coste_total: costT }, 201);
 }
 
 async function actualizarParteMaquinaria(id, request, env) {
@@ -20827,13 +20842,9 @@ async function crearConsumoMaterial(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureConsumosMaterialTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM consumos_material WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `CM-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `CM-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (CM-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const cant   = Number(d.cantidad||0);
   const costU  = parseFloat(d.coste_unitario)||null;
   const costT  = costU ? Math.round(cant * costU * 100)/100 : (parseFloat(d.coste_total)||null);
@@ -20842,14 +20853,17 @@ async function crearConsumoMaterial(request, env) {
      (empresa_id,obra_id,numero,fecha,tipo_movimiento,material,referencia,
       cantidad,unidad,almacen,solicitado_por,fase_trabajo,
       coste_unitario,coste_total,observaciones)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'CM-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM consumos_material WHERE empresa_id=? AND numero LIKE 'CM-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero, d.fecha,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
+    d.fecha,
     d.tipo_movimiento||'salida', d.material, d.referencia||null,
     cant, d.unidad||'ud', d.almacen||null, d.solicitado_por||null, d.fase_trabajo||null,
     costU, costT, d.observaciones||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero, coste_total: costT }, 201);
+  const cmRow = await env.DB.prepare('SELECT numero FROM consumos_material WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: cmRow?.numero, coste_total: costT }, 201);
 }
 
 async function actualizarConsumoMaterial(id, request, env) {
@@ -20940,22 +20954,20 @@ async function crearAccidente(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureAccidentesTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM accidentes_incidentes WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `AI-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `AI-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — registro legal de
+  // seguridad (accidentes/incidentes) con número calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO accidentes_incidentes
      (empresa_id,obra_id,numero,fecha,hora,tipo,gravedad,afectado,empresa_afectado,
       actividad_realizada,ubicacion,descripcion,testigos,lesiones,parte_cuerpo,dias_baja,
       causas_inmediatas,causas_raiz,acciones_correctivas,investigador,notificado_a,
       fecha_cierre,estado,observaciones)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'AI-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM accidentes_incidentes WHERE empresa_id=? AND numero LIKE 'AI-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero, d.fecha, d.hora||null,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
+    d.fecha, d.hora||null,
     d.tipo||'near_miss', d.gravedad||'near_miss',
     d.afectado||null, d.empresa_afectado||null, d.actividad_realizada||null,
     d.ubicacion||null, d.descripcion, d.testigos||null, d.lesiones||null,
@@ -20964,7 +20976,8 @@ async function crearAccidente(request, env) {
     d.investigador||null, d.notificado_a||null, d.fecha_cierre||null,
     d.estado||'abierto', d.observaciones||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+  const accRow = await env.DB.prepare('SELECT numero FROM accidentes_incidentes WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: accRow?.numero }, 201);
 }
 
 async function actualizarAccidente(id, request, env) {
@@ -21047,26 +21060,25 @@ async function crearFlujoCaja(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureFlujoCajaTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM flujo_caja WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `FC-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `FC-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (FC-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(
     `INSERT INTO flujo_caja
      (empresa_id,obra_id,numero,fecha,periodo,tipo,concepto,categoria,
       importe_previsto,importe_real,estado,cliente_proveedor,referencia,observaciones)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'FC-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM flujo_caja WHERE empresa_id=? AND numero LIKE 'FC-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero, d.fecha,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
+    d.fecha,
     d.periodo||null, d.tipo||'cobro', d.concepto, d.categoria||'certificacion',
     Number(d.importe_previsto||0),
     d.importe_real!=null ? Number(d.importe_real) : null,
     d.estado||'previsto', d.cliente_proveedor||null, d.referencia||null, d.observaciones||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+  const fcRow = await env.DB.prepare('SELECT numero FROM flujo_caja WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: fcRow?.numero }, 201);
 }
 
 async function actualizarFlujoCaja(id, request, env) {
@@ -21143,26 +21155,25 @@ async function crearSolicitudMaterial(request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureSolicitudesMaterialTable(env);
-  const anio = new Date().getFullYear();
-  const last = await env.DB.prepare(
-    `SELECT numero FROM solicitudes_material WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
-  ).bind(empresa_id, `SM-${anio}-%`).first();
-  let seq = 1;
-  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
-  const numero = `SM-${anio}-${String(seq).padStart(4,'0')}`;
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número (SM-YYYY-NNNN)
+  // calculado dentro del propio INSERT, atómico en D1.
+  const anio = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const lineas = typeof d.lineas === 'string' ? d.lineas : JSON.stringify(d.lineas || []);
   const r = await env.DB.prepare(
     `INSERT INTO solicitudes_material
      (empresa_id,obra_id,numero,fecha_solicitud,fecha_necesaria,solicitante,
       fase_trabajo,prioridad,lineas,estado,aprobado_por,fecha_aprobacion,pedido_id,observaciones)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     SELECT ?,?, 'SM-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM solicitudes_material WHERE empresa_id=? AND numero LIKE 'SM-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
-    empresa_id, d.obra_id||null, numero, d.fecha_solicitud,
+    empresa_id, d.obra_id||null, anio,
+    empresa_id, anio,
+    d.fecha_solicitud,
     d.fecha_necesaria||null, d.solicitante||null, d.fase_trabajo||null,
     d.prioridad||'normal', lineas, d.estado||'pendiente',
     d.aprobado_por||null, d.fecha_aprobacion||null, d.pedido_id||null, d.observaciones||null
   ).run();
-  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+  const smRow = await env.DB.prepare('SELECT numero FROM solicitudes_material WHERE id=?').bind(r.meta.last_row_id).first();
+  return jsonResp({ id: r.meta.last_row_id, numero: smRow?.numero }, 201);
 }
 
 async function actualizarSolicitudMaterial(id, request, env) {
@@ -21251,17 +21262,22 @@ async function crearLicenciaObra(request, env) {
   await ensureLicenciasObraTable(env);
   const b = await request.json();
   if (!b.tipo || !b.titulo) return jsonError('tipo y titulo son obligatorios', 400);
-  const cnt = await env.DB.prepare('SELECT COUNT(*) as n FROM licencias_obra WHERE empresa_id=?').bind(empresa_id).first();
-  const num = 'LIC-' + new Date().getFullYear() + '-' + String((cnt?.n||0)+1).padStart(4,'0');
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1. Se mantiene COUNT(*) global (sin filtrar por año,
+  // igual que el código original) para no cambiar la numeración de licencias ya existentes.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const res = await env.DB.prepare(
     `INSERT INTO licencias_obra (empresa_id,obra_id,numero,tipo,titulo,organismo,numero_expediente,fecha_solicitud,fecha_concesion,fecha_caducidad,estado,importe_tasa,adjunto_url,contacto,notas,alertar_dias,created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(empresa_id, b.obra_id||null, num, b.tipo, b.titulo, b.organismo||null,
+     SELECT ?,?, 'LIC-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM licencias_obra WHERE empresa_id=?),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?`
+  ).bind(empresa_id, b.obra_id||null, year,
+    empresa_id,
+    b.tipo, b.titulo, b.organismo||null,
     b.numero_expediente||null, b.fecha_solicitud||null, b.fecha_concesion||null,
     b.fecha_caducidad||null, b.estado||'en_tramite', b.importe_tasa||null,
     b.adjunto_url||null, b.contacto||null, b.notas||null, b.alertar_dias||30,
     user?.email||null).run();
-  return jsonOk({ id: res.meta.last_row_id, numero: num }, 201);
+  const licRow = await env.DB.prepare('SELECT numero FROM licencias_obra WHERE id=?').bind(res.meta.last_row_id).first();
+  return jsonOk({ id: res.meta.last_row_id, numero: licRow?.numero }, 201);
 }
 
 async function actualizarLicenciaObra(id, request, env) {
@@ -21331,19 +21347,28 @@ async function crearPrecioUnitario(request, env) {
   await ensureCatalogoPreciosTable(env);
   const b = await request.json();
   if (!b.descripcion || b.precio_unitario === undefined) return jsonError('descripcion y precio_unitario son obligatorios', 400);
-  let codigo = b.codigo || null;
-  if (!codigo) {
-    const cnt = await env.DB.prepare('SELECT COUNT(*) as n FROM catalogo_precios WHERE empresa_id=?').bind(empresa_id).first();
-    codigo = 'P' + String((cnt?.n||0)+1).padStart(5,'0');
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — código calculado
+  // dentro del propio INSERT cuando no viene explícito del llamante.
+  let res;
+  if (b.codigo) {
+    res = await env.DB.prepare(
+      `INSERT INTO catalogo_precios (empresa_id,codigo,capitulo,descripcion,unidad,precio_unitario,rendimiento,mano_obra,materiales,maquinaria,activo,notas)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(empresa_id, b.codigo, b.capitulo||null, b.descripcion, b.unidad||'ud',
+      parseFloat(b.precio_unitario)||0, b.rendimiento||null,
+      parseFloat(b.mano_obra)||0, parseFloat(b.materiales)||0, parseFloat(b.maquinaria)||0,
+      b.activo !== false ? 1 : 0, b.notas||null).run();
+  } else {
+    res = await env.DB.prepare(
+      `INSERT INTO catalogo_precios (empresa_id,codigo,capitulo,descripcion,unidad,precio_unitario,rendimiento,mano_obra,materiales,maquinaria,activo,notas)
+       SELECT ?, 'P' || printf('%05d', COALESCE((SELECT COUNT(*) FROM catalogo_precios WHERE empresa_id=?),0)+1), ?,?,?,?,?,?,?,?,?,?`
+    ).bind(empresa_id, empresa_id, b.capitulo||null, b.descripcion, b.unidad||'ud',
+      parseFloat(b.precio_unitario)||0, b.rendimiento||null,
+      parseFloat(b.mano_obra)||0, parseFloat(b.materiales)||0, parseFloat(b.maquinaria)||0,
+      b.activo !== false ? 1 : 0, b.notas||null).run();
   }
-  const res = await env.DB.prepare(
-    `INSERT INTO catalogo_precios (empresa_id,codigo,capitulo,descripcion,unidad,precio_unitario,rendimiento,mano_obra,materiales,maquinaria,activo,notas)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(empresa_id, codigo, b.capitulo||null, b.descripcion, b.unidad||'ud',
-    parseFloat(b.precio_unitario)||0, b.rendimiento||null,
-    parseFloat(b.mano_obra)||0, parseFloat(b.materiales)||0, parseFloat(b.maquinaria)||0,
-    b.activo !== false ? 1 : 0, b.notas||null).run();
-  return jsonOk({ id: res.meta.last_row_id, codigo }, 201);
+  const cpRow = await env.DB.prepare('SELECT codigo FROM catalogo_precios WHERE id=?').bind(res.meta.last_row_id).first();
+  return jsonOk({ id: res.meta.last_row_id, codigo: cpRow?.codigo }, 201);
 }
 
 async function actualizarPrecioUnitario(id, request, env) {
@@ -21507,17 +21532,22 @@ async function crearComparativoOferta(request, env) {
   await ensureComparativosOfertaTable(env);
   const b = await request.json();
   if (!b.titulo || !b.fecha) return jsonError('titulo y fecha son obligatorios', 400);
-  const cnt = await env.DB.prepare('SELECT COUNT(*) as n FROM comparativos_oferta WHERE empresa_id=?').bind(empresa_id).first();
-  const num = 'COF-' + new Date().getFullYear() + '-' + String((cnt?.n||0)+1).padStart(4,'0');
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1. COUNT(*) global (sin filtrar por año, igual que
+  // el código original) para no cambiar la numeración de comparativos ya existentes.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const res = await env.DB.prepare(
     `INSERT INTO comparativos_oferta (empresa_id,obra_id,numero,titulo,descripcion,fecha,fecha_limite,tipo,estado,partidas,oferentes,criterio_adj,adjudicado_a,importe_adj,notas,created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(empresa_id, b.obra_id||null, num, b.titulo, b.descripcion||null, b.fecha,
+     SELECT ?,?, 'COF-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM comparativos_oferta WHERE empresa_id=?),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?`
+  ).bind(empresa_id, b.obra_id||null, year,
+    empresa_id,
+    b.titulo, b.descripcion||null, b.fecha,
     b.fecha_limite||null, b.tipo||'suministro', b.estado||'abierto',
     JSON.stringify(b.partidas||[]), JSON.stringify(b.oferentes||[]),
     b.criterio_adj||null, b.adjudicado_a||null, b.importe_adj||null,
     b.notas||null, user?.email||null).run();
-  return jsonOk({ id: res.meta.last_row_id, numero: num }, 201);
+  const cofRow = await env.DB.prepare('SELECT numero FROM comparativos_oferta WHERE id=?').bind(res.meta.last_row_id).first();
+  return jsonOk({ id: res.meta.last_row_id, numero: cofRow?.numero }, 201);
 }
 
 async function actualizarComparativoOferta(id, request, env) {
@@ -21698,19 +21728,24 @@ async function crearOrdenTrabajo(request, env) {
   await ensureOrdenesTrabajo(env);
   const b = await request.json();
   if (!b.titulo || !b.fecha_apertura) return jsonError('titulo y fecha_apertura son obligatorios', 400);
-  const cnt = await env.DB.prepare('SELECT COUNT(*) as n FROM ordenes_trabajo WHERE empresa_id=?').bind(empresa_id).first();
-  const num = 'OT-' + new Date().getFullYear() + '-' + String((cnt?.n||0)+1).padStart(4,'0');
+  // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
+  // dentro del propio INSERT, atómico en D1. COUNT(*) global (sin filtrar por año, igual que
+  // el código original) para no cambiar la numeración de órdenes ya existentes.
+  const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const res = await env.DB.prepare(
     `INSERT INTO ordenes_trabajo (empresa_id,obra_id,numero,tipo,titulo,descripcion,ubicacion,equipo,prioridad,estado,asignado_a,fecha_apertura,fecha_inicio,fecha_limite,fecha_cierre,horas_estimadas,horas_reales,materiales,causa_raiz,solucion,verificado_por,observaciones,created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(empresa_id, b.obra_id||null, num, b.tipo||'correctivo', b.titulo,
+     SELECT ?,?, 'OT-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ordenes_trabajo WHERE empresa_id=?),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`
+  ).bind(empresa_id, b.obra_id||null, year,
+    empresa_id,
+    b.tipo||'correctivo', b.titulo,
     b.descripcion||null, b.ubicacion||null, b.equipo||null,
     b.prioridad||'normal', b.estado||'pendiente', b.asignado_a||null,
     b.fecha_apertura, b.fecha_inicio||null, b.fecha_limite||null, b.fecha_cierre||null,
     b.horas_estimadas||null, b.horas_reales||null, b.materiales||null,
     b.causa_raiz||null, b.solucion||null, b.verificado_por||null,
     b.observaciones||null, user?.email||null).run();
-  return jsonOk({ id: res.meta.last_row_id, numero: num }, 201);
+  const otRow = await env.DB.prepare('SELECT numero FROM ordenes_trabajo WHERE id=?').bind(res.meta.last_row_id).first();
+  return jsonOk({ id: res.meta.last_row_id, numero: otRow?.numero }, 201);
 }
 
 async function actualizarOrdenTrabajo(id, request, env) {
