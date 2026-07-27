@@ -6579,8 +6579,12 @@ async function getObras(request, env) {
 async function crearObra(request, env) {
   const { isSuperadmin, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) return err('No autorizado', 403);
-  const { nombre, codigo } = await request.json();
-  if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y código');
+  const bodyObra = await request.json();
+  // SEC-AUDIT-07 (27/07/2026): mismo bug de confusión de tipos que crearUsuario — nombre/codigo
+  // no-string (ej. número) disparaba "codigo?.trim is not a function" (500 sin manejar).
+  const nombre = typeof bodyObra.nombre === 'string' ? bodyObra.nombre : '';
+  const codigo = typeof bodyObra.codigo === 'string' ? bodyObra.codigo : '';
+  if (!nombre.trim() || !codigo.trim()) return err('Faltan nombre y código');
   try {
     const r = await env.DB.prepare('INSERT INTO obras (nombre, codigo, empresa_id) VALUES (?, ?, ?)')
       .bind(nombre.trim(), codigo.trim().toUpperCase(), empresa_id).run();
@@ -6663,7 +6667,10 @@ async function getBobinas(request, env) {
 async function crearBobina(request, env, ctx) {
   const { obraId, usuario, departamento, empresa_id } = await getAuth(request, env);
   const body = await request.json();
-  const { codigo, proveedor, tipo_cable, notas, registrado_por, num_albaran } = body;
+  const { proveedor, tipo_cable, notas, registrado_por, num_albaran } = body;
+  // SEC-AUDIT-07 (27/07/2026): mismo bug de confusión de tipos que crearUsuario — codigo
+  // no-string (ej. número) disparaba "codigo.trim is not a function" (500 sin manejar).
+  const codigo = typeof body.codigo === 'string' ? body.codigo : '';
   if (!codigo || !proveedor || !tipo_cable) return err('Faltan campos: codigo, proveedor, tipo_cable');
 
   const obraFinal = body.obra_id ? parseInt(body.obra_id) : obraId;
@@ -11972,8 +11979,11 @@ async function crearIncidencia(request, env, ctx) {
   const { empresa_id, obra_id, departamento, nombre } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  const { titulo, descripcion, tipo = 'otro', gravedad = 'media', asignado_a, fecha } = body;
-  if (!titulo?.trim()) return err('El título es obligatorio', 400);
+  const { descripcion, tipo = 'otro', gravedad = 'media', asignado_a, fecha } = body;
+  // SEC-AUDIT-07 (27/07/2026): mismo bug de confusión de tipos que crearUsuario — titulo
+  // no-string (ej. número) disparaba "titulo?.trim is not a function" (500 sin manejar).
+  const titulo = typeof body.titulo === 'string' ? body.titulo : '';
+  if (!titulo.trim()) return err('El título es obligatorio', 400);
   // DEPT-01: solo roles con vision transversal (isDeptPrivileged: SA/EA/desarrollador/Seguridad)
   // pueden crear incidencias en un departamento distinto al propio; jefe_de_obra/oficina van igual que encargado.
   const isPrivileged = isDeptPrivileged(auth);
