@@ -6055,6 +6055,16 @@ async function recuperarPass(request, env) {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `).run().catch(() => {});
+  // SEC-AUDIT-04 (26/07/2026, hallazgo de pentest sin autenticación real): en producción
+  // ya existía una tabla `reset_tokens` MÁS ANTIGUA (id, usuario_id, token, expires_at,
+  // created_at — sin `usado` ni `empresa_id`), así que el CREATE TABLE IF NOT EXISTS de
+  // arriba nunca hacía nada. El código de abajo asumía el esquema nuevo y explotaba con
+  // "no such column: usado" para CUALQUIER email real — el reset de contraseña estaba
+  // roto en producción para cualquier usuario, y de paso ese error (frente al 200 "ok"
+  // de un email inexistente) era un canal de enumeración de cuentas por status/tiempo de
+  // respuesta. ALTER TABLE ADD COLUMN es aditivo — no toca ninguna fila existente.
+  await env.DB.prepare(`ALTER TABLE reset_tokens ADD COLUMN usado INTEGER DEFAULT 0`).run().catch(() => {});
+  await env.DB.prepare(`ALTER TABLE reset_tokens ADD COLUMN empresa_id INTEGER`).run().catch(() => {});
 
   // Invalidar tokens anteriores de este usuario
   await env.DB.prepare(`UPDATE reset_tokens SET usado=1 WHERE usuario_id=? AND usado=0`)
