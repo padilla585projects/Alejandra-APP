@@ -4592,6 +4592,25 @@ export default {
       return new Response(null, { status: 204, headers: CORS });
     }
 
+    // SEC-AUDIT-08 (27/07/2026): fuzzing en vivo confirmó que pasar un objeto/array donde se
+    // espera un escalar (ej. {"descripcion":{"a":1}}) en un .bind() de D1 lanza "D1_TYPE_ERROR"
+    // sin manejar (500 crudo) — encontrado en 7 endpoints distintos, ninguno protegido por el
+    // safeStr() de SEC-AUDIT-07 porque ese solo cubre campos que llaman .trim(); estos pasan
+    // el valor directo a .bind() sin tocarlo. En vez de seguir parcheando campo a campo (con
+    // ~150 endpoints crear*/actualizar* sin auditar uno a uno), se sanea en el único punto de
+    // entrada real: cualquier objeto/array que llegue a un .bind() de esta petición se convierte
+    // en null antes de tocar D1 — este archivo no usa blobs ArrayBuffer/Uint8Array en ningún
+    // bind (verificado), así que no hay ningún caso legítimo de pasar un objeto sin serializar.
+    // El checkeo normal de "campo obligatorio" de cada endpoint hace su trabajo con el null en
+    // vez de que el worker crashee.
+    const _prepareOriginal = env.DB.prepare.bind(env.DB);
+    env.DB.prepare = (sql) => {
+      const stmt = _prepareOriginal(sql);
+      const _bindOriginal = stmt.bind.bind(stmt);
+      stmt.bind = (...args) => _bindOriginal(...args.map(a => (a !== null && typeof a === 'object') ? null : a));
+      return stmt;
+    };
+
     const url    = new URL(request.url);
     const path   = url.pathname;
     const method = request.method;
@@ -6770,11 +6789,16 @@ async function devolverBobina(codigo, request, env, ctx) {
     return json({ ok: true, mensaje: `Bobina ${codigo} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
   }
 
-  if (bobina.estado === 'devuelta') return err(`Bobina ${codigo} ya fue devuelta el ${bobina.fecha_devolucion}`, 409);
-
-  await env.DB.prepare(
-    'UPDATE bobinas SET estado = ?, fecha_devolucion = ?, notas = ?, devuelto_por = ? WHERE codigo = ? AND empresa_id = ?'
-  ).bind('devuelta', fecha, notas || bobina.notas || '', devuelto_por || '', codigo, eid).run();
+  // SEC-AUDIT-08 (27/07/2026, confirmado en vivo con 3 devoluciones concurrentes reales de la
+  // misma bobina): el check "if (bobina.estado === 'devuelta')" y el UPDATE no son atómicos —
+  // varias peticiones concurrentes pueden leer el estado ANTES de que cualquiera escriba, así
+  // que todas pasan el check y todas devuelven la bobina, duplicando el historial y los avisos
+  // de Telegram para una sola devolución real. Se mueve la condición al propio UPDATE (atómico
+  // en D1) y se decide la respuesta según si realmente cambió alguna fila (meta.changes).
+  const upd = await env.DB.prepare(
+    "UPDATE bobinas SET estado = 'devuelta', fecha_devolucion = ?, notas = ?, devuelto_por = ? WHERE codigo = ? AND empresa_id = ? AND estado != 'devuelta'"
+  ).bind(fecha, notas || bobina.notas || '', devuelto_por || '', codigo, eid).run();
+  if (!upd.meta.changes) return err(`Bobina ${codigo} ya fue devuelta el ${bobina.fecha_devolucion}`, 409);
 
   ctx.waitUntil(Promise.all([
     syncSheets(env, 'Elec-Bobinas', eid),
@@ -6961,11 +6985,12 @@ async function devolverPemp(matricula, request, env, ctx) {
     return json({ ok: true, mensaje: `PEMP ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
   }
 
-  if (pemp.estado === 'devuelta') return err(`PEMP ${matricula} ya fue devuelta el ${pemp.fecha_devolucion}`, 409);
-
-  await env.DB.prepare(
-    'UPDATE pemp SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ? AND empresa_id = ?'
-  ).bind('devuelta', fecha, devuelto_por || '', notas || pemp.notas || '', matricula, eid).run();
+  // SEC-AUDIT-08 (27/07/2026, confirmado en vivo con 3 devoluciones concurrentes reales de la
+  // misma PEMP): mismo check-then-act no atómico que devolverBobina — condición movida al UPDATE.
+  const upd = await env.DB.prepare(
+    "UPDATE pemp SET estado = 'devuelta', fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ? AND empresa_id = ? AND estado != 'devuelta'"
+  ).bind(fecha, devuelto_por || '', notas || pemp.notas || '', matricula, eid).run();
+  if (!upd.meta.changes) return err(`PEMP ${matricula} ya fue devuelta el ${pemp.fecha_devolucion}`, 409);
 
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('pemp', pemp.departamento), eid),
@@ -7145,11 +7170,12 @@ async function devolverCarretilla(matricula, request, env, ctx) {
     return json({ ok: true, mensaje: `Carretilla ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
   }
 
-  if (carretilla.estado === 'devuelta') return err(`Carretilla ${matricula} ya fue devuelta el ${carretilla.fecha_devolucion}`, 409);
-
-  await env.DB.prepare(
-    'UPDATE carretillas SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ? AND empresa_id = ?'
-  ).bind('devuelta', fecha, devuelto_por || '', notas || carretilla.notas || '', matricula, eid).run();
+  // SEC-AUDIT-08 (27/07/2026): mismo check-then-act no atómico que devolverBobina/devolverPemp
+  // — condición movida al UPDATE.
+  const upd = await env.DB.prepare(
+    "UPDATE carretillas SET estado = 'devuelta', fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ? AND empresa_id = ? AND estado != 'devuelta'"
+  ).bind(fecha, devuelto_por || '', notas || carretilla.notas || '', matricula, eid).run();
+  if (!upd.meta.changes) return err(`Carretilla ${matricula} ya fue devuelta el ${carretilla.fecha_devolucion}`, 409);
 
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('carretilla', carretilla.departamento), eid),
@@ -8981,10 +9007,20 @@ async function actualizarHorarioObra(id, request, env) {
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   const { hora_entrada, hora_salida, dias_semana, notas, horarios_dia } = body;
-  const horas_dia = calcHoras(hora_entrada, hora_salida);
-  const hdStr = horarios_dia ? JSON.stringify(horarios_dia) : null;
-  await env.DB.prepare('UPDATE horarios_obra SET hora_entrada=?,hora_salida=?,horas_dia=?,dias_semana=?,notas=?,horarios_dia=? WHERE id=? AND empresa_id=?')
-    .bind(hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null, hdStr, id, empresa_id).run();
+  // SEC-AUDIT-08 (27/07/2026): a diferencia de casi todos los demás actualizar*() del archivo,
+  // esta función reescribía TODAS las columnas incondicionalmente — una actualización parcial
+  // legítima (ej. solo {"notas":"..."}) dejaba hora_entrada/hora_salida en `undefined`, y D1
+  // rechaza bindear undefined con un 500 crudo (D1_TYPE_ERROR). horas_dia solo se recalcula si
+  // llegan las dos horas; el resto de columnas usa COALESCE para conservar el valor existente
+  // cuando el campo no viene en el body, igual que el patrón ya usado en el resto del archivo.
+  const horas_dia = (hora_entrada !== undefined && hora_salida !== undefined) ? calcHoras(hora_entrada, hora_salida) : null;
+  const hdStr = horarios_dia !== undefined ? (horarios_dia ? JSON.stringify(horarios_dia) : null) : null;
+  await env.DB.prepare(`UPDATE horarios_obra SET
+      hora_entrada = COALESCE(?, hora_entrada), hora_salida = COALESCE(?, hora_salida),
+      horas_dia = COALESCE(?, horas_dia), dias_semana = COALESCE(?, dias_semana),
+      notas = COALESCE(?, notas), horarios_dia = COALESCE(?, horarios_dia)
+    WHERE id=? AND empresa_id=?`)
+    .bind(hora_entrada ?? null, hora_salida ?? null, horas_dia, dias_semana ?? null, notas ?? null, hdStr, id, empresa_id).run();
   return json({ ok: true });
 }
 
