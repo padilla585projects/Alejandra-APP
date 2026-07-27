@@ -4588,6 +4588,19 @@ export default {
     const path   = url.pathname;
     const method = request.method;
 
+    // ── SEC-AUDIT-07 (27/07/2026): límite global de tamaño de body ──────────────
+    // Pentest: POST /usuarios con un campo de 5MB tardaba ~1.4s de CPU del worker
+    // antes de que D1 lo rechazara con SQLITE_TOOBIG (fallo limpio, sin fuga de
+    // datos, pero desperdicia cuota de cómputo — vector de DoS de bajo coste para
+    // el atacante). Se corta con Content-Length ANTES de tocar rutas/DB. Ningún
+    // endpoint legítimo de la app envía JSON de más de 2MB (adjuntos van por R2).
+    if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+      const len = parseInt(request.headers.get('Content-Length') || '0', 10);
+      if (len > 2 * 1024 * 1024) {
+        return err('Payload demasiado grande (máx 2MB).', 413);
+      }
+    }
+
     // ── SEC-14: Rate limiting para X-Admin-Code (brute-force legacy path) ───────
     // Si llega X-Admin-Code pero no coincide → registrar intento; bloquear tras 5 en 15min
     {
