@@ -7184,7 +7184,12 @@ async function actualizarObrasUsuario(id, request, env) {
 // crear/editar usuarios) puede asignar. Sin esta lista, "rol" salía directo del body sin
 // tope de rango — un encargado podía crearse a sí mismo (o a cualquier usuario de su obra)
 // como superadmin con una sola petición.
-const ROLES_ASIGNABLES_NO_ADMIN = ['operario', 'encargado', 'oficina', 'jefe_de_obra'];
+// SEC-AUDIT-02-FIX (26/07/2026): verificación independiente detectó que esta lista
+// dejaba fuera 3 roles normales/no privilegiados reales del catálogo (project_manager,
+// almacenero, ingeniero — ver <select id="mRol"> en panel.html) — un encargado dando de
+// alta un "Almacenero" nuevo desde Personal se encontraba con un 403 injustificado.
+// Solo quedan fuera los 3 roles realmente privilegiados: superadmin/empresa_admin/desarrollador.
+const ROLES_ASIGNABLES_NO_ADMIN = ['operario', 'encargado', 'oficina', 'jefe_de_obra', 'project_manager', 'almacenero', 'ingeniero'];
 
 async function crearUsuario(request, env) {
   const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
