@@ -72,6 +72,32 @@ function err(msg, status = 400) {
   return json({ ok: false, error: msg }, status);
 }
 
+// SEC-AUDIT-01 (26/07/2026): los módulos NEW-94+ (licencias-obra, catálogo-precios,
+// seguros-obra, comparativos-oferta, cae-documentacion, ordenes-trabajo, ausencias —
+// ~28 rutas) llamaban a estas 3 funciones sin que existieran en ningún sitio del
+// archivo (confirmado por búsqueda exhaustiva): todas esas rutas daban 500 siempre
+// (ReferenceError), fallo cerrado, no explotable, pero peligroso como puerta abierta
+// a que alguien las "arreglara" en el futuro copiando un patrón inseguro (p.ej.
+// confiar en una cabecera sin validar sesión). Se definen aquí usando el mismo
+// getAuth()/json()/err() que ya usa el resto del archivo — getEmpresaFromRequest()
+// EXIGE sesión válida con empresa_id (lanza si no la hay, el try/catch del router la
+// convierte en un 500 con mensaje limpio) en vez de devolver un empresa_id nulo que
+// dejaría pasar SELECT/INSERT sin aislar por empresa.
+async function getEmpresaFromRequest(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) throw new Error('No autorizado');
+  return {
+    empresa_id: auth.empresa_id,
+    user: { id: auth.usuario_id, email: null, nombre: auth.usuario || auth.nombre || '', rol: auth.rol },
+  };
+}
+function jsonOk(data, status = 200) {
+  return json({ ok: true, ...data }, status);
+}
+function jsonError(msg, status = 400) {
+  return err(msg, status);
+}
+
 // ── Crypto helpers (PBKDF2) ──────────────────────────────────────────────────
 async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
