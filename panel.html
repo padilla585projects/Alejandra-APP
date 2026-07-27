@@ -24978,8 +24978,8 @@ function addPartidaCof(p = {}) {
   const idx = tbody.children.length;
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><input type="text" value="${p.codigo||''}" placeholder="P${idx+1}" style="width:60px;padding:4px;border:1px solid #ccc;border-radius:4px" data-field="codigo"></td>
-    <td><input type="text" value="${p.descripcion||''}" placeholder="Descripción..." style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px" data-field="descripcion"></td>
+    <td><input type="text" value="${esc(p.codigo||'')}" placeholder="P${idx+1}" style="width:60px;padding:4px;border:1px solid #ccc;border-radius:4px" data-field="codigo"></td>
+    <td><input type="text" value="${esc(p.descripcion||'')}" placeholder="Descripción..." style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px" data-field="descripcion"></td>
     <td><input type="number" value="${p.cantidad||''}" min="0" step="0.01" style="width:80px;padding:4px;border:1px solid #ccc;border-radius:4px" data-field="cantidad"></td>
     <td><select style="padding:4px;border:1px solid #ccc;border-radius:4px" data-field="unidad">
       ${['ud','m','m2','m3','kg','t','h','ml','pa','l'].map(u=>`<option ${u===(p.unidad||'ud')?'selected':''}>${u}</option>`).join('')}
@@ -27953,7 +27953,7 @@ function renderFotosGrid() {
     galleryEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
       ${fotos.map(f => `
         <div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:.15s;position:relative"
-             onclick="abrirLightbox(${f.id},'${(f.titulo||f.nombre||f.comentario||'').replace(/'/g,"\\'")}','${(f.comentario||'').replace(/'/g,"\\'")}','${f.fecha_foto||f.created_at?.slice(0,10)||''}','${f.ubicacion||''}')">
+             onclick="abrirLightbox(${f.id},'${esc(f.titulo||f.nombre||f.comentario||'')}','${esc(f.comentario||'')}','${f.fecha_foto||f.created_at?.slice(0,10)||''}','${esc(f.ubicacion||'')}')">
           <div style="height:160px;background:var(--border);position:relative;overflow:hidden">
             <img src="/fotos-obra/${f.id}" loading="lazy" style="width:100%;height:100%;object-fit:cover"
                  onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:32px\\'>📷</div>'">
@@ -27980,13 +27980,13 @@ function renderFotosGrid() {
         <th style="text-align:left;padding:8px">Etiquetas</th><th style="text-align:left;padding:8px">Autor</th>
         <th></th>
       </tr></thead>
-      <tbody>${fotos.map(f=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirLightbox(${f.id},'${(f.titulo||f.nombre||f.comentario||'').replace(/'/g,"\\'")}','${(f.comentario||'').replace(/'/g,"\\'")}','${f.fecha_foto||f.created_at?.slice(0,10)||''}','${f.ubicacion||''}')">
+      <tbody>${fotos.map(f=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirLightbox(${f.id},'${esc(f.titulo||f.nombre||f.comentario||'')}','${esc(f.comentario||'')}','${f.fecha_foto||f.created_at?.slice(0,10)||''}','${esc(f.ubicacion||'')}')">
         <td style="padding:6px 8px"><img src="/fotos-obra/${f.id}" style="width:48px;height:36px;object-fit:cover;border-radius:4px" loading="lazy" onerror="this.src=''"></td>
-        <td style="padding:6px 8px">${f.titulo||f.nombre||f.comentario||'—'}</td>
+        <td style="padding:6px 8px">${escHtml(f.titulo||f.nombre||f.comentario||'—')}</td>
         <td style="padding:6px 8px">${f.fecha_foto||f.created_at?.slice(0,10)||'—'}</td>
-        <td style="padding:6px 8px">${f.ubicacion||'—'}</td>
-        <td style="padding:6px 8px;color:var(--primary)">${f.tags||'—'}</td>
-        <td style="padding:6px 8px">${f.subido_por||'—'}</td>
+        <td style="padding:6px 8px">${escHtml(f.ubicacion||'—')}</td>
+        <td style="padding:6px 8px;color:var(--primary)">${escHtml(f.tags||'—')}</td>
+        <td style="padding:6px 8px">${escHtml(f.subido_por||'—')}</td>
         <td style="padding:6px 8px"><button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();eliminarFotoObra(${f.id})">🗑</button></td>
       </tr>`).join('')}</tbody>
     </table>`;

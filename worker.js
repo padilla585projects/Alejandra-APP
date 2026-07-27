@@ -873,14 +873,14 @@ const TOOLS_SOLO_DEV_AITOOL = new Set([
 ]);
 
 // == Guard anti-SSRF para fetch_url: bloquea hosts internos/privados y esquemas no http(s) ==
-function esUrlSeguraFetch(rawUrl) {
-  let u;
-  try { u = new URL(rawUrl); } catch { return { ok: false, error: 'URL invalida' }; }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-    return { ok: false, error: 'Solo se permiten URLs http(s)://' };
-  }
-  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  const bloqueado =
+// SEC-AUDIT-02 (26/07/2026): esIpPrivadaOInterna() se extrae para poder reutilizarla
+// tanto contra el hostname (como antes) como contra las IPs REALES a las que resuelve
+// (ver esUrlSeguraFetch) — antes el filtro era solo léxico sobre el string de la URL, sin
+// resolver DNS: un dominio público que resolviera (o re-resolviera vía DNS rebinding) a
+// una IP privada pasaba sin problema.
+function esIpPrivadaOInterna(host) {
+  host = (host || '').toLowerCase().replace(/^\[|\]$/g, '');
+  return (
     host === 'localhost' || host === '0.0.0.0' || host === '::1' ||
     host.endsWith('.local') || host.endsWith('.internal') ||
     host === 'metadata.google.internal' ||
@@ -890,8 +890,58 @@ function esUrlSeguraFetch(rawUrl) {
     /^169\.254\./.test(host) ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
     /^(fc|fd)[0-9a-f]{2}:/.test(host) ||
-    /^fe80:/.test(host);
-  if (bloqueado) return { ok: false, error: 'Host interno/privado no permitido (anti-SSRF)' };
+    /^fe80:/.test(host)
+  );
+}
+
+// SEC-AUDIT-02: rechaza representaciones alternativas de IPv4 que new URL()/fetch()
+// aceptan pero el filtro léxico anterior no cubría — decimal (2130706433 = 127.0.0.1),
+// octal (0177.0.0.1), hexadecimal (0x7f000001) — todas se normalizan a la IP real que
+// representan antes de decidir.
+function esRepresentacionIpSospechosa(host) {
+  const limpio = (host || '').toLowerCase();
+  if (/^0x[0-9a-f]+$/.test(limpio)) return true;                    // hex puro: 0x7f000001
+  if (/^\d+$/.test(limpio) && limpio.length > 3) return true;        // decimal puro: 2130706433
+  // octetos con ceros a la izquierda (octal) o con prefijo 0x en algún octeto
+  if (/^(0x[0-9a-f]+|0[0-7]*)(\.(0x[0-9a-f]+|0[0-7]*|\d+)){0,3}$/.test(limpio) && /(^0[0-7]|\.0[0-7])/.test(limpio)) return true;
+  return false;
+}
+
+async function esUrlSeguraFetch(rawUrl, env) {
+  let u;
+  try { u = new URL(rawUrl); } catch { return { ok: false, error: 'URL invalida' }; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok: false, error: 'Solo se permiten URLs http(s)://' };
+  }
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (esRepresentacionIpSospechosa(host)) {
+    return { ok: false, error: 'Formato de host no permitido (anti-SSRF)' };
+  }
+  if (esIpPrivadaOInterna(host)) {
+    return { ok: false, error: 'Host interno/privado no permitido (anti-SSRF)' };
+  }
+  // Si el host YA es una IP literal en forma normal, no hace falta resolver DNS.
+  const esIpLiteral = /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':');
+  if (esIpLiteral) return { ok: true };
+  // Resolver DNS de verdad (DoH de Cloudflare) y comprobar las IPs reales — defensa
+  // contra DNS rebinding (el dominio resuelve a algo público en el momento del check
+  // pero a una IP privada en el momento real del fetch).
+  try {
+    const resp = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`, {
+      headers: { Accept: 'application/dns-json' },
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const ips = (data.Answer || []).filter(a => a.type === 1).map(a => a.data);
+      if (ips.some(ip => esIpPrivadaOInterna(ip))) {
+        return { ok: false, error: 'El dominio resuelve a una IP interna/privada (anti-SSRF)' };
+      }
+    }
+  } catch (_) {
+    // Si el DoH falla, no bloqueamos por eso (fail-open en la resolución, pero el
+    // filtro léxico de arriba ya cubre los casos obvios) — evita que un problema de red
+    // ajeno tumbe la herramienta entera.
+  }
   return { ok: true };
 }
 
@@ -1213,7 +1263,7 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       // HTTP request genérico a cualquier URL externa
       try {
         const { url, method = 'GET', headers = {}, body, timeout_ms = 10000 } = toolInput;
-        const _urlChk = esUrlSeguraFetch(url);
+        const _urlChk = await esUrlSeguraFetch(url, env);
         if (!_urlChk.ok) return JSON.stringify({ ok: false, error: _urlChk.error });
         // ══ FILTRO DE PRIVACIDAD — no enviar datos sensibles a URLs externas ══
         if (body) {
@@ -4515,6 +4565,13 @@ export default {
           ).bind(ip, win).first().catch(() => ({ cnt: 0 }));
           const cnt = row?.cnt ?? 0;
           env.DB.prepare('INSERT INTO login_attempts (ip, motivo) VALUES (?, ?)').bind(ip, 'admin_brute').run().catch(() => {});
+          // ALERTA-ATAQUE-01 (26/07/2026): Adrián: "quiero que cuando Alejandra detecte el
+          // ataque me avise por Telegram" — se avisa justo en el intento que dispara el
+          // bloqueo (cnt === 5, no en cada intento posterior ya bloqueado, para no saturar
+          // Telegram con el mismo ataque en curso).
+          if (cnt === 5) {
+            ctx.waitUntil(sendTelegram(env, `🚨 <b>Posible ataque: fuerza bruta en X-Admin-Code</b>\n📍 IP: ${ip}\n🔢 5 intentos fallidos en 15 min — bloqueada por 15 min.`));
+          }
           if (cnt >= 5) return err('Demasiados intentos. Espera 15 minutos.', 429);
         } catch (_) {}
       }
@@ -4556,7 +4613,7 @@ export default {
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
-      if (path === '/verificar'        && method === 'POST') return await verificarAcceso(request, env);
+      if (path === '/verificar'        && method === 'POST') return await verificarAcceso(request, env, ctx);
       if (path === '/recuperar-pass'   && method === 'POST') return await recuperarPass(request, env);
       if (path === '/resetear-pass'    && method === 'POST') return await resetearPass(request, env);
       if (path === '/auth/google/url'  && method === 'GET')  return googleAuthUrl(request, env);
@@ -4570,7 +4627,7 @@ export default {
       if (path === '/invitaciones'          && method === 'GET')  return await listarInvitaciones(request, env);
       if (path === '/invitaciones/anular'   && method === 'POST') return await anularInvitacion(request, env);
       if (path === '/invitaciones/verificar'&& method === 'GET')  return await verificarInvitacion(request, env);
-      if (path === '/acceso'      && method === 'POST') return await verificarAcceso(request, env); // alias legacy
+      if (path === '/acceso'      && method === 'POST') return await verificarAcceso(request, env, ctx); // alias legacy
       if (path === '/logout'      && method === 'POST') return await cerrarSesionServidor(request, env);
       if (path === '/sesiones'    && method === 'GET')  return await getSesionesActivas(request, env);
       if (path === '/sesiones/cerrar-todas' && method === 'POST') return await cerrarTodasSesiones(request, env);
@@ -6078,7 +6135,7 @@ async function resetearPass(request, env) {
   return json({ ok: true, nombre: reset.nombre });
 }
 
-async function verificarAcceso(request, env) {
+async function verificarAcceso(request, env, ctx) {
   // ── Rate limiting: máx 10 intentos por IP en 15 minutos ─────────────────
   const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
   try {
@@ -6086,6 +6143,11 @@ async function verificarAcceso(request, env) {
     const { cnt } = await env.DB.prepare(
       "SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND created_at > ?"
     ).bind(ip, windowStart).first() || { cnt: 0 };
+    // ALERTA-ATAQUE-01 (26/07/2026): aviso por Telegram justo en el intento que dispara el
+    // bloqueo (cnt === 10), no en cada intento posterior ya bloqueado.
+    if (cnt === 10) {
+      ctx?.waitUntil(sendTelegram(env, `🚨 <b>Posible ataque: fuerza bruta en login</b>\n📍 IP: ${ip}\n🔢 10 intentos fallidos en 15 min — bloqueada por 15 min.`));
+    }
     if (cnt >= 10) return err('Demasiados intentos. Espera 15 minutos.', 429);
   } catch (_) {}
 
@@ -7108,6 +7170,12 @@ async function actualizarObrasUsuario(id, request, env) {
   return json({ ok: true, obras_asignadas: await getObrasAsignadasUsuario(env, user.id, user.empresa_id, user.obra_id) });
 }
 
+// SEC-AUDIT-02 (26/07/2026): roles que un encargado (o cualquier no-admin con permiso de
+// crear/editar usuarios) puede asignar. Sin esta lista, "rol" salía directo del body sin
+// tope de rango — un encargado podía crearse a sí mismo (o a cualquier usuario de su obra)
+// como superadmin con una sola petición.
+const ROLES_ASIGNABLES_NO_ADMIN = ['operario', 'encargado', 'oficina', 'jefe_de_obra'];
+
 async function crearUsuario(request, env) {
   const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEmpresaAdmin && !isEncargado) return err('No autorizado', 403);
@@ -7118,17 +7186,23 @@ async function crearUsuario(request, env) {
 
   const obraFinal = obra_id ? parseInt(obra_id) : obraId;
   const deptFinal = deptBody || 'electrico';
+  const esAdminReal = isSuperadmin || isAdmin || isEmpresaAdmin;
 
   // Encargado solo puede crear usuarios de su propia obra (empresa_admin puede cualquiera)
-  if (isEncargado && !isSuperadmin && !isAdmin && !isEmpresaAdmin && obraFinal !== obraId) {
+  if (isEncargado && !esAdminReal && obraFinal !== obraId) {
     return err('No autorizado para crear usuarios en otra obra', 403);
+  }
+  // SEC-AUDIT-02: tope de rango de rol para quien no es admin real.
+  const rolFinal = rol || 'operario';
+  if (!esAdminReal && !ROLES_ASIGNABLES_NO_ADMIN.includes(rolFinal)) {
+    return err('No autorizado para asignar ese rol', 403);
   }
 
   try {
     const r = await env.DB.prepare(
       'INSERT INTO usuarios (nombre, codigo, rol, obra_id, departamento, activo, empresa_id) VALUES (?, ?, ?, ?, ?, 1, ?)'
-    ).bind(nombre.trim(), codigo.trim(), rol || 'operario', obraFinal || null, deptFinal, empresa_id).run();
-    return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), rol: rol || 'operario', departamento: deptFinal, codigo: codigo.trim() }, 201);
+    ).bind(nombre.trim(), codigo.trim(), rolFinal, obraFinal || null, deptFinal, empresa_id).run();
+    return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), rol: rolFinal, departamento: deptFinal, codigo: codigo.trim() }, 201);
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
     throw e;
@@ -7183,9 +7257,17 @@ async function editarUsuario(id, request, env) {
     if (body.obra_id !== undefined && body.obra_id !== null && parseInt(body.obra_id) !== obraId) return err('No autorizado', 403);
   }
   // roles_extra solo editable por superadmin/admin — evitar escalada de privilegios
-  const campos = (isSuperadmin || isAdmin)
+  const esAdminRealEd = isSuperadmin || isAdmin || isEmpresaAdmin;
+  const campos = esAdminRealEd
     ? ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra']
     : ['nombre', 'codigo', 'rol', 'obra_id', 'departamento'];
+  // SEC-AUDIT-02 (26/07/2026): "rol" estaba en la whitelist de AMBAS ramas sin tope de
+  // rango — un encargado podía hacer PUT /usuarios/<su_propio_id> con {rol:'superadmin'}
+  // y quedar como superadmin en su siguiente login. Se acota el valor permitido si quien
+  // edita no es admin real.
+  if (!esAdminRealEd && body.rol !== undefined && !ROLES_ASIGNABLES_NO_ADMIN.includes(body.rol)) {
+    return err('No autorizado para asignar ese rol', 403);
+  }
   const sets = [];
   const vals = [];
   for (const c of campos) {
@@ -19040,14 +19122,24 @@ async function getTimesheets(request, env) {
   return json({ items: results });
 }
 
+// SEC-AUDIT-02 (26/07/2026): timesheets era el único módulo de todo el archivo sin
+// ningún control de rol (~60 funciones análogas sí lo tienen) — un operario podía
+// aprobar sus propias horas y forjar el nombre del aprobador (aprobado_por venía literal
+// del body). "aprobado"/"aprobado_por"/"aprobado_at" quedan reservados a roles con
+// capacidad real de aprobar.
+const ROLES_APRUEBAN_TIMESHEET = ['superadmin', 'empresa_admin', 'desarrollador', 'encargado', 'oficina', 'jefe_de_obra'];
+
 async function crearTimesheet(request, env) {
   const auth = await getAuth(request, env);
-  const { empresa_id, nombre: usuario } = auth;
+  const { empresa_id, nombre: usuario, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   await ensureTimesheetTable(env);
   const body = await request.json();
   const { trabajador_id, obra_id, fecha, actividad, horas_normales=8, horas_extra=0, codigo_coste, aprobado=0, notas } = body;
   if (!fecha) return err('Fecha requerida', 400);
+  // Un operario puede registrar sus horas, pero no crearlas ya auto-aprobadas.
+  const puedeAprobar = ROLES_APRUEBAN_TIMESHEET.includes(rol);
+  const aprobadoFinal = puedeAprobar && aprobado ? 1 : 0;
   // Lookup trabajador name
   let trabajador_nombre = body.trabajador_nombre || null;
   if (trabajador_id && !trabajador_nombre) {
@@ -19055,26 +19147,33 @@ async function crearTimesheet(request, env) {
     if (t) trabajador_nombre = `${t.nombre||''} ${t.apellidos||''}`.trim();
   }
   const r = await env.DB.prepare(`
-    INSERT INTO timesheets (empresa_id, obra_id, trabajador_id, trabajador_nombre, fecha, actividad, horas_normales, horas_extra, codigo_coste, aprobado, notas)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(empresa_id, obra_id||null, trabajador_id||null, trabajador_nombre, fecha, actividad||null, horas_normales, horas_extra, codigo_coste||null, aprobado?1:0, notas||null).run();
+    INSERT INTO timesheets (empresa_id, obra_id, trabajador_id, trabajador_nombre, fecha, actividad, horas_normales, horas_extra, codigo_coste, aprobado, aprobado_por, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id||null, trabajador_id||null, trabajador_nombre, fecha, actividad||null, horas_normales, horas_extra, codigo_coste||null, aprobadoFinal, aprobadoFinal ? (usuario||'panel') : null, notas||null).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
 async function actualizarTimesheet(id, request, env) {
   const auth = await getAuth(request, env);
-  const { empresa_id, nombre: usuario } = auth;
+  const { empresa_id, nombre: usuario, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const ts = await env.DB.prepare('SELECT id FROM timesheets WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!ts) return err('Parte no encontrado', 404);
   const body = await request.json();
-  const campos = ['trabajador_id','trabajador_nombre','obra_id','fecha','actividad','horas_normales','horas_extra','codigo_coste','aprobado','notas','aprobado_por','aprobado_at'];
+  const puedeAprobar = ROLES_APRUEBAN_TIMESHEET.includes(rol);
+  const camposBase = ['trabajador_id','trabajador_nombre','obra_id','fecha','actividad','horas_normales','horas_extra','codigo_coste','notas'];
+  // aprobado/aprobado_por/aprobado_at solo si el rol puede aprobar de verdad.
+  const campos = puedeAprobar ? [...camposBase, 'aprobado'] : camposBase;
   const sets = [], vals = [];
   campos.forEach(f => { if (f in body) { sets.push(`${f}=?`); vals.push(body[f]); } });
-  // Auto-fill aprobado_por when approving
-  if ('aprobado' in body && body.aprobado) {
-    if (!body.aprobado_por) { sets.push('aprobado_por=?'); vals.push(usuario||'panel'); }
+  // Auto-fill aprobado_por/aprobado_at cuando aprueba — SIEMPRE el usuario de la sesión,
+  // nunca lo que venga en el body (antes aprobado_por se aceptaba literal del body).
+  if (puedeAprobar && 'aprobado' in body && body.aprobado) {
+    sets.push('aprobado_por=?'); vals.push(usuario||'panel');
     sets.push('aprobado_at=?'); vals.push(new Date().toISOString().slice(0,10));
+  }
+  if (!puedeAprobar && ('aprobado' in body || 'aprobado_por' in body || 'aprobado_at' in body)) {
+    return err('No autorizado para aprobar horas', 403);
   }
   if (!sets.length) return json({ ok: true });
   sets.push("updated_at=datetime('now')");
@@ -19084,8 +19183,8 @@ async function actualizarTimesheet(id, request, env) {
 }
 
 async function eliminarTimesheet(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
-  if (!empresa_id) return err('No autorizado', 403);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const ts = await env.DB.prepare('SELECT id FROM timesheets WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!ts) return err('Parte no encontrado', 404);
   await env.DB.prepare('DELETE FROM timesheets WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
