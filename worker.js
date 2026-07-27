@@ -265,6 +265,20 @@ async function sendTelegram(env, mensaje) {
   } catch (_) {}
 }
 
+// MONITOR-SEGURIDAD-01 (26/07/2026): Adrián: "tenemos que enseñar a Alejandra IA a
+// monitorizar todo eso" — los avisos de ataque (ALERTA-ATAQUE-01/02) solo mandaban un
+// Telegram puntual, sin dejar rastro consultable. Se persiste cada uno en la tabla `logs`
+// (ya está en la allowlist de consultar_bd del agente, TABLAS_EMPRESA_PERMITIDAS en
+// alejandra-agente/lib.js) además de Telegram, para que Alejandra pueda responder de
+// verdad si le preguntas "¿ha habido intentos de ataque?" en vez de depender solo de que
+// alguien haya visto el Telegram en su momento.
+async function alertarAtaque(env, { mensaje, detalle = '', empresa_id = null }) {
+  await sendTelegram(env, mensaje);
+  // logActividad() está definida más abajo en este archivo (function declaration,
+  // hoisted — utilizable aquí arriba sin problema).
+  await logActividad(env, { nivel: 'warn', origen: 'seguridad', mensaje: mensaje.replace(/<[^>]+>/g, ''), detalle, empresa_id: empresa_id || 1 });
+}
+
 // Envía a un chat_id concreto (notificaciones personales)
 async function sendTelegramToChat(env, chatId, mensaje) {
   try {
@@ -4580,7 +4594,7 @@ export default {
           // bloqueo (cnt === 5, no en cada intento posterior ya bloqueado, para no saturar
           // Telegram con el mismo ataque en curso).
           if (cnt === 5) {
-            ctx.waitUntil(sendTelegram(env, `🚨 <b>Posible ataque: fuerza bruta en X-Admin-Code</b>\n📍 IP: ${ip}\n🔢 5 intentos fallidos en 15 min — bloqueada por 15 min.`));
+            ctx.waitUntil(alertarAtaque(env, { mensaje: `🚨 <b>Posible ataque: fuerza bruta en X-Admin-Code</b>\n📍 IP: ${ip}\n🔢 5 intentos fallidos en 15 min — bloqueada por 15 min.`, detalle: `IP=${ip}` }));
           }
           if (cnt >= 5) return err('Demasiados intentos. Espera 15 minutos.', 429);
         } catch (_) {}
@@ -6156,7 +6170,7 @@ async function verificarAcceso(request, env, ctx) {
     // ALERTA-ATAQUE-01 (26/07/2026): aviso por Telegram justo en el intento que dispara el
     // bloqueo (cnt === 10), no en cada intento posterior ya bloqueado.
     if (cnt === 10) {
-      ctx?.waitUntil(sendTelegram(env, `🚨 <b>Posible ataque: fuerza bruta en login</b>\n📍 IP: ${ip}\n🔢 10 intentos fallidos en 15 min — bloqueada por 15 min.`));
+      ctx?.waitUntil(alertarAtaque(env, { mensaje: `🚨 <b>Posible ataque: fuerza bruta en login</b>\n📍 IP: ${ip}\n🔢 10 intentos fallidos en 15 min — bloqueada por 15 min.`, detalle: `IP=${ip}` }));
     }
     if (cnt >= 10) return err('Demasiados intentos. Espera 15 minutos.', 429);
   } catch (_) {}
@@ -7225,6 +7239,15 @@ async function crearUsuario(request, env) {
   const rolFinal = rol || 'operario';
   const ROLES_ASIGNABLES_EMPRESA_ADMIN = [...ROLES_ASIGNABLES_NO_ADMIN, 'empresa_admin'];
   if (!esPlataformaAdmin) {
+    // ALERTA-ATAQUE-02 (26/07/2026): Adrián: "respecto a Alejandra no me avisó de nada" —
+    // el ataque de escalada de SEC-AUDIT-03 usaba una sesión VÁLIDA y acertaba a la
+    // primera, así que ningún contador de fuerza bruta (ALERTA-ATAQUE-01) se disparaba
+    // nunca. Este es un aviso aparte, específico: cualquier intento de asignar un rol
+    // fuera de lo permitido es en sí mismo la señal de ataque, no hace falta esperar a
+    // que se repita.
+    if (!(isEmpresaAdmin ? ROLES_ASIGNABLES_EMPRESA_ADMIN : ROLES_ASIGNABLES_NO_ADMIN).includes(rolFinal)) {
+      await alertarAtaque(env, { mensaje: `🚨 <b>Intento de escalada de privilegios bloqueado</b>\n👤 empresa_id: ${empresa_id}\n🎯 Intentó asignar rol: <b>${rolFinal}</b>\n📍 Endpoint: POST /usuarios`, detalle: `rol_intentado=${rolFinal}`, empresa_id });
+    }
     const permitidos = isEmpresaAdmin ? ROLES_ASIGNABLES_EMPRESA_ADMIN : ROLES_ASIGNABLES_NO_ADMIN;
     if (!permitidos.includes(rolFinal)) return err('No autorizado para asignar ese rol', 403);
   }
@@ -7304,7 +7327,11 @@ async function editarUsuario(id, request, env) {
   if (!esPlataformaAdminEd && body.rol !== undefined) {
     const ROLES_ASIGNABLES_EMPRESA_ADMIN_ED = [...ROLES_ASIGNABLES_NO_ADMIN, 'empresa_admin'];
     const permitidosEd = isEmpresaAdmin ? ROLES_ASIGNABLES_EMPRESA_ADMIN_ED : ROLES_ASIGNABLES_NO_ADMIN;
-    if (!permitidosEd.includes(body.rol)) return err('No autorizado para asignar ese rol', 403);
+    if (!permitidosEd.includes(body.rol)) {
+      // ALERTA-ATAQUE-02: mismo aviso que crearUsuario(), ver comentario ahí.
+      await alertarAtaque(env, { mensaje: `🚨 <b>Intento de escalada de privilegios bloqueado</b>\n👤 empresa_id: ${empresa_id}\n🎯 Intentó asignar rol: <b>${body.rol}</b>\n📍 Endpoint: PUT /usuarios/${id}`, detalle: `rol_intentado=${body.rol}, usuario_objetivo=${id}`, empresa_id });
+      return err('No autorizado para asignar ese rol', 403);
+    }
   }
   const sets = [];
   const vals = [];

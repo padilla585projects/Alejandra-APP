@@ -10837,9 +10837,17 @@ async function verificarAdminToken(env, token, req) {
         const key = `admin-token-fail:${ip}:${ventana}`;
         const fallos = parseInt((await env.RATE_LIMIT_KV.get(key)) || '0', 10) + 1;
         await env.RATE_LIMIT_KV.put(key, String(fallos), { expirationTtl: 1800 });
-        if (fallos === 3 && env.TELEGRAM_BOT_TOKEN) {
-          await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN,
-            `🚨 <b>Posible ataque: token de admin incorrecto repetido (agente)</b>\n📍 IP: ${ip}\n🔢 3 intentos fallidos en 15 min.`);
+        if (fallos === 3) {
+          const msg = `🚨 <b>Posible ataque: token de admin incorrecto repetido (agente)</b>\n📍 IP: ${ip}\n🔢 3 intentos fallidos en 15 min.`;
+          if (env.TELEGRAM_BOT_TOKEN) await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, msg);
+          // MONITOR-SEGURIDAD-01: mismo criterio que worker.js — se persiste en `logs`
+          // (tabla compartida, ya en la allowlist de consultar_bd) para que Alejandra
+          // pueda responder de verdad si le preguntan por intentos de ataque.
+          try {
+            await env.DB.prepare(
+              `INSERT INTO logs (nivel, origen, mensaje, detalle, empresa_id) VALUES ('warn','seguridad',?,?,1)`
+            ).bind(msg.replace(/<[^>]+>/g, ''), `IP=${ip}`).run();
+          } catch (_) {}
         }
       }
     } catch (_) {}
