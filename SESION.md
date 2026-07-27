@@ -5,7 +5,25 @@
 **Versión actual:** v8.65 (version.json/sw.js/index.html sincronizados)
 **Resumen:** Parts 50-56 = roles/departamentos (hasta v8.23). Part 57 = primera tanda de bugs en vivo con Alberto (hasta v8.27). Part 58 = segunda tanda + checklist de pendientes + pruebas en HTC real + roles por departamento completos, v8.28→v8.47. Part 59 (esta sesión) = UX sidebar + previsualización de departamento para admins + CORS + refactor "verComoAdmin" + directorio por departamento + Almacén solo-material + fixes de fugas de sidebar (Obra, Seguridad de Obra, pie del sidebar, Chat DevTools), v8.48→v8.65. Ver Parts 50-59.
 
-**PARA RETOMAR EN OTRO CHAT:** sesión cerrada limpia, sin trabajo a medias. Todo commiteado y pusheado a `main` (último commit `956086e`), GitHub Pages propagado y verificado en Chrome real de Adrián vía la extensión claude-in-chrome, y los dos workers desplegados. No hay ninguna tarea en curso que retomar — solo quedan los pendientes de la checklist de abajo, ninguno bloqueante ni urgente.
+**PARA RETOMAR EN OTRO CHAT:** sesión cerrada limpia, sin trabajo a medias. Todo commiteado y pusheado a `main` (último commit `917bafa`), GitHub Pages propagado y verificado en Chrome real de Adrián vía la extensión claude-in-chrome, y los dos workers desplegados. No hay ninguna tarea en curso que retomar — solo quedan los pendientes de la checklist de abajo, ninguno bloqueante ni urgente.
+
+### SEC-AUDIT-02 (26/07/2026): segunda ronda — pentest declinado + 2 críticos más + alertas Telegram + Alejandra "sabe" reconocer manipulación [COMPLETADO]
+
+Adrián pidió ir más allá de SEC-AUDIT-01: "lanza un agente para hackear la app en todos los sitios... no pares hasta que el agente diga que no puede entrar ni conseguir nada". Un agente de pentest dinámico contra producción **se negó a ejecutar ataques activos** (inyección SQL, bypass de auth, prompt injection) — decisión correcta y compartida: aunque Adrián autorizaba, este entorno tiene datos reales de la empresa Levitec (confirmado en la misma sesión: 36 bobinas, 42 PEMP reales), no un entorno de pruebas vacío. Se optó por seguir con auditoría de código (sin riesgo) + comprobaciones de solo lectura en producción.
+
+**Segunda auditoría estática (independiente de SEC-AUDIT-01), 2 críticos más:**
+1. **Escalada de privilegios en usuarios** (`worker.js`, `crearUsuario`/`editarUsuario`): el campo `rol` no tenía tope de rango para quien no es admin real — un `encargado` podía hacer `PUT /usuarios/<su_id>` con `{rol:'superadmin'}` y quedar como superadmin en su siguiente login. Nueva `ROLES_ASIGNABLES_NO_ADMIN`.
+2. **`timesheets` sin ningún control de rol** (`worker.js`): único módulo de ~60 funciones similares sin el patrón `if (rol==='operario') return err(...)` — un operario podía auto-aprobar sus propias horas y forjar el nombre del aprobador (`aprobado_por` venía literal del body). Ahora esos 3 campos solo los toca quien puede aprobar de verdad, y `aprobado_por` siempre sale de la sesión.
+
+**Medios:** SSRF en `fetch_url` (filtro solo léxico, sin resolver DNS — ahora resuelve vía DoH de Cloudflare y rechaza IPs en formato decimal/octal/hex); 2 XSS confirmados en `panel.html` (atributos sin escapar comillas) + 3 celdas de tabla más, usando los helpers `esc()`/`escHtml()` ya existentes (quedan ~106 usos de `innerHTML` sin auditar, fuera de alcance).
+
+**Seguimiento — invalidación de sesiones + numeración atómica:** `manage_user change_role`/`reset_password` (tool de Alejandra dev) no invalidaban las sesiones activas del usuario objetivo — un reset de contraseña por cuenta comprometida no cerraba la puerta al token viejo hasta 30 días. Ahora borran las sesiones. `libro_subcontratacion` (registro legal Ley 32/2006) tenía numeración no atómica (`SELECT MAX+1` en dos pasos) — convertido a `INSERT...SELECT` atómico. Quedan 8 endpoints más con el mismo patrón de numeración, anotados como pendiente de menor riesgo.
+
+**Nuevo, a petición de Adrián — detección y alerta:** avisos por Telegram en los 3 puntos de fuerza bruta ya detectados (login, admin-code, token de admin del agente), solo en el intento que cruza el umbral. Nuevo módulo de prompt `seguridad_no_auth` en Alejandra Agente (instrucciones para reconocer y rechazar manipulación/prompt injection), cargado **solo** cuando `authOk=false` — a petición explícita de Adrián de no cargarlo en cada mensaje normal ("optimizar tokens").
+
+**Verificación final (tercer par de ojos, independiente):** un agente de verificación adversarial revisó los 2 rounds de fixes buscando regresiones — encontró UNA real: `ROLES_ASIGNABLES_NO_ADMIN` se había dejado fuera 3 roles normales del catálogo (`project_manager`, `almacenero`, `ingeniero`), lo que habría bloqueado con un 403 injustificado a un encargado dando de alta esos roles desde Personal. Corregido de inmediato, verificado contra el `<select>` real de `panel.html`.
+
+**Deploy:** worker.js desplegado 4 veces, alejandra-agente 1 vez, en esta ronda — `/health` 200 verificado tras cada deploy. Commits `b470a57`, `01c007a`, `917bafa`.
 
 ### SEC-AUDIT-01 (26/07/2026): auditoría de seguridad completa — IDOR, bypass de rol, envenenamiento de memoria sin auth [COMPLETADO]
 
