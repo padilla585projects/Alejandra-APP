@@ -5,7 +5,19 @@
 **Versión actual:** v8.65 (version.json/sw.js/index.html sincronizados)
 **Resumen:** Parts 50-56 = roles/departamentos (hasta v8.23). Part 57 = primera tanda de bugs en vivo con Alberto (hasta v8.27). Part 58 = segunda tanda + checklist de pendientes + pruebas en HTC real + roles por departamento completos, v8.28→v8.47. Part 59 (esta sesión) = UX sidebar + previsualización de departamento para admins + CORS + refactor "verComoAdmin" + directorio por departamento + Almacén solo-material + fixes de fugas de sidebar (Obra, Seguridad de Obra, pie del sidebar, Chat DevTools), v8.48→v8.65. Ver Parts 50-59.
 
-**PARA RETOMAR EN OTRO CHAT:** sesión cerrada limpia, sin trabajo a medias. Todo commiteado y pusheado a `main` (último commit `190a435`), GitHub Pages propagado y verificado en Chrome real de Adrián vía la extensión claude-in-chrome, y los dos workers desplegados. **Pendiente de que Adrián borre 2 empresas de prueba** que quedaron en D1 (ver SEC-AUDIT-03 abajo — datos ficticios, sin riesgo, pero sin borrar todavía). No hay ninguna otra tarea en curso que retomar.
+**PARA RETOMAR EN OTRO CHAT:** sesión cerrada limpia, sin trabajo a medias. Todo commiteado y pusheado a `main` (último commit `5d0c41b`), GitHub Pages propagado y verificado en Chrome real de Adrián vía la extensión claude-in-chrome, y los dos workers desplegados. **Pendiente de que Adrián borre 2 empresas de prueba** que quedaron en D1 (ver SEC-AUDIT-03 abajo — datos ficticios, sin riesgo, pero sin borrar todavía). **Adrián pidió seguir con pruebas de estrés/carga más contundentes** ("poner al límite la app") — carga concurrente, fuzzing más agresivo, y pruebas destructivas en local (`wrangler dev`) sin riesgo sobre producción — pendiente de retomar, no empezado todavía tras SEC-AUDIT-05.
+
+### SEC-AUDIT-05 (27/07/2026): pentest de estrés — condición de carrera CONFIRMADA en vivo, 6 registros legales con numeración duplicada [COMPLETADO]
+
+Continuación de "poner al límite la app": en vez de una petición cada vez, se dispararon **15 peticiones POST reales en paralelo** (`curl` en background, no secuenciales) contra `/registro-hormigonado` con la misma empresa/obra. Confirma en vivo el hallazgo teórico de SEC-AUDIT-02 (el patrón `SELECT MAX+1` en dos pasos sin transacción, sin atómica): el número 3 se repitió **7 veces** entre los primeros 15 registros — datos duplicados reales en un registro exigido por normativa (EHE-08, hormigonado).
+
+Arreglados los 6 endpoints con este patrón pendientes desde SEC-AUDIT-02 (`libro_subcontratacion` ya se había corregido entonces): `registro_hormigonado`, `formacion_obra`, `actas_replanteo`, `cubicaciones_obra`, `cronograma_pagos`, `rdp_registros` (Ley 31/1995) — mismo fix en los 6: el número se calcula dentro de la propia sentencia `INSERT` (`INSERT...SELECT` con subconsulta `COALESCE`), atómico en D1, sin ventana entre leer y escribir.
+
+**Nota de proceso**: el primer intento de fix (`registro_hormigonado`) tenía un error propio de conteo de placeholders SQL ("22 values for 23 columns") — detectado inmediatamente al reintentar el mismo ataque de concurrencia tras el deploy, corregido, y a partir de ahí los 5 restantes se verificaron con conteo programático (`grep -o '?' | wc -l` contra el número de comas del `.bind()`) antes de desplegar, sin más errores.
+
+**Verificado en vivo, dos veces**: 15/15 peticiones concurrentes contra `registro-hormigonado` → números únicos y consecutivos (16-30, sin duplicados); 12/12 peticiones concurrentes contra `formacion-obra` → igual, confirmando que el fix se generaliza correctamente a los 5 endpoints restantes.
+
+**Deploy:** worker.js, commit `5d0c41b`, `/health` 200 verificado.
 
 ### SEC-AUDIT-04 (26/07/2026): pentest sin autenticación (atacante anónimo real) — reset de contraseña roto + fuga de enumeración de cuentas [COMPLETADO]
 
