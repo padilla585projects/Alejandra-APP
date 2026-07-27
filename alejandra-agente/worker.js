@@ -19,6 +19,7 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 // que cambiar precios, allowlists, o las validaciones IDOR/SSRF, se cambia en
 // lib.js y worker.js lo recibe vía este import.
 import {
+  timingSafeEqual,
   PRECIOS_USD,
   calcularCosteYProveedor,
   filtrarToolsPorAuth,
@@ -2422,10 +2423,18 @@ export default {
     const url  = new URL(req.url);
     const path = url.pathname;
 
+    // SEC-AUDIT-01 (26/07/2026): '*' no habilita CSRF aquí (auth es Bearer, no cookies) y
+    // los clientes nativos (app Android/APK, Telegram, server-to-server) no envían Origin
+    // ni lo comprueban -- pero restringir por defensa en profundidad no rompe nada de eso,
+    // solo acota qué páginas web pueden leer la respuesta desde el navegador. Mismo origen
+    // que usa worker.js (el panel de oficina) para las dos únicas superficies web reales.
+    const origenPermitido = req.headers.get('Origin');
+    const ORIGENES_WEB_PERMITIDOS = ['https://padilla585projects.github.io'];
     const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': ORIGENES_WEB_PERMITIDOS.includes(origenPermitido) ? origenPermitido : ORIGENES_WEB_PERMITIDOS[0],
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type,Authorization'
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Vary': 'Origin'
     };
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
@@ -2777,9 +2786,7 @@ export default {
           headers: {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+            ...corsHeaders,
           }
         });
       }
@@ -3104,7 +3111,7 @@ export default {
         const token = authHeader.replace('Bearer ', '').trim();
         if (!token) return null;
         // Probar admin token primero
-        if (environment.ADMIN_TOKEN && token === environment.ADMIN_TOKEN) {
+        if (environment.ADMIN_TOKEN && timingSafeEqual(token, environment.ADMIN_TOKEN)) {
           return { usuario_id: 'adrian', empresa_id: 'default' };
         }
         // Probar sesiones del login worker (tabla sesiones - es donde están los tokens reales)
@@ -3337,12 +3344,27 @@ export default {
 
           const formData = await req.formData();
           const file = formData.get('file');
+          // SEC-AUDIT-01 (26/07/2026): sin Authorization, este endpoint confiaba
+          // ciegamente en el usuario_id que mandaba el propio formData — cualquiera sin
+          // cuenta podía subir un archivo "a nombre de" otra persona real (nombre/id
+          // adivinado o conocido), y ese archivo pasaba a pertenecer a la EMPRESA de esa
+          // víctima a efectos de /files/<key> y de listar_archivos/ver_archivo (file
+          // planting cross-empresa). Si la petición SÍ trae Authorization válido, se usa
+          // el usuario_id real de la sesión en vez del que venga en el formData —
+          // mitigación en profundidad para clientes autenticados; los clientes que aún no
+          // mandan Authorization en la subida (ver nota histórica de abajo) siguen
+          // resolviendo por nombre/id como antes.
+          let usuarioAutenticado = null;
+          try {
+            const authCheck = await getAuth(req, env);
+            if (authCheck?.usuario_id) usuarioAutenticado = String(authCheck.usuario_id);
+          } catch (_) {}
           // Normalizamos ya aquí (mismo criterio que normalizarUsuarioId en el resto
           // del código) para que el usuario_id guardado en customMetadata sea el id
           // REAL de `usuarios` siempre que se pueda resolver — de eso depende que
           // puedeAccederArchivo() en /files/<key> pueda determinar la empresa dueña.
           // No requiere ningún cambio en la app (sigue sin mandar Authorization aquí).
-          const usuario_id = await normalizarUsuarioId(env, formData.get('usuario_id') || 'anon');
+          const usuario_id = usuarioAutenticado || await normalizarUsuarioId(env, formData.get('usuario_id') || 'anon');
 
           if (!file || !(file instanceof File)) {
             return json({ error: 'Campo "file" requerido' }, 400);
@@ -4052,8 +4074,11 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     }
 
     let iter     = 0;
-    // Adrián (id=3) y admin tienen más iteraciones para usar más tools
-    const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
+    // Adrián (id=3) y admin tienen más iteraciones para usar más tools.
+    // SEC-AUDIT-01 (26/07/2026): sin exigir authOk, un anónimo (p.ej. desde
+    // /webhook/evento) que mandara usuario_id:"adrian" en el body obtenía más
+    // iteraciones que el resto de anónimos con solo adivinar/conocer ese nombre.
+    const esAdmin = authOk && ['3','adrian','admin','Adrian'].includes(usuario_id);
     const MAX_ITER = esAdmin ? 12 : 8;
     const herramientasUsadas = [];
     // Códigos de confirmación tecleados por el HUMANO en su mensaje real (barrera
@@ -4185,7 +4210,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // En canales móviles (app_android, pwa) limitamos a 4 iter porque el waitUntil
     // de Cloudflare Workers solo da ~30s tras la response; con tools más largos
     // se cancela la tarea y se pierde la respuesta + FCM.
-    const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
+    // SEC-AUDIT-01 (26/07/2026): idem procesarConNEXUS — exigir authOk.
+    const esAdmin = authOk && ['3','adrian','admin','Adrian'].includes(usuario_id);
     const esCanalMovilProc = (canal === 'app_android' || canal === 'pwa');
     let MAX_ITER = esAdmin ? 12 : 8;
     if (esCanalMovilProc) MAX_ITER = Math.min(MAX_ITER, esAdmin ? 8 : 4);
@@ -5437,9 +5463,13 @@ function calcularProteccion(input) {
 async function esDeveloperAgente(env, usuario_id) {
   if (!usuario_id) return false;
   const uid = String(usuario_id).toLowerCase().trim();
-  // Atajos para los IDs/nombres conocidos del creador
+  // SEC-AUDIT-01 (26/07/2026): el atajo por .includes() daba permisos de desarrollador
+  // (patch_codigo, ejecutar_deploy, bypass de aislamiento por empresa en la BD) a
+  // CUALQUIER usuario/nombre que solo CONTUVIERA "adrian" como subcadena — un empleado
+  // real llamado Adrián en cualquier empresa cliente, o alguien registrado como
+  // "adriana_rrhh", pasaba el check. Solo coincidencia EXACTA contra los ids/alias
+  // conocidos del creador.
   if (uid === 'adrian' || uid === 'adrián' || uid === '3' || uid === '35') return true;
-  if (uid.includes('adrian') || uid.includes('adrián')) return true;
   // Comprobar en BD por id numérico o por nombre
   try {
     const num = parseInt(uid, 10);
@@ -10760,7 +10790,7 @@ async function verificarAdminToken(env, token, req) {
     const rl = await validarRateLimit(env, `admin-auth:ip:${ip}`);
     if (!rl.ok) return false;
   }
-  if (env.ADMIN_TOKEN && token === env.ADMIN_TOKEN) return true;
+  if (env.ADMIN_TOKEN && timingSafeEqual(token, env.ADMIN_TOKEN)) return true;
   try {
     // Fix continuación 14 (hallazgo #2, relacionado): expires_at existe en el schema
     // desde el principio pero nunca se comprobaba aquí -- cualquier token con fecha de

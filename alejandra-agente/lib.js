@@ -9,6 +9,17 @@
 // worker.js y se prueba de forma manual/integración, no aquí.
 // ══════════════════════════════════════════════════════════════════════════════
 
+// SEC-AUDIT-01 (26/07/2026): comparación en tiempo constante para secretos de alto
+// privilegio (ADMIN_TOKEN) — "===" sale en cuanto encuentra el primer carácter distinto,
+// filtrando por temporización cuántos caracteres iniciales acertó un atacante.
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 // ── Precios y coste (fix continuación 9: gpt-4o mal etiquetado/tarificado) ───
 const PRECIOS_USD = {
   'claude-haiku-4-5':  { in: 1.00,  out: 5.00  },
@@ -112,7 +123,16 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   // sesion como minimo, igual que el resto de tools de datos de esta lista.
   // preguntar_usuario queda ligada a un usuario_id concreto; sin sesion
   // cualquiera podria generar spam de notificaciones a Adrian por Telegram.
-  'generar_grafico', 'preguntar_usuario'
+  'generar_grafico', 'preguntar_usuario',
+  // SEC-AUDIT-01 (26/07/2026): memory_save no estaba aqui -- alcanzable sin sesion desde
+  // /webhook/evento y POST / (rutas deliberadamente publicas, authOk=false). Guarda en
+  // alejandra_memoria SIN empresa_id y ese contenido se inyecta luego como contexto de
+  // confianza en el prompt de TODAS las conversaciones de TODAS las empresas (via
+  // obtenerContextoChat) -- permitia envenenamiento de memoria global persistente por
+  // prompt injection no autenticado. memory_read/leer_estado (exponen memoria/estado
+  // interno) y propose_mejora/tomar_decision (tomar_decision puede auto-aplicar cambios
+  // de config si confianza>=0.8) se gatean igual por defensa en profundidad.
+  'memory_save', 'memory_read', 'propose_mejora', 'leer_estado', 'tomar_decision'
 ]);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {
@@ -335,6 +355,7 @@ function calcularEsperaReintentoMs(intento, backoffMs, retryAfterHeader) {
 }
 
 export {
+  timingSafeEqual,
   PRECIOS_USD,
   calcularCosteYProveedor,
   TOOLS_SOLO_DEV_VERIFICADO,

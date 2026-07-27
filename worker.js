@@ -34,6 +34,19 @@ function logAIUsage(env, { empresa_id, proveedor, modelo, endpoint, input_tokens
   ).bind(empresa_id||null, proveedor, modelo, endpoint||null, input_tokens||0, output_tokens||0, coste).run().catch(()=>{});
 }
 
+// SEC-AUDIT-01 (26/07/2026): comparación en tiempo constante para secretos de alto
+// privilegio (ADMIN_CODE) — "===" sale en cuanto encuentra el primer carácter distinto,
+// filtrando por temporización cuántos caracteres iniciales acertó un atacante. El riesgo
+// real en un Worker de Cloudflare es bajo (jitter de red domina), pero es la práctica
+// correcta para comparar secretos y cuesta lo mismo aplicarla.
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 // Genera N bytes aleatorios criptográficamente seguros como string hex
 function randomHex(bytes = 16) {
   const arr = new Uint8Array(bytes);
@@ -131,7 +144,7 @@ async function getAuth(request, env) {
   const rol          = request.headers.get('X-Rol');
   const codigo       = request.headers.get('X-Codigo');
   const departamento = request.headers.get('X-Departamento') || 'electrico';
-  const isAdmin = env.ADMIN_CODE && adminCode === env.ADMIN_CODE;
+  const isAdmin = !!(env.ADMIN_CODE && timingSafeEqual(adminCode || '', env.ADMIN_CODE));
   // SEC-13: Los privilegios elevados SOLO se conceden por X-Admin-Code verificado contra env.
   // X-Rol es metadata informativa (departamento, logging) — NUNCA concede isAdmin/isSuperadmin.
   // Sin esto cualquier petición podría enviar "X-Rol: superadmin" y obtener acceso total.
@@ -4467,7 +4480,7 @@ export default {
     // Si llega X-Admin-Code pero no coincide → registrar intento; bloquear tras 5 en 15min
     {
       const xAdminCode = request.headers.get('X-Admin-Code');
-      if (xAdminCode && env.ADMIN_CODE && xAdminCode !== env.ADMIN_CODE) {
+      if (xAdminCode && env.ADMIN_CODE && !timingSafeEqual(xAdminCode, env.ADMIN_CODE)) {
         const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
         try {
           const win = new Date(Date.now() - 15 * 60 * 1000).toISOString().replace('T',' ').split('.')[0];
@@ -6090,7 +6103,7 @@ async function verificarAcceso(request, env) {
   if (!codigo) return err('Falta el código');
 
   // 1. ¿Es superadmin?
-  if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
+  if (env.ADMIN_CODE && timingSafeEqual(codigo.trim(), env.ADMIN_CODE)) {
     const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true, empresa_id: 1 });
     env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
     return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token });
@@ -6596,11 +6609,15 @@ async function devolverBobina(codigo, request, env, ctx) {
 
 async function eliminarBobina(codigo, request, env, ctx) {
   const { isSuperadmin, isAdmin, obraId, empresa_id } = await getAuth(request, env);
-  const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
+  if (!empresa_id) return err('No autorizado', 403);
+  // SEC-AUDIT-01 (26/07/2026): mismo bug que SCAN-01 (ver editarBobina) — el SELECT no
+  // filtraba por empresa_id, así que un admin de OTRA empresa podía borrar una bobina de
+  // esta empresa con solo conocer el código (visible en QR/informes/PDF).
+  const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ? AND empresa_id = ?').bind(codigo, empresa_id).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && bobina.obra_id !== obraId) return err('No autorizado', 403);
 
-  await env.DB.prepare('DELETE FROM bobinas WHERE codigo = ?').bind(codigo).run();
+  await env.DB.prepare('DELETE FROM bobinas WHERE codigo = ? AND empresa_id = ?').bind(codigo, empresa_id).run();
 
   ctx.waitUntil(Promise.all([
     syncSheets(env, 'Elec-Bobinas', empresa_id || bobina.empresa_id),
@@ -6699,7 +6716,12 @@ async function crearPemp(request, env, ctx) {
 
 async function editarPemp(matricula, request, env, ctx) {
   const { obraId, isSuperadmin, empresa_id } = await getAuth(request, env);
-  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
+  if (!empresa_id) return err('No autorizado', 403);
+  // SEC-AUDIT-01 (26/07/2026): mismo bug que SCAN-01 (ver editarBobina) — el SELECT no
+  // filtraba por empresa_id Y el check de obraId se saltaba entero si obraId era falsy
+  // (típico de empresa_admin/oficina sin obra fija en sesión), dejando editar equipos de
+  // otra empresa con solo saber la matrícula.
+  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ? AND empresa_id = ?').bind(matricula, empresa_id).first();
   if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
   if (obraId && !isSuperadmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
@@ -6724,9 +6746,9 @@ async function editarPemp(matricula, request, env, ctx) {
     if (body[c] !== undefined) { sets.push(`${c} = ?`); vals.push(body[c]); }
   }
   if (sets.length === 0) return err('No hay campos para actualizar');
-  vals.push(matricula);
+  vals.push(matricula, empresa_id);
 
-  await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
+  await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ? AND empresa_id = ?`).bind(...vals).run();
   if (notifAveria)   await sendTelegram(env, `📴 <b>PEMP AVERIADA</b>\n📖 ${matricula}\n🏗 Obra: ${pemp.obra_id || '—'}`);
   if (notifReparado) await sendTelegram(env, `🟢 <b>PEMP Reparada</b>\n📖 ${matricula}`);
   ctx?.waitUntil(syncSheets(env, tabForDept('pemp', body.departamento || pemp.departamento), empresa_id || pemp.empresa_id));
@@ -6775,11 +6797,13 @@ async function devolverPemp(matricula, request, env, ctx) {
 
 async function eliminarPemp(matricula, request, env, ctx) {
   const { isSuperadmin, isAdmin, obraId, empresa_id } = await getAuth(request, env);
-  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
+  if (!empresa_id) return err('No autorizado', 403);
+  // SEC-AUDIT-01: mismo bug que SCAN-01 — SELECT sin filtrar empresa_id.
+  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ? AND empresa_id = ?').bind(matricula, empresa_id).first();
   if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
-  await env.DB.prepare('DELETE FROM pemp WHERE matricula = ?').bind(matricula).run();
+  await env.DB.prepare('DELETE FROM pemp WHERE matricula = ? AND empresa_id = ?').bind(matricula, empresa_id).run();
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('pemp', pemp.departamento), empresa_id || pemp.empresa_id),
     sendTelegram(env, `🗑️ <b>PEMP eliminada</b>\n📖 ${matricula}`),
@@ -6877,7 +6901,10 @@ async function crearCarretilla(request, env, ctx) {
 
 async function editarCarretilla(matricula, request, env, ctx) {
   const { obraId, isSuperadmin, empresa_id } = await getAuth(request, env);
-  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
+  if (!empresa_id) return err('No autorizado', 403);
+  // SEC-AUDIT-01 (26/07/2026): mismo bug que SCAN-01 (ver editarBobina) — SELECT sin
+  // empresa_id + check de obraId saltado si obraId era falsy.
+  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ? AND empresa_id = ?').bind(matricula, empresa_id).first();
   if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
   if (obraId && !isSuperadmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
 
@@ -6901,9 +6928,9 @@ async function editarCarretilla(matricula, request, env, ctx) {
     if (body[c] !== undefined) { sets.push(`${c} = ?`); vals.push(body[c]); }
   }
   if (sets.length === 0) return err('No hay campos para actualizar');
-  vals.push(matricula);
+  vals.push(matricula, empresa_id);
 
-  await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
+  await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ? AND empresa_id = ?`).bind(...vals).run();
   if (notifAveria)   await sendTelegram(env, `📴 <b>Carretilla AVERIADA</b>\n📖 ${matricula}`);
   if (notifReparado) await sendTelegram(env, `🟢 <b>Carretilla Reparada</b>\n📖 ${matricula}`);
   ctx?.waitUntil(syncSheets(env, tabForDept('carretilla', body.departamento || carretilla.departamento), empresa_id || carretilla.empresa_id));
@@ -6951,11 +6978,13 @@ async function devolverCarretilla(matricula, request, env, ctx) {
 
 async function eliminarCarretilla(matricula, request, env, ctx) {
   const { isSuperadmin, isAdmin, obraId, empresa_id } = await getAuth(request, env);
-  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
+  if (!empresa_id) return err('No autorizado', 403);
+  // SEC-AUDIT-01: mismo bug que SCAN-01 — SELECT sin filtrar empresa_id.
+  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ? AND empresa_id = ?').bind(matricula, empresa_id).first();
   if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
 
-  await env.DB.prepare('DELETE FROM carretillas WHERE matricula = ?').bind(matricula).run();
+  await env.DB.prepare('DELETE FROM carretillas WHERE matricula = ? AND empresa_id = ?').bind(matricula, empresa_id).run();
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('carretilla', carretilla.departamento), empresa_id || carretilla.empresa_id),
     sendTelegram(env, `🗑️ <b>Carretilla eliminada</b>\n📖 ${matricula}`),
@@ -13531,8 +13560,11 @@ async function crearMantenimiento(request, env) {
   // Si es revisión → actualizar fecha_ultima_revision en la tabla del equipo
   if (tipo_mant === 'revision') {
     const tabla = (tipo_equipo === 'carretilla' || tipo_equipo === 'carretillas') ? 'carretillas' : 'pemp';
-    await env.DB.prepare(`UPDATE ${tabla} SET fecha_ultima_revision = ? WHERE matricula = ?`)
-      .bind(fecha_mant, matricula.trim().toUpperCase()).run().catch(() => {});
+    // SEC-AUDIT-01 (26/07/2026): sin empresa_id, un usuario podía registrar un
+    // mantenimiento con la matrícula de un equipo de OTRA empresa y sobrescribir su
+    // fecha_ultima_revision.
+    await env.DB.prepare(`UPDATE ${tabla} SET fecha_ultima_revision = ? WHERE matricula = ? AND empresa_id = ?`)
+      .bind(fecha_mant, matricula.trim().toUpperCase(), empresa_id).run().catch(() => {});
   }
 
   await sendTelegram(env,
@@ -16020,7 +16052,11 @@ async function getPlanoObraFile(id, request, env) {
       'Content-Type': p.archivo_mime || 'application/octet-stream',
       'Content-Disposition': `inline; filename="${p.archivo_nombre || 'plano'}"`,
       'Cache-Control': 'private, max-age=3600',
-      'Access-Control-Allow-Origin': '*',
+      // SEC-AUDIT-01 (26/07/2026): único endpoint del archivo que sobrescribía CORS a
+      // '*' en vez de usar la constante CORS global (restringida al origen del panel) —
+      // ya exige sesión y empresa_id arriba, así que no habilitaba acceso sin auth, pero
+      // no hay motivo para no usar la misma cabecera restringida que el resto del archivo.
+      'Access-Control-Allow-Origin': CORS['Access-Control-Allow-Origin'],
     }
   });
 }
