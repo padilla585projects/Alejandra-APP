@@ -5,7 +5,27 @@
 **Versión actual:** v8.65 (version.json/sw.js/index.html sincronizados)
 **Resumen:** Parts 50-56 = roles/departamentos (hasta v8.23). Part 57 = primera tanda de bugs en vivo con Alberto (hasta v8.27). Part 58 = segunda tanda + checklist de pendientes + pruebas en HTC real + roles por departamento completos, v8.28→v8.47. Part 59 (esta sesión) = UX sidebar + previsualización de departamento para admins + CORS + refactor "verComoAdmin" + directorio por departamento + Almacén solo-material + fixes de fugas de sidebar (Obra, Seguridad de Obra, pie del sidebar, Chat DevTools), v8.48→v8.65. Ver Parts 50-59.
 
-**PARA RETOMAR EN OTRO CHAT:** sesión cerrada limpia, sin trabajo a medias. Todo commiteado y pusheado a `main` (último commit `5d0c41b`), GitHub Pages propagado y verificado en Chrome real de Adrián vía la extensión claude-in-chrome, y los dos workers desplegados. **Pendiente de que Adrián borre 2 empresas de prueba** que quedaron en D1 (ver SEC-AUDIT-03 abajo — datos ficticios, sin riesgo, pero sin borrar todavía). **Adrián pidió seguir con pruebas de estrés/carga más contundentes** ("poner al límite la app") — carga concurrente, fuzzing más agresivo, y pruebas destructivas en local (`wrangler dev`) sin riesgo sobre producción — pendiente de retomar, no empezado todavía tras SEC-AUDIT-05.
+**PARA RETOMAR EN OTRO CHAT:** sesión cerrada limpia, sin trabajo a medias. Todo commiteado y pusheado a `main` (último commit `79d72a1`), workers desplegados y verificados. **Pendiente de que Adrián borre 2 empresas de prueba** que quedaron en D1 (ver SEC-AUDIT-03 abajo — datos ficticios, sin riesgo, pero sin borrar todavía). **Sigue en curso "hasta que rompa"** (fuzzing/estrés a petición explícita de Adrián): tras SEC-AUDIT-07 (límite de body), quedan por probar JSON anidado profundo, unicode/null-bytes, confusión de tipos, y repetir el patrón de payload gigante contra otros endpoints con campos de texto libre.
+
+### SEC-AUDIT-07 (27/07/2026): fuzzing — payload de 5MB desperdiciaba CPU del worker antes de que D1 lo rechazara [COMPLETADO]
+
+Continuación de "hasta que rompa": `POST /usuarios` con un campo `nombre` de 5MB devolvía `500 D1_ERROR: string or blob too big: SQLITE_TOOBIG` — fallo limpio, sin fuga de datos ni stack trace, pero tardaba ~1.4s de CPU del worker en cada intento (JSON.parse + validación + intento de INSERT) antes de que D1 lo rechazara. Un atacante podía repetir la petición muchas veces para gastar cuota de cómputo del worker con coste mínimo propio (vector de DoS de bajo coste, no de robo/modificación de datos).
+
+Fix: límite global de `Content-Length` (2MB) al principio de `fetch()`, antes de tocar cualquier ruta o la BD — ningún endpoint legítimo de la app manda JSON de más de 2MB (los adjuntos van por R2, no por JSON). Devuelve `413` en vez de fallar tarde con `500`.
+
+**Verificado en vivo**: 5MB → `413` en <1s consistentemente (antes: `500` en ~1.4s); 3MB → igual; una petición normal pequeña (`POST /usuarios` real) sigue devolviendo `201` sin cambios.
+
+**Deploy:** worker.js, commit `79d72a1`, `/health` 200 verificado.
+
+### SEC-AUDIT-06 (27/07/2026): pentest de estrés — condición de carrera en los 2 rate-limiters + monitorización de fuerza bruta rota en silencio [COMPLETADO]
+
+Continuación de "poner al límite la app": misma técnica que SEC-AUDIT-05 (peticiones POST reales en paralelo, no secuenciales) pero contra los rate-limiters de login y `X-Admin-Code`. Ambos comprobaban `SELECT COUNT(*)` de intentos fallidos ANTES de insertar el intento actual (y en el caso de `X-Admin-Code`, el `INSERT` ni siquiera se esperaba — sin `await` — así que la respuesta podía volver antes de que el intento quedara registrado). Resultado con carga real: 15/40 intentos de login concurrentes pasaron el límite declarado de 10; el de `X-Admin-Code` era peor por el `await` que faltaba.
+
+Fix en los dos: insertar el intento actual PRIMERO (esperado) y contar DESPUÉS (el conteo ya incluye la fila propia), cerrando la ventana de carrera. Verificado en vivo tras el fix: 7/30 y 4/20 respectivamente, ambos dentro de su límite.
+
+**Bonus del mismo pentest**: se descubrieron 4 consultas de monitorización de seguridad rotas en silencio (fallaban dentro de un `catch` vacío) porque referenciaban columnas que no existían en `login_attempts` (`success`, `email`) — dos `Watcher` de `nexusWatchers()` (UserAccessWatcher, SecurityWatcher), una herramienta de diagnóstico y un análisis de seguridad del chat. Es decir: la monitorización de fuerza bruta llevaba tiempo sin funcionar de verdad, sin que nadie lo notara. Corregidas las 4 consultas + migración auto-aplicada (`ALTER TABLE login_attempts ADD COLUMN email`).
+
+**Deploy:** worker.js, commits `95294bc` (rate-limiter de login + columna `email` + 4 consultas rotas) y `1c9e017` (rate-limiter de `X-Admin-Code`), `/health` 200 verificado tras cada uno.
 
 ### SEC-AUDIT-05 (27/07/2026): pentest de estrés — condición de carrera CONFIRMADA en vivo, 6 registros legales con numeración duplicada [COMPLETADO]
 
