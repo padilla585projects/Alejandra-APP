@@ -7152,6 +7152,11 @@ async function getUsuarios(request, env) {
   }
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();
+  // SEC-AUDIT-03 (26/07/2026, hallazgo de pentest dinámico real): `u.*` incluye
+  // password_hash — nunca debe viajar por la API, ni siquiera a un admin legítimo
+  // (no hay ningún uso legítimo en el frontend, y reduce el impacto si una sesión de
+  // admin se ve comprometida).
+  results.forEach(u => { delete u.password_hash; });
   return json(results);
 }
 
@@ -7201,16 +7206,27 @@ async function crearUsuario(request, env) {
 
   const obraFinal = obra_id ? parseInt(obra_id) : obraId;
   const deptFinal = deptBody || 'electrico';
-  const esAdminReal = isSuperadmin || isAdmin || isEmpresaAdmin;
+  // SEC-AUDIT-03 (26/07/2026, hallazgo de pentest dinámico REAL contra 2 empresas de
+  // prueba aisladas): esAdminReal trataba a empresa_admin EXACTAMENTE igual que un
+  // superadmin de verdad para el tope de roles — cualquier empresa_admin normal (el rol
+  // que recibe cualquier cliente que se autorregistra en /empresas/registro) podía hacer
+  // POST /usuarios con {rol:'superadmin'} y crear una cuenta con acceso a TODA la
+  // plataforma (todas las empresas), no solo la suya. Se separa en dos niveles:
+  // "esPlataformaAdmin" (superadmin/desarrollador/es_admin real) puede asignar CUALQUIER
+  // rol; empresa_admin puede asignar cualquier rol de ROLES_ASIGNABLES_NO_ADMIN + a sí
+  // mismo (empresa_admin, gestión de su propia empresa), pero NUNCA superadmin/desarrollador.
+  const esPlataformaAdmin = isSuperadmin || isAdmin;
+  const esAdminReal = esPlataformaAdmin || isEmpresaAdmin;
 
   // Encargado solo puede crear usuarios de su propia obra (empresa_admin puede cualquiera)
   if (isEncargado && !esAdminReal && obraFinal !== obraId) {
     return err('No autorizado para crear usuarios en otra obra', 403);
   }
-  // SEC-AUDIT-02: tope de rango de rol para quien no es admin real.
   const rolFinal = rol || 'operario';
-  if (!esAdminReal && !ROLES_ASIGNABLES_NO_ADMIN.includes(rolFinal)) {
-    return err('No autorizado para asignar ese rol', 403);
+  const ROLES_ASIGNABLES_EMPRESA_ADMIN = [...ROLES_ASIGNABLES_NO_ADMIN, 'empresa_admin'];
+  if (!esPlataformaAdmin) {
+    const permitidos = isEmpresaAdmin ? ROLES_ASIGNABLES_EMPRESA_ADMIN : ROLES_ASIGNABLES_NO_ADMIN;
+    if (!permitidos.includes(rolFinal)) return err('No autorizado para asignar ese rol', 403);
   }
 
   try {
@@ -7271,17 +7287,24 @@ async function editarUsuario(id, request, env) {
     // Encargado solo puede asignar su propia obra (no la de otro encargado)
     if (body.obra_id !== undefined && body.obra_id !== null && parseInt(body.obra_id) !== obraId) return err('No autorizado', 403);
   }
-  // roles_extra solo editable por superadmin/admin — evitar escalada de privilegios
-  const esAdminRealEd = isSuperadmin || isAdmin || isEmpresaAdmin;
-  const campos = esAdminRealEd
+  // SEC-AUDIT-03 (26/07/2026, hallazgo de pentest dinámico real): "esAdminRealEd" trataba
+  // a empresa_admin igual que a un superadmin de verdad — un empresa_admin normal (el rol
+  // que recibe cualquier cliente autorregistrado) podía hacer PUT /usuarios/<su_id> con
+  // {rol:'superadmin'} y quedar con acceso a TODA la plataforma. Mismo criterio que
+  // crearUsuario(): solo un admin de plataforma de verdad puede asignar
+  // superadmin/desarrollador; empresa_admin puede asignar su propio rol + los no-privilegiados.
+  // roles_extra (permisos ADICIONALES apilados sobre "rol") queda reservado a admin de
+  // plataforma real — si no, un empresa_admin podría colarse superadmin como rol extra
+  // aunque el campo "rol" principal ya estuviera bien acotado.
+  const esPlataformaAdminEd = isSuperadmin || isAdmin;
+  const esAdminRealEd = esPlataformaAdminEd || isEmpresaAdmin;
+  const campos = esPlataformaAdminEd
     ? ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra']
     : ['nombre', 'codigo', 'rol', 'obra_id', 'departamento'];
-  // SEC-AUDIT-02 (26/07/2026): "rol" estaba en la whitelist de AMBAS ramas sin tope de
-  // rango — un encargado podía hacer PUT /usuarios/<su_propio_id> con {rol:'superadmin'}
-  // y quedar como superadmin en su siguiente login. Se acota el valor permitido si quien
-  // edita no es admin real.
-  if (!esAdminRealEd && body.rol !== undefined && !ROLES_ASIGNABLES_NO_ADMIN.includes(body.rol)) {
-    return err('No autorizado para asignar ese rol', 403);
+  if (!esPlataformaAdminEd && body.rol !== undefined) {
+    const ROLES_ASIGNABLES_EMPRESA_ADMIN_ED = [...ROLES_ASIGNABLES_NO_ADMIN, 'empresa_admin'];
+    const permitidosEd = isEmpresaAdmin ? ROLES_ASIGNABLES_EMPRESA_ADMIN_ED : ROLES_ASIGNABLES_NO_ADMIN;
+    if (!permitidosEd.includes(body.rol)) return err('No autorizado para asignar ese rol', 403);
   }
   const sets = [];
   const vals = [];
