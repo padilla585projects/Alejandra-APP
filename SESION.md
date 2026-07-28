@@ -5,7 +5,20 @@
 **Versión actual:** v8.65 (sin cambios de frontend en esta sesión — solo worker.js)
 **Resumen:** Parts 50-59 = ver historial anterior (roles/departamentos, UX sidebar). Part 60 (esta sesión) = auditoría de seguridad completa + pruebas de estrés/carga, SEC-AUDIT-01 a 08.
 
-**PARA RETOMAR EN OTRO CHAT:** sesión cerrada limpia, sin trabajo a medias. Todo commiteado y pusheado a `main` (último commit `1315a25`), worker desplegado y verificado, `/health` 200. **Pendiente de que Adrián borre 2 empresas de prueba** que quedaron en D1 (ver SEC-AUDIT-03 abajo — datos ficticios, sin riesgo, con bastante actividad de prueba acumulada de toda la sesión: bobinas `SIM-*`/`VOL-*`/`Load*`, usuarios `SIMUSER-*`, etc., todo con prefijos claros). Ninguna acción de seguridad pendiente — las 8 rondas de auditoría están cerradas, verificadas en vivo y documentadas. Único riesgo aceptado y documentado (bajo, sin acción): `/bobinas`,`/pemp`,`/carretillas` devuelven `[]` en vez de 403 sin token (sin fuga real). Si se retoma "hasta que rompa" en el futuro: pendiente una herramienta de carga real (k6/autocannon) para probar carga sostenida de verdad — la máquina de pruebas local (curl repetido) no sirve para eso, como se confirmó en esta sesión.
+**PARA RETOMAR EN OTRO CHAT:** sesión cerrada limpia, sin trabajo a medias. Todo commiteado y pusheado a `main` (último commit `162425d`), worker desplegado y panel.html propagado en GitHub Pages, verificado con la cuenta real de Adrián en Chrome. **Pendiente de que Adrián borre 2 empresas de prueba** que quedaron en D1 (datos ficticios, sin riesgo, con bastante actividad de prueba acumulada de toda la sesión). Ninguna acción de seguridad pendiente — las 8 rondas de auditoría están cerradas, verificadas en vivo y documentadas. Único riesgo aceptado y documentado (bajo, sin acción): `/bobinas`,`/pemp`,`/carretillas` devuelven `[]` en vez de 403 sin token (sin fuga real).
+
+### Panel de Empresas — sugerencia #210 de Adrián resuelta [COMPLETADO]
+
+A petición de Adrián ("como developer no puedo borrar ni crear nada desde el panel de empresas"), investigado y arreglado en 4 pasos, todos verificados en vivo con su cuenta real en Chrome:
+
+1. **worker.js**: el `departamento` de sesión de superadmin/desarrollador se quedaba en `'electrico'` (no `null`) al iniciar sesión por email/código — provocaba que el panel creyera que estaban "previsualizando" ese departamento y ocultara toda la sección admin del sidebar (Empresa/Usuarios/Logs/Privacidad). Commit `7124de9`.
+2. **panel.html — el bug real**: el fix anterior no bastaba porque `doLogin()`/`doLoginGoogle()` tenían el MISMO patrón (`r.departamento || 'electrico'`) al guardar `SESSION` — el `null` correcto del backend se convertía otra vez en `'electrico'` justo al guardar la sesión. Encontrado inspeccionando `localStorage` en vivo tras confirmar con Adrián que el primer fix no había funcionado. Commit `1c0bf98`.
+3. **Editar/Eliminar empresa**: no existía ningún endpoint para tocar una empresa ajena (solo "Ver"). Añadidos `PUT`/`DELETE /empresas/:id` (soft-delete, `activa=0`, igual que obras) + botones en la tabla del panel. Commit `7124de9`.
+4. **Botón Eliminar cortado**: la columna de acciones (230px) no daba para 3 botones con texto — "Eliminar" se veía como "...". Cambiado a solo iconos con tooltip. Commit `162425d`.
+
+**Nota de proceso**: durante la verificación en vivo con clicks/arrastres de botones flotantes (`fabChatEquipo`/`remoteScanFab`, que tapaban la tabla por tener una posición arrastrada guardada en ese navegador), se disparó sin querer el botón "Eliminar" sobre `PENTEST-A` (empresa_id=6, ficticia) — reactivada al momento (`UPDATE empresas SET activa=1 WHERE id=6`), sin pérdida de datos.
+
+Si se retoma "hasta que rompa" en el futuro: pendiente una herramienta de carga real (k6/autocannon) para probar carga sostenida de verdad — la máquina de pruebas local (curl repetido) no sirve para eso, como se confirmó en esta sesión.
 
 ### SEC-AUDIT-08 (27/07/2026): la condición de carrera de SEC-AUDIT-05 estaba en 33 endpoints más, no solo 6 [COMPLETADO]
 
