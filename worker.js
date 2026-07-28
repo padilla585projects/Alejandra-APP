@@ -4715,6 +4715,8 @@ export default {
       if (path === '/sesion/obra'           && method === 'PUT')  return await actualizarSesionObra(request, env);
       if (path === '/empresas/registro'  && method === 'POST') return await registrarEmpresa(request, env);
       if (path === '/empresas'           && method === 'GET')  return await getEmpresas(request, env);
+      if (path.startsWith('/empresas/') && method === 'PUT')    return await editarEmpresaAdmin(path.split('/empresas/')[1], request, env);
+      if (path.startsWith('/empresas/') && method === 'DELETE') return await eliminarEmpresaAdmin(path.split('/empresas/')[1], request, env);
       if (path === '/superadmin/empresa' && method === 'POST') return await superadminSeleccionarEmpresa(request, env);
       if (path === '/mi-empresa'         && method === 'GET')  return await getMiEmpresa(request, env);
       if (path === '/mi-empresa'         && method === 'PUT')  return await updateMiEmpresa(request, env);
@@ -6275,7 +6277,12 @@ async function verificarAcceso(request, env, ctx) {
       if (!u || !u.password_hash) { await registrarFallo('email_invalido'); return err('Email o contraseña incorrectos', 401); }
       const valid = await verifyPassword(passInput, u.password_hash);
       if (!valid) { await registrarFallo('password_invalido'); return err('Email o contraseña incorrectos', 401); }
-      const dept = u.rol === 'empresa_admin' ? null : (u.departamento || 'electrico');
+      // FIX-EMPRESAS-01 (28/07/2026): solo empresa_admin quedaba con departamento=null; un
+      // superadmin/desarrollador que iniciaba sesión por email (no con el ADMIN_CODE maestro)
+      // se quedaba con departamento='electrico' por defecto, lo que en panel.html hacía que
+      // previsualizandoDepto diera true y ocultara TODA la pestaña "Empresa" del sidebar (junto
+      // con Usuarios/Logs/Privacidad) — parecía un bloqueo de permisos pero era solo de sesión.
+      const dept = ['empresa_admin', 'superadmin', 'desarrollador'].includes(u.rol) ? null : (u.departamento || 'electrico');
       const token = await crearSesion(env, {
         nombre: u.nombre, rol: u.rol, obra_id: u.obra_id, obra_nombre: u.obra_nombre,
         departamento: dept, es_admin: false, usuario_id: u.id, empresa_id: u.empresa_id || 1,
@@ -6320,10 +6327,12 @@ async function verificarAcceso(request, env, ctx) {
       }
       await sendTelegram(env, `👤 <b>Login</b>: ${usuario.nombre} (${usuario.rol})\n🏗 ${usuario.obra_nombre || '—'}  📷 ${usuario.departamento || '—'}`);
       await logActividad(env, { nivel: 'info', origen: 'login', mensaje: `Login: ${usuario.nombre} (${usuario.rol})`, detalle: `obra: ${usuario.obra_nombre || '—'} | dept: ${usuario.departamento || '—'}`, empresa_id: usuario.empresa_id || 1 });
+      // FIX-EMPRESAS-01 (28/07/2026): mismo fix que el login por email — ver comentario ahí.
+      const deptCod = ['empresa_admin', 'superadmin', 'desarrollador'].includes(usuario.rol) ? null : (usuario.departamento || 'electrico');
       const token = await crearSesion(env, {
         nombre: usuario.nombre, rol: usuario.rol,
         obra_id: usuario.obra_id, obra_nombre: usuario.obra_nombre,
-        departamento: usuario.departamento || 'electrico',
+        departamento: deptCod,
         es_admin: false, usuario_id: usuario.id,
         empresa_id: usuario.empresa_id || 1,
       });
@@ -6340,7 +6349,7 @@ async function verificarAcceso(request, env, ctx) {
         obra_id: usuario.obra_id,
         obra_nombre: usuario.obra_nombre,
         obras_asignadas,
-        departamento: usuario.departamento || 'electrico',
+        departamento: deptCod,
         token,
         empresa_id: usuario.empresa_id || 1,
         empresa_nombre: empRowCod?.nombre || '',
@@ -6497,6 +6506,46 @@ async function getEmpresas(request, env) {
     'SELECT id, nombre, slug, email, plan, activa, created_at FROM empresas WHERE activa = 1 ORDER BY nombre'
   ).all();
   return json(rows.results || []);
+}
+
+// FIX-EMPRESAS-02 (28/07/2026): la tabla de empresas del panel solo tenía "Ver" — no existía
+// ningún endpoint para editar o borrar una empresa ajena (updateMiEmpresa() solo deja tocar la
+// propia). Se añaden editarEmpresaAdmin/eliminarEmpresaAdmin, ambos restringidos a
+// isSuperadmin (incluye desarrollador, ver getAuth). "Eliminar" es un soft-delete (activa=0),
+// igual que ya hacen obras — nunca se borra la fila ni sus datos, y getEmpresas() ya filtra
+// por activa=1 así que desaparece del listado sin perder nada.
+async function editarEmpresaAdmin(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isSuperadmin) return err('Sin permisos', 403);
+  const empresaId = parseInt(id);
+  const existente = await env.DB.prepare('SELECT id FROM empresas WHERE id = ?').bind(empresaId).first();
+  if (!existente) return err('Empresa no encontrada', 404);
+  const body = await request.json().catch(() => ({}));
+  const { nombre, email, telefono, direccion, cif, plan } = body;
+  const campos = []; const vals = [];
+  if (nombre    !== undefined) {
+    if (!safeStr(nombre).trim()) return err('El nombre no puede quedar vacío', 400);
+    campos.push('nombre = ?');    vals.push(safeStr(nombre).trim());
+  }
+  if (email     !== undefined) { campos.push('email = ?');     vals.push(safeStr(email).trim()     || null); }
+  if (telefono  !== undefined) { campos.push('telefono = ?');  vals.push(safeStr(telefono).trim()  || null); }
+  if (direccion !== undefined) { campos.push('direccion = ?'); vals.push(safeStr(direccion).trim() || null); }
+  if (cif       !== undefined) { campos.push('cif = ?');       vals.push(safeStr(cif).trim()       || null); }
+  if (plan      !== undefined) { campos.push('plan = ?');      vals.push(safeStr(plan).trim()      || 'basic'); }
+  if (!campos.length) return err('Nada que actualizar', 400);
+  vals.push(empresaId);
+  await env.DB.prepare(`UPDATE empresas SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarEmpresaAdmin(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isSuperadmin) return err('Sin permisos', 403);
+  const empresaId = parseInt(id);
+  const existente = await env.DB.prepare('SELECT id, nombre FROM empresas WHERE id = ?').bind(empresaId).first();
+  if (!existente) return err('Empresa no encontrada', 404);
+  await env.DB.prepare('UPDATE empresas SET activa = 0 WHERE id = ?').bind(empresaId).run();
+  return json({ ok: true, mensaje: `Empresa "${existente.nombre}" desactivada` });
 }
 
 async function superadminSeleccionarEmpresa(request, env) {

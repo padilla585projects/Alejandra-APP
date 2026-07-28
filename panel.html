@@ -15288,8 +15288,10 @@ async function cargarListaEmpresas() {
       { title: 'Activa', field: 'activa', width: 80, hozAlign: 'center',
         formatter: c => c.getValue() ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-danger">✕</span>' },
       { title: 'Alta', field: 'created_at', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: '', field: 'id', width: 120, hozAlign: 'center', headerSort: false,
-        formatter: c => `<button class="btn btn-sm btn-secondary" onclick="seleccionarEmpresa(${c.getValue()})" title="Ver como esta empresa">👁 Ver</button>` },
+      { title: '', field: 'id', width: 230, hozAlign: 'center', headerSort: false,
+        formatter: c => `<button class="btn btn-sm btn-secondary" onclick="seleccionarEmpresa(${c.getValue()})" title="Ver como esta empresa">👁 Ver</button>
+          <button class="btn btn-sm btn-secondary" onclick="editarEmpresaTabla(${c.getValue()})" title="Editar empresa">✏️ Editar</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarEmpresaTabla(${c.getValue()})" title="Desactivar empresa">🗑 Eliminar</button>` },
     ]
   });
 }
@@ -15297,6 +15299,47 @@ async function cargarListaEmpresas() {
 async function seleccionarEmpresa(id) {
   const r = await api('/superadmin/empresa', { method: 'POST', body: JSON.stringify({ empresa_id: id }) });
   if (r.ok) { toast('Empresa seleccionada — recargando...', 'ok'); setTimeout(() => location.reload(), 1200); }
+  else toast(r.error || 'Error', 'err');
+}
+
+// FIX-EMPRESAS-02 (28/07/2026): editar/eliminar cualquier empresa desde la tabla (antes solo
+// existía "Ver"). Reutiliza el modal genérico (abrirModal) ya usado en el resto del panel.
+function editarEmpresaTabla(id) {
+  const row = tblEmpresas.getRows().find(r => r.getData().id === id);
+  const d = row ? row.getData() : {};
+  abrirModal(`✏️ Editar empresa #${id}`, `
+    <div class="form-group"><label>Nombre *</label><input type="text" id="editEmpNombre" value="${(d.nombre||'').replace(/"/g,'&quot;')}"></div>
+    <div class="form-group"><label>Email</label><input type="email" id="editEmpEmail" value="${(d.email||'').replace(/"/g,'&quot;')}"></div>
+    <div class="form-group"><label>Teléfono</label><input type="text" id="editEmpTelefono" value="${(d.telefono||'').replace(/"/g,'&quot;')}"></div>
+    <div class="form-group"><label>CIF</label><input type="text" id="editEmpCif" value="${(d.cif||'').replace(/"/g,'&quot;')}"></div>
+    <div class="form-group"><label>Dirección</label><input type="text" id="editEmpDireccion" value="${(d.direccion||'').replace(/"/g,'&quot;')}"></div>
+    <div class="form-group"><label>Plan</label>
+      <select id="editEmpPlan">
+        ${['basic','pro','enterprise'].map(p => `<option value="${p}" ${d.plan===p?'selected':''}>${p.toUpperCase()}</option>`).join('')}
+      </select>
+    </div>
+  `, async () => {
+    const body = {
+      nombre:    document.getElementById('editEmpNombre').value.trim(),
+      email:     document.getElementById('editEmpEmail').value.trim() || null,
+      telefono:  document.getElementById('editEmpTelefono').value.trim() || null,
+      cif:       document.getElementById('editEmpCif').value.trim() || null,
+      direccion: document.getElementById('editEmpDireccion').value.trim() || null,
+      plan:      document.getElementById('editEmpPlan').value,
+    };
+    if (!body.nombre) { toast('El nombre es obligatorio', 'err'); return; }
+    const r = await api(`/empresas/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok) { toast('Empresa actualizada ✓', 'ok'); cerrarModal(); cargarListaEmpresas(); }
+    else toast(r.error || 'Error al guardar', 'err');
+  });
+}
+
+async function eliminarEmpresaTabla(id) {
+  const row = tblEmpresas.getRows().find(r => r.getData().id === id);
+  const nombre = row ? row.getData().nombre : `#${id}`;
+  if (!confirm(`¿Desactivar la empresa "${nombre}"? No se borran sus datos, solo deja de aparecer en este listado. Sus usuarios seguirán pudiendo acceder normalmente (esta acción no bloquea el login).`)) return;
+  const r = await api(`/empresas/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast(r.mensaje || 'Empresa desactivada ✓', 'ok'); cargarListaEmpresas(); }
   else toast(r.error || 'Error', 'err');
 }
 
