@@ -9966,7 +9966,12 @@ async function doLogin() {
   }
 
   TOKEN = r.token;
-  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: r.roles_extra || [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null, departamento: r.departamento || 'electrico', obra_id: r.obra_id || null, obra_nombre: r.obra_nombre || null, obras_asignadas: r.obras_asignadas || (r.obra_id ? [r.obra_id] : []) };
+  // FIX-EMPRESAS-01 (28/07/2026): "r.departamento || 'electrico'" trataba el null explícito
+  // que ahora manda el backend para superadmin/desarrollador (ver worker.js FIX-EMPRESAS-01)
+  // igual que si el campo faltara del todo, forzando 'electrico' y deshaciendo el fix del
+  // backend justo al guardar la sesión — previsualizandoDepto volvía a dar true y ocultaba
+  // toda la pestaña "Empresa". Solo se aplica el fallback si el campo no vino en la respuesta.
+  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: r.roles_extra || [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null, departamento: r.departamento !== undefined ? r.departamento : 'electrico', obra_id: r.obra_id || null, obra_nombre: r.obra_nombre || null, obras_asignadas: r.obras_asignadas || (r.obra_id ? [r.obra_id] : []) };
   localStorage.setItem('panel_token', TOKEN);
   localStorage.setItem('panel_session', JSON.stringify(SESSION));
   mostrarSeleccionObra(r);
@@ -17707,7 +17712,8 @@ if ('serviceWorker' in navigator) {
           return;
         }
         TOKEN = d.token;
-        SESSION = { nombre: d.nombre, rol: d.rol, roles_extra: d.roles_extra || [], empresa_id: d.empresa_id, empresa_nombre: d.empresa_nombre, usuario_id: d.usuario_id || null, departamento: d.departamento || 'electrico', obra_id: d.obra_id || null, obra_nombre: d.obra_nombre || null, obras_asignadas: d.obras_asignadas || (d.obra_id ? [d.obra_id] : []) };
+        // FIX-EMPRESAS-01 (28/07/2026): mismo fix que doLogin() — ver comentario ahí.
+        SESSION = { nombre: d.nombre, rol: d.rol, roles_extra: d.roles_extra || [], empresa_id: d.empresa_id, empresa_nombre: d.empresa_nombre, usuario_id: d.usuario_id || null, departamento: d.departamento !== undefined ? d.departamento : 'electrico', obra_id: d.obra_id || null, obra_nombre: d.obra_nombre || null, obras_asignadas: d.obras_asignadas || (d.obra_id ? [d.obra_id] : []) };
         localStorage.setItem('panel_token', TOKEN);
         localStorage.setItem('panel_session', JSON.stringify(SESSION));
         iniciarApp();
