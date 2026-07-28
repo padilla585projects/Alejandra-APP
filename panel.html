@@ -15293,10 +15293,14 @@ async function cargarListaEmpresas() {
       { title: 'Activa', field: 'activa', width: 80, hozAlign: 'center',
         formatter: c => c.getValue() ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-danger">✕</span>' },
       { title: 'Alta', field: 'created_at', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: '', field: 'id', width: 230, hozAlign: 'center', headerSort: false,
-        formatter: c => `<button class="btn btn-sm btn-secondary" onclick="seleccionarEmpresa(${c.getValue()})" title="Ver como esta empresa">👁 Ver</button>
-          <button class="btn btn-sm btn-secondary" onclick="editarEmpresaTabla(${c.getValue()})" title="Editar empresa">✏️ Editar</button>
-          <button class="btn btn-sm btn-danger" onclick="eliminarEmpresaTabla(${c.getValue()})" title="Desactivar empresa">🗑 Eliminar</button>` },
+      { title: '', field: 'id', width: 130, hozAlign: 'center', headerSort: false,
+        // FIX-EMPRESAS-03 (28/07/2026): con los 3 botones en texto completo (👁 Ver / ✏️ Editar
+        // / 🗑 Eliminar) los 230px de columna no alcanzaban y "Eliminar" quedaba cortado, visible
+        // solo como "..." — confirmado por Adrián en vivo. Solo icono + title (tooltip) para
+        // que quepan los 3 sin ensanchar la tabla.
+        formatter: c => `<button class="btn btn-sm btn-secondary" onclick="seleccionarEmpresa(${c.getValue()})" title="Ver como esta empresa">👁</button>
+          <button class="btn btn-sm btn-secondary" onclick="editarEmpresaTabla(${c.getValue()})" title="Editar empresa">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarEmpresaTabla(${c.getValue()})" title="Desactivar empresa">🗑</button>` },
     ]
   });
 }
