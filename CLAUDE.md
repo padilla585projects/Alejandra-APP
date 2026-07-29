@@ -137,13 +137,16 @@ npx wrangler tail
 
 > ⚠️ **INCIDENTE 20/07/2026 (SEC-08/SEC-09)**: Se blindó la barrera humana anti-borrado en `worker.js` pero el agente de oficina/app web se quedó SIN blindar durante horas, porque es **código separado**. Casi se deja un flanco abierto.
 
-Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, comparten BD D1). Pero por dentro son **DOS workers con código distinto**, y se le habla desde **3 sitios**:
+Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, comparten BD D1). Pero por dentro son **DOS workers con código distinto**, y se le habla desde **4 sitios**:
 
 | Sitio desde el que se habla | Worker que responde | Herramienta de escritura | Barrera destructiva |
 |---|---|---|---|
-| App móvil/web (`index.html`) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
-| Panel de oficina (`panel.html`) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
+| App móvil/PWA (`index.html`) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
+| Panel de oficina (`panel.html`, "Alejandra Office") | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
+| Panel de control standalone (`alejandra-panel.html`, login con Google/token admin) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
 | Chat dev del panel + Telegram | `alejandra-app-api` (`worker.js`) | `sql_query`, `run_migration` | 🔒 Estricta (SEC-08) |
+
+> ⚠️ **`alejandra-panel.html` es un frontend aparte**, con su propio parseo del stream SSE de `/api/chat/stream` — no reutiliza código de `index.html` ni `panel.html`. Cualquier cambio en el formato de eventos SSE (`routing`/`token`/`tool_start`/`tool_end`/`text`/`done`) hay que verificarlo en **los tres** frontends de `alejandra-agente`, no solo en los dos "grandes". (Incidente 29/07/2026: el evento `token` se añadió en mayo y nunca se implementó aquí — la respuesta se generaba bien en el servidor pero no se pintaba nunca.)
 
 **Regla de oro:** toda mejora/fix de **seguridad, tools, permisos o barreras** hay que aplicarla —o decidir conscientemente que no aplica— en **LOS DOS** workers (`worker.js` **y** `alejandra-agente/worker.js`). Si solo se toca uno, quedan descompensados (una Alejandra protegida, la otra no). Antes de cerrar una sesión de seguridad, preguntarse: *"¿esto también afecta al otro cerebro?"*.
 
