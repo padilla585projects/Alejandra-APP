@@ -2449,7 +2449,13 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': ORIGENES_WEB_PERMITIDOS.includes(origenPermitido) ? origenPermitido : ORIGENES_WEB_PERMITIDOS[0],
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      // FIX-ALEJANDRA-CORS-01 (29/07/2026): al añadir X-Token a las peticiones del chat de
+      // index.html (FIX-ALEJANDRA-SYNC-01, hoy mismo) se rompió el chat entero desde la PWA/
+      // panel — "Error: Failed to fetch" es un bloqueo de preflight CORS del propio navegador,
+      // no un error del servidor: X-Token no estaba en la lista de headers permitidos, así que
+      // el navegador ni siquiera llegaba a mandar la petición real. Confirmado en vivo por
+      // Adrián con capturas del error tras el deploy de hoy.
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Token',
       'Vary': 'Origin'
     };
 

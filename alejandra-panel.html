@@ -800,6 +800,33 @@ async function enviarChat() {
   }
 }
 
+// Post-procesado común de la respuesta final de Alejandra: extrae <plan>/<guia>,
+// renderiza markdown definitivo, añade botones de copiar y dispara TTS.
+// Usado tanto por el evento 'text' (fallback completo) como por 'done' cuando
+// la respuesta se construyó a partir de eventos 'token' acumulados.
+function finalizarTextoStream(texto, bub) {
+  let textoLimpio = texto;
+  const planMatch = textoLimpio.match(/<plan>([\s\S]*?)<\/plan>/);
+  if (planMatch) {
+    textoLimpio = textoLimpio.replace(planMatch[0], '').trim();
+    try {
+      const plan = JSON.parse(planMatch[1]);
+      setTimeout(() => ofrecerPlan(plan), 200);
+    } catch (e) { console.warn('[plan] JSON inválido:', e); }
+  }
+  const guiaMatch = textoLimpio.match(/<guia>([\s\S]*?)<\/guia>/);
+  if (guiaMatch) {
+    textoLimpio = textoLimpio.replace(guiaMatch[0], '').trim();
+    try {
+      const guia = JSON.parse(guiaMatch[1]);
+      setTimeout(() => ofrecerGuia(guia), 200);
+    } catch (e) { console.warn('[guia] JSON inválido:', e); }
+  }
+  bub.innerHTML = renderMd(textoLimpio);
+  addCopyBtns(bub);
+  hablar(textoLimpio);
+}
+
 async function handleStreamEv(ev, state) {
   const { block, msgs } = state;
 
@@ -846,6 +873,29 @@ async function handleStreamEv(ev, state) {
     msgs.scrollTop = msgs.scrollHeight;
   }
 
+  // FIX-ALEJANDRA-TOKEN-01 (29/07/2026): en el camino normal (cliente conectado,
+  // sin timeout) el backend SOLO manda eventos 'token' — el evento 'text' completo
+  // solo llega en los caminos de fallback (desconexión/timeout/error). Este panel
+  // nunca manejaba 'token', así que la respuesta se generaba bien en el servidor
+  // pero no se pintaba nunca (se quedaba solo el badge de routing). Acumulamos
+  // aquí igual que ya hacían index.html y panel.html.
+  else if (ev.type === 'token') {
+    if (!state.textBub) {
+      const row = document.createElement('div');
+      row.className = 'msg-b';
+      row.innerHTML = `<div class="msg-avatar">🤖</div>`;
+      const bub = document.createElement('div');
+      bub.className = 'bub-b';
+      row.appendChild(bub);
+      block.appendChild(row);
+      state.textBub = bub;
+      state.textoAcumulado = '';
+    }
+    state.textoAcumulado += ev.texto;
+    state.textBub.innerHTML = esc(state.textoAcumulado).replace(/\n/g, '<br>');
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
   else if (ev.type === 'text') {
     // Crear burbuja de respuesta
     const row = document.createElement('div');
@@ -866,30 +916,15 @@ async function handleStreamEv(ev, state) {
       msgs.scrollTop = msgs.scrollHeight;
       if (i % 5 === 0) await new Promise(r => setTimeout(r, 16));
     }
-    // Detectar y extraer bloques <plan>...</plan> y <guia>...</guia>
-    let textoLimpio = ev.texto;
-    const planMatch = textoLimpio.match(/<plan>([\s\S]*?)<\/plan>/);
-    if (planMatch) {
-      textoLimpio = textoLimpio.replace(planMatch[0], '').trim();
-      try {
-        const plan = JSON.parse(planMatch[1]);
-        setTimeout(() => ofrecerPlan(plan), 200);
-      } catch (e) { console.warn('[plan] JSON inválido:', e); }
-    }
-    const guiaMatch = textoLimpio.match(/<guia>([\s\S]*?)<\/guia>/);
-    if (guiaMatch) {
-      textoLimpio = textoLimpio.replace(guiaMatch[0], '').trim();
-      try {
-        const guia = JSON.parse(guiaMatch[1]);
-        setTimeout(() => ofrecerGuia(guia), 200);
-      } catch (e) { console.warn('[guia] JSON inválido:', e); }
-    }
-    bub.innerHTML = renderMd(textoLimpio);
-    addCopyBtns(bub);
-    hablar(textoLimpio);
+    finalizarTextoStream(ev.texto, bub);
   }
 
   else if (ev.type === 'done') {
+    // Si la respuesta llegó por 'token' (camino normal), aquí es donde sabemos
+    // que el streaming terminó — hacemos el post-procesado que 'text' hace inline.
+    if (state.textBub && state.textoAcumulado != null) {
+      finalizarTextoStream(state.textoAcumulado, state.textBub);
+    }
     const parts = [];
     if (ev.experto)      parts.push(`experto: ${ev.experto}`);
     if (ev.busqueda_web) parts.push('web search');
@@ -2539,8 +2574,30 @@ function fmtN(n) {
   const code = urlParams.get('code');
   if (code) { handleGoogleCallback(code); return; }
   const saved = localStorage.getItem('alej_token');
-  if (saved) { adminToken = saved; showApp(); }
+  if (saved) {
+    adminToken = saved;
+    showApp();
+    verificarSesionGuardada();
+  }
 })();
+
+// FIX-ALEJANDRA-SESION-01 (29/07/2026): antes se confiaba ciegamente en el token
+// guardado en localStorage sin volver a comprobarlo contra el servidor. Si había
+// caducado o el ADMIN_TOKEN se había rotado, el panel seguía mostrando "logueado"
+// pero /api/sync/* y el resto de rutas /api/admin/* devolvían 401/403 en bucle
+// silencioso — el chat seguía pareciendo funcionar porque /api/chat/stream no
+// exige auth (cae a modo no verificado sin avisar). Revalidamos en segundo plano
+// (no bloquea el arranque) y forzamos vuelta al login si ya no es válido.
+async function verificarSesionGuardada() {
+  try {
+    const r = await fetch(`${API}/api/admin/config`, { headers: { Authorization: `Bearer ${adminToken}` } });
+    if (r.status === 401 || r.status === 403) {
+      logout();
+      const errEl = document.getElementById('loginErr');
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Tu sesión caducó. Vuelve a entrar.'; }
+    }
+  } catch {}
+}
 </script>
 </body>
 </html>
