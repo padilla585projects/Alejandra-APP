@@ -4096,6 +4096,18 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     const tools  = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
     console.log(`NEXUS: experto=${clas.experto} web=${clas.buscar_web} tools=${tools.map(t=>t.name).join(',')}`);
 
+    // FIX-ALEJANDRA-LATENCIA-01 — ver comentario en procesarConNEXUSStream: saludos/
+    // confirmaciones cortas (único caso source='regex'+experto='simple') se responden al
+    // instante sin llamar al modelo.
+    if (clas.source === 'regex' && clas.experto === 'simple') {
+      const nombreRaw = (usuario_label || '').trim();
+      const nombre = nombreRaw ? nombreRaw.charAt(0).toUpperCase() + nombreRaw.slice(1) : '';
+      const saludos = nombre
+        ? [`¡Hola ${nombre}! ¿En qué te ayudo?`, `Hola ${nombre} 👋 ¿Qué necesitas?`, `¡Aquí estoy, ${nombre}! Dime.`]
+        : ['¡Hola! ¿En qué te ayudo?', 'Hola 👋 ¿Qué necesitas?', '¡Aquí estoy! Dime.'];
+      return { texto: saludos[Math.floor(Math.random() * saludos.length)], acciones: [], requiere_confirmacion: false };
+    }
+
     // PASO 2: Búsqueda web previa si Haiku lo decidió (evita una iteración extra)
     let resultadoWeb = null;
     let usoBusquedaWeb = false;
@@ -4221,6 +4233,23 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     const expert = NEXUS_EXPERTS[clas.experto] || NEXUS_EXPERTS.app;
     const tools  = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
     await send({ type: 'routing', experto: clas.experto, buscar_web: clas.buscar_web, modelo: expert.model });
+
+    // FIX-ALEJANDRA-LATENCIA-01 (29/07/2026): Adrián: "responde lento hasta para un hola" —
+    // medido en vivo: la clasificación regex es instantánea (~0ms) pero la llamada real a
+    // Claude Haiku tardaba ~2.5-3s solo para saludar. Los saludos/confirmaciones cortas ya
+    // los detecta REGEX_ROUTES (único caso que produce source='regex' + experto='simple') sin
+    // tocar el modelo — respondemos al instante con un saludo variado en vez de gastar una
+    // llamada a la API por un "hola".
+    if (clas.source === 'regex' && clas.experto === 'simple') {
+      const nombreRaw = (usuario_label || '').trim();
+      const nombre = nombreRaw ? nombreRaw.charAt(0).toUpperCase() + nombreRaw.slice(1) : '';
+      const saludos = nombre
+        ? [`¡Hola ${nombre}! ¿En qué te ayudo?`, `Hola ${nombre} 👋 ¿Qué necesitas?`, `¡Aquí estoy, ${nombre}! Dime.`]
+        : ['¡Hola! ¿En qué te ayudo?', 'Hola 👋 ¿Qué necesitas?', '¡Aquí estoy! Dime.'];
+      const textoInstant = saludos[Math.floor(Math.random() * saludos.length)];
+      await send({ type: 'text', texto: textoInstant });
+      return { texto: textoInstant, herramientas_usadas: [], modelo: 'instant', experto: clas.experto, busqueda_web: false };
+    }
 
     // PASO 2: Búsqueda web previa
     let resultadoWeb = null, usoBusquedaWeb = false;
