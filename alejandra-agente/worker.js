@@ -3124,7 +3124,13 @@ export default {
       // ── Helper auth para sync (Bearer token → sesion con usuario_id/empresa_id) ──
       async function getAuth(request, environment) {
         const authHeader = request.headers.get('Authorization') || '';
-        const token = authHeader.replace('Bearer ', '').trim();
+        // FIX-ALEJANDRA-SYNC-01 (29/07/2026): el resto de index.html (apiCall()) manda el
+        // token de sesión como X-Token, no como Authorization: Bearer — el chat de la app/PWA
+        // nunca mandaba ningún header de auth, así que getAuth() siempre devolvía null ahí
+        // (perdiendo authOk y las tools de desarrollador) y el historial cross-dispositivo
+        // (que exige sesión) daba 401. Se acepta X-Token como alternativa, mismo patrón que
+        // ya usa el endpoint /conocimiento un poco más abajo en este archivo.
+        const token = authHeader.replace('Bearer ', '').trim() || (request.headers.get('X-Token') || '').trim();
         if (!token) return null;
         // Probar admin token primero
         if (environment.ADMIN_TOKEN && timingSafeEqual(token, environment.ADMIN_TOKEN)) {
@@ -3440,6 +3446,18 @@ export default {
 
     } catch (err) {
       console.error('ERROR fetch:', err.message);
+      // FIX-ALEJANDRA-LOG-01 (29/07/2026): Adrián mandó un mensaje con foto desde la app
+      // Android y nunca recibió respuesta -- este catch SÍ atrapaba el error y devolvía un 500
+      // limpio al cliente, pero solo hacía console.error (logs en vivo de Cloudflare, no
+      // consultables después del hecho). No quedaba ningún rastro en la BD ni aviso, así que
+      // el fallo era del todo invisible una vez pasado. Se persiste en alejandra_logs + aviso
+      // por Telegram, igual que ya se hace con otros errores relevantes de este archivo.
+      ctx.waitUntil(env.DB.prepare(
+        `INSERT INTO alejandra_logs (usuario_id, empresa_id, accion, parametros, resultado, status, created_at) VALUES (?,?,?,?,?,?,datetime('now'))`
+      ).bind('sistema', 'default', 'error_fetch', JSON.stringify({ path, method: req.method }), String(err.stack || err.message).slice(0, 1500), 'error').run().catch(() => {}));
+      if (env.TELEGRAM_BOT_TOKEN) {
+        ctx.waitUntil(enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, `⚠️ <b>Error interno</b> en ${path}\n${String(err.message).slice(0, 300)}`).catch(() => {}));
+      }
       return json({ error: err.message }, 500);
     }
   },

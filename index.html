@@ -12644,7 +12644,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.66';
+const APP_VERSION = '8.67';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -19443,6 +19443,15 @@ window.turnoToggle   = turnoToggle;
         const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
               headers: { 'X-Token': getSession()?.token || '' }
             });
+        // FIX-ALEJANDRA-SYNC-02 (29/07/2026): Adrián reportó que la PWA "no seguía la
+        // conversación" de la app Android — este catch era completamente silencioso, así que
+        // si la sincronización fallaba (token caducado, red, 500 puntual...) no quedaba NINGÚN
+        // rastro y caía sin avisar al historial local viejo del dispositivo, dando la
+        // impresión de que Alejandra "no recordaba nada" aunque el servidor sí tuviera la
+        // conversación completa. Se loguea en consola para poder diagnosticarlo si vuelve a
+        // pasar (no se muestra al usuario para no interrumpir con un error de una función
+        // secundaria — el chat sigue siendo usable con el historial local de fallback).
+        if (!res.ok) console.warn('[Alejandra] Sync de historial falló:', res.status, await res.text().catch(()=>'').then(t=>t.slice(0,200)));
         const data = await res.json();
         if (data.ok && data.mensajes && data.mensajes.length > 0) {
           iaHistory = data.mensajes.map(m => ({ role: m.rol === 'assistant' ? 'assistant' : 'user', content: m.contenido }));
@@ -19456,8 +19465,10 @@ window.turnoToggle   = turnoToggle;
           box.scrollTop = box.scrollHeight;
           try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
           return;
+        } else if (!data.ok) {
+          console.warn('[Alejandra] Sync de historial: respuesta no-ok:', data.error);
         }
-      } catch {}
+      } catch (e) { console.warn('[Alejandra] Sync de historial: excepción:', e.message); }
     }
     // Fallback: localStorage
     try {
@@ -19772,9 +19783,12 @@ window.turnoToggle   = turnoToggle;
       }
 
       try {
+        // FIX-ALEJANDRA-SYNC-01 (29/07/2026): sin X-Token, getAuth() del agente devolvía null
+        // aquí (perdiendo authOk/tools de desarrollador) y no era posible cargar el historial
+        // cross-dispositivo (que exige sesión) — ver comentario en getAuth() del worker.
         const res = await fetch(ALEJANDRA_STREAM_API, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(s.token ? { 'X-Token': s.token } : {}) },
           body: JSON.stringify({
             mensaje:    msg || '(adjunto)',
             usuario_id: s.usuario_id || s.nombre || 'unknown',
@@ -20447,9 +20461,10 @@ async function alejandraEnviar() {
     }
 
     try {
+      // FIX-ALEJANDRA-SYNC-01: ver comentario en la llamada equivalente de app_android más arriba.
       const res = await fetch(ALEJANDRA_STREAM_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(s.token ? { 'X-Token': s.token } : {}) },
         body: JSON.stringify({
           mensaje:    msg || '(archivo adjunto sin mensaje)',
           usuario_id: s.usuario_id || s.nombre || 'unknown',
