@@ -15669,19 +15669,23 @@ async function cargarAlejandraChat() {
     // no {role, content} -- por eso cada burbuja salía en blanco/"undefined". De paso se escapa
     // el contenido (antes iba directo a innerHTML sin escapar, un mensaje de usuario con '<'
     // podía romper el render o inyectar HTML).
-    cont.innerHTML = msgs.map(m => {
-      const esUsuario = m.rol === 'user';
-      const bg = esUsuario ? 'var(--accent)' : 'var(--surface2)';
-      const color = esUsuario ? '#000' : 'var(--text)';
-      const texto = String(m.contenido || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-      return `<div style="display:flex;justify-content:${esUsuario ? 'flex-end' : 'flex-start'};margin-bottom:8px">
-        <div style="max-width:85%;padding:10px 14px;border-radius:12px;background:${bg};color:${color};font-size:13px;word-break:break-word;line-height:1.45;border:1px solid ${esUsuario ? 'transparent' : 'var(--border)'}">${texto}</div>
-      </div>`;
-    }).join('');
+    cont.innerHTML = msgs.map(_alejandraBurbujaHTML).join('');
     cont.scrollTop = cont.scrollHeight;
   } catch (e) {
     console.error('Error cargando chat Alejandra:', e);
   }
+}
+
+// FIX-ALEJANDRA-FAB-03: extraído de cargarAlejandraChat() para reutilizarlo también en
+// el eco optimista de alejandrEnviar() — un solo sitio que sabe pintar una burbuja.
+function _alejandraBurbujaHTML(m) {
+  const esUsuario = m.rol === 'user';
+  const bg = esUsuario ? 'var(--accent)' : 'var(--surface2)';
+  const color = esUsuario ? '#000' : 'var(--text)';
+  const texto = String(m.contenido || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  return `<div style="display:flex;justify-content:${esUsuario ? 'flex-end' : 'flex-start'};margin-bottom:8px">
+    <div style="max-width:85%;padding:10px 14px;border-radius:12px;background:${bg};color:${color};font-size:13px;word-break:break-word;line-height:1.45;border:1px solid ${esUsuario ? 'transparent' : 'var(--border)'}">${texto}</div>
+  </div>`;
 }
 
 async function alejandrEnviar() {
@@ -15693,6 +15697,25 @@ async function alejandrEnviar() {
   if (!usuarioId) {
     alert('No hay sesión activa');
     return;
+  }
+  const cont = document.getElementById('alejandraMensajes');
+  // FIX-ALEJANDRA-FAB-04 (29/07/2026): Adrián: "no veo los mensajes que mando en el chat
+  // y después me contesta de golpe y nada que ver con lo que le pregunto" — este envío no
+  // pintaba el mensaje propio al momento (esperaba al polling de 5s de cargarAlejandraChat,
+  // que releía TODO el historial cross-canal, incluyendo avisos automáticos/briefings que
+  // Alejandra manda sola sin pregunta). Resultado: tu pregunta tardaba en aparecer y, para
+  // cuando el polling refrescaba, podía haberse colado un mensaje automático de por medio,
+  // dando la sensación de una respuesta que no venía a cuento. Ahora se pinta el mensaje
+  // propio al instante y la respuesta real (la de ESTA petición, no la del polling).
+  if (cont?.querySelector('.empty-state')) cont.innerHTML = '';
+  if (cont) {
+    cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'user', contenido: msg }));
+    cont.scrollTop = cont.scrollHeight;
+  }
+  const typingId = 'alej-typing-' + Date.now();
+  if (cont) {
+    cont.insertAdjacentHTML('beforeend', `<div id="${typingId}" style="display:flex;justify-content:flex-start;margin-bottom:8px"><div style="padding:10px 14px;border-radius:12px;background:var(--surface2);color:var(--muted);font-size:13px">Escribiendo…</div></div>`);
+    cont.scrollTop = cont.scrollHeight;
   }
   try {
     // AYUDA-01: se informa a Alejandra de en qué sección del panel está el usuario
@@ -15712,12 +15735,18 @@ async function alejandrEnviar() {
       // pestaña congelada hasta cerrarlo. Adrián: "da error al enviar mensaje".
       body: JSON.stringify({ mensaje: msg, usuario_id: usuarioId, canal: 'panel', rol: SESSION?.rol || null, pantalla: pantallaActual })
     });
+    document.getElementById(typingId)?.remove();
     if (!r.ok) {
       _alejandraMostrarError(`Error al enviar (${r.status}). Vuelve a intentarlo.`);
       return;
     }
-    cargarAlejandraChat();
+    const data = await r.json().catch(() => ({}));
+    if (cont) {
+      cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'assistant', contenido: data.texto || 'Sin respuesta' }));
+      cont.scrollTop = cont.scrollHeight;
+    }
   } catch (e) {
+    document.getElementById(typingId)?.remove();
     console.error('Error enviando mensaje:', e);
     _alejandraMostrarError('Error de conexión. Vuelve a intentarlo.');
   }
