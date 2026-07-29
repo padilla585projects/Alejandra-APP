@@ -931,8 +931,92 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Selecciona empresa</div>
       <div style="font-size:12px;color:var(--muted);margin-top:4px;opacity:.7">¿Con qué empresa trabajas hoy?</div>
     </div>
+    <!-- FIX-EMPRESAS-MOVIL (29/07/2026): mismo nivel de gestión que Office (crear/editar/
+         desactivar/reactivar/borrar definitivo), a petición de Adrián. -->
+    <div style="padding:0 16px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+        <input type="checkbox" id="chkEmpresasInactivasMovil" onchange="cargarEmpresasAdmin()"> Ver desactivadas
+      </label>
+      <button class="btn-sm" onclick="abrirModalEmpresaAdmin()">+ Nueva empresa</button>
+    </div>
     <div id="empresaSelGrid" class="dept-grid" style="padding:0 12px 12px;overflow-y:auto;flex:1">
       <div class="empty-state">Cargando...</div>
+    </div>
+  </div>
+
+  <!-- Modal: Crear/Editar empresa (superadmin) -->
+  <div class="modal-overlay" id="modalEmpresaAdmin" onclick="if(event.target===this)cerrarModalEmpresaAdmin()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div class="modal-title" style="margin-bottom:0;flex:1" id="modalEmpresaAdminTitulo">Nueva empresa</div>
+        <button onclick="cerrarModalEmpresaAdmin()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <input type="hidden" id="empAdminId">
+      <div class="form-group">
+        <label class="form-label">Nombre de la empresa *</label>
+        <input class="form-input" id="empAdminNombre" placeholder="Nombre de la empresa">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="empAdminEmail" placeholder="contacto@empresa.com">
+      </div>
+      <div class="form-group" id="empAdminPasswordGrupo">
+        <label class="form-label">Contraseña del admin *</label>
+        <input class="form-input" type="password" id="empAdminPassword" placeholder="Mínimo 8 caracteres">
+      </div>
+      <div class="form-group" id="empAdminNombreAdminGrupo">
+        <label class="form-label">Nombre del administrador *</label>
+        <input class="form-input" id="empAdminNombreAdmin" placeholder="Nombre de la persona admin">
+      </div>
+      <div class="form-group" id="empAdminObraGrupo">
+        <label class="form-label">Primera obra (opcional)</label>
+        <input class="form-input" id="empAdminObraNombre" placeholder="Nombre de la obra">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Teléfono</label>
+        <input class="form-input" id="empAdminTelefono" placeholder="+34 600 000 000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CIF</label>
+        <input class="form-input" id="empAdminCif" placeholder="B12345678">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Dirección</label>
+        <input class="form-input" id="empAdminDireccion" placeholder="Calle, ciudad">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Plan</label>
+        <select class="form-input" id="empAdminPlan">
+          <option value="basic">BASIC</option>
+          <option value="pro">PRO</option>
+          <option value="enterprise">ENTERPRISE</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1" onclick="guardarEmpresaAdmin()">💾 Guardar</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarModalEmpresaAdmin()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Borrar empresa DEFINITIVAMENTE (superadmin) -->
+  <div class="modal-overlay" id="modalBorrarEmpresaDef" onclick="if(event.target===this)cerrarModalBorrarEmpresaDef()">
+    <div class="modal">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div class="modal-title" style="margin-bottom:0;flex:1;color:var(--red)">⚠️ Borrar definitivamente</div>
+        <button onclick="cerrarModalBorrarEmpresaDef()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <input type="hidden" id="borrarEmpId">
+      <p style="color:var(--red);font-weight:600;font-size:13px">Esta acción NO se puede deshacer. Se borran para siempre todos los datos de esta empresa: usuarios, obras, bobinas, incidencias, partes, archivos... todo.</p>
+      <p style="font-size:13px">Para confirmar, escribe exactamente el nombre de la empresa:</p>
+      <p id="borrarEmpNombreMostrado" style="font-family:monospace;background:var(--bg-alt,#1a1a2e);padding:6px 10px;border-radius:6px;font-size:13px"></p>
+      <div class="form-group">
+        <input class="form-input" id="borrarEmpNombreInput" placeholder="Escribe el nombre aquí">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1;background:var(--red)" onclick="confirmarBorrarEmpresaDef()">🗑️ Borrar definitivamente</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarModalBorrarEmpresaDef()">Cancelar</button>
+      </div>
     </div>
   </div>
 
@@ -6572,6 +6656,16 @@ window.docsAbrirCarpeta    = docsAbrirCarpeta;
 window.docsSubirArchivo    = docsSubirArchivo;
 window.docsDescargarDoc    = docsDescargarDoc;
 window.docsBorrarArchivo   = docsBorrarArchivo;
+// FIX-EMPRESAS-MOVIL (29/07/2026): mismo patrón de exposición explícita a window que el resto
+// del archivo, necesario para que los onclick="" inline del selector de empresa las encuentren.
+window.abrirModalEmpresaAdmin      = abrirModalEmpresaAdmin;
+window.cerrarModalEmpresaAdmin     = cerrarModalEmpresaAdmin;
+window.guardarEmpresaAdmin         = guardarEmpresaAdmin;
+window.desactivarEmpresaAdminMovil = desactivarEmpresaAdminMovil;
+window.reactivarEmpresaAdminMovil  = reactivarEmpresaAdminMovil;
+window.abrirModalBorrarEmpresaDef  = abrirModalBorrarEmpresaDef;
+window.cerrarModalBorrarEmpresaDef = cerrarModalBorrarEmpresaDef;
+window.confirmarBorrarEmpresaDef   = confirmarBorrarEmpresaDef;
 
 function volverSelectorDepto() {
   const s = getSession();
@@ -6582,12 +6676,19 @@ function volverSelectorDepto() {
   showScreen('dept');
 }
 
+// _empresasAdminCache: guarda la última lista cargada para poder leer nombre/plan/etc. al
+// abrir los modales de editar/borrar sin tener que volver a pedirla al servidor.
+let _empresasAdminCache = [];
+
 async function cargarEmpresasAdmin() {
   const grid = document.getElementById('empresaSelGrid');
   if (!grid) return;
   grid.innerHTML = '<div class="empty-state">Cargando empresas...</div>';
   try {
-    const res = await apiCall('/empresas');
+    // FIX-EMPRESAS-MOVIL (29/07/2026): ?todas=1 para poder ver/reactivar empresas desactivadas
+    // desde el móvil también, mismo criterio que Office.
+    const todas = document.getElementById('chkEmpresasInactivasMovil')?.checked;
+    const res = await apiCall('/empresas' + (todas ? '?todas=1' : ''));
     if (res.status === 401) return; // apiCall ya gestiona logout + reload
     if (res.status === 403) {
       // Esta pantalla solo se muestra si la sesión local cree ser superadmin.
@@ -6605,19 +6706,143 @@ async function cargarEmpresasAdmin() {
       return;
     }
     const lista = await res.json();
+    _empresasAdminCache = lista;
     if (!lista.length) { grid.innerHTML = '<div class="empty-state">No hay empresas registradas</div>'; return; }
+    // FIX-EMPRESAS-MOVIL: botones de acción (editar/desactivar-reactivar/borrar definitivo)
+    // dentro de la card, con stopPropagation para no disparar el "seleccionar" del div padre.
     grid.innerHTML = lista.map(e => `
-      <div class="dept-card" data-eid="${e.id}" data-enombre="${(e.nombre||'').replace(/"/g,'&quot;')}" onclick="seleccionarEmpresaAdmin(this.dataset.eid, this.dataset.enombre)">
+      <div class="dept-card" data-eid="${e.id}" data-enombre="${(e.nombre||'').replace(/"/g,'&quot;')}" onclick="seleccionarEmpresaAdmin(this.dataset.eid, this.dataset.enombre)" style="${e.activa ? '' : 'opacity:.55'}">
         <div class="dept-icon-wrap" style="font-size:28px">🏢</div>
         <div style="flex:1">
-          <div class="dept-name">${e.nombre}</div>
+          <div class="dept-name">${e.nombre}${e.activa ? '' : ' <span style="color:var(--red);font-size:11px">(desactivada)</span>'}</div>
           <div class="dept-desc">${e.email || e.slug || '—'}</div>
+        </div>
+        <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+          <button title="Editar" style="background:none;border:none;font-size:16px;cursor:pointer" onclick="abrirModalEmpresaAdmin(${e.id})">✏️</button>
+          ${e.activa
+            ? `<button title="Desactivar (no borra datos)" style="background:none;border:none;font-size:16px;cursor:pointer" onclick="desactivarEmpresaAdminMovil(${e.id})">🗑</button>`
+            : `<button title="Reactivar" style="background:none;border:none;font-size:16px;cursor:pointer" onclick="reactivarEmpresaAdminMovil(${e.id})">↺</button>
+               <button title="Borrar DEFINITIVAMENTE" style="background:none;border:none;font-size:16px;cursor:pointer" onclick="abrirModalBorrarEmpresaDef(${e.id})">⚠️</button>`}
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>`).join('');
   } catch {
     grid.innerHTML = '<div class="empty-state">Error de conexión<br><button class="btn-sm" style="margin-top:10px" onclick="cargarEmpresasAdmin()">↻ Reintentar</button></div>';
   }
+}
+
+// FIX-EMPRESAS-MOVIL (29/07/2026): crear/editar empresa desde el móvil, mismo nivel que Office.
+// Sin id = crear (usa /empresas/registro, requiere password+nombre admin); con id = editar
+// (usa PUT /empresas/:id, solo datos de la empresa, sin tocar el admin).
+function abrirModalEmpresaAdmin(id) {
+  const esNuevo = !id;
+  document.getElementById('empAdminId').value = id || '';
+  document.getElementById('modalEmpresaAdminTitulo').textContent = esNuevo ? 'Nueva empresa' : 'Editar empresa';
+  document.getElementById('empAdminPasswordGrupo').style.display = esNuevo ? '' : 'none';
+  document.getElementById('empAdminNombreAdminGrupo').style.display = esNuevo ? '' : 'none';
+  document.getElementById('empAdminObraGrupo').style.display = esNuevo ? '' : 'none';
+  const e = esNuevo ? {} : (_empresasAdminCache.find(x => x.id === id) || {});
+  document.getElementById('empAdminNombre').value = e.nombre || '';
+  document.getElementById('empAdminEmail').value = e.email || '';
+  document.getElementById('empAdminPassword').value = '';
+  document.getElementById('empAdminNombreAdmin').value = '';
+  document.getElementById('empAdminObraNombre').value = '';
+  document.getElementById('empAdminTelefono').value = e.telefono || '';
+  document.getElementById('empAdminCif').value = e.cif || '';
+  document.getElementById('empAdminDireccion').value = e.direccion || '';
+  document.getElementById('empAdminPlan').value = e.plan || 'basic';
+  document.getElementById('modalEmpresaAdmin').classList.add('show');
+}
+function cerrarModalEmpresaAdmin() { document.getElementById('modalEmpresaAdmin').classList.remove('show'); }
+
+async function guardarEmpresaAdmin() {
+  const id = document.getElementById('empAdminId').value;
+  const nombre = document.getElementById('empAdminNombre').value.trim();
+  if (!nombre) return toast('El nombre es obligatorio', 'err');
+  try {
+    if (!id) {
+      // Crear: POST /empresas/registro (mismo endpoint público de autorregistro, requiere
+      // admin_nombre + email + password).
+      const email = document.getElementById('empAdminEmail').value.trim();
+      const password = document.getElementById('empAdminPassword').value;
+      const adminNombre = document.getElementById('empAdminNombreAdmin').value.trim();
+      if (!email || !password || !adminNombre) return toast('Email, contraseña y nombre del admin son obligatorios', 'err');
+      if (password.length < 8) return toast('La contraseña debe tener al menos 8 caracteres', 'err');
+      const res = await apiCall('/empresas/registro', { method: 'POST', body: JSON.stringify({
+        empresa_nombre: nombre, email, password, admin_nombre: adminNombre,
+        obra_nombre: document.getElementById('empAdminObraNombre').value.trim() || null,
+      }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) return toast(data.error || 'Error al crear la empresa', 'err');
+      toast('Empresa creada ✓', 'ok');
+    } else {
+      const res = await apiCall(`/empresas/${id}`, { method: 'PUT', body: JSON.stringify({
+        nombre,
+        email: document.getElementById('empAdminEmail').value.trim() || null,
+        telefono: document.getElementById('empAdminTelefono').value.trim() || null,
+        cif: document.getElementById('empAdminCif').value.trim() || null,
+        direccion: document.getElementById('empAdminDireccion').value.trim() || null,
+        plan: document.getElementById('empAdminPlan').value,
+      }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) return toast(data.error || 'Error al guardar', 'err');
+      toast('Empresa actualizada ✓', 'ok');
+    }
+    cerrarModalEmpresaAdmin();
+    cargarEmpresasAdmin();
+  } catch { toast('Error de conexión', 'err'); }
+}
+
+async function desactivarEmpresaAdminMovil(id) {
+  const e = _empresasAdminCache.find(x => x.id === id);
+  const nombre = e ? e.nombre : `#${id}`;
+  if (!confirm(`¿Desactivar la empresa "${nombre}"?\n\nNo se borra ningún dato — solo deja de aparecer en el listado normal. Sus usuarios seguirán pudiendo acceder normalmente, esta acción no bloquea el login.`)) return;
+  try {
+    const res = await apiCall(`/empresas/${id}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) return toast(data.error || 'Error', 'err');
+    toast(data.mensaje || 'Empresa desactivada ✓', 'ok');
+    cargarEmpresasAdmin();
+  } catch { toast('Error de conexión', 'err'); }
+}
+
+async function reactivarEmpresaAdminMovil(id) {
+  const e = _empresasAdminCache.find(x => x.id === id);
+  const nombre = e ? e.nombre : `#${id}`;
+  if (!confirm(`¿Reactivar la empresa "${nombre}"? Volverá a aparecer en el listado normal.`)) return;
+  try {
+    const res = await apiCall(`/empresas/${id}/reactivar`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) return toast(data.error || 'Error', 'err');
+    toast(data.mensaje || 'Empresa reactivada ✓', 'ok');
+    cargarEmpresasAdmin();
+  } catch { toast('Error de conexión', 'err'); }
+}
+
+function abrirModalBorrarEmpresaDef(id) {
+  const e = _empresasAdminCache.find(x => x.id === id);
+  const nombre = e ? e.nombre : `#${id}`;
+  document.getElementById('borrarEmpId').value = id;
+  document.getElementById('borrarEmpNombreMostrado').textContent = nombre;
+  document.getElementById('borrarEmpNombreInput').value = '';
+  document.getElementById('modalBorrarEmpresaDef').classList.add('show');
+}
+function cerrarModalBorrarEmpresaDef() { document.getElementById('modalBorrarEmpresaDef').classList.remove('show'); }
+
+async function confirmarBorrarEmpresaDef() {
+  const id = document.getElementById('borrarEmpId').value;
+  const e = _empresasAdminCache.find(x => x.id === parseInt(id));
+  const nombre = e ? e.nombre : '';
+  const escrito = document.getElementById('borrarEmpNombreInput').value.trim();
+  if (escrito !== nombre) return toast('El nombre no coincide', 'err');
+  try {
+    const res = await apiCall(`/empresas/${id}/definitivo`, { method: 'DELETE', body: JSON.stringify({ confirmar_nombre: escrito }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) return toast(data.error || 'Error', 'err');
+    toast(data.mensaje || 'Empresa borrada definitivamente', 'ok');
+    cerrarModalBorrarEmpresaDef();
+    cargarEmpresasAdmin();
+  } catch { toast('Error de conexión', 'err'); }
 }
 
 async function seleccionarEmpresaAdmin(empresa_id, empresa_nombre) {
@@ -12419,7 +12644,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.65';
+const APP_VERSION = '8.66';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

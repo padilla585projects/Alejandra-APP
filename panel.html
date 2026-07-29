@@ -15300,7 +15300,7 @@ async function cargarListaEmpresas() {
       { title: 'Activa', field: 'activa', width: 80, hozAlign: 'center',
         formatter: c => c.getValue() ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-danger">✕</span>' },
       { title: 'Alta', field: 'created_at', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: '', field: 'id', width: 130, hozAlign: 'center', headerSort: false,
+      { title: '', field: 'id', width: 170, hozAlign: 'center', headerSort: false,
         // FIX-EMPRESAS-03 (28/07/2026): con los 3 botones en texto completo (👁 Ver / ✏️ Editar
         // / 🗑 Eliminar) los 230px de columna no alcanzaban y "Eliminar" quedaba cortado, visible
         // solo como "..." — confirmado por Adrián en vivo. Solo icono + title (tooltip) para
@@ -15314,7 +15314,8 @@ async function cargarListaEmpresas() {
             <button class="btn btn-sm btn-secondary" onclick="editarEmpresaTabla(${c.getValue()})" title="Editar empresa">✏️</button>
             ${activa
               ? `<button class="btn btn-sm btn-danger" onclick="eliminarEmpresaTabla(${c.getValue()})" title="Desactivar empresa (no borra datos)">🗑</button>`
-              : `<button class="btn btn-sm btn-success" onclick="reactivarEmpresaTabla(${c.getValue()})" title="Reactivar empresa">↺</button>`}`;
+              : `<button class="btn btn-sm btn-success" onclick="reactivarEmpresaTabla(${c.getValue()})" title="Reactivar empresa">↺</button>
+                 <button class="btn btn-sm btn-danger" onclick="borrarEmpresaDefinitivoTabla(${c.getValue()})" title="Borrar DEFINITIVAMENTE (irreversible)">⚠️</button>`}`;
         } },
     ]
   });
@@ -15375,6 +15376,29 @@ async function reactivarEmpresaTabla(id) {
   const r = await api(`/empresas/${id}/reactivar`, { method: 'POST' });
   if (r.ok) { toast(r.mensaje || 'Empresa reactivada ✓', 'ok'); cargarListaEmpresas(); }
   else toast(r.error || 'Error', 'err');
+}
+
+// FIX-EMPRESAS-05 (29/07/2026): borrado DEFINITIVO real (no desactivar) — solo disponible sobre
+// empresas ya desactivadas (el backend lo exige también). Confirmación fuerte: hay que escribir
+// el nombre EXACTO de la empresa, no basta con un simple aceptar.
+function borrarEmpresaDefinitivoTabla(id) {
+  const row = tblEmpresas.getRows().find(r => r.getData().id === id);
+  const nombre = row ? row.getData().nombre : `#${id}`;
+  abrirModal(`⚠️ Borrar definitivamente "${nombre}"`, `
+    <p style="color:var(--red);font-weight:600">Esta acción NO se puede deshacer. Se borran para siempre todos los datos de esta empresa: usuarios, obras, bobinas, incidencias, partes, archivos... todo.</p>
+    <p>Para confirmar, escribe exactamente el nombre de la empresa:</p>
+    <p style="font-family:monospace;background:var(--bg-alt,#1a1a2e);padding:6px 10px;border-radius:6px">${nombre.replace(/</g,'&lt;')}</p>
+    <div class="form-group"><input type="text" id="confirmarBorradoNombre" placeholder="Escribe el nombre aquí"></div>
+  `, async () => {
+    const escrito = document.getElementById('confirmarBorradoNombre').value.trim();
+    if (escrito !== nombre) { toast('El nombre no coincide', 'err'); return; }
+    const r = await api(`/empresas/${id}/definitivo`, { method: 'DELETE', body: JSON.stringify({ confirmar_nombre: escrito }) });
+    if (r.ok) { toast(r.mensaje || 'Empresa borrada definitivamente', 'ok'); cerrarModal(); cargarListaEmpresas(); }
+    else toast(r.error || 'Error', 'err');
+  });
+  // El botón genérico del modal dice "Guardar" — para esta acción tan destructiva lo cambiamos.
+  const btn = document.getElementById('modalOkBtn');
+  if (btn) { btn.textContent = '🗑️ Borrar definitivamente'; btn.classList.add('btn-danger'); }
 }
 
 // ── WIZARD CREAR EMPRESA (superadmin) ──────────────────────────
@@ -17605,6 +17629,11 @@ function abrirModal(titulo, html, onOk) {
 function cerrarModal() {
   document.getElementById('modalOverlay').classList.remove('open');
   _modalCallback = null;
+  // FIX-EMPRESAS-05: restaurar el botón genérico a su estado por defecto — algunos usos
+  // (borrarEmpresaDefinitivoTabla) lo personalizan a "Borrar definitivamente"/btn-danger y si
+  // no se resetea aquí, el SIGUIENTE modal que use abrirModal() heredaría ese texto/color.
+  const btn = document.getElementById('modalOkBtn');
+  if (btn) { btn.textContent = 'Guardar'; btn.classList.remove('btn-danger'); }
 }
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modalOverlay')) cerrarModal();

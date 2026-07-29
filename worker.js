@@ -4717,6 +4717,10 @@ export default {
       if (path === '/empresas'           && method === 'GET')  return await getEmpresas(request, env);
       if (path.startsWith('/empresas/') && path.endsWith('/reactivar') && method === 'POST')
         return await reactivarEmpresaAdmin(path.split('/empresas/')[1].replace('/reactivar', ''), request, env);
+      // FIX-EMPRESAS-05: ruta específica del borrado DEFINITIVO, comprobada antes que el DELETE
+      // genérico (que es el soft-delete/desactivar) para que no la intercepte por el prefijo.
+      if (path.startsWith('/empresas/') && path.endsWith('/definitivo') && method === 'DELETE')
+        return await borrarEmpresaDefinitivo(path.split('/empresas/')[1].replace('/definitivo', ''), request, env);
       if (path.startsWith('/empresas/') && method === 'PUT')    return await editarEmpresaAdmin(path.split('/empresas/')[1], request, env);
       if (path.startsWith('/empresas/') && method === 'DELETE') return await eliminarEmpresaAdmin(path.split('/empresas/')[1], request, env);
       if (path === '/superadmin/empresa' && method === 'POST') return await superadminSeleccionarEmpresa(request, env);
@@ -6566,6 +6570,85 @@ async function reactivarEmpresaAdmin(id, request, env) {
   if (!existente) return err('Empresa no encontrada', 404);
   await env.DB.prepare('UPDATE empresas SET activa = 1 WHERE id = ?').bind(empresaId).run();
   return json({ ok: true, mensaje: `Empresa "${existente.nombre}" reactivada` });
+}
+
+// FIX-EMPRESAS-05 (29/07/2026): borrado DEFINITIVO real (no soft-delete), a petición explícita
+// de Adrián tras diferenciar "desactivar" (reversible) de "borrar" (irreversible). Lista exacta
+// de las 121 tablas reales del schema D1 con columna empresa_id — obtenida consultando
+// PRAGMA table_info sobre las 148 tablas de la BD en producción, NO a mano por grep del código
+// (una lista incompleta a mano dejaría filas huérfanas de la empresa borrada).
+const TABLAS_CON_EMPRESA_ID = [
+  'accidentes_incidentes','accion_items','actas_replanteo','actas_reunion','ai_usage','albaranes',
+  'alejandra_logs','alejandra_preguntas','alquileres','archivos','ats_jha','bobinas','carnets',
+  'carpetas','carretillas','catalogo_precios','certificaciones','certificaciones_lineas',
+  'chat_alejandra','chat_mensajes','checklist_ejecuciones','checklist_plantillas',
+  'checklist_registros','checklists_plantillas','comparativos_oferta','consumos_material',
+  'contratos_amendments','contratos_obra','control_calidad','cronograma_pagos','cubicaciones_obra',
+  'docs_dept','docs_notas','documentos_obra','energias_carretilla','ensayos_materiales',
+  'entregables','entregas_material','epi_revisiones','epis_asignados','equipos_medicion',
+  'escandallo_precios','escaneos_remotos','evaluaciones_proveedores','eventos_calendario',
+  'facturas_proveedor','fichajes','flujo_caja','formacion_obra','fotos_obra','garantias',
+  'graficos','herramientas','historial','historial_carretillas','historial_herramientas',
+  'historial_mantenimientos','historial_pemp','hitos_obra','horarios_obra','incidencia_fotos',
+  'incidencias','inspecciones_seg','instrucciones_obra','inventario_seg','invitaciones',
+  'itp_obra','kits_herramientas','licencias_obra','logs','materiales_obra','movimientos_seg',
+  'ncrs_obra','obras','obs_seguridad','ordenes_cambio','ordenes_compra','ordenes_trabajo',
+  'partes_maquinaria','partes_trabajo','pedidos','pemp','permisos_trabajo','personal_externo',
+  'planos','planos_obra','procedimientos_obra','proveedores','proveedores_gestion','punch_list',
+  'push_subscriptions','rdp_registros','reconocimientos_medicos','registro_hormigonado',
+  'repostajes','reset_tokens','residuos_obra','rfis','riesgos_obra','seg_registro_comentarios',
+  'seg_registro_fotos','seg_registros','sesiones','solicitudes_cambio','solicitudes_material',
+  'subcontratas','submittals','sugerencias','sync_dispositivos','sync_eventos','tareas_obra',
+  'timesheets','tipos_cable','tipos_carretilla','tipos_herramienta','tipos_material_seg',
+  'tipos_pemp','transmittals_obra','turnos','usuarios','vincular_tokens',
+];
+
+async function borrarEmpresaDefinitivo(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isSuperadmin) return err('Sin permisos', 403);
+  const empresaId = parseInt(id);
+  const existente = await env.DB.prepare('SELECT id, nombre, activa FROM empresas WHERE id = ?').bind(empresaId).first();
+  if (!existente) return err('Empresa no encontrada', 404);
+  // Salvaguarda: solo se puede borrar definitivamente una empresa YA desactivada — obliga a
+  // pasar primero por "Desactivar", evitando borrar de un click algo todavía en uso real.
+  if (existente.activa) return err('Solo se puede borrar definitivamente una empresa ya desactivada. Desactívala primero.', 400);
+
+  const body = await request.json().catch(() => ({}));
+  // Confirmación fuerte: el nombre EXACTO de la empresa, no un simple "sí/no" — el mismo
+  // criterio que un proveedor cloud pide para borrar un proyecto/cuenta entera.
+  if (safeStr(body.confirmar_nombre).trim() !== existente.nombre) {
+    return err('El nombre no coincide. Escribe exactamente el nombre de la empresa para confirmar el borrado definitivo.', 400);
+  }
+
+  // Borrar archivos en R2 (prefijo e{empresaId}/, ver subirArchivo() y el resto de r2Key de
+  // este archivo) — si falla no bloqueamos el borrado de la BD por ello, solo se registra.
+  let archivosBorrados = 0;
+  try {
+    let cursor;
+    do {
+      const listado = await env.FILES.list({ prefix: `e${empresaId}/`, cursor });
+      for (const obj of listado.objects) { await env.FILES.delete(obj.key); archivosBorrados++; }
+      cursor = listado.truncated ? listado.cursor : undefined;
+    } while (cursor);
+  } catch (_) {}
+
+  // Borrar en cascada las 121 tablas con empresa_id + la propia fila de empresas, todo en una
+  // única transacción atómica (env.DB.batch) — o se borra todo, o no se borra nada.
+  const stmts = TABLAS_CON_EMPRESA_ID.map(t => env.DB.prepare(`DELETE FROM ${t} WHERE empresa_id = ?`).bind(empresaId));
+  stmts.push(env.DB.prepare('DELETE FROM empresas WHERE id = ?').bind(empresaId));
+  await env.DB.batch(stmts);
+
+  // Registro de auditoría en el log de quien ejecuta el borrado (no en el de la empresa
+  // borrada, que ya no existe) + aviso por Telegram, dado lo irreversible de la acción.
+  await logActividad(env, {
+    nivel: 'warn', origen: 'admin',
+    mensaje: `Empresa "${existente.nombre}" (id ${empresaId}) BORRADA DEFINITIVAMENTE por ${auth.nombre || auth.usuario_id}`,
+    detalle: `${TABLAS_CON_EMPRESA_ID.length} tablas afectadas, ${archivosBorrados} archivos R2 eliminados`,
+    empresa_id: auth.empresa_id,
+  });
+  await sendTelegram(env, `🗑️ <b>BORRADO DEFINITIVO DE EMPRESA</b>\n🏢 ${existente.nombre} (id ${empresaId})\n👤 Por: ${auth.nombre || auth.usuario_id}\n📁 ${archivosBorrados} archivos R2 eliminados`);
+
+  return json({ ok: true, mensaje: `Empresa "${existente.nombre}" borrada definitivamente (${TABLAS_CON_EMPRESA_ID.length} tablas, ${archivosBorrados} archivos R2).` });
 }
 
 async function superadminSeleccionarEmpresa(request, env) {
