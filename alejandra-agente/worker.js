@@ -2681,8 +2681,14 @@ export default {
         const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const canalChat = canal || 'web';
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
-        const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
-        const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado);
+        // FIX-ALEJANDRA-ROL-01 (29/07/2026): con sesión verificada, el rol/nombre real
+        // (sesionAuth, de la tabla `sesiones`) tiene prioridad sobre lo que mande el body —
+        // antes rol/usuario_nombre venían siempre del cliente sin verificar, aunque hubiera
+        // sesión. Sin sesión (authOk=false) se mantiene el comportamiento anterior.
+        const rolVerificado = authOk ? (sesionAuth.rol || rol) : rol;
+        const usuarioLabel = authOk && sesionAuth.nombre ? sesionAuth.nombre
+          : (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
+        const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rolVerificado, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado);
 
         await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat, adjuntos);
         if (respuesta.acciones?.length > 0) ctx.waitUntil(autoLearnChat(env, usuario_id, empresa, respuesta));
@@ -2720,7 +2726,11 @@ export default {
         const empresa  = sesionAuth ? sesionAuth.empresa_id : (empresa_id || 'default');
         const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
-        const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
+        // FIX-ALEJANDRA-ROL-01: ver comentario en /api/chat — rol/nombre de la sesión
+        // verificada tienen prioridad sobre lo que mande el body sin verificar.
+        const rolVerificado = authOk ? (sesionAuth.rol || rol) : rol;
+        const usuarioLabel = authOk && sesionAuth.nombre ? sesionAuth.nombre
+          : (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
 
         const { readable, writable } = new TransformStream();
         const writer = writable.getWriter();
@@ -2759,7 +2769,7 @@ export default {
           let respFinal = null;
           try {
             const canalReal = canal || 'panel';
-            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado, () => clienteDesconectado);
+            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rolVerificado, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado, () => clienteDesconectado);
             respFinal = resp;
             await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal, adjuntos);
             // actualizarResumen no bloquea — fire-and-forget dentro del waitUntil
@@ -2768,6 +2778,12 @@ export default {
           } catch(e) {
             await send({ type: 'error', mensaje: e.message });
             console.error('[chat/stream] error:', e.message);
+            // FIX-ALEJANDRA-LOG-01 (29/07/2026): este es justo el path que probablemente causó
+            // el mensaje con foto sin respuesta de hoy (app Android, canal='app_android' usa
+            // streaming) — antes solo console.error, sin rastro consultable después del hecho.
+            ctx.waitUntil(env.DB.prepare(
+              `INSERT INTO alejandra_logs (usuario_id, empresa_id, accion, parametros, resultado, status, created_at) VALUES (?,?,?,?,?,?,datetime('now'))`
+            ).bind(String(usuario_id), String(empresa), 'error_chat_stream', JSON.stringify({ canal: canalReal, tiene_adjuntos: !!(adjuntos && adjuntos.length) }), String(e.stack || e.message).slice(0, 1500), 'error').run().catch(() => {}));
           } finally {
             try { await writer.close(); } catch(_) {}
             // Enviar SIEMPRE push para canales móviles cuando hay respuesta válida.
@@ -3134,12 +3150,17 @@ export default {
         if (!token) return null;
         // Probar admin token primero
         if (environment.ADMIN_TOKEN && timingSafeEqual(token, environment.ADMIN_TOKEN)) {
-          return { usuario_id: 'adrian', empresa_id: 'default' };
+          return { usuario_id: 'adrian', empresa_id: 'default', rol: 'desarrollador', nombre: 'Adrián', departamento: null, es_admin: true };
         }
         // Probar sesiones del login worker (tabla sesiones - es donde están los tokens reales)
         try {
+          // FIX-ALEJANDRA-ROL-01 (29/07/2026): Adrián: "Alejandra debe saber quién la escribe
+          // y qué rol tiene". getAuth() solo traía usuario_id/empresa_id -- el resto del código
+          // (rol, nombre) confiaba en lo que el propio CLIENTE mandaba en el body del mensaje
+          // (body.rol, body.usuario_nombre), que cualquiera puede rellenar como quiera. Ahora
+          // se traen rol/nombre/departamento/es_admin de la sesión ya verificada por token.
           const sesion = await environment.DB.prepare(
-            `SELECT usuario_id, empresa_id FROM sesiones WHERE token = ?`
+            `SELECT usuario_id, empresa_id, rol, nombre, departamento, es_admin FROM sesiones WHERE token = ?`
           ).bind(token).first();
           if (sesion) {
             // Actualizar last_used (no bloquear si falla)
@@ -3147,7 +3168,11 @@ export default {
               .bind(token).run().catch(() => {});
             return {
               usuario_id: String(sesion.usuario_id),
-              empresa_id: String(sesion.empresa_id || 'default')
+              empresa_id: String(sesion.empresa_id || 'default'),
+              rol: sesion.rol || null,
+              nombre: sesion.nombre || null,
+              departamento: sesion.departamento || null,
+              es_admin: !!sesion.es_admin,
             };
           }
         } catch (e) {
