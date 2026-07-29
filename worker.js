@@ -4715,6 +4715,8 @@ export default {
       if (path === '/sesion/obra'           && method === 'PUT')  return await actualizarSesionObra(request, env);
       if (path === '/empresas/registro'  && method === 'POST') return await registrarEmpresa(request, env);
       if (path === '/empresas'           && method === 'GET')  return await getEmpresas(request, env);
+      if (path.startsWith('/empresas/') && path.endsWith('/reactivar') && method === 'POST')
+        return await reactivarEmpresaAdmin(path.split('/empresas/')[1].replace('/reactivar', ''), request, env);
       if (path.startsWith('/empresas/') && method === 'PUT')    return await editarEmpresaAdmin(path.split('/empresas/')[1], request, env);
       if (path.startsWith('/empresas/') && method === 'DELETE') return await eliminarEmpresaAdmin(path.split('/empresas/')[1], request, env);
       if (path === '/superadmin/empresa' && method === 'POST') return await superadminSeleccionarEmpresa(request, env);
@@ -6502,8 +6504,13 @@ async function registrarEmpresa(request, env) {
 async function getEmpresas(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.isSuperadmin) return err('Sin permisos', 403);
+  // FIX-EMPRESAS-04 (29/07/2026): Adrián, tras confundir "desactivar" con "borrar" — se añade
+  // ?todas=1 para poder ver también las empresas desactivadas (activa=0) y reactivarlas desde
+  // el panel, en vez de que desaparezcan sin más del listado sin forma de recuperarlas visualmente.
+  const url = new URL(request.url);
+  const todas = url.searchParams.get('todas') === '1';
   const rows = await env.DB.prepare(
-    'SELECT id, nombre, slug, email, plan, activa, created_at FROM empresas WHERE activa = 1 ORDER BY nombre'
+    `SELECT id, nombre, slug, email, plan, activa, created_at FROM empresas ${todas ? '' : 'WHERE activa = 1'} ORDER BY activa DESC, nombre`
   ).all();
   return json(rows.results || []);
 }
@@ -6546,6 +6553,19 @@ async function eliminarEmpresaAdmin(id, request, env) {
   if (!existente) return err('Empresa no encontrada', 404);
   await env.DB.prepare('UPDATE empresas SET activa = 0 WHERE id = ?').bind(empresaId).run();
   return json({ ok: true, mensaje: `Empresa "${existente.nombre}" desactivada` });
+}
+
+// FIX-EMPRESAS-04 (29/07/2026): Adrián desactivó por error las 2 empresas de prueba sin darse
+// cuenta de que "Eliminar" no borra nada, solo desactiva — pidió diferenciar de verdad
+// desactivar (reversible) de borrar (definitivo). Reactivar es lo simétrico a eliminarEmpresaAdmin.
+async function reactivarEmpresaAdmin(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isSuperadmin) return err('Sin permisos', 403);
+  const empresaId = parseInt(id);
+  const existente = await env.DB.prepare('SELECT id, nombre FROM empresas WHERE id = ?').bind(empresaId).first();
+  if (!existente) return err('Empresa no encontrada', 404);
+  await env.DB.prepare('UPDATE empresas SET activa = 1 WHERE id = ?').bind(empresaId).run();
+  return json({ ok: true, mensaje: `Empresa "${existente.nombre}" reactivada` });
 }
 
 async function superadminSeleccionarEmpresa(request, env) {

@@ -8621,6 +8621,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <div class="section-card-title"><span>🏢</span> Todas las empresas <span style="background:rgba(168,85,247,.2);color:#a855f7;font-size:9px;padding:2px 8px;border-radius:10px;margin-left:6px">SUPERADMIN</span></div>
             <div class="tbl-toolbar" style="margin-bottom:12px">
               <input class="tbl-search" id="searchEmpresas" placeholder="🔍 Buscar empresa..." oninput="tblEmpresas&&tblEmpresas.setFilter('nombre','like',this.value)">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer">
+                <input type="checkbox" id="chkEmpresasInactivas" onchange="cargarListaEmpresas()"> Mostrar desactivadas
+              </label>
               <button class="btn btn-secondary" onclick="cargarListaEmpresas()">🔄 Actualizar</button>
             </div>
             <div class="tbl-wrap"><div id="tblEmpresas"></div></div>
@@ -15277,7 +15280,11 @@ async function guardarInformeSemanal() {
 
 // ── LISTA DE EMPRESAS (superadmin) ─────────────────────────────
 async function cargarListaEmpresas() {
-  const r = await api('/empresas');
+  // FIX-EMPRESAS-04 (29/07/2026): Adrián desactivó por error las 2 empresas de prueba pensando
+  // que "Eliminar" las borraba de verdad — al ser soft-delete, desaparecían del listado sin
+  // forma de recuperarlas desde el panel. Toggle para verlas y reactivarlas.
+  const todas = document.getElementById('chkEmpresasInactivas')?.checked;
+  const r = await api('/empresas' + (todas ? '?todas=1' : ''));
   const data = r.empresas || r.data || r || [];
   if (!Array.isArray(data)) return;
   if (tblEmpresas) { tblEmpresas.replaceData(data); return; }
@@ -15298,9 +15305,17 @@ async function cargarListaEmpresas() {
         // / 🗑 Eliminar) los 230px de columna no alcanzaban y "Eliminar" quedaba cortado, visible
         // solo como "..." — confirmado por Adrián en vivo. Solo icono + title (tooltip) para
         // que quepan los 3 sin ensanchar la tabla.
-        formatter: c => `<button class="btn btn-sm btn-secondary" onclick="seleccionarEmpresa(${c.getValue()})" title="Ver como esta empresa">👁</button>
-          <button class="btn btn-sm btn-secondary" onclick="editarEmpresaTabla(${c.getValue()})" title="Editar empresa">✏️</button>
-          <button class="btn btn-sm btn-danger" onclick="eliminarEmpresaTabla(${c.getValue()})" title="Desactivar empresa">🗑</button>` },
+        // FIX-EMPRESAS-04: "Eliminar" solo desactiva (nunca borra datos) — se sustituye por
+        // "↺ Reactivar" cuando la empresa ya está desactivada, para dejarlo claro y poder
+        // deshacerlo desde el propio panel sin tocar la BD a mano.
+        formatter: c => {
+          const activa = c.getData().activa;
+          return `<button class="btn btn-sm btn-secondary" onclick="seleccionarEmpresa(${c.getValue()})" title="Ver como esta empresa">👁</button>
+            <button class="btn btn-sm btn-secondary" onclick="editarEmpresaTabla(${c.getValue()})" title="Editar empresa">✏️</button>
+            ${activa
+              ? `<button class="btn btn-sm btn-danger" onclick="eliminarEmpresaTabla(${c.getValue()})" title="Desactivar empresa (no borra datos)">🗑</button>`
+              : `<button class="btn btn-sm btn-success" onclick="reactivarEmpresaTabla(${c.getValue()})" title="Reactivar empresa">↺</button>`}`;
+        } },
     ]
   });
 }
@@ -15346,9 +15361,19 @@ function editarEmpresaTabla(id) {
 async function eliminarEmpresaTabla(id) {
   const row = tblEmpresas.getRows().find(r => r.getData().id === id);
   const nombre = row ? row.getData().nombre : `#${id}`;
-  if (!confirm(`¿Desactivar la empresa "${nombre}"? No se borran sus datos, solo deja de aparecer en este listado. Sus usuarios seguirán pudiendo acceder normalmente (esta acción no bloquea el login).`)) return;
+  if (!confirm(`¿Desactivar la empresa "${nombre}"?\n\nNo se borra NINGÚN dato — solo deja de aparecer en el listado normal (marca "Mostrar desactivadas" para verla y poder reactivarla). Sus usuarios seguirán pudiendo acceder normalmente, esta acción no bloquea el login.`)) return;
   const r = await api(`/empresas/${id}`, { method: 'DELETE' });
   if (r.ok) { toast(r.mensaje || 'Empresa desactivada ✓', 'ok'); cargarListaEmpresas(); }
+  else toast(r.error || 'Error', 'err');
+}
+
+// FIX-EMPRESAS-04 (29/07/2026): ver comentario en cargarListaEmpresas().
+async function reactivarEmpresaTabla(id) {
+  const row = tblEmpresas.getRows().find(r => r.getData().id === id);
+  const nombre = row ? row.getData().nombre : `#${id}`;
+  if (!confirm(`¿Reactivar la empresa "${nombre}"? Volverá a aparecer en el listado normal.`)) return;
+  const r = await api(`/empresas/${id}/reactivar`, { method: 'POST' });
+  if (r.ok) { toast(r.mensaje || 'Empresa reactivada ✓', 'ok'); cargarListaEmpresas(); }
   else toast(r.error || 'Error', 'err');
 }
 
