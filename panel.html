@@ -15697,17 +15697,34 @@ async function alejandrEnviar() {
     const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-      body: JSON.stringify({ message: msg, usuario_id: usuarioId, canal: 'panel', pantalla: pantallaActual })
+      // FIX-ALEJANDRA-FAB-01 (29/07/2026): este endpoint espera 'mensaje' (español), no
+      // 'message' — el typo hacía que TODO envío desde este FAB devolviera 400 ("mensaje y
+      // usuario_id requeridos") y el alert() bloqueante que saltaba después dejaba la
+      // pestaña congelada hasta cerrarlo. Adrián: "da error al enviar mensaje".
+      body: JSON.stringify({ mensaje: msg, usuario_id: usuarioId, canal: 'panel', rol: SESSION?.rol || null, pantalla: pantallaActual })
     });
     if (!r.ok) {
-      alert('Error al enviar mensaje');
+      _alejandraMostrarError(`Error al enviar (${r.status}). Vuelve a intentarlo.`);
       return;
     }
     cargarAlejandraChat();
   } catch (e) {
     console.error('Error enviando mensaje:', e);
-    alert('Error al enviar mensaje');
+    _alejandraMostrarError('Error de conexión. Vuelve a intentarlo.');
   }
+}
+
+// FIX-ALEJANDRA-FAB-01: alert() es una llamada bloqueante — congela toda la pestaña
+// (incluida cualquier herramienta de automatización/testing) hasta que el usuario la
+// cierra a mano. Mostramos el error dentro del propio panel de chat en su lugar.
+function _alejandraMostrarError(texto) {
+  const cont = document.getElementById('alejandraMensajes');
+  if (!cont) return;
+  const d = document.createElement('div');
+  d.style.cssText = 'padding:10px 14px;border-radius:12px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444;font-size:13px;margin-bottom:8px';
+  d.textContent = '❌ ' + texto;
+  cont.appendChild(d);
+  cont.scrollTop = cont.scrollHeight;
 }
 
 // Color de avatar según rol
