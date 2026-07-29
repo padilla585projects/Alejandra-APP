@@ -15649,8 +15649,13 @@ async function cargarAlejandraChat() {
   const usuarioId = SESSION?.usuario_id || null;
   if (!usuarioId) return;
   try {
+    // FIX-ALEJANDRA-FAB-02 (29/07/2026): este endpoint vive en worker.js (alejandra-app-api),
+    // que solo reconoce X-Token (ver getAuth() ahí) -- Authorization: Bearer no identifica a
+    // nadie en ese worker, así que la petición se trataba como anónima y devolvía 403 al pedir
+    // el historial de "otro usuario" (null). El envío ya funcionaba (FIX-ALEJANDRA-FAB-01) pero
+    // la respuesta nunca se veía porque este fetch para repintarla siempre fallaba.
     const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}`, {
-      headers: { 'Authorization': `Bearer ${TOKEN}` }
+      headers: { 'X-Token': TOKEN }
     });
     if (!r.ok) return;
     const data = await r.json();
