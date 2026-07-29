@@ -15665,13 +15665,17 @@ async function cargarAlejandraChat() {
       cont.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">Hola, pregúntame lo que necesites</div></div>';
       return;
     }
+    // FIX-ALEJANDRA-FAB-03 (29/07/2026): /ia-chat-history devuelve {rol, contenido} (español),
+    // no {role, content} -- por eso cada burbuja salía en blanco/"undefined". De paso se escapa
+    // el contenido (antes iba directo a innerHTML sin escapar, un mensaje de usuario con '<'
+    // podía romper el render o inyectar HTML).
     cont.innerHTML = msgs.map(m => {
-      const esUsuario = m.role === 'user';
-      const clase = esUsuario ? 'user-msg' : 'ia-msg';
+      const esUsuario = m.rol === 'user';
       const bg = esUsuario ? 'var(--accent)' : 'var(--surface2)';
       const color = esUsuario ? '#000' : 'var(--text)';
+      const texto = String(m.contenido || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
       return `<div style="display:flex;justify-content:${esUsuario ? 'flex-end' : 'flex-start'};margin-bottom:8px">
-        <div style="max-width:85%;padding:10px 14px;border-radius:12px;background:${bg};color:${color};font-size:13px;word-break:break-word;line-height:1.45;border:1px solid ${esUsuario ? 'transparent' : 'var(--border)'}">${m.content || m.text}</div>
+        <div style="max-width:85%;padding:10px 14px;border-radius:12px;background:${bg};color:${color};font-size:13px;word-break:break-word;line-height:1.45;border:1px solid ${esUsuario ? 'transparent' : 'var(--border)'}">${texto}</div>
       </div>`;
     }).join('');
     cont.scrollTop = cont.scrollHeight;
