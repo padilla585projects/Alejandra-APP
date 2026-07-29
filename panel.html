@@ -18493,7 +18493,7 @@ async function wSend(){
   document.getElementById('wSend').disabled=true;
   let textoAcum='', bubbleEl=null;
   try{
-    const res=await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:msg,usuario_id:${JSON.stringify(SESSION?.usuario_id || SESSION?.nombre || 'Adrian')},empresa_id:${JSON.stringify(SESSION?.empresa_id || null)},canal:'panel',rol:'desarrollador',pantalla:'popup-ai',dom_actual:null})});
+    const res=await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+_tok},body:JSON.stringify({mensaje:msg,usuario_id:${JSON.stringify(SESSION?.usuario_id || SESSION?.nombre || 'Adrian')},empresa_id:${JSON.stringify(SESSION?.empresa_id || null)},canal:'panel',rol:'desarrollador',pantalla:'popup-ai',dom_actual:null})});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const reader=res.body.getReader();
     const dec=new TextDecoder();
@@ -18654,7 +18654,13 @@ document.getElementById('wInput').focus();
     try {
       const res = await fetch(AGENTE_STREAM_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // FIX-ALEJANDRA-CONTINUIDAD-01 (29/07/2026): Adrián: "que sepa quién la habla y de
+        // qué, que no se olvide cuando cambie de plataforma" -- este chat (y el de wSend/
+        // popup) nunca mandaban token de sesión, así que Alejandra no podía verificar quién
+        // escribía (usaba lo que el body dijera, sin comprobar) y perdía la identidad real
+        // al cambiar de canal. Mismo patrón que ya usa alejandrEnviar() (el FAB) para este
+        // mismo worker.
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
         body: JSON.stringify({
           mensaje:    msgText,
           usuario_id: SESSION?.usuario_id || null,
