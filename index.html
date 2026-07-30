@@ -123,7 +123,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
 .module-card{background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:0 24px;display:flex;align-items:center;gap:22px;cursor:pointer;transition:all .2s;flex:1;min-height:100px}
 .module-card.full-width{width:100%}
 .module-card:active{transform:scale(0.97);opacity:.9}
-.module-card.sortable-mode{cursor:grab;user-select:none}
+.module-card.sortable-mode{cursor:grabbing;user-select:none;touch-action:none}
 .module-card.sortable-mode:active{cursor:grabbing;transform:scale(1.02);box-shadow:0 4px 20px rgba(0,0,0,.2);opacity:1}
 .module-card.drag-over-top{border-top:3px solid var(--accent) !important}
 .module-card.drag-over-bottom{border-bottom:3px solid var(--accent) !important}
@@ -131,7 +131,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
 .drag-handle{display:none;color:var(--muted);font-size:22px;cursor:grab;padding:0 4px;flex-shrink:0}
 .sortable-mode .drag-handle{display:flex;align-items:center}
 .sortable-mode .module-arrow{display:none}
-#btnOrdenarHome{display:none}
 .module-emoji{font-size:52px;line-height:1;flex-shrink:0}
 .module-info{flex:1}
 .module-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)}
@@ -1252,7 +1251,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
     </div>
-    <button id="btnOrdenarHome" onclick="toggleHomeEditMode()" title="Reordenar tarjetas" style="position:absolute;bottom:72px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:50%;width:44px;height:44px;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.15)">🔀</button>
     <div id="adminHomeBtn" style="display:none;padding:0 16px 12px">
       <button class="admin-home-btn" onclick="showScreen('admin')">
         🔐 Panel de Administración
@@ -6143,27 +6141,21 @@ let _pendingDept = null;
 // ── Reordenar tarjetas del home ───────────────────────────────────────────────
 const HOME_ORDER_KEY = 'alejandra_home_order';
 let _homeEditMode = false;
-let _dragSrc = null;
 
 function toggleHomeEditMode() {
   _homeEditMode = !_homeEditMode;
-  const btn = document.getElementById('btnOrdenarHome');
   const cards = document.querySelectorAll('.module-card');
   if (_homeEditMode) {
-    if (btn) btn.textContent = '✅';
     cards.forEach(c => {
       if (c.style.display !== 'none') {
-        c.draggable = true;
         c.classList.add('sortable-mode');
       }
     });
-    toast('Arrastra las tarjetas para reordenarlas');
+    toast('Mantén pulsado y mueve la tarjeta');
   } else {
-    if (btn) btn.textContent = '🔀';
     const order = [...document.querySelectorAll('.module-card')].map(c => c.id).filter(Boolean);
     localStorage.setItem(HOME_ORDER_KEY, JSON.stringify(order));
     cards.forEach(c => {
-      c.draggable = false;
       c.classList.remove('sortable-mode', 'dragging', 'drag-over-top', 'drag-over-bottom');
     });
     toast('✅ Orden guardado');
@@ -6181,71 +6173,112 @@ function applyHomeOrder() {
   });
 }
 
-document.addEventListener('dragstart', e => {
-  if (!_homeEditMode) return;
-  _dragSrc = e.target.closest('.module-card');
-  if (!_dragSrc) return;
-  _dragSrc.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-});
-document.addEventListener('dragover', e => {
-  if (!_homeEditMode || !_dragSrc) return;
-  e.preventDefault();
-  const target = e.target.closest('.module-card');
-  if (!target || target === _dragSrc) return;
+function _marcarDestinoOrden(card, x, y) {
+  const el = document.elementFromPoint(x, y);
+  const target = el?.closest('.module-card');
   document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
+  if (!target || target === card || target.style.display === 'none') return null;
   const rect = target.getBoundingClientRect();
-  target.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
-});
-document.addEventListener('drop', e => {
-  if (!_homeEditMode || !_dragSrc) return;
-  e.preventDefault();
-  const target = e.target.closest('.module-card');
-  if (!target || target === _dragSrc) return;
-  const rect = target.getBoundingClientRect();
-  if (e.clientY < rect.top + rect.height / 2) target.before(_dragSrc); else target.after(_dragSrc);
-  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
-});
-document.addEventListener('dragend', () => {
-  if (_dragSrc) { _dragSrc.classList.remove('dragging'); _dragSrc = null; }
-  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
-});
+  target.classList.add(y < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+  return target;
+}
 
-// Soporte táctil para móviles
-let _touchCard = null, _touchLastTarget = null;
+function _soltarTarjetaOrden(card, x, y) {
+  const target = _marcarDestinoOrden(card, x, y);
+  if (target) {
+    const rect = target.getBoundingClientRect();
+    if (y < rect.top + rect.height / 2) target.before(card); else target.after(card);
+  }
+  card?.classList.remove('dragging');
+  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
+  if (_homeEditMode) toggleHomeEditMode();
+}
+
+// Pulsación larga (450 ms) y arrastre en móvil.
+let _touchCard = null, _touchLongPressTimer = null, _touchStartX = 0, _touchStartY = 0;
+let _suppressHomeClickUntil = 0;
 document.addEventListener('touchstart', e => {
-  if (!_homeEditMode) return;
-  _touchCard = e.target.closest('.module-card');
-  if (_touchCard) _touchCard.classList.add('dragging');
+  const card = e.target.closest('#screenHome .module-card');
+  if (!card || card.style.display === 'none' || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  _touchStartX = t.clientX; _touchStartY = t.clientY;
+  clearTimeout(_touchLongPressTimer);
+  _touchLongPressTimer = setTimeout(() => {
+    if (!_homeEditMode) toggleHomeEditMode();
+    _touchCard = card;
+    _touchCard.classList.add('dragging');
+    if (navigator.vibrate) navigator.vibrate(60);
+  }, 450);
 }, { passive: true });
 document.addEventListener('touchmove', e => {
-  if (!_homeEditMode || !_touchCard) return;
-  e.preventDefault();
   const t = e.touches[0];
-  const el = document.elementFromPoint(t.clientX, t.clientY);
-  const target = el?.closest('.module-card');
-  if (_touchLastTarget && _touchLastTarget !== target) {
-    _touchLastTarget.classList.remove('drag-over-top','drag-over-bottom');
+  if (!_touchCard) {
+    if (Math.hypot(t.clientX - _touchStartX, t.clientY - _touchStartY) > 10) {
+      clearTimeout(_touchLongPressTimer);
+      _touchLongPressTimer = null;
+    }
+    return;
   }
-  if (target && target !== _touchCard) {
-    const rect = target.getBoundingClientRect();
-    target.classList.add(t.clientY < rect.top + rect.height/2 ? 'drag-over-top' : 'drag-over-bottom');
-    _touchLastTarget = target;
-  }
+  e.preventDefault();
+  _marcarDestinoOrden(_touchCard, t.clientX, t.clientY);
 }, { passive: false });
 document.addEventListener('touchend', e => {
-  if (!_homeEditMode || !_touchCard) return;
+  clearTimeout(_touchLongPressTimer);
+  _touchLongPressTimer = null;
+  if (!_touchCard) return;
+  e.preventDefault();
   const t = e.changedTouches[0];
-  const el = document.elementFromPoint(t.clientX, t.clientY);
-  const target = el?.closest('.module-card');
-  if (target && target !== _touchCard) {
-    const rect = target.getBoundingClientRect();
-    if (t.clientY < rect.top + rect.height/2) target.before(_touchCard); else target.after(_touchCard);
-  }
-  _touchCard.classList.remove('dragging');
-  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
-  _touchCard = null; _touchLastTarget = null;
+  _soltarTarjetaOrden(_touchCard, t.clientX, t.clientY);
+  _touchCard = null;
+  _suppressHomeClickUntil = Date.now() + 700;
+}, { passive: false });
+document.addEventListener('touchcancel', () => {
+  clearTimeout(_touchLongPressTimer);
+  _touchLongPressTimer = null;
+  if (_touchCard) _soltarTarjetaOrden(_touchCard, _touchStartX, _touchStartY);
+  _touchCard = null;
 });
+
+// Mismo gesto con ratón: mantener pulsado, mover y soltar.
+let _mouseCard = null, _mouseLongPressTimer = null, _mouseStartX = 0, _mouseStartY = 0;
+document.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const card = e.target.closest('#screenHome .module-card');
+  if (!card || card.style.display === 'none') return;
+  _mouseStartX = e.clientX; _mouseStartY = e.clientY;
+  clearTimeout(_mouseLongPressTimer);
+  _mouseLongPressTimer = setTimeout(() => {
+    if (!_homeEditMode) toggleHomeEditMode();
+    _mouseCard = card;
+    _mouseCard.classList.add('dragging');
+  }, 450);
+});
+document.addEventListener('mousemove', e => {
+  if (!_mouseCard) {
+    if (Math.hypot(e.clientX - _mouseStartX, e.clientY - _mouseStartY) > 10) {
+      clearTimeout(_mouseLongPressTimer);
+      _mouseLongPressTimer = null;
+    }
+    return;
+  }
+  e.preventDefault();
+  _marcarDestinoOrden(_mouseCard, e.clientX, e.clientY);
+});
+document.addEventListener('mouseup', e => {
+  clearTimeout(_mouseLongPressTimer);
+  _mouseLongPressTimer = null;
+  if (!_mouseCard) return;
+  e.preventDefault();
+  _soltarTarjetaOrden(_mouseCard, e.clientX, e.clientY);
+  _mouseCard = null;
+  _suppressHomeClickUntil = Date.now() + 700;
+});
+document.addEventListener('click', e => {
+  if (Date.now() < _suppressHomeClickUntil && e.target.closest('#screenHome .module-card')) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+}, true);
 // ─────────────────────────────────────────────────────────────────────────────
 
 function seleccionarDepto(dept) {
@@ -7153,8 +7186,6 @@ function _applyScreen(name) {
   const navMap = { home: 'navInicio', ajustes: 'navAjustes', sugerencias: 'navSugerencias', ia: 'navIA' };
   if (navMap[name]) document.getElementById(navMap[name])?.classList.add('active');
 
-  const btnOrd = document.getElementById('btnOrdenarHome');
-  if (btnOrd) btnOrd.style.display = (name === 'home') ? 'flex' : 'none';
   if (name !== 'home' && _homeEditMode) toggleHomeEditMode();
   if (name === 'ajustes')      { renderAjustesInfo(); initAjustesTabs(); }
   if (name === 'pedidos')      { cargarPedidos(); }
@@ -13051,7 +13082,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.85';
+const APP_VERSION = '8.86';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

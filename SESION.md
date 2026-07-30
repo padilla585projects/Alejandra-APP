@@ -1,7 +1,14 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.85.
+**Última actualización:** 30/07/2026 — v8.86.
+
+### v8.86 — reordenar tarjetas con pulsación larga
+
+- Eliminado el botón flotante `🔀` que ocupaba espacio en la pantalla de Inicio.
+- Para reordenar basta con mantener pulsada una tarjeta durante 450 ms, moverla y soltarla. Funciona con gesto táctil y ratón.
+- Un desplazamiento normal cancela la pulsación larga para que se pueda seguir haciendo scroll sin activar el orden por accidente.
+- Al soltar se guarda el orden automáticamente y se bloquea el clic residual, evitando abrir la tarjeta movida.
 
 ### v8.85 — menú cerrado y específico para Teleco
 
