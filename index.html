@@ -12644,7 +12644,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.67';
+const APP_VERSION = '8.68';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -19875,6 +19875,17 @@ window.turnoToggle   = turnoToggle;
           if (bubbleEl) bubbleEl.innerHTML = _escHtml(reply).replace(/\n/g, '<br>');
         }
 
+        // Opciones pinchables: Alejandra termina preguntas de confirmación/elección
+        // cerrada con <<OPCIONES: A|B|C>> — se quita del texto y se pintan como botones
+        // que mandan esa opción tal cual, igual que si el usuario la hubiera escrito.
+        const opcionesMatch = reply.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
+        if (opcionesMatch) {
+          reply = reply.replace(/<<OPCIONES:[^>]+>>\s*$/, '').trim();
+          if (bubbleEl) bubbleEl.innerHTML = _escHtml(reply).replace(/\n/g, '<br>');
+          const opciones = opcionesMatch[1].split('|').map(o => o.trim()).filter(Boolean);
+          if (opciones.length) _iaRenderOpciones(opciones);
+        }
+
         // Guardar en historial local
         iaHistory.push({ role: 'user', content: msg });
         iaHistory.push({ role: 'assistant', content: reply });
@@ -19923,6 +19934,27 @@ window.turnoToggle   = turnoToggle;
     box.appendChild(d);
     box.scrollTop = box.scrollHeight;
     return d;
+  }
+
+  function _iaRenderOpciones(opciones) {
+    const box = document.getElementById('iaMessages');
+    const cont = document.createElement('div');
+    cont.className = 'ia-opciones';
+    cont.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:-4px';
+    opciones.forEach(texto => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = texto;
+      btn.style.cssText = 'background:var(--surface2);border:1px solid var(--accent);color:var(--accent);border-radius:16px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap';
+      btn.onclick = () => {
+        cont.remove();
+        const input = document.getElementById('iaInput');
+        if (input) { input.value = texto; window.iaSend(); }
+      };
+      cont.appendChild(btn);
+    });
+    box.appendChild(cont);
+    box.scrollTop = box.scrollHeight;
   }
 
   function appendIATyping() {
