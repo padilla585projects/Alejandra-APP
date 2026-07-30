@@ -4657,24 +4657,43 @@ async function bobinasBatch(request, env, ctx) {
 
   let actualizadas = 0;
   for (const b of bobinas) {
-    if (!b.codigo || !b.proveedor || !b.tipo_cable) {
-      detalle.push({ codigo: b.codigo || '?', status: 'error', error: 'Faltan campos obligatorios' });
+    if (!b || typeof b !== 'object' || Array.isArray(b)) {
+      detalle.push({ codigo: '?', status: 'error', error: 'Fila inválida' });
       errores++;
       continue;
     }
-    const codigo = safeStr(b.codigo).trim().toUpperCase();
-    const obraFinal = b.obra_id ? parseInt(b.obra_id) : obraId;
+    const codigo = typeof b?.codigo === 'string' ? b.codigo.trim().toUpperCase() : '';
+    if (!codigo) {
+      detalle.push({ codigo: '?', status: 'error', error: 'Falta el código/matrícula' });
+      errores++;
+      continue;
+    }
+    const proveedor = typeof b.proveedor === 'string' ? b.proveedor.trim().slice(0, 200) || null : null;
+    const tipoCable = typeof b.tipo_cable === 'string' ? b.tipo_cable.trim().slice(0, 200) || null : null;
+    const numAlbaran = typeof b.num_albaran === 'string' ? b.num_albaran.trim().slice(0, 100) || null : null;
+    const notas = typeof b.notas === 'string' ? b.notas.trim().slice(0, 1000) || null : null;
+    const estado = b.estado === 'devuelta' ? 'devuelta' : 'activa';
+    const obraSolicitada = b.obra_id ? parseInt(b.obra_id) : null;
+    const obraFinal = Number.isFinite(obraSolicitada) ? obraSolicitada : obraId;
     try {
       const existing = await env.DB.prepare(
-        'SELECT id, proveedor, tipo_cable, num_albaran, notas FROM bobinas WHERE codigo = ? AND empresa_id = ?'
+        'SELECT id, proveedor, tipo_cable, num_albaran, notas, estado, fecha_devolucion FROM bobinas WHERE codigo = ? AND empresa_id = ?'
       ).bind(codigo, empresa_id).first();
       if (existing) {
         const campos = [], vals = [];
-        if (b.proveedor && !existing.proveedor)   { campos.push('proveedor = ?');   vals.push(b.proveedor); }
-        if (b.tipo_cable && !existing.tipo_cable)  { campos.push('tipo_cable = ?');  vals.push(b.tipo_cable); }
-        if (b.num_albaran && !existing.num_albaran){ campos.push('num_albaran = ?'); vals.push(b.num_albaran); }
-        if (b.notas && !existing.notas)            { campos.push('notas = ?');       vals.push(b.notas); }
+        if (proveedor && !existing.proveedor)  { campos.push('proveedor = ?');   vals.push(proveedor); }
+        if (tipoCable && !existing.tipo_cable) { campos.push('tipo_cable = ?');  vals.push(tipoCable); }
+        if (numAlbaran && !existing.num_albaran) { campos.push('num_albaran = ?'); vals.push(numAlbaran); }
+        if (notas && !existing.notas)          { campos.push('notas = ?');       vals.push(notas); }
         if (obraFinal)                             { campos.push('obra_id = ?');     vals.push(obraFinal); }
+        if (estado === 'devuelta' && existing.estado !== 'devuelta') {
+          campos.push("estado = 'devuelta'", 'fecha_devolucion = ?', 'devuelto_por = ?');
+          vals.push(fecha, registradoPor || rol);
+        } else if (estado === 'activa' && existing.estado !== 'activa') {
+          // Una bobina que vuelve a recibirse entra de nuevo en stock.
+          campos.push("estado = 'activa'", 'fecha_entrada = ?', 'fecha_devolucion = NULL', 'devuelto_por = NULL');
+          vals.push(fecha);
+        }
         if (campos.length) {
           vals.push(existing.id);
           await env.DB.prepare(`UPDATE bobinas SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
@@ -4687,8 +4706,16 @@ async function bobinasBatch(request, env, ctx) {
         continue;
       }
       await env.DB.prepare(
-        'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran, departamento, empresa_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).bind(codigo, b.proveedor, b.tipo_cable, fecha, 'activa', b.notas || '', registradoPor || rol, obraFinal || null, b.num_albaran || null, departamento, empresa_id).run();
+        `INSERT INTO bobinas
+         (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id,
+          num_albaran, departamento, empresa_id, fecha_devolucion, devuelto_por)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        codigo, proveedor, tipoCable, fecha, estado, notas, registradoPor || rol,
+        obraFinal || null, numAlbaran, departamento, empresa_id,
+        estado === 'devuelta' ? fecha : null,
+        estado === 'devuelta' ? (registradoPor || rol) : null
+      ).run();
       detalle.push({ codigo, status: 'ok' });
       importadas++;
     } catch(e) {

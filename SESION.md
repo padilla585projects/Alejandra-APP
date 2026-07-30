@@ -1,7 +1,15 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.79.
+**Última actualización:** 30/07/2026 — v8.80.
+
+### v8.80 — opciones reales por bobina en la revisión
+
+- Solo Código/Matrícula es obligatorio. Proveedor, Tipo de cable, Metros, Albarán y Notas pueden dejarse vacíos; la tabla D1 ya admitía esos valores y la obligación anterior era artificial.
+- Cada fila incorpora un selector `📥 Recibida` / `↩ Devuelta`, además de la casilla para excluirla del lote.
+- Acciones rápidas `📥 Todas recibidas` y `↩ Todas devueltas`; después se puede corregir individualmente cualquier excepción.
+- El Worker aplica el movimiento: Recibida usa el estado interno `activa`; Devuelta usa `devuelta`, fecha de devolución y usuario. Si una bobina devuelta vuelve a recibirse, limpia los datos de devolución y vuelve a stock.
+- El botón pasa a llamarse `Guardar movimientos`, acorde con un lote que puede mezclar entradas y devoluciones.
 
 ### v8.79 — validación visible al confirmar bobinas escaneadas
 

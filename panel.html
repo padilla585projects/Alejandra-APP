@@ -18344,7 +18344,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.79';
+const PANEL_APP_VERSION = '8.80';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -19512,14 +19512,20 @@ document.getElementById('wInput').focus();
         </td>
         <td style="padding:4px 6px">
           <input type="text" value="${escH(b.proveedor || '')}" data-idx="${i}" data-field="proveedor"
-            style="${inpStyle}" placeholder="Proveedor *">
+            style="${inpStyle}" placeholder="Proveedor (opcional)">
         </td>
         <td style="padding:4px 6px">
           <input type="text" value="${escH(b.tipo_cable || '')}" data-idx="${i}" data-field="tipo_cable"
-            style="${inpStyle}" placeholder="Tipo cable *">
+            style="${inpStyle}" placeholder="Tipo cable (opcional)">
         </td>
         <td style="padding:4px 6px">
-          <input type="text" value="${escH(b.metros != null ? String(b.metros) : '')}" data-idx="${i}" data-field="metros"
+          <select data-idx="${i}" data-field="estado" style="${inpStyle};min-width:115px">
+            <option value="activa" ${(b.estado || b.movimiento) !== 'devuelta' ? 'selected' : ''}>📥 Recibida</option>
+            <option value="devuelta" ${(b.estado || b.movimiento) === 'devuelta' ? 'selected' : ''}>↩ Devuelta</option>
+          </select>
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${escH(Number(b.metros) > 0 ? String(b.metros) : '')}" data-idx="${i}" data-field="metros"
             style="${inpStyle};width:70px" placeholder="Metros">
         </td>
         <td style="padding:4px 6px">
@@ -19539,6 +19545,14 @@ document.getElementById('wInput').focus();
 
   function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
+  function sbMarcarTodas(estado) {
+    const normalizado = estado === 'devuelta' ? 'devuelta' : 'activa';
+    document.querySelectorAll('#sbTbody select[data-field="estado"]').forEach(select => {
+      select.value = normalizado;
+    });
+    toast(normalizado === 'devuelta' ? 'Todas marcadas como devueltas' : 'Todas marcadas como recibidas', 'info');
+  }
+
   async function sbImportar() {
     const obraId = SESSION?.obra_id || document.getElementById('sbObraSel')?.value || null;
     const bobinas = [];
@@ -19550,18 +19564,14 @@ document.getElementById('wInput').focus();
     document.querySelectorAll('#sbTbody tr').forEach((tr, i) => {
       const cb = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
       if (!cb?.checked) return;
-      const get = f => tr.querySelector(`input[data-field="${f}"][data-idx="${i}"]`)?.value?.trim() || '';
+      const get = f => tr.querySelector(`[data-field="${f}"][data-idx="${i}"]`)?.value?.trim() || '';
       const codigo = get('codigo');
       const proveedor = get('proveedor');
       const tipo_cable = get('tipo_cable');
-      const faltan = [
-        !codigo ? 'Código' : '',
-        !proveedor ? 'Proveedor' : '',
-        !tipo_cable ? 'Tipo cable' : ''
-      ].filter(Boolean);
+      const faltan = [!codigo ? 'Código' : ''].filter(Boolean);
       if (faltan.length) {
         incompletas.push({ fila: i + 1, faltan });
-        ['codigo', 'proveedor', 'tipo_cable'].forEach(campo => {
+        ['codigo'].forEach(campo => {
           if (get(campo)) return;
           const input = tr.querySelector(`input[data-field="${campo}"][data-idx="${i}"]`);
           if (input) {
@@ -19574,6 +19584,7 @@ document.getElementById('wInput').focus();
       const metros = get('metros');
       bobinas.push({
         codigo, proveedor, tipo_cable,
+        estado:      get('estado') === 'devuelta' ? 'devuelta' : 'activa',
         num_albaran: get('num_albaran') || null,
         notas:       [get('notas'), metros ? `${metros}m` : ''].filter(Boolean).join(' · ') || null,
         obra_id:     obraId ? parseInt(obraId) : null,
@@ -19590,7 +19601,7 @@ document.getElementById('wInput').focus();
         validacion.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
       document.querySelector('#sbTbody input[aria-invalid="true"]')?.focus();
-      toast(`Faltan datos obligatorios en ${incompletas.length} bobina(s)`, 'err');
+      toast(`Falta el código en ${incompletas.length} bobina(s)`, 'err');
       return;
     }
     if (validacion) {
@@ -19626,7 +19637,7 @@ document.getElementById('wInput').focus();
     } catch(e) {
       toast('❌ ' + e.message, 'err');
     } finally {
-      btn.disabled = false; btn.textContent = '⚡ Importar bobinas';
+      btn.disabled = false; btn.textContent = '⚡ Guardar movimientos';
     }
   }
 
@@ -19811,6 +19822,7 @@ document.getElementById('wInput').focus();
   window.sbPreviewFiles        = sbPreviewFiles;
   window.sbEnviar              = sbEnviar;
   window.sbImportar            = sbImportar;
+  window.sbMarcarTodas         = sbMarcarTodas;
   window.sbAbrirConDatos       = sbAbrirConDatos;
   window.abrirScanDevolucionPanel = abrirScanDevolucionPanel;
   window.cerrarScanDevolucionPanel = cerrarScanDevolucionPanel;
@@ -19962,14 +19974,20 @@ document.getElementById('wInput').focus();
         <div style="font-size:13px;font-weight:700">Bobinas extraídas</div>
         <div id="sbResumen" style="font-size:11px;color:var(--muted);flex:1;text-align:right"></div>
       </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button type="button" onclick="sbMarcarTodas('activa')" class="btn btn-secondary" style="font-size:11px;padding:6px 10px">📥 Todas recibidas</button>
+        <button type="button" onclick="sbMarcarTodas('devuelta')" class="btn btn-secondary" style="font-size:11px;padding:6px 10px">↩ Todas devueltas</button>
+        <span style="font-size:11px;color:var(--muted);align-self:center">Después puedes cambiar una fila concreta.</span>
+      </div>
       <div style="overflow-x:auto;margin-bottom:14px">
-        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:780px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
           <thead>
             <tr style="background:var(--surface2)">
               <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border);width:32px">✓</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Código</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Proveedor</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Tipo cable</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Movimiento</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Metros</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Albarán</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Notas</th>
@@ -19982,7 +20000,7 @@ document.getElementById('wInput').focus();
         style="display:none;margin-bottom:12px;padding:10px 12px;border:1px solid var(--red);border-radius:8px;background:rgba(239,68,68,.12);color:#fecaca;font-size:12px;font-weight:600;line-height:1.45"></div>
       <div style="display:flex;gap:8px">
         <button onclick="sbVolver()" class="btn btn-secondary" style="flex:0 0 100px">← Volver</button>
-        <button onclick="sbImportar()" class="btn btn-primary" style="flex:1" id="sbBtnImportar">⚡ Importar bobinas</button>
+        <button onclick="sbImportar()" class="btn btn-primary" style="flex:1" id="sbBtnImportar">⚡ Guardar movimientos</button>
       </div>
     </div>
   </div>
