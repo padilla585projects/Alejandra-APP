@@ -4221,13 +4221,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       style="position:fixed;bottom:72px;right:132px;width:44px;height:44px;border-radius:50%;background:#8b5cf6;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,.45);z-index:200;display:none;align-items:center;justify-content:center">📋</button>
   </div>
 
-  <!-- FAB: Escanear albarán bobinas -->
+  <!-- FAB: Escanear albarán bobinas (entrada o devolución, se elige al abrir) -->
   <button id="btnScanBobinas" onclick="abrirScanBobinas()" title="Escanear albarán"
     style="position:fixed;bottom:72px;right:132px;width:44px;height:44px;border-radius:50%;background:#8b5cf6;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,.45);z-index:200;display:none;align-items:center;justify-content:center">📷</button>
-
-  <!-- FAB: Escanear devolución de bobinas -->
-  <button id="btnScanDevolucion" onclick="abrirScanDevolucion()" title="Escanear devolución"
-    style="position:fixed;bottom:72px;right:180px;width:44px;height:44px;border-radius:50%;background:#0ea5e9;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(14,165,233,.45);z-index:200;display:none;align-items:center;justify-content:center">↩️</button>
 
   <!-- Modal: Scan parte semanal -->
   <div class="modal-overlay" id="modalScanParte" onclick="if(event.target===this)cerrarScanParte()" style="display:none">
@@ -4309,8 +4305,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
   <div class="modal-overlay" id="modalScanBobinasApp" onclick="if(event.target===this)cerrarScanBobinas()" style="display:none">
     <div class="modal" style="max-width:min(98vw,700px);max-height:92vh;overflow-y:auto;padding:20px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
-        <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">📷 Escanear albarán de bobinas</div>
+        <div id="sbAppTitulo" style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">📷 Escanear albarán de bobinas</div>
         <button onclick="cerrarScanBobinas()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+
+      <!-- Paso 0: elegir qué hacer con el albarán -->
+      <div id="sbAppStepModo">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px">¿Qué quieres hacer con este albarán?</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onclick="sbAppElegirModo('entrada')" class="btn-primary" style="width:100%;text-align:left;padding:16px">📥 Registrar entrada nueva<div style="font-size:11px;font-weight:400;opacity:.85;margin-top:2px">Bobinas que llegan a obra (proveedor, tipo de cable, metros)</div></button>
+          <button onclick="sbAppElegirModo('devolucion')" class="btn-primary" style="width:100%;text-align:left;padding:16px;background:#0ea5e9">↩️ Marcar como devueltas<div style="font-size:11px;font-weight:400;opacity:.85;margin-top:2px">Bobinas que se recogen/devuelven al proveedor</div></button>
+        </div>
       </div>
 
       <!-- Paso 1 -->
@@ -4325,7 +4330,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div style="font-size:14px;font-weight:700;color:var(--text)">Sube fotos de albaranes y hojas de control</div>
           <div style="font-size:11px;color:var(--muted);margin-top:4px">Puedes subir varias — Alejandra cruzará los datos</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px">JPG, PNG — máx 5 imágenes</div>
-          <input type="file" id="sbAppImgInput" accept="image/*" multiple style="display:none" onchange="sbAppPreviewImgs(this)">
+          <input type="file" id="sbAppImgInput" accept="image/*" capture="environment" multiple style="display:none" onchange="sbAppPreviewImgs(this)">
         </div>
         <div id="sbAppPreviews" style="display:none;display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"></div>
         <button id="btnSbAppEnviar" onclick="sbAppEnviar()" class="btn-primary" style="width:100%;margin-top:14px;display:none">🔍 Analizar con Alejandra</button>
@@ -4366,24 +4371,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <button onclick="sbAppImportar()" class="btn-primary" style="flex:1" id="btnSbAppImportar">⚡ Importar bobinas</button>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- Modal: Scan devolución bobinas (app) -->
-  <div class="modal-overlay" id="modalScanDevolucion" onclick="if(event.target===this)cerrarScanDevolucion()" style="display:none">
-    <div class="modal" style="max-width:min(98vw,700px);max-height:92vh;overflow-y:auto;padding:20px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
-        <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">↩️ Escanear devolución de bobinas</div>
-        <button onclick="cerrarScanDevolucion()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
-      </div>
-
-      <!-- Paso 1 -->
-      <div id="sdAppStep1">
+      <!-- Paso 1 devolución -->
+      <div id="sdAppStep1" style="display:none">
         <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s" onclick="document.getElementById('sdAppImgInput').click()" id="sdAppDropzone">
           <div style="font-size:36px;margin-bottom:8px">📄</div>
           <div style="font-size:14px;font-weight:700;color:var(--text)">Sube la foto del albarán de devolución</div>
           <div style="font-size:11px;color:var(--muted);margin-top:4px">Una sola foto — JPG, PNG</div>
-          <input type="file" id="sdAppImgInput" accept="image/*" style="display:none" onchange="sdAppPreview(this)">
+          <input type="file" id="sdAppImgInput" accept="image/*" capture="environment" style="display:none" onchange="sdAppPreview(this)">
         </div>
         <div id="sdAppPreview" style="display:none;margin-top:10px"></div>
         <button id="btnSdAppEnviar" onclick="sdAppEnviar()" class="btn-primary" style="width:100%;margin-top:14px;display:none">🔍 Analizar con Alejandra</button>
@@ -7149,8 +7144,6 @@ function _applyScreen(name) {
   if (name !== 'module') {
     const fabScanBob = document.getElementById('btnScanBobinas');
     if (fabScanBob) fabScanBob.style.display = 'none';
-    const fabScanDev = document.getElementById('btnScanDevolucion');
-    if (fabScanDev) fabScanDev.style.display = 'none';
   }
   actualizarBtnAtras();
   cargarBadgeIdeas();
@@ -7390,11 +7383,6 @@ function updateModuleUI() {
   if (fabScanBob) {
     const esAdmin = s?.rol !== 'operario';
     fabScanBob.style.display = (mod === 'bobinas' && esAdmin) ? 'flex' : 'none';
-  }
-  const fabScanDev = document.getElementById('btnScanDevolucion');
-  if (fabScanDev) {
-    const esAdmin = s?.rol !== 'operario';
-    fabScanDev.style.display = (mod === 'bobinas' && esAdmin) ? 'flex' : 'none';
   }
 }
 
@@ -12820,7 +12808,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.72';
+const APP_VERSION = '8.73';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18494,9 +18482,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function abrirScanBobinas() {
     const modal = document.getElementById('modalScanBobinasApp');
     modal.style.display = 'flex';
-    document.getElementById('sbAppStep1').style.display = '';
+    document.getElementById('sbAppTitulo').textContent = '📷 Escanear albarán de bobinas';
+    document.getElementById('sbAppStepModo').style.display = '';
+    document.getElementById('sbAppStep1').style.display = 'none';
     document.getElementById('sbAppStep2').style.display = 'none';
     document.getElementById('sbAppStep3').style.display = 'none';
+    document.getElementById('sdAppStep1').style.display = 'none';
+    document.getElementById('sdAppStep2').style.display = 'none';
+    document.getElementById('sdAppStep3').style.display = 'none';
     document.getElementById('sbAppPreviews').innerHTML = '';
     document.getElementById('sbAppPreviews').style.display = 'none';
     document.getElementById('btnSbAppEnviar').style.display = 'none';
@@ -18504,28 +18497,48 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('sbAppImgInput').value = '';
     _sbAppFiles = [];
     _sbAppData = null;
-    const s = getSession();
-    const info = document.getElementById('sbAppObraInfo');
-    const selGroup = document.getElementById('sbAppObraSelGroup');
-    if (s?.obra_id) {
-      info.textContent = `🏗 Obra: ${s.obra_nombre || 'Obra ' + s.obra_id}`;
-      info.style.display = '';
-      selGroup.style.display = 'none';
-    } else {
-      info.style.display = 'none';
-      selGroup.style.display = '';
-      const sel = document.getElementById('sbAppObraSel');
-      if (sel.options.length <= 1) {
-        apiCall('/obras').then(r => {
-          (r.obras || r || []).forEach(o => {
-            const opt = document.createElement('option');
-            opt.value = o.id; opt.textContent = o.nombre;
-            sel.appendChild(opt);
-          });
-        }).catch(() => {});
+    document.getElementById('sdAppPreview').innerHTML = '';
+    document.getElementById('sdAppPreview').style.display = 'none';
+    document.getElementById('btnSdAppEnviar').style.display = 'none';
+    document.getElementById('sdAppImgInput').value = '';
+    _sdAppFile = null;
+    _sdAppData = null;
+  }
+
+  // Paso 0: elige qué hacer con el albarán escaneado -- entrada nueva (multi-foto,
+  // requiere proveedor/tipo_cable) o devolución (una foto, solo matrículas).
+  function sbAppElegirModo(modo) {
+    document.getElementById('sbAppStepModo').style.display = 'none';
+    if (modo === 'entrada') {
+      document.getElementById('sbAppTitulo').textContent = '📥 Registrar entrada de bobinas';
+      document.getElementById('sbAppStep1').style.display = '';
+      const s = getSession();
+      const info = document.getElementById('sbAppObraInfo');
+      const selGroup = document.getElementById('sbAppObraSelGroup');
+      if (s?.obra_id) {
+        info.textContent = `🏗 Obra: ${s.obra_nombre || 'Obra ' + s.obra_id}`;
+        info.style.display = '';
+        selGroup.style.display = 'none';
+      } else {
+        info.style.display = 'none';
+        selGroup.style.display = '';
+        const sel = document.getElementById('sbAppObraSel');
+        if (sel.options.length <= 1) {
+          apiCall('/obras').then(r => {
+            (r.obras || r || []).forEach(o => {
+              const opt = document.createElement('option');
+              opt.value = o.id; opt.textContent = o.nombre;
+              sel.appendChild(opt);
+            });
+          }).catch(() => {});
+        }
       }
+    } else {
+      document.getElementById('sbAppTitulo').textContent = '↩️ Escanear devolución de bobinas';
+      document.getElementById('sdAppStep1').style.display = '';
     }
   }
+  window.sbAppElegirModo = sbAppElegirModo;
 
   function cerrarScanBobinas() {
     const m = document.getElementById('modalScanBobinasApp');
@@ -18668,7 +18681,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   function sbAppVolver() {
     document.getElementById('sbAppStep3').style.display = 'none';
-    document.getElementById('sbAppStep1').style.display = '';
+    document.getElementById('sbAppStepModo').style.display = '';
   }
 
   async function sbAppImportar() {
@@ -18714,28 +18727,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.sbAppVolver         = sbAppVolver;
   window.sbAppImportar       = sbAppImportar;
 
-  // ── SCAN DEVOLUCIÓN DE BOBINAS ────────────────────────────────────────────────
+  // ── SCAN DEVOLUCIÓN DE BOBINAS (modo dentro del mismo modal que la entrada) ──
   let _sdAppFile = null;
   let _sdAppData = null;
-
-  function abrirScanDevolucion() {
-    document.getElementById('modalScanDevolucion').style.display = 'flex';
-    document.getElementById('sdAppStep1').style.display = '';
-    document.getElementById('sdAppStep2').style.display = 'none';
-    document.getElementById('sdAppStep3').style.display = 'none';
-    document.getElementById('sdAppPreview').innerHTML = '';
-    document.getElementById('sdAppPreview').style.display = 'none';
-    document.getElementById('btnSdAppEnviar').style.display = 'none';
-    document.getElementById('sdAppImgInput').value = '';
-    _sdAppFile = null;
-    _sdAppData = null;
-  }
-  window.abrirScanDevolucion = abrirScanDevolucion;
-
-  function cerrarScanDevolucion() {
-    document.getElementById('modalScanDevolucion').style.display = 'none';
-  }
-  window.cerrarScanDevolucion = cerrarScanDevolucion;
 
   function sdAppPreview(input) {
     const file = input.files?.[0];
@@ -18807,7 +18801,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   function sdAppVolver() {
     document.getElementById('sdAppStep3').style.display = 'none';
-    document.getElementById('sdAppStep1').style.display = '';
+    document.getElementById('sbAppStepModo').style.display = '';
   }
   window.sdAppVolver = sdAppVolver;
 
@@ -18839,7 +18833,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     btn.disabled = false;
     btn.textContent = '↩️ Marcar como devueltas';
     toast(`✅ ${ok} devuelta(s)${fallo ? ` · ❌ ${fallo} con error` : ''}`, fallo ? 'err' : 'ok');
-    cerrarScanDevolucion();
+    cerrarScanBobinas();
     if (typeof cargarStock === 'function') cargarStock();
   }
   window.sdAppConfirmar = sdAppConfirmar;
