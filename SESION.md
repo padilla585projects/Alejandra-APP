@@ -1,7 +1,15 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.84.
+**Última actualización:** 30/07/2026 — v8.85.
+
+### v8.85 — menú cerrado y específico para Teleco
+
+- Causa corregida: Teleco utilizaba la plantilla genérica `trade`, que hacía visibles por defecto tarjetas comunes que no formaban parte de su configuración de submódulos.
+- Teleco pasa a usar una lista blanca de tarjetas. Ya no hereda automáticamente Actas de reunión, Control de calidad, Subcontratas, RdP/Prevención, Hormigonado ni Formación.
+- Conserva Racks/Cableado, PEMP, Carretillas, Pedidos, Calendario, Incidencias, Galería, Partes, Herramientas, Documentación, Planos, Alejandra IA y Resumen de obra.
+- `Planos` se añade a la configuración de submódulos para que también pueda activarse o desactivarse desde Mi Empresa.
+- La lista blanca impide que futuras tarjetas genéricas se cuelen en Teleco sin una decisión explícita. Caché renovada a v8.85.
 
 ### v8.84 — configuración de departamentos unificada
 

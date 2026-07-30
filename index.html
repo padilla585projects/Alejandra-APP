@@ -6023,6 +6023,35 @@ function renderAjustesInfo() {
   }
 }
 
+// Menús cerrados por departamento. Si mañana se añade una tarjeta genérica nueva,
+// Teleco no debe heredarla automáticamente: solo aparece cuando se incorpora aquí
+// de forma consciente.
+const _HOME_DEPT_ALLOWED_CARDS = {
+  telecom: new Set([
+    'cardTelecomRacks',
+    'cardPemp',
+    'cardCarretillas',
+    'cardPedidos',
+    'cardCalendario',
+    'cardIncidencias',
+    'cardGaleria',
+    'cardPartes',
+    'cardHerramientas',
+    'cardDocs',
+    'cardPlanos',
+    'cardAlejandraIA',
+    'cardObraDashboard',
+  ]),
+};
+
+function aplicarMenuHomeEspecifico(dept) {
+  const permitidas = _HOME_DEPT_ALLOWED_CARDS[dept];
+  if (!permitidas) return;
+  document.querySelectorAll('#screenHome .module-grid > .module-card').forEach(card => {
+    if (!permitidas.has(card.id)) card.style.display = 'none';
+  });
+}
+
 function setupHomeModules() {
   const s = getSession();
   const dept = s?.departamento;
@@ -6102,6 +6131,8 @@ function setupHomeModules() {
   // Card Alejandra IA: visible para todos los usuarios logados
   const cardAlejIA = document.getElementById('cardAlejandraIA');
   if (cardAlejIA) cardAlejIA.style.display = 'flex';
+  // Telecom no hereda módulos de construcción por pertenecer a la plantilla trade.
+  aplicarMenuHomeEspecifico(dept);
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
   applyModulosConfig();
   applyHomeOrder();
@@ -6424,6 +6455,7 @@ const _HOME_TRADE_MODS = [
   { card: 'cardGaleria',          label: '📷 Galería de fotos' },
   { card: 'cardPartes',           label: '📋 Partes de trabajo' },
   { card: 'cardDocs',             label: '📂 Documentación' },
+  { card: 'cardPlanos',           label: '📐 Planos' },
 ];
 const _SEG_MODS = [
   { key: 'seg_escaner',      label: '📷 Escáner' },
@@ -13019,7 +13051,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.84';
+const APP_VERSION = '8.85';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
