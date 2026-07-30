@@ -4091,7 +4091,8 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
   try {
     // PASO 1: Haiku clasifica el mensaje
-    const clas   = await clasificarConHaiku(env, mensaje);
+    let clas     = await clasificarConHaiku(env, mensaje);
+    clas         = await mantenerContinuidadExperto(env, usuario_id, clas);
     const expert = NEXUS_EXPERTS[clas.experto] || NEXUS_EXPERTS.app;
     const tools  = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
     console.log(`NEXUS: experto=${clas.experto} web=${clas.buscar_web} tools=${tools.map(t=>t.name).join(',')}`);
@@ -4143,7 +4144,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // continuacion si detectamos ese patron.
     if (respAPI.stop_reason !== 'tool_use' && tools.length > 0) {
       const textoPlan = (respAPI.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ');
-      const pareceDiferido = /proceder[eé]\w*\s+a|procedo\s+a|voy\s+a\s+(proceder|generar|crear|usar)|un momento,?\s*por favor|en breve\b|te (proporcionar|mostrar)[eé]\w*|una vez (haya sido|este)\s*(creado|generado)/i.test(textoPlan);
+      const pareceDiferido = /proceder[eé]\w*\s+a|procedo\s+a|voy\s+a\s+(proceder|generar|crear|usar|insertar|registrar|guardar|ejecutar)|un momento,?\s*por favor|en breve\b|te (proporcionar|mostrar)[eé]\w*|una vez (haya sido|este)\s*(creado|generado)|(necesito|tengo que)\s+\w+[^.!?]*\b(espera|un momento|un segundo)\b|dame un (segundo|momento)/i.test(textoPlan);
       if (pareceDiferido) {
         console.log('[NEXUS] plan diferido detectado sin tool_use, forzando continuacion');
         messages.push({ role: 'assistant', content: respAPI.content });
@@ -4229,7 +4230,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
 
   try {
     // PASO 1: Clasificar
-    const clas   = await clasificarConHaiku(env, mensaje);
+    let clas     = await clasificarConHaiku(env, mensaje);
+    clas         = await mantenerContinuidadExperto(env, usuario_id, clas);
     const expert = NEXUS_EXPERTS[clas.experto] || NEXUS_EXPERTS.app;
     const tools  = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
     await send({ type: 'routing', experto: clas.experto, buscar_web: clas.buscar_web, modelo: expert.model });
@@ -4290,7 +4292,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // UNA continuacion pidiendole que ejecute ya la accion anunciada.
     if (respAPI.stop_reason !== 'tool_use' && tools.length > 0) {
       const textoPlan = (respAPI.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ');
-      const pareceDiferido = /proceder[eé]\w*\s+a|procedo\s+a|voy\s+a\s+(proceder|generar|crear|usar)|un momento,?\s*por favor|en breve\b|te (proporcionar|mostrar)[eé]\w*|una vez (haya sido|este)\s*(creado|generado)/i.test(textoPlan);
+      const pareceDiferido = /proceder[eé]\w*\s+a|procedo\s+a|voy\s+a\s+(proceder|generar|crear|usar|insertar|registrar|guardar|ejecutar)|un momento,?\s*por favor|en breve\b|te (proporcionar|mostrar)[eé]\w*|una vez (haya sido|este)\s*(creado|generado)|(necesito|tengo que)\s+\w+[^.!?]*\b(espera|un momento|un segundo)\b|dame un (segundo|momento)/i.test(textoPlan);
       if (pareceDiferido) {
         console.log('[NEXUSStream] plan diferido detectado sin tool_use, forzando continuacion');
         messages.push({ role: 'assistant', content: respAPI.content });
@@ -9553,6 +9555,36 @@ async function clasificarConHaiku(env, mensaje) {
     console.error('ERROR clasificar:', err.message);
     return { experto: 'app', buscar_web: false, query_web: null, source: 'fallback' };
   }
+}
+
+// PROBLEMA-MEMORIA-01 (30/07/2026): Adrián a media tarea registrando PEMPs desde
+// una foto ("Que paso?" tras quedarse Alejandra a medias) — el clasificador solo
+// mira el mensaje suelto, sin memoria de la conversación. Un mensaje corto/ambiguo
+// que en contexto es una continuación de la tarea ("Que paso?", "sigue", "vale",
+// "y los demás?") cae en el experto "simple" (Haiku barato, sin la tool
+// escribir_bd, sin el módulo de registro de datos, con solo 3-4 turnos de
+// historial) y Alejandra pierde el hilo por completo, respondiendo con un saludo
+// genérico en vez de retomar la tarea. Si el turno inmediatamente anterior de
+// este mismo usuario usó un experto "de trabajo" (no "simple") hace poco,
+// seguimos con ese mismo experto en vez de reclasificar a ciegas.
+async function mantenerContinuidadExperto(env, usuario_id, clas) {
+  if (clas.experto !== 'simple' || !usuario_id) return clas;
+  try {
+    const ultimo = await env.DB.prepare(
+      `SELECT parametros, created_at FROM alejandra_logs WHERE usuario_id=? AND accion='chat' ORDER BY created_at DESC LIMIT 1`
+    ).bind(String(usuario_id)).first();
+    if (!ultimo?.created_at) return clas;
+    const minutos = (Date.now() - new Date(ultimo.created_at.replace(' ', 'T') + 'Z').getTime()) / 60000;
+    if (!(minutos >= 0) || minutos > 15) return clas;
+    const expertoPrevio = /^\[(\w+)\]/.exec(ultimo.parametros || '')?.[1];
+    if (expertoPrevio && expertoPrevio !== 'simple' && NEXUS_EXPERTS[expertoPrevio]) {
+      console.log(`[NEXUS] continuidad de experto: "simple"→"${expertoPrevio}" (turno anterior hace ${minutos.toFixed(1)}min)`);
+      return { ...clas, experto: expertoPrevio, source: 'continuidad' };
+    }
+  } catch (err) {
+    console.warn('[NEXUS] error comprobando continuidad de experto:', err.message);
+  }
+  return clas;
 }
 
 // ── Anthropic API ─────────────────────────────────────────────────────────────
