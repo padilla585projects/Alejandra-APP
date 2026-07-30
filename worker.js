@@ -6036,11 +6036,13 @@ export default {
 
       // ── Escaneos remotos móvil→panel: router a Documentos/Galería/Planos/Bobinas ──
       if (path === '/escaneos-remotos' && method === 'GET') return await listarEscaneosRemotos(request, env);
+      if (path === '/escaneos-remotos/albaranes' && method === 'POST') return await subirAlbaranesBobinas(request, env);
       if (path.startsWith('/escaneos-remotos/')) {
         const parts = path.split('/');
         const erId = parseInt(parts[2]);
         if (parts[3] === 'imagen' && method === 'GET') return await getEscaneoRemotoImagen(erId, request, env);
         if (!parts[3] && method === 'PATCH') return await actualizarEscaneoRemoto(erId, request, env);
+        if (!parts[3] && method === 'DELETE') return await eliminarAlbaranBobinas(erId, request, env);
       }
 
       // ── Chat interno (NEW-08) ─────────────────────────────────────────────
@@ -15043,6 +15045,16 @@ async function ensureEscaneosRemotosTable(env) {
       created_at      TEXT DEFAULT (datetime('now'))
     )`).run();
   } catch {} // ya existe
+  // ARCHIVO-ALBARANES-01: metadatos editables para que los escaneos y las subidas
+  // manuales compartan un único archivo privado en R2.
+  for (const sql of [
+    'ALTER TABLE escaneos_remotos ADD COLUMN archivo_nombre TEXT',
+    'ALTER TABLE escaneos_remotos ADD COLUMN mime_type TEXT',
+    'ALTER TABLE escaneos_remotos ADD COLUMN tamano_bytes INTEGER',
+    'ALTER TABLE escaneos_remotos ADD COLUMN num_albaran TEXT',
+  ]) {
+    try { await env.DB.prepare(sql).run(); } catch {}
+  }
 }
 
 // Fix ESCANEO-ROUTER (23/07/2026): hasta ahora "Escanear con el móvil" (los 6 tipos del
@@ -15167,14 +15179,29 @@ async function listarEscaneosRemotos(request, env) {
   const url = new URL(request.url);
   const estado  = url.searchParams.get('estado');
   const subtipo = url.searchParams.get('subtipo');
-  let q = 'SELECT * FROM escaneos_remotos WHERE empresa_id = ?';
+  const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get('limit')) || 100));
+  let q = `SELECT er.id, er.empresa_id, er.obra_id, er.usuario_id, er.subtipo,
+                  er.contexto, er.estado, er.datos_extraidos, er.destino_tipo,
+                  er.destino_id, er.created_at, er.archivo_nombre, er.mime_type,
+                  er.tamano_bytes, er.num_albaran,
+                  u.nombre AS usuario_nombre, o.nombre AS obra_nombre
+           FROM escaneos_remotos er
+           LEFT JOIN usuarios u ON u.id = er.usuario_id AND u.empresa_id = er.empresa_id
+           LEFT JOIN obras o ON o.id = er.obra_id AND o.empresa_id = er.empresa_id
+           WHERE er.empresa_id = ?`;
   const binds = [s.empresa_id];
-  if ((s.obra_id || s.obraId) && !s.isSuperadmin && !s.isEmpresaAdmin) { q += ' AND obra_id = ?'; binds.push(s.obra_id || s.obraId); }
-  if (estado)  { q += ' AND estado = ?';  binds.push(estado); }
-  if (subtipo) { q += ' AND subtipo = ?'; binds.push(subtipo); }
-  q += ' ORDER BY created_at DESC LIMIT 100';
+  if ((s.obra_id || s.obraId) && !s.isSuperadmin && !s.isEmpresaAdmin) { q += ' AND er.obra_id = ?'; binds.push(s.obra_id || s.obraId); }
+  if (estado)  { q += ' AND er.estado = ?';  binds.push(estado); }
+  if (subtipo) { q += ' AND er.subtipo = ?'; binds.push(subtipo); }
+  q += ' ORDER BY er.created_at DESC LIMIT ?';
+  binds.push(limit);
   const rows = await env.DB.prepare(q).bind(...binds).all();
   return json({ ok: true, items: rows.results || [] });
+}
+
+function tieneAccesoEscaneoObra(s, obraId) {
+  const obraScope = s.obra_id || s.obraId;
+  return !obraScope || s.isSuperadmin || s.isEmpresaAdmin || Number(obraId) === Number(obraScope);
 }
 
 async function getEscaneoRemotoImagen(id, request, env) {
@@ -15182,11 +15209,77 @@ async function getEscaneoRemotoImagen(id, request, env) {
   if (!s?.empresa_id) return err('No autorizado', 403);
   const meta = await env.DB.prepare('SELECT * FROM escaneos_remotos WHERE id = ? AND empresa_id = ?').bind(id, s.empresa_id).first();
   if (!meta) return err('Escaneo no encontrado', 404);
+  if (!tieneAccesoEscaneoObra(s, meta.obra_id)) return err('Sin permisos para esta obra', 403);
   const obj = await env.FILES.get(meta.r2_key);
   if (!obj) return err('Imagen no disponible', 404);
+  const mime = meta.mime_type || obj.httpMetadata?.contentType || 'image/jpeg';
   return new Response(obj.body, {
-    headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+    headers: { 'Content-Type': mime, 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
   });
+}
+
+function puedeGestionarAlbaranes(s) {
+  return hasRole(s, 'oficina', 'empresa_admin', 'superadmin', 'desarrollador');
+}
+
+async function subirAlbaranesBobinas(request, env) {
+  const s = await getAuth(request, env);
+  if (!s?.empresa_id) return err('No autorizado', 403);
+  if (!puedeGestionarAlbaranes(s)) return err('Sin permisos', 403);
+  await ensureEscaneosRemotosTable(env);
+
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const archivos = form.getAll('archivos').filter(f => f?.size);
+  if (!archivos.length) return err('Selecciona al menos un archivo', 400);
+  if (archivos.length > 10) return err('Máximo 10 archivos por subida', 400);
+
+  const permitidos = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+  const total = archivos.reduce((sum, f) => sum + Number(f.size || 0), 0);
+  if (total > 60 * 1024 * 1024) return err('Los archivos superan 60 MB en conjunto', 413);
+  for (const archivo of archivos) {
+    if (!permitidos.has(archivo.type)) return err(`Formato no permitido: ${archivo.name}`, 415);
+    if (archivo.size > 20 * 1024 * 1024) return err(`${archivo.name}: máximo 20 MB`, 413);
+  }
+
+  let obraId = parseInt(form.get('obra_id'));
+  if (!Number.isFinite(obraId)) obraId = s.obra_id || s.obraId || null;
+  if (!tieneAccesoEscaneoObra(s, obraId)) return err('Sin permisos para esta obra', 403);
+  if (obraId) {
+    const obra = await env.DB.prepare('SELECT id FROM obras WHERE id=? AND empresa_id=?').bind(obraId, s.empresa_id).first();
+    if (!obra) return err('Obra no válida', 400);
+  }
+  const numAlbaran = String(form.get('num_albaran') || '').trim().slice(0, 100) || null;
+  const contextoBase = String(form.get('contexto') || '').trim().slice(0, 300) || null;
+  const usuarioId = String(s.usuario_id || s.nombre || '');
+  const guardados = [];
+
+  for (const archivo of archivos) {
+    const nombre = String(archivo.name || 'albaran').slice(0, 240);
+    const extension = archivo.type === 'application/pdf' ? 'pdf'
+      : archivo.type === 'image/png' ? 'png'
+      : archivo.type === 'image/webp' ? 'webp' : 'jpg';
+    const r2Key = `e${s.empresa_id}/escaneos/${obraId || 0}/${Date.now()}_${crypto.randomUUID()}_bobina.${extension}`;
+    await env.FILES.put(r2Key, archivo.stream(), {
+      httpMetadata: { contentType: archivo.type },
+    });
+    try {
+      const result = await env.DB.prepare(
+        `INSERT INTO escaneos_remotos
+          (empresa_id, obra_id, usuario_id, subtipo, contexto, r2_key, estado,
+           archivo_nombre, mime_type, tamano_bytes, num_albaran)
+         VALUES (?,?,?,?,?,?,'archivado',?,?,?,?)`
+      ).bind(
+        s.empresa_id, obraId, usuarioId, 'bobina', contextoBase || nombre,
+        r2Key, nombre, archivo.type, archivo.size, numAlbaran
+      ).run();
+      guardados.push({ id: result.meta?.last_row_id, nombre });
+    } catch (error) {
+      await env.FILES.delete(r2Key);
+      throw error;
+    }
+  }
+  return json({ ok: true, guardados });
 }
 
 async function actualizarEscaneoRemoto(id, request, env) {
@@ -15194,17 +15287,55 @@ async function actualizarEscaneoRemoto(id, request, env) {
   if (!s?.empresa_id) return err('No autorizado', 403);
   // Office admite usuarios cuyo rol principal es operario pero que tienen "oficina"
   // en roles_extra. Comprobar solo s.rol los dejaba ver el pendiente, pero no descartarlo.
-  if (!hasRole(s, 'oficina', 'superadmin', 'desarrollador')) return err('Sin permisos', 403);
+  if (!puedeGestionarAlbaranes(s)) return err('Sin permisos', 403);
+  const actual = await env.DB.prepare(
+    'SELECT obra_id FROM escaneos_remotos WHERE id=? AND empresa_id=?'
+  ).bind(id, s.empresa_id).first();
+  if (!actual) return err('Escaneo no encontrado', 404);
+  if (!tieneAccesoEscaneoObra(s, actual.obra_id)) return err('Sin permisos para esta obra', 403);
   const b = await request.json().catch(() => ({}));
-  const campos = ['estado', 'destino_tipo', 'destino_id'];
+  const campos = ['estado', 'destino_tipo', 'destino_id', 'contexto', 'obra_id', 'archivo_nombre', 'num_albaran'];
   const sets = []; const vals = [];
-  for (const c of campos) { if (b[c] !== undefined) { sets.push(`${c}=?`); vals.push(b[c]); } }
+  for (const c of campos) {
+    if (b[c] === undefined) continue;
+    let valor = b[c];
+    if (c === 'contexto' || c === 'archivo_nombre') valor = String(valor || '').trim().slice(0, c === 'contexto' ? 300 : 240) || null;
+    if (c === 'num_albaran') valor = String(valor || '').trim().slice(0, 100) || null;
+    if (c === 'obra_id') {
+      valor = parseInt(valor);
+      if (!Number.isFinite(valor)) valor = null;
+      if (!tieneAccesoEscaneoObra(s, valor)) return err('Sin permisos para esta obra', 403);
+      if (valor) {
+        const obra = await env.DB.prepare('SELECT id FROM obras WHERE id=? AND empresa_id=?').bind(valor, s.empresa_id).first();
+        if (!obra) return err('Obra no válida', 400);
+      }
+    }
+    sets.push(`${c}=?`);
+    vals.push(valor);
+  }
   if (!sets.length) return err('Sin campos', 400);
   vals.push(id, s.empresa_id);
   const result = await env.DB.prepare(
     `UPDATE escaneos_remotos SET ${sets.join(',')} WHERE id=? AND empresa_id=?`
   ).bind(...vals).run();
   if (!result.meta?.changes) return err('Escaneo no encontrado', 404);
+  return json({ ok: true });
+}
+
+async function eliminarAlbaranBobinas(id, request, env) {
+  const s = await getAuth(request, env);
+  if (!s?.empresa_id) return err('No autorizado', 403);
+  if (!puedeGestionarAlbaranes(s)) return err('Sin permisos', 403);
+  if (!Number.isFinite(id)) return err('Albarán no válido', 400);
+  await ensureEscaneosRemotosTable(env);
+  const meta = await env.DB.prepare(
+    `SELECT id, r2_key, obra_id FROM escaneos_remotos
+     WHERE id=? AND empresa_id=? AND subtipo='bobina'`
+  ).bind(id, s.empresa_id).first();
+  if (!meta) return err('Albarán no encontrado', 404);
+  if (!tieneAccesoEscaneoObra(s, meta.obra_id)) return err('Sin permisos para esta obra', 403);
+  if (meta.r2_key) await env.FILES.delete(meta.r2_key);
+  await env.DB.prepare('DELETE FROM escaneos_remotos WHERE id=? AND empresa_id=?').bind(id, s.empresa_id).run();
   return json({ ok: true });
 }
 

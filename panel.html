@@ -172,6 +172,20 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .btn-danger:hover{background:rgba(239,68,68,.25)}
 .btn-sm{padding:5px 10px;font-size:11px}
 
+/* Archivo privado de albaranes dentro del inventario de bobinas */
+.bobinas-tabs{display:flex;gap:6px;margin:14px 0;border-bottom:1px solid var(--border);padding-bottom:8px}
+.bobinas-tab{border:1px solid var(--border);background:var(--surface2);color:var(--muted);border-radius:8px;padding:8px 14px;cursor:pointer;font:600 12px 'Poppins',sans-serif}
+.bobinas-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.albaranes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px}
+.albaran-card{border:1px solid var(--border);border-radius:12px;background:var(--surface2);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.albaran-thumb{height:170px;background:var(--surface);display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--border);overflow:hidden}
+.albaran-thumb img{width:100%;height:100%;object-fit:cover}
+.albaran-body{padding:12px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.albaran-title{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.albaran-meta{font-size:11px;color:var(--muted);line-height:1.55}
+.albaran-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
+@media(max-width:600px){.albaranes-grid{grid-template-columns:1fr}.bobinas-tabs{position:sticky;top:0;background:var(--bg);z-index:2}}
+
 /* EDITOR PLANOS */
 .editor-tool-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap}
 .editor-tool-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -1543,6 +1557,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div class="page" id="pageBobinas">
         <div class="page-title">⚡ Bobinas de cable</div>
         <div class="page-sub">Inventario de bobinas eléctricas</div>
+        <div class="bobinas-tabs" role="tablist" aria-label="Secciones de bobinas">
+          <button class="bobinas-tab active" id="bobTabInventario" role="tab" aria-selected="true" onclick="mostrarTabBobinas('inventario')">⚡ Inventario</button>
+          <button class="bobinas-tab" id="bobTabAlbaranes" role="tab" aria-selected="false" onclick="mostrarTabBobinas('albaranes')">🧾 Albaranes</button>
+        </div>
+        <div id="bobinasInventarioView">
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchBobinas" placeholder="🔍 Buscar código, tipo, proveedor o albarán...">
           <select class="tbl-search" id="filtroDepBobinas" style="min-width:150px" onchange="cargarBobinas()">
@@ -1590,6 +1609,20 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" style="background:#0ea5e9;color:#fff;border-color:#0ea5e9" onclick="abrirHistorialBobinas()">📜 Historial</button>
         </div>
         <div class="tbl-wrap"><div id="tblBobinas"></div></div>
+        </div>
+        <div id="bobinasAlbaranesView" style="display:none">
+          <div class="tbl-toolbar">
+            <input class="tbl-search" id="buscarAlbaranesBobinas" placeholder="🔍 Buscar albarán, archivo, obra o bobina..." oninput="renderAlbaranesBobinas()">
+            <button class="btn btn-primary" onclick="document.getElementById('inputSubirAlbaranesBobinas').click()">⬆ Subir albaranes</button>
+            <input id="inputSubirAlbaranesBobinas" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" style="display:none" onchange="subirAlbaranesBobinas(this)">
+            <button class="btn btn-secondary" onclick="cargarAlbaranesBobinas()">🔄 Actualizar</button>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">
+            Archivo privado de fotos y PDF. Puedes ver, editar, descargar, compartir o eliminar cada albarán.
+          </div>
+          <div id="albaranesBobinasEstado" style="font-size:12px;color:var(--muted);padding:20px 0">Abre esta pestaña para cargar el archivo.</div>
+          <div class="albaranes-grid" id="albaranesBobinasGrid"></div>
+        </div>
       </div>
 
       <!-- ARCHIVO-BOBINAS-01 (25/07/2026): historial completo de bobinas (altas +
@@ -13244,6 +13277,259 @@ async function cargarHistorialBobinas() {
   });
 }
 
+// ARCHIVO-ALBARANES-01: segunda pestaña dentro de Bobinas. Las fotos siguen privadas
+// en R2; el navegador las solicita con la sesión activa para ver/descargar/compartir.
+let _albaranesBobinas = [];
+let _albaranPreviewUrl = null;
+
+function mostrarTabBobinas(tab) {
+  const esAlbaranes = tab === 'albaranes';
+  document.getElementById('bobinasInventarioView').style.display = esAlbaranes ? 'none' : '';
+  document.getElementById('bobinasAlbaranesView').style.display = esAlbaranes ? '' : 'none';
+  const btnInv = document.getElementById('bobTabInventario');
+  const btnAlb = document.getElementById('bobTabAlbaranes');
+  btnInv.classList.toggle('active', !esAlbaranes);
+  btnAlb.classList.toggle('active', esAlbaranes);
+  btnInv.setAttribute('aria-selected', String(!esAlbaranes));
+  btnAlb.setAttribute('aria-selected', String(esAlbaranes));
+  if (esAlbaranes) cargarAlbaranesBobinas();
+  else cargarBobinas();
+}
+
+function _albaranDatosExtraidos(item) {
+  try { return JSON.parse(item.datos_extraidos || '{}') || {}; } catch { return {}; }
+}
+
+function _albaranNombre(item) {
+  return item.contexto || item.archivo_nombre || `Albarán escaneado #${item.id}`;
+}
+
+function _albaranNombreDescarga(item) {
+  const original = item.archivo_nombre || _albaranNombre(item);
+  const ext = item.mime_type === 'application/pdf' ? '.pdf'
+    : item.mime_type === 'image/png' ? '.png'
+    : item.mime_type === 'image/webp' ? '.webp' : '.jpg';
+  const limpio = String(original).replace(/[\\/:*?"<>|]+/g, '-').trim() || `albaran-${item.id}`;
+  return /\.[a-z0-9]{2,5}$/i.test(limpio) ? limpio : limpio + ext;
+}
+
+async function cargarAlbaranesBobinas() {
+  const estado = document.getElementById('albaranesBobinasEstado');
+  if (estado) { estado.style.display = ''; estado.textContent = '⏳ Cargando albaranes…'; }
+  const r = await api('/escaneos-remotos?subtipo=bobina&limit=500');
+  if (!r.ok) {
+    if (estado) estado.textContent = '❌ ' + (r.error || 'No se pudo cargar el archivo');
+    return;
+  }
+  _albaranesBobinas = r.items || [];
+  renderAlbaranesBobinas();
+}
+
+function renderAlbaranesBobinas() {
+  const grid = document.getElementById('albaranesBobinasGrid');
+  const estado = document.getElementById('albaranesBobinasEstado');
+  if (!grid || !estado) return;
+  const q = (document.getElementById('buscarAlbaranesBobinas')?.value || '').trim().toLowerCase();
+  const lista = _albaranesBobinas.filter(item => {
+    const datos = _albaranDatosExtraidos(item);
+    const bobinas = Array.isArray(datos.bobinas) ? datos.bobinas : [];
+    const texto = [
+      _albaranNombre(item), item.archivo_nombre, item.num_albaran, item.obra_nombre,
+      item.usuario_nombre, ...bobinas.flatMap(b => [b.codigo, b.num_albaran, b.proveedor])
+    ].filter(Boolean).join(' ').toLowerCase();
+    return !q || texto.includes(q);
+  });
+  estado.style.display = lista.length ? 'none' : '';
+  estado.textContent = _albaranesBobinas.length ? 'No hay resultados para esta búsqueda.' : 'Todavía no hay albaranes guardados.';
+  grid.innerHTML = lista.map(item => {
+    const datos = _albaranDatosExtraidos(item);
+    const bobinas = Array.isArray(datos.bobinas) ? datos.bobinas : [];
+    const nums = [...new Set([item.num_albaran, datos.num_albaran, ...bobinas.map(b => b.num_albaran)].filter(Boolean))];
+    const codigos = bobinas.map(b => b.codigo).filter(Boolean);
+    const mime = item.mime_type || 'image/jpeg';
+    const imgUrl = API + '/escaneos-remotos/' + Number(item.id) + '/imagen?token=' + encodeURIComponent(TOKEN);
+    const thumb = mime === 'application/pdf'
+      ? '<div style="font-size:58px">📄</div>'
+      : `<img loading="lazy" src="${imgUrl}" alt="Vista previa del albarán" onerror="this.parentElement.innerHTML='<div style=&quot;font-size:42px&quot;>🧾</div>'">`;
+    const estadoMeta = {
+      confirmado: ['ok', 'Importado'],
+      archivado: ['info', 'Archivado'],
+      pendiente: ['warn', 'Pendiente de revisión'],
+      descartado: ['muted', 'Descartado'],
+    }[item.estado] || ['muted', item.estado || 'Guardado'];
+    return `
+      <article class="albaran-card">
+        <button class="albaran-thumb" onclick="verAlbaranBobinas(${Number(item.id)})" style="border-left:0;border-right:0;border-top:0;cursor:pointer;width:100%" title="Abrir albarán">${thumb}</button>
+        <div class="albaran-body">
+          <div class="albaran-title" title="${escHtml(_albaranNombre(item))}">🧾 ${escHtml(_albaranNombre(item))}</div>
+          <div><span class="badge badge-${estadoMeta[0]}">${escHtml(estadoMeta[1])}</span></div>
+          <div class="albaran-meta">
+            ${nums.length ? `<div><b>Nº:</b> ${nums.map(escHtml).join(', ')}</div>` : ''}
+            <div><b>Fecha:</b> ${fmtFechaHora(item.created_at)}</div>
+            <div><b>Obra:</b> ${escHtml(item.obra_nombre || 'Sin obra')}</div>
+            <div><b>Subido por:</b> ${escHtml(item.usuario_nombre || item.usuario_id || '—')}</div>
+            ${codigos.length ? `<div><b>Bobinas:</b> ${codigos.slice(0, 5).map(escHtml).join(', ')}${codigos.length > 5 ? ` y ${codigos.length - 5} más` : ''}</div>` : ''}
+          </div>
+          <div class="albaran-actions">
+            <button class="btn btn-secondary btn-sm" onclick="verAlbaranBobinas(${Number(item.id)})">👁 Ver</button>
+            <button class="btn btn-secondary btn-sm" onclick="editarAlbaranBobinas(${Number(item.id)})">✏️ Editar</button>
+            <button class="btn btn-secondary btn-sm" onclick="descargarAlbaranBobinas(${Number(item.id)})">⬇ Descargar</button>
+            <button class="btn btn-secondary btn-sm" onclick="compartirAlbaranBobinas(${Number(item.id)})">📤 Compartir</button>
+            <button class="btn btn-danger btn-sm" onclick="eliminarAlbaranBobinas(${Number(item.id)})">🗑 Eliminar</button>
+          </div>
+        </div>
+      </article>`;
+  }).join('');
+}
+
+async function _obtenerArchivoAlbaran(id) {
+  const item = _albaranesBobinas.find(x => Number(x.id) === Number(id));
+  if (!item) throw new Error('Albarán no encontrado');
+  const res = await apiRaw(`/escaneos-remotos/${Number(id)}/imagen`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Error ${res.status}`);
+  }
+  return { item, blob: await res.blob() };
+}
+
+async function verAlbaranBobinas(id) {
+  try {
+    const { item, blob } = await _obtenerArchivoAlbaran(id);
+    if (_albaranPreviewUrl) URL.revokeObjectURL(_albaranPreviewUrl);
+    _albaranPreviewUrl = URL.createObjectURL(blob);
+    document.getElementById('albaranPreviewOverlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'albaranPreviewOverlay';
+    overlay.className = 'modal-overlay open';
+    const visor = (item.mime_type || blob.type) === 'application/pdf'
+      ? `<iframe src="${_albaranPreviewUrl}" title="Albarán PDF" style="width:100%;height:72vh;border:0;background:#fff"></iframe>`
+      : `<img src="${_albaranPreviewUrl}" alt="Albarán" style="display:block;max-width:100%;max-height:72vh;margin:auto;object-fit:contain">`;
+    overlay.innerHTML = `<div class="modal" style="max-width:1000px;width:96%">
+      <div class="modal-header">
+        <div class="modal-title">${escHtml(_albaranNombre(item))}</div>
+        <button class="modal-close" onclick="cerrarPreviewAlbaran()">×</button>
+      </div>
+      <div class="modal-body" style="padding:10px;text-align:center">${visor}</div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="descargarAlbaranBobinas(${Number(id)})">⬇ Descargar</button>
+        <button class="btn btn-primary" onclick="compartirAlbaranBobinas(${Number(id)})">📤 Compartir</button>
+      </div>
+    </div>`;
+    overlay.onclick = e => { if (e.target === overlay) cerrarPreviewAlbaran(); };
+    document.body.appendChild(overlay);
+  } catch (e) { toast('❌ ' + e.message, 'err'); }
+}
+
+function cerrarPreviewAlbaran() {
+  document.getElementById('albaranPreviewOverlay')?.remove();
+  if (_albaranPreviewUrl) URL.revokeObjectURL(_albaranPreviewUrl);
+  _albaranPreviewUrl = null;
+}
+
+async function descargarAlbaranBobinas(id) {
+  try {
+    const { item, blob } = await _obtenerArchivoAlbaran(id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = _albaranNombreDescarga(item);
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast('✅ Descarga preparada', 'ok');
+  } catch (e) { toast('❌ ' + e.message, 'err'); }
+}
+
+async function compartirAlbaranBobinas(id) {
+  try {
+    const { item, blob } = await _obtenerArchivoAlbaran(id);
+    const file = new File([blob], _albaranNombreDescarga(item), { type: blob.type || item.mime_type || 'image/jpeg' });
+    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+      await navigator.share({ title: _albaranNombre(item), text: item.num_albaran ? `Albarán ${item.num_albaran}` : 'Albarán de bobinas', files: [file] });
+      return;
+    }
+    await descargarAlbaranBobinas(id);
+    toast('Este equipo no permite compartir archivos directamente; se ha descargado para que puedas adjuntarlo.', 'info');
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('❌ No se pudo compartir: ' + e.message, 'err');
+  }
+}
+
+function editarAlbaranBobinas(id) {
+  const item = _albaranesBobinas.find(x => Number(x.id) === Number(id));
+  if (!item) return;
+  const obras = window._obrasPanel || [];
+  abrirModal('Editar albarán', `
+    <div class="form-group"><div class="form-label">Nombre o descripción</div>
+      <input class="form-input" id="mAlbContexto" value="${escHtml(_albaranNombre(item))}">
+    </div>
+    <div class="form-group"><div class="form-label">Nº de albarán</div>
+      <input class="form-input" id="mAlbNumero" value="${escHtml(item.num_albaran || '')}" placeholder="Opcional">
+    </div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-input" id="mAlbObra">
+        <option value="">Sin obra</option>
+        ${obras.map(o => `<option value="${Number(o.id)}"${Number(o.id)===Number(item.obra_id)?' selected':''}>${escHtml(o.nombre)}</option>`).join('')}
+      </select>
+    </div>`, async () => {
+      const r = await api(`/escaneos-remotos/${Number(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          contexto: document.getElementById('mAlbContexto').value,
+          num_albaran: document.getElementById('mAlbNumero').value,
+          obra_id: document.getElementById('mAlbObra').value || null,
+        })
+      });
+      if (!r.ok) { toast('❌ ' + (r.error || 'No se pudo editar'), 'err'); return; }
+      cerrarModal();
+      toast('✅ Albarán actualizado', 'ok');
+      cargarAlbaranesBobinas();
+    });
+}
+
+async function eliminarAlbaranBobinas(id) {
+  const item = _albaranesBobinas.find(x => Number(x.id) === Number(id));
+  if (!item || !confirm(`¿Eliminar "${_albaranNombre(item)}"?\n\nSe borrarán definitivamente el archivo y su registro.`)) return;
+  const r = await api(`/escaneos-remotos/${Number(id)}`, { method: 'DELETE' });
+  if (!r.ok) { toast('❌ ' + (r.error || 'No se pudo eliminar'), 'err'); return; }
+  _albaranesBobinas = _albaranesBobinas.filter(x => Number(x.id) !== Number(id));
+  renderAlbaranesBobinas();
+  toast('✅ Albarán eliminado', 'ok');
+}
+
+function subirAlbaranesBobinas(input) {
+  const archivos = Array.from(input.files || []).slice(0, 10);
+  input.value = '';
+  if (!archivos.length) return;
+  const fd = new FormData();
+  archivos.forEach(f => fd.append('archivos', f));
+  const obraId = document.getElementById('filtroObraBobinas')?.value || SESSION?.obra_id || '';
+  if (obraId) fd.append('obra_id', obraId);
+  const estado = document.getElementById('albaranesBobinasEstado');
+  estado.style.display = '';
+  estado.textContent = `⏳ Enviando ${archivos.length} archivo(s)… 0 %`;
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', API + '/escaneos-remotos/albaranes');
+  if (TOKEN) xhr.setRequestHeader('X-Token', TOKEN);
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) estado.textContent = `⏳ Enviando ${archivos.length} archivo(s)… ${Math.round(e.loaded * 100 / e.total)} %`;
+  };
+  xhr.onerror = () => { estado.textContent = '❌ No se pudieron enviar los archivos'; toast('Comprueba la conexión y vuelve a intentarlo', 'err'); };
+  xhr.ontimeout = () => { estado.textContent = '❌ La subida tardó demasiado'; toast('La subida agotó el tiempo de espera', 'err'); };
+  xhr.timeout = 120000;
+  xhr.onload = async () => {
+    let data = {};
+    try { data = JSON.parse(xhr.responseText || '{}'); } catch {}
+    if (xhr.status < 200 || xhr.status >= 300 || !data.ok) {
+      estado.textContent = '❌ ' + (data.error || `Error ${xhr.status}`);
+      toast(estado.textContent, 'err');
+      return;
+    }
+    toast(`✅ ${data.guardados?.length || archivos.length} albarán(es) guardados`, 'ok');
+    await cargarAlbaranesBobinas();
+  };
+  xhr.send(fd);
+}
+
 // SCAN-02: modal único por bobina para cambiar longitud/estado, y devolver con el flujo
 // correcto (Devuelto por + notas, vía POST /bobinas/:codigo/devolver) en vez del editor de
 // celda que nunca guardaba nada. Pedido explícitamente por Adrián: "quiero un modal en el
@@ -18344,7 +18630,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.80';
+const PANEL_APP_VERSION = '8.81';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

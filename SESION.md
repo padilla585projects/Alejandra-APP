@@ -1,7 +1,17 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.80.
+**Última actualización:** 30/07/2026 — v8.81.
+
+### v8.81 — archivo de albaranes dentro de Bobinas
+
+- La pantalla Bobinas tiene dos pestañas: `Inventario` y `Albaranes`.
+- `Albaranes` reúne los escaneos remotos de bobinas ya existentes y admite subidas manuales de JPG, PNG, WebP y PDF (hasta 10 archivos, 20 MB por archivo y 60 MB por lote).
+- Cada ficha muestra miniatura, fecha, usuario, obra, estado, números de albarán y códigos de bobina extraídos.
+- Acciones disponibles: ver en grande, editar nombre/número/obra, descargar, compartir mediante el menú nativo del dispositivo y eliminar.
+- Eliminar borra de forma definitiva tanto el objeto privado de R2 como el registro D1, siempre limitado a empresa/obra y a usuarios autorizados de Office.
+- El archivo sigue siendo privado: las vistas y descargas pasan por el Worker con sesión autenticada; no se publica el bucket R2.
+- La subida muestra porcentaje real de transferencia y un resultado visible de éxito o error.
 
 ### v8.80 — opciones reales por bobina en la revisión
 
