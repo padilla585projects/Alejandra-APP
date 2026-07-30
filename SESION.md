@@ -1,7 +1,14 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.83.
+**Última actualización:** 30/07/2026 — v8.84.
+
+### v8.84 — configuración de departamentos unificada
+
+- Eliminada la sección antigua `Departamentos activos`, que duplicaba los mismos interruptores de `Departamentos y submódulos` y podía quedar visualmente desincronizada.
+- La empresa tiene ahora una sola sección: `Departamentos activos y submódulos`. Desde ella se activa cada departamento y se eligen sus tarjetas internas.
+- Corregido el guardado unificado, que enviaba el nombre de empresa vacío y devolvía `Falta el nombre de la empresa`.
+- La caché web/PWA sube a v8.84. Telecom permanece activo para Edison Montajes.
 
 ### v8.83 — departamento Teleco: racks y cableado completo
 

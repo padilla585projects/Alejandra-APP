@@ -4,6 +4,8 @@
 Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+ACTUALIZACIÓN v8.84 (30/07/2026): unificada la configuración duplicada de departamentos de Mi Empresa. Se elimina el bloque antiguo "Departamentos activos" y queda una única sección "Departamentos activos y submódulos", que controla tanto la visibilidad del departamento como sus tarjetas internas. Corregido además el guardado que enviaba vacío el nombre de empresa y mostraba "Falta el nombre de la empresa". Telecom permanece activo para Edison Montajes. Caché renovada a v8.84.
+
 ACTUALIZACIÓN v8.83 (30/07/2026): departamento Teleco terminado. Nueva gestión de racks y cableado en PWA y Office con jerarquía obra → IDF → rack → patch panel → puertos; altas, edición, borrado protegido, estado libre/ocupado, destino, etiqueta, categoría, notas e informe imprimible por rack. El Worker valida empresa, obra asignada y parentesco completo; técnicos Teleco pueden documentar y los borrados quedan para responsables. Índices únicos de D1 aplicados en producción. Caché web/PWA renovada a v8.83. Ver SESION.md.
 
 ACTUALIZACIÓN v8.82 (30/07/2026): el archivo de albaranes de Bobinas ya está también en la PWA móvil como cuarta pestaña. Comparte los mismos datos privados de R2/D1 que Office e incluye buscar, subir con progreso, ver imágenes/PDF, editar nombre y número, descargar, compartir y eliminar. La gestión queda disponible para Office, administradores, Encargado, Jefe de obra y Project Manager; la consulta respeta empresa y obra. Caché móvil renovada a v8.82.
