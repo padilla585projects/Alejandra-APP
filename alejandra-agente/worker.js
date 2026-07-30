@@ -10176,6 +10176,45 @@ async function _intentarGeminiVisionFallback(env, messages, systemPrompt, maxTok
   return null;
 }
 
+// Grok (xAI) — API compatible con OpenAI, reutiliza los mismos conversores que
+// ya existen para GPT-4o/OpenRouter. Solo se intenta si XAI_API_KEY está
+// configurada; cualquier fallo cae de vuelta a GPT-4o sin romper el flujo.
+async function _intentarGrokFallback(env, messages, systemPrompt, maxTokens, tools) {
+  try {
+    const toolsOpenAI = _anthropicToolsToOpenAI(tools);
+    const tieneImagenes = messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'image'));
+    const msgs = _agenteMsgsToOpenAI(messages, systemPrompt, tieneImagenes);
+    const resp = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'grok-4', max_tokens: maxTokens || 1024, messages: msgs,
+        ...(toolsOpenAI ? { tools: toolsOpenAI, tool_choice: 'auto' } : {})
+      })
+    });
+    if (!resp.ok) {
+      console.log(`[Fallback] Grok FALLO: HTTP ${resp.status} ${(await resp.text()).slice(0, 200)}`);
+      return null;
+    }
+    const data = await resp.json();
+    const msg = data.choices?.[0]?.message;
+    if (!msg || (!msg.content && !(Array.isArray(msg.tool_calls) && msg.tool_calls.length))) return null;
+    const content = _openAIToolCallsToAnthropicContent(msg, tools);
+    const esToolUse = content.some(b => b.type === 'tool_use');
+    console.log(`[Fallback] Grok OK: ${data.model || 'grok-4'}${esToolUse ? ' (tool_use)' : ''}`);
+    return {
+      content: content.length ? content : [{ type: 'text', text: 'Sin respuesta.' }],
+      stop_reason: esToolUse ? 'tool_use' : 'end_turn',
+      usage: data.usage ? { input_tokens: data.usage.prompt_tokens || 0, output_tokens: data.usage.completion_tokens || 0 } : {},
+      modelo_real: data.model || 'grok-4',
+      proveedor_real: 'xai'
+    };
+  } catch (e) {
+    console.log(`[Fallback] Grok EXCEPCION: ${e.message}`);
+    return null;
+  }
+}
+
 async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools) {
   // ── 0º INTENTO (solo si hay imágenes): Gemini ───────────────────────────────
   const tieneImagenesFallback = messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'image'));
@@ -10184,11 +10223,19 @@ async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools
     if (gemini) return gemini;
   }
 
-  // ── 1º INTENTO: cascada OpenRouter (modelos gratuitos) ──────────────────────
+  // ── 1º INTENTO: Grok (xAI, de pago pero más barato que GPT-4o) — antes que la
+  // cascada gratis a petición de Adrián. Solo si hay clave configurada; si falla
+  // o no está, sigue a OpenRouter gratis sin romper el flujo.
+  if (env.XAI_API_KEY) {
+    const grok = await _intentarGrokFallback(env, messages, systemPrompt, maxTokens, tools);
+    if (grok) return grok;
+  }
+
+  // ── 2º INTENTO: cascada OpenRouter (modelos gratuitos) ──────────────────────
   const gratis = await _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, maxTokens, tools);
   if (gratis) return gratis;
 
-  // ── 2º INTENTO: OpenAI gpt-4o (de pago, último recurso — soporta visión) ───
+  // ── 3º INTENTO: OpenAI gpt-4o (de pago, último recurso — soporta visión) ───
   if (!env.OPENAI_API_KEY) throw new Error('Sin modelos disponibles — OPENROUTER_API_KEY y OPENAI_API_KEY no configuradas');
   const toolsOpenAI = _anthropicToolsToOpenAI(tools);
   const tieneImgsGpt = messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'image'));

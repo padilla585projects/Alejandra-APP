@@ -28,7 +28,9 @@ const PRECIOS_USD = {
   // Antes faltaba: cuando llamarGPT4oFallback() entraba en juego, registrarTokenUso()
   // recibía el nombre del modelo Claude original (no 'gpt-4o'), así que este precio
   // nunca se llegaba a usar y el coste se calculaba mal con el precio de Claude.
-  'gpt-4o':            { in: 2.50,  out: 10.00 }
+  'gpt-4o':            { in: 2.50,  out: 10.00 },
+  // Precio aproximado de grok-4 (xAI) a fecha de este fix -- revisar si xAI cambia tarifas.
+  'grok-4':            { in: 3.00,  out: 15.00 }
 };
 
 // Precios en €/millón de tokens para modelos OpenRouter DE PAGO (sin sufijo ":free").
@@ -63,6 +65,7 @@ function calcularCosteYProveedor(modelo, tokensEntrada, tokensSalida) {
   if (modelo.startsWith('claude')) proveedor = 'anthropic';
   else if (modelo.includes('/') || modelo.endsWith(':free')) proveedor = 'openrouter';
   else if (modelo.startsWith('gpt')) proveedor = 'openai';
+  else if (modelo.startsWith('grok')) proveedor = 'xai';
   else proveedor = 'anthropic';
 
   let coste;
