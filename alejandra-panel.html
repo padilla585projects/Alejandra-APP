@@ -822,9 +822,38 @@ function finalizarTextoStream(texto, bub) {
       setTimeout(() => ofrecerGuia(guia), 200);
     } catch (e) { console.warn('[guia] JSON inválido:', e); }
   }
+  // Opciones pinchables (paridad con index.html/panel.html): Alejandra termina
+  // preguntas de confirmación/elección cerrada con <<OPCIONES: A|B|C>>.
+  let opcionesDetectadas = null;
+  const opcionesMatch = textoLimpio.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
+  if (opcionesMatch) {
+    textoLimpio = textoLimpio.replace(/<<OPCIONES:[^>]+>>\s*$/, '').trim();
+    opcionesDetectadas = opcionesMatch[1].split('|').map(o => o.trim()).filter(Boolean);
+  }
   bub.innerHTML = renderMd(textoLimpio);
   addCopyBtns(bub);
   hablar(textoLimpio);
+  if (opcionesDetectadas && opcionesDetectadas.length) renderOpcionesPinchables(bub, opcionesDetectadas);
+}
+
+function renderOpcionesPinchables(bub, opciones) {
+  const cont = document.createElement('div');
+  cont.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:10px';
+  opciones.forEach(texto => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = texto;
+    btn.style.cssText = 'background:var(--surface2,#1e2d40);border:1px solid var(--accent,#f97316);color:var(--accent,#f97316);border-radius:16px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap';
+    btn.onclick = () => {
+      cont.remove();
+      const input = document.getElementById('chatInput');
+      if (input) { input.value = texto; enviarChat(); }
+    };
+    cont.appendChild(btn);
+  });
+  bub.parentElement ? bub.parentElement.appendChild(cont) : bub.appendChild(cont);
+  const msgs = document.getElementById('chatMsgs');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
 }
 
 async function handleStreamEv(ev, state) {

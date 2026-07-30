@@ -15741,15 +15741,47 @@ async function alejandrEnviar() {
       return;
     }
     const data = await r.json().catch(() => ({}));
+    // Opciones pinchables (paridad con index.html/PWA): Alejandra termina preguntas
+    // de confirmación/elección cerrada con <<OPCIONES: A|B|C>> — se quita del texto
+    // y se pintan como botones que mandan esa opción tal cual.
+    let texto = data.texto || 'Sin respuesta';
+    let opciones = null;
+    const opcionesMatch = texto.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
+    if (opcionesMatch) {
+      texto = texto.replace(/<<OPCIONES:[^>]+>>\s*$/, '').trim();
+      opciones = opcionesMatch[1].split('|').map(o => o.trim()).filter(Boolean);
+    }
     if (cont) {
-      cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'assistant', contenido: data.texto || 'Sin respuesta' }));
+      cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'assistant', contenido: texto }));
       cont.scrollTop = cont.scrollHeight;
+      if (opciones && opciones.length) _alejandraRenderOpciones(cont, opciones);
     }
   } catch (e) {
     document.getElementById(typingId)?.remove();
     console.error('Error enviando mensaje:', e);
     _alejandraMostrarError('Error de conexión. Vuelve a intentarlo.');
   }
+}
+
+// Opciones pinchables (paridad con index.html/PWA) — un botón por opción, que al
+// pulsarlo manda ese texto exacto como si el usuario lo hubiera escrito.
+function _alejandraRenderOpciones(cont, opciones) {
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
+  opciones.forEach(texto => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = texto;
+    btn.style.cssText = 'background:var(--surface2);border:1px solid var(--accent);color:var(--accent);border-radius:16px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap';
+    btn.onclick = () => {
+      div.remove();
+      const input = document.getElementById('alejandrInput');
+      if (input) { input.value = texto; alejandrEnviar(); }
+    };
+    div.appendChild(btn);
+  });
+  cont.appendChild(div);
+  cont.scrollTop = cont.scrollHeight;
 }
 
 // FIX-ALEJANDRA-FAB-01: alert() es una llamada bloqueante — congela toda la pestaña
@@ -18565,7 +18597,11 @@ async function wSend(){
     typing.remove();
     if(!textoAcum){addMsg('bot','Sin respuesta');textoAcum='Sin respuesta';}
     let reply=textoAcum.replace(/<plan>[\\s\\S]*?<\\/plan>/g,'').replace(/<guia>[\\s\\S]*?<\\/guia>/g,'').trim();
+    let wOpciones=null;
+    const wOpcMatch=reply.match(/<<OPCIONES:\\s*([^>]+)>>\\s*$/);
+    if(wOpcMatch){reply=reply.replace(/<<OPCIONES:[^>]+>>\\s*$/,'').trim();wOpciones=wOpcMatch[1].split('|').map(o=>o.trim()).filter(Boolean);}
     if(bubbleEl)bubbleEl.innerHTML=_wEsc(reply).replace(/\\n/g,'<br>');
+    if(wOpciones&&wOpciones.length)_wRenderOpciones(wOpciones);
     _hist.push({role:'user',content:msg},{role:'assistant',content:reply});
     if(_hist.length>20)_hist=_hist.slice(-20);
     try{if(window.opener&&!window.opener.closed)window.opener._aiSyncFromChild({role:'user',content:msg},{role:'assistant',content:reply});}catch(e){}
@@ -18581,6 +18617,19 @@ function addTyping(){
   const b=document.getElementById('wMsgs');
   const d=document.createElement('div'); d.className='ai-msg bot ai-typing';
   d.innerHTML='<span></span><span></span><span></span>'; b.appendChild(d); b.scrollTop=b.scrollHeight; return d;
+}
+function _wRenderOpciones(opciones){
+  const b=document.getElementById('wMsgs');
+  const div=document.createElement('div');
+  div.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
+  opciones.forEach(texto=>{
+    const btn=document.createElement('button');
+    btn.type='button'; btn.textContent=texto;
+    btn.style.cssText='background:#1e2d40;border:1px solid #f97316;color:#f97316;border-radius:16px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap';
+    btn.onclick=()=>{div.remove();const inp=document.getElementById('wInput');if(inp){inp.value=texto;wSend();}};
+    div.appendChild(btn);
+  });
+  b.appendChild(div); b.scrollTop=b.scrollHeight;
 }
 document.getElementById('wInput').focus();
 <\/script></body></html>`);
@@ -18770,7 +18819,16 @@ document.getElementById('wInput').focus();
 
       // Limpiar plan/guia del texto
       let reply = textoAcum.replace(/<plan>[\s\S]*?<\/plan>/g, '').replace(/<guia>[\s\S]*?<\/guia>/g, '').trim();
+
+      // Opciones pinchables (paridad con index.html/PWA y el FAB de este mismo panel.html)
+      const aiOpcMatch = reply.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
+      let aiOpciones = null;
+      if (aiOpcMatch) {
+        reply = reply.replace(/<<OPCIONES:[^>]+>>\s*$/, '').trim();
+        aiOpciones = aiOpcMatch[1].split('|').map(o => o.trim()).filter(Boolean);
+      }
       if (bubbleEl) bubbleEl.innerHTML = _aiEsc(reply).replace(/\n/g, '<br>');
+      if (aiOpciones && aiOpciones.length) _aiRenderOpciones(aiOpciones);
 
       aiHistory.push({ role: 'user', content: msgText });
       aiHistory.push({ role: 'assistant', content: reply });
@@ -18805,6 +18863,26 @@ document.getElementById('wInput').focus();
     box.appendChild(d);
     box.scrollTop = box.scrollHeight;
     return d;
+  }
+
+  function _aiRenderOpciones(opciones) {
+    const box = document.getElementById('aiMessages');
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
+    opciones.forEach(texto => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = texto;
+      btn.style.cssText = 'background:#1e2d40;border:1px solid #f97316;color:#f97316;border-radius:16px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap';
+      btn.onclick = () => {
+        div.remove();
+        const input = document.getElementById('aiInput');
+        if (input) { input.value = texto; window.aiSend(); }
+      };
+      div.appendChild(btn);
+    });
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
   }
 
   // Mostrar botón cuando hay sesión activa
