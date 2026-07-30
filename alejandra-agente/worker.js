@@ -10211,8 +10211,9 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
       return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools);
     }
     // Reintentado (ver fetchAnthropicConReintentos) y sigue fallando: rate limit
-    // (429) o sobrecarga (529/503) → fallback a GPT-4o en vez de propagar el error
-    if (resp.status === 429 || resp.status === 529 || resp.status === 503) {
+    // (429), sobrecarga (529/503) o error interno (500, ej. picos con fotos
+    // adjuntas) → fallback a GPT-4o en vez de propagar el error
+    if (resp.status === 429 || resp.status === 529 || resp.status === 503 || resp.status === 500) {
       return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools);
     }
     throw new Error(`Anthropic ${resp.status}: ${errText.substring(0,200)}`);
@@ -10278,9 +10279,10 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
     const errText = await resp.text();
     const sinCreditos = resp.status === 400 && errText.includes('credit balance is too low');
     // Reintentado (ver fetchAnthropicConReintentos) y sigue fallando: rate limit
-    // (429) o sobrecarga (529/503) → antes esto no tenía fallback en el streaming
-    // y el usuario veía el error crudo a mitad de la respuesta.
-    const rateLimitOSobrecarga = resp.status === 429 || resp.status === 529 || resp.status === 503;
+    // (429), sobrecarga (529/503) o error interno (500, ej. picos con fotos
+    // adjuntas) → antes esto no tenía fallback en el streaming y el usuario
+    // veía el error crudo a mitad de la respuesta.
+    const rateLimitOSobrecarga = resp.status === 429 || resp.status === 529 || resp.status === 503 || resp.status === 500;
     if (sinCreditos || rateLimitOSobrecarga) {
       if (sinCreditos && !_anthropicSinCreditos) {
         _anthropicSinCreditos = true;
