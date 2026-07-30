@@ -4527,6 +4527,96 @@ Si un campo no está claro o no aparece, pon null. El código/matrícula es el c
   });
 }
 
+// ── SCAN DEVOLUCIÓN DE BOBINAS (solo extrae códigos, no da de alta datos completos) ──
+// Adrián/Alberto: pasar el albarán de devolución de bobinas y marcarlas como devueltas
+// directamente, sin el flujo largo de "entrada" (que pide proveedor/tipo_cable/metros).
+// Reutiliza devolverBobina() para cada código, que ya crea-y-marca si no existe.
+async function scanDevolucionBobinas(request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('image');
+  if (!file || !file.size) return err('Falta la imagen', 400);
+  if (file.size > 20 * 1024 * 1024) return err('Imagen demasiado grande (máx 20 MB)', 413);
+
+  const bytes = await file.arrayBuffer();
+  const u8 = new Uint8Array(bytes);
+  let b64 = '';
+  for (let i = 0; i < u8.length; i += 8192) b64 += String.fromCharCode(...u8.slice(i, i + 8192));
+  b64 = btoa(b64);
+
+  const prompt = `Analiza esta imagen de un "ALBARAN DEVOLUCION DE BOBINAS" (formulario con tabla: MATRICULA | N. ALBARAN PROVEEDOR | FABRICANTE DEL CABLE | OBSERVACIONES, mas un campo "PROVEEDOR QUE RECOGE").
+Extrae fila por fila. IMPORTANTE: el numero de albaran es POR FILA, no es uno solo para todo el documento -- cada fila puede tener uno distinto.
+Si la columna OBSERVACIONES de una fila dice algo como "NO ESTA", "no encontrada", "falta" o similar (la bobina NO estaba fisicamente para recoger), inclúyela igualmente pero copia esa observacion literal -- NO la omitas.
+No inventes datos que no veas -- si un campo no aparece, pon null. Responde SOLO con JSON valido sin texto adicional:
+{
+  "proveedor_recoge": "empresa en PROVEEDOR QUE RECOGE, ej TECNOHM, o null",
+  "filas": [
+    { "matricula": "82AGWMG", "num_albaran": "5051213325", "fabricante": null, "observaciones": null },
+    { "matricula": "82A9UG1K", "num_albaran": "5017364", "fabricante": null, "observaciones": "NO ESTA" }
+  ]
+}`;
+  const geminiBody = {
+    contents: [{ parts: [{ inline_data: { mime_type: file.type || 'image/jpeg', data: b64 } }, { text: prompt }] }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+  };
+  const gemResult = await callGemini(env, geminiBody, 'scan-devolucion-bobinas');
+  if (!gemResult.ok) return err(gemResult.error, gemResult.status);
+  const aiJson = gemResult.data;
+
+  const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  logAIUsage(env, {
+    empresa_id, proveedor: 'gemini', modelo: gemResult.model, endpoint: 'scan_devolucion_bobinas',
+    input_tokens: aiJson.usageMetadata?.promptTokenCount || 0,
+    output_tokens: aiJson.usageMetadata?.candidatesTokenCount || 0,
+  });
+
+  const match = texto.match(/\{[\s\S]*\}/);
+  if (!match) return err('La IA no devolvió JSON válido', 502);
+  let data;
+  try { data = JSON.parse(match[0]); }
+  catch (e) { return err('JSON inválido de la IA: ' + e.message, 502); }
+
+  const filasRaw = Array.isArray(data.filas) ? data.filas : [];
+  // Deduplicar por matrícula -- si alguna fila de esa matrícula trae observación de "no está",
+  // prevalece esa (más seguro no marcar como devuelta algo que no se recogió de verdad).
+  const RE_NO_ESTA = /no\s*est[aá]|no\s*encontrad|falta/i;
+  const porMatricula = new Map();
+  for (const f of filasRaw) {
+    const matricula = typeof f.matricula === 'string' ? f.matricula.trim().toUpperCase() : '';
+    if (!matricula) continue;
+    const noEsta = RE_NO_ESTA.test(String(f.observaciones || ''));
+    const previa = porMatricula.get(matricula);
+    if (!previa || (noEsta && !previa.no_esta)) {
+      porMatricula.set(matricula, {
+        codigo: matricula,
+        num_albaran: f.num_albaran || null,
+        fabricante: f.fabricante || null,
+        observaciones: f.observaciones || null,
+        no_esta: noEsta,
+      });
+    }
+  }
+  const filas = [...porMatricula.values()];
+  if (!filas.length) return err('No se detectó ninguna matrícula en la imagen', 502);
+
+  // Comprobar cuáles ya existen en inventario, solo para informar en la pantalla de revisión
+  // (la decisión real de crear-si-no-existe la toma devolverBobina al confirmar cada una).
+  const placeholders = filas.map(() => '?').join(',');
+  const { results: existentes } = await env.DB.prepare(
+    `SELECT codigo, estado FROM bobinas WHERE empresa_id = ? AND codigo IN (${placeholders})`
+  ).bind(empresa_id, ...filas.map(f => f.codigo)).all();
+  const mapaExistentes = new Map(existentes.map(b => [b.codigo, b.estado]));
+
+  return json({
+    ok: true,
+    proveedor_recoge: data.proveedor_recoge || null,
+    filas: filas.map(f => ({ ...f, existe: mapaExistentes.has(f.codigo), estado_actual: mapaExistentes.get(f.codigo) || null }))
+  });
+}
+
 // ── BOBINAS BATCH (importación desde albarán escaneado) ────────────────────
 async function bobinasBatch(request, env, ctx) {
   const { empresa_id, rol, nombre: registradoPor, obraId, departamento } = await getAuth(request, env);
@@ -4621,7 +4711,15 @@ export default {
     // datos, pero desperdicia cuota de cómputo — vector de DoS de bajo coste para
     // el atacante). Se corta con Content-Length ANTES de tocar rutas/DB. Ningún
     // endpoint legítimo de la app envía JSON de más de 2MB (adjuntos van por R2).
-    if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+    // FIX-SCAN-BOBINAS-01 (30/07/2026): este límite se aplicaba también a los
+    // endpoints multipart/form-data que suben fotos directamente en el body
+    // (/scan-bobinas, /scan-devolucion-bobinas) — una foto de móvil normal pesa
+    // 3-6MB, así que llevaba desde el 27/07 rompiendo el escaneo de albaranes en
+    // producción con un 413 silencioso (confirmado con la foto real de Alberto,
+    // 30/07). El riesgo real (JSON gigante hacia D1) no aplica a multipart: esos
+    // endpoints ya validan su propio límite de imagen (20MB) más abajo.
+    if ((method === 'POST' || method === 'PUT' || method === 'PATCH')
+        && !(request.headers.get('Content-Type') || '').includes('multipart/form-data')) {
       const len = parseInt(request.headers.get('Content-Length') || '0', 10);
       if (len > 2 * 1024 * 1024) {
         return err('Payload demasiado grande (máx 2MB).', 413);
@@ -4807,6 +4905,24 @@ export default {
       if (path.startsWith('/bobinas/') && method === 'DELETE') {
         return await eliminarBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env, ctx);
       }
+
+      // ── Telecom: racks/cableado (IDF -> rack -> patch panel -> puerto) ──────
+      if (path === '/telecom/idf'          && method === 'GET')    return await getTelecomIdf(request, env);
+      if (path === '/telecom/idf'          && method === 'POST')   return await crearTelecomIdf(request, env);
+      if (path.startsWith('/telecom/idf/') && method === 'DELETE') return await eliminarTelecomIdf(path.split('/telecom/idf/')[1], request, env);
+
+      if (path === '/telecom/racks'          && method === 'GET')    return await getTelecomRacks(request, env);
+      if (path === '/telecom/racks'          && method === 'POST')   return await crearTelecomRack(request, env);
+      if (path.startsWith('/telecom/racks/') && method === 'DELETE') return await eliminarTelecomRack(path.split('/telecom/racks/')[1], request, env);
+
+      if (path === '/telecom/patch-panels'          && method === 'GET')    return await getTelecomPatchPanels(request, env);
+      if (path === '/telecom/patch-panels'          && method === 'POST')   return await crearTelecomPatchPanel(request, env);
+      if (path.startsWith('/telecom/patch-panels/') && method === 'DELETE') return await eliminarTelecomPatchPanel(path.split('/telecom/patch-panels/')[1], request, env);
+
+      if (path === '/telecom/puertos'          && method === 'GET') return await getTelecomPuertos(request, env);
+      if (path.startsWith('/telecom/puertos/') && method === 'PUT') return await editarTelecomPuerto(path.split('/telecom/puertos/')[1], request, env);
+
+      if (path.startsWith('/telecom/informe/')) return await getTelecomInforme(path.split('/telecom/informe/')[1], request, env);
 
       // ── PEMP ──────────────────────────────────────────────────────────────
       if (path === '/pemp'        && method === 'GET')    return await getPemp(request, env);
@@ -5989,6 +6105,7 @@ export default {
 
       // ── Scan albarán bobinas ─────────────────────────────────────
       if (path === '/scan-bobinas'   && method === 'POST') return await scanBobinas(request, env);
+      if (path === '/scan-devolucion-bobinas' && method === 'POST') return await scanDevolucionBobinas(request, env);
       if (path === '/bobinas/batch'  && method === 'POST') return await bobinasBatch(request, env, ctx);
 
       // ── Modulo Planos Tecnicos ─────────────────────────────────────
@@ -6774,6 +6891,183 @@ async function crearObra(request, env) {
   }
 }
 
+// ── Telecom: racks/cableado ─────────────────────────────────────────────────
+// Jerarquia: obra -> IDF (por planta/ubicacion) -> rack -> patch panel -> puerto.
+// Documenta donde esta conectado cada puerto para entregar un informe al cliente.
+async function getTelecomIdf(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : null;
+  let sql = 'SELECT * FROM telecom_idf WHERE empresa_id = ?';
+  const params = [empresa_id];
+  if (obraId) { sql += ' AND obra_id = ?'; params.push(obraId); }
+  sql += ' ORDER BY nombre';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function crearTelecomIdf(request, env) {
+  const { empresa_id, usuario } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json();
+  const nombre = safeStr(body.nombre).trim();
+  const obraId = body.obra_id ? parseInt(body.obra_id) : null;
+  if (!nombre || !obraId) return err('Faltan campos: nombre, obra_id');
+  const ubicacion = safeStr(body.ubicacion).trim();
+  const notas = safeStr(body.notas).trim();
+  const r = await env.DB.prepare(
+    'INSERT INTO telecom_idf (obra_id, empresa_id, nombre, ubicacion, notas, creado_por) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(obraId, empresa_id, nombre, ubicacion || null, notas || null, safeStr(usuario) || null).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre, ubicacion, obra_id: obraId }, 201);
+}
+
+async function eliminarTelecomIdf(idRaw, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const id = parseInt(idRaw);
+  const racks = await env.DB.prepare('SELECT COUNT(*) as n FROM telecom_racks WHERE idf_id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (racks?.n > 0) return err('Este IDF tiene racks dentro — bórralos primero', 409);
+  const r = await env.DB.prepare('DELETE FROM telecom_idf WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  if (!r.meta.changes) return err('IDF no encontrado', 404);
+  return json({ ok: true });
+}
+
+async function getTelecomRacks(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const idfId = url.searchParams.get('idf_id') ? parseInt(url.searchParams.get('idf_id')) : null;
+  if (!idfId) return err('Falta idf_id');
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM telecom_racks WHERE idf_id = ? AND empresa_id = ? ORDER BY nombre'
+  ).bind(idfId, empresa_id).all();
+  return json(results);
+}
+
+async function crearTelecomRack(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json();
+  const nombre = safeStr(body.nombre).trim();
+  const idfId = body.idf_id ? parseInt(body.idf_id) : null;
+  if (!nombre || !idfId) return err('Faltan campos: nombre, idf_id');
+  const notas = safeStr(body.notas).trim();
+  const r = await env.DB.prepare(
+    'INSERT INTO telecom_racks (idf_id, empresa_id, nombre, notas) VALUES (?, ?, ?, ?)'
+  ).bind(idfId, empresa_id, nombre, notas || null).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre, idf_id: idfId }, 201);
+}
+
+async function eliminarTelecomRack(idRaw, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const id = parseInt(idRaw);
+  const pps = await env.DB.prepare('SELECT COUNT(*) as n FROM telecom_patch_panels WHERE rack_id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (pps?.n > 0) return err('Este rack tiene patch panels dentro — bórralos primero', 409);
+  const r = await env.DB.prepare('DELETE FROM telecom_racks WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  if (!r.meta.changes) return err('Rack no encontrado', 404);
+  return json({ ok: true });
+}
+
+async function getTelecomPatchPanels(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const rackId = url.searchParams.get('rack_id') ? parseInt(url.searchParams.get('rack_id')) : null;
+  if (!rackId) return err('Falta rack_id');
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM telecom_patch_panels WHERE rack_id = ? AND empresa_id = ? ORDER BY nombre'
+  ).bind(rackId, empresa_id).all();
+  return json(results);
+}
+
+async function crearTelecomPatchPanel(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json();
+  const nombre = safeStr(body.nombre).trim();
+  const rackId = body.rack_id ? parseInt(body.rack_id) : null;
+  const numPuertos = body.num_puertos ? parseInt(body.num_puertos) : 24;
+  if (!nombre || !rackId) return err('Faltan campos: nombre, rack_id');
+  if (!(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
+  const r = await env.DB.prepare(
+    'INSERT INTO telecom_patch_panels (rack_id, empresa_id, nombre, num_puertos) VALUES (?, ?, ?, ?)'
+  ).bind(rackId, empresa_id, nombre, numPuertos).run();
+  const patchPanelId = r.meta.last_row_id;
+  // Crear automáticamente los N puertos vacíos — así el técnico entra directo a rellenar,
+  // no tiene que dar de alta puerto a puerto.
+  const stmts = [];
+  for (let n = 1; n <= numPuertos; n++) {
+    stmts.push(env.DB.prepare(
+      'INSERT INTO telecom_puertos (patch_panel_id, empresa_id, numero, estado) VALUES (?, ?, ?, ?)'
+    ).bind(patchPanelId, empresa_id, n, 'libre'));
+  }
+  await env.DB.batch(stmts);
+  return json({ ok: true, id: patchPanelId, nombre, rack_id: rackId, num_puertos: numPuertos }, 201);
+}
+
+async function eliminarTelecomPatchPanel(idRaw, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const id = parseInt(idRaw);
+  await env.DB.prepare('DELETE FROM telecom_puertos WHERE patch_panel_id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  const r = await env.DB.prepare('DELETE FROM telecom_patch_panels WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  if (!r.meta.changes) return err('Patch panel no encontrado', 404);
+  return json({ ok: true });
+}
+
+async function getTelecomPuertos(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const patchPanelId = url.searchParams.get('patch_panel_id') ? parseInt(url.searchParams.get('patch_panel_id')) : null;
+  if (!patchPanelId) return err('Falta patch_panel_id');
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM telecom_puertos WHERE patch_panel_id = ? AND empresa_id = ? ORDER BY numero'
+  ).bind(patchPanelId, empresa_id).all();
+  return json(results);
+}
+
+async function editarTelecomPuerto(idRaw, request, env) {
+  const { empresa_id, usuario } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const id = parseInt(idRaw);
+  const body = await request.json();
+  const destino = safeStr(body.destino).trim();
+  const cableLabel = safeStr(body.cable_label).trim();
+  const categoria = safeStr(body.categoria).trim();
+  const notas = safeStr(body.notas).trim();
+  // Vaciar el puerto explícitamente si mandan destino='' — si no, se infiere ocupado/libre
+  // según si queda algún dato relevante relleno.
+  const estado = (destino || cableLabel) ? 'ocupado' : 'libre';
+  const r = await env.DB.prepare(
+    `UPDATE telecom_puertos SET destino=?, cable_label=?, categoria=?, notas=?, estado=?, actualizado_por=?, updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(destino || null, cableLabel || null, categoria || null, notas || null, estado, safeStr(usuario) || null, id, empresa_id).run();
+  if (!r.meta.changes) return err('Puerto no encontrado', 404);
+  return json({ ok: true, estado });
+}
+
+async function getTelecomInforme(rackIdRaw, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const rackId = parseInt(rackIdRaw);
+  const rack = await env.DB.prepare('SELECT * FROM telecom_racks WHERE id = ? AND empresa_id = ?').bind(rackId, empresa_id).first();
+  if (!rack) return err('Rack no encontrado', 404);
+  const idf = await env.DB.prepare('SELECT * FROM telecom_idf WHERE id = ? AND empresa_id = ?').bind(rack.idf_id, empresa_id).first();
+  const { results: patchPanels } = await env.DB.prepare(
+    'SELECT * FROM telecom_patch_panels WHERE rack_id = ? AND empresa_id = ? ORDER BY nombre'
+  ).bind(rackId, empresa_id).all();
+  for (const pp of patchPanels) {
+    const { results: puertos } = await env.DB.prepare(
+      'SELECT * FROM telecom_puertos WHERE patch_panel_id = ? AND empresa_id = ? ORDER BY numero'
+    ).bind(pp.id, empresa_id).all();
+    pp.puertos = puertos;
+  }
+  return json({ rack, idf, patch_panels: patchPanels });
+}
+
 async function actualizarObra(id, request, env) {
   const { isSuperadmin, isAdmin, isEmpresaAdmin, isJefeObra, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEmpresaAdmin && !isJefeObra) return err('No autorizado', 403);
@@ -6923,7 +7217,11 @@ async function devolverBobina(codigo, request, env, ctx) {
   if (!eid) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { notas, devuelto_por } = body;
-  const fecha = fechaEspana();
+  // Fecha real de devolución opcional (ej. el albarán se procesa días después de la
+  // recogida física) — si no la mandan o no tiene formato válido, se usa la de hoy.
+  const fechaCustom = typeof body.fecha_devolucion === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha_devolucion)
+    ? body.fecha_devolucion : null;
+  const fecha = fechaCustom || fechaEspana();
 
   let bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ? AND empresa_id = ?').bind(codigo, eid).first();
 

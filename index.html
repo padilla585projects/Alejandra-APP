@@ -1043,6 +1043,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <div class="module-count" id="cntBobinas">–</div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardTelecomRacks" onclick="navTo('telecomRacks')" style="display:none;border-left:3px solid #0ea5e9">
+        <div class="module-emoji">🗄️</div>
+        <div class="module-info">
+          <div class="module-name">Racks / Cableado</div>
+          <div class="module-desc">IDF, racks, patch panels y puertos</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardPemp" onclick="selectModule('pemp')">
         <div class="module-emoji">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
@@ -2260,6 +2268,80 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="defGuardar()">💾 Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TELECOM: RACKS / CABLEADO -->
+  <div id="screenTelecomRacks" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div id="telecomBreadcrumb" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🗄️ Racks / Cableado</div>
+      <button id="telecomAddBtn" onclick="telecomAbrirNuevo()" style="background:var(--accent);color:#fff;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;flex-shrink:0">+ Nuevo</button>
+    </div>
+    <div id="telecomContent" style="padding:12px 14px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando...</div>
+    </div>
+  </div>
+
+  <!-- MODAL TELECOM: crear IDF / rack / patch panel (campos segun nivel) -->
+  <div class="modal-overlay" id="modalTelecom" onclick="if(event.target===this)telecomCerrarModal()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);width:100%;max-width:520px;border-radius:18px 18px 0 0;max-height:80vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div id="telecomModalTitle" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Nuevo</div>
+        <button onclick="telecomCerrarModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+      <div style="padding:14px 16px;overflow-y:auto;flex:1">
+        <div style="margin-bottom:11px">
+          <label id="telecomModalLabel1" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Nombre *</label>
+          <input id="telecomModalInput1" type="text" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:11px" id="telecomModalField2Wrap">
+          <label id="telecomModalLabel2" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Ubicación</label>
+          <input id="telecomModalInput2" type="text" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <button onclick="telecomGuardarModal()" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL TELECOM: editar puerto -->
+  <div class="modal-overlay" id="modalTelecomPuerto" onclick="if(event.target===this)telecomCerrarModalPuerto()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);width:100%;max-width:520px;border-radius:18px 18px 0 0;max-height:85vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div id="telecomPuertoModalTitle" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Puerto</div>
+        <button onclick="telecomCerrarModalPuerto()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+      <div style="padding:14px 16px;overflow-y:auto;flex:1">
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Destino (sala/puesto)</label>
+          <input id="telecomPuertoDestino" type="text" placeholder="Ej: Oficina 101 - Puesto 3" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Etiqueta del cable</label>
+          <input id="telecomPuertoCable" type="text" placeholder="Ej: P1-C101" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Categoría</label>
+          <select id="telecomPuertoCategoria" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+            <option value="">—</option>
+            <option value="Cat5e">Cat5e</option>
+            <option value="Cat6">Cat6</option>
+            <option value="Cat6A">Cat6A</option>
+            <option value="Fibra OM3">Fibra OM3</option>
+            <option value="Fibra OM4">Fibra OM4</option>
+            <option value="Fibra OS2">Fibra OS2 (monomodo)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Notas</label>
+          <textarea id="telecomPuertoNotas" rows="2" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+        <button onclick="telecomVaciarPuerto()" style="flex:1;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">Vaciar</button>
+        <button onclick="telecomGuardarPuerto()" style="flex:2;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
       </div>
     </div>
   </div>
@@ -4143,6 +4225,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
   <button id="btnScanBobinas" onclick="abrirScanBobinas()" title="Escanear albarán"
     style="position:fixed;bottom:72px;right:132px;width:44px;height:44px;border-radius:50%;background:#8b5cf6;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,.45);z-index:200;display:none;align-items:center;justify-content:center">📷</button>
 
+  <!-- FAB: Escanear devolución de bobinas -->
+  <button id="btnScanDevolucion" onclick="abrirScanDevolucion()" title="Escanear devolución"
+    style="position:fixed;bottom:72px;right:180px;width:44px;height:44px;border-radius:50%;background:#0ea5e9;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(14,165,233,.45);z-index:200;display:none;align-items:center;justify-content:center">↩️</button>
+
   <!-- Modal: Scan parte semanal -->
   <div class="modal-overlay" id="modalScanParte" onclick="if(event.target===this)cerrarScanParte()" style="display:none">
     <div class="modal" style="max-width:min(98vw,700px);max-height:92vh;overflow-y:auto;padding:20px">
@@ -4278,6 +4364,66 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <div style="display:flex;gap:8px">
           <button onclick="sbAppVolver()" class="btn-primary btn-secondary" style="flex:0 0 90px">← Volver</button>
           <button onclick="sbAppImportar()" class="btn-primary" style="flex:1" id="btnSbAppImportar">⚡ Importar bobinas</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Scan devolución bobinas (app) -->
+  <div class="modal-overlay" id="modalScanDevolucion" onclick="if(event.target===this)cerrarScanDevolucion()" style="display:none">
+    <div class="modal" style="max-width:min(98vw,700px);max-height:92vh;overflow-y:auto;padding:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">↩️ Escanear devolución de bobinas</div>
+        <button onclick="cerrarScanDevolucion()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+
+      <!-- Paso 1 -->
+      <div id="sdAppStep1">
+        <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s" onclick="document.getElementById('sdAppImgInput').click()" id="sdAppDropzone">
+          <div style="font-size:36px;margin-bottom:8px">📄</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">Sube la foto del albarán de devolución</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Una sola foto — JPG, PNG</div>
+          <input type="file" id="sdAppImgInput" accept="image/*" style="display:none" onchange="sdAppPreview(this)">
+        </div>
+        <div id="sdAppPreview" style="display:none;margin-top:10px"></div>
+        <button id="btnSdAppEnviar" onclick="sdAppEnviar()" class="btn-primary" style="width:100%;margin-top:14px;display:none">🔍 Analizar con Alejandra</button>
+      </div>
+
+      <!-- Paso 2 -->
+      <div id="sdAppStep2" style="display:none;text-align:center;padding:30px 0">
+        <div style="font-size:40px;margin-bottom:12px">🤖</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el albarán...</div>
+        <div style="font-size:12px;color:var(--muted)">Puede tardar 10-20 segundos</div>
+        <div class="spinner" style="margin:16px auto 0"></div>
+      </div>
+
+      <!-- Paso 3 -->
+      <div id="sdAppStep3" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="font-size:13px;font-weight:700">Matrículas detectadas</div>
+          <div id="sdAppResumen" style="font-size:11px;color:var(--muted);flex:1;text-align:right"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <label style="font-size:12px;font-weight:700;color:var(--muted)">Fecha de devolución</label>
+          <input type="date" id="sdAppFecha" style="padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:12px">
+        </div>
+        <div id="sdAppAviso" style="display:none;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:10px"></div>
+        <div style="overflow-x:auto;margin-bottom:14px">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px">
+            <thead>
+              <tr style="background:var(--surface2)">
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border);width:28px">✓</th>
+                <th style="padding:7px 6px;text-align:left;border-bottom:1px solid var(--border)">Matrícula</th>
+                <th style="padding:7px 6px;text-align:left;border-bottom:1px solid var(--border)">Nº Albarán</th>
+                <th style="padding:7px 6px;text-align:left;border-bottom:1px solid var(--border)">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="sdAppTbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="sdAppVolver()" class="btn-primary btn-secondary" style="flex:0 0 90px">← Volver</button>
+          <button onclick="sdAppConfirmar()" class="btn-primary" style="flex:1" id="btnSdAppConfirmar">↩️ Marcar como devueltas</button>
         </div>
       </div>
     </div>
@@ -5888,11 +6034,13 @@ function setupHomeModules() {
   const cardCal2    = document.getElementById('cardCalidad');
   const cardSubc    = document.getElementById('cardSubcontratas');
   const cardPlanos  = document.getElementById('cardPlanos');
+  const cardTelecomRacks = document.getElementById('cardTelecomRacks');
   // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard, Incidencias y Galería
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
     if (cardC) cardC.style.display = 'none';
+    if (cardTelecomRacks) cardTelecomRacks.style.display = 'none';
     if (cardPed) cardPed.style.display = 'flex';
     if (btnNuevo) btnNuevo.style.display = 'flex';
     if (cardDocs) cardDocs.style.display = 'flex';
@@ -5914,6 +6062,8 @@ function setupHomeModules() {
   const mostrarBobinas = dept === 'electrico';
   const esOficinaTecnica = dept === 'ingenieria';
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
+  // Racks/Cableado: solo telecomunicaciones
+  if (cardTelecomRacks) cardTelecomRacks.style.display = (dept === 'telecom') ? 'flex' : 'none';
   if (cardP) cardP.style.display = esOficinaTecnica ? 'none' : 'flex';
   if (cardC) cardC.style.display = esOficinaTecnica ? 'none' : 'flex';
   // Pedidos: visible para todos excepto seguridad
@@ -6267,6 +6417,7 @@ window.guardarModulosConfig = guardarModulosConfig;
 // keys: trade depts → home_{dept}_{card}; seg/per ya tenían sus prefijos.
 const _HOME_TRADE_MODS = [
   { card: 'cardBobinas',          label: '⚡ Bobinas',           soloElectrico: true },
+  { card: 'cardTelecomRacks',     label: '🗄️ Racks / Cableado', soloTelecom: true },
   { card: 'cardPemp',             label: '🛠 PEMP' },
   { card: 'cardCarretillas',      label: '🚜 Carretillas' },
   { card: 'cardPedidos',          label: '📥 Pedidos' },
@@ -6300,7 +6451,7 @@ function _modsParaDept(dept) {
   if (tpl === 'personal')  return _PER_MODS;
   // trade
   return _HOME_TRADE_MODS
-    .filter(m => !m.soloElectrico || dept === 'electrico')
+    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloTelecom || dept === 'telecom'))
     .map(m => ({ key: `home_${dept}_${m.card}`, label: m.label, _card: m.card }));
 }
 
@@ -6324,6 +6475,7 @@ function applyModulosConfig() {
   if (dept && _DEPTS_CATALOG[dept]?.template === 'trade') {
     _HOME_TRADE_MODS.forEach(m => {
       if (m.soloElectrico && dept !== 'electrico') return;
+      if (m.soloTelecom && dept !== 'telecom') return;
       const el = document.getElementById(m.card);
       if (!el) return;
       const k = `home_${dept}_${m.card}`;
@@ -6997,6 +7149,8 @@ function _applyScreen(name) {
   if (name !== 'module') {
     const fabScanBob = document.getElementById('btnScanBobinas');
     if (fabScanBob) fabScanBob.style.display = 'none';
+    const fabScanDev = document.getElementById('btnScanDevolucion');
+    if (fabScanDev) fabScanDev.style.display = 'none';
   }
   actualizarBtnAtras();
   cargarBadgeIdeas();
@@ -7100,6 +7254,11 @@ function navTo(target) {
   }
   if (target === 'planos') {
     showScreen('planos');
+    return;
+  }
+  if (target === 'telecomRacks') {
+    showScreen('telecomRacks');
+    telecomCargarIdfs();
     return;
   }
   if (target === 'reuniones') {
@@ -7231,6 +7390,11 @@ function updateModuleUI() {
   if (fabScanBob) {
     const esAdmin = s?.rol !== 'operario';
     fabScanBob.style.display = (mod === 'bobinas' && esAdmin) ? 'flex' : 'none';
+  }
+  const fabScanDev = document.getElementById('btnScanDevolucion');
+  if (fabScanDev) {
+    const esAdmin = s?.rol !== 'operario';
+    fabScanDev.style.display = (mod === 'bobinas' && esAdmin) ? 'flex' : 'none';
   }
 }
 
@@ -12656,7 +12820,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.70';
+const APP_VERSION = '8.72';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15882,6 +16046,255 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   window.ocCerrarModal = ocCerrarModal;
 
+  // ── TELECOM: RACKS / CABLEADO ─────────────────────────────────────────────────
+  // Jerarquia navegada dentro de una sola pantalla (como Docs): IDF -> rack -> patch panel -> puertos.
+  let _telecomNivel = 'idf';
+  let _telecomCtx = { obra_id: null, idf_id: null, idf_nombre: null, rack_id: null, rack_nombre: null, pp_id: null, pp_nombre: null };
+  let _telecomPuertoActual = null;
+
+  function telecomCargarIdfs() {
+    _telecomNivel = 'idf';
+    _telecomCtx = { obra_id: getSession()?.obra_id || null, idf_id: null, idf_nombre: null, rack_id: null, rack_nombre: null, pp_id: null, pp_nombre: null };
+    document.getElementById('telecomBreadcrumb').textContent = '🗄️ Racks / Cableado';
+    document.getElementById('telecomAddBtn').style.display = '';
+    document.getElementById('telecomAddBtn').textContent = '+ Nuevo IDF';
+    telecomCargarNivel('/telecom/idf?obra_id=' + (_telecomCtx.obra_id || ''), telecomRenderIdfs);
+  }
+  window.telecomCargarIdfs = telecomCargarIdfs;
+
+  async function telecomCargarNivel(path, renderFn) {
+    const el = document.getElementById('telecomContent');
+    el.innerHTML = '<div class="empty-state">Cargando...</div>';
+    try {
+      const res = await apiCall(path);
+      const data = await res.json();
+      renderFn(Array.isArray(data) ? data : []);
+    } catch (e) {
+      el.innerHTML = '<div class="empty-state">Error al cargar</div>';
+    }
+  }
+
+  function _telecomVolverBtn(onClick) {
+    return `<div onclick="${onClick}" style="display:flex;align-items:center;gap:6px;padding:10px 4px;color:var(--accent);font-weight:700;font-size:13px;cursor:pointer">← Volver</div>`;
+  }
+  function _telecomItemHTML(id, titulo, subtitulo, onClick, onDelete) {
+    return `<div style="display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:8px;background:var(--card);border:1px solid var(--border);border-radius:12px">
+      <div onclick="${onClick}" style="flex:1;cursor:pointer">
+        <div style="font-weight:700;font-size:14px;color:var(--text)">${titulo}</div>
+        ${subtitulo ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${subtitulo}</div>` : ''}
+      </div>
+      <span onclick="${onClick}" style="color:var(--muted);cursor:pointer">›</span>
+      ${onDelete ? `<button onclick="${onDelete}" style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:4px">🗑</button>` : ''}
+    </div>`;
+  }
+
+  function telecomRenderIdfs(list) {
+    const el = document.getElementById('telecomContent');
+    if (!list.length) { el.innerHTML = '<div class="empty-state">Sin IDFs todavía. Pulsa "+ Nuevo IDF" para crear el primero.</div>'; return; }
+    el.innerHTML = list.map(i => _telecomItemHTML(
+      i.id, '📍 ' + i.nombre, i.ubicacion || '',
+      `telecomAbrirIdf(${i.id}, '${(i.nombre||'').replace(/'/g,"\\'")}')`,
+      `telecomEliminarIdf(${i.id})`
+    )).join('');
+  }
+
+  function telecomAbrirIdf(id, nombre) {
+    _telecomNivel = 'rack';
+    _telecomCtx.idf_id = id; _telecomCtx.idf_nombre = nombre;
+    document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + nombre;
+    document.getElementById('telecomAddBtn').textContent = '+ Nuevo Rack';
+    const el = document.getElementById('telecomContent');
+    el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()');
+    telecomCargarNivel('/telecom/racks?idf_id=' + id, (list) => {
+      el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()') + (list.length
+        ? list.map(r => _telecomItemHTML(r.id, '🗄️ ' + r.nombre, '', `telecomAbrirRack(${r.id}, '${(r.nombre||'').replace(/'/g,"\\'")}')`, `telecomEliminarRack(${r.id})`)).join('')
+        : '<div class="empty-state">Sin racks en este IDF. Pulsa "+ Nuevo Rack".</div>');
+    });
+  }
+  window.telecomAbrirIdf = telecomAbrirIdf;
+
+  function telecomAbrirRack(id, nombre) {
+    _telecomNivel = 'pp';
+    _telecomCtx.rack_id = id; _telecomCtx.rack_nombre = nombre;
+    document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + _telecomCtx.idf_nombre + ' › ' + nombre;
+    document.getElementById('telecomAddBtn').textContent = '+ Nuevo Patch Panel';
+    const el = document.getElementById('telecomContent');
+    el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${_telecomCtx.idf_id}, '${(_telecomCtx.idf_nombre||'').replace(/'/g,"\\'")}')`);
+    telecomCargarNivel('/telecom/patch-panels?rack_id=' + id, (list) => {
+      const informeBtn = `<button onclick="telecomGenerarInforme(${id})" style="width:100%;margin-bottom:10px;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:9px;padding:9px;font-weight:700;font-size:13px;cursor:pointer">📄 Generar informe de este rack</button>`;
+      el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${_telecomCtx.idf_id}, '${(_telecomCtx.idf_nombre||'').replace(/'/g,"\\'")}')`)
+        + informeBtn
+        + (list.length
+          ? list.map(p => _telecomItemHTML(p.id, '🔌 ' + p.nombre, p.num_puertos + ' puertos', `telecomAbrirPP(${p.id}, '${(p.nombre||'').replace(/'/g,"\\'")}')`, `telecomEliminarPP(${p.id})`)).join('')
+          : '<div class="empty-state">Sin patch panels en este rack. Pulsa "+ Nuevo Patch Panel".</div>');
+    });
+  }
+  window.telecomAbrirRack = telecomAbrirRack;
+
+  function telecomAbrirPP(id, nombre) {
+    _telecomNivel = 'puertos';
+    _telecomCtx.pp_id = id; _telecomCtx.pp_nombre = nombre;
+    document.getElementById('telecomBreadcrumb').textContent = '🔌 ' + nombre;
+    document.getElementById('telecomAddBtn').style.display = 'none';
+    const el = document.getElementById('telecomContent');
+    el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${_telecomCtx.rack_id}, '${(_telecomCtx.rack_nombre||'').replace(/'/g,"\\'")}')`);
+    telecomCargarNivel('/telecom/puertos?patch_panel_id=' + id, (list) => {
+      const grid = list.map(p => {
+        const ocupado = p.estado === 'ocupado';
+        return `<div onclick='telecomAbrirPuerto(${JSON.stringify(p)})' style="cursor:pointer;padding:8px 4px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'}">
+          <div style="font-weight:800;font-size:13px;color:${ocupado ? '#22c55e' : 'var(--text)'}">${p.numero}</div>
+          <div style="font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ocupado ? (p.destino || 'ocupado') : 'libre'}</div>
+        </div>`;
+      }).join('');
+      el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${_telecomCtx.rack_id}, '${(_telecomCtx.rack_nombre||'').replace(/'/g,"\\'")}')`)
+        + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px">${grid}</div>`;
+    });
+  }
+  window.telecomAbrirPP = telecomAbrirPP;
+
+  function telecomAbrirPuerto(puerto) {
+    _telecomPuertoActual = puerto;
+    document.getElementById('telecomPuertoModalTitle').textContent = 'Puerto ' + puerto.numero;
+    document.getElementById('telecomPuertoDestino').value = puerto.destino || '';
+    document.getElementById('telecomPuertoCable').value = puerto.cable_label || '';
+    document.getElementById('telecomPuertoCategoria').value = puerto.categoria || '';
+    document.getElementById('telecomPuertoNotas').value = puerto.notas || '';
+    document.getElementById('modalTelecomPuerto').style.display = 'flex';
+  }
+  window.telecomAbrirPuerto = telecomAbrirPuerto;
+
+  function telecomCerrarModalPuerto() {
+    document.getElementById('modalTelecomPuerto').style.display = 'none';
+    _telecomPuertoActual = null;
+  }
+  window.telecomCerrarModalPuerto = telecomCerrarModalPuerto;
+
+  async function _telecomGuardarPuertoDatos(datos) {
+    if (!_telecomPuertoActual) return;
+    try {
+      await apiCall('/telecom/puertos/' + _telecomPuertoActual.id, { method: 'PUT', body: JSON.stringify(datos) });
+      telecomCerrarModalPuerto();
+      telecomAbrirPP(_telecomCtx.pp_id, _telecomCtx.pp_nombre);
+    } catch (e) { toast('❌ Error al guardar el puerto', 'err'); }
+  }
+  function telecomGuardarPuerto() {
+    _telecomGuardarPuertoDatos({
+      destino: document.getElementById('telecomPuertoDestino').value.trim(),
+      cable_label: document.getElementById('telecomPuertoCable').value.trim(),
+      categoria: document.getElementById('telecomPuertoCategoria').value,
+      notas: document.getElementById('telecomPuertoNotas').value.trim()
+    });
+  }
+  window.telecomGuardarPuerto = telecomGuardarPuerto;
+  function telecomVaciarPuerto() {
+    if (!confirm('¿Vaciar este puerto?')) return;
+    _telecomGuardarPuertoDatos({ destino: '', cable_label: '', categoria: '', notas: '' });
+  }
+  window.telecomVaciarPuerto = telecomVaciarPuerto;
+
+  async function telecomEliminarIdf(id) {
+    if (!confirm('¿Borrar este IDF? Debe estar vacío (sin racks).')) return;
+    try {
+      const res = await apiCall('/telecom/idf/' + id, { method: 'DELETE' });
+      if (!res.ok) { const d = await res.json().catch(()=>({})); toast('❌ ' + (d.error || 'Error al borrar'), 'err'); return; }
+      telecomCargarIdfs();
+    } catch (e) { toast('❌ Error al borrar', 'err'); }
+  }
+  window.telecomEliminarIdf = telecomEliminarIdf;
+  async function telecomEliminarRack(id) {
+    if (!confirm('¿Borrar este rack? Debe estar vacío (sin patch panels).')) return;
+    try {
+      const res = await apiCall('/telecom/racks/' + id, { method: 'DELETE' });
+      if (!res.ok) { const d = await res.json().catch(()=>({})); toast('❌ ' + (d.error || 'Error al borrar'), 'err'); return; }
+      telecomAbrirIdf(_telecomCtx.idf_id, _telecomCtx.idf_nombre);
+    } catch (e) { toast('❌ Error al borrar', 'err'); }
+  }
+  window.telecomEliminarRack = telecomEliminarRack;
+  async function telecomEliminarPP(id) {
+    if (!confirm('¿Borrar este patch panel? Se perderán los datos de sus puertos.')) return;
+    try {
+      await apiCall('/telecom/patch-panels/' + id, { method: 'DELETE' });
+      telecomAbrirRack(_telecomCtx.rack_id, _telecomCtx.rack_nombre);
+    } catch (e) { toast('❌ Error al borrar', 'err'); }
+  }
+  window.telecomEliminarPP = telecomEliminarPP;
+
+  function telecomAbrirNuevo() {
+    document.getElementById('telecomModalInput1').value = '';
+    document.getElementById('telecomModalInput2').value = '';
+    const field2Wrap = document.getElementById('telecomModalField2Wrap');
+    if (_telecomNivel === 'idf') {
+      document.getElementById('telecomModalTitle').textContent = 'Nuevo IDF';
+      document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: IDF Planta 1)';
+      field2Wrap.style.display = '';
+      document.getElementById('telecomModalLabel2').textContent = 'Ubicación (ej: Planta 1 - Sala técnica)';
+    } else if (_telecomNivel === 'rack') {
+      document.getElementById('telecomModalTitle').textContent = 'Nuevo Rack';
+      document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: Rack A)';
+      field2Wrap.style.display = 'none';
+    } else if (_telecomNivel === 'pp') {
+      document.getElementById('telecomModalTitle').textContent = 'Nuevo Patch Panel';
+      document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: PP-1)';
+      field2Wrap.style.display = '';
+      document.getElementById('telecomModalLabel2').textContent = 'Número de puertos (por defecto 24)';
+      document.getElementById('telecomModalInput2').value = '24';
+    }
+    document.getElementById('modalTelecom').style.display = 'flex';
+  }
+  window.telecomAbrirNuevo = telecomAbrirNuevo;
+
+  function telecomCerrarModal() {
+    document.getElementById('modalTelecom').style.display = 'none';
+  }
+  window.telecomCerrarModal = telecomCerrarModal;
+
+  async function telecomGuardarModal() {
+    const nombre = document.getElementById('telecomModalInput1').value.trim();
+    if (!nombre) { toast('❌ Falta el nombre', 'err'); return; }
+    try {
+      if (_telecomNivel === 'idf') {
+        await apiCall('/telecom/idf', { method: 'POST', body: JSON.stringify({ obra_id: _telecomCtx.obra_id, nombre, ubicacion: document.getElementById('telecomModalInput2').value.trim() }) });
+        telecomCerrarModal();
+        telecomCargarIdfs();
+      } else if (_telecomNivel === 'rack') {
+        await apiCall('/telecom/racks', { method: 'POST', body: JSON.stringify({ idf_id: _telecomCtx.idf_id, nombre }) });
+        telecomCerrarModal();
+        telecomAbrirIdf(_telecomCtx.idf_id, _telecomCtx.idf_nombre);
+      } else if (_telecomNivel === 'pp') {
+        const numPuertos = parseInt(document.getElementById('telecomModalInput2').value) || 24;
+        await apiCall('/telecom/patch-panels', { method: 'POST', body: JSON.stringify({ rack_id: _telecomCtx.rack_id, nombre, num_puertos: numPuertos }) });
+        telecomCerrarModal();
+        telecomAbrirRack(_telecomCtx.rack_id, _telecomCtx.rack_nombre);
+      }
+    } catch (e) { toast('❌ Error al guardar', 'err'); }
+  }
+  window.telecomGuardarModal = telecomGuardarModal;
+
+  async function telecomGenerarInforme(rackId) {
+    try {
+      const res = await apiCall('/telecom/informe/' + rackId);
+      const data = await res.json();
+      const w = window.open('', '_blank');
+      const filas = data.patch_panels.map(pp => `
+        <h3>${pp.nombre} (${pp.num_puertos} puertos)</h3>
+        <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;margin-bottom:20px;font-size:13px">
+          <tr style="background:#eee"><th>Puerto</th><th>Destino</th><th>Cable</th><th>Categoría</th><th>Notas</th></tr>
+          ${pp.puertos.map(p => `<tr><td>${p.numero}</td><td>${p.destino || ''}</td><td>${p.cable_label || ''}</td><td>${p.categoria || ''}</td><td>${p.notas || ''}</td></tr>`).join('')}
+        </table>`).join('');
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe ${data.rack.nombre}</title>
+        <style>body{font-family:Arial,sans-serif;padding:24px;color:#111} h1{margin-bottom:2px} h2{color:#555;font-weight:normal;margin-top:0}</style>
+        </head><body>
+        <h1>Informe de cableado — ${data.rack.nombre}</h1>
+        <h2>${data.idf?.nombre || ''} ${data.idf?.ubicacion ? '— ' + data.idf.ubicacion : ''}</h2>
+        ${filas}
+        <p style="color:#888;font-size:11px">Generado ${new Date().toLocaleString('es-ES')}</p>
+        <script>window.onload=()=>window.print()<\/script>
+        </body></html>`);
+      w.document.close();
+    } catch (e) { toast('❌ Error al generar el informe', 'err'); }
+  }
+  window.telecomGenerarInforme = telecomGenerarInforme;
+
   // ── ACTAS DE REUNIÓN (NEW-36) ─────────────────────────────────────────────────
   let _actasData = [];
   let _actaFiltro = 'todas';
@@ -18300,6 +18713,136 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.sbAppEnviar         = sbAppEnviar;
   window.sbAppVolver         = sbAppVolver;
   window.sbAppImportar       = sbAppImportar;
+
+  // ── SCAN DEVOLUCIÓN DE BOBINAS ────────────────────────────────────────────────
+  let _sdAppFile = null;
+  let _sdAppData = null;
+
+  function abrirScanDevolucion() {
+    document.getElementById('modalScanDevolucion').style.display = 'flex';
+    document.getElementById('sdAppStep1').style.display = '';
+    document.getElementById('sdAppStep2').style.display = 'none';
+    document.getElementById('sdAppStep3').style.display = 'none';
+    document.getElementById('sdAppPreview').innerHTML = '';
+    document.getElementById('sdAppPreview').style.display = 'none';
+    document.getElementById('btnSdAppEnviar').style.display = 'none';
+    document.getElementById('sdAppImgInput').value = '';
+    _sdAppFile = null;
+    _sdAppData = null;
+  }
+  window.abrirScanDevolucion = abrirScanDevolucion;
+
+  function cerrarScanDevolucion() {
+    document.getElementById('modalScanDevolucion').style.display = 'none';
+  }
+  window.cerrarScanDevolucion = cerrarScanDevolucion;
+
+  function sdAppPreview(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    _sdAppFile = file;
+    const prev = document.getElementById('sdAppPreview');
+    prev.innerHTML = `<img src="${URL.createObjectURL(file)}" style="max-width:100%;max-height:220px;border-radius:8px;display:block;margin:0 auto">`;
+    prev.style.display = '';
+    document.getElementById('btnSdAppEnviar').style.display = '';
+  }
+  window.sdAppPreview = sdAppPreview;
+
+  async function sdAppEnviar() {
+    if (!_sdAppFile) { toast('Selecciona una foto', 'err'); return; }
+    document.getElementById('sdAppStep1').style.display = 'none';
+    document.getElementById('sdAppStep2').style.display = '';
+    try {
+      const compressed = await _sbAppCompressImage(_sdAppFile, 2000, 0.85);
+      const fd = new FormData();
+      fd.append('image', compressed);
+      const res  = await apiCallRaw('/scan-devolucion-bobinas', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
+      _sdAppData = data;
+      sdAppMostrarReview(data);
+    } catch (e) {
+      document.getElementById('sdAppStep2').style.display = 'none';
+      document.getElementById('sdAppStep1').style.display = '';
+      toast('❌ ' + e.message, 'err');
+    }
+  }
+  window.sdAppEnviar = sdAppEnviar;
+
+  function sdAppMostrarReview(data) {
+    document.getElementById('sdAppStep2').style.display = 'none';
+    document.getElementById('sdAppStep3').style.display = '';
+    const tbody = document.getElementById('sdAppTbody');
+    tbody.innerHTML = '';
+    const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    (data.filas || []).forEach((f, i) => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      // Las marcadas "NO ESTA" en el albarán van desmarcadas por defecto — no se recogieron
+      // de verdad, así que no deberían marcarse como devueltas sin que alguien lo confirme.
+      const checked = f.no_esta ? '' : 'checked';
+      const estadoTxt = f.no_esta
+        ? '<span style="color:#ef4444;font-weight:700">⚠️ NO ESTABA</span>'
+        : (f.existe ? `en inventario (${escH(f.estado_actual)})` : 'nueva — se creará');
+      tr.innerHTML = `
+        <td style="padding:4px;text-align:center"><input type="checkbox" data-idx="${i}" ${checked} style="width:16px;height:16px;cursor:pointer"></td>
+        <td style="padding:4px 6px;font-weight:700">${escH(f.codigo)}</td>
+        <td style="padding:4px 6px">${escH(f.num_albaran)}</td>
+        <td style="padding:4px 6px;font-size:11px">${estadoTxt}</td>`;
+      tbody.appendChild(tr);
+    });
+    const nTotal = (data.filas||[]).length;
+    const nNoEsta = (data.filas||[]).filter(f => f.no_esta).length;
+    document.getElementById('sdAppResumen').textContent = `${nTotal} matrículas${data.proveedor_recoge ? ' · ' + data.proveedor_recoge : ''}`;
+    const fechaInput = document.getElementById('sdAppFecha');
+    if (fechaInput && !fechaInput.value) fechaInput.value = new Date().toISOString().slice(0, 10);
+    const aviso = document.getElementById('sdAppAviso');
+    if (nNoEsta > 0) {
+      aviso.style.display = '';
+      aviso.textContent = `⚠️ ${nNoEsta} matrícula(s) venían marcadas como "NO ESTA" en el albarán — se han desmarcado por defecto, revísalas antes de confirmar.`;
+    } else {
+      aviso.style.display = 'none';
+    }
+  }
+
+  function sdAppVolver() {
+    document.getElementById('sdAppStep3').style.display = 'none';
+    document.getElementById('sdAppStep1').style.display = '';
+  }
+  window.sdAppVolver = sdAppVolver;
+
+  async function sdAppConfirmar() {
+    if (!_sdAppData) return;
+    const seleccionadas = [];
+    document.querySelectorAll('#sdAppTbody tr').forEach((tr, i) => {
+      const cb = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
+      if (cb?.checked) seleccionadas.push(_sdAppData.filas[i]);
+    });
+    if (!seleccionadas.length) { toast('No hay matrículas seleccionadas', 'err'); return; }
+    const btn = document.getElementById('btnSdAppConfirmar');
+    const fechaDevolucion = document.getElementById('sdAppFecha')?.value || null;
+    btn.disabled = true;
+    let ok = 0, fallo = 0;
+    for (const f of seleccionadas) {
+      btn.textContent = `⏳ Devolviendo ${f.codigo}...`;
+      try {
+        const notasPartes = [];
+        if (f.num_albaran) notasPartes.push(`Albarán ${f.num_albaran}`);
+        if (_sdAppData.proveedor_recoge) notasPartes.push(_sdAppData.proveedor_recoge);
+        const res = await apiCall(`/bobinas/${encodeURIComponent(f.codigo)}/devolver`, {
+          method: 'PUT',
+          body: JSON.stringify({ notas: notasPartes.join(' · '), devuelto_por: getSession()?.nombre || '', fecha_devolucion: fechaDevolucion })
+        });
+        if (res.ok) ok++; else fallo++;
+      } catch (e) { fallo++; }
+    }
+    btn.disabled = false;
+    btn.textContent = '↩️ Marcar como devueltas';
+    toast(`✅ ${ok} devuelta(s)${fallo ? ` · ❌ ${fallo} con error` : ''}`, fallo ? 'err' : 'ok');
+    cerrarScanDevolucion();
+    if (typeof cargarStock === 'function') cargarStock();
+  }
+  window.sdAppConfirmar = sdAppConfirmar;
 })();
 
 // ═══════════════════════════════════════════════════════════════
