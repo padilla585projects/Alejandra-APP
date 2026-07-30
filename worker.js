@@ -4537,15 +4537,17 @@ async function scanDevolucionBobinas(request, env) {
 
   const form = await request.formData().catch(() => null);
   if (!form) return err('Falta el formulario', 400);
-  const file = form.get('image');
-  if (!file || !file.size) return err('Falta la imagen', 400);
-  if (file.size > 20 * 1024 * 1024) return err('Imagen demasiado grande (máx 20 MB)', 413);
-
-  const bytes = await file.arrayBuffer();
-  const u8 = new Uint8Array(bytes);
-  let b64 = '';
-  for (let i = 0; i < u8.length; i += 8192) b64 += String.fromCharCode(...u8.slice(i, i + 8192));
-  b64 = btoa(b64);
+  const imageKeys = ['image', 'image2', 'image3', 'image4', 'image5'];
+  const files = imageKeys.map(key => form.get(key)).filter(file => file?.size);
+  if (!files.length) return err('Falta la imagen', 400);
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalBytes > 30 * 1024 * 1024) {
+    return err('Las imágenes ocupan demasiado en conjunto (máx 30 MB)', 413);
+  }
+  const demasiadoGrande = files.findIndex(file => file.size > 20 * 1024 * 1024);
+  if (demasiadoGrande !== -1) {
+    return err(`La imagen ${demasiadoGrande + 1} es demasiado grande (máx 20 MB)`, 413);
+  }
 
   const prompt = `Analiza esta imagen de un "ALBARAN DEVOLUCION DE BOBINAS" (formulario con tabla: MATRICULA | N. ALBARAN PROVEEDOR | FABRICANTE DEL CABLE | OBSERVACIONES, mas un campo "PROVEEDOR QUE RECOGE").
 Extrae fila por fila. IMPORTANTE: el numero de albaran es POR FILA, no es uno solo para todo el documento -- cada fila puede tener uno distinto.
@@ -4558,28 +4560,42 @@ No inventes datos que no veas -- si un campo no aparece, pon null. Responde SOLO
     { "matricula": "82A9UG1K", "num_albaran": "5017364", "fabricante": null, "observaciones": "NO ESTA" }
   ]
 }`;
-  const geminiBody = {
-    contents: [{ parts: [{ inline_data: { mime_type: file.type || 'image/jpeg', data: b64 } }, { text: prompt }] }],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
-  };
-  const gemResult = await callGemini(env, geminiBody, 'scan-devolucion-bobinas');
-  if (!gemResult.ok) return err(gemResult.error, gemResult.status);
-  const aiJson = gemResult.data;
+  const filasRaw = [];
+  const proveedores = new Set();
 
-  const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  logAIUsage(env, {
-    empresa_id, proveedor: 'gemini', modelo: gemResult.model, endpoint: 'scan_devolucion_bobinas',
-    input_tokens: aiJson.usageMetadata?.promptTokenCount || 0,
-    output_tokens: aiJson.usageMetadata?.candidatesTokenCount || 0,
-  });
+  // Procesar uno a uno mantiene acotada la memoria del Worker aunque se envíen cinco fotos.
+  for (let docIndex = 0; docIndex < files.length; docIndex++) {
+    const file = files[docIndex];
+    const bytes = await file.arrayBuffer();
+    const u8 = new Uint8Array(bytes);
+    let binary = '';
+    for (let i = 0; i < u8.length; i += 8192) binary += String.fromCharCode(...u8.slice(i, i + 8192));
+    const b64 = btoa(binary);
+    const geminiBody = {
+      contents: [{ parts: [{ inline_data: { mime_type: file.type || 'image/jpeg', data: b64 } }, { text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    };
+    const gemResult = await callGemini(env, geminiBody, 'scan-devolucion-bobinas');
+    if (!gemResult.ok) return err(`Documento ${docIndex + 1}: ${gemResult.error}`, gemResult.status);
+    const aiJson = gemResult.data;
+    const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-  const match = texto.match(/\{[\s\S]*\}/);
-  if (!match) return err('La IA no devolvió JSON válido', 502);
-  let data;
-  try { data = JSON.parse(match[0]); }
-  catch (e) { return err('JSON inválido de la IA: ' + e.message, 502); }
+    logAIUsage(env, {
+      empresa_id, proveedor: 'gemini', modelo: gemResult.model, endpoint: 'scan_devolucion_bobinas',
+      input_tokens: aiJson.usageMetadata?.promptTokenCount || 0,
+      output_tokens: aiJson.usageMetadata?.candidatesTokenCount || 0,
+    });
 
-  const filasRaw = Array.isArray(data.filas) ? data.filas : [];
+    const match = texto.match(/\{[\s\S]*\}/);
+    if (!match) return err(`Documento ${docIndex + 1}: la IA no devolvió JSON válido`, 502);
+    let data;
+    try { data = JSON.parse(match[0]); }
+    catch (e) { return err(`Documento ${docIndex + 1}: JSON inválido de la IA: ${e.message}`, 502); }
+
+    if (data.proveedor_recoge) proveedores.add(String(data.proveedor_recoge).trim());
+    if (Array.isArray(data.filas)) filasRaw.push(...data.filas);
+  }
+
   // Deduplicar por matrícula -- si alguna fila de esa matrícula trae observación de "no está",
   // prevalece esa (más seguro no marcar como devuelta algo que no se recogió de verdad).
   const RE_NO_ESTA = /no\s*est[aá]|no\s*encontrad|falta/i;
@@ -4589,18 +4605,24 @@ No inventes datos que no veas -- si un campo no aparece, pon null. Responde SOLO
     if (!matricula) continue;
     const noEsta = RE_NO_ESTA.test(String(f.observaciones || ''));
     const previa = porMatricula.get(matricula);
-    if (!previa || (noEsta && !previa.no_esta)) {
-      porMatricula.set(matricula, {
-        codigo: matricula,
-        num_albaran: f.num_albaran || null,
-        fabricante: f.fabricante || null,
-        observaciones: f.observaciones || null,
-        no_esta: noEsta,
-      });
-    }
+    const actual = {
+      codigo: matricula,
+      num_albaran: f.num_albaran || null,
+      fabricante: f.fabricante || null,
+      observaciones: f.observaciones || null,
+      no_esta: noEsta,
+    };
+    if (!previa) porMatricula.set(matricula, actual);
+    else if (noEsta && !previa.no_esta) porMatricula.set(matricula, { ...previa, ...actual });
+    else porMatricula.set(matricula, {
+      ...previa,
+      num_albaran: previa.num_albaran || actual.num_albaran,
+      fabricante: previa.fabricante || actual.fabricante,
+      observaciones: previa.observaciones || actual.observaciones,
+    });
   }
   const filas = [...porMatricula.values()];
-  if (!filas.length) return err('No se detectó ninguna matrícula en la imagen', 502);
+  if (!filas.length) return err('No se detectó ninguna matrícula en los documentos', 502);
 
   // Comprobar cuáles ya existen en inventario, solo para informar en la pantalla de revisión
   // (la decisión real de crear-si-no-existe la toma devolverBobina al confirmar cada una).
@@ -4612,7 +4634,8 @@ No inventes datos que no veas -- si un campo no aparece, pon null. Responde SOLO
 
   return json({
     ok: true,
-    proveedor_recoge: data.proveedor_recoge || null,
+    proveedor_recoge: [...proveedores].join(' / ') || null,
+    imagenes_procesadas: files.length,
     filas: filas.map(f => ({ ...f, existe: mapaExistentes.has(f.codigo), estado_actual: mapaExistentes.get(f.codigo) || null }))
   });
 }

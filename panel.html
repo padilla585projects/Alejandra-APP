@@ -1577,7 +1577,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <option value="">📋 Nº albarán</option>
           </select>
           <button class="btn btn-primary" onclick="abrirModalBobina()">+ Nueva bobina</button>
-          <button class="btn btn-secondary" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6" onclick="abrirScanBobinasPanel()">📷 Escanear albarán</button>
+          <button class="btn btn-secondary" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6" onclick="abrirScanBobinasModoPanel()">📷 Escanear albarán</button>
           <button class="btn btn-secondary" onclick="exportarBobinasExcel()">📊 Excel</button>
           <!-- BOBINAS-FILTRO-01: print(true, true) para imprimir TODAS las filas que
                cumplan el filtro activo, no solo la página de 20 visible en pantalla. -->
@@ -17829,7 +17829,10 @@ async function confirmarResetPass() {
 
 // ── SERVICE WORKER ─────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    reg.update();
+    if (reg.waiting) reg.waiting.postMessage({ tipo: 'SKIP_WAITING' });
+  }).catch(() => {});
 }
 
 // ── INICIO ─────────────────────────────────────────────────────
@@ -18288,15 +18291,9 @@ async function _registrarPushDeveloper() {
   }
 })();
 
-// AUTO-UPDATE (25/07/2026): en pleno testing en vivo con Alberto, Adrián: "podíamos
-// hacer que se recargue la web sola después de una actualización no?" — el panel de
-// Office nunca comprobaba si había una versión nueva desplegada; cada fix se quedaba
-// sin llegar hasta que alguien recargaba a mano. Mismo patrón que index.html
-// (checkVersionAndUpdate), simplificado porque panel.html no tiene Service Worker
-// que desregistrar. No se compara contra una constante fija (evita un 5º archivo que
-// mantener sincronizado en cada deploy, ver CLAUDE.md): la primera lectura de
-// version.json fija la base, y solo se recarga si luego cambia frente a esa base.
-let _panelVersionBase = null;
+// La versión queda embebida en Office para detectar incluso una primera carga servida
+// desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
+const PANEL_APP_VERSION = '8.74';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -18306,12 +18303,30 @@ async function _checkPanelVersion() {
     const j = await res.json();
     if (!j.v) return;
     const tag = document.getElementById('panelVersionTag');
-    if (tag) tag.textContent = 'v' + j.v;
-    if (_panelVersionBase === null) { _panelVersionBase = j.v; return; }
-    if (j.v !== _panelVersionBase) {
+    if (tag) tag.textContent = 'v' + PANEL_APP_VERSION;
+    if (j.v !== PANEL_APP_VERSION) {
+      const intento = Number(sessionStorage.getItem('panel_update_attempt') || 0);
+      if (Date.now() - intento < 30000) return;
+      sessionStorage.setItem('panel_update_attempt', String(Date.now()));
       _panelActualizando = true;
       toast('🔄 Nueva versión v' + j.v + ' disponible — recargando...', 'ok');
-      setTimeout(() => location.reload(), 4000);
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(reg => reg.update()));
+          regs.forEach(reg => reg.waiting?.postMessage({ tipo: 'SKIP_WAITING' }));
+        }
+        if ('caches' in window) {
+          const names = await caches.keys();
+          await Promise.all(names.map(name => caches.delete(name)));
+        }
+      } catch {}
+      setTimeout(() => {
+        const url = new URL(location.href);
+        url.searchParams.set('_v', j.v);
+        url.searchParams.set('_r', Date.now());
+        location.replace(url.toString());
+      }, 1500);
     }
   } catch {}
 }
@@ -19320,28 +19335,73 @@ document.getElementById('wInput').focus();
   }
 
   function sbCompressImage(file, maxDim, quality) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       if (!file.type.startsWith('image/')) { resolve(file); return; }
+      let settled = false;
+      const finish = (value, error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (error) reject(error);
+        else resolve(value);
+      };
+      const timer = setTimeout(() => {
+        finish(null, new Error(`El móvil no pudo preparar "${file.name}" en 25 segundos. Prueba a repetir la foto.`));
+      }, 25000);
       const img = new Image();
       img.onload = () => {
-        let w = img.width, h = img.height;
-        if (w <= maxDim && h <= maxDim && file.size < 1.5 * 1024 * 1024) {
+        try {
+          let w = img.width, h = img.height;
+          if (w <= maxDim && h <= maxDim && file.size < 1.5 * 1024 * 1024) {
+            URL.revokeObjectURL(img.src);
+            finish(file);
+            return;
+          }
+          if (w > h) { if (w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; } }
+          else       { if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; } }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('No se pudo abrir el procesador de imágenes');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => {
+            URL.revokeObjectURL(img.src);
+            finish(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file);
+          }, 'image/jpeg', quality);
+        } catch (error) {
           URL.revokeObjectURL(img.src);
-          resolve(file);
-          return;
+          finish(null, error);
         }
-        if (w > h) { if (w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; } }
-        else       { if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; } }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        canvas.toBlob(blob => {
-          URL.revokeObjectURL(img.src);
-          resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file);
-        }, 'image/jpeg', quality);
       };
-      img.onerror = () => resolve(file);
+      img.onerror = () => {
+        URL.revokeObjectURL(img.src);
+        finish(null, new Error(`No se pudo leer "${file.name}". Usa una foto JPG o PNG.`));
+      };
       img.src = URL.createObjectURL(file);
+    });
+  }
+
+  function sbEnviarConProgreso(path, formData, onProgress, timeoutMs = 120000) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', API + path);
+      if (TOKEN) xhr.setRequestHeader('X-Token', TOKEN);
+      xhr.timeout = timeoutMs;
+      xhr.upload.onprogress = event => {
+        if (event.lengthComputable) onProgress?.(Math.round(event.loaded * 100 / event.total));
+      };
+      xhr.upload.onload = () => onProgress?.(100);
+      xhr.onerror = () => reject(new Error('No se pudo enviar la imagen. Comprueba la cobertura y vuelve a intentarlo.'));
+      xhr.ontimeout = () => reject(new Error('El envío tardó demasiado. Comprueba la cobertura y vuelve a intentarlo.'));
+      xhr.onabort = () => reject(new Error('El envío se canceló.'));
+      xhr.onload = () => {
+        if (xhr.status === 401 && TOKEN) _panelSesionCaducada();
+        let data;
+        try { data = JSON.parse(xhr.responseText || '{}'); }
+        catch { return reject(new Error('El servidor respondió de forma inesperada. Vuelve a intentarlo.')); }
+        resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data });
+      };
+      xhr.send(formData);
     });
   }
 
@@ -19350,18 +19410,22 @@ document.getElementById('wInput').focus();
     document.getElementById('sbStep1').style.display = 'none';
     document.getElementById('sbStep2').style.display = '';
     const infoEl = document.getElementById('sbStep2Info');
-    infoEl.textContent = _sbFiles.length > 1
-      ? `Comprimiendo y cotejando ${_sbFiles.length} documentos — puede tardar 15-30 segundos`
-      : 'Analizando documento — puede tardar 10-20 segundos';
     try {
       const fd = new FormData();
       const keys = ['image', 'image2', 'image3', 'image4', 'image5'];
       for (let i = 0; i < _sbFiles.length; i++) {
+        infoEl.textContent = `Preparando foto ${i + 1} de ${_sbFiles.length}…`;
+        await new Promise(resolve => requestAnimationFrame(resolve));
         const compressed = await sbCompressImage(_sbFiles[i], 2000, 0.85);
         fd.append(keys[i], compressed);
       }
-      const res  = await apiRaw('/scan-bobinas', { method: 'POST', body: fd });
-      const data = await res.json();
+      infoEl.textContent = `Subiendo ${_sbFiles.length} documento(s)… 0 %`;
+      const res = await sbEnviarConProgreso('/scan-bobinas', fd, percent => {
+        infoEl.textContent = percent < 100
+          ? `Subiendo ${_sbFiles.length} documento(s)… ${percent} %`
+          : '✅ Fotos recibidas · Alejandra está analizando…';
+      });
+      const data = res.data;
       if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
       _sbData = data;
       sbMostrarReview(data);
@@ -19473,12 +19537,185 @@ document.getElementById('wInput').focus();
     sbMostrarReview({ bobinas });
   }
 
+  // FIX-SCAN-BOBINAS-02: igual que en la PWA, Office usa un solo botón y
+  // pregunta primero si el albarán corresponde a una entrada o una devolución.
+  function abrirScanBobinasModoPanel() {
+    document.getElementById('modalScanBobinasModo').style.display = 'flex';
+  }
+
+  function cerrarScanBobinasModoPanel() {
+    document.getElementById('modalScanBobinasModo').style.display = 'none';
+  }
+
+  function elegirScanBobinasModoPanel(modo) {
+    cerrarScanBobinasModoPanel();
+    if (modo === 'devolucion') abrirScanDevolucionPanel();
+    else abrirScanBobinasPanel();
+  }
+
+  let _sdFiles = [];
+  let _sdData = null;
+
+  function abrirScanDevolucionPanel() {
+    const modal = document.getElementById('modalScanDevolucion');
+    modal.style.display = 'flex';
+    document.getElementById('sdStep1').style.display = '';
+    document.getElementById('sdStep2').style.display = 'none';
+    document.getElementById('sdStep3').style.display = 'none';
+    document.getElementById('sdPreview').innerHTML = '';
+    document.getElementById('sdPreview').style.display = 'none';
+    document.getElementById('sdBtnAnalizar').style.display = 'none';
+    document.getElementById('sdFileInput').value = '';
+    document.getElementById('sdDropzone').style.borderColor = 'var(--border)';
+    document.getElementById('sdAviso').style.display = 'none';
+    document.getElementById('sdFecha').value = new Date().toISOString().slice(0, 10);
+    _sdFiles = [];
+    _sdData = null;
+  }
+
+  function cerrarScanDevolucionPanel() {
+    document.getElementById('modalScanDevolucion').style.display = 'none';
+  }
+
+  function sdPreviewFile(input) {
+    const files = Array.from(input.files || []).filter(file => file.type.startsWith('image/')).slice(0, 5);
+    if (!files.length) return;
+    _sdFiles = files;
+    const preview = document.getElementById('sdPreview');
+    preview.innerHTML = '';
+    preview.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px';
+    files.forEach(file => {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.alt = file.name;
+      img.style.cssText = 'width:100px;height:100px;object-fit:cover;border-radius:8px;border:1px solid var(--border)';
+      preview.appendChild(img);
+    });
+    document.getElementById('sdBtnAnalizar').style.display = '';
+    document.getElementById('sdDropzone').style.borderColor = 'var(--accent)';
+  }
+
+  async function sdEnviar() {
+    if (!_sdFiles.length) { toast('Selecciona al menos una foto', 'err'); return; }
+    document.getElementById('sdStep1').style.display = 'none';
+    document.getElementById('sdStep2').style.display = '';
+    const infoEl = document.getElementById('sdStep2Info');
+    try {
+      const fd = new FormData();
+      const keys = ['image', 'image2', 'image3', 'image4', 'image5'];
+      for (let i = 0; i < _sdFiles.length; i++) {
+        infoEl.textContent = `Preparando foto ${i + 1} de ${_sdFiles.length}…`;
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const compressed = await sbCompressImage(_sdFiles[i], 2000, 0.85);
+        fd.append(keys[i], compressed);
+      }
+      infoEl.textContent = `Subiendo ${_sdFiles.length} documento(s)… 0 %`;
+      const res = await sbEnviarConProgreso('/scan-devolucion-bobinas', fd, percent => {
+        infoEl.textContent = percent < 100
+          ? `Subiendo ${_sdFiles.length} documento(s)… ${percent} %`
+          : '✅ Fotos recibidas · Alejandra está analizando…';
+      }, 180000);
+      const data = res.data;
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
+      _sdData = data;
+      sdMostrarReview(data);
+    } catch (e) {
+      document.getElementById('sdStep2').style.display = 'none';
+      document.getElementById('sdStep1').style.display = '';
+      toast('❌ ' + e.message, 'err');
+    }
+  }
+
+  function sdMostrarReview(data) {
+    document.getElementById('sdStep2').style.display = 'none';
+    document.getElementById('sdStep3').style.display = '';
+    const tbody = document.getElementById('sdTbody');
+    tbody.innerHTML = '';
+    (data.filas || []).forEach((fila, i) => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      const checked = fila.no_esta ? '' : 'checked';
+      const estado = fila.no_esta
+        ? '<span style="color:#ef4444;font-weight:700">⚠️ NO ESTABA</span>'
+        : (fila.existe ? `en inventario (${escH(fila.estado_actual || '')})` : 'nueva — se creará');
+      tr.innerHTML = `
+        <td style="padding:4px;text-align:center"><input type="checkbox" data-idx="${i}" ${checked} style="width:16px;height:16px;cursor:pointer"></td>
+        <td style="padding:4px 6px;font-weight:700">${escH(fila.codigo || '')}</td>
+        <td style="padding:4px 6px">${escH(fila.num_albaran || '')}</td>
+        <td style="padding:4px 6px;font-size:11px">${estado}</td>`;
+      tbody.appendChild(tr);
+    });
+    const total = (data.filas || []).length;
+    const noEstaban = (data.filas || []).filter(f => f.no_esta).length;
+    const docs = data.imagenes_procesadas > 1 ? ` · ${data.imagenes_procesadas} albaranes` : '';
+    document.getElementById('sdResumen').textContent =
+      `${total} matrículas${docs}${data.proveedor_recoge ? ' · ' + data.proveedor_recoge : ''}`;
+    const aviso = document.getElementById('sdAviso');
+    if (noEstaban) {
+      aviso.style.display = '';
+      aviso.textContent = `⚠️ ${noEstaban} matrícula(s) marcadas como "NO ESTÁ" se han desmarcado. Revísalas antes de confirmar.`;
+    } else {
+      aviso.style.display = 'none';
+    }
+  }
+
+  function sdVolver() {
+    document.getElementById('sdStep3').style.display = 'none';
+    document.getElementById('sdStep1').style.display = '';
+  }
+
+  async function sdConfirmar() {
+    if (!_sdData) return;
+    const seleccionadas = [];
+    document.querySelectorAll('#sdTbody tr').forEach((tr, i) => {
+      if (tr.querySelector(`input[type=checkbox][data-idx="${i}"]`)?.checked) {
+        seleccionadas.push(_sdData.filas[i]);
+      }
+    });
+    if (!seleccionadas.length) { toast('No hay matrículas seleccionadas', 'err'); return; }
+    const btn = document.getElementById('sdBtnConfirmar');
+    const fecha = document.getElementById('sdFecha')?.value || null;
+    btn.disabled = true;
+    let correctas = 0;
+    let fallidas = 0;
+    for (const fila of seleccionadas) {
+      btn.textContent = `⏳ Devolviendo ${fila.codigo}...`;
+      const notas = [
+        fila.num_albaran ? `Albarán ${fila.num_albaran}` : '',
+        _sdData.proveedor_recoge || ''
+      ].filter(Boolean).join(' · ');
+      try {
+        const res = await api(`/bobinas/${encodeURIComponent(fila.codigo)}/devolver`, {
+          method: 'PUT',
+          body: JSON.stringify({ notas, devuelto_por: SESSION?.nombre || '', fecha_devolucion: fecha })
+        });
+        if (res.ok) correctas++; else fallidas++;
+      } catch {
+        fallidas++;
+      }
+    }
+    btn.disabled = false;
+    btn.textContent = '↩️ Marcar como devueltas';
+    toast(`✅ ${correctas} devuelta(s)${fallidas ? ` · ❌ ${fallidas} con error` : ''}`, fallidas ? 'err' : 'ok');
+    if (!fallidas) cerrarScanDevolucionPanel();
+    if (typeof cargarBobinas === 'function') cargarBobinas();
+  }
+
   window.abrirScanBobinasPanel = abrirScanBobinasPanel;
+  window.abrirScanBobinasModoPanel = abrirScanBobinasModoPanel;
+  window.cerrarScanBobinasModoPanel = cerrarScanBobinasModoPanel;
+  window.elegirScanBobinasModoPanel = elegirScanBobinasModoPanel;
   window.cerrarScanBobinas     = cerrarScanBobinas;
   window.sbPreviewFiles        = sbPreviewFiles;
   window.sbEnviar              = sbEnviar;
   window.sbImportar            = sbImportar;
   window.sbAbrirConDatos       = sbAbrirConDatos;
+  window.abrirScanDevolucionPanel = abrirScanDevolucionPanel;
+  window.cerrarScanDevolucionPanel = cerrarScanDevolucionPanel;
+  window.sdPreviewFile = sdPreviewFile;
+  window.sdEnviar = sdEnviar;
+  window.sdVolver = sdVolver;
+  window.sdConfirmar = sdConfirmar;
   window.sbVolver              = () => {
     document.getElementById('sbStep3').style.display = 'none';
     document.getElementById('sbStep1').style.display = '';
@@ -19565,6 +19802,22 @@ document.getElementById('wInput').focus();
   </div>
 </div>
 
+<!-- Selector único para el escaneo de bobinas: entrada o devolución -->
+<div id="modalScanBobinasModo" onclick="if(event.target===this)cerrarScanBobinasModoPanel()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2100;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:16px;padding:24px;width:min(92vw,440px);box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">📷 Escanear albarán de bobinas</div>
+      <button onclick="cerrarScanBobinasModoPanel()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">¿Qué operación aparece en los albaranes?</div>
+    <div style="display:grid;gap:10px">
+      <button onclick="elegirScanBobinasModoPanel('entrada')" class="btn btn-primary" style="padding:14px">📥 Registrar entrada de bobinas</button>
+      <button onclick="elegirScanBobinasModoPanel('devolucion')" class="btn btn-secondary" style="padding:14px">↩️ Marcar devolución de bobinas</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal scan albarán bobinas panel -->
 <div id="modalScanBobinas" onclick="if(event.target===this)cerrarScanBobinas()"
   style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center">
@@ -19626,6 +19879,68 @@ document.getElementById('wInput').focus();
       <div style="display:flex;gap:8px">
         <button onclick="sbVolver()" class="btn btn-secondary" style="flex:0 0 100px">← Volver</button>
         <button onclick="sbImportar()" class="btn btn-primary" style="flex:1" id="sbBtnImportar">⚡ Importar bobinas</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Scan devolución bobinas (panel) -->
+<div id="modalScanDevolucion" onclick="if(event.target===this)cerrarScanDevolucionPanel()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:16px;padding:24px;width:min(96vw,700px);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">↩️ Escanear devolución de bobinas</div>
+      <button onclick="cerrarScanDevolucionPanel()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+
+    <!-- Paso 1 -->
+    <div id="sdStep1">
+      <div id="sdDropzone" onclick="document.getElementById('sdFileInput').click()"
+        style="border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:12px">
+        <div style="font-size:40px;margin-bottom:8px">📄</div>
+        <div style="font-size:14px;font-weight:700">Sube fotos de albaranes de devolución</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Puedes seleccionar hasta 5 fotos — JPG, PNG</div>
+        <input type="file" id="sdFileInput" accept="image/*" multiple style="display:none" onchange="sdPreviewFile(this)">
+      </div>
+      <div id="sdPreview" style="display:none;margin-bottom:12px"></div>
+      <button id="sdBtnAnalizar" onclick="sdEnviar()" class="btn btn-primary" style="width:100%;display:none">🔍 Analizar con Alejandra</button>
+    </div>
+
+    <!-- Paso 2 -->
+    <div id="sdStep2" style="display:none;text-align:center;padding:40px 0">
+      <div style="font-size:44px;margin-bottom:14px">🤖</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">Procesando albaranes de devolución</div>
+      <div id="sdStep2Info" style="font-size:12px;color:var(--muted)">Preparando imágenes…</div>
+      <div class="spinner" style="margin:20px auto 0"></div>
+    </div>
+
+    <!-- Paso 3 -->
+    <div id="sdStep3" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700">Matrículas detectadas</div>
+        <div id="sdResumen" style="font-size:11px;color:var(--muted);flex:1;text-align:right"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <label style="font-size:12px;font-weight:700;color:var(--muted)">Fecha de devolución</label>
+        <input type="date" id="sdFecha" style="padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:12px">
+      </div>
+      <div id="sdAviso" style="display:none;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:10px"></div>
+      <div style="overflow-x:auto;margin-bottom:14px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:480px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border);width:32px">✓</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Matrícula</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Nº Albarán</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="sdTbody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="sdVolver()" class="btn btn-secondary" style="flex:0 0 100px">← Volver</button>
+        <button onclick="sdConfirmar()" class="btn btn-primary" style="flex:1" id="sdBtnConfirmar">↩️ Marcar como devueltas</button>
       </div>
     </div>
   </div>

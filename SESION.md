@@ -1,6 +1,17 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
+**Última actualización:** 30/07/2026 — v8.74.
+
+### v8.74 — Escaneo múltiple de bobinas en Office + feedback móvil + caché forzada
+
+- Office mantiene un único botón **“Escanear albarán”** y pregunta si son entradas o devoluciones.
+- La devolución acepta hasta 5 fotos/albaranes, los procesa uno a uno y unifica matrículas duplicadas; una observación “NO ESTÁ” siempre prevalece por seguridad.
+- En móvil, la pantalla informa de cada estado real: preparación de cada foto, porcentaje de subida, confirmación de fotos recibidas y análisis de Alejandra.
+- La compresión ya no puede quedar esperando indefinidamente: controla errores de decodificación/canvas y tiene límite de 25 segundos por foto. La subida también tiene límite y vuelve al paso anterior conservando las fotos para reintentar.
+- Office incorpora `PANEL_APP_VERSION`: al detectar una versión distinta en `version.json`, actualiza el Service Worker, vacía Cache Storage y recarga con URL anticáche. Versiones sincronizadas en `panel.html`, `index.html`, `sw.js` y `version.json`.
+- Backend `/scan-devolucion-bobinas`: admite `image`…`image5`, máximo 20 MB por imagen y 30 MB total; analiza secuencialmente para acotar memoria.
+
 **Fecha:** 30/07/2026 -- Adrián reportó fallos de Alejandra en la PWA (app_android) registrando PEMPs de Liftisa desde foto ("no supo hacérmelo", "me dejó a medias", "me pregunta cosas que ya le dije"). Sesión larga de debugging en vivo (D1 + R2 + prueba real en Alejandra Office con la cuenta de Adrián y con la de Alberto Martínez, encargado sin bypass de dev) que encontró y corrigió 6 bugs distintos, todos en `alejandra-agente/worker.js`:
 
 1. **500 de Anthropic sin fallback** — `fetchAnthropicConReintentos` reintentaba 500 pero el fallback a GPT-4o tras agotar reintentos solo cubría 429/529/503; un 500 persistente (frecuente con fotos) se propagaba como `Error: Anthropic 500:...` literal al usuario. Fix en `llamarAnthropic` y `llamarAnthropicStream`. Commit `d926ca2`.
