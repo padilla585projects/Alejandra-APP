@@ -17951,7 +17951,11 @@ async function _registrarPushDeveloper() {
 (function() {
   let _rsSyncInterval = null;
   let _rsPingInterval = null;
-  let _rsSyncDesde = new Date().toISOString();
+  // Solapar ligeramente el cursor y deduplicar por id evita perder un evento creado
+  // en el mismo segundo que una respuesta de polling (D1 guarda CURRENT_TIMESTAMP
+  // con precisión de segundos).
+  let _rsSyncDesde = new Date(Date.now() - 10000).toISOString();
+  const _rsEventosVistos = new Set();
   let _rsDispositivos = [];
   let _rsScanPendiente = null;
   let _rsScanResultados = [];
@@ -17974,6 +17978,7 @@ async function _registrarPushDeveloper() {
   function rsIniciarSync() {
     if (_rsSyncInterval) return;
     _rsHacerPing();
+    _rsPollEventos();
     _rsPingInterval = setInterval(_rsHacerPing, 30000);
     _rsSyncInterval = setInterval(_rsPollEventos, 3000);
     const fab = document.getElementById('remoteScanFab');
@@ -18026,8 +18031,14 @@ async function _registrarPushDeveloper() {
         headers: _rsApiHeaders()
       });
       const d = await r.json();
-      if (d.servidor) _rsSyncDesde = d.servidor;
+      if (d.servidor) {
+        const servidorMs = Date.parse(d.servidor);
+        if (Number.isFinite(servidorMs)) _rsSyncDesde = new Date(servidorMs - 10000).toISOString();
+      }
       for (const ev of (d.eventos || [])) {
+        if (_rsEventosVistos.has(ev.id)) continue;
+        _rsEventosVistos.add(ev.id);
+        if (_rsEventosVistos.size > 500) _rsEventosVistos.delete(_rsEventosVistos.values().next().value);
         _rsProcesarEvento(ev);
       }
     } catch {}
@@ -18322,7 +18333,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.76';
+const PANEL_APP_VERSION = '8.77';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

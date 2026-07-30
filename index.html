@@ -12808,7 +12808,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.76';
+const APP_VERSION = '8.77';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18845,7 +18845,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 (function() {
   let _rmPingInterval = null;
   let _rmPollInterval = null;
-  let _rmSyncDesde = new Date().toISOString();
+  // Recuperar también solicitudes recientes al arrancar/reabrir la PWA. El cursor
+  // se solapa después unos segundos y cada evento se deduplica por id para evitar
+  // la carrera causada por la precisión de segundos de CURRENT_TIMESTAMP en D1.
+  let _rmSyncDesde = new Date(Date.now() - 120000).toISOString();
+  const _rmEventosVistos = new Set();
   let _rmPendiente = null; // scan_request activo
 
   const RM_TIPOS = {
@@ -18861,6 +18865,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function rmIniciarSync() {
     if (_rmPingInterval) return;
     _rmHacerPing();
+    _rmPollEventos();
     _rmPingInterval = setInterval(_rmHacerPing, 30000);
     _rmPollInterval = setInterval(_rmPollEventos, 5000);
   }
@@ -18904,8 +18909,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         headers: _rmHeaders()
       });
       const d = await r.json();
-      if (d.servidor) _rmSyncDesde = d.servidor;
+      if (d.servidor) {
+        const servidorMs = Date.parse(d.servidor);
+        if (Number.isFinite(servidorMs)) _rmSyncDesde = new Date(servidorMs - 10000).toISOString();
+      }
       for (const ev of (d.eventos || [])) {
+        if (_rmEventosVistos.has(ev.id)) continue;
+        _rmEventosVistos.add(ev.id);
+        if (_rmEventosVistos.size > 500) _rmEventosVistos.delete(_rmEventosVistos.values().next().value);
         _rmProcesarEvento(ev);
       }
     } catch (e) { console.error('[rm] poll eventos falló:', e?.message || e); }
@@ -19066,6 +19077,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.rmIniciarSync = rmIniciarSync;
   window.rmDetenerSync = rmDetenerSync;
   window.rmReconectarSync = rmReconectarSync;
+
+  // iniciarApp() se ejecuta antes de este bloque en una carga normal, por lo que su
+  // llamada defensiva todavía no encuentra rmIniciarSync. Arrancar aquí garantiza
+  // el receptor remoto sin depender de un visibilitychange posterior.
+  if (getSession()?.token) rmIniciarSync();
 })();
 
 // ── CHECKLIST PRE-USO EQUIPOS (NEW-21) ───────────────────────────────────────
@@ -21601,4 +21617,3 @@ async function formacionCargarMobile() {
 </script>
 </body>
 </html>
-

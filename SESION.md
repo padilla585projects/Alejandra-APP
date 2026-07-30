@@ -1,7 +1,14 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.76.
+**Última actualización:** 30/07/2026 — v8.77.
+
+### v8.77 — receptor de escaneo remoto móvil siempre activo
+
+- Reproducido en vivo: Office creó correctamente `scan_request`, pero el móvil había dejado de hacer ping y no recibió la solicitud.
+- Causa principal: `iniciarApp()` intentaba ejecutar `rmIniciarSync()` antes de que el bloque de escaneo remoto hubiese definido y exportado la función. El receptor solo se recuperaba de forma accidental tras un `visibilitychange`.
+- El bloque móvil inicia ahora la sincronización al terminar de cargarse si existe sesión, y ejecuta ping + polling inmediatamente.
+- El polling de móvil y Office solapa 10 segundos su cursor y deduplica eventos por id; así no pierde solicitudes/resultados creados en el mismo segundo que una consulta D1. El móvil recupera además solicitudes de los últimos 2 minutos tras recargar la PWA.
 
 ### v8.76 — CORS de PATCH corregido (causa real de “Descartar”)
 
