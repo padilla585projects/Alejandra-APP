@@ -13060,7 +13060,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.82';
+const APP_VERSION = '8.83';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -16291,12 +16291,27 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   let _telecomNivel = 'idf';
   let _telecomCtx = { obra_id: null, idf_id: null, idf_nombre: null, rack_id: null, rack_nombre: null, pp_id: null, pp_nombre: null };
   let _telecomPuertoActual = null;
+  let _telecomEditActual = null;
+  let _telecomCache = { idf: [], rack: [], pp: [], puertos: [] };
+
+  function _telecomPuedeEliminar() {
+    const s = getSession() || {};
+    const roles = [s.rol, ...(s.roles_extra || [])];
+    return roles.some(r => ['oficina','empresa_admin','superadmin','desarrollador','encargado','jefe_de_obra','project_manager'].includes(r));
+  }
+
+  async function _telecomLeerRespuesta(res) {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) throw new Error(data?.error || `Error ${res.status}`);
+    return data;
+  }
 
   function telecomCargarIdfs() {
     _telecomNivel = 'idf';
+    _telecomEditActual = null;
     _telecomCtx = { obra_id: getSession()?.obra_id || null, idf_id: null, idf_nombre: null, rack_id: null, rack_nombre: null, pp_id: null, pp_nombre: null };
     document.getElementById('telecomBreadcrumb').textContent = '🗄️ Racks / Cableado';
-    document.getElementById('telecomAddBtn').style.display = '';
+    document.getElementById('telecomAddBtn').style.display = _telecomCtx.obra_id ? '' : 'none';
     document.getElementById('telecomAddBtn').textContent = '+ Nuevo IDF';
     telecomCargarNivel('/telecom/idf?obra_id=' + (_telecomCtx.obra_id || ''), telecomRenderIdfs);
   }
@@ -16307,92 +16322,115 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     el.innerHTML = '<div class="empty-state">Cargando...</div>';
     try {
       const res = await apiCall(path);
-      const data = await res.json();
+      const data = await _telecomLeerRespuesta(res);
       renderFn(Array.isArray(data) ? data : []);
     } catch (e) {
-      el.innerHTML = '<div class="empty-state">Error al cargar</div>';
+      el.innerHTML = `<div class="empty-state">❌ ${_escHtml(e.message || 'Error al cargar')}</div>`;
     }
   }
 
   function _telecomVolverBtn(onClick) {
     return `<div onclick="${onClick}" style="display:flex;align-items:center;gap:6px;padding:10px 4px;color:var(--accent);font-weight:700;font-size:13px;cursor:pointer">← Volver</div>`;
   }
-  function _telecomItemHTML(id, titulo, subtitulo, onClick, onDelete) {
+  function _telecomItemHTML(id, titulo, subtitulo, onClick, tipo) {
+    const borrar = _telecomPuedeEliminar()
+      ? `<button onclick="event.stopPropagation();telecomEliminarEntidad('${tipo}',${Number(id)})" title="Eliminar" style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:7px">🗑</button>`
+      : '';
     return `<div style="display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:8px;background:var(--card);border:1px solid var(--border);border-radius:12px">
       <div onclick="${onClick}" style="flex:1;cursor:pointer">
         <div style="font-weight:700;font-size:14px;color:var(--text)">${titulo}</div>
         ${subtitulo ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${subtitulo}</div>` : ''}
       </div>
-      <span onclick="${onClick}" style="color:var(--muted);cursor:pointer">›</span>
-      ${onDelete ? `<button onclick="${onDelete}" style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:4px">🗑</button>` : ''}
+      <button onclick="event.stopPropagation();telecomEditarEntidad('${tipo}',${Number(id)})" title="Editar" style="background:none;border:none;color:var(--accent);font-size:16px;cursor:pointer;padding:7px">✏️</button>
+      ${borrar}
+      <span onclick="${onClick}" style="color:var(--muted);cursor:pointer;padding:7px">›</span>
     </div>`;
   }
 
   function telecomRenderIdfs(list) {
     const el = document.getElementById('telecomContent');
-    if (!list.length) { el.innerHTML = '<div class="empty-state">Sin IDFs todavía. Pulsa "+ Nuevo IDF" para crear el primero.</div>'; return; }
+    _telecomCache.idf = list;
+    if (!list.length) {
+      el.innerHTML = `<div class="empty-state">${_telecomCtx.obra_id
+        ? 'Sin IDFs todavía. Pulsa "+ Nuevo IDF" para crear el primero.'
+        : 'Selecciona una obra en la cabecera para crear su primer IDF.'}</div>`;
+      return;
+    }
     el.innerHTML = list.map(i => _telecomItemHTML(
-      i.id, '📍 ' + i.nombre, i.ubicacion || '',
-      `telecomAbrirIdf(${i.id}, '${(i.nombre||'').replace(/'/g,"\\'")}')`,
-      `telecomEliminarIdf(${i.id})`
+      i.id, '📍 ' + _escHtml(i.nombre),
+      _escHtml([i.obra_nombre, i.ubicacion].filter(Boolean).join(' · ')),
+      `telecomAbrirIdf(${Number(i.id)})`, 'idf'
     )).join('');
   }
 
-  function telecomAbrirIdf(id, nombre) {
+  function telecomAbrirIdf(id) {
+    const item = _telecomCache.idf.find(x => Number(x.id) === Number(id));
+    if (!item) return;
     _telecomNivel = 'rack';
-    _telecomCtx.idf_id = id; _telecomCtx.idf_nombre = nombre;
-    document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + nombre;
+    _telecomCtx.idf_id = id; _telecomCtx.idf_nombre = item.nombre;
+    document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + item.nombre;
+    document.getElementById('telecomAddBtn').style.display = '';
     document.getElementById('telecomAddBtn').textContent = '+ Nuevo Rack';
     const el = document.getElementById('telecomContent');
     el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()');
     telecomCargarNivel('/telecom/racks?idf_id=' + id, (list) => {
+      _telecomCache.rack = list;
       el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()') + (list.length
-        ? list.map(r => _telecomItemHTML(r.id, '🗄️ ' + r.nombre, '', `telecomAbrirRack(${r.id}, '${(r.nombre||'').replace(/'/g,"\\'")}')`, `telecomEliminarRack(${r.id})`)).join('')
+        ? list.map(r => _telecomItemHTML(r.id, '🗄️ ' + _escHtml(r.nombre), _escHtml(r.notas || ''), `telecomAbrirRack(${Number(r.id)})`, 'rack')).join('')
         : '<div class="empty-state">Sin racks en este IDF. Pulsa "+ Nuevo Rack".</div>');
     });
   }
   window.telecomAbrirIdf = telecomAbrirIdf;
 
-  function telecomAbrirRack(id, nombre) {
+  function telecomAbrirRack(id) {
+    const item = _telecomCache.rack.find(x => Number(x.id) === Number(id));
+    if (!item) return;
     _telecomNivel = 'pp';
-    _telecomCtx.rack_id = id; _telecomCtx.rack_nombre = nombre;
-    document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + _telecomCtx.idf_nombre + ' › ' + nombre;
+    _telecomCtx.rack_id = id; _telecomCtx.rack_nombre = item.nombre;
+    document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + _telecomCtx.idf_nombre + ' › ' + item.nombre;
+    document.getElementById('telecomAddBtn').style.display = '';
     document.getElementById('telecomAddBtn').textContent = '+ Nuevo Patch Panel';
     const el = document.getElementById('telecomContent');
-    el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${_telecomCtx.idf_id}, '${(_telecomCtx.idf_nombre||'').replace(/'/g,"\\'")}')`);
+    el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`);
     telecomCargarNivel('/telecom/patch-panels?rack_id=' + id, (list) => {
+      _telecomCache.pp = list;
       const informeBtn = `<button onclick="telecomGenerarInforme(${id})" style="width:100%;margin-bottom:10px;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:9px;padding:9px;font-weight:700;font-size:13px;cursor:pointer">📄 Generar informe de este rack</button>`;
-      el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${_telecomCtx.idf_id}, '${(_telecomCtx.idf_nombre||'').replace(/'/g,"\\'")}')`)
+      el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`)
         + informeBtn
         + (list.length
-          ? list.map(p => _telecomItemHTML(p.id, '🔌 ' + p.nombre, p.num_puertos + ' puertos', `telecomAbrirPP(${p.id}, '${(p.nombre||'').replace(/'/g,"\\'")}')`, `telecomEliminarPP(${p.id})`)).join('')
+          ? list.map(p => _telecomItemHTML(p.id, '🔌 ' + _escHtml(p.nombre), Number(p.num_puertos) + ' puertos', `telecomAbrirPP(${Number(p.id)})`, 'pp')).join('')
           : '<div class="empty-state">Sin patch panels en este rack. Pulsa "+ Nuevo Patch Panel".</div>');
     });
   }
   window.telecomAbrirRack = telecomAbrirRack;
 
-  function telecomAbrirPP(id, nombre) {
+  function telecomAbrirPP(id) {
+    const item = _telecomCache.pp.find(x => Number(x.id) === Number(id));
+    if (!item) return;
     _telecomNivel = 'puertos';
-    _telecomCtx.pp_id = id; _telecomCtx.pp_nombre = nombre;
-    document.getElementById('telecomBreadcrumb').textContent = '🔌 ' + nombre;
+    _telecomCtx.pp_id = id; _telecomCtx.pp_nombre = item.nombre;
+    document.getElementById('telecomBreadcrumb').textContent = '🔌 ' + item.nombre;
     document.getElementById('telecomAddBtn').style.display = 'none';
     const el = document.getElementById('telecomContent');
-    el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${_telecomCtx.rack_id}, '${(_telecomCtx.rack_nombre||'').replace(/'/g,"\\'")}')`);
+    el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${Number(_telecomCtx.rack_id)})`);
     telecomCargarNivel('/telecom/puertos?patch_panel_id=' + id, (list) => {
+      _telecomCache.puertos = list;
       const grid = list.map(p => {
         const ocupado = p.estado === 'ocupado';
-        return `<div onclick='telecomAbrirPuerto(${JSON.stringify(p)})' style="cursor:pointer;padding:8px 4px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'}">
+        return `<div onclick="telecomAbrirPuerto(${Number(p.id)})" style="cursor:pointer;padding:8px 4px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'}">
           <div style="font-weight:800;font-size:13px;color:${ocupado ? '#22c55e' : 'var(--text)'}">${p.numero}</div>
-          <div style="font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ocupado ? (p.destino || 'ocupado') : 'libre'}</div>
+          <div style="font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ocupado ? _escHtml(p.destino || 'ocupado') : 'libre'}</div>
         </div>`;
       }).join('');
-      el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${_telecomCtx.rack_id}, '${(_telecomCtx.rack_nombre||'').replace(/'/g,"\\'")}')`)
+      el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${Number(_telecomCtx.rack_id)})`)
         + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px">${grid}</div>`;
     });
   }
   window.telecomAbrirPP = telecomAbrirPP;
 
-  function telecomAbrirPuerto(puerto) {
+  function telecomAbrirPuerto(id) {
+    const puerto = _telecomCache.puertos.find(x => Number(x.id) === Number(id));
+    if (!puerto) return;
     _telecomPuertoActual = puerto;
     document.getElementById('telecomPuertoModalTitle').textContent = 'Puerto ' + puerto.numero;
     document.getElementById('telecomPuertoDestino').value = puerto.destino || '';
@@ -16412,10 +16450,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   async function _telecomGuardarPuertoDatos(datos) {
     if (!_telecomPuertoActual) return;
     try {
-      await apiCall('/telecom/puertos/' + _telecomPuertoActual.id, { method: 'PUT', body: JSON.stringify(datos) });
+      const res = await apiCall('/telecom/puertos/' + _telecomPuertoActual.id, { method: 'PUT', body: JSON.stringify(datos) });
+      await _telecomLeerRespuesta(res);
       telecomCerrarModalPuerto();
-      telecomAbrirPP(_telecomCtx.pp_id, _telecomCtx.pp_nombre);
-    } catch (e) { toast('❌ Error al guardar el puerto', 'err'); }
+      toast('✅ Puerto actualizado', 'ok');
+      telecomAbrirPP(_telecomCtx.pp_id);
+    } catch (e) { toast('❌ ' + (e.message || 'Error al guardar el puerto'), 'err'); }
   }
   function telecomGuardarPuerto() {
     _telecomGuardarPuertoDatos({
@@ -16432,34 +16472,26 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   window.telecomVaciarPuerto = telecomVaciarPuerto;
 
-  async function telecomEliminarIdf(id) {
-    if (!confirm('¿Borrar este IDF? Debe estar vacío (sin racks).')) return;
+  async function telecomEliminarEntidad(tipo, id) {
+    const cfg = {
+      idf:  { path:'/telecom/idf/', label:'IDF', pregunta:'¿Borrar este IDF? Debe estar vacío (sin racks).' },
+      rack: { path:'/telecom/racks/', label:'rack', pregunta:'¿Borrar este rack? Debe estar vacío (sin patch panels).' },
+      pp:   { path:'/telecom/patch-panels/', label:'patch panel', pregunta:'¿Borrar este patch panel? Se perderán los datos de sus puertos.' },
+    }[tipo];
+    if (!cfg || !confirm(cfg.pregunta)) return;
     try {
-      const res = await apiCall('/telecom/idf/' + id, { method: 'DELETE' });
-      if (!res.ok) { const d = await res.json().catch(()=>({})); toast('❌ ' + (d.error || 'Error al borrar'), 'err'); return; }
-      telecomCargarIdfs();
-    } catch (e) { toast('❌ Error al borrar', 'err'); }
+      const res = await apiCall(cfg.path + id, { method: 'DELETE' });
+      await _telecomLeerRespuesta(res);
+      toast(`✅ ${cfg.label} eliminado`, 'ok');
+      if (tipo === 'idf') telecomCargarIdfs();
+      else if (tipo === 'rack') telecomAbrirIdf(_telecomCtx.idf_id);
+      else telecomAbrirRack(_telecomCtx.rack_id);
+    } catch (e) { toast('❌ ' + (e.message || 'Error al borrar'), 'err'); }
   }
-  window.telecomEliminarIdf = telecomEliminarIdf;
-  async function telecomEliminarRack(id) {
-    if (!confirm('¿Borrar este rack? Debe estar vacío (sin patch panels).')) return;
-    try {
-      const res = await apiCall('/telecom/racks/' + id, { method: 'DELETE' });
-      if (!res.ok) { const d = await res.json().catch(()=>({})); toast('❌ ' + (d.error || 'Error al borrar'), 'err'); return; }
-      telecomAbrirIdf(_telecomCtx.idf_id, _telecomCtx.idf_nombre);
-    } catch (e) { toast('❌ Error al borrar', 'err'); }
-  }
-  window.telecomEliminarRack = telecomEliminarRack;
-  async function telecomEliminarPP(id) {
-    if (!confirm('¿Borrar este patch panel? Se perderán los datos de sus puertos.')) return;
-    try {
-      await apiCall('/telecom/patch-panels/' + id, { method: 'DELETE' });
-      telecomAbrirRack(_telecomCtx.rack_id, _telecomCtx.rack_nombre);
-    } catch (e) { toast('❌ Error al borrar', 'err'); }
-  }
-  window.telecomEliminarPP = telecomEliminarPP;
+  window.telecomEliminarEntidad = telecomEliminarEntidad;
 
   function telecomAbrirNuevo() {
+    _telecomEditActual = null;
     document.getElementById('telecomModalInput1').value = '';
     document.getElementById('telecomModalInput2').value = '';
     const field2Wrap = document.getElementById('telecomModalField2Wrap');
@@ -16483,8 +16515,35 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   window.telecomAbrirNuevo = telecomAbrirNuevo;
 
+  function telecomEditarEntidad(tipo, id) {
+    const item = (_telecomCache[tipo] || []).find(x => Number(x.id) === Number(id));
+    if (!item) return;
+    _telecomEditActual = { tipo, id: Number(id) };
+    const field2Wrap = document.getElementById('telecomModalField2Wrap');
+    document.getElementById('telecomModalInput1').value = item.nombre || '';
+    document.getElementById('telecomModalInput2').value = '';
+    if (tipo === 'idf') {
+      document.getElementById('telecomModalTitle').textContent = 'Editar IDF';
+      document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
+      document.getElementById('telecomModalLabel2').textContent = 'Ubicación';
+      document.getElementById('telecomModalInput2').value = item.ubicacion || '';
+      field2Wrap.style.display = '';
+    } else if (tipo === 'rack') {
+      document.getElementById('telecomModalTitle').textContent = 'Editar rack';
+      document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
+      field2Wrap.style.display = 'none';
+    } else {
+      document.getElementById('telecomModalTitle').textContent = 'Editar patch panel';
+      document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
+      field2Wrap.style.display = 'none';
+    }
+    document.getElementById('modalTelecom').style.display = 'flex';
+  }
+  window.telecomEditarEntidad = telecomEditarEntidad;
+
   function telecomCerrarModal() {
     document.getElementById('modalTelecom').style.display = 'none';
+    _telecomEditActual = null;
   }
   window.telecomCerrarModal = telecomCerrarModal;
 
@@ -16492,46 +16551,65 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const nombre = document.getElementById('telecomModalInput1').value.trim();
     if (!nombre) { toast('❌ Falta el nombre', 'err'); return; }
     try {
-      if (_telecomNivel === 'idf') {
-        await apiCall('/telecom/idf', { method: 'POST', body: JSON.stringify({ obra_id: _telecomCtx.obra_id, nombre, ubicacion: document.getElementById('telecomModalInput2').value.trim() }) });
+      if (_telecomEditActual) {
+        const { tipo, id } = _telecomEditActual;
+        const path = tipo === 'idf' ? '/telecom/idf/' : tipo === 'rack' ? '/telecom/racks/' : '/telecom/patch-panels/';
+        const body = { nombre };
+        if (tipo === 'idf') body.ubicacion = document.getElementById('telecomModalInput2').value.trim();
+        const res = await apiCall(path + id, { method: 'PATCH', body: JSON.stringify(body) });
+        await _telecomLeerRespuesta(res);
         telecomCerrarModal();
+        toast('✅ Cambios guardados', 'ok');
+        if (tipo === 'idf') telecomCargarIdfs();
+        else if (tipo === 'rack') telecomAbrirIdf(_telecomCtx.idf_id);
+        else telecomAbrirRack(_telecomCtx.rack_id);
+      } else if (_telecomNivel === 'idf') {
+        const res = await apiCall('/telecom/idf', { method: 'POST', body: JSON.stringify({ obra_id: _telecomCtx.obra_id, nombre, ubicacion: document.getElementById('telecomModalInput2').value.trim() }) });
+        await _telecomLeerRespuesta(res);
+        telecomCerrarModal();
+        toast('✅ IDF creado', 'ok');
         telecomCargarIdfs();
       } else if (_telecomNivel === 'rack') {
-        await apiCall('/telecom/racks', { method: 'POST', body: JSON.stringify({ idf_id: _telecomCtx.idf_id, nombre }) });
+        const res = await apiCall('/telecom/racks', { method: 'POST', body: JSON.stringify({ idf_id: _telecomCtx.idf_id, nombre }) });
+        await _telecomLeerRespuesta(res);
         telecomCerrarModal();
-        telecomAbrirIdf(_telecomCtx.idf_id, _telecomCtx.idf_nombre);
+        toast('✅ Rack creado', 'ok');
+        telecomAbrirIdf(_telecomCtx.idf_id);
       } else if (_telecomNivel === 'pp') {
         const numPuertos = parseInt(document.getElementById('telecomModalInput2').value) || 24;
-        await apiCall('/telecom/patch-panels', { method: 'POST', body: JSON.stringify({ rack_id: _telecomCtx.rack_id, nombre, num_puertos: numPuertos }) });
+        const res = await apiCall('/telecom/patch-panels', { method: 'POST', body: JSON.stringify({ rack_id: _telecomCtx.rack_id, nombre, num_puertos: numPuertos }) });
+        await _telecomLeerRespuesta(res);
         telecomCerrarModal();
-        telecomAbrirRack(_telecomCtx.rack_id, _telecomCtx.rack_nombre);
+        toast('✅ Patch panel creado', 'ok');
+        telecomAbrirRack(_telecomCtx.rack_id);
       }
-    } catch (e) { toast('❌ Error al guardar', 'err'); }
+    } catch (e) { toast('❌ ' + (e.message || 'Error al guardar'), 'err'); }
   }
   window.telecomGuardarModal = telecomGuardarModal;
 
   async function telecomGenerarInforme(rackId) {
     try {
       const res = await apiCall('/telecom/informe/' + rackId);
-      const data = await res.json();
+      const data = await _telecomLeerRespuesta(res);
       const w = window.open('', '_blank');
+      if (!w) throw new Error('El navegador ha bloqueado la ventana del informe');
       const filas = data.patch_panels.map(pp => `
-        <h3>${pp.nombre} (${pp.num_puertos} puertos)</h3>
+        <h3>${_escHtml(pp.nombre)} (${Number(pp.num_puertos)} puertos)</h3>
         <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;margin-bottom:20px;font-size:13px">
           <tr style="background:#eee"><th>Puerto</th><th>Destino</th><th>Cable</th><th>Categoría</th><th>Notas</th></tr>
-          ${pp.puertos.map(p => `<tr><td>${p.numero}</td><td>${p.destino || ''}</td><td>${p.cable_label || ''}</td><td>${p.categoria || ''}</td><td>${p.notas || ''}</td></tr>`).join('')}
+          ${pp.puertos.map(p => `<tr><td>${Number(p.numero)}</td><td>${_escHtml(p.destino || '')}</td><td>${_escHtml(p.cable_label || '')}</td><td>${_escHtml(p.categoria || '')}</td><td>${_escHtml(p.notas || '')}</td></tr>`).join('')}
         </table>`).join('');
-      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe ${data.rack.nombre}</title>
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe ${_escHtml(data.rack.nombre)}</title>
         <style>body{font-family:Arial,sans-serif;padding:24px;color:#111} h1{margin-bottom:2px} h2{color:#555;font-weight:normal;margin-top:0}</style>
         </head><body>
-        <h1>Informe de cableado — ${data.rack.nombre}</h1>
-        <h2>${data.idf?.nombre || ''} ${data.idf?.ubicacion ? '— ' + data.idf.ubicacion : ''}</h2>
+        <h1>Informe de cableado — ${_escHtml(data.rack.nombre)}</h1>
+        <h2>${_escHtml(data.idf?.nombre || '')} ${data.idf?.ubicacion ? '— ' + _escHtml(data.idf.ubicacion) : ''}</h2>
         ${filas}
         <p style="color:#888;font-size:11px">Generado ${new Date().toLocaleString('es-ES')}</p>
         <script>window.onload=()=>window.print()<\/script>
         </body></html>`);
       w.document.close();
-    } catch (e) { toast('❌ Error al generar el informe', 'err'); }
+    } catch (e) { toast('❌ ' + (e.message || 'Error al generar el informe'), 'err'); }
   }
   window.telecomGenerarInforme = telecomGenerarInforme;
 

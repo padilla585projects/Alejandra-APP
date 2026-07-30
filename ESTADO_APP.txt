@@ -4,6 +4,8 @@
 Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+ACTUALIZACIÓN v8.83 (30/07/2026): departamento Teleco terminado. Nueva gestión de racks y cableado en PWA y Office con jerarquía obra → IDF → rack → patch panel → puertos; altas, edición, borrado protegido, estado libre/ocupado, destino, etiqueta, categoría, notas e informe imprimible por rack. El Worker valida empresa, obra asignada y parentesco completo; técnicos Teleco pueden documentar y los borrados quedan para responsables. Índices únicos de D1 aplicados en producción. Caché web/PWA renovada a v8.83. Ver SESION.md.
+
 ACTUALIZACIÓN v8.82 (30/07/2026): el archivo de albaranes de Bobinas ya está también en la PWA móvil como cuarta pestaña. Comparte los mismos datos privados de R2/D1 que Office e incluye buscar, subir con progreso, ver imágenes/PDF, editar nombre y número, descargar, compartir y eliminar. La gestión queda disponible para Office, administradores, Encargado, Jefe de obra y Project Manager; la consulta respeta empresa y obra. Caché móvil renovada a v8.82.
 
 ACTUALIZACIÓN v8.81 (30/07/2026): nuevo archivo de albaranes dentro de Bobinas, presentado como pestaña junto a Inventario. Reúne los escaneos remotos existentes y permite subir manualmente JPG/PNG/WebP/PDF con progreso visible. Cada albarán se puede ver, editar (nombre, número y obra), descargar, compartir o eliminar. Los archivos permanecen privados en R2; D1 guarda sus metadatos y la eliminación limpia ambos sitios con aislamiento por empresa/obra. La versión 8.81 fuerza también la renovación de caché web. Ver SESION.md para detalle técnico.

@@ -1,7 +1,17 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.82.
+**Última actualización:** 30/07/2026 — v8.83.
+
+### v8.83 — departamento Teleco: racks y cableado completo
+
+- Teleco incorpora una gestión real de cableado con jerarquía `obra → IDF → rack → patch panel → puerto`, disponible tanto en la PWA como en Alejandra Office.
+- Cada puerto permite guardar destino, etiqueta de cable, categoría y notas; se muestra libre/ocupado automáticamente y puede vaciarse cuando cambia el conexionado.
+- IDF, racks y patch panels se pueden crear y renombrar. Los responsables pueden eliminarlos con protecciones para no borrar un IDF o rack que todavía contenga elementos.
+- Cada rack genera un informe imprimible con todos sus patch panels y puertos para entrega o revisión con el cliente.
+- El Worker valida empresa, obra asignada y toda la cadena padre antes de leer o modificar datos. Los técnicos de Teleco pueden documentar desde campo; los borrados completos quedan para responsables.
+- D1 tiene índices únicos por ámbito para impedir nombres duplicados dentro de la misma obra/IDF/rack. La migración `migrate_telecom_racks.sql` ya está aplicada en producción.
+- Versiones sincronizadas a `8.83` en PWA, Office, Service Worker y `version.json`, forzando la renovación de caché.
 
 ### v8.82 — archivo de albaranes también en la PWA
 

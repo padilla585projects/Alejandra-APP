@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS telecom_idf (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_telecom_idf_obra ON telecom_idf(obra_id, empresa_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_telecom_idf_nombre
+  ON telecom_idf(empresa_id, obra_id, nombre COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS telecom_racks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,6 +23,8 @@ CREATE TABLE IF NOT EXISTS telecom_racks (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_telecom_racks_idf ON telecom_racks(idf_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_telecom_racks_nombre
+  ON telecom_racks(empresa_id, idf_id, nombre COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS telecom_patch_panels (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +35,8 @@ CREATE TABLE IF NOT EXISTS telecom_patch_panels (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_telecom_pp_rack ON telecom_patch_panels(rack_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_telecom_pp_nombre
+  ON telecom_patch_panels(empresa_id, rack_id, nombre COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS telecom_puertos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
