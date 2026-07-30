@@ -1,7 +1,16 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.86.
+**Última actualización:** 30/07/2026 — v8.88.
+
+### v8.88 — resumen y ficha técnica de patch panels
+
+- Cada tarjeta de patch panel muestra el total y los contadores calculados de puertos ocupados/libres. El panel BMS de prueba queda confirmado con 11 ocupados y 13 libres.
+- Patch panels editables con Red/VLAN, switch asociado, subred, posición U y notas de configuración en PWA y Office.
+- El informe del rack incluye los metadatos técnicos y el resumen de ocupación de cada panel.
+- Dentro del patch panel, el destino se muestra más grande y con etiqueta/categoría debajo para identificar cada conexión sin abrir el puerto.
+- Nueva migración `migrate_telecom_patch_panel_metadata.sql` aplicada a D1 producción. Worker desplegado con Version ID `89486141-5a6e-47b5-ac0d-6dc74ee08177`.
+- v8.87 corrigió el selector nativo de categoría: fondo blanco y letras oscuras en Android/tema oscuro. Caché consolidada en v8.88.
 
 ### v8.86 — reordenar tarjetas con pulsación larga
 

@@ -4,6 +4,8 @@
 Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+ACTUALIZACIÓN v8.88 (30/07/2026): ampliado Teleco/Racks. Las tarjetas de patch panel muestran contadores reales de puertos ocupados y libres sin necesidad de entrar; permiten documentar Red/VLAN, switch asociado, subred, posición U y notas de configuración, visibles también en el informe del rack. Dentro del patch panel se agrandan destino, etiqueta y categoría de cada puerto para poder identificarlos desde la cuadrícula. D1 migrado en producción y Worker desplegado. Incluye el contraste corregido del selector de categoría de v8.87. Caché renovada a v8.88.
+
 ACTUALIZACIÓN v8.86 (30/07/2026): reordenación de tarjetas simplificada. Se elimina el botón flotante 🔀 de Inicio; ahora basta con mantener pulsada una tarjeta 450 ms, moverla y soltarla. Funciona en táctil y ratón, cancela el gesto si detecta scroll, guarda automáticamente al soltar y evita abrir accidentalmente la tarjeta movida. Incluye el menú PWA de Teleco cerrado con lista blanca de v8.85: ya no se cuelan Actas, Calidad, Subcontratas, RdP, Hormigonado ni Formación. Caché renovada a v8.86.
 
 ACTUALIZACIÓN v8.84 (30/07/2026): unificada la configuración duplicada de departamentos de Mi Empresa. Se elimina el bloque antiguo "Departamentos activos" y queda una única sección "Departamentos activos y submódulos", que controla tanto la visibilidad del departamento como sus tarjetas internas. Corregido además el guardado que enviaba vacío el nombre de empresa y mostraba "Falta el nombre de la empresa". Telecom permanece activo para Edison Montajes. Caché renovada a v8.84.

@@ -2304,6 +2304,30 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <label id="telecomModalLabel2" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Ubicación</label>
           <input id="telecomModalInput2" type="text" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
         </div>
+        <div id="telecomModalPatchFields" style="display:none">
+          <div style="margin-bottom:11px">
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Red / VLAN</label>
+            <input id="telecomModalRedVlan" type="text" placeholder="Ej: BMS · VLAN 30" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div style="margin-bottom:11px">
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Switch asociado</label>
+            <input id="telecomModalSwitch" type="text" placeholder="Ej: SW-BMS-01" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="margin-bottom:11px">
+              <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Subred</label>
+              <input id="telecomModalSubred" type="text" placeholder="192.168.30.0/24" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+            </div>
+            <div style="margin-bottom:11px">
+              <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Posición U</label>
+              <input id="telecomModalPosicionU" type="text" placeholder="Ej: U12–U13" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+            </div>
+          </div>
+          <div style="margin-bottom:11px">
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Notas de configuración</label>
+            <textarea id="telecomModalNotasConfig" rows="3" maxlength="1000" placeholder="Ej: PoE, trunk, reserva…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+          </div>
+        </div>
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
         <button onclick="telecomGuardarModal()" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
@@ -13082,7 +13106,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.87';
+const APP_VERSION = '8.88';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -16420,7 +16444,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`)
         + informeBtn
         + (list.length
-          ? list.map(p => _telecomItemHTML(p.id, '🔌 ' + _escHtml(p.nombre), Number(p.num_puertos) + ' puertos', `telecomAbrirPP(${Number(p.id)})`, 'pp')).join('')
+          ? list.map(p => {
+              const ocupados = Number(p.ocupados) || 0;
+              const libres = Number(p.libres) || 0;
+              const tecnico = [
+                p.red_vlan ? _escHtml(p.red_vlan) : '',
+                p.switch_asociado ? _escHtml(p.switch_asociado) : '',
+                p.subred ? _escHtml(p.subred) : '',
+                p.posicion_u ? _escHtml(p.posicion_u) : ''
+              ].filter(Boolean).join(' · ');
+              const resumen = `<span style="color:#22c55e;font-weight:800">${ocupados} ocupados</span> · <span style="color:#60a5fa;font-weight:800">${libres} libres</span>`;
+              const subtitulo = `${Number(p.num_puertos)} puertos · ${resumen}${tecnico ? `<div style="margin-top:4px;color:var(--text);font-weight:600">${tecnico}</div>` : ''}`;
+              return _telecomItemHTML(p.id, '🔌 ' + _escHtml(p.nombre), subtitulo, `telecomAbrirPP(${Number(p.id)})`, 'pp');
+            }).join('')
           : '<div class="empty-state">Sin patch panels en este rack. Pulsa "+ Nuevo Patch Panel".</div>');
     });
   }
@@ -16439,9 +16475,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       _telecomCache.puertos = list;
       const grid = list.map(p => {
         const ocupado = p.estado === 'ocupado';
-        return `<div onclick="telecomAbrirPuerto(${Number(p.id)})" style="cursor:pointer;padding:8px 4px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'}">
-          <div style="font-weight:800;font-size:13px;color:${ocupado ? '#22c55e' : 'var(--text)'}">${p.numero}</div>
-          <div style="font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ocupado ? _escHtml(p.destino || 'ocupado') : 'libre'}</div>
+        const detalleCable = ocupado ? [p.cable_label, p.categoria].filter(Boolean).map(_escHtml).join(' · ') : '';
+        return `<div onclick="telecomAbrirPuerto(${Number(p.id)})" style="cursor:pointer;padding:9px 5px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'};min-height:58px;display:flex;flex-direction:column;justify-content:center">
+          <div style="font-weight:900;font-size:14px;color:${ocupado ? '#22c55e' : 'var(--text)'}">${p.numero}</div>
+          <div style="font-size:11px;font-weight:700;line-height:1.25;color:${ocupado ? 'var(--text)' : 'var(--muted)'};overflow-wrap:anywhere">${ocupado ? _escHtml(p.destino || 'ocupado') : 'libre'}</div>
+          ${detalleCable ? `<div style="font-size:9px;line-height:1.2;color:var(--muted);margin-top:3px;overflow-wrap:anywhere">${detalleCable}</div>` : ''}
         </div>`;
       }).join('');
       el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${Number(_telecomCtx.rack_id)})`)
@@ -16516,7 +16554,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     _telecomEditActual = null;
     document.getElementById('telecomModalInput1').value = '';
     document.getElementById('telecomModalInput2').value = '';
+    ['telecomModalRedVlan','telecomModalSwitch','telecomModalSubred','telecomModalPosicionU','telecomModalNotasConfig']
+      .forEach(id => { document.getElementById(id).value = ''; });
     const field2Wrap = document.getElementById('telecomModalField2Wrap');
+    const patchFields = document.getElementById('telecomModalPatchFields');
+    patchFields.style.display = 'none';
     if (_telecomNivel === 'idf') {
       document.getElementById('telecomModalTitle').textContent = 'Nuevo IDF';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: IDF Planta 1)';
@@ -16532,6 +16574,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       field2Wrap.style.display = '';
       document.getElementById('telecomModalLabel2').textContent = 'Número de puertos (por defecto 24)';
       document.getElementById('telecomModalInput2').value = '24';
+      patchFields.style.display = '';
     }
     document.getElementById('modalTelecom').style.display = 'flex';
   }
@@ -16542,6 +16585,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!item) return;
     _telecomEditActual = { tipo, id: Number(id) };
     const field2Wrap = document.getElementById('telecomModalField2Wrap');
+    const patchFields = document.getElementById('telecomModalPatchFields');
+    patchFields.style.display = 'none';
     document.getElementById('telecomModalInput1').value = item.nombre || '';
     document.getElementById('telecomModalInput2').value = '';
     if (tipo === 'idf') {
@@ -16558,6 +16603,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       document.getElementById('telecomModalTitle').textContent = 'Editar patch panel';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
       field2Wrap.style.display = 'none';
+      patchFields.style.display = '';
+      document.getElementById('telecomModalRedVlan').value = item.red_vlan || '';
+      document.getElementById('telecomModalSwitch').value = item.switch_asociado || '';
+      document.getElementById('telecomModalSubred').value = item.subred || '';
+      document.getElementById('telecomModalPosicionU').value = item.posicion_u || '';
+      document.getElementById('telecomModalNotasConfig').value = item.notas_config || '';
     }
     document.getElementById('modalTelecom').style.display = 'flex';
   }
@@ -16569,6 +16620,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   window.telecomCerrarModal = telecomCerrarModal;
 
+  function _telecomDatosPatchPanelFormulario() {
+    return {
+      red_vlan: document.getElementById('telecomModalRedVlan').value.trim(),
+      switch_asociado: document.getElementById('telecomModalSwitch').value.trim(),
+      subred: document.getElementById('telecomModalSubred').value.trim(),
+      posicion_u: document.getElementById('telecomModalPosicionU').value.trim(),
+      notas_config: document.getElementById('telecomModalNotasConfig').value.trim()
+    };
+  }
+
   async function telecomGuardarModal() {
     const nombre = document.getElementById('telecomModalInput1').value.trim();
     if (!nombre) { toast('❌ Falta el nombre', 'err'); return; }
@@ -16578,6 +16639,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         const path = tipo === 'idf' ? '/telecom/idf/' : tipo === 'rack' ? '/telecom/racks/' : '/telecom/patch-panels/';
         const body = { nombre };
         if (tipo === 'idf') body.ubicacion = document.getElementById('telecomModalInput2').value.trim();
+        if (tipo === 'pp') Object.assign(body, _telecomDatosPatchPanelFormulario());
         const res = await apiCall(path + id, { method: 'PATCH', body: JSON.stringify(body) });
         await _telecomLeerRespuesta(res);
         telecomCerrarModal();
@@ -16599,7 +16661,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         telecomAbrirIdf(_telecomCtx.idf_id);
       } else if (_telecomNivel === 'pp') {
         const numPuertos = parseInt(document.getElementById('telecomModalInput2').value) || 24;
-        const res = await apiCall('/telecom/patch-panels', { method: 'POST', body: JSON.stringify({ rack_id: _telecomCtx.rack_id, nombre, num_puertos: numPuertos }) });
+        const res = await apiCall('/telecom/patch-panels', { method: 'POST', body: JSON.stringify({
+          rack_id: _telecomCtx.rack_id, nombre, num_puertos: numPuertos, ..._telecomDatosPatchPanelFormulario()
+        }) });
         await _telecomLeerRespuesta(res);
         telecomCerrarModal();
         toast('✅ Patch panel creado', 'ok');
@@ -16615,12 +16679,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const data = await _telecomLeerRespuesta(res);
       const w = window.open('', '_blank');
       if (!w) throw new Error('El navegador ha bloqueado la ventana del informe');
-      const filas = data.patch_panels.map(pp => `
-        <h3>${_escHtml(pp.nombre)} (${Number(pp.num_puertos)} puertos)</h3>
+      const filas = data.patch_panels.map(pp => {
+        const ocupados = (pp.puertos || []).filter(p => p.estado === 'ocupado').length;
+        const meta = [
+          pp.red_vlan && `<b>Red/VLAN:</b> ${_escHtml(pp.red_vlan)}`,
+          pp.switch_asociado && `<b>Switch:</b> ${_escHtml(pp.switch_asociado)}`,
+          pp.subred && `<b>Subred:</b> ${_escHtml(pp.subred)}`,
+          pp.posicion_u && `<b>Posición:</b> ${_escHtml(pp.posicion_u)}`
+        ].filter(Boolean).join(' · ');
+        return `
+        <h3>${_escHtml(pp.nombre)} (${Number(pp.num_puertos)} puertos · ${ocupados} ocupados · ${Number(pp.num_puertos) - ocupados} libres)</h3>
+        ${meta ? `<p>${meta}</p>` : ''}
+        ${pp.notas_config ? `<p><b>Configuración:</b> ${_escHtml(pp.notas_config)}</p>` : ''}
         <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;margin-bottom:20px;font-size:13px">
           <tr style="background:#eee"><th>Puerto</th><th>Destino</th><th>Cable</th><th>Categoría</th><th>Notas</th></tr>
           ${pp.puertos.map(p => `<tr><td>${Number(p.numero)}</td><td>${_escHtml(p.destino || '')}</td><td>${_escHtml(p.cable_label || '')}</td><td>${_escHtml(p.categoria || '')}</td><td>${_escHtml(p.notas || '')}</td></tr>`).join('')}
-        </table>`).join('');
+        </table>`;
+      }).join('');
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe ${_escHtml(data.rack.nombre)}</title>
         <style>body{font-family:Arial,sans-serif;padding:24px;color:#111} h1{margin-bottom:2px} h2{color:#555;font-weight:normal;margin-top:0}</style>
         </head><body>

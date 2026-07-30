@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS telecom_patch_panels (
   empresa_id INTEGER NOT NULL,
   nombre TEXT NOT NULL,
   num_puertos INTEGER NOT NULL DEFAULT 24,
+  red_vlan TEXT,
+  switch_asociado TEXT,
+  subred TEXT,
+  posicion_u TEXT,
+  notas_config TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_telecom_pp_rack ON telecom_patch_panels(rack_id);

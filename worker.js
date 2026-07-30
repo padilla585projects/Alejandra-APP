@@ -7201,7 +7201,15 @@ async function getTelecomPatchPanels(request, env) {
   if (!rackId) return err('Falta rack_id');
   if (!(await telecomGetRack(auth, env, rackId))) return err('Rack no encontrado', 404);
   const { results } = await env.DB.prepare(
-    'SELECT * FROM telecom_patch_panels WHERE rack_id = ? AND empresa_id = ? ORDER BY nombre'
+    `SELECT pp.*,
+            COALESCE(SUM(CASE WHEN p.estado = 'ocupado' THEN 1 ELSE 0 END), 0) AS ocupados,
+            COALESCE(SUM(CASE WHEN p.estado = 'libre' THEN 1 ELSE 0 END), 0) AS libres
+     FROM telecom_patch_panels pp
+     LEFT JOIN telecom_puertos p
+       ON p.patch_panel_id = pp.id AND p.empresa_id = pp.empresa_id
+     WHERE pp.rack_id = ? AND pp.empresa_id = ?
+     GROUP BY pp.id
+     ORDER BY pp.nombre`
   ).bind(rackId, auth.empresa_id).all();
   return json(results);
 }
@@ -7213,14 +7221,27 @@ async function crearTelecomPatchPanel(request, env) {
   const nombre = safeStr(body.nombre).trim();
   const rackId = body.rack_id ? parseInt(body.rack_id) : null;
   const numPuertos = body.num_puertos ? parseInt(body.num_puertos) : 24;
+  const redVlan = safeStr(body.red_vlan).trim();
+  const switchAsociado = safeStr(body.switch_asociado).trim();
+  const subred = safeStr(body.subred).trim();
+  const posicionU = safeStr(body.posicion_u).trim();
+  const notasConfig = safeStr(body.notas_config).trim();
   if (!nombre || !rackId) return err('Faltan campos: nombre, rack_id');
   if (!(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
+  if ([redVlan, switchAsociado, subred, posicionU].some(v => v.length > 160) || notasConfig.length > 1000) {
+    return err('Los datos técnicos del patch panel son demasiado largos');
+  }
   if (!(await telecomGetRack(auth, env, rackId))) return err('Rack no encontrado', 404);
   let patchPanelId = null;
   try {
     const r = await env.DB.prepare(
-      'INSERT INTO telecom_patch_panels (rack_id, empresa_id, nombre, num_puertos) VALUES (?, ?, ?, ?)'
-    ).bind(rackId, auth.empresa_id, nombre, numPuertos).run();
+      `INSERT INTO telecom_patch_panels
+       (rack_id, empresa_id, nombre, num_puertos, red_vlan, switch_asociado, subred, posicion_u, notas_config)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      rackId, auth.empresa_id, nombre, numPuertos,
+      redVlan || null, switchAsociado || null, subred || null, posicionU || null, notasConfig || null
+    ).run();
     patchPanelId = r.meta.last_row_id;
     // Crear automáticamente los N puertos vacíos — así el técnico entra directo a rellenar.
     const stmts = [];
@@ -7230,7 +7251,10 @@ async function crearTelecomPatchPanel(request, env) {
       ).bind(patchPanelId, auth.empresa_id, n, 'libre'));
     }
     await env.DB.batch(stmts);
-    return json({ ok: true, id: patchPanelId, nombre, rack_id: rackId, num_puertos: numPuertos }, 201);
+    return json({
+      ok: true, id: patchPanelId, nombre, rack_id: rackId, num_puertos: numPuertos,
+      red_vlan: redVlan, switch_asociado: switchAsociado, subred, posicion_u: posicionU, notas_config: notasConfig
+    }, 201);
   } catch (e) {
     if (patchPanelId) {
       await env.DB.prepare('DELETE FROM telecom_patch_panels WHERE id = ? AND empresa_id = ?')
@@ -7248,11 +7272,24 @@ async function editarTelecomPatchPanel(idRaw, request, env) {
   if (!actual) return err('Patch panel no encontrado', 404);
   const body = await request.json().catch(() => ({}));
   const nombre = body.nombre === undefined ? actual.nombre : safeStr(body.nombre).trim();
+  const redVlan = body.red_vlan === undefined ? safeStr(actual.red_vlan).trim() : safeStr(body.red_vlan).trim();
+  const switchAsociado = body.switch_asociado === undefined ? safeStr(actual.switch_asociado).trim() : safeStr(body.switch_asociado).trim();
+  const subred = body.subred === undefined ? safeStr(actual.subred).trim() : safeStr(body.subred).trim();
+  const posicionU = body.posicion_u === undefined ? safeStr(actual.posicion_u).trim() : safeStr(body.posicion_u).trim();
+  const notasConfig = body.notas_config === undefined ? safeStr(actual.notas_config).trim() : safeStr(body.notas_config).trim();
   if (!nombre) return err('El nombre es obligatorio');
+  if ([redVlan, switchAsociado, subred, posicionU].some(v => v.length > 160) || notasConfig.length > 1000) {
+    return err('Los datos técnicos del patch panel son demasiado largos');
+  }
   try {
     await env.DB.prepare(
-      'UPDATE telecom_patch_panels SET nombre = ? WHERE id = ? AND empresa_id = ?'
-    ).bind(nombre, actual.id, auth.empresa_id).run();
+      `UPDATE telecom_patch_panels
+       SET nombre = ?, red_vlan = ?, switch_asociado = ?, subred = ?, posicion_u = ?, notas_config = ?
+       WHERE id = ? AND empresa_id = ?`
+    ).bind(
+      nombre, redVlan || null, switchAsociado || null, subred || null, posicionU || null, notasConfig || null,
+      actual.id, auth.empresa_id
+    ).run();
     return json({ ok: true });
   } catch (e) {
     if (safeStr(e?.message).includes('UNIQUE')) return err('Ya existe un patch panel con ese nombre en el rack', 409);
