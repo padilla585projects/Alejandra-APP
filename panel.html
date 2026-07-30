@@ -18344,7 +18344,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.78';
+const PANEL_APP_VERSION = '8.79';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -19490,6 +19490,11 @@ document.getElementById('wInput').focus();
   function sbMostrarReview(data) {
     document.getElementById('sbStep2').style.display = 'none';
     document.getElementById('sbStep3').style.display = '';
+    const validacion = document.getElementById('sbValidation');
+    if (validacion) {
+      validacion.style.display = 'none';
+      validacion.textContent = '';
+    }
     const tbody = document.getElementById('sbTbody');
     tbody.innerHTML = '';
     const inpStyle = 'width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px';
@@ -19537,6 +19542,11 @@ document.getElementById('wInput').focus();
   async function sbImportar() {
     const obraId = SESSION?.obra_id || document.getElementById('sbObraSel')?.value || null;
     const bobinas = [];
+    const incompletas = [];
+    document.querySelectorAll('#sbTbody input[data-field]').forEach(input => {
+      input.style.borderColor = 'var(--border)';
+      input.removeAttribute('aria-invalid');
+    });
     document.querySelectorAll('#sbTbody tr').forEach((tr, i) => {
       const cb = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
       if (!cb?.checked) return;
@@ -19544,7 +19554,23 @@ document.getElementById('wInput').focus();
       const codigo = get('codigo');
       const proveedor = get('proveedor');
       const tipo_cable = get('tipo_cable');
-      if (!codigo || !proveedor || !tipo_cable) return;
+      const faltan = [
+        !codigo ? 'Código' : '',
+        !proveedor ? 'Proveedor' : '',
+        !tipo_cable ? 'Tipo cable' : ''
+      ].filter(Boolean);
+      if (faltan.length) {
+        incompletas.push({ fila: i + 1, faltan });
+        ['codigo', 'proveedor', 'tipo_cable'].forEach(campo => {
+          if (get(campo)) return;
+          const input = tr.querySelector(`input[data-field="${campo}"][data-idx="${i}"]`);
+          if (input) {
+            input.style.borderColor = 'var(--red)';
+            input.setAttribute('aria-invalid', 'true');
+          }
+        });
+        return;
+      }
       const metros = get('metros');
       bobinas.push({
         codigo, proveedor, tipo_cable,
@@ -19553,7 +19579,32 @@ document.getElementById('wInput').focus();
         obra_id:     obraId ? parseInt(obraId) : null,
       });
     });
-    if (!bobinas.length) { toast('No hay bobinas seleccionadas o faltan campos', 'err'); return; }
+    const validacion = document.getElementById('sbValidation');
+    if (incompletas.length) {
+      const detalle = incompletas.slice(0, 4)
+        .map(x => `Fila ${x.fila}: ${x.faltan.join(', ')}`)
+        .join(' · ');
+      if (validacion) {
+        validacion.textContent = `Completa los campos marcados en rojo. ${detalle}${incompletas.length > 4 ? ` · y ${incompletas.length - 4} fila(s) más` : ''}.`;
+        validacion.style.display = 'block';
+        validacion.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      document.querySelector('#sbTbody input[aria-invalid="true"]')?.focus();
+      toast(`Faltan datos obligatorios en ${incompletas.length} bobina(s)`, 'err');
+      return;
+    }
+    if (validacion) {
+      validacion.style.display = 'none';
+      validacion.textContent = '';
+    }
+    if (!bobinas.length) {
+      if (validacion) {
+        validacion.textContent = 'Selecciona al menos una bobina para importarla.';
+        validacion.style.display = 'block';
+      }
+      toast('No hay bobinas seleccionadas', 'err');
+      return;
+    }
     const btn = document.getElementById('sbBtnImportar');
     btn.disabled = true; btn.textContent = '⏳ Importando...';
     try {
@@ -19927,6 +19978,8 @@ document.getElementById('wInput').focus();
           <tbody id="sbTbody"></tbody>
         </table>
       </div>
+      <div id="sbValidation" role="alert"
+        style="display:none;margin-bottom:12px;padding:10px 12px;border:1px solid var(--red);border-radius:8px;background:rgba(239,68,68,.12);color:#fecaca;font-size:12px;font-weight:600;line-height:1.45"></div>
       <div style="display:flex;gap:8px">
         <button onclick="sbVolver()" class="btn btn-secondary" style="flex:0 0 100px">← Volver</button>
         <button onclick="sbImportar()" class="btn btn-primary" style="flex:1" id="sbBtnImportar">⚡ Importar bobinas</button>

@@ -1,7 +1,13 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.78.
+**Última actualización:** 30/07/2026 — v8.79.
+
+### v8.79 — validación visible al confirmar bobinas escaneadas
+
+- Reproducido con los dos escaneos reales pendientes: `Revisar y guardar` abría correctamente la tabla, pero `Importar bobinas` parecía no responder cuando la IA había dejado campos obligatorios vacíos.
+- La confirmación bloquea ahora todo el lote si alguna fila seleccionada carece de Código, Proveedor o Tipo cable, marca cada campo vacío en rojo, muestra un aviso persistente dentro del modal con las filas afectadas y enfoca el primer campo pendiente.
+- Si no hay ninguna fila seleccionada, también aparece un aviso persistente dentro de la revisión.
 
 ### v8.78 — validación fresca del móvil antes de solicitar la cámara
 
