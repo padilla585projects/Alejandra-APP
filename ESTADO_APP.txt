@@ -4,6 +4,8 @@
 Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+ACTUALIZACIÓN v8.82 (30/07/2026): el archivo de albaranes de Bobinas ya está también en la PWA móvil como cuarta pestaña. Comparte los mismos datos privados de R2/D1 que Office e incluye buscar, subir con progreso, ver imágenes/PDF, editar nombre y número, descargar, compartir y eliminar. La gestión queda disponible para Office, administradores, Encargado, Jefe de obra y Project Manager; la consulta respeta empresa y obra. Caché móvil renovada a v8.82.
+
 ACTUALIZACIÓN v8.81 (30/07/2026): nuevo archivo de albaranes dentro de Bobinas, presentado como pestaña junto a Inventario. Reúne los escaneos remotos existentes y permite subir manualmente JPG/PNG/WebP/PDF con progreso visible. Cada albarán se puede ver, editar (nombre, número y obra), descargar, compartir o eliminar. Los archivos permanecen privados en R2; D1 guarda sus metadatos y la eliminación limpia ambos sitios con aislamiento por empresa/obra. La versión 8.81 fuerza también la renovación de caché web. Ver SESION.md para detalle técnico.
 
 ACTUALIZACIÓN v8.80 (30/07/2026): revisión flexible de bobinas escaneadas. Solo Código/Matrícula es obligatorio; Proveedor, Tipo de cable, Metros, Albarán y Notas son opcionales. Cada fila permite elegir 📥 Recibida o ↩ Devuelta y puede excluirse con su casilla; también hay botones para marcar todas como recibidas o todas como devueltas y luego corregir excepciones. El Worker aplica el estado, fechas y usuario reales, y permite volver a recibir una bobina previamente devuelta. v8.79: validación visible dentro del modal. Ver SESION.md para detalle técnico y continuidad.

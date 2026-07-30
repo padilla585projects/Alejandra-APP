@@ -15219,7 +15219,10 @@ async function getEscaneoRemotoImagen(id, request, env) {
 }
 
 function puedeGestionarAlbaranes(s) {
-  return hasRole(s, 'oficina', 'empresa_admin', 'superadmin', 'desarrollador');
+  return hasRole(
+    s, 'oficina', 'empresa_admin', 'superadmin', 'desarrollador',
+    'encargado', 'jefe_de_obra', 'project_manager'
+  );
 }
 
 async function subirAlbaranesBobinas(request, env) {

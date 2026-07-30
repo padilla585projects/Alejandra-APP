@@ -1,7 +1,16 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.81.
+**Última actualización:** 30/07/2026 — v8.82.
+
+### v8.82 — archivo de albaranes también en la PWA
+
+- La PWA añade `🧾 Albaranes` como cuarta pestaña del módulo Bobinas; no aparece en PEMP ni Carretillas.
+- Consulta exactamente el mismo archivo privado que Office y muestra los cuatro albaranes de bobinas ya guardados.
+- Incluye búsqueda, miniaturas, vista grande/PDF, edición de nombre y número, descarga, compartir mediante el menú nativo y eliminación con confirmación.
+- Permite subir hasta 10 JPG/PNG/WebP/PDF desde archivos o la galería, mostrando el porcentaje real de envío y el resultado final.
+- Ver/descargar/compartir está disponible para usuarios autenticados con acceso a la obra. Subir/editar/eliminar queda limitado a responsables y usuarios de Office; se añadieron Encargado, Jefe de obra y Project Manager al permiso del backend.
+- La caché de la PWA sube a `alejandra-v8.82`, por lo que los móviles reciben la pestaña nueva al actualizar.
 
 ### v8.81 — archivo de albaranes dentro de Bobinas
 
