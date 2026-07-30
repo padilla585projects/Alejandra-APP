@@ -18005,7 +18005,10 @@ async function _registrarPushDeveloper() {
       const d = await r.json();
       _rsDispositivos = d.dispositivos || [];
       _rsActualizarFab();
-    } catch {}
+      return _rsDispositivos;
+    } catch {
+      return [];
+    }
   }
 
   function _rsActualizarFab() {
@@ -18135,6 +18138,14 @@ async function _registrarPushDeveloper() {
 
   window.rsEnviarScan = async function() {
     const contexto = document.getElementById('rsScanContexto')?.value || '';
+    // El estado mostrado al abrir el selector puede tener hasta 30 s. Confirmarlo
+    // justo antes de crear la petición evita una espera falsa si el móvil se cerró.
+    const dispositivos = await _rsHacerPing();
+    if (!dispositivos.some(d => d.tipo === 'app')) {
+      rsCerrarScanModal();
+      toast('El móvil ya no está conectado. Abre Alejandra en el teléfono y vuelve a intentarlo.', 'err');
+      return;
+    }
     const modal = document.querySelector('#rsScanOverlay .rs-scan-modal');
     if (modal) {
       const tipoLabel = RS_TIPOS.find(t => t.id === _rsScanTipoSel)?.label || _rsScanTipoSel;
@@ -18333,7 +18344,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.77';
+const PANEL_APP_VERSION = '8.78';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

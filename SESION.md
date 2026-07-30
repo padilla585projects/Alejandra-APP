@@ -1,7 +1,12 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.77.
+**Última actualización:** 30/07/2026 — v8.78.
+
+### v8.78 — validación fresca del móvil antes de solicitar la cámara
+
+- Office vuelve a consultar los dispositivos justo al pulsar `Escanear`; ya no confía en un estado que puede tener hasta 30 segundos.
+- Si el móvil se cerró o desconectó entretanto, cancela la espera antes de crear `scan_request` y muestra: “El móvil ya no está conectado. Abre Alejandra en el teléfono y vuelve a intentarlo.”
 
 ### v8.77 — receptor de escaneo remoto móvil siempre activo
 
