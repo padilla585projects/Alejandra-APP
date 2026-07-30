@@ -1793,14 +1793,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             </div>
             <div class="form-group">
               <label>Categoría</label>
-              <select class="form-input" id="telecomOfficePuertoCategoria">
-                <option value="">—</option>
-                <option value="Cat5e">Cat5e</option>
-                <option value="Cat6">Cat6</option>
-                <option value="Cat6A">Cat6A</option>
-                <option value="Fibra OM3">Fibra OM3</option>
-                <option value="Fibra OM4">Fibra OM4</option>
-                <option value="Fibra OS2">Fibra OS2 (monomodo)</option>
+              <select class="form-input" id="telecomOfficePuertoCategoria" style="background:#fff;color:#111827;color-scheme:light">
+                <option value="" style="background:#fff;color:#111827">—</option>
+                <option value="Cat5e" style="background:#fff;color:#111827">Cat5e</option>
+                <option value="Cat6" style="background:#fff;color:#111827">Cat6</option>
+                <option value="Cat6A" style="background:#fff;color:#111827">Cat6A</option>
+                <option value="Fibra OM3" style="background:#fff;color:#111827">Fibra OM3</option>
+                <option value="Fibra OM4" style="background:#fff;color:#111827">Fibra OM4</option>
+                <option value="Fibra OS2" style="background:#fff;color:#111827">Fibra OS2 (monomodo)</option>
               </select>
             </div>
             <div class="form-group">
@@ -19010,7 +19010,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.86';
+const PANEL_APP_VERSION = '8.87';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

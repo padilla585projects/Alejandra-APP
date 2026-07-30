@@ -2329,14 +2329,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
         <div style="margin-bottom:11px">
           <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Categoría</label>
-          <select id="telecomPuertoCategoria" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
-            <option value="">—</option>
-            <option value="Cat5e">Cat5e</option>
-            <option value="Cat6">Cat6</option>
-            <option value="Cat6A">Cat6A</option>
-            <option value="Fibra OM3">Fibra OM3</option>
-            <option value="Fibra OM4">Fibra OM4</option>
-            <option value="Fibra OS2">Fibra OS2 (monomodo)</option>
+          <select id="telecomPuertoCategoria" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#111827;color-scheme:light;font-size:13px">
+            <option value="" style="background:#fff;color:#111827">—</option>
+            <option value="Cat5e" style="background:#fff;color:#111827">Cat5e</option>
+            <option value="Cat6" style="background:#fff;color:#111827">Cat6</option>
+            <option value="Cat6A" style="background:#fff;color:#111827">Cat6A</option>
+            <option value="Fibra OM3" style="background:#fff;color:#111827">Fibra OM3</option>
+            <option value="Fibra OM4" style="background:#fff;color:#111827">Fibra OM4</option>
+            <option value="Fibra OS2" style="background:#fff;color:#111827">Fibra OS2 (monomodo)</option>
           </select>
         </div>
         <div style="margin-bottom:11px">
@@ -13082,7 +13082,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.86';
+const APP_VERSION = '8.87';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
