@@ -11548,10 +11548,17 @@ function telecomOfficeVaciarPuerto() {
 }
 
 async function telecomOfficeInforme(rackId) {
+  const w = window.open('', '_blank');
+  if (!w) {
+    toast('Permite las ventanas emergentes para abrir el informe', 'err');
+    return;
+  }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Generando informe…</title>
+    <style>body{font-family:Arial,sans-serif;padding:32px;color:#111}</style></head>
+    <body><h2>Generando informe…</h2><p>Espera un momento.</p></body></html>`);
+  w.document.close();
   try {
     const data = await _telecomOfficeApi('/telecom/informe/' + Number(rackId));
-    const w = window.open('', '_blank');
-    if (!w) throw new Error('El navegador ha bloqueado la ventana del informe');
     const filas = (data.patch_panels || []).map(pp => {
       const ocupados = (pp.puertos || []).filter(p => p.estado === 'ocupado').length;
       const meta = [
@@ -11567,13 +11574,24 @@ async function telecomOfficeInforme(rackId) {
       ${(pp.puertos || []).map(p => `<tr><td>${Number(p.numero)}</td><td>${escHtml(p.estado)}</td><td>${escHtml(p.destino||'')}</td><td>${escHtml(p.cable_label||'')}</td><td>${escHtml(p.categoria||'')}</td><td>${escHtml(p.notas||'')}</td></tr>`).join('')}
       </tbody></table>`;
     }).join('');
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Informe ${escHtml(data.rack.nombre)}</title>
-      <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}table{width:100%;border-collapse:collapse;margin-bottom:24px}th,td{border:1px solid #bbb;padding:6px;font-size:12px;text-align:left}th{background:#eee}h1{margin-bottom:3px}h2{font-weight:normal;color:#555;margin-top:0}@media print{button{display:none}}</style></head><body>
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${escHtml(data.rack.nombre)}</title>
+      <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}.acciones{position:sticky;top:0;display:flex;gap:8px;padding:10px 0;background:#fff;z-index:2}.acciones button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}.imprimir{background:#f97316;color:#fff}.cerrar{background:#e5e7eb;color:#111}table{width:100%;border-collapse:collapse;margin-bottom:24px}th,td{border:1px solid #bbb;padding:6px;font-size:12px;text-align:left}th{background:#eee}h1{margin-bottom:3px}h2{font-weight:normal;color:#555;margin-top:0}@media print{.acciones{display:none}body{padding:0}}</style></head><body>
+      <div class="acciones"><button class="imprimir" onclick="window.print()">🖨 Imprimir / guardar PDF</button><button class="cerrar" onclick="window.close()">Cerrar</button></div>
       <h1>Informe de cableado — ${escHtml(data.rack.nombre)}</h1>
       <h2>${escHtml(data.idf?.nombre||'')} ${data.idf?.ubicacion?'— '+escHtml(data.idf.ubicacion):''}</h2>${filas}
-      <p style="color:#777;font-size:11px">Generado ${new Date().toLocaleString('es-ES')}</p><script>window.onload=()=>window.print()<\/script></body></html>`);
+      <p style="color:#777;font-size:11px">Generado ${new Date().toLocaleString('es-ES')}</p></body></html>`);
     w.document.close();
-  } catch (e) { toast(e.message || 'No se pudo generar el informe', 'err'); }
+    w.focus();
+  } catch (e) {
+    if (!w.closed) {
+      w.document.open();
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+        <body style="font-family:Arial,sans-serif;padding:32px;color:#991b1b"><h2>No se pudo generar el informe</h2><p>${escHtml(e.message || 'Error desconocido')}</p><button onclick="window.close()">Cerrar</button></body></html>`);
+      w.document.close();
+    }
+    toast(e.message || 'No se pudo generar el informe', 'err');
+  }
 }
 
 // ── NAVEGACIÓN ─────────────────────────────────────────────────
@@ -19082,7 +19100,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.88';
+const PANEL_APP_VERSION = '8.89';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

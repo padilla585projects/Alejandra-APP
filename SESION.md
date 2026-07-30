@@ -1,7 +1,14 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.88.
+**Última actualización:** 30/07/2026 — v8.89.
+
+### v8.89 — informe Teleco fiable en móvil
+
+- Causa del fallo: `window.open()` se ejecutaba después de esperar la API; Android/PWA podía bloquearlo por haber perdido el gesto directo del usuario.
+- La pestaña se abre ahora inmediatamente con el estado “Generando informe…” y se rellena cuando llega la información.
+- Ya no se dispara `window.print()` automáticamente. El informe queda visible y ofrece `Imprimir / guardar PDF` y `Cerrar`.
+- Si la API falla, la pestaña muestra el error en vez de quedarse vacía. Aplicado tanto en PWA como en Office.
 
 ### v8.88 — resumen y ficha técnica de patch panels
 
