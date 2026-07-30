@@ -6,7 +6,9 @@
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  // Office usa PATCH en escaneos remotos y otros módulos. Si no se declara aquí,
+  // el navegador bloquea el preflight antes de que la petición llegue al endpoint.
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Code, X-Obra-Id, X-Departamento, X-Token',
   'Access-Control-Expose-Headers': 'X-Total-Count, X-Limit, X-Offset',
   'Vary': 'Origin',

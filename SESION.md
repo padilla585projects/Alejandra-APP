@@ -1,7 +1,13 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.75.
+**Última actualización:** 30/07/2026 — v8.76.
+
+### v8.76 — CORS de PATCH corregido (causa real de “Descartar”)
+
+- Reproducido en vivo en Chrome con la sesión real de Adrián: el clic enviaba `PATCH /escaneos-remotos/1`, pero nunca recibía respuesta.
+- Causa: `Access-Control-Allow-Methods` global permitía GET/POST/PUT/DELETE, pero omitía PATCH. El navegador bloqueaba el preflight antes de entregar la petición al endpoint.
+- Añadido PATCH al CORS global. Esto repara “Descartar” y cualquier otro endpoint PATCH utilizado desde Office.
 
 ### v8.75 — Descartar escaneo remoto + cámara flotante siempre visible
 
