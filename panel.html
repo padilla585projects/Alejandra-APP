@@ -18195,6 +18195,25 @@ async function _registrarPushDeveloper() {
   const RS_TIPO_ICO = { documento:'📄', factura:'🧾', albaran:'📋', foto_obra:'🏗️', bobina:'🔌', plano:'📐' };
   const RS_TIPO_LBL = { documento:'Documento', factura:'Factura', albaran:'Albarán', foto_obra:'Foto de obra', bobina:'Bobina/Material', plano:'Plano' };
 
+  // Cuando aparece el botón 📥, el contenedor crece. Si el usuario había arrastrado la
+  // cámara 📷 cerca del borde inferior, la posición guardada podía dejarla fuera de pantalla.
+  function rsAjustarFabEnPantalla() {
+    const fab = document.getElementById('remoteScanFab');
+    if (!fab || fab.style.display === 'none') return;
+    requestAnimationFrame(() => {
+      const rect = fab.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const left = Math.max(4, Math.min(window.innerWidth - rect.width - 4, rect.left));
+      const top = Math.max(4, Math.min(window.innerHeight - rect.height - 4, rect.top));
+      if (Math.abs(left - rect.left) < 1 && Math.abs(top - rect.top) < 1) return;
+      fab.style.left = left + 'px';
+      fab.style.top = top + 'px';
+      fab.style.right = 'auto';
+      fab.style.bottom = 'auto';
+      localStorage.setItem('fab_pos_remoteScanFab', JSON.stringify({ left: fab.style.left, top: fab.style.top }));
+    });
+  }
+
   async function rsActualizarBadgePendientes() {
     try {
       const r = await fetch(API + '/escaneos-remotos?estado=pendiente', { headers: _rsApiHeaders() });
@@ -18206,8 +18225,10 @@ async function _registrarPushDeveloper() {
       const n = _rsPendientesCache.length;
       btn.style.display = n > 0 ? 'flex' : 'none';
       badge.textContent = n > 9 ? '9+' : String(n);
+      rsAjustarFabEnPantalla();
     } catch {}
   }
+  window.addEventListener('resize', rsAjustarFabEnPantalla);
 
   window.rsAbrirPendientes = async function() {
     const overlay = document.createElement('div');
@@ -18252,7 +18273,7 @@ async function _registrarPushDeveloper() {
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
             ${accionBtn}
-            <button onclick="rsDescartarPendiente(${it.id})" class="btn btn-secondary" style="font-size:11px;padding:5px 10px">🗑 Descartar</button>
+            <button onclick="rsDescartarPendiente(${it.id},this)" class="btn btn-secondary" style="font-size:11px;padding:5px 10px">🗑 Descartar</button>
           </div>
         </div>`;
     }).join('');
@@ -18268,15 +18289,23 @@ async function _registrarPushDeveloper() {
     if (typeof sbAbrirConDatos === 'function') sbAbrirConDatos(bobinas, id);
   };
 
-  window.rsDescartarPendiente = async function(id) {
+  window.rsDescartarPendiente = async function(id, btn) {
+    const textoOriginal = btn?.textContent || '🗑 Descartar';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Descartando…'; }
     try {
-      await fetch(API + '/escaneos-remotos/' + id, {
+      const res = await fetch(API + '/escaneos-remotos/' + id, {
         method: 'PATCH', headers: _rsApiHeaders(), body: JSON.stringify({ estado: 'descartado' })
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || `Error ${res.status}`);
       _rsPendientesCache = _rsPendientesCache.filter(x => x.id !== id);
       rsRenderPendientes();
-      rsActualizarBadgePendientes();
-    } catch { toast('Error al descartar', 'err'); }
+      await rsActualizarBadgePendientes();
+      toast('✅ Escaneo descartado', 'ok');
+    } catch (error) {
+      if (btn) { btn.disabled = false; btn.textContent = textoOriginal; }
+      toast('❌ No se pudo descartar: ' + (error.message || 'error desconocido'), 'err');
+    }
   };
 
   // ── Exponer inicio de sync para llamar desde iniciarApp() ──
@@ -18293,7 +18322,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.74';
+const PANEL_APP_VERSION = '8.75';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

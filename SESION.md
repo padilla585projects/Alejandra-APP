@@ -1,7 +1,13 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.74.
+**Última actualización:** 30/07/2026 — v8.75.
+
+### v8.75 — Descartar escaneo remoto + cámara flotante siempre visible
+
+- Corregido “Descartar” en Escaneos pendientes: el permiso ahora reconoce `oficina` en `roles_extra`, valida la respuesta del Worker y muestra confirmación o el error real.
+- Al aparecer el botón 📥 de pendientes, el bloque flotante crecía y una posición arrastrada antigua podía dejar la cámara 📷 fuera del borde inferior. Office recoloca ahora el bloque completo dentro de la pantalla al cambiar el contador o el tamaño de ventana.
+- Los dos botones tienen funciones distintas: 📥 revisa escaneos ya recibidos; 📷 inicia un nuevo escaneo remoto en el móvil conectado.
 
 ### v8.74 — Escaneo múltiple de bobinas en Office + feedback móvil + caché forzada
 

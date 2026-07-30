@@ -15163,14 +15163,19 @@ async function getEscaneoRemotoImagen(id, request, env) {
 async function actualizarEscaneoRemoto(id, request, env) {
   const s = await getAuth(request, env);
   if (!s?.empresa_id) return err('No autorizado', 403);
-  if (s.rol === 'operario') return err('Sin permisos', 403);
+  // Office admite usuarios cuyo rol principal es operario pero que tienen "oficina"
+  // en roles_extra. Comprobar solo s.rol los dejaba ver el pendiente, pero no descartarlo.
+  if (!hasRole(s, 'oficina', 'superadmin', 'desarrollador')) return err('Sin permisos', 403);
   const b = await request.json().catch(() => ({}));
   const campos = ['estado', 'destino_tipo', 'destino_id'];
   const sets = []; const vals = [];
   for (const c of campos) { if (b[c] !== undefined) { sets.push(`${c}=?`); vals.push(b[c]); } }
   if (!sets.length) return err('Sin campos', 400);
   vals.push(id, s.empresa_id);
-  await env.DB.prepare(`UPDATE escaneos_remotos SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  const result = await env.DB.prepare(
+    `UPDATE escaneos_remotos SET ${sets.join(',')} WHERE id=? AND empresa_id=?`
+  ).bind(...vals).run();
+  if (!result.meta?.changes) return err('Escaneo no encontrado', 404);
   return json({ ok: true });
 }
 
