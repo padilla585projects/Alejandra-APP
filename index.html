@@ -2375,6 +2375,18 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
     </div>
   </div>
 
+  <!-- INFORME TELECOM: vista interna fiable en PWA, sin ventanas emergentes -->
+  <div class="modal-overlay" id="modalTelecomInforme" style="display:none;align-items:stretch;justify-content:center;padding:0;background:rgba(3,7,18,.94)">
+    <div style="background:#fff;width:100%;max-width:900px;height:100%;display:flex;flex-direction:column">
+      <div style="padding:10px 12px;display:flex;align-items:center;gap:8px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div id="telecomInformeTitulo" style="flex:1;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:var(--text)">Informe de cableado</div>
+        <button onclick="telecomImprimirInforme()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 12px;font-weight:800;font-size:12px;cursor:pointer">🖨 Imprimir / PDF</button>
+        <button onclick="telecomCerrarInforme()" aria-label="Cerrar informe" style="background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-weight:800;font-size:16px;cursor:pointer">×</button>
+      </div>
+      <iframe id="telecomInformeFrame" title="Vista previa del informe de cableado" style="width:100%;flex:1;border:0;background:#fff"></iframe>
+    </div>
+  </div>
+
   <!-- ACTAS DE REUNIÓN (NEW-36) -->
   <div id="screenReuniones" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
@@ -13106,7 +13118,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.89';
+const APP_VERSION = '8.90';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -16673,18 +16685,28 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   window.telecomGuardarModal = telecomGuardarModal;
 
+  function telecomCerrarInforme() {
+    document.getElementById('modalTelecomInforme').style.display = 'none';
+    document.getElementById('telecomInformeFrame').srcdoc = '';
+  }
+  window.telecomCerrarInforme = telecomCerrarInforme;
+
+  function telecomImprimirInforme() {
+    const frame = document.getElementById('telecomInformeFrame');
+    if (!frame?.contentWindow) return toast('❌ El informe todavía no está listo', 'err');
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  }
+  window.telecomImprimirInforme = telecomImprimirInforme;
+
   async function telecomGenerarInforme(rackId) {
-    // Abrir la pestaña dentro del gesto del usuario. Si esperamos primero a la API,
-    // Android/PWA la considera un popup tardío y puede bloquearla.
-    const w = window.open('', '_blank');
-    if (!w) {
-      toast('❌ Permite las ventanas emergentes para abrir el informe', 'err');
-      return;
-    }
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Generando informe…</title>
+    const modal = document.getElementById('modalTelecomInforme');
+    const frame = document.getElementById('telecomInformeFrame');
+    document.getElementById('telecomInformeTitulo').textContent = 'Generando informe…';
+    frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
       <style>body{font-family:Arial,sans-serif;padding:32px;color:#111}</style></head>
-      <body><h2>Generando informe…</h2><p>Espera un momento.</p></body></html>`);
-    w.document.close();
+      <body><h2>Generando informe…</h2><p>Espera un momento.</p></body></html>`;
+    modal.style.display = 'flex';
     try {
       const res = await apiCall('/telecom/informe/' + rackId);
       const data = await _telecomLeerRespuesta(res);
@@ -16705,25 +16727,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           ${pp.puertos.map(p => `<tr><td>${Number(p.numero)}</td><td>${_escHtml(p.destino || '')}</td><td>${_escHtml(p.cable_label || '')}</td><td>${_escHtml(p.categoria || '')}</td><td>${_escHtml(p.notas || '')}</td></tr>`).join('')}
         </table>`;
       }).join('');
-      w.document.open();
-      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${_escHtml(data.rack.nombre)}</title>
-        <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}.acciones{position:sticky;top:0;display:flex;gap:8px;padding:10px 0;background:#fff;z-index:2}.acciones button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}.imprimir{background:#f97316;color:#fff}.cerrar{background:#e5e7eb;color:#111}h1{margin-bottom:2px}h2{color:#555;font-weight:normal;margin-top:0}@media print{.acciones{display:none}body{padding:0}}</style>
+      document.getElementById('telecomInformeTitulo').textContent = 'Informe · ' + data.rack.nombre;
+      frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${_escHtml(data.rack.nombre)}</title>
+        <style>body{font-family:Arial,sans-serif;padding:24px;color:#111;margin:0}h1{margin-bottom:2px;font-size:26px}h2{color:#555;font-weight:normal;margin-top:0;font-size:18px}h3{break-after:avoid}table{break-inside:auto}tr{break-inside:avoid}@media(max-width:600px){body{padding:16px}h1{font-size:21px}table{font-size:10px!important}th,td{padding:4px!important}}@media print{body{padding:0}}</style>
         </head><body>
-        <div class="acciones"><button class="imprimir" onclick="window.print()">🖨 Imprimir / guardar PDF</button><button class="cerrar" onclick="window.close()">Cerrar</button></div>
         <h1>Informe de cableado — ${_escHtml(data.rack.nombre)}</h1>
         <h2>${_escHtml(data.idf?.nombre || '')} ${data.idf?.ubicacion ? '— ' + _escHtml(data.idf.ubicacion) : ''}</h2>
         ${filas}
         <p style="color:#888;font-size:11px">Generado ${new Date().toLocaleString('es-ES')}</p>
-        </body></html>`);
-      w.document.close();
-      w.focus();
+        </body></html>`;
     } catch (e) {
-      if (!w.closed) {
-        w.document.open();
-        w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-          <body style="font-family:Arial,sans-serif;padding:32px;color:#991b1b"><h2>No se pudo generar el informe</h2><p>${_escHtml(e.message || 'Error desconocido')}</p><button onclick="window.close()">Cerrar</button></body></html>`);
-        w.document.close();
-      }
+      document.getElementById('telecomInformeTitulo').textContent = 'Error al generar el informe';
+      frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+        <body style="font-family:Arial,sans-serif;padding:32px;color:#991b1b"><h2>No se pudo generar el informe</h2><p>${_escHtml(e.message || 'Error desconocido')}</p></body></html>`;
       toast('❌ ' + (e.message || 'Error al generar el informe'), 'err');
     }
   }

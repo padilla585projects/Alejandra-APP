@@ -1,7 +1,14 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.89.
+**Última actualización:** 30/07/2026 — v8.90.
+
+### v8.90 — informe Teleco integrado en la PWA
+
+- La prueba de v8.89 confirmó otro comportamiento de Android/PWA: `window.open()` podía devolver una ventana válida pero dejarla oculta para el usuario.
+- El informe ya no abre ninguna pestaña. Se renderiza dentro de un modal a pantalla completa con `iframe.srcdoc`, previsualización desplazable, `Imprimir / PDF` y cierre.
+- La impresión se lanza desde un botón pulsado por el usuario sobre el `contentWindow` del informe, compatible con el diálogo nativo de impresión/guardado PDF.
+- Estados de carga y error quedan visibles dentro de la propia vista.
 
 ### v8.89 — informe Teleco fiable en móvil
 

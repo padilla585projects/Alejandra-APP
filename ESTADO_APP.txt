@@ -4,6 +4,8 @@
 Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+ACTUALIZACIÓN v8.90 (30/07/2026): el informe de Teleco en PWA deja de depender por completo de pestañas o ventanas emergentes. Se muestra dentro de Alejandra como una vista completa con previsualización desplazable, botón "Imprimir / PDF" y cierre explícito. Esto corrige el caso observado donde Android aceptaba `window.open()` pero escondía la pestaña generada. Mantiene los datos y el formato incorporados en v8.88-v8.89. Caché renovada a v8.90.
+
 ACTUALIZACIÓN v8.89 (30/07/2026): corregida la generación de informes de Teleco en móvil/PWA. La pestaña del informe se abre inmediatamente durante el toque del usuario, antes de consultar la API, evitando que Android la bloquee como ventana emergente tardía o la deje aparentemente vacía. Se elimina la impresión automática y el informe muestra controles visibles para "Imprimir / guardar PDF" y "Cerrar"; los errores también se muestran dentro de la propia pestaña. Mismo flujo aplicado en Office. Caché renovada a v8.89.
 
 ACTUALIZACIÓN v8.88 (30/07/2026): ampliado Teleco/Racks. Las tarjetas de patch panel muestran contadores reales de puertos ocupados y libres sin necesidad de entrar; permiten documentar Red/VLAN, switch asociado, subred, posición U y notas de configuración, visibles también en el informe del rack. Dentro del patch panel se agrandan destino, etiqueta y categoría de cada puerto para poder identificarlos desde la cuadrícula. D1 migrado en producción y Worker desplegado. Incluye el contraste corregido del selector de categoría de v8.87. Caché renovada a v8.88.
