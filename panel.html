@@ -11284,12 +11284,13 @@ function _telecomOfficeAcciones(tipo, id) {
     ${_telecomOfficePuedeEliminar() ? `<button class="btn btn-secondary btn-sm" title="Eliminar" style="color:var(--danger)" onclick="telecomOfficeEliminar('${tipo}',${Number(id)})">🗑</button>` : ''}
   </div>`;
 }
-function _telecomOfficeFila(tipo, item, titulo, subtitulo, abrir) {
+function _telecomOfficeFila(tipo, item, titulo, subtitulo, abrir, extraBtn) {
   return `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--surface2)">
     <div style="flex:1;min-width:0;cursor:pointer" onclick="${abrir}">
       <div style="font-weight:700">${titulo}</div>
       ${subtitulo ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${subtitulo}</div>` : ''}
     </div>
+    ${extraBtn || ''}
     ${_telecomOfficeAcciones(tipo, item.id)}
     <button class="btn btn-secondary btn-sm" onclick="${abrir}">›</button>
   </div>`;
@@ -11331,10 +11332,13 @@ async function telecomOfficeCargarIdfs() {
       cont.innerHTML = `<div class="empty-state">${obraId ? 'Sin IDFs en esta obra.' : 'No hay IDFs registrados en las obras disponibles.'}</div>`;
       return;
     }
+    // ORG-INFORME-03 (31/07/2026): ver comentario gemelo en index.html (telecomRenderIdfs)
+    // — el botón de informe se muda a la lista de IDFs y pasa a cubrir todo el IDF.
     cont.innerHTML = _telecomOfficeCache.idf.map(i => _telecomOfficeFila(
       'idf', i, '📍 ' + escHtml(i.nombre),
       escHtml([i.obra_nombre, i.ubicacion].filter(Boolean).join(' · ')),
-      `telecomOfficeAbrirIdf(${Number(i.id)})`
+      `telecomOfficeAbrirIdf(${Number(i.id)})`,
+      `<button class="btn btn-secondary btn-sm" title="Generar informe" onclick="event.stopPropagation();telecomOfficeInformeIdf(${Number(i.id)})">📄</button>`
     )).join('');
   } catch (e) {
     cont.innerHTML = `<div class="empty-state">❌ ${escHtml(e.message)}</div>`;
@@ -11378,8 +11382,7 @@ async function telecomOfficeAbrirRack(id) {
   try {
     const list = await _telecomOfficeApi('/telecom/patch-panels?rack_id=' + Number(id));
     _telecomOfficeCache.pp = Array.isArray(list) ? list : [];
-    const informe = `<button class="btn btn-secondary" style="margin-bottom:12px" onclick="telecomOfficeInforme(${Number(id)})">📄 Generar informe del rack</button>`;
-    cont.innerHTML = informe + (_telecomOfficeCache.pp.length
+    cont.innerHTML = (_telecomOfficeCache.pp.length
       ? _telecomOfficeCache.pp.map(p => {
           const ocupados = Number(p.ocupados) || 0;
           const libres = Number(p.libres) || 0;
@@ -11611,6 +11614,9 @@ const _TELECOM_OFFICE_INFORME_CSS = `
   .pg-cell{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:9.5px;font-variant-numeric:tabular-nums}
   .pg-cell.on{background:var(--accent);color:#fff;font-weight:700}
   .pg-cell.off{background:#fff;border:1px solid var(--line);color:var(--ink-mute)}
+  .rack-section{margin-bottom:44px}
+  .rack-section:not(:first-child){padding-top:30px;border-top:2px dashed var(--line)}
+  .rack-section-title{font-size:19px;font-weight:800;margin:0 0 18px;letter-spacing:-.005em;break-after:avoid}
   .panel{margin-bottom:34px}
   .panel-head{display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:10px;break-after:avoid}
   .panel-head h2{margin:0;font-size:15px;font-weight:800;letter-spacing:.02em}
@@ -11721,7 +11727,9 @@ function _telecomOfficeInformePanel(pp) {
   </div>`;
 }
 
-async function telecomOfficeInforme(rackId) {
+// ORG-INFORME-03 (31/07/2026): ver comentario gemelo en index.html
+// (telecomGenerarInformeIdf) — informe de todo el IDF, no de un rack suelto.
+async function telecomOfficeInformeIdf(idfId) {
   const w = window.open('', '_blank');
   if (!w) {
     toast('Permite las ventanas emergentes para abrir el informe', 'err');
@@ -11730,18 +11738,26 @@ async function telecomOfficeInforme(rackId) {
   w.document.write(_telecomOfficeInformeEstado('Generando informe…', 'Espera un momento.', false));
   w.document.close();
   try {
-    const data = await _telecomOfficeApi('/telecom/informe/' + Number(rackId));
-    const paneles = _telecomOfficeOrdenarPorPosicion(data.patch_panels || []);
-    const elevacion = _telecomOfficeInformeElevacion(paneles);
-    const filas = paneles.map(_telecomOfficeInformePanel).join('');
+    const data = await _telecomOfficeApi('/telecom/informe-idf/' + Number(idfId));
+    const racks = data.racks || [];
+    const secciones = racks.map(rack => {
+      const paneles = _telecomOfficeOrdenarPorPosicion(rack.patch_panels || []);
+      const elevacion = _telecomOfficeInformeElevacion(paneles);
+      const filas = paneles.map(_telecomOfficeInformePanel).join('');
+      return `<div class="rack-section">
+        <h2 class="rack-section-title">🗄️ ${escHtml(rack.nombre)}</h2>
+        ${elevacion || '<p class="config-note">Sin patch panels registrados en este rack.</p>'}
+        ${filas}
+      </div>`;
+    }).join('') || '<p class="config-note">Este IDF todavía no tiene racks.</p>';
     const obraLinea = data.obra?.nombre ? escHtml(data.obra.nombre) + (data.obra.codigo ? ' · ' + escHtml(data.obra.codigo) : '') : '';
     const empresaLinea = data.empresa?.nombre ? escHtml(data.empresa.nombre) + (data.empresa.direccion ? ' — ' + escHtml(data.empresa.direccion) : '') : '';
     w.document.open();
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${escHtml(data.rack.nombre)}</title>
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${escHtml(data.idf.nombre)}</title>
       <style>${_TELECOM_OFFICE_INFORME_CSS}</style></head><body>
       <div class="acciones"><button class="imprimir" onclick="window.print()">🖨 Imprimir / guardar PDF</button><button class="cerrar" onclick="window.close()">Cerrar</button></div>
       <div class="doc-head">
-        <div><h1>${escHtml(data.rack.nombre)}</h1><p class="loc">${escHtml(data.idf?.nombre || '')}${data.idf?.ubicacion ? ' — ' + escHtml(data.idf.ubicacion) : ''}</p></div>
+        <div><h1>${escHtml(data.idf.nombre)}</h1><p class="loc">${escHtml(data.idf.ubicacion || '')}</p></div>
         <div class="doc-meta">
           <div>Informe de cableado</div>
           ${obraLinea ? `<div><b>${obraLinea}</b></div>` : ''}
@@ -11749,8 +11765,7 @@ async function telecomOfficeInforme(rackId) {
           <div><b>${new Date().toLocaleDateString('es-ES')}</b></div>
         </div>
       </div>
-      ${elevacion}
-      ${filas}
+      ${secciones}
       <div class="doc-foot">Generado ${new Date().toLocaleString('es-ES')} · Alejandra</div>
       </body></html>`);
     w.document.close();
@@ -19278,7 +19293,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.94';
+const PANEL_APP_VERSION = '8.95';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

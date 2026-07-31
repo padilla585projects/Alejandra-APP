@@ -4977,7 +4977,7 @@ export default {
       if (path === '/telecom/puertos'          && method === 'GET') return await getTelecomPuertos(request, env);
       if (path.startsWith('/telecom/puertos/') && method === 'PUT') return await editarTelecomPuerto(path.split('/telecom/puertos/')[1], request, env);
 
-      if (path.startsWith('/telecom/informe/')) return await getTelecomInforme(path.split('/telecom/informe/')[1], request, env);
+      if (path.startsWith('/telecom/informe-idf/')) return await getTelecomInformeIdf(path.split('/telecom/informe-idf/')[1], request, env);
 
       // ── PEMP ──────────────────────────────────────────────────────────────
       if (path === '/pemp'        && method === 'GET')    return await getPemp(request, env);
@@ -7344,32 +7344,42 @@ async function editarTelecomPuerto(idRaw, request, env) {
   return json({ ok: true, estado });
 }
 
-async function getTelecomInforme(rackIdRaw, request, env) {
+// ORG-INFORME-03 (31/07/2026): Adrián: "el botón generar informe... debería estar en la
+// primera página, para seleccionar lo que quieres en el informe" → confirmado por
+// AskUserQuestion: informe de TODO el IDF (todos sus racks juntos), no de un rack suelto.
+// Sustituye al antiguo getTelecomInforme (por rack) — el botón que lo llamaba (dentro de
+// un rack concreto) desaparece del frontend, así que ese endpoint por-rack se retira con
+// él en vez de dejarlo huérfano.
+async function getTelecomInformeIdf(idfIdRaw, request, env) {
   const auth = await getAuth(request, env);
   if (!puedeVerTelecom(auth)) return err('No autorizado', 403);
-  const rack = await telecomGetRack(auth, env, rackIdRaw);
-  if (!rack) return err('Rack no encontrado', 404);
-  const idf = await env.DB.prepare('SELECT * FROM telecom_idf WHERE id = ? AND empresa_id = ?').bind(rack.idf_id, auth.empresa_id).first();
+  const idf = await env.DB.prepare('SELECT * FROM telecom_idf WHERE id = ? AND empresa_id = ?').bind(parseInt(idfIdRaw), auth.empresa_id).first();
+  if (!idf) return err('IDF no encontrado', 404);
   // ORG-INFORME-02 (31/07/2026): Adrián: "ahí que poner el nombre de obra, dirección...
-  // algo más profesional" — el informe solo traía rack/idf/puertos, sin ningún dato de la
-  // obra o la empresa. `obras` no tiene columna `direccion` (comprobado en D1: solo
+  // algo más profesional" — `obras` no tiene columna `direccion` (comprobado en D1: solo
   // nombre/codigo/comunidad pese a que actualizarObra() la referencia — bug preexistente,
   // fuera de alcance aquí); la dirección real que sí existe es la de la ficha de empresa
   // (`empresas.direccion`), así que se usa esa como dirección del informe.
-  const obra = idf?.obra_id
+  const obra = idf.obra_id
     ? await env.DB.prepare('SELECT id, nombre, codigo FROM obras WHERE id = ? AND empresa_id = ?').bind(idf.obra_id, auth.empresa_id).first()
     : null;
   const empresa = await env.DB.prepare('SELECT id, nombre, direccion FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
-  const { results: patchPanels } = await env.DB.prepare(
-    'SELECT * FROM telecom_patch_panels WHERE rack_id = ? AND empresa_id = ? ORDER BY nombre'
-  ).bind(rack.id, auth.empresa_id).all();
-  for (const pp of patchPanels) {
-    const { results: puertos } = await env.DB.prepare(
-      'SELECT * FROM telecom_puertos WHERE patch_panel_id = ? AND empresa_id = ? ORDER BY numero'
-    ).bind(pp.id, auth.empresa_id).all();
-    pp.puertos = puertos;
+  const { results: racks } = await env.DB.prepare(
+    'SELECT * FROM telecom_racks WHERE idf_id = ? AND empresa_id = ? ORDER BY nombre'
+  ).bind(idf.id, auth.empresa_id).all();
+  for (const rack of racks) {
+    const { results: patchPanels } = await env.DB.prepare(
+      'SELECT * FROM telecom_patch_panels WHERE rack_id = ? AND empresa_id = ? ORDER BY nombre'
+    ).bind(rack.id, auth.empresa_id).all();
+    for (const pp of patchPanels) {
+      const { results: puertos } = await env.DB.prepare(
+        'SELECT * FROM telecom_puertos WHERE patch_panel_id = ? AND empresa_id = ? ORDER BY numero'
+      ).bind(pp.id, auth.empresa_id).all();
+      pp.puertos = puertos;
+    }
+    rack.patch_panels = patchPanels;
   }
-  return json({ rack, idf, obra, empresa, patch_panels: patchPanels });
+  return json({ idf, obra, empresa, racks });
 }
 
 async function actualizarObra(id, request, env) {
