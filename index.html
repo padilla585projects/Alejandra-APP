@@ -13143,7 +13143,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.95';
+const APP_VERSION = '8.96';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -16447,7 +16447,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       i.id, '📍 ' + _escHtml(i.nombre),
       _escHtml([i.obra_nombre, i.ubicacion].filter(Boolean).join(' · ')),
       `telecomAbrirIdf(${Number(i.id)})`, 'idf',
-      `<button onclick="event.stopPropagation();telecomGenerarInformeIdf(${Number(i.id)})" title="Generar informe" style="background:none;border:none;color:var(--accent);font-size:16px;cursor:pointer;padding:7px">📄</button>`
+      `<button onclick="event.stopPropagation();telecomGenerarInformeIdf(${Number(i.id)})" style="flex:0 0 auto;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">📄 Informe</button>`
     )).join('');
   }
 

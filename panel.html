@@ -11338,7 +11338,7 @@ async function telecomOfficeCargarIdfs() {
       'idf', i, '📍 ' + escHtml(i.nombre),
       escHtml([i.obra_nombre, i.ubicacion].filter(Boolean).join(' · ')),
       `telecomOfficeAbrirIdf(${Number(i.id)})`,
-      `<button class="btn btn-secondary btn-sm" title="Generar informe" onclick="event.stopPropagation();telecomOfficeInformeIdf(${Number(i.id)})">📄</button>`
+      `<button onclick="event.stopPropagation();telecomOfficeInformeIdf(${Number(i.id)})" style="flex:0 0 auto;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">📄 Informe</button>`
     )).join('');
   } catch (e) {
     cont.innerHTML = `<div class="empty-state">❌ ${escHtml(e.message)}</div>`;
@@ -19293,7 +19293,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.95';
+const PANEL_APP_VERSION = '8.96';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
