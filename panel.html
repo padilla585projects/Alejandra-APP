@@ -11595,7 +11595,22 @@ const _TELECOM_OFFICE_INFORME_CSS = `
   .doc-head h1{margin:0;font-size:27px;font-weight:800;letter-spacing:-.01em;text-wrap:balance}
   .doc-head .loc{margin:6px 0 0;font-size:13.5px;color:var(--ink-mute)}
   .doc-meta{text-align:right;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-mute);line-height:1.7}
+  .doc-meta div{margin-bottom:1px}
   .doc-meta b{color:var(--ink);font-weight:700;text-transform:none;letter-spacing:0}
+  .rack-frame{border:1.5px solid var(--ink);border-radius:8px;padding:16px;margin-bottom:34px;break-inside:avoid}
+  .rack-frame-title{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute);font-weight:700;margin-bottom:10px}
+  .rack-slot{display:flex;align-items:center;gap:12px;padding:7px 10px;border:1px solid var(--line);border-radius:5px;margin-bottom:6px;background:#fff}
+  .rack-slot:last-child{margin-bottom:0}
+  .rack-slot-name{font-size:12px;font-weight:700;flex:0 0 128px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rack-slot-pos{font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:10px;color:var(--ink-mute);flex:0 0 auto;background:var(--accent-soft);border-radius:4px;padding:1px 6px}
+  .rack-slot-ticks{flex:1;display:flex;gap:2px;height:14px}
+  .tick{flex:1;border-radius:1px;background:var(--line)}
+  .tick.on{background:var(--accent)}
+  .rack-slot-count{font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:10.5px;color:var(--ink-mute);font-variant-numeric:tabular-nums;flex:0 0 auto;width:38px;text-align:right}
+  .port-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin:0 0 16px}
+  .pg-cell{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:9.5px;font-variant-numeric:tabular-nums}
+  .pg-cell.on{background:var(--accent);color:#fff;font-weight:700}
+  .pg-cell.off{background:#fff;border:1px solid var(--line);color:var(--ink-mute)}
   .panel{margin-bottom:34px}
   .panel-head{display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:10px;break-after:avoid}
   .panel-head h2{margin:0;font-size:15px;font-weight:800;letter-spacing:.02em}
@@ -11619,8 +11634,8 @@ const _TELECOM_OFFICE_INFORME_CSS = `
   tr.free .state-dot{border:1.4px solid var(--ink-mute);background:transparent}
   .cable{font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:11.5px}
   .doc-foot{margin-top:36px;padding-top:14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--ink-mute)}
-  @media(max-width:600px){body{padding:0 18px 40px}.doc-head{flex-direction:column;align-items:flex-start;gap:10px}.doc-meta{text-align:left}table{font-size:10.5px}th,td{padding:6px}}
-  @media print{.acciones{display:none}body{padding:0 4mm}tr{break-inside:avoid}}
+  @media(max-width:600px){body{padding:0 18px 40px}.doc-head{flex-direction:column;align-items:flex-start;gap:10px}.doc-meta{text-align:left}table{font-size:10.5px}th,td{padding:6px}.rack-slot-name{flex-basis:76px}}
+  @media print{.acciones{display:none}body{padding:0 4mm}tr{break-inside:avoid}.rack-slot{break-inside:avoid}}
 `;
 
 function _telecomOfficeInformeEstado(mensaje, detalle, esError) {
@@ -11641,6 +11656,31 @@ function _telecomOfficeInformeEstado(mensaje, detalle, esError) {
     <body><div class="box">${esError ? '<div class="bad">!</div>' : '<div class="spin"></div>'}<h2>${mensaje}</h2><p>${detalle}</p>${esError ? '<button onclick="window.close()">Cerrar</button>' : ''}</div></body></html>`;
 }
 
+// ORG-INFORME-02 (31/07/2026): ver comentario gemelo en index.html
+// (_telecomOrdenarPorPosicion/_telecomInformeElevacion) — misma lógica aquí.
+function _telecomOfficeOrdenarPorPosicion(paneles) {
+  const nums = paneles.map(p => parseInt(p.posicion_u, 10));
+  if (!nums.every(n => !isNaN(n))) return paneles;
+  return paneles.map((p, i) => [p, nums[i]]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+}
+
+function _telecomOfficeInformeElevacion(paneles) {
+  if (!paneles.length) return '';
+  const filas = paneles.map(pp => {
+    const puertos = pp.puertos || [];
+    const total = Number(pp.num_puertos) || puertos.length;
+    const ocupados = puertos.filter(p => p.estado === 'ocupado').length;
+    const ticks = puertos.map(p => `<span class="tick${p.estado === 'ocupado' ? ' on' : ''}"></span>`).join('');
+    return `<div class="rack-slot">
+      <span class="rack-slot-name">${escHtml(pp.nombre)}</span>
+      ${pp.posicion_u ? `<span class="rack-slot-pos">${escHtml(pp.posicion_u)}</span>` : ''}
+      <span class="rack-slot-ticks">${ticks}</span>
+      <span class="rack-slot-count">${ocupados}/${total}</span>
+    </div>`;
+  }).join('');
+  return `<div class="rack-frame"><div class="rack-frame-title">Vista de elevación</div>${filas}</div>`;
+}
+
 function _telecomOfficeInformePanel(pp) {
   const puertos = pp.puertos || [];
   const total = Number(pp.num_puertos) || puertos.length;
@@ -11652,6 +11692,10 @@ function _telecomOfficeInformePanel(pp) {
     pp.subred && `<span class="tag"><b>Subred</b> ${escHtml(pp.subred)}</span>`,
     pp.posicion_u && `<span class="tag"><b>Posición</b> ${escHtml(pp.posicion_u)}</span>`
   ].filter(Boolean).join('');
+  const grid = puertos.map(p => {
+    const ocupado = p.estado === 'ocupado';
+    return `<div class="pg-cell ${ocupado ? 'on' : 'off'}" title="${escHtml(p.destino || (ocupado ? 'Ocupado' : 'Libre'))}">${Number(p.numero)}</div>`;
+  }).join('');
   const filas = puertos.map(p => {
     const ocupado = p.estado === 'ocupado';
     return `<tr class="${ocupado ? 'occupied' : 'free'}">
@@ -11669,6 +11713,7 @@ function _telecomOfficeInformePanel(pp) {
     </div>
     ${tags ? `<div class="tags">${tags}</div>` : ''}
     ${pp.notas_config ? `<p class="config-note"><b>Configuración:</b> ${escHtml(pp.notas_config)}</p>` : ''}
+    <div class="port-grid">${grid}</div>
     <table>
       <thead><tr><th>Puerto</th><th>Destino</th><th>Cable</th><th>Categoría</th><th>Notas</th></tr></thead>
       <tbody>${filas}</tbody>
@@ -11686,15 +11731,25 @@ async function telecomOfficeInforme(rackId) {
   w.document.close();
   try {
     const data = await _telecomOfficeApi('/telecom/informe/' + Number(rackId));
-    const filas = (data.patch_panels || []).map(_telecomOfficeInformePanel).join('');
+    const paneles = _telecomOfficeOrdenarPorPosicion(data.patch_panels || []);
+    const elevacion = _telecomOfficeInformeElevacion(paneles);
+    const filas = paneles.map(_telecomOfficeInformePanel).join('');
+    const obraLinea = data.obra?.nombre ? escHtml(data.obra.nombre) + (data.obra.codigo ? ' · ' + escHtml(data.obra.codigo) : '') : '';
+    const empresaLinea = data.empresa?.nombre ? escHtml(data.empresa.nombre) + (data.empresa.direccion ? ' — ' + escHtml(data.empresa.direccion) : '') : '';
     w.document.open();
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${escHtml(data.rack.nombre)}</title>
       <style>${_TELECOM_OFFICE_INFORME_CSS}</style></head><body>
       <div class="acciones"><button class="imprimir" onclick="window.print()">🖨 Imprimir / guardar PDF</button><button class="cerrar" onclick="window.close()">Cerrar</button></div>
       <div class="doc-head">
         <div><h1>${escHtml(data.rack.nombre)}</h1><p class="loc">${escHtml(data.idf?.nombre || '')}${data.idf?.ubicacion ? ' — ' + escHtml(data.idf.ubicacion) : ''}</p></div>
-        <div class="doc-meta"><div>Informe de cableado</div><div><b>${new Date().toLocaleDateString('es-ES')}</b></div></div>
+        <div class="doc-meta">
+          <div>Informe de cableado</div>
+          ${obraLinea ? `<div><b>${obraLinea}</b></div>` : ''}
+          ${empresaLinea ? `<div>${empresaLinea}</div>` : ''}
+          <div><b>${new Date().toLocaleDateString('es-ES')}</b></div>
+        </div>
       </div>
+      ${elevacion}
       ${filas}
       <div class="doc-foot">Generado ${new Date().toLocaleString('es-ES')} · Alejandra</div>
       </body></html>`);
@@ -19223,7 +19278,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.93';
+const PANEL_APP_VERSION = '8.94';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

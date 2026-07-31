@@ -7350,6 +7350,16 @@ async function getTelecomInforme(rackIdRaw, request, env) {
   const rack = await telecomGetRack(auth, env, rackIdRaw);
   if (!rack) return err('Rack no encontrado', 404);
   const idf = await env.DB.prepare('SELECT * FROM telecom_idf WHERE id = ? AND empresa_id = ?').bind(rack.idf_id, auth.empresa_id).first();
+  // ORG-INFORME-02 (31/07/2026): Adrián: "ahí que poner el nombre de obra, dirección...
+  // algo más profesional" — el informe solo traía rack/idf/puertos, sin ningún dato de la
+  // obra o la empresa. `obras` no tiene columna `direccion` (comprobado en D1: solo
+  // nombre/codigo/comunidad pese a que actualizarObra() la referencia — bug preexistente,
+  // fuera de alcance aquí); la dirección real que sí existe es la de la ficha de empresa
+  // (`empresas.direccion`), así que se usa esa como dirección del informe.
+  const obra = idf?.obra_id
+    ? await env.DB.prepare('SELECT id, nombre, codigo FROM obras WHERE id = ? AND empresa_id = ?').bind(idf.obra_id, auth.empresa_id).first()
+    : null;
+  const empresa = await env.DB.prepare('SELECT id, nombre, direccion FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
   const { results: patchPanels } = await env.DB.prepare(
     'SELECT * FROM telecom_patch_panels WHERE rack_id = ? AND empresa_id = ? ORDER BY nombre'
   ).bind(rack.id, auth.empresa_id).all();
@@ -7359,7 +7369,7 @@ async function getTelecomInforme(rackIdRaw, request, env) {
     ).bind(pp.id, auth.empresa_id).all();
     pp.puertos = puertos;
   }
-  return json({ rack, idf, patch_panels: patchPanels });
+  return json({ rack, idf, obra, empresa, patch_panels: patchPanels });
 }
 
 async function actualizarObra(id, request, env) {
