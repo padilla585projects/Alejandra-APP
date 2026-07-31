@@ -1,7 +1,37 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 31/07/2026 — organización de documentación, credenciales e higiene de repo completada.
+**Última actualización:** 31/07/2026 — organización de documentación, credenciales e higiene de repo completada + verificación de entorno (todo verde salvo incidencia puntual de la API de Cloudflare).
+
+### 31/07/2026 — sesión de orden/limpieza documental (sin cambio de versión de la app; sigue v8.90)
+
+Resumen para otro chat que retome el proyecto. No se tocó lógica de negocio (worker.js ni frontends).
+
+**Qué se hizo (3 bloques):**
+
+1. **Documentación operativa** (commits `0c03d5e` y `73821c5`, ambos pusheados a `main`):
+   - `.env.example`: reescrito como plantilla de referencia completa de secrets — secciones por worker (`alejandra-app-api` / `alejandra-agente`), compartidos, legacy/opcionales y bindings. Se alineó con las variables que el código usa DE VERDAD (barrido con regex sobre `env.XXX` en ambos worker.js: 24 keys en el principal, 19 en el agente).
+   - `OPERACION_PROYECTO.md`: NUEVO — guía rápida operativa (arranque de sesión, mapa de workers, herramientas locales, secretos, tests, deploy, cierre).
+   - `CLAUDE.md`: ruta de arranque corregida a `C:\Users\Adrian\Downloads\Projects\alejandra-app`, Wrangler a v4.x, sección "Estado actual" apunta a SESION/ESTADO/IDEAS en vez del bloque v6.01 obsoleto.
+   - `REFERENCIA_PROYECTO.txt`: reescrito por completo (555 → 134 líneas) — se eliminó ruido histórico (app vieja Bobinaap, deploy por curl, tokens en texto, rutas `<RUTA_BASE>`). Ahora es un resumen operativo que apunta a CLAUDE.md/OPERACION_PROYECTO.md como fuente canónica.
+   - `SESION.md`: cabecera actualizada.
+
+2. **Higiene de repo** (dentro de `0c03d5e`):
+   - `.gitignore`: añadidos `.claude/worktrees/`, `CTemp/` (directorio local vacío), `worker_deploy_result.txt`, y ordenada la sección de package files de raíz.
+   - `NUEVA_CUENTA.txt` y `worker_deploy_result.txt`: fuera del control de versiones (`git rm --cached`), **se conservan en local**. Son referencia histórica; `.env.example` + secrets de Cloudflare/GitHub son la fuente operativa real.
+   - Nota: `NUEVA_CUENTA.txt` (histórico) contiene el token de Telegram y IDs de Google Sheets en texto plano — no commitear.
+
+3. **Verificación de entorno/producción** (sin cambios, sin deploy):
+   - `git status` limpio, versión sincronizada `8.90/8.90/8.90`.
+   - Health OK en ambos workers: `alejandra-app-api` y `alejandra-agente` (version 6.13).
+   - Secrets list OK en ambos workers (22 y 18 secrets respectivamente).
+   - Tests agente: 85/85 en verde (`npm test` en `alejandra-agente/`).
+   - ⚠️ **WARN pendiente**: `npx wrangler whoami` y `npx wrangler deployments list` fallaron con `521/522/525` (respuesta malformada del edge de Cloudflare, GET /user y /accounts...). Probable incidencia transitoria del lado de Cloudflare — `secret list` sí funcionó. Reintentar en la próxima sesión antes de desplegar. Logs en `C:\Users\Adrian\.wrangler\logs\`.
+
+**PARA RETOMAR EN OTRO CHAT (pendientes decididos, no ejecutados):**
+- Reintentar `npx wrangler whoami` / `deployments list` (WARN de API Cloudflare) y anotar resultado.
+- Barrido final de secretos en textos versionados (recomendado por seguridad).
+- Decidir siguiente mejora pequeña del backlog en `IDEAS_PENDIENTES.txt` (no se abrió ningún ítem).
 
 ### v8.90 — informe Teleco integrado en la PWA
 
