@@ -1,7 +1,7 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 30/07/2026 — v8.90.
+**Última actualización:** 31/07/2026 — organización de documentación, credenciales e higiene de repo completada.
 
 ### v8.90 — informe Teleco integrado en la PWA
 

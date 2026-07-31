@@ -23,9 +23,10 @@ El agente IA integrado se llama **Alejandra** (Claude Sonnet via Anthropic API, 
 | R2 (archivos) | `alejandra-app-files` |
 | Cuenta Cloudflare | `padilla585.projects@gmail.com` — ID: `d65ead2b2967bf68ff3848a36cd7b1b4` |
 | Node.js | v24.14.1 |
-| Wrangler | v4.84.1 (autenticado, usa `wrangler.toml` automáticamente) |
+| Wrangler | v4.x (autenticado, usa `wrangler.toml` automáticamente) |
 
-> ⚠️ Credenciales en `NUEVA_CUENTA.txt` (local, en `.gitignore`, nunca commitear).
+> ⚠️ `NUEVA_CUENTA.txt` es referencia histórica local (en `.gitignore`, nunca commitear).
+> Usa `.env.example` + Cloudflare/GitHub secrets como fuente operativa actual.
 >
 > 🔑 **¿En otro ordenador y no tienes NUEVA_CUENTA.txt?** Busca aquí:
 > - Secrets de Cloudflare Workers: https://dash.cloudflare.com → Workers → alejandra-app-api → Settings → Variables
@@ -39,8 +40,8 @@ El agente IA integrado se llama **Alejandra** (Claude Sonnet via Anthropic API, 
 ## AL INICIO DE CADA SESIÓN (obligatorio)
 
 ```powershell
-# 1. Situarse en la carpeta correcta
-cd "C:\Users\Adrian\Downloads\Alejandra APP\Alejandra APP"
+# 1. Situarse en la carpeta correcta (esta copia local del repo)
+cd "C:\Users\Adrian\Downloads\Projects\alejandra-app"
 
 # 2. Sincronizar con GitHub
 git pull
@@ -120,6 +121,8 @@ npx wrangler d1 execute alejandra-db --command "SELECT * FROM bobinas LIMIT 5"
 # Ver logs del worker en tiempo real
 npx wrangler tail
 ```
+
+Guía operativa rápida adicional: `OPERACION_PROYECTO.md`
 
 ---
 
@@ -237,12 +240,10 @@ Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, com
 
 ---
 
-## Estado actual (última sesión conocida)
+## Estado actual
 
-- **Versión:** v6.01
-- **Fecha:** 18/05/2026
-- **Worker:** desplegado ✅
-- **GitHub:** en sync ✅ (ver SESION.md para commit exacto)
-- **Últimas features:** Fix raíz encoding (TextDecoder), auto-logout en 401, alejandra-panel.html con Google OAuth
+El estado vivo del proyecto se mantiene en:
 
-> Para el estado exacto y actualizado, leer `SESION.md` y `ESTADO_APP.txt`.
+- `SESION.md` (situación actual de trabajo)
+- `ESTADO_APP.txt` (histórico técnico y de versiones)
+- `IDEAS_PENDIENTES.txt` (backlog y pendientes)

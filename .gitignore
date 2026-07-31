@@ -1,6 +1,9 @@
 # Wrangler local dev cache (R2 emulation, D1 local, etc.)
 .wrangler/
 
+# Claude local worktrees/sandbox
+.claude/worktrees/
+
 # R2 local emulation data (fotos subidas en wrangler dev)
 e1/
 e2/
@@ -20,7 +23,12 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
-node_modules/
+
+# Temp/local artifacts
+CTemp/
+worker_deploy_result.txt
+
+# Root package files are local-only in this repo
 package.json
 package-lock.json
 # Excepción: alejandra-agente sí necesita package.json/lockfile trackeados
