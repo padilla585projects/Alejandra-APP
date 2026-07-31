@@ -1,9 +1,32 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 31/07/2026 — organización de documentación, credenciales e higiene de repo completada + verificación de entorno (todo verde salvo incidencia puntual de la API de Cloudflare).
+**Última actualización:** 31/07/2026 — filtro real por departamento (Office + PWA) y rediseño completo del informe de cableado de racks. Versión final v8.97.
 
-### 31/07/2026 — sesión de orden/limpieza documental (sin cambio de versión de la app; sigue v8.90)
+### 31/07/2026 (tarde) — filtro por departamento + rediseño del informe de Teleco (v8.90 → v8.97)
+
+Resumen para otro chat que retome el proyecto.
+
+**1. Verificación de estado (sin cambios):** repo limpio, versiones sincronizadas, `wrangler whoami` ya no daba el 521/525 de la sesión anterior (incidencia transitoria de Cloudflare confirmada resuelta sola), tests agente 85/85, ambos workers `/health` 200. `IDEAS_PENDIENTES.txt`: "columnas del inventario" descartado a petición de Adrián; 4 cuentas duplicadas de "Alberto" en D1 revisadas de nuevo — ya estaban desactivadas desde la limpieza de la sesión anterior, nada pendiente.
+
+**2. ORG-DIR-01..04 — filtro por departamento roto (v8.91, v8.92):**
+- Adrián: "cuando activamos un departamento nuevo se cargan subdepartamentos que no tienen nada que ver" + "en Teleco el inventario de PEMP/carretillas es el mismo que el de Eléctrico, no hay filtro independiente".
+- **Office** (`panel.html`): `construirDirectorioDepartamentos()` ("Todos los departamentos") pintaba todos los departamentos del catálogo sin comprobar cuáles están activos en Mi Empresa, y sus enlaces clonados navegaban a la página compartida sin fijar departamento. Fix: se acota a los activos (`/mi-empresa`) y `navTo(page, deptKey)` fija un override que `_conDeptoPreview()` respeta. Commit `4f6a393` (v8.91).
+- **PWA** (`index.html`): el backend solo filtra por departamento a roles admin si la petición manda `?departamento=`, y la PWA nunca lo mandaba — un superadmin veía siempre TODO el inventario sin filtrar. Confirmado en vivo en Levitec (PEMP=44/Carretillas=7 idénticos en Eléctrico y Telecomunicaciones). Fix: `apiCall()`/`apiCallRaw()` añaden el parámetro automáticamente para roles admin. Commit `b856f35` (v8.92).
+- Verificado en el Chrome real de Adrián (sesión ya logueada, sin tocar credenciales) tras cada fix.
+
+**3. ORG-INFORME-01..04 — informe de cableado rediseñado (v8.93 → v8.97):**
+- Punto de partida: tabla Arial con bordes, sin jerarquía. Adrián pidió usar una skill de diseño (`artifact-design`) aplicada a este documento real de la app.
+- v8.93 (commit `06a55ad`): identidad visual propia — paleta técnica fría, puertos/cables en monoespaciada, punto de estado ocupado/libre, medidor de ocupación por patch panel.
+- v8.94 (commit `2365126`): cabecera con obra (nombre+código) y empresa (`obras` no tiene columna `direccion` en D1 pese a que `actualizarObra()` la referencia — bug preexistente, no tocado; se usa la dirección de la ficha de empresa). Nueva "Vista de elevación" del rack (franja por patch panel con posición/ocupación) y mapa de puertos en rejilla numerada.
+- v8.95 (commit `e7f89af`): Adrián — "el botón está mal puesto, debería estar en la primera página para elegir qué quieres en el informe". Confirmado por `AskUserQuestion`: informe de TODO el IDF (una sección por rack), no de un rack suelto. Nuevo endpoint `GET /telecom/informe-idf/:id`, se retira el informe por-rack (queda huérfano).
+- v8.96 (commit `ca4ff21`) y v8.97 (commit `194203c`): dos iteraciones de sitio/estilo del botón hasta el resultado final — fijo en la barra de herramientas junto a "+ Nuevo IDF" (genera directo con un solo IDF, abre selector con varios).
+- Paridad completa `index.html`/`panel.html` en todo el proceso (Office usa pestaña real, la PWA un modal con iframe — mismo HTML/CSS).
+- Verificado en producción en cada paso con el rack real "Rak B" (Edison Montajes/CPD Getafe).
+
+**Pendiente para otra sesión:** NEW-89 (`/telecom-maquinaria`... realmente `/partes-maquinaria`, sin comprobación de rol — cualquier usuario autenticado puede crear/editar/borrar partes de maquinaria de su empresa) sigue sin resolver, no se tocó esta sesión.
+
+### 31/07/2026 (mañana) — sesión de orden/limpieza documental (sin cambio de versión de la app; sigue v8.90)
 
 Resumen para otro chat que retome el proyecto. No se tocó lógica de negocio (worker.js ni frontends).
 

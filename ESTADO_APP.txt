@@ -4,6 +4,17 @@
 Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+ACTUALIZACIÓN v8.97 (31/07/2026): informe de cableado de racks rediseñado de raíz (Adrián: "el
+informe es muy sencillo" + "utiliza una skill de UI"). Identidad visual propia (paleta técnica
+fría, puertos/cables en monoespaciada, estado ocupado/libre con punto, medidor de ocupación),
+cabecera con obra+empresa, "Vista de elevación" del rack y mapa de puertos en rejilla numerada.
+El informe pasa de ser por-rack a ser por-IDF completo (una sección por rack), con nuevo
+endpoint GET /telecom/informe-idf/:id; el botón queda fijo en la barra de herramientas junto a
+"+ Nuevo IDF" (con un solo IDF genera directo, con varios abre un selector). Paridad completa
+PWA/Office. De paso, v8.91-v8.92 corrigieron que Teleco (y cualquier departamento nuevo)
+mostraba el inventario de Eléctrico sin filtrar en Office ("Todos los departamentos") y en la
+PWA para roles admin. Ver SESION.md e IDEAS_PENDIENTES.txt para el detalle versión a versión.
+
 SIN CAMBIO DE VERSIÓN (31/07/2026, docs/orden, sin tocar lógica): limpieza y orden del repo — `.env.example` reescrito como plantilla completa de secrets por worker; nuevo `OPERACION_PROYECTO.md` (guía rápida operativa); `REFERENCIA_PROYECTO.txt` reescrito (555→134 líneas, sin ruido histórico ni tokens); `CLAUDE.md` actualizado (ruta de arranque, Wrangler v4.x, estado vivo). Higiene git: `.gitignore` ampliado, `NUEVA_CUENTA.txt` y `worker_deploy_result.txt` fuera del repo (se conservan en local). Verificación de entorno: versiones 8.90 sincronizadas, health OK en ambos workers, tests agente 85/85, secrets OK. WARN: `wrangler whoami`/`deployments list` con 521/525 transitorio de Cloudflare — reintentar antes de desplegar. Commits `0c03d5e`, `73821c5`. Ver SESION.md para detalle.
 
 ACTUALIZACIÓN v8.90 (30/07/2026): el informe de Teleco en PWA deja de depender por completo de pestañas o ventanas emergentes. Se muestra dentro de Alejandra como una vista completa con previsualización desplazable, botón "Imprimir / PDF" y cierre explícito. Esto corrige el caso observado donde Android aceptaba `window.open()` pero escondía la pestaña generada. Mantiene los datos y el formato incorporados en v8.88-v8.89. Caché renovada a v8.90.

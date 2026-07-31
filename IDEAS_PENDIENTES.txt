@@ -1,7 +1,60 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización vigente: 26/07/2026 — SEC-AUDIT-01: auditoría de seguridad completa (worker.js + alejandra-agente), 3 críticos corregidos y desplegados — IDOR cross-empresa en editar/borrar PEMP/Carretillas/Bobinas, bypass a "developer" por substring de nombre en el agente, y envenenamiento de memoria global sin autenticación (memory_save alcanzable sin sesión, se inyectaba en el contexto de TODAS las conversaciones de TODAS las empresas). Ver sección de errores.
+  Última actualización vigente: 31/07/2026 — ORG-DIR-01..04 e INFORME-01..04: filtro real por
+  departamento en el directorio de Office y en la PWA (Teleco mostraba el inventario de
+  Eléctrico) + informe de cableado rediseñado con identidad propia y movido a informe por IDF.
+  Ver sección de errores y esta misma zona más abajo.
+
+[✓ HECHO v8.91-v8.92] ORG-DIR-01..04 — Teleco (y cualquier departamento nuevo) veía el
+  inventario de Eléctrico sin filtro independiente
+    · Adrián, probando Teleco recién activado: "cuando activamos un departamento nuevo en la
+      empresa se cargan un montón de subdepartamentos que no tienen nada que ver. además he
+      visto que en departamento nuevo (Teleco) el inventario de las PEMP, carretillas y demás
+      son las mismas que la de eléctricas. no hay filtro independiente".
+    · Office (panel.html): construirDirectorioDepartamentos() ("Todos los departamentos")
+      pintaba SIEMPRE un bloque por cada departamento del catálogo, activado o no en Mi
+      Empresa (activarlo no era la causa real, simplemente nadie lo había notado antes). Los
+      enlaces clonados de PEMP/Carretillas/Bobinas/Pedidos navegaban a la página compartida sin
+      fijar ningún departamento — mismos datos sin filtrar en cualquier bloque. Fix: el
+      directorio se acota a los departamentos activos (consulta /mi-empresa), y navTo(page,
+      deptKey) fija un override que _deptoPreviewParam()/_conDeptoPreview() propagan como
+      filtro real (v8.91).
+    · PWA (index.html): el backend (getPemp/getCarretillas/...) filtra por departamento a
+      roles admin solo si la petición manda ?departamento=X — la PWA nunca lo mandaba, así que
+      un superadmin/empresa_admin/desarrollador veía siempre el inventario completo sin filtrar
+      sin importar el departamento elegido en "Selecciona departamento". Confirmado en vivo en
+      Levitec/CPD Getafe: PEMP=44 y Carretillas=7 idénticos en Eléctrico y Telecomunicaciones.
+      apiCall()/apiCallRaw() ahora añaden ?departamento=X en toda petición GET para esos roles
+      (mismo criterio que _deptoPreviewParam() de Office) — v8.92.
+    · Verificado en producción con datos reales tras cada fix (Chrome real del usuario, sin
+      tocar credenciales). Ver SESION.md.
+
+[✓ HECHO v8.93-v8.97] ORG-INFORME-01..04 — Informe de cableado de racks: rediseño completo
+    · Adrián: "el informe es muy sencillo, podemos hacerlo mejor. utiliza una skill de UI para
+      que salga bien" → skill artifact-design aplicada a un documento real de la app (no un
+      Artifact): paleta técnica fría, tipografía monoespaciada para puertos/cables (coherente
+      con el dominio de cableado estructurado), estado ocupado/libre codificado con un punto,
+      medidor de ocupación por patch panel — v8.93.
+    · "ahí que poner EL nombre de obra, dirección... algo más profesional" + "quizás un
+      esquema del rack, cada panel, algo chulo": cabecera con obra (nombre+código) y empresa
+      (obras no tiene columna dirección en D1 pese a que actualizarObra() la referencia — bug
+      preexistente sin tocar; se usa la dirección real de la ficha de empresa). Nueva "Vista de
+      elevación" (franja por patch panel con su posición, ocupación y contador) y mapa de
+      puertos en rejilla numerada (como la serigrafía de un patch panel real) antes de la tabla
+      detallada — v8.94.
+    · "el botón generar informe donde está es absurdo, debería estar en la primera página para
+      seleccionar lo que quieres en el informe" → confirmado por AskUserQuestion: informe de
+      TODO el IDF (una sección por rack), no de un rack suelto. Nuevo endpoint
+      GET /telecom/informe-idf/:id (sustituye al informe por-rack, retirado por quedar
+      huérfano) — v8.95. Iterado dos veces más sobre el sitio exacto del botón ("me gustaba el
+      botón grande arriba" → v8.96 chip con borde; "al lado del botón de nuevo IDF, ahí es
+      donde tiene que ir" → v8.97, botón fijo en la barra de herramientas junto a "+ Nuevo
+      IDF": con un solo IDF genera directo, con varios abre un menú flotante para elegir cuál).
+    · Aplicado con paridad completa en index.html y panel.html (Office usa pestaña real con
+      window.open, la PWA un modal con iframe srcdoc — mismo HTML/CSS del informe en ambos).
+    · Verificado en producción en cada paso con el rack real "Rak B" (Edison Montajes/CPD
+      Getafe, patch panels BMS y Seguridad). Ver SESION.md.
 
 [✓ HECHO v8.83] TELECO-01 — gestión de racks y cableado en PWA y Office
     · Jerarquía completa obra → IDF → rack → patch panel → puerto.
