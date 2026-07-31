@@ -2427,13 +2427,14 @@ LEYENDA DE ESTADO:
 
     · Sugerencias de la app revisadas (Part 58): la #208 sigue siendo la última (38 en
       total) — nada pendiente por ahora.
+    · [✓ DESCARTADO 31/07/2026] "quiero quitar columnas del inventario que no valen y añadir
+        otras" — Adrián lo da por hecho ya, no se retoma.
+    · [✓ VERIFICADO 31/07/2026] 4 cuentas "Alberto" en D1 (ids 1, 12, 50, 51): revisadas de
+        nuevo en D1 producción a petición de Adrián — las 4 ya están desactivadas lógicamente
+        (activo=0, codigo='_del_N') desde la limpieza de DATA-ALBERTO (25/07/2026). Solo la 46
+        (Alberto Martínez, amartinezc@levitec.es) sigue activa. No queda nada pendiente de
+        borrar; no hizo falta ningún borrado permanente adicional.
     · Pendiente sin resolver (flagged para futura sesión, ver también SESION.md Part 58):
-      - "quiero quitar columnas del inventario que no valen y añadir otras" (pedido por Adrián,
-        nunca especificó cuáles — preguntar antes de tocar la tabla).
-      - 4 cuentas "Alberto" en D1 (ids 1, 12, 46, 50, 51), solo el 46 activo. Adrián confirmó
-        que sí quiere limpiarlas, pero es un borrado permanente que tiene que hacer él mismo
-        desde Office → Usuarios (Claude no borra datos permanentemente) — pendiente de que
-        lo haga.
       - Departamentos sin cuentas reales todavía (Obra Civil, Albañilería, Pintura,
         Carpintería, Telecom, Almacén): sin menú propio a propósito — añadir uno cuando
         haga falta es ahora solo una entrada nueva en _MENU_ROL_DEPT_CONFIG (panel.html),

@@ -9557,6 +9557,15 @@ function _panelSesionCaducada() {
 // inventarios de los otros departamentos") ya vive en _deptoPreviewParam() para que se
 // respete también aquí.
 function _deptoPreviewParam() {
+  // ORG-DIR-02 (31/07/2026): Adrián: "en departamento nuevo (Teleco) el inventario de las
+  // PEMP, carretillas y demás son las mismas que la de eléctricas. no hay filtro
+  // independiente" — un enlace clonado dentro de un bloque del directorio ("Todos los
+  // departamentos") navegaba a la misma página compartida sin fijar ningún departamento,
+  // así que PEMP/Carretillas/Bobinas/Pedidos salían sin filtrar (todos los departamentos
+  // mezclados) sin importar en qué bloque se hubiera pulsado. window._directorioDeptOverride
+  // lo fija navTo(page, deptKey) al navegar desde un bloque del directorio (ver
+  // construirDirectorioDepartamentos) y tiene prioridad sobre todo lo demás.
+  if (window._directorioDeptOverride) return window._directorioDeptOverride;
   if (!SESSION) return null;
   // ALMACEN-FILTRO-01 (26/07/2026): en la vista de Almacén (previsualización admin o
   // usuario real del departamento almacén) manda el filtro elegido en el modal, si hay
@@ -9574,7 +9583,10 @@ function _conDeptoPreview(path, method) {
   if (!depto) return path;
   const [base, query = ''] = path.split('?');
   const params = new URLSearchParams(query);
-  if (!params.has('departamento')) params.set('departamento', depto);
+  // ORG-DIR-02: un filtro de departamento (select filtroDepPemp/Carretillas/...) dejado con
+  // un valor de una previsualización anterior no debe ganarle a un clic explícito desde el
+  // directorio — el override siempre sustituye lo que hubiera en la URL.
+  if (window._directorioDeptOverride || !params.has('departamento')) params.set('departamento', depto);
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
 }
@@ -10553,7 +10565,7 @@ function aplicarFiltroDeptAlmacen(dep, txt) {
 // "Pedidos") se ocultan para no duplicar contenido sin agrupar. Solo se construye para el
 // admin real SIN departamento elegido — nunca durante una previsualización ni para
 // encargados/operarios reales (organizarSidebarEncargado() ya cubre esos casos).
-function construirDirectorioDepartamentos() {
+async function construirDirectorioDepartamentos() {
   const anclaInventarios = document.querySelector('.sidebar-section[data-sid="inventarios"]');
   if (!anclaInventarios) return;
   const padre = anclaInventarios.parentNode;
@@ -10564,8 +10576,22 @@ function construirDirectorioDepartamentos() {
   // idénticas a la de obra_civil, así que el bloque de Obra Civil ya muestra sus páginas).
   const DENTRO_DE_OBRA_CIVIL = ['albanileria', 'pintura', 'carpinteria'];
 
+  // ORG-DIR-01 (31/07/2026): Adrián: "cuando activamos un departamento nuevo en la
+  // empresa, se cargan un montón de subdepartamentos que no tienen nada que ver" — este
+  // directorio pintaba SIEMPRE un bloque por cada departamento del catálogo, activado o
+  // no, porque nunca comprobaba _empData.departamentos (la lista real de la empresa).
+  // Mismo criterio que aplicarDeptosActivos() en index.html: sin lista guardada, se
+  // consideran todos activos (compatibilidad con empresas antiguas sin configurar).
+  let activos = null;
+  try {
+    if (!_empData) { const r = await api('/mi-empresa'); _empData = r?.empresa || null; }
+    const raw = _empData?.departamentos;
+    if (raw) activos = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {}
+
   Object.keys(_MENU_ROL_DEPT_CONFIG.encargado).forEach(deptKey => {
     if (DENTRO_DE_OBRA_CIVIL.includes(deptKey)) return;
+    if (activos && !activos.includes(deptKey)) return;
     const cfg = _MENU_ROL_DEPT_CONFIG.encargado[deptKey];
     const paginas = [...(cfg.material || []), ...(cfg.seccionExtra?.paginas || [])];
     // PREVIEW-ADMIN-08: el stock de material de Seguridad (data-page="seguridad",
@@ -10590,6 +10616,10 @@ function construirDirectorioDepartamentos() {
       clone.style.display = '';
       clone.removeAttribute('data-hidden-by-perms');
       clone.classList.add('nav-item-directorio-clone');
+      // ORG-DIR-02: el clon apuntaba a la misma página compartida sin fijar departamento
+      // (navTo('pemp') a secas) — PEMP/Carretillas/Bobinas/Pedidos salían sin filtrar,
+      // igual en cualquier bloque. Se fija el departamento de ESTE bloque al navegar.
+      clone.setAttribute('onclick', `navTo('${page}','${deptKey}')`);
       padre.insertBefore(clone, anclaInventarios);
     });
   });
@@ -12053,8 +12083,15 @@ function navBack() {
   _doNavTo(target);  // navegar sin añadir al stack
 }
 
-function navTo(page) {
-  if (currentPage === page) return;
+function navTo(page, deptOverride) {
+  // ORG-DIR-02 (31/07/2026): deptOverride solo lo pasan los enlaces clonados del directorio
+  // "Todos los departamentos" (construirDirectorioDepartamentos) para que PEMP/Carretillas/
+  // Bobinas/Pedidos carguen filtrados por el bloque desde el que se entra. Cualquier
+  // navegación normal (deptOverride ausente) limpia el override anterior — si no, un filtro
+  // de un clic previo en el directorio se quedaría pegado a páginas ajenas.
+  const overrideChanged = (window._directorioDeptOverride || null) !== (deptOverride || null);
+  window._directorioDeptOverride = deptOverride || null;
+  if (currentPage === page && !overrideChanged) return;
   if (currentPage) _navStack.push(currentPage);  // guardar en historial
   _doNavTo(page);
 }
@@ -19100,7 +19137,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.90';
+const PANEL_APP_VERSION = '8.91';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
