@@ -11577,47 +11577,133 @@ function telecomOfficeVaciarPuerto() {
   if (confirm('¿Vaciar los datos de este puerto?')) _telecomOfficeGuardarPuertoDatos({ destino:'', cable_label:'', categoria:'', notas:'' });
 }
 
+// ORG-INFORME-01 (31/07/2026): Adrián: "el informe es muy sencillo, podemos hacerlo
+// mejor". Mismo rediseño que telecomGenerarInforme() en index.html — paleta técnica fría,
+// puertos en monoespaciada, estado ocupado/libre codificado con un punto, medidor de
+// ocupación por panel. Aquí vive en una pestaña real (window.open), no en un iframe, así
+// que la barra de Imprimir/Cerrar se queda dentro del propio documento.
+const _TELECOM_OFFICE_INFORME_CSS = `
+  :root{--paper:#f6f8fa;--ink:#101823;--ink-mute:#5b6472;--line:#dde2e8;--accent:#0e7c86;--accent-soft:#e3f1f1}
+  *{box-sizing:border-box}
+  body{margin:0;padding:0 44px 56px;background:var(--paper);color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .acciones{position:sticky;top:0;display:flex;gap:8px;padding:16px 0;background:var(--paper);z-index:2}
+  .acciones button{border:0;border-radius:8px;padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer}
+  .imprimir{background:var(--accent);color:#fff}
+  .cerrar{background:#fff;color:var(--ink);border:1px solid var(--line)!important}
+  .doc-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;padding-bottom:20px;margin-bottom:28px;border-bottom:2px solid var(--ink)}
+  .doc-head h1{margin:0;font-size:27px;font-weight:800;letter-spacing:-.01em;text-wrap:balance}
+  .doc-head .loc{margin:6px 0 0;font-size:13.5px;color:var(--ink-mute)}
+  .doc-meta{text-align:right;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-mute);line-height:1.7}
+  .doc-meta b{color:var(--ink);font-weight:700;text-transform:none;letter-spacing:0}
+  .panel{margin-bottom:34px}
+  .panel-head{display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:10px;break-after:avoid}
+  .panel-head h2{margin:0;font-size:15px;font-weight:800;letter-spacing:.02em}
+  .occ-meter{flex:1;display:flex;align-items:center;gap:8px;max-width:220px}
+  .occ-bar{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+  .occ-fill{height:100%;background:var(--accent);border-radius:3px}
+  .occ-count{font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:11.5px;color:var(--ink-mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tags{display:flex;flex-wrap:wrap;gap:6px 10px;margin:0 0 12px}
+  .tag{font-size:11px;color:var(--ink-mute);background:var(--accent-soft);border-radius:5px;padding:3px 8px}
+  .tag b{color:var(--ink);font-weight:700}
+  .config-note{font-size:12px;color:var(--ink-mute);margin:0 0 12px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead{display:table-header-group}
+  th{text-align:left;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-mute);font-weight:700;padding:0 10px 8px;border-bottom:1px solid var(--ink)}
+  td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr.free td{color:var(--ink-mute)}
+  tr.free .dest{font-style:italic}
+  .port-no{font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-variant-numeric:tabular-nums;width:1%;white-space:nowrap}
+  .state-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;vertical-align:middle}
+  tr.occupied .state-dot{background:var(--accent)}
+  tr.free .state-dot{border:1.4px solid var(--ink-mute);background:transparent}
+  .cable{font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:11.5px}
+  .doc-foot{margin-top:36px;padding-top:14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--ink-mute)}
+  @media(max-width:600px){body{padding:0 18px 40px}.doc-head{flex-direction:column;align-items:flex-start;gap:10px}.doc-meta{text-align:left}table{font-size:10.5px}th,td{padding:6px}}
+  @media print{.acciones{display:none}body{padding:0 4mm}tr{break-inside:avoid}}
+`;
+
+function _telecomOfficeInformeEstado(mensaje, detalle, esError) {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${mensaje}</title>
+    <style>
+      :root{--paper:#f6f8fa;--ink:#101823;--ink-mute:#5b6472;--line:#dde2e8;--accent:#0e7c86}
+      body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:var(--paper);color:var(--ink);
+        font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+      .box{text-align:center;max-width:340px;padding:0 24px}
+      .spin{width:26px;height:26px;margin:0 auto 16px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:sp .8s linear infinite}
+      @keyframes sp{to{transform:rotate(360deg)}}
+      @media(prefers-reduced-motion:reduce){.spin{animation:none}}
+      .bad{width:38px;height:38px;margin:0 auto 14px;border-radius:50%;background:#fbe6e6;color:#a4272c;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px}
+      h2{margin:0 0 6px;font-size:15.5px}
+      p{margin:0 0 16px;font-size:12.5px;color:var(--ink-mute)}
+      button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:9px 16px;font-weight:700;font-size:12.5px;cursor:pointer}
+    </style></head>
+    <body><div class="box">${esError ? '<div class="bad">!</div>' : '<div class="spin"></div>'}<h2>${mensaje}</h2><p>${detalle}</p>${esError ? '<button onclick="window.close()">Cerrar</button>' : ''}</div></body></html>`;
+}
+
+function _telecomOfficeInformePanel(pp) {
+  const puertos = pp.puertos || [];
+  const total = Number(pp.num_puertos) || puertos.length;
+  const ocupados = puertos.filter(p => p.estado === 'ocupado').length;
+  const pct = total ? Math.round((ocupados / total) * 100) : 0;
+  const tags = [
+    pp.red_vlan && `<span class="tag"><b>Red/VLAN</b> ${escHtml(pp.red_vlan)}</span>`,
+    pp.switch_asociado && `<span class="tag"><b>Switch</b> ${escHtml(pp.switch_asociado)}</span>`,
+    pp.subred && `<span class="tag"><b>Subred</b> ${escHtml(pp.subred)}</span>`,
+    pp.posicion_u && `<span class="tag"><b>Posición</b> ${escHtml(pp.posicion_u)}</span>`
+  ].filter(Boolean).join('');
+  const filas = puertos.map(p => {
+    const ocupado = p.estado === 'ocupado';
+    return `<tr class="${ocupado ? 'occupied' : 'free'}">
+      <td class="port-no"><span class="state-dot"></span>${Number(p.numero)}</td>
+      <td class="dest">${escHtml(p.destino || '') || '—'}</td>
+      <td class="cable">${escHtml(p.cable_label || '') || '—'}</td>
+      <td>${escHtml(p.categoria || '') || '—'}</td>
+      <td>${escHtml(p.notas || '') || '—'}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="panel">
+    <div class="panel-head">
+      <h2>${escHtml(pp.nombre)}</h2>
+      <div class="occ-meter"><div class="occ-bar"><div class="occ-fill" style="width:${pct}%"></div></div><span class="occ-count">${ocupados}/${total} puertos</span></div>
+    </div>
+    ${tags ? `<div class="tags">${tags}</div>` : ''}
+    ${pp.notas_config ? `<p class="config-note"><b>Configuración:</b> ${escHtml(pp.notas_config)}</p>` : ''}
+    <table>
+      <thead><tr><th>Puerto</th><th>Destino</th><th>Cable</th><th>Categoría</th><th>Notas</th></tr></thead>
+      <tbody>${filas}</tbody>
+    </table>
+  </div>`;
+}
+
 async function telecomOfficeInforme(rackId) {
   const w = window.open('', '_blank');
   if (!w) {
     toast('Permite las ventanas emergentes para abrir el informe', 'err');
     return;
   }
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Generando informe…</title>
-    <style>body{font-family:Arial,sans-serif;padding:32px;color:#111}</style></head>
-    <body><h2>Generando informe…</h2><p>Espera un momento.</p></body></html>`);
+  w.document.write(_telecomOfficeInformeEstado('Generando informe…', 'Espera un momento.', false));
   w.document.close();
   try {
     const data = await _telecomOfficeApi('/telecom/informe/' + Number(rackId));
-    const filas = (data.patch_panels || []).map(pp => {
-      const ocupados = (pp.puertos || []).filter(p => p.estado === 'ocupado').length;
-      const meta = [
-        pp.red_vlan && `<b>Red/VLAN:</b> ${escHtml(pp.red_vlan)}`,
-        pp.switch_asociado && `<b>Switch:</b> ${escHtml(pp.switch_asociado)}`,
-        pp.subred && `<b>Subred:</b> ${escHtml(pp.subred)}`,
-        pp.posicion_u && `<b>Posición:</b> ${escHtml(pp.posicion_u)}`
-      ].filter(Boolean).join(' · ');
-      return `<h3>${escHtml(pp.nombre)} (${Number(pp.num_puertos)} puertos · ${ocupados} ocupados · ${Number(pp.num_puertos) - ocupados} libres)</h3>
-      ${meta ? `<p>${meta}</p>` : ''}
-      ${pp.notas_config ? `<p><b>Configuración:</b> ${escHtml(pp.notas_config)}</p>` : ''}
-      <table><thead><tr><th>Puerto</th><th>Estado</th><th>Destino</th><th>Cable</th><th>Categoría</th><th>Notas</th></tr></thead><tbody>
-      ${(pp.puertos || []).map(p => `<tr><td>${Number(p.numero)}</td><td>${escHtml(p.estado)}</td><td>${escHtml(p.destino||'')}</td><td>${escHtml(p.cable_label||'')}</td><td>${escHtml(p.categoria||'')}</td><td>${escHtml(p.notas||'')}</td></tr>`).join('')}
-      </tbody></table>`;
-    }).join('');
+    const filas = (data.patch_panels || []).map(_telecomOfficeInformePanel).join('');
     w.document.open();
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${escHtml(data.rack.nombre)}</title>
-      <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}.acciones{position:sticky;top:0;display:flex;gap:8px;padding:10px 0;background:#fff;z-index:2}.acciones button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}.imprimir{background:#f97316;color:#fff}.cerrar{background:#e5e7eb;color:#111}table{width:100%;border-collapse:collapse;margin-bottom:24px}th,td{border:1px solid #bbb;padding:6px;font-size:12px;text-align:left}th{background:#eee}h1{margin-bottom:3px}h2{font-weight:normal;color:#555;margin-top:0}@media print{.acciones{display:none}body{padding:0}}</style></head><body>
+      <style>${_TELECOM_OFFICE_INFORME_CSS}</style></head><body>
       <div class="acciones"><button class="imprimir" onclick="window.print()">🖨 Imprimir / guardar PDF</button><button class="cerrar" onclick="window.close()">Cerrar</button></div>
-      <h1>Informe de cableado — ${escHtml(data.rack.nombre)}</h1>
-      <h2>${escHtml(data.idf?.nombre||'')} ${data.idf?.ubicacion?'— '+escHtml(data.idf.ubicacion):''}</h2>${filas}
-      <p style="color:#777;font-size:11px">Generado ${new Date().toLocaleString('es-ES')}</p></body></html>`);
+      <div class="doc-head">
+        <div><h1>${escHtml(data.rack.nombre)}</h1><p class="loc">${escHtml(data.idf?.nombre || '')}${data.idf?.ubicacion ? ' — ' + escHtml(data.idf.ubicacion) : ''}</p></div>
+        <div class="doc-meta"><div>Informe de cableado</div><div><b>${new Date().toLocaleDateString('es-ES')}</b></div></div>
+      </div>
+      ${filas}
+      <div class="doc-foot">Generado ${new Date().toLocaleString('es-ES')} · Alejandra</div>
+      </body></html>`);
     w.document.close();
     w.focus();
   } catch (e) {
     if (!w.closed) {
       w.document.open();
-      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-        <body style="font-family:Arial,sans-serif;padding:32px;color:#991b1b"><h2>No se pudo generar el informe</h2><p>${escHtml(e.message || 'Error desconocido')}</p><button onclick="window.close()">Cerrar</button></body></html>`);
+      w.document.write(_telecomOfficeInformeEstado('No se pudo generar el informe', escHtml(e.message || 'Error desconocido'), true));
       w.document.close();
     }
     toast(e.message || 'No se pudo generar el informe', 'err');
@@ -19137,7 +19223,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.92';
+const PANEL_APP_VERSION = '8.93';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
