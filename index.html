@@ -5288,7 +5288,31 @@ function cerrarSesion() {
   location.reload();
 }
 
+// ORG-DIR-03 (31/07/2026): Adrián, probando en Levitec/CPD Getafe como superadmin: "en
+// departamento nuevo (Teleco) el inventario de las PEMP, carretillas y demás son las
+// mismas que la de eléctricas" — confirmado también en la app móvil (badges PEMP=44/
+// Carretillas=7 idénticos en Eléctrico y Telecomunicaciones). El backend (getPemp/
+// getCarretillas/...) SÍ filtra por departamento para roles admin, pero solo si la
+// petición manda ?departamento=X — para encargado/operario no hace falta (su propio
+// departamento de sesión ya filtra), pero para superadmin/empresa_admin/desarrollador el
+// backend deliberadamente ignora su departamento activo salvo que se lo pidas por query,
+// y aquí nunca se pedía. Mismo criterio ya usado en panel.html (_deptoPreviewParam):
+// "el backend ya soporta este parámetro... si una ruta no lo usa, el parámetro de más se
+// ignora sin más".
+function _conDeptoFiltro(path, method) {
+  if (method && method !== 'GET') return path;
+  const s = getSession();
+  if (!s || !['superadmin', 'empresa_admin', 'desarrollador'].includes(s.rol)) return path;
+  if (!s.departamento || s.departamento === 'almacen') return path;
+  const [base, query = ''] = path.split('?');
+  const params = new URLSearchParams(query);
+  if (!params.has('departamento')) params.set('departamento', s.departamento);
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
 async function apiCall(path, options = {}) {
+  path = _conDeptoFiltro(path, options.method);
   const base = getAPI();
   const s = getSession();
   const headers = {
@@ -5314,6 +5338,7 @@ async function apiCall(path, options = {}) {
 
 // apiCallRaw: igual que apiCall pero sin Content-Type (para FormData)
 async function apiCallRaw(path, options = {}) {
+  path = _conDeptoFiltro(path, options.method);
   const base = getAPI();
   const s = getSession();
   const headers = {
@@ -13118,7 +13143,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.91';
+const APP_VERSION = '8.92';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
