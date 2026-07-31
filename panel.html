@@ -1752,6 +1752,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <select class="tbl-search" id="telecomOfficeObra" style="min-width:210px" onchange="telecomOfficeCargarIdfs()">
             <option value="">🏗 Todas las obras</option>
           </select>
+          <button class="btn btn-secondary" id="telecomOfficeInformeTopBtn" style="display:none" onclick="telecomOfficeAbrirInformePicker()">📄 Informe</button>
           <button class="btn btn-primary" id="telecomOfficeNuevoBtn" onclick="telecomOfficeAbrirNuevo()">+ Nuevo IDF</button>
           <button class="btn btn-secondary" onclick="telecomOfficeCargarIdfs()">🔄 Actualizar</button>
         </div>
@@ -11322,6 +11323,11 @@ async function telecomOfficeCargarIdfs() {
   _telecomOfficeCtx = { obra_id:obraId ? Number(obraId) : null, idf_id:null, idf_nombre:'', rack_id:null, rack_nombre:'', pp_id:null, pp_nombre:'' };
   const nuevo = document.getElementById('telecomOfficeNuevoBtn');
   if (nuevo) { nuevo.textContent = '+ Nuevo IDF'; nuevo.disabled = !obraId; nuevo.title = obraId ? '' : 'Selecciona una obra para crear un IDF'; }
+  // ORG-INFORME-04 (31/07/2026): Adrián: "me gustaba el botón grande arriba" / "al lado
+  // del botón de nuevo IDF, ahí es donde tiene que ir" — botón fijo de la barra de
+  // herramientas en vez de uno por fila. Solo vive en el nivel IDF.
+  const informeBtn = document.getElementById('telecomOfficeInformeTopBtn');
+  if (informeBtn) informeBtn.style.display = '';
   document.getElementById('telecomOfficeBreadcrumb').innerHTML = '🗄️ Racks / Cableado';
   const cont = document.getElementById('telecomOfficeContent');
   cont.innerHTML = '<div class="empty-state">Cargando…</div>';
@@ -11332,17 +11338,34 @@ async function telecomOfficeCargarIdfs() {
       cont.innerHTML = `<div class="empty-state">${obraId ? 'Sin IDFs en esta obra.' : 'No hay IDFs registrados en las obras disponibles.'}</div>`;
       return;
     }
-    // ORG-INFORME-03 (31/07/2026): ver comentario gemelo en index.html (telecomRenderIdfs)
-    // — el botón de informe se muda a la lista de IDFs y pasa a cubrir todo el IDF.
     cont.innerHTML = _telecomOfficeCache.idf.map(i => _telecomOfficeFila(
       'idf', i, '📍 ' + escHtml(i.nombre),
       escHtml([i.obra_nombre, i.ubicacion].filter(Boolean).join(' · ')),
-      `telecomOfficeAbrirIdf(${Number(i.id)})`,
-      `<button onclick="event.stopPropagation();telecomOfficeInformeIdf(${Number(i.id)})" style="flex:0 0 auto;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">📄 Informe</button>`
+      `telecomOfficeAbrirIdf(${Number(i.id)})`
     )).join('');
   } catch (e) {
     cont.innerHTML = `<div class="empty-state">❌ ${escHtml(e.message)}</div>`;
   }
+}
+
+function telecomOfficeAbrirInformePicker() {
+  const list = _telecomOfficeCache.idf || [];
+  if (!list.length) { toast('No hay ningún IDF todavía', 'err'); return; }
+  if (list.length === 1) { telecomOfficeInformeIdf(list[0].id); return; }
+  const existente = document.getElementById('telecomOfficeInformePickerMenu');
+  if (existente) { existente.remove(); return; }
+  const btn = document.getElementById('telecomOfficeInformeTopBtn');
+  const rect = btn.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.id = 'telecomOfficeInformePickerMenu';
+  menu.style.cssText = `position:fixed;top:${rect.bottom + 6}px;left:${rect.left}px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.4);z-index:9999;min-width:200px;max-height:280px;overflow-y:auto;padding:6px`;
+  menu.innerHTML = list.map(i => `<div onclick="telecomOfficeInformeIdf(${Number(i.id)});document.getElementById('telecomOfficeInformePickerMenu')?.remove()"
+    style="padding:9px 10px;border-radius:7px;cursor:pointer;font-size:13px"
+    onmouseover="this.style.background='var(--surface3, rgba(255,255,255,.06))'" onmouseout="this.style.background='transparent'">📍 ${escHtml(i.nombre)}</div>`).join('');
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', function cerrar(e) {
+    if (!menu.contains(e.target) && e.target.id !== 'telecomOfficeInformeTopBtn') { menu.remove(); document.removeEventListener('click', cerrar); }
+  }), 0);
 }
 
 async function telecomOfficeAbrirIdf(id) {
@@ -11353,6 +11376,8 @@ async function telecomOfficeAbrirIdf(id) {
   _telecomOfficeCtx.idf_nombre = item.nombre;
   const nuevo = document.getElementById('telecomOfficeNuevoBtn');
   nuevo.disabled = false; nuevo.textContent = '+ Nuevo Rack';
+  const informeBtn = document.getElementById('telecomOfficeInformeTopBtn');
+  if (informeBtn) informeBtn.style.display = 'none';
   document.getElementById('telecomOfficeBreadcrumb').innerHTML =
     _telecomOfficeBtnVolver('telecomOfficeCargarIdfs()','IDF') + `<span>🗄️ ${escHtml(item.nombre)}</span>`;
   const cont = document.getElementById('telecomOfficeContent');
@@ -19293,7 +19318,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '8.96';
+const PANEL_APP_VERSION = '8.97';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

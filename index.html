@@ -2281,6 +2281,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
   <div id="screenTelecomRacks" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
       <div id="telecomBreadcrumb" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🗄️ Racks / Cableado</div>
+      <button id="telecomInformeTopBtn" onclick="telecomAbrirInformePicker()" style="display:none;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;flex-shrink:0">📄 Informe</button>
       <button id="telecomAddBtn" onclick="telecomAbrirNuevo()" style="background:var(--accent);color:#fff;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;flex-shrink:0">+ Nuevo</button>
     </div>
     <div id="telecomContent" style="padding:12px 14px;overflow-y:auto;flex:1">
@@ -13143,7 +13144,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.96';
+const APP_VERSION = '8.97';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -16396,6 +16397,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('telecomBreadcrumb').textContent = '🗄️ Racks / Cableado';
     document.getElementById('telecomAddBtn').style.display = _telecomCtx.obra_id ? '' : 'none';
     document.getElementById('telecomAddBtn').textContent = '+ Nuevo IDF';
+    // ORG-INFORME-04 (31/07/2026): Adrián: "me gustaba el botón grande arriba" / "al lado
+    // del botón de nuevo IDF, ahí es donde tiene que ir" — el botón de informe se mueve de
+    // dentro de cada fila a la cabecera fija, junto a "+ Nuevo". Solo vive en el nivel IDF
+    // (aquí); se oculta al entrar en un rack (telecomAbrirIdf/telecomAbrirRack).
+    document.getElementById('telecomInformeTopBtn').style.display = _telecomCtx.obra_id ? '' : 'none';
     telecomCargarNivel('/telecom/idf?obra_id=' + (_telecomCtx.obra_id || ''), telecomRenderIdfs);
   }
   window.telecomCargarIdfs = telecomCargarIdfs;
@@ -16440,16 +16446,35 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         : 'Selecciona una obra en la cabecera para crear su primer IDF.'}</div>`;
       return;
     }
-    // ORG-INFORME-03 (31/07/2026): Adrián: "el botón generar informe... debería estar en
-    // la primera página, para seleccionar lo que quieres en el informe" → confirmado:
-    // informe de todo el IDF, botón aquí en vez de enterrado dentro de un rack concreto.
     el.innerHTML = list.map(i => _telecomItemHTML(
       i.id, '📍 ' + _escHtml(i.nombre),
       _escHtml([i.obra_nombre, i.ubicacion].filter(Boolean).join(' · ')),
-      `telecomAbrirIdf(${Number(i.id)})`, 'idf',
-      `<button onclick="event.stopPropagation();telecomGenerarInformeIdf(${Number(i.id)})" style="flex:0 0 auto;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">📄 Informe</button>`
+      `telecomAbrirIdf(${Number(i.id)})`, 'idf'
     )).join('');
   }
+
+  // ORG-INFORME-04 (31/07/2026): botón fijo de la cabecera (telecomInformeTopBtn) — con un
+  // solo IDF genera directo; con varios, abre un menú flotante para elegir cuál.
+  function telecomAbrirInformePicker() {
+    const list = _telecomCache.idf || [];
+    if (!list.length) { toast('No hay ningún IDF todavía', 'err'); return; }
+    if (list.length === 1) { telecomGenerarInformeIdf(list[0].id); return; }
+    const existente = document.getElementById('telecomInformePickerMenu');
+    if (existente) { existente.remove(); return; }
+    const btn = document.getElementById('telecomInformeTopBtn');
+    const rect = btn.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.id = 'telecomInformePickerMenu';
+    menu.style.cssText = `position:fixed;top:${rect.bottom + 6}px;right:${window.innerWidth - rect.right}px;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.4);z-index:9999;min-width:200px;max-height:280px;overflow-y:auto;padding:6px`;
+    menu.innerHTML = list.map(i => `<div onclick="telecomGenerarInformeIdf(${Number(i.id)});document.getElementById('telecomInformePickerMenu')?.remove()"
+      style="padding:9px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--text)"
+      onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='transparent'">📍 ${_escHtml(i.nombre)}</div>`).join('');
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', function cerrar(e) {
+      if (!menu.contains(e.target) && e.target.id !== 'telecomInformeTopBtn') { menu.remove(); document.removeEventListener('click', cerrar); }
+    }), 0);
+  }
+  window.telecomAbrirInformePicker = telecomAbrirInformePicker;
 
   function telecomAbrirIdf(id) {
     const item = _telecomCache.idf.find(x => Number(x.id) === Number(id));
@@ -16459,6 +16484,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + item.nombre;
     document.getElementById('telecomAddBtn').style.display = '';
     document.getElementById('telecomAddBtn').textContent = '+ Nuevo Rack';
+    document.getElementById('telecomInformeTopBtn').style.display = 'none';
     const el = document.getElementById('telecomContent');
     el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()');
     telecomCargarNivel('/telecom/racks?idf_id=' + id, (list) => {
