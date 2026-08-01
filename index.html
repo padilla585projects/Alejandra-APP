@@ -13144,7 +13144,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.97';
+const APP_VERSION = '8.98';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -20848,9 +20848,26 @@ window.turnoToggle   = turnoToggle;
     setTimeout(() => { window.speechSynthesis.getVoices(); }, 200);
   }
 
+  // NOTIF-01/TTS-01 (31/07/2026): Adrián: "cuando me habla en voz alta y me lee los
+  // mensajes... quiero que lea solo las palabras, nada de símbolos raros ni emojis" —
+  // iaSpeak() ya quitaba HTML/markdown pero no emojis; alejandraHablar() (el chat flotante
+  // de Alejandra) no limpiaba absolutamente nada. Limpiador compartido por las dos voces.
+  function _limpiarTextoParaVoz(text) {
+    return String(text || '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&[a-z]+;/gi, ' ')
+      .replace(/[*_~`#>|]/g, '')
+      .replace(/\p{Extended_Pictographic}/gu, '')
+      .replace(/[‍️⃣]/g, '')
+      .replace(/[←-⇿⌀-⏿①-➿⬀-⯿]/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
   function iaSpeak(text) {
     if (!_iaTtsEnabled || !window.speechSynthesis) return;
-    const clean = text.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/gi, ' ').replace(/[*_~`#]/g, '').trim();
+    const clean = _limpiarTextoParaVoz(text);
     if (!clean) return;
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(clean);
@@ -21310,8 +21327,10 @@ function alejandraHablar(texto) {
   if (!_alejandraAutoHablar) return;
   const synth = window.speechSynthesis;
   if (!synth) return;
+  const limpio = _limpiarTextoParaVoz(texto);
+  if (!limpio) return;
   synth.cancel();
-  const utt = new SpeechSynthesisUtterance(texto.substring(0, 500));
+  const utt = new SpeechSynthesisUtterance(limpio.substring(0, 500));
   utt.lang  = 'es-ES';
   utt.rate  = 1.05;
   utt.pitch = 1.0;

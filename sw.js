@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v8.97';
+const CACHE = 'alejandra-v8.98';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -11,6 +11,10 @@ self.addEventListener('message', e => {
 });
 
 // ── Push notifications de Alejandra IA (solo developer) ─────────────────────
+// NOTIF-01 (31/07/2026): Adrián: "las notificaciones siguen saliendo cuando me contesta
+// Alejandra... yo la estoy hablando por la PWA y ella me contesta y salen notificaciones
+// por la app Android" — el push se mostraba siempre, sin comprobar si ya había una
+// ventana de la app abierta y en primer plano (donde la respuesta ya se ve en pantalla).
 self.addEventListener('push', e => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch { data = { title: 'Alejandra', body: e.data?.text() || '' }; }
@@ -24,7 +28,13 @@ self.addEventListener('push', e => {
     data: { url: data.url || '/panel.html' },
     vibrate: [200, 100, 200]
   };
-  e.waitUntil(self.registration.showNotification(title, options));
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      const appEnPrimerPlano = clientList.some(c => c.focused || c.visibilityState === 'visible');
+      if (appEnPrimerPlano) return; // ya la está viendo, no hace falta el aviso del sistema
+      return self.registration.showNotification(title, options);
+    })
+  );
 });
 
 self.addEventListener('notificationclick', e => {
