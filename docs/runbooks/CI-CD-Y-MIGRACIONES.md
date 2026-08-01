@@ -48,32 +48,21 @@ escrita a mano. Registrado en ARC-008.
 > ⚠️ **Este workflow no es el único mecanismo que altera el esquema.** `worker.js` ejecuta DDL
 > en producción por su cuenta (ver ARC-011). Controlar este workflow no controla el esquema.
 
-### Migración 008 — `migrate_008_plano_circuitos.sql` — BLOQUEADA
+### Migración 008 — `migrate_008_plano_circuitos.sql` — PENDIENTE DE APLICAR
 
-**No puede ejecutarse desde el workflow.** Está excluida del selector y, además, rechazada por
-un guard explícito en `.github/workflows/migrate-d1-agent.yml`. Doble barrera deliberada.
+**Desbloqueada el 2026-08-02.** Estuvo excluida del selector durante unas horas por un
+diagnóstico incorrecto: se supuso que `worker.js:24646` ya había creado `planos.circuitos_json`
+y que aplicarla fallaría por columna duplicada.
 
-Motivo:
+La consulta al esquema real (ARC-011 fase 2) demostró lo contrario: **la columna no existe**.
+El `ALTER` en runtime falla en silencio por su `.catch(() => {})`, y las cuatro operaciones que
+usan esa columna (`worker.js:26073`, `26092`, `26124`, `26216`) están rotas en producción.
 
-- `planos.circuitos_json` **ya se crea desde código**: `worker.js:24646`, dentro de
-  `_ensurePlanosTable()`, ejecuta `ALTER TABLE planos ADD COLUMN circuitos_json TEXT` silenciado
-  con `.catch(() => {})`. El fichero `.sql` duplica ese mismo cambio.
-- Ejecutar la 008 **fallaría por columna duplicada** (`duplicate column name: circuitos_json`).
-  Al haberse retirado el `|| echo` que enmascaraba errores, ese fallo detendría el workflow —
-  correcto, pero evitable no lanzándola.
-- **El estado real de producción sigue pendiente de verificación autorizada.** No se ha
-  consultado D1 remoto: la afirmación anterior se basa en lectura de código, no en evidencia de
-  la base de datos.
-- **El fichero se conserva**, no se borra: documenta la intención del cambio y es material para
-  el inventario de ARC-011.
+**Aplicar la 008 es el arreglo, no el riesgo.** Riesgo bajo: `ADD COLUMN` es aditivo y no toca
+filas existentes. Requiere autorización de migración como cualquier otra.
 
-La solución definitiva no pertenece a F-0.1, sino al saneamiento del gobierno del esquema D1
-(ARC-011): mientras el código siga creando columnas en caliente, cualquier migración versionada
-que las duplique estará en conflicto por diseño.
-
-Para desbloquearla en el futuro: eliminar primero el DDL en runtime de `worker.js`, verificar el
-esquema real con consulta autorizada de solo lectura, y solo entonces decidir si la 008 debe
-aplicarse, reescribirse como idempotente o archivarse como ya aplicada.
+> 📌 Lección: un bloqueo basado en lectura de código, sin contrastar con el esquema real, puede
+> impedir precisamente el arreglo que hacía falta. Antes de bloquear una migración, verificar.
 
 Las migraciones de raíz están `PENDIENTE`: no tienen manifiesto/orden único. Aplicarlas solo mediante procedimiento específico aprobado hasta normalizarlas.
 

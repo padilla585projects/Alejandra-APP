@@ -7,11 +7,12 @@ on:
         description: Commit SHA, tag or branch containing the reviewed migration
         required: true
         default: main
-      # migrate_008_plano_circuitos.sql NO figura aqui a proposito: esta BLOQUEADA.
-      # La columna planos.circuitos_json ya la crea worker.js en tiempo de ejecucion
-      # (worker.js:24646), por lo que aplicar la migracion fallaria con "duplicate
-      # column name". El fichero se conserva; no se borra. Ver ARC-011 y
-      # docs/runbooks/CI-CD-Y-MIGRACIONES.md antes de reintroducirla.
+      # migrate_008 vuelve al selector tras la fase 2 de ARC-011 (2026-08-02): se
+      # bloqueo suponiendo que worker.js:24646 ya habia creado planos.circuitos_json,
+      # pero la consulta al esquema real demostro que la columna NO EXISTE. El ALTER
+      # en runtime falla en silencio por su .catch(() => {}), y el codigo que usa esa
+      # columna esta roto en produccion. Aplicar la 008 es el arreglo, no el riesgo.
+      # Ver docs/architecture/07-INVENTARIO-DDL-RUNTIME.md.
       migration:
         description: Reviewed Alejandra Agent migration to apply
         required: true
@@ -24,6 +25,7 @@ on:
           - migrate_005_dev_bypass.sql
           - migrate_006_planos_unifilar_planta_electrica.sql
           - migrate_007_planos_planta_industrial.sql
+          - migrate_008_plano_circuitos.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true
@@ -42,15 +44,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
-      # Defensa en profundidad: aunque 008 ya no esta en el selector, se rechaza
-      # explicitamente por si alguien la reintroduce sin leer ARC-011.
+      # Punto de extension para bloquear migraciones concretas. Vacio a proposito:
+      # el bloqueo de la 008 se retiro tras verificar el esquema real (ARC-011 fase 2).
+      # Anadir aqui un caso solo con evidencia del esquema, nunca por suposicion.
       - name: Reject blocked migrations
         env:
           MIGRATION_FILE: ${{ inputs.migration }}
         run: |
           case "$MIGRATION_FILE" in
-            migrate_008_plano_circuitos.sql)
-              echo "::error::migrate_008 esta BLOQUEADA: worker.js crea planos.circuitos_json en runtime (worker.js:24646). Aplicarla fallaria por columna duplicada. Ver ARC-011."
+            __ninguna_bloqueada__)
+              echo "::error::Migracion bloqueada."
               exit 1
               ;;
           esac
