@@ -73,10 +73,15 @@ Primer uso real del circuito de entrega segura. Se comportó como estaba diseña
 ARC-013 está **corregido y verificado en local**, pero un arreglo de observabilidad no
 sirve de nada sin desplegar. Estos son los pasos, en orden:
 
-1. **Revisar e integrar las dos ramas.** `docs/estado-arc012-arc014` (`1cc942d`, solo
-   documentación) y `fix/arc-013-ddl-sin-silenciar` (`eb772ee`, los dos workers). Ninguna
-   está publicada todavía: se dejaron en local a propósito, porque publicar es una acción
-   hacia fuera y correspondía decidirla al Director.
+1. **Revisar e integrar las dos ramas.** Ninguna está publicada: se dejaron en local a
+   propósito, porque publicar es una acción hacia fuera y correspondía decidirla al Director.
+
+   | Rama | Commits | Qué lleva |
+   |---|---|---|
+   | `docs/estado-arc012-arc014` | `1cc942d` | Solo documentación de estado |
+   | `fix/arc-013-ddl-sin-silenciar` | `eb772ee`, `5bedd98`, `5c8b2b9` | ARC-013 (los dos workers), puesta al día de roadmap/backlog/changelog y ARC-015 |
+
+   La segunda rama sale de la primera, así que integrando la segunda entra todo.
 2. **Desplegar `worker.js`** por su workflow manual, con `ref` del commit aprobado y la
    confirmación exacta. Recordar que la aprobación del entorno la puede conceder la misma
    credencial que lanza el workflow (ARC-014): conviene hacerlo de forma consciente.
@@ -88,7 +93,12 @@ sirve de nada sin desplegar. Estos son los pasos, en orden:
 
 Riesgo del despliegue: bajo. `runDDL()` no lanza en ningún caso —probado también con el
 binding roto—, y en éxito y en duplicado se comporta exactamente igual que el código
-anterior. Lo único que cambia es que un fallo real deja rastro.
+anterior. Lo único que cambia es que un fallo real deja rastro. El cambio de ARC-015 es
+texto del prompt: no toca lógica.
+
+Al desplegar entran además las correcciones de ARC-015, así que conviene **probar a
+preguntarle a Alejandra por checklists, turnos o mantenimientos**: son consultas que
+antes generaban SQL contra columnas inexistentes.
 
 ## Otras acciones pendientes del Director
 

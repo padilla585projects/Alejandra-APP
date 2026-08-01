@@ -40,6 +40,7 @@ Fue el primer uso real del circuito de entrega segura de F-0.1 y se comportó co
 - Los secretos siguen a nivel de repositorio, no de entorno: cualquier workflow puede leerlos.
 - **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción, no las migraciones versionadas. Fases 1 y 2 verificadas; **fase 3 pendiente** (ADR, migrador único, declaración de las 27 tablas huérfanas y retirada del DDL en runtime por verticales).
 - **ARC-013 (alto):** los 18 `ALTER` en runtime llevan `catch` vacío, así que un fallo no deja rastro. Tres de dieciocho ya habían fallado sin que nadie lo supiera. Es la causa raíz de ARC-012 y exige desplegar `worker.js`.
+- **ARC-015 (alto):** el bloque `SCHEMA BASE DE DATOS` del prompt de `worker.js` describe columnas que no existen, así que Alejandra genera SQL que falla. Corregidas las 8 tablas con `CREATE` autoritativo en `worker.js`; las ~29 restantes exigen consulta de metadatos a D1 porque las 27 huérfanas no tienen `CREATE` en el repositorio.
 - **ARC-014 (medio):** la aprobación del entorno `production` se concedió con la misma credencial que lanzó el workflow. Un agente con token de administración puede aprobar su propio despliegue: la barrera cubre el error accidental, no la intención.
 - `usuario_obras` está declarada en código y en `.sql` pero **no existe** en producción: `migrate_roles_multiobra.sql` nunca se aplicó. Pendiente comprobar de qué depende antes de actuar.
 - ARC-005 queda mitigado en los workflows versionados, pendiente de validación remota.
