@@ -162,6 +162,44 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   'ram_clear', 'ram_read', 'ram_save', 'descubrir_herramientas', 'validar_cambios_bd',
   'verificar_deploy'
 ]);
+// SEC-CRON-01 / ARC-017 (02/08/2026): el cron llama al modelo con esDevVerificado=true,
+// así que filtrarToolsPorAuth no le filtraba NADA. Seis veces al día, sin nadie delante,
+// el modelo alcanzaba desplegar, hacer rollback, escribir en el repo y escribir en la BD
+// de cualquier empresa. El motivo por defecto de un despliegue era, literalmente,
+// «Deploy autónomo por Alejandra».
+//
+// El flag no se puede bajar sin más: `puedeNotificarUsuario` depende de él —el cron SÍ
+// necesita poder avisar a cualquier usuario, y para eso está—. La barrera correcta es la
+// LISTA de tools: lo que no se le ofrece al modelo, el modelo no lo puede invocar.
+//
+// Criterio: el cron no toma decisiones irreversibles ni de alcance amplio sin humano.
+// Puede leer, analizar y avisar; no puede tocar producción, código, ni escribir datos
+// cross-empresa por decisión propia. Es N0–N1 en los términos de ADR-0006.
+//
+// Sus escrituras deterministas NO pasan por aquí (`tareas_alejandra`, `alejandra_ram` se
+// escriben con SQL directo), así que siguen funcionando igual.
+//
+// Si algún día el cron necesita de verdad una de estas, la vía correcta es un camino de
+// código explícito y acotado, no dejar que lo decida el modelo.
+const TOOLS_PROHIBIDAS_CRON = new Set([
+  // Producción y código
+  'patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback', 'test_endpoint',
+  // Escritura de datos y configuración
+  'escribir_bd', 'configurar_alerta', 'nexus_manage',
+  // tomar_decision con confianza>=0.8 y auto_aplicar escribe agente_config por su cuenta
+  'tomar_decision',
+]);
+
+// Se detecta por identidad, no por un flag que haya que acordarse de pasar: el cron
+// siempre entra como usuario 'system' con empresa 'cron'.
+function esInvocacionCron(usuario_id, empresa_id) {
+  return String(usuario_id) === 'system' && String(empresa_id) === 'cron';
+}
+
+function filtrarToolsCron(tools) {
+  return (tools || []).filter(t => !TOOLS_PROHIBIDAS_CRON.has(t.name));
+}
+
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {
     if (TOOLS_SOLO_DEV_VERIFICADO.has(t.name) && !esDevVerificado) return false;
@@ -389,6 +427,9 @@ export {
   TOOLS_SOLO_DEV_VERIFICADO,
   TOOLS_REQUIEREN_SESION,
   filtrarToolsPorAuth,
+  TOOLS_PROHIBIDAS_CRON,
+  esInvocacionCron,
+  filtrarToolsCron,
   TABLAS_EMPRESA_PERMITIDAS,
   COLUMNA_BLOQUEADA_BD,
   extraerTablasQuery,

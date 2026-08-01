@@ -27,6 +27,8 @@ import {
   PRECIOS_USD,
   calcularCosteYProveedor,
   filtrarToolsPorAuth,
+  esInvocacionCron,
+  filtrarToolsCron,
   TOOLS_SOLO_DEV_VERIFICADO,
   TOOLS_REQUIEREN_SESION,
   extraerTablasQuery,
@@ -4208,7 +4210,12 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     let clas     = await clasificarConHaiku(env, mensaje);
     clas         = await mantenerContinuidadExperto(env, usuario_id, clas);
     const expert = NEXUS_EXPERTS[clas.experto] || NEXUS_EXPERTS.app;
-    const tools  = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
+    // ARC-017: el cron entra con esDevVerificado=true (lo necesita `puedeNotificarUsuario`
+    // para poder avisar a cualquier usuario), así que sin este segundo filtro recibía TODAS
+    // las tools —deploy, rollback, escritura en el repo y en la BD de cualquier empresa—
+    // seis veces al día y sin nadie delante. Ver TOOLS_PROHIBIDAS_CRON en lib.js.
+    let tools   = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
+    if (esInvocacionCron(usuario_id, empresa_id)) tools = filtrarToolsCron(tools);
     console.log(`NEXUS: experto=${clas.experto} web=${clas.buscar_web} tools=${tools.map(t=>t.name).join(',')}`);
 
     // FIX-ALEJANDRA-LATENCIA-01 — ver comentario en procesarConNEXUSStream: saludos/
@@ -4347,7 +4354,12 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let clas     = await clasificarConHaiku(env, mensaje);
     clas         = await mantenerContinuidadExperto(env, usuario_id, clas);
     const expert = NEXUS_EXPERTS[clas.experto] || NEXUS_EXPERTS.app;
-    const tools  = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
+    // ARC-017: el cron entra con esDevVerificado=true (lo necesita `puedeNotificarUsuario`
+    // para poder avisar a cualquier usuario), así que sin este segundo filtro recibía TODAS
+    // las tools —deploy, rollback, escritura en el repo y en la BD de cualquier empresa—
+    // seis veces al día y sin nadie delante. Ver TOOLS_PROHIBIDAS_CRON en lib.js.
+    let tools   = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
+    if (esInvocacionCron(usuario_id, empresa_id)) tools = filtrarToolsCron(tools);
     await send({ type: 'routing', experto: clas.experto, buscar_web: clas.buscar_web, modelo: expert.model });
 
     // FIX-ALEJANDRA-LATENCIA-01 (29/07/2026): Adrián: "responde lento hasta para un hola" —

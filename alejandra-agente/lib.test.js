@@ -3,6 +3,8 @@ import {
   PRECIOS_USD,
   calcularCosteYProveedor,
   filtrarToolsPorAuth,
+  filtrarToolsCron,
+  esInvocacionCron,
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
@@ -122,6 +124,38 @@ describe('filtrarToolsPorAuth', () => {
     expect(filtrarToolsPorAuth(publicas, false, false).map(t => t.name)).toEqual(
       publicas.map(t => t.name)
     );
+  });
+
+  // ARC-017 / SEC-CRON-01 (02/08/2026): el cron llama al modelo con esDevVerificado=true
+  // seis veces al día y sin nadie delante. El flag no se puede bajar porque
+  // puedeNotificarUsuario depende de él, así que la barrera es la lista de tools.
+  it('el cron NO recibe tools de produccion ni de codigo, aunque venga como dev', () => {
+    const peligrosas = ['ejecutar_deploy', 'rollback', 'patch_codigo', 'github_escribir',
+      'nexus_manage', 'test_endpoint'].map(name => ({ name }));
+    // Como dev verificado las recibiría todas...
+    expect(filtrarToolsPorAuth(peligrosas, true, true)).toHaveLength(peligrosas.length);
+    // ...pero el filtro del cron las quita.
+    expect(filtrarToolsCron(filtrarToolsPorAuth(peligrosas, true, true))).toEqual([]);
+  });
+
+  it('el cron NO puede escribir en la BD ni cambiar su propia configuracion', () => {
+    const escritura = ['escribir_bd', 'configurar_alerta', 'tomar_decision'].map(name => ({ name }));
+    expect(filtrarToolsCron(filtrarToolsPorAuth(escritura, true, true))).toEqual([]);
+  });
+
+  it('el cron SI conserva lo que necesita para analizar y avisar', () => {
+    const necesarias = ['consultar_bd', 'estado_obra', 'enviar_telegram_informe',
+      'enviar_push', 'pensar', 'memory_read'].map(name => ({ name }));
+    expect(filtrarToolsCron(filtrarToolsPorAuth(necesarias, true, true)).map(t => t.name))
+      .toEqual(necesarias.map(t => t.name));
+  });
+
+  it('esInvocacionCron solo reconoce la identidad real del cron', () => {
+    expect(esInvocacionCron('system', 'cron')).toBe(true);
+    expect(esInvocacionCron('system', 1)).toBe(false);
+    expect(esInvocacionCron('3', 'cron')).toBe(false);
+    // Un usuario no puede hacerse pasar por el cron: su identidad sale de la sesión.
+    expect(esInvocacionCron('anon:system', 'cron')).toBe(false);
   });
 
   it('con sesión: las tools de datos vuelven a estar disponibles (sin regresión)', () => {
