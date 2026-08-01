@@ -178,19 +178,37 @@ Tres merecen atención:
 2. **¿Qué DDL silenciado falló?** Tres: `planos.circuitos_json`, `inventario_seg.ubicacion` y `empresas.retencion_config`. Los tres son bugs activos.
 3. **¿Están aplicadas las migraciones versionadas?** No todas. `migrate_roles_multiobra.sql` (`usuario_obras`) no lo está, y la 008 tampoco — que era precisamente la que hacía falta.
 
-## Acciones propuestas
+## Acciones — estado
 
-Ninguna ejecutada: todas requieren autorización para modificar producción.
-
-| # | Acción | Riesgo |
+| # | Acción | Estado |
 |---|---|---|
-| 1 | Aplicar `migrate_008_plano_circuitos.sql` mediante el workflow manual | Bajo. `ADD COLUMN` es aditivo y no toca filas existentes. Arregla la funcionalidad de circuitos. |
-| 2 | Crear y aplicar migración para `inventario_seg.ubicacion` | Bajo. Cierra SEG-01 de verdad. |
-| 3 | Crear y aplicar migración para `empresas.retencion_config` | Bajo. Restaura la política de retención (RGPD). |
-| 4 | Revisar `usuario_obras`: decidir si aplicar `migrate_roles_multiobra.sql` o retirarla | Medio. Requiere comprobar si el código depende de ella. |
-| 5 | Sustituir los `catch` vacíos de los 18 DDL por registro de error | Bajo, pero exige despliegue. Sin esto, el próximo fallo será igual de invisible. |
+| 1 | Aplicar `migrate_008_plano_circuitos.sql` | ✅ Aplicada 2026-08-02, run 30722027660 |
+| 2 | Crear y aplicar migración para `inventario_seg.ubicacion` | ✅ Aplicada, run 30722072138. SEG-01 cerrado de verdad |
+| 3 | Crear y aplicar migración para `empresas.retencion_config` | ✅ Aplicada, run 30722103191. Retención RGPD restaurada |
+| 4 | Revisar `usuario_obras` | ⬜ Pendiente. Requiere comprobar si el código depende de ella |
+| 5 | Sustituir los `catch` vacíos de los 18 DDL por registro de error | ⬜ Pendiente — **ARC-013**. Exige despliegue |
 
-La acción 5 es la que evita que esto vuelva a repetirse: mientras el patrón siga, cada `ALTER` fallido creará un bug silencioso más.
+Las tres migraciones se aplicaron por el workflow manual, con confirmación textual y aprobación
+de entorno, y se verificaron después contra el esquema real:
+
+```
+planos.circuitos_json         presente
+inventario_seg.ubicacion      presente
+empresas.retencion_config     presente
+```
+
+La acción 5 es la que evita que esto vuelva a repetirse: mientras el patrón siga, cada `ALTER`
+fallido creará un bug silencioso más. Tres de dieciocho ya habían fallado.
+
+## Observación de seguridad sobre el circuito de aprobación
+
+Durante la aplicación se comprobó que el entorno `production` **sí detiene** el workflow y exige
+aprobación: los tres runs quedaron en `waiting` hasta ser aprobados. La barrera funciona frente a
+ejecuciones accidentales.
+
+Sin embargo, la aprobación se concedió mediante la misma credencial que lanzó el workflow. Un
+agente que disponga de un token con permisos de administración puede aprobar su propio
+despliegue. La protección de entorno cubre el error, no la intención. Registrado como **ARC-014**.
 
 ## Fase siguiente
 
