@@ -48,7 +48,7 @@ escrita a mano. Registrado en ARC-008.
 > ⚠️ **Este workflow no es el único mecanismo que altera el esquema.** `worker.js` ejecuta DDL
 > en producción por su cuenta (ver ARC-011). Controlar este workflow no controla el esquema.
 
-### Migración 008 — `migrate_008_plano_circuitos.sql` — PENDIENTE DE APLICAR
+### Migración 008 — `migrate_008_plano_circuitos.sql` — APLICADA (2026-08-02)
 
 **Desbloqueada el 2026-08-02.** Estuvo excluida del selector durante unas horas por un
 diagnóstico incorrecto: se supuso que `worker.js:24646` ya había creado `planos.circuitos_json`
@@ -58,11 +58,28 @@ La consulta al esquema real (ARC-011 fase 2) demostró lo contrario: **la column
 El `ALTER` en runtime falla en silencio por su `.catch(() => {})`, y las cuatro operaciones que
 usan esa columna (`worker.js:26073`, `26092`, `26124`, `26216`) están rotas en producción.
 
-**Aplicar la 008 es el arreglo, no el riesgo.** Riesgo bajo: `ADD COLUMN` es aditivo y no toca
-filas existentes. Requiere autorización de migración como cualquier otra.
+Se aplicó el 2026-08-02 (run 30722027660) junto con `migrate_inventario_seg_ubicacion.sql`
+(30722072138) y `migrate_empresas_retencion.sql` (30722103191). Las tres columnas quedaron
+verificadas contra el esquema real.
 
 > 📌 Lección: un bloqueo basado en lectura de código, sin contrastar con el esquema real, puede
 > impedir precisamente el arreglo que hacía falta. Antes de bloquear una migración, verificar.
+
+### Circuito validado en la práctica
+
+Las tres migraciones anteriores fueron el primer uso real del flujo manual. Comportamiento
+observado, útil como referencia:
+
+1. `workflow_dispatch` con `ref`, fichero y confirmación exacta.
+2. El paso de verificación vuelca el contenido del `.sql` en el log antes de aplicarlo, de modo
+   que queda constancia de qué se ejecutó exactamente.
+3. El job queda en **`waiting`** hasta que alguien aprueba el entorno `production`. La barrera
+   funciona.
+4. Tras aprobar, `wrangler` aplica la migración y el log registra las queries ejecutadas.
+
+> ⚠️ La aprobación puede concederse con la misma credencial que lanzó el workflow. Un agente con
+> token de administración puede aprobar su propio despliegue: la protección de entorno cubre el
+> error accidental, no la intención. Ver ARC-014.
 
 ### Migraciones de raíz
 
