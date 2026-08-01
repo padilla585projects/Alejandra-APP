@@ -1,0 +1,30 @@
+name: CI validation
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Syntax and agent tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Worker syntax
+        run: |
+          node --check worker.js
+          node --check alejandra-agente/worker.js
+      - name: Install agent test dependencies
+        working-directory: alejandra-agente
+        run: npm ci
+      - name: Run agent tests
+        working-directory: alejandra-agente
+        run: npm test

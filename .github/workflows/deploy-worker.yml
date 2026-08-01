@@ -1,22 +1,60 @@
-﻿name: Deploy Worker to Cloudflare
+name: Deploy API Worker (manual)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'worker.js'
-      - 'wrangler.toml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA, tag or branch approved for deployment
+        required: true
+        default: main
+      confirmation:
+        description: Type DEPLOY_API_WORKER to confirm production deployment
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
+    if: github.event.inputs.confirmation == 'DEPLOY_API_WORKER'
+    name: Deploy API Worker
     runs-on: ubuntu-latest
-    name: Deploy Worker
+    environment: production
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Precheck exigido por ADR-0001: no se despliega codigo que no parsea.
+      - name: Precheck Worker syntax
+        run: node --check worker.js
       - name: Deploy with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4'
+      # Healthcheck exigido por ADR-0001. Si falla, el despliegue se marca en
+      # rojo: hay que promover manualmente el ultimo SHA sano (ver runbook).
+      - name: Healthcheck
+        run: |
+          sleep 15
+          for i in 1 2 3; do
+            if STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://alejandra-app-api.alejandra-app.workers.dev/health); then
+              :
+            else
+              STATUS="000"
+            fi
+            echo "Intento $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "OK: API Worker operativo"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Healthcheck fallido. Revisar despliegue y considerar rollback."
+          exit 1
