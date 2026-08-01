@@ -42,3 +42,9 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4'
           workingDirectory: alejandra-agente
+      # SIN healthcheck automatico a proposito. GET /health de este Worker responde
+      # 200 sin comprobar D1 ni R2, y su campo "version" esta escrito a mano
+      # (alejandra-agente/worker.js:2493), asi que no distingue "Worker desplegado"
+      # de "Worker operativo" y daria luz verde a un despliegue roto. Verificacion
+      # manual post-despliegue segun docs/runbooks/CI-CD-Y-MIGRACIONES.md.
+      # Reincorporar cuando exista un endpoint de salud con dependencias reales.

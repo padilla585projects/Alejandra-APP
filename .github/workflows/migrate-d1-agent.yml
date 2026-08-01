@@ -7,6 +7,11 @@ on:
         description: Commit SHA, tag or branch containing the reviewed migration
         required: true
         default: main
+      # migrate_008_plano_circuitos.sql NO figura aqui a proposito: esta BLOQUEADA.
+      # La columna planos.circuitos_json ya la crea worker.js en tiempo de ejecucion
+      # (worker.js:24646), por lo que aplicar la migracion fallaria con "duplicate
+      # column name". El fichero se conserva; no se borra. Ver ARC-011 y
+      # docs/runbooks/CI-CD-Y-MIGRACIONES.md antes de reintroducirla.
       migration:
         description: Reviewed Alejandra Agent migration to apply
         required: true
@@ -19,7 +24,6 @@ on:
           - migrate_005_dev_bypass.sql
           - migrate_006_planos_unifilar_planta_electrica.sql
           - migrate_007_planos_planta_industrial.sql
-          - migrate_008_plano_circuitos.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true
@@ -38,6 +42,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+      # Defensa en profundidad: aunque 008 ya no esta en el selector, se rechaza
+      # explicitamente por si alguien la reintroduce sin leer ARC-011.
+      - name: Reject blocked migrations
+        env:
+          MIGRATION_FILE: ${{ inputs.migration }}
+        run: |
+          case "$MIGRATION_FILE" in
+            migrate_008_plano_circuitos.sql)
+              echo "::error::migrate_008 esta BLOQUEADA: worker.js crea planos.circuitos_json en runtime (worker.js:24646). Aplicarla fallaria por columna duplicada. Ver ARC-011."
+              exit 1
+              ;;
+          esac
+          echo "Migracion permitida: $MIGRATION_FILE"
       - name: Apply selected migration
         working-directory: alejandra-agente
         env:
