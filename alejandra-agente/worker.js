@@ -2816,15 +2816,22 @@ export default {
             ).bind(String(usuario_id), String(empresa), 'error_chat_stream', JSON.stringify({ canal: canalReal, tiene_adjuntos: !!(adjuntos && adjuntos.length) }), String(e.stack || e.message).slice(0, 1500), 'error').run().catch(() => {}));
           } finally {
             try { await writer.close(); } catch(_) {}
-            // Enviar SIEMPRE push para canales móviles cuando hay respuesta válida.
-            // Detectar "cliente desconectado" desde el worker es poco fiable
-            // (writer.write se bufferea y req.signal no se activa).
-            // Estrategia: el cliente Flutter filtra el push en foreground si
-            //   data.tipo === 'chat_respuesta' (la app ya muestra el mensaje).
-            // Si la app está cerrada o en background, el push se muestra normal.
+            // NOTIF-02 (01/08/2026): Adrián: "sigue mandándome notificaciones la app
+            // Alejandra al teléfono y estamos trabajando desde Chrome" — antes se mandaba
+            // push SIEMPRE que hubiera respuesta en canal móvil, confiando en que cada
+            // dispositivo la silenciara solo si ÉL MISMO tenía la conversación en primer
+            // plano (fix NOTIF-01 en sw.js). Eso no cubre multi-dispositivo: el móvil no
+            // tiene forma de saber que el usuario está activo en el PWA de Chrome en el
+            // ordenador — son dos service workers independientes.
+            // req.signal.addEventListener('abort') (arriba) es la señal MÁS fiable de que
+            // el cliente que preguntó sigue conectado — si sigue conectado, está viendo la
+            // respuesta en directo por streaming AHORA MISMO, así que un push es siempre
+            // redundante (llegue de donde llegue: el mismo dispositivo o el token
+            // registrado de otro). Solo se manda si esa conexión se cerró de verdad
+            // (clienteDesconectado=true) antes de terminar — app cerrada o en background.
             const esCanalMovil = (canal === 'app_android' || canal === 'pwa');
             console.log(`[chat/stream] cierre: esCanalMovil=${esCanalMovil} canal=${canal} usuario_id=${usuario_id} respTexto=${respFinal?.texto ? 'sí('+respFinal.texto.length+'c)' : 'no'} clienteDesconectado=${clienteDesconectado}`);
-            if (esCanalMovil && respFinal && respFinal.texto) {
+            if (esCanalMovil && clienteDesconectado && respFinal && respFinal.texto) {
               try {
                 const fcmRow = await env.DB.prepare(
                   "SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? ORDER BY created_at DESC LIMIT 1"
