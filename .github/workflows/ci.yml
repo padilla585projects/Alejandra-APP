@@ -36,6 +36,9 @@ jobs:
         run: node scripts/check-versiones.js
       - name: Check every route declares an authorization mechanism
         run: node scripts/inventario-rutas.js --check
+      # Solo compara NOMBRES: nunca lee valores de secretos ni contacta con Cloudflare.
+      - name: Check secrets and bindings are declared
+        run: node scripts/inventario-entorno.js --check
       - name: Install agent test dependencies
         working-directory: alejandra-agente
         run: npm ci
