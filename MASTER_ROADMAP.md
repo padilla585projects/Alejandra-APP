@@ -32,8 +32,9 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 | Fase 1 — contrato cognitivo | Documentada; ADR-0002 **aceptado** como arquitectura objetivo, implementación bloqueada por ARC-001/002/003/004/005. |
 | Fase 2 — motor/modos | Documentada; ADR-0004 propuesto. |
 | Núcleo Cognitivo | No implementado. |
-| Entrega segura | F-0.1 implementada localmente y pendiente de integración. **El P0 sigue vivo en producción**: los workflows antiguos continúan activos en GitHub hasta que la rama se integre. |
-| Auditoría remota GitHub | Realizada 2026-08-02 en solo lectura: `main` sin protección, entorno `production` inexistente, `github-pages` limitado a `main`, los 5 secretos presentes a nivel de repositorio. |
+| Entrega segura | **F-0.1 integrada y activa en remoto** (PR #9, 2026-08-02): workflows antiguos retirados, `main` protegida, entorno `production` con revisor requerido. El P0 está neutralizado. Queda mover los secretos a nivel de entorno (`F-0.2-CFG`). |
+| Esquema D1 | **ARC-011 fases 1 y 2 verificadas** (PR #10): 105 de 150 tablas existen solo porque el código las crea y 27 tablas reales no las declara nadie; el esquema **no es reproducible desde el repositorio**. ARC-012 resuelto (PR #11): las 3 columnas que faltaban se aplicaron y verificaron. ARC-013 corregido en código (`eb772ee`), pendiente de despliegue. Fase 3 pendiente, exige ADR propio. |
+| Auditoría remota GitHub | Realizada 2026-08-02 en solo lectura. Sus cinco hallazgos quedaron corregidos al activar F-0.1, salvo los secretos, que siguen a nivel de repositorio. |
 | Auditoría remota Cloudflare | Pendiente, solo lectura autorizada. |
 
 ## Épocas y fases
@@ -42,15 +43,15 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-0.1 — Separación de CI, despliegue y migraciones**
 
-- Estado/prioridad/tamaño: **Implementada localmente — pendiente de integración y validación remota** / Crítica / M.
+- Estado/prioridad/tamaño: **Integrada y activa en remoto (PR #9, 2026-08-02)** / Crítica / M.
 - Objetivo y valor: separar integración de producción para evitar despliegues y migraciones accidentales.
 - Alcance/fuera: workflows, entornos, runbooks y validaciones; no cambia funcionalidades ni infraestructura de negocio.
 - Dependencias/bloqueantes/paralelo: ADR-0001 (aceptado) y acceso administrativo a GitHub; puede ir en paralelo con F-0.2, no con despliegues no aprobados.
 - Referencias/ADR/módulos: auditoría, plan de PRs, ADR-0001, `docs/runbooks/CI-CD-Y-MIGRACIONES.md`; GitHub Actions/Workers/D1.
-- Áreas/migraciones: `.github/workflows`, runbooks; sin migración funcional prevista. `migrate_008` queda bloqueada (ver ARC-011).
+- Áreas/migraciones: `.github/workflows`, runbooks; sin migración funcional prevista. `migrate_008` se desbloqueó y se aplicó el 2026-08-02: el bloqueo partía de leer código sin contrastar con el esquema real, y la migración era el arreglo (ver ARC-012).
 - Riesgos/compliance/pruebas: interrupción de entrega; mínimo privilegio y aprobación; CI, promoción manual y rollback documentado. Los healthchecks automáticos de Workers se retiraron por diseño: `GET /health` no distingue desplegado de operativo (ver ARC-008); Pages sí conserva verificación de versión servida.
 - Aceptación/recuperación/entregables: `main` no despliega por sí solo; promoción identificable y migración explícita; rollback a artefacto sano; workflow y runbook aprobados.
-- Estado de aceptación: cumplido en el repositorio (validado localmente); **no cumplido en remoto** hasta integrar la rama, proteger `main` y crear el entorno `production`.
+- Estado de aceptación: **cumplido en repositorio y en remoto**. Validado además en la práctica: las tres migraciones de ARC-012 fueron el primer uso real del circuito y quedaron en `waiting` hasta aprobación del entorno. Salvedad registrada en ARC-014: la aprobación puede concederla la misma credencial que lanzó el workflow.
 - Resultado/siguiente: Entrega segura v0.2; habilita F-0.2 y cualquier cambio funcional.
 
 **F-0.2 — Inventario remoto, calidad y contratos base**

@@ -68,11 +68,32 @@ Primer uso real del circuito de entrega segura. Se comportó como estaba diseña
 - Migraciones de raíz sin manifiesto único.
 - ADR-0004 sigue propuesto; el Núcleo Cognitivo no puede iniciarse.
 
-## Siguiente acción exacta
+## Lunes — qué tiene que hacer el Director
 
-**ARC-013 — sustituir la supresión de errores de los 18 DDL en runtime por registro de error**, distinguiendo el caso benigno («la columna ya existe») del fallo real. El cambio se prepara y valida en rama; **desplegar `worker.js` requiere autorización explícita aparte** y no forma parte de la tarea.
+ARC-013 está **corregido y verificado en local**, pero un arreglo de observabilidad no
+sirve de nada sin desplegar. Estos son los pasos, en orden:
 
-En paralelo y solo por el Director, por exigir los valores reales: **recrear los secretos de Cloudflare en el entorno `production`** (tarea `F-0.2-CFG`).
+1. **Revisar e integrar las dos ramas.** `docs/estado-arc012-arc014` (`1cc942d`, solo
+   documentación) y `fix/arc-013-ddl-sin-silenciar` (`eb772ee`, los dos workers). Ninguna
+   está publicada todavía: se dejaron en local a propósito, porque publicar es una acción
+   hacia fuera y correspondía decidirla al Director.
+2. **Desplegar `worker.js`** por su workflow manual, con `ref` del commit aprobado y la
+   confirmación exacta. Recordar que la aprobación del entorno la puede conceder la misma
+   credencial que lanza el workflow (ARC-014): conviene hacerlo de forma consciente.
+3. **Comprobar `wrangler tail` durante unos minutos** y buscar líneas `[DDL]`. Esa es la
+   prueba de que el arreglo funciona: si aparece alguna, hay un DDL que lleva fallando en
+   silencio y ahora se ve. **Si no aparece ninguna, también es un buen resultado.**
+4. `alejandra-agente/worker.js` es un despliegue **independiente**. Los dos workers se
+   despliegan por separado; desplegar uno no despliega el otro.
+
+Riesgo del despliegue: bajo. `runDDL()` no lanza en ningún caso —probado también con el
+binding roto—, y en éxito y en duplicado se comporta exactamente igual que el código
+anterior. Lo único que cambia es que un fallo real deja rastro.
+
+## Otras acciones pendientes del Director
+
+**`F-0.2-CFG`** — recrear los secretos de Cloudflare en el entorno `production`. Exige
+manejar los valores reales, que la API no expone.
 
 ## No tocar sin nueva autorización
 

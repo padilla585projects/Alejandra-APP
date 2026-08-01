@@ -35,10 +35,10 @@ Siguiente acción exacta:
 - ID: ARC-013
 - Título: Sustituir los 18 `catch` vacíos de DDL por registro de error
 - Fase: Época 0 — deuda de esquema (derivada de ARC-011/ARC-012)
-- Estado: lista
+- Estado: en revisión — **código completo y verificado; falta desplegar**
 - Prioridad: Alta
-- Rama: `fix/arc-013-ddl-sin-silenciar`
-- Responsable actual: Agente de Ingeniería
+- Rama: `fix/arc-013-ddl-sin-silenciar` (commit `eb772ee`)
+- Responsable actual: Director del Proyecto (solo queda la decisión de despliegue)
 - Objetivo: que ningún `ALTER TABLE` ni `CREATE TABLE` ejecutado en runtime pueda fallar sin dejar rastro. Es la causa raíz de ARC-012: tres de dieciocho sentencias ya habían fallado en silencio durante semanas.
 - Criterios de aceptación:
   1. Las 18 sentencias DDL con el error suprimido registran el fallo en lugar de tragárselo.
@@ -49,10 +49,11 @@ Siguiente acción exacta:
   6. Nada desplegado.
 - Dependencias: ARC-011 fase 2 (inventario verificado, con las 18 ubicaciones localizadas).
 - Bloqueos: el arreglo no surte efecto hasta desplegar `worker.js`, y **el despliegue es una decisión aparte del Director**. La tarea entrega el código validado, no la puesta en producción.
-- Archivos principales: `worker.js`; posiblemente `alejandra-agente/worker.js`.
-- Pruebas: `node --check` en los dos workers y `npm --prefix alejandra-agente test`.
+- Archivos principales: `worker.js` (41 llamadas), `alejandra-agente/worker.js` (7 llamadas).
+- Pruebas: ✅ `node --check` en los dos workers; ✅ 85/85 tests del agente; ✅ barrido que confirma 0 sentencias DDL con el error suprimido; ✅ prueba de la lógica de `runDDL` contra los 5 escenarios de error de D1 y contra un binding roto — no lanza en ninguno.
+- Resultado: alcance mayor que el estimado (los 18 del backlog eran solo los `ALTER`; los `CREATE TABLE` silenciados eran la misma clase de riesgo). Se añade `ddlPaso()` para `runMigrations()`, que etiquetaba cualquier error como «ya existe» y le daba al operador un visto bueno falso.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: localizar las 18 ubicaciones listadas en `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md` y sustituir la supresión por un helper único de registro.
+- Siguiente acción exacta: **integrar la rama y desplegar `worker.js`** por el workflow manual. Hasta desplegar, el arreglo no surte efecto en producción. Ver la sección «Lunes» de `HANDOFF.md`.
 
 ### F-0.2-CFG — Completar la configuración remota de entrega segura
 
