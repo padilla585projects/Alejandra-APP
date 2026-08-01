@@ -17,11 +17,23 @@
 const { execFileSync } = require('child_process');
 
 // Marcadores de doble codificación UTF-8. Ver `CLAUDE.md`, sección CODIFICACIÓN.
+//
+// Las cuatro líneas de abajo llevan ESCAPE_AUTO porque contienen, necesariamente, los
+// mismos patrones que buscan. Sin esa marca este script se delataría a sí mismo y habría
+// roto el CI en la propia PR que lo introduce. Es el mismo problema que hace inviable
+// escanear ficheros enteros: `worker.js` incluye la herramienta anti-corrupción de
+// Alejandra, que también tiene que contener los patrones corruptos.
+//
+// La marca es deliberadamente fea y explícita: debe cantar en una revisión. Solo vale
+// para código cuyo cometido sea definir o describir estos patrones. Usarla para «callar»
+// una corrupción real es exactamente el fallo que este script existe para evitar.
+const ESCAPE_AUTO = 'encoding-check-ignore';
+
 const MARCADORES = [
-  { re: /Ã[\x80-\xBF‚ƒ„…†‡ˆ‰Š‹ŒŽ''""•–—˜™š›œžŸ¡-ÿ]/, nombre: 'Ã + carácter (á é í ó ú ñ corruptas)' },
-  { re: /Â[^\w\s]/, nombre: 'Â suelto (¿ © ª corruptas)' },
-  { re: /â€[œ""¦"˜™]/, nombre: 'â€ (comillas o em-dash corruptos)' },
-  { re: /ï»¿/, nombre: 'BOM corrupta' },
+  { re: /Ã[\x80-\xBF‚ƒ„…†‡ˆ‰Š‹ŒŽ''""•–—˜™š›œžŸ¡-ÿ]/, nombre: 'Ã + carácter (á é í ó ú ñ corruptas)' }, // encoding-check-ignore
+  { re: /Â[^\w\s]/, nombre: 'Â suelto (¿ © ª corruptas)' },                                             // encoding-check-ignore
+  { re: /â€[œ""¦"˜™]/, nombre: 'â€ (comillas o em-dash corruptos)' },                                    // encoding-check-ignore
+  { re: /ï»¿/, nombre: 'BOM corrupta' },                                                                 // encoding-check-ignore
 ];
 
 const args = process.argv.slice(2);
@@ -44,6 +56,7 @@ let ficheroActual = '';
 for (const linea of diff.split('\n')) {
   if (linea.startsWith('+++ b/')) { ficheroActual = linea.slice(6); continue; }
   if (!linea.startsWith('+') || linea.startsWith('+++')) continue;
+  if (linea.includes(ESCAPE_AUTO)) continue;
   for (const m of MARCADORES) {
     if (m.re.test(linea)) {
       hallazgos.push({ fichero: ficheroActual, marcador: m.nombre, linea: linea.slice(1, 120) });

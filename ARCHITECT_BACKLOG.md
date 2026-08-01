@@ -11,7 +11,7 @@ Cada ítem conserva estado, evidencia, impacto, alternativas y fase/ADR de desti
 
 | ID | Estado | Tema | Impacto | Evidencia / siguiente decisión |
 |---|---|---|---|---|
-| ARC-001 | Pendiente | Modelo de riesgo y aprobación humana | Alto | ADR-0003 fija evaluación obligatoria; faltan umbrales, responsables y catálogo de acciones. Requiere ADR. |
+| ARC-001 | ADR redactado — pendiente de decisión | Modelo de riesgo y aprobación humana | Alto | ADR-0003 fija evaluación obligatoria; faltaban umbrales, responsables y catálogo de acciones. **ADR-0006 redactado el 2026-08-02** con el catálogo real de capacidades de Alejandra y una propuesta de cuatro niveles por reversibilidad y alcance. Contiene 5 preguntas que solo el Director puede responder; la de mayor impacto es si `run_migration` sale del agente, porque hoy permite alterar el esquema saltándose el circuito de F-0.1. Es el primer dominó: desbloquea ADR-0004 y con él F-1.1. |
 | ARC-002 | Pendiente | Gobierno de memoria | Alto | Definir privacidad, tenant, procedencia, confianza, caducidad, corrección y borrado. Requiere ADR y compliance. |
 | ARC-003 | Investigación | Definición de Nexo | Alto | Alcance no aprobado: integración, orquestación o producto. No diseñar/implementar sin decisión. |
 | ARC-004 | Pendiente | QA y verificación independiente | Alto | Determinar controles deterministas, revisión humana, métricas y trazas. |
