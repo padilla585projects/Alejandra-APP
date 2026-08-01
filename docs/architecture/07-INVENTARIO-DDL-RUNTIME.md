@@ -185,7 +185,7 @@ Tres merecen atención:
 | 1 | Aplicar `migrate_008_plano_circuitos.sql` | ✅ Aplicada 2026-08-02, run 30722027660 |
 | 2 | Crear y aplicar migración para `inventario_seg.ubicacion` | ✅ Aplicada, run 30722072138. SEG-01 cerrado de verdad |
 | 3 | Crear y aplicar migración para `empresas.retencion_config` | ✅ Aplicada, run 30722103191. Retención RGPD restaurada |
-| 4 | Revisar `usuario_obras` | ⬜ Pendiente. Requiere comprobar si el código depende de ella |
+| 4 | Revisar `usuario_obras` | ✅ Revisado 2026-08-02: **no es un bug** — ver abajo |
 | 5 | Sustituir los `catch` vacíos de los 18 DDL por registro de error | ⬜ Pendiente — **ARC-013**. Exige despliegue |
 
 Las tres migraciones se aplicaron por el workflow manual, con confirmación textual y aprobación
@@ -199,6 +199,48 @@ empresas.retencion_config     presente
 
 La acción 5 es la que evita que esto vuelva a repetirse: mientras el patrón siga, cada `ALTER`
 fallido creará un bug silencioso más. Tres de dieciocho ya habían fallado.
+
+## `usuario_obras` — revisado, no es un bug (2026-08-02)
+
+La fase 2 la marcó como sospechosa: declarada en código **y** en `migrate_roles_multiobra.sql`,
+y sin embargo inexistente en producción. Revisado el código, **no hay funcionalidad rota**:
+
+- `ensureUsuarioObrasTable()` (`worker.js:281`) hace `CREATE TABLE IF NOT EXISTS` **sin
+  `catch`**, y se invoca antes de cada lectura (`worker.js:295`) y de cada escritura
+  (`worker.js:8112`). La tabla se creará en el primer uso real.
+- Que no exista significa solo que **la asignación multiobra no se ha usado nunca** en
+  producción. Es el patrón lazy funcionando como se espera, como las otras 23 tablas.
+- Las dos definiciones —código y `.sql`— son **idénticas**, así que no hay riesgo de
+  divergencia. La única diferencia: el `.sql` crea dos índices que el código no. Sin
+  impacto real, porque la clave primaria `(usuario_id, obra_id)` ya cubre la única
+  consulta que existe, y no hay búsquedas por `obra_id`.
+
+A diferencia de los tres bugs de ARC-012, aquí el `CREATE` **no está silenciado**: si
+fallara, saldría un 500 visible en vez de un fallo mudo.
+
+## El esquema descrito a Alejandra no coincide con el real — ARC-015 (2026-08-02)
+
+Hallazgo derivado de este inventario. El prompt de `worker.js` incluye un bloque
+`SCHEMA BASE DE DATOS` con 75 tablas que Alejandra usa para redactar SQL. Contrastado
+contra los `CREATE` reales, **está escrito de memoria**: describe columnas que no existen.
+
+Ejemplo representativo: `checklist_plantillas` se describía como
+`(id, empresa_id, nombre, departamento, items JSON, activa, created_at)` cuando la tabla
+real es `(id, empresa_id, tipo_equipo, pregunta, orden, created_at)`. Ninguna de las cuatro
+columnas citadas existe. La descripción correspondía a medias a **otra** tabla,
+`checklists_plantillas` —con `s`—, que es una tabla **distinta**, no una errata, y que ni
+siquiera figuraba en el bloque.
+
+Corregidas las 8 tablas cuyo `CREATE` vive en `worker.js` y es por tanto autoritativo:
+`turnos`, `historial_mantenimientos`, `checklist_plantillas`, `checklist_registros`,
+`fotos_obra`, `docs_notas`, `login_attempts`, `vincular_tokens`. Añadidas al bloque
+`checklists_plantillas` y `checklist_ejecuciones`, que faltaban.
+
+**Las ~29 restantes no se pueden cerrar con análisis estático.** Las 27 tablas huérfanas no
+tienen `CREATE` en ninguna parte del repositorio, así que la única referencia posible es
+D1. Verificarlas requiere una consulta de metadatos autorizada, igual que la fase 2.
+
+> 📌 Misma lección que con la migración 008: sobre este esquema, leer código no basta.
 
 ## Observación de seguridad sobre el circuito de aprobación
 

@@ -2569,7 +2569,7 @@ CORE:
 - sesiones(id, token, usuario_id, nombre, rol, obra_id, empresa_id, departamento, expires_at, created_at, last_used)
 - personal_externo(empresa_id, obra_id, nombre, dni, categoria, telefono, empresa_subcontrata, activo, created_at)
 - horarios_obra(empresa_id, obra_id, hora_entrada, hora_salida, tolerancia_min, created_at)
-- turnos(empresa_id, obra_id, nombre, hora_inicio, hora_fin, dias_semana, activo, created_at)
+- turnos(id, empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, fecha, turno, created_at)
 
 INVENTARIO:
 - bobinas(id, codigo UNIQUE, tipo, seccion, longitud, proveedor, num_albaran, estado[disponible/asignada/devuelta], obra_id, obra_nombre, departamento, fecha_entrada, fecha_devolucion, notas, empresa_id)
@@ -2586,7 +2586,7 @@ HISTORIAL:
 - historial_pemp(id, pemp_id, accion, obra_id, obra_nombre, usuario, notas, fecha, empresa_id)
 - historial_carretillas(id, carretilla_id, accion, obra_id, obra_nombre, usuario, notas, fecha, empresa_id)
 - historial_herramientas(id, empresa_id, herramienta_id, kit_id, accion, estado_anterior, estado_nuevo, usuario, notas, fecha)
-- historial_mantenimientos(id, empresa_id, equipo_tipo, equipo_id, tipo_mantenimiento, descripcion, usuario, fecha, created_at)
+- historial_mantenimientos(id, empresa_id, tipo_equipo, equipo_id, matricula, obra_id, fecha_mant, tipo_mant, descripcion, realizado_por, adjunto_nombre, created_at)
 
 OPERACIONES:
 - pedidos(id, descripcion, estado[pendiente/aprobado/recibido/cancelado], prioridad, obra_id, usuario, empresa_id, created_at)
@@ -2600,12 +2600,14 @@ OPERACIONES:
 - epis_asignados(id, empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, tipo_epi, talla, numero_serie, fecha_entrega, fecha_caducidad, proxima_revision, estado, observaciones, created_by, created_at)
 
 CHECKLISTS / FOTOS / DOCS:
-- checklist_plantillas(id, empresa_id, nombre, departamento, items JSON, activa, created_at)
-- checklist_registros(id, empresa_id, obra_id, plantilla_id, usuario_id, fecha, respuestas JSON, estado, created_at)
-- fotos_obra(id, empresa_id, obra_id, r2_key, nombre, descripcion, usuario, departamento, created_at)
+- checklist_plantillas(id, empresa_id, tipo_equipo, pregunta, orden, created_at) — preguntas de checklist por tipo de equipo
+- checklists_plantillas(id, empresa_id, nombre, descripcion, categoria, items JSON, activa, created_at, updated_at) — OJO: tabla DISTINTA de la anterior, plantillas de checklist de obra
+- checklist_registros(id, empresa_id, obra_id, tipo_equipo, equipo_id, equipo_mat, resultado, respuestas JSON, comentario, realizado_por, created_at)
+- checklist_ejecuciones(id, empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, ...) — ejecuciones de checklists_plantillas
+- fotos_obra(id, empresa_id, obra_id, departamento, nombre, mime_type, tamano, comentario, subido_por, created_at, titulo, tags, ubicacion, fecha_foto)
 - carpetas(id, empresa_id, nombre, parent_id, departamento, created_at)
 - docs_dept(id, empresa_id, carpeta_id, nombre, r2_key, mime_type, subido_por, created_at)
-- docs_notas(id, empresa_id, titulo, contenido, usuario, departamento, created_at)
+- docs_notas(id, empresa_id, obra_id, departamento, carpeta_id, titulo, contenido, creado_por, updated_at, created_at)
 - chat_mensajes(id, empresa_id, obra_id, usuario_id, mensaje, tipo, created_at)
 - eventos_calendario(id, empresa_id, obra_id, titulo, descripcion, fecha_inicio, fecha_fin, tipo, usuario, created_at)
 
@@ -2629,9 +2631,9 @@ CATÁLOGOS (sin empresa_id, datos globales):
 
 SISTEMA:
 - logs(id, tipo, nivel[info/warning/error], mensaje, usuario, obra, empresa_id, created_at)
-- login_attempts(ip, email, attempts, last_attempt)
+- login_attempts(id, ip, motivo, created_at, email) — una fila por intento; NO hay contador acumulado
 - reset_tokens(id, usuario_id, token, expires_at, created_at)
-- vincular_tokens(id, token, empresa_id, rol, departamento, expires_at, created_at)
+- vincular_tokens(token PRIMARY KEY, usuario_id, empresa_id, created_at, expires_at)
 - config(clave PRIMARY KEY, valor, updated_at) — configuración global
 - sugerencias(id, texto, categoria, usuario, obra, estado[pendiente/en_progreso/resuelto/cerrado], empresa_id, leida, created_at)
 - alejandra_memoria(id, tipo[hecho/pendiente/contexto/aviso/aprendizaje/error], canal, titulo, contenido, importancia[1-5], created_at)
