@@ -1,7 +1,23 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 31/07/2026 — filtro real por departamento (Office + PWA) y rediseño completo del informe de cableado de racks. Versión final v8.97.
+**Última actualización:** 01/08/2026 — BOBINAS-STOCK-01 + EQUIPOS-REVISION-01: dos consultas más de INTELIGENCIA DE NEGOCIO en el cron de alejandra-agente que fallaban en silencio. alejandra-agente v6.13 → v6.14 (la PWA/Office no cambian, siguen en v8.97).
+
+### 01/08/2026 — BOBINAS-STOCK-01 + EQUIPOS-REVISION-01 (alejandra-agente v6.13 → v6.14)
+
+Resumen para otro chat que retome el proyecto. Solo `alejandra-agente/worker.js`, sin tocar la PWA ni Office.
+
+**Contexto:** en la sesión anterior (commit `29bf6bb`, FICHAJES-PROACTIVO-01) se descubrió que el bloque `Promise.all` de INTELIGENCIA DE NEGOCIO dentro de `scheduled()` (cron nocturno/horario del agente) tenía consultas con nombres de columna/tabla que no existen en el D1 real, atrapadas en silencio por `.catch(() => ({results:[]}))` — así que las alertas proactivas correspondientes nunca se disparaban en producción sin que nadie lo notara. Esta sesión continuó el mismo barrido sobre las dos consultas restantes del bloque.
+
+**1. `bobinasStock`** — pedía `metros_restantes`/`metros_totales` de `bobinas`; esas columnas no existen (verificado con `PRAGMA table_info(bobinas)` contra D1 producción: `codigo, tipo, seccion, longitud, proveedor, num_albaran, estado, obra_id, obra_nombre, departamento, fecha_entrada, fecha_devolucion, notas, created_at, tipo_cable, empresa_id, registrado_por, devuelto_por`). Una bobina se gestiona como unidad completa (entra/sale de obra vía `estado`), no como consumible con metros restantes — no existe un % de consumo real que calcular. Redefinida como "pocas bobinas disponibles del mismo tipo" (`estado='disponible'` agrupado por `tipo`, `HAVING disponibles <= 3`).
+
+**2. `equiposRevision`** — apuntaba a una tabla `equipos` que no existe en absoluto (confirmado con `SELECT name FROM sqlite_master WHERE type='table'`). Los equipos con revisión periódica real son `pemp` y `carretillas` (columna real `fecha_proxima_revision`, no `ultima_revision`; `herramientas` no tiene revisión periódica). Reescrita como `UNION ALL` de ambas tablas, vencidas o a menos de 5 días de vencer (mismo umbral que ya usa el resto del prompt del cron: "Equipo a <5 días de vencer revisión → avisa").
+
+**Verificación:** ambas consultas nuevas ejecutadas directamente contra D1 producción (sin error, con datos reales de ejemplo). `node --check worker.js` OK. `npm test` en `alejandra-agente/` → 85/85. Sin corrupción de encoding en el diff. `npx wrangler deploy` dentro de `alejandra-agente/` → desplegado con bindings DB/FILES intactos, `/health` → 200 `{"status":"ok","version":"6.14",...}`.
+
+**Versión:** solo `alejandra-agente/worker.js` tiene versión propia (cabecera + `GET /health`, independiente de `version.json`/PWA desde v6.13 — ver comentario en la cabecera del archivo). Subida de v6.13 a v6.14. No aplica el checklist de sincronización de `version.json`/`sw.js`/`index.html` porque no se tocó ni la PWA ni Office.
+
+**Pendiente para otra sesión:** ninguno nuevo. NEW-89 (`/partes-maquinaria` sin comprobación de rol) sigue sin resolver de la sesión anterior.
 
 ### 31/07/2026 (tarde) — filtro por departamento + rediseño del informe de Teleco (v8.90 → v8.97)
 

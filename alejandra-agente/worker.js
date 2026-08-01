@@ -1,7 +1,11 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v6.13 (fix: versión desincronizada entre esta cabecera y GET /health -- v6.03
+// Versión: v6.14 (fix: bobinasStock/equiposRevision de INTELIGENCIA DE NEGOCIO en scheduled()
+//           consultaban columnas/tablas inexistentes en D1 (metros_restantes/metros_totales en
+//           bobinas, tabla `equipos`) y fallaban en silencio via .catch -- ver BOBINAS-STOCK-01
+//           y EQUIPOS-REVISION-01 en el bloque de Promise.all.
+//           v6.13 (fix: versión desincronizada entre esta cabecera y GET /health -- v6.03
 //           aquí vs "6.12" en /health, ambos números "prestados" en su día del changelog
 //           de la PWA en ESTADO_APP.txt, nunca fue un contador propio del agente. A partir
 //           de esta versión, el número de versión del agente es independiente del de la
@@ -2484,7 +2488,7 @@ export default {
 
     try {
       if (path === '/health') {
-        return json({ status: 'ok', version: '6.13', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true });
+        return json({ status: 'ok', version: '6.14', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true });
       }
 
       // ── Historial del chat (sync entre dispositivos) ────────────────────
@@ -3603,7 +3607,15 @@ export default {
       try {
         const [obrasActivas, bobinasStock, fichajesHoy, equiposRevision, gastosRecientes, incidenciasAbiertas, personalActivo, materialesObra] = await Promise.all([
           env.DB.prepare(`SELECT id, nombre FROM obras WHERE estado IN ('activa','en_curso','abierta') LIMIT 20`).all().catch(() => ({results:[]})),
-          env.DB.prepare(`SELECT nombre, metros_restantes, metros_totales, ROUND(metros_restantes*100.0/metros_totales,1) as pct FROM bobinas WHERE metros_totales > 0 AND metros_restantes < (metros_totales * 0.20) AND metros_restantes > 0 ORDER BY pct ASC LIMIT 10`).all().catch(() => ({results:[]})),
+          // BOBINAS-STOCK-01 (01/08/2026): `bobinas` no tiene metros_restantes/metros_totales
+          // (columnas reales: codigo, tipo, seccion, longitud, estado...). Una bobina se
+          // gestiona como unidad completa (entra/sale de obra), no como consumible con metros
+          // restantes, así que no existe un % de consumo por bobina que calcular. La consulta
+          // fallaba en SILENCIO desde siempre. Redefinido como "pocas bobinas disponibles de
+          // un mismo tipo" (equivalente real más cercano a "stock bajo").
+          env.DB.prepare(`SELECT tipo, COUNT(*) as disponibles, SUM(COALESCE(longitud,0)) as metros_disponibles
+            FROM bobinas WHERE estado = 'disponible' AND tipo IS NOT NULL
+            GROUP BY tipo HAVING disponibles <= 3 ORDER BY disponibles ASC LIMIT 10`).all().catch(() => ({results:[]})),
           // FICHAJES-PROACTIVO-01 (01/08/2026): la tabla real es fichajes(usuario_id,
           // personal_externo_id, fecha, hora_entrada, estado...) — no existen `f.tipo`,
           // `f.hora` ni una tabla `personal` (es `usuarios`/`personal_externo`). Esta
@@ -3614,7 +3626,19 @@ export default {
             LEFT JOIN usuarios u ON u.id = f.usuario_id
             LEFT JOIN personal_externo pe ON pe.id = f.personal_externo_id
             WHERE f.fecha = date('now') ORDER BY f.hora_entrada DESC LIMIT 30`).all().catch(() => ({results:[]})),
-          env.DB.prepare(`SELECT nombre, tipo, ultima_revision, CAST(julianday('now') - julianday(ultima_revision) AS INTEGER) as dias_sin FROM equipos WHERE ultima_revision IS NOT NULL AND julianday('now') - julianday(ultima_revision) > 25 LIMIT 10`).all().catch(() => ({results:[]})),
+          // EQUIPOS-REVISION-01 (01/08/2026): no existe una tabla `equipos` en D1. Los equipos
+          // con revisiones periódicas son `pemp` y `carretillas` (columna real
+          // `fecha_proxima_revision`, no `ultima_revision`); `herramientas` no tiene revisión
+          // periódica. La consulta fallaba en SILENCIO desde siempre. Unifica PEMP + carretillas
+          // vencidas o a <5 días de vencer (mismo umbral que el resto del prompt del cron).
+          env.DB.prepare(`SELECT matricula as nombre, 'PEMP' as tipo, fecha_proxima_revision,
+              CAST(julianday(fecha_proxima_revision) - julianday('now') AS INTEGER) as dias_restantes
+            FROM pemp WHERE fecha_proxima_revision IS NOT NULL AND julianday(fecha_proxima_revision) - julianday('now') < 5
+            UNION ALL
+            SELECT matricula as nombre, 'Carretilla' as tipo, fecha_proxima_revision,
+              CAST(julianday(fecha_proxima_revision) - julianday('now') AS INTEGER) as dias_restantes
+            FROM carretillas WHERE fecha_proxima_revision IS NOT NULL AND julianday(fecha_proxima_revision) - julianday('now') < 5
+            ORDER BY dias_restantes ASC LIMIT 10`).all().catch(() => ({results:[]})),
           env.DB.prepare(`SELECT SUM(importe) as total, COUNT(*) as n FROM gastos WHERE fecha >= date('now', '-7 days')`).first().catch(() => ({total:0,n:0})),
           env.DB.prepare(`SELECT COUNT(*) as n FROM incidencias WHERE estado IN ('abierta','pendiente')`).first().catch(() => ({n:0})),
           env.DB.prepare(`SELECT COUNT(*) as n FROM usuarios WHERE activo = 1`).first().catch(() => ({n:0})),

@@ -4,6 +4,18 @@
 Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+BOBINAS-STOCK-01 + EQUIPOS-REVISION-01 (01/08/2026, sin cambio de versión de frontend — solo
+alejandra-agente/worker.js, v6.13 → v6.14): siguiendo de FICHAJES-PROACTIVO-01 (sesión anterior,
+commit 29bf6bb), el mismo bloque de INTELIGENCIA DE NEGOCIO en el cron de alejandra-agente tenía
+dos consultas más fallando en silencio (atrapadas por .catch) por columnas/tablas inexistentes en
+D1: bobinasStock pedía metros_restantes/metros_totales de `bobinas` (esa tabla no trackea
+consumo parcial, se gestiona por unidad completa — redefinida como "≤3 bobinas disponibles del
+mismo tipo"), y equiposRevision apuntaba a una tabla `equipos` inexistente (los equipos con
+revisión periódica real son `pemp`/`carretillas`, columna fecha_proxima_revision — reescrita
+como UNION de ambas, vencidas o a <5 días). Verificado con las consultas reales contra D1
+producción, npm test 85/85, node --check y despliegue (`npx wrangler deploy` en
+alejandra-agente/, /health 200). Ver IDEAS_PENDIENTES.txt para el detalle completo.
+
 ACTUALIZACIÓN v8.97 (31/07/2026): informe de cableado de racks rediseñado de raíz (Adrián: "el
 informe es muy sencillo" + "utiliza una skill de UI"). Identidad visual propia (paleta técnica
 fría, puertos/cables en monoespaciada, estado ocupado/libre con punto, medidor de ocupación),

@@ -1,10 +1,33 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización vigente: 31/07/2026 — ORG-DIR-01..04 e INFORME-01..04: filtro real por
-  departamento en el directorio de Office y en la PWA (Teleco mostraba el inventario de
-  Eléctrico) + informe de cableado rediseñado con identidad propia y movido a informe por IDF.
-  Ver sección de errores y esta misma zona más abajo.
+  Última actualización vigente: 01/08/2026 — BOBINAS-STOCK-01 y EQUIPOS-REVISION-01: dos
+  consultas más de INTELIGENCIA DE NEGOCIO (cron de alejandra-agente) que fallaban en silencio
+  por columnas/tablas inexistentes, mismo patrón que FICHAJES-PROACTIVO-01. Ver sección de
+  errores y esta misma zona más abajo.
+
+[✓ HECHO alejandra-agente v6.14] BOBINAS-STOCK-01 y EQUIPOS-REVISION-01 — alertas proactivas de
+  stock de bobinas y revisión de equipos nunca funcionaron (fallo silencioso)
+    · Encontrado al arreglar FICHAJES-PROACTIVO-01 (commit 29bf6bb, sesión anterior): el mismo
+      bloque de Promise.all de INTELIGENCIA DE NEGOCIO en scheduled() (alejandra-agente/
+      worker.js) tenía dos consultas más con el mismo patrón — columnas/tabla inexistentes,
+      atrapadas por un .catch(() => ({results:[]})) que las dejaba fallar sin avisar nunca.
+    · BOBINAS-STOCK-01: la consulta pedía metros_restantes/metros_totales de `bobinas`, columnas
+      que no existen (verificado con PRAGMA table_info contra D1 real) — una bobina se gestiona
+      como unidad completa (estado disponible/activa/en obra/devuelta), no como consumible con
+      metros restantes, así que no hay un % de consumo por bobina que calcular. No existía un
+      equivalente real de "stock bajo" tal y como estaba planteado; redefinida como "pocas
+      bobinas disponibles de un mismo tipo" (≤3 con estado='disponible', agrupado por tipo).
+    · EQUIPOS-REVISION-01: la consulta apuntaba a una tabla `equipos` que no existe en D1
+      (confirmado con sqlite_master). Los equipos con revisión periódica real son `pemp` y
+      `carretillas` (columna real fecha_proxima_revision, no ultima_revision); herramientas no
+      tiene revisión periódica. Reescrita como UNION de pemp + carretillas, vencidas o a menos
+      de 5 días de vencer (mismo umbral ya usado en el resto del prompt del cron).
+    · Verificado con las dos consultas reales contra D1 en producción (sin error), node --check,
+      npm test (85/85) y despliegue con `npx wrangler deploy` dentro de alejandra-agente/
+      (v6.13 → v6.14, /health 200).
+    · Alcance: solo alejandra-agente/worker.js — este backend no tiene versión de frontend
+      (index.html/panel.html) que sincronizar.
 
 [✓ HECHO v8.91-v8.92] ORG-DIR-01..04 — Teleco (y cualquier departamento nuevo) veía el
   inventario de Eléctrico sin filtro independiente
