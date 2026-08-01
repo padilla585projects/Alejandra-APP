@@ -1,53 +1,65 @@
 # Handoff — Alejandra 2.0
 
 - Fecha: 2026-08-02
-- Agente que entrega: Codex, Arquitecto Técnico
-- Tarea: GOV-001 — Engineering Workflow
-- Estado: documentación creada; en revisión
-- Rama: `codex/foundation-close` — sin push, sin merge
-- Último commit de implementación: `96417a5` — correcciones finales de CI de F-0.1
+- Agentes que entregan: Codex y Claude, Agentes de Ingeniería
+- Trabajo entregado: F-0.1 (entrega segura) y GOV-001 (proceso de ingeniería), consolidados
+- Estado: **implementado localmente; pendiente de integración y validación remota**
+- Rama: `codex/foundation-close` — **sin push, sin merge, sin despliegue**
+- Commits: `966ad7c`, `a59a2c5`, `6d5d98c`, `96417a5`, `cce5224`, `f644a6b` y la consolidación del 2026-08-02
 
-## Objetivo realizado
+## Qué está terminado
 
-Se creó `ENGINEERING_WORKFLOW.md` como procedimiento único de trabajo para cualquier Agente de Ingeniería del Proyecto Alejandra, sin depender del modelo utilizado y sin cambiar código, arquitectura o infraestructura.
+**F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.
 
-## Cambios realizados
+- `ci.yml` valida en PR y ramas distintas de `main`, sin secretos ni wrangler.
+- Los 5 workflows de producción solo declaran `workflow_dispatch`.
+- `d1 execute` existe únicamente en `migrate-d1-agent.yml`, con selector cerrado.
+- Sin `|| echo`, `|| true` ni `continue-on-error` en ningún workflow.
+- La escritura de secretos salió del despliegue y valida que ningún valor esté vacío.
+- `migrate_008_plano_circuitos.sql` **bloqueada**: fuera del selector y rechazada por un guard, porque `worker.js:24646` ya crea esa columna en runtime. El fichero se conserva.
+- Healthchecks automáticos de Workers **retirados por diseño**: `GET /health` devuelve 200 sin comprobar D1/R2, así que daría por bueno un despliegue roto. Verificación manual en el runbook. Pages sí conserva healthcheck porque valida la versión servida.
+- Pages incorpora precheck de sincronía de `version.json` / `sw.js` / `index.html`.
 
-- Se consolidó el flujo obligatorio desde contexto hasta detención.
-- Se definieron lectura inicial, relevo, ramas, commits, PRs, fases, plantilla de prompt y definición de terminado.
-- Se asignó una fuente única a cada clase de norma para evitar duplicidad.
-- `AGENTS.md` conserva reglas específicas del repositorio y remite al proceso operativo común.
-- `START_HERE.md` y el registro documental enlazan el nuevo documento.
+**GOV-001 — Proceso de ingeniería.** `ENGINEERING_WORKFLOW.md` es el procedimiento operativo único, independiente del modelo de IA. `AGENTS.md` conserva solo las reglas específicas del repositorio y remite a él.
 
-## Archivos modificados
+**Decisiones cerradas.** ADR-0001 (entrega deliberada) y ADR-0002 (contrato cognitivo, como arquitectura objetivo con implementación bloqueada) aceptados. ADR-0005 cierra COH-001/ARC-009; ADR-0002 cierra COH-002/ARC-010. Foundation v0.1 sin bloqueos de coherencia.
 
-- `ENGINEERING_WORKFLOW.md`
-- `AGENTS.md`
-- `START_HERE.md`
-- `TASKS.md`
-- `PROJECT_STATE.md`
-- `HANDOFF.md`
-- `CHANGELOG.md`
-- `docs/DOCUMENTATION-REGISTER.md`
+## Qué está pendiente
 
-## Validación realizada
+**F-0.1 no es efectiva en producción.** La rama no está integrada, así que los cuatro workflows antiguos siguen activos en GitHub con sus disparadores por `push`. El riesgo P0 sigue vivo en el remoto.
 
-- Revisión de jerarquía y enlaces documentales.
-- Revisión de solapamientos: proceso común en `ENGINEERING_WORKFLOW.md`; reglas específicas del repositorio en `AGENTS.md`; arquitectura en `ARCHITECT_RULES.md` y ADRs.
-- No se modificaron archivos funcionales, workflows, secretos, infraestructura ni producción.
+Auditoría remota de GitHub (2026-08-02, solo lectura, nada modificado):
 
-## Bloqueos y riesgos
+| Elemento | Estado real |
+|---|---|
+| Protección de `main` | ❌ No protegida (HTTP 404), sin rulesets |
+| Entorno `production` | ❌ No existe; los workflows lo crearían sin reglas de aprobación |
+| Entorno `github-pages` | ✅ Existe, política de rama limitada a `main` |
+| Pages | ✅ `build_type: workflow`, HTTPS forzado |
+| Secretos | ✅ Los 5 existen, pero a nivel de repositorio, no de entorno |
+| Workflows en remoto | ⚠️ Los 4 antiguos siguen activos |
 
-- Se detectó una discrepancia histórica en `MASTER_ROADMAP.md`: algunas referencias siguen describiendo ADRs como propuestos y F-0.1 como riesgo activo, mientras `PROJECT_STATE.md`, `HANDOFF.md` y ADRs posteriores reflejan un estado más reciente. No se corrigió automáticamente por requerir una decisión documental explícita.
-- F-0.1 sigue pendiente de validación remota y configuración de GitHub; GOV-001 no modifica ese alcance.
+Auditoría remota de Cloudflare: pendiente.
+
+## Riesgos abiertos
+
+- **ARC-011 (crítico).** El esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción (~108 `CREATE TABLE IF NOT EXISTS`, ~51 `ALTER TABLE`), no las migraciones versionadas. F-0.1 controla las migraciones del workflow, no las del código. El inventario y su conversión a migraciones versionadas es trabajo futuro obligatorio con ADR propio.
+- **El estado real de D1 no está verificado.** Todo lo afirmado sobre el esquema procede de leer código, no de consultar la base de datos.
+- **ARC-005** mitigado solo para el código, no para el esquema, y pendiente de validación remota.
+- **ARC-008.** No existe endpoint de salud con dependencias reales; sin él no se pueden reincorporar los healthchecks.
+- Migraciones de raíz sin manifiesto único.
+- ADR-0004 sigue propuesto; el Núcleo Cognitivo no puede iniciarse.
 
 ## Siguiente acción exacta
 
-Revisar y aprobar `ENGINEERING_WORKFLOW.md`. Decidir mediante cambio documentado cómo normalizar las referencias históricas de estado en `MASTER_ROADMAP.md`; no iniciar una nueva fase ni ejecutar acciones remotas.
+**Activar y validar F-0.1 en GitHub remoto mediante rama y PR segura** (tarea `F-0.1-R` en `TASKS.md`).
+
+Empezar por: desactivar manualmente los 4 workflows antiguos en Actions → cada workflow → `···` → *Disable workflow*, y después abrir la PR de `codex/foundation-close` hacia `main`. Requiere acceso administrativo a GitHub.
 
 ## No tocar sin nueva autorización
 
 - No desplegar Pages ni Workers.
 - No ejecutar migraciones D1 remotas, incluida la 008.
 - No modificar secretos, bindings, Cloudflare, D1, R2 ni producción.
-- No iniciar el Núcleo Cognitivo ni funcionalidades ajenas a tareas aprobadas.
+- No iniciar el Núcleo Cognitivo ni abrir fases nuevas.
+- No reescribir los commits ya creados en esta rama.
