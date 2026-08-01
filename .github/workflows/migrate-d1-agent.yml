@@ -1,4 +1,13 @@
-name: Apply Alejandra Agent D1 migration (manual)
+name: Apply D1 migration (manual)
+
+# Unico flujo automatizado para aplicar una migracion a alejandra-db. Ambos
+# Workers comparten la misma base, asi que el selector cubre tanto las
+# migraciones del agente como las de la raiz, indicadas por su ruta relativa
+# al repositorio. Nunca se ejecuta como paso de un despliegue.
+#
+# ATENCION: este workflow no es el unico mecanismo que altera el esquema.
+# worker.js ejecuta DDL en produccion por su cuenta (ARC-011), de modo que
+# controlar este flujo no equivale a controlar el esquema.
 
 on:
   workflow_dispatch:
@@ -7,23 +16,21 @@ on:
         description: Commit SHA, tag or branch containing the reviewed migration
         required: true
         default: main
-      # migrate_008_plano_circuitos.sql NO figura aqui a proposito: esta BLOQUEADA.
-      # La columna planos.circuitos_json ya la crea worker.js en tiempo de ejecucion
-      # (worker.js:24646), por lo que aplicar la migracion fallaria con "duplicate
-      # column name". El fichero se conserva; no se borra. Ver ARC-011 y
-      # docs/runbooks/CI-CD-Y-MIGRACIONES.md antes de reintroducirla.
       migration:
-        description: Reviewed Alejandra Agent migration to apply
+        description: Reviewed migration to apply (path relative to repo root)
         required: true
         type: choice
         options:
-          - migrate_001_init_schema.sql
-          - migrate_002_token_uso.sql
-          - migrate_003_fix_schema.sql
-          - migrate_004_rename_agente_config.sql
-          - migrate_005_dev_bypass.sql
-          - migrate_006_planos_unifilar_planta_electrica.sql
-          - migrate_007_planos_planta_industrial.sql
+          - alejandra-agente/migrate_001_init_schema.sql
+          - alejandra-agente/migrate_002_token_uso.sql
+          - alejandra-agente/migrate_003_fix_schema.sql
+          - alejandra-agente/migrate_004_rename_agente_config.sql
+          - alejandra-agente/migrate_005_dev_bypass.sql
+          - alejandra-agente/migrate_006_planos_unifilar_planta_electrica.sql
+          - alejandra-agente/migrate_007_planos_planta_industrial.sql
+          - alejandra-agente/migrate_008_plano_circuitos.sql
+          - migrate_inventario_seg_ubicacion.sql
+          - migrate_empresas_retencion.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true
@@ -42,21 +49,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
-      # Defensa en profundidad: aunque 008 ya no esta en el selector, se rechaza
-      # explicitamente por si alguien la reintroduce sin leer ARC-011.
+      # Punto de extension para bloquear migraciones concretas. Vacio a proposito:
+      # el bloqueo de la 008 se retiro tras verificar el esquema real (ARC-011 fase 2).
+      # Anadir aqui un caso solo con evidencia del esquema, nunca por suposicion.
       - name: Reject blocked migrations
         env:
           MIGRATION_FILE: ${{ inputs.migration }}
         run: |
           case "$MIGRATION_FILE" in
-            migrate_008_plano_circuitos.sql)
-              echo "::error::migrate_008 esta BLOQUEADA: worker.js crea planos.circuitos_json en runtime (worker.js:24646). Aplicarla fallaria por columna duplicada. Ver ARC-011."
+            __ninguna_bloqueada__)
+              echo "::error::Migracion bloqueada."
               exit 1
               ;;
           esac
+          if [ ! -f "$MIGRATION_FILE" ]; then
+            echo "::error::No existe el fichero $MIGRATION_FILE en el ref indicado."
+            exit 1
+          fi
           echo "Migracion permitida: $MIGRATION_FILE"
+          echo "--- contenido ---"
+          cat "$MIGRATION_FILE"
       - name: Apply selected migration
-        working-directory: alejandra-agente
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
