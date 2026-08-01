@@ -45,3 +45,21 @@ Siguiente acción exacta:
 - Pruebas: YAML de los seis workflows válido; `node --check` válido para ambos Workers; 85/85 tests del agente superados; validación remota pendiente.
 - Última actualización: 2026-08-01
 - Siguiente acción exacta: revisar los commits de F-0.1, configurar controles remotos de GitHub y validar una PR sin desplegar.
+
+## GOV-001 — Engineering Workflow
+
+- ID: GOV-001
+- Título: Consolidación del proceso operativo de ingeniería
+- Fase: Gobierno transversal; no crea una fase del roadmap
+- Estado: en revisión
+- Prioridad: Alta
+- Rama: `codex/foundation-close`
+- Responsable actual: Codex
+- Objetivo: establecer un proceso único, independiente del modelo de IA, sin duplicar normas del repositorio.
+- Criterios de aceptación: `ENGINEERING_WORKFLOW.md` define inicio, relevo, ramas, commits, PRs, fases, prompts, jerarquía y terminado; referencias actualizadas; sin código ni arquitectura modificados.
+- Dependencias: fuentes documentales vigentes y ADRs relacionados.
+- Bloqueos: discrepancia histórica detectada entre el estado vivo y algunas referencias de `MASTER_ROADMAP.md`; no resuelta automáticamente.
+- Archivos principales: `ENGINEERING_WORKFLOW.md`, `AGENTS.md`, `START_HERE.md`, `docs/DOCUMENTATION-REGISTER.md`.
+- Pruebas: revisión de enlaces, jerarquía y ausencia de duplicación operativa.
+- Última actualización: 2026-08-02
+- Siguiente acción exacta: revisar el documento consolidado y decidir si se normalizan las referencias históricas de estado del roadmap mediante cambio documentado.

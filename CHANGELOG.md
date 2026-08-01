@@ -11,6 +11,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Registro operativo de F-0.1 en `TASKS.md`, incluida la migración 008 sin ejecutar.
 - ARC-011: riesgo crítico de esquema D1 definido por DDL en tiempo de ejecución, con el inventario de `CREATE TABLE`/`ALTER TABLE` desde código registrado como trabajo futuro obligatorio.
 - Precheck de sincronía de versiones antes de publicar Pages, y healthcheck que verifica la versión servida.
+- `ENGINEERING_WORKFLOW.md` como procedimiento operativo común e independiente del modelo de IA.
 
 ### Changed
 

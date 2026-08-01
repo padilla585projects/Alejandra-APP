@@ -4,14 +4,16 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
-Foundation v0.1 aprobada. F-0.1 separa localmente CI, CD, secretos y migraciones; requiere revisión y configuración manual de los entornos GitHub `production` y `github-pages` antes de considerarse operativa.
+Foundation v0.1 aprobada. F-0.1 está **cerrada localmente**: CI, CD, secretos y migraciones quedan separados en los workflows versionados y ningún push o merge activa producción.
+
+**Todavía no es efectiva en producción.** La rama no está integrada, así que los workflows antiguos siguen activos en GitHub. Además, la auditoría remota del 2026-08-02 confirmó que `main` no está protegida y que el entorno `production` no existe: hasta configurarlos, la única barrera real es la palabra de confirmación. Detalle en `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
 
 ## Lectura obligatoria
 
-1. `MASTER_PLAN.md` y `MASTER_ROADMAP.md`
-2. `PROJECT_STATE.md`, `ARCHITECT_RULES.md` y `ARCHITECT_BACKLOG.md`
-3. ADRs y `docs/runbooks/CI-CD-Y-MIGRACIONES.md`
-4. `HANDOFF.md` y `AGENTS.md`
+1. `MASTER_PLAN.md`, `MASTER_ROADMAP.md` y `PROJECT_STATE.md`
+2. `TASKS.md`, `HANDOFF.md`, `AGENTS.md` y `ENGINEERING_WORKFLOW.md`
+3. `ARCHITECT_RULES.md`, `ARCHITECT_BACKLOG.md` y ADRs relacionados
+4. Arquitectura, runbooks y documentación del área afectada
 
 ## Siguiente paso
 

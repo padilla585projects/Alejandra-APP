@@ -1,12 +1,12 @@
 # Registro de documentación
 
-Actualizado: 2026-08-01.
+Actualizado: 2026-08-02.
 
 | Documento/grupo | Estado | Uso |
 |---|---|---|
 | `MASTER_PLAN.md`, `MASTER_ROADMAP.md`, `TASKS.md` | Vigente | Visión, ejecución y cola operativa. |
 | `ARCHITECT_RULES.md`, `ARCHITECT_BACKLOG.md` | Vigente | Gobierno y cartera arquitectónica. |
-| `START_HERE.md`, `PROJECT_STATE.md`, `HANDOFF.md`, `AGENTS.md`, `CHANGELOG.md` | Vigente | Continuidad y contribución. |
+| `START_HERE.md`, `PROJECT_STATE.md`, `HANDOFF.md`, `AGENTS.md`, `ENGINEERING_WORKFLOW.md`, `CHANGELOG.md` | Vigente | Continuidad, proceso operativo y contribución. |
 | `docs/runbooks/CI-CD-Y-MIGRACIONES.md` | Vigente | Operación manual de CI, CD, secretos y D1. |
 | `docs/00-09`, `docs/architecture/`, ADRs, otros runbooks e ideas | Vigente | Detalle normativo y técnico. |
 | `docs/archive/` | Archivada de consulta | Trazabilidad; no son fuentes vigentes ni planes ejecutables. |

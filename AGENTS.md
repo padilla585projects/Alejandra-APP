@@ -8,13 +8,9 @@ La continuidad, seguridad y trazabilidad prevalecen sobre la rapidez. Se evoluci
 
 ## Flujo de trabajo
 
-1. Leer `START_HERE.md`, `PROJECT_STATE.md`, `HANDOFF.md` y la documentación del área.
-2. Comprobar estado de Git y preservar cambios ajenos.
-3. Definir alcance, riesgos, archivos, permisos y validaciones antes de editar.
-4. Implementar una unidad coherente; no mezclar limpieza, seguridad y funcionalidades sin relación.
-5. Ejecutar las pruebas pertinentes y registrar resultado, omisiones y motivo.
-6. Actualizar `PROJECT_STATE.md`, `HANDOFF.md`, `CHANGELOG.md` y ADR/runbook/idea cuando corresponda.
-7. Entregar para revisión. No continuar a una nueva fase sin autorización explícita.
+`ENGINEERING_WORKFLOW.md` es la fuente operativa única para inicio, alcance, relevo, ramas,
+commits, PRs, fases y definición de terminado. Este archivo conserva únicamente las reglas
+específicas de contribución, seguridad y calidad del repositorio.
 
 ## Reglas de ingeniería y calidad
 
@@ -42,4 +38,5 @@ La continuidad, seguridad y trazabilidad prevalecen sobre la rapidez. Se evoluci
 
 ## Definición de terminado
 
-Un trabajo termina solo cuando el alcance está completo, no rompe contratos conocidos, las pruebas acordadas están ejecutadas o justificadamente omitidas, riesgos/rollback están documentados, `PROJECT_STATE.md` y `HANDOFF.md` reflejan la realidad y la revisión requerida ha sido solicitada.
+Aplicar la definición de terminado de `ENGINEERING_WORKFLOW.md`, además de las comprobaciones
+específicas de este archivo.
