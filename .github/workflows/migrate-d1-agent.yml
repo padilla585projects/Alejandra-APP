@@ -1,4 +1,13 @@
-name: Apply Alejandra Agent D1 migration (manual)
+name: Apply D1 migration (manual)
+
+# Unico flujo automatizado para aplicar una migracion a alejandra-db. Ambos
+# Workers comparten la misma base, asi que el selector cubre tanto las
+# migraciones del agente como las de la raiz, indicadas por su ruta relativa
+# al repositorio. Nunca se ejecuta como paso de un despliegue.
+#
+# ATENCION: este workflow no es el unico mecanismo que altera el esquema.
+# worker.js ejecuta DDL en produccion por su cuenta (ARC-011), de modo que
+# controlar este flujo no equivale a controlar el esquema.
 
 on:
   workflow_dispatch:
@@ -7,25 +16,21 @@ on:
         description: Commit SHA, tag or branch containing the reviewed migration
         required: true
         default: main
-      # migrate_008 vuelve al selector tras la fase 2 de ARC-011 (2026-08-02): se
-      # bloqueo suponiendo que worker.js:24646 ya habia creado planos.circuitos_json,
-      # pero la consulta al esquema real demostro que la columna NO EXISTE. El ALTER
-      # en runtime falla en silencio por su .catch(() => {}), y el codigo que usa esa
-      # columna esta roto en produccion. Aplicar la 008 es el arreglo, no el riesgo.
-      # Ver docs/architecture/07-INVENTARIO-DDL-RUNTIME.md.
       migration:
-        description: Reviewed Alejandra Agent migration to apply
+        description: Reviewed migration to apply (path relative to repo root)
         required: true
         type: choice
         options:
-          - migrate_001_init_schema.sql
-          - migrate_002_token_uso.sql
-          - migrate_003_fix_schema.sql
-          - migrate_004_rename_agente_config.sql
-          - migrate_005_dev_bypass.sql
-          - migrate_006_planos_unifilar_planta_electrica.sql
-          - migrate_007_planos_planta_industrial.sql
-          - migrate_008_plano_circuitos.sql
+          - alejandra-agente/migrate_001_init_schema.sql
+          - alejandra-agente/migrate_002_token_uso.sql
+          - alejandra-agente/migrate_003_fix_schema.sql
+          - alejandra-agente/migrate_004_rename_agente_config.sql
+          - alejandra-agente/migrate_005_dev_bypass.sql
+          - alejandra-agente/migrate_006_planos_unifilar_planta_electrica.sql
+          - alejandra-agente/migrate_007_planos_planta_industrial.sql
+          - alejandra-agente/migrate_008_plano_circuitos.sql
+          - migrate_inventario_seg_ubicacion.sql
+          - migrate_empresas_retencion.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true
@@ -57,9 +62,14 @@ jobs:
               exit 1
               ;;
           esac
+          if [ ! -f "$MIGRATION_FILE" ]; then
+            echo "::error::No existe el fichero $MIGRATION_FILE en el ref indicado."
+            exit 1
+          fi
           echo "Migracion permitida: $MIGRATION_FILE"
+          echo "--- contenido ---"
+          cat "$MIGRATION_FILE"
       - name: Apply selected migration
-        working-directory: alejandra-agente
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

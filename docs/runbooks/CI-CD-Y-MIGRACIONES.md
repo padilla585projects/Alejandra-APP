@@ -64,7 +64,16 @@ filas existentes. Requiere autorización de migración como cualquier otra.
 > 📌 Lección: un bloqueo basado en lectura de código, sin contrastar con el esquema real, puede
 > impedir precisamente el arreglo que hacía falta. Antes de bloquear una migración, verificar.
 
-Las migraciones de raíz están `PENDIENTE`: no tienen manifiesto/orden único. Aplicarlas solo mediante procedimiento específico aprobado hasta normalizarlas.
+### Migraciones de raíz
+
+El workflow acepta desde el 2026-08-02 migraciones de ambos directorios, indicadas por su ruta
+relativa a la raíz del repositorio. Ambos Workers comparten `alejandra-db`, así que un único
+flujo cubre las dos familias.
+
+En el selector solo figuran las migraciones **revisadas**. Las históricas de raíz siguen sin
+manifiesto ni orden único y no se han incorporado: aplicarlas requiere revisarlas una a una y
+añadirlas explícitamente. No dar por hecho que estén aplicadas — la verificación de ARC-011
+demostró que `migrate_roles_multiobra.sql` (`usuario_obras`) nunca lo estuvo.
 
 ## Secretos
 
