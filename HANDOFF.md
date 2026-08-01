@@ -79,9 +79,14 @@ sirve de nada sin desplegar. Estos son los pasos, en orden:
    | Rama | Commits | Qué lleva |
    |---|---|---|
    | `docs/estado-arc012-arc014` | `1cc942d` | Solo documentación de estado |
-   | `fix/arc-013-ddl-sin-silenciar` | `eb772ee`, `5bedd98`, `5c8b2b9` | ARC-013 (los dos workers), puesta al día de roadmap/backlog/changelog y ARC-015 |
+   | `fix/arc-013-ddl-sin-silenciar` | `eb772ee`, `5bedd98`, `5c8b2b9`, `6f95fbf` | ARC-013 (los dos workers), roadmap/backlog/changelog al día y ARC-015 |
+   | `feat/f-0.2-inventario-y-contratos` | `2cc6f5b`, `16dd55d` | F-0.2: catálogo de rutas, checks de CI, arreglo de `/sesion/departamento` y ADR-0006 |
 
-   La segunda rama sale de la primera, así que integrando la segunda entra todo.
+   Cada rama sale de la anterior, así que **integrando la última entra todo**.
+
+   ⚠️ La tercera toca `ci.yml`. El job conserva su nombre `Syntax and agent tests` a
+   propósito, porque es el check requerido por la protección de `main`: si en alguna
+   revisión se renombra, la protección deja de exigir nada.
 2. **Desplegar `worker.js`** por su workflow manual, con `ref` del commit aprobado y la
    confirmación exacta. Recordar que la aprobación del entorno la puede conceder la misma
    credencial que lanza el workflow (ARC-014): conviene hacerlo de forma consciente.
@@ -104,6 +109,16 @@ antes generaban SQL contra columnas inexistentes.
 
 **`F-0.2-CFG`** — recrear los secretos de Cloudflare en el entorno `production`. Exige
 manejar los valores reales, que la API no expone.
+
+**ADR-0006 — decidir.** Redactado y pendiente de tu respuesta. Es el primer dominó de la
+Época 1: bloquea ADR-0004, que bloquea F-1.1. Tiene cinco preguntas al final; la de mayor
+impacto es si `run_migration` sale del alcance de Alejandra, porque hoy le permite alterar
+el esquema saltándose el circuito de F-0.1. Aceptarlo no desbloquea la implementación por
+sí solo: seguirían pendientes ARC-003 (definición de Nexo), ARC-004 (QA) y ARC-006
+(catálogo de tools), cada uno con su propia decisión.
+
+**ARC-015 — autorizar la consulta de metadatos a D1** para cerrar las ~29 tablas cuyo
+esquema descrito a Alejandra no se puede verificar desde el repositorio.
 
 ## No tocar sin nueva autorización
 
