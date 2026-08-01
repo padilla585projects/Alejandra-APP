@@ -21158,6 +21158,20 @@ window.turnoToggle   = turnoToggle;
                 bubbleEl.innerHTML = _escHtml(textoAcumulado).replace(/\n/g, '<br>');
                 document.getElementById('iaMessages').scrollTop = document.getElementById('iaMessages').scrollHeight;
                 break;
+              // SSE-PARIDAD-01 (02/08/2026): el servidor emitía estos tres eventos y NINGÚN
+              // frontend los pintaba — mismo patrón que el incidente de `token` (29/07).
+              // `progreso` era el peor: al generar un plano el worker manda un contador cada
+              // 5s (alejandra-agente/worker.js:7327) y el usuario veía el spinner congelado
+              // entre 30 y 120 segundos, sin señal de que siguiera vivo.
+              case 'progreso':
+                _iaSetEstado(typing, ev.mensaje || 'Trabajando…');
+                break;
+              case 'thinking':
+                _iaSetEstado(typing, '🤔 ' + (ev.siguiente_paso || ev.problema || 'Pensando…'));
+                break;
+              case 'plan':
+                _iaSetEstado(typing, '📋 ' + (ev.objetivo || 'Planificando…'));
+                break;
               case 'cost':
                 break; // No mostrar coste
               case 'done':
