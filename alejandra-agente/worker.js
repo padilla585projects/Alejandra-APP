@@ -10414,6 +10414,16 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  // FIX-STREAM-TOOLUSE (01/08/2026): Adrián reportó "Sin respuesta" dos veces seguidas
+  // dando instrucciones claras (vacaciones de un empleado) — esta fase de streaming
+  // SOLO escuchaba text_delta. Esta llamada SÍ recibe `tools` (no es una fase sin
+  // herramientas), así que si el modelo decidía llamar a una en vez de responder con
+  // texto, el bloque tool_use se perdía en silencio: nada se ejecutaba, nada se
+  // guardaba, y el usuario veía un mensaje vacío. El camino de respaldo (fallback
+  // GPT-4o, más abajo en esta misma función) ya capturaba su tool_use — aquí faltaba.
+  let toolUseBlock = null;
+  let toolUseIndex = null;
+  let toolUseInputJson = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -10428,15 +10438,27 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
       if (data === '[DONE]') break;
       try {
         const evt = JSON.parse(data);
-        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+        if (evt.type === 'content_block_start' && evt.content_block?.type === 'tool_use') {
+          toolUseIndex = evt.index;
+          toolUseBlock = { type: 'tool_use', id: evt.content_block.id, name: evt.content_block.name, input: {} };
+          toolUseInputJson = '';
+        } else if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
           const token = evt.delta.text || '';
           if (token) {
             acumulado += token;
             try { await onToken(token); } catch(_) {}
           }
+        } else if (evt.type === 'content_block_delta' && evt.delta?.type === 'input_json_delta' && evt.index === toolUseIndex) {
+          toolUseInputJson += evt.delta.partial_json || '';
         }
       } catch (_) {}
     }
+  }
+
+  if (toolUseBlock) {
+    try { toolUseBlock.input = toolUseInputJson ? JSON.parse(toolUseInputJson) : {}; } catch (_) { toolUseBlock.input = {}; }
+    console.log(`[Stream] tool_use detectado en fase final de streaming → ${toolUseBlock.name}`);
+    return { __tool_use__: toolUseBlock };
   }
 
   return acumulado.trim() || 'Sin respuesta';
