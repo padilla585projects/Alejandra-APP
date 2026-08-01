@@ -4,7 +4,7 @@ Este archivo es de lectura obligatoria para cualquier IA, desarrollador o herram
 
 ## Filosofía
 
-La continuidad, seguridad y trazabilidad prevalecen sobre la rapidez. Se evoluciona mediante cambios pequeños, reversibles y documentados. El repositorio y sus documentos vigentes son la única fuente de verdad; el historial de un chat nunca lo es.
+La continuidad, seguridad y trazabilidad prevalecen sobre la rapidez. Se evoluciona mediante cambios pequeños, reversibles y documentados. La regla de autonomía y de contexto vive exclusivamente en `ENGINEERING_WORKFLOW.md`; el historial de un chat nunca sustituye la documentación del repositorio.
 
 ## Flujo de trabajo
 

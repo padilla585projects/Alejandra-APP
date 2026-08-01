@@ -12,6 +12,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - ARC-011: riesgo crítico de esquema D1 definido por DDL en tiempo de ejecución, con el inventario de `CREATE TABLE`/`ALTER TABLE` desde código registrado como trabajo futuro obligatorio.
 - Precheck de sincronía de versiones antes de publicar Pages, y healthcheck que verifica la versión servida.
 - `ENGINEERING_WORKFLOW.md` como procedimiento operativo común e independiente del modelo de IA.
+- Regla de autonomía de los agentes: los prompts asignan objetivos y el contexto se obtiene de la documentación versionada.
 
 ### Changed
 

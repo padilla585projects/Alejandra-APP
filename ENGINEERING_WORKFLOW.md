@@ -6,7 +6,7 @@
 
 ## Autoridad y fuentes de verdad
 
-La memoria oficial vive en documentación versionada; nunca en chats, personas ni modelos. La jerarquía es:
+La jerarquía documental oficial es:
 
 1. `MASTER_PLAN.md` — visión global y principios.
 2. `MASTER_ROADMAP.md` — fases, dependencias y ejecución.
@@ -28,6 +28,16 @@ Cada documento tiene una responsabilidad única:
 | Deuda, riesgos y propuestas no aprobadas | `ARCHITECT_BACKLOG.md` y `docs/ideas/` |
 
 Ante contradicción entre fuentes, detenerse, conservar evidencia y solicitar o registrar la resolución mediante ADR o el mecanismo que corresponda. No se resuelve por memoria de un chat ni por inferencia.
+
+## Regla de autonomía de los agentes
+
+La documentación versionada del repositorio es la única fuente oficial de contexto del proyecto.
+
+Los prompts asignan objetivos, no contexto. Antes de comenzar cualquier tarea, el Agente de Ingeniería debe leer la documentación indicada por este flujo de trabajo para comprender el estado del proyecto.
+
+Si la documentación es suficiente, el agente continúa de forma autónoma. Si detecta contradicciones, información insuficiente o bloqueos, se detiene, documenta el problema y propone la corrección mínima necesaria.
+
+No debe improvisar, asumir información no documentada ni solicitar contexto que ya deba existir en el repositorio. Los prompts no son fuentes de verdad ni pueden sustituir la documentación versionada.
 
 ## Flujo obligatorio de trabajo
 
@@ -169,7 +179,7 @@ Actúa como Agente de Ingeniería del Proyecto Alejandra.
 <documentos a actualizar, detenerse y esperar revisión>
 ```
 
-Los prompts son instrucciones de ejecución, no fuentes de verdad. Un prompt no puede modificar una fase aprobada, una decisión ADR o la jerarquía documental sin el cambio versionado y la aprobación requerida.
+Esta plantilla aplica la regla de autonomía de los agentes. Un prompt no puede modificar una fase aprobada, una decisión ADR o la jerarquía documental sin el cambio versionado y la aprobación requerida.
 
 ## Definición de terminado
 
