@@ -1,7 +1,38 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Última actualización:** 01/08/2026 — BOBINAS-STOCK-01 + EQUIPOS-REVISION-01: dos consultas más de INTELIGENCIA DE NEGOCIO en el cron de alejandra-agente que fallaban en silencio. alejandra-agente v6.13 → v6.14 (la PWA/Office no cambian, siguen en v8.97).
+**Última actualización:** 01/08/2026 — sesión larga de depuración en vivo del chat de Alejandra (agente): "Sin respuesta", fichajes por lenguaje natural, notificaciones duplicadas multi-dispositivo, y ajuste de voz. PWA/Office v8.99, alejandra-agente v6.14.
+
+### 01/08/2026 (tarde/noche) — depuración en vivo del chat de Alejandra: "Sin respuesta", fichajes, notificaciones, voz (PWA/Office v8.90 → v8.99, alejandra-agente v6.14)
+
+Resumen para otro chat que retome el proyecto. Sesión muy larga, con pruebas reales en el chat de Alejandra (usuario real "Adrián", empresas Levitec/Edison Montajes) en vez de solo revisión de código. Varios hallazgos encadenados: cada fix llevó al siguiente porque las pruebas en vivo destaparon el problema real detrás de cada síntoma.
+
+**Punto de partida:** Adrián — "mira la conversación que tengo con Alejandra, no me resuelve". Se leyó `alejandra_historial` directamente en D1 para ver qué pasó de verdad (no hay UI de admin para esto todavía).
+
+**1. NOTIF-01 — notificaciones duplicadas con la PWA abierta (commit `7c2a3ba`, v8.98):** el `push` handler de `sw.js` mostraba siempre la notificación del sistema sin comprobar si ya había una ventana de la app en primer plano. Fix: comprobar `clients.matchAll()` antes de mostrar. Mismo commit: `alejandraHablar()` (voz del chat flotante) no limpiaba nada antes de leer en voz alta (emojis, markdown) — nuevo `_limpiarTextoParaVoz()` compartido con `iaSpeak()`.
+
+**2. "Sin respuesta" — causa real (commits `fc1cd08`, `dcabbb7`):** probado en vivo "Dani faltó hoy" → Alejandra se quedaba con un mensaje vacío. Dos causas encadenadas:
+   - `llamarAnthropicStream()` (fase final de streaming) solo procesaba `content_block_delta` de tipo `text_delta` — si el modelo llamaba a una herramienta ahí, el bloque `tool_use` se perdía en silencio. Corregido capturando también `content_block_start`/`input_json_delta` (`fc1cd08`).
+   - Causa real más profunda: el clasificador (Haiku) mandaba avisos declarativos de asistencia ("Dani faltó hoy") al experto **'simple'**, que solo tiene `consultar_bd` — sin `escribir_bd` no puede registrar nada. Corregido el prompt del clasificador para reconocer HECHOS que implican escribir en BD, no solo órdenes imperativas (`dcabbb7`). Verificado en producción: "Dani faltó hoy" → consulta de verdad, no encuentra a Dani en la empresa activa y pregunta; "es de Edison Montajes" → `escribir_bd` real, confirmado en D1 (`fichajes.id=392`).
+
+**3. FICHAJES-PROACTIVO-01 (commit `29bf6bb`) — fichajes por lenguaje natural + aviso proactivo:**
+   - Prompt: documentado que `fichajes.estado` ya cubre presente/retraso/ausencia/vacaciones/baja/festivo (una fila por día, sin `fecha_fin`) — antes Alejandra no lo sabía y llegó a decir que no existía forma de trackear vacaciones.
+   - Modo de cron `check_fichajes` tenía instrucciones escritas pero ningún tramo horario lo activaba nunca (dead code) — activado a las 16:00 y movido a los modos con NEXUS completo (herramientas reales).
+   - De paso, mismo bug de `resumen_dia` (17-19 excluía la propia hora de disparo del cron, 19) corregido a 17-19 inclusive; y la consulta "FICHAJES HOY" del cron (columnas/tabla inexistentes) corregida junto con "Personal activo".
+   - Sesión en paralelo (**task_54e30eeb**, terminó sola y se pusheó como `99eea6f`): mismo barrido sobre las dos consultas restantes del bloque de negocio (`bobinasStock`/`equiposRevision`) — ver detalle en la entrada de abajo, ya integrada aquí.
+
+**4. Bugs encontrados en pruebas reales de fichaje (commits `fc16701`, `fff57cc`):**
+   - Probado "Adrián + María" (opción pinchable) → se guardó **María + Alberto**, no Adrián. Alberto resultó ser `usuario_id=1`, una cuenta **desactivada** (duplicado antiguo de la limpieza DATA-ALBERTO del 25/07) — `consultar_bd` no filtraba `activo=1`. Fix: instrucción explícita de filtrar activo y de NUNCA sustituir un nombre confirmado por otro sin decirlo. Registro erróneo borrado (`fichajes.id=393`).
+   - Adrián: "no puede hacerlo en pares" (combinaciones tipo "Adrián + María", "Adrián + Juan José"... no escala) + "tiene que ser individuales" + "poner la opción 'lo escribo yo'". Cambiado a una opción `<<OPCIONES:>>` por persona + una opción fija "Lo escribo yo" para texto libre.
+   - Segunda ronda de pruebas (Yousuf/Tarik/Adrián en Edison Montajes) destapó OTRO duplicado real: dos usuarios activos llamados "Adrian"/"Adrián" (`id=68`, un empleado de pruebas sin email, y `id=35`, la cuenta real) — Alejandra fichó a los dos. `id=68` desactivado en D1 (mismo patrón `activo=0`, `codigo='_del_68'`) a petición de Adrián ("quita ese empleado duplicado mío"). Fichaje duplicado (`id=397`) borrado.
+   - NOTIF-02 (commit `fff57cc`): "sigue mandándome notificaciones al teléfono estando en Chrome" — el push automático de fin-de-turno en canal móvil se mandaba siempre, confiando en que cada dispositivo se auto-silenciara (NOTIF-01) — eso no cubre multi-dispositivo (el móvil no sabe que Chrome está activo). Fix: solo se manda si `clienteDesconectado` es `true` (la conexión del que preguntó realmente se cerró) — si sigue conectada, esa persona ya está viendo la respuesta en directo por streaming, el push es siempre redundante.
+
+**5. VOZ-01 (commit `d6cd1ee`, v8.99):** "la voz de Alejandra no me gusta nada, además lee muy lento" + "en ajustes poder modificarlo". Nueva sección "🔊 Voz de Alejandra" en Ajustes → Sistema (PWA): selector de voz + control de velocidad (0.7x-1.6x) + botón "Probar voz", en `localStorage`, compartida por `iaSpeak()`/`alejandraHablar()`. Rate por defecto subido de 1.05 a 1.15. Investigado en vivo: en Chrome de escritorio, Google solo expone una voz española (masculina) vía Web Speech API — no hay forma de conseguir una Google femenina ahí (limitación fija del navegador, no de la app); el selector sí lista voces nativas del sistema (Windows) que si son femeninas deberían funcionar. Heurística automática (`iaGetVoice()`) ya prioriza voz femenina por nombre — sin cambios, confirmado correcto.
+
+**Pendiente para otra sesión:**
+- No verificado en dispositivo Android real que NOTIF-01/NOTIF-02 se comporten como se espera (solo probado el razonamiento del código + D1).
+- El selector de voz nuevo no se probó a fondo si "pegar" el cambio de voz en Android (limitación de plataforma sospechada, no confirmada en el dispositivo real de Adrián).
+- NEW-89 (`/partes-maquinaria` sin comprobación de rol) sigue sin resolver.
 
 ### 01/08/2026 — BOBINAS-STOCK-01 + EQUIPOS-REVISION-01 (alejandra-agente v6.13 → v6.14)
 

@@ -4,6 +4,20 @@
 Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
+ACTUALIZACIÓN v8.99 + alejandra-agente v6.14 (01/08/2026): sesión larga de depuración en vivo
+del chat de Alejandra a partir de "mira la conversación que tengo con Alejandra, no me
+resuelve". Causa real de los "Sin respuesta": el clasificador (Haiku) mandaba avisos
+declarativos de asistencia ("Dani faltó hoy") al experto 'simple' (solo lectura, sin
+escribir_bd) en vez de a 'app' — corregido el prompt del clasificador. Fichajes por lenguaje
+natural funcionando de verdad ("X faltó hoy", "hoy han venido todos"), con aviso proactivo
+diario a las 16:00 (modo de cron check_fichajes que llevaba escrito pero nunca se activaba).
+Dos bugs de datos reales encontrados y corregidos en pruebas en vivo: consultar_bd no filtraba
+activo=1 (fichó cuentas duplicadas desactivadas) y opciones pinchables en combinaciones que no
+escalaban (cambiado a una opción por persona + "Lo escribo yo"). Notificaciones push
+duplicadas multi-dispositivo corregidas en dos capas (sw.js + servidor, solo manda push si la
+conexión de quien preguntó se cerró de verdad). Nueva sección "Voz de Alejandra" en Ajustes
+(selector de voz + velocidad). Ver SESION.md para el detalle commit a commit.
+
 BOBINAS-STOCK-01 + EQUIPOS-REVISION-01 (01/08/2026, sin cambio de versión de frontend — solo
 alejandra-agente/worker.js, v6.13 → v6.14): siguiendo de FICHAJES-PROACTIVO-01 (sesión anterior,
 commit 29bf6bb), el mismo bloque de INTELIGENCIA DE NEGOCIO en el cron de alejandra-agente tenía

@@ -1,10 +1,48 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización vigente: 01/08/2026 — BOBINAS-STOCK-01 y EQUIPOS-REVISION-01: dos
-  consultas más de INTELIGENCIA DE NEGOCIO (cron de alejandra-agente) que fallaban en silencio
-  por columnas/tablas inexistentes, mismo patrón que FICHAJES-PROACTIVO-01. Ver sección de
-  errores y esta misma zona más abajo.
+  Última actualización vigente: 01/08/2026 — depuración en vivo del chat de Alejandra: causa
+  real de "Sin respuesta" (clasificador mandaba avisos de asistencia a un experto sin
+  escribir_bd), fichajes por lenguaje natural + aviso proactivo, notificaciones duplicadas
+  multi-dispositivo, y ajuste de voz en Ajustes. Ver sección de errores y esta misma zona
+  más abajo.
+
+[✓ HECHO PWA/Office v8.98-v8.99, alejandra-agente v6.14] SESION-CHAT-01 — depuración en vivo
+  del chat de Alejandra: "Sin respuesta", fichajes, notificaciones duplicadas, voz
+    · Adrián: "mira la conversación que tengo con Alejandra, no me resuelve". Se leyó
+      alejandra_historial directamente en D1 para diagnosticar en vez de solo revisar código.
+    · "Sin respuesta" (causa real, no solo el streaming): el clasificador (Haiku) mandaba
+      avisos declarativos de asistencia ("Dani faltó hoy") al experto 'simple', que solo
+      tiene consultar_bd, sin escribir_bd — no podía registrar nada y se quedaba mudo.
+      Corregido el prompt del clasificador para reconocer HECHOS que implican escribir en
+      BD, no solo órdenes imperativas. De paso, llamarAnthropicStream() perdía en silencio
+      cualquier tool_use de la fase final de streaming (solo escuchaba texto) — corregido
+      también, aunque la causa real era la clasificación.
+    · Fichajes por lenguaje natural: documentado que fichajes.estado ya cubre
+      presente/retraso/ausencia/vacaciones/baja/festivo (antes Alejandra no lo sabía y
+      llegó a decir que no existía forma de trackear vacaciones). "Dani faltó hoy" y "hoy
+      han venido todos" funcionan de verdad, con validación posterior en D1.
+    · Aviso proactivo diario: modo de cron check_fichajes tenía instrucciones escritas pero
+      ningún tramo horario lo activaba nunca (dead code) — activado a las 16:00.
+    · 2 bugs de datos reales encontrados en pruebas en vivo: consultar_bd no filtraba
+      activo=1 (fichó a una cuenta duplicada desactivada de "Alberto" en vez de la real) y
+      dos usuarios activos duplicados llamados "Adrian"/"Adrián" en Edison Montajes (fichó a
+      los dos) — el duplicado (id=68) desactivado en D1 a petición de Adrián. Fix de prompt:
+      filtrar activo=1 siempre y nunca sustituir un nombre confirmado por otro sin decirlo.
+    · Opciones pinchables <<OPCIONES:>>: probado que ofrecer combinaciones ("Adrián +
+      María", "Adrián + Juan José"...) no escala con más de 2-3 personas — cambiado a una
+      opción por persona + una opción fija "Lo escribo yo" para texto libre.
+    · NOTIF-01/02: el push de fin de turno se mandaba siempre en canal móvil, confiando en
+      que cada dispositivo se auto-silenciara si tenía la conversación en primer plano — no
+      cubre multi-dispositivo (el móvil no sabe que Chrome está activo en el ordenador).
+      Corregido en dos pasos: sw.js ya no muestra el push si hay una ventana en primer
+      plano; y el servidor solo lo manda si la conexión de quien preguntó se cerró de
+      verdad (si sigue conectada, ya está viendo la respuesta en directo).
+    · VOZ-01: nueva sección "🔊 Voz de Alejandra" en Ajustes → Sistema (selector de voz +
+      velocidad + botón de prueba). En Chrome de escritorio, Google solo expone una voz
+      española (masculina) — limitación fija del navegador, no de la app; el selector
+      permite elegir voces nativas del sistema como alternativa.
+    · Ver SESION.md para el detalle completo, commit a commit.
 
 [✓ HECHO alejandra-agente v6.14] BOBINAS-STOCK-01 y EQUIPOS-REVISION-01 — alertas proactivas de
   stock de bobinas y revisión de equipos nunca funcionaron (fallo silencioso)
