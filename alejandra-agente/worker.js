@@ -163,7 +163,13 @@ EJEMPLOS:
 ✓ CORRECTO: "Voy a registrar las bobinas → ejecuto escribir_bd → valido con validar_cambios_bd(SELECT COUNT(*) FROM bobinas WHERE num_albaran=?) → Digo 'Registradas ✅ 5 bobinas de albarán 632404024'"
 ✗ INCORRECTO: "Voy a registrar las bobinas" → ejecuto escribir_bd → NO valido → "Todo registrado" (ESTO TE DEJARÁ TIRADO SI ALGO FALLÓ)
 
-PUNTUACIÓN CRÍTICA: Si la validación falla y lo ocultas, he fallado completamente. Siempre reporta el resultado real, no lo que esperas que sea.`,
+PUNTUACIÓN CRÍTICA: Si la validación falla y lo ocultas, he fallado completamente. Siempre reporta el resultado real, no lo que esperas que sea.
+
+FICHAJES / ASISTENCIA — TABLA fichajes(id, empresa_id, usuario_id, personal_externo_id, obra_id, fecha, hora_entrada, hora_salida, horas_trabajadas, horas_extra, minutos_retraso, estado, motivo, notas, registrado_por, departamento, created_at). estado acepta: 'presente' (normal), 'retraso', 'ausencia', 'vacaciones', 'baja', 'festivo'.
+· NO existe una tabla separada de "ausencias" ni un campo de vacaciones en la tabla usuarios — NO lo digas ni lo inventes. Faltar/estar de vacaciones/de baja es UNA FILA de fichajes con el estado correspondiente ese día (una fila por día, no hay fecha_fin: un rango de varios días son varias filas, una por fecha).
+· "Dani faltó hoy" / "Dani no ha venido" → resuelve el usuario_id de Dani con consultar_bd (por nombre, en su empresa), comprueba si ya hay fichaje suyo hoy (único por empresa_id+fecha+usuario_id: si ya existe, usa UPDATE en vez de INSERT) y escribir_bd un fichaje de hoy con estado='ausencia' (horas=0). Igual patrón para 'vacaciones'/'baja' (una fila por cada día del rango si te dan varios días).
+· "hoy han venido todos, no falta nadie" / "ficha a los chicos" → con consultar_bd identifica el personal activo de la obra/departamento del usuario que TODAVÍA no tenga fichaje hoy, y crea un fichaje estado='presente' para cada uno de golpe (no preguntes uno a uno salvo lista ambigua o con nombres repetidos).
+· Sigue siempre el patrón de validación de arriba (escribir_bd → validar_cambios_bd → solo entonces confirmar "Registrado").`,
 
   tecnica: `INFRAESTRUCTURA PROPIA:
 - Worker: alejandra-agente.alejandra-app.workers.dev (Cloudflare Workers, ES modules)
@@ -3598,11 +3604,20 @@ export default {
         const [obrasActivas, bobinasStock, fichajesHoy, equiposRevision, gastosRecientes, incidenciasAbiertas, personalActivo, materialesObra] = await Promise.all([
           env.DB.prepare(`SELECT id, nombre FROM obras WHERE estado IN ('activa','en_curso','abierta') LIMIT 20`).all().catch(() => ({results:[]})),
           env.DB.prepare(`SELECT nombre, metros_restantes, metros_totales, ROUND(metros_restantes*100.0/metros_totales,1) as pct FROM bobinas WHERE metros_totales > 0 AND metros_restantes < (metros_totales * 0.20) AND metros_restantes > 0 ORDER BY pct ASC LIMIT 10`).all().catch(() => ({results:[]})),
-          env.DB.prepare(`SELECT f.tipo, p.nombre, f.hora FROM fichajes f LEFT JOIN personal p ON p.id = f.usuario_id WHERE date(f.fecha) = date('now') ORDER BY f.hora DESC LIMIT 30`).all().catch(() => ({results:[]})),
+          // FICHAJES-PROACTIVO-01 (01/08/2026): la tabla real es fichajes(usuario_id,
+          // personal_externo_id, fecha, hora_entrada, estado...) — no existen `f.tipo`,
+          // `f.hora` ni una tabla `personal` (es `usuarios`/`personal_externo`). Esta
+          // consulta fallaba en SILENCIO (el .catch de abajo) desde siempre, así que
+          // "FICHAJES HOY" en el prompt del cron nunca reflejaba la realidad.
+          env.DB.prepare(`SELECT f.estado, COALESCE(u.nombre, pe.nombre) as nombre, f.hora_entrada as hora
+            FROM fichajes f
+            LEFT JOIN usuarios u ON u.id = f.usuario_id
+            LEFT JOIN personal_externo pe ON pe.id = f.personal_externo_id
+            WHERE f.fecha = date('now') ORDER BY f.hora_entrada DESC LIMIT 30`).all().catch(() => ({results:[]})),
           env.DB.prepare(`SELECT nombre, tipo, ultima_revision, CAST(julianday('now') - julianday(ultima_revision) AS INTEGER) as dias_sin FROM equipos WHERE ultima_revision IS NOT NULL AND julianday('now') - julianday(ultima_revision) > 25 LIMIT 10`).all().catch(() => ({results:[]})),
           env.DB.prepare(`SELECT SUM(importe) as total, COUNT(*) as n FROM gastos WHERE fecha >= date('now', '-7 days')`).first().catch(() => ({total:0,n:0})),
           env.DB.prepare(`SELECT COUNT(*) as n FROM incidencias WHERE estado IN ('abierta','pendiente')`).first().catch(() => ({n:0})),
-          env.DB.prepare(`SELECT COUNT(*) as n FROM personal WHERE activo = 1`).first().catch(() => ({n:0})),
+          env.DB.prepare(`SELECT COUNT(*) as n FROM usuarios WHERE activo = 1`).first().catch(() => ({n:0})),
           env.DB.prepare(`SELECT obra_nombre, SUM(cantidad * precio_unitario) as coste_total, COUNT(*) as lineas FROM materiales_obra WHERE fecha >= date('now', '-7 days') GROUP BY obra_nombre LIMIT 10`).all().catch(() => ({results:[]}))
         ]);
         negocio = {
@@ -3624,7 +3639,15 @@ export default {
       if (diaDelMes === 1 && horaLocal >= 8 && horaLocal < 10) modoCron = 'mensual';
       else if (diaSemana === 1 && horaLocal >= 7 && horaLocal < 9) modoCron = 'semanal';
       else if (horaLocal >= 7 && horaLocal < 9) modoCron = 'briefing_matutino';
-      else if (horaLocal >= 17 && horaLocal < 19) modoCron = 'resumen_dia';
+      // FICHAJES-PROACTIVO-01 (01/08/2026): Adrián pidió que Alejandra pregunte sola si no
+      // le han dicho quién ha venido/faltado hoy. 'check_fichajes' ya tenía instrucciones
+      // (más abajo) pero ningún tramo horario la disparaba nunca — quedaba muerta desde
+      // que se escribió. El cron real dispara a las horaLocal {7,10,13,16,19,21}; 16 caía
+      // siempre en 'normal' (sin tools, no puede avisar de nada). También corregido el
+      // límite de 'resumen_dia' (17-19 excluía la propia hora 19 en la que dispara el cron,
+      // así que ese modo tampoco se activaba nunca).
+      else if (horaLocal === 16) modoCron = 'check_fichajes';
+      else if (horaLocal >= 17 && horaLocal <= 19) modoCron = 'resumen_dia';
       else if (horaLocal >= 21 && horaLocal < 23) modoCron = 'reflexion';
 
       // ── PREDICCIÓN DE AGOTAMIENTO DE STOCK ──────────────────────────────
@@ -3786,10 +3809,11 @@ export default {
       if (negocio.obras?.length > 0) partes.push(`OBRAS ACTIVAS (${negocio.obras.length}): ${negocio.obras.map(o => o.nombre).join(', ')}.`);
       if (negocio.bobinas_bajas?.length > 0) partes.push(`⚠️ BOBINAS STOCK BAJO: ${negocio.bobinas_bajas.map(b => `${b.nombre} al ${b.pct}% (${b.metros_restantes}m de ${b.metros_totales}m)`).join('; ')}.`);
       if (negocio.fichajes_hoy?.length > 0) {
-        const entradas = negocio.fichajes_hoy.filter(f => f.tipo === 'entrada');
-        partes.push(`FICHAJES HOY: ${entradas.length} entradas. ${entradas.slice(0,5).map(f => `${f.nombre} (${f.hora})`).join(', ')}${entradas.length > 5 ? '...' : ''}`);
-      } else if (horaLocal >= 8 && horaLocal <= 11) {
-        partes.push(`⚠️ FICHAJES HOY: ninguno registrado (${horaLocal}:00).`);
+        const presentes = negocio.fichajes_hoy.filter(f => ['presente','retraso'].includes(f.estado));
+        const ausentes  = negocio.fichajes_hoy.filter(f => ['ausencia','baja','vacaciones','festivo'].includes(f.estado));
+        partes.push(`FICHAJES HOY: ${presentes.length} presentes${ausentes.length ? `, ${ausentes.length} ausentes/vacaciones/baja` : ''}. ${presentes.slice(0,5).map(f => f.nombre).join(', ')}${presentes.length > 5 ? '...' : ''}`);
+      } else if (horaLocal >= 8 && horaLocal <= 16) {
+        partes.push(`⚠️ FICHAJES HOY: ninguno registrado todavía (${horaLocal}:00).`);
       }
       if (negocio.equipos_revision?.length > 0) partes.push(`⚠️ EQUIPOS REVISIÓN VENCIDA: ${negocio.equipos_revision.map(e => `${e.nombre} (${e.tipo}, ${e.dias_sin} días sin revisión)`).join('; ')}.`);
       if (negocio.gastos_semana?.total > 0) partes.push(`GASTOS (7 días): ${negocio.gastos_semana.total?.toFixed?.(2) || negocio.gastos_semana.total}€ en ${negocio.gastos_semana.n} registros.`);
@@ -3815,10 +3839,12 @@ export default {
 - Tareas pendientes del día anterior
 Envía el briefing a Adrián con iniciar_conversacion. Máx 15 líneas, claro y accionable.`,
 
-        check_fichajes: `MODO CHECK FICHAJES — Revisa quién ha fichado y quién falta.
-- Si hay operarios activos que no han fichado y es >8:30, avisa al encargado.
-- Si detectas patrones anómalos (misma persona sin fichar 3+ días), escala.
-- No molestes por personal de oficina o roles que no fichan.`,
+        check_fichajes: `MODO CHECK FICHAJES — Son las 16:00, revisa si se ha registrado la asistencia de hoy.
+- Si "FICHAJES HOY" muestra 0 o solo unos pocos frente al personal activo esperado, usa enviar_push o iniciar_conversacion para preguntar directamente: "¿Quién ha venido hoy? Dime si alguien ha faltado y te lo registro."
+- Si el usuario ya respondió esto durante el día (revisa el historial de la conversación), NO vuelvas a preguntar — responde SIN_ACCION.
+- Si detectas patrones anómalos (misma persona sin fichar 3+ días), escala con iniciar_conversacion.
+- No molestes fines de semana ni por personal de oficina o roles que no fichan.
+- No preguntes si ya hay fichajes para todo el personal activo esperado hoy.`,
 
         resumen_dia: `MODO RESUMEN DIARIO — Genera un resumen del día para Adrián:
 - Fichajes: quién ha trabajado, cuántas horas estimadas
@@ -3895,7 +3921,7 @@ REGLAS GENERALES:
       // ── OPTIMIZACIÓN: Modelo según modo ─────────────────────────────────
       // Modo "normal" (monitorización) → Haiku (barato, $1/$5 por Mtok)
       // Modos importantes (briefing, resumen, reflexión, semanal, mensual) → Sonnet (potente, $3/$15)
-      const modosImportantes = ['briefing_matutino', 'resumen_dia', 'reflexion', 'semanal', 'mensual'];
+      const modosImportantes = ['briefing_matutino', 'resumen_dia', 'reflexion', 'semanal', 'mensual', 'check_fichajes'];
       let respuesta;
 
       if (modosImportantes.includes(modoCron)) {
