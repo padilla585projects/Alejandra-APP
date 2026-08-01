@@ -1297,6 +1297,28 @@ const TOOL_BORRAR_ESQUEMA = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// ARC-013 (02/08/2026) — DDL en caliente sin silenciar el error.
+//
+// Copia deliberada del helper de `worker.js` (raiz). Los dos workers son codigo
+// separado y comparten la misma D1: un DDL que falle aqui produce exactamente el
+// mismo bug silencioso. Ver la regla de los dos cerebros en CLAUDE.md.
+//
+// El duplicado es el funcionamiento normal del patron idempotente y no se registra.
+// Todo lo demas si, incluido `no such table` — que es el bug que se busca.
+const DDL_DUPLICADO = /duplicate column name|already exists/i;
+
+async function runDDL(env, sql) {
+  try {
+    await env.DB.prepare(sql).run();
+    return true;
+  } catch (e) {
+    const msg = (e && e.message) || String(e);
+    if (DDL_DUPLICADO.test(msg)) return false;
+    console.error('[DDL]', String(sql).replace(/\s+/g, ' ').trim().slice(0, 140), '->', msg);
+    return false;
+  }
+}
+
 // MODULO GRAFICOS / PREGUNTAS (NEW-XXX, 22/07/2026). Logica pura,
 // duplicada tal cual en worker.js (raiz): ambos comparten la misma BD
 // D1 (alejandra-db), no hace falta proxy via Service Binding porque no
@@ -4069,7 +4091,7 @@ async function ensureNewTables(env) {
     )`
   ];
   for (const sql of migrations) {
-    await env.DB.prepare(sql).run().catch(() => {});
+    await runDDL(env, sql);
   }
   _tablesEnsured = true;
   // Seed normativa y alertas si están vacías
@@ -7597,13 +7619,13 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (accion === 'crear') {
           if (!input.titulo) return '❌ El título es obligatorio para crear una tarea.';
           // Ensure table exists
-          await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tareas_obra (
+          await runDDL(env, `CREATE TABLE IF NOT EXISTS tareas_obra (
             id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
             titulo TEXT NOT NULL, descripcion TEXT, asignado_a TEXT, fase_id INTEGER,
             estado TEXT DEFAULT 'pendiente', prioridad TEXT DEFAULT 'normal',
             fecha_limite TEXT, ubicacion TEXT, notas TEXT, created_by TEXT,
             created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
-          )`).run().catch(()=>{});
+          )`);
           const res = await env.DB.prepare(
             `INSERT INTO tareas_obra (obra_id,empresa_id,titulo,descripcion,asignado_a,estado,prioridad,fecha_limite,ubicacion,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`
           ).bind(obraId,empresa_id||1,input.titulo,input.descripcion||null,input.asignado_a||null,
@@ -7657,14 +7679,14 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const eid    = empresa_id || 1;
 
         // Ensure table
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS rfis (
+        await runDDL(env, `CREATE TABLE IF NOT EXISTS rfis (
           id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
           numero TEXT, titulo TEXT NOT NULL, categoria TEXT DEFAULT 'otro',
           descripcion TEXT, estado TEXT DEFAULT 'abierta', prioridad TEXT DEFAULT 'normal',
           creado_por TEXT, asignado_a TEXT, respuesta TEXT, respondido_por TEXT,
           fecha_respuesta TEXT, fecha_limite TEXT, impacto_plazo INTEGER DEFAULT 0,
           impacto_coste INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now'))
-        )`).run().catch(()=>{});
+        )`);
 
         if (accion === 'listar') {
           let q = 'SELECT * FROM rfis WHERE empresa_id=?';
@@ -7758,7 +7780,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const eid    = empresa_id || 1;
 
         // Ensure table
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ordenes_cambio (
+        await runDDL(env, `CREATE TABLE IF NOT EXISTS ordenes_cambio (
           id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
           numero TEXT, titulo TEXT NOT NULL, descripcion TEXT, rfi_id INTEGER,
           estado TEXT DEFAULT 'propuesta', categoria TEXT DEFAULT 'general',
@@ -7766,7 +7788,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           solicitado_por TEXT, aprobado_por TEXT,
           fecha_propuesta TEXT, fecha_aprobacion TEXT, notas TEXT,
           created_at TEXT DEFAULT (datetime('now'))
-        )`).run().catch(()=>{});
+        )`);
 
         if (accion === 'resumen') {
           const totales = await env.DB.prepare(
@@ -7878,13 +7900,13 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const eid    = empresa_id || 1;
 
         // Ensure table
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS actas_reunion (
+        await runDDL(env, `CREATE TABLE IF NOT EXISTS actas_reunion (
           id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
           numero TEXT, titulo TEXT NOT NULL, tipo TEXT DEFAULT 'progreso',
           fecha TEXT, convocante TEXT, asistentes TEXT, resumen TEXT, acuerdos TEXT,
           proxima_reunion TEXT, estado TEXT DEFAULT 'borrador',
           created_at TEXT DEFAULT (datetime('now'))
-        )`).run().catch(()=>{});
+        )`);
 
         if (accion === 'listar') {
           let q = 'SELECT * FROM actas_reunion WHERE empresa_id=?';
@@ -7947,12 +7969,12 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           // Parsear líneas numeradas o guionadas como tareas
           const lineas = acuerdosText.split(/\n/).map(l => l.replace(/^[\d\.\-\*]\s*/,'').trim()).filter(l => l.length > 10);
           if (!lineas.length) return '❌ No se encontraron acuerdos parseables como tareas.';
-          await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tareas_obra (
+          await runDDL(env, `CREATE TABLE IF NOT EXISTS tareas_obra (
             id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
             titulo TEXT NOT NULL, descripcion TEXT, estado TEXT DEFAULT 'pendiente',
             prioridad TEXT DEFAULT 'normal', asignado_a TEXT, fecha_limite TEXT,
             ubicacion TEXT, created_at TEXT DEFAULT (datetime('now'))
-          )`).run().catch(()=>{});
+          )`);
           let creadas = 0;
           for (const linea of lineas.slice(0, 10)) {
             // Intenta extraer responsable: "texto - Nombre" o "texto (Nombre)"
@@ -8004,7 +8026,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const eid    = empresa_id || 1;
 
         // Ensure table
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS control_calidad (
+        await runDDL(env, `CREATE TABLE IF NOT EXISTS control_calidad (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           obra_id INTEGER, empresa_id INTEGER NOT NULL,
           numero TEXT, titulo TEXT NOT NULL,
@@ -8016,7 +8038,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           fecha_limite TEXT, fecha_resolucion TEXT,
           resuelto_por TEXT, notas_resolucion TEXT,
           created_at TEXT DEFAULT (datetime('now'))
-        )`).run().catch(()=>{});
+        )`);
 
         if (accion === 'listar') {
           let q = 'SELECT * FROM control_calidad WHERE empresa_id=?';
