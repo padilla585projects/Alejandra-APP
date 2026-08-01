@@ -17,4 +17,6 @@ Foundation v0.1 aprobada. F-0.1 está **cerrada localmente**: CI, CD, secretos y
 
 ## Siguiente paso
 
-Revisar F-0.1, configurar las protecciones manuales de GitHub y validar workflows en una PR. No iniciar el Núcleo Cognitivo.
+**Activar y validar F-0.1 en GitHub remoto mediante rama y PR segura** — tarea `F-0.1-R` en `TASKS.md`, detalle en `HANDOFF.md`.
+
+No iniciar el Núcleo Cognitivo ni abrir fases nuevas.

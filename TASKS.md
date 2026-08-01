@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: contrato vacío. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **una tarea activa** (F-0.1-R). No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Reglas
 
@@ -28,38 +28,39 @@ Pruebas:
 Siguiente acción exacta:
 ```
 
-## F-0.1 — Entrega segura
+## TAREA ACTIVA
 
-- ID: F-0.1
-- Título: Separación segura de CI, despliegues, secretos y migraciones D1
-- Fase: Fundación técnica
-- Estado: en revisión
+### F-0.1-R — Activar y validar F-0.1 en GitHub remoto
+
+- ID: F-0.1-R
+- Título: Activar y validar F-0.1 en GitHub remoto mediante rama y PR segura
+- Fase: Época 0 — Fundación y entrega segura
+- Estado: lista
 - Prioridad: P0
 - Rama: `codex/foundation-close`
-- Responsable actual: Codex
-- Objetivo: separar validación, publicación, despliegues, migraciones D1 y configuración de secretos sin modificar producción.
-- Criterios de aceptación: PR solo valida; push no altera producción; Workers y Pages se despliegan solo de forma explícita; migraciones y secretos son operaciones explícitas independientes; pruebas locales completas y documentación actualizada.
-- Dependencias: protección y revisores del entorno GitHub `production`, protección de `main` y secretos de entorno, que requieren intervención con acceso administrativo.
-- Bloqueos: no hay autenticación GitHub disponible para verificar o configurar controles remotos. No bloquea los cambios versionados.
-- Archivos principales: `.github/workflows/`, `CLAUDE.md`, ADR-0001 y runbook de CI/CD/migraciones.
-- Pruebas: YAML de los seis workflows válido; `node --check` válido para ambos Workers; 85/85 tests del agente superados; validación remota pendiente.
-- Última actualización: 2026-08-01
-- Siguiente acción exacta: revisar los commits de F-0.1, configurar controles remotos de GitHub y validar una PR sin desplegar.
-
-## GOV-001 — Engineering Workflow
-
-- ID: GOV-001
-- Título: Consolidación del proceso operativo de ingeniería
-- Fase: Gobierno transversal; no crea una fase del roadmap
-- Estado: en revisión
-- Prioridad: Alta
-- Rama: `codex/foundation-close`
-- Responsable actual: Codex
-- Objetivo: establecer un proceso único, independiente del modelo de IA, sin duplicar normas del repositorio.
-- Criterios de aceptación: `ENGINEERING_WORKFLOW.md` define inicio, relevo, ramas, commits, PRs, fases, prompts, jerarquía y terminado; referencias actualizadas; sin código ni arquitectura modificados.
-- Dependencias: fuentes documentales vigentes y ADRs relacionados.
-- Bloqueos: discrepancia histórica detectada entre el estado vivo y algunas referencias de `MASTER_ROADMAP.md`; no resuelta automáticamente.
-- Archivos principales: `ENGINEERING_WORKFLOW.md`, `AGENTS.md`, `START_HERE.md`, `docs/DOCUMENTATION-REGISTER.md`.
-- Pruebas: revisión de enlaces, jerarquía y ausencia de duplicación operativa.
+- Responsable actual: `PENDIENTE` — requiere acceso administrativo a GitHub
+- Objetivo: que la separación de CI/CD implementada localmente pase a ser efectiva en producción, sin desplegar nada durante el proceso.
+- Criterios de aceptación:
+  1. Los 4 workflows antiguos desactivados manualmente **antes** de integrar.
+  2. PR abierta que ejecute únicamente `ci.yml` y lo supere.
+  3. Integración sin que se dispare ningún despliegue (verificado en la pestaña Actions).
+  4. `main` protegida: PR obligatoria, `ci.yml` como check requerido, sin push directo.
+  5. Entorno `production` creado con revisores requeridos.
+  6. Secretos de Cloudflare movidos al entorno `production`.
+  7. Ensayo con confirmación errónea: el job sale `skipped`, no ejecuta.
+  8. Nada desplegado, migrado ni ningún secreto modificado durante la validación.
+- Dependencias: acceso administrativo a GitHub (Settings, Environments, Branch protection).
+- Bloqueos: ninguno técnico. El token disponible es de solo lectura para configuración; crear entornos y proteger ramas exige permisos de administración.
+- Archivos principales: ninguno — es configuración remota y una PR. No requiere cambios de código.
+- Pruebas: las de `ci.yml` en la PR, más la verificación de que ningún workflow de producción se ejecuta.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: revisar el documento consolidado y decidir si se normalizan las referencias históricas de estado del roadmap mediante cambio documentado.
+- Siguiente acción exacta: desactivar manualmente los 4 workflows antiguos en Actions y abrir la PR de `codex/foundation-close` hacia `main`.
+
+## Completadas — pendientes de aprobación
+
+| ID | Título | Estado | Evidencia |
+|---|---|---|---|
+| F-0.1 | Separación de CI, despliegues, secretos y migraciones D1 | Implementada localmente; en revisión | `a59a2c5`, `6d5d98c`, `96417a5`, `cce5224`. Validada: 6/6 YAML, `node --check` ×2, 85/85 tests, 5/5 criterios de entrega segura. Auditoría remota de GitHub realizada. |
+| GOV-001 | Consolidación del proceso operativo de ingeniería | Completada; en revisión | `f644a6b`. `ENGINEERING_WORKFLOW.md` como proceso único; `AGENTS.md` conserva solo reglas del repositorio y remite a él. |
+
+La discrepancia de estado que GOV-001 dejó registrada en `MASTER_ROADMAP.md` quedó resuelta en la consolidación del 2026-08-02: el roadmap refleja ya ADR-0001/0002 aceptados, F-0.1 implementada localmente y la auditoría remota realizada.

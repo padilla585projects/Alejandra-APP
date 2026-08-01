@@ -28,12 +28,13 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 |---|---|
 | Fase 0 — auditoría | Completada documentalmente. |
 | Fase 0.5 — continuidad | Completada documentalmente. |
-| Foundation v0.1 | Declarada aprobada en `PROJECT_STATE.md`; COH-001/COH-002 continúan registrados históricamente. |
-| Fase 1 — contrato cognitivo | Documentada; ADR-0002 propuesto. |
+| Foundation v0.1 | Aprobada. COH-001 cerrado por ADR-0005 y COH-002 por ADR-0002; sin bloqueos de coherencia abiertos. |
+| Fase 1 — contrato cognitivo | Documentada; ADR-0002 **aceptado** como arquitectura objetivo, implementación bloqueada por ARC-001/002/003/004/005. |
 | Fase 2 — motor/modos | Documentada; ADR-0004 propuesto. |
 | Núcleo Cognitivo | No implementado. |
-| Entrega segura | Bloqueante P0: push a `main` despliega y el agente intenta migraciones D1 remotas. |
-| Auditoría remota GitHub/Cloudflare | Pendiente, solo lectura autorizada. |
+| Entrega segura | F-0.1 implementada localmente y pendiente de integración. **El P0 sigue vivo en producción**: los workflows antiguos continúan activos en GitHub hasta que la rama se integre. |
+| Auditoría remota GitHub | Realizada 2026-08-02 en solo lectura: `main` sin protección, entorno `production` inexistente, `github-pages` limitado a `main`, los 5 secretos presentes a nivel de repositorio. |
+| Auditoría remota Cloudflare | Pendiente, solo lectura autorizada. |
 
 ## Épocas y fases
 
@@ -41,14 +42,15 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-0.1 — Separación de CI, despliegue y migraciones**
 
-- Estado/prioridad/tamaño: En revisión / Crítica / M.
+- Estado/prioridad/tamaño: **Implementada localmente — pendiente de integración y validación remota** / Crítica / M.
 - Objetivo y valor: separar integración de producción para evitar despliegues y migraciones accidentales.
 - Alcance/fuera: workflows, entornos, runbooks y validaciones; no cambia funcionalidades ni infraestructura de negocio.
-- Dependencias/bloqueantes/paralelo: ADR-0001 y acceso administrativo; puede ir en paralelo con F-0.2, no con despliegues no aprobados.
-- Referencias/ADR/módulos: auditoría, plan de PRs, ADR-0001; GitHub Actions/Workers/D1.
-- Áreas/migraciones: `.github/workflows`, runbooks; sin migración funcional prevista.
-- Riesgos/compliance/pruebas: interrupción de entrega; mínimo privilegio y aprobación; CI, promoción manual, healthcheck, rollback probado.
+- Dependencias/bloqueantes/paralelo: ADR-0001 (aceptado) y acceso administrativo a GitHub; puede ir en paralelo con F-0.2, no con despliegues no aprobados.
+- Referencias/ADR/módulos: auditoría, plan de PRs, ADR-0001, `docs/runbooks/CI-CD-Y-MIGRACIONES.md`; GitHub Actions/Workers/D1.
+- Áreas/migraciones: `.github/workflows`, runbooks; sin migración funcional prevista. `migrate_008` queda bloqueada (ver ARC-011).
+- Riesgos/compliance/pruebas: interrupción de entrega; mínimo privilegio y aprobación; CI, promoción manual y rollback documentado. Los healthchecks automáticos de Workers se retiraron por diseño: `GET /health` no distingue desplegado de operativo (ver ARC-008); Pages sí conserva verificación de versión servida.
 - Aceptación/recuperación/entregables: `main` no despliega por sí solo; promoción identificable y migración explícita; rollback a artefacto sano; workflow y runbook aprobados.
+- Estado de aceptación: cumplido en el repositorio (validado localmente); **no cumplido en remoto** hasta integrar la rama, proteger `main` y crear el entorno `production`.
 - Resultado/siguiente: Entrega segura v0.2; habilita F-0.2 y cualquier cambio funcional.
 
 **F-0.2 — Inventario remoto, calidad y contratos base**
@@ -278,6 +280,6 @@ Bloqueantes arquitectónicos: ADR-0001 y ADR-0002 aceptados; ADR-0004 pendiente;
 
 ## Contradicciones, simplificaciones y preguntas abiertas
 
-- COH-001 y COH-002 siguen en la revisión Foundation; no se resuelven aquí.
+- COH-001 y COH-002 quedaron resueltos el 2026-08-01 por ADR-0005 y ADR-0002 respectivamente.
 - Simplificación recomendada: validar un vertical por época antes de generalizar; evitar reescribir los dos Workers o crear Marketplace/multiagente antes de registries, permisos y observabilidad.
-- Preguntas: estado de ADR-0001/0002/0004; definición de Nexo; matriz de riesgo/aprobación; gobierno de memoria; alcance de QA; fuentes de conocimiento y métricas de éxito. Todas están enlazadas al backlog o ADRs, no se asumen resueltas.
+- Preguntas: estado de ADR-0004; definición de Nexo; matriz de riesgo/aprobación; gobierno de memoria; alcance de QA; fuentes de conocimiento y métricas de éxito. Todas están enlazadas al backlog o ADRs, no se asumen resueltas. ADR-0001 y ADR-0002 ya están aceptados.
