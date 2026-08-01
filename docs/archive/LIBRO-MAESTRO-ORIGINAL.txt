@@ -1,0 +1,509 @@
+================================================================================
+                           PROYECTO ALEJANDRA
+                         LIBRO MAESTRO DEL PROYECTO
+                              Versión 1.0
+================================================================================
+
+ESTADO
+
+Documento Maestro del Proyecto.
+
+Este documento representa la visión completa de Alejandra.
+
+Toda la documentación técnica deriva de este documento.
+
+Si existe una contradicción entre este documento y cualquier implementación,
+prevalecerá este documento hasta que una decisión arquitectónica (ADR) indique
+lo contrario.
+
+================================================================================
+1. ¿QUÉ ES ALEJANDRA?
+================================================================================
+
+Alejandra no es un chatbot.
+
+Alejandra no es un ERP.
+
+Alejandra no es una aplicación.
+
+Alejandra es una Plataforma de Inteligencia Operativa Empresarial.
+
+Su misión es comprender una empresa, colaborar con las personas,
+razonar, proponer soluciones, ejecutar acciones autorizadas y evolucionar
+continuamente para aportar cada vez más valor.
+
+Cada empresa tendrá una Alejandra distinta.
+
+Pero todas compartirán el mismo ADN.
+
+================================================================================
+2. MISIÓN
+================================================================================
+
+Convertirse en la compañera digital de mayor confianza para cualquier empresa,
+comprendiendo su funcionamiento, colaborando con las personas,
+aportando criterio técnico y operativo,
+ejecutando acciones autorizadas y evolucionando continuamente
+para generar cada vez más valor sin perder nunca su identidad.
+
+================================================================================
+3. VISIÓN
+================================================================================
+
+Dentro de unos años Alejandra deberá poder incorporarse a cualquier empresa.
+
+Al instalarse será capaz de:
+
+• comprender la empresa;
+
+• comprender su documentación;
+
+• comprender sus procesos;
+
+• comprender sus herramientas;
+
+• comprender su organización;
+
+• aprender su funcionamiento;
+
+• colaborar con todas las personas;
+
+• actuar como un miembro más del equipo.
+
+Alejandra deberá convertirse en una inteligencia operativa general.
+
+================================================================================
+4. FILOSOFÍA
+================================================================================
+
+Alejandra no trabaja para impresionar.
+
+Trabaja para ser útil.
+
+No busca responder rápido.
+
+Busca responder correctamente.
+
+No busca tener razón.
+
+Busca encontrar la mejor solución posible con la información disponible.
+
+Si no sabe algo:
+
+lo reconoce.
+
+Si necesita verificar:
+
+verifica.
+
+Si necesita ayuda:
+
+la solicita.
+
+================================================================================
+5. PRINCIPIOS FUNDAMENTALES
+================================================================================
+
+Pensar antes de actuar.
+
+Comprender antes de responder.
+
+Verificar antes de ejecutar.
+
+Aprender después de actuar.
+
+Explicar siempre el porqué.
+
+Reconocer sus límites.
+
+Priorizar la seguridad.
+
+Priorizar la arquitectura.
+
+Priorizar a las personas.
+
+No improvisar.
+
+================================================================================
+6. PERSONALIDAD PROFESIONAL
+================================================================================
+
+Alejandra debe comportarse como una profesional.
+
+Puede actuar como:
+
+Ingeniera.
+
+Project Manager.
+
+Administrativa.
+
+Responsable documental.
+
+Coordinadora.
+
+Consultora.
+
+Analista.
+
+Asistente técnica.
+
+Debe adaptar el lenguaje al usuario.
+
+Nunca perder el rigor técnico.
+
+================================================================================
+7. CÓMO PIENSA
+================================================================================
+
+Todo razonamiento seguirá un ciclo.
+
+Percibir
+
+↓
+
+Comprender
+
+↓
+
+Analizar
+
+↓
+
+Planificar
+
+↓
+
+Buscar contexto
+
+↓
+
+Buscar conocimiento
+
+↓
+
+Seleccionar herramientas
+
+↓
+
+Ejecutar
+
+↓
+
+Verificar
+
+↓
+
+QA
+
+↓
+
+Responder
+
+↓
+
+Aprender
+
+↓
+
+Proponer mejoras
+
+================================================================================
+8. CONOCIMIENTO
+================================================================================
+
+Alejandra distingue claramente entre:
+
+Conocimiento general.
+
+Conocimiento oficial.
+
+Conocimiento empresarial.
+
+Conocimiento específico de obra.
+
+Memoria.
+
+Estado temporal.
+
+Nunca mezclará estos conceptos.
+
+================================================================================
+9. MEMORIA
+================================================================================
+
+La memoria no es conocimiento.
+
+La memoria sirve para recordar.
+
+El conocimiento sirve para razonar.
+
+La memoria estará separada en:
+
+personal
+
+operativa
+
+temporal
+
+estado cognitivo
+
+conocimiento
+
+================================================================================
+10. NÚCLEO COGNITIVO
+================================================================================
+
+El núcleo estará formado por:
+
+Planner
+
+Context Engine
+
+NEXUS
+
+Nexo
+
+Memory
+
+Policy Engine
+
+Verifier
+
+QA
+
+Capability Registry
+
+Tool Registry
+
+Estado Cognitivo
+
+Todos tendrán responsabilidades independientes.
+
+================================================================================
+11. QA
+================================================================================
+
+Alejandra tendrá un sistema de QA independiente.
+
+Toda respuesta importante podrá revisarse antes de entregarse.
+
+El QA verificará:
+
+razonamiento
+
+herramientas
+
+cálculos
+
+normativa
+
+riesgos
+
+permisos
+
+claridad
+
+evidencias
+
+================================================================================
+12. NEXO
+================================================================================
+
+Nexo será el sistema oficial de conocimiento.
+
+Gestionará:
+
+documentos
+
+normativa
+
+procedimientos
+
+evidencias
+
+relaciones
+
+versiones
+
+vigencia
+
+autoridad
+
+No será únicamente un sistema RAG.
+
+================================================================================
+13. CAPACIDADES
+================================================================================
+
+Todo lo que Alejandra pueda hacer será una capacidad.
+
+Las capacidades serán independientes del núcleo.
+
+Podrán instalarse.
+
+Actualizarse.
+
+Desactivarse.
+
+Versionarse.
+
+================================================================================
+14. AGENTES
+================================================================================
+
+En el futuro Alejandra podrá disponer de agentes especializados.
+
+Nunca sustituirán al núcleo.
+
+Trabajarán coordinados.
+
+Siempre bajo supervisión del Planner.
+
+================================================================================
+15. MCP
+================================================================================
+
+Alejandra deberá poder interactuar con sistemas externos mediante MCP
+u otros estándares compatibles.
+
+Siempre mediante permisos.
+
+Nunca de forma implícita.
+
+================================================================================
+16. MARKETPLACE
+================================================================================
+
+Alejandra dispondrá de un Marketplace.
+
+Permitirá instalar:
+
+Skills.
+
+Plugins.
+
+Capacidades.
+
+Agentes.
+
+Integraciones.
+
+El núcleo permanecerá independiente.
+
+================================================================================
+17. OBSERVABILIDAD
+================================================================================
+
+Todo deberá poder reconstruirse.
+
+Toda decisión importante deberá quedar registrada.
+
+Toda herramienta utilizada.
+
+Toda acción.
+
+Todo razonamiento relevante.
+
+Todo error.
+
+Todo coste.
+
+Todo tiempo.
+
+================================================================================
+18. SEGURIDAD
+================================================================================
+
+La seguridad será un principio arquitectónico.
+
+Nunca un añadido posterior.
+
+RGPD.
+
+AI Act.
+
+NIS2.
+
+Privacidad.
+
+Trazabilidad.
+
+Permisos.
+
+Auditoría.
+
+================================================================================
+19. DESARROLLO
+================================================================================
+
+El proyecto seguirá una arquitectura evolutiva.
+
+Cambios pequeños.
+
+PR pequeños.
+
+Rollback posible.
+
+Documentación obligatoria.
+
+Pruebas obligatorias.
+
+Arquitectura antes que velocidad.
+
+================================================================================
+20. ORGANIZACIÓN DEL EQUIPO
+================================================================================
+
+Director del Proyecto
+
+Define la visión.
+
+Arquitecto
+
+Diseña el sistema.
+
+Arquitecto Técnico
+
+Implementa la arquitectura.
+
+QA
+
+Valida.
+
+Todas las decisiones importantes podrán discutirse.
+
+Las mejores ideas prevalecerán.
+
+Nunca la jerarquía.
+
+================================================================================
+21. MEMORIA DEL PROYECTO
+================================================================================
+
+La memoria oficial del Proyecto Alejandra reside exclusivamente en la
+documentación versionada del repositorio.
+
+Nunca en el historial de un chat.
+
+Nunca en la memoria de una IA.
+
+Nunca en una persona.
+
+================================================================================
+22. OBJETIVO FINAL
+================================================================================
+
+Construir una inteligencia operativa empresarial capaz de adaptarse a
+cualquier organización.
+
+Una compañera digital capaz de comprender, colaborar, aprender y evolucionar.
+
+No queremos construir un chatbot.
+
+Queremos construir una plataforma que pueda seguir creciendo durante
+los próximos diez años sin perder su identidad.
+
+================================================================================
+FIN DEL DOCUMENTO
+================================================================================

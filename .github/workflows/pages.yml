@@ -1,9 +1,16 @@
-name: Deploy to GitHub Pages
+name: Publish GitHub Pages (manual)
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA, tag or branch approved for publication
+        required: true
+        default: main
+      confirmation:
+        description: Type PUBLISH_GITHUB_PAGES to confirm production publication
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -11,45 +18,79 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: github-pages-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    if: github.event.inputs.confirmation == 'PUBLISH_GITHUB_PAGES'
+    # El entorno DEBE llamarse github-pages: actions/deploy-pages@v4 lo exige y
+    # falla por permisos con cualquier otro nombre. Las reglas de aprobacion se
+    # configuran sobre este entorno, no renombrandolo.
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      # Precheck: las tres versiones deben coincidir. Desincronizarlas provoco
+      # bucles de recarga infinita en produccion (incidentes 22/04 y 26/04/2026).
+      - name: Precheck version sync
+        run: |
+          V_JSON=$(grep -oP '(?<="v":")[^"]+' version.json)
+          V_SW=$(grep -oP "(?<=alejandra-v)[\d.]+" sw.js | head -1)
+          V_HTML=$(grep -oP "(?<=APP_VERSION = ')[\d.]+" index.html | head -1)
+          echo "version.json=$V_JSON sw.js=$V_SW index.html=$V_HTML"
+          if [ "$V_JSON" != "$V_SW" ] || [ "$V_JSON" != "$V_HTML" ]; then
+            echo "::error::Versiones desincronizadas. No se publica."
+            exit 1
+          fi
       - name: Setup Pages
         uses: actions/configure-pages@v4
-
-      - name: Prepare site (excluir archivos de backend)
+      - name: Prepare site
         run: |
           mkdir -p _site
-          cp index.html _site/
-          cp panel.html _site/
-          cp alejandra-panel.html _site/ 2>/dev/null || true
-          cp sw.js _site/ 2>/dev/null || true
-          cp .nojekyll _site/ 2>/dev/null || true
-          cp icon-192.png icon-512.png icon.svg _site/ 2>/dev/null || true
-          cp -r icons _site/ 2>/dev/null || true
-          cp -r fonts _site/ 2>/dev/null || true
-          cp -r img _site/ 2>/dev/null || true
-          cp manifest.json _site/ 2>/dev/null || true
-          cp favicon.ico _site/ 2>/dev/null || true
+          cp index.html panel.html _site/
+          for asset in alejandra-panel.html sw.js .nojekyll manifest.json icon-192.png icon-512.png icon.svg favicon.ico; do
+            if [ -f "$asset" ]; then cp "$asset" _site/; fi
+          done
+          for directory in icons fonts img; do
+            if [ -d "$directory" ]; then cp -r "$directory" _site/; fi
+          done
           VERSION=$(grep -oP "(?<=APP_VERSION = ')[\d.]+" index.html | head -1)
           echo "{\"v\":\"$VERSION\"}" > _site/version.json
-          echo "Version desplegada: $VERSION" && ls -lh _site/
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '_site'
-
-      - name: Deploy to GitHub Pages
+          path: _site
+      - name: Publish Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      # Healthcheck exigido por ADR-0001: la publicacion no se da por buena
+      # hasta comprobar que la version servida es la que se acaba de publicar.
+      - name: Healthcheck published version
+        run: |
+          EXPECTED=$(grep -oP "(?<=APP_VERSION = ')[\d.]+" index.html | head -1)
+          URL="${{ steps.deployment.outputs.page_url }}"
+          echo "Esperando propagacion de $URL (esperado v$EXPECTED)"
+          for i in 1 2 3 4 5 6; do
+            sleep 10
+            if BODY=$(curl -fsS "${URL%/}/version.json"); then
+              if SERVED=$(printf '%s' "$BODY" | grep -oP '(?<="v":")[^"]+'); then
+                :
+              else
+                SERVED=""
+              fi
+            else
+              SERVED=""
+            fi
+            echo "Intento $i: servido='$SERVED'"
+            if [ "$SERVED" = "$EXPECTED" ]; then
+              echo "OK: Pages sirve la version $EXPECTED"
+              exit 0
+            fi
+          done
+          echo "::error::Pages no sirve la version $EXPECTED tras 60s. Revisar publicacion."
+          exit 1

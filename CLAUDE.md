@@ -1,14 +1,52 @@
 # CLAUDE.md — Alejandra APP
 
-Lee este archivo SIEMPRE al inicio de cada sesión. Es la guía de arranque para cualquier ordenador.
+Guía de arranque para cualquier IA o desarrollador que abra este repositorio.
+
+> ⛔ **Este archivo NO es la fuente de verdad del proyecto.** Es un índice de arranque y una
+> referencia técnica de la aplicación existente. La fuente de verdad es la documentación
+> versionada descrita abajo. Ante cualquier contradicción entre este archivo y
+> `ARCHITECT_RULES.md` / `AGENTS.md` / `MASTER_PLAN.md`, **prevalece la documentación oficial**.
+
+---
+
+## Lectura obligatoria antes de trabajar
+
+Este es el orden de arranque vigente (sustituye al flujo de sesión anterior):
+
+1. `START_HERE.md` — punto de entrada y siguiente paso aprobado
+2. `PROJECT_STATE.md` — estado real del proyecto
+3. `MASTER_PLAN.md` — visión y principios
+4. `MASTER_ROADMAP.md` — fases, dependencias y orden de ejecución
+5. `ARCHITECT_RULES.md` y `AGENTS.md` — reglas obligatorias de contribución
+6. `ARCHITECT_BACKLOG.md` — riesgos, deuda y decisiones pendientes
+7. `HANDOFF.md` y `TASKS.md` — relevo y cola operativa inmediata
+8. `docs/decisions/` — ADRs (decisiones oficiales)
+
+Jerarquía documental aprobada: **Master Plan → Master Roadmap → ADR → arquitectura/normas → código.**
+Si aparece una contradicción, se detiene el cambio y se resuelve mediante ADR.
+
+### Documentos históricos (NO son estado actual)
+
+`SESION.md`, `ESTADO_APP.txt` e `IDEAS_PENDIENTES.txt` están **archivados de consulta**.
+Conservan historial valioso de versiones, incidentes y bugs, pero **no deben usarse como
+estado, backlog ni fuente de verdad**. No hace falta actualizarlos.
+Ver `docs/DOCUMENTATION-REGISTER.md`.
 
 ---
 
 ## ¿Qué es este proyecto?
 
-**Alejandra APP** es una PWA de gestión industrial (bobinas, equipos, personal, fichajes, documentos, incidencias…) para empresas del sector eléctrico/mecánico. Tiene app móvil (`index.html`) y panel web de oficina (`panel.html`). El backend es un Cloudflare Worker (`worker.js`) con base de datos D1 (SQLite) y almacenamiento R2.
+**Alejandra APP** es una PWA de gestión industrial (bobinas, equipos, personal, fichajes,
+documentos, incidencias…) para empresas del sector eléctrico/mecánico. Tiene app móvil
+(`index.html`) y panel web de oficina (`panel.html`). El backend es un Cloudflare Worker
+(`worker.js`) con base de datos D1 (SQLite) y almacenamiento R2.
 
-El agente IA integrado se llama **Alejandra** (Claude Sonnet via Anthropic API, con herramientas propias, cron nocturno, Telegram, self-audit y propose_fix).
+El agente IA integrado se llama **Alejandra** (Claude via Anthropic API, con herramientas
+propias, cron nocturno, Telegram, self-audit y propose_fix).
+
+La visión a largo plazo (Alejandra 2.0 como plataforma de inteligencia operativa) está en
+`MASTER_PLAN.md`. **No está implementada**: el Núcleo Cognitivo es un contrato de diseño,
+no código existente.
 
 ---
 
@@ -19,50 +57,88 @@ El agente IA integrado se llama **Alejandra** (Claude Sonnet via Anthropic API, 
 | GitHub | https://github.com/padilla585projects/Alejandra-APP (branch: `main`) |
 | App móvil (Pages) | https://padilla585projects.github.io/Alejandra-APP/ |
 | Worker API | https://alejandra-app-api.alejandra-app.workers.dev |
+| Worker IA | https://alejandra-agente.alejandra-app.workers.dev |
 | D1 (BD) | `alejandra-db` — ID: `0c9eccde-78f1-476d-ac68-bf452bec0c62` |
 | R2 (archivos) | `alejandra-app-files` |
 | Cuenta Cloudflare | `padilla585.projects@gmail.com` — ID: `d65ead2b2967bf68ff3848a36cd7b1b4` |
 | Node.js | v24.14.1 |
-| Wrangler | v4.x (autenticado, usa `wrangler.toml` automáticamente) |
+| Wrangler | v4.x |
 
 > ⚠️ `NUEVA_CUENTA.txt` es referencia histórica local (en `.gitignore`, nunca commitear).
-> Usa `.env.example` + Cloudflare/GitHub secrets como fuente operativa actual.
+> Los secretos no se leen, imprimen ni versionan. `.env.example` solo contiene marcadores.
 >
-> 🔑 **¿En otro ordenador y no tienes NUEVA_CUENTA.txt?** Busca aquí:
-> - Secrets de Cloudflare Workers: https://dash.cloudflare.com → Workers → alejandra-app-api → Settings → Variables
-> - Secrets de GitHub Actions (tokens de backup): https://github.com/padilla585projects/Alejandra-APP/settings/secrets/actions
->   - `AGENTE_ADMIN_TOKEN` → token del panel admin del agente (admin.html)
->   - `CLOUDFLARE_API_TOKEN` → token de deploy del worker
-> - Variables de entorno requeridas: ver `.env.example` en la raíz del repo
+> 🔑 **¿En otro ordenador?** Los valores viven en:
+> - Cloudflare: https://dash.cloudflare.com → Workers → Settings → Variables
+> - GitHub Actions: https://github.com/padilla585projects/Alejandra-APP/settings/secrets/actions
+> - Listado de variables requeridas: `.env.example`
 
 ---
 
-## AL INICIO DE CADA SESIÓN (obligatorio)
+## ⛔ Prohibiciones operativas
+
+Estas acciones **requieren autorización humana explícita y runbook aprobado**. No se
+ejecutan por rutina ni por iniciativa de una IA:
+
+- **No desplegar.** Ni `npx wrangler deploy`, ni promoción, ni ningún equivalente.
+- **No ejecutar migraciones** contra D1 remoto.
+- **No modificar secretos** en Cloudflare ni GitHub.
+- **No alterar** Cloudflare, D1, R2 ni configuración de GitHub.
+- **No hacer refactors masivos** ni cambios funcionales fuera del alcance acordado.
+- **No inventar decisiones**: marcar `PENDIENTE` y pedir aprobación.
+
+> ✅ **Entrega segura (F-0.1):** una PR solo ejecuta validaciones; un `push`, incluido a
+> `main`, no despliega Pages ni Workers, no ejecuta migraciones D1 y no reescribe secretos.
+> Producción requiere iniciar manualmente el workflow correspondiente, seleccionar un SHA/tag
+> aprobado, introducir su confirmación exacta y superar la protección del entorno GitHub
+> `production`. Ver `docs/decisions/ADR-0001-ENTREGA-DELIBERADA.md` y
+> `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
+
+---
+
+## Flujo de trabajo
+
+1. Leer las fuentes obligatorias de arriba.
+2. Comprobar el estado de Git y preservar cambios ajenos.
+3. Definir alcance, riesgos, archivos, permisos y validaciones **antes** de editar.
+4. Implementar una unidad coherente; no mezclar limpieza, seguridad y funcionalidades sin relación.
+5. Ejecutar las pruebas pertinentes y registrar resultado, omisiones y motivo.
+6. Actualizar `PROJECT_STATE.md`, `HANDOFF.md`, `CHANGELOG.md` y ADR/runbook cuando corresponda.
+7. Entregar para revisión. **No continuar a una nueva fase sin autorización explícita.**
+
+Ramas: una tarea principal por rama, con prefijos `docs/`, `chore/`, `feat/`, `fix/` y
+formato `tipo/area-descripcion`. Nunca trabajar directamente sobre `main`.
+
+### Verificación antes de commit
 
 ```powershell
-# 1. Situarse en la carpeta correcta (esta copia local del repo)
-cd "C:\Users\Adrian\Downloads\Projects\alejandra-app"
-
-# 2. Sincronizar con GitHub
-git pull
-git status        # debe decir "up to date with 'origin/main'"
-git log --oneline -3
-
-# 3. Leer el estado actual
-# → SESION.md        (¿está LIBRE o EN CURSO?)
-# → IDEAS_PENDIENTES.txt  (bugs y features pendientes)
-# → ESTADO_APP.txt   (versión actual, historial, reglas)
+# Encoding — obligatorio (ver sección CODIFICACIÓN DE ARCHIVOS)
+git diff --staged -- "*.html" "*.js" | Select-String -Pattern "Ã|Â|â€|ï»¿"
+# Si devuelve ALGO → STOP. Hay corrupción de encoding.
 ```
 
-Si `SESION.md` dice **EN CURSO**: otro chat está trabajando. Coordinarse antes de empezar.
+```powershell
+git add <archivos modificados>   # Nunca "git add -A" a ciegas
+git commit -m "tipo: descripción"
+```
 
-**Actualizar `SESION.md` a EN CURSO** con fecha y qué se va a hacer antes de tocar código.
+### Pruebas
+
+```powershell
+node --check worker.js
+node --check alejandra-agente/worker.js
+npm --prefix alejandra-agente test    # 85 tests de políticas y tools
+```
+
+Ejecutar la sintaxis de los Workers cuando se modifiquen, y los tests del agente ante
+cambios de herramientas o políticas. Añadir pruebas negativas de autorización ante
+cambios de seguridad.
 
 ---
 
-## AL FINAL DE CADA SESIÓN (obligatorio)
+## Versionado de la app
 
-### 1. Verificar que las 3 versiones están sincronizadas ANTES del push
+La app tiene tres marcadores de versión que **deben estar sincronizados entre sí**:
+`version.json`, `sw.js` (`alejandra-vX.XX`) e `index.html` (`APP_VERSION`).
 
 ```powershell
 $v  = (gc version.json | ConvertFrom-Json).v
@@ -71,76 +147,35 @@ $h  = [regex]::Match((gc index.html -Raw), "APP_VERSION = '([^']+)'").Groups[1].
 if ($v -ne $sw -or $v -ne $h) { Write-Error "DESINCRONIZADO: json=$v sw=$sw html=$h" } else { Write-Host "OK: $v" }
 ```
 
-> ⛔ Si no coinciden → **NO hacer push**. Corregirlo primero.
-> Este error causó bucles de recarga infinita en producción (incidentes 22/04 y 26/04/2026).
+> ⛔ Desincronizarlos causó bucles de recarga infinita en producción (incidentes 22/04 y
+> 26/04/2026). Si se cambia uno, se cambian los tres.
 
-### 2. Verificar encoding ANTES de commit
-
-```powershell
-# Buscar caracteres corruptos en archivos modificados
-git diff -- "*.html" "*.js" | Select-String -Pattern "Ã|Â|â€|ï»¿"
-# Si sale ALGO → PARAR. Hay corrupción de encoding. Ver sección "CODIFICACIÓN DE ARCHIVOS".
-```
-
-### 3. Commit y push
-
-```powershell
-git add <archivos modificados>   # Nunca "git add -A" a ciegas
-git commit -m "feat/fix: descripción — vX.XX"
-git push
-```
-
-### 3. Actualizar los archivos de estado
-
-- `version.json` → `{"v":"X.XX"}`
-- `ESTADO_APP.txt` → añadir entrada en HISTORIAL DE VERSIONES
-- `IDEAS_PENDIENTES.txt` → marcar resueltos con `[✓ HECHO vX.XX]`
-- `SESION.md` → estado LIBRE + resumen de lo hecho
-
-### 4. Si se tocó `worker.js` → desplegar
-
-```powershell
-npx wrangler deploy
-# Verificar que el deploy incluye bindings DB y FILES
-```
+Subir de versión es una **decisión de entrega**, no un paso automático de cada edición.
+Se decide al preparar una entrega aprobada, no al tocar un archivo.
 
 ---
 
-## Comandos útiles
+## Comandos de diagnóstico (solo lectura)
 
 ```powershell
-# Desplegar worker (siempre via wrangler.toml, NO --name manual)
-npx wrangler deploy
-
-# Ver deploys recientes
-npx wrangler deployments list
-
-# Consultar D1
-npx wrangler d1 execute alejandra-db --command "SELECT * FROM bobinas LIMIT 5"
-
-# Ver logs del worker en tiempo real
-npx wrangler tail
+npx wrangler deployments list                    # ver deploys recientes
+npx wrangler tail                                # logs en tiempo real
+npx wrangler d1 execute alejandra-db --command "SELECT ..." --remote   # requiere autorización
 ```
 
-Guía operativa rápida adicional: `OPERACION_PROYECTO.md`
-
----
-
-## Reglas de código
-
-- **Explicar el plan técnico y esperar confirmación del usuario ANTES de tocar código.**
-- Subir versión en cada cambio funcional (incluso si solo cambia el frontend).
-- Los 3 archivos de versión (`version.json`, `sw.js`, `index.html`) deben estar siempre sincronizados.
-- Deploy del worker: siempre `npx wrangler deploy` (usa `wrangler.toml` → nombre `alejandra-app-api`).
-- La app vieja (`Bobinaap` en GitHub) está **CONGELADA**. No tocar, no deployar.
+> Cualquier comando que **escriba** en D1, R2, Workers o secretos está sujeto a las
+> prohibiciones de arriba.
 
 ---
 
 ## UNA Alejandra, DOS cerebros (CRÍTICO — leer siempre)
 
-> ⚠️ **INCIDENTE 20/07/2026 (SEC-08/SEC-09)**: Se blindó la barrera humana anti-borrado en `worker.js` pero el agente de oficina/app web se quedó SIN blindar durante horas, porque es **código separado**. Casi se deja un flanco abierto.
+> ⚠️ **INCIDENTE 20/07/2026 (SEC-08/SEC-09)**: Se blindó la barrera humana anti-borrado en
+> `worker.js` pero el agente de oficina/app web se quedó SIN blindar durante horas, porque
+> es **código separado**. Casi se deja un flanco abierto.
 
-Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, comparten BD D1). Pero por dentro son **DOS workers con código distinto**, y se le habla desde **4 sitios**:
+Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, comparten BD
+D1). Pero por dentro son **DOS workers con código distinto**, y se le habla desde **4 sitios**:
 
 | Sitio desde el que se habla | Worker que responde | Herramienta de escritura | Barrera destructiva |
 |---|---|---|---|
@@ -149,33 +184,52 @@ Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, com
 | Panel de control standalone (`alejandra-panel.html`, login con Google/token admin) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
 | Chat dev del panel + Telegram | `alejandra-app-api` (`worker.js`) | `sql_query`, `run_migration` | 🔒 Estricta (SEC-08) |
 
-> ⚠️ **`alejandra-panel.html` es un frontend aparte**, con su propio parseo del stream SSE de `/api/chat/stream` — no reutiliza código de `index.html` ni `panel.html`. Cualquier cambio en el formato de eventos SSE (`routing`/`token`/`tool_start`/`tool_end`/`text`/`done`) hay que verificarlo en **los tres** frontends de `alejandra-agente`, no solo en los dos "grandes". (Incidente 29/07/2026: el evento `token` se añadió en mayo y nunca se implementó aquí — la respuesta se generaba bien en el servidor pero no se pintaba nunca.)
+> ⚠️ **`alejandra-panel.html` es un frontend aparte**, con su propio parseo del stream SSE
+> de `/api/chat/stream` — no reutiliza código de `index.html` ni `panel.html`. Cualquier
+> cambio en el formato de eventos SSE (`routing`/`token`/`tool_start`/`tool_end`/`text`/`done`)
+> hay que verificarlo en **los tres** frontends de `alejandra-agente`, no solo en los dos
+> "grandes". (Incidente 29/07/2026: el evento `token` se añadió en mayo y nunca se implementó
+> aquí — la respuesta se generaba bien en el servidor pero no se pintaba nunca.)
 
-**Regla de oro:** toda mejora/fix de **seguridad, tools, permisos o barreras** hay que aplicarla —o decidir conscientemente que no aplica— en **LOS DOS** workers (`worker.js` **y** `alejandra-agente/worker.js`). Si solo se toca uno, quedan descompensados (una Alejandra protegida, la otra no). Antes de cerrar una sesión de seguridad, preguntarse: *"¿esto también afecta al otro cerebro?"*.
+**Regla de oro:** toda mejora/fix de **seguridad, tools, permisos o barreras** hay que
+aplicarla —o decidir conscientemente que no aplica— en **LOS DOS** workers (`worker.js`
+**y** `alejandra-agente/worker.js`). Si solo se toca uno, quedan descompensados (una
+Alejandra protegida, la otra no). Antes de cerrar una sesión de seguridad, preguntarse:
+*"¿esto también afecta al otro cerebro?"*.
 
-**Deploy:** cada worker se despliega por separado. **Los dos tienen CI** (verificado 20/07/2026 — corrige una nota anterior de este archivo que decía que el agente no tenía CI; era obsoleta).
-- `worker.js` → `npx wrangler deploy` en la raíz para probar en el momento; además hay CI (`.github/workflows/deploy-worker.yml`) que redespliega automáticamente al pushear a `main`.
-- `alejandra-agente/worker.js` → `npx wrangler deploy` **dentro de** `alejandra-agente/` para probar en el momento; además hay CI (`.github/workflows/deploy-alejandra-agente.yml`, dispara con cambios en `alejandra-agente/**`) que corre `lib.test.js`, aplica migraciones D1 y redespliega al pushear a `main`.
-- El deploy manual sigue siendo útil para probar en producción ANTES de pushear/commitear (ver flujo habitual de esta sesión), pero ya no es estrictamente necesario para que el cambio llegue a producción una vez está en GitHub: el push a `main` es suficiente para ambos workers.
+Los dos workers se validan en CI y se despliegan por workflows manuales e independientes. Las
+migraciones D1 y la configuración de secretos son operaciones manuales separadas; nunca forman
+parte de un despliegue ordinario. Consultar el runbook antes de cualquier acción de producción.
+
+---
+
+## Esquema de base de datos (deuda conocida)
+
+> ⚠️ El esquema real de D1 **no está definido por las migraciones versionadas**. El código
+> de producción ejecuta DDL en caliente: `worker.js` contiene ~108 `CREATE TABLE IF NOT EXISTS`
+> y ~51 `ALTER TABLE`, muchos silenciados con `.catch(() => {})`. `schema_completo.sql` y los
+> ficheros `migrate_*.sql` son **parciales**, no reproducen el esquema real.
+
+Consecuencia práctica: no asumir que una columna existe por estar en un `.sql`, ni que falta
+por no estarlo. Verificar contra D1 (con autorización) antes de decidir.
+Registrado como deuda en `ARCHITECT_BACKLOG.md`.
 
 ---
 
 ## CODIFICACIÓN DE ARCHIVOS (CRÍTICO — leer siempre)
 
-> ⛔ **INCIDENTE 13/05/2026**: Los archivos `panel.html` y `worker.js` se corrompieron por guardarlos con codificación incorrecta. Costó horas arreglarlo. NUNCA debe volver a ocurrir.
+> ⛔ **INCIDENTE 13/05/2026**: Los archivos `panel.html` y `worker.js` se corrompieron por
+> guardarlos con codificación incorrecta. Costó horas arreglarlo. NUNCA debe volver a ocurrir.
 
-### Reglas obligatorias:
+### Reglas obligatorias
 
-1. **Todos los archivos del proyecto son UTF-8 SIN BOM.** No usar UTF-8 with BOM, no usar Latin-1, no usar Windows-1252.
+1. **Todos los archivos del proyecto son UTF-8 SIN BOM.** No usar UTF-8 with BOM, no usar
+   Latin-1, no usar Windows-1252.
 
-2. **NUNCA abrir ni guardar archivos con un editor que no esté configurado en UTF-8.** Si usas Notepad, VS Code, Notepad++ u otro, verificar que la codificación sea UTF-8 (sin BOM) ANTES de guardar.
+2. **NUNCA abrir ni guardar archivos con un editor que no esté configurado en UTF-8.**
 
-3. **Antes de hacer commit, verificar que no hay caracteres corruptos:**
-   ```powershell
-   # Verificación de encoding — ejecutar SIEMPRE antes de push
-   git diff --staged -- "*.html" "*.js" | Select-String -Pattern "Ã|Â|â€|ï»¿"
-   # Si devuelve ALGO → STOP. Los archivos están corruptos. NO hacer push.
-   ```
+3. **Antes de hacer commit, verificar que no hay caracteres corruptos** (comando en la
+   sección "Verificación antes de commit").
 
 4. **Caracteres válidos que SÍ deben aparecer en el código:**
    - Tildes: á, é, í, ó, ú, ñ, ü (en strings de texto español)
@@ -195,9 +249,9 @@ Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, com
    # CORRECTO — UTF-8 sin BOM
    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
    [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
-   
-   # INCORRECTO — Set-Content por defecto usa UTF-16 en Windows
-   # INCORRECTO — Out-File por defecto añade BOM
+
+   # INCORRECTO — Set-Content por defecto usa la codificación ANSI del sistema
+   # INCORRECTO — Out-File por defecto puede añadir BOM
    ```
 
 7. **Si se detecta corrupción en un archivo ya commiteado:**
@@ -213,16 +267,16 @@ Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, com
 |---|---|
 | `index.html` | App móvil PWA (toda la lógica frontend en un solo archivo) |
 | `panel.html` | Panel web de oficina |
+| `alejandra-panel.html` | Panel de control standalone (frontend independiente) |
 | `worker.js` | Backend Cloudflare Worker `alejandra-app-api` (API REST + Alejandra "dev" + crons) |
-| `alejandra-agente/worker.js` | Worker SEPARADO `alejandra-agente` (Alejandra de la app web/móvil y del panel de oficina). Ver "UNA Alejandra, DOS cerebros" abajo. Tiene sus propios `lib.js`/`lib.test.js` |
+| `alejandra-agente/worker.js` | Worker SEPARADO `alejandra-agente` (Alejandra de la app web/móvil y del panel de oficina). Tiene sus propios `lib.js`/`lib.test.js` |
 | `sw.js` | Service Worker (caché offline, push notifications) |
-| `version.json` | `{"v":"X.XX"}` — versión actual (debe coincidir con sw.js e index.html) |
+| `version.json` | `{"v":"X.XX"}` — debe coincidir con `sw.js` e `index.html` |
 | `wrangler.toml` | Config Cloudflare (bindings D1 y R2) |
-| `schema_completo.sql` | Schema completo de la BD (referencia) |
-| `migrate_*.sql` | Migraciones aplicadas manualmente en D1 |
-| `SESION.md` | Estado de la sesión activa (LIBRE / EN CURSO) |
-| `ESTADO_APP.txt` | Historial completo de versiones, reglas, infraestructura |
-| `IDEAS_PENDIENTES.txt` | Bugs y features pendientes (fuente de verdad para el backlog) |
+| `schema_completo.sql` | Schema de referencia — **parcial**, ver deuda de esquema |
+| `migrate_*.sql` | Migraciones versionadas — **parciales**, ver deuda de esquema |
+| `.github/workflows/` | CI/CD — objeto de la fase F-0.1 |
+| `docs/` | Documentación oficial: ADRs, arquitectura, runbooks, archivo histórico |
 
 ---
 
@@ -242,8 +296,4 @@ Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, com
 
 ## Estado actual
 
-El estado vivo del proyecto se mantiene en:
-
-- `SESION.md` (situación actual de trabajo)
-- `ESTADO_APP.txt` (histórico técnico y de versiones)
-- `IDEAS_PENDIENTES.txt` (backlog y pendientes)
+El estado vivo del proyecto está en `PROJECT_STATE.md`, `HANDOFF.md` y `TASKS.md`.
