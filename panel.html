@@ -19629,8 +19629,38 @@ async function wSend(){
             bubbleEl.innerHTML=_wEsc(textoAcum).replace(/\\n/g,'<br>');
             document.getElementById('wMsgs').scrollTop=document.getElementById('wMsgs').scrollHeight;
             break;
-          case 'done':typing.remove();break;
-          case 'error':typing.remove();addMsg('bot','❌ '+(ev.mensaje||'Error'));break;
+          // SSE-PARIDAD-01 (02/08/2026): este parser descartaba routing, progreso,
+          // thinking y plan. El peor era progreso: generando un plano el worker manda un
+          // contador cada 5s y aquí no se pintaba nada, así que el spinner parecía muerto
+          // entre 30 y 120 segundos. routing faltaba en los DOS chats de panel.html: sin
+          // él no había ninguna señal de que una consulta iba a tardar por buscar en web.
+          case 'routing':
+            if(ev.buscar_web){
+              const b=document.getElementById('wMsgs');
+              const ch=document.createElement('div');ch.className='ai-msg bot';
+              ch.style.cssText='font-size:12px;opacity:0.8';
+              ch.textContent='🌐 Buscando en internet...';
+              b.appendChild(ch);b.scrollTop=b.scrollHeight;
+            }
+            break;
+          case 'progreso':{
+            typing.remove();
+            const b=document.getElementById('wMsgs');
+            let p=document.getElementById('wProgreso');
+            // Un solo chip que se actualiza, no uno nuevo cada 5s.
+            if(!p){p=document.createElement('div');p.id='wProgreso';p.className='ai-msg bot';p.style.cssText='font-size:12px;opacity:0.8';b.appendChild(p);}
+            p.textContent=ev.mensaje||'Trabajando...';
+            b.scrollTop=b.scrollHeight;
+            break;}
+          case 'thinking':case 'plan':{
+            const b=document.getElementById('wMsgs');
+            const ch=document.createElement('div');ch.className='ai-msg bot';
+            ch.style.cssText='font-size:12px;opacity:0.8';
+            ch.textContent=(ev.type==='plan'?'📋 ':'🤔 ')+(ev.objetivo||ev.siguiente_paso||ev.problema||'');
+            b.appendChild(ch);b.scrollTop=b.scrollHeight;
+            break;}
+          case 'done':{typing.remove();const p=document.getElementById('wProgreso');if(p)p.remove();break;}
+          case 'error':{typing.remove();const p=document.getElementById('wProgreso');if(p)p.remove();addMsg('bot','❌ '+(ev.mensaje||'Error'));break;}
         }
       }
     }
@@ -19843,13 +19873,60 @@ document.getElementById('wInput').focus();
               bubbleEl.innerHTML = _aiEsc(textoAcum).replace(/\n/g, '<br>');
               document.getElementById('aiMessages').scrollTop = document.getElementById('aiMessages').scrollHeight;
               break;
-            case 'done':
-              typing.remove();
+            // SSE-PARIDAD-01 (02/08/2026): ver la nota del chat popup. Este parser tenía
+            // exactamente los mismos cuatro huecos.
+            case 'routing':
+              if (ev.buscar_web) {
+                const box = document.getElementById('aiMessages');
+                const ch = document.createElement('div');
+                ch.className = 'ai-msg bot';
+                ch.style.cssText = 'font-size:12px;opacity:0.8';
+                ch.textContent = '🌐 Buscando en internet...';
+                box.appendChild(ch);
+                box.scrollTop = box.scrollHeight;
+              }
               break;
-            case 'error':
+            case 'progreso': {
               typing.remove();
+              const box = document.getElementById('aiMessages');
+              let p = document.getElementById('aiProgreso');
+              // Un solo chip que se actualiza, no uno nuevo cada 5s.
+              if (!p) {
+                p = document.createElement('div');
+                p.id = 'aiProgreso';
+                p.className = 'ai-msg bot';
+                p.style.cssText = 'font-size:12px;opacity:0.8';
+                box.appendChild(p);
+              }
+              p.textContent = ev.mensaje || 'Trabajando...';
+              box.scrollTop = box.scrollHeight;
+              break;
+            }
+            case 'thinking':
+            case 'plan': {
+              const box = document.getElementById('aiMessages');
+              const ch = document.createElement('div');
+              ch.className = 'ai-msg bot';
+              ch.style.cssText = 'font-size:12px;opacity:0.8';
+              ch.textContent = (ev.type === 'plan' ? '📋 ' : '🤔 ') +
+                (ev.objetivo || ev.siguiente_paso || ev.problema || '');
+              box.appendChild(ch);
+              box.scrollTop = box.scrollHeight;
+              break;
+            }
+            case 'done': {
+              typing.remove();
+              const p = document.getElementById('aiProgreso');
+              if (p) p.remove();
+              break;
+            }
+            case 'error': {
+              typing.remove();
+              const p = document.getElementById('aiProgreso');
+              if (p) p.remove();
               appendMsg('bot', '❌ ' + (ev.mensaje || 'Error'));
               break;
+            }
           }
         }
       }

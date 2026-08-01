@@ -948,12 +948,39 @@ async function handleStreamEv(ev, state) {
     finalizarTextoStream(ev.texto, bub);
   }
 
+  // SSE-PARIDAD-01 (02/08/2026): este parser ya recibió el fix de `token` en julio, pero
+  // seguía descartando `progreso`, `thinking` y `plan`. El peor es `progreso`: generando
+  // o editando un plano SVG el worker manda un contador cada 5 s
+  // (alejandra-agente/worker.js:7327) y aquí no se pintaba, así que el usuario veía el
+  // panel parado entre 30 y 120 segundos sin señal de que siguiera trabajando.
+  else if (ev.type === 'progreso') {
+    // Un solo elemento que se actualiza, no uno nuevo cada 5 s.
+    if (!state._progresoEl) {
+      state._progresoEl = document.createElement('div');
+      state._progresoEl.className = 'stream-routing';
+      block.appendChild(state._progresoEl);
+    }
+    state._progresoEl.textContent = ev.mensaje || 'Trabajando…';
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  else if (ev.type === 'thinking' || ev.type === 'plan') {
+    const el = document.createElement('div');
+    el.className = 'stream-routing';
+    // textContent, no innerHTML: el payload lo compone el modelo.
+    el.textContent = (ev.type === 'plan' ? '📋 ' : '🤔 ') +
+      (ev.objetivo || ev.siguiente_paso || ev.problema || '');
+    block.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
   else if (ev.type === 'done') {
     // Si la respuesta llegó por 'token' (camino normal), aquí es donde sabemos
     // que el streaming terminó — hacemos el post-procesado que 'text' hace inline.
     if (state.textBub && state.textoAcumulado != null) {
       finalizarTextoStream(state.textoAcumulado, state.textBub);
     }
+    if (state._progresoEl) { state._progresoEl.remove(); state._progresoEl = null; }
     const parts = [];
     if (ev.experto)      parts.push(`experto: ${ev.experto}`);
     if (ev.busqueda_web) parts.push('web search');
@@ -967,6 +994,7 @@ async function handleStreamEv(ev, state) {
   }
 
   else if (ev.type === 'error') {
+    if (state._progresoEl) { state._progresoEl.remove(); state._progresoEl = null; }
     const el = document.createElement('div');
     el.className = 'msg-b';
     el.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b"><div class="bub-err">❌ ${esc(ev.mensaje||'Error')}</div></div>`;
