@@ -14,7 +14,11 @@ jobs:
     name: Syntax and agent tests
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 es necesario para el check de encoding, que compara contra la
+      # base y no contra ficheros enteros.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -22,6 +26,16 @@ jobs:
         run: |
           node --check worker.js
           node --check alejandra-agente/worker.js
+      # F-0.2: validaciones que CLAUDE.md describe como manuales. Existían, pero había que
+      # acordarse de ejecutarlas — y el incidente de encoding del 13/05/2026 costó horas.
+      - name: Check file encoding (added lines only)
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || 'origin/main' }}"
+          node scripts/check-encoding.js "$BASE"
+      - name: Check version markers are in sync
+        run: node scripts/check-versiones.js
+      - name: Check every route declares an authorization mechanism
+        run: node scripts/inventario-rutas.js --check
       - name: Install agent test dependencies
         working-directory: alejandra-agente
         run: npm ci

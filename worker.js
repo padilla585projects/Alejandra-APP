@@ -6615,13 +6615,21 @@ async function verificarAcceso(request, env, ctx) {
 async function actualizarSesionDepartamento(request, env) {
   const xToken = request.headers.get('X-Token');
   if (!xToken) return err('No autorizado', 403);
+  // F-0.2 (02/08/2026): antes solo se comprobaba que el header existiera. El UPDATE está
+  // acotado por token, así que no había riesgo de tocar la sesión de otro, pero una sesión
+  // YA CADUCADA podía seguir cambiando su departamento —el resto de endpoints lo impide
+  // desde SEC-08/SEC-09— y la respuesta era `ok:true` aunque no se actualizara ninguna
+  // fila. `actualizarSesionObra`, la función de justo debajo, ya lo hacía bien.
+  const auth = await getAuth(request, env);
+  if (!auth?.usuario_id) return err('No autorizado', 403);
   const { departamento } = await request.json().catch(() => ({}));
   // SEC-14: lista completa de departamentos válidos (debe reflejar _DEPTS_CATALOG en index.html).
   // Antes solo tenía 4 de 11 — cambiar a "oficina" (u otros 6) fallaba en silencio aquí y
   // dejaba el departamento de la sesión desactualizado en D1.
   const validos = ['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil', 'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'ingenieria'];
   if (!departamento || !validos.includes(departamento)) return err('Departamento inválido', 400);
-  await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
+  const res = await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
+  if (!res?.meta?.changes) return err('Sesión no encontrada', 404);
   return json({ ok: true });
 }
 
