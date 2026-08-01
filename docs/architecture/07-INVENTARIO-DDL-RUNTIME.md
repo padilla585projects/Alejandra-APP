@@ -216,12 +216,6 @@ despliegue. La protección de entorno cubre el error, no la intención. Registra
 
 ## Referencias
 
-- `ARCHITECT_BACKLOG.md` — ARC-011, ARC-005
+- `ARCHITECT_BACKLOG.md` — ARC-011, ARC-012, ARC-013, ARC-014, ARC-005
 - `docs/runbooks/CI-CD-Y-MIGRACIONES.md`
-- `schema_completo.sql`, `migrate_*.sql`
-
-## Referencias
-
-- `ARCHITECT_BACKLOG.md` — ARC-011, ARC-005
-- `docs/runbooks/CI-CD-Y-MIGRACIONES.md` — migración 008 bloqueada
 - `schema_completo.sql`, `migrate_*.sql`
