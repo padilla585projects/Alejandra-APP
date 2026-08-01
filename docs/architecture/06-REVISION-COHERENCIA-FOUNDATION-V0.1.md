@@ -8,12 +8,14 @@
 
 La fundación es coherente en sus principios principales: documentación versionada, seguridad y permisos, evolución incremental, no implementación sin aprobación, y separación entre arquitectura actual y objetivo. ADR-0003 refuerza coherentemente el principio de control humano y de verificación.
 
-## Contradicciones importantes: no resueltas
+## Contradicciones importantes: resueltas el 2026-08-01
 
-| ID | Documentos | Contradicción | Impacto | Acción requerida |
+| ID | Documentos | Contradicción | Impacto | Resolución |
 |---|---|---|---|---|
-| COH-001 | `LIBRO MAESTRO DEL PROYECTO.txt` / `ARCHITECT_RULES.md` | El Libro Maestro se declara fuente superior, pero no está versionado en Git; las reglas establecen que solo la documentación versionada es oficial. | Alto: no hay precedencia verificable en el repositorio. | Decidir si versionar y normalizar el Libro Maestro o reemplazarlo mediante ADR/documento maestro versionado. |
-| COH-002 | `docs/02-ADN.md` / `PROJECT_STATE.md` / ADR-0002 | ADN dice que Fase 1 fue aprobada; estado y ADR-0002 la declaran pendiente/propuesta. | Alto: no está claro qué contrato cognitivo está congelado. | Director/Arquitecto deben decidir si ADR-0002 se acepta, se ajusta o se rechaza. |
+| COH-001 | Libro Maestro / `ARCHITECT_RULES.md` | El Libro Maestro se declaraba fuente superior, pero no estaba versionado en Git; las reglas establecen que solo la documentación versionada es oficial. | Alto: no había precedencia verificable en el repositorio. | **Cerrada por ADR-0005.** El original quedó versionado en `docs/archive/LIBRO-MAESTRO-ORIGINAL.txt` sin autoridad normativa; el contenido vigente vive en `MASTER_PLAN.md`. La jerarquía documental es ahora explícita y verificable. |
+| COH-002 | `docs/02-ADN.md` / `PROJECT_STATE.md` / ADR-0002 | ADN decía que Fase 1 fue aprobada; estado y ADR-0002 la declaraban pendiente/propuesta. | Alto: no estaba claro qué contrato cognitivo estaba congelado. | **Cerrada por ADR-0002**, aceptado como arquitectura objetivo con implementación bloqueada por ARC-001/002/003/004/005. El contrato congelado es `docs/02-ADN.md` + `docs/03-ARQUITECTURA-COGNITIVA.md`. |
+
+Ninguna de las dos resoluciones modificó código, infraestructura ni producción.
 
 ## Observaciones no bloqueantes
 
@@ -22,10 +24,17 @@ La fundación es coherente en sus principios principales: documentación version
 
 ## Estado de congelación
 
-**Foundation v0.1 queda congelada como línea base documental operativa, con dos decisiones bloqueantes pendientes (COH-001 y COH-002).** No autoriza iniciar el desarrollo del Núcleo Cognitivo hasta resolverlas mediante decisión documentada/ADR.
+**Foundation v0.1 queda congelada como línea base documental operativa, sin bloqueos de
+coherencia abiertos.** COH-001 y COH-002 se resolvieron el 2026-08-01 mediante ADR-0005 y
+ADR-0002 respectivamente.
+
+Esto **no autoriza** iniciar el desarrollo del Núcleo Cognitivo. El bloqueo ya no es de
+coherencia documental, sino de dependencias técnicas explícitas: entrega segura (ARC-005 /
+ADR-0001), evaluación de riesgo (ARC-001), gobierno de memoria (ARC-002), definición de Nexo
+(ARC-003) y QA/Verifier (ARC-004). El siguiente trabajo aprobado es la fase F-0.1.
 
 ## Referencias
 
 - `ARCHITECT_RULES.md`
 - `ARCHITECT_BACKLOG.md`
-- ADR-0001, ADR-0002, ADR-0003
+- ADR-0001, ADR-0002, ADR-0003, ADR-0005

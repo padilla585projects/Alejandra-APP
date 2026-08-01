@@ -6,10 +6,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Added
 
-- Fundación documental: visión normalizada (`MASTER_PLAN.md`), roadmap de ejecución, ADRs, reglas, backlog, handoff y cola operativa.
-- Archivo histórico de Libro Maestro y plan evolutivo, preservado para trazabilidad.
+- CI independiente, workflows manuales de Pages/Workers y migración D1 controlada del agente.
+- Runbook de CI/CD y migraciones.
+- Registro operativo de F-0.1 en `TASKS.md`, incluida la migración 008 sin ejecutar.
 
 ### Changed
 
-- Jerarquía documental explícita: Master Plan → Master Roadmap → ADR → arquitectura/normas → código.
-- Sin cambios funcionales, de infraestructura, datos ni producción.
+- ADR-0001 aceptado: un push o merge ya no activa producción desde los workflows versionados; secretos, Pages y D1 quedan desacoplados del despliegue ordinario.
+- Sin cambios funcionales, de datos ni despliegues.

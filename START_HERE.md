@@ -1,19 +1,18 @@
 # Alejandra 2.0 — empezar aquí
 
-La documentación versionada del repositorio es la fuente oficial; los chats y prompts no lo son.
+La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
-Foundation v0.1 está aprobada. La visión vigente está en `MASTER_PLAN.md`; la ejecución por fases en `MASTER_ROADMAP.md`. El producto existente no ha cambiado.
+Foundation v0.1 aprobada. F-0.1 separa localmente CI, CD, secretos y migraciones; requiere revisión y configuración manual de los entornos GitHub `production` y `github-pages` antes de considerarse operativa.
 
-## Lectura obligatoria antes de trabajar
+## Lectura obligatoria
 
-1. `MASTER_PLAN.md`
-2. `MASTER_ROADMAP.md`
-3. `ARCHITECT_RULES.md`, `PROJECT_STATE.md` y `ARCHITECT_BACKLOG.md`
-4. ADRs propuestos en `docs/decisions/`
-5. `HANDOFF.md` y `AGENTS.md`
+1. `MASTER_PLAN.md` y `MASTER_ROADMAP.md`
+2. `PROJECT_STATE.md`, `ARCHITECT_RULES.md` y `ARCHITECT_BACKLOG.md`
+3. ADRs y `docs/runbooks/CI-CD-Y-MIGRACIONES.md`
+4. `HANDOFF.md` y `AGENTS.md`
 
 ## Siguiente paso
 
-Revisar ADR-0004; no implementar el Núcleo Cognitivo todavía.
+Revisar F-0.1, configurar las protecciones manuales de GitHub y validar workflows en una PR. No iniciar el Núcleo Cognitivo.

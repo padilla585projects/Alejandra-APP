@@ -41,7 +41,7 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-0.1 — Separación de CI, despliegue y migraciones**
 
-- Estado/prioridad/tamaño: Pendiente / Crítica / M.
+- Estado/prioridad/tamaño: En revisión / Crítica / M.
 - Objetivo y valor: separar integración de producción para evitar despliegues y migraciones accidentales.
 - Alcance/fuera: workflows, entornos, runbooks y validaciones; no cambia funcionalidades ni infraestructura de negocio.
 - Dependencias/bloqueantes/paralelo: ADR-0001 y acceso administrativo; puede ir en paralelo con F-0.2, no con despliegues no aprobados.
@@ -230,7 +230,7 @@ F-0.1 Entrega segura → F-0.2 Calidad/contratos → F-1.1 Decisiones aprobadas
 | F-3.1 y F-4.1 | Contrato común de trazas acordado antes de integrar. |
 | F-5.1 e investigación F-6.2 | Sin acceso a proveedores/productivo. |
 
-Bloqueantes arquitectónicos: ADR-0001/0002/0004 propuestos; ARC-001, 002, 003, 004, 006, 008, 009 y 010. Bloqueantes de seguridad: despliegue automático, migraciones D1 remotas, permisos de tokens, aislamiento D1/R2 y retención. Dependencias externas: acceso GitHub/Cloudflare solo lectura, proveedores IA, cumplimiento/asesoría, contratos de integraciones y presupuesto de observabilidad.
+Bloqueantes arquitectónicos: ADR-0001 y ADR-0002 aceptados; ADR-0004 pendiente; ARC-001, 002, 003, 004, 006 y 008 abiertos. ARC-005 está mitigado localmente y requiere validación remota; ARC-009 y ARC-010 están cerrados. Bloqueantes de seguridad: controles remotos de despliegue, permisos de tokens, aislamiento D1/R2 y retención. Dependencias externas: acceso GitHub/Cloudflare solo lectura, proveedores IA, cumplimiento/asesoría, contratos de integraciones y presupuesto de observabilidad.
 
 ## Estrategia de ramas y relevo
 
