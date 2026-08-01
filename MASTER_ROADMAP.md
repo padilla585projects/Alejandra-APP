@@ -1,0 +1,283 @@
+# Master Roadmap — Alejandra 2.0
+
+- Versión: 0.1 (borrador para revisión humana y arquitectónica)
+- Fecha: 2026-08-01
+- Estado: activo; no autoriza implementación por sí mismo
+- Propietario: Director del Proyecto
+- Custodia técnica: Arquitecto del Proyecto y Arquitecto Técnico
+
+## Propósito, alcance y uso
+
+Este es el mapa global de construcción: qué se construirá, en qué orden, con qué dependencias y qué evidencia cierra cada fase. No sustituye `PROJECT_STATE.md` (estado presente), `TASKS.md` (cola inmediata), `ARCHITECT_BACKLOG.md` (riesgos/deuda/propuestas) ni los ADR (decisiones oficiales).
+
+Alcance: arquitectura, diseño, implementación, pruebas, despliegue y validación de Alejandra 2.0. No asigna fechas cerradas: los tamaños son aproximaciones relativas (`XS`–`XL`). Un elemento `PENDIENTE` no es una decisión aprobada.
+
+## Referencias obligatorias y actualización
+
+Antes de trabajar: `START_HERE.md`, `PROJECT_STATE.md`, `HANDOFF.md`, `AGENTS.md`, `ARCHITECT_RULES.md`, `ARCHITECT_BACKLOG.md`, ADRs, documentación 00–09, arquitectura, ideas y runbooks.
+
+Tras aprobar/cerrar una fase, actualizar este documento, `PROJECT_STATE.md`, `ARCHITECT_BACKLOG.md`, `CHANGELOG.md`, `HANDOFF.md`, ADRs aplicables y `docs/DOCUMENTATION-REGISTER.md`. Solo Director/Arquitecto del Proyecto aprueban fases; cualquier miembro puede proponer cambios mediante ADR/idea. Una conversación no modifica este roadmap: requiere cambio versionado y aprobación documentada.
+
+## Principios técnicos incorporados del plan histórico
+
+El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-COMPLETO.md`. Su contenido único se incorpora como restricciones de ejecución: preservar capacidades multidisciplinares; usar evidencia recuperable, reglas y cálculos deterministas sin reducir el sistema a RAG; tratar web/OCR/documentos como contenido no confiable; mantener aislamiento por empresa/obra; separar memoria de conocimiento; sustituir SQL libre de forma gradual por tools semánticas; usar planos con modelo estructurado y revisión; y construir observabilidad con trazas, auditoría, costes y reproducciones seguras. Estas restricciones se concretan en F-1 a F-4 y no son implementación aprobada.
+
+## Estado real al crear el roadmap
+
+| Elemento | Estado verificable |
+|---|---|
+| Fase 0 — auditoría | Completada documentalmente. |
+| Fase 0.5 — continuidad | Completada documentalmente. |
+| Foundation v0.1 | Declarada aprobada en `PROJECT_STATE.md`; COH-001/COH-002 continúan registrados históricamente. |
+| Fase 1 — contrato cognitivo | Documentada; ADR-0002 propuesto. |
+| Fase 2 — motor/modos | Documentada; ADR-0004 propuesto. |
+| Núcleo Cognitivo | No implementado. |
+| Entrega segura | Bloqueante P0: push a `main` despliega y el agente intenta migraciones D1 remotas. |
+| Auditoría remota GitHub/Cloudflare | Pendiente, solo lectura autorizada. |
+
+## Épocas y fases
+
+### Época 0 — Fundación y entrega segura
+
+**F-0.1 — Separación de CI, despliegue y migraciones**
+
+- Estado/prioridad/tamaño: Pendiente / Crítica / M.
+- Objetivo y valor: separar integración de producción para evitar despliegues y migraciones accidentales.
+- Alcance/fuera: workflows, entornos, runbooks y validaciones; no cambia funcionalidades ni infraestructura de negocio.
+- Dependencias/bloqueantes/paralelo: ADR-0001 y acceso administrativo; puede ir en paralelo con F-0.2, no con despliegues no aprobados.
+- Referencias/ADR/módulos: auditoría, plan de PRs, ADR-0001; GitHub Actions/Workers/D1.
+- Áreas/migraciones: `.github/workflows`, runbooks; sin migración funcional prevista.
+- Riesgos/compliance/pruebas: interrupción de entrega; mínimo privilegio y aprobación; CI, promoción manual, healthcheck, rollback probado.
+- Aceptación/recuperación/entregables: `main` no despliega por sí solo; promoción identificable y migración explícita; rollback a artefacto sano; workflow y runbook aprobados.
+- Resultado/siguiente: Entrega segura v0.2; habilita F-0.2 y cualquier cambio funcional.
+
+**F-0.2 — Inventario remoto, calidad y contratos base**
+
+- Estado/prioridad/tamaño: Pendiente / Alta / L.
+- Objetivo y valor: conocer recursos reales y establecer pruebas/contratos para evolucionar sin regresiones.
+- Alcance/fuera: auditoría de solo lectura, inventario de bindings/secretos/migraciones, CI de calidad y catálogo de rutas; no cambia datos/producción.
+- Dependencias/bloqueantes/paralelo: F-0.1 para evitar despliegue; acceso remoto autorizado; paralelo limitado con diseño UX.
+- Referencias/ADR/módulos: auditoría, PR-02 a PR-04, ARC-006; Workers, D1/R2, frontends.
+- Áreas/migraciones: scripts, tests, docs; migraciones solo se inventarían si evidencia exige corrección aprobada.
+- Riesgos/compliance/pruebas: exposición de metadatos; secretos minimizados; pruebas de contrato y negativas de autorización.
+- Aceptación/recuperación/entregables: inventario verificable y CI sin CD; revertir scripts/documentación; habilita implementaciones seguras.
+
+### Época 1 — Núcleo Cognitivo
+
+**F-1.1 — Aprobar contrato cognitivo y Motor de Decisión**
+
+- Estado/prioridad/tamaño: En revisión / Crítica / S.
+- Objetivo y valor: resolver ADR-0002/0004 y sus preguntas antes de código.
+- Alcance/fuera: decisiones de diseño, riesgo, modos y límites; no implementación.
+- Dependencias/bloqueantes/paralelo: ARC-001, ARC-003, ARC-004, ARC-006; puede ir en paralelo con F-0.1 documental.
+- Referencias/ADR/módulos: ADN, Arquitectura Cognitiva, Motor de Decisión; ADR-0002/0003/0004.
+- Áreas/migraciones: docs/decisions y backlog; ninguna migración.
+- Riesgos/compliance/pruebas: autonomía ambigua; revisión arquitectónica de coherencia; evidencia de aprobación ADR.
+- Aceptación/recuperación/entregables: ADRs resueltos y bloqueos convertidos en fases; reversión documental mediante ADR sustituto; habilita F-1.2.
+
+**F-1.2 — Estado Cognitivo, Planner, Context Engine y Policy Engine**
+
+- Estado/prioridad/tamaño: Planificada / Crítica / XL.
+- Objetivo y valor: implementar las bases que deciden con contexto y permisos verificables.
+- Alcance/fuera: contratos, extracción incremental, pruebas y trazas mínimas; no memoria compartida, Nexo ni agentes.
+- Dependencias/bloqueantes/paralelo: F-0.1, F-0.2, F-1.1; paralelo parcial con UX transversal.
+- Referencias/ADR/módulos: Arquitectura Cognitiva, Motor, ADR-0003/0004; Worker IA y contratos compartidos.
+- Áreas/migraciones: `alejandra-agente`, paquetes/contratos propuestos; `PENDIENTE` migraciones solo tras modelo de estado aprobado.
+- Riesgos/compliance/pruebas: bypass de tenant/política; unitarias, integración y negativas de permiso; rollback por ruta/feature flag.
+- Aceptación/recuperación/entregables: una ruta piloto decide sin alterar permisos y conserva compatibilidad; diseño de rollback y pruebas publicadas; habilita F-1.3.
+
+**F-1.3 — Capability/Tool Registry, Verifier y QA**
+
+- Estado/prioridad/tamaño: Planificada / Alta / L.
+- Objetivo y valor: declarar capacidades y verificar resultados antes de responder/ejecutar.
+- Alcance/fuera: registro, contrato de tools, verificación/QA inicial; no marketplace ni plugins.
+- Dependencias/bloqueantes/paralelo: F-1.2, ARC-004, ARC-006; paralelo con F-2.1 solo documental.
+- Referencias/ADR/módulos: ADR-0003/0004; tools IA y políticas.
+- Áreas/migraciones: registry, tests, observabilidad; `PENDIENTE` persistencia.
+- Riesgos/compliance/pruebas: falsa validación/acciones sensibles; controles deterministas, pruebas negativas y revisión humana.
+- Aceptación/recuperación/entregables: tool piloto declarada, autorizada y verificada; retirada por feature flag; habilita Núcleo Cognitivo v1.
+
+### Época 2 — Conocimiento y Memoria
+
+**F-2.1 — Gobierno de memoria y conocimiento**
+
+- Estado/prioridad/tamaño: Pendiente / Crítica / XL.
+- Objetivo y valor: separar memoria, conocimiento, estado temporal y fuentes para evitar fugas/degradación.
+- Alcance/fuera: modelo de autoridad, vigencia, procedencia, relaciones, backlinks, contradicciones e ingesta segura; no aprendizaje autónomo amplio.
+- Dependencias/bloqueantes/paralelo: F-1.1 y ARC-002; paralelo documental con F-1.3.
+- Referencias/ADR/módulos: ADN, Arquitectura Cognitiva, compliance; Memory/Context Engine/D1/R2.
+- Áreas/migraciones: esquema y migraciones `PENDIENTE` tras ADR; no asumir datos existentes.
+- Riesgos/compliance/pruebas: RGPD, multiempresa, contenido inyectado; aislamiento, retención, borrado y pruebas IDOR.
+- Aceptación/recuperación/entregables: política y modelo aprobados, recuperación híbrida limitada y auditada; rollback/retención documentados; habilita F-2.2.
+
+**F-2.2 — Nexo v1**
+
+- Estado/prioridad/tamaño: Investigación / Alta / XL.
+- Objetivo y valor: definir e implementar coordinación entre fuentes/módulos solo tras aclarar su propósito.
+- Alcance/fuera: definición, ADR y vertical piloto; no multiagente general.
+- Dependencias/bloqueantes/paralelo: F-2.1, ARC-003; paralelo con observabilidad base.
+- Referencias/ADR/módulos: Arquitectura Cognitiva, ARC-003; `PENDIENTE` ADR de Nexo.
+- Áreas/migraciones: `PENDIENTE`.
+- Riesgos/compliance/pruebas: acoplamiento y autoridad difusa; contratos/aislamiento/e2e.
+- Aceptación/recuperación/entregables: propósito aprobado y una integración reversible; habilita conocimiento operacional.
+
+### Época 3 — Herramientas y trabajo operativo
+
+**F-3.1 — Herramientas semánticas y reglas deterministas**
+
+- Estado/prioridad/tamaño: Pendiente / Alta / XL.
+- Objetivo y valor: sustituir progresivamente SQL libre por operaciones con intención, permisos y validación.
+- Alcance/fuera: tools semánticas, cálculos deterministas, motor de reglas y estado de obra consolidado; no reemplazo masivo.
+- Dependencias/bloqueantes/paralelo: F-1.3, F-2.1, ARC-006; paralelo con F-4.1.
+- Referencias/ADR/módulos: Tool Registry, ADR-0003; Workers/D1.
+- Áreas/migraciones: endpoints/services/migraciones por vertical `PENDIENTE`.
+- Riesgos/compliance/pruebas: regresión de negocio; contratos, autorización, migración y rollback por vertical.
+- Aceptación/recuperación/entregables: una familia de tools sustituida sin pérdida de contrato; habilita F-3.2.
+
+**F-3.2 — Ingeniería técnica y planos estructurados v1**
+
+- Estado/prioridad/tamaño: Pendiente / Media / XL.
+- Objetivo y valor: herramientas multidisciplinares y revisiones de planos estructurados.
+- Alcance/fuera: cálculo verificable, modelo de plano y revisión; no CAD/BIM completo.
+- Dependencias/bloqueantes/paralelo: F-3.1, QA y conocimiento técnico; paralelo limitado con UX.
+- Referencias/ADR/módulos: Arquitectura Cognitiva; R2/planos/tools.
+- Áreas/migraciones: `PENDIENTE` contrato de plano y metadatos.
+- Riesgos/compliance/pruebas: seguridad técnica/resultados erróneos; verificadores, datos de ejemplo, revisión humana.
+- Aceptación/recuperación/entregables: Planos v1 verificables y reversibles; habilita hito Planos v1.
+
+### Época 4 — Observabilidad y control
+
+**F-4.1 — Observabilidad, evaluación y DevTools seguros**
+
+- Estado/prioridad/tamaño: Pendiente / Alta / L.
+- Objetivo y valor: trazabilidad reproducible de decisiones, costes, salud y calidad.
+- Alcance/fuera: `trace_id`, spans, logs estructurados, auditoría, métricas, evaluaciones, reproducciones seguras y DevTools; no exponer secretos/datos.
+- Dependencias/bloqueantes/paralelo: F-0.1, F-0.2; puede avanzar en paralelo con F-1.2 mediante contratos.
+- Referencias/ADR/módulos: ARC-004/008; Workers, IA, CI.
+- Áreas/migraciones: observabilidad y almacenamiento `PENDIENTE`.
+- Riesgos/compliance/pruebas: retención/PII/coste; redacción, acceso mínimo, carga y pruebas de trazas.
+- Aceptación/recuperación/entregables: traza de una decisión piloto y panel/consulta segura; desactivación controlada; habilita Observabilidad v1.
+
+### Época 5 — Capacidades instalables
+
+**F-5.1 — Skills, plugins, adaptadores y MCP gobernados**
+
+- Estado/prioridad/tamaño: Pendiente / Media / XL.
+- Objetivo y valor: instalar capacidades compatibles, versionadas y con permisos explícitos.
+- Alcance/fuera: manifiesto, ciclo instalar/desinstalar, compatibilidad, permisos y versiones; no tienda pública hasta validación.
+- Dependencias/bloqueantes/paralelo: F-1.3, F-4.1, ARC-006; paralelo con investigación de integraciones.
+- Referencias/ADR/módulos: Capability Registry; `PENDIENTE` ADR de extensibilidad.
+- Áreas/migraciones: paquetes/registry `PENDIENTE`.
+- Riesgos/compliance/pruebas: supply chain/plugin inseguro; firma, sandbox, compatibilidad y rollback.
+- Aceptación/recuperación/entregables: capacidad piloto instalable/desinstalable y auditada; habilita Capacidades Instalables v1.
+
+### Época 6 — Agentes e integraciones
+
+**F-6.1 — Delegación y agentes especializados**
+
+- Estado/prioridad/tamaño: Pendiente / Media / XL.
+- Objetivo y valor: delegar trabajo con bandeja, límites y supervisión.
+- Alcance/fuera: arquitectura multiagente, delegación y cola; no autonomía abierta.
+- Dependencias/bloqueantes/paralelo: F-1.3, F-2.2, F-4.1, F-5.1; ARC-003/004 resueltos.
+- Referencias/ADR/módulos: Motor de Decisión, Nexo; `PENDIENTE` ADR.
+- Áreas/migraciones: `PENDIENTE`.
+- Riesgos/compliance/pruebas: bucles, costes y permisos; límites, simulación, trazas y kill switch.
+- Aceptación/recuperación/entregables: un agente delegado en tarea acotada y cancelable; habilita Agentes v1.
+
+**F-6.2 — Integraciones empresariales**
+
+- Estado/prioridad/tamaño: Pendiente / Media / XL.
+- Objetivo y valor: correo, documentos, Microsoft 365, GitHub, ERP, CAD/BIM, IoT y otros adaptadores conforme a valor probado.
+- Alcance/fuera: un adaptador por vez; no integración masiva ni control de ordenador por defecto.
+- Dependencias/bloqueantes/paralelo: F-5.1, F-6.1 si delegada; proveedores y contratos externos.
+- Riesgos/compliance/pruebas: credenciales, GDPR, disponibilidad; sandbox, mínimos permisos, mocks y rollback.
+- Aceptación/recuperación/entregables: adaptador aprobado, auditable, revocable; habilita Plataforma Empresarial v1 progresiva.
+
+### Época 7 — Inteligencia empresarial proactiva
+
+**F-7.1 — Eventos, recomendaciones y aprendizaje supervisado**
+
+- Estado/prioridad/tamaño: Pendiente / Media / XL.
+- Objetivo y valor: detectar tendencias/carencias y proponer mejoras operativas explicables.
+- Alcance/fuera: eventos, objetivos, recomendaciones, reflexión con revisión; no autoaprendizaje de políticas ni acciones no solicitadas.
+- Dependencias/bloqueantes/paralelo: F-2.1, F-4.1, F-6.1; compliance y métricas aprobadas.
+- Riesgos/compliance/pruebas: automatización insegura/sesgo/coste; simulación, aprobación, métricas y kill switch.
+- Aceptación/recuperación/entregables: recomendación trazable y supervisada; habilita Inteligencia Proactiva v1.
+
+### Época transversal — Producto, UX, seguridad y compliance
+
+**T-1 — Calidad transversal**
+
+- Estado/prioridad/tamaño: Continua / Crítica / continua.
+- Objetivo/alcance: UX/UI, móvil, accesibilidad, RGPD, AI Act, privacidad, multiempresa, mínimo privilegio, rendimiento, costes y mantenibilidad en cada fase.
+- Dependencias/paralelo: aplica a todas; no es una fase que habilite bypasses.
+- Pruebas/aceptación: requisitos no funcionales, amenazas, accesibilidad y rendimiento definidos por cada ficha; ninguna fase cierra sin evidencia proporcional.
+
+## Dependencias, paralelismo y camino crítico
+
+```text
+F-0.1 Entrega segura → F-0.2 Calidad/contratos → F-1.1 Decisiones aprobadas
+→ F-1.2 Estado/Planner/Context/Policy → F-1.3 Registries/Verifier/QA
+→ F-2.1 Memoria/conocimiento → F-3.1 Tools semánticas → F-3.2 Planos
+→ F-4.1 Observabilidad → F-5.1 Capacidades → F-6.1 Agentes → F-7.1 Proactividad
+```
+
+| Puede ir en paralelo | Condición de seguridad |
+|---|---|
+| F-0.1 y diseño F-1.1 | Ninguno despliega ni cambia contratos. |
+| F-0.2 y T-1 | Áreas separadas; inventario remoto solo lectura. |
+| F-1.3 y diseño F-2.1 | Sin suponer persistencia/permiso futuro. |
+| F-3.1 y F-4.1 | Contrato común de trazas acordado antes de integrar. |
+| F-5.1 e investigación F-6.2 | Sin acceso a proveedores/productivo. |
+
+Bloqueantes arquitectónicos: ADR-0001/0002/0004 propuestos; ARC-001, 002, 003, 004, 006, 008, 009 y 010. Bloqueantes de seguridad: despliegue automático, migraciones D1 remotas, permisos de tokens, aislamiento D1/R2 y retención. Dependencias externas: acceso GitHub/Cloudflare solo lectura, proveedores IA, cumplimiento/asesoría, contratos de integraciones y presupuesto de observabilidad.
+
+## Estrategia de ramas y relevo
+
+- Una tarea principal por rama; prefijos: `docs/`, `chore/`, `feat/`, `fix/`, con formato `tipo/area-descripcion`.
+- El responsable, rama, alcance y siguiente paso viven en `TASKS.md` y `HANDOFF.md`; no duplicar tareas activas.
+- Una rama no mezcla cambios funcionales, migraciones y refactors no relacionados. Un PR se crea al tener criterios, pruebas, rollback y documentación preparados.
+- Relevo: actualizar TASKS/HANDOFF, dejar estado reproducible, pruebas y bloqueos; el siguiente agente revisa fuentes obligatorias antes de editar.
+- Conflictos: detener cambios solapados, comparar intención/ADR, conservar la decisión aprobada y escalar conflicto arquitectónico al Director/Arquitecto.
+- Integración: CI aprobada, revisión, riesgos/rollback explícitos, ADR/documentación actualizados y sin despliegue implícito.
+
+## Contrato de TASKS.md
+
+`TASKS.md` será la cola inmediata, no el roadmap. No contiene tareas ficticias. Cada entrada usa: `ID`, `Título`, `Fase`, `Estado`, `Prioridad`, `Rama`, `Responsable actual`, `Objetivo`, `Criterios de aceptación`, `Dependencias`, `Bloqueos`, `Archivos principales`, `Pruebas`, `Última actualización`, `Siguiente acción exacta`. Estados: pendiente, lista, en curso, bloqueada, en revisión, aprobada, completada, cancelada.
+
+## Registro inicial de riesgos globales
+
+| Riesgo | Prob. | Impacto | Mitigación | Fase/responsable |
+|---|---:|---:|---|---|
+| Alcance excesivo/fases gigantes | Alta | Alto | Fichas acotadas, ADR y PR pequeño | Todas / Arquitecto Técnico |
+| Prompts monolíticos y acoplamiento IA | Alta | Alto | Contratos, módulos, evaluaciones | F-1 / Arquitecto |
+| Proveedor IA/costes/contexto excesivo | Media | Alto | Abstracción, presupuesto, trazas | F-1, F-4 / Director |
+| Pruebas insuficientes/deuda monolítica | Alta | Alto | F-0.2, contratos y regresión | F-0 / Arquitecto Técnico |
+| Fuga multiempresa o datos personales | Media | Crítico | Policy, mínimo privilegio, IDOR, RGPD | Todas / Seguridad |
+| Automatización o aprendizaje inseguro | Media | Crítico | ADR-0003, aprobación, supervisión | F-1, F-7 / Arquitecto |
+| Plugins/agentes incompatibles | Media | Alto | Registry, sandbox, compatibilidad | F-5, F-6 / Arquitecto |
+| Despliegue/migración accidental sin rollback | Alta | Crítico | ADR-0001, promoción deliberada | F-0.1 / Director |
+| Documentación desactualizada/conflicto agentes | Media | Alto | Reglas, roadmap, handoff, PR | Todas / Equipo |
+| RGPD/AI Act incumplido | Media | Crítico | Privacy by design, asesoría/evidencia | T-1 / Compliance |
+
+## Hitos verificables
+
+| Hito | Criterio |
+|---|---|
+| Foundation v0.1 | Documentación fundacional y ADR-0003 aprobados, coherencia registrada. |
+| Entrega segura v0.2 | CI separada de CD, promoción y rollback aprobados. |
+| Núcleo Cognitivo v1 | F-1.2/F-1.3 con decisión, permisos, verificación y QA probados. |
+| Nexo v1 | Propósito aprobado y coordinación reversible auditada. |
+| Herramientas Semánticas v1 | Familia piloto sustituye SQL libre con contratos y permisos. |
+| Planos v1 | Plano estructurado con revisión y verificador. |
+| Observabilidad v1 | Trazas, coste, salud y evaluación segura visibles. |
+| Cerebro de Alejandra v1 | Decisiones reproducibles y operables mediante DevTools seguros. |
+| Capacidades Instalables v1 | Capacidad firmada/compatible, instalable y revocable. |
+| Agentes v1 | Delegación acotada, supervisada y cancelable. |
+| Plataforma Empresarial v1 | Integración empresarial aprobada, segura y operativa. |
+
+## Contradicciones, simplificaciones y preguntas abiertas
+
+- COH-001 y COH-002 siguen en la revisión Foundation; no se resuelven aquí.
+- Simplificación recomendada: validar un vertical por época antes de generalizar; evitar reescribir los dos Workers o crear Marketplace/multiagente antes de registries, permisos y observabilidad.
+- Preguntas: estado de ADR-0001/0002/0004; definición de Nexo; matriz de riesgo/aprobación; gobierno de memoria; alcance de QA; fuentes de conocimiento y métricas de éxito. Todas están enlazadas al backlog o ADRs, no se asumen resueltas.
