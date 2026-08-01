@@ -3,9 +3,9 @@
 - Fecha: 2026-08-02
 - Agentes que entregan: Codex y Claude, Agentes de Ingeniería
 - Trabajo entregado: F-0.1 (entrega segura) y GOV-001 (proceso de ingeniería), consolidados
-- Estado: **implementado localmente; pendiente de integración y validación remota**
-- Rama: `codex/foundation-close` — **sin push, sin merge, sin despliegue**
-- Commits: `966ad7c`, `a59a2c5`, `6d5d98c`, `96417a5`, `cce5224`, `f644a6b` y la consolidación del 2026-08-02
+- Estado: **F-0.1 integrada en `main` y activa en remoto**; queda configuración de secretos por entorno
+- Rama: `codex/foundation-close`, integrada mediante PR #9
+- Commits: `966ad7c`, `a59a2c5`, `6d5d98c`, `96417a5`, `cce5224`, `f644a6b`, `a21e630`, `7f2031b`, `80cc1ff`
 
 ## Qué está terminado
 
@@ -24,22 +24,25 @@
 
 **Decisiones cerradas.** ADR-0001 (entrega deliberada) y ADR-0002 (contrato cognitivo, como arquitectura objetivo con implementación bloqueada) aceptados. ADR-0005 cierra COH-001/ARC-009; ADR-0002 cierra COH-002/ARC-010. Foundation v0.1 sin bloqueos de coherencia.
 
+**F-0.1-R — Activación en remoto (2026-08-02).** El P0 está neutralizado en producción.
+
+| Acción | Resultado |
+|---|---|
+| Workflows antiguos desactivados antes de integrar | ✅ los 4 en `disabled_manually` |
+| Rama publicada y PR #9 abierta | ✅ |
+| CI ejecutado | ✅ `SUCCESS` en `push` y en `pull_request` |
+| Despliegues disparados durante el proceso | ✅ ninguno |
+| Entorno `production` | ✅ creado con `required_reviewers` |
+| Protección de `main` | ✅ PR obligatoria, check `Syntax and agent tests`, rama al día, sin force-push ni borrado |
+| PR integrada | ✅ |
+
 ## Qué está pendiente
 
-**F-0.1 no es efectiva en producción.** La rama no está integrada, así que los cuatro workflows antiguos siguen activos en GitHub con sus disparadores por `push`. El riesgo P0 sigue vivo en el remoto.
-
-Auditoría remota de GitHub (2026-08-02, solo lectura, nada modificado):
-
-| Elemento | Estado real |
-|---|---|
-| Protección de `main` | ❌ No protegida (HTTP 404), sin rulesets |
-| Entorno `production` | ❌ No existe; los workflows lo crearían sin reglas de aprobación |
-| Entorno `github-pages` | ✅ Existe, política de rama limitada a `main` |
-| Pages | ✅ `build_type: workflow`, HTTPS forzado |
-| Secretos | ✅ Los 5 existen, pero a nivel de repositorio, no de entorno |
-| Workflows en remoto | ⚠️ Los 4 antiguos siguen activos |
-
-Auditoría remota de Cloudflare: pendiente.
+- **Secretos aún a nivel de repositorio.** Moverlos al entorno `production` exige reintroducir los valores a mano: la API no los expone. No borrarlos del repositorio hasta haberlos verificado en el entorno.
+- **Ensayo de confirmación errónea** sobre un workflow de producción: debe salir `skipped`. No pudo hacerse antes del merge porque `workflow_dispatch` no aparece hasta estar en la rama por defecto.
+- **`required_approving_review_count` está en 1.** Al ser un repositorio de un solo mantenedor, GitHub no permite auto-aprobar: el merge exige el bypass de administrador (`enforce_admins` está en `false` precisamente para conservar esa vía). Decidir si se mantiene o baja a 0.
+- **Política de rama de `github-pages`** limitada a `main`: publicar desde un tag fallaría. Decidir si se amplía.
+- Auditoría remota de Cloudflare: pendiente.
 
 ## Riesgos abiertos
 
@@ -52,9 +55,9 @@ Auditoría remota de Cloudflare: pendiente.
 
 ## Siguiente acción exacta
 
-**Activar y validar F-0.1 en GitHub remoto mediante rama y PR segura** (tarea `F-0.1-R` en `TASKS.md`).
+**Recrear los secretos de Cloudflare en el entorno `production`** desde Settings → Environments → production (tarea `F-0.2-CFG` en `TASKS.md`). Retirarlos del nivel de repositorio solo después de verificarlos allí.
 
-Empezar por: desactivar manualmente los 4 workflows antiguos en Actions → cada workflow → `···` → *Disable workflow*, y después abrir la PR de `codex/foundation-close` hacia `main`. Requiere acceso administrativo a GitHub.
+Requiere manejar los valores reales, por lo que corresponde al Director del Proyecto.
 
 ## No tocar sin nueva autorización
 

@@ -6,7 +6,7 @@ La documentación versionada del repositorio es la fuente oficial.
 
 Foundation v0.1 aprobada. F-0.1 está **cerrada localmente**: CI, CD, secretos y migraciones quedan separados en los workflows versionados y ningún push o merge activa producción.
 
-**Todavía no es efectiva en producción.** La rama no está integrada, así que los workflows antiguos siguen activos en GitHub. Además, la auditoría remota del 2026-08-02 confirmó que `main` no está protegida y que el entorno `production` no existe: hasta configurarlos, la única barrera real es la palabra de confirmación. Detalle en `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
+**Activa en producción desde el 2026-08-02** (PR #9): workflows antiguos retirados, `main` protegida y entorno `production` con revisor requerido. Queda mover los secretos a nivel de entorno. Detalle en `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
 
 ## Lectura obligatoria
 
@@ -17,6 +17,6 @@ Foundation v0.1 aprobada. F-0.1 está **cerrada localmente**: CI, CD, secretos y
 
 ## Siguiente paso
 
-**Activar y validar F-0.1 en GitHub remoto mediante rama y PR segura** — tarea `F-0.1-R` en `TASKS.md`, detalle en `HANDOFF.md`.
+**Completar la configuración remota de entrega segura** — tarea `F-0.2-CFG` en `TASKS.md`, detalle en `HANDOFF.md`.
 
 No iniciar el Núcleo Cognitivo ni abrir fases nuevas.

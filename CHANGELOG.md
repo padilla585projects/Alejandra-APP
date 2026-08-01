@@ -21,5 +21,6 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Los despliegues de Workers pierden el healthcheck automático: `GET /health` no comprueba D1/R2 ni acredita la versión desplegada, así que un 200 podía dar por bueno un despliegue roto. Se sustituye por verificación manual documentada y queda registrado en ARC-008.
 - ARC-005 se matiza: la mitigación cubre las migraciones lanzadas por workflow, no el DDL que ejecuta el propio Worker.
 - Auditoría remota de GitHub en solo lectura: `main` sin protección, entorno `production` inexistente, `github-pages` limitado a `main`, secretos a nivel de repositorio y workflows antiguos aún activos. El runbook sustituye los `PENDIENTE` por el estado real.
+- F-0.1 activada en remoto (PR #9): workflows antiguos desactivados antes de integrar, CI verde sin disparar ningún despliegue, entorno `production` creado con revisor requerido y `main` protegida con PR obligatoria y check requerido. Queda mover los secretos a nivel de entorno.
 - Consolidación documental: `MASTER_ROADMAP.md` refleja ADR-0001/0002 aceptados, COH-001/COH-002 cerrados y F-0.1 como «implementada localmente — pendiente de integración y validación remota». `TASKS.md` queda con una única tarea activa (`F-0.1-R`) y `HANDOFF.md` integra F-0.1 y GOV-001 con una sola siguiente acción.
 - Sin cambios funcionales, de datos ni despliegues.

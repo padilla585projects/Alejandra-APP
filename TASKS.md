@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **una tarea activa** (F-0.1-R). No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **una tarea activa** (F-0.2-CFG). No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Reglas
 
@@ -30,37 +30,33 @@ Siguiente acción exacta:
 
 ## TAREA ACTIVA
 
-### F-0.1-R — Activar y validar F-0.1 en GitHub remoto
+### F-0.2-CFG — Completar la configuración remota de entrega segura
 
-- ID: F-0.1-R
-- Título: Activar y validar F-0.1 en GitHub remoto mediante rama y PR segura
+- ID: F-0.2-CFG
+- Título: Cerrar los controles remotos que F-0.1-R no pudo completar
 - Fase: Época 0 — Fundación y entrega segura
 - Estado: lista
-- Prioridad: P0
-- Rama: `codex/foundation-close`
-- Responsable actual: `PENDIENTE` — requiere acceso administrativo a GitHub
-- Objetivo: que la separación de CI/CD implementada localmente pase a ser efectiva en producción, sin desplegar nada durante el proceso.
+- Prioridad: Alta
+- Rama: `PENDIENTE` — es configuración remota; solo requiere rama si cambia documentación
+- Responsable actual: Director del Proyecto (requiere manejar valores de secretos)
+- Objetivo: que los secretos de producción queden acotados al entorno `production` y que el circuito manual de despliegue quede probado en vacío.
 - Criterios de aceptación:
-  1. Los 4 workflows antiguos desactivados manualmente **antes** de integrar.
-  2. PR abierta que ejecute únicamente `ci.yml` y lo supere.
-  3. Integración sin que se dispare ningún despliegue (verificado en la pestaña Actions).
-  4. `main` protegida: PR obligatoria, `ci.yml` como check requerido, sin push directo.
-  5. Entorno `production` creado con revisores requeridos.
-  6. Secretos de Cloudflare movidos al entorno `production`.
-  7. Ensayo con confirmación errónea: el job sale `skipped`, no ejecuta.
-  8. Nada desplegado, migrado ni ningún secreto modificado durante la validación.
-- Dependencias: acceso administrativo a GitHub (Settings, Environments, Branch protection).
-- Bloqueos: ninguno técnico. El token disponible es de solo lectura para configuración; crear entornos y proteger ramas exige permisos de administración.
-- Archivos principales: ninguno — es configuración remota y una PR. No requiere cambios de código.
-- Pruebas: las de `ci.yml` en la PR, más la verificación de que ningún workflow de producción se ejecuta.
+  1. Los secretos de Cloudflare y de aplicación recreados en el entorno `production` y retirados del nivel de repositorio **solo después** de verificarlos allí.
+  2. Ensayo con confirmación errónea sobre un workflow de producción: el job debe salir `skipped`, sin ejecutar.
+  3. Decidir si `required_approving_review_count` sigue en 1 (exige bypass de administrador al ser un repositorio de un solo mantenedor) o baja a 0.
+  4. Decidir si la política de rama de `github-pages` sigue limitada a `main` o se amplía para publicar por tag.
+  5. Nada desplegado ni migrado durante la validación.
+- Dependencias: F-0.1-R completada; acceso a los valores reales de los secretos.
+- Bloqueos: los valores de los secretos no son legibles desde la API; solo el Director puede reintroducirlos.
+- Archivos principales: ninguno; es configuración remota.
+- Pruebas: verificación en Actions de que el ensayo sale `skipped` y de que no se genera ningún despliegue.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: desactivar manualmente los 4 workflows antiguos en Actions y abrir la PR de `codex/foundation-close` hacia `main`.
+- Siguiente acción exacta: recrear los secretos en el entorno `production` desde Settings → Environments.
 
 ## Completadas — pendientes de aprobación
 
 | ID | Título | Estado | Evidencia |
 |---|---|---|---|
-| F-0.1 | Separación de CI, despliegues, secretos y migraciones D1 | Implementada localmente; en revisión | `a59a2c5`, `6d5d98c`, `96417a5`, `cce5224`. Validada: 6/6 YAML, `node --check` ×2, 85/85 tests, 5/5 criterios de entrega segura. Auditoría remota de GitHub realizada. |
-| GOV-001 | Consolidación del proceso operativo de ingeniería | Completada; en revisión | `f644a6b`. `ENGINEERING_WORKFLOW.md` como proceso único; `AGENTS.md` conserva solo reglas del repositorio y remite a él. |
-
-La discrepancia de estado que GOV-001 dejó registrada en `MASTER_ROADMAP.md` quedó resuelta en la consolidación del 2026-08-02: el roadmap refleja ya ADR-0001/0002 aceptados, F-0.1 implementada localmente y la auditoría remota realizada.
+| F-0.1 | Separación de CI, despliegues, secretos y migraciones D1 | Implementada e integrada | `a59a2c5`, `6d5d98c`, `96417a5`, `cce5224`. Validada: 6/6 YAML, `node --check` ×2, 85/85 tests, 5/5 criterios de entrega segura. |
+| F-0.1-R | Activación y validación en GitHub remoto | Completada | PR #9 integrada. Workflows antiguos desactivados antes de integrar; CI verde en `push` y `pull_request`; ningún despliegue disparado; entorno `production` creado con revisor requerido; `main` protegida con PR obligatoria y check requerido. |
+| GOV-001 | Consolidación del proceso operativo de ingeniería | Completada; en revisión | `f644a6b`, `80cc1ff`. `ENGINEERING_WORKFLOW.md` como proceso único; `AGENTS.md` conserva solo reglas del repositorio y remite a él. |

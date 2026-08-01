@@ -5,9 +5,9 @@
 1. Crear una rama y abrir PR: `ci.yml` ejecuta validaciones sin secretos de producción.
 2. Integrar solo tras revisión y CI correcto. Integrar no publica, despliega, migra ni reconfigura secretos.
 3. Para producción, iniciar manualmente el workflow correspondiente desde GitHub Actions, indicando un SHA/tag revisado y la confirmación exacta.
-4. Cada operación requiere la protección del entorno correspondiente y una aprobación humana. **Esa protección todavía no existe**: ver «Estado remoto verificado».
+4. Cada operación requiere la protección del entorno correspondiente y una aprobación humana. El entorno `production` exige revisor desde el 2026-08-02: ver «Estado remoto».
 
-> ⚠️ Un workflow que solo declara `workflow_dispatch` **no aparece en la interfaz de Actions hasta que está en la rama por defecto**. Hasta integrar esta rama en `main` no se podrá lanzar ninguno manualmente.
+> ⚠️ Un workflow que solo declara `workflow_dispatch` **no aparece en la interfaz de Actions hasta que está en la rama por defecto**.
 
 > ⚠️ Si la confirmación se escribe mal, el job aparece como **`skipped`** (gris), no como fallo. No confundirlo con un despliegue realizado.
 
@@ -81,29 +81,28 @@ Las migraciones de raíz están `PENDIENTE`: no tienen manifiesto/orden único. 
 
 `Configure Cloudflare secrets (manual)` es una operación de producción independiente. Requiere `CONFIGURE_AGENT_SECRETS`, la protección del entorno `production` y secretos de GitHub disponibles únicamente en dicho entorno. Configura juntos los nombres existentes `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` y `ADMIN_TOKEN` mediante `wrangler secret bulk`; no se invoca durante CI, despliegues ni migraciones.
 
-## Estado remoto verificado
+## Estado remoto
 
-Auditoría de solo lectura vía API de GitHub (2026-08-02). No se modificó nada.
+Configurado el 2026-08-02 durante la activación de F-0.1 (PR #9).
 
-| Elemento | Estado real | Consecuencia |
+| Elemento | Estado | Nota |
 |---|---|---|
-| Protección de `main` | ❌ **No protegida** (HTTP 404) y sin rulesets | Cualquiera con acceso puede pushear directo a `main`. |
-| Entorno `production` | ❌ **No existe** | Los 4 workflows que lo declaran lo crearán implícitamente al ejecutarse, **sin reglas de aprobación**. La única barrera efectiva hoy es la palabra de confirmación. |
-| Entorno `github-pages` | ✅ Existe, con política de rama: **solo `main`** | Publicar Pages desde un tag o rama distinta de `main` **fallará** por política de entorno, aunque el workflow acepte cualquier `ref`. |
-| Pages | ✅ `build_type: workflow`, HTTPS forzado, origen `main` | Confirma que el entorno debe llamarse `github-pages`; renombrarlo rompe la publicación. |
-| Secretos de repositorio | ✅ `ADMIN_TOKEN`, `ANTHROPIC_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `OPENAI_API_KEY` | Los cinco que usan los workflows existen. Están a nivel de repositorio, **no de entorno**: cualquier workflow puede leerlos. |
-| Workflows activos en remoto | ⚠️ Los **4 antiguos siguen activos** con sus disparadores por `push` | El riesgo P0 sigue vivo en producción hasta que esta rama se integre. |
+| Protección de `main` | ✅ PR obligatoria, 1 aprobación, check requerido `Syntax and agent tests`, rama al día, sin force-push ni borrado | `enforce_admins` en `false` a propósito, para conservar una vía de emergencia. |
+| Entorno `production` | ✅ Existe con `required_reviewers` | Todo despliegue, migración o cambio de secretos exige aprobación explícita. |
+| Entorno `github-pages` | ✅ Existe, política de rama: **solo `main`** | Publicar desde un tag fallaría: el workflow acepta cualquier `ref`, pero el entorno no. |
+| Pages | ✅ `build_type: workflow`, HTTPS forzado | El entorno debe llamarse `github-pages`; renombrarlo rompe la publicación. |
+| Secretos | ⚠️ Los cinco existen, pero **a nivel de repositorio, no de entorno** | Cualquier workflow puede leerlos. Pendiente de mover. |
+| Workflows antiguos | ✅ Desactivados manualmente antes de integrar | Sustituidos por las versiones manuales. |
 
-## Configuración manual obligatoria en GitHub
+> ⚠️ Con 1 aprobación requerida y un solo mantenedor, GitHub no permite auto-aprobar: el merge exige el bypass de administrador. Es una fricción conocida, no un fallo.
 
-Pendiente. Requiere permisos de administración; el token disponible es de solo lectura para estos fines.
+## Configuración manual pendiente
 
-1. **Crear el entorno `production`** y exigir revisores de despliegue. Sin esto, la protección de entorno que asumen los workflows no existe.
-2. **Proteger `main`**: PR obligatoria, `ci.yml` como check requerido y prohibir pushes directos.
-3. **Mover los secretos de Cloudflare al entorno `production`** en lugar de dejarlos a nivel de repositorio.
-4. Decidir si la política de rama de `github-pages` debe seguir limitada a `main`; si se quiere publicar por tag, hay que ampliarla.
+1. **Recrear los secretos en el entorno `production`** y retirarlos del nivel de repositorio **solo después** de verificarlos allí. La API no expone sus valores, así que debe hacerlo una persona.
+2. **Ensayo en vacío**: lanzar un workflow de producción con la confirmación mal escrita y comprobar que el job sale `skipped`.
+3. Decidir si `required_approving_review_count` sigue en 1 o baja a 0.
+4. Decidir si la política de rama de `github-pages` se amplía para publicar por tag.
 5. Revisar permisos de `CLOUDFLARE_API_TOKEN` con mínimo privilegio y rotación definida.
-6. Tras integrar esta rama, comprobar en Actions que los workflows antiguos han desaparecido y los nuevos figuran como manuales.
 
 ## Evidencia de cierre
 

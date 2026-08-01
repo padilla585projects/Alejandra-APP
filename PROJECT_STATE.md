@@ -1,7 +1,7 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-02
-- Estado: F-0.1 **implementada localmente — pendiente de integración y validación remota**. Nada desplegado, migrado ni pusheado.
+- Estado: F-0.1 **integrada y activa en remoto**. Nada desplegado ni migrado en el proceso.
 
 ## Gobierno operativo
 
@@ -11,13 +11,15 @@
 
 CI (`ci.yml`), CD manual (Pages y Workers), migraciones D1 y configuración de secretos están separados en el repositorio. Un push/merge ya no activa los workflows de producción versionados.
 
-**Esto todavía no aplica en producción.** La rama no está integrada, de modo que los cuatro workflows antiguos siguen activos en GitHub y el riesgo P0 sigue vivo en el remoto. La auditoría de solo lectura del 2026-08-02 confirmó además que `main` no está protegida, que el entorno `production` no existe y que los secretos están a nivel de repositorio en lugar de entorno. `github-pages` sí existe, con política de rama limitada a `main`. Detalle en `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
+**Activo en remoto desde el 2026-08-02** (PR #9). Los workflows antiguos se desactivaron antes de integrar, CI pasó en verde y no se disparó ningún despliegue durante el proceso. Se creó el entorno `production` con revisor requerido y se protegió `main` con PR obligatoria y check requerido.
+
+Queda pendiente mover los secretos de repositorio a entorno y probar en vacío el circuito manual: la API no expone los valores de los secretos, así que recrearlos corresponde al Director. Detalle en `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
 
 Los despliegues de Workers no llevan healthcheck automático: los `GET /health` actuales devuelven 200 sin comprobar D1/R2, por lo que darían por bueno un despliegue roto. La verificación es manual (runbook); Pages sí conserva healthcheck porque valida la versión servida.
 
 ## Riesgos activos
 
-- **El P0 sigue vivo en producción** hasta integrar la rama: los workflows antiguos continúan activos en GitHub.
+- Los secretos siguen a nivel de repositorio, no de entorno: cualquier workflow puede leerlos.
 - **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción (~108 `CREATE TABLE IF NOT EXISTS`, ~51 `ALTER TABLE`), no las migraciones versionadas. F-0.1 controla las migraciones del workflow, no las del código.
 - `migrate_008_plano_circuitos.sql` queda **bloqueada** en el workflow: la columna ya se crea desde código y aplicarla fallaría por duplicado. El fichero se conserva.
 - ARC-005 queda mitigado en los workflows versionados, pendiente de validación remota.
@@ -27,6 +29,6 @@ Los despliegues de Workers no llevan healthcheck automático: los `GET /health` 
 
 ## Siguiente objetivo
 
-**Activar y validar F-0.1 en GitHub remoto mediante rama y PR segura** (tarea `F-0.1-R`). Es la única tarea activa.
+**Completar la configuración remota de entrega segura** (tarea `F-0.2-CFG`): secretos por entorno y ensayo en vacío del circuito manual. Es la única tarea activa.
 
 Después: resolver ADR-0004 antes de implementar el Núcleo Cognitivo. El inventario de DDL en runtime (ARC-011) es trabajo futuro obligatorio y requiere ADR propio; no pertenece a F-0.1.
