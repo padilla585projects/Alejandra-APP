@@ -16,6 +16,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Inventario del esquema real de D1 (`docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`), con las dos fases de ARC-011: análisis estático de los dos workers y contraste con producción.
 - `runDDL()` en ambos workers: ejecuta DDL en caliente sin lanzar, pero registrando todo error que no sea el duplicado esperado. `ddlPaso()` para `runMigrations()`, que distingue aplicada / ya existía / ERROR.
 - ARC-013 y ARC-014 en el backlog, abiertos a raíz del arreglo de ARC-012.
+- F-0.2: cuatro scripts de inventario y validación en `scripts/` —rutas y su autorización, encoding, sincronía de versiones, y secretos/bindings/migraciones—, todos de solo lectura y enganchados al job de CI existente. Ninguno contacta con Cloudflare ni lee valores de secretos.
+- ADR-0006, que resuelve ARC-001 con una propuesta de matriz de riesgo en cuatro niveles por reversibilidad y alcance. Pendiente de decisión del Director; desbloquea ADR-0004 y con él F-1.1.
 
 ### Changed
 
@@ -29,4 +31,5 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - ARC-012 resuelto: `planos.circuitos_json`, `inventario_seg.ubicacion` y `empresas.retencion_config` aplicadas por el workflow manual y verificadas contra el esquema real. Cierra SEG-01 de verdad —el fix del 25/07 nunca llegó a funcionar— y restaura la retención RGPD, que estaba inoperante.
 - ARC-013: se retira la supresión de errores del DDL en runtime en los dos workers (48 llamadas a `runDDL`, 10 pasos a `ddlPaso`). No cambia comportamiento observable —el helper nunca lanza— pero un `no such table` deja de ser invisible. Requiere despliegue de `worker.js` para surtir efecto.
 - Puesta al día del estado tras las PR #10 y #11: `START_HERE.md`, `PROJECT_STATE.md`, `HANDOFF.md`, `TASKS.md`, `MASTER_ROADMAP.md` y `ARCHITECT_BACKLOG.md` seguían reflejando solo hasta la PR #9.
-- Sin cambios de datos ni despliegues. El único cambio de código es de observabilidad.
+- `PUT /sesion/departamento` comprobaba que el header `X-Token` existiera, pero no que la sesión fuese real ni que no hubiera caducado, y devolvía `ok:true` aunque no actualizara ninguna fila. El `UPDATE` está acotado por token, así que no permitía tocar la sesión de otro, pero una sesión ya caducada podía seguir cambiando su departamento —cosa que el resto de endpoints impide desde SEC-08/SEC-09—. Detectado por el catálogo de rutas de F-0.2.
+- Sin cambios de datos ni despliegues. Los cambios de código son de observabilidad, de corrección del prompt y de esa comprobación de sesión.
