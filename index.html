@@ -3637,6 +3637,23 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="limpiarCache()">🗑 Limpiar caché SW</button>
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px;background:var(--red)" onclick="resetSesionCompleto()">⚠️ Resetear sesión y caché</button>
         </div>
+        <!-- VOZ-01 (01/08/2026): Adrián: "la voz de Alejandra no me gusta nada, además
+             lee muy lento" + "tenemos que en ajustes poder modificarlo en alguna sección
+             para el chat" — antes la voz y la velocidad estaban fijas en el código sin
+             ningún control. Aplica tanto al chat flotante de Alejandra como al panel IA. -->
+        <div class="settings-section" id="sistemaVozSection">
+          <div class="settings-title">🔊 Voz de Alejandra</div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label">Voz</label>
+            <select class="form-input" id="vozSelect" onchange="vozGuardarSeleccion()"></select>
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label">Velocidad: <span id="vozVelocidadLabel">1.15x</span></label>
+            <input type="range" id="vozVelocidad" min="0.7" max="1.6" step="0.05" style="width:100%"
+              oninput="vozActualizarVelocidadLabel()" onchange="vozGuardarSeleccion()">
+          </div>
+          <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:0" onclick="vozProbar()">▶️ Probar voz</button>
+        </div>
         <div class="settings-section" id="sistemaPushSection" style="display:none">
           <div class="settings-title">🔔 Notificaciones push (Alejandra)</div>
           <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Recibe avisos cuando Alejandra te responda o detecte problemas.</div>
@@ -11826,7 +11843,7 @@ function selAjTab(tab) {
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 60000); } // 1 min (antes 30s)
   if (tab === 'sesion')      cargarEstadoTelegram();
-  if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); }
+  if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); vozPoblarSelector(); }
   if (tab === 'empresa')    cargarPanelEmpresa();
   if (tab === 'comparativa') cargarComparativaObras();
 }
@@ -13144,7 +13161,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '8.98';
+const APP_VERSION = '8.99';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -20843,8 +20860,59 @@ window.turnoToggle   = turnoToggle;
            null;
   }
 
+  // VOZ-01 (01/08/2026): Adrián: "la voz de Alejandra no me gusta nada, además lee muy
+  // lento" + "tenemos que en ajustes poder modificarlo en alguna sección para el chat" —
+  // antes la voz/velocidad estaban fijas en el código (rate 1.05, voz elegida por
+  // heurística) sin ningún control visible. Preferencias compartidas por iaSpeak() y
+  // alejandraHablar() (los dos lectores de voz de la app), guardadas en localStorage y
+  // editables desde Ajustes → Sistema → 🔊 Voz de Alejandra.
+  function _vozPrefs() {
+    let rate = parseFloat(localStorage.getItem('alejandra_voz_rate'));
+    if (!rate || isNaN(rate)) rate = 1.15;
+    return { rate, voiceURI: localStorage.getItem('alejandra_voz_uri') || '' };
+  }
+  function _vozElegida() {
+    const { voiceURI } = _vozPrefs();
+    if (voiceURI) {
+      const elegida = (window.speechSynthesis?.getVoices() || []).find(v => v.voiceURI === voiceURI);
+      if (elegida) return elegida;
+    }
+    return iaGetVoice();
+  }
+  function vozPoblarSelector() {
+    const sel = document.getElementById('vozSelect');
+    if (!sel || !window.speechSynthesis) return;
+    const voices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('es'));
+    const { voiceURI, rate } = _vozPrefs();
+    sel.innerHTML = '<option value="">Automática (recomendada)</option>' +
+      voices.map(v => `<option value="${_escHtml(v.voiceURI)}"${v.voiceURI === voiceURI ? ' selected' : ''}>${_escHtml(v.name)} (${_escHtml(v.lang)})</option>`).join('');
+    const rangeEl = document.getElementById('vozVelocidad');
+    if (rangeEl) rangeEl.value = rate;
+    vozActualizarVelocidadLabel();
+  }
+  function vozActualizarVelocidadLabel() {
+    const val = document.getElementById('vozVelocidad')?.value || _vozPrefs().rate;
+    const label = document.getElementById('vozVelocidadLabel');
+    if (label) label.textContent = Number(val).toFixed(2) + 'x';
+  }
+  function vozGuardarSeleccion() {
+    localStorage.setItem('alejandra_voz_uri', document.getElementById('vozSelect')?.value || '');
+    localStorage.setItem('alejandra_voz_rate', document.getElementById('vozVelocidad')?.value || '1.15');
+    vozActualizarVelocidadLabel();
+  }
+  window.vozGuardarSeleccion = vozGuardarSeleccion;
+  window.vozActualizarVelocidadLabel = vozActualizarVelocidadLabel;
+  function vozProbar() {
+    vozGuardarSeleccion();
+    const prevIA = _iaTtsEnabled;
+    _iaTtsEnabled = true;
+    iaSpeak('Hola, así sueno con esta voz y esta velocidad.');
+    _iaTtsEnabled = prevIA;
+  }
+  window.vozProbar = vozProbar;
+
   if (window.speechSynthesis) {
-    window.speechSynthesis.onvoiceschanged = () => { _iaVoicesLoaded = true; };
+    window.speechSynthesis.onvoiceschanged = () => { _iaVoicesLoaded = true; vozPoblarSelector(); };
     setTimeout(() => { window.speechSynthesis.getVoices(); }, 200);
   }
 
@@ -20872,9 +20940,9 @@ window.turnoToggle   = turnoToggle;
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(clean);
     utt.lang = 'es-ES';
-    utt.rate = 1.05;
+    utt.rate = _vozPrefs().rate;
     utt.pitch = 1.1;
-    const voice = iaGetVoice();
+    const voice = _vozElegida();
     if (voice) utt.voice = voice;
     window.speechSynthesis.speak(utt);
   }
@@ -21332,12 +21400,9 @@ function alejandraHablar(texto) {
   synth.cancel();
   const utt = new SpeechSynthesisUtterance(limpio.substring(0, 500));
   utt.lang  = 'es-ES';
-  utt.rate  = 1.05;
+  utt.rate  = _vozPrefs().rate;
   utt.pitch = 1.0;
-  // Buscar voz española femenina
-  const voces = synth.getVoices();
-  const voz   = voces.find(v => v.lang.startsWith('es') && /female|mujer|lucia|maria/i.test(v.name))
-             || voces.find(v => v.lang.startsWith('es'));
+  const voz = _vozElegida();
   if (voz) utt.voice = voz;
   synth.speak(utt);
 }
