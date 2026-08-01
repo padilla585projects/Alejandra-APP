@@ -89,6 +89,48 @@ describe('filtrarToolsPorAuth', () => {
     expect(r.map(t => t.name)).toEqual(['buscar_web']);
   });
 
+  // SEC-ANON-01 (02/08/2026): pruebas negativas de autorización.
+  // `/api/chat` acepta peticiones sin sesión a propósito, y sin sesión el `empresa_id`
+  // sale del body sin verificar. Estas tools estaban FUERA del gateo, así que un anónimo
+  // podía leer datos de la empresa que eligiera y código privado de GitHub.
+  // Si alguien las saca de TOOLS_REQUIEREN_SESION, este test tiene que romperse.
+  it('sin sesión: ninguna tool de datos de empresa es alcanzable', () => {
+    const datos = ['consultar_personal', 'consultar_inventario', 'estado_obra',
+      'buscar_documentos', 'buscar_proveedores', 'consultar_precios',
+      'consultar_punch_list', 'buscar_tareas', 'recuperar_conversacion']
+      .map(name => ({ name }));
+    expect(filtrarToolsPorAuth(datos, false, false)).toEqual([]);
+  });
+
+  it('sin sesión: ninguna tool que escriba datos de empresa es alcanzable', () => {
+    const escritura = ['gestionar_tarea', 'gestionar_rfi', 'gestionar_oc', 'gestionar_acta',
+      'gestionar_calidad', 'generar_documento', 'editar_plano']
+      .map(name => ({ name }));
+    expect(filtrarToolsPorAuth(escritura, false, false)).toEqual([]);
+  });
+
+  it('sin sesión: el código fuente de GitHub no es alcanzable', () => {
+    const codigo = ['github_leer', 'github_listar', 'github_buscar', 'grep_codigo']
+      .map(name => ({ name }));
+    expect(filtrarToolsPorAuth(codigo, false, false)).toEqual([]);
+  });
+
+  it('sin sesión: siguen pasando las tools que no tocan datos de nadie', () => {
+    // El chat anónimo existe por diseño y debe seguir sirviendo para consultas técnicas.
+    const publicas = ['buscar_web', 'buscar_normativa', 'pensar', 'planificar',
+      'calcular_cable', 'calcular_bandeja', 'calcular_proteccion'].map(name => ({ name }));
+    expect(filtrarToolsPorAuth(publicas, false, false).map(t => t.name)).toEqual(
+      publicas.map(t => t.name)
+    );
+  });
+
+  it('con sesión: las tools de datos vuelven a estar disponibles (sin regresión)', () => {
+    const datos = ['consultar_personal', 'estado_obra', 'github_leer'].map(name => ({ name }));
+    expect(filtrarToolsPorAuth(datos, true, false).map(t => t.name)).toEqual(
+      ['consultar_personal', 'estado_obra', 'github_leer']
+    );
+  });
+
   it('con sesión pero sin dev verificado: deja consultar_bd pero no patch_codigo', () => {
     const r = filtrarToolsPorAuth(tools, true, false);
     expect(r.map(t => t.name)).toEqual(['consultar_bd', 'buscar_web']);

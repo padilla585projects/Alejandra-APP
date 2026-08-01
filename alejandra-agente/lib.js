@@ -135,7 +135,32 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   // prompt injection no autenticado. memory_read/leer_estado (exponen memoria/estado
   // interno) y propose_mejora/tomar_decision (tomar_decision puede auto-aplicar cambios
   // de config si confianza>=0.8) se gatean igual por defensa en profundidad.
-  'memory_save', 'memory_read', 'propose_mejora', 'leer_estado', 'tomar_decision'
+  'memory_save', 'memory_read', 'propose_mejora', 'leer_estado', 'tomar_decision',
+
+  // SEC-ANON-01 (02/08/2026): `/api/chat` y `/api/chat/stream` aceptan peticiones SIN
+  // sesión a propósito, y sin sesión el `empresa_id` se toma del body sin verificar
+  // (worker.js: `sesionAuth ? sesionAuth.empresa_id : (empresa_id || 'default')`).
+  // Es decir: para cualquier tool acotada por empresa_id, ese acotamiento lo elige
+  // quien llama. Un anónimo podía pedir datos de la empresa que quisiera.
+  //
+  // El gateo anterior cubría `consultar_bd` y `exportar_datos`, pero no estas, que
+  // llegan a los mismos datos por la puerta de al lado. Se añaden todas las que leen o
+  // escriben datos de empresa, más las de GitHub —que exponen código privado— y las de
+  // estado interno del agente.
+  //
+  // Lo que se deja SIN gatear a propósito, porque no toca datos de nadie: `buscar_web`,
+  // `buscar_normativa`, `pensar`, `planificar` y los cálculos de ingeniería
+  // (`calcular_cable`, `calcular_bandeja`, `calcular_proteccion`). El chat anónimo
+  // sigue siendo útil para consultas técnicas, que es para lo que existe.
+  'analizar_foto_obra', 'buscar_documentos', 'buscar_precios', 'buscar_procedimientos',
+  'buscar_proveedores', 'buscar_tareas', 'consultar_inventario', 'consultar_personal',
+  'consultar_precios', 'consultar_punch_list', 'estado_obra', 'recuperar_conversacion',
+  'consultar_conocimiento',
+  'editar_plano', 'generar_documento', 'generar_esquema_electrico', 'generar_plano',
+  'gestionar_acta', 'gestionar_calidad', 'gestionar_oc', 'gestionar_rfi', 'gestionar_tarea',
+  'github_buscar', 'github_leer', 'github_listar', 'grep_codigo',
+  'ram_clear', 'ram_read', 'ram_save', 'descubrir_herramientas', 'validar_cambios_bd',
+  'verificar_deploy'
 ]);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {

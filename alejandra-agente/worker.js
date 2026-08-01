@@ -2713,7 +2713,15 @@ export default {
         const sesionAuth = await getAuth(req, env);
         const authOk = !!sesionAuth;
         // Normalizar usuario_id: "Adrian", "adrian", "3", "3.0" → siempre el mismo ID
-        const usuario_id = sesionAuth ? sesionAuth.usuario_id : await normalizarUsuarioId(env, rawUserId);
+        // SEC-ANON-01 (02/08/2026): sin sesión NO se resuelve el nombre a una cuenta real.
+        // normalizarUsuarioId hace `SELECT id FROM usuarios WHERE LOWER(nombre)=LOWER(?)`,
+        // así que un anónimo mandando usuario_id:"Adrian" obtenía el id real de Adrián — y
+        // con él, obtenerContextoChat le metía al prompt sus 10 últimos mensajes privados.
+        // Se saltaba el control que sí tiene /api/chat/history. En sentido inverso, además,
+        // permitía ESCRIBIR en el historial de esa persona.
+        // El prefijo `anon:` no puede colisionar con ningún id real y mantiene la
+        // continuidad de la conversación anónima, que es lo único que aquí hace falta.
+        const usuario_id = sesionAuth ? sesionAuth.usuario_id : `anon:${String(rawUserId).trim().slice(0, 40)}`;
         const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
 
         // Protección anti runaway-cost: rate limit por identidad + tope de gasto diario.
@@ -2729,7 +2737,11 @@ export default {
           return json({ error: 'Servicio temporalmente saturado (tope de gasto diario alcanzado). Vuelve a intentarlo más tarde.' }, 429);
         }
 
-        const empresa   = sesionAuth ? sesionAuth.empresa_id : (empresa_id || 'default');
+        // SEC-ANON-01: sin sesión el empresa_id del body se ignora. Antes lo elegía quien
+        // llamaba, así que cualquier tool acotada por empresa quedaba acotada por el
+        // atacante. Las tools de datos ya están gateadas en TOOLS_REQUIEREN_SESION; esto
+        // es defensa en profundidad y cierra además el historial por empresa.
+        const empresa   = sesionAuth ? sesionAuth.empresa_id : 'default';
         const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const canalChat = canal || 'web';
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
@@ -2759,7 +2771,15 @@ export default {
         // Ver comentario en /api/chat: identidad verificada por token, no por el body.
         const sesionAuth = await getAuth(req, env);
         const authOk = !!sesionAuth;
-        const usuario_id = sesionAuth ? sesionAuth.usuario_id : await normalizarUsuarioId(env, rawUserId);
+        // SEC-ANON-01 (02/08/2026): sin sesión NO se resuelve el nombre a una cuenta real.
+        // normalizarUsuarioId hace `SELECT id FROM usuarios WHERE LOWER(nombre)=LOWER(?)`,
+        // así que un anónimo mandando usuario_id:"Adrian" obtenía el id real de Adrián — y
+        // con él, obtenerContextoChat le metía al prompt sus 10 últimos mensajes privados.
+        // Se saltaba el control que sí tiene /api/chat/history. En sentido inverso, además,
+        // permitía ESCRIBIR en el historial de esa persona.
+        // El prefijo `anon:` no puede colisionar con ningún id real y mantiene la
+        // continuidad de la conversación anónima, que es lo único que aquí hace falta.
+        const usuario_id = sesionAuth ? sesionAuth.usuario_id : `anon:${String(rawUserId).trim().slice(0, 40)}`;
         const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
 
         // Protección anti runaway-cost: rate limit por identidad + tope de gasto diario
@@ -2775,7 +2795,8 @@ export default {
           return json({ error: 'Servicio temporalmente saturado (tope de gasto diario alcanzado). Vuelve a intentarlo más tarde.' }, 429);
         }
 
-        const empresa  = sesionAuth ? sesionAuth.empresa_id : (empresa_id || 'default');
+        // SEC-ANON-01: ver la nota en /api/chat. Sin sesión, el empresa_id del body se ignora.
+        const empresa  = sesionAuth ? sesionAuth.empresa_id : 'default';
         const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
         // FIX-ALEJANDRA-ROL-01: ver comentario en /api/chat — rol/nombre de la sesión
