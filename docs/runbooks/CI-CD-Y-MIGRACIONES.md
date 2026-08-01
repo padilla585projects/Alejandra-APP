@@ -13,23 +13,63 @@
 - Agente: `Deploy Alejandra Agent Worker (manual)` con `DEPLOY_ALEJANDRA_AGENT`, entorno `production`; ejecuta tests antes de desplegar.
 - Pages: `Publish GitHub Pages (manual)` con `PUBLISH_GITHUB_PAGES`, entorno GitHub obligatorio `github-pages`.
 
-Cada despliegue usa un `ref` explícito. Antes de iniciarlo: confirmar SHA, CI, responsable, healthcheck esperado y rollback. Para revertir, publicar manualmente el último SHA sano mediante el workflow específico.
+Cada despliegue usa un `ref` explícito. Antes de iniciarlo: confirmar SHA, CI, responsable, verificación esperada y rollback. Para revertir, publicar manualmente el último SHA sano mediante el workflow específico.
+
+### Verificación tras desplegar (manual, obligatoria)
+
+**Los despliegues de Workers no llevan healthcheck automático a propósito.** `GET /health`
+existe y es público en ambos Workers, no exige credenciales y no tiene efectos secundarios,
+pero **no distingue «Worker desplegado» de «Worker operativo»**:
+
+| Worker | Endpoint | Por qué no sirve como healthcheck |
+|---|---|---|
+| API (`alejandra-app-api`) | `worker.js:4822` | Devuelve `{ok:true, ts}` constante. No consulta D1 ni R2: respondería 200 con la base de datos caída o los bindings ausentes. |
+| Agente (`alejandra-agente`) | `alejandra-agente/worker.js:2493` | Devuelve flags de presencia de secretos, pero tampoco toca D1/R2. Su campo `version` está escrito a mano (`6.14`) y ya se desincronizó una vez (ver cabecera del archivo, v6.13), así que no acredita qué versión se desplegó. |
+
+Un 200 de esos endpoints daría luz verde a un despliegue roto, que es peor que no comprobar
+nada. Por eso la verificación es manual: tras desplegar, el responsable debe comprobar una
+operación real de lectura contra D1 desde la aplicación y registrar el resultado en el handoff.
+
+Pages sí conserva healthcheck automático: comprueba que `/version.json` sirve la versión
+publicada, lo que sí distingue publicado de operativo.
+
+**Reincorporar healthchecks automáticos requiere primero** un endpoint de salud que verifique
+dependencias reales (D1, R2 y bindings) y exponga la versión desplegada de forma derivada, no
+escrita a mano. Registrado en ARC-008.
 
 ## Migraciones D1
 
-`Apply Alejandra Agent D1 migration (manual)` es el único workflow versionado que puede aplicar una de las ocho migraciones del agente. Requiere seleccionar el archivo en una lista cerrada, escribir `APPLY_D1_MIGRATION`, revisión de la migración, aprobación del entorno `production` y validación posterior. Nunca ejecutar una migración como paso de despliegue.
+`Apply Alejandra Agent D1 migration (manual)` es el único workflow versionado que puede aplicar una migración del agente. Requiere seleccionar el archivo en una lista cerrada, escribir `APPLY_D1_MIGRATION`, revisión de la migración, aprobación del entorno `production` y validación posterior. Nunca ejecutar una migración como paso de despliegue.
 
-### Migración 008 — `migrate_008_plano_circuitos.sql`
+> ⚠️ **Este workflow no es el único mecanismo que altera el esquema.** `worker.js` ejecuta DDL
+> en producción por su cuenta (ver ARC-011). Controlar este workflow no controla el esquema.
 
-La migración 008 queda registrada en el selector, pero **no ha sido ejecutada**. Añade `circuitos_json` a `planos` y no es idempotente. Antes de autorizarla, el responsable debe:
+### Migración 008 — `migrate_008_plano_circuitos.sql` — BLOQUEADA
 
-1. confirmar el SHA exacto y revisar el SQL;
-2. verificar con consulta remota de solo lectura y autorización que la columna no existe;
-3. documentar impacto, ventana, responsable y mitigación;
-4. ejecutar únicamente el workflow de migración, no un despliegue;
-5. registrar la evidencia posterior y el resultado en el handoff.
+**No puede ejecutarse desde el workflow.** Está excluida del selector y, además, rechazada por
+un guard explícito en `.github/workflows/migrate-d1-agent.yml`. Doble barrera deliberada.
 
-El rollback de un `ALTER TABLE ... ADD COLUMN` no se presume: requiere una decisión y procedimiento específico aprobados.
+Motivo:
+
+- `planos.circuitos_json` **ya se crea desde código**: `worker.js:24646`, dentro de
+  `_ensurePlanosTable()`, ejecuta `ALTER TABLE planos ADD COLUMN circuitos_json TEXT` silenciado
+  con `.catch(() => {})`. El fichero `.sql` duplica ese mismo cambio.
+- Ejecutar la 008 **fallaría por columna duplicada** (`duplicate column name: circuitos_json`).
+  Al haberse retirado el `|| echo` que enmascaraba errores, ese fallo detendría el workflow —
+  correcto, pero evitable no lanzándola.
+- **El estado real de producción sigue pendiente de verificación autorizada.** No se ha
+  consultado D1 remoto: la afirmación anterior se basa en lectura de código, no en evidencia de
+  la base de datos.
+- **El fichero se conserva**, no se borra: documenta la intención del cambio y es material para
+  el inventario de ARC-011.
+
+La solución definitiva no pertenece a F-0.1, sino al saneamiento del gobierno del esquema D1
+(ARC-011): mientras el código siga creando columnas en caliente, cualquier migración versionada
+que las duplique estará en conflicto por diseño.
+
+Para desbloquearla en el futuro: eliminar primero el DDL en runtime de `worker.js`, verificar el
+esquema real con consulta autorizada de solo lectura, y solo entonces decidir si la 008 debe
+aplicarse, reescribirse como idempotente o archivarse como ya aplicada.
 
 Las migraciones de raíz están `PENDIENTE`: no tienen manifiesto/orden único. Aplicarlas solo mediante procedimiento específico aprobado hasta normalizarlas.
 
