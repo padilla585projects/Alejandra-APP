@@ -227,6 +227,29 @@ describe('filtrarToolsPorAuth', () => {
     }
   });
 
+  // F-1.3-MIGRAR-RESTO-TOOLS, lote 3 (2026-08-02): 7 tools públicas
+  // (SEC-ANON-01 las dejó deliberadamente sin sesión porque no tocan datos de
+  // nadie: búsqueda externa y cálculos de ingeniería deterministas).
+  // acceso:'publico' — ausentes de los tres Set, así que el filtrado no
+  // depende de authOk/esDevVerificado en absoluto, con o sin metadato.
+  it('lote 3 (buscar_web, calcular_cable, calcular_bandeja, calcular_proteccion, pensar, planificar, buscar_normativa): metadato ADR-0010 no cambia el filtrado', () => {
+    const lote3 = [
+      'buscar_web', 'calcular_cable', 'calcular_bandeja', 'calcular_proteccion',
+      'pensar', 'planificar', 'buscar_normativa',
+    ];
+    for (const name of lote3) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso: 'publico', cron: 'permitido', nivel_riesgo: 'N0' };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+        // Público: siempre pasa, independientemente de authOk/esDevVerificado.
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado)).toEqual([conMetadato]);
+      }
+      expect(filtrarToolsCron([conMetadato])).toEqual([conMetadato]);
+    }
+  });
+
   // fix continuación 14 (IDOR/SQLi en configurar_alerta y exportar_datos):
   // configurar_alerta pasa a exigir dev verificado (igual que patch_codigo,
   // guardaba SQL arbitrario ejecutado sin scope); exportar_datos pasa a exigir
