@@ -35,7 +35,7 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 | Entrega segura | **F-0.1 integrada y activa en remoto** (PR #9, 2026-08-02): workflows antiguos retirados, `main` protegida, entorno `production` con revisor requerido. El P0 está neutralizado. Queda mover los secretos a nivel de entorno (`F-0.2-CFG`). |
 | Esquema D1 | **ARC-011 fases 1 y 2 verificadas** (PR #10): 105 de 150 tablas existen solo porque el código las crea y 27 tablas reales no las declara nadie; el esquema **no es reproducible desde el repositorio**. ARC-012 resuelto (PR #11): las 3 columnas que faltaban se aplicaron y verificaron. ARC-013 corregido en código (`eb772ee`), pendiente de despliegue. Fase 3 pendiente, exige ADR propio. |
 | Auditoría remota GitHub | Realizada 2026-08-02 en solo lectura. Sus cinco hallazgos quedaron corregidos al activar F-0.1, salvo los secretos, que siguen a nivel de repositorio. |
-| Auditoría remota Cloudflare | Pendiente, solo lectura autorizada. |
+| Auditoría remota Cloudflare | **Realizada el 2026-08-02**, solo lectura autorizada por el Director. Workers, D1, R2, KV y secretos (solo nombres) inventariados. Esquema de Alejandra verificado contra D1 real: 57/60 correcto (ARC-015 cerrado). Ningún secreto ni binding sin declarar. Hallazgo: Worker y bucket R2 huérfanos sin documentar (ARC-018), pendiente de decisión — no tocados. |
 
 ## Épocas y fases
 

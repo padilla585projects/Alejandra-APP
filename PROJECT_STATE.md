@@ -49,23 +49,35 @@ El bloqueo de `migrate_008_plano_circuitos.sql` se retiró: partía de un diagn�
 
 Fue el primer uso real del circuito de entrega segura de F-0.1 y se comportó como estaba diseñado: los tres runs quedaron en `waiting` hasta aprobación del entorno.
 
+## Estado de despliegue (2026-08-02)
+
+**Los dos Workers están desplegados y respondiendo** (`HTTP 200` verificado): `alejandra-app-api` versión `a5ccf770`, `alejandra-agente` versión `a67353ec`. Llevan ARC-013, ARC-015, ARC-016 y ARC-017 en producción.
+
 ## Riesgos activos
 
 - Los secretos siguen a nivel de repositorio, no de entorno: cualquier workflow puede leerlos.
-- **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción, no las migraciones versionadas. Fases 1 y 2 verificadas; **fase 3 pendiente** (ADR, migrador único, declaración de las 27 tablas huérfanas y retirada del DDL en runtime por verticales).
-- **ARC-013 (alto):** los 18 `ALTER` en runtime llevan `catch` vacío, así que un fallo no deja rastro. Tres de dieciocho ya habían fallado sin que nadie lo supiera. Es la causa raíz de ARC-012 y exige desplegar `worker.js`.
-- **ARC-015 (alto):** el bloque `SCHEMA BASE DE DATOS` del prompt de `worker.js` describe columnas que no existen, así que Alejandra genera SQL que falla. Corregidas las 8 tablas con `CREATE` autoritativo en `worker.js`; las ~29 restantes exigen consulta de metadatos a D1 porque las 27 huérfanas no tienen `CREATE` en el repositorio.
+- **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción, no las migraciones versionadas. Fases 1 y 2 verificadas. **Fase 3 con ADR redactado** (`ADR-0011`, propuesto): migración por vertical, empezando por `checklists`, con manifiesto de estado. Pendiente de decisión.
+- **ARC-018 (alto, nuevo):** la auditoría remota de Cloudflare del 2026-08-02 encontró un Worker huérfano (`alejandra-worker`, fork abandonado de `worker.js` de mayo, sin las mejoras SEC-01 a SEC-15, con rutas de escritura completas y alcanzables) y un bucket R2 no documentado (`alejandra-files`). No se ha confirmado si comparten datos con producción, ni se han tocado — la autorización cubría lectura de metadatos, no borrar recursos.
 - **ARC-014 (medio):** la aprobación del entorno `production` se concedió con la misma credencial que lanzó el workflow. Un agente con token de administración puede aprobar su propio despliegue: la barrera cubre el error accidental, no la intención.
-- `usuario_obras` está declarada en código y en `.sql` pero **no existe** en producción: `migrate_roles_multiobra.sql` nunca se aplicó. Pendiente comprobar de qué depende antes de actuar.
 - ARC-005 queda mitigado en los workflows versionados, pendiente de validación remota.
 - ARC-008: no existe un endpoint de salud que verifique dependencias reales.
-- Migraciones raíz carecen de manifiesto único y no se automatizan.
+- Migraciones raíz carecen de manifiesto único (ver propuesta en ADR-0011).
 - Núcleo Cognitivo y Motor de Decisión siguen documentados, no implementados.
+
+## Decisiones pendientes del Director
+
+Cinco ADR redactados y **propuestos**, esperando decisión. Ninguno implica trabajo adicional del agente hasta ser aceptados — es la frontera que fija ADR-0007: redactar es autónomo, aceptar no.
+
+| ADR | Resuelve | Qué decide |
+|---|---|---|
+| `ADR-0006` | ARC-001 | Matriz de riesgo N0–N3; si `run_migration` sale del alcance del agente. Primer dominó — desbloquea ADR-0004 y F-1.1 |
+| `ADR-0008` | ARC-003 | Qué es «Nexo»: tres interpretaciones mutuamente excluyentes |
+| `ADR-0009` | ARC-004 | Alcance de QA: tres niveles de verificación, generalizando lo que ya existe (SEC-08/SEC-09) |
+| `ADR-0010` | ARC-006 | Catálogo de tools: el nivel de acceso pasa a ser metadato declarado, no listas externas que se olvidan |
+| `ADR-0011` | ARC-011 fase 3 | Migrador por vertical y manifiesto de migraciones aplicadas |
+
+Además: **`F-0.2-CFG`** (secretos por entorno), **ARC-018** (worker/bucket huérfanos) y **ARC-014** (autoaprobación de despliegue) — ninguno requiere ADR, pero sí decisión.
 
 ## Siguiente objetivo
 
-**ARC-013 — retirar la supresión de errores del DDL en runtime.** Mientras el patrón siga, cada `ALTER` fallido creará un bug silencioso más. El cambio de código se prepara y valida en rama; el despliegue de `worker.js` requiere autorización explícita aparte.
-
-En paralelo, solo por el Director: **`F-0.2-CFG`** (secretos por entorno y ensayo en vacío del circuito manual), porque exige manejar los valores reales.
-
-Después: ARC-011 fase 3 con ADR propio, y resolver ADR-0004 antes de implementar el Núcleo Cognitivo.
+No hay tarea de ingeniería pendiente sin decisión previa. El trabajo autónomo de Época 0 está agotado hasta que el Director resuelva alguno de los cinco ADR de arriba — aceptarlos es lo único que desbloquea la Época 1.
