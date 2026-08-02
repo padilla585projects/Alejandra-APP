@@ -37,9 +37,35 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4'
-      # SIN healthcheck automatico a proposito. GET /health de este Worker devuelve
-      # {ok:true} constante sin tocar D1 ni R2 (worker.js:4822): responderia 200 con
-      # la base de datos caida o los bindings ausentes, dando por bueno un despliegue
-      # roto. Verificacion manual post-despliegue segun
+      # Healthcheck automatico (ADR-0014): /health ya comprueba D1 y R2 y distingue
+      # desplegado de operativo. "degraded" es advertencia, no bloquea; "unhealthy"
+      # bloquea el job. No sustituye la verificacion manual registrada en
       # docs/runbooks/CI-CD-Y-MIGRACIONES.md.
-      # Reincorporar cuando exista un endpoint de salud con dependencias reales.
+      - name: Verify deployment health
+        run: |
+          set -e
+          URL="https://alejandra-app-api.alejandra-app.workers.dev/health"
+          RESPONSE=""
+          for i in 1 2 3 4 5; do
+            if RESPONSE=$(curl -sf "$URL"); then
+              break
+            fi
+            echo "Intento $i sin respuesta, reintentando en 5s..."
+            sleep 5
+          done
+          if [ -z "$RESPONSE" ]; then
+            echo "::error::/health no respondio tras 5 intentos."
+            exit 1
+          fi
+          echo "$RESPONSE"
+          ESTADO=$(echo "$RESPONSE" | jq -r '.estado // "desconocido"')
+          if [ "$ESTADO" = "unhealthy" ]; then
+            echo "::error::/health devolvio unhealthy. Revisar D1/R2 antes de dar por bueno el despliegue."
+            exit 1
+          elif [ "$ESTADO" = "degraded" ]; then
+            echo "::warning::/health devolvio degraded. Investigar antes de dar por bueno el despliegue."
+          elif [ "$ESTADO" != "healthy" ]; then
+            echo "::warning::/health devolvio un estado inesperado: $ESTADO."
+          else
+            echo "Estado healthy."
+          fi

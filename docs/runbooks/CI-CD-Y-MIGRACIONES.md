@@ -19,24 +19,24 @@
 
 Cada despliegue usa un `ref` explícito. Antes de iniciarlo: confirmar SHA, CI, responsable, verificación esperada y rollback. Para revertir, publicar manualmente el último SHA sano mediante el workflow específico.
 
-### Verificación tras desplegar (manual, obligatoria)
+### Verificación tras desplegar (automática + manual, obligatoria)
 
-**Los workflows de Workers todavía no ejecutan un healthcheck automático.** No es porque el
-endpoint sea superficial: desde ADR-0014, `GET /health` es público, no tiene efectos
-secundarios, comprueba D1 y el objeto centinela de R2, y devuelve `estado` (`healthy`,
-`degraded` o `unhealthy`) junto con la versión derivada del despliegue.
+Desde ADR-0014, `GET /health` es público, no tiene efectos secundarios, comprueba D1 y el
+objeto centinela de R2, y devuelve `estado` (`healthy`, `degraded` o `unhealthy`) junto con la
+versión derivada del despliegue.
 
-Por ahora la verificación sigue siendo manual y obligatoria: tras desplegar, el responsable
-debe consultar `/health`, confirmar que el estado es `healthy`, realizar una lectura real desde
-la aplicación y registrar ambos resultados en el handoff. `degraded` exige investigación antes
-de dar el despliegue por bueno; `unhealthy` exige rollback o mitigación.
+**Los dos workflows de Worker (`deploy-worker.yml`, `deploy-alejandra-agente.yml`) ya incluyen
+un paso `Verify deployment health`** que consulta `/health` tras desplegar (con reintentos):
+`unhealthy` o la falta de respuesta hacen fallar el job; `degraded` lo deja en verde con una
+advertencia (`::warning::`) visible en el resumen del run.
 
-Pages sí conserva healthcheck automático: comprueba que `/version.json` sirve la versión
-publicada, lo que sí distingue publicado de operativo.
+Ese paso automático no sustituye la verificación manual: tras desplegar, el responsable sigue
+debiendo confirmar el estado en el log del job, realizar una lectura real desde la aplicación y
+registrar ambos resultados en el handoff. Un job en verde con advertencia `degraded` exige
+investigación antes de dar el despliegue por bueno; `unhealthy` exige rollback o mitigación.
 
-El endpoint ya cumple los requisitos para automatizar la comprobación. Incorporarla a los
-workflows es una tarea posterior y separada: debe tratar `degraded` como advertencia y
-`unhealthy` como bloqueo, y conservar la verificación posterior registrada.
+Pages conserva su propio healthcheck automático: comprueba que `/version.json` sirve la versión
+publicada, lo que también distingue publicado de operativo.
 
 ## Migraciones D1
 
