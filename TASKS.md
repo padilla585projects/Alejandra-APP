@@ -30,6 +30,13 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
+### P-CONCEPT-001 — Demo visual aislada
+
+- Estado: en revisión
+- Objetivo: evaluar la futura experiencia de Alejandra sin modificar la aplicación.
+- Archivos principales: `prototypes/alejandra-concept/`.
+- Siguiente acción exacta: revisar la demo y decidir su dirección visual.
+
 ### P-DESIGN-001 — Visión visual madura de Alejandra
 
 - ID: P-DESIGN-001
