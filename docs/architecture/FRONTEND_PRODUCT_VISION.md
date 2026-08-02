@@ -101,3 +101,12 @@ Todo flujo es completo con teclado, foco visible y texto de error anunciado. Con
 ## Criterio de decisión
 
 La dirección se aprueba si transmite calma y control, hace visible el contexto sin saturar, permite operar rápidamente en campo y sostiene crecimiento de dashboards, IA y administración sin crear tres productos inconexos. Tras aprobación, cada pantalla se diseñará y migrará como una rebanada validada; esta visión no autoriza todavía implementar el frontend nuevo.
+
+## Preservación de la línea visual actual
+
+La interfaz actual no se ha modificado durante P-DESIGN. Para permitir recuperar o comparar el
+estilo anterior sin ambigüedad, queda fijada la etiqueta Git `ui-baseline-2026-08-02` sobre el
+commit `9c8c5ba` (estado de la aplicación antes de la línea de visión/migración de presentación).
+La futura construcción debe conservar esta referencia; recuperar el estilo anterior consiste en
+partir de esa etiqueta o revertir las rebanadas de presentación posteriores, nunca en reconstruirlo
+de memoria.
