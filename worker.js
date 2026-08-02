@@ -115,6 +115,14 @@ async function runDDL(env, sql) {
     const msg = (e && e.message) || String(e);
     if (DDL_DUPLICADO.test(msg)) return false;
     console.error('[DDL]', String(sql).replace(/\s+/g, ' ').trim().slice(0, 140), '->', msg);
+    // await deliberado (no fire-and-forget): sin `ctx` disponible en esta función, un
+    // waitUntil no es posible aquí — sin esperar, la escritura de la traza podría
+    // cortarse en cuanto la petición en curso termine de responder.
+    await registrarTraza(env, {
+      tipo: 'ddl_error',
+      resumen: `DDL falló en caliente: ${msg}`.slice(0, 200),
+      detalle: { sentencia: String(sql).replace(/\s+/g, ' ').trim().slice(0, 500), mensaje_error: msg, origen: 'runDDL' },
+    });
     return false;
   }
 }
@@ -133,7 +141,177 @@ async function ddlPaso(env, sql, etiqueta, results) {
     if (DDL_DUPLICADO.test(msg)) { results.push(`${etiqueta}: ya existía`); return; }
     console.error('[DDL]', String(sql).replace(/\s+/g, ' ').trim().slice(0, 140), '->', msg);
     results.push(`${etiqueta}: ERROR — ${msg}`);
+    // await deliberado — mismo motivo que en runDDL(): sin `ctx` aquí, no hay waitUntil.
+    await registrarTraza(env, {
+      tipo: 'ddl_error',
+      resumen: `DDL falló — ${etiqueta}: ${msg}`.slice(0, 200),
+      detalle: { sentencia: String(sql).replace(/\s+/g, ' ').trim().slice(0, 500), etiqueta, mensaje_error: msg, origen: 'ddlPaso' },
+    });
   }
+}
+
+// ── ADR-0014 — Observabilidad y trazas (ARC-008) ────────────────────────────
+//
+// Almacén persistente de trazas en D1 (tabla `alejandra_trazas`, migrada y verificada,
+// ver ARCHITECT_BACKLOG.md ARC-008). Sustituye —para lo que hoy solo iba a
+// `console.error`— el vacío que señalaba ARC-013: un `ALTER TABLE` fallido en silencio
+// no tenía dónde consultarse después de que expirara `wrangler tail`/Workers Logs.
+//
+// Redacción básica (ADR-0014 §2.1): antes de persistir, se enmascaran patrones de email
+// y teléfono español (9 dígitos) en cualquier string dentro de `detalle`. No es una
+// solución general de PII —el ADR fija el principio de minimizar antes de escribir, no
+// depurar después— pero cubre los dos patrones que el ADR exige como mínimo.
+const RE_EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+// Teléfono español: 9 dígitos, opcionalmente con +34/0034 delante y separadores sueltos.
+const RE_TELEFONO_ES = /(?:\+?34|0034)?[\s.-]?(?:\d[\s.-]?){9}/g;
+
+function redactarTexto(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(RE_EMAIL, '[email-redactado]')
+    .replace(RE_TELEFONO_ES, (m) => (m.replace(/[^\d]/g, '').length >= 9 ? '[telefono-redactado]' : m));
+}
+
+// Recorre recursivamente el detalle (objeto/array/string) redactando cualquier string de
+// texto libre. No transforma números, booleanos ni claves. Trunca strings muy largos —
+// el ADR prohíbe explícitamente persistir el cuerpo íntegro de una conversación.
+const DETALLE_STR_MAX = 2000;
+function redactarDetalle(valor, profundidad = 0) {
+  if (profundidad > 6) return null; // corta ciclos/estructuras patológicas, no debería ocurrir
+  if (typeof valor === 'string') {
+    const truncado = valor.length > DETALLE_STR_MAX ? valor.slice(0, DETALLE_STR_MAX) + '…[truncado]' : valor;
+    return redactarTexto(truncado);
+  }
+  if (Array.isArray(valor)) return valor.map(v => redactarDetalle(v, profundidad + 1));
+  if (valor && typeof valor === 'object') {
+    const out = {};
+    for (const k of Object.keys(valor)) out[k] = redactarDetalle(valor[k], profundidad + 1);
+    return out;
+  }
+  return valor; // number, boolean, null, undefined
+}
+
+// registrarTraza — función interna del Worker (no confundir con el contrato inyectable
+// `registrarTraza(decision)` de nucleo-cognitivo/src/motor-decision.js, que sigue sin
+// implementación y fuera de alcance aquí). Persiste una fila en `alejandra_trazas`.
+//
+// Resiliente por diseño, igual que runDDL(): si el INSERT falla, se registra con
+// console.error pero NUNCA se lanza — una traza rota no puede tumbar la petición que la
+// originó.
+async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, resumen, detalle }) {
+  try {
+    if (!env?.DB) return;
+    const detalleRedactado = redactarDetalle(detalle ?? {});
+    await env.DB.prepare(
+      'INSERT INTO alejandra_trazas (worker, tipo, empresa_id, usuario_id, resumen, detalle_json) VALUES (?,?,?,?,?,?)'
+    ).bind(
+      'api',
+      String(tipo || 'desconocido'),
+      empresaId != null ? String(empresaId) : null,
+      usuarioId != null ? String(usuarioId) : null,
+      String(resumen || '').slice(0, 500),
+      JSON.stringify(detalleRedactado ?? {})
+    ).run();
+  } catch (e) {
+    console.error('[TRAZA] No se pudo registrar traza:', tipo, '->', (e && e.message) || String(e));
+  }
+}
+
+// Presupuesto de tiempo compartido por las dos comprobaciones de /health (ADR-0014 §4).
+const HEALTH_TIMEOUT_MS = 1500;
+
+// Versión desplegada, derivada, no escrita a mano (ADR-0014 §4).
+//
+// Cloudflare Workers puede exponer metadatos de la versión activa vía el binding nativo
+// "version_metadata" (wrangler.toml → [version_metadata] binding = "CF_VERSION_METADATA"),
+// sin necesitar que el pipeline de CI inyecte nada: Cloudflare lo rellena en cada deploy
+// con el mismo identificador que aparece en `wrangler deployments list`. Es el mecanismo
+// más simple viable porque no depende de que el workflow de despliegue pase un `--var`
+// nuevo. Si el binding no está disponible (entorno local, wrangler antiguo, o el binding
+// aún no se ha añadido a este entorno concreto), se cae a 'unknown' en vez de inventar un
+// valor — ver resumen de la tarea para el estado real de este mecanismo tras el deploy.
+function versionDesplegada(env) {
+  const meta = env?.CF_VERSION_METADATA;
+  if (meta && (meta.id || meta.tag)) return meta.tag || meta.id;
+  return 'unknown';
+}
+
+async function conTimeout(promesa, ms) {
+  return await Promise.race([
+    promesa,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
+
+// GET /health — ADR-0014 §4. Público, sin auth, sin efectos secundarios (no registra
+// trazas: se llamaría en cada healthcheck y sería puro ruido). Comprueba D1 y R2 reales
+// con presupuesto de tiempo acotado, y devuelve tres estados en vez de un binario.
+async function handleHealth(env) {
+  const version = versionDesplegada(env);
+
+  const d1Check = (async () => {
+    try {
+      await conTimeout(env.DB.prepare('SELECT 1').first(), HEALTH_TIMEOUT_MS);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  })();
+
+  const r2Check = (async () => {
+    try {
+      const head = env.FILES.head('_healthcheck/centinela.txt');
+      const res = await conTimeout(head, HEALTH_TIMEOUT_MS);
+      return !!res;
+    } catch (_) {
+      return false;
+    }
+  })();
+
+  const [d1, r2] = await Promise.all([d1Check, r2Check]);
+
+  let estado, status;
+  if (d1 && r2) { estado = 'healthy'; status = 200; }
+  else if (!d1) { estado = 'unhealthy'; status = 503; } // D1 falla, sola o con R2 — bloqueante
+  else { estado = 'degraded'; status = 200; } // solo R2 falla — advertencia, no bloquea
+
+  return json({ estado, d1, r2, version }, status);
+}
+
+// GET /admin/trazas — ADR-0014 §3. Único endpoint de consulta, en este Worker
+// (`alejandra-app-api`), cubre las trazas de los dos Workers porque ambos escriben en la
+// misma tabla `alejandra_trazas`. Mismo patrón de autenticación que el resto de rutas
+// admin (hasRole(s, 'superadmin', 'desarrollador')) — nunca accesible por el cron.
+const TRAZAS_LIMIT_MAX = 200;
+async function handleAdminTrazas(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
+
+  const url = new URL(request.url);
+  const tipo = url.searchParams.get('tipo');
+  const worker = url.searchParams.get('worker');
+  const desde = url.searchParams.get('desde');
+  const hasta = url.searchParams.get('hasta');
+  const empresaId = url.searchParams.get('empresa_id');
+  const limitParam = parseInt(url.searchParams.get('limit'), 10);
+  const limit = Number.isFinite(limitParam) && limitParam > 0
+    ? Math.min(limitParam, TRAZAS_LIMIT_MAX)
+    : TRAZAS_LIMIT_MAX;
+
+  const where = [];
+  const binds = [];
+  if (tipo)      { where.push('tipo = ?');        binds.push(tipo); }
+  if (worker)    { where.push('worker = ?');       binds.push(worker); }
+  if (desde)     { where.push('ts >= ?');          binds.push(desde); }
+  if (hasta)     { where.push('ts <= ?');          binds.push(hasta); }
+  if (empresaId) { where.push('empresa_id = ?');   binds.push(empresaId); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const rows = await env.DB.prepare(
+    `SELECT id, ts, worker, tipo, empresa_id, usuario_id, resumen, detalle_json FROM alejandra_trazas ${whereSql} ORDER BY ts DESC LIMIT ?`
+  ).bind(...binds, limit).all();
+
+  return json({ ok: true, trazas: rows.results || [], limit });
 }
 
 // SEC-AUDIT-01 (26/07/2026): los módulos NEW-94+ (licencias-obra, catálogo-precios,
@@ -3861,11 +4039,21 @@ async function recordatorioFixesPendientes(env) {
 // Health check post-deploy: espera 90s, comprueba el worker, auto-revierte si falla
 async function _checkearSaludPostDeploy(env, fixId, chatId) {
   await new Promise(r => setTimeout(r, 90000));
+  // ADR-0014 §4 — /health ya no es un binario ok/ts: devuelve estado 'healthy' | 'degraded'
+  // | 'unhealthy'. 'degraded' (p.ej. solo R2 caído) es una advertencia, no bloquea el
+  // health check post-deploy; solo 'unhealthy' (D1 caído) o un fallo de red cuentan como
+  // fallo real y disparan el auto-revert.
   let saludOk = false;
+  let estadoTraza = 'sin_respuesta';
   try {
     const res = await fetch('https://alejandra-app-api.alejandra-app.workers.dev/health', { signal: AbortSignal.timeout(10000) });
-    saludOk = res.ok;
+    const body = await res.json().catch(() => null);
+    estadoTraza = body?.estado || (res.ok ? 'ok_sin_estado' : 'error_http');
+    saludOk = res.ok && body?.estado !== 'unhealthy';
   } catch (_) {}
+  if (estadoTraza === 'degraded') {
+    console.error('[HEALTH-POST-DEPLOY] estado degraded tras fix', fixId, '— advertencia, no bloquea');
+  }
   if (saludOk) {
     await env.DB.prepare("UPDATE alejandra_fixes SET estado='verificado', updated_at=CURRENT_TIMESTAMP WHERE id=? AND estado='aplicado'").bind(fixId).run();
     return;
@@ -4875,7 +5063,7 @@ export default {
       // en panel.html llaman a /health primero; sin CORS el navegador bloqueaba la
       // respuesta entera (net::ERR_FAILED), dejando el punto de conexión en rojo y
       // Adrián viendo ~100 errores en consola en plena sesión en vivo.
-      if (path === '/health'      && method === 'GET')  return json({ ok: true, ts: Date.now() });
+      if (path === '/health'      && method === 'GET')  return await handleHealth(env);
 
       // ── OTA App Flutter ────────────────────────────────────────────────────
       if (path === '/version' && method === 'GET') {
@@ -4953,6 +5141,9 @@ export default {
       if (path === '/admin/setup-telegram-webhook' && method === 'POST') return await setupTelegramWebhook(request, env);
       if (path === '/admin/login-attempts' && method === 'DELETE') return await adminBorrarLoginAttempts(request, env);
       if (path === '/admin/server-logs'   && method === 'DELETE') return await adminBorrarServerLogs(request, env);
+      // ADR-0014 §3 — único endpoint de consulta de trazas, cubre los dos Workers porque
+      // ambos escriben en la misma tabla alejandra_trazas. Solo en alejandra-app-api.
+      if (path === '/admin/trazas'        && method === 'GET')  return await handleAdminTrazas(request, env);
 
       // Push: clave publica VAPID. Publica por diseno (los navegadores la
       // necesitan para suscribirse), asi que va SIN auth a proposito. El worker
