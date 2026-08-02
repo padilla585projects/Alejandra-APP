@@ -11,6 +11,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - `ADR-0014` aceptado con modificaciones (2026-08-02): observabilidad y trazas (ARC-008). Tabla D1 `alejandra_trazas` compartida por los dos Workers; retención 30 días para trazas de decisión y 90 para errores de DDL/eventos de seguridad, con minimización/redacción obligatoria; un único endpoint `GET /admin/trazas` en `alejandra-app-api`; `/health` con tres estados (`healthy`/`degraded`/`unhealthy`) comprobando D1 y un objeto centinela en R2, versión derivada del SHA de despliegue; migración autorizada solo en el entorno actual de desarrollo/pruebas.
 - `nucleo-cognitivo/src/memory.js`: interfaz de Memory (ADR-0013 §8) — `consultarMemoria`, `listarCandidatasPendientes`, `confirmarCandidata`, `rechazarCandidata` (lanzan error explícito, sin persistencia), más las constantes puras de categorías/métodos/estados y `caducidadPorDefecto()`. Contrato `registrarTraza()` fijado en `motor-decision.js` (ADR-0014 §5), como dependencia inyectada sin romper el aislamiento actual. 20 pruebas nuevas.
 - `migrate_trazas.sql`: declara y **aplica** (run `30746110357`) la tabla `alejandra_trazas` con el esquema exacto de ADR-0014 §1. Export previo de `alejandra-db` (8,1 MB) y validación posterior contra el esquema real.
+- ADR-0014 implementado y desplegado en los dos Workers: `registrarTraza()` real conectado a ARC-013 (`runDDL()`/`ddlPaso()` ahora también persisten `tipo='ddl_error'`, con minimización/redacción de email y teléfono); `/health` rediseñado con tres estados (`healthy`/`degraded`/`unhealthy`), comprobando D1 y un objeto centinela nuevo en R2 (`_healthcheck/centinela.txt`); `GET /admin/trazas` en `alejandra-app-api`. Versión derivada del binding nativo `version_metadata` de Cloudflare. 16 pruebas nuevas en `alejandra-agente` (110/110 en verde).
 - `nucleo-cognitivo/`: esqueleto y contratos del núcleo cognitivo (Estado Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión), paquete aislado sin integrar en producción, sin memoria persistente ni decisiones sin trazabilidad.
 - CI independiente, workflows manuales de Pages/Workers y migración D1 controlada del agente.
 - Runbook de CI/CD y migraciones, con procedimiento de verificación manual post-despliegue.
@@ -26,6 +27,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - ADR-0006, ADR-0008, ADR-0009, ADR-0010 y ADR-0011, redactados y **aceptados por el Director el mismo día** (2026-08-02): matriz de riesgo N0–N3 (ARC-001), definición de Nexo como capa de integración (ARC-003), QA en tres niveles (ARC-004), catálogo de tools con metadato de acceso (ARC-006), y migrador por vertical como estrategia (ARC-011 fase 3). Cierran ARC-001, ARC-003, ARC-004 y ARC-006 en el backlog.
 - `migrate_checklists.sql`: primer vertical de la migración por fases de ARC-011 (ADR-0011), declara `checklist_plantillas`, `checklist_registros`, `checklists_plantillas` y `checklist_ejecuciones` con el esquema exacto de `worker.js`. Paso 1 (declarar) completo; aplicarla contra D1 exige autorización aparte del Director.
 - `migrate_manifiesto.json`: primer manifiesto de migraciones (formato de ADR-0011), con las tres migraciones de ARC-012 ya verificadas y `migrate_checklists.sql` como pendiente de aplicar.
+
+### Fixed
+
+- `index.html`: `checkVersionAndUpdate()` desactiva su *fallback* de versión contra `/health` del agente. Ese campo pasó a ser un id de despliegue de Cloudflare tras ADR-0014 y nunca coincidiría con `APP_VERSION`, lo que habría forzado una recarga en cada uso del *fallback* — mismo patrón que los incidentes de recarga infinita del 22/04 y 26/04. Detectado y corregido en el mismo ciclo que desplegó ADR-0014, antes de afectar a un usuario real.
 
 ### Removed
 
