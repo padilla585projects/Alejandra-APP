@@ -1,6 +1,13 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **tareas activas**: F-0.2-CFG, ARC-011-FASE3-CHECKLISTS, F-1.2-NUCLEO-ESQUELETO (interfaces `memory.js`/`registrarTraza()` ya construidas, sigue abierta sin fecha de cierre) y P-ARCH-002 (línea de presentación, independiente). ARC-008-TRAZAS-MIGRACION (tabla `alejandra_trazas` aplicada y verificada) pasa a la tabla de completadas, junto con ARC-013. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **tareas activas**: F-0.2-CFG (pospuesta, ver decisión del Director), ARC-011-FASE3-CHECKLISTS (paso 2 pospuesto, ver decisión del Director) y F-1.2-NUCLEO-ESQUELETO (interfaces `memory.js`/`registrarTraza()` ya construidas, sigue abierta sin fecha de cierre). P-ARCH-002 fue **aprobada por el Director el 2026-08-02** y pasa a la tabla de completadas, junto con ARC-008-TRAZAS-MIGRACION y ARC-013. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+
+## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
+
+- **P-ARCH-002 — aprobada.** El componente de notificaciones temporales queda cerrado; desbloquea la siguiente rebanada de presentación.
+- **ARC-014 — riesgo aceptado temporalmente.** Mientras el proyecto tenga un único mantenedor en fase de desarrollo, no se exige revisor distinto del solicitante. Se reabre en cuanto exista producción real o más de un mantenedor. Detalle en `ARCHITECT_BACKLOG.md`.
+- **ARC-011-FASE3-CHECKLISTS (paso 2, aplicar contra D1) — pospuesta.** No se autoriza todavía; se retoma cuando exista una ventana específica para cambios de esquema con verificación de D1 antes y después, tras completar la validación de la interfaz y del núcleo cognitivo.
+- **F-0.2-CFG — pospuesta.** Los secretos se mueven al entorno `production` cuando el proyecto entre en preproducción/producción estable. Mientras tanto se mantiene la configuración a nivel de repositorio; ningún agente debe conocer ni manipular los valores reales.
 
 ## Reglas
 
@@ -29,24 +36,6 @@ Siguiente acción exacta:
 ```
 
 ## TAREAS ACTIVAS
-
-### P-ARCH-002 — Componente compartido de notificaciones temporales
-
-- ID: P-ARCH-002
-- Título: Extraer la primitiva de toast del panel de conversación
-- Fase: Época transversal — P-1
-- Estado: en revisión
-- Prioridad: Alta
-- Rama: `docs/presentacion-arquitectura` (PENDIENTE de integración)
-- Responsable actual: Arquitecto del Proyecto; Director del Proyecto para la revisión antes de ampliar
-- Objetivo: aislar un componente visual reutilizable sin modificar funcionalidad, backend ni permisos.
-- Criterios de aceptación: API heredada compatible, 12 invocaciones sin cambios, escape/cierre/caducidad conservados, accesibilidad del cierre, pruebas y rollback por Git.
-- Dependencias: `ADR-0012` aceptado; P-ARCH-001 aprobado.
-- Bloqueos: no ampliar la migración hasta revisar `docs/architecture/FRONTEND_SLICE_TOAST.md`.
-- Archivos principales: `packages/design-system/src/components/toast.js`, `alejandra-panel.html`, documentación de arquitectura.
-- Pruebas: sintaxis del componente, DOM/temporizador simulados, encoding y diff check.
-- Última actualización: 2026-08-02
-- Siguiente acción exacta: el Director revisa la evidencia P-ARCH-002; detenerse hasta decidir si autoriza la siguiente rebanada.
 
 ### F-1.2-NUCLEO-ESQUELETO — Esqueleto, contratos e interfaces del núcleo cognitivo
 
@@ -92,7 +81,7 @@ Siguiente acción exacta:
 - Archivos principales: `migrate_checklists.sql` (nuevo), `migrate_manifiesto.json` (nuevo).
 - Pruebas: verificación manual de que los 4 `CREATE TABLE IF NOT EXISTS` coinciden columna por columna con los `CREATE` de `worker.js` (14196, 14207, 18122, 18134); `node -e "JSON.parse(...)"` sobre el manifiesto.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: el Director decide si autoriza aplicar `migrate_checklists.sql` contra D1 (paso 2 de ADR-0011) por el workflow manual de migraciones.
+- Siguiente acción exacta: **pospuesta por decisión del Director (2026-08-02).** No se inicia el workflow de aplicación hasta que exista una ventana específica para cambios de esquema, con verificación de D1 antes y después, tras completar la validación de la interfaz y del núcleo cognitivo.
 
 ### F-0.2-CFG — Completar la configuración remota de entrega segura
 
@@ -115,7 +104,7 @@ Siguiente acción exacta:
 - Archivos principales: ninguno; es configuración remota.
 - Pruebas: verificación en Actions de que el ensayo sale `skipped` y de que no se genera ningún despliegue.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: recrear los secretos en el entorno `production` desde Settings → Environments.
+- Siguiente acción exacta: **pospuesta por decisión del Director (2026-08-02).** Se retoma cuando el proyecto entre en fase estable de preproducción/producción; mientras tanto se mantiene la configuración a nivel de repositorio y ningún agente maneja los valores reales.
 
 ## Completadas — pendientes de aprobación
 
@@ -141,3 +130,4 @@ Siguiente acción exacta:
 | ARC-008-TRAZAS-MIGRACION | Migración D1 de la tabla `alejandra_trazas` | Completada y verificada | PR #21 (declaración) + run 30746110357 (aplicación). Export previo de `alejandra-db` (8,1 MB) antes de aplicar; verificada contra el esquema real tras aplicar. Autorización del Director acotada a la única D1 existente; no se extiende a una futura producción separada. |
 | ADR-0014 (implementación) | `registrarTraza()` real + `/health` de tres estados + `GET /admin/trazas`, en los dos Workers | Completada, desplegada y verificada | PR #24 (`alejandra-app-api`, run 30746614977) + PR #25 (`alejandra-agente`, run 30746733097). ARC-013 conectado a `alejandra_trazas`; `/health` verificado en vivo `healthy` en los dos; 110/110 tests del agente en verde. |
 | fix/version-fallback-adr0014 | `index.html`: desactivar fallback de versión roto por el cambio de `/health` | Completada | PR #26. `hj.version` pasó a ser un UUID de despliegue; el fallback comparaba contra `APP_VERSION` y habría forzado recargas falsas (patrón de los incidentes de recarga infinita). Corregido en `main`; publicar a Pages sigue siendo un paso de entrega aparte. |
+| P-ARCH-002 | Componente compartido de notificaciones temporales | **Aprobada por el Director (2026-08-02)** | `packages/design-system/src/components/toast.js`. API heredada `mostrarToast()` compatible, 12 invocaciones sin cambios, sin backend ni permisos afectados. Evidencia en `docs/architecture/FRONTEND_SLICE_TOAST.md`. Desbloquea la siguiente rebanada de presentación. |
