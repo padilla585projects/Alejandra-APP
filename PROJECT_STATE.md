@@ -202,8 +202,37 @@ app vía FCM/comandos acotados por `puedeNotificarUsuario`); `generar_informe`, 
 de personal, sin gate de confirmación humana todavía, anotado como pendiente). 121/121
 pruebas en verde. **69/69 tools de `alejandra-agente/worker.js` migradas**
 (`memory_save`/`memory_read`/`propose_mejora`/`tomar_decision` deliberadamente excluidas,
-dominio ADR-0013). **65/103 tools totales migradas**; quedan 34 en `worker.js` raíz, con
-gating independiente (regla de los dos cerebros).
+dominio ADR-0013).
+
+**`F-1.3-MIGRAR-RESTO-TOOLS` completada (2026-08-02) — catálogo de `worker.js` raíz también
+migrado.** 31/34 tools (`memory_save`/`memory_read`/`memory_delete` excluidas, mismo motivo).
+Este catálogo es enteramente `acceso:'dev_verificado'`: `executeAITool()` solo se alcanza hoy
+desde canales ya restringidos a Adrián (comentario propio del código, verificado antes de
+delegar). Trabajo repartido en dos agentes en paralelo (worktrees aislados, sin tocar el mismo
+tool) más 8 tools administrativas de más riesgo revisadas directamente: `sql_query`,
+`run_migration` (**N3**, mandato explícito de ADR-0006/0010), `direct_fix`, `manage_user`,
+`repo_write_file`, `propose_fix`, `self_audit`, `r2_delete`.
+
+**Hallazgo real corregido de paso, el más relevante de la tarea:** `direct_fix` y
+`repo_write_file` afirmaban en su `description` (visible al propio modelo, no solo al humano)
+y en su mensaje de retorno que un commit se despliega automáticamente a Cloudflare/Pages en
+~1 min/~30s — **falso desde F-0.1/ADR-0001** (2026-08-02): ningún workflow se dispara por push
+a `main`, el despliegue exige `workflow_dispatch` manual con confirmación y aprobación del
+entorno `production`. Sin corregir, esto podía hacer que Alejandra creyera (o le dijera a
+Adrián) que un fix ya estaba en producción cuando solo estaba commiteado — el mismo patrón de
+"estado percibido ≠ estado real" que ya causó los incidentes de recarga infinita del 22/04 y
+26/04. Corregido en ambas tools.
+
+**Hallazgo anotado, sin resolver (candidato a ADR aparte):** `sql_query` permite DDL
+(`CREATE`/`ALTER`/`DROP`), con la misma barrera humana (`CONFIRMO BORRADO`) que `run_migration`,
+pero sin la distinción N3 explícita que ADR-0006 sí le da a `run_migration` por su capacidad de
+alterar el esquema. No se cambió su comportamiento en esta tarea, solo se documentó.
+
+**96/103 tools totales con metadato ADR-0010** (65 en el agente + 31 en `worker.js` raíz); 7
+excluidas a propósito (dominio ADR-0013). Ninguna migración cambia comportamiento observable —
+los `Set`/gates existentes en cada Worker siguen siendo la fuente de verdad hasta que se
+decida retirarlos. **No queda ninguna tarea activa de ingeniería sin decisión del Director
+pendiente** (`F-0.2-CFG` y `ARC-011-FASE3-CHECKLISTS` paso 2 siguen pospuestas).
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen

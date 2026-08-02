@@ -85,8 +85,19 @@ sensibles (`ejecutar_deploy` N3, `github_escribir`/`patch_codigo`/`rollback`/`te
 `ram_clear` N1. 120/120 en verde tras el lote 7. **Lote 8 — CATÁLOGO DEL AGENTE COMPLETO:** `exportar_datos`
 N2 (exporta sin `LIMIT`, PII de personal); resto N0/N1. 121/121 en verde. **69/69 tools de
 `alejandra-agente/worker.js` migradas** (`memory_save`/`memory_read`/`propose_mejora`/
-`tomar_decision` deliberadamente excluidas, dominio ADR-0013). **65/103 tools totales**;
-queda `worker.js` raíz (34 tools, gating independiente).
+`tomar_decision` deliberadamente excluidas, dominio ADR-0013).
+
+**`F-1.3-MIGRAR-RESTO-TOOLS` completada (2026-08-02).** `worker.js` raíz también migrado:
+31/34 tools (3 `memory_*` excluidas). Trabajo en dos agentes paralelos (worktrees) + 8 tools
+administrativas de mayor riesgo revisadas directamente (`sql_query`, `run_migration` → N3,
+`direct_fix`, `manage_user`, `repo_write_file`, `propose_fix`, `self_audit`, `r2_delete`).
+**Hallazgo real corregido:** `direct_fix`/`repo_write_file` afirmaban (en su `description`,
+visible al modelo, y en su mensaje de retorno) que un commit se despliega solo a Cloudflare —
+falso desde F-0.1; podía hacer que Alejandra creyera que un fix ya estaba en producción.
+Corregido en ambas. **Hallazgo anotado sin resolver:** `sql_query` permite el mismo DDL que
+`run_migration` bajo la misma barrera, sin la distinción N3 explícita — candidato a ADR aparte.
+**96/103 tools totales migradas**, 7 excluidas a propósito (ADR-0013). **No queda ninguna
+tarea activa de ingeniería sin decisión del Director pendiente.**
 
 En paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla
 contra D1 sigue exigiendo autorización del Director.
