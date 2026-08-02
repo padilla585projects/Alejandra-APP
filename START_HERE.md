@@ -39,6 +39,12 @@ sin aplicar) — ver `TASKS.md`.
 **Presentación (P-1):** `ADR-0012` aceptado. P-ARCH-001 y **P-ARCH-002 aprobados** por el
 Director. Queda desbloqueada la siguiente rebanada, aún sin definir.
 
+**Migraciones D1 aplicadas (2026-08-02):** el Director autorizó en chat el paso 2 de
+`migrate_checklists.sql` (ARC-011 fase 3) y `migrate_memoria_gobernada.sql` (F-2.1), sobre la
+única D1 existente. Ambas verificadas columna por columna antes y después; ver `HANDOFF.md` y
+`migrate_manifiesto.json`. Queda pendiente, como siguiente unidad de trabajo del ciclo de
+ADR-0011, retirar (comentar, no borrar) el DDL en runtime del vertical `checklists`.
+
 ## Lectura obligatoria
 
 1. `MASTER_PLAN.md`, `MASTER_ROADMAP.md` y `PROJECT_STATE.md`

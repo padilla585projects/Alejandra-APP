@@ -21,10 +21,11 @@
     },
     {
       "archivo": "migrate_checklists.sql",
-      "aplicada": false,
-      "run": null,
+      "aplicada": true,
+      "run": "30758297243",
       "verticalARC011": "checklists",
-      "nota": "Paso 1 (declarar) completado. Paso 2 (aplicar y verificar contra D1) pendiente de autorizacion del Director."
+      "verificado": "2026-08-02",
+      "nota": "Autorizada por el Director en chat (2026-08-02). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas): las 4 tablas ya existian creadas por el DDL en runtime, columna por columna identicas a la migracion antes y despues (verificacion de solo lectura); CREATE TABLE IF NOT EXISTS confirmado como no-op (0 rows_written). El DDL en runtime de este vertical (worker.js:14196-14221, 18122-18152) sigue intacto: retirarlo es el paso 3 del ciclo de ADR-0011, no esta tarea."
     },
     {
       "archivo": "migrate_trazas.sql",
@@ -36,11 +37,12 @@
     },
     {
       "archivo": "migrate_memoria_gobernada.sql",
-      "aplicada": false,
-      "run": null,
+      "aplicada": true,
+      "run": "30758423450",
       "adr": "ADR-0013",
       "fase": "F-2.1",
-      "nota": "Paso 1 (declarar) completado el 2026-08-02, primer entregable de F-2.1 (Epoca 2, abierta por ADR-0007 enmienda 1 al cerrarse F-1.1/F-1.2/F-1.3). Tabla nueva 'memoria_gobernada', sin relacion con la legada 'alejandra_memoria' (memory_save/memory_read, dominio excluido de ADR-0010). Paso 2 (aplicar y verificar contra D1) pendiente de autorizacion del Director, igual que checklists."
+      "verificado": "2026-08-02",
+      "nota": "Autorizada por el Director en chat (2026-08-02). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas). Tabla 'memoria_gobernada' creada con las 16 columnas declaradas (contrato ADR-0013 SS1-SS6) y los 2 indices, verificadas columna por columna tras aplicar; 0 filas. La tabla legada 'alejandra_memoria' (memory_save/memory_read) se verifico sin cambios en su CREATE. Ningun Worker lee ni escribe la tabla nueva todavia; nucleo-cognitivo/src/memory.js sigue siendo interfaz pura."
     }
   ]
 }

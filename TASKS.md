@@ -44,46 +44,46 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
 - ID: F-2.1-MEMORIA-DECLARAR
 - Título: Declarar en una migración `.sql` versionada el esquema de memoria gobernada de ADR-0013
 - Fase: Época 2 — Conocimiento y Memoria (F-2.1), abierta el 2026-08-02 por ADR-0007 enmienda 1 al cerrarse F-1.1/F-1.2/F-1.3 (Época 1 completa)
-- Estado: **en revisión — paso 1 (declarar) completo; falta autorización del Director para el paso 2 (aplicar)**
+- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (implementar `memory.js` real) bloqueado por ARC-008 §8**
 - Prioridad: Crítica
-- Rama: `feat/f21-memoria-declarar`
-- Responsable actual: Director del Proyecto (autorización para aplicar contra D1)
-- Objetivo: declarar la tabla `memoria_gobernada`, con los siete elementos del contrato de ADR-0013 (privacidad/lista blanca, aislamiento por tenant, procedencia, confianza, caducidad, corrección versionada, borrado), siguiendo el ciclo de ADR-0011. Es una tabla **nueva**, sin relación con la legada `alejandra_memoria` (`memory_save`/`memory_read`, ya en producción, dominio excluido de ADR-0010).
+- Rama: `feat/f21-memoria-declarar` (paso 1), `feat/migrar-checklists-memoria-d1` (paso 2, PR #52)
+- Responsable actual: Agente de Ingeniería (paso 3 exige revisar los dos Workers antes de retomar)
+- Objetivo: declarar y aplicar la tabla `memoria_gobernada`, con los siete elementos del contrato de ADR-0013 (privacidad/lista blanca, aislamiento por tenant, procedencia, confianza, caducidad, corrección versionada, borrado), siguiendo el ciclo de ADR-0011. Es una tabla **nueva**, sin relación con la legada `alejandra_memoria` (`memory_save`/`memory_read`, ya en producción, dominio excluido de ADR-0010).
 - Criterios de aceptación:
   1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con las columnas de ADR-0013 §1-§6 (`migrate_memoria_gobernada.sql`), sin tocar la tabla legada.
-  2. ✅ No se ejecuta contra D1 en esta tarea: eso exige autorización explícita del Director (ADR-0007).
-  3. ✅ Ningún Worker escribe ni lee la tabla nueva todavía; `nucleo-cognitivo/src/memory.js` sigue siendo interfaz pura sin cambios.
-  4. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: false`.
+  2. ✅ **Aplicada contra D1 (run `30758423450`, 2026-08-02)**, autorizada por el Director en chat. Circuito oficial: PR #52 (añade el archivo al selector cerrado) → `workflow_dispatch` con confirmación `APPLY_D1_MIGRATION` → aprobación del entorno `production` por el Director → `wrangler d1 execute --remote`.
+  3. ✅ Verificado tras aplicar: 16 columnas + 2 índices (`idx_memoria_gobernada_empresa`, `idx_memoria_gobernada_caduca`) coinciden exactamente con la migración; 0 filas; el `CREATE TABLE` de `alejandra_memoria` (legada) no cambió.
+  4. ✅ Ningún Worker escribe ni lee la tabla nueva todavía; `nucleo-cognitivo/src/memory.js` sigue siendo interfaz pura sin cambios.
+  5. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: true`.
 - Dependencias: ADR-0013 aceptado con modificaciones (2026-08-02); ADR-0011 aceptado como estrategia.
-- Bloqueos: aplicar la migración contra D1 exige decisión del Director; además, ARC-008 debe avanzar lo suficiente para que un recuerdo consultado tenga trazabilidad completa en una decisión (ADR-0013 §8), y la implementación real de `memory.js`/tools requiere revisar los dos Workers (regla de los dos cerebros).
-- Archivos principales: `migrate_memoria_gobernada.sql` (nuevo), `migrate_manifiesto.json`.
-- Pruebas: `node -e "JSON.parse(...)"` sobre el manifiesto; verificación manual de que las columnas declaradas cubren los siete elementos de ADR-0013.
+- Bloqueos: la implementación real de `memory.js`/tools (paso 3, activar lectura/escritura) sigue exigiendo que ARC-008 permita trazabilidad completa de una decisión que consulte memoria (ADR-0013 §8) y revisar los dos Workers (regla de los dos cerebros). No es una decisión del Director pendiente; es trabajo de ingeniería sin desbloquear todavía por dependencia técnica real.
+- Archivos principales: `migrate_memoria_gobernada.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`.
+- Pruebas: `node -e "JSON.parse(...)"` sobre el manifiesto; verificación manual columna por columna antes y después contra D1 real.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: **pendiente de decisión del Director.** No se inicia el workflow de aplicación hasta que exista autorización explícita, verificación de D1 antes y después, y (idealmente) mayor avance de ARC-008.
+- Siguiente acción exacta: sin acción inmediata — el paso 3 (persistencia real) espera avance de ARC-008 §8. Ver `HANDOFF.md`.
 
-### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
-
-### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
+### ARC-011-FASE3-CHECKLISTS — Migración del vertical `checklists`
 
 - ID: ARC-011-FASE3-CHECKLISTS
 - Título: Primer vertical de la migración por fases de ARC-011 (ADR-0011)
 - Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
-- Estado: **en revisión — paso 1 (declarar) completo; falta autorización del Director para el paso 2 (aplicar)**
+- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (retirar DDL en runtime del vertical) pendiente, siguiente unidad de trabajo del ciclo**
 - Prioridad: Media
-- Rama: `docs/arc-011-fase3-checklists`
-- Responsable actual: Director del Proyecto (autorización para aplicar contra D1)
-- Objetivo: declarar en una migración `.sql` versionada el esquema real —ya verificado en ARC-015— de las tablas del vertical `checklists` (`checklist_plantillas`, `checklists_plantillas`, `checklist_registros`, `checklist_ejecuciones`), siguiendo el ciclo de ADR-0011.
+- Rama: `docs/arc-011-fase3-checklists` (paso 1), `feat/migrar-checklists-memoria-d1` (paso 2, PR #52)
+- Responsable actual: Agente de Ingeniería
+- Objetivo: declarar y aplicar en una migración `.sql` versionada el esquema real —ya verificado en ARC-015— de las tablas del vertical `checklists` (`checklist_plantillas`, `checklists_plantillas`, `checklist_registros`, `checklist_ejecuciones`), siguiendo el ciclo de ADR-0011.
 - Criterios de aceptación:
   1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con el esquema exacto verificado (`migrate_checklists.sql`, con la fuente `worker.js:línea` de cada `CREATE`), no el que el código debería crear.
-  2. ✅ No se ejecuta contra D1 en esta tarea: eso es una migración y requiere autorización explícita del Director (ADR-0007).
-  3. ✅ El DDL en runtime de este vertical se deja intacto (`worker.js:14196-14221` y `18122-18152`) hasta que la migración esté aplicada y verificada — ADR-0011 prohíbe retirarlo antes.
-  4. ✅ Registrada en `migrate_manifiesto.json` (creado, formato de ADR-0011) como `aplicada: false`.
+  2. ✅ **Aplicada contra D1 (run `30758297243`, 2026-08-02)**, autorizada por el Director en chat, circuito oficial (PR #52 → `workflow_dispatch` con `APPLY_D1_MIGRATION` → aprobación del entorno `production` por el Director → `wrangler d1 execute --remote`).
+  3. ✅ Verificado antes y después: las 4 tablas ya existían (creadas por el DDL en runtime), columna por columna idénticas a la migración; `0 rows_written` confirma que fue un no-op aditivo.
+  4. El DDL en runtime de este vertical se deja intacto (`worker.js:14196-14221` y `18122-18152`) — retirarlo es el **paso 3** del ciclo de ADR-0011, todavía no ejecutado.
+  5. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: true`.
 - Dependencias: ADR-0011 aceptado como estrategia (2026-08-02); ARC-013 y ARC-015 ya corregidos.
-- Bloqueos: aplicar la migración contra D1 exige decisión del Director.
-- Archivos principales: `migrate_checklists.sql` (nuevo), `migrate_manifiesto.json` (nuevo).
-- Pruebas: verificación manual de que los 4 `CREATE TABLE IF NOT EXISTS` coinciden columna por columna con los `CREATE` de `worker.js` (14196, 14207, 18122, 18134); `node -e "JSON.parse(...)"` sobre el manifiesto.
+- Bloqueos: ninguno para el paso 3 (retirar el `CREATE TABLE`/comentarlo con referencia a la migración) — es código reversible, autorizado por ADR-0007 sin necesitar nueva decisión del Director salvo que aparezca un riesgo no documentado.
+- Archivos principales: `migrate_checklists.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, próximamente `worker.js` (paso 3).
+- Pruebas: verificación manual columna por columna antes y después contra D1 real; `node -e "JSON.parse(...)"` sobre el manifiesto.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: **pospuesta por decisión del Director (2026-08-02).** No se inicia el workflow de aplicación hasta que exista una ventana específica para cambios de esquema, con verificación de D1 antes y después, tras completar la validación de la interfaz y del núcleo cognitivo.
+- Siguiente acción exacta: ejecutar el paso 3 del ciclo de ADR-0011 (comentar el DDL en runtime de `worker.js:14196-14221`/`18122-18152` con referencia a `migrate_checklists.sql`, sin borrarlo) y el paso 4 (verificar el vertical en producción sin el DDL en caliente) como tarea de ingeniería independiente.
 
 ### F-0.2-CFG — Completar la configuración remota de entrega segura
 
