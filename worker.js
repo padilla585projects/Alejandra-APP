@@ -82,6 +82,60 @@ function err(msg, status = 400) {
   return json({ ok: false, error: msg }, status);
 }
 
+// ARC-013 (02/08/2026) — DDL en caliente sin silenciar el error.
+//
+// Hasta ahora cada CREATE/ALTER ejecutado en runtime llevaba `.catch(() => {})` o un
+// `try {} catch {}` vacío. El motivo original era legítimo: el patrón es idempotente y
+// reejecutar `ADD COLUMN` sobre una columna que ya existe DEBE ser inofensivo. Pero la
+// supresión no distinguía ese caso benigno de un fallo real, así que una sentencia que
+// no llegaba a aplicarse nunca no dejaba rastro alguno.
+//
+// El inventario de ARC-011 lo confirmó contra el esquema real de D1: de las 41 columnas
+// que el código añade en caliente, 3 no existían en producción. `planos.circuitos_json`
+// rompía 4 operaciones de planos; `inventario_seg.ubicacion` mantenía abierto SEG-01
+// dándolo por cerrado desde el 25/07/2026; y `empresas.retencion_config` dejaba la
+// retención RGPD inoperante. Ninguno de los tres generó una sola línea de log en semanas.
+//
+// runDDL conserva el comportamiento —nunca lanza, la petición en curso no se interrumpe—
+// pero registra todo lo que no sea el duplicado esperado. Un `no such table`, un error de
+// sintaxis o un problema de permisos dejan de ser invisibles.
+//
+// ⚠️ El registro va a `console.error`, visible en `wrangler tail` y en Workers Logs. No
+// hay persistencia ni alerta: para eso hace falta el endpoint de salud de ARC-008.
+
+// Duplicado esperado del patrón idempotente: no es un fallo, no se registra.
+// Todo lo demás sí, incluido `no such table` — que es exactamente el bug que se busca.
+const DDL_DUPLICADO = /duplicate column name|already exists/i;
+
+async function runDDL(env, sql) {
+  try {
+    await env.DB.prepare(sql).run();
+    return true;
+  } catch (e) {
+    const msg = (e && e.message) || String(e);
+    if (DDL_DUPLICADO.test(msg)) return false;
+    console.error('[DDL]', String(sql).replace(/\s+/g, ' ').trim().slice(0, 140), '->', msg);
+    return false;
+  }
+}
+
+// Variante para runMigrations(), que le informa al operador del resultado de cada paso.
+// Antes cada paso etiquetaba CUALQUIER error como "ya existe": un fallo real —un
+// `no such table`, un error de sintaxis— se le presentaba al operador como un paso
+// correcto. Es el mismo defecto de ARC-013 pero peor, porque no deja el rastro en
+// blanco sino que afirma activamente que todo fue bien.
+async function ddlPaso(env, sql, etiqueta, results) {
+  try {
+    await env.DB.prepare(sql).run();
+    results.push(`${etiqueta}: aplicada`);
+  } catch (e) {
+    const msg = (e && e.message) || String(e);
+    if (DDL_DUPLICADO.test(msg)) { results.push(`${etiqueta}: ya existía`); return; }
+    console.error('[DDL]', String(sql).replace(/\s+/g, ' ').trim().slice(0, 140), '->', msg);
+    results.push(`${etiqueta}: ERROR — ${msg}`);
+  }
+}
+
 // SEC-AUDIT-01 (26/07/2026): los módulos NEW-94+ (licencias-obra, catálogo-precios,
 // seguros-obra, comparativos-oferta, cae-documentacion, ordenes-trabajo, ausencias —
 // ~28 rutas) llamaban a estas 3 funciones sin que existieran en ningún sitio del
@@ -2515,7 +2569,7 @@ CORE:
 - sesiones(id, token, usuario_id, nombre, rol, obra_id, empresa_id, departamento, expires_at, created_at, last_used)
 - personal_externo(empresa_id, obra_id, nombre, dni, categoria, telefono, empresa_subcontrata, activo, created_at)
 - horarios_obra(empresa_id, obra_id, hora_entrada, hora_salida, tolerancia_min, created_at)
-- turnos(empresa_id, obra_id, nombre, hora_inicio, hora_fin, dias_semana, activo, created_at)
+- turnos(id, empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, fecha, turno, created_at)
 
 INVENTARIO:
 - bobinas(id, codigo UNIQUE, tipo, seccion, longitud, proveedor, num_albaran, estado[disponible/asignada/devuelta], obra_id, obra_nombre, departamento, fecha_entrada, fecha_devolucion, notas, empresa_id)
@@ -2532,7 +2586,7 @@ HISTORIAL:
 - historial_pemp(id, pemp_id, accion, obra_id, obra_nombre, usuario, notas, fecha, empresa_id)
 - historial_carretillas(id, carretilla_id, accion, obra_id, obra_nombre, usuario, notas, fecha, empresa_id)
 - historial_herramientas(id, empresa_id, herramienta_id, kit_id, accion, estado_anterior, estado_nuevo, usuario, notas, fecha)
-- historial_mantenimientos(id, empresa_id, equipo_tipo, equipo_id, tipo_mantenimiento, descripcion, usuario, fecha, created_at)
+- historial_mantenimientos(id, empresa_id, tipo_equipo, equipo_id, matricula, obra_id, fecha_mant, tipo_mant, descripcion, realizado_por, adjunto_nombre, created_at)
 
 OPERACIONES:
 - pedidos(id, descripcion, estado[pendiente/aprobado/recibido/cancelado], prioridad, obra_id, usuario, empresa_id, created_at)
@@ -2546,12 +2600,14 @@ OPERACIONES:
 - epis_asignados(id, empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, tipo_epi, talla, numero_serie, fecha_entrega, fecha_caducidad, proxima_revision, estado, observaciones, created_by, created_at)
 
 CHECKLISTS / FOTOS / DOCS:
-- checklist_plantillas(id, empresa_id, nombre, departamento, items JSON, activa, created_at)
-- checklist_registros(id, empresa_id, obra_id, plantilla_id, usuario_id, fecha, respuestas JSON, estado, created_at)
-- fotos_obra(id, empresa_id, obra_id, r2_key, nombre, descripcion, usuario, departamento, created_at)
+- checklist_plantillas(id, empresa_id, tipo_equipo, pregunta, orden, created_at) — preguntas de checklist por tipo de equipo
+- checklists_plantillas(id, empresa_id, nombre, descripcion, categoria, items JSON, activa, created_at, updated_at) — OJO: tabla DISTINTA de la anterior, plantillas de checklist de obra
+- checklist_registros(id, empresa_id, obra_id, tipo_equipo, equipo_id, equipo_mat, resultado, respuestas JSON, comentario, realizado_por, created_at)
+- checklist_ejecuciones(id, empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, ...) — ejecuciones de checklists_plantillas
+- fotos_obra(id, empresa_id, obra_id, departamento, nombre, mime_type, tamano, comentario, subido_por, created_at, titulo, tags, ubicacion, fecha_foto)
 - carpetas(id, empresa_id, nombre, parent_id, departamento, created_at)
 - docs_dept(id, empresa_id, carpeta_id, nombre, r2_key, mime_type, subido_por, created_at)
-- docs_notas(id, empresa_id, titulo, contenido, usuario, departamento, created_at)
+- docs_notas(id, empresa_id, obra_id, departamento, carpeta_id, titulo, contenido, creado_por, updated_at, created_at)
 - chat_mensajes(id, empresa_id, obra_id, usuario_id, mensaje, tipo, created_at)
 - eventos_calendario(id, empresa_id, obra_id, titulo, descripcion, fecha_inicio, fecha_fin, tipo, usuario, created_at)
 
@@ -2575,9 +2631,9 @@ CATÁLOGOS (sin empresa_id, datos globales):
 
 SISTEMA:
 - logs(id, tipo, nivel[info/warning/error], mensaje, usuario, obra, empresa_id, created_at)
-- login_attempts(ip, email, attempts, last_attempt)
+- login_attempts(id, ip, motivo, created_at, email) — una fila por intento; NO hay contador acumulado
 - reset_tokens(id, usuario_id, token, expires_at, created_at)
-- vincular_tokens(id, token, empresa_id, rol, departamento, expires_at, created_at)
+- vincular_tokens(token PRIMARY KEY, usuario_id, empresa_id, created_at, expires_at)
 - config(clave PRIMARY KEY, valor, updated_at) — configuración global
 - sugerencias(id, texto, categoria, usuario, obra, estado[pendiente/en_progreso/resuelto/cerrado], empresa_id, leida, created_at)
 - alejandra_memoria(id, tipo[hecho/pendiente/contexto/aviso/aprendizaje/error], canal, titulo, contenido, importancia[1-5], created_at)
@@ -6282,7 +6338,7 @@ async function recuperarPass(request, env) {
   if (!usuario) return okMsg;
 
   // Crear tabla si no existe (idempotente)
-  await env.DB.prepare(`
+  await runDDL(env, `
     CREATE TABLE IF NOT EXISTS reset_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       token TEXT NOT NULL UNIQUE,
@@ -6292,7 +6348,7 @@ async function recuperarPass(request, env) {
       usado INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     )
-  `).run().catch(() => {});
+  `);
   // SEC-AUDIT-04 (26/07/2026, hallazgo de pentest sin autenticación real): en producción
   // ya existía una tabla `reset_tokens` MÁS ANTIGUA (id, usuario_id, token, expires_at,
   // created_at — sin `usado` ni `empresa_id`), así que el CREATE TABLE IF NOT EXISTS de
@@ -6301,8 +6357,8 @@ async function recuperarPass(request, env) {
   // roto en producción para cualquier usuario, y de paso ese error (frente al 200 "ok"
   // de un email inexistente) era un canal de enumeración de cuentas por status/tiempo de
   // respuesta. ALTER TABLE ADD COLUMN es aditivo — no toca ninguna fila existente.
-  await env.DB.prepare(`ALTER TABLE reset_tokens ADD COLUMN usado INTEGER DEFAULT 0`).run().catch(() => {});
-  await env.DB.prepare(`ALTER TABLE reset_tokens ADD COLUMN empresa_id INTEGER`).run().catch(() => {});
+  await runDDL(env, `ALTER TABLE reset_tokens ADD COLUMN usado INTEGER DEFAULT 0`);
+  await runDDL(env, `ALTER TABLE reset_tokens ADD COLUMN empresa_id INTEGER`);
 
   // Invalidar tokens anteriores de este usuario
   await env.DB.prepare(`UPDATE reset_tokens SET usado=1 WHERE usuario_id=? AND usado=0`)
@@ -6426,7 +6482,7 @@ async function verificarAcceso(request, env, ctx) {
   // email añadido a login_attempts (antes solo ip/motivo) para que el análisis de
   // seguridad de Alejandra (SELECT ... GROUP BY email) pueda agrupar de verdad —
   // estaba silenciosamente roto por falta de esta columna (ver logins_fallidos).
-  await env.DB.prepare(`ALTER TABLE login_attempts ADD COLUMN email TEXT`).run().catch(() => {});
+  await runDDL(env, `ALTER TABLE login_attempts ADD COLUMN email TEXT`);
   const registrarFallo = async (motivo) => {
     try {
       await env.DB.prepare('INSERT INTO login_attempts (ip, motivo, email) VALUES (?, ?, ?)').bind(ip, motivo, emailInputRL).run();
@@ -11430,7 +11486,7 @@ async function buscarItemSeg(codigo, request, env) {
 let _invSegUbicacionOk = false;
 async function ensureInventarioSegUbicacion(env) {
   if (_invSegUbicacionOk) return;
-  try { await env.DB.prepare('ALTER TABLE inventario_seg ADD COLUMN ubicacion TEXT').run(); } catch {}
+  await runDDL(env, 'ALTER TABLE inventario_seg ADD COLUMN ubicacion TEXT');
   _invSegUbicacionOk = true;
 }
 
@@ -12491,9 +12547,9 @@ async function googleMobileRedirect(request, env) {
 let _nonceTableEnsured = false;
 async function _ensureNonceTable(env) {
   if (_nonceTableEnsured) return;
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS auth_nonces (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS auth_nonces (
     nonce TEXT PRIMARY KEY, result TEXT NOT NULL, created_at TEXT NOT NULL
-  )`).run().catch(() => {});
+  )`);
   // Limpiar nonces viejos (>5 min)
   await env.DB.prepare(`DELETE FROM auth_nonces WHERE created_at < datetime('now', '-5 minutes')`).run().catch(() => {});
   _nonceTableEnsured = true;
@@ -13700,7 +13756,7 @@ async function rgpdSetConfig(request, env) {
   };
 
   // Asegurarse de que la columna existe (migración on-the-fly)
-  await env.DB.prepare(`ALTER TABLE empresas ADD COLUMN retencion_config TEXT`).run().catch(() => {});
+  await runDDL(env, `ALTER TABLE empresas ADD COLUMN retencion_config TEXT`);
 
   await env.DB.prepare(`UPDATE empresas SET retencion_config=? WHERE id=?`)
     .bind(JSON.stringify(config), auth.empresa_id).run();
@@ -14233,15 +14289,10 @@ async function runMigrations(request, env) {
   } catch(e) { results.push('partes_trabajo: ' + e.message); }
   // PARTES-01: columnas de trazabilidad para tablas ya existentes (el CREATE de arriba solo
   // aplica a instalaciones nuevas). Ver también ensurePartesTrabajoCols.
-  try { await env.DB.prepare('ALTER TABLE partes_trabajo ADD COLUMN updated_at TEXT').run(); results.push('partes_trabajo.updated_at: añadida'); }
-  catch { results.push('partes_trabajo.updated_at: ya existe'); }
-  try { await env.DB.prepare('ALTER TABLE partes_trabajo ADD COLUMN modificado_por TEXT').run(); results.push('partes_trabajo.modificado_por: añadida'); }
-  catch { results.push('partes_trabajo.modificado_por: ya existe'); }
+  await ddlPaso(env, 'ALTER TABLE partes_trabajo ADD COLUMN updated_at TEXT', 'partes_trabajo.updated_at', results);
+  await ddlPaso(env, 'ALTER TABLE partes_trabajo ADD COLUMN modificado_por TEXT', 'partes_trabajo.modificado_por', results);
   // Seguridad: expiración de sesiones (CRIT-3)
-  try {
-    await env.DB.prepare('ALTER TABLE sesiones ADD COLUMN expires_at TEXT').run();
-    results.push('sesiones.expires_at: añadida');
-  } catch { results.push('sesiones.expires_at: ya existe'); }
+  await ddlPaso(env, 'ALTER TABLE sesiones ADD COLUMN expires_at TEXT', 'sesiones.expires_at', results);
   // Seguridad: rate limiting de login (CRIT-1)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS login_attempts (
@@ -14270,24 +14321,12 @@ async function runMigrations(request, env) {
     results.push('turnos: creada');
   } catch(e) { results.push('turnos: ' + e.message); }
   // Informe semanal Telegram (NEW-18)
-  try {
-    await env.DB.prepare('ALTER TABLE empresas ADD COLUMN informe_semanal INTEGER DEFAULT 0').run();
-    results.push('empresas.informe_semanal: añadida');
-  } catch { results.push('empresas.informe_semanal: ya existe'); }
-  try {
-    await env.DB.prepare("ALTER TABLE empresas ADD COLUMN informe_dia TEXT DEFAULT 'lunes'").run();
-    results.push('empresas.informe_dia: añadida');
-  } catch { results.push('empresas.informe_dia: ya existe'); }
+  await ddlPaso(env, 'ALTER TABLE empresas ADD COLUMN informe_semanal INTEGER DEFAULT 0', 'empresas.informe_semanal', results);
+  await ddlPaso(env, "ALTER TABLE empresas ADD COLUMN informe_dia TEXT DEFAULT 'lunes'", 'empresas.informe_dia', results);
   // Módulos configurables (NEW-29)
-  try {
-    await env.DB.prepare('ALTER TABLE empresas ADD COLUMN modulos_config TEXT').run();
-    results.push('empresas.modulos_config: añadida');
-  } catch { results.push('empresas.modulos_config: ya existe'); }
+  await ddlPaso(env, 'ALTER TABLE empresas ADD COLUMN modulos_config TEXT', 'empresas.modulos_config', results);
   // Telegram personal (telegram_id en usuarios)
-  try {
-    await env.DB.prepare('ALTER TABLE usuarios ADD COLUMN telegram_id TEXT').run();
-    results.push('usuarios.telegram_id: añadida');
-  } catch { results.push('usuarios.telegram_id: ya existe'); }
+  await ddlPaso(env, 'ALTER TABLE usuarios ADD COLUMN telegram_id TEXT', 'usuarios.telegram_id', results);
   // Tabla de tokens de vinculación de Telegram
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vincular_tokens (
@@ -14300,14 +14339,8 @@ async function runMigrations(request, env) {
     results.push('vincular_tokens: creada');
   } catch(e) { results.push('vincular_tokens: ' + e.message); }
   // Foto de perfil en usuarios y personal_externo
-  try {
-    await env.DB.prepare('ALTER TABLE usuarios ADD COLUMN foto_r2_key TEXT').run();
-    results.push('usuarios.foto_r2_key: añadida');
-  } catch { results.push('usuarios.foto_r2_key: ya existe'); }
-  try {
-    await env.DB.prepare('ALTER TABLE personal_externo ADD COLUMN foto_r2_key TEXT').run();
-    results.push('personal_externo.foto_r2_key: añadida');
-  } catch { results.push('personal_externo.foto_r2_key: ya existe'); }
+  await ddlPaso(env, 'ALTER TABLE usuarios ADD COLUMN foto_r2_key TEXT', 'usuarios.foto_r2_key', results);
+  await ddlPaso(env, 'ALTER TABLE personal_externo ADD COLUMN foto_r2_key TEXT', 'personal_externo.foto_r2_key', results);
   // Carnets y certificaciones (NEW-19)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS carnets (
@@ -14396,8 +14429,8 @@ function puedeGestionarPartes(auth) {
 let _partesColsOk = false;
 async function ensurePartesTrabajoCols(env) {
   if (_partesColsOk) return;
-  try { await env.DB.prepare('ALTER TABLE partes_trabajo ADD COLUMN updated_at TEXT').run(); } catch {}
-  try { await env.DB.prepare('ALTER TABLE partes_trabajo ADD COLUMN modificado_por TEXT').run(); } catch {}
+  await runDDL(env, 'ALTER TABLE partes_trabajo ADD COLUMN updated_at TEXT');
+  await runDDL(env, 'ALTER TABLE partes_trabajo ADD COLUMN modificado_por TEXT');
   _partesColsOk = true;
 }
 
@@ -14762,7 +14795,7 @@ async function ensureFotosObraExtended(env) {
     'ALTER TABLE fotos_obra ADD COLUMN tags TEXT',
     'ALTER TABLE fotos_obra ADD COLUMN ubicacion TEXT',
     'ALTER TABLE fotos_obra ADD COLUMN fecha_foto TEXT',
-  ]) { await env.DB.prepare(col).run().catch(()=>{}); }
+  ]) { await runDDL(env, col); }
 }
 async function listarFotosObra(request, env) {
   const auth = await getAuth(request, env);
@@ -15289,22 +15322,20 @@ async function syncCrearEvento(request, env, ctx) {
 }
 
 async function ensureEscaneosRemotosTable(env) {
-  try {
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS escaneos_remotos (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      empresa_id      INTEGER NOT NULL,
-      obra_id         INTEGER,
-      usuario_id      TEXT,
-      subtipo         TEXT,
-      contexto        TEXT,
-      r2_key          TEXT,
-      estado          TEXT DEFAULT 'pendiente',
-      datos_extraidos TEXT,
-      destino_tipo    TEXT,
-      destino_id      INTEGER,
-      created_at      TEXT DEFAULT (datetime('now'))
-    )`).run();
-  } catch {} // ya existe
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS escaneos_remotos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    obra_id         INTEGER,
+    usuario_id      TEXT,
+    subtipo         TEXT,
+    contexto        TEXT,
+    r2_key          TEXT,
+    estado          TEXT DEFAULT 'pendiente',
+    datos_extraidos TEXT,
+    destino_tipo    TEXT,
+    destino_id      INTEGER,
+    created_at      TEXT DEFAULT (datetime('now'))
+  )`);
   // ARCHIVO-ALBARANES-01: metadatos editables para que los escaneos y las subidas
   // manuales compartan un único archivo privado en R2.
   for (const sql of [
@@ -15313,7 +15344,7 @@ async function ensureEscaneosRemotosTable(env) {
     'ALTER TABLE escaneos_remotos ADD COLUMN tamano_bytes INTEGER',
     'ALTER TABLE escaneos_remotos ADD COLUMN num_albaran TEXT',
   ]) {
-    try { await env.DB.prepare(sql).run(); } catch {}
+    await runDDL(env, sql);
   }
 }
 
@@ -15929,7 +15960,7 @@ async function devAICostes(request, env) {
 }
 
 async function ensureFasesObraTable(env) {
-  await env.DB.prepare(`
+  await runDDL(env, `
     CREATE TABLE IF NOT EXISTS fases_obra (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       obra_id INTEGER NOT NULL,
@@ -15946,7 +15977,7 @@ async function ensureFasesObraTable(env) {
       orden INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
-  `).run().catch(()=>{});
+  `);
 }
 
 async function getFasesObra(request, env) {
@@ -16012,7 +16043,7 @@ async function eliminarFaseObra(id, request, env) {
 
 // ── Diario de obra (NEW-31) ──────────────────────────────────────────────────
 async function ensureDiarioObraTable(env) {
-  await env.DB.prepare(`
+  await runDDL(env, `
     CREATE TABLE IF NOT EXISTS diario_obra (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       obra_id INTEGER NOT NULL,
@@ -16029,7 +16060,7 @@ async function ensureDiarioObraTable(env) {
       creado_por TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
-  `).run().catch(()=>{});
+  `);
 }
 
 async function getDiarioObra(request, env) {
@@ -16113,7 +16144,7 @@ async function ensureTareasObraTable(env) {
   // DEPT-01 (21/07/2026): aislamiento por departamento — cada departamento (electrico,
   // mecanicas, construccion...) solo ve/edita sus propias tareas. Seguridad ve todo (solo lectura
   // en departamentos ajenos). Columna nueva, tabla vacía en producción -> sin backfill necesario.
-  await env.DB.prepare(`ALTER TABLE tareas_obra ADD COLUMN departamento TEXT`).run().catch(() => {});
+  await runDDL(env, `ALTER TABLE tareas_obra ADD COLUMN departamento TEXT`);
 }
 
 // DEPT-01: true si el usuario ve/edita TODOS los departamentos (admins de siempre + Seguridad,
@@ -16293,7 +16324,7 @@ async function eliminarPartidaPresupuesto(id, request, env) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function ensureRfisTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS rfis (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS rfis (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     obra_id         INTEGER,
     empresa_id      INTEGER NOT NULL,
@@ -16312,9 +16343,9 @@ async function ensureRfisTable(env) {
     impacto_plazo   INTEGER DEFAULT 0,
     impacto_coste   INTEGER DEFAULT 0,
     created_at      TEXT DEFAULT (datetime('now'))
-  )`).run().catch(() => {});
+  )`);
   // DEPT-01 (21/07/2026): aislamiento por departamento, ver ensureTareasObraTable() para contexto.
-  await env.DB.prepare(`ALTER TABLE rfis ADD COLUMN departamento TEXT`).run().catch(() => {});
+  await runDDL(env, `ALTER TABLE rfis ADD COLUMN departamento TEXT`);
 }
 
 async function getRfis(request, env) {
@@ -16428,7 +16459,7 @@ async function eliminarRfi(id, request, env) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function ensureOrdenesCambioTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ordenes_cambio (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS ordenes_cambio (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     obra_id          INTEGER,
     empresa_id       INTEGER NOT NULL,
@@ -16446,7 +16477,7 @@ async function ensureOrdenesCambioTable(env) {
     fecha_aprobacion TEXT,
     notas            TEXT,
     created_at       TEXT DEFAULT (datetime('now'))
-  )`).run().catch(() => {});
+  )`);
 }
 
 async function getOrdenesCambio(request, env) {
@@ -16541,7 +16572,7 @@ async function eliminarOrdenCambio(id, request, env) {
 // ── ACTAS DE REUNIÓN (NEW-36) ────────────────────────────────────────────────
 
 async function ensureActasTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS actas_reunion (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS actas_reunion (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     obra_id INTEGER, empresa_id INTEGER NOT NULL,
     numero TEXT, titulo TEXT NOT NULL,
@@ -16550,7 +16581,7 @@ async function ensureActasTable(env) {
     resumen TEXT, acuerdos TEXT,
     proxima_reunion TEXT, estado TEXT DEFAULT 'borrador',
     created_at TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
   // Add extended columns if not already present (NEW-49 enhancements)
   for (const col of [
     'ALTER TABLE actas_reunion ADD COLUMN hora TEXT',
@@ -16562,7 +16593,7 @@ async function ensureActasTable(env) {
     'ALTER TABLE actas_reunion ADD COLUMN redactor TEXT',
     'ALTER TABLE actas_reunion ADD COLUMN updated_at TEXT',
     'ALTER TABLE actas_reunion ADD COLUMN departamento TEXT', // DEPT-01 (21/07/2026)
-  ]) { await env.DB.prepare(col).run().catch(()=>{}); }
+  ]) { await runDDL(env, col); }
 }
 
 async function getActasReunion(request, env) {
@@ -16657,7 +16688,7 @@ async function getActaReunionById(id, request, env) {
 // ── CONTROL DE CALIDAD / PUNCH LIST (NEW-37) ─────────────────────────────────
 
 async function ensureCalidadTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS control_calidad (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS control_calidad (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     obra_id INTEGER, empresa_id INTEGER NOT NULL,
     numero TEXT, titulo TEXT NOT NULL,
@@ -16669,8 +16700,8 @@ async function ensureCalidadTable(env) {
     fecha_limite TEXT, fecha_resolucion TEXT,
     resuelto_por TEXT, notas_resolucion TEXT,
     created_at TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
-  await env.DB.prepare(`ALTER TABLE control_calidad ADD COLUMN departamento TEXT`).run().catch(()=>{}); // DEPT-01 (21/07/2026)
+  )`);
+  await runDDL(env, `ALTER TABLE control_calidad ADD COLUMN departamento TEXT`); // DEPT-01 (21/07/2026)
 }
 
 async function getControlCalidad(request, env) {
@@ -16759,7 +16790,7 @@ async function eliminarDeficiencia(id, request, env) {
 
 // ── HITOS DE OBRA (NEW-39) ────────────────────────────────────────────────────
 async function ensureHitosObraTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS hitos_obra (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS hitos_obra (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id INTEGER NOT NULL,
     obra_id INTEGER NOT NULL,
@@ -16772,7 +16803,7 @@ async function ensureHitosObraTable(env) {
     alertar_dias INTEGER DEFAULT 7,
     notas TEXT,
     created_at TEXT DEFAULT (datetime('now'))
-  )`).run().catch(() => {});
+  )`);
 }
 async function getHitosObra(request, env) {
   const auth = await getAuth(request, env);
@@ -16834,7 +16865,7 @@ async function eliminarHitoObra(id, request, env) {
 
 // ── CORRESPONDENCIA DE OBRA (NEW-40) ─────────────────────────────────────────
 async function ensureCorrespondenciaTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS correspondencia (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS correspondencia (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id INTEGER NOT NULL,
     obra_id INTEGER,
@@ -16850,7 +16881,7 @@ async function ensureCorrespondenciaTable(env) {
     fecha_respuesta_limite DATE,
     notas TEXT,
     created_at TEXT DEFAULT (datetime('now'))
-  )`).run().catch(() => {});
+  )`);
 }
 async function getCorrespondencia(request, env) {
   const auth = await getAuth(request, env);
@@ -17297,7 +17328,7 @@ async function ensurePunchListTable(env) {
     creado_por TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`).run();
-  await env.DB.prepare(`ALTER TABLE punch_list ADD COLUMN departamento TEXT`).run().catch(()=>{}); // DEPT-01 (21/07/2026)
+  await runDDL(env, `ALTER TABLE punch_list ADD COLUMN departamento TEXT`); // DEPT-01 (21/07/2026)
 }
 async function getPunchList(request, env) {
   const auth = await getAuth(request, env);
@@ -17986,7 +18017,7 @@ async function getCronogramaObra(obraId, request, env) {
 //  NEW-54 — TRANSMITTALS / TRANSMISION DE DOCUMENTOS
 // ═══════════════════════════════════════════════════════════════════════════
 async function ensureTransmittalsTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS transmittals_obra (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS transmittals_obra (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id INTEGER NOT NULL,
     obra_id INTEGER,
@@ -18003,7 +18034,7 @@ async function ensureTransmittalsTable(env) {
     notas TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 async function getTransmittals(request, env) {
   const auth = await getAuth(request, env);
@@ -18080,7 +18111,7 @@ async function eliminarTransmittal(id, request, env) {
 // ============================================================
 
 async function ensureQATablas(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checklists_plantillas (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS checklists_plantillas (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id      INTEGER NOT NULL,
     nombre          TEXT NOT NULL,
@@ -18090,9 +18121,9 @@ async function ensureQATablas(env) {
     activa          INTEGER DEFAULT 1,
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checklist_ejecuciones (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS checklist_ejecuciones (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id            INTEGER NOT NULL,
     obra_id               INTEGER,
@@ -18110,9 +18141,9 @@ async function ensureQATablas(env) {
     porcentaje_conformidad REAL DEFAULT 0,
     created_at            TEXT DEFAULT (datetime('now')),
     updated_at            TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ncrs_obra (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS ncrs_obra (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id        INTEGER NOT NULL,
     obra_id           INTEGER,
@@ -18128,7 +18159,7 @@ async function ensureQATablas(env) {
     created_at        TEXT DEFAULT (datetime('now')),
     updated_at        TEXT DEFAULT (datetime('now')),
     cerrada_at        TEXT
-  )`).run().catch(()=>{});
+  )`);
 }
 
 // -- Plantillas -------------------------------------------------------
@@ -18389,7 +18420,7 @@ function tryParse(str, def) {
 // ============================================================
 
 async function ensureEntregasTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS entregas_material (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS entregas_material (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id        INTEGER NOT NULL,
     obra_id           INTEGER,
@@ -18413,7 +18444,7 @@ async function ensureEntregasTable(env) {
     numero_albaran    TEXT,
     created_at        TEXT DEFAULT (datetime('now')),
     updated_at        TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getEntregasMaterial(request, env) {
@@ -18546,7 +18577,7 @@ async function eliminarEntregaMaterial(id, request, env) {
 // ============================================================
 
 async function ensurePresupuestoTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS presupuesto_lineas (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS presupuesto_lineas (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id            INTEGER NOT NULL,
     obra_id               INTEGER NOT NULL,
@@ -18565,7 +18596,7 @@ async function ensurePresupuestoTable(env) {
     notas                 TEXT,
     created_at            TEXT DEFAULT (datetime('now')),
     updated_at            TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getPresupuestoLineas(request, env) {
@@ -18680,7 +18711,7 @@ async function getPresupuestoResumen(obraId, request, env) {
 // ============================================================
 
 async function ensureRiesgosTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS riesgos_obra (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS riesgos_obra (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id      INTEGER NOT NULL,
     obra_id         INTEGER,
@@ -18702,7 +18733,7 @@ async function ensureRiesgosTable(env) {
     notas           TEXT,
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 const RISK_SCORE = { baja:1, media:2, alta:3 };
@@ -18833,7 +18864,7 @@ async function eliminarRiesgo(id, request, env) {
 // ============================================================
 
 async function ensureAccionItemsTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS accion_items (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS accion_items (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id      INTEGER NOT NULL,
     obra_id         INTEGER,
@@ -18850,7 +18881,7 @@ async function ensureAccionItemsTable(env) {
     cerrado_por     TEXT,
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getAccionItems(request, env) {
@@ -20499,7 +20530,7 @@ async function eliminarFieldReport(id, request, env) {
 
 // ── Garantias / Warranty Management (NEW-79) ──────────────────────────────────
 async function ensureGarantiasTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS garantias (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS garantias (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id           INTEGER NOT NULL,
     obra_id              INTEGER,
@@ -20521,7 +20552,7 @@ async function ensureGarantiasTable(env) {
     submittal_id         INTEGER,
     created_at           TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getGarantias(request, env) {
@@ -20617,7 +20648,7 @@ async function eliminarGarantia(id, request, env) {
 
 // ── Alquileres de Equipo / Equipment Rental Log (NEW-80) ──────────────────────
 async function ensureAlquileresTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS alquileres (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS alquileres (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id        INTEGER NOT NULL,
     obra_id           INTEGER,
@@ -20640,7 +20671,7 @@ async function ensureAlquileresTable(env) {
     observaciones     TEXT,
     created_at        TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getAlquileres(request, env) {
@@ -20740,7 +20771,7 @@ async function eliminarAlquiler(id, request, env) {
 
 // ── Entregables de Proyecto / Project Deliverables Tracker (NEW-81) ──────────
 async function ensureEntregablesTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS entregables (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS entregables (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id     INTEGER NOT NULL,
     obra_id        INTEGER,
@@ -20758,7 +20789,7 @@ async function ensureEntregablesTable(env) {
     fecha_aprobacion TEXT,
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getEntregables(request, env) {
@@ -20837,7 +20868,7 @@ async function eliminarEntregable(id, request, env) {
 
 // ── Lecciones Aprendidas / Lessons Learned (NEW-82) ──────────────────────────
 async function ensureLeccionesTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS lecciones_aprendidas (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS lecciones_aprendidas (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id    INTEGER NOT NULL,
     obra_id       INTEGER,
@@ -20855,7 +20886,7 @@ async function ensureLeccionesTable(env) {
     published_at  TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getLecciones(request, env) {
@@ -20935,7 +20966,7 @@ async function eliminarLeccion(id, request, env) {
 
 // ── Rendimientos de Produccion / Productivity Tracking (NEW-83) ──────────────
 async function ensureRendimientosTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS rendimientos (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS rendimientos (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id     INTEGER NOT NULL,
     obra_id        INTEGER,
@@ -20953,7 +20984,7 @@ async function ensureRendimientosTable(env) {
     observaciones  TEXT,
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getRendimientos(request, env) {
@@ -21042,7 +21073,7 @@ async function eliminarRendimiento(id, request, env) {
 
 // ── Analisis de Trabajo Seguro / Job Hazard Analysis ATS (NEW-84) ────────────
 async function ensureAtsTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ats_jha (
+  await runDDL(env, `CREATE TABLE IF NOT EXISTS ats_jha (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id      INTEGER NOT NULL,
     obra_id         INTEGER,
@@ -21062,7 +21093,7 @@ async function ensureAtsTable(env) {
     hora_firma      TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run().catch(()=>{});
+  )`);
 }
 
 async function getAts(request, env) {
@@ -24643,7 +24674,7 @@ async function _ensurePlanosTable(env) {
       actualizado_en TEXT    DEFAULT (datetime('now'))
     )
   `).run();
-  await env.DB.prepare(`ALTER TABLE planos ADD COLUMN circuitos_json TEXT`).run().catch(() => {});
+  await runDDL(env, `ALTER TABLE planos ADD COLUMN circuitos_json TEXT`);
 }
 
 // ═══════════════════════════════════════════════════════════════════
