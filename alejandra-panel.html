@@ -331,6 +331,7 @@ a{color:var(--acc2);text-decoration:none}
 </div>
 
 <script src="packages/design-system/src/components/toast.js"></script>
+<script src="packages/design-system/src/components/empty-state.js"></script>
 <script src="apps/conversacion/src/api/agent-client.js"></script>
 <script src="apps/conversacion/src/features/system-health/index.js"></script>
 <script>
@@ -394,7 +395,12 @@ function toggleLog(id) {
 }
 
 function renderHistorial(items) {
-  if (!items.length) return '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones</div>';
+  if (!items.length) {
+    const emptyState = window.AlejandraPresentation?.designSystem?.emptyStateHtml;
+    return emptyState
+      ? emptyState({ message: 'Sin conversaciones' })
+      : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones</div>';
+  }
   return [...items].reverse().map((x,i)=>logItemHtml(x,`lg${i}`)).join('');
 }
 function filtrarHistorial(canal, btn) {
