@@ -4,6 +4,7 @@ import {
   calcularCosteYProveedor,
   filtrarToolsPorAuth,
   filtrarToolsCron,
+  toolsParaAnthropic,
   esInvocacionCron,
   extraerTablasQuery,
   validarScopeEmpresaBD,
@@ -187,6 +188,23 @@ describe('filtrarToolsPorAuth', () => {
   it('lista vacía o null no rompe', () => {
     expect(filtrarToolsPorAuth(null, true, true)).toEqual([]);
     expect(filtrarToolsPorAuth([], true, true)).toEqual([]);
+  });
+
+  // F-1.3/ADR-0010 (piloto de migración, consultar_personal): el metadato
+  // acceso/cron/nivel_riesgo que añade el catálogo de tools NO debe cambiar
+  // el resultado de filtrarToolsPorAuth/filtrarToolsCron, que solo miran
+  // t.name — es la garantía de "sin cambiar su comportamiento observable"
+  // que exige ADR-0010 para la migración incremental.
+  it('el metadato de ADR-0010 (acceso/cron/nivel_riesgo) no cambia el filtrado por auth/cron', () => {
+    const sinMetadato = { name: 'consultar_personal' };
+    const conMetadato = { name: 'consultar_personal', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N0' };
+
+    for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+      expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+        .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+    }
+    expect(filtrarToolsCron([conMetadato])).toEqual([conMetadato]);
+    expect(filtrarToolsCron([sinMetadato])).toEqual([sinMetadato]);
   });
 
   // fix continuación 14 (IDOR/SQLi en configurar_alerta y exportar_datos):
@@ -761,5 +779,42 @@ describe('determinarEstadoSalud (ADR-0014 §4, tres estados)', () => {
 
   it('unhealthy cuando fallan las dos', () => {
     expect(determinarEstadoSalud(false, false)).toBe('unhealthy');
+  });
+});
+
+// ── toolsParaAnthropic (F-1.3/ADR-0010) ─────────────────────────────────────
+describe('toolsParaAnthropic', () => {
+  it('conserva name/description/input_schema y descarta el metadato de ADR-0010', () => {
+    const tool = {
+      name: 'consultar_personal',
+      description: 'Busca personal',
+      input_schema: { type: 'object', properties: {} },
+      acceso: 'sesion',
+      cron: 'permitido',
+      nivel_riesgo: 'N0',
+    };
+    const [limpia] = toolsParaAnthropic([tool]);
+    expect(limpia).toEqual({
+      name: 'consultar_personal',
+      description: 'Busca personal',
+      input_schema: { type: 'object', properties: {} },
+      cache_control: { type: 'ephemeral' },
+    });
+    expect(limpia.acceso).toBeUndefined();
+    expect(limpia.cron).toBeUndefined();
+    expect(limpia.nivel_riesgo).toBeUndefined();
+  });
+
+  it('solo añade cache_control a la última tool de la lista', () => {
+    const tools = [{ name: 'a' }, { name: 'b' }, { name: 'c' }];
+    const limpias = toolsParaAnthropic(tools);
+    expect(limpias[0].cache_control).toBeUndefined();
+    expect(limpias[1].cache_control).toBeUndefined();
+    expect(limpias[2].cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('lista vacía o null no rompe', () => {
+    expect(toolsParaAnthropic(null)).toEqual([]);
+    expect(toolsParaAnthropic([])).toEqual([]);
   });
 });

@@ -67,11 +67,13 @@ consultan `/health` tras desplegar y fallan el job si el estado es `unhealthy` o
 (PR #36), con `degraded` como advertencia no bloqueante — no sustituye la verificación manual
 del handoff. No queda pendiente de ADR-0014.
 
-**F-1.2 verificada como completa y cerrada (2026-08-02).** **F-1.3 abierta**: el primer
-entregable (esqueleto y contratos del Tool Registry/ADR-0010 y Verifier/ADR-0009, aislado, sin
-integrar en producción) está **completado** — ver `F-1.3-TOOL-REGISTRY-ESQUELETO` en
-`TASKS.md`. Siguiente entregable en curso: `F-1.3-TOOL-PILOTO-MIGRADA`, migrar una tool real
-como piloto sin cambiar comportamiento observable.
+**F-1.2 verificada como completa y cerrada (2026-08-02).** **F-1.3 abierta**: el esqueleto del
+Tool Registry/Verifier (ADR-0010/ADR-0009) y el piloto de migración (`consultar_personal`)
+están **completados**. El piloto encontró y corrigió un riesgo real: `TOOL_CONSULTAR_PERSONAL`
+se envía tal cual a la API de Anthropic — se añadió `toolsParaAnthropic()` en `lib.js` para
+sanear el metadato de ADR-0010 antes de construir `body.tools`. Siguiente entregable en curso:
+`F-1.3-MIGRAR-RESTO-TOOLS`, continuar la migración incremental del resto del catálogo (68
+tools del agente, 34 de `worker.js` raíz).
 
 En paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla
 contra D1 sigue exigiendo autorización del Director.

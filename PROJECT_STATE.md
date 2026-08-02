@@ -150,9 +150,23 @@ ARC-006) están cerradas. **Primer entregable completado:** `nucleo-cognitivo/to
 `filtrarToolsPorAcceso`, `filtrarToolsParaCron`) y `verifier.js` (nivel determinista real;
 revisión humana asíncrona y explicabilidad como interfaces con error explícito, ADR-0009).
 33/33 pruebas en verde. Sin migrar el catálogo real de tools de ningún Worker, sin integrarse
-en producción. **Siguiente entregable en curso:** `F-1.3-TOOL-PILOTO-MIGRADA` — migrar una
-sola tool real de `alejandra-agente/worker.js` al formato de ADR-0010, sin cambiar su
-comportamiento observable, como piloto de la migración incremental tool por tool.
+en producción.
+
+**Segundo entregable completado (piloto):** `TOOL_CONSULTAR_PERSONAL`
+(`alejandra-agente/worker.js`) migrada al formato de ADR-0010 (`acceso:'sesion'`,
+`cron:'permitido'`, `nivel_riesgo:'N0'`), sin cambiar comportamiento observable. **Hallazgo
+real corregido en el mismo ciclo:** esos objetos se envían tal cual dentro de `body.tools` a
+la API de Anthropic (`llamarAnthropic`); sin sanear, el metadato de ADR-0010 habría viajado en
+el JSON real de la API. Se extrajo `toolsParaAnthropic()` a `lib.js` (whitelist de
+`name`/`description`/`input_schema`/`cache_control`), usada ya en el único punto que construye
+`body.tools`, protegiendo también a las tools que se migren después. 114/114 pruebas del
+agente en verde (4 nuevas) + 1 nueva en `nucleo-cognitivo` que valida la declaración real
+copiada literalmente (sin importar entre paquetes). Los tres `Set` de `lib.js` siguen intactos
+— ADR-0010 exige migración incremental hasta que la última tool esté migrada.
+
+**Siguiente entregable en curso:** `F-1.3-MIGRAR-RESTO-TOOLS` — continuar la migración,
+tool por tool o en lotes pequeños, del resto del catálogo (68 tools restantes en el agente, 34
+en `worker.js` raíz con gating independiente).
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen

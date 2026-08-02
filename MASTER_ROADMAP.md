@@ -95,7 +95,7 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-1.3 — Capability/Tool Registry, Verifier y QA**
 
-- Estado/prioridad/tamaño: **Iniciada (2026-08-02) — primer entregable (esqueleto y contratos del Tool Registry y Verifier) completado; migración de una tool piloto en curso** / Alta / L.
+- Estado/prioridad/tamaño: **Iniciada (2026-08-02) — esqueleto del Tool Registry/Verifier y piloto de migración (`consultar_personal`) completados; migración incremental del resto del catálogo en curso** / Alta / L.
 - Objetivo y valor: declarar capacidades y verificar resultados antes de responder/ejecutar.
 - Alcance/fuera: registro, contrato de tools, verificación/QA inicial; no marketplace ni plugins.
 - Dependencias/bloqueantes/paralelo: F-1.2, ARC-004, ARC-006; paralelo con F-2.1 solo documental.
