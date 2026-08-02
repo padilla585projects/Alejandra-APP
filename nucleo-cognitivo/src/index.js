@@ -3,3 +3,4 @@ export * as policyEngine from './policy-engine.js';
 export * as contextEngine from './context-engine.js';
 export * as planner from './planner.js';
 export * as motorDecision from './motor-decision.js';
+export * as memory from './memory.js';

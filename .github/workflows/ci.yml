@@ -53,4 +53,4 @@ jobs:
           done
       - name: Run nucleo-cognitivo tests
         working-directory: nucleo-cognitivo
-        run: node --test test/contratos.test.js
+        run: node --test test/contratos.test.js test/memory.test.js

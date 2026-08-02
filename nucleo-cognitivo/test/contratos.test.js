@@ -54,6 +54,13 @@ test('Context Engine, Planner y Motor de Decisión son interfaces sin implementa
   assert.throws(() => decidir({}), /esqueleto de F-1\.2/);
 });
 
+test('Motor de Decisión: decidir() acepta registrarTraza inyectado sin invocarlo mientras no esté implementada', () => {
+  let invocada = false;
+  const registrarTraza = async () => { invocada = true; };
+  assert.throws(() => decidir({}, { registrarTraza }), /esqueleto de F-1\.2/);
+  assert.equal(invocada, false);
+});
+
 test('Motor de Decisión: el contrato exige los campos de traza de 04-MOTOR-DE-DECISION.md', () => {
   const decisionCompleta = Object.fromEntries(CAMPOS_TRAZA_OBLIGATORIOS.map((c) => [c, 'valor']));
   assert.equal(tieneTrazaSuficiente(decisionCompleta), true);
