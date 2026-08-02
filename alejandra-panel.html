@@ -332,6 +332,7 @@ a{color:var(--acc2);text-decoration:none}
 
 <script src="packages/design-system/src/components/toast.js"></script>
 <script src="packages/design-system/src/components/empty-state.js"></script>
+<script src="packages/design-system/src/components/loading-state.js"></script>
 <script src="apps/conversacion/src/api/agent-client.js"></script>
 <script src="apps/conversacion/src/features/system-health/index.js"></script>
 <script>
@@ -367,6 +368,10 @@ function historialAPares(rows) {
   return pares;
 }
 const CANAL_COLOR = { web:'b-green', telegram:'b-blue', panel:'b-acc', app:'b-green' };
+function loadingStateHtml(message) {
+  const loading = window.AlejandraPresentation?.designSystem?.loadingStateHtml;
+  return loading ? loading(message) : `<div style="color:var(--muted);font-size:13px">${esc(message)}</div>`;
+}
 
 function logItemHtml(x, uid) {
   const preview = (s, n) => { const t = (s||''); return esc(t.substring(0,n)) + (t.length>n?'…':''); };
@@ -1367,7 +1372,7 @@ function toggleVoz() {
 // ═══════════════ DASHBOARD ══════════════════════════════════
 async function initDashboard() {
   const c = document.getElementById('content');
-  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando...</div>';
+  c.innerHTML = loadingStateHtml('Cargando...');
   try {
     const [health, cfg, chats, mem] = await Promise.all([
       fetch(`${API}/health`).then(r=>r.json()).catch(()=>({})),
@@ -1428,7 +1433,7 @@ async function initDashboard() {
 // ═══════════════ GASTOS ═════════════════════════════════════
 async function initGastos(dias=30) {
   const c = document.getElementById('content');
-  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando gastos...</div>';
+  c.innerHTML = loadingStateHtml('Cargando gastos...');
   try {
     const data = await adminFetch(`/api/admin/gastos?dias=${dias}`);
     const modelos = data.por_modelo || [];
@@ -1501,7 +1506,7 @@ async function initGastos(dias=30) {
 // ═══════════════ MEMORIA ════════════════════════════════════
 async function initMemoria(filtro='') {
   const c = document.getElementById('content');
-  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando memoria...</div>';
+  c.innerHTML = loadingStateHtml('Cargando memoria...');
   try {
     const url   = filtro ? `/api/admin/memoria?tipo=${filtro}&limit=100` : '/api/admin/memoria?limit=100';
     const data  = await adminFetch(url);
@@ -1533,7 +1538,7 @@ async function initMemoria(filtro='') {
 // ═══════════════ LOGS ═══════════════════════════════════════
 async function initLogs() {
   const c = document.getElementById('content');
-  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando logs...</div>';
+  c.innerHTML = loadingStateHtml('Cargando logs...');
   try {
     const raw   = await adminFetch('/api/admin/chat?limit=100');
     const items = historialAPares(Array.isArray(raw) ? raw : []);
