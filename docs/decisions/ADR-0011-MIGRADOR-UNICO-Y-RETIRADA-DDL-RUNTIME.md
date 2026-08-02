@@ -2,8 +2,9 @@
 
 - Identificador: ADR-0011
 - Fecha: 2026-08-02
-- Estado: **Propuesto** — requiere decisión del Director
-- Decisores: Director del Proyecto — `PENDIENTE`
+- Estado: **Aceptado como estrategia de evolución** (2026-08-02) — la implementación no queda
+  autorizada de golpe: sigue el orden y el ritmo del roadmap, vertical por vertical
+- Decisores: Director del Proyecto
 - Resuelve: ARC-011 fase 3
 - Depende de: ARC-013 (ya corregido — el DDL en runtime deja rastro), ARC-015 (ya corregido
   con datos reales de D1)
@@ -100,6 +101,25 @@ incorrecto, luego desbloqueada al comprobar contra D1 real).
    código; una tabla es más difícil de desincronizar de la realidad.
 3. **¿Cuánto tiempo entre verticales?** No es una pregunta técnica: es cuánto ritmo quiere
    el Director para este trabajo frente al resto del roadmap.
+
+## Decisión (2026-08-02)
+
+El Director acepta la **estrategia**: migración por vertical de negocio, nunca de golpe,
+con manifiesto de estado, empezando por `checklists`. No se aprueba un calendario cerrado ni
+una ejecución masiva — **la implementación sigue el ritmo del roadmap**, es decir, cada
+vertical se declara, verifica y retira el DDL en runtime como una unidad de trabajo propia,
+intercalada con el resto de fases, no como un proyecto aparte que se ejecuta de un tirón.
+
+Las dos preguntas técnicas quedan resueltas por defecto, revisables si la práctica lo pide:
+el manifiesto es un **fichero versionado** en el repositorio (más visible en revisión de
+código que una tabla en D1), y el ritmo entre verticales lo marca la disponibilidad de
+revisión del Director, no un plazo fijo.
+
+**Lo que este ADR no cambia:** cada paso 2 del ciclo (aplicar contra D1, aunque sea con
+`IF NOT EXISTS`) sigue siendo una migración D1 y por tanto **requiere autorización explícita
+del Director** conforme a ADR-0007 — la aceptación de la estrategia no es autorización para
+ejecutar migraciones. El paso 1 (declarar la migración `.sql` a partir del esquema real ya
+verificado) es código reversible y puede prepararse de forma autónoma.
 
 ## Referencias
 

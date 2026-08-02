@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **dos tareas activas** (ARC-013 y F-0.2-CFG). No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **dos tareas activas** (F-0.2-CFG y ARC-011-FASE3-CHECKLISTS). ARC-013 ya está desplegado y pasa a la tabla de completadas. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Reglas
 
@@ -30,30 +30,27 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-### ARC-013 — Retirar la supresión de errores del DDL en runtime
+### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 
-- ID: ARC-013
-- Título: Sustituir los 18 `catch` vacíos de DDL por registro de error
-- Fase: Época 0 — deuda de esquema (derivada de ARC-011/ARC-012)
-- Estado: en revisión — **código completo y verificado; falta desplegar**
-- Prioridad: Alta
-- Rama: `fix/arc-013-ddl-sin-silenciar` (commit `eb772ee`)
-- Responsable actual: Director del Proyecto (solo queda la decisión de despliegue)
-- Objetivo: que ningún `ALTER TABLE` ni `CREATE TABLE` ejecutado en runtime pueda fallar sin dejar rastro. Es la causa raíz de ARC-012: tres de dieciocho sentencias ya habían fallado en silencio durante semanas.
+- ID: ARC-011-FASE3-CHECKLISTS
+- Título: Primer vertical de la migración por fases de ARC-011 (ADR-0011)
+- Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
+- Estado: lista
+- Prioridad: Media
+- Rama: `PENDIENTE`
+- Responsable actual: Agente de Ingeniería (paso 1, código); Director para el paso 2 (aplicar contra D1)
+- Objetivo: declarar en una migración `.sql` versionada el esquema real —ya verificado en ARC-015— de las tablas del vertical `checklists` (`checklist_plantillas`, `checklists_plantillas`, `checklist_registros`, `checklist_ejecuciones`), siguiendo el ciclo de ADR-0011.
 - Criterios de aceptación:
-  1. Las 18 sentencias DDL con el error suprimido registran el fallo en lugar de tragárselo.
-  2. El registro **distingue el caso benigno del real**: `duplicate column name` / `already exists` es el funcionamiento normal del patrón idempotente y no debe generar ruido; cualquier otro error sí.
-  3. Un fallo de DDL no interrumpe la petición en curso: el objetivo es observabilidad, no cambiar el comportamiento.
-  4. `node --check worker.js` en verde y 85/85 tests del agente sin regresión.
-  5. Se revisa si el mismo patrón existe en `alejandra-agente/worker.js` y se aplica —o se descarta motivadamente— también allí. Regla de los dos cerebros.
-  6. Nada desplegado.
-- Dependencias: ARC-011 fase 2 (inventario verificado, con las 18 ubicaciones localizadas).
-- Bloqueos: el arreglo no surte efecto hasta desplegar `worker.js`, y **el despliegue es una decisión aparte del Director**. La tarea entrega el código validado, no la puesta en producción.
-- Archivos principales: `worker.js` (41 llamadas), `alejandra-agente/worker.js` (7 llamadas).
-- Pruebas: ✅ `node --check` en los dos workers; ✅ 85/85 tests del agente; ✅ barrido que confirma 0 sentencias DDL con el error suprimido; ✅ prueba de la lógica de `runDDL` contra los 5 escenarios de error de D1 y contra un binding roto — no lanza en ninguno.
-- Resultado: alcance mayor que el estimado (los 18 del backlog eran solo los `ALTER`; los `CREATE TABLE` silenciados eran la misma clase de riesgo). Se añade `ddlPaso()` para `runMigrations()`, que etiquetaba cualquier error como «ya existe» y le daba al operador un visto bueno falso.
+  1. Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con el esquema exacto verificado, no el que el código debería crear.
+  2. No se ejecuta contra D1 en esta tarea: eso es una migración y requiere autorización explícita del Director (ADR-0007).
+  3. El DDL en runtime de este vertical se deja intacto hasta que la migración esté aplicada y verificada — ADR-0011 prohíbe retirarlo antes.
+  4. Se registra en el manifiesto de migraciones (a crear si no existe) como `aplicada: false`.
+- Dependencias: ADR-0011 aceptado como estrategia (2026-08-02); ARC-013 y ARC-015 ya corregidos.
+- Bloqueos: aplicar la migración contra D1 exige decisión del Director.
+- Archivos principales: nuevo `migrate_checklists.sql` (o equivalente); manifiesto de migraciones.
+- Pruebas: `node --check` sobre cualquier script auxiliar; verificación manual de que el `CREATE TABLE IF NOT EXISTS` coincide columna por columna con lo verificado en ARC-015.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: **integrar la rama y desplegar `worker.js`** por el workflow manual. Hasta desplegar, el arreglo no surte efecto en producción. Ver la sección «Lunes» de `HANDOFF.md`.
+- Siguiente acción exacta: escribir la migración a partir del esquema verificado en `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md` y ARC-015.
 
 ### F-0.2-CFG — Completar la configuración remota de entrega segura
 
@@ -85,8 +82,13 @@ Siguiente acción exacta:
 | F-0.1 | Separación de CI, despliegues, secretos y migraciones D1 | Implementada e integrada | `a59a2c5`, `6d5d98c`, `96417a5`, `cce5224`. Validada: 6/6 YAML, `node --check` ×2, 85/85 tests, 5/5 criterios de entrega segura. |
 | F-0.1-R | Activación y validación en GitHub remoto | Completada | PR #9 integrada. Workflows antiguos desactivados antes de integrar; CI verde en `push` y `pull_request`; ningún despliegue disparado; entorno `production` creado con revisor requerido; `main` protegida con PR obligatoria y check requerido. |
 | GOV-001 | Consolidación del proceso operativo de ingeniería | Completada; en revisión | `f644a6b`, `80cc1ff`. `ENGINEERING_WORKFLOW.md` como proceso único; `AGENTS.md` conserva solo reglas del repositorio y remite a él. |
-| ARC-011 (fases 1-2) | Inventario del esquema D1 y contraste con producción | Completada | PR #10. 173 DDL en código; 105/150 tablas solo existen porque el código las crea; 27 tablas reales sin declarar; 3 `ALTER` fallidos en silencio. Informe en `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`. Fase 3 pendiente con ADR propio. |
+| ARC-011 (fases 1-2) | Inventario del esquema D1 y contraste con producción | Completada | PR #10. 173 DDL en código; 105/150 tablas solo existen porque el código las crea; 27 tablas reales sin declarar; 3 `ALTER` fallidos en silencio. Informe en `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`. Fase 3: ver ADR-0011 (aceptado como estrategia) y tarea `ARC-011-FASE3-CHECKLISTS`. |
 | ARC-012 | Tres columnas ausentes en producción | Completada | PR #11. Runs 30722027660, 30722072138 y 30722103191, verificados contra el esquema real. Cierra SEG-01 de verdad y restaura la retención RGPD. |
-| ARC-015 | Esquema descrito a Alejandra distinto del real | Parcial | `5c8b2b9`. Corregidas las 8 tablas con `CREATE` autoritativo en `worker.js`. Las ~29 restantes exigen consulta de metadatos a D1: las huérfanas no tienen `CREATE` en el repositorio. |
-| F-0.2 (parcial) | Catálogo de rutas, checks de CI y contratos base | Implementada | `2cc6f5b`, `16dd55d`, `7dcf084`. 544 rutas inventariadas con su mecanismo de autorización; 0 sin proteger tras corregir `PUT /sesion/departamento`. Inventario de bindings y secretos: limpio, ningún secreto ni binding usado sin declarar. Cuatro validaciones pasan a CI: encoding, versiones, autorización de rutas y declaración de secretos. **Falta:** auditoría remota de Cloudflare y el manifiesto de migraciones, ambos dependientes de acceso autorizado. |
-| ADR-0006 | Matriz de riesgo y aprobación humana (ARC-001) | Redactado; pendiente de decisión | `16dd55d`. Cinco preguntas abiertas para el Director. Primer dominó de la Época 1. |
+| ARC-013 | Retirar la supresión de errores del DDL en runtime | Completada y **desplegada** | `eb772ee` + posteriores. `runDDL()`/`ddlPaso()` en producción en los dos workers (`alejandra-app-api` `a5ccf770`, `alejandra-agente` `a67353ec`). Ningún DDL falla ya en silencio. |
+| ARC-015 | Esquema descrito a Alejandra distinto del real | Cerrado | `5c8b2b9` + auditoría remota de Cloudflare. Esquema verificado contra D1 real: 57/60 correcto. |
+| F-0.2 | Catálogo de rutas, checks de CI y contratos base | **Completada (2026-08-02)** | `2cc6f5b`, `16dd55d`, `7dcf084`, `42eb2c2`. 544 rutas inventariadas; inventario de bindings/secretos limpio; cuatro validaciones en CI; auditoría remota de Cloudflare cierra la fase. Hallazgo ARC-018 registrado, no bloqueante. |
+| ADR-0006 | Matriz de riesgo y aprobación humana (ARC-001) | **Aceptado (2026-08-02)** | `run_migration` pasa a capacidad administrativa fuera del alcance autónomo. Desbloquea ADR-0004. |
+| ADR-0008 | Definición de Nexo (ARC-003) | **Aceptado (2026-08-02)** | Nexo = capa de integración con sistemas externos (interpretación A). |
+| ADR-0009 | Alcance de QA y verificación (ARC-004) | **Aceptado (2026-08-02)** | Tres niveles de verificación; explicabilidad como deuda hasta F-4.1. |
+| ADR-0010 | Catálogo de tools y matriz de permisos (ARC-006) | **Aceptado (2026-08-02)** | `acceso`/`cron`/`nivel_riesgo` como metadato declarado por tool. |
+| ADR-0011 | Migrador único y retirada del DDL en runtime (ARC-011 fase 3) | **Aceptado como estrategia (2026-08-02)** | Migración por vertical, empezando por `checklists`, al ritmo del roadmap. |

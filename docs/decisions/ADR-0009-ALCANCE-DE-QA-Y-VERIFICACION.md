@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0009
 - Fecha: 2026-08-02
-- Estado: **Propuesto** — requiere decisión del Director
-- Decisores: Director del Proyecto — `PENDIENTE`
+- Estado: **Aceptado** (2026-08-02)
+- Decisores: Director del Proyecto
 - Resuelve: ARC-004
 - Desbloquea: F-1.3 («Capability/Tool Registry, Verifier y QA»)
 
@@ -69,6 +69,20 @@ humana asíncrona son, literalmente, cómo se implementan sus niveles N2/N3 en c
 3. **¿El nivel «Explicabilidad» debe bloquear la acción** hasta que exista la traza, o puede
    quedar como deuda hasta F-4.1? Recomendación: que quede como deuda explícita — bloquear
    ahora repetiría el problema que ADR-0007 acaba de resolver.
+
+## Decisión (2026-08-02)
+
+El Director acepta la clasificación en tres niveles (determinista, revisión humana
+asíncrona, explicabilidad) tal como se propuso, sin añadir un cuarto tipo. Se adoptan las
+recomendaciones del documento para las preguntas 2 y 3: las revisiones asíncronas siguen
+yendo a `DEV_CHAT_ID` hasta que exista más de un revisor humano — ampliar el reparto es
+decisión aparte cuando llegue el caso; y el nivel «Explicabilidad» **no bloquea** ninguna
+acción mientras no exista traza — queda como deuda explícita hasta F-4.1 (observabilidad),
+sin repetir el problema que ADR-0007 ya resolvió.
+
+Consecuencia directa: F-1.3 puede especificarse con el grano de trabajo que este ADR fija —
+registrar, por tool, a qué nivel de verificación está sujeta —, en coordinación con
+ADR-0010 (catálogo de tools), que es donde ese nivel se declara como metadato.
 
 ## Referencias
 

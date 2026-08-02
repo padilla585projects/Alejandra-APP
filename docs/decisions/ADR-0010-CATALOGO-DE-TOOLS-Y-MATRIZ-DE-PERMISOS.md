@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0010
 - Fecha: 2026-08-02
-- Estado: **Propuesto** — requiere decisión del Director
-- Decisores: Director del Proyecto — `PENDIENTE`
+- Estado: **Aceptado** (2026-08-02)
+- Decisores: Director del Proyecto
 - Resuelve: ARC-006
 - Desbloquea: F-1.3 («Capability/Tool Registry, Verifier y QA»)
 
@@ -95,6 +95,23 @@ dónde vive la fuente de verdad.
 3. **¿Este registro es compartido entre los dos workers, o cada uno mantiene el suyo?**
    Recomendación: cada uno el suyo, por la razón de «dos cerebros» arriba — unificar es un
    ADR aparte, no parte de este.
+
+## Decisión (2026-08-02)
+
+El Director acepta el criterio de tres campos (`acceso`, `cron`, `nivel_riesgo`) sin
+añadir campos nuevos, y acepta las recomendaciones del documento para las preguntas 2 y 3:
+migración **incremental**, tool por tool, sin retirar los `Set` de `lib.js` hasta que la
+última tool esté migrada; y **registro independiente por worker** — este ADR no unifica el
+gating de `worker.js` y `alejandra-agente/worker.js`, coherente con la regla de «dos
+cerebros» de `CLAUDE.md`.
+
+`nivel_riesgo` usa los niveles N0–N3 de ADR-0006 ya aceptado; en particular, `run_migration`
+debe declararse `nivel_riesgo: 'N3'` cuando se migre, reflejando que ADR-0006 la sacó del
+alcance autónomo del agente.
+
+Consecuencia directa: F-1.3 queda especificada con el criterio de aceptación del documento —
+migrar las 69+34 tools existentes sin cambiar su comportamiento observable, verificable
+comparando `filtrarToolsPorAuth()` antes y después.
 
 ## Referencias
 

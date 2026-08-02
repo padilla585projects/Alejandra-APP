@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0008
 - Fecha: 2026-08-02
-- Estado: **Propuesto** — requiere decisión del Director
-- Decisores: Director del Proyecto — `PENDIENTE`
+- Estado: **Aceptado** (2026-08-02)
+- Decisores: Director del Proyecto
 - Resuelve: ARC-003
 - Desbloquea: F-2.2 («Nexo v1»); referenciado como dependencia por F-6.1 (Agentes)
 
@@ -82,6 +82,18 @@ supervisión.
 **¿Cuál de las tres interpretaciones —A, B o C— es la que tenías en mente al escribir «Nexo
 es su conocimiento»?** Si es una cuarta que no está aquí, decirlo destraba el ADR igual de
 bien: lo importante es tener una intención escrita antes de diseñar.
+
+## Decisión (2026-08-02)
+
+El Director elige la **interpretación A: Nexo como capa de integración** con sistemas
+externos (normativa, precios de mercado, documentación de fabricantes). Se descartan
+explícitamente B y C: Nexo **no** es el Motor de Decisión ni una capa de orquestación entre
+módulos, y **no** es coordinación multiagente ni adelanta la Época 6.
+
+Consecuencia directa: F-2.2 («Nexo v1») queda desbloqueada como extensión aditiva de tools
+existentes (`buscar_normativa`, `buscar_precios` y similares), sin necesidad de resolver
+primero la frontera con el Motor de Decisión (ADR-0004) ni con F-1.3/F-4.1, que solo eran
+dependencias de las interpretaciones B y C.
 
 ## Referencias
 

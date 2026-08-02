@@ -17,7 +17,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - `runDDL()` en ambos workers: ejecuta DDL en caliente sin lanzar, pero registrando todo error que no sea el duplicado esperado. `ddlPaso()` para `runMigrations()`, que distingue aplicada / ya existía / ERROR.
 - ARC-013 y ARC-014 en el backlog, abiertos a raíz del arreglo de ARC-012.
 - F-0.2: cuatro scripts de inventario y validación en `scripts/` —rutas y su autorización, encoding, sincronía de versiones, y secretos/bindings/migraciones—, todos de solo lectura y enganchados al job de CI existente. Ninguno contacta con Cloudflare ni lee valores de secretos.
-- ADR-0006, que resuelve ARC-001 con una propuesta de matriz de riesgo en cuatro niveles por reversibilidad y alcance. Pendiente de decisión del Director; desbloquea ADR-0004 y con él F-1.1.
+- ADR-0006, ADR-0008, ADR-0009, ADR-0010 y ADR-0011, redactados y **aceptados por el Director el mismo día** (2026-08-02): matriz de riesgo N0–N3 (ARC-001), definición de Nexo como capa de integración (ARC-003), QA en tres niveles (ARC-004), catálogo de tools con metadato de acceso (ARC-006), y migrador por vertical como estrategia (ARC-011 fase 3). Cierran ARC-001, ARC-003, ARC-004 y ARC-006 en el backlog.
+- Tarea `ARC-011-FASE3-CHECKLISTS` en `TASKS.md`: primer vertical de la migración por fases, habilitado por ADR-0011.
 
 ### Changed
 

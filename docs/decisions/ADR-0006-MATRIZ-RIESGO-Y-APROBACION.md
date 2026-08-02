@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0006
 - Fecha: 2026-08-02
-- Estado: **Propuesto** — requiere decisión del Director
-- Decisores: Director del Proyecto — `PENDIENTE`
+- Estado: **Aceptado** (2026-08-02)
+- Decisores: Director del Proyecto
 - Resuelve: ARC-001
 - Desbloquea: ADR-0004 y, con él, F-1.1 y toda la Época 1
 
@@ -98,6 +98,28 @@ decidir.
    rol mínimo (`encargado` hacia arriba)?
 5. **¿Qué pasa con lo que ya está en producción sin clasificar?** ¿Se audita antes de
    seguir, o se clasifica según se vaya tocando?
+
+## Decisión (2026-08-02)
+
+El Director acepta la matriz de cuatro niveles (N0–N3) por reversibilidad y alcance, tal
+como se propuso, con una precisión sobre la pregunta 2:
+
+- **Criterio de reversibilidad y alcance: aceptado sin cambios.**
+- **`run_migration` no se retira del agente**, pero **sale del alcance autónomo**: pasa a
+  ser una **capacidad administrativa**, sujeta a **autorización explícita** en cada uso,
+  igual que cualquier otra acción N3. La tool sigue existiendo en el catálogo, pero no
+  puede invocarse sin esa autorización — no es una decisión que Alejandra pueda tomar por
+  su cuenta en ningún caso.
+- Las preguntas 3, 4 y 5 quedan resueltas por la propia matriz: el cron limitado a N0–N1
+  (sin excepciones abiertas), N2 aprobado por el usuario sobre sus propios datos o por un
+  rol `encargado` hacia arriba cuando el alcance excede al propio usuario, y lo que ya está
+  en producción se clasifica según se vaya tocando — no se bloquea trabajo para auditar de
+  golpe, que sería el mismo error que ADR-0007 ya corrigió.
+
+Consecuencia inmediata: ADR-0004 queda desbloqueado por su dependencia de ARC-001. `run_migration`
+queda pendiente de que su gating en código refleje esta clasificación (ARC-006/ADR-0010 es
+donde se declara ese metadato); hasta entonces, el criterio es documental y debe respetarse
+manualmente.
 
 ## Referencias
 
