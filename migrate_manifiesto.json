@@ -28,10 +28,11 @@
     },
     {
       "archivo": "migrate_trazas.sql",
-      "aplicada": false,
-      "run": null,
+      "aplicada": true,
+      "run": "30746110357",
       "adr": "ADR-0014",
-      "nota": "Paso 1 (declarar) completado. Autorizacion del Director concedida el 2026-08-02 para aplicar, acotada al entorno actual (unica D1 existente, alejandra-db) con export previo y validacion posterior. No se extiende a una futura produccion separada."
+      "verificado": "2026-08-02",
+      "nota": "Aplicada con autorizacion del Director (2026-08-02), acotada a la unica D1 existente (alejandra-db). Export previo en local antes de aplicar. Verificada contra el esquema real: tabla alejandra_trazas + idx_trazas_ts + idx_trazas_tipo coinciden exactamente con ADR-0014 seccion 1. No se extiende a una futura produccion separada."
     }
   ]
 }

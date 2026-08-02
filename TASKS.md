@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **tareas activas**: F-0.2-CFG, ARC-011-FASE3-CHECKLISTS, F-1.2-NUCLEO-ESQUELETO, ARC-008-TRAZAS-MIGRACION (nueva) y P-ARCH-002 (línea de presentación, independiente). ARC-013 ya está desplegado y pasa a la tabla de completadas. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **tareas activas**: F-0.2-CFG, ARC-011-FASE3-CHECKLISTS, F-1.2-NUCLEO-ESQUELETO (interfaces `memory.js`/`registrarTraza()` ya construidas, sigue abierta sin fecha de cierre) y P-ARCH-002 (línea de presentación, independiente). ARC-008-TRAZAS-MIGRACION (tabla `alejandra_trazas` aplicada y verificada) pasa a la tabla de completadas, junto con ARC-013. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Reglas
 
@@ -70,7 +70,7 @@ Siguiente acción exacta:
 - Archivos principales: `nucleo-cognitivo/` (nuevo).
 - Pruebas: `node --check` sobre cada módulo; `node --test nucleo-cognitivo/test`.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: construir `nucleo-cognitivo/src/memory.js` y el contrato `registrarTraza()` como interfaces (mismo patrón que `context-engine.js`/`planner.js`: lanzan error explícito citando la dependencia real que falta, no un stub silencioso), con pruebas. No integrar persistencia real todavía.
+- Siguiente acción exacta: `memory.js` y el contrato `registrarTraza()` ya construidos como interfaces (2026-08-02, PR #20) — con la tabla `alejandra_trazas` ya aplicada (ARC-008-TRAZAS-MIGRACION), el siguiente paso real de persistencia es implementar `registrarTraza()` en cada Worker por separado (regla de los dos cerebros) y el endpoint `GET /admin/trazas` en `alejandra-app-api`, ambos ADR-0014 §3/§5 — eso ya toca `worker.js`/`alejandra-agente/worker.js`, fuera del aislamiento actual de `nucleo-cognitivo/`; requiere alcance explícito antes de empezar, no se abre sin acordarlo.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 
@@ -93,29 +93,6 @@ Siguiente acción exacta:
 - Pruebas: verificación manual de que los 4 `CREATE TABLE IF NOT EXISTS` coinciden columna por columna con los `CREATE` de `worker.js` (14196, 14207, 18122, 18134); `node -e "JSON.parse(...)"` sobre el manifiesto.
 - Última actualización: 2026-08-02
 - Siguiente acción exacta: el Director decide si autoriza aplicar `migrate_checklists.sql` contra D1 (paso 2 de ADR-0011) por el workflow manual de migraciones.
-
-### ARC-008-TRAZAS-MIGRACION — Declarar y aplicar la tabla `alejandra_trazas`
-
-- ID: ARC-008-TRAZAS-MIGRACION
-- Título: Migración D1 de la tabla de trazas (ADR-0014)
-- Fase: Época 0/1 — deuda de observabilidad (derivada de ARC-008)
-- Estado: lista
-- Prioridad: Media
-- Rama: `PENDIENTE`
-- Responsable actual: Agente de Ingeniería (declarar); autorización del Director ya concedida y acotada para aplicar
-- Objetivo: declarar en una migración `.sql` versionada la tabla `alejandra_trazas` con el esquema exacto de ADR-0014 (`id`, `ts`, `worker`, `tipo`, `empresa_id`, `usuario_id`, `resumen`, `detalle_json`, índices por `ts` y `tipo`), siguiendo el ciclo de ADR-0011, y aplicarla contra el entorno actual de desarrollo/pruebas.
-- Criterios de aceptación:
-  1. Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) registrada en `migrate_manifiesto.json` como `aplicada: false` hasta ejecutarla.
-  2. Copia o export previo del estado actual del entorno antes de aplicar (condición explícita de ADR-0014 §6).
-  3. Aplicación por el workflow manual `Apply Alejandra Agent D1 migration`, con confirmación exacta — **autorización ya concedida por el Director, acotada al entorno actual de desarrollo/pruebas; no se extiende a una futura producción real**.
-  4. Validación posterior contra el esquema real (mismo criterio que ARC-012).
-  5. `worker.js` y `alejandra-agente/worker.js` no se modifican en esta tarea — la tabla existe, pero nada escribe en ella todavía (eso es implementación de `/health`, `GET /admin/trazas` y `registrarTraza()`, trabajo aparte).
-- Dependencias: ADR-0014 aceptado con modificaciones (2026-08-02).
-- Bloqueos: ninguno para declarar y aplicar en desarrollo/pruebas; aplicar en producción real exige autorización aparte.
-- Archivos principales: `migrate_trazas.sql` (nuevo), `migrate_manifiesto.json`.
-- Pruebas: verificación manual de que el `CREATE TABLE IF NOT EXISTS` coincide con el esquema de ADR-0014 §1; validación post-aplicación contra D1 real (entorno de desarrollo/pruebas).
-- Última actualización: 2026-08-02
-- Siguiente acción exacta: declarar `migrate_trazas.sql`, hacer copia/export previo del entorno de desarrollo/pruebas, aplicar por el workflow manual, y validar contra el esquema real.
 
 ### F-0.2-CFG — Completar la configuración remota de entrega segura
 
@@ -158,3 +135,7 @@ Siguiente acción exacta:
 | ADR-0009 | Alcance de QA y verificación (ARC-004) | **Aceptado (2026-08-02)** | Tres niveles de verificación; explicabilidad como deuda hasta F-4.1. |
 | ADR-0010 | Catálogo de tools y matriz de permisos (ARC-006) | **Aceptado (2026-08-02)** | `acceso`/`cron`/`nivel_riesgo` como metadato declarado por tool. |
 | ADR-0011 | Migrador único y retirada del DDL en runtime (ARC-011 fase 3) | **Aceptado como estrategia (2026-08-02)** | Migración por vertical, empezando por `checklists`, al ritmo del roadmap. |
+| ADR-0013 | Gobierno de memoria (ARC-002) | **Aceptado con modificaciones (2026-08-02)** | Memoria opt-in, candidatas pendientes de validación para inferencias, caducidad 6/12 meses, aprobación por rol para memoria compartida, supresión real sin versión archivada. |
+| ADR-0014 | Observabilidad y trazas (ARC-008) | **Aceptado con modificaciones (2026-08-02)** | Tabla `alejandra_trazas` en D1, retención 30/90 días, minimización obligatoria, endpoint único en `alejandra-app-api`, `/health` de tres estados. |
+| F-1.2 (interfaces memoria/trazas) | `memory.js` y contrato `registrarTraza()` en `nucleo-cognitivo/` | Completada | PR #20. Interfaces sin persistencia real, mismo patrón que `context-engine.js`/`planner.js`; 20 pruebas en verde. |
+| ARC-008-TRAZAS-MIGRACION | Migración D1 de la tabla `alejandra_trazas` | Completada y verificada | PR #21 (declaración) + run 30746110357 (aplicación). Export previo de `alejandra-db` (8,1 MB) antes de aplicar; verificada contra el esquema real tras aplicar. Autorización del Director acotada a la única D1 existente; no se extiende a una futura producción separada. |
