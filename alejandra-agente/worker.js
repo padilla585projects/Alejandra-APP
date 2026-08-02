@@ -1788,6 +1788,13 @@ const TOOL_RECUPERAR_CONVERSACION = {
   nivel_riesgo: 'N0',
 };
 
+// F-1.3/ADR-0010 (lote 6, 2026-08-02): tools administrativas/de escritura
+// amplia, revisadas linea a linea antes de clasificar.
+// escribir_bd: INSERT/UPDATE/DELETE generico acotado por empresa
+// (validarScopeEmpresaBD), pero DELETE y UPDATE masivo ya exigen "CONFIRMO
+// BORRADO <codigo>" del humano en el propio codigo -- coincide exactamente
+// con la definicion de N2 de ADR-0006 ("escritura amplia... confirmacion
+// humana explicita en el momento"). cron:'prohibido' (TOOLS_PROHIBIDAS_CRON).
 const TOOL_ESCRIBIR_BD = {
   name: 'escribir_bd',
   description: 'Ejecuta operaciones de escritura en la base de datos (INSERT, UPDATE, DELETE). Usa con responsabilidad — los cambios son permanentes. IMPORTANTE: Siempre usa validar_cambios_bd DESPUÉS de esta operación para confirmar que el cambio se guardó.',
@@ -1798,9 +1805,14 @@ const TOOL_ESCRIBIR_BD = {
       params: { type: 'array', description: 'Parámetros para la consulta (opcional)', items: { type: 'string' } }
     },
     required: ['query']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
 };
 
+// Solo ejecuta SELECT (`if (!/^SELECT\b/i...) return 'solo SELECT'`) — lectura
+// de verificación, sin escritura propia.
 const TOOL_VALIDAR_CAMBIOS_BD = {
   name: 'validar_cambios_bd',
   description: '✅ HERRAMIENTA CRÍTICA — Valida que los cambios de escritura se guardaron realmente en BD. Ejecuta un SELECT de verificación después de INSERT/UPDATE/DELETE. SIEMPRE úsala después de escribir_bd para confirmar que los datos están presentes.',
@@ -1812,7 +1824,10 @@ const TOOL_VALIDAR_CAMBIOS_BD = {
       descripcion:     { type: 'string', description: 'Descripción legible de qué se está validando (ej: "Bobina C138062 en obra 1")' }
     },
     required: ['verificar_query', 'descripcion']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_ENVIAR_PUSH = {
@@ -1954,6 +1969,11 @@ const TOOL_GITHUB_LEER = {
   nivel_riesgo: 'N0',
 };
 
+// Commitea directo (PUT a la API de contenido de GitHub) — cambia el código
+// fuente real. dev_verificado + cron:'prohibido' (ya en los dos Set de
+// lib.js). No autodespliega (F-0.1/ADR-0001: push a main no dispara
+// producción), pero es difícil de deshacer sin otra tool (rollback/revert
+// manual) — N2, no N1.
 const TOOL_GITHUB_ESCRIBIR = {
   name: 'github_escribir',
   description: 'Crea o modifica un archivo en el repositorio. Hace commit automáticamente. Repos: "app" o "worker".',
@@ -1967,7 +1987,10 @@ const TOOL_GITHUB_ESCRIBIR = {
       rama:      { type: 'string', description: 'Rama (default: main)' }
     },
     required: ['ruta', 'contenido', 'mensaje']
-  }
+  },
+  acceso: 'dev_verificado',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
 };
 
 const TOOL_GITHUB_BUSCAR = {
@@ -2050,6 +2073,11 @@ const TOOL_RAM_CLEAR = {
   }
 };
 
+// Restringido a hosts propios del proyecto (urlPermitidaTestEndpoint) tras el
+// SSRF ya documentado en el case, pero permite POST con body arbitrario contra
+// cualquier endpoint de los workers propios -- incluidos, en teoria, endpoints
+// de escritura. N2 por ese techo de capacidad, no por lo habitual (comprobar
+// un GET /health).
 const TOOL_TEST_ENDPOINT = {
   name: 'test_endpoint',
   description: 'Hace una llamada HTTP real a un endpoint para verificar que funciona después de un deploy o cambio. Devuelve status, tiempo de respuesta y preview del body.',
@@ -2062,9 +2090,16 @@ const TOOL_TEST_ENDPOINT = {
       esperar: { type: 'string', description: 'Texto que debe aparecer en la respuesta para considerar OK (ej: "status":"ok")' }
     },
     required: ['url']
-  }
+  },
+  acceso: 'dev_verificado',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
 };
 
+// Fuerza el ref de "main" al commit anterior (`force: true`) -- reescribe
+// historia del repo real. No toca produccion por si solo (el propio mensaje
+// de retorno pide usar ejecutar_deploy despues), pero es dificil de deshacer
+// sin otra accion humana. N2, mismo nivel que github_escribir/patch_codigo.
 const TOOL_ROLLBACK = {
   name: 'rollback',
   description: 'Revierte el último commit del repo en GitHub y redespliega. Úsalo si un deploy rompió algo. Solo revierte 1 commit.',
@@ -2075,9 +2110,14 @@ const TOOL_ROLLBACK = {
       motivo: { type: 'string', description: 'Por qué se hace el rollback' }
     },
     required: ['motivo']
-  }
+  },
+  acceso: 'dev_verificado',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
 };
 
+// Solo lectura (polling de GitHub Actions) mas un push de notificacion propio
+// a Adrian si el deploy tuvo exito -- sin escritura de datos de negocio.
 const TOOL_VERIFICAR_DEPLOY = {
   name: 'verificar_deploy',
   description: 'Consulta el estado del último deploy en GitHub Actions. Úsalo ~40 segundos después de ejecutar_deploy para saber si tuvo éxito o falló. Devuelve status, conclusión y qué pasos fallaron.',
@@ -2086,9 +2126,15 @@ const TOOL_VERIFICAR_DEPLOY = {
     properties: {
       worker: { type: 'string', description: 'Qué workflow verificar: "agente" o "app". Default: agente' }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
+// Despliega directamente a Cloudflare Workers (PUT a la API de Cloudflare) o,
+// si falla, dispara el workflow de GitHub Actions. Es literalmente el
+// "despliegue" que ADR-0006 pone como ejemplo de N3.
 const TOOL_DEPLOY = {
   name: 'ejecutar_deploy',
   description: 'Despliega el worker en Cloudflare via GitHub Actions. Úsalo después de patch_codigo. IMPORTANTE: tras llamar a esta tool, espera ~40s y luego llama a verificar_deploy para confirmar que el deploy fue exitoso.',
@@ -2098,9 +2144,15 @@ const TOOL_DEPLOY = {
       worker: { type: 'string', description: 'Qué worker desplegar: "agente" (alejandra-agente) o "app" (alejandra-app-api). Default: agente' },
       motivo: { type: 'string', description: 'Por qué se hace el deploy (para el log)' }
     }
-  }
+  },
+  acceso: 'dev_verificado',
+  cron: 'prohibido',
+  nivel_riesgo: 'N3',
 };
 
+// Reemplazo quirurgico de una cadena unica y commit via PUT -- mismo riesgo
+// que github_escribir (codigo fuente real, dificil de deshacer sin otra
+// accion), aunque mas acotado en superficie de cambio.
 const TOOL_PATCH_CODIGO = {
   name: 'patch_codigo',
   description: 'Aplica un cambio quirúrgico en un archivo del repo: busca una cadena EXACTA y la reemplaza por otra. Seguro para archivos grandes (no reescribe todo, solo la línea/bloque). Requiere que old_str sea único en el archivo.',
@@ -2114,9 +2166,16 @@ const TOOL_PATCH_CODIGO = {
       repo:    { type: 'string', description: 'Alias: "app" o "worker". Default: "worker"' }
     },
     required: ['ruta', 'old_str', 'new_str', 'mensaje']
-  }
+  },
+  acceso: 'dev_verificado',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
 };
 
+// Crea/edita/elimina "expertos dinamicos" que el router usa YA MISMO por
+// keywords -- cambia comportamiento de enrutamiento en produccion para
+// cualquier conversacion, no solo datos propios. N2 ("cambio de
+// configuracion", dificil de deshacer sin volver a editar).
 const TOOL_NEXUS_MANAGE = {
   name: 'nexus_manage',
   description: 'Crea, edita o elimina expertos dinámicos en NEXUS. Los expertos dinámicos se activan inmediatamente y el router los usa por keywords. Acciones: list, create, edit, delete.',
@@ -2128,7 +2187,10 @@ const TOOL_NEXUS_MANAGE = {
       config:   { type: 'object', description: 'Config del experto: { modules: [...], keywords: [...], maxTokens: N, descripcion: "..." }' }
     },
     required: ['accion']
-  }
+  },
+  acceso: 'dev_verificado',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
 };
 
 const TOOL_CONTROLAR_APP = {
@@ -2347,6 +2409,11 @@ const TOOL_HISTORICO_MATERIALES = {
   }
 };
 
+// CRUD de una fila en alertas_config; condicion_sql se valida como SELECT-only
+// al crear Y de nuevo al verificar (defensa en profundidad, fix continuación
+// 14). No esta acotada por empresa_id, pero ya exige esDevVerificado tanto en
+// el gating externo como repetido dentro del propio case. N1: fila unica,
+// reversible (eliminar la alerta).
 const TOOL_CONFIGURAR_ALERTA = {
   name: 'configurar_alerta',
   description: 'Configura alertas proactivas que se verifican periódicamente y notifican por Telegram/push (ej: bobinas con stock bajo, operarios sin fichar en 24h, equipos sin revisión en 30+ días).',
@@ -2362,7 +2429,10 @@ const TOOL_CONFIGURAR_ALERTA = {
       alerta_id:  { type: 'number', description: 'ID de la alerta (requerido para eliminar)' }
     },
     required: ['accion']
-  }
+  },
+  acceso: 'dev_verificado',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_EXPORTAR_DATOS = {
