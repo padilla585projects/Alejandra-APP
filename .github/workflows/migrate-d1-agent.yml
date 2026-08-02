@@ -31,6 +31,7 @@ on:
           - alejandra-agente/migrate_008_plano_circuitos.sql
           - migrate_inventario_seg_ubicacion.sql
           - migrate_empresas_retencion.sql
+          - migrate_trazas.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true

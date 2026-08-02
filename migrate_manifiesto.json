@@ -25,6 +25,13 @@
       "run": null,
       "verticalARC011": "checklists",
       "nota": "Paso 1 (declarar) completado. Paso 2 (aplicar y verificar contra D1) pendiente de autorizacion del Director."
+    },
+    {
+      "archivo": "migrate_trazas.sql",
+      "aplicada": false,
+      "run": null,
+      "adr": "ADR-0014",
+      "nota": "Paso 1 (declarar) completado. Autorizacion del Director concedida el 2026-08-02 para aplicar, acotada al entorno actual (unica D1 existente, alejandra-db) con export previo y validacion posterior. No se extiende a una futura produccion separada."
     }
   ]
 }
