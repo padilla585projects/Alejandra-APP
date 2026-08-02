@@ -15,11 +15,17 @@ La experiencia madura combina tres cualidades: precisión industrial, calidez de
 
 - **Personalidad:** sobria, próxima, precisa y serena. Evita el neón, el «dashboard de videojuego» y el exceso de tarjetas.
 - **Marca:** violeta profundo como señal de Alejandra; azul para información, verde para estado confirmado, ámbar para atención y rojo solo para riesgo/error.
+- **Dirección aprobada parcialmente (2026-08-02):** Alejandra se concibe como un **centro de control operativo**, no como una interfaz conversacional o relacional. El chat/IA ocupa una capa secundaria de análisis, evidencia y asistencia contextual.
+- **Continuidad de marca:** se conserva como base la paleta actual de Alejandra. La paleta clara de esta propuesta queda registrada como dirección preferida para un futuro modo claro; no sustituye los colores vigentes ni autoriza cambios de estilos.
 - **Luz:** superficies claras cálidas para oficina; superficies tinta para modo oscuro y operaciones nocturnas. Ambos modos usan la misma jerarquía, no diseños distintos.
 - **Tipografía:** `Montserrat` para navegación, títulos y cifras de decisión; `Poppins` para lectura y formularios. Monoespaciada solo para trazas, IDs y evidencias técnicas.
 - **Iconografía:** Lucide, trazo uniforme, siempre acompañada de etiqueta en acciones importantes. Los emojis no forman parte del lenguaje final de producto.
 
 ## Paleta y tokens propuestos
+
+La tabla siguiente describe la **dirección de modo claro que gusta al Director**. Antes de
+implementar tokens visuales nuevos, debe contrastarse contra la paleta actual del producto para
+preservar sus equivalencias de marca en modo oscuro.
 
 | Rol | Claro | Oscuro | Uso |
 |---|---|---|---|

@@ -101,7 +101,9 @@ permanece bloqueado hasta que el Director resuelva ADR-0004.
 
 La migración de presentación y el Design System quedan **pausados para decisión visual** por
 P-DESIGN-001. La propuesta completa está en `docs/architecture/FRONTEND_PRODUCT_VISION.md`.
-No se implementa el nuevo frontend hasta la revisión del Director.
+El Director ha orientado la propuesta hacia un **centro de control operativo** y ha indicado que
+la paleta presentada es la dirección preferida para modo claro, conservando la identidad de
+color actual de Alejandra. No se implementa el nuevo frontend hasta la revisión final.
 
 `ADR-0012` fue aceptado el 2026-08-02. La arquitectura vigente
 `docs/architecture/FRONTEND_ARCHITECTURE.md` define aplicaciones, features, sistema de diseño
