@@ -3,7 +3,7 @@
 - Fecha: 2026-08-02
 - Agentes que entregan: Codex y Claude, Agentes de Ingeniería
 - Trabajo entregado: F-0.1/F-0.1-R (entrega segura), GOV-001 (proceso de ingeniería), ARC-011 fases 1-2 (inventario de esquema), ARC-012 (tres columnas ausentes), ARC-013/015/016/017 (desplegados en producción), F-0.2 (completada), ADR-0007 y su enmienda 1, y los cinco ADR de Época 1 (`ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010`, `ADR-0011`) — **todos aceptados por el Director el 2026-08-02**
-- Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno) y `ARC-018`/`ARC-014` (decisiones pendientes). Época 1 sigue bloqueada solo por `ADR-0004` (Motor de Decisión), el único ADR que no se ha aceptado todavía.
+- Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno) y `ARC-018`/`ARC-014` (decisiones pendientes). **Época 1 abierta**: `ADR-0004` aceptado, F-1.1 cerrada, F-1.2 iniciada (esqueleto y contratos del núcleo cognitivo, sin activar memoria ni decisiones sin trazabilidad).
 - PRs integradas: #9 (F-0.1), #10 (ARC-011), #11 (ARC-012)
 
 ## Qué está terminado
@@ -38,7 +38,9 @@ Consecuencia: ARC-001, ARC-003, ARC-004 y ARC-006 quedan cerrados en `ARCHITECT_
 
 ## Qué está pendiente
 
-- **`ADR-0004` (Motor de Decisión) — el único ADR de Época 1 sin aceptar.** Es lo único que le falta a F-1.1 para abrirse; es una fase de decisión que ADR-0007 enmienda 1 excluye de la apertura autónoma.
+- **P-ARCH-002 — componente compartido de presentación, en revisión.** P-ARCH-001 (salud del panel) fue aprobado. Se extrajo la primitiva de notificaciones temporales a `packages/design-system`, manteniendo las 12 invocaciones, iconos, cierre, caducidad y fallback. No llama a backend ni trata permisos. Evidencia, pruebas y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md`. No ampliar hasta revisión del Director.
+
+- **F-1.2, esqueleto del núcleo cognitivo, en curso.** `ADR-0004` aceptado, F-1.1 cerrada. `nucleo-cognitivo/` construido como paquete aislado (Estado Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión), sin activar memoria persistente ni decisiones sin trazabilidad, por restricción expresa del Director. No integrado en `worker.js` ni `alejandra-agente/worker.js`.
 - **ARC-011 fase 3, trabajo de código** — declarar la migración `.sql` del vertical `checklists` (autónomo); aplicarla contra D1 sigue exigiendo autorización del Director.
 - **ARC-014 — la aprobación de entorno no frena a un token de administración.** Evaluar `prevent_self_review`, revisores distintos del solicitante, o un token de menor privilegio para agentes.
 - **Secretos aún a nivel de repositorio (`F-0.2-CFG`).** Moverlos al entorno `production` exige reintroducir los valores a mano: la API no los expone.
@@ -57,27 +59,32 @@ Consecuencia: ARC-001, ARC-003, ARC-004 y ARC-006 quedan cerrados en `ARCHITECT_
 
 ## Próximo trabajo autónomo
 
-Con ARC-001/003/004/006 cerrados y ADR-0011 aceptado como estrategia, el siguiente trabajo
-autónomo de Época 0/1 es declarar la migración `.sql` del vertical `checklists` (ARC-011
-fase 3, paso 1: código reversible, sin tocar D1). El resto de la Época 1 permanece detenido
-hasta que el Director resuelva `ADR-0004`.
+Con `ADR-0004` aceptado y F-1.1 cerrada, el trabajo autónomo en curso es F-1.2: ampliar el
+esqueleto de `nucleo-cognitivo/` sin activarlo en producción, sin memoria persistente y sin
+decisiones sin trazabilidad. En paralelo, ARC-011 fase 3 sigue con su paso 1 completo
+(`migrate_checklists.sql`); aplicarla contra D1 sigue exigiendo autorización del Director.
 
 ## Otras acciones pendientes del Director
 
 **`F-0.2-CFG`** — recrear los secretos de Cloudflare en el entorno `production`. Exige
 manejar los valores reales, que la API no expone.
 
-**`ADR-0004` — decidir.** Es ahora el único dominó que falta para abrir F-1.1 y con ella el
-resto de la Época 1.
+**`ARC-002` y `ARC-008`** — gobierno de memoria y observabilidad/trazas: mientras sigan sin
+ADR, el núcleo cognitivo no puede ampliarse más allá del esqueleto actual.
 
 **`ARC-018`** — decidir qué hacer con el Worker y el bucket R2 huérfanos.
 
 **`ARC-014`** — decidir cómo separar la aprobación de entorno del token que lanza el despliegue.
+
+**P-ARCH-002 — revisar la rebanada de notificaciones.** No bloquea el backend ni el Núcleo
+Cognitivo; sí bloquea la siguiente extracción de frontend hasta que se revise su evidencia.
 
 ## No tocar sin nueva autorización
 
 - No desplegar Pages ni Workers sin verificación posterior registrada.
 - No ejecutar migraciones D1 remotas (incluida la del vertical `checklists`, aunque se declare en código).
 - No modificar secretos, bindings, Cloudflare, D1, R2 ni producción.
-- No iniciar el Núcleo Cognitivo (F-1.2 en adelante).
-- No aceptar `ADR-0004` por cuenta propia.
+- No integrar `nucleo-cognitivo/` en `worker.js` ni `alejandra-agente/worker.js`.
+- No activar memoria persistente sensible ni decisiones sin trazabilidad en el núcleo cognitivo.
+- No aceptar `ADR-0002`/`ADR-0004` nuevas revisiones por cuenta propia si aparece una contradicción.
+- No ampliar la migración de presentación más allá de P-ARCH-002 hasta su revisión.

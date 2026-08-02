@@ -84,15 +84,42 @@ explícitamente de la apertura autónoma. F-1.1 sigue bloqueada solo por él.
 
 ## Decisiones aún pendientes del Director
 
-- **`ADR-0004`** — Motor de Decisión: única decisión que falta para desbloquear F-1.1 y con ella el resto de la Época 1.
 - **`F-0.2-CFG`** — mover secretos al entorno `production` (requiere valores reales).
 - **`ARC-018`** — worker/bucket huérfanos de la auditoría Cloudflare.
 - **`ARC-014`** — autoaprobación de despliegue con token de administración.
+- **`ARC-002`** — gobierno de memoria: bloquea que el núcleo cognitivo active memoria persistente.
+- **`ARC-008`** — observabilidad/trazas: bloquea decisiones del núcleo sin trazabilidad suficiente.
+
+## Época 1 — Núcleo Cognitivo (iniciada 2026-08-02)
+
+**ADR-0004 aceptado** como arquitectura objetivo del Motor de Decisión. Cierra **F-1.1**.
+Con ADR-0002 y ADR-0004 aceptados, y ARC-001/003/004/006 cerrados, no queda ningún ADR
+propuesto que bloquee el diseño del núcleo cognitivo.
+
+**F-1.2 iniciada, acotada a esqueleto y contratos.** `nucleo-cognitivo/` es un paquete nuevo,
+aislado de `worker.js` y `alejandra-agente/worker.js` — no se integra en producción. Incluye
+Estado Cognitivo (efímero, sin persistencia), Policy Engine (clasificación de riesgo N0–N3 de
+ADR-0006, sin acceso a sesión real), y las interfaces de Context Engine, Planner y Motor de
+Decisión (forma de datos definida, sin implementación real). Por decisión expresa del
+Director: **no se activa memoria persistente sensible** (ARC-002 sigue sin ADR) **ni se toman
+decisiones sin trazabilidad suficiente** (ARC-008 sigue abierto). Memory, Nexo, Capability/Tool
+Registry, Verifier y QA quedan fuera de este entregable — pertenecen a F-1.3/F-2.1/F-2.2, no
+abiertas. Las 5 «Decisiones abiertas» de `docs/architecture/04-MOTOR-DE-DECISION.md` siguen sin
+resolver, para cuando F-1.2 tenga contexto concreto con el que decidirlas.
 
 ## Siguiente objetivo
 
-Con ARC-001/003/004/006 cerrados, se habilita trabajo autónomo de código en la línea de
-ARC-011 fase 3 (ADR-0011): declarar la migración `.sql` del vertical `checklists` a partir del
-esquema real ya verificado en ARC-015. Es código reversible; **aplicarla contra D1 sigue
-requiriendo autorización del Director**. El resto del trabajo de Época 1 (F-1.1 en adelante)
-permanece bloqueado hasta que el Director resuelva ADR-0004.
+El trabajo de código en curso es F-1.2 (esqueleto del núcleo cognitivo). En paralelo, ARC-011
+fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla contra D1
+sigue requiriendo autorización del Director. `F-0.2-CFG`, `ARC-018` y `ARC-014` siguen
+esperando decisión del Director, sin relación con el núcleo cognitivo.
+
+## Arquitectura de presentación
+
+`ADR-0012` fue aceptado el 2026-08-02. La arquitectura vigente
+`docs/architecture/FRONTEND_ARCHITECTURE.md` define aplicaciones, features, sistema de diseño
+y clientes API. P-ARCH-001 (indicador de salud) fue aprobado. P-ARCH-002 extrae la primitiva
+compartida de notificaciones temporales sin contrato de backend; su evidencia está en
+`docs/architecture/FRONTEND_SLICE_TOAST.md`. No es dependencia del Núcleo Cognitivo y avanza
+en paralelo con backend/motor de decisión, pero la migración no se amplía hasta revisar esta
+rebanada.

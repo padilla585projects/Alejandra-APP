@@ -6,6 +6,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Added
 
+- `ADR-0004` aceptado (2026-08-02): arquitectura objetivo del Motor de Decisión. Cierra F-1.1 y abre F-1.2.
+- `nucleo-cognitivo/`: esqueleto y contratos del núcleo cognitivo (Estado Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión), paquete aislado sin integrar en producción, sin memoria persistente ni decisiones sin trazabilidad.
 - CI independiente, workflows manuales de Pages/Workers y migración D1 controlada del agente.
 - Runbook de CI/CD y migraciones, con procedimiento de verificación manual post-despliegue.
 - Registro operativo de F-0.1 en `TASKS.md`, incluida la migración 008 sin ejecutar.

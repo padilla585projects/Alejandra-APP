@@ -71,10 +71,11 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-1.1 — Aprobar contrato cognitivo y Motor de Decisión**
 
-- Estado/prioridad/tamaño: En revisión — **bloqueada solo por ADR-0004** / Crítica / S.
+- Estado/prioridad/tamaño: **Completada (2026-08-02)** / Crítica / S.
 - Objetivo y valor: resolver ADR-0002/0004 y sus preguntas antes de código.
 - Alcance/fuera: decisiones de diseño, riesgo, modos y límites; no implementación.
-- Dependencias/bloqueantes/paralelo: ~~ARC-001, ARC-003, ARC-004, ARC-006~~ **cerrados el 2026-08-02** por ADR-0006/0008/0009/0010, todos aceptados. Único bloqueo restante: **ADR-0004 (Motor de Decisión) sigue Propuesto** — es una fase de decisión, no de construcción, y ADR-0007 enmienda 1 excluye explícitamente que el agente la abra o la resuelva por su cuenta. Puede ir en paralelo con F-0.1 documental.
+- Dependencias/bloqueantes/paralelo: ~~ARC-001, ARC-003, ARC-004, ARC-006~~ **cerrados el 2026-08-02** por ADR-0006/0008/0009/0010, todos aceptados. ~~ADR-0004~~ **aceptado el 2026-08-02** como arquitectura objetivo. Puede ir en paralelo con F-0.1 documental.
+- Estado de aceptación: **cumplido**. ADR-0002 y ADR-0004 aceptados; abre F-1.2.
 - Referencias/ADR/módulos: ADN, Arquitectura Cognitiva, Motor de Decisión; ADR-0002/0003/0004.
 - Áreas/migraciones: docs/decisions y backlog; ninguna migración.
 - Riesgos/compliance/pruebas: autonomía ambigua; revisión arquitectónica de coherencia; evidencia de aprobación ADR.
@@ -82,14 +83,15 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-1.2 — Estado Cognitivo, Planner, Context Engine y Policy Engine**
 
-- Estado/prioridad/tamaño: Planificada / Crítica / XL.
+- Estado/prioridad/tamaño: **Iniciada (2026-08-02) — esqueleto y contratos, sin activar** / Crítica / XL.
 - Objetivo y valor: implementar las bases que deciden con contexto y permisos verificables.
 - Alcance/fuera: contratos, extracción incremental, pruebas y trazas mínimas; no memoria compartida, Nexo ni agentes.
-- Dependencias/bloqueantes/paralelo: F-0.1, F-0.2, F-1.1; paralelo parcial con UX transversal.
-- Referencias/ADR/módulos: Arquitectura Cognitiva, Motor, ADR-0003/0004; Worker IA y contratos compartidos.
-- Áreas/migraciones: `alejandra-agente`, paquetes/contratos propuestos; `PENDIENTE` migraciones solo tras modelo de estado aprobado.
-- Riesgos/compliance/pruebas: bypass de tenant/política; unitarias, integración y negativas de permiso; rollback por ruta/feature flag.
+- Dependencias/bloqueantes/paralelo: F-0.1, F-0.2, F-1.1 — **las tres completadas**; paralelo parcial con UX transversal (independiente de P-1, ver Época transversal).
+- Referencias/ADR/módulos: Arquitectura Cognitiva, Motor, ADR-0002/0003/0004; Worker IA y contratos compartidos.
+- Áreas/migraciones: `nucleo-cognitivo/` (paquete nuevo, aislado, no integrado en `worker.js` ni `alejandra-agente/worker.js`); `PENDIENTE` migraciones solo tras modelo de estado aprobado.
+- Riesgos/compliance/pruebas: bypass de tenant/política; unitarias, integración y negativas de permiso; rollback por ruta/feature flag. **Restricción explícita del Director (2026-08-02):** no activar memoria persistente sensible (ARC-002 sigue sin ADR) ni tomar decisiones sin trazabilidad suficiente (ARC-008 sigue abierto) — el esqueleto se queda en contratos/interfaces desconectados de producción hasta resolver ambos.
 - Aceptación/recuperación/entregables: una ruta piloto decide sin alterar permisos y conserva compatibilidad; diseño de rollback y pruebas publicadas; habilita F-1.3.
+- Primer entregable: `nucleo-cognitivo/` con Estado Cognitivo (efímero, sin persistencia), Policy Engine (clasificación de riesgo N0–N3 de ADR-0006, sin acceso a sesión real), Context Engine y Planner y Motor de Decisión (interfaces con forma de datos, sin implementación — pendientes de dependencias reales). Memory, Nexo, Capability/Tool Registry, Verifier y QA quedan **fuera** de este entregable: pertenecen a F-1.3/F-2.1/F-2.2, no abiertas.
 
 **F-1.3 — Capability/Tool Registry, Verifier y QA**
 
@@ -211,6 +213,13 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 ### Época transversal — Producto, UX, seguridad y compliance
 
+**P-1 — Arquitectura de la capa de presentación**
+
+- Estado/prioridad/tamaño: **P-ARCH-001 aprobado; P-ARCH-002 en revisión** / Alta / M.
+- Objetivo/alcance: separar de forma gradual la presentación de la lógica de negocio mediante aplicaciones de campo, oficina, administración y conversación, features aisladas, sistema de diseño y clientes de API; no implementa aún el refactor.
+- Dependencias/bloqueantes/paralelo: `ADR-0012` aceptado y P-ARCH-001 aprobado. La ampliación queda bloqueada hasta revisar P-ARCH-002; es independiente de `ADR-0004` y puede continuar en paralelo con Workers, motor de decisión y núcleo cognitivo sin cambiar sus contratos unilateralmente.
+- Pruebas/aceptación: piloto de un vertical, compatibilidad funcional, revisión de accesibilidad/responsive y rollback por PR. Referencias: `docs/architecture/FRONTEND_ARCHITECTURE.md`, `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md` y `docs/architecture/FRONTEND_SLICE_TOAST.md`.
+
 **T-1 — Calidad transversal**
 
 - Estado/prioridad/tamaño: Continua / Crítica / continua.
@@ -234,6 +243,7 @@ F-0.1 Entrega segura → F-0.2 Calidad/contratos → F-1.1 Decisiones aprobadas
 | F-1.3 y diseño F-2.1 | Sin suponer persistencia/permiso futuro. |
 | F-3.1 y F-4.1 | Contrato común de trazas acordado antes de integrar. |
 | F-5.1 e investigación F-6.2 | Sin acceso a proveedores/productivo. |
+| P-1 y backend/núcleo cognitivo | Solo consume contratos publicados; no cambia Workers, dominio ni autorización. |
 
 Bloqueantes arquitectónicos: ADR-0001, ADR-0002, ADR-0006, ADR-0008, ADR-0009, ADR-0010 y ADR-0011 (como estrategia) aceptados; **ADR-0004 sigue pendiente y es ahora el único bloqueo de F-1.1**. ARC-001, 003, 004 y 006 cerrados el 2026-08-02; ARC-002 y 008 siguen abiertos. ARC-005 está mitigado localmente y requiere validación remota; ARC-009 y ARC-010 están cerrados. Bloqueantes de seguridad: controles remotos de despliegue, permisos de tokens, aislamiento D1/R2 y retención. Dependencias externas: acceso GitHub/Cloudflare solo lectura, proveedores IA, cumplimiento/asesoría, contratos de integraciones y presupuesto de observabilidad.
 

@@ -45,3 +45,12 @@ jobs:
       - name: Run agent tests
         working-directory: alejandra-agente
         run: npm test
+      # F-1.2: esqueleto del nucleo cognitivo, sin dependencias externas.
+      - name: Check nucleo-cognitivo syntax
+        run: |
+          for f in nucleo-cognitivo/src/*.js nucleo-cognitivo/test/*.js; do
+            node --check "$f"
+          done
+      - name: Run nucleo-cognitivo tests
+        working-directory: nucleo-cognitivo
+        run: node --test test/contratos.test.js
