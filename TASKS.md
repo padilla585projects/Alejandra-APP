@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **tareas activas**: solo F-0.2-CFG y ARC-011-FASE3-CHECKLISTS (paso 2), ambas pospuestas por decisión del Director. **F-1.3-MIGRAR-RESTO-TOOLS completada (2026-08-02)**: los catálogos de tools de los dos Workers quedan migrados al completo a ADR-0010 (96/103 tools; 7 excluidas a propósito, dominio ADR-0013) y pasa a la tabla de completadas, junto con F-1.3-TOOL-REGISTRY-ESQUELETO, F-1.3-TOOL-PILOTO-MIGRADA, F-1.2-NUCLEO-ESQUELETO, P-ARCH-002, ARC-008-TRAZAS-MIGRACION y ARC-013. **No queda ninguna tarea activa de ingeniería sin decisión pendiente del Director.** No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **tareas activas**: F-0.2-CFG y ARC-011-FASE3-CHECKLISTS (paso 2), pospuestas por decisión del Director; y **F-2.1-MEMORIA-DECLARAR**, nueva, con su paso 1 (declarar) ya completo. **F-1.3-MIGRAR-RESTO-TOOLS completada (2026-08-02)**: los catálogos de tools de los dos Workers quedan migrados al completo a ADR-0010 (96/103 tools; 7 excluidas a propósito, dominio ADR-0013) y pasa a la tabla de completadas, junto con F-1.3-TOOL-REGISTRY-ESQUELETO, F-1.3-TOOL-PILOTO-MIGRADA, F-1.2-NUCLEO-ESQUELETO, P-ARCH-002, ARC-008-TRAZAS-MIGRACION y ARC-013. Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**; por ADR-0007 enmienda 1 se abre **F-2.1** (Época 2, gobierno de memoria), cuyo modelo ya está aceptado por el Director en ADR-0013. **No queda ninguna tarea activa de ingeniería sin decisión pendiente del Director**, salvo el paso 2 (aplicar contra D1) de F-2.1-MEMORIA-DECLARAR, que sigue el mismo circuito que `checklists`. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
@@ -37,7 +37,29 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). Quedan solo las tareas pospuestas por decisión del Director.
+Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). Quedan las tareas pospuestas por decisión del Director más **F-2.1-MEMORIA-DECLARAR**, abierta el mismo día.
+
+### F-2.1-MEMORIA-DECLARAR — Declarar el esquema de Memory (ADR-0013)
+
+- ID: F-2.1-MEMORIA-DECLARAR
+- Título: Declarar en una migración `.sql` versionada el esquema de memoria gobernada de ADR-0013
+- Fase: Época 2 — Conocimiento y Memoria (F-2.1), abierta el 2026-08-02 por ADR-0007 enmienda 1 al cerrarse F-1.1/F-1.2/F-1.3 (Época 1 completa)
+- Estado: **en revisión — paso 1 (declarar) completo; falta autorización del Director para el paso 2 (aplicar)**
+- Prioridad: Crítica
+- Rama: `feat/f21-memoria-declarar`
+- Responsable actual: Director del Proyecto (autorización para aplicar contra D1)
+- Objetivo: declarar la tabla `memoria_gobernada`, con los siete elementos del contrato de ADR-0013 (privacidad/lista blanca, aislamiento por tenant, procedencia, confianza, caducidad, corrección versionada, borrado), siguiendo el ciclo de ADR-0011. Es una tabla **nueva**, sin relación con la legada `alejandra_memoria` (`memory_save`/`memory_read`, ya en producción, dominio excluido de ADR-0010).
+- Criterios de aceptación:
+  1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con las columnas de ADR-0013 §1-§6 (`migrate_memoria_gobernada.sql`), sin tocar la tabla legada.
+  2. ✅ No se ejecuta contra D1 en esta tarea: eso exige autorización explícita del Director (ADR-0007).
+  3. ✅ Ningún Worker escribe ni lee la tabla nueva todavía; `nucleo-cognitivo/src/memory.js` sigue siendo interfaz pura sin cambios.
+  4. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: false`.
+- Dependencias: ADR-0013 aceptado con modificaciones (2026-08-02); ADR-0011 aceptado como estrategia.
+- Bloqueos: aplicar la migración contra D1 exige decisión del Director; además, ARC-008 debe avanzar lo suficiente para que un recuerdo consultado tenga trazabilidad completa en una decisión (ADR-0013 §8), y la implementación real de `memory.js`/tools requiere revisar los dos Workers (regla de los dos cerebros).
+- Archivos principales: `migrate_memoria_gobernada.sql` (nuevo), `migrate_manifiesto.json`.
+- Pruebas: `node -e "JSON.parse(...)"` sobre el manifiesto; verificación manual de que las columnas declaradas cubren los siete elementos de ADR-0013.
+- Última actualización: 2026-08-02
+- Siguiente acción exacta: **pendiente de decisión del Director.** No se inicia el workflow de aplicación hasta que exista autorización explícita, verificación de D1 antes y después, y (idealmente) mayor avance de ARC-008.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 

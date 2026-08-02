@@ -30,8 +30,11 @@ Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisió
 tres estados y `GET /admin/trazas` ya están desplegados en producción (ADR-0014, fuera del
 paquete aislado, en cada Worker).
 
-**F-1.3 abierta** (2026-08-02): primer entregable en curso, esqueleto y contratos del Tool
-Registry (ADR-0010) y Verifier (ADR-0009), mismo patrón aislado que F-1.2 — ver `TASKS.md`.
+**F-1.3 completada** (2026-08-02): Tool Registry (ADR-0010) y Verifier (ADR-0009) migrados a
+todo el catálogo real de tools de los dos Workers (96/103, 7 excluidas a propósito). Cierra la
+Época 1 completa. **Época 2 abierta** (`ADR-0007` enmienda 1): F-2.1 (gobierno de memoria) con
+su modelo aceptado en `ADR-0013` y primer esquema declarado (`migrate_memoria_gobernada.sql`,
+sin aplicar) — ver `TASKS.md`.
 
 **Presentación (P-1):** `ADR-0012` aceptado. P-ARCH-001 y **P-ARCH-002 aprobados** por el
 Director. Queda desbloqueada la siguiente rebanada, aún sin definir.
@@ -45,13 +48,17 @@ Director. Queda desbloqueada la siguiente rebanada, aún sin definir.
 
 ## Siguiente paso
 
-Trabajo autónomo en curso: **F-1.3-TOOL-REGISTRY-ESQUELETO** (ver `TASKS.md`) — esqueleto y
-contratos del Tool Registry y Verifier, sin integrar en producción ni migrar el catálogo real
-de tools de ningún Worker.
+**F-1.3 completada (2026-08-02):** catálogo de tools de los dos Workers migrado a ADR-0010
+(96/103, 7 excluidas a propósito). Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**
+y, por `ADR-0007` enmienda 1, se abre **F-2.1** (Época 2, gobierno de memoria) — ver `TASKS.md`
+(`F-2.1-MEMORIA-DECLARAR`). Primer entregable completado: `migrate_memoria_gobernada.sql`
+declara (sin aplicar) el esquema de memoria gobernada de `ADR-0013`, tabla nueva sin relación
+con la legada `alejandra_memoria`.
 
 En paralelo, sigue pendiente de decisión exclusiva del Director: **`F-0.2-CFG`** (secretos al
 entorno `production`), **ARC-014** (reapertura si cambia el número de mantenedores o entra en
-producción real), **ARC-011-FASE3-CHECKLISTS paso 2** (aplicar la migración contra D1), y
-definir la siguiente rebanada de presentación (P-1) tras P-ARCH-002.
+producción real), **ARC-011-FASE3-CHECKLISTS paso 2** y **F-2.1-MEMORIA-DECLARAR paso 2**
+(aplicar cada migración contra D1), y definir la siguiente rebanada de presentación (P-1) tras
+P-ARCH-002.
 
 No integrar `nucleo-cognitivo/` en producción ni activar memoria persistente en él.
