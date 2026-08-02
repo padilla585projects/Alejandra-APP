@@ -207,6 +207,26 @@ describe('filtrarToolsPorAuth', () => {
     expect(filtrarToolsCron([sinMetadato])).toEqual([sinMetadato]);
   });
 
+  // F-1.3-MIGRAR-RESTO-TOOLS, lote 2 (2026-08-02): 8 tools de solo lectura que
+  // ya exigían sesión, sin escritura de datos de negocio. Mismo criterio y
+  // misma garantía que el piloto: el metadato de ADR-0010 no cambia el
+  // resultado de filtrarToolsPorAuth/filtrarToolsCron.
+  it('lote 2 (buscar_documentos, buscar_tareas, consultar_inventario, buscar_precios, buscar_procedimientos, consultar_punch_list, buscar_proveedores, consultar_precios): metadato ADR-0010 no cambia el filtrado', () => {
+    const lote2 = [
+      'buscar_documentos', 'buscar_tareas', 'consultar_inventario', 'buscar_precios',
+      'buscar_procedimientos', 'consultar_punch_list', 'buscar_proveedores', 'consultar_precios',
+    ];
+    for (const name of lote2) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N0' };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+      }
+      expect(filtrarToolsCron([conMetadato])).toEqual([conMetadato]);
+    }
+  });
+
   // fix continuación 14 (IDOR/SQLi en configurar_alerta y exportar_datos):
   // configurar_alerta pasa a exigir dev verificado (igual que patch_codigo,
   // guardaba SQL arbitrario ejecutado sin scope); exportar_datos pasa a exigir
