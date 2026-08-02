@@ -1830,6 +1830,12 @@ const TOOL_VALIDAR_CAMBIOS_BD = {
   nivel_riesgo: 'N0',
 };
 
+// F-1.3/ADR-0010 (lote 7, 2026-08-02): notificaciones y generación de
+// contenido, revisadas linea a linea. enviar_push/iniciar_conversacion/
+// controlar_app se quedan DENTRO del ecosistema propio de la app (FCM a un
+// usuario ya registrado, acotado por puedeNotificarUsuario) -- distinto de
+// "sale de la organizacion" (el ejemplo de N2 de ADR-0006 es Telegram/email a
+// un destino externo arbitrario), asi que se clasifican N1, no N2.
 const TOOL_ENVIAR_PUSH = {
   name: 'enviar_push',
   description: 'Envía una notificación push al móvil del usuario. Úsala para avisar de algo importante o llamar su atención.',
@@ -1841,9 +1847,15 @@ const TOOL_ENVIAR_PUSH = {
       cuerpo:     { type: 'string', description: 'Texto del cuerpo de la notificación' }
     },
     required: ['titulo', 'cuerpo']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
+// Escribe un único archivo HTML en R2, con las 5 subconsultas ya acotadas por
+// empresa_id (fix continuación 19). No envía nada fuera — genera el informe;
+// enviarlo es enviar_email/enviar_telegram_informe, ya N2. N1.
 const TOOL_GENERAR_INFORME = {
   name: 'generar_informe',
   description: 'Genera un informe en HTML profesional con datos reales de la BD. Tipos: semanal (resumen semana de obra), fichajes, equipos (PEMP+carretillas), inventario (bobinas), incidencias, evaluacion_riesgos (PRL), plan_emergencia (PRL), personalizado. Guarda en R2 y devuelve la r2_key para enviarlo por email o Telegram.',
@@ -1859,9 +1871,14 @@ const TOOL_GENERAR_INFORME = {
       contenido:    { type: 'string', description: 'Contenido en texto o HTML para tipo personalizado/evaluacion_riesgos/plan_emergencia' }
     },
     required: ['tipo', 'titulo']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
+// Envía un email real (Resend) a CUALQUIER dirección en "para" -- sale de la
+// organización, el ejemplo textual que ADR-0006 da para N2.
 const TOOL_ENVIAR_EMAIL = {
   name: 'enviar_email',
   description: `Envía un email via Resend. Soporta tres modos según r2_key:
@@ -1878,9 +1895,14 @@ El campo "para" es el email del destinatario (si no lo sabes, pregúntalo).`,
       r2_key:  { type: 'string', description: 'R2 key del archivo a enviar (esquema .svg, informe .html, etc.). Opcional.' }
     },
     required: ['para', 'asunto']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N2',
 };
 
+// Envía por la API de Telegram — literalmente "envío de Telegram", el mismo
+// ejemplo de N2 que da ADR-0006.
 const TOOL_ENVIAR_TELEGRAM_INFORME = {
   name: 'enviar_telegram_informe',
   description: `Envía por Telegram un archivo R2 o un mensaje de texto.
@@ -1897,7 +1919,10 @@ El chat_id se resuelve automáticamente desde la memoria del usuario si escribi�
       chat_id:        { type: 'string', description: 'Chat ID de Telegram (opcional — se resuelve desde memoria si el usuario ya escribió al bot)' }
     },
     required: []
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N2',
 };
 
 const TOOL_INICIAR_CONVERSACION = {
@@ -1911,9 +1936,14 @@ const TOOL_INICIAR_CONVERSACION = {
       titulo_push:{ type: 'string', description: 'Título corto para la notificación push (ej: "Alejandra tiene algo que decirte")' }
     },
     required: ['usuario_id', 'mensaje']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
+// Escribe un único objeto en R2, con comprobación de propiedad si la key ya
+// existe (fix continuación 20). N1.
 const TOOL_SUBIR_ARCHIVO = {
   name: 'subir_archivo',
   description: 'Sube o crea un archivo en el almacenamiento R2. Útil para guardar resultados, generar reportes o escribir archivos de configuración.',
@@ -1925,7 +1955,10 @@ const TOOL_SUBIR_ARCHIVO = {
       content_type: { type: 'string', description: 'MIME type (default: text/plain)' }
     },
     required: ['key', 'contenido']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 // github_listar/github_leer/github_buscar/grep_codigo comparten el mismo
@@ -2028,6 +2061,8 @@ const TOOL_GREP_CODIGO = {
   nivel_riesgo: 'N0',
 };
 
+// Upsert de una fila en alejandra_ram, scratch propio del agente con TTL de
+// 24h -- no son datos de negocio. N1.
 const TOOL_RAM_SAVE = {
   name: 'ram_save',
   description: 'Guarda datos temporales en RAM local (D1). Úsalo para almacenar contenido de archivos grandes, resultados intermedios o contexto de tareas largas. Se borra automáticamente en 1 hora o cuando uses ram_clear.',
@@ -2039,7 +2074,10 @@ const TOOL_RAM_SAVE = {
       tarea:  { type: 'string', description: 'Nombre de la tarea para agrupar entradas relacionadas (ej: "patch_clasificador")' }
     },
     required: ['clave', 'valor']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_RAM_READ = {
@@ -2061,6 +2099,8 @@ const TOOL_RAM_READ = {
   nivel_riesgo: 'N0',
 };
 
+// DELETE sobre alejandra_ram (por tarea, por clave, o expiradas) -- mismo
+// scratch propio del agente que ram_save, no datos de negocio. N1.
 const TOOL_RAM_CLEAR = {
   name: 'ram_clear',
   description: 'Limpia la RAM local al terminar una tarea. Borra por tarea (recomendado) o por clave específica.',
@@ -2070,7 +2110,10 @@ const TOOL_RAM_CLEAR = {
       tarea: { type: 'string', description: 'Borrar todas las entradas de esta tarea' },
       clave: { type: 'string', description: 'Borrar solo esta clave (si no se especifica tarea)' }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 // Restringido a hosts propios del proyecto (urlPermitidaTestEndpoint) tras el
@@ -2193,6 +2236,9 @@ const TOOL_NEXUS_MANAGE = {
   nivel_riesgo: 'N2',
 };
 
+// Encola un comando (INSERT en alejandra_comandos) para la app del usuario
+// destino, acotado por puedeNotificarUsuario. Mismo canal interno que
+// enviar_push/iniciar_conversacion. N1.
 const TOOL_CONTROLAR_APP = {
   name: 'controlar_app',
   description: 'Envía un comando remoto a la app del usuario. La app lo ejecuta automáticamente. Tipos disponibles:\n• navegar: cambiar de pantalla (chat/voz/traductor/historial/ajustes)\n• dialogo: mostrar AlertDialog\n• toast: mostrar SnackBar breve (info/exito/error)\n• vibrar: feedback háptico (corto/largo/doble/alarma)\n• prefill_chat: pre-rellenar el input del chat con texto sugerido\n• enviar_mensaje: enviar mensaje en nombre del usuario (úsalo SOLO si el usuario lo pidió expresamente)\n• abrir_conversacion: abrir el historial\n• tomar_foto: lanzar el image_picker del chat\n• recargar: refrescar la pantalla actual\n• accion: ejecutar función nombrada (refresh/sync)\n• datos: precargar datos en pantalla\n• notificar: notificación local',
@@ -2207,7 +2253,10 @@ const TOOL_CONTROLAR_APP = {
       }
     },
     required: ['tipo', 'payload']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 // Tools por experto

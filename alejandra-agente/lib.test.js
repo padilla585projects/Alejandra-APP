@@ -298,6 +298,33 @@ describe('filtrarToolsPorAuth', () => {
     }
   });
 
+  // F-1.3-MIGRAR-RESTO-TOOLS, lote 7 (2026-08-02): notificaciones/generación
+  // de contenido. enviar_email/enviar_telegram_informe salen de la
+  // organización (N2, el ejemplo textual de ADR-0006); el resto se queda
+  // dentro del ecosistema propio de la app (N1).
+  it('lote 7 (ram_save/clear, enviar_push, generar_informe, enviar_email N2, enviar_telegram_informe N2, iniciar_conversacion, subir_archivo, controlar_app): metadato ADR-0010 no cambia el filtrado', () => {
+    const lote7 = [
+      { name: 'ram_save', nivel_riesgo: 'N1' },
+      { name: 'ram_clear', nivel_riesgo: 'N1' },
+      { name: 'enviar_push', nivel_riesgo: 'N1' },
+      { name: 'generar_informe', nivel_riesgo: 'N1' },
+      { name: 'enviar_email', nivel_riesgo: 'N2' },
+      { name: 'enviar_telegram_informe', nivel_riesgo: 'N2' },
+      { name: 'iniciar_conversacion', nivel_riesgo: 'N1' },
+      { name: 'subir_archivo', nivel_riesgo: 'N1' },
+      { name: 'controlar_app', nivel_riesgo: 'N1' },
+    ];
+    for (const { name, nivel_riesgo } of lote7) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso: 'sesion', cron: 'permitido', nivel_riesgo };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+      }
+      expect(filtrarToolsCron([conMetadato]).map(t => t.name)).toEqual([name]);
+    }
+  });
+
   // F-1.3-MIGRAR-RESTO-TOOLS, lote 3 (2026-08-02): 7 tools públicas
   // (SEC-ANON-01 las dejó deliberadamente sin sesión porque no tocan datos de
   // nadie: búsqueda externa y cálculos de ingeniería deterministas).
