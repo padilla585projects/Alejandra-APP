@@ -51,7 +51,20 @@ Fue el primer uso real del circuito de entrega segura de F-0.1 y se comportó co
 
 ## Estado de despliegue (2026-08-02)
 
-**Los dos Workers están desplegados y respondiendo** (`HTTP 200` verificado): `alejandra-app-api` versión `a5ccf770`, `alejandra-agente` versión `a67353ec`. Llevan ARC-013, ARC-015, ARC-016 y ARC-017 en producción.
+**Los dos Workers están desplegados y respondiendo** (`HTTP 200` verificado): `alejandra-app-api` versión `29d48103` (deployment id de Cloudflare), `alejandra-agente` versión `6f220f61`. Llevan ARC-013, ARC-015, ARC-016, ARC-017 y ahora ADR-0014 (`registrarTraza`, `/health` real de tres estados, `GET /admin/trazas`) en producción.
+
+## ADR-0014 — implementado y verificado en producción (2026-08-02)
+
+`registrarTraza()` conectado a ARC-013 (`runDDL()`/`ddlPaso()`) en los dos Workers: todo error real de DDL ahora también persiste en `alejandra_trazas` (`tipo='ddl_error'`), con minimización/redacción de email y teléfono antes de serializar, sin romper el `console.error` existente. `/health` rediseñado en ambos (`estado`: `healthy`/`degraded`/`unhealthy`, comprobando D1 y el objeto centinela `_healthcheck/centinela.txt` en R2), verificado en vivo:
+
+| Worker | `/health` |
+|---|---|
+| `alejandra-app-api` | `{"estado":"healthy","d1":true,"r2":true,"version":"29d48103-..."}` |
+| `alejandra-agente` | `{"estado":"healthy","d1":true,"r2":true,"version":"6f220f61-...", ...flags existentes}` |
+
+`GET /admin/trazas` solo en `alejandra-app-api` (decisión del Director), protegido con `hasRole(s, 'superadmin', 'desarrollador')`, verificado en vivo (403 sin sesión). Versión derivada del binding nativo `version_metadata` de Cloudflare en los dos Workers — mismo id que `wrangler deployments list`, sin tocar el pipeline de CI. `alejandra-agente/lib.js` gana 16 pruebas nuevas (110/110 en verde).
+
+**Bug encontrado y corregido en el mismo ciclo:** `index.html` comparaba el `version` de `/health` del agente contra `APP_VERSION` como *fallback* de actualización — al pasar `version` a ser un UUID de despliegue, esa comparación nunca coincidiría y forzaría una recarga en cada uso, el mismo patrón de los incidentes de recarga infinita del 22/04 y 26/04. Desactivado el *fallback* antes de que llegara a afectar a un usuario real (el código ya está en `main`; publicarlo a Pages es un paso de entrega aparte, no automático).
 
 ## ARC-018 — resuelto (2026-08-02)
 
@@ -116,11 +129,11 @@ endpoint `GET /admin/trazas` son trabajo aparte, fuera del núcleo aislado.
 
 ## Siguiente objetivo
 
-Con `memory.js`, `registrarTraza()` y la tabla `alejandra_trazas` ya en pie, el siguiente
-trabajo real de F-1.2 es de alcance mayor: implementar `registrarTraza()` en cada Worker
-(regla de los dos cerebros) y el endpoint `GET /admin/trazas` en `alejandra-app-api` — eso ya
-toca `worker.js`/`alejandra-agente/worker.js`, fuera del aislamiento actual del núcleo, y
-conviene acordar su alcance explícitamente antes de empezar. En paralelo, ARC-011 fase 3
+ADR-0014 queda implementado de extremo a extremo (interfaz en `nucleo-cognitivo/`, tabla D1,
+`registrarTraza()` real, `/health` de tres estados, `GET /admin/trazas`, todo desplegado y
+verificado). Lo único de ADR-0014 que sigue pendiente es que `worker.js`/`alejandra-agente/worker.js`
+reincorporen el healthcheck automático post-despliegue en el runbook (ahora que `/health` sí
+distingue desplegado de operativo) — trabajo menor, no bloqueante. En paralelo, ARC-011 fase 3
 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla contra D1 sigue
 requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen esperando decisión del
 Director, sin relación con el núcleo
