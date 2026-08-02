@@ -104,6 +104,10 @@ El relevo se registra en `HANDOFF.md`; nunca se deja solo en el chat. Al pausar,
 
 El último commit se anota con hash corto y mensaje. Un bloqueo describe el hecho observable, impacto, autoridad necesaria y condición exacta para reanudar. La siguiente acción debe ser ejecutable sin interpretar conversaciones anteriores.
 
+Todo commit estable se publica a continuación en la rama propia mediante un `push` no forzado,
+salvo que una política o un bloqueo remoto verificable lo impida. El push conserva el relevo en
+el repositorio remoto; no autoriza merge a `main` ni modifica ramas ajenas.
+
 ## Ramas e integración
 
 - Una tarea principal por rama. No se trabaja directamente sobre `main`.
