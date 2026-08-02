@@ -11846,8 +11846,10 @@ async function buscarItemSeg(codigo, request, env) {
 // crearItemSeg la ignoraba en silencio: se perdía siempre, sin error visible.
 let _invSegUbicacionOk = false;
 async function ensureInventarioSegUbicacion(env) {
-  if (_invSegUbicacionOk) return;
-  await runDDL(env, 'ALTER TABLE inventario_seg ADD COLUMN ubicacion TEXT');
+  // ARC-012/ARC-011 (2026-08-02): columna aplicada y verificada contra D1 real
+  // via migrate_inventario_seg_ubicacion.sql (run 30722072138). Se retira el
+  // ALTER en runtime -- no hay entorno donde esta columna pudiera faltar ya.
+  // await runDDL(env, 'ALTER TABLE inventario_seg ADD COLUMN ubicacion TEXT');
   _invSegUbicacionOk = true;
 }
 
@@ -14116,8 +14118,10 @@ async function rgpdSetConfig(request, env) {
     logs_dias:     Math.max(7,  parseInt(body.logs_dias)     || 90),
   };
 
-  // Asegurarse de que la columna existe (migración on-the-fly)
-  await runDDL(env, `ALTER TABLE empresas ADD COLUMN retencion_config TEXT`);
+  // ARC-012/ARC-011 (2026-08-02): columna aplicada y verificada contra D1 real
+  // via migrate_empresas_retencion.sql (run 30722103191). Se retira el ALTER
+  // en runtime -- no hay entorno donde esta columna pudiera faltar ya.
+  // await runDDL(env, `ALTER TABLE empresas ADD COLUMN retencion_config TEXT`);
 
   await env.DB.prepare(`UPDATE empresas SET retencion_config=? WHERE id=?`)
     .bind(JSON.stringify(config), auth.empresa_id).run();
@@ -25022,7 +25026,10 @@ async function _ensurePlanosTable(env) {
       actualizado_en TEXT    DEFAULT (datetime('now'))
     )
   `).run();
-  await runDDL(env, `ALTER TABLE planos ADD COLUMN circuitos_json TEXT`);
+  // ARC-012/ARC-011 (2026-08-02): columna aplicada y verificada contra D1 real
+  // via migrate_008_plano_circuitos.sql (run 30722027660). Se retira el ALTER
+  // en runtime -- no hay entorno donde esta columna pudiera faltar ya.
+  // await runDDL(env, `ALTER TABLE planos ADD COLUMN circuitos_json TEXT`);
 }
 
 // ═══════════════════════════════════════════════════════════════════
