@@ -4,17 +4,37 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
-Foundation v0.1 aprobada. F-0.1 está **cerrada localmente**: CI, CD, secretos y migraciones quedan separados en los workflows versionados y ningún push o merge activa producción.
+Foundation v0.1 aprobada. **F-0.1 activa en producción desde el 2026-08-02** (PR #9): workflows
+antiguos retirados, `main` protegida, entorno `production` con revisor requerido. Queda mover
+los secretos a nivel de entorno (`F-0.2-CFG`, pospuesta). Detalle en
+`docs/runbooks/CI-CD-Y-MIGRACIONES.md`. Healthcheck automático post-despliegue reincorporado
+(PR #36).
 
-**Activa en producción desde el 2026-08-02** (PR #9): workflows antiguos retirados, `main` protegida y entorno `production` con revisor requerido. Queda mover los secretos a nivel de entorno. Detalle en `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
+**ARC-011 fases 1 y 2 verificadas** (PR #10); **ARC-012 resuelto** (PR #11); **ARC-013, 015,
+016, 017 corregidos y desplegados en producción.** ARC-011 fase 3 (`ADR-0011`, migrador por
+vertical) tiene su paso 1 completo (`migrate_checklists.sql`); aplicarla contra D1 exige
+autorización del Director. **ARC-018 resuelto** (worker/bucket R2 huérfanos borrados).
+**ARC-014**: riesgo aceptado temporalmente por el Director mientras haya un único mantenedor.
 
-**ARC-011 fases 1 y 2 completadas** (PR #10): el esquema real de D1 está inventariado y contrastado contra el código. 105 de 150 tablas existen solo porque el código las crea y 27 tablas de producción no las declara nadie. El contraste destapó **3 bugs activos** por `ALTER` silenciados.
+**F-0.2 completada** (2026-08-02): catálogo de rutas, CI de calidad y auditoría remota de
+Cloudflare.
 
-**ARC-012 resuelto** (PR #11): las tres columnas ausentes se aplicaron por el workflow manual y se verificaron contra el esquema real. Fue el primer uso real del circuito de entrega segura, y funcionó. **ARC-013 corregido y desplegado.** Sigue abierto **ARC-014** (un token de administración puede aprobar su propio despliegue).
+**Los ocho ADR de Época 1 aceptados** (2026-08-02): `ADR-0004`, `ADR-0006`, `ADR-0008`,
+`ADR-0009`, `ADR-0010`, `ADR-0011` (como estrategia), `ADR-0013` y `ADR-0014` (estos dos con
+modificaciones). Ningún ADR de Época 1 queda `Propuesto`. Cierran ARC-001, ARC-002, ARC-003,
+ARC-004, ARC-006 y ARC-008, y con `ADR-0004` se cierra **F-1.1**.
 
-**F-0.2 completada** (2026-08-02): catálogo de rutas, CI de calidad y auditoría remota de Cloudflare, con el hallazgo **ARC-018** (worker/bucket huérfanos) pendiente de decisión.
+**F-1.2 completada y verificada** (2026-08-02): `nucleo-cognitivo/`, paquete aislado con Estado
+Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión, `memory.js`
+(ADR-0013) y el contrato `registrarTraza()` (ADR-0014). `registrarTraza()` real, `/health` de
+tres estados y `GET /admin/trazas` ya están desplegados en producción (ADR-0014, fuera del
+paquete aislado, en cada Worker).
 
-**Seis ADR de Época 1 aceptados** (2026-08-02): `ADR-0004`, `ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010` y `ADR-0011` (este último como estrategia). Cierran ARC-001, ARC-003, ARC-004 y ARC-006, y con `ADR-0004` se cierra **F-1.1**. Se abre **F-1.2**, acotada a esqueleto y contratos del núcleo cognitivo (`nucleo-cognitivo/`), sin activar memoria persistente ni decisiones sin trazabilidad.
+**F-1.3 abierta** (2026-08-02): primer entregable en curso, esqueleto y contratos del Tool
+Registry (ADR-0010) y Verifier (ADR-0009), mismo patrón aislado que F-1.2 — ver `TASKS.md`.
+
+**Presentación (P-1):** `ADR-0012` aceptado. P-ARCH-001 y **P-ARCH-002 aprobados** por el
+Director. Queda desbloqueada la siguiente rebanada, aún sin definir.
 
 ## Lectura obligatoria
 
@@ -25,30 +45,13 @@ Foundation v0.1 aprobada. F-0.1 está **cerrada localmente**: CI, CD, secretos y
 
 ## Siguiente paso
 
-**ARC-013 ya está desplegado en producción** (ver `PROJECT_STATE.md`). F-0.2 se completó el
-2026-08-02 con la auditoría remota de Cloudflare. El Director aceptó el mismo día los cinco
-ADR de la primera tanda de Época 1 (`ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010`, `ADR-0011`),
-cerrando ARC-001, ARC-003, ARC-004 y ARC-006.
+Trabajo autónomo en curso: **F-1.3-TOOL-REGISTRY-ESQUELETO** (ver `TASKS.md`) — esqueleto y
+contratos del Tool Registry y Verifier, sin integrar en producción ni migrar el catálogo real
+de tools de ningún Worker.
 
-Trabajo autónomo habilitado ahora mismo: **ARC-011 fase 3, vertical `checklists`** —
-declarar la migración `.sql` a partir del esquema real ya verificado en ARC-015 (código
-reversible). **Aplicarla contra D1 sigue exigiendo autorización explícita del Director.**
-
-**`ADR-0004` aceptado el 2026-08-02**: cierra F-1.1 y abre F-1.2. Primer entregable en curso:
-`nucleo-cognitivo/`, paquete aislado con Estado Cognitivo, Policy Engine y las interfaces de
-Context Engine, Planner y Motor de Decisión — sin integrarlo en `worker.js` ni
-`alejandra-agente/worker.js`. Por restricción expresa del Director: no se activa memoria
-persistente sensible (ARC-002 sigue sin ADR) ni se toman decisiones sin trazabilidad
-suficiente (ARC-008 sigue abierto). Memory, Nexo, Capability/Tool Registry, Verifier y QA
-quedan fuera — son F-1.3/F-2.1/F-2.2, no abiertas.
-
-En paralelo, y solo por el Director: **`F-0.2-CFG`** (secretos al entorno `production`),
-**ARC-018** (worker/bucket huérfanos), **ARC-014** (autoaprobación de despliegue), y
-**ARC-002**/**ARC-008** (memoria y trazas, condición para ampliar F-1.2).
+En paralelo, sigue pendiente de decisión exclusiva del Director: **`F-0.2-CFG`** (secretos al
+entorno `production`), **ARC-014** (reapertura si cambia el número de mantenedores o entra en
+producción real), **ARC-011-FASE3-CHECKLISTS paso 2** (aplicar la migración contra D1), y
+definir la siguiente rebanada de presentación (P-1) tras P-ARCH-002.
 
 No integrar `nucleo-cognitivo/` en producción ni activar memoria persistente en él.
-
-**Presentación:** `ADR-0012` fue aceptado. La arquitectura vigente está en
-`docs/architecture/FRONTEND_ARCHITECTURE.md`; el piloto de salud P-ARCH-001 fue aprobado.
-La rebanada compartida de notificaciones P-ARCH-002 está en revisión: no ampliar hasta revisar
-`docs/architecture/FRONTEND_SLICE_TOAST.md`.

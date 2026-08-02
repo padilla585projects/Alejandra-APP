@@ -137,11 +137,21 @@ verificado). **El healthcheck automático post-despliegue se reincorporó (PR #3
 `deploy-worker.yml` y `deploy-alejandra-agente.yml` consultan `/health` tras desplegar
 (con reintentos), fallan el job si el estado es `unhealthy` o no responde, y dejan una
 advertencia visible si es `degraded`, sin bloquear. No sustituye la verificación manual
-registrada en el handoff. No queda ningún pendiente de ADR-0014. En paralelo, ARC-011 fase 3
-(ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla contra D1 sigue
-requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen esperando decisión del
-Director, sin relación con el núcleo
-cognitivo.
+registrada en el handoff. No queda ningún pendiente de ADR-0014.
+
+**F-1.2 verificada y cerrada (2026-08-02):** sus 6 criterios de aceptación se comprobaron
+directamente contra `nucleo-cognitivo/` — `node --check` sobre los módulos y `node --test
+nucleo-cognitivo/test/*.js` en verde (20/20). `TASKS.md` describía como pendiente un paso
+(`registrarTraza()` real en los Workers) que ya estaba hecho desde PR #24/#25; corregido.
+**F-1.3 abierta (2026-08-02)** por `ADR-0007` enmienda 1: sus dependencias (F-1.2, ARC-004,
+ARC-006) están cerradas. Primer entregable en curso: esqueleto y contratos del Tool Registry
+(validación pura del metadato `acceso`/`cron`/`nivel_riesgo` de ADR-0010) y las interfaces de
+Verifier según los tres niveles de ADR-0009, mismo patrón que F-1.2 — sin migrar el catálogo
+real de tools de ningún Worker, sin integrarse en producción.
+
+En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
+aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen
+esperando decisión del Director, sin relación con el núcleo cognitivo.
 
 ## Arquitectura de presentación
 
