@@ -325,6 +325,35 @@ describe('filtrarToolsPorAuth', () => {
     }
   });
 
+  // F-1.3-MIGRAR-RESTO-TOOLS, lote 8 (2026-08-02): último lote del agente.
+  // exportar_datos es N2 (exporta sin LIMIT, incluye PII de personal);
+  // preguntar_usuario es N1 pese a usar Telegram porque su destino es fijo
+  // (no un chat_id arbitrario, a diferencia de enviar_telegram_informe).
+  it('lote 8 (analizar_foto_obra, generar_esquema_electrico, listar/borrar_esquema, generar_plano, generar_grafico, preguntar_usuario, generar_documento, historico_materiales, exportar_datos N2): metadato ADR-0010 no cambia el filtrado', () => {
+    const lote8 = [
+      { name: 'analizar_foto_obra', nivel_riesgo: 'N0' },
+      { name: 'generar_esquema_electrico', nivel_riesgo: 'N1' },
+      { name: 'listar_esquemas', nivel_riesgo: 'N0' },
+      { name: 'borrar_esquema', nivel_riesgo: 'N1' },
+      { name: 'generar_plano', nivel_riesgo: 'N1' },
+      { name: 'generar_grafico', nivel_riesgo: 'N1' },
+      { name: 'preguntar_usuario', nivel_riesgo: 'N1' },
+      { name: 'generar_documento', nivel_riesgo: 'N1' },
+      { name: 'historico_materiales', nivel_riesgo: 'N1' },
+      { name: 'exportar_datos', nivel_riesgo: 'N2' },
+      { name: 'estado_obra', nivel_riesgo: 'N0' },
+    ];
+    for (const { name, nivel_riesgo } of lote8) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso: 'sesion', cron: 'permitido', nivel_riesgo };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+      }
+      expect(filtrarToolsCron([conMetadato]).map(t => t.name)).toEqual([name]);
+    }
+  });
+
   // F-1.3-MIGRAR-RESTO-TOOLS, lote 3 (2026-08-02): 7 tools públicas
   // (SEC-ANON-01 las dejó deliberadamente sin sesión porque no tocan datos de
   // nadie: búsqueda externa y cálculos de ingeniería deterministas).

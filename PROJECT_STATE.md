@@ -193,12 +193,17 @@ pruebas en verde. 45/103 tools migradas tras el lote 6.
 literalmente de la organización, el ejemplo textual de ADR-0006); `enviar_push`,
 `iniciar_conversacion`, `controlar_app` (**N1**, se quedan dentro del ecosistema propio de la
 app vía FCM/comandos acotados por `puedeNotificarUsuario`); `generar_informe`, `subir_archivo`,
-`ram_save`, `ram_clear` (**N1**). 120/120 pruebas en verde. **54/103 tools migradas**; quedan
-15 en el agente y 34 en `worker.js` raíz.
-`memory_save`/`memory_read`/`propose_mejora`/`tomar_decision` siguen sin clasificar (dominio
-de ADR-0013). Siguiente lote: `analizar_foto`, `generar_esquema`, `listar_esquemas`,
-`borrar_esquema`, `generar_grafico`, `preguntar_usuario`, `generar_plano`, `generar_documento`,
-`historico_materiales`, `exportar_datos`.
+`ram_save`, `ram_clear` (**N1**). 120/120 pruebas en verde. 54/103 tools migradas tras el lote 7.
+
+**Lote 8 completado (2026-08-02) — CATÁLOGO DEL AGENTE COMPLETO.** Último lote:
+`analizar_foto_obra`/`listar_esquemas`/`estado_obra` (**N0**); `generar_esquema_electrico`,
+`borrar_esquema`, `generar_plano`, `generar_grafico`, `preguntar_usuario`, `generar_documento`,
+`historico_materiales` (**N1**); `exportar_datos` (**N2** — exporta sin `LIMIT`, incluye PII
+de personal, sin gate de confirmación humana todavía, anotado como pendiente). 121/121
+pruebas en verde. **69/69 tools de `alejandra-agente/worker.js` migradas**
+(`memory_save`/`memory_read`/`propose_mejora`/`tomar_decision` deliberadamente excluidas,
+dominio ADR-0013). **65/103 tools totales migradas**; quedan 34 en `worker.js` raíz, con
+gating independiente (regla de los dos cerebros).
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen
