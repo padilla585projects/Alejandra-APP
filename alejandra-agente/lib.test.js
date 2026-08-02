@@ -248,6 +248,27 @@ describe('filtrarToolsPorAuth', () => {
     }
   });
 
+  // F-1.3-MIGRAR-RESTO-TOOLS, lote 5 (2026-08-02): 12 tools de solo lectura
+  // más, verificadas leyendo su case en el switch de ejecución (incluidas
+  // github_listar/leer/buscar/grep_codigo, que comparten bloque con
+  // github_escribir/patch_codigo pero no hacen ningún fetch PUT).
+  it('lote 5 (descubrir_herramientas, recuperar_conversacion, leer_estado, consultar_bd, listar_archivos, ver_archivo, consultar_conocimiento, ram_read, github_listar/leer/buscar, grep_codigo): metadato ADR-0010 no cambia el filtrado', () => {
+    const lote5 = [
+      'descubrir_herramientas', 'recuperar_conversacion', 'leer_estado', 'consultar_bd',
+      'listar_archivos', 'ver_archivo', 'consultar_conocimiento', 'ram_read',
+      'github_listar', 'github_leer', 'github_buscar', 'grep_codigo',
+    ];
+    for (const name of lote5) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N0' };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+      }
+      expect(filtrarToolsCron([conMetadato])).toEqual([conMetadato]);
+    }
+  });
+
   // F-1.3-MIGRAR-RESTO-TOOLS, lote 3 (2026-08-02): 7 tools públicas
   // (SEC-ANON-01 las dejó deliberadamente sin sesión porque no tocan datos de
   // nadie: búsqueda externa y cálculos de ingeniería deterministas).

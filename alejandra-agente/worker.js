@@ -1132,7 +1132,10 @@ const TOOL_LISTAR_ARCHIVOS = {
     properties: {
       prefix: { type: 'string', description: 'Prefijo para filtrar archivos (ej: "chat_files/usuario_id/"). Si se omite, lista todos.' }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_VER_ARCHIVO = {
@@ -1144,13 +1147,19 @@ const TOOL_VER_ARCHIVO = {
       key: { type: 'string', description: 'Clave del archivo en R2 (ej: "chat_files/usuario/archivo.png")' }
     },
     required: ['key']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_LEER_ESTADO = {
   name: 'leer_estado',
   description: 'Lee tu estado actual: configuración, conteo de memorias y decisiones, logs recientes. Úsalo antes de tomar decisiones.',
-  input_schema: { type: 'object', properties: {} }
+  input_schema: { type: 'object', properties: {} },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_TOMAR_DECISION = {
@@ -1179,7 +1188,12 @@ const TOOL_CONSULTAR_BD = {
       params: { type: 'array', description: 'Parámetros para la consulta (opcional)', items: { type: 'string' } }
     },
     required: ['query']
-  }
+  },
+  // validarSoloSelectBD()/validarScopeEmpresaBD() en worker.js exigen SELECT
+  // y acotan por empresa_id antes de ejecutar — solo lectura real.
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_CALCULAR_CABLE = {
@@ -1747,10 +1761,18 @@ const TOOL_PLANIFICAR = {
   nivel_riesgo: 'N0',
 };
 
+// F-1.3/ADR-0010 (lote 5, 2026-08-02): tools de solo lectura verificadas
+// leyendo su case en el switch de ejecución (sin INSERT/UPDATE/DELETE de
+// negocio). Todas en TOOLS_REQUIEREN_SESION, ninguna en
+// TOOLS_SOLO_DEV_VERIFICADO/TOOLS_PROHIBIDAS_CRON. acceso:'sesion',
+// cron:'permitido', nivel_riesgo:'N0'.
 const TOOL_DESCUBRIR_HERRAMIENTAS = {
   name: 'descubrir_herramientas',
   description: 'Lista todas las herramientas que tienes disponibles ahora mismo, con descripción. Úsala cuando no sepas qué herramienta usar para una tarea.',
-  input_schema: { type: 'object', properties: {} }
+  input_schema: { type: 'object', properties: {} },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_RECUPERAR_CONVERSACION = {
@@ -1760,7 +1782,10 @@ const TOOL_RECUPERAR_CONVERSACION = {
     type: 'object',
     properties: { tema: { type: 'string', description: 'Tema o palabras clave de la conversación a buscar' } },
     required: ['tema']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_ESCRIBIR_BD = {
@@ -1888,6 +1913,12 @@ const TOOL_SUBIR_ARCHIVO = {
   }
 };
 
+// github_listar/github_leer/github_buscar/grep_codigo comparten el mismo
+// bloque `case` en el switch de ejecución que github_escribir/patch_codigo,
+// pero solo estas dos últimas hacen `fetch(..., {method:'PUT'})` — las
+// cuatro de aquí son de solo lectura contra la API de GitHub. En
+// TOOLS_REQUIEREN_SESION (exponen código privado), ninguna en
+// TOOLS_SOLO_DEV_VERIFICADO/TOOLS_PROHIBIDAS_CRON.
 const TOOL_GITHUB_LISTAR = {
   name: 'github_listar',
   description: 'Lista archivos y carpetas de un repositorio en GitHub. Repos disponibles: "app" (padilla585projects/AlejandraIA — Flutter), "worker" (padilla585projects/Alejandra-APP — Workers backend). Por defecto usa "app".',
@@ -1898,7 +1929,10 @@ const TOOL_GITHUB_LISTAR = {
       repo: { type: 'string', description: 'Alias: "app" o "worker". O formato completo "owner/name".' },
       rama: { type: 'string', description: 'Rama (default: main)' }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_GITHUB_LEER = {
@@ -1914,7 +1948,10 @@ const TOOL_GITHUB_LEER = {
       hasta_linea: { type: 'number', description: 'Leer hasta esta línea. Default: todo el archivo' }
     },
     required: ['ruta']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_GITHUB_ESCRIBIR = {
@@ -1944,7 +1981,10 @@ const TOOL_GITHUB_BUSCAR = {
       extension: { type: 'string', description: 'Filtrar por extensión (ej: "dart", "js")' }
     },
     required: ['patron']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_GREP_CODIGO = {
@@ -1959,7 +1999,10 @@ const TOOL_GREP_CODIGO = {
       contexto:{ type: 'number', description: 'Líneas de contexto antes y después de cada match (default: 3)' }
     },
     required: ['ruta', 'patron']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_RAM_SAVE = {
@@ -1986,7 +2029,13 @@ const TOOL_RAM_READ = {
       tarea: { type: 'string', description: 'Filtrar por tarea (opcional)' }
     },
     required: ['clave']
-  }
+  },
+  // El case borra entradas ya expiradas antes de leer (housekeeping interno,
+  // no datos de negocio) y devuelve un SELECT — solo lectura desde la
+  // perspectiva del usuario/tool.
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_RAM_CLEAR = {
@@ -2109,7 +2158,10 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
       id:     { type: 'number', description: 'ID del elemento (preferido si lo tienes)' },
       titulo: { type: 'string', description: 'Título o palabra clave para buscar si no tienes el id' }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 // ── PHASE 1 (MVP): 4 herramientas de búsqueda en BD ─────────────────────────────
