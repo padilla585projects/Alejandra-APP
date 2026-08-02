@@ -77,11 +77,11 @@ a{color:var(--acc2);text-decoration:none}
 
 /* ── SYNC / REMOTE SCAN ── */
 #syncFab{position:fixed;bottom:80px;right:20px;z-index:500;display:none;flex-direction:column;gap:8px;align-items:flex-end}
-.fab-main{background:var(--acc);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:22px;box-shadow:0 4px 20px rgba(139,92,246,.5);transition:transform .2s,box-shadow .2s;position:relative}
+.fab-main{background:var(--color-primary);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:22px;box-shadow:0 4px 20px rgba(139,92,246,.5);transition:transform .2s,box-shadow .2s;position:relative}
 .fab-main:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(139,92,246,.7)}
 .fab-badge{position:absolute;top:-2px;right:-2px;background:var(--green);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid var(--bg)}
 .fab-badge.offline{background:var(--muted)}
-.fab-label{background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--muted);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.fab-label{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:6px var(--space-3);font-size:11px;color:var(--color-text-muted);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 
 /* Scan modal */
 .scan-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;animation:fadeIn .15s}
@@ -113,12 +113,12 @@ a{color:var(--acc2);text-decoration:none}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
 /* Device status bar */
-.dev-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surf);border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
+.dev-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);margin-bottom:var(--space-3)}
 .dev-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .dev-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
 .dev-dot.off{background:var(--muted)}
-.dev-name{font-size:12px;color:var(--text);font-weight:600}
-.dev-ping{font-size:10px;color:var(--muted);margin-left:auto}
+.dev-name{font-size:12px;color:var(--color-text);font-weight:600}
+.dev-ping{font-size:10px;color:var(--color-text-muted);margin-left:auto}
 
 /* Scan result card */
 .scan-result{background:var(--surf);border:1px solid var(--acc);border-radius:14px;padding:16px;margin-bottom:12px;animation:fadeIn .3s}
