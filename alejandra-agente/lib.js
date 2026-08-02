@@ -420,6 +420,66 @@ function calcularEsperaReintentoMs(intento, backoffMs, retryAfterHeader) {
   return espera;
 }
 
+// ── ARC-008 / ADR-0014 (02/08/2026) — observabilidad y trazas ──────────────
+// Minimización/redacción (ADR-0014 §2.1): antes de persistir cualquier
+// detalle en `alejandra_trazas.detalle_json`, se enmascaran patrones de texto
+// libre que puedan ser datos personales -- como mínimo, emails y teléfonos
+// españoles (9 dígitos). Puras para poder testearlas sin mockear D1.
+// registrarTraza() en worker.js las usa antes de hacer el INSERT real.
+function redactarTexto(valor) {
+  if (typeof valor !== 'string') return valor;
+  let out = valor.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[email-redactado]');
+  // Teléfono español: 9 dígitos (típicamente agrupados en 3+3+3), con o sin
+  // prefijo +34/0034 y con o sin espacios/guiones entre grupos, acotado por
+  // límite de palabra para no comerse fragmentos de números más largos (ids,
+  // importes, etc.). No se pretende cubrir todos los formatos internacionales
+  // -- ADR-0014 pide "como mínimo" este patrón.
+  out = out.replace(/(?<![\d+])(?:\+34[\s-]?|0034[\s-]?)?\d{3}[\s-]?\d{3}[\s-]?\d{3}\b/g, '[telefono-redactado]');
+  return out;
+}
+
+// Recorre recursivamente un valor (típicamente el `detalle` de una traza) y
+// aplica redactarTexto() a cada string que encuentra. Profundidad acotada
+// para no colgarse con estructuras circulares o extremadamente anidadas --
+// en ese caso devuelve el valor tal cual a partir del límite (mejor un campo
+// sin redactar por caso extremo que una excepción que tumbe registrarTraza).
+function redactarDetalle(valor, profundidad = 0) {
+  if (profundidad > 6) return valor;
+  if (typeof valor === 'string') return redactarTexto(valor);
+  if (Array.isArray(valor)) return valor.map((v) => redactarDetalle(v, profundidad + 1));
+  if (valor && typeof valor === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(valor)) out[k] = redactarDetalle(v, profundidad + 1);
+    return out;
+  }
+  return valor;
+}
+
+// Extrae la tabla afectada por un DDL (CREATE TABLE / ALTER TABLE) para
+// poder resumir un ddl_error en una línea legible sin parsear SQL completo.
+// Devuelve null si no se reconoce el patrón (no bloquea el registro de la
+// traza, solo empobrece el resumen).
+function extraerTablaDDL(sql) {
+  const s = String(sql || '');
+  let m = /ALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_]*)/i.exec(s);
+  if (m) return m[1];
+  m = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)/i.exec(s);
+  if (m) return m[1];
+  return null;
+}
+
+// Deriva el estado de /health (ADR-0014 §4) a partir de si D1 y el centinela
+// de R2 respondieron dentro del presupuesto de tiempo. Pura: worker.js hace
+// las comprobaciones reales (SELECT 1 / FILES.head) y le pasa los booleanos.
+//   - D1 falla (sola o con R2) -> 'unhealthy' (nada funciona sin BD)
+//   - Solo R2 falla            -> 'degraded'  (fotos/documentos afectados)
+//   - Las dos responden        -> 'healthy'
+function determinarEstadoSalud(d1Ok, r2Ok) {
+  if (!d1Ok) return 'unhealthy';
+  if (!r2Ok) return 'degraded';
+  return 'healthy';
+}
+
 export {
   timingSafeEqual,
   PRECIOS_USD,
@@ -445,4 +505,8 @@ export {
   codigoConfirmacionOp,
   whereEsTrivialmenteCierto,
   detectarEscrituraDestructivaBalanceada,
+  redactarTexto,
+  redactarDetalle,
+  extraerTablaDDL,
+  determinarEstadoSalud,
 };

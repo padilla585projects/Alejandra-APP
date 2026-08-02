@@ -17,6 +17,10 @@ import {
   whereEsTrivialmenteCierto,
   detectarEscrituraDestructivaBalanceada,
   TOOLS_SOLO_DEV_VERIFICADO,
+  redactarTexto,
+  redactarDetalle,
+  extraerTablaDDL,
+  determinarEstadoSalud,
 } from './lib.js';
 
 // ── calcularCosteYProveedor (fix continuación 9) ────────────────────────────
@@ -671,5 +675,91 @@ describe('SEC-10 gating nexus_manage', () => {
     const tools = [{ name: 'nexus_manage' }];
     const filtradas = filtrarToolsPorAuth(tools, true, true).map(t => t.name);
     expect(filtradas).toContain('nexus_manage');
+  });
+});
+
+// == ADR-0014 / ARC-008 (02/08/2026): observabilidad y trazas ===============
+describe('redactarTexto', () => {
+  it('enmascara un email dentro de una frase', () => {
+    expect(redactarTexto('contactar a juan.perez@obra.com para el parte'))
+      .toBe('contactar a [email-redactado] para el parte');
+  });
+
+  it('enmascara un teléfono español de 9 dígitos sin separadores', () => {
+    expect(redactarTexto('llamar al 612345678 antes de las 9')).toBe('llamar al [telefono-redactado] antes de las 9');
+  });
+
+  it('enmascara un teléfono con espacios y prefijo +34', () => {
+    expect(redactarTexto('tel: +34 612 345 678')).toBe('tel: [telefono-redactado]');
+  });
+
+  it('NO toca un número que no sean 9 dígitos (ej. un id corto)', () => {
+    expect(redactarTexto('albarán 12345')).toBe('albarán 12345');
+  });
+
+  it('deja intacto un texto sin datos sensibles', () => {
+    expect(redactarTexto('se ha creado la tarea correctamente')).toBe('se ha creado la tarea correctamente');
+  });
+
+  it('valores no-string pasan sin cambios (no revienta con null/number)', () => {
+    expect(redactarTexto(null)).toBeNull();
+    expect(redactarTexto(42)).toBe(42);
+    expect(redactarTexto(undefined)).toBeUndefined();
+  });
+});
+
+describe('redactarDetalle', () => {
+  it('redacta strings anidados dentro de objetos y arrays', () => {
+    const out = redactarDetalle({
+      mensaje_error: 'no such table',
+      contacto: { email: 'a@b.com', notas: ['llamar a 612345678'] },
+    });
+    expect(out.contacto.email).toBe('[email-redactado]');
+    expect(out.contacto.notas[0]).toBe('llamar a [telefono-redactado]');
+    expect(out.mensaje_error).toBe('no such table');
+  });
+
+  it('no rompe con estructuras muy anidadas (límite de profundidad)', () => {
+    let anidado = 'a@b.com';
+    for (let i = 0; i < 10; i++) anidado = { nivel: anidado };
+    expect(() => redactarDetalle(anidado)).not.toThrow();
+  });
+
+  it('deja pasar números/booleanos tal cual', () => {
+    const out = redactarDetalle({ confianza: 0.8, ok: true });
+    expect(out).toEqual({ confianza: 0.8, ok: true });
+  });
+});
+
+describe('extraerTablaDDL', () => {
+  it('extrae la tabla de un CREATE TABLE IF NOT EXISTS', () => {
+    expect(extraerTablaDDL('CREATE TABLE IF NOT EXISTS rfis (id INTEGER)')).toBe('rfis');
+  });
+
+  it('extrae la tabla de un ALTER TABLE', () => {
+    expect(extraerTablaDDL('ALTER TABLE tareas_obra ADD COLUMN prioridad TEXT')).toBe('tareas_obra');
+  });
+
+  it('devuelve null si no reconoce el patrón', () => {
+    expect(extraerTablaDDL('SELECT 1')).toBeNull();
+    expect(extraerTablaDDL('')).toBeNull();
+  });
+});
+
+describe('determinarEstadoSalud (ADR-0014 §4, tres estados)', () => {
+  it('healthy cuando D1 y R2 responden', () => {
+    expect(determinarEstadoSalud(true, true)).toBe('healthy');
+  });
+
+  it('degraded cuando solo falla R2', () => {
+    expect(determinarEstadoSalud(true, false)).toBe('degraded');
+  });
+
+  it('unhealthy cuando falla D1, aunque R2 responda', () => {
+    expect(determinarEstadoSalud(false, true)).toBe('unhealthy');
+  });
+
+  it('unhealthy cuando fallan las dos', () => {
+    expect(determinarEstadoSalud(false, false)).toBe('unhealthy');
   });
 });
