@@ -32,6 +32,8 @@ on:
           - migrate_inventario_seg_ubicacion.sql
           - migrate_empresas_retencion.sql
           - migrate_trazas.sql
+          - migrate_checklists.sql
+          - migrate_memoria_gobernada.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true
