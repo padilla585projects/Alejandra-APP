@@ -1,0 +1,30 @@
+{
+  "_comentario": "ADR-0011 — manifiesto de migraciones. Se crea con las entradas que ya tienen evidencia documentada (ARC-012) mas la nueva migracion de este vertical. Las demas migraciones .sql del repositorio no tienen aqui una entrada 'aplicada' verificada: poblar el resto exige una consulta de metadatos a D1 (mismo metodo autorizado que uso ARC-015), que es un paso aparte y no se ha hecho todavia. No asumir 'no aplicada' de una migracion que simplemente no aparece aqui.",
+  "migraciones": [
+    {
+      "archivo": "alejandra-agente/migrate_008_plano_circuitos.sql",
+      "aplicada": true,
+      "run": "30722027660",
+      "verificado": "2026-08-02"
+    },
+    {
+      "archivo": "migrate_inventario_seg_ubicacion.sql",
+      "aplicada": true,
+      "run": "30722072138",
+      "verificado": "2026-08-02"
+    },
+    {
+      "archivo": "migrate_empresas_retencion.sql",
+      "aplicada": true,
+      "run": "30722103191",
+      "verificado": "2026-08-02"
+    },
+    {
+      "archivo": "migrate_checklists.sql",
+      "aplicada": false,
+      "run": null,
+      "verticalARC011": "checklists",
+      "nota": "Paso 1 (declarar) completado. Paso 2 (aplicar y verificar contra D1) pendiente de autorizacion del Director."
+    }
+  ]
+}
