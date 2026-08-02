@@ -30,6 +30,24 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
+### P-DESIGN-001 — Visión visual madura de Alejandra
+
+- ID: P-DESIGN-001
+- Título: Proponer y decidir la dirección visual antes de construir el nuevo frontend
+- Fase: P-DESIGN — visión del frontend
+- Estado: en revisión
+- Prioridad: Alta
+- Rama: `codex/presentation-next`
+- Responsable actual: Director del Proyecto para decisión; Arquitectura/Producto para iteraciones solicitadas
+- Objetivo: valorar la dirección visual completa de campo, oficina, administración, chat y observabilidad sin cambiar la aplicación.
+- Criterios de aceptación: filosofía, identidad, tokens propuestos, navegación, pantallas, estados, responsive y claro/oscuro documentados; mockup representativo disponible; decisión explícita antes de retomar migración.
+- Dependencias: ADR-0012 aceptado; migración de presentación pausada por esta fase.
+- Bloqueos: no construir nuevo frontend, no extraer más componentes ni continuar Design System hasta decisión de dirección.
+- Archivos principales: `docs/architecture/FRONTEND_PRODUCT_VISION.md`.
+- Pruebas: revisión de coherencia con ADR-0012 y arquitectura de presentación; validación visual del mockup.
+- Última actualización: 2026-08-02
+- Siguiente acción exacta: Director revisa la visión y decide si es la dirección visual del producto.
+
 ### P-ARCH-002/P-ARCH-003 — Primitivas y tokens del sistema de diseño
 
 - ID: P-ARCH-002/P-ARCH-003

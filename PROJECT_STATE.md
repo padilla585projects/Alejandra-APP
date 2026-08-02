@@ -99,6 +99,10 @@ permanece bloqueado hasta que el Director resuelva ADR-0004.
 
 ## Arquitectura de presentación
 
+La migración de presentación y el Design System quedan **pausados para decisión visual** por
+P-DESIGN-001. La propuesta completa está en `docs/architecture/FRONTEND_PRODUCT_VISION.md`.
+No se implementa el nuevo frontend hasta la revisión del Director.
+
 `ADR-0012` fue aceptado el 2026-08-02. La arquitectura vigente
 `docs/architecture/FRONTEND_ARCHITECTURE.md` define aplicaciones, features, sistema de diseño
 y clientes API. P-ARCH-001 (indicador de salud) fue aprobado. P-ARCH-002 extrae la primitiva

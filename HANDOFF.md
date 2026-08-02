@@ -38,6 +38,11 @@ Consecuencia: ARC-001, ARC-003, ARC-004 y ARC-006 quedan cerrados en `ARCHITECT_
 
 ## Qué está pendiente
 
+- **P-DESIGN-001 — visión del frontend, en revisión.** La migración de presentación se pausa.
+  `docs/architecture/FRONTEND_PRODUCT_VISION.md` define la dirección visual madura y cuenta
+  con un mockup representativo. No extraer más componentes ni construir el frontend nuevo hasta
+  decisión del Director.
+
 - **P-ARCH-002/P-ARCH-003 — presentación, completadas localmente.** P-ARCH-001 (salud del panel) fue aprobado. P-ARCH-002 extrajo la primitiva de notificaciones a `packages/design-system`, manteniendo 12 invocaciones, iconos, cierre, caducidad y fallback. P-ARCH-003 extrajo los 12 tokens base de color a `packages/design-system/src/tokens/base.css`, sin cambiar sus 299 consumidores. No llaman a backend ni tratan permisos. Evidencias y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md` y `docs/architecture/FRONTEND_SLICE_TOKENS.md`.
 
 - **`ADR-0004` (Motor de Decisión) — el único ADR de Época 1 sin aceptar.** Es lo único que le falta a F-1.1 para abrirse; es una fase de decisión que ADR-0007 enmienda 1 excluye de la apertura autónoma.
