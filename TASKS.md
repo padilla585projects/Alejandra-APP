@@ -35,22 +35,22 @@ Siguiente acción exacta:
 - ID: ARC-011-FASE3-CHECKLISTS
 - Título: Primer vertical de la migración por fases de ARC-011 (ADR-0011)
 - Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
-- Estado: lista
+- Estado: **en revisión — paso 1 (declarar) completo; falta autorización del Director para el paso 2 (aplicar)**
 - Prioridad: Media
-- Rama: `PENDIENTE`
-- Responsable actual: Agente de Ingeniería (paso 1, código); Director para el paso 2 (aplicar contra D1)
+- Rama: `docs/arc-011-fase3-checklists`
+- Responsable actual: Director del Proyecto (autorización para aplicar contra D1)
 - Objetivo: declarar en una migración `.sql` versionada el esquema real —ya verificado en ARC-015— de las tablas del vertical `checklists` (`checklist_plantillas`, `checklists_plantillas`, `checklist_registros`, `checklist_ejecuciones`), siguiendo el ciclo de ADR-0011.
 - Criterios de aceptación:
-  1. Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con el esquema exacto verificado, no el que el código debería crear.
-  2. No se ejecuta contra D1 en esta tarea: eso es una migración y requiere autorización explícita del Director (ADR-0007).
-  3. El DDL en runtime de este vertical se deja intacto hasta que la migración esté aplicada y verificada — ADR-0011 prohíbe retirarlo antes.
-  4. Se registra en el manifiesto de migraciones (a crear si no existe) como `aplicada: false`.
+  1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con el esquema exacto verificado (`migrate_checklists.sql`, con la fuente `worker.js:línea` de cada `CREATE`), no el que el código debería crear.
+  2. ✅ No se ejecuta contra D1 en esta tarea: eso es una migración y requiere autorización explícita del Director (ADR-0007).
+  3. ✅ El DDL en runtime de este vertical se deja intacto (`worker.js:14196-14221` y `18122-18152`) hasta que la migración esté aplicada y verificada — ADR-0011 prohíbe retirarlo antes.
+  4. ✅ Registrada en `migrate_manifiesto.json` (creado, formato de ADR-0011) como `aplicada: false`.
 - Dependencias: ADR-0011 aceptado como estrategia (2026-08-02); ARC-013 y ARC-015 ya corregidos.
 - Bloqueos: aplicar la migración contra D1 exige decisión del Director.
-- Archivos principales: nuevo `migrate_checklists.sql` (o equivalente); manifiesto de migraciones.
-- Pruebas: `node --check` sobre cualquier script auxiliar; verificación manual de que el `CREATE TABLE IF NOT EXISTS` coincide columna por columna con lo verificado en ARC-015.
+- Archivos principales: `migrate_checklists.sql` (nuevo), `migrate_manifiesto.json` (nuevo).
+- Pruebas: verificación manual de que los 4 `CREATE TABLE IF NOT EXISTS` coinciden columna por columna con los `CREATE` de `worker.js` (14196, 14207, 18122, 18134); `node -e "JSON.parse(...)"` sobre el manifiesto.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: escribir la migración a partir del esquema verificado en `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md` y ARC-015.
+- Siguiente acción exacta: el Director decide si autoriza aplicar `migrate_checklists.sql` contra D1 (paso 2 de ADR-0011) por el workflow manual de migraciones.
 
 ### F-0.2-CFG — Completar la configuración remota de entrega segura
 
