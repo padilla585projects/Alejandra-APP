@@ -22,7 +22,7 @@ const RAIZ = path.resolve(__dirname, '..');
 const leer = f => fs.readFileSync(path.join(RAIZ, f), 'utf8');
 
 // Nombres que `env.X` puede tener sin ser secreto: son bindings declarados en wrangler.
-const BINDINGS = new Set(['DB', 'FILES', 'API_WEB', 'RATE_LIMIT_KV', 'ASSETS']);
+const BINDINGS = new Set(['DB', 'FILES', 'API_WEB', 'RATE_LIMIT_KV', 'ASSETS', 'CF_VERSION_METADATA']);
 
 // Referencias en código que no son variables de entorno reales.
 const FALSOS = new Set(['env', 'ctx', 'request']);
