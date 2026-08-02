@@ -2565,21 +2565,21 @@ superadmin > desarrollador > empresa_admin > jefe_de_obra > encargado > oficina 
 CORE:
 - empresas(id, nombre, plan, activa, created_at)
 - obras(id, nombre, codigo UNIQUE, activa, empresa_id, created_at)
-- usuarios(id, nombre, email, codigo, password_hash, rol, activo, google_id, telegram_id, departamento, empresa_id, created_at)
+- usuarios(id, nombre, codigo, rol, obra_id, obra_nombre, departamento, activo, created_at, empresa_id, email, password_hash, google_pending, telegram_id, foto_r2_key, roles_extra)
 - sesiones(id, token, usuario_id, nombre, rol, obra_id, empresa_id, departamento, expires_at, created_at, last_used)
-- personal_externo(empresa_id, obra_id, nombre, dni, categoria, telefono, empresa_subcontrata, activo, created_at)
-- horarios_obra(empresa_id, obra_id, hora_entrada, hora_salida, tolerancia_min, created_at)
+- personal_externo(id, empresa_id, nombre, dni, obra_id, departamento, activo, notas, created_at, foto_r2_key)
+- horarios_obra(id, empresa_id, obra_id, hora_entrada, hora_salida, horas_dia, dias_semana, notas, created_at, horarios_dia)
 - turnos(id, empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, fecha, turno, created_at)
 
 INVENTARIO:
 - bobinas(id, codigo UNIQUE, tipo, seccion, longitud, proveedor, num_albaran, estado[disponible/asignada/devuelta], obra_id, obra_nombre, departamento, fecha_entrada, fecha_devolucion, notas, empresa_id)
 - pemp(id, matricula UNIQUE, tipo, marca, proveedor, energia, estado[disponible/asignada/averia/revision], obra_id, obra_nombre, departamento, fecha_revision, fecha_proxima_revision, fecha_averia, notas, empresa_id)
 - carretillas(id, matricula UNIQUE, tipo, marca, energia, estado, obra_id, fecha_revision, fecha_proxima_revision, notas, empresa_id)
-- herramientas(id, codigo, nombre, tipo_id, estado, obra_id, empresa_id)
+- herramientas(id, empresa_id, kit_id, tipo_id, marca, modelo, numero_serie, departamento, obra_id, asignado_a, alimentacion, estado, notas, fecha_alta, fecha_asignacion, fecha_devolucion, fecha_averia, fecha_reparacion, created_at)
 - kits_herramientas(id, empresa_id, numero_kit, nombre, obra_id, departamento, asignado_a, num_componentes, notas, fecha_alta, fecha_asignacion)
 - inventario_seg(id, empresa_id, tipo_material, modo[individual/cantidad], codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, destino_actual, notas, registrado_por, stock_minimo, created_at)
 - movimientos_seg(id, item_id, accion, cantidad, destino, usuario, notas, fecha)
-- archivos(id, empresa_id, nombre, r2_key, mime_type, herramienta_id, created_at)
+- archivos(id, empresa_id, herramienta_id, r2_key, nombre, mime, tamano, subido_por, created_at)
 
 HISTORIAL:
 - historial(bobina_id, bobina_codigo, accion, obra_id, obra_nombre, usuario, notas, fecha)
@@ -2589,10 +2589,10 @@ HISTORIAL:
 - historial_mantenimientos(id, empresa_id, tipo_equipo, equipo_id, matricula, obra_id, fecha_mant, tipo_mant, descripcion, realizado_por, adjunto_nombre, created_at)
 
 OPERACIONES:
-- pedidos(id, descripcion, estado[pendiente/aprobado/recibido/cancelado], prioridad, obra_id, usuario, empresa_id, created_at)
+- pedidos(id, empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, estado, solicitado_por, notas, fecha_solicitud, fecha_recepcion, created_at)
 - albaranes(id, empresa_id, pedido_id, r2_key, nombre_archivo, mime_type, subido_por, fecha, created_at)
 - incidencias(id, empresa_id, obra_id, departamento, titulo, descripcion, tipo, gravedad, estado[abierta/en_proceso/resuelta/cerrada], reportado_por, asignado_a, resolucion, fecha, created_at)
-- incidencia_fotos(id, incidencia_id, r2_key, nombre, empresa_id, created_at)
+- incidencia_fotos(id, empresa_id, incidencia_id, r2_key, nombre_archivo, mime_type, subido_por, created_at)
 - partes_trabajo(id, empresa_id, obra_id, fecha, cliente, nombre_encargado, direccion, obra TEXT, descripcion, personal JSON, material JSON, firma_cliente, firma_responsable, departamento, creado_por, created_at)
 - fichajes(id, empresa_id, usuario_id, personal_externo_id, obra_id, fecha TEXT, hora_entrada, hora_salida, horas_trabajadas, horas_extra, estado, motivo, notas, registrado_por, minutos_retraso, created_at)
 - repostajes(id, empresa_id, obra_id, equipo_tipo, equipo_id, tipo, cantidad, unidad, coste, usuario, notas, fecha, created_at)
@@ -2606,13 +2606,13 @@ CHECKLISTS / FOTOS / DOCS:
 - checklist_ejecuciones(id, empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, ...) — ejecuciones de checklists_plantillas
 - fotos_obra(id, empresa_id, obra_id, departamento, nombre, mime_type, tamano, comentario, subido_por, created_at, titulo, tags, ubicacion, fecha_foto)
 - carpetas(id, empresa_id, nombre, parent_id, departamento, created_at)
-- docs_dept(id, empresa_id, carpeta_id, nombre, r2_key, mime_type, subido_por, created_at)
+- docs_dept(id, empresa_id, obra_id, departamento, carpeta_id, r2_key, nombre, mime, tamano, descripcion, subido_por, created_at)
 - docs_notas(id, empresa_id, obra_id, departamento, carpeta_id, titulo, contenido, creado_por, updated_at, created_at)
-- chat_mensajes(id, empresa_id, obra_id, usuario_id, mensaje, tipo, created_at)
-- eventos_calendario(id, empresa_id, obra_id, titulo, descripcion, fecha_inicio, fecha_fin, tipo, usuario, created_at)
+- chat_mensajes(id, empresa_id, obra_id, usuario_id, usuario_nombre, rol, mensaje, created_at, destinatario_id)
+- eventos_calendario(id, empresa_id, obra_id, departamento, titulo, descripcion, tipo, fecha, hora, recordatorio_dias, creado_por, created_at)
 
 SEGURIDAD LABORAL:
-- proveedores(id, empresa_id, nombre, cif, contacto, telefono, email, activo, created_at)
+- proveedores(id, nombre, empresa_id)
 
 GESTIÓN DE OBRA (NEW v6.71-v6.79):
 - obs_seguridad(id, empresa_id, obra_id, tipo[positiva/negativa/peligro_inminente], categoria, descripcion, ubicacion, responsable, estado[abierta/en_progreso/cerrada], prioridad, fecha_limite, fecha_cierre, accion_correctiva, foto_key, subido_por, created_at)
@@ -2638,7 +2638,7 @@ SISTEMA:
 - sugerencias(id, texto, categoria, usuario, obra, estado[pendiente/en_progreso/resuelto/cerrado], empresa_id, leida, created_at)
 - alejandra_memoria(id, tipo[hecho/pendiente/contexto/aviso/aprendizaje/error], canal, titulo, contenido, importancia[1-5], created_at)
 - alejandra_historial(id, canal[telegram/web], rol[user/assistant], contenido, created_at)
-- alejandra_fixes(id, descripcion, archivo, old_code, new_code, razon, estado, sugerencia_id, commit_sha, created_at)
+- alejandra_fixes(id, descripcion, archivo, contenido_nuevo, razon, sugerencia_id, estado, created_at, updated_at, commit_sha)
 - alejandra_config(key PRIMARY KEY, value, updated_at)
 
 ════ TUS CAPACIDADES (TOOLS) ════
