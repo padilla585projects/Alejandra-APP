@@ -44,23 +44,22 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
 - ID: ARC-011-FASE3-RFIS
 - Título: Segundo vertical de la migración por fases de ARC-011 (ADR-0011), tras `checklists`
 - Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
-- Estado: **paso 1 (declarar) completo (2026-08-02); paso 2 (aplicar) pendiente de autorización del Director**
+- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (retirar DDL en runtime) fuera de alcance por instrucción explícita del Director**
 - Prioridad: Media
-- Rama: `main` (declarado directamente, código reversible, sin rama propia)
-- Responsable actual: Director del Proyecto (autorización para aplicar contra D1)
-- Objetivo: declarar en una migración `.sql` versionada el esquema real de la tabla `rfis` (consultas técnicas de obra, NEW-34), única en su vertical, siguiendo el ciclo de ADR-0011.
+- Rama: `main` (paso 1), `feat/migrar-rfis-d1` (paso 2, PR #55)
+- Responsable actual: —
+- Objetivo: declarar y aplicar en una migración `.sql` versionada el esquema real de la tabla `rfis` (consultas técnicas de obra, NEW-34), única en su vertical, siguiendo el ciclo de ADR-0011.
 - Criterios de aceptación:
   1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con el esquema exacto verificado contra D1 real (`migrate_rfis.sql`), incorporando en el mismo `CREATE` la columna `departamento` (añadida en runtime, DEPT-01) para evitar un `ALTER` no idempotente.
-  2. ✅ Verificado columna por columna contra D1 (`PRAGMA table_info`, solo lectura): las 19 columnas coinciden exactamente.
-  3. No se ejecuta contra D1 en esta tarea: eso es una migración y requiere autorización explícita del Director (ADR-0007).
-  4. El DDL en runtime de este vertical se deja intacto (`worker.js`, `ensureRfisTable()`) hasta que la migración esté aplicada y verificada — ADR-0011 prohíbe retirarlo antes.
-  5. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: false`.
+  2. ✅ **Aplicada contra D1 (run `30769663802`, 2026-08-02)**, autorizada por el Director en chat con condiciones explícitas (verificar antes, circuito oficial exclusivamente, no tocar Workers/permisos fuera de lo necesario). Verificado antes y después: 19 columnas idénticas; `0 rows_written` confirma no-op.
+  3. El DDL en runtime de este vertical se deja intacto (`worker.js`, `ensureRfisTable()`) — el Director limitó explícitamente el alcance a la migración, sin tocar backend/Workers. Retirarlo (paso 3) queda pendiente de una autorización aparte, no implícita en esta.
+  4. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: true`.
 - Dependencias: ADR-0011 aceptado como estrategia (2026-08-02); `checklists` como ciclo de referencia ya completo.
-- Bloqueos: aplicar la migración contra D1 exige decisión del Director.
-- Archivos principales: `migrate_rfis.sql` (nuevo), `migrate_manifiesto.json`.
-- Pruebas: verificación manual de que las 19 columnas coinciden con `PRAGMA table_info(rfis)` real; `node -e "JSON.parse(...)"` sobre el manifiesto.
+- Bloqueos: ninguno para el paso 2 (ya hecho). El paso 3 exige autorización aparte, porque esta autorización excluyó explícitamente tocar Workers.
+- Archivos principales: `migrate_rfis.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`.
+- Pruebas: verificación manual de que las 19 columnas coinciden con `PRAGMA table_info(rfis)` real antes y después; `node -e "JSON.parse(...)"` sobre el manifiesto.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: **pendiente de decisión del Director**, igual que `checklists` y `memoria_gobernada` en su momento.
+- Siguiente acción exacta: sin acción inmediata. Retirar el DDL en runtime (paso 3) queda disponible como tarea de ingeniería de bajo riesgo si el Director autoriza tocar `worker.js`, igual que se hizo con `checklists`.
 
 ### F-2.1-MEMORIA-DECLARAR — Declarar el esquema de Memory (ADR-0013)
 

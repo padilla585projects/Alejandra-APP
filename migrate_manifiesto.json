@@ -46,11 +46,11 @@
     },
     {
       "archivo": "migrate_rfis.sql",
-      "aplicada": false,
-      "run": null,
+      "aplicada": true,
+      "run": "30769663802",
       "verticalARC011": "rfis",
       "verificado": "2026-08-02",
-      "nota": "Paso 1 (declarar) completado el 2026-08-02, tercer vertical del ciclo de ADR-0011 (tras checklists). Tabla unica 'rfis' (NEW-34), CREATE + ALTER (departamento, DEPT-01) unificados en un solo CREATE TABLE IF NOT EXISTS con las 19 columnas, verificadas una a una contra D1 real (PRAGMA table_info, solo lectura). Paso 2 (aplicar y verificar contra D1) pendiente de autorizacion del Director, igual que checklists y memoria_gobernada."
+      "nota": "Autorizada por el Director en chat (2026-08-02). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas): la tabla ya existia con las 19 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). El DDL en runtime de este vertical (worker.js, ensureRfisTable()) sigue intacto: retirarlo es el paso 3 del ciclo de ADR-0011, no esta tarea (el Director limito el alcance a la migracion, sin tocar Workers)."
     }
   ]
 }
