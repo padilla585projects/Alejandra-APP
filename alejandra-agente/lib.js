@@ -160,7 +160,13 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   'gestionar_acta', 'gestionar_calidad', 'gestionar_oc', 'gestionar_rfi', 'gestionar_tarea',
   'github_buscar', 'github_leer', 'github_listar', 'grep_codigo',
   'ram_clear', 'ram_read', 'ram_save', 'descubrir_herramientas', 'validar_cambios_bd',
-  'verificar_deploy'
+  'verificar_deploy',
+
+  // ARC-008 §8 / F-2.1 paso 3, decisión del Director (2026-08-02, "Opción A"): primera
+  // tool de lectura sobre memoria_gobernada. empresa_id sale de la sesión, nunca del
+  // input -- sin sesión no hay tenant al que acotar la consulta, mismo criterio que el
+  // resto de esta lista.
+  'memoria_consultar',
 ]);
 // SEC-CRON-01 / ARC-017 (02/08/2026): el cron llama al modelo con esDevVerificado=true,
 // así que filtrarToolsPorAuth no le filtraba NADA. Seis veces al día, sin nadie delante,
@@ -308,6 +314,60 @@ function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypass
     return null;
   }
   return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
+}
+
+// ── Consulta de memoria_gobernada (ARC-008 §8, tool memoria_consultar) ──────
+// Orden de confianza (migrate_memoria_gobernada.sql: TEXT 'alta'|'media'|'baja', §4) —
+// necesario porque SQLite no compara ese enum numéricamente por sí solo.
+const RANGO_CONFIANZA = Object.freeze({ baja: 1, media: 2, alta: 3 });
+
+// Construye SQL + binds para leer memoria_gobernada, extraído a función pura
+// para poder probar aislamiento por tenant, caducidad y confianza sin D1 real
+// (decisión del Director, 2026-08-02: "Añadir pruebas de aislamiento,
+// caducidad, confianza y ausencia de resultados cruzados"). worker.js solo
+// ejecuta el SQL devuelto; toda la lógica de qué filtrar vive aquí.
+//
+// Invariantes que SIEMPRE se cumplen, sin excepción ni bypass:
+//   - empresa_id = ? es el primer filtro y el primer bind -- aislamiento por tenant.
+//   - estado = 'confirmada' -- nunca candidatas pendientes ni sustituidas.
+//   - caduca_en > ahora -- nunca memoria caducada.
+function construirConsultaMemoriaGobernada({
+  empresaId,
+  ahora,
+  consulta = '',
+  categorias = [],
+  ambito = null,
+  confianzaMinima = null,
+  limit = 10,
+}) {
+  const where = ['empresa_id = ?', 'estado = ?', 'caduca_en > ?'];
+  const binds = [String(empresaId), 'confirmada', ahora];
+
+  if (categorias.length > 0) {
+    const placeholders = categorias.map(() => '?').join(',');
+    where.push(`categoria IN (${placeholders})`);
+    binds.push(...categorias.map(String));
+  }
+  if (ambito) {
+    where.push('ambito = ?');
+    binds.push(String(ambito));
+  }
+  if (confianzaMinima && RANGO_CONFIANZA[confianzaMinima] != null) {
+    const aceptadas = Object.keys(RANGO_CONFIANZA)
+      .filter((nivel) => RANGO_CONFIANZA[nivel] >= RANGO_CONFIANZA[confianzaMinima]);
+    where.push(`confianza IN (${aceptadas.map(() => '?').join(',')})`);
+    binds.push(...aceptadas);
+  }
+  if (consulta && consulta.trim()) {
+    where.push('contenido LIKE ?');
+    binds.push(`%${consulta.trim()}%`);
+  }
+
+  const limitSeguro = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+  const sql = `SELECT id, contenido, origen, categoria, confianza, fecha_creacion, caduca_en, ambito, metodo
+               FROM memoria_gobernada WHERE ${where.join(' AND ')} ORDER BY fecha_creacion DESC LIMIT ?`;
+
+  return { sql, binds: [...binds, limitSeguro] };
 }
 
 // ── Barrera humana para escrituras destructivas en escribir_bd ──────────────
@@ -526,4 +586,6 @@ export {
   redactarDetalle,
   extraerTablaDDL,
   determinarEstadoSalud,
+  RANGO_CONFIANZA,
+  construirConsultaMemoriaGobernada,
 };

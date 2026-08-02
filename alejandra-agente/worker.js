@@ -47,6 +47,7 @@ import {
   redactarDetalle,
   extraerTablaDDL,
   determinarEstadoSalud,
+  construirConsultaMemoriaGobernada,
 } from './lib.js';
 const EUR_RATE = 0.92;
 
@@ -1390,52 +1391,32 @@ async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, r
   }
 }
 
-// Orden de confianza (migrate_memoria_gobernada.sql: TEXT 'alta'|'media'|'baja', §4) —
-// necesario porque SQLite no compara ese enum numéricamente por sí solo.
-const RANGO_CONFIANZA = Object.freeze({ baja: 1, media: 2, alta: 3 });
-
 // consultarMemoria — ARC-008 §8 (trazabilidad de decisiones que consultan memoria).
 // Lee recuerdos confirmados de `memoria_gobernada` acotados por empresa, categoría,
 // ámbito, caducidad y confianza. Registra una traza del tipo 'memoria_consulta' con
 // los recuerdos devueltos, para linkar la decisión que consultó con qué memoria usó.
 //
-// Resiliente por diseño: si falla la lectura o la traza, devuelve [] — una consulta
-// de memoria rota no puede fallar la decisión que la solicitó.
+// El SQL/binds se construyen en construirConsultaMemoriaGobernada() (lib.js), función
+// pura testeada con vitest (aislamiento por tenant, caducidad, confianza) — este
+// worker solo la invoca y ejecuta. Resiliente por diseño: si falla la lectura o la
+// traza, devuelve [] — una consulta de memoria rota no puede fallar la decisión que
+// la solicitó.
 async function consultarMemoria(env, {
   empresaId,
   consulta = '',
   categorias = [],
   ambito = null,
   confianzaMinima = null,
+  limit = 10,
 }) {
   try {
     if (!env?.DB || !empresaId) return [];
 
     const ahora = new Date().toISOString();
-    const where = ['empresa_id = ?', 'estado = ?', 'caduca_en > ?'];
-    const binds = [String(empresaId), 'confirmada', ahora];
-
-    if (categorias.length > 0) {
-      const placeholders = categorias.map(() => '?').join(',');
-      where.push(`categoria IN (${placeholders})`);
-      binds.push(...categorias.map(String));
-    }
-    if (ambito) {
-      where.push('ambito = ?');
-      binds.push(String(ambito));
-    }
-    if (confianzaMinima && RANGO_CONFIANZA[confianzaMinima] != null) {
-      const aceptadas = Object.keys(RANGO_CONFIANZA)
-        .filter((nivel) => RANGO_CONFIANZA[nivel] >= RANGO_CONFIANZA[confianzaMinima]);
-      where.push(`confianza IN (${aceptadas.map(() => '?').join(',')})`);
-      binds.push(...aceptadas);
-    }
-
-    const whereSql = `WHERE ${where.join(' AND ')}`;
-    const rows = await env.DB.prepare(
-      `SELECT id, contenido, origen, categoria, confianza, fecha_creacion, caduca_en, ambito, metodo
-       FROM memoria_gobernada ${whereSql} ORDER BY fecha_creacion DESC`
-    ).bind(...binds).all();
+    const { sql, binds } = construirConsultaMemoriaGobernada({
+      empresaId, ahora, consulta, categorias, ambito, confianzaMinima, limit,
+    });
+    const rows = await env.DB.prepare(sql).bind(...binds).all();
 
     const recuerdos = rows.results || [];
 
@@ -1447,7 +1428,7 @@ async function consultarMemoria(env, {
         empresaId,
         resumen: `Consultada memoria: ${recuerdos.length} recuerdos recuperados`,
         detalle: {
-          filtros: { categorias: categorias.length > 0 ? categorias : null, ambito, confianzaMinima },
+          filtros: { categorias: categorias.length > 0 ? categorias : null, ambito, confianzaMinima, consulta: consulta || null },
           recuerdos_ids: recuerdos.map(r => r.id),
           recuerdos_count: recuerdos.length,
         },
@@ -2512,6 +2493,53 @@ const TOOL_CONSULTAR_PERSONAL = {
   nivel_riesgo: 'N0',
 };
 
+// Categorías de la lista blanca de ADR-0013 §1 — duplicado literal de
+// CATEGORIAS_LISTA_BLANCA en nucleo-cognitivo/src/memory.js. No se importa
+// desde ahí porque nucleo-cognitivo/ no está integrado en ningún Worker
+// (prohibido por CLAUDE.md); mantener ambas listas idénticas es la
+// responsabilidad de quien las toque, igual que el resto de metadato
+// duplicado a propósito en este archivo (ver F-1.3-TOOL-PILOTO-MIGRADA).
+const CATEGORIAS_MEMORIA_GOBERNADA = new Set([
+  'hechos_operativos', 'preferencias_trabajo', 'procedimientos_internos', 'correcciones',
+]);
+
+// Decisión del Director (2026-08-02, aprobación de "Opción A" tras resolver
+// ARC-008 §8): primera tool de LECTURA sobre memoria_gobernada, alcance
+// acotado. Condiciones explícitas de la aprobación, todas cubiertas aquí:
+//   - Nombre no confundible con memory_save/memory_read (memoria legada,
+//     alejandra_memoria) -> 'memoria_consultar'.
+//   - nivel_riesgo:'N0', acceso:'sesion' (empresa_id sale de la sesión, nunca
+//     del input -> aislamiento estricto por tenant, mismo patrón que
+//     consultar_personal).
+//   - Solo lectura: usa consultarMemoria(), que ya filtra estado='confirmada'
+//     y caduca_en > ahora -> nunca candidatas, nunca caducadas.
+//   - categoria (si se pasa) se valida contra CATEGORIAS_MEMORIA_GOBERNADA
+//     antes de tocar la BD; una categoría fuera de la lista blanca de
+//     ADR-0013 se rechaza con error, no se ignora en silencio.
+//   - Sin escritura, sin inferencia, sin creación de candidatas: no expone
+//     confirmarCandidata/rechazarCandidata/listarCandidatasPendientes.
+// Las tools legadas (memory_save/memory_read, tabla alejandra_memoria) NO se
+// tocan. Coexistencia temporal documentada en nucleo-cognitivo/README.md y en
+// HANDOFF.md; ver ahí el criterio de migración futura.
+const TOOL_MEMORIA_CONSULTAR = {
+  name: 'memoria_consultar',
+  description: 'Consulta la memoria gobernada de la empresa (hechos operativos, preferencias de trabajo, procedimientos internos, correcciones ya confirmados). Solo lectura, solo memoria confirmada y vigente de tu propia empresa. NO es memory_read (esa lee la memoria legada de Alejandra, sin aislamiento por empresa).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      consulta:  { type: 'string', description: 'Texto a buscar dentro del contenido del recuerdo (opcional)' },
+      categoria: { type: 'string', description: 'Filtrar por una categoría: hechos_operativos, preferencias_trabajo, procedimientos_internos o correcciones (opcional)' },
+      ambito:    { type: 'string', description: '"personal" o "compartida" (opcional, por defecto ambas)' },
+      confianza_minima: { type: 'string', description: '"baja", "media" o "alta" — solo recuerdos con esa confianza o superior (opcional)' },
+      limit:     { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
+    },
+    required: []
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
+};
+
 const TOOL_CONSULTAR_INVENTARIO = {
   name: 'consultar_inventario',
   description: 'Busca materiales en el inventario por nombre, tipo o referencia. Devuelve cantidad disponible, precio y ubicación.',
@@ -2758,12 +2786,12 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -6723,6 +6751,48 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `Encontrados ${rows.length} registros de personal:\n\n${items.join('\n\n')}`;
       } catch (err) {
         return `Error consultando personal: ${err.message}`;
+      }
+    }
+
+    // memoria_consultar — decisión del Director (2026-08-02, "Opción A" tras ARC-008 §8).
+    // Solo lectura sobre memoria_gobernada, vía consultarMemoria() (que ya filtra
+    // estado='confirmada', caduca_en > ahora y empresa_id) -- este case solo valida el
+    // input y da formato a la salida, sin tocar el aislamiento por tenant ni el filtro
+    // de vigencia, que viven en consultarMemoria() para que ningún caller pueda saltarlos.
+    case 'memoria_consultar': {
+      try {
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+
+        if (input.categoria && !CATEGORIAS_MEMORIA_GOBERNADA.has(input.categoria)) {
+          return `Categoría "${input.categoria}" no reconocida. Válidas: ${[...CATEGORIAS_MEMORIA_GOBERNADA].join(', ')}.`;
+        }
+        if (input.ambito && !['personal', 'compartida'].includes(input.ambito)) {
+          return `Ámbito "${input.ambito}" no reconocido. Válidos: personal, compartida.`;
+        }
+        if (input.confianza_minima && !['baja', 'media', 'alta'].includes(input.confianza_minima)) {
+          return `Confianza "${input.confianza_minima}" no reconocida. Válidas: baja, media, alta.`;
+        }
+
+        const recuerdos = await consultarMemoria(env, {
+          empresaId: eid,
+          consulta: input.consulta || '',
+          categorias: input.categoria ? [input.categoria] : [],
+          ambito: input.ambito || null,
+          confianzaMinima: input.confianza_minima || null,
+          limit: input.limit || 10,
+        });
+
+        if (!recuerdos.length) return 'No se encontró memoria coincidente.';
+
+        const items = recuerdos.map(r =>
+          `🧠 **${r.contenido}**\n` +
+          `   Categoría: ${r.categoria} | Confianza: ${r.confianza} | Ámbito: ${r.ambito}\n` +
+          `   Origen: ${r.origen} | Desde: ${r.fecha_creacion}`
+        );
+        return `Encontrados ${recuerdos.length} recuerdos:\n\n${items.join('\n\n')}`;
+      } catch (err) {
+        return `Error consultando memoria: ${err.message}`;
       }
     }
 

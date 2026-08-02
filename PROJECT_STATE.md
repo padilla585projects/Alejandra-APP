@@ -275,8 +275,21 @@ idéntica en los dos Workers). `nucleo-cognitivo/src/memory.js` pasa de lanzar e
 las cuatro funciones como dependencia inyectada (`inyectarMemoria()`), mismo patrón que
 `registrarTraza()` en `motor-decision.js`; sin inyección devuelve `[]`/no-op. **Ninguno de los
 dos Workers importa `nucleo-cognitivo/` todavía** — sigue prohibido por `CLAUDE.md`. 36/36
-pruebas en verde en `nucleo-cognitivo`, 121/121 en `alejandra-agente`, `node --check` limpio en
-ambos Workers.
+pruebas en verde en `nucleo-cognitivo`.
+
+**`memoria_consultar` — primera tool de lectura sobre memoria gobernada, aprobada por el
+Director (2026-08-02, "Opción A").** Solo lectura, `nivel_riesgo:'N0'`, `acceso:'sesion'`,
+expuesta únicamente en `alejandra-agente/worker.js` (decisión consciente: el catálogo de
+`worker.js` raíz es enteramente `dev_verificado`). `empresa_id` sale de la sesión, nunca del
+input del modelo; `categoria` se valida contra la lista blanca de ADR-0013 §1 antes de tocar
+la BD; nunca devuelve candidatas, caducadas ni memoria de otra empresa. Las tools legadas
+`memory_save`/`memory_read` (tabla `alejandra_memoria`) quedan intactas — coexistencia
+documentada en `HANDOFF.md`. La construcción del SQL se extrajo a
+`construirConsultaMemoriaGobernada()` (`alejandra-agente/lib.js`), función pura con 15 pruebas
+nuevas (aislamiento por tenant, caducidad, confianza, ausencia de resultados cruzados).
+136/136 pruebas en `alejandra-agente`, `node --check` limpio en los dos Workers y en `lib.js`.
+**Escritura sobre `memoria_gobernada` (candidatas, confirmación) queda pendiente de una
+decisión específica posterior del Director** — no forma parte de este entregable.
 
 ## Arquitectura de presentación
 

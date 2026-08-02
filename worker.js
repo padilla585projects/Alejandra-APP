@@ -234,6 +234,7 @@ async function consultarMemoria(env, {
   categorias = [],
   ambito = null,
   confianzaMinima = null,
+  limit = 10,
 }) {
   try {
     if (!env?.DB || !empresaId) return [];
@@ -257,12 +258,17 @@ async function consultarMemoria(env, {
       where.push(`confianza IN (${aceptadas.map(() => '?').join(',')})`);
       binds.push(...aceptadas);
     }
+    if (consulta && consulta.trim()) {
+      where.push('contenido LIKE ?');
+      binds.push(`%${consulta.trim()}%`);
+    }
 
+    const limitSeguro = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
     const whereSql = `WHERE ${where.join(' AND ')}`;
     const rows = await env.DB.prepare(
       `SELECT id, contenido, origen, categoria, confianza, fecha_creacion, caduca_en, ambito, metodo
-       FROM memoria_gobernada ${whereSql} ORDER BY fecha_creacion DESC`
-    ).bind(...binds).all();
+       FROM memoria_gobernada ${whereSql} ORDER BY fecha_creacion DESC LIMIT ?`
+    ).bind(...binds, limitSeguro).all();
 
     const recuerdos = rows.results || [];
 
@@ -274,7 +280,7 @@ async function consultarMemoria(env, {
         empresaId,
         resumen: `Consultada memoria: ${recuerdos.length} recuerdos recuperados`,
         detalle: {
-          filtros: { categorias: categorias.length > 0 ? categorias : null, ambito, confianzaMinima },
+          filtros: { categorias: categorias.length > 0 ? categorias : null, ambito, confianzaMinima, consulta: consulta || null },
           recuerdos_ids: recuerdos.map(r => r.id),
           recuerdos_count: recuerdos.length,
         },
