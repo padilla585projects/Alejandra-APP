@@ -16668,28 +16668,34 @@ async function eliminarPartidaPresupuesto(id, request, env) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function ensureRfisTable(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS rfis (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    obra_id         INTEGER,
-    empresa_id      INTEGER NOT NULL,
-    numero          TEXT,
-    titulo          TEXT NOT NULL,
-    categoria       TEXT DEFAULT 'otro',
-    descripcion     TEXT,
-    estado          TEXT DEFAULT 'abierta',
-    prioridad       TEXT DEFAULT 'normal',
-    creado_por      TEXT,
-    asignado_a      TEXT,
-    respuesta       TEXT,
-    respondido_por  TEXT,
-    fecha_respuesta TEXT,
-    fecha_limite    TEXT,
-    impacto_plazo   INTEGER DEFAULT 0,
-    impacto_coste   INTEGER DEFAULT 0,
-    created_at      TEXT DEFAULT (datetime('now'))
-  )`);
-  // DEPT-01 (21/07/2026): aislamiento por departamento, ver ensureTareasObraTable() para contexto.
-  await runDDL(env, `ALTER TABLE rfis ADD COLUMN departamento TEXT`);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-02): la tabla "rfis" (con la
+  // columna departamento de DEPT-01 ya incorporada) queda declarada y
+  // aplicada en migrate_rfis.sql (run 30769663802, verificada columna por
+  // columna contra D1 real antes y despues). Se retira el CREATE/ALTER en
+  // runtime -- no hay entorno donde este runtime pudiera crearla de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS rfis (
+  //   id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   obra_id         INTEGER,
+  //   empresa_id      INTEGER NOT NULL,
+  //   numero          TEXT,
+  //   titulo          TEXT NOT NULL,
+  //   categoria       TEXT DEFAULT 'otro',
+  //   descripcion     TEXT,
+  //   estado          TEXT DEFAULT 'abierta',
+  //   prioridad       TEXT DEFAULT 'normal',
+  //   creado_por      TEXT,
+  //   asignado_a      TEXT,
+  //   respuesta       TEXT,
+  //   respondido_por  TEXT,
+  //   fecha_respuesta TEXT,
+  //   fecha_limite    TEXT,
+  //   impacto_plazo   INTEGER DEFAULT 0,
+  //   impacto_coste   INTEGER DEFAULT 0,
+  //   created_at      TEXT DEFAULT (datetime('now'))
+  // )`);
+  // // DEPT-01 (21/07/2026): aislamiento por departamento, ver ensureTareasObraTable() para contexto.
+  // await runDDL(env, `ALTER TABLE rfis ADD COLUMN departamento TEXT`);
 }
 
 async function getRfis(request, env) {
