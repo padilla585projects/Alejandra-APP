@@ -14544,34 +14544,13 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('chat_mensajes: creada');
   } catch(e) { results.push('chat_mensajes: ' + e.message); }
-  // Tablas checklist (NEW-21)
-  try {
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checklist_plantillas (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      empresa_id  INTEGER NOT NULL,
-      tipo_equipo TEXT NOT NULL,
-      pregunta    TEXT NOT NULL,
-      orden       INTEGER DEFAULT 0,
-      created_at  TEXT DEFAULT (datetime('now'))
-    )`).run();
-    results.push('checklist_plantillas: creada');
-  } catch(e) { results.push('checklist_plantillas: ' + e.message); }
-  try {
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checklist_registros (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      empresa_id  INTEGER NOT NULL,
-      obra_id     INTEGER,
-      tipo_equipo TEXT NOT NULL,
-      equipo_id   INTEGER NOT NULL,
-      equipo_mat  TEXT,
-      resultado   TEXT NOT NULL,
-      respuestas  TEXT NOT NULL,
-      comentario  TEXT,
-      realizado_por TEXT,
-      created_at  TEXT DEFAULT (datetime('now'))
-    )`).run();
-    results.push('checklist_registros: creada');
-  } catch(e) { results.push('checklist_registros: ' + e.message); }
+  // Tablas checklist (NEW-21) -- ARC-011 fase 3 / ADR-0011 paso 3 (2026-08-02):
+  // checklist_plantillas y checklist_registros quedan declaradas y aplicadas en
+  // migrate_checklists.sql (run 30758297243, verificado columna por columna
+  // contra D1 real). Se retira el CREATE TABLE en runtime; ver el .sql para el
+  // esquema exacto.
+  results.push('checklist_plantillas: ver migrate_checklists.sql (ADR-0011)');
+  results.push('checklist_registros: ver migrate_checklists.sql (ADR-0011)');
   // Mantenimiento preventivo (NEW-15) — columnas en pemp + carretillas + tabla historial
   try {
     await env.DB.prepare(`ALTER TABLE pemp ADD COLUMN aviso_mantenimiento INTEGER DEFAULT 1`).run();
@@ -18472,38 +18451,46 @@ async function eliminarTransmittal(id, request, env) {
 // ============================================================
 
 async function ensureQATablas(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS checklists_plantillas (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id      INTEGER NOT NULL,
-    nombre          TEXT NOT NULL,
-    descripcion     TEXT,
-    categoria       TEXT DEFAULT 'general',
-    items           TEXT DEFAULT '[]',
-    activa          INTEGER DEFAULT 1,
-    created_at      TEXT DEFAULT (datetime('now')),
-    updated_at      TEXT DEFAULT (datetime('now'))
-  )`);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-02): checklists_plantillas y
+  // checklist_ejecuciones quedan declaradas y aplicadas en migrate_checklists.sql
+  // (run 30758297243, verificado columna por columna contra D1 real). Se retira
+  // su CREATE TABLE en runtime -- las 4 tablas del vertical "checklists" ya
+  // existen y no hay entorno donde este runtime pudiera crearlas de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS checklists_plantillas (
+  //   id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id      INTEGER NOT NULL,
+  //   nombre          TEXT NOT NULL,
+  //   descripcion     TEXT,
+  //   categoria       TEXT DEFAULT 'general',
+  //   items           TEXT DEFAULT '[]',
+  //   activa          INTEGER DEFAULT 1,
+  //   created_at      TEXT DEFAULT (datetime('now')),
+  //   updated_at      TEXT DEFAULT (datetime('now'))
+  // )`);
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS checklist_ejecuciones (
+  //   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id            INTEGER NOT NULL,
+  //   obra_id               INTEGER,
+  //   plantilla_id          INTEGER,
+  //   plantilla_nombre      TEXT,
+  //   titulo                TEXT NOT NULL,
+  //   fecha                 TEXT,
+  //   inspector             TEXT,
+  //   estado                TEXT DEFAULT 'en_curso',
+  //   resultados            TEXT DEFAULT '[]',
+  //   notas_generales       TEXT,
+  //   num_ok                INTEGER DEFAULT 0,
+  //   num_nok               INTEGER DEFAULT 0,
+  //   num_na                INTEGER DEFAULT 0,
+  //   porcentaje_conformidad REAL DEFAULT 0,
+  //   created_at            TEXT DEFAULT (datetime('now')),
+  //   updated_at            TEXT DEFAULT (datetime('now'))
+  // )`);
 
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS checklist_ejecuciones (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id            INTEGER NOT NULL,
-    obra_id               INTEGER,
-    plantilla_id          INTEGER,
-    plantilla_nombre      TEXT,
-    titulo                TEXT NOT NULL,
-    fecha                 TEXT,
-    inspector             TEXT,
-    estado                TEXT DEFAULT 'en_curso',
-    resultados            TEXT DEFAULT '[]',
-    notas_generales       TEXT,
-    num_ok                INTEGER DEFAULT 0,
-    num_nok               INTEGER DEFAULT 0,
-    num_na                INTEGER DEFAULT 0,
-    porcentaje_conformidad REAL DEFAULT 0,
-    created_at            TEXT DEFAULT (datetime('now')),
-    updated_at            TEXT DEFAULT (datetime('now'))
-  )`);
-
+  // ncrs_obra NO pertenece al vertical "checklists" (no esta en migrate_checklists.sql):
+  // se deja intacta, sin declarar todavia (ARC-011 fase 3 pendiente para este vertical).
   await runDDL(env, `CREATE TABLE IF NOT EXISTS ncrs_obra (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id        INTEGER NOT NULL,

@@ -21,13 +21,15 @@
 -- contra D1 es aditivo y no toca ninguna fila existente si las tablas ya
 -- estan creadas por el runtime, que es el caso esperado en produccion.
 --
--- Paso 1 de 5 del ciclo de ADR-0011 (declarar). NO aplicada todavia: el paso
--- 2 (aplicar y verificar columna por columna contra D1 real) exige
--- autorizacion explicita del Director conforme a ADR-0007 -- una migracion D1
--- no es una accion reversible sin ella, aunque el SQL en si sea aditivo. El
--- DDL en runtime de este vertical (worker.js:14196-14221, 18122-18152) se
--- deja intacto hasta que el paso 2 y el paso 4 (verificar en produccion sin
--- el DDL en caliente) esten completos.
+-- Paso 1 de 5 del ciclo de ADR-0011 (declarar).
+-- Paso 2 (aplicar contra D1) -- COMPLETADO 2026-08-02, run 30758297243,
+-- autorizado por el Director en chat. Las 4 tablas ya existian, verificadas
+-- columna por columna antes y despues; no-op confirmado (0 rows_written).
+-- Paso 3 (retirar el DDL en runtime de este vertical) -- COMPLETADO 2026-08-02:
+-- ver worker.js, funciones runMigrations() y ensureQATablas() (el CREATE queda
+-- comentado, no borrado, con referencia a esta migracion).
+-- Paso 4 (verificar el vertical en produccion sin el DDL en caliente) --
+-- pendiente del proximo despliegue de worker.js.
 
 CREATE TABLE IF NOT EXISTS checklist_plantillas (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
