@@ -133,9 +133,11 @@ endpoint `GET /admin/trazas` son trabajo aparte, fuera del núcleo aislado.
 
 ADR-0014 queda implementado de extremo a extremo (interfaz en `nucleo-cognitivo/`, tabla D1,
 `registrarTraza()` real, `/health` de tres estados, `GET /admin/trazas`, todo desplegado y
-verificado). Lo único de ADR-0014 que sigue pendiente es que `worker.js`/`alejandra-agente/worker.js`
-reincorporen el healthcheck automático post-despliegue en el runbook (ahora que `/health` sí
-distingue desplegado de operativo) — trabajo menor, no bloqueante. En paralelo, ARC-011 fase 3
+verificado). **El healthcheck automático post-despliegue se reincorporó (PR #36):**
+`deploy-worker.yml` y `deploy-alejandra-agente.yml` consultan `/health` tras desplegar
+(con reintentos), fallan el job si el estado es `unhealthy` o no responde, y dejan una
+advertencia visible si es `degraded`, sin bloquear. No sustituye la verificación manual
+registrada en el handoff. No queda ningún pendiente de ADR-0014. En paralelo, ARC-011 fase 3
 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla contra D1 sigue
 requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen esperando decisión del
 Director, sin relación con el núcleo
