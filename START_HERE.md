@@ -42,8 +42,9 @@ Director. Queda desbloqueada la siguiente rebanada, aún sin definir.
 **Migraciones D1 aplicadas (2026-08-02):** el Director autorizó en chat el paso 2 de
 `migrate_checklists.sql` (ARC-011 fase 3) y `migrate_memoria_gobernada.sql` (F-2.1), sobre la
 única D1 existente. Ambas verificadas columna por columna antes y después; ver `HANDOFF.md` y
-`migrate_manifiesto.json`. Queda pendiente, como siguiente unidad de trabajo del ciclo de
-ADR-0011, retirar (comentar, no borrar) el DDL en runtime del vertical `checklists`.
+`migrate_manifiesto.json`. **Vertical `checklists` completo:** el ciclo de 5 pasos de
+ADR-0011 quedó cerrado el mismo día (DDL en runtime retirado, `worker.js` desplegado y
+verificado en producción sin él) — plantilla probada para el próximo vertical.
 
 ## Lectura obligatoria
 

@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **tareas activas**: F-0.2-CFG y ARC-011-FASE3-CHECKLISTS (paso 2), pospuestas por decisión del Director; y **F-2.1-MEMORIA-DECLARAR**, nueva, con su paso 1 (declarar) ya completo. **F-1.3-MIGRAR-RESTO-TOOLS completada (2026-08-02)**: los catálogos de tools de los dos Workers quedan migrados al completo a ADR-0010 (96/103 tools; 7 excluidas a propósito, dominio ADR-0013) y pasa a la tabla de completadas, junto con F-1.3-TOOL-REGISTRY-ESQUELETO, F-1.3-TOOL-PILOTO-MIGRADA, F-1.2-NUCLEO-ESQUELETO, P-ARCH-002, ARC-008-TRAZAS-MIGRACION y ARC-013. Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**; por ADR-0007 enmienda 1 se abre **F-2.1** (Época 2, gobierno de memoria), cuyo modelo ya está aceptado por el Director en ADR-0013. **No queda ninguna tarea activa de ingeniería sin decisión pendiente del Director**, salvo el paso 2 (aplicar contra D1) de F-2.1-MEMORIA-DECLARAR, que sigue el mismo circuito que `checklists`. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **F-0.2-CFG** pospuesta (tarea administrativa del Director, sin trabajo de ingeniería pendiente). **ARC-011-FASE3-CHECKLISTS** y **F-2.1-MEMORIA-DECLARAR completadas (2026-08-02)**: el Director autorizó en chat el paso 2 (aplicar contra D1) de ambas; `checklists` completó además los pasos 3-4 (retirar el DDL en runtime y verificar en producción tras desplegar `worker.js`), cerrando el ciclo de 5 pasos de ADR-0011 para ese vertical. `F-2.1-MEMORIA-DECLARAR` queda con la tabla `memoria_gobernada` aplicada y verificada; su paso 3 (persistencia real) sigue bloqueado por ARC-008 §8, no por decisión del Director. **F-1.3-MIGRAR-RESTO-TOOLS completada (2026-08-02)**: los catálogos de tools de los dos Workers quedan migrados al completo a ADR-0010 (96/103 tools; 7 excluidas a propósito, dominio ADR-0013). Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**; por ADR-0007 enmienda 1 se abrió **F-2.1** (Época 2, gobierno de memoria), cuyo modelo ya está aceptado por el Director en ADR-0013. **No queda ninguna tarea activa de ingeniería sin decisión pendiente del Director.** No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
@@ -67,23 +67,23 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
 - ID: ARC-011-FASE3-CHECKLISTS
 - Título: Primer vertical de la migración por fases de ARC-011 (ADR-0011)
 - Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
-- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (retirar DDL en runtime del vertical) pendiente, siguiente unidad de trabajo del ciclo**
+- Estado: **completada — ciclo de ADR-0011 (5 pasos) cerrado para este vertical (2026-08-02)**
 - Prioridad: Media
-- Rama: `docs/arc-011-fase3-checklists` (paso 1), `feat/migrar-checklists-memoria-d1` (paso 2, PR #52)
-- Responsable actual: Agente de Ingeniería
-- Objetivo: declarar y aplicar en una migración `.sql` versionada el esquema real —ya verificado en ARC-015— de las tablas del vertical `checklists` (`checklist_plantillas`, `checklists_plantillas`, `checklist_registros`, `checklist_ejecuciones`), siguiendo el ciclo de ADR-0011.
+- Rama: `docs/arc-011-fase3-checklists` (paso 1), `feat/migrar-checklists-memoria-d1` (paso 2, PR #52), `feat/arc011-checklists-retirar-ddl-runtime` (pasos 3-4, PR #53)
+- Responsable actual: —
+- Objetivo: declarar, aplicar y retirar el DDL en runtime del esquema real —ya verificado en ARC-015— de las tablas del vertical `checklists` (`checklist_plantillas`, `checklists_plantillas`, `checklist_registros`, `checklist_ejecuciones`), siguiendo el ciclo completo de ADR-0011.
 - Criterios de aceptación:
   1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con el esquema exacto verificado (`migrate_checklists.sql`, con la fuente `worker.js:línea` de cada `CREATE`), no el que el código debería crear.
-  2. ✅ **Aplicada contra D1 (run `30758297243`, 2026-08-02)**, autorizada por el Director en chat, circuito oficial (PR #52 → `workflow_dispatch` con `APPLY_D1_MIGRATION` → aprobación del entorno `production` por el Director → `wrangler d1 execute --remote`).
-  3. ✅ Verificado antes y después: las 4 tablas ya existían (creadas por el DDL en runtime), columna por columna idénticas a la migración; `0 rows_written` confirma que fue un no-op aditivo.
-  4. El DDL en runtime de este vertical se deja intacto (`worker.js:14196-14221` y `18122-18152`) — retirarlo es el **paso 3** del ciclo de ADR-0011, todavía no ejecutado.
+  2. ✅ **Aplicada contra D1 (run `30758297243`, 2026-08-02)**, autorizada por el Director en chat, circuito oficial (PR #52 → `workflow_dispatch` con `APPLY_D1_MIGRATION` → aprobación del entorno `production` por el Director → `wrangler d1 execute --remote`). Verificado antes y después: las 4 tablas ya existían, columna por columna idénticas; `0 rows_written` confirma no-op aditivo.
+  3. ✅ **DDL en runtime retirado (PR #53):** comentado, no borrado, en `runMigrations()` (`checklist_plantillas`/`checklist_registros`) y `ensureQATablas()` (`checklists_plantillas`/`checklist_ejecuciones`), con referencia a la migración. `ncrs_obra` (misma función, vertical distinto y sin migrar) queda intacta a propósito.
+  4. ✅ **Verificado en producción sin el DDL en caliente:** desplegado `worker.js` (run `30759124864`, SHA `eecb657`), `/health` → `healthy` (d1:true, r2:true), las 4 tablas del vertical siguen presentes tras el despliegue.
   5. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: true`.
 - Dependencias: ADR-0011 aceptado como estrategia (2026-08-02); ARC-013 y ARC-015 ya corregidos.
-- Bloqueos: ninguno para el paso 3 (retirar el `CREATE TABLE`/comentarlo con referencia a la migración) — es código reversible, autorizado por ADR-0007 sin necesitar nueva decisión del Director salvo que aparezca un riesgo no documentado.
-- Archivos principales: `migrate_checklists.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, próximamente `worker.js` (paso 3).
-- Pruebas: verificación manual columna por columna antes y después contra D1 real; `node -e "JSON.parse(...)"` sobre el manifiesto.
+- Bloqueos: ninguno. Ciclo completo.
+- Archivos principales: `migrate_checklists.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, `worker.js`.
+- Pruebas: verificación manual columna por columna antes y después contra D1 real; `node --check worker.js`; `/health` tras desplegar.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: ejecutar el paso 3 del ciclo de ADR-0011 (comentar el DDL en runtime de `worker.js:14196-14221`/`18122-18152` con referencia a `migrate_checklists.sql`, sin borrarlo) y el paso 4 (verificar el vertical en producción sin el DDL en caliente) como tarea de ingeniería independiente.
+- Siguiente acción exacta: ninguna — vertical `checklists` completo. Sirve de plantilla para el próximo vertical de ARC-011 fase 3 (candidato: el que tenga más riesgo/beneficio entre las tablas restantes con `CREATE` propio, no las 27 huérfanas todavía).
 
 ### F-0.2-CFG — Completar la configuración remota de entrega segura
 

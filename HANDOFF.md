@@ -24,8 +24,16 @@ como corresponde a la barrera real) → `wrangler d1 execute --remote`.
 
 `migrate_manifiesto.json` actualizado: ambas entradas pasan a `aplicada: true` con su `run`.
 Ningún Worker lee ni escribe `memoria_gobernada` todavía (`nucleo-cognitivo/src/memory.js`
-sigue como interfaz pura); el DDL en runtime de `checklists` en `worker.js` sigue intacto —
-retirarlo es el paso 3 del ciclo de ADR-0011, siguiente unidad de trabajo (ver `TASKS.md`).
+sigue como interfaz pura).
+
+**Ciclo de ADR-0011 completado para `checklists` (mismo día, continuación autónoma sin nueva
+autorización, tal como pidió el Director):** PR #53 retira (comenta, no borra) el `CREATE
+TABLE IF NOT EXISTS` en runtime de `runMigrations()` y `ensureQATablas()` en `worker.js`,
+con referencia a `migrate_checklists.sql`; `ncrs_obra` (mismo `ensureQATablas`, vertical
+distinto, sin migrar) queda intacta a propósito. Desplegado `worker.js` (run `30759124864`,
+SHA `eecb657`, aprobado por el Director): `/health` → `healthy` (d1:true, r2:true); las 4
+tablas del vertical verificadas presentes tras el despliegue sin el DDL en caliente. Vertical
+`checklists` queda como plantilla probada de los 5 pasos del ciclo para el siguiente vertical.
 
 Decisiones del Director en la misma ronda: **F-0.2-CFG** se mantiene pospuesta, tarea
 administrativa que hará él personalmente, sin más trabajo de ingeniería sobre ese punto;
