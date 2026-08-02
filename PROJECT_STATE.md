@@ -53,11 +53,14 @@ Fue el primer uso real del circuito de entrega segura de F-0.1 y se comportó co
 
 **Los dos Workers están desplegados y respondiendo** (`HTTP 200` verificado): `alejandra-app-api` versión `a5ccf770`, `alejandra-agente` versión `a67353ec`. Llevan ARC-013, ARC-015, ARC-016 y ARC-017 en producción.
 
+## ARC-018 — resuelto (2026-08-02)
+
+`alejandra-worker` (fork huérfano, CORS abierto, escritura confirmada contra la `alejandra-db` real) borrado. Su bucket `alejandra-files` tenía 12 fotos únicas de una incidencia real (23/04) que nunca llegaron al sistema — migradas a `alejandra-app-files` y verificadas antes de vaciar y borrar el bucket. Detalle completo en `ARCHITECT_BACKLOG.md`.
+
 ## Riesgos activos
 
 - Los secretos siguen a nivel de repositorio, no de entorno: cualquier workflow puede leerlos.
 - **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción, no las migraciones versionadas. Fases 1 y 2 verificadas. **Fase 3: `ADR-0011` aceptado el 2026-08-02** como estrategia (migración por vertical, empezando por `checklists`, con manifiesto de estado); la implementación sigue en curso al ritmo del roadmap, y cada aplicación real contra D1 exige autorización aparte.
-- **ARC-018 (alto, nuevo):** la auditoría remota de Cloudflare del 2026-08-02 encontró un Worker huérfano (`alejandra-worker`, fork abandonado de `worker.js` de mayo, sin las mejoras SEC-01 a SEC-15, con rutas de escritura completas y alcanzables) y un bucket R2 no documentado (`alejandra-files`). No se ha confirmado si comparten datos con producción, ni se han tocado — la autorización cubría lectura de metadatos, no borrar recursos.
 - **ARC-014 (medio):** la aprobación del entorno `production` se concedió con la misma credencial que lanzó el workflow. Un agente con token de administración puede aprobar su propio despliegue: la barrera cubre el error accidental, no la intención.
 - ARC-005 queda mitigado en los workflows versionados, pendiente de validación remota.
 - ARC-008: no existe un endpoint de salud que verifique dependencias reales.
@@ -85,7 +88,6 @@ explícitamente de la apertura autónoma. F-1.1 sigue bloqueada solo por él.
 ## Decisiones aún pendientes del Director
 
 - **`F-0.2-CFG`** — mover secretos al entorno `production` (requiere valores reales).
-- **`ARC-018`** — worker/bucket huérfanos de la auditoría Cloudflare.
 - **`ARC-014`** — autoaprobación de despliegue con token de administración.
 - **`ARC-002`** — gobierno de memoria: bloquea que el núcleo cognitivo active memoria persistente.
 - **`ARC-008`** — observabilidad/trazas: bloquea decisiones del núcleo sin trazabilidad suficiente.

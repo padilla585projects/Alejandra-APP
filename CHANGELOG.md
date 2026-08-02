@@ -23,6 +23,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - `migrate_checklists.sql`: primer vertical de la migración por fases de ARC-011 (ADR-0011), declara `checklist_plantillas`, `checklist_registros`, `checklists_plantillas` y `checklist_ejecuciones` con el esquema exacto de `worker.js`. Paso 1 (declarar) completo; aplicarla contra D1 exige autorización aparte del Director.
 - `migrate_manifiesto.json`: primer manifiesto de migraciones (formato de ADR-0011), con las tres migraciones de ARC-012 ya verificadas y `migrate_checklists.sql` como pendiente de aplicar.
 
+### Removed
+
+- ARC-018 resuelto: `alejandra-worker` (fork huérfano de `worker.js`, CORS abierto, confirmado contra la `alejandra-db` real vía dashboard) borrado de Cloudflare. Su bucket `alejandra-files` contenía 12 fotos únicas de una incidencia real (23/04, obra 1/eléctrico) que nunca llegaron a `alejandra-app-files`; migradas y verificadas por tamaño idéntico antes de vaciar y borrar el bucket. Ambos recursos ya no existen en la cuenta.
+
 ### Changed
 
 - ADR-0001 aceptado: un push o merge ya no activa producción desde los workflows versionados; secretos, Pages y D1 quedan desacoplados del despliegue ordinario.
