@@ -3,6 +3,20 @@
 - Actualizado: 2026-08-02
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas.
 
+## Autonomía de los agentes
+
+**ADR-0007 (aceptado, 2026-08-02)** sustituye las prohibiciones absolutas por un criterio de
+**reversibilidad**: el código se deshace, los datos no.
+
+Autónomo: ramas, commits, `push`, PR y merge con CI en verde, pruebas, despliegue de Workers
+y encadenar tareas ya aprobadas de `TASKS.md`. Requiere decisión humana: migraciones D1,
+secretos, borrado de datos, borrado en R2 y abrir una fase nueva.
+
+Se revisó la premisa de que el entorno fuera solo de desarrollo y **no se sostiene**: la app
+opera con datos personales reales —ARC-012 restauró la retención RGPD el mismo día— por lo
+que las salvaguardas sobre datos se mantienen íntegras. Lo que se retiró es la ceremonia
+sobre acciones reversibles.
+
 ## Gobierno operativo
 
 `ENGINEERING_WORKFLOW.md` está creado para revisión como proceso común de cualquier agente de ingeniería. Centraliza el procedimiento operativo y deja en `AGENTS.md` solo las reglas específicas del repositorio. No modifica arquitectura, código, infraestructura ni el estado de F-0.1.
