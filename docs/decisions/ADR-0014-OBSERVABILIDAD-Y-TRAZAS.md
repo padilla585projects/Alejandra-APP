@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0014
 - Fecha: 2026-08-02
-- Estado: **Propuesto**
-- Decisores: `PENDIENTE` (Director del Proyecto)
+- Estado: **Aceptado con modificaciones**
+- Decisores: Director del Proyecto (2026-08-02)
 - Resuelve: ARC-008
 - Desbloquea: que `nucleo-cognitivo/motor-decision.js` pueda registrar y consultar
   trazas reales (parte de F-1.2 en adelante); reincorporar healthchecks automáticos
@@ -115,54 +115,103 @@ Esto responde a la pregunta del paso 5 del encargo: **sí, las trazas de ARC-013
 destino persistente distinto de los logs efímeros de Cloudflare**, y es este mismo almacén, no
 uno aparte — evita crear dos sistemas de trazas cuando uno con un discriminador basta.
 
-### 2. Retención: 30 días en crudo, sin agregación automática en esta fase
+### 2. Retención: diferenciada por tipo, sin agregación automática en esta fase
 
 D1 no es un almacén de logs de largo plazo (cuota de fila y de tamaño de base de datos del
-plan de Cloudflare). Se propone:
+plan de Cloudflare). **Decisión del Director — retención diferenciada, no un único plazo:**
 
-- Purga por antigüedad: un paso más en el cron nocturno ya existente en `worker.js` que borra
-  `DELETE FROM alejandra_trazas WHERE ts < datetime('now', '-30 days')`.
-- Sin agregación/rollup automático en esta fase: agregar mal (medias sobre datos que ya no
-  existen, por ejemplo) es peor que no agregar. Si en el futuro se necesita retención más larga
-  para métricas, es una decisión aparte con su propio ADR, no una extensión silenciosa de este.
-- 30 días es una propuesta de partida, no un valor probado: es una pregunta abierta para el
-  Director (ver más abajo) si el volumen real de trazas (sobre todo `tipo='decision'` cuando el
-  Motor de Decisión esté implementado) lo hace inviable antes de 30 días.
+- **`tipo = 'decision'`: 30 días** en crudo.
+- **`tipo = 'ddl_error'` y eventos de seguridad: 90 días** — un incidente de seguridad o un
+  `ALTER TABLE` fallido en silencio (ARC-013) tiene más valor de auditoría a medio plazo que
+  una decisión cognitiva individual, y su volumen es mucho menor, así que sostener 90 días no
+  compite en cuota con las trazas de decisión.
 
-### 3. Consulta: un endpoint de solo lectura, no un panel nuevo
+La purga en el cron nocturno de `worker.js` pasa a distinguir por `tipo`:
 
-Se propone un endpoint `GET /admin/trazas` en cada Worker (mismo patrón que las rutas de
-desarrollador existentes), con los mismos filtros de acceso que ya protegen las tools
-`TOOLS_SOLO_DEV_VERIFICADO` (`alejandra-agente/lib.js`) y el chat dev de `worker.js`: exige
-identidad de desarrollador verificada, nunca el cron. Parámetros: `tipo`, `worker`, `desde`,
-`hasta`, `empresa_id`, `limit` (con tope máximo fijo en servidor, no solo por defecto). Devuelve
-filas tal cual, sin agregación. Construir un dashboard visual sobre esto es trabajo aparte
-(quedaría en `TASKS.md` si se acepta este ADR) — aquí solo se decide que la consulta existe y
-por dónde se hace, no su interfaz visual.
+```sql
+DELETE FROM alejandra_trazas WHERE tipo = 'decision'  AND ts < datetime('now', '-30 days');
+DELETE FROM alejandra_trazas WHERE tipo != 'decision' AND ts < datetime('now', '-90 days');
+```
+
+Sin agregación/rollup automático en esta fase: agregar mal (medias sobre datos que ya no
+existen, por ejemplo) es peor que no agregar. Si en el futuro se necesita retención más larga
+para métricas, es una decisión aparte con su propio ADR, no una extensión silenciosa de este.
+
+### 2.1. Minimización y redacción de datos sensibles
+
+**Decisión del Director:** `resumen` y `detalle_json` deben pasar por minimización y
+redacción antes de persistirse — ningún campo de texto libre de usuario se guarda tal cual si
+puede contener datos sensibles (nombres completos fuera de lo estrictamente necesario, texto
+de conversación, identificadores personales). En particular:
+
+- **Nunca se guarda una conversación completa por defecto.** `detalle_json` para
+  `tipo = 'decision'` persiste los ocho campos de `CAMPOS_TRAZA_OBLIGATORIOS` tal como los
+  define el Motor de Decisión (motivos, evidencia, confianza, etc.), no el histórico de
+  mensajes que llevó a esa decisión — si `evidencia` referencia un mensaje, debe hacerlo por
+  identificador (p. ej. `mensaje_id`), no citando el contenido íntegro.
+  ​`resumen` se limita a una línea legible construida a partir de campos ya estructurados
+  (tipo de decisión, resultado), no un extracto libre del texto original.
+- La redacción concreta (qué patrones se enmascaran: emails, teléfonos, DNI/NIF) es trabajo de
+  implementación posterior a este ADR, pero el principio —minimizar antes de escribir, no
+  depurar después— queda fijado aquí y no es negociable en el código que implemente
+  `registrarTraza()`.
+
+### 3. Consulta: un único endpoint administrativo en el Worker principal
+
+**Decisión del Director:** un solo endpoint `GET /admin/trazas`, no uno por Worker. Se
+interpreta "Worker principal" como **`alejandra-app-api`** (`worker.js`) — es el Worker de la
+API REST central del sistema, mientras que `alejandra-agente` es el Worker específico del
+agente de IA; esta es la lectura de este agente y queda explícita aquí para que el Director
+la corrija si se refería a otro. `alejandra-agente/worker.js` **no** expone su propio
+endpoint de consulta en esta primera versión: como ambos Workers escriben en la misma tabla
+`alejandra_trazas` (punto 1), consultar desde `alejandra-app-api` ya cubre las trazas de los
+dos, sin duplicar la superficie administrativa.
+
+Mismos filtros de acceso que ya protegen las tools `TOOLS_SOLO_DEV_VERIFICADO`
+(`alejandra-agente/lib.js`) y el chat dev de `worker.js`: exige identidad de desarrollador
+verificada, nunca el cron. Parámetros: `tipo`, `worker`, `desde`, `hasta`, `empresa_id`,
+`limit` (con tope máximo fijo en servidor, no solo por defecto). Devuelve filas tal cual, ya
+minimizadas/redactadas (punto 2.1), sin agregación. Construir un dashboard visual sobre esto
+es trabajo aparte (quedaría en `TASKS.md` si se acepta este ADR) — aquí solo se decide que la
+consulta existe, por dónde se hace y en cuál de los dos Workers, no su interfaz visual.
 
 ### 4. El endpoint de salud real
 
 `GET /health` pasa a comprobar dependencias reales, con presupuesto de tiempo acotado para no
-convertir el healthcheck en un cuello de botella:
+convertir el healthcheck en un cuello de botella. **Decisión del Director: tres estados, no
+un binario 200/503, y R2 se comprueba contra un objeto centinela nombrado, no una clave
+cualquiera:**
 
 - **D1**: `SELECT 1` (o equivalente mínimo) contra el binding `DB`, con `AbortSignal.timeout()`
   corto (propuesta: 1500 ms).
-- **R2**: una operación de lectura barata contra el binding correspondiente (`FILES` en
-  `worker.js`, el que aplique en `alejandra-agente/worker.js`) — `head()` sobre una clave
-  conocida y estable, no un `list()` completo del bucket. Mismo presupuesto de tiempo.
+- **R2 — objeto centinela**: se crea y mantiene deliberadamente una clave fija y conocida,
+  p. ej. `_healthcheck/centinela.txt`, cuyo único propósito es existir para que `/health` la
+  compruebe con `head()` — no un archivo de negocio reutilizado (que podría borrarse por
+  razones ajenas a la salud del sistema y disparar una falsa alarma). Mismo presupuesto de
+  tiempo que D1.
 - **Versión**: derivada, no escrita a mano. Propuesta: inyectar el SHA corto de commit como
   variable en tiempo de build/despliegue (Cloudflare Workers soporta variables de compilación vía
   `wrangler`), de forma que el número que devuelve `/health` sea el mismo que aparece en
   `wrangler deployments list` — así se corrige la causa exacta del desajuste v6.13/`6.12` que ya
   documenta la cabecera de `alejandra-agente/worker.js` (líneas 8-13).
-- **Respuesta**: `200` solo si D1 y R2 responden dentro del presupuesto; `503` con
-  `{ ok: false, d1: bool, r2: bool, version }` si alguna falla o hace timeout. Sigue siendo
-  público y sin efectos secundarios, igual que hoy — no se le añade autenticación ni escritura.
+- **Respuesta — tres estados:**
+  - `healthy` (`200`): D1 y el centinela de R2 responden dentro del presupuesto.
+  - `degraded` (`200`, para no disparar alarmas de infraestructura de forma automática, pero
+    con el estado visible en el cuerpo): **exactamente una** de las dos dependencias falla o
+    hace timeout. El sistema sigue sirviendo tráfico pero con una dependencia comprometida.
+  - `unhealthy` (`503`): **D1 falla**, sola o junto con R2. D1 es la dependencia de la que
+    depende prácticamente toda la funcionalidad (autenticación, datos de negocio); un fallo
+    de R2 en solitario degrada (fotos/documentos), un fallo de D1 inhabilita el sistema, así
+    que se trata con más severidad incluso si R2 sigue respondiendo.
+  - Cuerpo de respuesta en los tres casos: `{ estado: 'healthy'|'degraded'|'unhealthy', d1: bool, r2: bool, version }`.
+  - Sigue siendo público y sin efectos secundarios, igual que hoy — no se le añade
+    autenticación ni escritura.
 - Una vez desplegado este cambio en ambos Workers, `docs/runbooks/CI-CD-Y-MIGRACIONES.md` debe
-  actualizarse para reincorporar el healthcheck automático post-despliegue que F-0.1 retiró, y
-  la función `_checkearSaludPostDeploy()` de `worker.js` (que ya llama a `/health` tras un
-  `propose_fix` aplicado, líneas 3861-3868) pasa a ser una verificación real en vez de comprobar
-  solo que el Worker responde.
+  actualizarse para reincorporar el healthcheck automático post-despliegue que F-0.1 retiró
+  (tratando `degraded` como advertencia, no como fallo de despliegue, y `unhealthy` como
+  bloqueo), y la función `_checkearSaludPostDeploy()` de `worker.js` (que ya llama a `/health`
+  tras un `propose_fix` aplicado, líneas 3861-3868) pasa a ser una verificación real en vez de
+  comprobar solo que el Worker responde.
 
 Esto es una decisión de diseño, no la implementación: cambiar `worker.js` y
 `alejandra-agente/worker.js` para que `/health` haga estas comprobaciones es trabajo de código
@@ -199,6 +248,24 @@ async function registrarTraza(decision) { /* implementación real, fuera del nú
   ninguna implementación de esa dependencia puede escribir en D1 antes de que la tabla exista y
   el ADR esté aceptado.
 
+### 6. Alcance de la autorización de migración — decisión del Director
+
+**Se autoriza aplicar la migración de `alejandra_trazas` únicamente en el entorno actual de
+desarrollo/pruebas.** Esta autorización:
+
+- Exige **copia o export previo** de los datos actuales del entorno antes de aplicar la
+  migración, y **validación posterior** de que el esquema resultante coincide con lo
+  documentado aquí (mismo criterio que ya usó ARC-012 al verificar contra el esquema real tras
+  aplicar).
+- **No se extiende a una futura producción real.** Aplicar esta misma migración contra el
+  entorno de producción, cuando exista o se distinga del actual, es una autorización aparte y
+  posterior — exactamente el mismo criterio que `CLAUDE.md` ya aplica a cualquier migración
+  D1: cada aplicación real exige su propia decisión explícita, ninguna autorización se
+  reutiliza automáticamente para un entorno distinto de aquel para el que se concedió.
+- Sigue pasando por el workflow manual `Apply Alejandra Agent D1 migration` con confirmación
+  exacta, no por un `CREATE TABLE IF NOT EXISTS` en caliente — coherente con el resto de este
+  ADR y con ADR-0011.
+
 ## Alternativas consideradas
 
 | Alternativa | Motivo para elegir o descartar |
@@ -216,12 +283,14 @@ async function registrarTraza(decision) { /* implementación real, fuera del nú
 **Si se acepta:**
 
 - Hace falta una migración D1 nueva (tabla `alejandra_trazas`) por el workflow manual
-  `Apply Alejandra Agent D1 migration`, con autorización explícita del Director — no autónoma,
-  conforme a `CLAUDE.md`.
+  `Apply Alejandra Agent D1 migration`. **Ya autorizada, acotada al entorno actual de
+  desarrollo/pruebas** (punto 6) — aplicarla en una futura producción real exige autorización
+  aparte.
 - `worker.js` y `alejandra-agente/worker.js` necesitan cambios de código: el nuevo `/health` real
-  en los dos (regla de los dos cerebros), el endpoint `GET /admin/trazas` en los dos, y cambiar
-  `runDDL()`/`ddlPaso()` (ARC-013) para que, además de `console.error`, escriban una fila
-  `tipo='ddl_error'`. Cada uno es trabajo de implementación posterior, fuera de este ADR.
+  en los dos (regla de los dos cerebros), el endpoint `GET /admin/trazas` solo en
+  `alejandra-app-api`, y cambiar `runDDL()`/`ddlPaso()` (ARC-013) para que, además de
+  `console.error`, escriban una fila `tipo='ddl_error'`. Cada uno es trabajo de implementación
+  posterior, fuera de este ADR.
 - El paso de purga por 30 días añade una operación más al cron nocturno; hay que verificar que
   no compite en tiempo con las tareas que ya corren ahí.
 - Una vez desplegado el `/health` real, `docs/runbooks/CI-CD-Y-MIGRACIONES.md` debe actualizarse
@@ -239,18 +308,21 @@ async function registrarTraza(decision) { /* implementación real, fuera del nú
 - Los errores de DDL de ARC-013 siguen visibles solo en `wrangler tail`/Workers Logs, sin
   persistencia ni forma de consultarlos después de que expiren.
 
-## Preguntas que solo el Director puede responder
+## Respuestas del Director (2026-08-02)
 
-1. **¿Se acepta D1 (tabla `alejandra_trazas` compartida, discriminada por `tipo`) como destino de
-   las trazas**, o se prefiere KV, un tercero, o tablas separadas por tipo?
-2. **¿30 días de retención en crudo es razonable**, o hace falta un periodo distinto según el
-   volumen real, sobre todo para `tipo='decision'` una vez que el Motor de Decisión esté activo?
-3. **¿El endpoint `GET /admin/trazas` debe existir en los dos Workers desde el principio**, o
-   basta con uno mientras el Motor de Decisión no esté implementado en ninguno de los dos?
-4. **¿Se acepta el diseño de `/health` real (D1 + R2 con timeout corto, versión derivada del
-   SHA de despliegue)**, o falta comprobar algo más antes de dar luz verde a un despliegue?
-5. **¿Se autoriza ya la migración D1 de `alejandra_trazas`** en cuanto este ADR se acepte, o
-   queda como una autorización aparte y posterior, igual que cualquier otra migración?
+1. **Almacén:** D1 confirmado como almacén de trazas v1, tabla `alejandra_trazas` discriminada
+   por `tipo` — sin evaluar alternativa.
+2. **Retención:** diferenciada, no un único plazo — 30 días para `tipo='decision'`, 90 días
+   para errores de DDL o eventos de seguridad (punto 2). Además, minimización/redacción
+   obligatoria y prohibición de guardar conversaciones completas por defecto (punto 2.1).
+3. **Endpoint de consulta:** un único endpoint administrativo, en el Worker principal
+   (interpretado como `alejandra-app-api`, ver punto 3) — no uno por Worker.
+4. **`/health`:** aceptado con modificación — tres estados (`healthy`/`degraded`/`unhealthy`,
+   punto 4) en vez del binario 200/503 propuesto, y comprobación de R2 contra un objeto
+   centinela nombrado, no una clave de negocio reutilizada.
+5. **Migración:** autorizada, pero **solo en el entorno actual de desarrollo/pruebas**, con
+   copia/export previo y validación posterior. No se extiende a una futura producción real
+   (punto 6).
 
 ## Referencias
 
