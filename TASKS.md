@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **tareas activas**: F-0.2-CFG (pospuesta, ver decisión del Director), ARC-011-FASE3-CHECKLISTS (paso 2 pospuesto, ver decisión del Director) y F-1.2-NUCLEO-ESQUELETO (interfaces `memory.js`/`registrarTraza()` ya construidas, sigue abierta sin fecha de cierre). P-ARCH-002 fue **aprobada por el Director el 2026-08-02** y pasa a la tabla de completadas, junto con ARC-008-TRAZAS-MIGRACION y ARC-013. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **tareas activas**: F-0.2-CFG (pospuesta, ver decisión del Director), ARC-011-FASE3-CHECKLISTS (paso 2 pospuesto, ver decisión del Director) y F-1.3-TOOL-REGISTRY-ESQUELETO (primer entregable en curso). **F-1.2-NUCLEO-ESQUELETO se verificó completa (2026-08-02)** — sus 6 criterios de aceptación se cumplen y las 20 pruebas pasan (`node --test nucleo-cognitivo/test/*.js`) — y pasa a la tabla de completadas, junto con P-ARCH-002, ARC-008-TRAZAS-MIGRACION y ARC-013. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
@@ -37,29 +37,28 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-### F-1.2-NUCLEO-ESQUELETO — Esqueleto, contratos e interfaces del núcleo cognitivo
+### F-1.3-TOOL-REGISTRY-ESQUELETO — Esqueleto y contratos del Capability/Tool Registry
 
-- ID: F-1.2-NUCLEO-ESQUELETO
-- Título: Primer entregable de F-1.2 tras aceptar ADR-0004
-- Fase: Época 1 — Núcleo Cognitivo (F-1.2)
+- ID: F-1.3-TOOL-REGISTRY-ESQUELETO
+- Título: Primer entregable de F-1.3 tras cerrar F-1.2
+- Fase: Época 1 — Núcleo Cognitivo (F-1.3)
 - Estado: en curso
 - Prioridad: Alta
-- Rama: `feat/f-1.2-nucleo-cognitivo-esqueleto`
+- Rama: `feat/f-1.3-tool-registry-esqueleto`
 - Responsable actual: Agente de Ingeniería
-- Objetivo: construir `nucleo-cognitivo/` como paquete aislado con Estado Cognitivo, Policy Engine y las interfaces de Context Engine, Planner y Motor de Decisión, sin integrarlo en `worker.js` ni `alejandra-agente/worker.js`.
+- Objetivo: declarar, como paquete aislado (mismo patrón que F-1.2: contratos y pruebas, sin integrar en `worker.js` ni `alejandra-agente/worker.js`), el contrato del Tool Registry — validación pura del metadato `acceso`/`cron`/`nivel_riesgo` por tool que fija ADR-0010 — y las interfaces de Verifier según los tres niveles de ADR-0009 (determinista, revisión humana asíncrona, explicabilidad como deuda).
 - Criterios de aceptación:
-  1. Estado Cognitivo: implementación real, pero estrictamente efímera (objeto en memoria de proceso, sin escritura a D1/R2/disco).
-  2. Policy Engine: clasificación de riesgo N0–N3 según la matriz de ADR-0006, como función pura sobre metadato declarado — sin leer sesión, permisos ni datos reales.
-  3. Context Engine, Planner y Motor de Decisión: interfaz y forma de datos definidas (JSDoc/typedef); la implementación lanza un error explícito citando la dependencia que falta (no un stub silencioso).
-  4. El contrato del Motor de Decisión exige, en su forma de datos, los campos de traza de `docs/architecture/04-MOTOR-DE-DECISION.md` (decisión, motivos, evidencia, confianza, riesgo, permisos efectivos, modo, criterio de salida).
-  5. Ningún componente de Memory, Nexo, Capability/Tool Registry, Verifier o QA se construye en esta tarea.
-  6. Pruebas (`node --test`) verifican los puntos 1-4; CI ejecuta `node --check` y las pruebas del paquete.
-- Dependencias: ADR-0004 aceptado (2026-08-02); F-1.1 cerrada. ADR-0013 y ADR-0014 aceptados con modificaciones (2026-08-02) desbloquean la ampliación siguiente.
-- Bloqueos: ninguno para las interfaces `memory.js` (contrato ADR-0013 §8) y `registrarTraza()` (contrato ADR-0014 §5) — ambas sin persistencia real. La persistencia real de memoria o trazas exige además aplicar la migración D1 correspondiente (la de `alejandra_trazas` ya autorizada, solo en desarrollo/pruebas).
-- Archivos principales: `nucleo-cognitivo/` (nuevo).
-- Pruebas: `node --check` sobre cada módulo; `node --test nucleo-cognitivo/test`.
+  1. Tool Registry: función pura que valida la forma de una declaración de tool (nombre, descripción, `acceso`, `cron`, `nivel_riesgo` ∈ {N0,N1,N2,N3} de ADR-0006) — sin leer el catálogo real de ninguno de los dos Workers, sin ejecutar tools.
+  2. Verifier: interfaz para los tres niveles de ADR-0009; el nivel determinista puede tener implementación real si es función pura sobre datos ya provistos (p. ej. validación de esquema); revisión humana y explicabilidad quedan como interfaz que lanza error explícito, citando la dependencia que falta.
+  3. QA: no se construye en esta tarea — depende de Verifier real y de tools ya registradas; ver `docs/decisions/ADR-0009-ALCANCE-DE-QA-Y-VERIFICACION.md`.
+  4. Ningún catálogo de tools real de `worker.js` ni `alejandra-agente/lib.js` se migra ni se toca en esta tarea — eso es trabajo posterior, vertical por vertical, no de golpe (mismo principio que ARC-011/ADR-0011).
+  5. Pruebas (`node --test`) verifican los puntos 1-2; CI ejecuta `node --check` y las pruebas del paquete.
+- Dependencias: F-1.2 completada (2026-08-02); ARC-004 (ADR-0009) y ARC-006 (ADR-0010) cerrados.
+- Bloqueos: ninguno para el esqueleto. Migrar el catálogo real de tools de cada Worker al Registry es alcance posterior, fuera de esta tarea.
+- Archivos principales: `nucleo-cognitivo/` o paquete nuevo equivalente (a decidir en la implementación, documentando el porqué).
+- Pruebas: `node --check` sobre cada módulo; `node --test` sobre el paquete correspondiente.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: `memory.js` y el contrato `registrarTraza()` ya construidos como interfaces (2026-08-02, PR #20) — con la tabla `alejandra_trazas` ya aplicada (ARC-008-TRAZAS-MIGRACION), el siguiente paso real de persistencia es implementar `registrarTraza()` en cada Worker por separado (regla de los dos cerebros) y el endpoint `GET /admin/trazas` en `alejandra-app-api`, ambos ADR-0014 §3/§5 — eso ya toca `worker.js`/`alejandra-agente/worker.js`, fuera del aislamiento actual de `nucleo-cognitivo/`; requiere alcance explícito antes de empezar, no se abre sin acordarlo.
+- Siguiente acción exacta: construir el esqueleto (Tool Registry + Verifier) siguiendo el mismo patrón de interfaces con error explícito que usó F-1.2.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 
@@ -131,3 +130,4 @@ Siguiente acción exacta:
 | ADR-0014 (implementación) | `registrarTraza()` real + `/health` de tres estados + `GET /admin/trazas`, en los dos Workers | Completada, desplegada y verificada | PR #24 (`alejandra-app-api`, run 30746614977) + PR #25 (`alejandra-agente`, run 30746733097). ARC-013 conectado a `alejandra_trazas`; `/health` verificado en vivo `healthy` en los dos; 110/110 tests del agente en verde. |
 | fix/version-fallback-adr0014 | `index.html`: desactivar fallback de versión roto por el cambio de `/health` | Completada | PR #26. `hj.version` pasó a ser un UUID de despliegue; el fallback comparaba contra `APP_VERSION` y habría forzado recargas falsas (patrón de los incidentes de recarga infinita). Corregido en `main`; publicar a Pages sigue siendo un paso de entrega aparte. |
 | P-ARCH-002 | Componente compartido de notificaciones temporales | **Aprobada por el Director (2026-08-02)** | `packages/design-system/src/components/toast.js`. API heredada `mostrarToast()` compatible, 12 invocaciones sin cambios, sin backend ni permisos afectados. Evidencia en `docs/architecture/FRONTEND_SLICE_TOAST.md`. Desbloquea la siguiente rebanada de presentación. |
+| F-1.2-NUCLEO-ESQUELETO | Esqueleto, contratos e interfaces del núcleo cognitivo | Completada — verificada (2026-08-02) | `nucleo-cognitivo/`: Estado Cognitivo y Policy Engine implementados; Context Engine, Planner y Motor de Decisión como interfaces con error explícito; `memory.js` (ADR-0013 §8) y contrato `registrarTraza()` (ADR-0014 §5) añadidos en PR #20. Los 6 criterios de aceptación verificados contra el código: `node --check nucleo-cognitivo/src/*.js` y `node --test nucleo-cognitivo/test/*.js` (20/20 en verde). Cierra F-1.2 y desbloquea F-1.3. |

@@ -36,6 +36,10 @@ package-lock.json
 # antes de desplegar — ver .github/workflows/deploy-alejandra-agente.yml).
 !alejandra-agente/package.json
 !alejandra-agente/package-lock.json
+# Excepción: nucleo-cognitivo/package.json documenta "npm test" (F-1.2) y no
+# tiene dependencias externas, pero sin trackearlo nadie mas que un checkout
+# con el archivo local puede ejecutar ese comando.
+!nucleo-cognitivo/package.json
 
 # Claves y secretos — NUNCA commitear
 CLAVES.txt

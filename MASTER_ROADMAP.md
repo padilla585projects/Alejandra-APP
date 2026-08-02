@@ -31,7 +31,7 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 | Foundation v0.1 | Aprobada. COH-001 cerrado por ADR-0005 y COH-002 por ADR-0002; sin bloqueos de coherencia abiertos. |
 | Fase 1 — contrato cognitivo | Documentada; ADR-0002 **aceptado** como arquitectura objetivo. ARC-001/003/004/002/008 cerrados el 2026-08-02 (ADR-0006/0008/0009/0010/0013/0014); ADR-0004 también aceptado, cierra F-1.1. |
 | Fase 2 — motor/modos | Documentada; ADR-0004 **aceptado** (2026-08-02), cierra F-1.1. |
-| Núcleo Cognitivo | Esqueleto en curso (F-1.2); no integrado en producción. |
+| Núcleo Cognitivo | F-1.2 completada y verificada (2026-08-02); F-1.3 (Tool Registry/Verifier) abierta, esqueleto en curso. No integrado en producción. |
 | Entrega segura | **F-0.1 integrada y activa en remoto** (PR #9, 2026-08-02): workflows antiguos retirados, `main` protegida, entorno `production` con revisor requerido. El P0 está neutralizado. Queda mover los secretos a nivel de entorno (`F-0.2-CFG`). |
 | Esquema D1 | **ARC-011 fases 1 y 2 verificadas** (PR #10): 105 de 150 tablas existen solo porque el código las crea y 27 tablas reales no las declara nadie; el esquema **no es reproducible desde el repositorio**. ARC-012 resuelto (PR #11): las 3 columnas que faltaban se aplicaron y verificaron. ARC-013 corregido en código (`eb772ee`), pendiente de despliegue. Fase 3 pendiente, exige ADR propio. |
 | Auditoría remota GitHub | Realizada 2026-08-02 en solo lectura. Sus cinco hallazgos quedaron corregidos al activar F-0.1, salvo los secretos, que siguen a nivel de repositorio. |
@@ -52,7 +52,7 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 - Áreas/migraciones: `.github/workflows`, runbooks; sin migración funcional prevista. `migrate_008` se desbloqueó y se aplicó el 2026-08-02: el bloqueo partía de leer código sin contrastar con el esquema real, y la migración era el arreglo (ver ARC-012).
 - Riesgos/compliance/pruebas: interrupción de entrega; mínimo privilegio y aprobación; CI, promoción manual y rollback documentado. Los healthchecks automáticos de Workers se retiraron por diseño: `GET /health` no distingue desplegado de operativo (ver ARC-008); Pages sí conserva verificación de versión servida.
 - Aceptación/recuperación/entregables: `main` no despliega por sí solo; promoción identificable y migración explícita; rollback a artefacto sano; workflow y runbook aprobados.
-- Estado de aceptación: **cumplido en repositorio y en remoto**. Validado además en la práctica: las tres migraciones de ARC-012 fueron el primer uso real del circuito y quedaron en `waiting` hasta aprobación del entorno. Salvedad registrada en ARC-014: la aprobación puede concederla la misma credencial que lanzó el workflow.
+- Estado de aceptación: **cumplido en repositorio y en remoto**. Validado además en la práctica: las tres migraciones de ARC-012 fueron el primer uso real del circuito y quedaron en `waiting` hasta aprobación del entorno. Salvedad registrada en ARC-014: la aprobación puede concederla la misma credencial que lanzó el workflow. Healthcheck automático post-despliegue reincorporado (PR #36, 2026-08-02).
 - Resultado/siguiente: Entrega segura v0.2; habilita F-0.2 y cualquier cambio funcional.
 
 **F-0.2 — Inventario remoto, calidad y contratos base**
@@ -83,7 +83,7 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-1.2 — Estado Cognitivo, Planner, Context Engine y Policy Engine**
 
-- Estado/prioridad/tamaño: **Iniciada (2026-08-02) — esqueleto y contratos, sin activar** / Crítica / XL.
+- Estado/prioridad/tamaño: **Completada y verificada (2026-08-02)** / Crítica / XL.
 - Objetivo y valor: implementar las bases que deciden con contexto y permisos verificables.
 - Alcance/fuera: contratos, extracción incremental, pruebas y trazas mínimas; no memoria compartida, Nexo ni agentes.
 - Dependencias/bloqueantes/paralelo: F-0.1, F-0.2, F-1.1 — **las tres completadas**; paralelo parcial con UX transversal (independiente de P-1, ver Época transversal).
@@ -91,11 +91,11 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 - Áreas/migraciones: `nucleo-cognitivo/` (paquete nuevo, aislado, no integrado en `worker.js` ni `alejandra-agente/worker.js`); `PENDIENTE` migraciones solo tras modelo de estado aprobado.
 - Riesgos/compliance/pruebas: bypass de tenant/política; unitarias, integración y negativas de permiso; rollback por ruta/feature flag. **ARC-002 (ADR-0013) y ARC-008 (ADR-0014) aceptados con modificaciones el 2026-08-02**: el esqueleto puede ampliarse con las interfaces de `memory.js` y el helper `registrarTraza()`, pero la persistencia real exige además la migración D1 correspondiente (autorizada solo en desarrollo/pruebas para ARC-008; ARC-002 sigue el migrador de ADR-0011) y no se activa en producción por esta tarea.
 - Aceptación/recuperación/entregables: una ruta piloto decide sin alterar permisos y conserva compatibilidad; diseño de rollback y pruebas publicadas; habilita F-1.3.
-- Primer entregable: `nucleo-cognitivo/` con Estado Cognitivo (efímero, sin persistencia), Policy Engine (clasificación de riesgo N0–N3 de ADR-0006, sin acceso a sesión real), Context Engine y Planner y Motor de Decisión (interfaces con forma de datos, sin implementación — pendientes de dependencias reales). Memory, Nexo, Capability/Tool Registry, Verifier y QA quedan **fuera** de este entregable: pertenecen a F-1.3/F-2.1/F-2.2, no abiertas. Ampliación siguiente: interfaces `memory.js` (ADR-0013) y `registrarTraza()` (ADR-0014), sin persistencia real todavía.
+- Estado de aceptación: **cumplido y verificado (2026-08-02)**: `nucleo-cognitivo/` con Estado Cognitivo (efímero, sin persistencia), Policy Engine (clasificación de riesgo N0–N3 de ADR-0006, sin acceso a sesión real), Context Engine, Planner y Motor de Decisión (interfaces con forma de datos, sin implementación — pendientes de dependencias reales), `memory.js` (ADR-0013) y contrato `registrarTraza()` (ADR-0014). Memory, Nexo, Capability/Tool Registry, Verifier y QA quedaron **fuera** de este entregable: pertenecen a F-1.3/F-2.1/F-2.2. Los 6 criterios de aceptación se verificaron contra el código: `node --check` y `node --test nucleo-cognitivo/test/*.js` (20/20 en verde). Habilita F-1.3.
 
 **F-1.3 — Capability/Tool Registry, Verifier y QA**
 
-- Estado/prioridad/tamaño: Planificada / Alta / L.
+- Estado/prioridad/tamaño: **Iniciada (2026-08-02) — esqueleto y contratos del Tool Registry y Verifier, sin activar** / Alta / L.
 - Objetivo y valor: declarar capacidades y verificar resultados antes de responder/ejecutar.
 - Alcance/fuera: registro, contrato de tools, verificación/QA inicial; no marketplace ni plugins.
 - Dependencias/bloqueantes/paralelo: F-1.2, ARC-004, ARC-006; paralelo con F-2.1 solo documental.

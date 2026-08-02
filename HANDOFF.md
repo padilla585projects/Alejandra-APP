@@ -65,9 +65,14 @@ ADR-0014 queda implementado, desplegado y verificado de extremo a extremo, inclu
 healthcheck automático post-despliegue: `deploy-worker.yml` y `deploy-alejandra-agente.yml`
 consultan `/health` tras desplegar y fallan el job si el estado es `unhealthy` o no responde
 (PR #36), con `degraded` como advertencia no bloqueante — no sustituye la verificación manual
-del handoff. No queda pendiente de ADR-0014. En paralelo, ARC-011 fase 3 sigue con su paso 1
-completo (`migrate_checklists.sql`); aplicarla contra D1 sigue exigiendo autorización del
-Director.
+del handoff. No queda pendiente de ADR-0014.
+
+**F-1.2 verificada como completa y cerrada (2026-08-02).** **F-1.3 abierta**: primer entregable
+en curso, esqueleto y contratos del Tool Registry (ADR-0010) y Verifier (ADR-0009), aislado,
+sin integrar en producción — ver `F-1.3-TOOL-REGISTRY-ESQUELETO` en `TASKS.md`.
+
+En paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla
+contra D1 sigue exigiendo autorización del Director.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 

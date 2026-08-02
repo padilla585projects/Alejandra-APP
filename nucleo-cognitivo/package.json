@@ -1,0 +1,9 @@
+{
+  "name": "nucleo-cognitivo",
+  "private": true,
+  "type": "module",
+  "description": "Esqueleto, contratos e interfaces del nucleo cognitivo (F-1.2, ADR-0004). No integrado en produccion.",
+  "scripts": {
+    "test": "node --test test/contratos.test.js test/memory.test.js"
+  }
+}
