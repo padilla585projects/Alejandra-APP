@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0013
 - Fecha: 2026-08-02
-- Estado: **Propuesto**
-- Decisores: `PENDIENTE` (Director del Proyecto)
+- Estado: **Aceptado con modificaciones**
+- Decisores: Director del Proyecto (2026-08-02)
 - Resuelve: ARC-002
 - Desbloquea: activación del componente `Memory` en `nucleo-cognitivo/` (fuera del esqueleto actual de F-1.2)
 
@@ -96,18 +96,25 @@ autorización de migración contra D1 que `CLAUDE.md` exige para cualquier cambi
 ### 1. Privacidad — por defecto, nada se recuerda
 
 Memory es **opt-in por tipo de dato, no opt-out**. Ningún dato pasa a memoria persistente
-solo por haber aparecido en una conversación o en una tool. Se propone una lista blanca
-explícita de categorías de recuerdo permitidas (empezando deliberadamente estrecha: hechos
-operativos declarados como "recordar esto" por un usuario con rol `encargado` o superior, y
-correcciones explícitas sobre respuestas previas de Alejandra), y todo lo que no encaje en la
-lista blanca no se persiste, aunque el modelo lo considere relevante. Esto invierte la carga
-de la prueba respecto a cómo funciona hoy el historial de chat (que sí guarda todo por
-defecto): Memory es un componente nuevo y no hereda ese comportamiento.
+solo por haber aparecido en una conversación o en una tool. **Decisión del Director:** la
+lista blanca de categorías de recuerdo permitidas es: hechos operativos declarados
+explícitamente, preferencias de trabajo, procedimientos internos, y correcciones sobre
+respuestas previas de Alejandra. Todo lo que no encaje en esta lista no se persiste, aunque
+el modelo lo considere relevante. Esto invierte la carga de la prueba respecto a cómo
+funciona hoy el historial de chat (que sí guarda todo por defecto): Memory es un componente
+nuevo y no hereda ese comportamiento.
 
-Dato explícitamente excluido de la lista blanca inicial: cualquier campo que ya se trate como
-sensible en otras partes del sistema (nóminas, datos médicos de incidencias, DNI/NIF), aunque
-aparezca de forma incidental en una conversación. Ampliar la lista blanca es una decisión de
-ADR posterior o enmienda de este, no una que Memory pueda tomar por sí sola.
+**Las inferencias automáticas no entran directamente en esta lista blanca.** Un dato que el
+sistema deduce de un patrón (sin que un humano lo haya declarado, corregido, ni aprobado)
+solo puede registrarse como **candidata pendiente de validación humana** (ver estado nuevo en
+el punto 3) — nunca como memoria confirmada. Una candidata sin validar no es consultable por
+`consultar_memoria`; existe solo para que un humano la revise y decida si pasa a memoria real.
+
+Dato explícitamente excluido de la lista blanca, incluida la vía de candidatas: cualquier
+campo que ya se trate como sensible en otras partes del sistema (nóminas, datos médicos de
+incidencias, DNI/NIF), aunque aparezca de forma incidental en una conversación. Ampliar la
+lista blanca es una decisión de ADR posterior o enmienda de este, no una que Memory pueda
+tomar por sí sola.
 
 ### 2. Aislamiento por tenant (empresa)
 
@@ -126,6 +133,18 @@ cruzar de empresa cambiando de contexto) porque un recuerdo mal aislado no se pu
 deshacer una vez visto — mismo criterio de reversibilidad que ya usa ADR-0006 para clasificar
 riesgo.
 
+**Memoria personal vs. memoria compartida — decisión del Director.** Todo recuerdo lleva
+además un `ambito`: `personal` (visible solo para quien lo declaró) o `compartida`
+(visible para el resto de la empresa/obra según el mismo `empresa_id`). Cualquier usuario
+puede **proponer** memoria personal propia sin aprobación de nadie más — es su propio dato.
+Para que un recuerdo pase a `ambito = compartida`, hace falta que lo **apruebe** un usuario
+con rol `encargado` o superior (mismo umbral que N2 en ADR-0006): un `operario` puede
+proponer que algo se recuerde para toda la obra, pero no puede aprobarlo él mismo. Un
+recuerdo compartido propuesto y sin aprobar se queda en `estado = candidata_pendiente_validacion`
+(la misma máquina de estados del punto 3), aunque su `metodo` sea `declarado` — la
+distinción de `estado` no es solo para lo `inferido`, también gatea la promoción de
+personal a compartida.
+
 ### 3. Procedencia del dato
 
 Todo recuerdo declara de dónde salió, con al menos estos campos:
@@ -136,12 +155,17 @@ Todo recuerdo declara de dónde salió, con al menos estos campos:
   hasta la interacción que lo produjo.
 - `fecha_creacion`.
 - `metodo`: `declarado` (un usuario pidió explícitamente "recuerda esto"),
-  `corregido` (nació de una corrección sobre algo que Alejandra dijo mal) o `inferido`
-  (el sistema lo dedujo de un patrón; requiere confianza inicial más baja, ver punto 4).
+  `corregido` (nació de una corrección sobre algo que Alejandra dijo mal), `procedimiento`
+  (procedimiento interno documentado), o `inferido` (el sistema lo dedujo de un patrón).
+- `estado`: **decisión del Director** — todo recuerdo `inferido` nace con
+  `estado = candidata_pendiente_validacion` y no puede pasar a `estado = confirmada` (la única
+  consultable por `consultar_memoria`) sin que un humano lo revise y confirme. Los recuerdos
+  `declarado`, `corregido` y `procedimiento` nacen directamente en `estado = confirmada`,
+  sujetos además a la regla de aprobación por rol del punto 2 cuando son memoria compartida.
 
-Un recuerdo `inferido` sin `origen` rastreable no debería persistir — es exactamente el tipo
-de "decisión sin trazabilidad suficiente" que `motor-decision.js` ya está diseñado para
-rechazar en el resto del ciclo.
+Un recuerdo `inferido` sin `origen` rastreable no debería ni siquiera registrarse como
+candidata — es exactamente el tipo de "decisión sin trazabilidad suficiente" que
+`motor-decision.js` ya está diseñado para rechazar en el resto del ciclo.
 
 ### 4. Confianza
 
@@ -161,12 +185,18 @@ inventado ad hoc para Memory. Se propone:
 ### 5. Caducidad
 
 Todo recuerdo lleva `caduca_en` (nunca `NULL` indefinido por defecto — indefinido debe ser
-una elección explícita, no la ausencia de una). Se propone una caducidad por defecto corta
-(orden de meses, a definir por el Director al aceptar) salvo que un humano la extienda
-explícitamente al declarar el recuerdo. Un recuerdo caducado no se borra automáticamente de
-inmediato (para permitir auditoría/recuperación en la ventana de retención general de la
-empresa, ver punto 6), pero deja de ser consultable por `consultar_memoria` desde su fecha de
-caducidad.
+una elección explícita, no la ausencia de una). **Decisión del Director:**
+
+- Caducidad por defecto: **6 meses**, para cualquier recuerdo (`personal` o `compartida`,
+  `declarado`/`corregido`/`inferido`-confirmado).
+- **Procedimientos empresariales expresamente aprobados** (`metodo = procedimiento`, con
+  aprobación de `encargado` o superior según el punto 2): caducidad extendida a **12 meses** —
+  son la categoría con más probabilidad de seguir vigente más allá de los 6 meses por defecto,
+  y ya pasaron por una aprobación explícita, no solo una declaración.
+
+Un recuerdo caducado no se borra automáticamente de inmediato (para permitir
+auditoría/recuperación en la ventana de retención general de la empresa, ver punto 6), pero
+deja de ser consultable por `consultar_memoria` desde su fecha de caducidad.
 
 Esto es deliberadamente más conservador que `empresas.retencion_config` (que hoy solo cubre
 retención general de datos operativos): la caducidad de Memory es más corta porque un
@@ -196,12 +226,19 @@ irreversible:
   `CONFIRMO BORRADO` (SEC-08/SEC-09) si el volumen o el alcance lo justifica según ADR-0006 —
   un borrado masivo de recuerdos es N2 como mínimo, nunca una operación silenciosa de fondo.
 - **Borrado por derecho de supresión (RGPD art. 17, "derecho al olvido")**: un trabajador o
-  empresa puede pedir el borrado de lo que Memory tiene sobre él/ella. Este borrado es
-  **inmediato y real** (no un "sustituido" versionado como en el punto 6) precisamente porque
-  el derecho de supresión existe para dejar de existir, no para quedar archivado con otro
-  nombre. Debe quedar registrado *que* se ejecutó un borrado por derecho de supresión (fecha,
-  alcance, quién lo solicitó) sin registrar *el contenido borrado* — el mismo patrón que ya
-  usa el proyecto para no reconstruir accidentalmente lo que se pidió eliminar.
+  empresa puede pedir el borrado de lo que Memory tiene sobre él/ella. **Decisión del
+  Director: el contenido se elimina realmente, sin conservar ninguna versión archivada** —
+  no queda un `sustituido` versionado como en el punto 6, ni siquiera oculto. Puede
+  mantenerse una **traza técnica mínima** de que se atendió la solicitud (fecha, alcance,
+  quién la pidió), pero sin el contenido eliminado — el mismo patrón que ya usa el proyecto
+  para no reconstruir accidentalmente lo que se pidió eliminar.
+- **Verificación de identidad — decisión del Director:** no se exige verificación adicional
+  cuando la solicitud de supresión llega desde una sesión ya autenticada y es sobre los
+  propios datos del usuario de esa sesión. Se exige **autenticación reforzada** cuando la
+  solicitud es sensible (p. ej. sobre datos de otra persona), amplia (p. ej. "borra toda mi
+  memoria compartida en la empresa"), o llega **fuera de sesión** (p. ej. un correo o un
+  canal no autenticado pidiendo el borrado) — el mecanismo concreto de esa autenticación
+  reforzada queda `PENDIENTE` de definir en la implementación.
 - Ninguna de las dos vías es responsabilidad del propio agente Alejandra en autonomía: borrar
   memoria sobre datos reales de personas cae bajo "Borrado en R2" / "`DELETE` masivo" del
   criterio ya vigente en `CLAUDE.md` — requiere decisión humana porque no hay vuelta atrás
@@ -215,13 +252,21 @@ ADR-0011, `nucleo-cognitivo/` necesitaría un módulo `memory.js` con una forma 
 la de `policy-engine.js` (función pura, sin acceso directo a D1 desde el núcleo cognitivo, tal
 como ya hace `context-engine.js` al declararse "interfaz" en vez de implementar acceso real):
 
-- `consultarMemoria({ empresaId, consulta, filtros })` → lista de recuerdos, cada uno con
-  `contenido`, `origen`, `confianza`, `fecha_creacion`, `caduca_en` — es decir, exactamente lo
-  que la salida `consultar_memoria` del Motor de Decisión necesita para alimentar `evidencia`
-  y `confianza` en `tieneTrazaSuficiente()`.
-- Ningún recuerdo devuelto sin `confianza` explícita — un recuerdo sin confianza no debe poder
-  usarse como evidencia, por la misma razón que hoy una decisión sin `evidencia` no puede
-  considerarse trazada.
+- `consultarMemoria({ empresaId, consulta, filtros })` → lista de recuerdos **en
+  `estado = confirmada` únicamente**, cada uno con `contenido`, `origen`, `confianza`,
+  `fecha_creacion`, `caduca_en`, `ambito` — es decir, exactamente lo que la salida
+  `consultar_memoria` del Motor de Decisión necesita para alimentar `evidencia` y `confianza`
+  en `tieneTrazaSuficiente()`. Una candidata pendiente de validación nunca aparece en esta
+  lista, aunque exista en el almacén.
+- `listarCandidatasPendientes({ empresaId })` → lista de recuerdos en
+  `estado = candidata_pendiente_validacion`, para que un humano con el rol correspondiente
+  (`encargado`+ si es memoria compartida) las revise.
+- `confirmarCandidata({ id, aprobadaPor })` / `rechazarCandidata({ id })` → promueve una
+  candidata a `estado = confirmada` o la descarta; ambas exigen la identidad de quien decide,
+  por la misma razón de trazabilidad que el resto del contrato.
+- Ningún recuerdo devuelto por `consultarMemoria` sin `confianza` explícita — un recuerdo sin
+  confianza no debe poder usarse como evidencia, por la misma razón que hoy una decisión sin
+  `evidencia` no puede considerarse trazada.
 - El módulo debe fallar igual que las interfaces actuales (lanzar error explícito, no un stub
   silencioso) mientras la persistencia real no exista — coherente con el criterio que
   `nucleo-cognitivo/README.md` ya documenta para `context-engine.js` y `planner.js`.
@@ -255,9 +300,10 @@ como ya hace `context-engine.js` al declararse "interfaz" en vez de implementar 
 - La regla de los dos cerebros aplica desde el primer código real: cualquier implementación de
   escritura o lectura de Memory en `alejandra-agente/worker.js` o `worker.js` debe decidir
   conscientemente si también aplica al otro, no solo a uno.
-- Aparece trabajo de compliance no trivial: hay que decidir el plazo exacto de caducidad por
-  defecto y el procedimiento operativo del derecho de supresión (a quién se le pide, cómo se
-  verifica la identidad de quien lo pide), que este ADR deja como `PENDIENTE` para el Director.
+- El plazo de caducidad (6/12 meses) y el criterio de verificación de identidad para
+  supresión ya están decididos (ver Respuestas del Director). Queda `PENDIENTE` de
+  implementación el mecanismo técnico concreto de la autenticación reforzada para
+  solicitudes sensibles/amplias/fuera de sesión.
 
 **Si se rechaza o se pospone:** Memory sigue fuera del esqueleto de `nucleo-cognitivo/`
 indefinidamente, `consultar_memoria` sigue siendo una salida declarada pero inalcanzable del
@@ -265,18 +311,21 @@ Motor de Decisión, y el sistema sigue dependiendo únicamente del historial de 
 gobierno como sustituto de facto de memoria — que es el statu quo actual, sin cambio de
 riesgo en ninguna dirección.
 
-## Preguntas que solo el Director puede responder
+## Respuestas del Director (2026-08-02)
 
-1. **¿Se acepta la lista blanca opt-in de categorías de recuerdo** (punto 1), o se prefiere un
-   criterio distinto para decidir qué entra en Memory?
-2. **¿Qué plazo de caducidad por defecto es razonable** para un recuerdo `inferido` frente a
-   uno `declarado`/`corregido`? Este ADR propone "orden de meses" pero no fija un número.
-3. **¿Quién puede declarar memoria** — cualquier usuario sobre sus propios datos, o hace falta
-   `encargado` hacia arriba, igual que N2 en ADR-0006?
-4. **¿El derecho de supresión (punto 7) requiere verificación de identidad adicional**, o basta
-   con el rol/sesión ya autenticada del sistema?
-5. **¿Se acepta que Memory dependa de D1 y del migrador único de ADR-0011**, o se prefiere
-   evaluar un almacén separado antes de construir nada?
+1. **Categorías permitidas:** hechos operativos declarados explícitamente, preferencias de
+   trabajo, procedimientos internos y correcciones. Las inferencias automáticas no entran
+   directamente — solo como candidatas pendientes de validación humana (punto 3).
+2. **Caducidad por defecto: 6 meses.** Procedimientos empresariales expresamente aprobados:
+   hasta 12 meses (punto 5).
+3. **Quién declara memoria:** cualquier usuario puede proponer memoria personal propia sin
+   aprobación. Memoria compartida de empresa u obra exige aprobación de `encargado` o
+   superior (punto 2).
+4. **Verificación de identidad para supresión:** no se exige verificación adicional cuando la
+   solicitud llega desde una sesión autenticada y es sobre datos propios. Se exige
+   autenticación reforzada para solicitudes sensibles, amplias, o fuera de sesión (punto 7).
+5. **Almacén:** D1 como almacén inicial, mediante el migrador gobernado por ADR-0011 —
+   confirmado, sin evaluar alternativa.
 
 ## Referencias
 
