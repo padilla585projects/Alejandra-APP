@@ -13,5 +13,11 @@ database_id = "0c9eccde-78f1-476d-ac68-bf452bec0c62"
 binding = "FILES"
 bucket_name = "alejandra-app-files"
 
+# ADR-0014 §4 — versión derivada (no escrita a mano) para GET /health. Cloudflare rellena
+# este binding en cada deploy con el mismo identificador que aparece en
+# `wrangler deployments list`, sin que el pipeline de CI tenga que inyectar nada aparte.
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
 [triggers]
 crons = ["0 7 * * *", "0 18 * * *"]
