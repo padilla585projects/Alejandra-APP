@@ -733,27 +733,59 @@ async function transcribeAudio(env, audioBuffer) {
 }
 
 const AI_TOOLS = [
+  // F-1.3/ADR-0010 (worker.js raiz, 2026-08-02): TODAS las tools de este
+  // catalogo son acceso:'dev_verificado' -- executeAITool() solo se alcanza
+  // hoy desde canales ya restringidos a Adrian (comentario linea ~1116,
+  // los 3 call sites reales pasan {dev:true}). cron:'prohibido' en las de
+  // riesgo N2/N3 aunque hoy no exista un camino real de cron hacia estas
+  // tools (declaracion de cara al futuro, no aplicada todavia).
+  //
+  // sql_query: permite CREATE/ALTER/DROP igual que run_migration -- no solo
+  // DML. Tiene la misma barrera humana (CONFIRMO BORRADO) que gestiona
+  // operaciones destructivas, por eso se clasifica N2 igual que escribir_bd
+  // en alejandra-agente (mismo patron de barrera). Queda anotado: a
+  // diferencia de run_migration, que ADR-0006 saca explicitamente del
+  // alcance autonomo (N3) por su capacidad de alterar el esquema, sql_query
+  // tiene esa MISMA capacidad de DDL sin esa distincion explicita -- posible
+  // brecha a revisar en una decision aparte, no se cambia el comportamiento
+  // en esta tarea.
   {
     name: 'sql_query',
     description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total. IMPORTANTE: las operaciones catastroficas (DROP/TRUNCATE/ALTER TABLE, o DELETE/UPDATE sin WHERE) estan bloqueadas por una barrera humana: al intentarlas recibes un codigo unico ligado a esa consulta exacta, y solo se ejecutan si el usuario humano escribe literalmente "CONFIRMO BORRADO <codigo>" en su mensaje. Ese codigo autoriza SOLO ese SQL concreto, no cualquier otro. Tu NO puedes autoconfirmar ni teclear el codigo; muestraselo al humano, explica que borrara, y espera a que lo escriba.',
-    input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' } }, required: ['sql'] }
+    input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' } }, required: ['sql'] },
+    acceso: 'dev_verificado',
+    cron: 'prohibido',
+    nivel_riesgo: 'N2',
   },
+  // ADR-0010/ADR-0006: solo alcanzable via executeAITool() con { dev: true } (canales
+  // ya restringidos a Adrian). Solo lee internet (Tavily), no toca D1/R2 -> N0.
   {
     name: 'web_search',
     description: 'Busca en internet usando Tavily (resultados reales de páginas web). Úsalo para documentación técnica, APIs, errores de JS/CF Workers, librerías, etc. Devuelve una respuesta directa + fragmentos de páginas reales.',
-    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Término de búsqueda' }, depth: { type: 'string', enum: ['basic', 'advanced'], description: 'basic=rápido, advanced=más detalle (usa advanced solo para preguntas complejas)' } }, required: ['query'] }
+    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Término de búsqueda' }, depth: { type: 'string', enum: ['basic', 'advanced'], description: 'basic=rápido, advanced=más detalle (usa advanced solo para preguntas complejas)' } }, required: ['query'] },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
+  // ADR-0010/ADR-0006: solo lectura de una sugerencia y su imagen en D1, no modifica nada -> N0.
   {
     name: 'read_suggestion_image',
     description: 'Lee una sugerencia/reporte de bug de la BD y muestra su imagen adjunta para analizarla visualmente. Usa esto para entender bugs reportados con capturas de pantalla y poder arreglarlos directamente.',
-    input_schema: { type: 'object', properties: { id: { type: 'integer', description: 'ID de la sugerencia en la tabla sugerencias' } }, required: ['id'] }
+    input_schema: { type: 'object', properties: { id: { type: 'integer', description: 'ID de la sugerencia en la tabla sugerencias' } }, required: ['id'] },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
+  // ADR-0010/ADR-0006: consulta sqlite_master + COUNT(*), solo lectura -> N0.
   {
     name: 'list_tables',
     description: 'Lista todas las tablas y su cantidad de registros',
-    input_schema: { type: 'object', properties: {} }
+    input_schema: { type: 'object', properties: {} },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
   {
+    // ADR-0010/ADR-0006: sale de la organización (Agent Gateway externo) y comparte
+    // shared_context/capabilities con agentes de terceros (Jarvis, Numa) -> N2. Solo
+    // escribe 1-2 filas en config (secret/joined), pero el riesgo real es la salida
+    // de datos, no la escritura en D1. cron prohibido: no hay hoy camino real desde
+    // scheduled() a executeAITool(), y si lo hubiera, esto no debe correr sin control.
+    acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2',
     name: 'network_sync',
     description: 'Sincroniza con la red de agentes IA de Adrián vía el Agent Gateway. Envía tu estado y recibe: mensajes pendientes de otros agentes, shared_context (lo que saben todos), network_capabilities (qué puede hacer cada agente). Jarvis (IA del hogar) está en la red. Usa esto para colaborar con otros agentes.',
     input_schema: {
@@ -764,6 +796,10 @@ const AI_TOOLS = [
     }
   },
   {
+    // ADR-0006: envía mensajes y puede pedir action_request a un agente externo
+    // (ej. "control_home_devices", "send_telegram") -> sale de la organización y
+    // puede desencadenar efectos fuera de nuestro control -> N2. cron prohibido.
+    acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2',
     name: 'network_send',
     description: 'Envía un mensaje o petición de acción a otro agente de la red (ej: Jarvis). El mensaje se entrega en el próximo sync del agente destino (~60s). Para pedir acciones usa type=action_request.',
     input_schema: {
@@ -778,11 +814,20 @@ const AI_TOOLS = [
     }
   },
   {
+    // ADR-0006: registra la identidad de Alejandra en un gateway externo por primera
+    // vez (join_request) -> sale de la organización, mismo criterio que network_send/
+    // sync -> N2. cron prohibido.
+    acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2',
     name: 'network_join',
     description: 'Registra a Alejandra en la red de agentes IA por primera vez. Solo necesario si no se ha unido antes. Envía join_request al gateway y espera aprobación de Jarvis.',
     input_schema: { type: 'object', properties: {} }
   },
   {
+    // ADR-0006: pese al guard anti-SSRF (bloquea hosts internos/privados), sigue
+    // siendo un HTTP request LIBRE a cualquier URL/servicio EXTERNO, con soporte de
+    // POST/PUT/DELETE/PATCH y body arbitrario -> sale de la organización y puede
+    // escribir en sistemas de terceros -> N2. cron prohibido.
+    acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2',
     name: 'fetch_url',
     description: 'Hace un HTTP request a cualquier URL externa y devuelve la respuesta. Para APIs externas, webhooks, servicios REST, etc. Soporta GET/POST/PUT/DELETE con headers y body custom.',
     input_schema: {
@@ -798,6 +843,10 @@ const AI_TOOLS = [
     }
   },
   {
+    // ADR-0006 (ejemplo literal del propio ADR): envío de Telegram = N2. Sale de la
+    // organización hacia un chat de Telegram (aunque sea a un usuario vinculado o al
+    // chat principal). cron prohibido.
+    acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2',
     name: 'send_notification',
     description: 'Envía una notificación por Telegram a un usuario vinculado o al chat principal',
     input_schema: {
@@ -809,21 +858,38 @@ const AI_TOOLS = [
       required: ['message']
     }
   },
+  // ADR-0010/ADR-0006: action='get' es lectura; action='set' escribe UNA fila
+  // (clave 'dev_notif_filters') en la tabla config vía INSERT OR REPLACE — escritura
+  // reversible y de alcance mínimo -> N1 (no N0 por el path 'set').
+  // ADR-0010/ADR-0006: env.FILES.list() es solo lectura del bucket R2, no borra ni sube nada -> N0.
   {
     name: 'r2_list',
     description: 'Lista archivos en R2 (almacenamiento de ficheros)',
-    input_schema: { type: 'object', properties: { prefix: { type: 'string', description: 'Prefijo para filtrar (opcional)' } } }
+    input_schema: { type: 'object', properties: { prefix: { type: 'string', description: 'Prefijo para filtrar (opcional)' } } },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
+  // Borrado permanente en R2, ya con barrera humana (exigirConfirmacionHumana)
+  // antes de ejecutar -- coincide con la definicion de N2 de ADR-0006.
   {
     name: 'r2_delete',
     description: 'Elimina un archivo de R2',
-    input_schema: { type: 'object', properties: { key: { type: 'string', description: 'Key del archivo a eliminar' } }, required: ['key'] }
+    input_schema: { type: 'object', properties: { key: { type: 'string', description: 'Key del archivo a eliminar' } }, required: ['key'] },
+    acceso: 'dev_verificado',
+    cron: 'prohibido',
+    nivel_riesgo: 'N2',
   },
+  // ADR-0010/ADR-0006: solo COUNT(*) agregados sobre D1, no modifica nada -> N0.
   {
     name: 'app_status',
     description: 'Devuelve estado general de la app: usuarios activos, sesiones, obras, bobinas, errores recientes, sugerencias pendientes',
-    input_schema: { type: 'object', properties: {} }
+    input_schema: { type: 'object', properties: {} },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
+  // Bundle de acciones con riesgo muy dispar: 'info'/'activate'/'deactivate' son
+  // una fila sin gate; 'change_role' (a rol elevado), 'delete' y
+  // 'reset_password' SI exigen exigirConfirmacionHumana en el propio codigo.
+  // Se clasifica por el techo de capacidad de la tool (N2), igual que
+  // escribir_bd/sql_query -- mismo patron de barrera humana en el momento.
   {
     name: 'manage_user',
     description: 'Gestiona un usuario: activar, desactivar, cambiar rol, eliminar, resetear contraseña',
@@ -835,7 +901,10 @@ const AI_TOOLS = [
         value: { type: 'string', description: 'Nuevo valor (rol, contraseña, etc.)' }
       },
       required: ['action', 'user_id']
-    }
+    },
+    acceso: 'dev_verificado',
+    cron: 'prohibido',
+    nivel_riesgo: 'N2',
   },
   {
     name: 'filter_notifications',
@@ -847,7 +916,8 @@ const AI_TOOLS = [
         filters: { type: 'object', description: 'Objeto con categorías y si están activas: {sugerencias: true, usuarios: true, errores: true, bobinas: false}' }
       },
       required: ['action']
-    }
+    },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N1'
   },
   {
     name: 'memory_save',
@@ -885,6 +955,7 @@ const AI_TOOLS = [
       required: ['id']
     }
   },
+  // ADR-0010/ADR-0006: GET a la API de contenidos de GitHub, solo lectura -> N0.
   {
     name: 'repo_read_file',
     description: 'Lee contenido de un archivo del repo GitHub. Para archivos grandes usa line_start/line_end — worker.js tiene ~23500 lineas, lee en bloques de 300-500 a la vez.',
@@ -896,8 +967,10 @@ const AI_TOOLS = [
         line_end: { type: 'integer', description: 'Linea final (inclusive). Omitir para leer hasta fin o limite de 50K chars.' }
       },
       required: ['path']
-    }
+    },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
+  // ADR-0010/ADR-0006: GET a la API de contenidos de GitHub, solo lectura -> N0.
   {
     name: 'repo_list_dir',
     description: 'Lista los archivos y carpetas de un directorio del repositorio GitHub.',
@@ -906,11 +979,21 @@ const AI_TOOLS = [
       properties: {
         path: { type: 'string', description: 'Ruta del directorio (ej: ".", ".github/workflows", "icons")' }
       }
-    }
+    },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
+  // Bug encontrado durante F-1.3 (revisión previa a clasificar nivel_riesgo,
+  // 2026-08-02): la description le decía al MODELO que el commit se
+  // desplegaba solo -- desde F-0.1/ADR-0001 (2026-08-02) ningun workflow se
+  // dispara por push a main, el despliegue exige workflow_dispatch manual +
+  // confirmacion + revisor. Corregido para no inducir a Alejandra a creer
+  // (o a decirle a Adrian) que un fix ya esta en produccion cuando solo esta
+  // commiteado. Mismo criterio que github_escribir/patch_codigo en
+  // alejandra-agente: N2 (cambia codigo fuente real, dificil de deshacer sin
+  // otra accion humana), gate solo para archivos criticos.
   {
     name: 'repo_write_file',
-    description: 'Crea o modifica un archivo en el repositorio GitHub haciendo un commit. Si modificas worker.js, se desplegará automáticamente a Cloudflare en ~1 minuto. Si modificas panel.html o index.html, se desplegará a GitHub Pages en ~30 segundos.',
+    description: 'Crea o modifica un archivo en el repositorio GitHub haciendo un commit. El commit NO se despliega solo: desplegar a Cloudflare o publicar en GitHub Pages exige iniciar a mano el workflow correspondiente (workflow_dispatch + confirmación + aprobación del entorno production).',
     input_schema: {
       type: 'object',
       properties: {
@@ -919,13 +1002,29 @@ const AI_TOOLS = [
         message: { type: 'string', description: 'Mensaje del commit (ej: "fix: corregir bug en login")' }
       },
       required: ['path', 'content', 'message']
-    }
+    },
+    acceso: 'dev_verificado',
+    cron: 'prohibido',
+    nivel_riesgo: 'N2',
   },
+  // Solo lectura/diagnostico -- compara tablas reales contra el schema
+  // conocido, no escribe nada (verificado: sin INSERT/UPDATE/DELETE en su
+  // bloque de ejecucion). N0.
   {
     name: 'self_audit',
     description: 'Ejecuta un diagnóstico completo del agente: compara las tablas reales de la BD contra el schema conocido, verifica tools críticas, detecta patrones de error en memoria, y reporta discrepancias. Úsalo al inicio de cada sesión importante y en la revisión autónoma. Devuelve un informe con problemas detectados y sugerencias de fix.',
-    input_schema: { type: 'object', properties: {} }
+    input_schema: { type: 'object', properties: {} },
+    acceso: 'dev_verificado',
+    cron: 'permitido',
+    nivel_riesgo: 'N0',
   },
+  // A diferencia de direct_fix, esta tool NO aplica nada -- solo guarda la
+  // propuesta (INSERT en alejandra_fixes) y notifica por Telegram con
+  // botones para que Adrian decida. Es exactamente el mecanismo de "revision
+  // humana asincrona" de ADR-0009. La propia ADR-0006 cita "propose_fix
+  // aplicado" como ejemplo de N2 -- pero eso describe la aplicacion (el
+  // click en el boton, en otra ruta de codigo), no esta tool en si, que se
+  // queda en N1 (una fila, con aviso, sin cambiar nada todavia).
   {
     name: 'propose_fix',
     description: 'Propone un fix para aprobación de Adrián (úsalo cuando el cambio sea arriesgado, grande o estructural). Para bugs pequeños y confirmados usa direct_fix en su lugar. Guarda el fix en staging y envía mensaje Telegram con botones [✅ Aplicar] [❌ Ignorar].',
@@ -940,11 +1039,24 @@ const AI_TOOLS = [
         sugerencia_id: { type: 'integer', description: 'ID de la sugerencia relacionada (si aplica — se marcará como resuelta al aplicar el fix)' }
       },
       required: ['descripcion', 'archivo', 'old_code', 'new_code', 'razon']
-    }
+    },
+    acceso: 'dev_verificado',
+    cron: 'permitido',
+    nivel_riesgo: 'N1',
   },
+  // Bug encontrado durante F-1.3 (2026-08-02): misma description desactualizada
+  // que repo_write_file ("CI/CD despliega automaticamente"), corregida por la
+  // misma razon. Ademas, a diferencia de repo_write_file (que SI exige
+  // exigirConfirmacionHumana para archivos criticos) y de sql_query/escribir_bd
+  // (barrera humana antes de ejecutar), direct_fix commitea INMEDIATAMENTE sin
+  // ningun gate previo -- solo notifica DESPUES con boton de revertir. Es el
+  // unico de los "tools de codigo" sin confirmacion humana en el momento. Se
+  // clasifica N2 (mismo nivel que las demas tools de escritura de codigo), pero
+  // queda anotado como el caso con menos barrera de todos -- candidato a
+  // revisar en una decision aparte sobre si merece confirmacion previa.
   {
     name: 'direct_fix',
-    description: 'Aplica un patch quirúrgico (old_code → new_code) INMEDIATAMENTE sin esperar aprobación. Hace commit en GitHub, el CI/CD despliega automáticamente (~1 min worker, ~30s frontend). Notifica a Adrián después con [↩️ Revertir]. ÚSALO para: bugs confirmados por usuarios, errores recurrentes en logs, fixes pequeños (<20 líneas). FLUJO OBLIGATORIO: 1) grep_code para localizar el código exacto, 2) repo_read_file para leer el contexto completo, 3) direct_fix con old_code copiado literalmente.',
+    description: 'Aplica un patch quirúrgico (old_code → new_code) INMEDIATAMENTE sin esperar aprobación previa. Hace commit en GitHub; el commit NO se despliega solo (F-0.1: desplegar sigue exigiendo iniciar a mano el workflow correspondiente). Notifica a Adrián después con [↩️ Revertir]. ÚSALO para: bugs confirmados por usuarios, errores recurrentes en logs, fixes pequeños (<20 líneas). FLUJO OBLIGATORIO: 1) grep_code para localizar el código exacto, 2) repo_read_file para leer el contexto completo, 3) direct_fix con old_code copiado literalmente.',
     input_schema: {
       type: 'object',
       properties: {
@@ -956,8 +1068,15 @@ const AI_TOOLS = [
         sugerencia_id: { type: 'integer', description: 'ID de sugerencia relacionada (se marcará como resuelta)' }
       },
       required: ['descripcion', 'archivo', 'old_code', 'new_code', 'razon']
-    }
+    },
+    acceso: 'dev_verificado',
+    cron: 'prohibido',
+    nivel_riesgo: 'N2',
   },
+  // ADR-0006 lo exige explicitamente: "run_migration debe declararse
+  // nivel_riesgo: 'N3' cuando se migre, reflejando que ADR-0006 la saca del
+  // alcance autonomo del agente" (decision del Director, 2026-08-02). No es
+  // una clasificacion mia -- es la que manda el propio ADR.
   {
     name: 'run_migration',
     description: 'Ejecuta SQL DDL directamente en la base de datos D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN, CREATE INDEX, etc.). Úsalo para crear tablas nuevas, añadir columnas, crear índices. Admite múltiples sentencias separadas por punto y coma.',
@@ -968,13 +1087,20 @@ const AI_TOOLS = [
         descripcion: { type: 'string', description: 'Para qué es esta migración (se guarda en memoria)' }
       },
       required: ['sql']
-    }
+    },
+    acceso: 'dev_verificado',
+    cron: 'prohibido',
+    nivel_riesgo: 'N3',
   },
+  // ADR-0010/ADR-0006: solo lee GitHub Actions runs + commits via GET, no dispara ni cancela nada -> N0.
   {
     name: 'check_deploy_status',
     description: 'Consulta el estado de los últimos deploys de GitHub Actions. Úsalo después de un direct_fix o repo_write_file para verificar que el deploy fue exitoso. Devuelve: estado (success/failure/in_progress), commit, mensaje de error si falló, y los últimos commits del repo.',
-    input_schema: { type: 'object', properties: {} }
+    input_schema: { type: 'object', properties: {} },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
+  // ADR-0010/ADR-0006: solo lee archivos del repo via GitHub API y busca patrones de
+  // corrupción, no escribe nada -> N0.
   {
     name: 'check_encoding',
     description: 'Verifica que los archivos HTML/JS del proyecto no tienen corrupción de encoding (doble-codificación UTF-8). ÚSALO después de cada direct_fix en panel.html, index.html, worker.js o sw.js. Busca patrones de corrupción conocidos (Ã, Ã, â€, BOM). Incidente real 13/05/2026: este error rompió el panel web.',
@@ -983,8 +1109,10 @@ const AI_TOOLS = [
       properties: {
         files: { type: 'array', items: { type: 'string' }, description: 'Archivos a verificar. Por defecto: panel.html, index.html, worker.js, sw.js' }
       }
-    }
+    },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
+  // ADR-0010/ADR-0006: lee un archivo del repo y busca un patrón regex/texto, no escribe -> N0.
   {
     name: 'grep_code',
     description: 'Busca un patrón de texto en un archivo del repo y devuelve las líneas que coinciden con contexto. IMPRESCINDIBLE antes de direct_fix o propose_fix — localiza exactamente dónde está el código a cambiar sin leer el archivo entero. Especialmente útil para worker.js (23500+ líneas).',
@@ -996,9 +1124,14 @@ const AI_TOOLS = [
         context_lines: { type: 'integer', description: 'Líneas de contexto antes y después de cada coincidencia (default: 3, max recomendado: 10)' }
       },
       required: ['path', 'pattern']
-    }
+    },
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0'
   },
   {
+    // ADR-0006: solo lecturas (SELECT sobre usuarios/login_attempts/sesiones/obras/
+    // empresas), no modifica nada -> N0. Las "soluciones" que devuelve son sugerencias
+    // de texto (referencian sql_query/manage_user), no ejecutan nada por sí misma.
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0',
     name: 'diagnose_user',
     description: 'Diagnóstico completo de un usuario: busca por nombre/email/ID y detecta TODOS los problemas de acceso (cuenta inactiva, sin obra asignada, sin contraseña/Google, login bloqueado, pendiente de aprobación, sesiones activas). Devuelve problemas encontrados + soluciones accionables.',
     input_schema: {
@@ -1010,6 +1143,8 @@ const AI_TOOLS = [
     }
   },
   {
+    // ADR-0006: solo lecturas sobre logs/login_attempts/sesiones, ninguna escritura -> N0.
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0',
     name: 'patrol_logs',
     description: 'Patrulla los logs de las últimas N horas buscando errores recurrentes, patrones sospechosos, anomalías de seguridad (logins fallidos, 403 repetidos, sesiones sospechosas) y correlación con deploys recientes. Agrupa errores por mensaje, identifica los que se repiten 3+ veces y devuelve un informe estructurado con severidad.',
     input_schema: {
@@ -1022,6 +1157,9 @@ const AI_TOOLS = [
     }
   },
   {
+    // ADR-0006: solo lecturas/agregaciones SELECT sobre fichajes/incidencias/logs/
+    // sesiones/usuarios/bobinas, no escribe nada -> N0.
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0',
     name: 'analyze_trends',
     description: 'Análisis temporal de tendencias de la app. Compara datos entre periodos (hoy vs ayer, esta semana vs anterior, este mes vs anterior) para fichajes, incidencias, errores, usuarios activos y bobinas. Detecta anomalías y cambios significativos automáticamente.',
     input_schema: {
@@ -1035,6 +1173,10 @@ const AI_TOOLS = [
     }
   },
   {
+    // ADR-0006: _generarPlanoInterno() (linea ~26299) hace un unico INSERT en la
+    // tabla "planos" (una fila, trivialmente reversible con DELETE) tras generar el
+    // SVG vía IA; no hay borrado ni escritura amplia -> N1.
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N1',
     name: 'generar_plano',
     description: 'Genera un plano tecnico profesional en formato SVG editable, listo para descargar y editar desde el panel. El usuario NUNCA tiene por que conocer los tipos internos ni pedirlos por su nombre tecnico: a partir de lo que describa en lenguaje normal (que tipo de instalacion es, que quiere ver reflejado, para que sirve), elige tu mismo el "tipo" que mejor encaja usando las pistas de la lista de abajo. Si lo que pide es ambiguo entre dos tipos, o si faltan datos importantes para poder generarlo bien (por ejemplo: no se sabe la ubicacion/nave, cuantos circuitos o cuadros hay, las potencias, si hay generador/SAI, cuantas plantas, etc.), NO inventes esos datos ni generes el plano a medias: pregunta primero al usuario con palabras sencillas y cotidianas (nunca menciones nombres de tipos, tools ni parametros internos), y genera el plano solo cuando tengas lo necesario.',
     input_schema: {
@@ -1050,6 +1192,8 @@ const AI_TOOLS = [
     }
   },
   {
+    // ADR-0006: solo SELECT sobre la tabla planos -> N0.
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N0',
     name: 'listar_planos',
     description: 'Lista los planos tecnicos guardados de una empresa, con filtro opcional por tipo.',
     input_schema: {
@@ -1062,6 +1206,10 @@ const AI_TOOLS = [
     }
   },
   {
+    // ADR-0006: un unico INSERT en la tabla "graficos" (una fila, reversible); la
+    // URL de QuickChart solo se construye, no se envían datos sensibles a terceros
+    // (los valores numéricos ya son del propio usuario/conversación) -> N1.
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N1',
     name: 'generar_grafico',
     description: 'Genera un grafico visual (barras, lineas, tarta, dona o radar) a partir de datos que ya tengas o hayas calculado (por ejemplo tras usar consultar_bd, analyze_trends o historico_materiales). Usalo cuando mostrar los numeros en una tabla o en texto sea menos claro que verlos representados visualmente. El resultado es una imagen: incluye SIEMPRE en tu respuesta al usuario la etiqueta <img> exacta que te devuelva la tool (campo html_embed) para que se vea el grafico en el chat -- no la describas con palabras en vez de mostrarla, y no inventes tus propias etiquetas.',
     input_schema: {
@@ -1089,6 +1237,14 @@ const AI_TOOLS = [
     }
   },
   {
+    // Reclasificada tras revisar el case (2026-08-02): a diferencia de
+    // send_notification (chat_id arbitrario elegido por quien llama -> N2, el
+    // ejemplo literal de ADR-0006), el Telegram de esta tool va SIEMPRE al mismo
+    // destino fijo (env.DEV_CHAT_ID/TELEGRAM_CHAT_ID, no controlable por el
+    // input) -- mismo patrón que preguntar_usuario en alejandra-agente/worker.js,
+    // ya clasificado N1 allí por el mismo motivo. INSERT de una fila en
+    // alejandra_preguntas + aviso a un destino fijo -> N1, no N2.
+    acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N1',
     name: 'preguntar_usuario',
     description: 'Formula una pregunta de aclaracion estructurada cuando te falta informacion clave para continuar y NO hay un usuario esperando tu respuesta en ese momento (por ejemplo: durante una revision nocturna automatica, un cron, o cualquier analisis que hagas por tu cuenta sin que nadie te este hablando). La pregunta queda guardada y se avisa a Adrian por Telegram; cuando la responda, la retomaras en tu siguiente ciclo de analisis. NO uses esta tool en una conversacion normal donde el usuario esta escribiendote ahora mismo: en ese caso simplemente pregunta en tu propia respuesta de texto, sin necesidad de ninguna tool.',
     input_schema: {
@@ -1979,9 +2135,15 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
             } catch {}
           }).catch(() => {});
         }
+        // Bug encontrado durante F-1.3 (revisión previa a clasificar nivel_riesgo,
+        // 2026-08-02): este mensaje decía "Deploy automático... en ~1 min/~30 seg",
+        // pero desde F-0.1/ADR-0001 (2026-08-02) ningún workflow se dispara por push
+        // a main -- Pages, el Worker de este archivo y el del agente exigen iniciar a
+        // mano el workflow correspondiente (workflow_dispatch + confirmación + revisor
+        // del entorno production). El commit queda en main, pero NO se despliega solo.
         const deployMsg = archivo === 'worker.js' || archivo === 'wrangler.toml'
-          ? 'Deploy automático a Cloudflare en ~1 min (GitHub Actions).'
-          : 'Deploy a GitHub Pages en ~30 seg.';
+          ? 'Commit en main. El despliegue a Cloudflare sigue exigiendo iniciar a mano el workflow "Deploy API Worker (manual)" (ref + confirmación + aprobación del entorno production).'
+          : 'Commit en main. La publicación a GitHub Pages sigue exigiendo iniciar a mano el workflow "Publish GitHub Pages (manual)".';
         return JSON.stringify({ ok: true, fix_id: fixId, commit: commitSha, deploy: deployMsg });
       } catch (e) {
         autoLearn(env, 'error', `direct_fix falló: ${descripcion}`, `Error: ${e.message} | Archivo: ${archivo}`, 4);
