@@ -20,14 +20,19 @@
 <script src="https://cdn.jsdelivr.net/npm/interactjs@1.10.27/dist/interact.min.js"></script>
 <style>
 :root {
-  --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
-  --accent:#f97316; --accent2:#fb923c;
-  --blue:#2563eb; --green:#22c55e; --red:#ef4444; --yellow:#eab308;
-  --text:#e5e7eb; --muted:#64748b; --border:#334155;
-  --sidebar-w: 240px;
+  --bg:#0d1020; --surface:#171b30; --surface2:#222842;
+  --accent:#a995ff; --accent2:#c7bcff;
+  --blue:#76a9ff; --green:#6ee7a2; --red:#ff9c9c; --yellow:#f6c768;
+  --text:#f4f5fb; --muted:#a7aec3; --border:#343b59;
+  --sidebar-w:264px;
+  --surface-page:var(--bg); --surface-panel:var(--surface); --surface-selected:var(--surface2);
+  --text-primary:var(--text); --text-secondary:var(--muted); --action-primary:var(--accent);
+  --focus-ring:var(--accent2); --radius-control:10px; --radius-panel:14px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;font-size:14px}
+body{background:radial-gradient(circle at 78% -10%,rgba(132,109,255,.16),transparent 34%),radial-gradient(circle at 12% 110%,rgba(55,111,206,.12),transparent 35%),var(--bg)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px}
 
 /* ── LOGIN ── */
 #loginScreen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
@@ -76,26 +81,26 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #appShell.visible{display:flex}
 
 /* SIDEBAR */
-#sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden}
-.sidebar-brand{display:flex;align-items:center;gap:10px;padding:20px 16px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+#sidebar{width:264px;background:linear-gradient(180deg,#1a1f37 0%,#12162a 100%);border-right:1px solid rgba(199,188,255,.18);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;box-shadow:12px 0 38px rgba(0,0,0,.13)}
+.sidebar-brand{display:flex;align-items:center;gap:10px;padding:24px 18px 20px;border-bottom:1px solid rgba(199,188,255,.14);flex-shrink:0}
 .sidebar-appname{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);line-height:1.1}
 .sidebar-sub{font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:2px;color:var(--accent);text-transform:uppercase}
-.sidebar-section{padding:12px 12px 4px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.sidebar-section{padding:20px 18px 6px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:2px;color:#8e97b6;text-transform:uppercase;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
 .sidebar-section:hover{color:var(--primary)}
 .sidebar-section .sec-chevron{margin-left:auto;font-size:10px;transition:transform .2s;transform-origin:center}
 .sidebar-section.sec-collapsed .sec-chevron{transform:rotate(-90deg)}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;margin:2px 8px;cursor:pointer;font-family:'Poppins',sans-serif;font-weight:500;font-size:13px;color:var(--muted);transition:all .15s;border:none;background:none;width:calc(100% - 16px);text-align:left}
-.nav-item:hover{background:var(--surface2);color:var(--text)}
-.nav-item.active{background:rgba(249,115,22,.12);color:var(--accent);font-weight:600}
+.nav-item{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:10px;margin:2px 12px;cursor:pointer;font-family:'Poppins',sans-serif;font-weight:500;font-size:13px;color:var(--text-secondary);transition:background .15s,color .15s,transform .15s;border:1px solid transparent;background:none;width:calc(100% - 24px);text-align:left}
+.nav-item:hover{background:rgba(255,255,255,.055);color:var(--text-primary);transform:translateX(2px)}
+.nav-item.active{background:linear-gradient(90deg,rgba(169,149,255,.24),rgba(169,149,255,.08));border-color:rgba(199,188,255,.16);color:#ded8ff;font-weight:600;box-shadow:inset 3px 0 0 var(--action-primary),0 7px 18px rgba(0,0,0,.12)}
 .nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
 .nav-item .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:1px 6px;border-radius:10px}
 
 /* MAIN AREA */
-#mainArea{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#mainArea{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
 /* TOPBAR */
-#topbar{background:var(--surface);border-bottom:2px solid var(--accent);padding:0 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;height:52px}
-.topbar-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);flex:1}
+#topbar{background:rgba(23,27,48,.88);backdrop-filter:blur(16px);border-bottom:1px solid rgba(199,188,255,.14);padding:0 30px;display:flex;align-items:center;gap:12px;flex-shrink:0;height:68px;box-shadow:0 8px 28px rgba(0,0,0,.14);position:relative;z-index:2}
+.topbar-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--text-primary);flex:1;letter-spacing:-.35px}
 .topbar-empresa{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted)}
 .topbar-user{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px}
 .topbar-user .rol-badge{padding:2px 8px;border-radius:10px;font-size:9px;letter-spacing:.5px}
@@ -112,15 +117,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .conn-dot.err{background:var(--red);box-shadow:0 0 6px rgba(239,68,68,.7)}
 
 /* CONTENT */
-#content{flex:1;overflow-y:auto;padding:24px}
+#content{flex:1;overflow-y:auto;padding:32px 34px 44px;background:linear-gradient(180deg,rgba(32,37,64,.7),rgba(13,16,32,.96) 280px)}
 .page{display:none}
 .page.active{display:block}
-.page-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;color:var(--text);margin-bottom:6px}
-.page-sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+.page-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px;color:var(--text);margin-bottom:7px;letter-spacing:-.7px}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:28px;max-width:72ch}
 
 /* KPI CARDS */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px}
-.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:8px;transition:border-color .2s,transform .15s;cursor:default;position:relative}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px;margin-bottom:32px}
+.kpi-card{background:linear-gradient(145deg,rgba(37,43,70,.98),rgba(24,28,49,.98));border:1px solid rgba(199,188,255,.16);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:8px;transition:border-color .2s,transform .15s,box-shadow .2s;cursor:default;position:relative;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.13)}
+.kpi-card::before{content:'';position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,var(--accent),#6fa8ff);opacity:.8}
 .docs-tab{padding:7px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:all .2s;border-radius:6px 6px 0 0}
 .docs-tab:hover{color:var(--text)}
 .docs-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--accent)11}
@@ -128,7 +134,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .docs-file:hover{border-color:var(--accent)}
 .docs-folder{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s;margin-bottom:6px}
 .docs-folder:hover{border-color:var(--yellow);background:var(--yellow)0d}
-.kpi-card:hover{border-color:var(--accent)}
+.kpi-card:hover{border-color:rgba(199,188,255,.6);box-shadow:0 16px 34px rgba(0,0,0,.2)}
 .kpi-card.nav-card{cursor:pointer}
 .kpi-card.nav-card:hover{border-color:var(--accent);transform:translateY(-2px)}
 .kpi-card.nav-card::after{content:'→';position:absolute;top:12px;right:14px;font-size:13px;color:var(--muted);opacity:0;transition:opacity .2s,right .15s}
@@ -141,8 +147,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .kpi-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 
 /* SECTION CARDS */
-.section-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px}
-.section-card-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.section-card{background:rgba(23,27,48,.84);border:1px solid rgba(199,188,255,.14);border-radius:16px;padding:22px;margin-bottom:22px;box-shadow:0 10px 24px rgba(0,0,0,.1)}
+.section-card-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1.7px;text-transform:uppercase;color:#aeb5ce;margin-bottom:18px;display:flex;align-items:center;gap:8px}
 .section-card-title span{color:var(--accent)}
 
 /* TABLA BASE (antes de cargar Tabulator en cada módulo) */
@@ -266,9 +272,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 /* RESPONSIVE sidebar collapse */
 @media(max-width:900px){
-  #sidebar{position:fixed;left:-260px;top:0;bottom:0;z-index:500;transition:left .25s;width:240px}
+  #sidebar{position:fixed;left:-268px;top:0;bottom:0;z-index:500;transition:left .25s;width:264px}
   #sidebar.open{left:0;box-shadow:4px 0 30px rgba(0,0,0,.5)}
   #mainArea{width:100%}
+  #topbar{padding:0 18px}
+  #content{padding:24px 18px 36px}
+  .page-title{font-size:24px}
 }
 
 /* ── SYNC / REMOTE SCAN ── */
