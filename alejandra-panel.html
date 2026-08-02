@@ -18,11 +18,11 @@ button{cursor:pointer}
 a{color:var(--acc2);text-decoration:none}
 
 /* ── LOGIN ── */
-#loginView{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:20px;padding:24px}
-.login-card{background:var(--surf);border:1px solid var(--border);border-radius:20px;padding:32px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+#loginView{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:20px;padding:var(--space-5)}
+.login-card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:20px;padding:var(--space-6);width:100%;max-width:380px;display:flex;flex-direction:column;gap:var(--space-4);box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .login-logo{text-align:center;font-size:48px}
 .login-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;text-align:center}
-.login-sub{color:var(--muted);font-size:12px;text-align:center}
+.login-sub{color:var(--color-text-muted);font-size:12px;text-align:center}
 .inp{background:var(--color-surface-raised);border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3) 14px;color:var(--color-text);font-size:14px;width:100%;outline:none;transition:border-color .2s}
 .inp:focus{border-color:var(--color-primary)}
 .btn-acc{background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius-sm);padding:var(--space-3);font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;width:100%;transition:opacity .2s;letter-spacing:.5px}
