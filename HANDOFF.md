@@ -67,9 +67,11 @@ consultan `/health` tras desplegar y fallan el job si el estado es `unhealthy` o
 (PR #36), con `degraded` como advertencia no bloqueante — no sustituye la verificación manual
 del handoff. No queda pendiente de ADR-0014.
 
-**F-1.2 verificada como completa y cerrada (2026-08-02).** **F-1.3 abierta**: primer entregable
-en curso, esqueleto y contratos del Tool Registry (ADR-0010) y Verifier (ADR-0009), aislado,
-sin integrar en producción — ver `F-1.3-TOOL-REGISTRY-ESQUELETO` en `TASKS.md`.
+**F-1.2 verificada como completa y cerrada (2026-08-02).** **F-1.3 abierta**: el primer
+entregable (esqueleto y contratos del Tool Registry/ADR-0010 y Verifier/ADR-0009, aislado, sin
+integrar en producción) está **completado** — ver `F-1.3-TOOL-REGISTRY-ESQUELETO` en
+`TASKS.md`. Siguiente entregable en curso: `F-1.3-TOOL-PILOTO-MIGRADA`, migrar una tool real
+como piloto sin cambiar comportamiento observable.
 
 En paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla
 contra D1 sigue exigiendo autorización del Director.
