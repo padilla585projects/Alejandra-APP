@@ -33,6 +33,14 @@
       "adr": "ADR-0014",
       "verificado": "2026-08-02",
       "nota": "Aplicada con autorizacion del Director (2026-08-02), acotada a la unica D1 existente (alejandra-db). Export previo en local antes de aplicar. Verificada contra el esquema real: tabla alejandra_trazas + idx_trazas_ts + idx_trazas_tipo coinciden exactamente con ADR-0014 seccion 1. No se extiende a una futura produccion separada."
+    },
+    {
+      "archivo": "migrate_memoria_gobernada.sql",
+      "aplicada": false,
+      "run": null,
+      "adr": "ADR-0013",
+      "fase": "F-2.1",
+      "nota": "Paso 1 (declarar) completado el 2026-08-02, primer entregable de F-2.1 (Epoca 2, abierta por ADR-0007 enmienda 1 al cerrarse F-1.1/F-1.2/F-1.3). Tabla nueva 'memoria_gobernada', sin relacion con la legada 'alejandra_memoria' (memory_save/memory_read, dominio excluido de ADR-0010). Paso 2 (aplicar y verificar contra D1) pendiente de autorizacion del Director, igual que checklists."
     }
   ]
 }

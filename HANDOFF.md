@@ -122,6 +122,15 @@ tarea activa de ingeniería sin decisión del Director pendiente.**
 En paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla
 contra D1 sigue exigiendo autorización del Director.
 
+**Época 1 cerrada (F-1.1/F-1.2/F-1.3 completas); Época 2 abierta (2026-08-02, ADR-0007
+enmienda 1).** F-2.1 (gobierno de memoria) tiene su modelo ya aceptado por el Director
+(`ADR-0013`, con modificaciones) y su primer entregable completado: `migrate_memoria_gobernada.sql`
+declara (paso 1 de ADR-0011, sin aplicar) la tabla `memoria_gobernada`, con los siete elementos
+del contrato de ADR-0013, sin relación con la tabla legada `alejandra_memoria` que ya usan
+`memory_save`/`memory_read` en producción. Registrada en `migrate_manifiesto.json` como
+`aplicada: false`. Ningún Worker la lee ni la escribe; `nucleo-cognitivo/src/memory.js` sigue
+sin cambios. Ver `TASKS.md` (`F-2.1-MEMORIA-DECLARAR`).
+
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
 Las cuatro decisiones planteadas quedaron resueltas el mismo día: **P-ARCH-002** aprobada;
@@ -138,5 +147,7 @@ detalle completo en `TASKS.md` y `ARCHITECT_BACKLOG.md`.
 - No integrar `nucleo-cognitivo/` en `worker.js` ni `alejandra-agente/worker.js`.
 - No persistir memoria ni trazas reales sin aplicar antes la migración D1 correspondiente con autorización explícita (la de trazas ya autorizada, pero solo en desarrollo/pruebas).
 - No aplicar la migración de `alejandra_trazas` contra una futura producción sin autorización aparte.
+- No aplicar `migrate_memoria_gobernada.sql` (F-2.1) contra D1 sin autorización explícita del Director.
+- No implementar persistencia real en `nucleo-cognitivo/src/memory.js` (sigue como interfaz) mientras esa migración no esté aplicada y verificada.
 - No aceptar nuevas revisiones de ningún ADR por cuenta propia si aparece una contradicción.
 - No ampliar la migración de presentación más allá de P-ARCH-002 hasta su revisión.

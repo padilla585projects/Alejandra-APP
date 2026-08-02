@@ -245,6 +245,24 @@ En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_ch
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen
 esperando decisión del Director, sin relación con el núcleo cognitivo.
 
+## Época 2 — Conocimiento y Memoria (abierta 2026-08-02)
+
+Con F-1.1, F-1.2 y F-1.3 completas, **la Época 1 queda cerrada**. Por `ADR-0007` enmienda 1
+(apertura autónoma de fase cuando dependencias y ADR están cerrados), se abre **F-2.1**
+(gobierno de memoria): sus dependencias (F-1.1, ARC-002) están cerradas y su modelo ya fue
+aceptado por el Director en `ADR-0013` (con modificaciones), el mismo día.
+
+**Primer entregable completado:** `migrate_memoria_gobernada.sql` declara (paso 1 de
+ADR-0011, sin aplicar) la tabla `memoria_gobernada`, nueva y sin relación con la tabla legada
+`alejandra_memoria` (usada hoy por `memory_save`/`memory_read`, dominio excluido a propósito
+del catálogo ADR-0010). Las columnas cubren los siete elementos del contrato de ADR-0013:
+aislamiento por `empresa_id`/`ambito`, procedencia (`origen`/`metodo`/`tarea_id`), `confianza`,
+`caduca_en`, corrección versionada (`version_anterior_id`/`estado`) y `aprobada_por`. Registrada
+en `migrate_manifiesto.json` como `aplicada: false`. Ningún Worker escribe ni lee esta tabla
+todavía; `nucleo-cognitivo/src/memory.js` sigue siendo interfaz pura sin cambios. Aplicarla
+contra D1 exige autorización explícita del Director, igual que `checklists` — ver
+`TASKS.md` (`F-2.1-MEMORIA-DECLARAR`).
+
 ## Arquitectura de presentación
 
 `ADR-0012` fue aceptado el 2026-08-02. La arquitectura vigente

@@ -95,27 +95,27 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-1.3 — Capability/Tool Registry, Verifier y QA**
 
-- Estado/prioridad/tamaño: **Iniciada (2026-08-02) — esqueleto del Tool Registry/Verifier y piloto de migración (`consultar_personal`) completados; migración incremental del resto del catálogo en curso** / Alta / L.
+- Estado/prioridad/tamaño: **Completada (2026-08-02)** — esqueleto del Tool Registry/Verifier, piloto de migración (`consultar_personal`) y migración incremental del resto del catálogo (96/103 tools, 7 excluidas a propósito por ser dominio ADR-0013) completados. Cierra F-1.3 y, con ella, la Época 1 (F-1.1/F-1.2/F-1.3 completas). / Alta / L.
 - Objetivo y valor: declarar capacidades y verificar resultados antes de responder/ejecutar.
 - Alcance/fuera: registro, contrato de tools, verificación/QA inicial; no marketplace ni plugins.
 - Dependencias/bloqueantes/paralelo: F-1.2, ARC-004, ARC-006; paralelo con F-2.1 solo documental.
 - Referencias/ADR/módulos: ADR-0003/0004; tools IA y políticas.
 - Áreas/migraciones: registry, tests, observabilidad; `PENDIENTE` persistencia.
 - Riesgos/compliance/pruebas: falsa validación/acciones sensibles; controles deterministas, pruebas negativas y revisión humana.
-- Aceptación/recuperación/entregables: tool piloto declarada, autorizada y verificada; retirada por feature flag; habilita Núcleo Cognitivo v1.
+- Aceptación/recuperación/entregables: tool piloto declarada, autorizada y verificada (hecho); retirada de los `Set`/gates existentes por feature flag **pendiente** — ADR-0010 exige convivencia del metadato nuevo con los gates actuales hasta que se decida retirarlos, no forma parte de "migrar el catálogo". Habilita Núcleo Cognitivo v1.
 
 ### Época 2 — Conocimiento y Memoria
 
 **F-2.1 — Gobierno de memoria y conocimiento**
 
-- Estado/prioridad/tamaño: Pendiente / Crítica / XL.
+- Estado/prioridad/tamaño: **Abierta (2026-08-02, ADR-0007 enmienda 1)** — dependencias (F-1.1, ARC-002) cerradas vía ADR-0004/ADR-0013; modelo y contrato de gobierno ya aceptados por el Director (ADR-0013, con modificaciones). Primer entregable completado: declaración (paso 1 de ADR-0011) de `migrate_memoria_gobernada.sql`, sin aplicar contra D1. / Crítica / XL.
 - Objetivo y valor: separar memoria, conocimiento, estado temporal y fuentes para evitar fugas/degradación.
 - Alcance/fuera: modelo de autoridad, vigencia, procedencia, relaciones, backlinks, contradicciones e ingesta segura; no aprendizaje autónomo amplio.
 - Dependencias/bloqueantes/paralelo: F-1.1 y ARC-002; paralelo documental con F-1.3.
-- Referencias/ADR/módulos: ADN, Arquitectura Cognitiva, compliance; Memory/Context Engine/D1/R2.
-- Áreas/migraciones: esquema y migraciones `PENDIENTE` tras ADR; no asumir datos existentes.
+- Referencias/ADR/módulos: ADN, Arquitectura Cognitiva, compliance; Memory/Context Engine/D1/R2; ADR-0013.
+- Áreas/migraciones: esquema declarado (`migrate_memoria_gobernada.sql`, sin aplicar); aplicar contra D1 exige autorización del Director (ADR-0007), igual que `checklists`.
 - Riesgos/compliance/pruebas: RGPD, multiempresa, contenido inyectado; aislamiento, retención, borrado y pruebas IDOR.
-- Aceptación/recuperación/entregables: política y modelo aprobados, recuperación híbrida limitada y auditada; rollback/retención documentados; habilita F-2.2.
+- Aceptación/recuperación/entregables: política y modelo aprobados (hecho, ADR-0013); recuperación híbrida limitada y auditada; rollback/retención documentados; habilita F-2.2.
 
 **F-2.2 — Nexo v1**
 
