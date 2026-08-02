@@ -6,6 +6,26 @@
 - Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno) y `ARC-014` (decisión pendiente). **Época 1 abierta y sin ADR propuesto pendiente**: `ADR-0004` aceptado, F-1.1 cerrada; F-1.2 en curso, ampliable con las interfaces de memoria (ADR-0013) y trazas (ADR-0014), ambos aceptados con modificaciones.
 - PRs integradas: #9 (F-0.1), #10 (ARC-011), #11 (ARC-012)
 
+## Despliegue verificado (2026-08-02) — F-1.2/F-1.3 en producción
+
+Tras cerrar F-1.2 y F-1.3 (núcleo cognitivo aislado + catálogos de tools de los dos Workers
+migrados a ADR-0010, 96/103 tools), se desplegaron ambos Workers con SHA `5e4f1c3`
+(`main`, PR #49). Aprobación del entorno `production` concedida por el Director en ambos runs.
+
+| Worker | Run | Versión desplegada | `/health` | Verificación |
+|---|---|---|---|---|
+| `alejandra-agente` | [30756551099](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30756551099) | `74234d68-4e49-4368-a309-552f24ab22b0` (16:25:33 UTC) | `healthy` (d1:true, r2:true) | Coincide con `wrangler deployments list`. El healthcheck automático del propio workflow reportó un `version` distinto (`6f220f61...`, de un deploy anterior) por lag de propagación del edge de Cloudflare — reconsultado ~2 min después, ya en la versión correcta. |
+| `alejandra-app-api` (`worker.js` raíz) | [30756646526](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30756646526) | `9cfb30c3-ff09-4200-959e-98a7eb27bbf4` (16:27:31 UTC) | `healthy` (d1:true, r2:true) | Coincide con `wrangler deployments list`. |
+
+Lectura real contra D1 tras ambos despliegues (`wrangler d1 execute alejandra-db --command
+"SELECT COUNT(*) as total FROM usuarios" --remote`, solo lectura): `318` filas leídas,
+respuesta correcta.
+
+Nota para el runbook: el healthcheck automático de CI puede reportar la versión desplegada
+*anterior* si `/health` responde desde un nodo del edge que aún no propagó — no es un fallo,
+pero conviene reconsultar manualmente unos minutos después antes de dar el despliegue por
+bueno del todo, tal como se hizo aquí.
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.

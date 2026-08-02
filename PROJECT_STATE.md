@@ -49,9 +49,16 @@ El bloqueo de `migrate_008_plano_circuitos.sql` se retiró: partía de un diagn�
 
 Fue el primer uso real del circuito de entrega segura de F-0.1 y se comportó como estaba diseñado: los tres runs quedaron en `waiting` hasta aprobación del entorno.
 
-## Estado de despliegue (2026-08-02)
+## Estado de despliegue (2026-08-02, actualizado tras F-1.2/F-1.3)
 
-**Los dos Workers están desplegados y respondiendo** (`HTTP 200` verificado): `alejandra-app-api` versión `29d48103` (deployment id de Cloudflare), `alejandra-agente` versión `6f220f61`. Llevan ARC-013, ARC-015, ARC-016, ARC-017 y ahora ADR-0014 (`registrarTraza`, `/health` real de tres estados, `GET /admin/trazas`) en producción.
+**Los dos Workers están desplegados y respondiendo** (`/health: healthy`, D1 y R2 en verde,
+verificado): `alejandra-app-api` versión `9cfb30c3-ff09-4200-959e-98a7eb27bbf4`,
+`alejandra-agente` versión `74234d68-4e49-4368-a309-552f24ab22b0` — ambos con SHA `5e4f1c3`
+(`main`, PR #49), aprobados por el Director. Llevan ARC-013, ARC-015, ARC-016, ARC-017,
+ADR-0014 (`registrarTraza`, `/health` real de tres estados, `GET /admin/trazas`, healthcheck
+automático post-despliegue) y ahora F-1.2/F-1.3 (metadato de ADR-0010 en 96/103 tools; el
+núcleo cognitivo aislado en `nucleo-cognitivo/` sigue sin integrar en ninguno de los dos, tal
+como exige el alcance de F-1.2). Verificación completa registrada en `HANDOFF.md`.
 
 ## ADR-0014 — implementado y verificado en producción (2026-08-02)
 
