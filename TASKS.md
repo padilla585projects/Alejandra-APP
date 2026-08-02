@@ -44,22 +44,23 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
 - ID: ARC-011-FASE3-RFIS
 - Título: Segundo vertical de la migración por fases de ARC-011 (ADR-0011), tras `checklists`
 - Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
-- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (retirar DDL en runtime) fuera de alcance por instrucción explícita del Director**
+- Estado: **completada — ciclo de ADR-0011 (5 pasos) cerrado para este vertical (2026-08-02)**
 - Prioridad: Media
-- Rama: `main` (paso 1), `feat/migrar-rfis-d1` (paso 2, PR #55)
+- Rama: `main` (paso 1), `feat/migrar-rfis-d1` (paso 2, PR #55), `feat/arc011-rfis-retirar-ddl-runtime` (pasos 3-4, PR #56)
 - Responsable actual: —
-- Objetivo: declarar y aplicar en una migración `.sql` versionada el esquema real de la tabla `rfis` (consultas técnicas de obra, NEW-34), única en su vertical, siguiendo el ciclo de ADR-0011.
+- Objetivo: declarar, aplicar y retirar el DDL en runtime del esquema real de la tabla `rfis` (consultas técnicas de obra, NEW-34), única en su vertical, siguiendo el ciclo completo de ADR-0011.
 - Criterios de aceptación:
   1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con el esquema exacto verificado contra D1 real (`migrate_rfis.sql`), incorporando en el mismo `CREATE` la columna `departamento` (añadida en runtime, DEPT-01) para evitar un `ALTER` no idempotente.
-  2. ✅ **Aplicada contra D1 (run `30769663802`, 2026-08-02)**, autorizada por el Director en chat con condiciones explícitas (verificar antes, circuito oficial exclusivamente, no tocar Workers/permisos fuera de lo necesario). Verificado antes y después: 19 columnas idénticas; `0 rows_written` confirma no-op.
-  3. El DDL en runtime de este vertical se deja intacto (`worker.js`, `ensureRfisTable()`) — el Director limitó explícitamente el alcance a la migración, sin tocar backend/Workers. Retirarlo (paso 3) queda pendiente de una autorización aparte, no implícita en esta.
-  4. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: true`.
+  2. ✅ **Aplicada contra D1 (run `30769663802`, 2026-08-02)**, autorizada por el Director en chat con condiciones explícitas. Verificado antes y después: 19 columnas idénticas; `0 rows_written` confirma no-op.
+  3. ✅ **DDL en runtime retirado (PR #56)**, autorizado por el Director en chat (2026-08-02): comentado, no borrado, en `ensureRfisTable()`, con referencia a la migración.
+  4. ✅ **Verificado en producción sin el DDL en caliente:** desplegado `worker.js` (run `30770291895`, versión `2fa16165-4623-4e26-ba5e-cfb2e448a23d`), `/health` → `healthy` (d1:true, r2:true), las 19 columnas de `rfis` siguen presentes tras el despliegue.
+  5. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: true`.
 - Dependencias: ADR-0011 aceptado como estrategia (2026-08-02); `checklists` como ciclo de referencia ya completo.
-- Bloqueos: ninguno para el paso 2 (ya hecho). El paso 3 exige autorización aparte, porque esta autorización excluyó explícitamente tocar Workers.
-- Archivos principales: `migrate_rfis.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`.
-- Pruebas: verificación manual de que las 19 columnas coinciden con `PRAGMA table_info(rfis)` real antes y después; `node -e "JSON.parse(...)"` sobre el manifiesto.
+- Bloqueos: ninguno. Ciclo completo.
+- Archivos principales: `migrate_rfis.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, `worker.js`.
+- Pruebas: verificación manual columna por columna antes y después contra D1 real; `node --check worker.js`; `/health` tras desplegar.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: sin acción inmediata. Retirar el DDL en runtime (paso 3) queda disponible como tarea de ingeniería de bajo riesgo si el Director autoriza tocar `worker.js`, igual que se hizo con `checklists`.
+- Siguiente acción exacta: ninguna — vertical `rfis` completo. Segundo vertical con el ciclo de 5 pasos cerrado, tras `checklists`.
 
 ### F-2.1-MEMORIA-DECLARAR — Declarar el esquema de Memory (ADR-0013)
 

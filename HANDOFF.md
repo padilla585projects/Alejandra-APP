@@ -42,6 +42,28 @@ autoriza continuar automáticamente con la siguiente tarea oficial desbloqueada 
 documentación, sin esperar nueva autorización salvo que la propia documentación reserve
 expresamente una decisión al Director.
 
+## Vertical `rfis` completo — ARC-011 fase 3 (2026-08-02)
+
+Segundo vertical del ciclo de ADR-0011 tras `checklists`. Declarado autónomamente (paso 1,
+código reversible, sin PR); pasos 2-4 autorizados por el Director en chat, cada uno por
+separado:
+
+1. **Declarar:** `migrate_rfis.sql` — tabla única `rfis` (NEW-34), CREATE + ALTER
+   `departamento` (DEPT-01) unificados en un solo `CREATE TABLE IF NOT EXISTS`, verificado
+   columna por columna contra D1 real.
+2. **Aplicar** (autorización con condiciones explícitas: verificar antes, circuito oficial
+   exclusivo, sin tocar Workers): PR #55 → `workflow_dispatch` → aprobación de `production` →
+   [run 30769663802](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30769663802).
+   No-op confirmado (`0 rows_written`); 19 columnas idénticas antes y después.
+3. **Retirar DDL en runtime** (autorización aparte, "autorizo"): PR #56 comenta (no borra) el
+   `CREATE`/`ALTER` de `ensureRfisTable()`.
+4. **Verificar en producción:** desplegado `worker.js`
+   ([run 30770291895](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30770291895)).
+   `/health` reportó primero la versión anterior por lag de propagación del edge (mismo
+   patrón ya documentado en el runbook) y, reconsultado ~20s después, la versión correcta
+   `2fa16165-4623-4e26-ba5e-cfb2e448a23d`, `healthy`; las 19 columnas de `rfis` verificadas
+   presentes tras el despliegue.
+
 ## Limpieza de DDL en runtime — ARC-012 (2026-08-02, continuación autónoma)
 
 Extendido el mismo patrón del vertical `checklists` a las tres columnas de ARC-012, ya
