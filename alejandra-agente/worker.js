@@ -1065,6 +1065,10 @@ async function buildAnthropicSystemBlocks(modulos, tools, env) {
 }
 
 // ── Tools disponibles ─────────────────────────────────────────────────────────
+// F-1.3/ADR-0010 (lote 3, 2026-08-02): tools públicas — NO están en
+// TOOLS_REQUIEREN_SESION a propósito (SEC-ANON-01: no tocan datos de nadie),
+// ni en TOOLS_PROHIBIDAS_CRON ni en TOOLS_SOLO_DEV_VERIFICADO. acceso:'publico',
+// cron:'permitido', nivel_riesgo:'N0' (búsqueda/cálculo, sin escritura).
 const TOOL_BUSCAR_WEB = {
   name: 'buscar_web',
   description: 'Busca información actualizada en internet (precios, normativas, noticias).',
@@ -1072,7 +1076,10 @@ const TOOL_BUSCAR_WEB = {
     type: 'object',
     properties: { query: { type: 'string', description: 'Consulta de búsqueda' } },
     required: ['query']
-  }
+  },
+  acceso: 'publico',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_MEMORY_SAVE = {
@@ -1190,7 +1197,10 @@ const TOOL_CALCULAR_CABLE = {
       max_caida_pct: { type: 'number', description: 'Caída de tensión máxima admisible en % (default 3 alumbrado, 5 fuerza)' }
     },
     required: ['potencia_w', 'tension_v', 'longitud_m']
-  }
+  },
+  acceso: 'publico',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_CALCULAR_BANDEJA = {
@@ -1206,7 +1216,10 @@ const TOOL_CALCULAR_BANDEJA = {
       cables_diametro_mm:{ type: 'array', description: 'Diámetros exteriores de los cables en mm', items: { type: 'number' } }
     },
     required: ['ancho_mm', 'alto_mm']
-  }
+  },
+  acceso: 'publico',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_CALCULAR_PROTECCION = {
@@ -1222,7 +1235,10 @@ const TOOL_CALCULAR_PROTECCION = {
       tension_v:            { type: 'number', description: 'Tensión nominal en voltios (default 230)' }
     },
     required: ['intensidad_nominal_a']
-  }
+  },
+  acceso: 'publico',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_ANALIZAR_FOTO = {
@@ -1681,7 +1697,10 @@ const TOOL_PENSAR = {
       siguiente_paso: { type: 'string', description: 'Qué vas a hacer a continuación' }
     },
     required: ['problema', 'analisis', 'siguiente_paso']
-  }
+  },
+  acceso: 'publico',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_PLANIFICAR = {
@@ -1695,7 +1714,10 @@ const TOOL_PLANIFICAR = {
       herramientas_a_usar: { type: 'array', items: { type: 'string' }, description: 'Herramientas que vas a necesitar' }
     },
     required: ['objetivo', 'pasos']
-  }
+  },
+  acceso: 'publico',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_DESCUBRIR_HERRAMIENTAS = {
@@ -2211,7 +2233,10 @@ const TOOL_BUSCAR_NORMATIVA = {
       tema:     { type: 'string', description: 'Filtrar por palabra clave/tema adicional (opcional)' }
     },
     required: ['consulta']
-  }
+  },
+  acceso: 'publico',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_HISTORICO_MATERIALES = {
