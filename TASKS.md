@@ -30,6 +30,24 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
+### P-ARCH-001 — Revisión de la arquitectura de la capa de presentación
+
+- ID: P-ARCH-001
+- Título: Decidir la arquitectura objetivo del frontend antes de iniciar el refactor
+- Fase: Época transversal — P-1
+- Estado: en revisión
+- Prioridad: Alta
+- Rama: `docs/presentacion-arquitectura` (PENDIENTE de integración)
+- Responsable actual: Director del Proyecto para la decisión; Arquitecto del Proyecto para cambios solicitados
+- Objetivo: revisar `ADR-0012` y `docs/architecture/FRONTEND_ARCHITECTURE.md` sin mover archivos ni cambiar funcionalidades.
+- Criterios de aceptación: decisión explícita sobre ADR-0012; si se acepta, crear una tarea independiente y acotada para preparación/piloto; si no, registrar la alternativa en ADR o backlog.
+- Dependencias: análisis documentado del frontend actual.
+- Bloqueos: ADR-0012 sigue Propuesto; ningún refactor está autorizado.
+- Archivos principales: `docs/architecture/FRONTEND_ARCHITECTURE.md`, `docs/decisions/ADR-0012-ARQUITECTURA-CAPA-PRESENTACION.md`.
+- Pruebas: revisión documental de límites, paralelismo, migración, accesibilidad e integración con Workers.
+- Última actualización: 2026-08-02
+- Siguiente acción exacta: el Director revisa y decide ADR-0012; detenerse hasta esa decisión.
+
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 
 - ID: ARC-011-FASE3-CHECKLISTS

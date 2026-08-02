@@ -211,6 +211,13 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 ### Época transversal — Producto, UX, seguridad y compliance
 
+**P-1 — Arquitectura de la capa de presentación**
+
+- Estado/prioridad/tamaño: **Documentada; pendiente de aprobación de ADR-0012** / Alta / M.
+- Objetivo/alcance: separar de forma gradual la presentación de la lógica de negocio mediante aplicaciones de campo, oficina, administración y conversación, features aisladas, sistema de diseño y clientes de API; no implementa aún el refactor.
+- Dependencias/bloqueantes/paralelo: requiere aceptación de `ADR-0012` para cualquier extracción estructural. Es independiente de `ADR-0004` y puede planificarse en paralelo con Workers, motor de decisión y núcleo cognitivo sin cambiar sus contratos unilateralmente.
+- Pruebas/aceptación: inventario de rutas y contratos, piloto de un vertical, compatibilidad funcional, revisión de accesibilidad/responsive y rollback por PR. Referencia: `docs/architecture/FRONTEND_ARCHITECTURE.md`.
+
 **T-1 — Calidad transversal**
 
 - Estado/prioridad/tamaño: Continua / Crítica / continua.
@@ -234,6 +241,7 @@ F-0.1 Entrega segura → F-0.2 Calidad/contratos → F-1.1 Decisiones aprobadas
 | F-1.3 y diseño F-2.1 | Sin suponer persistencia/permiso futuro. |
 | F-3.1 y F-4.1 | Contrato común de trazas acordado antes de integrar. |
 | F-5.1 e investigación F-6.2 | Sin acceso a proveedores/productivo. |
+| P-1 y backend/núcleo cognitivo | Solo consume contratos publicados; no cambia Workers, dominio ni autorización. |
 
 Bloqueantes arquitectónicos: ADR-0001, ADR-0002, ADR-0006, ADR-0008, ADR-0009, ADR-0010 y ADR-0011 (como estrategia) aceptados; **ADR-0004 sigue pendiente y es ahora el único bloqueo de F-1.1**. ARC-001, 003, 004 y 006 cerrados el 2026-08-02; ARC-002 y 008 siguen abiertos. ARC-005 está mitigado localmente y requiere validación remota; ARC-009 y ARC-010 están cerrados. Bloqueantes de seguridad: controles remotos de despliegue, permisos de tokens, aislamiento D1/R2 y retención. Dependencias externas: acceso GitHub/Cloudflare solo lectura, proveedores IA, cumplimiento/asesoría, contratos de integraciones y presupuesto de observabilidad.
 

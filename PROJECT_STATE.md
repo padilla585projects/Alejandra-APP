@@ -88,6 +88,8 @@ explícitamente de la apertura autónoma. F-1.1 sigue bloqueada solo por él.
 - **`F-0.2-CFG`** — mover secretos al entorno `production` (requiere valores reales).
 - **`ARC-018`** — worker/bucket huérfanos de la auditoría Cloudflare.
 - **`ARC-014`** — autoaprobación de despliegue con token de administración.
+- **`ADR-0012`** — arquitectura de la capa de presentación: aprobar, rechazar o solicitar
+  cambios antes de cualquier refactor del frontend.
 
 ## Siguiente objetivo
 
@@ -96,3 +98,11 @@ ARC-011 fase 3 (ADR-0011): declarar la migración `.sql` del vertical `checklist
 esquema real ya verificado en ARC-015. Es código reversible; **aplicarla contra D1 sigue
 requiriendo autorización del Director**. El resto del trabajo de Época 1 (F-1.1 en adelante)
 permanece bloqueado hasta que el Director resuelva ADR-0004.
+
+## Arquitectura de presentación
+
+La propuesta `docs/architecture/FRONTEND_ARCHITECTURE.md` analiza las cuatro entradas de
+frontend actuales y define una arquitectura objetivo por aplicaciones, features y paquetes,
+sin modificación de código. Está asociada a **`ADR-0012` (Propuesto)**. No es dependencia del
+Núcleo Cognitivo y puede evolucionar en paralelo con backend y motor de decisión, pero ninguna
+extracción estructural se inicia hasta que el Director acepte el ADR.

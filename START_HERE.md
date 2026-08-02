@@ -42,3 +42,7 @@ En paralelo, y solo por el Director: **`F-0.2-CFG`** (secretos al entorno `produ
 **ARC-018** (worker/bucket huérfanos) y **ARC-014** (autoaprobación de despliegue).
 
 No iniciar el Núcleo Cognitivo (F-1.2 en adelante) ni aceptar ADR-0004 por cuenta propia.
+
+**Presentación:** la arquitectura objetivo está documentada en
+`docs/architecture/FRONTEND_ARCHITECTURE.md`. `ADR-0012` sigue **Propuesto**: no iniciar
+extracciones ni refactor de frontend hasta la decisión del Director.
