@@ -61,9 +61,11 @@ Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan cerra
 
 ## Próximo trabajo autónomo
 
-ADR-0014 queda implementado, desplegado y verificado de extremo a extremo. Pendiente, menor y
-no bloqueante: reincorporar el healthcheck automático post-despliegue en el runbook, ahora que
-`/health` distingue desplegado de operativo. En paralelo, ARC-011 fase 3 sigue con su paso 1
+ADR-0014 queda implementado, desplegado y verificado de extremo a extremo, incluido el
+healthcheck automático post-despliegue: `deploy-worker.yml` y `deploy-alejandra-agente.yml`
+consultan `/health` tras desplegar y fallan el job si el estado es `unhealthy` o no responde
+(PR #36), con `degraded` como advertencia no bloqueante — no sustituye la verificación manual
+del handoff. No queda pendiente de ADR-0014. En paralelo, ARC-011 fase 3 sigue con su paso 1
 completo (`migrate_checklists.sql`); aplicarla contra D1 sigue exigiendo autorización del
 Director.
 
