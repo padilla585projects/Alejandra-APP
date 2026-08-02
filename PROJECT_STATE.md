@@ -72,9 +72,9 @@ Fue el primer uso real del circuito de entrega segura de F-0.1 y se comportó co
 
 ## Riesgos activos
 
-- Los secretos siguen a nivel de repositorio, no de entorno: cualquier workflow puede leerlos.
-- **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción, no las migraciones versionadas. Fases 1 y 2 verificadas. **Fase 3: `ADR-0011` aceptado el 2026-08-02** como estrategia (migración por vertical, empezando por `checklists`, con manifiesto de estado); la implementación sigue en curso al ritmo del roadmap, y cada aplicación real contra D1 exige autorización aparte.
-- **ARC-014 (medio):** la aprobación del entorno `production` se concedió con la misma credencial que lanzó el workflow. Un agente con token de administración puede aprobar su propio despliegue: la barrera cubre el error accidental, no la intención.
+- Los secretos siguen a nivel de repositorio, no de entorno: cualquier workflow puede leerlos. **Pospuesto por decisión del Director (2026-08-02, F-0.2-CFG):** se mueven cuando el proyecto entre en fase estable de preproducción/producción; ningún agente maneja los valores reales mientras tanto.
+- **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción, no las migraciones versionadas. Fases 1 y 2 verificadas. **Fase 3: `ADR-0011` aceptado el 2026-08-02** como estrategia (migración por vertical, empezando por `checklists`, con manifiesto de estado). Paso 1 (declarar `migrate_checklists.sql`) completo. **Paso 2 (aplicar contra D1) pospuesto por decisión del Director (2026-08-02):** se retoma cuando exista una ventana específica para cambios de esquema, con verificación de D1 antes y después.
+- **ARC-014 (medio) — riesgo aceptado temporalmente por el Director (2026-08-02).** La aprobación del entorno `production` se concedió con la misma credencial que lanzó el workflow; un agente con token de administración puede aprobar su propio despliegue. Mientras el proyecto tenga un único mantenedor en desarrollo, se acepta sin mitigación adicional. Se reabre en cuanto exista producción real o más de un mantenedor: entonces será obligatorio un revisor de identidad distinta al solicitante. Detalle en `ARCHITECT_BACKLOG.md`.
 - ARC-005 queda mitigado en los workflows versionados, pendiente de validación remota.
 - Migraciones raíz carecen de manifiesto único (ver propuesta en ADR-0011).
 - Núcleo Cognitivo y Motor de Decisión siguen documentados, no implementados.
@@ -98,8 +98,10 @@ Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan **cer
 
 ## Decisiones aún pendientes del Director
 
-- **`F-0.2-CFG`** — mover secretos al entorno `production` (requiere valores reales).
-- **`ARC-014`** — autoaprobación de despliegue con token de administración.
+Ninguna decisión de las cuatro planteadas el 2026-08-02 sigue abierta: **P-ARCH-002** aprobada,
+**ARC-014** aceptada como riesgo temporal, **ARC-011-FASE3-CHECKLISTS** (paso 2) y **`F-0.2-CFG`**
+pospuestas hasta una fase de preproducción/producción estable. Detalle de cada una en `TASKS.md`
+y `ARCHITECT_BACKLOG.md`.
 
 ## Época 1 — Núcleo Cognitivo (iniciada 2026-08-02)
 
@@ -143,8 +145,8 @@ cognitivo.
 
 `ADR-0012` fue aceptado el 2026-08-02. La arquitectura vigente
 `docs/architecture/FRONTEND_ARCHITECTURE.md` define aplicaciones, features, sistema de diseño
-y clientes API. P-ARCH-001 (indicador de salud) fue aprobado. P-ARCH-002 extrae la primitiva
-compartida de notificaciones temporales sin contrato de backend; su evidencia está en
-`docs/architecture/FRONTEND_SLICE_TOAST.md`. No es dependencia del Núcleo Cognitivo y avanza
-en paralelo con backend/motor de decisión, pero la migración no se amplía hasta revisar esta
-rebanada.
+y clientes API. P-ARCH-001 (indicador de salud) fue aprobado. **P-ARCH-002 (componente
+compartido de notificaciones temporales) fue aprobado por el Director el 2026-08-02** — su
+evidencia está en `docs/architecture/FRONTEND_SLICE_TOAST.md`. No es dependencia del Núcleo
+Cognitivo y avanza en paralelo con backend/motor de decisión. Con P-ARCH-002 cerrada, queda
+desbloqueada la siguiente rebanada de presentación (aún sin definir ni abrir).

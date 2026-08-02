@@ -41,13 +41,13 @@ Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan cerra
 
 ## Qué está pendiente
 
-- **P-ARCH-002 — componente compartido de presentación, en revisión.** P-ARCH-001 (salud del panel) fue aprobado. Se extrajo la primitiva de notificaciones temporales a `packages/design-system`, manteniendo las 12 invocaciones, iconos, cierre, caducidad y fallback. No llama a backend ni trata permisos. Evidencia, pruebas y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md`. No ampliar hasta revisión del Director.
+- **P-ARCH-002 — aprobada por el Director (2026-08-02).** P-ARCH-001 (salud del panel) fue aprobado. Se extrajo la primitiva de notificaciones temporales a `packages/design-system`, manteniendo las 12 invocaciones, iconos, cierre, caducidad y fallback. No llama a backend ni trata permisos. Evidencia, pruebas y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md`. Queda desbloqueada la siguiente rebanada de presentación, aún sin definir ni abrir.
 
 - **F-1.2, núcleo cognitivo, en curso — ampliada.** `ADR-0004` aceptado, F-1.1 cerrada. `nucleo-cognitivo/` construido como paquete aislado (Estado Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión). Con ADR-0013/0014 aceptados, se amplió (PR #20) con la interfaz `memory.js` y el contrato `registrarTraza()` — ambos sin persistencia real. `memory.js` sigue sin implementación real (exige el migrador de ADR-0011). El helper `registrarTraza()` sí tiene implementación real, pero **fuera** de `nucleo-cognitivo/`: cada Worker tiene su propia versión (PR #24, #25) que escribe en `alejandra_trazas`, conectada a ARC-013. El paquete `nucleo-cognitivo/` en sí sigue sin integrarse en `worker.js` ni `alejandra-agente/worker.js`.
 - **ADR-0014 — implementado, desplegado y verificado (2026-08-02).** `/health` real (`healthy`/`degraded`/`unhealthy`, D1 + objeto centinela en R2) en los dos Workers; `GET /admin/trazas` en `alejandra-app-api`; ARC-013 conectado a `alejandra_trazas`. Verificado en vivo contra producción. **Bug lateral encontrado y corregido en el mismo ciclo:** `index.html` comparaba el `version` de `/health` (ahora un UUID de despliegue) contra `APP_VERSION`, lo que habría forzado recargas falsas (PR #26) — mismo patrón que los incidentes de recarga infinita del 22/04 y 26/04. Corregido en `main`; publicar a Pages sigue siendo un paso de entrega aparte.
-- **ARC-011 fase 3, trabajo de código** — declarar la migración `.sql` del vertical `checklists` (autónomo); aplicarla contra D1 sigue exigiendo autorización del Director.
-- **ARC-014 — la aprobación de entorno no frena a un token de administración.** Evaluar `prevent_self_review`, revisores distintos del solicitante, o un token de menor privilegio para agentes.
-- **Secretos aún a nivel de repositorio (`F-0.2-CFG`).** Moverlos al entorno `production` exige reintroducir los valores a mano: la API no los expone.
+- **ARC-011 fase 3, paso 1 completo** — migración `.sql` del vertical `checklists` declarada. **Paso 2 (aplicar contra D1) pospuesto por decisión del Director (2026-08-02):** se retoma cuando exista una ventana específica para cambios de esquema, con verificación de D1 antes y después.
+- **ARC-014 — riesgo aceptado temporalmente por el Director (2026-08-02).** Mientras el proyecto tenga un único mantenedor en desarrollo, no se exige revisor distinto del solicitante. Se reabre en cuanto exista producción real o más de un mantenedor.
+- **Secretos aún a nivel de repositorio (`F-0.2-CFG`) — pospuesto por decisión del Director (2026-08-02).** Se mueven al entorno `production` cuando el proyecto entre en fase estable de preproducción/producción; ningún agente maneja los valores reales mientras tanto.
 - **Ensayo de confirmación errónea** sobre un workflow de producción: debe salir `skipped`.
 - **`usuario_obras` no existe en producción**, pese a estar declarada en código y en `migrate_roles_multiobra.sql`. Comprobar qué depende de ella antes de aplicar nada.
 
@@ -67,15 +67,13 @@ no bloqueante: reincorporar el healthcheck automático post-despliegue en el run
 completo (`migrate_checklists.sql`); aplicarla contra D1 sigue exigiendo autorización del
 Director.
 
-## Otras acciones pendientes del Director
+## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
-**`F-0.2-CFG`** — recrear los secretos de Cloudflare en el entorno `production`. Exige
-manejar los valores reales, que la API no expone.
-
-**`ARC-014`** — decidir cómo separar la aprobación de entorno del token que lanza el despliegue.
-
-**P-ARCH-002 — revisar la rebanada de notificaciones.** No bloquea el backend ni el Núcleo
-Cognitivo; sí bloquea la siguiente extracción de frontend hasta que se revise su evidencia.
+Las cuatro decisiones planteadas quedaron resueltas el mismo día: **P-ARCH-002** aprobada;
+**ARC-014** aceptada como riesgo temporal (mientras haya un único mantenedor en desarrollo);
+**ARC-011-FASE3-CHECKLISTS** (paso 2, aplicar contra D1) y **`F-0.2-CFG`** pospuestas hasta una
+fase de preproducción/producción estable. Ninguna queda abierta como pregunta al Director;
+detalle completo en `TASKS.md` y `ARCHITECT_BACKLOG.md`.
 
 ## No tocar sin nueva autorización
 
