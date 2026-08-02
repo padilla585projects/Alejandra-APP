@@ -99,11 +99,12 @@ permanece bloqueado hasta que el Director resuelva ADR-0004.
 
 ## Arquitectura de presentación
 
-La migración de presentación y el Design System quedan **pausados para decisión visual** por
-P-DESIGN-001. La propuesta completa está en `docs/architecture/FRONTEND_PRODUCT_VISION.md`.
+P-DESIGN-001 está **aprobada**. La propuesta completa está en
+`docs/architecture/FRONTEND_PRODUCT_VISION.md`.
 El Director ha orientado la propuesta hacia un **centro de control operativo** y ha indicado que
 la paleta presentada es la dirección preferida para modo claro, conservando la identidad de
-color actual de Alejandra. No se implementa el nuevo frontend hasta la revisión final.
+color actual de Alejandra. La construcción se reanuda de forma incremental y reversible desde
+tokens, sin modificar aún las pantallas existentes.
 
 `ADR-0012` fue aceptado el 2026-08-02. La arquitectura vigente
 `docs/architecture/FRONTEND_ARCHITECTURE.md` define aplicaciones, features, sistema de diseño

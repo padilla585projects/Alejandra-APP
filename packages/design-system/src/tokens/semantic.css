@@ -1,0 +1,27 @@
+:root {
+  --color-canvas: var(--bg);
+  --color-surface: var(--surf);
+  --color-surface-raised: var(--surf2);
+  --color-text: var(--text);
+  --color-text-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--acc);
+  --color-primary-strong: var(--acc2);
+  --color-success: var(--green);
+  --color-warning: var(--yellow);
+  --color-danger: var(--red);
+  --color-info: var(--blue);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --layer-navigation: 10;
+  --layer-menu: 100;
+  --layer-dialog: 500;
+  --layer-notification: 1000;
+}

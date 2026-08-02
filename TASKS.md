@@ -35,18 +35,36 @@ Siguiente acción exacta:
 - ID: P-DESIGN-001
 - Título: Proponer y decidir la dirección visual antes de construir el nuevo frontend
 - Fase: P-DESIGN — visión del frontend
-- Estado: en revisión
+- Estado: aprobada
 - Prioridad: Alta
 - Rama: `codex/presentation-next`
 - Responsable actual: Director del Proyecto para decisión; Arquitectura/Producto para iteraciones solicitadas
 - Objetivo: valorar la dirección visual completa de campo, oficina, administración, chat y observabilidad sin cambiar la aplicación.
 - Criterios de aceptación: filosofía, identidad, tokens propuestos, navegación, pantallas, estados, responsive y claro/oscuro documentados; mockup representativo disponible; decisión explícita antes de retomar migración.
 - Dependencias: ADR-0012 aceptado; migración de presentación pausada por esta fase.
-- Bloqueos: no construir nuevo frontend, no extraer más componentes ni continuar Design System hasta decisión de dirección.
+- Bloqueos: ninguno para cimientos reversibles de presentación.
 - Archivos principales: `docs/architecture/FRONTEND_PRODUCT_VISION.md`.
 - Pruebas: revisión de coherencia con ADR-0012 y arquitectura de presentación; validación visual del mockup.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: Director revisa la visión y decide si es la dirección visual del producto.
+- Siguiente acción exacta: iniciar desde tokens y componentes sin consumo visual.
+
+### P-ARCH-004 — Tokens semánticos y modo claro preparado
+
+- ID: P-ARCH-004
+- Título: Consolidar contratos de color, espaciado, capas y radios del Design System
+- Fase: Época transversal — P-1
+- Estado: completada
+- Prioridad: Alta
+- Rama: `codex/presentation-next`
+- Responsable actual: Agente de Ingeniería
+- Objetivo: preparar tokens semánticos sin alterar la interfaz actual.
+- Criterios de aceptación: paleta actual preservada por alias; modo claro aislado y no cargado; sin cambios a entradas HTML ni contratos backend.
+- Dependencias: P-DESIGN-001 aprobada; línea base `ui-baseline-2026-08-02` preservada.
+- Bloqueos: ninguno para la siguiente rebanada visual de bajo riesgo.
+- Archivos principales: `packages/design-system/src/tokens/semantic.css`, `packages/design-system/src/tokens/light.css`.
+- Pruebas: inventario de tokens, encoding y diff check.
+- Última actualización: 2026-08-02
+- Siguiente acción exacta: incorporar los tokens semánticos en una sola superficie de bajo riesgo, conservando la paleta actual por defecto.
 
 ### P-ARCH-002/P-ARCH-003 — Primitivas y tokens del sistema de diseño
 

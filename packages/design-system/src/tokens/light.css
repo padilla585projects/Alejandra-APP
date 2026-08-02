@@ -1,0 +1,14 @@
+:root[data-theme="light"] {
+  --bg: #f7f7fb;
+  --surf: #ffffff;
+  --surf2: #f0f1f7;
+  --acc: #6d4aff;
+  --acc2: #5d3fe0;
+  --text: #171827;
+  --muted: #64748b;
+  --border: #d9dce7;
+  --green: #15803d;
+  --red: #c2413b;
+  --yellow: #b45309;
+  --blue: #2563eb;
+}
