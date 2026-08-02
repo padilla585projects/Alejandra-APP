@@ -63,13 +63,12 @@ Fue el primer uso real del circuito de entrega segura de F-0.1 y se comportó co
 - **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción, no las migraciones versionadas. Fases 1 y 2 verificadas. **Fase 3: `ADR-0011` aceptado el 2026-08-02** como estrategia (migración por vertical, empezando por `checklists`, con manifiesto de estado); la implementación sigue en curso al ritmo del roadmap, y cada aplicación real contra D1 exige autorización aparte.
 - **ARC-014 (medio):** la aprobación del entorno `production` se concedió con la misma credencial que lanzó el workflow. Un agente con token de administración puede aprobar su propio despliegue: la barrera cubre el error accidental, no la intención.
 - ARC-005 queda mitigado en los workflows versionados, pendiente de validación remota.
-- ARC-008: no existe un endpoint de salud que verifique dependencias reales.
 - Migraciones raíz carecen de manifiesto único (ver propuesta en ADR-0011).
 - Núcleo Cognitivo y Motor de Decisión siguen documentados, no implementados.
 
 ## Decisiones del Director — Época 1 (2026-08-02)
 
-Los cinco ADR de la primera tanda quedaron **aceptados** el mismo día que se redactaron:
+Los siete ADR de Época 1 quedaron **aceptados** el mismo día que se redactaron:
 
 | ADR | Resuelve | Decisión |
 |---|---|---|
@@ -78,43 +77,47 @@ Los cinco ADR de la primera tanda quedaron **aceptados** el mismo día que se re
 | `ADR-0009` | ARC-004 | QA en tres niveles (determinista, revisión humana asíncrona, explicabilidad); explicabilidad queda como deuda hasta F-4.1, sin bloquear nada mientras tanto |
 | `ADR-0010` | ARC-006 | Catálogo de tools: `acceso`/`cron`/`nivel_riesgo` como metadato declarado por tool, migración incremental, un registro por worker |
 | `ADR-0011` | ARC-011 fase 3 | Aceptado **como estrategia**: migrador por vertical (empieza por `checklists`), manifiesto versionado. La implementación sigue el ritmo del roadmap; cada aplicación real contra D1 sigue exigiendo autorización aparte (ADR-0007) |
+| `ADR-0004` | Motor de Decisión y modos cognitivos | Aceptado como arquitectura objetivo. Cierra **F-1.1** |
+| `ADR-0013` | ARC-002 | Aceptado **con modificaciones**: memoria opt-in (hechos declarados, preferencias, procedimientos, correcciones); inferencias solo como candidata pendiente de validación; caducidad 6/12 meses; memoria compartida exige aprobación `encargado`+; supresión real sin versión archivada. D1 vía ADR-0011 |
+| `ADR-0014` | ARC-008 | Aceptado **con modificaciones**: tabla `alejandra_trazas` en D1, retención 30/90 días diferenciada, minimización obligatoria, endpoint único en `alejandra-app-api`, `/health` con tres estados. Migración autorizada solo en desarrollo/pruebas |
 
-Consecuencia: ARC-001, ARC-003, ARC-004 y ARC-006 quedan **cerrados** en `ARCHITECT_BACKLOG.md`.
-
-**Lo que esto NO desbloquea todavía:** `ADR-0004` (Motor de Decisión) sigue **Propuesto** — es
-el único ADR de Época 1 sin decidir, y es una fase de decisión que ADR-0007 enmienda 1 excluye
-explícitamente de la apertura autónoma. F-1.1 sigue bloqueada solo por él.
+Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan **cerrados** en `ARCHITECT_BACKLOG.md`. Ningún ADR de Época 1 queda `Propuesto`.
 
 ## Decisiones aún pendientes del Director
 
 - **`F-0.2-CFG`** — mover secretos al entorno `production` (requiere valores reales).
 - **`ARC-014`** — autoaprobación de despliegue con token de administración.
-- **`ARC-002`** — gobierno de memoria: bloquea que el núcleo cognitivo active memoria persistente.
-- **`ARC-008`** — observabilidad/trazas: bloquea decisiones del núcleo sin trazabilidad suficiente.
 
 ## Época 1 — Núcleo Cognitivo (iniciada 2026-08-02)
 
 **ADR-0004 aceptado** como arquitectura objetivo del Motor de Decisión. Cierra **F-1.1**.
-Con ADR-0002 y ADR-0004 aceptados, y ARC-001/003/004/006 cerrados, no queda ningún ADR
-propuesto que bloquee el diseño del núcleo cognitivo.
+Con ARC-001/002/003/004/006/008 cerrados, no queda ningún ADR de Época 1 propuesto que
+bloquee el diseño del núcleo cognitivo.
 
-**F-1.2 iniciada, acotada a esqueleto y contratos.** `nucleo-cognitivo/` es un paquete nuevo,
-aislado de `worker.js` y `alejandra-agente/worker.js` — no se integra en producción. Incluye
-Estado Cognitivo (efímero, sin persistencia), Policy Engine (clasificación de riesgo N0–N3 de
-ADR-0006, sin acceso a sesión real), y las interfaces de Context Engine, Planner y Motor de
-Decisión (forma de datos definida, sin implementación real). Por decisión expresa del
-Director: **no se activa memoria persistente sensible** (ARC-002 sigue sin ADR) **ni se toman
-decisiones sin trazabilidad suficiente** (ARC-008 sigue abierto). Memory, Nexo, Capability/Tool
-Registry, Verifier y QA quedan fuera de este entregable — pertenecen a F-1.3/F-2.1/F-2.2, no
-abiertas. Las 5 «Decisiones abiertas» de `docs/architecture/04-MOTOR-DE-DECISION.md` siguen sin
-resolver, para cuando F-1.2 tenga contexto concreto con el que decidirlas.
+**F-1.2 iniciada con esqueleto y contratos; ampliable tras ADR-0013/0014.**
+`nucleo-cognitivo/` es un paquete nuevo, aislado de `worker.js` y `alejandra-agente/worker.js`
+— no se integra en producción. Incluye Estado Cognitivo (efímero, sin persistencia), Policy
+Engine (clasificación de riesgo N0–N3 de ADR-0006, sin acceso a sesión real), y las interfaces
+de Context Engine, Planner y Motor de Decisión (forma de datos definida, sin implementación
+real). **Con ADR-0013 y ADR-0014 aceptados (2026-08-02)**, el esqueleto puede ampliarse con la
+interfaz `memory.js` (contrato de ADR-0013, sección 8) y el helper inyectable
+`registrarTraza()` (contrato de ADR-0014, sección 5) — ambos como interfaces sin persistencia
+real todavía, mismo patrón que el resto del paquete. La persistencia real de cualquiera de los
+dos exige además la migración D1 correspondiente (la de trazas ya autorizada, solo en
+desarrollo/pruebas). Nexo, Capability/Tool Registry, Verifier y QA siguen fuera de este
+entregable — pertenecen a F-1.3/F-2.2, no abiertas. Las 5 «Decisiones abiertas» de
+`docs/architecture/04-MOTOR-DE-DECISION.md` siguen sin resolver, para cuando F-1.2 tenga
+contexto concreto con el que decidirlas.
 
 ## Siguiente objetivo
 
-El trabajo de código en curso es F-1.2 (esqueleto del núcleo cognitivo). En paralelo, ARC-011
-fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla contra D1
-sigue requiriendo autorización del Director. `F-0.2-CFG`, `ARC-018` y `ARC-014` siguen
-esperando decisión del Director, sin relación con el núcleo cognitivo.
+El trabajo de código en curso es F-1.2: ampliar `nucleo-cognitivo/` con las interfaces
+`memory.js` y `registrarTraza()` recién desbloqueadas. En paralelo, ARC-011 fase 3
+(ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla contra D1 sigue
+requiriendo autorización del Director. La migración de `alejandra_trazas` (ADR-0014) tiene
+autorización acotada a desarrollo/pruebas, pendiente de ejecutarse por el workflow manual.
+`F-0.2-CFG` y `ARC-014` siguen esperando decisión del Director, sin relación con el núcleo
+cognitivo.
 
 ## Arquitectura de presentación
 

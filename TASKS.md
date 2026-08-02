@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **tareas activas**: F-0.2-CFG, ARC-011-FASE3-CHECKLISTS, F-1.2-NUCLEO-ESQUELETO y P-ARCH-002 (línea de presentación, independiente). ARC-013 ya está desplegado y pasa a la tabla de completadas. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **tareas activas**: F-0.2-CFG, ARC-011-FASE3-CHECKLISTS, F-1.2-NUCLEO-ESQUELETO, ARC-008-TRAZAS-MIGRACION (nueva) y P-ARCH-002 (línea de presentación, independiente). ARC-013 ya está desplegado y pasa a la tabla de completadas. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Reglas
 
@@ -65,12 +65,12 @@ Siguiente acción exacta:
   4. El contrato del Motor de Decisión exige, en su forma de datos, los campos de traza de `docs/architecture/04-MOTOR-DE-DECISION.md` (decisión, motivos, evidencia, confianza, riesgo, permisos efectivos, modo, criterio de salida).
   5. Ningún componente de Memory, Nexo, Capability/Tool Registry, Verifier o QA se construye en esta tarea.
   6. Pruebas (`node --test`) verifican los puntos 1-4; CI ejecuta `node --check` y las pruebas del paquete.
-- Dependencias: ADR-0004 aceptado (2026-08-02); F-1.1 cerrada.
-- Bloqueos: ARC-002 (memoria) y ARC-008 (trazas) impiden ampliar más allá de este esqueleto.
+- Dependencias: ADR-0004 aceptado (2026-08-02); F-1.1 cerrada. ADR-0013 y ADR-0014 aceptados con modificaciones (2026-08-02) desbloquean la ampliación siguiente.
+- Bloqueos: ninguno para las interfaces `memory.js` (contrato ADR-0013 §8) y `registrarTraza()` (contrato ADR-0014 §5) — ambas sin persistencia real. La persistencia real de memoria o trazas exige además aplicar la migración D1 correspondiente (la de `alejandra_trazas` ya autorizada, solo en desarrollo/pruebas).
 - Archivos principales: `nucleo-cognitivo/` (nuevo).
 - Pruebas: `node --check` sobre cada módulo; `node --test nucleo-cognitivo/test`.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: ampliar el esqueleto solo cuando F-1.3/F-2.1 se abran con sus propias dependencias resueltas; mientras tanto, esta tarea queda en curso sin fecha de cierre fija.
+- Siguiente acción exacta: construir `nucleo-cognitivo/src/memory.js` y el contrato `registrarTraza()` como interfaces (mismo patrón que `context-engine.js`/`planner.js`: lanzan error explícito citando la dependencia real que falta, no un stub silencioso), con pruebas. No integrar persistencia real todavía.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 
@@ -93,6 +93,29 @@ Siguiente acción exacta:
 - Pruebas: verificación manual de que los 4 `CREATE TABLE IF NOT EXISTS` coinciden columna por columna con los `CREATE` de `worker.js` (14196, 14207, 18122, 18134); `node -e "JSON.parse(...)"` sobre el manifiesto.
 - Última actualización: 2026-08-02
 - Siguiente acción exacta: el Director decide si autoriza aplicar `migrate_checklists.sql` contra D1 (paso 2 de ADR-0011) por el workflow manual de migraciones.
+
+### ARC-008-TRAZAS-MIGRACION — Declarar y aplicar la tabla `alejandra_trazas`
+
+- ID: ARC-008-TRAZAS-MIGRACION
+- Título: Migración D1 de la tabla de trazas (ADR-0014)
+- Fase: Época 0/1 — deuda de observabilidad (derivada de ARC-008)
+- Estado: lista
+- Prioridad: Media
+- Rama: `PENDIENTE`
+- Responsable actual: Agente de Ingeniería (declarar); autorización del Director ya concedida y acotada para aplicar
+- Objetivo: declarar en una migración `.sql` versionada la tabla `alejandra_trazas` con el esquema exacto de ADR-0014 (`id`, `ts`, `worker`, `tipo`, `empresa_id`, `usuario_id`, `resumen`, `detalle_json`, índices por `ts` y `tipo`), siguiendo el ciclo de ADR-0011, y aplicarla contra el entorno actual de desarrollo/pruebas.
+- Criterios de aceptación:
+  1. Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) registrada en `migrate_manifiesto.json` como `aplicada: false` hasta ejecutarla.
+  2. Copia o export previo del estado actual del entorno antes de aplicar (condición explícita de ADR-0014 §6).
+  3. Aplicación por el workflow manual `Apply Alejandra Agent D1 migration`, con confirmación exacta — **autorización ya concedida por el Director, acotada al entorno actual de desarrollo/pruebas; no se extiende a una futura producción real**.
+  4. Validación posterior contra el esquema real (mismo criterio que ARC-012).
+  5. `worker.js` y `alejandra-agente/worker.js` no se modifican en esta tarea — la tabla existe, pero nada escribe en ella todavía (eso es implementación de `/health`, `GET /admin/trazas` y `registrarTraza()`, trabajo aparte).
+- Dependencias: ADR-0014 aceptado con modificaciones (2026-08-02).
+- Bloqueos: ninguno para declarar y aplicar en desarrollo/pruebas; aplicar en producción real exige autorización aparte.
+- Archivos principales: `migrate_trazas.sql` (nuevo), `migrate_manifiesto.json`.
+- Pruebas: verificación manual de que el `CREATE TABLE IF NOT EXISTS` coincide con el esquema de ADR-0014 §1; validación post-aplicación contra D1 real (entorno de desarrollo/pruebas).
+- Última actualización: 2026-08-02
+- Siguiente acción exacta: declarar `migrate_trazas.sql`, hacer copia/export previo del entorno de desarrollo/pruebas, aplicar por el workflow manual, y validar contra el esquema real.
 
 ### F-0.2-CFG — Completar la configuración remota de entrega segura
 
