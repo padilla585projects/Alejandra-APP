@@ -82,10 +82,11 @@ sensibles (`ejecutar_deploy` N3, `github_escribir`/`patch_codigo`/`rollback`/`te
 `validar_cambios_bd` N0), cada una revisada línea a línea. 119/119 en verde tras el lote 6. **Lote 7:** notificaciones/contenido —
 `enviar_email`/`enviar_telegram_informe` N2 (salen de la organización); `enviar_push`/
 `iniciar_conversacion`/`controlar_app`/`generar_informe`/`subir_archivo`/`ram_save`/
-`ram_clear` N1. 120/120 en verde. **54/103 tools migradas**; quedan 15 en el agente y 34 en
-`worker.js` raíz.
-`memory_save`/`memory_read`/`propose_mejora`/`tomar_decision` sin clasificar a propósito
-(dominio de ADR-0013, no de ADR-0010).
+`ram_clear` N1. 120/120 en verde tras el lote 7. **Lote 8 — CATÁLOGO DEL AGENTE COMPLETO:** `exportar_datos`
+N2 (exporta sin `LIMIT`, PII de personal); resto N0/N1. 121/121 en verde. **69/69 tools de
+`alejandra-agente/worker.js` migradas** (`memory_save`/`memory_read`/`propose_mejora`/
+`tomar_decision` deliberadamente excluidas, dominio ADR-0013). **65/103 tools totales**;
+queda `worker.js` raíz (34 tools, gating independiente).
 
 En paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla
 contra D1 sigue exigiendo autorización del Director.

@@ -1255,6 +1255,8 @@ const TOOL_CALCULAR_PROTECCION = {
   nivel_riesgo: 'N0',
 };
 
+// F-1.3/ADR-0010 (lote 8, 2026-08-02): último lote del agente, revisado
+// linea a linea. Solo lectura/análisis (sin R2/D1 write): N0.
 const TOOL_ANALIZAR_FOTO = {
   name: 'analizar_foto_obra',
   description: 'Analiza una foto de obra con IA de visión avanzada (Gemini). Identifica elementos, problemas, materiales, estado de instalaciones eléctricas/mecánicas.',
@@ -1265,7 +1267,10 @@ const TOOL_ANALIZAR_FOTO = {
       pregunta: { type: 'string', description: 'Pregunta específica sobre la foto (opcional)' }
     },
     required: ['key']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_GENERAR_ESQUEMA = {
@@ -1306,7 +1311,12 @@ MODO B — SVG MANUAL (para circuitos personalizados que no sean DOL):
       obra_id:     { type: 'number', description: 'ID de obra (opcional). Si se indica, guarda el esquema en los documentos de esa obra — aparece en la sección Documentos de la app.' }
     },
     required: ['titulo', 'tipo']
-  }
+  },
+  // Escribe HTML+SVG en R2 y (si hay obra_id) una fila en documentos_obra --
+  // una entidad nueva, propia empresa. N1.
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_LISTAR_ESQUEMAS = {
@@ -1318,9 +1328,14 @@ const TOOL_LISTAR_ESQUEMAS = {
       obra_id: { type: 'number', description: 'ID de obra para filtrar (opcional). Si no se indica, devuelve todos.' },
       limit:   { type: 'number', description: 'Máximo de resultados (por defecto 20, máx 50)' }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
+// DELETE de R2 + BD tras comprobar propiedad primero (fix continuación 17).
+// Fila unica, reversible en el sentido de ADR-0006 (alcance acotado). N1.
 const TOOL_BORRAR_ESQUEMA = {
   name: 'borrar_esquema',
   description: 'Elimina un esquema eléctrico: borra los archivos de R2 (HTML visor + SVG puro) y el registro en documentos_obra. Pasa el r2_key del HTML (termina en .html).',
@@ -1331,7 +1346,10 @@ const TOOL_BORRAR_ESQUEMA = {
       documento_id: { type: 'number', description: 'ID del registro en documentos_obra (opcional, acelera la búsqueda)' }
     },
     required: ['r2_key']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1468,9 +1486,19 @@ const TOOL_GENERAR_GRAFICO = {
       }
     },
     required: ['tipo', 'titulo', 'labels', 'datasets']
-  }
+  },
+  // INSERT de una fila en graficos + construye una URL de QuickChart (no
+  // escribe datos de negocio). N1.
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
+// INSERT de una fila en alejandra_preguntas + aviso por Telegram, pero a un
+// DESTINO FIJO (el bot/chat del propio proyecto vía env.TELEGRAM_BOT_TOKEN,
+// no un chat_id arbitrario que el llamador elija) -- distinto de
+// enviar_telegram_informe (N2), que sí acepta un chat_id arbitrario. Mismo
+// canal que ya usa ADR-0009 para revisión humana asíncrona. N1.
 const TOOL_PREGUNTAR_USUARIO = {
   name: 'preguntar_usuario',
   description: 'Formula una pregunta de aclaracion estructurada cuando te falta informacion clave para continuar y NO hay un usuario esperando tu respuesta en ese momento (por ejemplo: durante tu auto-analisis/reflexion periodica). La pregunta queda guardada y se avisa a Adrian por Telegram; cuando la responda, la retomaras en tu siguiente ciclo de analisis. NO uses esta tool en una conversacion normal donde el usuario esta escribiendote ahora mismo: en ese caso simplemente pregunta en tu propia respuesta de texto, sin necesidad de ninguna tool.',
@@ -1482,7 +1510,10 @@ const TOOL_PREGUNTAR_USUARIO = {
       contexto: { type: 'string', description: 'Breve contexto de por que surge la pregunta' }
     },
     required: ['pregunta']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_GENERAR_PLANO = {
@@ -1526,7 +1557,12 @@ El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos)
       }
     },
     required: ['tipo', 'titulo', 'descripcion']
-  }
+  },
+  // Proxy via env.API_WEB al worker web, que genera y guarda UN plano nuevo
+  // acotado por empresa_id (mismo mecanismo que editar_plano, ya N1). N1.
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_EDITAR_PLANO = {
@@ -1562,6 +1598,7 @@ const TOOL_EDITAR_PLANO = {
   nivel_riesgo: 'N1',
 };
 
+// Solo SELECTs en paralelo (Promise.all), acotados por obra/empresa. N0.
 const TOOL_ESTADO_OBRA = {
   name: 'estado_obra',
   description: 'Obtiene un resumen ejecutivo completo de una obra: KPIs actuales (fichajes hoy, equipos, pedidos, incidencias abiertas), fases de planificación con % de progreso, últimas entradas del diario de obra, y tareas abiertas por prioridad. Úsalo cuando el usuario pregunte por el estado, el progreso, el briefing del día, o quiera saber cómo va la obra.',
@@ -1570,7 +1607,10 @@ const TOOL_ESTADO_OBRA = {
     properties: {
       obra_id: { type: 'number', description: 'ID de la obra. Si no se especifica, busca la obra activa del usuario.' }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 // F-1.3/ADR-0010 (lote 4, 2026-08-02): las 5 tools "gestionar_*" son CRUD
@@ -2405,6 +2445,8 @@ const TOOL_MARCAR_PLANO = {
   nivel_riesgo: 'N0',
 };
 
+// Genera texto a partir de plantillas + input.datos (sin leer BD) y escribe
+// UN archivo en R2. N1.
 const TOOL_GENERAR_DOCUMENTO = {
   name: 'generar_documento',
   description: 'Genera un documento técnico completo (memoria técnica, certificado de instalación, lista de materiales, presupuesto o informe de obra) y lo guarda en R2 para descargar.',
@@ -2416,7 +2458,10 @@ const TOOL_GENERAR_DOCUMENTO = {
       datos:  { type: 'object', description: 'Datos del documento según tipo: memoria_tecnica {titulo,obra,instalador,cif,direccion,objeto,normativa,descripcion,potencia,calculos,pliego,firmante}; certificado_instalacion {numero,titular,direccion,localidad,tipo_instalacion,tension,potencia_instalada,potencia_demandada,empresa_instaladora,reie,instalador,continuidad,aislamiento,tierra,diferenciales,firmante}; lista_materiales {obra,materiales:[{nombre,referencia,fabricante,cantidad,unidad,precio_unitario}]}; presupuesto {cliente,obra,validez,iva_pct,partidas:[{descripcion,cantidad,unidad,precio}]}; informe_obra {obra,responsable,estado_general,avance_pct,trabajos_realizados,incidencias,materiales_pendientes,personal_count,observaciones,proximos_pasos}' }
     },
     required: ['tipo']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_BUSCAR_NORMATIVA = {
@@ -2436,6 +2481,9 @@ const TOOL_BUSCAR_NORMATIVA = {
   nivel_riesgo: 'N0',
 };
 
+// accion='registrar' hace un INSERT de una fila en materiales_obra, acotado
+// por empresa real de la sesión salvo dev verificado (fix continuación 19);
+// consultar/comparar son SELECT. N1 por la escritura.
 const TOOL_HISTORICO_MATERIALES = {
   name: 'historico_materiales',
   description: 'Tracking de materiales usados por obra: registra consumos, consulta el histórico de una obra o compara consumo entre obras similares.',
@@ -2455,7 +2503,10 @@ const TOOL_HISTORICO_MATERIALES = {
       notas:           { type: 'string', description: 'Notas adicionales (opcional)' }
     },
     required: ['accion']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 // CRUD de una fila en alertas_config; condicion_sql se valida como SELECT-only
@@ -2484,6 +2535,14 @@ const TOOL_CONFIGURAR_ALERTA = {
   nivel_riesgo: 'N1',
 };
 
+// Aunque es un SELECT (no escribe datos de negocio), exporta TODAS las filas
+// que cumplan el filtro sin LIMIT -- a diferencia de las tools de búsqueda
+// (limit 10-50). tipo='personal' incluye DNI/teléfono/email. Se clasifica
+// N2 por el volumen/sensibilidad de lo que puede salir de la BD de una vez,
+// no por escribir nada; hoy el código no exige confirmación humana para esto
+// (a diferencia de escribir_bd), que es exactamente lo que N2 pide en
+// ADR-0006 -- queda anotado como pendiente para cuando se implemente el
+// gating real, no se toca el comportamiento en esta tarea.
 const TOOL_EXPORTAR_DATOS = {
   name: 'exportar_datos',
   description: 'Exporta datos (bobinas, personal, fichajes, materiales, gastos, o una consulta SQL SELECT personalizada) a un CSV descargable guardado en R2.',
@@ -2497,7 +2556,10 @@ const TOOL_EXPORTAR_DATOS = {
       sql_custom:   { type: 'string', description: 'Consulta SELECT personalizada (requerida solo si tipo="custom"; debe empezar por SELECT)' }
     },
     required: ['tipo']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N2',
 };
 
 const TOOL_BUSCAR_PROCEDIMIENTOS = {
