@@ -31,7 +31,7 @@ específicas de contribución, seguridad y calidad del repositorio.
 
 ## Prohibiciones
 
-- **Autonomía: ver ADR-0007**, que es la fuente única. En resumen: el código es reversible y el agente actúa solo (ramas, commits, push, PR, merge con CI en verde, pruebas, despliegue de Workers y encadenar tareas ya aprobadas). Los datos no lo son y exigen decisión humana: **migraciones D1, secretos, `DELETE`/`DROP`/`TRUNCATE`/`UPDATE` masivo y borrado en R2**. Abrir una **fase nueva** del roadmap tampoco es autónomo.
+- **Autonomía: ver ADR-0007**, que es la fuente única. En resumen: el código es reversible y el agente actúa solo (ramas, commits, push, PR, merge con CI en verde, pruebas, despliegue de Workers y encadenar tareas ya aprobadas). Los datos no lo son y exigen decisión humana: **migraciones D1, secretos, `DELETE`/`DROP`/`TRUNCATE`/`UPDATE` masivo y borrado en R2**. Abrir una **fase nueva** sí es autónomo si todas sus dependencias están cerradas y sus ADR aceptados (ADR-0007, enmienda 1); **aceptar** un ADR nunca lo es.
 - Todo despliegue autónomo exige verificación posterior registrada. Desplegar sin comprobar no es autonomía.
 - No hacer refactors masivos, borrados no justificados ni cambios funcionales fuera de alcance.
 - No inventar decisiones: marcar `PENDIENTE` y solicitar la aprobación necesaria.

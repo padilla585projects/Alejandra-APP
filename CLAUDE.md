@@ -93,7 +93,7 @@ verde, ejecutar pruebas, **desplegar Workers** y encadenar tareas ya aprobadas e
 - **`DELETE`, `DROP`, `TRUNCATE` o `UPDATE` masivo.** Se mantiene la barrera
   `CONFIRMO BORRADO` (SEC-08/SEC-09).
 - **Borrado en R2.** Los ficheros no tienen copia.
-- **Abrir una fase nueva del roadmap.** Es decisión de producto, no de ingeniería.
+- **Aceptar un ADR** (pasarlo de Propuesto a Aceptado). Redactarlo sí es autónomo; abrir una fase también, si sus dependencias están cerradas — ADR-0007, enmienda 1.
 
 Además, con independencia de la autonomía: **no hacer refactors masivos** ni cambios fuera
 del alcance acordado, y **no inventar decisiones** — marcar `PENDIENTE` y pedir aprobación.
@@ -123,7 +123,7 @@ Todo despliegue autónomo exige **verificación posterior registrada**.
 4. Implementar una unidad coherente; no mezclar limpieza, seguridad y funcionalidades sin relación.
 5. Ejecutar las pruebas pertinentes y registrar resultado, omisiones y motivo.
 6. Actualizar `PROJECT_STATE.md`, `HANDOFF.md`, `CHANGELOG.md` y ADR/runbook cuando corresponda.
-7. Entregar para revisión y **tomar la siguiente tarea aprobada de `TASKS.md` sin pedir permiso** (ADR-0007). **No abrir una fase nueva sin autorización explícita.**
+7. Entregar para revisión y **tomar la siguiente tarea aprobada de `TASKS.md` sin pedir permiso** (ADR-0007). Se puede **abrir la siguiente fase** si todas sus dependencias están cerradas y sus ADR aceptados (enmienda 1), dejando constancia. **Aceptar un ADR nunca es autónomo.**
 
 Ramas: una tarea principal por rama, con prefijos `docs/`, `chore/`, `feat/`, `fix/` y
 formato `tipo/area-descripcion`. Nunca trabajar directamente sobre `main`.
@@ -146,7 +146,7 @@ git commit -m "tipo: descripción"
 ```powershell
 node --check worker.js
 node --check alejandra-agente/worker.js
-npm --prefix alejandra-agente test    # 85 tests de políticas y tools
+npm --prefix alejandra-agente test    # 94 tests de políticas y tools
 ```
 
 Ejecutar la sintaxis de los Workers cuando se modifiquen, y los tests del agente ante

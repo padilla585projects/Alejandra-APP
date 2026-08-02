@@ -57,7 +57,34 @@ No por ceremonia, sino porque **no hay vuelta atrás razonable**.
 | **Secretos** | Su exposición no se deshace. Rotarlos exige coordinación externa |
 | `DELETE`, `DROP`, `TRUNCATE`, `UPDATE` masivo | Pérdida de datos de terceros. Mantiene la barrera `CONFIRMO BORRADO` (SEC-08/SEC-09) |
 | Borrado en R2 | Los ficheros no tienen copia |
-| **Abrir una fase nueva del roadmap** | Es una decisión de producto, no de ingeniería. Encadenar tareas aprobadas sí es autónomo; abrir una fase, no |
+| Aceptar un ADR | Cambiar un ADR de «Propuesto» a «Aceptado» es la decisión misma. Redactarlo sí es autónomo |
+
+### Enmienda 1 (2026-08-02) — apertura autónoma de fases
+
+Autorizada expresamente por el Director. La redacción original reservaba abrir una fase
+nueva para el Director; en la práctica eso detenía al agente aunque todas las dependencias
+de la fase estuvieran cerradas, que es precisamente el caso en que ya no hay nada que
+decidir.
+
+**El agente puede abrir la siguiente fase del roadmap por su cuenta si, y solo si:**
+
+1. **Todas** las dependencias declaradas en la ficha de esa fase en `MASTER_ROADMAP.md`
+   están resueltas y documentadas.
+2. Los ADR de los que depende están en estado **Aceptado**. Un ADR redactado pero
+   propuesto **no** cuenta.
+3. El agente deja constancia escrita de esa comprobación, dependencia por dependencia,
+   antes de escribir la primera línea de código.
+
+**Se detiene** si alguna dependencia no está resuelta, si un ADR sigue propuesto, o si al
+comprobarlo aparece una contradicción entre documentos.
+
+**Lo que esta enmienda NO cambia:** el agente sigue sin poder **aceptar** un ADR. Por
+tanto, una fase cuyo contenido sea tomar decisiones —como F-1.1, que consiste en resolver
+ADR-0002 y ADR-0004— sigue requiriendo al Director. La enmienda desbloquea las fases de
+**construcción**, no las de **decisión**.
+
+Esto es deliberado: si el agente pudiera aceptar los ADR de los que depende para avanzar,
+la condición 2 no sería una condición, sería un trámite que él mismo se firma.
 
 ## Alternativas consideradas
 
