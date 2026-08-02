@@ -21,25 +21,22 @@ Cada despliegue usa un `ref` explícito. Antes de iniciarlo: confirmar SHA, CI, 
 
 ### Verificación tras desplegar (manual, obligatoria)
 
-**Los despliegues de Workers no llevan healthcheck automático a propósito.** `GET /health`
-existe y es público en ambos Workers, no exige credenciales y no tiene efectos secundarios,
-pero **no distingue «Worker desplegado» de «Worker operativo»**:
+**Los workflows de Workers todavía no ejecutan un healthcheck automático.** No es porque el
+endpoint sea superficial: desde ADR-0014, `GET /health` es público, no tiene efectos
+secundarios, comprueba D1 y el objeto centinela de R2, y devuelve `estado` (`healthy`,
+`degraded` o `unhealthy`) junto con la versión derivada del despliegue.
 
-| Worker | Endpoint | Por qué no sirve como healthcheck |
-|---|---|---|
-| API (`alejandra-app-api`) | `worker.js:4822` | Devuelve `{ok:true, ts}` constante. No consulta D1 ni R2: respondería 200 con la base de datos caída o los bindings ausentes. |
-| Agente (`alejandra-agente`) | `alejandra-agente/worker.js:2493` | Devuelve flags de presencia de secretos, pero tampoco toca D1/R2. Su campo `version` está escrito a mano (`6.14`) y ya se desincronizó una vez (ver cabecera del archivo, v6.13), así que no acredita qué versión se desplegó. |
-
-Un 200 de esos endpoints daría luz verde a un despliegue roto, que es peor que no comprobar
-nada. Por eso la verificación es manual: tras desplegar, el responsable debe comprobar una
-operación real de lectura contra D1 desde la aplicación y registrar el resultado en el handoff.
+Por ahora la verificación sigue siendo manual y obligatoria: tras desplegar, el responsable
+debe consultar `/health`, confirmar que el estado es `healthy`, realizar una lectura real desde
+la aplicación y registrar ambos resultados en el handoff. `degraded` exige investigación antes
+de dar el despliegue por bueno; `unhealthy` exige rollback o mitigación.
 
 Pages sí conserva healthcheck automático: comprueba que `/version.json` sirve la versión
 publicada, lo que sí distingue publicado de operativo.
 
-**Reincorporar healthchecks automáticos requiere primero** un endpoint de salud que verifique
-dependencias reales (D1, R2 y bindings) y exponga la versión desplegada de forma derivada, no
-escrita a mano. Registrado en ARC-008.
+El endpoint ya cumple los requisitos para automatizar la comprobación. Incorporarla a los
+workflows es una tarea posterior y separada: debe tratar `degraded` como advertencia y
+`unhealthy` como bloqueo, y conservar la verificación posterior registrada.
 
 ## Migraciones D1
 

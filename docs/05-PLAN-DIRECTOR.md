@@ -1,14 +1,14 @@
 # Plan director
 
-## Fase 0 — Auditoría y preparación
+## Estado de ejecución
 
-Alcance actual: inventario técnico, riesgos, documentación, estándares, ADRs, runbooks y plan de PRs. No se cambia el comportamiento de Alejandra.
+La auditoría y preparación de Fase 0 están cerradas. La entrega segura está activa en remoto: CI, despliegues, migraciones D1 y secretos son operaciones separadas. El plan ejecutable vigente es `MASTER_ROADMAP.md`; `PROJECT_STATE.md` conserva el estado y los riesgos activos.
 
 ## Siguientes puertas de decisión
 
-1. Revisar y aceptar la auditoría y ADR-0001.
-2. Acordar el modelo de promoción a producción antes de cualquier cambio funcional.
-3. Definir el primer corte vertical del núcleo y su contrato de pruebas.
-4. Ejecutar refactorizaciones pequeñas por dominio, con compatibilidad y rollback.
+1. Completar ARC-011 fase 3: migrador por vertical, empezando por `checklists`; la aplicación contra D1 exige autorización humana.
+2. Cerrar F-0.2-CFG trasladando secretos al entorno `production` cuando el Director facilite los valores.
+3. Resolver ARC-014 para separar la aprobación del entorno de la credencial que inicia el despliegue.
+4. Evolucionar F-1.2 únicamente dentro de los contratos y límites aceptados; el núcleo sigue aislado de producción.
 
-No se autoriza en este plan la implantación de Marketplace, Skills, Plugins, MCP, agentes, motor cognitivo, QA o Nexo 2.0; requieren fases y ADRs propios.
+No se autoriza por este documento la integración del núcleo en producción ni la implantación de Marketplace, Skills, Plugins, MCP, agentes, QA o capacidades adicionales; requieren la fase, el ADR y la autorización aplicables.

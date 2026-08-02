@@ -1,8 +1,8 @@
 # Motor de Decisión y Modos Cognitivos v1.0
 
-- Estado: especificación para revisión de arquitectura
-- Alcance: diseño del componente central de decisión; no implementa ni altera el agente actual
-- Dependencias: ADR-0003 aceptado; arquitectura cognitiva v1.0; ARC-001, ARC-003, ARC-004 y ARC-006 pendientes
+- Estado: arquitectura objetivo aceptada; contrato aislado en F-1.2
+- Alcance: diseño del componente central de decisión; `nucleo-cognitivo/src/motor-decision.js` fija su contrato, pero no altera el agente de producción
+- Dependencias: ADR-0003, ADR-0004, ADR-0006, ADR-0008, ADR-0009, ADR-0010 y ADR-0014 aceptados
 
 ## Propósito
 
@@ -17,7 +17,7 @@ Su objetivo es elegir la acción mínima que permita avanzar con evidencia, resp
 | Responsabilidades | Clasificar intención e impacto; seleccionar modo; decidir necesidades de contexto/conocimiento/memoria; determinar ruta de control; exigir aprobación o detenerse cuando ADR-0003 no se cumple. |
 | Entradas | Solicitud normalizada, identidad/sesión, contexto disponible, estado cognitivo, políticas efectivas, registros de capacidades/tools, evidencia disponible y restricciones del canal. |
 | Salidas | `respuesta_directa`, `solicitar_informacion`, `recuperar_contexto`, `consultar_memoria`, `buscar_conocimiento`, `plan`, `solicitar_aprobacion`, `invocar_tool`, `activar_colaboracion`, `rechazar`, `posponer`. |
-| Trazabilidad | Decisión, motivos, evidencia, confianza, riesgo, permisos efectivos, modo y criterio de salida. El formato/retención es `PREGUNTA ABIERTA`. |
+| Trazabilidad | Decisión, motivos, evidencia, confianza, riesgo, permisos efectivos, modo y criterio de salida. ADR-0014 fija persistencia en D1, minimización y retención diferenciada; el contrato inyectable mantiene al núcleo sin I/O. |
 
 ## Prioridades y criterios
 
@@ -128,10 +128,9 @@ El Motor de Decisión coordina rutas; los componentes especializados conservan s
 
 ## Riesgos y preguntas abiertas
 
-- Sin taxonomía de riesgo/umbrales aprobados (ARC-001), el motor solo puede fijar el principio, no automatizar decisiones de aprobación.
-- Sin catálogo de tools y capacidades (ARC-006), las “herramientas preferentes” son categorías, no permisos implementables.
-- Activación de agentes depende de definición de Nexo y modelo de colaboración (ARC-003); no se presupone que exista.
-- QA independiente, trazas y métricas de confianza siguen pendientes (ARC-004/ARC-008).
+- La matriz N0–N3 (ADR-0006) y el catálogo de tools (ADR-0010) están aceptados, pero el núcleo todavía no lee sesión, permisos ni registros reales.
+- Nexo está definido como capa de integración con sistemas externos (ADR-0008); su implementación sigue fuera de la fase abierta.
+- QA y trazas tienen decisiones aceptadas (ADR-0009/0014); la ejecución completa de esas capas no pertenece aún al núcleo aislado.
 - Una clasificación de modo errónea no debe cambiar permisos ni ejecutar; el modo debe ser explicable, revisable y sustituible.
 
 ## Decisiones abiertas

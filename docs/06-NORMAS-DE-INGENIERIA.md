@@ -1,7 +1,7 @@
 # Normas de ingeniería
 
 1. Trabajar en ramas cortas y PRs pequeños; no mezclar documentación, seguridad y funcionalidades no relacionadas.
-2. No hacer *push* a `main` como mecanismo de despliegue hasta que se apruebe el cambio de CI/CD descrito en ADR-0001.
+2. No usar un *push* o merge a `main` como mecanismo de despliegue: CI valida y los despliegues, migraciones D1 y secretos se inician manualmente mediante los workflows versionados y sus protecciones de entorno.
 3. Todo endpoint debe autenticar, autorizar y acotar empresa/departamento antes de acceder a D1 o R2.
 4. Las operaciones destructivas y las acciones externas requieren validación explícita, trazabilidad y prueba negativa.
 5. Los secretos solo viven en el gestor de secretos correspondiente; `.env.example` contiene únicamente marcadores.

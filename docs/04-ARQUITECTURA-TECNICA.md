@@ -21,7 +21,7 @@ flowchart LR
 - Backend: `worker.js` raíz (≈26.280 líneas) y `alejandra-agente/worker.js` (≈11.133 líneas).
 - Datos: D1 compartida y R2 compartido entre Workers; el agente además usa KV para límite de tasa.
 - Infraestructura declarada: ambos `wrangler.toml` enlazan `DB` y `FILES`; el agente declara `API_WEB` y `RATE_LIMIT_KV`.
-- Automatización: GitHub Actions despliega Pages y ambos Workers al hacer push a `main`.
+- Automatización: GitHub Actions ejecuta CI en PR/push; Pages, cada Worker, migraciones D1 y secretos se promueven mediante workflows manuales independientes, con `ref` explícito y protecciones de entorno.
 
 ## Decisión de evolución
 
