@@ -227,6 +227,27 @@ describe('filtrarToolsPorAuth', () => {
     }
   });
 
+  // F-1.3-MIGRAR-RESTO-TOOLS, lote 4 (2026-08-02): las 5 tools "gestionar_*"
+  // (CRUD acotado por empresa_id, N1) más editar_plano (N1) y marcar_plano
+  // (N0 — pese al nombre, es solo lectura/análisis, sin escritura en D1).
+  // Todas exigían sesión (TOOLS_REQUIEREN_SESION) antes de esta migración.
+  it('lote 4 (gestionar_tarea/rfi/oc/acta/calidad, editar_plano N1; marcar_plano N0): metadato ADR-0010 no cambia el filtrado', () => {
+    const lote4 = [
+      ['gestionar_tarea', 'N1'], ['gestionar_rfi', 'N1'], ['gestionar_oc', 'N1'],
+      ['gestionar_acta', 'N1'], ['gestionar_calidad', 'N1'], ['editar_plano', 'N1'],
+      ['marcar_plano', 'N0'],
+    ];
+    for (const [name, nivel_riesgo] of lote4) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso: 'sesion', cron: 'permitido', nivel_riesgo };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+      }
+      expect(filtrarToolsCron([conMetadato])).toEqual([conMetadato]);
+    }
+  });
+
   // F-1.3-MIGRAR-RESTO-TOOLS, lote 3 (2026-08-02): 7 tools públicas
   // (SEC-ANON-01 las dejó deliberadamente sin sesión porque no tocan datos de
   // nadie: búsqueda externa y cálculos de ingeniería deterministas).

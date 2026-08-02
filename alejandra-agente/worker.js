@@ -1539,7 +1539,13 @@ const TOOL_EDITAR_PLANO = {
       }
     },
     required: ['cambios']
-  }
+  },
+  // Revisado el case 'editar_plano' (worker.js): modifica los circuitos de UN
+  // plano ya existente, acotado por empresa_id via el endpoint interno del
+  // worker web (env.API_WEB). Una fila/entidad de negocio, empresa propia.
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_ESTADO_OBRA = {
@@ -1553,6 +1559,12 @@ const TOOL_ESTADO_OBRA = {
   }
 };
 
+// F-1.3/ADR-0010 (lote 4, 2026-08-02): las 5 tools "gestionar_*" son CRUD
+// acotado a empresa_id (WHERE id=? AND empresa_id=? en cada UPDATE/DELETE),
+// una fila por operación, sin acceso cross-empresa. nivel_riesgo:'N1' (ADR-0006:
+// "modifica datos de negocio; deshacer trivial; alcance una fila o pocas").
+// Revisado el código de ejecución de cada una antes de clasificar -- no por
+// patrón de nombre (ver marcar_plano más abajo, que pese al nombre es N0).
 const TOOL_GESTIONAR_TAREA = {
   name: 'gestionar_tarea',
   description: 'Crea, actualiza o lista tareas de obra (tipo Fieldwire). Cada tarea tiene título, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), responsable, fecha límite y ubicación. Úsalo cuando el usuario quiera crear una tarea, asignar trabajo, ver qué está pendiente, o marcar algo como completado.',
@@ -1576,7 +1588,10 @@ const TOOL_GESTIONAR_TAREA = {
       filtro_estado: { type: 'string', description: 'Para listar: filtrar por estado' }
     },
     required: ['accion']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_GESTIONAR_RFI = {
@@ -1606,7 +1621,10 @@ const TOOL_GESTIONAR_RFI = {
       filtro_estado:  { type: 'string', description: 'Para listar: filtrar por estado (abierta/respondida/etc.)' }
     },
     required: ['accion']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_GESTIONAR_OC = {
@@ -1633,7 +1651,10 @@ const TOOL_GESTIONAR_OC = {
       filtro_estado:  { type: 'string', description: 'Para listar: filtrar por estado (propuesta/en_revision/aprobada/rechazada)' }
     },
     required: ['accion']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_GESTIONAR_ACTA = {
@@ -1661,7 +1682,10 @@ const TOOL_GESTIONAR_ACTA = {
       filtro_tipo:     { type: 'string', description: 'Para listar: filtrar por tipo de reunión' }
     },
     required: ['accion']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_GESTIONAR_CALIDAD = {
@@ -1683,7 +1707,10 @@ const TOOL_GESTIONAR_CALIDAD = {
       filtro_estado: { type: 'string' }
     },
     required: ['accion']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_PENSAR = {
@@ -2194,6 +2221,10 @@ const TOOL_BUSCAR_PRECIOS = {
   nivel_riesgo: 'N0',
 };
 
+// Pese al nombre ("marcar"), el case 'marcar_plano' (worker.js) es de solo
+// lectura: analiza un archivo de R2 con Gemini y devuelve texto, sin ningún
+// INSERT/UPDATE/DELETE en D1. nivel_riesgo:'N0', no N1 -- exactamente el tipo
+// de caso que exige leer el código y no clasificar por patrón de nombre.
 const TOOL_MARCAR_PLANO = {
   name: 'marcar_plano',
   description: 'Analiza un plano o PDF técnico ya subido a R2 con IA de visión: identifica circuitos, mide distancias, detecta errores y problemas de normativa. Úsalo cuando el usuario suba un plano y pida revisión o análisis.',
@@ -2205,7 +2236,10 @@ const TOOL_MARCAR_PLANO = {
       tipo:           { type: 'string', description: 'Tipo de plano/instalación (opcional, default "general")' }
     },
     required: ['key', 'instrucciones']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_GENERAR_DOCUMENTO = {
@@ -8276,9 +8310,14 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
         if (accion === 'resolver') {
           if (!defId) return '❌ Necesito deficiencia_id para resolver.';
-          await env.DB.prepare(
-            `UPDATE control_calidad SET estado='resuelto', fecha_resolucion=date('now')${input.notas_resolucion?`, notas_resolucion='${input.notas_resolucion.replace(/'/g,"''")}'`:''} WHERE id=? AND empresa_id=?`
-          ).bind(defId, eid).run();
+          // Bug encontrado durante F-1.3 (revisión previa a clasificar nivel_riesgo,
+          // 2026-08-02): notas_resolucion se interpolaba directo en el SQL (solo
+          // escapando comillas simples a mano) en vez de ir por parámetro ?, el único
+          // caso de este tipo en todo gestionar_calidad/gestionar_tarea/gestionar_rfi/
+          // gestionar_oc/gestionar_acta. Sin cambio de comportamiento observable.
+          const sqlResolver = `UPDATE control_calidad SET estado='resuelto', fecha_resolucion=date('now')${input.notas_resolucion ? ', notas_resolucion=?' : ''} WHERE id=? AND empresa_id=?`;
+          const paramsResolver = input.notas_resolucion ? [input.notas_resolucion, defId, eid] : [defId, eid];
+          await env.DB.prepare(sqlResolver).bind(...paramsResolver).run();
           return `✅ Deficiencia #${defId} marcada como resuelta.`;
         }
 
