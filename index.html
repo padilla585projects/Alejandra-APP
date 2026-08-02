@@ -13206,13 +13206,13 @@ async function checkVersionAndUpdate(useWorkerFallback = false) {
     // version.json con cache-bust (1 fetch ligero ~100 bytes)
     const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
     if (res.ok) { const j = await res.json(); remoteV = j.v; }
-    // Solo al volver a primer plano: fallback al worker si version.json falló
-    if (!remoteV && useWorkerFallback) {
-      try {
-        const hRes = await fetch('https://alejandra-agente.alejandra-app.workers.dev/health');
-        if (hRes.ok) { const hj = await hRes.json(); remoteV = hj.version; }
-      } catch {}
-    }
+    // Solo al volver a primer plano: fallback al worker si version.json falló.
+    // ADR-0014 cambió /health: `version` es ahora el id de despliegue de Cloudflare
+    // (UUID), no la versión semántica de la app (X.XX) — nunca coincidiría con
+    // APP_VERSION, lo que forzaría una recarga en cada fallback. Sin fuente de
+    // versión semántica en /health, este fallback queda inactivo a propósito
+    // (no forzar actualización) en vez de comparar contra un campo que ya no
+    // significa lo mismo.
     if (remoteV && remoteV !== APP_VERSION) {
       if (new URLSearchParams(location.search).has('code')) return;
       _actualizando = true;
