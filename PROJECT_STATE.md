@@ -164,13 +164,16 @@ agente en verde (4 nuevas) + 1 nueva en `nucleo-cognitivo` que valida la declara
 copiada literalmente (sin importar entre paquetes). Los tres `Set` de `lib.js` siguen intactos
 — ADR-0010 exige migración incremental hasta que la última tool esté migrada.
 
-**`F-1.3-MIGRAR-RESTO-TOOLS` en curso — lotes 2 y 3 completados (2026-08-02):** lote 2 (8
-tools de solo lectura con sesión) y lote 3 (7 tools públicas: `buscar_web`, `calcular_cable`,
-`calcular_bandeja`, `calcular_proteccion`, `pensar`, `planificar`, `buscar_normativa`), mismo
-patrón que el piloto. 116/116 pruebas del agente en verde. 16/103 tools migradas; quedan 53 en
-el agente y 34 en `worker.js` raíz (gating independiente, regla de los dos cerebros). Siguiente
-lote entra en escritura reversible (N1) — requiere revisar cada tool individualmente, no por
-patrón de nombre.
+**`F-1.3-MIGRAR-RESTO-TOOLS` en curso — lotes 2, 3 y 4 completados (2026-08-02):** lote 2 (8
+tools de solo lectura con sesión), lote 3 (7 tools públicas) y **lote 4** (5 tools
+`gestionar_*` + `editar_plano`, N1 tras revisar el código de cada `case`: CRUD acotado por
+`empresa_id`, una fila por operación). `marcar_plano` resultó ser **N0**, no N1: pese al
+nombre, solo analiza con Gemini, sin escritura en D1 — exactamente el caso que exige leer el
+código y no clasificar por patrón de nombre. **Bug real corregido de paso:** `gestionar_calidad`
+(acción `resolver`) interpolaba `notas_resolucion` directo en el SQL en vez de un parámetro
+`?`; corregido sin cambiar comportamiento observable. 117/117 pruebas del agente en verde.
+23/103 tools migradas; quedan 46 en el agente y 34 en `worker.js` raíz. Siguiente lote: tools
+de escritura restantes, revisadas una por una (algunas serán N2 o `dev_verificado`).
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen
