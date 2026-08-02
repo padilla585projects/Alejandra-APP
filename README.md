@@ -2,9 +2,10 @@
 
 PWA de gestión industrial y de obra para empresas del sector eléctrico/mecánico: inventario de maquinaria, personal, documentación, calidad y seguimiento de obra — con un **agente de IA propio (Alejandra)** integrado en toda la plataforma.
 
-Dos frontends sobre el mismo backend:
+Tres frontends sobre el mismo backend:
 - **App móvil** (`index.html`) — para operarios y encargados en campo: escaneo QR/OCR, fichajes, incidencias, partes de trabajo, chat con Alejandra.
 - **Panel de oficina** (`panel.html`) — para gestión completa de obra: dashboards, documentación, calidad, subcontratas, planos técnicos generados por IA.
+- **Panel de control** (`alejandra-panel.html`) — frontend independiente con login Google/token de administrador, para supervisión y DevTools del agente.
 
 ## ¿Qué hace?
 
@@ -71,7 +72,7 @@ Vanilla JS · Cloudflare Workers · Cloudflare D1 (SQLite) · Cloudflare R2 · A
 
 ## Deploy
 
-- **App móvil (GitHub Pages):** https://padilla585projects.github.io/Alejandra-APP/
+- **App móvil, panel de oficina y panel de control (GitHub Pages):** https://padilla585projects.github.io/Alejandra-APP/
 - **Backend principal:** Cloudflare Workers (`alejandra-app-api`)
 - **Backend del agente IA:** Cloudflare Workers (`alejandra-agente`)
 - **BD:** Cloudflare D1 (`alejandra-db`)
