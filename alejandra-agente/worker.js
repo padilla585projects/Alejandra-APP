@@ -1,16 +1,17 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v6.14 (fix: bobinasStock/equiposRevision de INTELIGENCIA DE NEGOCIO en scheduled()
+// Versión: v6.15 (ADR-0014/ARC-008, 02/08/2026: GET /health deja de llevar un número de
+//           versión escrito a mano -- ahora deriva de env.CF_VERSION_METADATA.id, el id de
+//           despliegue que expone Cloudflare y que coincide con `wrangler deployments list`.
+//           Esta cabecera pasa a ser solo un changelog legible para humanos, ya no la fuente
+//           de la versión que devuelve /health -- así no puede volver a desincronizarse como
+//           pasó entre v6.13 (aquí) y "6.12" (en /health). registrarTraza() nuevo, conectado
+//           a runDDL() para persistir errores de DDL en `alejandra_trazas` (tipo='ddl_error').
+//           v6.14 (fix: bobinasStock/equiposRevision de INTELIGENCIA DE NEGOCIO en scheduled()
 //           consultaban columnas/tablas inexistentes en D1 (metros_restantes/metros_totales en
 //           bobinas, tabla `equipos`) y fallaban en silencio via .catch -- ver BOBINAS-STOCK-01
-//           y EQUIPOS-REVISION-01 en el bloque de Promise.all.
-//           v6.13 (fix: versión desincronizada entre esta cabecera y GET /health -- v6.03
-//           aquí vs "6.12" en /health, ambos números "prestados" en su día del changelog
-//           de la PWA en ESTADO_APP.txt, nunca fue un contador propio del agente. A partir
-//           de esta versión, el número de versión del agente es independiente del de la
-//           PWA/ESTADO_APP.txt/version.json -- no volver a copiarlo de ahí. Súbelo aquí Y
-//           en el "version" de GET /health a la vez, y solo cuando cambie este worker.)
+//           y EQUIPOS-REVISION-01 en el bloque de Promise.all.)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -41,6 +42,10 @@ import {
   extraerCodigosConfirmacion,
   codigoConfirmacionOp,
   detectarEscrituraDestructivaBalanceada,
+  redactarTexto,
+  redactarDetalle,
+  extraerTablaDDL,
+  determinarEstadoSalud,
 } from './lib.js';
 const EUR_RATE = 0.92;
 
@@ -1309,6 +1314,33 @@ const TOOL_BORRAR_ESQUEMA = {
 // Todo lo demas si, incluido `no such table` — que es el bug que se busca.
 const DDL_DUPLICADO = /duplicate column name|already exists/i;
 
+// ARC-008 / ADR-0014 (02/08/2026) — registro persistente de trazas en la
+// tabla D1 compartida `alejandra_trazas` (worker='agente'). Copia deliberada
+// del helper de `worker.js` (raíz) por la regla de los dos cerebros: cada
+// Worker implementa su propio registrarTraza() sobre la misma tabla, sin que
+// uno dependa del código del otro. Minimiza/redacta (ADR-0014 §2.1) antes de
+// serializar detalle_json -- nunca se persiste un email/teléfono en crudo ni
+// el cuerpo de una conversación. Resiliente: un fallo de INSERT jamás debe
+// tumbar el flujo que llama a esto, igual que runDDL() ya hace con DDL.
+async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, resumen, detalle }) {
+  try {
+    const resumenRedactado = redactarTexto(String(resumen || ''));
+    const detalleRedactado = redactarDetalle(detalle ?? {});
+    await env.DB.prepare(
+      `INSERT INTO alejandra_trazas (worker, tipo, empresa_id, usuario_id, resumen, detalle_json)
+       VALUES ('agente', ?, ?, ?, ?, ?)`
+    ).bind(
+      String(tipo),
+      empresaId != null ? String(empresaId) : null,
+      usuarioId != null ? String(usuarioId) : null,
+      resumenRedactado,
+      JSON.stringify(detalleRedactado)
+    ).run();
+  } catch (e) {
+    console.error('[TRAZA]', tipo, '->', (e && e.message) || String(e));
+  }
+}
+
 async function runDDL(env, sql) {
   try {
     await env.DB.prepare(sql).run();
@@ -1317,6 +1349,13 @@ async function runDDL(env, sql) {
     const msg = (e && e.message) || String(e);
     if (DDL_DUPLICADO.test(msg)) return false;
     console.error('[DDL]', String(sql).replace(/\s+/g, ' ').trim().slice(0, 140), '->', msg);
+    const tabla = extraerTablaDDL(sql);
+    const sentenciaCorta = String(sql).replace(/\s+/g, ' ').trim().slice(0, 500);
+    await registrarTraza(env, {
+      tipo: 'ddl_error',
+      resumen: `DDL fallido${tabla ? ` en ${tabla}` : ''}: ${msg.slice(0, 140)}`,
+      detalle: { sentencia: sentenciaCorta, mensaje_error: msg, tabla },
+    });
     return false;
   }
 }
@@ -2513,8 +2552,36 @@ export default {
       new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
 
     try {
+      // ADR-0014 §4 (02/08/2026) — health real: comprueba D1 y un objeto
+      // centinela de R2 de verdad, con presupuesto de tiempo acotado, y
+      // devuelve tres estados en vez del 200 ciego de antes. Público, sin
+      // autenticación, sin efectos secundarios (no registra trazas). La
+      // versión se deriva de CF_VERSION_METADATA (id de despliegue expuesto
+      // por Cloudflare, el mismo que aparece en `wrangler deployments list`)
+      // en vez de escribirse a mano -- corrige la causa exacta del
+      // desajuste v6.13/`6.12` documentado en la cabecera de este archivo.
       if (path === '/health') {
-        return json({ status: 'ok', version: '6.14', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true });
+        const PRESUPUESTO_HEALTH_MS = 1500;
+        const conTimeout = (promesa) => Promise.race([
+          promesa,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), PRESUPUESTO_HEALTH_MS)),
+        ]);
+        const [d1Ok, r2Ok] = await Promise.all([
+          conTimeout(env.DB.prepare('SELECT 1').run()).then(() => true).catch(() => false),
+          conTimeout(env.FILES.head('_healthcheck/centinela.txt')).then((obj) => !!obj).catch(() => false),
+        ]);
+        const estado = determinarEstadoSalud(d1Ok, r2Ok);
+        const version = (env.CF_VERSION_METADATA && env.CF_VERSION_METADATA.id) || 'desconocida';
+        return json({
+          estado, d1: d1Ok, r2: r2Ok, version,
+          // Campos previos, mantenidos tal cual para no romper a quien ya
+          // consume este endpoint (p.ej. index.html usa `.version` como
+          // fallback de actualización).
+          status: estado === 'unhealthy' ? 'error' : 'ok',
+          nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true,
+          vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true,
+          razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true,
+        }, estado === 'unhealthy' ? 503 : 200);
       }
 
       // ── Historial del chat (sync entre dispositivos) ────────────────────

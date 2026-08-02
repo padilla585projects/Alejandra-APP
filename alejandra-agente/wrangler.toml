@@ -13,6 +13,13 @@ database_id = "0c9eccde-78f1-476d-ac68-bf452bec0c62"
 binding = "FILES"
 bucket_name = "alejandra-app-files"
 
+# ADR-0014 (02/08/2026) — version derivada, no escrita a mano. Expone el id
+# de despliegue de Cloudflare (el mismo que "wrangler deployments list") como
+# env.CF_VERSION_METADATA.id, usado en GET /health. Corrige la causa exacta
+# del desajuste v6.13 (cabecera de worker.js) vs "6.12" (antiguo /health).
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
 # Service Binding al worker web raiz (alejandra-app-api): ahi vive la logica
 # canonica de generacion/edicion de planos SVG (y el resto de tools con feedback
 # visual en panel.html). Un Worker NO puede hacer fetch() normal a otro Worker
