@@ -3,7 +3,7 @@
 - Fecha: 2026-08-02
 - Agentes que entregan: Codex y Claude, Agentes de Ingeniería
 - Trabajo entregado: F-0.1/F-0.1-R (entrega segura), GOV-001 (proceso de ingeniería), ARC-011 fases 1-2 (inventario de esquema), ARC-012 (tres columnas ausentes), ARC-013/015/016/017 (desplegados en producción), F-0.2 (completada), ADR-0007 y su enmienda 1, y los cinco ADR de Época 1 (`ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010`, `ADR-0011`) — **todos aceptados por el Director el 2026-08-02**
-- Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno) y `ARC-018`/`ARC-014` (decisiones pendientes). **Época 1 abierta**: `ADR-0004` aceptado, F-1.1 cerrada, F-1.2 iniciada (esqueleto y contratos del núcleo cognitivo, sin activar memoria ni decisiones sin trazabilidad).
+- Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno) y `ARC-014` (decisión pendiente). `ARC-018` resuelto el 2026-08-02 (Worker y bucket R2 huérfanos borrados, datos únicos migrados). **Época 1 abierta**: `ADR-0004` aceptado, F-1.1 cerrada, F-1.2 iniciada (esqueleto y contratos del núcleo cognitivo, sin activar memoria ni decisiones sin trazabilidad).
 - PRs integradas: #9 (F-0.1), #10 (ARC-011), #11 (ARC-012)
 
 ## Qué está terminado
@@ -44,7 +44,6 @@ Consecuencia: ARC-001, ARC-003, ARC-004 y ARC-006 quedan cerrados en `ARCHITECT_
 - **ARC-011 fase 3, trabajo de código** — declarar la migración `.sql` del vertical `checklists` (autónomo); aplicarla contra D1 sigue exigiendo autorización del Director.
 - **ARC-014 — la aprobación de entorno no frena a un token de administración.** Evaluar `prevent_self_review`, revisores distintos del solicitante, o un token de menor privilegio para agentes.
 - **Secretos aún a nivel de repositorio (`F-0.2-CFG`).** Moverlos al entorno `production` exige reintroducir los valores a mano: la API no los expone.
-- **ARC-018 — Worker y bucket R2 huérfanos**, detectados en la auditoría de Cloudflare. No confirmado si `alejandra-worker` comparte la misma `alejandra-db` de producción. No se ha tocado.
 - **Ensayo de confirmación errónea** sobre un workflow de producción: debe salir `skipped`.
 - **`usuario_obras` no existe en producción**, pese a estar declarada en código y en `migrate_roles_multiobra.sql`. Comprobar qué depende de ella antes de aplicar nada.
 
@@ -71,8 +70,6 @@ manejar los valores reales, que la API no expone.
 
 **`ARC-002` y `ARC-008`** — gobierno de memoria y observabilidad/trazas: mientras sigan sin
 ADR, el núcleo cognitivo no puede ampliarse más allá del esqueleto actual.
-
-**`ARC-018`** — decidir qué hacer con el Worker y el bucket R2 huérfanos.
 
 **`ARC-014`** — decidir cómo separar la aprobación de entorno del token que lanza el despliegue.
 
