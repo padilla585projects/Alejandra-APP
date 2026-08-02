@@ -172,8 +172,16 @@ nombre, solo analiza con Gemini, sin escritura en D1 — exactamente el caso que
 código y no clasificar por patrón de nombre. **Bug real corregido de paso:** `gestionar_calidad`
 (acción `resolver`) interpolaba `notas_resolucion` directo en el SQL en vez de un parámetro
 `?`; corregido sin cambiar comportamiento observable. 117/117 pruebas del agente en verde.
-23/103 tools migradas; quedan 46 en el agente y 34 en `worker.js` raíz. Siguiente lote: tools
-de escritura restantes, revisadas una por una (algunas serán N2 o `dev_verificado`).
+23/103 tools migradas tras el lote 4. **Lote 5 completado (2026-08-02):** 12 tools de solo
+lectura más (`descubrir_herramientas`, `recuperar_conversacion`, `leer_estado`,
+`consultar_bd`, `listar_archivos`, `ver_archivo`, `consultar_conocimiento`, `ram_read`,
+`github_listar`, `github_leer`, `github_buscar`, `grep_codigo`), verificando que ninguna
+escribe (las 4 de GitHub comparten `case` con `github_escribir`/`patch_codigo`, que sí
+escriben). 118/118 pruebas del agente en verde. **35/103 tools migradas**; quedan 34 en el
+agente y 34 en `worker.js` raíz. `memory_save`/`memory_read`/`propose_mejora`/`tomar_decision`
+quedan deliberadamente sin clasificar — su dominio es ADR-0013 (memoria), no ADR-0010.
+Siguiente lote: tools de escritura restantes, revisadas una por una (algunas serán N2 o
+`dev_verificado`).
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen
