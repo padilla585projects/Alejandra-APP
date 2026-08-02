@@ -333,6 +333,7 @@ a{color:var(--acc2);text-decoration:none}
 <script src="packages/design-system/src/components/toast.js"></script>
 <script src="packages/design-system/src/components/empty-state.js"></script>
 <script src="packages/design-system/src/components/loading-state.js"></script>
+<script src="packages/design-system/src/components/error-state.js"></script>
 <script src="apps/conversacion/src/api/agent-client.js"></script>
 <script src="apps/conversacion/src/features/system-health/index.js"></script>
 <script>
@@ -371,6 +372,10 @@ const CANAL_COLOR = { web:'b-green', telegram:'b-blue', panel:'b-acc', app:'b-gr
 function loadingStateHtml(message) {
   const loading = window.AlejandraPresentation?.designSystem?.loadingStateHtml;
   return loading ? loading(message) : `<div style="color:var(--muted);font-size:13px">${esc(message)}</div>`;
+}
+function errorStateHtml(message) {
+  const errorState = window.AlejandraPresentation?.designSystem?.errorStateHtml;
+  return errorState ? errorState(message) : `<div style="color:var(--red)">Error: ${esc(message)}</div>`;
 }
 
 function logItemHtml(x, uid) {
@@ -1427,7 +1432,7 @@ async function initDashboard() {
         ${chatList.length ? [...chatList].reverse().slice(0,8).map((c,i)=>logItemHtml(c,`db${i}`)).join('')
         : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones aún</div>'}
       </div>`;
-  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+  } catch(err) { c.innerHTML = errorStateHtml(err.message); }
 }
 
 // ═══════════════ GASTOS ═════════════════════════════════════
@@ -1499,7 +1504,7 @@ async function initGastos(dias=30) {
         Precios: Haiku $1/$5 · Sonnet $3/$15 · GPT-4o-mini $0.15/$0.60 (por millón tokens entrada/salida). EUR = USD × 0.92
       </div>`;
   } catch(err) {
-    c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`;
+    c.innerHTML = errorStateHtml(err.message);
   }
 }
 
@@ -1532,7 +1537,7 @@ async function initMemoria(filtro='') {
           <div class="mem-date">${fmtDate(m.created_at)}</div>
         </div>`).join('')
       : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin registros</div>'}`;
-  } catch(err) { document.getElementById('content').innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+  } catch(err) { document.getElementById('content').innerHTML = errorStateHtml(err.message); }
 }
 
 // ═══════════════ LOGS ═══════════════════════════════════════
@@ -1556,7 +1561,7 @@ async function initLogs() {
       </div>`;
 
     window._histItems = items;
-  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+  } catch(err) { c.innerHTML = errorStateHtml(err.message); }
 }
 
 // ═══════════════ CONFIG ═════════════════════════════════════
@@ -1596,7 +1601,7 @@ async function initConfig() {
         <button class="btn-acc" onclick="saveConfig()">💾 Guardar</button>
         <div id="cfgMsg" style="margin-top:10px;font-size:12px;text-align:center;display:none"></div>
       </div>`;
-  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+  } catch(err) { c.innerHTML = errorStateHtml(err.message); }
 }
 
 function selModo(modo, el) {
@@ -1728,7 +1733,7 @@ async function initSeguridad() {
           <button class="btn-acc" style="margin-top:10px" onclick="crearUsuario()">Crear acceso</button>
         </div>
       </div>`;
-  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+  } catch(err) { c.innerHTML = errorStateHtml(err.message); }
 }
 
 async function cambiarPassword() {
