@@ -93,6 +93,54 @@ Nota para el runbook: el healthcheck automático de CI puede reportar la versió
 pero conviene reconsultar manualmente unos minutos después antes de dar el despliegue por
 bueno del todo, tal como se hizo aquí.
 
+## ARC-008 §8 resuelto — persistencia real de consulta de memoria (2026-08-02)
+
+Bloqueo técnico identificado en `TASKS.md`/`HANDOFF.md`: el paso 3 de `F-2.1-MEMORIA-DECLARAR`
+(implementar `memory.js` real) exigía que ARC-008 permitiera "trazabilidad completa de una
+decisión que consulte memoria" (ADR-0013 §8), y eso no existía — `consultarMemoria()` era una
+interfaz que solo lanzaba error.
+
+**Resuelto:** `consultarMemoria(env, params)` real en `worker.js` y `alejandra-agente/worker.js`
+(implementación idéntica en los dos, regla de "UNA Alejandra, DOS cerebros"). Lee
+`memoria_gobernada` filtrando por `empresa_id`, `estado='confirmada'`, `caduca_en` no vencido,
+categoría (lista blanca de ADR-0013 §1) y confianza mínima (con `RANGO_CONFIANZA` para comparar
+el enum TEXT `'baja'|'media'|'alta'` correctamente — un bug real detectado y corregido antes de
+cerrar: la primera versión comparaba ese TEXT contra un número con `>=`, comparación sin efecto
+en SQLite). Cada consulta registra una traza `tipo='memoria_consulta'` con los IDs de los
+recuerdos devueltos, cerrando la cadena "decisión → consulta → recuerdos usados" que ARC-008
+§8 exigía.
+
+`listarCandidatasPendientes()`, `confirmarCandidata()` (traza `tipo='memoria_confirmacion'`) y
+`rechazarCandidata()` completan el CRUD de `memoria_gobernada` en ambos Workers, siguiendo el
+mismo patrón resiliente que `registrarTraza()`/`runDDL()` (nunca lanzan, `console.error` en
+fallo). **Ninguna de las cuatro funciones se invoca todavía desde ninguna ruta ni tool** — son
+funciones internas, listas para cuando se decida exponerlas (candidato: extender
+`memory_save`/`memory_read` o crear tools nuevas, decisión aparte).
+
+`nucleo-cognitivo/src/memory.js` cambia de "lanza error explícito" a "dependencia inyectada"
+(`inyectarMemoria()`) para sus cuatro funciones — mismo patrón ya usado por `registrarTraza()`
+en `motor-decision.js`, consistente con que una consulta de memoria rota no debe bloquear la
+decisión que la solicitó. Sin inyección (p.ej. en tests o si nunca se integra), devuelve
+`[]`/no-op, nunca lanza. **Se mantiene la prohibición de `CLAUDE.md`: ningún Worker importa
+`nucleo-cognitivo/` todavía** — la inyección es un contrato que un futuro integrador usaría, no
+una integración real hecha en esta tarea.
+
+Verificación: `node --check worker.js` y `node --check alejandra-agente/worker.js` limpios;
+`node --test nucleo-cognitivo/test/*.js` 36/36 en verde (5 tests de `memory.test.js`
+reescritos para reflejar el nuevo comportamiento de inyección, ya no esperan que lance);
+`npm --prefix alejandra-agente test` 121/121 en verde (sin cambios en el conteo — las nuevas
+funciones no tienen pruebas propias en `alejandra-agente` todavía porque no son tools
+expuestas). Verificación de encoding (`git diff` sin `Ã`/`Â`/`â€`/`ï»¿`) limpia. Rama
+`feat/arc008-consultarmemoria-real`, sin desplegar ni tocar D1 — cambio de código puro,
+reversible, autónomo bajo ADR-0007.
+
+**Consecuencia para F-2.1 paso 3:** con la traza resuelta, el bloqueo original de
+`TASKS.md`/`F-2.1-MEMORIA-DECLARAR` queda superado en su forma original ("ARC-008 debe permitir
+trazabilidad completa"). Queda pendiente, como trabajo aparte y no bloqueado por dependencia
+técnica: decidir qué tool(s) exponen esta memoria al modelo (ADR-0010, clasificación de
+riesgo) y si se conecta con `motor-decision.js` real (que sigue sin implementación, depende de
+Context Engine/Planner).
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.

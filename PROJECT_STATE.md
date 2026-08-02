@@ -258,10 +258,25 @@ ADR-0011, sin aplicar) la tabla `memoria_gobernada`, nueva y sin relación con l
 del catálogo ADR-0010). Las columnas cubren los siete elementos del contrato de ADR-0013:
 aislamiento por `empresa_id`/`ambito`, procedencia (`origen`/`metodo`/`tarea_id`), `confianza`,
 `caduca_en`, corrección versionada (`version_anterior_id`/`estado`) y `aprobada_por`. Registrada
-en `migrate_manifiesto.json` como `aplicada: false`. Ningún Worker escribe ni lee esta tabla
-todavía; `nucleo-cognitivo/src/memory.js` sigue siendo interfaz pura sin cambios. Aplicarla
-contra D1 exige autorización explícita del Director, igual que `checklists` — ver
-`TASKS.md` (`F-2.1-MEMORIA-DECLARAR`).
+en `migrate_manifiesto.json` como `aplicada: false`. Aplicarla contra D1 exige autorización
+explícita del Director, igual que `checklists` — ver `TASKS.md` (`F-2.1-MEMORIA-DECLARAR`).
+
+**ARC-008 §8 resuelto, paso 3 en curso (2026-08-02).** El bloqueo que impedía activar
+`nucleo-cognitivo/src/memory.js` era la falta de trazabilidad completa de una decisión que
+consulta memoria (ADR-0013 §8). Resuelto: `consultarMemoria()` real en los dos Workers lee
+`memoria_gobernada` (empresa/categoría/ámbito/confianza, solo `confirmada` y no caducada) y
+registra una traza `memoria_consulta` con los recuerdos exactos devueltos — la cadena
+"decisión → consulta de memoria → recuerdos usados" queda completa en `alejandra_trazas`.
+`listarCandidatasPendientes()`, `confirmarCandidata()` (traza `memoria_confirmacion`) y
+`rechazarCandidata()` completan el CRUD sobre `memoria_gobernada` en ambos Workers. **Nada de
+esto se expone todavía vía ninguna ruta ni tool** — son funciones internas listas para que una
+tool futura las use, siguiendo la regla de "UNA Alejandra, DOS cerebros" (implementación
+idéntica en los dos Workers). `nucleo-cognitivo/src/memory.js` pasa de lanzar error a aceptar
+las cuatro funciones como dependencia inyectada (`inyectarMemoria()`), mismo patrón que
+`registrarTraza()` en `motor-decision.js`; sin inyección devuelve `[]`/no-op. **Ninguno de los
+dos Workers importa `nucleo-cognitivo/` todavía** — sigue prohibido por `CLAUDE.md`. 36/36
+pruebas en verde en `nucleo-cognitivo`, 121/121 en `alejandra-agente`, `node --check` limpio en
+ambos Workers.
 
 ## Arquitectura de presentación
 

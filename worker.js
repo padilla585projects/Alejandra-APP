@@ -217,6 +217,133 @@ async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, r
   }
 }
 
+// Orden de confianza (migrate_memoria_gobernada.sql: TEXT 'alta'|'media'|'baja', §4) —
+// necesario porque SQLite no compara ese enum numéricamente por sí solo.
+const RANGO_CONFIANZA = Object.freeze({ baja: 1, media: 2, alta: 3 });
+
+// consultarMemoria — ARC-008 §8 (trazabilidad de decisiones que consultan memoria).
+// Lee recuerdos confirmados de `memoria_gobernada` acotados por empresa, categoría,
+// ámbito, caducidad y confianza. Registra una traza del tipo 'memoria_consulta' con
+// los recuerdos devueltos, para linkar la decisión que consultó con qué memoria usó.
+//
+// Resiliente por diseño: si falla la lectura o la traza, devuelve [] — una consulta
+// de memoria rota no puede fallar la decisión que la solicitó.
+async function consultarMemoria(env, {
+  empresaId,
+  consulta = '',
+  categorias = [],
+  ambito = null,
+  confianzaMinima = null,
+}) {
+  try {
+    if (!env?.DB || !empresaId) return [];
+
+    const ahora = new Date().toISOString();
+    const where = ['empresa_id = ?', 'estado = ?', 'caduca_en > ?'];
+    const binds = [String(empresaId), 'confirmada', ahora];
+
+    if (categorias.length > 0) {
+      const placeholders = categorias.map(() => '?').join(',');
+      where.push(`categoria IN (${placeholders})`);
+      binds.push(...categorias.map(String));
+    }
+    if (ambito) {
+      where.push('ambito = ?');
+      binds.push(String(ambito));
+    }
+    if (confianzaMinima && RANGO_CONFIANZA[confianzaMinima] != null) {
+      const aceptadas = Object.keys(RANGO_CONFIANZA)
+        .filter((nivel) => RANGO_CONFIANZA[nivel] >= RANGO_CONFIANZA[confianzaMinima]);
+      where.push(`confianza IN (${aceptadas.map(() => '?').join(',')})`);
+      binds.push(...aceptadas);
+    }
+
+    const whereSql = `WHERE ${where.join(' AND ')}`;
+    const rows = await env.DB.prepare(
+      `SELECT id, contenido, origen, categoria, confianza, fecha_creacion, caduca_en, ambito, metodo
+       FROM memoria_gobernada ${whereSql} ORDER BY fecha_creacion DESC`
+    ).bind(...binds).all();
+
+    const recuerdos = rows.results || [];
+
+    // Registrar la consulta en trazas (ARC-008 §8) — para trazabilidad completa.
+    // Si falla esta traza, no bloqueamos la decisión que consultó memoria.
+    try {
+      await registrarTraza(env, {
+        tipo: 'memoria_consulta',
+        empresaId,
+        resumen: `Consultada memoria: ${recuerdos.length} recuerdos recuperados`,
+        detalle: {
+          filtros: { categorias: categorias.length > 0 ? categorias : null, ambito, confianzaMinima },
+          recuerdos_ids: recuerdos.map(r => r.id),
+          recuerdos_count: recuerdos.length,
+        },
+      });
+    } catch (_) {
+      console.error('[MEMORIA_TRAZA]', 'No se pudo registrar consulta de memoria');
+    }
+
+    return recuerdos;
+  } catch (e) {
+    console.error('[MEMORIA]', 'consultarMemoria error:', (e && e.message) || String(e));
+    return [];
+  }
+}
+
+// listarCandidatasPendientes — ADR-0013 §2/§3. Solo para flujos de aprobación
+// (encargado+); nunca la usa el Motor de Decisión al responder, que solo lee
+// memoria ya `confirmada` vía consultarMemoria().
+async function listarCandidatasPendientes(env, { empresaId }) {
+  try {
+    if (!env?.DB || !empresaId) return [];
+    const rows = await env.DB.prepare(
+      `SELECT id, contenido, origen, categoria, confianza, fecha_creacion, caduca_en, ambito, metodo, usuario_id
+       FROM memoria_gobernada WHERE empresa_id = ? AND estado = ? ORDER BY fecha_creacion DESC`
+    ).bind(String(empresaId), 'candidata_pendiente_validacion').all();
+    return rows.results || [];
+  } catch (e) {
+    console.error('[MEMORIA]', 'listarCandidatasPendientes error:', (e && e.message) || String(e));
+    return [];
+  }
+}
+
+// confirmarCandidata — ADR-0013 §2/§3. Transición de estado sobre la fila
+// existente (candidata → confirmada), no crea una fila nueva. Registra una
+// traza porque aprobar memoria compartida/candidata es en sí una decisión con
+// efecto persistente (ARC-008 §8).
+async function confirmarCandidata(env, { id, aprobadaPor }) {
+  try {
+    if (!env?.DB || !id || !aprobadaPor) return;
+    const res = await env.DB.prepare(
+      `UPDATE memoria_gobernada SET estado = 'confirmada', aprobada_por = ?, updated_at = datetime('now')
+       WHERE id = ? AND estado = 'candidata_pendiente_validacion'`
+    ).bind(String(aprobadaPor), id).run();
+    if (res?.meta?.changes) {
+      await registrarTraza(env, {
+        tipo: 'memoria_confirmacion',
+        usuarioId: aprobadaPor,
+        resumen: `Candidata de memoria ${id} confirmada por ${aprobadaPor}`,
+        detalle: { recuerdo_id: id, aprobada_por: aprobadaPor },
+      });
+    }
+  } catch (e) {
+    console.error('[MEMORIA]', 'confirmarCandidata error:', (e && e.message) || String(e));
+  }
+}
+
+// rechazarCandidata — ADR-0013 §1. Elimina la candidata sin que su contenido
+// llegue a ser memoria vigente.
+async function rechazarCandidata(env, { id }) {
+  try {
+    if (!env?.DB || !id) return;
+    await env.DB.prepare(
+      `DELETE FROM memoria_gobernada WHERE id = ? AND estado = 'candidata_pendiente_validacion'`
+    ).bind(id).run();
+  } catch (e) {
+    console.error('[MEMORIA]', 'rechazarCandidata error:', (e && e.message) || String(e));
+  }
+}
+
 // Presupuesto de tiempo compartido por las dos comprobaciones de /health (ADR-0014 §4).
 const HEALTH_TIMEOUT_MS = 1500;
 
