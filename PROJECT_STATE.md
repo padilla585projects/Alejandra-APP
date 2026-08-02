@@ -88,8 +88,6 @@ explícitamente de la apertura autónoma. F-1.1 sigue bloqueada solo por él.
 - **`F-0.2-CFG`** — mover secretos al entorno `production` (requiere valores reales).
 - **`ARC-018`** — worker/bucket huérfanos de la auditoría Cloudflare.
 - **`ARC-014`** — autoaprobación de despliegue con token de administración.
-- **`ADR-0012`** — arquitectura de la capa de presentación: aprobar, rechazar o solicitar
-  cambios antes de cualquier refactor del frontend.
 
 ## Siguiente objetivo
 
@@ -101,8 +99,9 @@ permanece bloqueado hasta que el Director resuelva ADR-0004.
 
 ## Arquitectura de presentación
 
-La propuesta `docs/architecture/FRONTEND_ARCHITECTURE.md` analiza las cuatro entradas de
-frontend actuales y define una arquitectura objetivo por aplicaciones, features y paquetes,
-sin modificación de código. Está asociada a **`ADR-0012` (Propuesto)**. No es dependencia del
-Núcleo Cognitivo y puede evolucionar en paralelo con backend y motor de decisión, pero ninguna
-extracción estructural se inicia hasta que el Director acepte el ADR.
+`ADR-0012` fue aceptado el 2026-08-02. La arquitectura vigente
+`docs/architecture/FRONTEND_ARCHITECTURE.md` define aplicaciones, features, sistema de diseño
+y clientes API. El piloto P-ARCH-001 extrajo el indicador de salud de solo lectura del panel de
+conversación; su evidencia está en `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md`. No es
+dependencia del Núcleo Cognitivo y avanza en paralelo con backend/motor de decisión, pero la
+migración no se amplía hasta revisar el piloto.

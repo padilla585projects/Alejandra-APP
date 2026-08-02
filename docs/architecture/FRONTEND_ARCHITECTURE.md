@@ -1,9 +1,9 @@
 # Arquitectura de la capa de presentación
 
-- Estado: **Propuesta para aprobación**
+- Estado: **Vigente**
 - Fecha: 2026-08-02
 - Propietario: Arquitecto del Proyecto
-- Decisión asociada: `ADR-0012` (Propuesto)
+- Decisión asociada: `ADR-0012` (Aceptado, 2026-08-02)
 - Alcance: interfaz de campo, oficina, administración y conversación; no modifica la API, los Workers ni la funcionalidad actual.
 
 ## Propósito y filosofía
@@ -193,7 +193,7 @@ Una PR de presentación se revisa contra esta lista:
 
 ## Evolución futura
 
-Tras su aprobación, este documento será la referencia para toda modificación estructural del frontend. Las decisiones que cambien sus límites (framework, monorepo/build, estrategia de despliegue, routing global, librería de componentes o contratos públicos) se registrarán en un ADR. Los detalles de cada vertical, el inventario vivo de componentes y las guías de contribución se añadirán sin duplicar aquí los contratos de backend, seguridad o dominio.
+Este documento es la referencia para toda modificación estructural del frontend. Las decisiones que cambien sus límites (framework, monorepo/build, estrategia de despliegue, routing global, librería de componentes o contratos públicos) se registrarán en un ADR. Los detalles de cada vertical, el inventario vivo de componentes y las guías de contribución se añadirán sin duplicar aquí los contratos de backend, seguridad o dominio. La primera rebanada está documentada en `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md`; no se amplía hasta su revisión.
 
 ## Referencias
 

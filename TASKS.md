@@ -38,15 +38,15 @@ Siguiente acción exacta:
 - Estado: en revisión
 - Prioridad: Alta
 - Rama: `docs/presentacion-arquitectura` (PENDIENTE de integración)
-- Responsable actual: Director del Proyecto para la decisión; Arquitecto del Proyecto para cambios solicitados
-- Objetivo: revisar `ADR-0012` y `docs/architecture/FRONTEND_ARCHITECTURE.md` sin mover archivos ni cambiar funcionalidades.
-- Criterios de aceptación: decisión explícita sobre ADR-0012; si se acepta, crear una tarea independiente y acotada para preparación/piloto; si no, registrar la alternativa en ADR o backlog.
-- Dependencias: análisis documentado del frontend actual.
-- Bloqueos: ADR-0012 sigue Propuesto; ningún refactor está autorizado.
-- Archivos principales: `docs/architecture/FRONTEND_ARCHITECTURE.md`, `docs/decisions/ADR-0012-ARQUITECTURA-CAPA-PRESENTACION.md`.
-- Pruebas: revisión documental de límites, paralelismo, migración, accesibilidad e integración con Workers.
+- Responsable actual: Arquitecto del Proyecto para el piloto; Director del Proyecto para su revisión antes de ampliar
+- Objetivo: validar una rebanada de bajo riesgo de la arquitectura aceptada sin cambiar el contrato ni comportamiento del Worker.
+- Criterios de aceptación: piloto de salud documentado, cliente API aislado, fallback compatible, pruebas de contrato/renderizado, rollback por Git y evidencia de menor acoplamiento.
+- Dependencias: `ADR-0012` aceptado; análisis documentado del frontend actual.
+- Bloqueos: no ampliar la migración hasta revisar `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md`.
+- Archivos principales: `apps/conversacion/src/api/agent-client.js`, `apps/conversacion/src/features/system-health/index.js`, `alejandra-panel.html`, documentación de arquitectura.
+- Pruebas: sintaxis de módulos, contrato HTTP/feature con `fetch` simulado, encoding y diff check.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: el Director revisa y decide ADR-0012; detenerse hasta esa decisión.
+- Siguiente acción exacta: el Director revisa la evidencia P-ARCH-001; detenerse hasta decidir si autoriza la siguiente rebanada.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 

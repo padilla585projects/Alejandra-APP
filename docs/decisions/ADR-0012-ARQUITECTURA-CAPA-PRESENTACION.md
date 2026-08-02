@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0012
 - Fecha: 2026-08-02
-- Estado: **Propuesto**
-- Decisores: Director del Proyecto (PENDIENTE)
+- Estado: **Aceptado** (2026-08-02)
+- Decisores: Director del Proyecto
 - Relacionado: `docs/architecture/FRONTEND_ARCHITECTURE.md`, `docs/architecture/02-PROPUESTA-ORGANIZACION.md`, `docs/07-UI-UX.md`
 
 ## Contexto
@@ -12,7 +12,7 @@ La interfaz vigente reside principalmente en cuatro documentos HTML monolíticos
 
 La propuesta documentada no altera la aplicación existente ni implica adoptar un framework. Se necesita una decisión para que futuros cambios estructurales compartan una referencia y no creen una arquitectura accidental.
 
-## Decisión propuesta
+## Decisión
 
 Adoptar `docs/architecture/FRONTEND_ARCHITECTURE.md` como arquitectura objetivo de la presentación:
 
@@ -32,7 +32,7 @@ La adopción autoriza planificar y ejecutar extracciones pequeñas conforme a la
 | Mantener los HTML monolíticos y aplicar convenciones informales | Descartada: no crea límites revisables ni evita nuevos acoplamientos o conflictos. |
 | Reescribir todas las entradas de una vez con un framework | Descartada: alto riesgo, contradice la evolución por cambios pequeños y no preserva evidencia de regresión. |
 | Adoptar ahora un framework concreto | Descartada: la necesidad comprobada es separación de responsabilidades; la tecnología no la resuelve por sí sola. |
-| Arquitectura por aplicaciones, features y paquetes; migración gradual | **Propuesta**: hace explícitos los límites, mantiene opciones tecnológicas y permite trabajo paralelo. |
+| Arquitectura por aplicaciones, features y paquetes; migración gradual | **Aceptada**: hace explícitos los límites, mantiene opciones tecnológicas y permite trabajo paralelo. |
 
 ## Consecuencias
 
@@ -44,7 +44,7 @@ La adopción autoriza planificar y ejecutar extracciones pequeñas conforme a la
 
 ## Adopción y rollback
 
-Adopción: aceptar este ADR y abrir una tarea de preparación limitada al inventario y cimientos de presentación. No se mueve código como consecuencia automática de este ADR.
+Adopción: iniciar con una única rebanada vertical de riesgo bajo y entregar su evidencia antes de ampliar. No se mueve código como consecuencia automática de este ADR fuera de esa rebanada aprobada.
 
 Rollback: rechazar este ADR o sustituirlo por otro. Al ser una decisión documental, no tiene impacto en datos ni servicio.
 

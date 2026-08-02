@@ -213,10 +213,10 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **P-1 — Arquitectura de la capa de presentación**
 
-- Estado/prioridad/tamaño: **Documentada; pendiente de aprobación de ADR-0012** / Alta / M.
+- Estado/prioridad/tamaño: **Arquitectura aprobada; piloto P-ARCH-001 en revisión** / Alta / M.
 - Objetivo/alcance: separar de forma gradual la presentación de la lógica de negocio mediante aplicaciones de campo, oficina, administración y conversación, features aisladas, sistema de diseño y clientes de API; no implementa aún el refactor.
-- Dependencias/bloqueantes/paralelo: requiere aceptación de `ADR-0012` para cualquier extracción estructural. Es independiente de `ADR-0004` y puede planificarse en paralelo con Workers, motor de decisión y núcleo cognitivo sin cambiar sus contratos unilateralmente.
-- Pruebas/aceptación: inventario de rutas y contratos, piloto de un vertical, compatibilidad funcional, revisión de accesibilidad/responsive y rollback por PR. Referencia: `docs/architecture/FRONTEND_ARCHITECTURE.md`.
+- Dependencias/bloqueantes/paralelo: `ADR-0012` aceptado. La ampliación queda bloqueada hasta revisar el piloto `P-ARCH-001`; es independiente de `ADR-0004` y puede continuar en paralelo con Workers, motor de decisión y núcleo cognitivo sin cambiar sus contratos unilateralmente.
+- Pruebas/aceptación: piloto de un vertical, compatibilidad funcional, revisión de accesibilidad/responsive y rollback por PR. Referencias: `docs/architecture/FRONTEND_ARCHITECTURE.md` y `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md`.
 
 **T-1 — Calidad transversal**
 

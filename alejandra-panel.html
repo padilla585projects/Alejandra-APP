@@ -334,6 +334,8 @@ a{color:var(--acc2);text-decoration:none}
   </div>
 </div>
 
+<script src="apps/conversacion/src/api/agent-client.js"></script>
+<script src="apps/conversacion/src/features/system-health/index.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
 const API = 'https://alejandra-agente.alejandra-app.workers.dev';
@@ -564,6 +566,19 @@ function openMobile()  { document.getElementById('mobileOverlay').style.display=
 function closeMobile() { document.getElementById('mobileOverlay').style.display='none';  document.getElementById('mobileSidebar').style.display='none'; }
 
 async function fetchHealth() {
+  const feature = window.AlejandraPresentation?.systemHealth;
+  if (feature) {
+    return feature.refreshSystemHealth({
+      apiBaseUrl: API,
+      elements: {
+        versionElement: document.getElementById('sideVer'),
+        statusElement: document.getElementById('topbar-status'),
+      },
+    });
+  }
+
+  // Compatibilidad temporal durante la migración: la entrada actual sigue operativa si
+  // el módulo no llega a cargarse. Se retirará al consolidar el shell de conversación.
   try {
     const d = await fetch(`${API}/health`).then(r=>r.json());
     document.getElementById('sideVer').textContent  = d.version || 'v?';
