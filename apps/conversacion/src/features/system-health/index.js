@@ -4,7 +4,7 @@ function renderSystemHealth(health, { versionElement, statusElement }) {
 
   const online = health.status === 'ok';
   statusElement.textContent = online ? '● online' : '● error';
-  statusElement.style.color = online ? 'var(--green)' : 'var(--red)';
+  statusElement.style.color = online ? 'var(--color-success)' : 'var(--color-danger)';
 }
 
 async function refreshSystemHealth({ apiBaseUrl, elements }) {
