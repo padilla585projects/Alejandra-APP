@@ -42,9 +42,35 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4'
           workingDirectory: alejandra-agente
-      # SIN healthcheck automatico a proposito. GET /health de este Worker responde
-      # 200 sin comprobar D1 ni R2, y su campo "version" esta escrito a mano
-      # (alejandra-agente/worker.js:2493), asi que no distingue "Worker desplegado"
-      # de "Worker operativo" y daria luz verde a un despliegue roto. Verificacion
-      # manual post-despliegue segun docs/runbooks/CI-CD-Y-MIGRACIONES.md.
-      # Reincorporar cuando exista un endpoint de salud con dependencias reales.
+      # Healthcheck automatico (ADR-0014): /health ya comprueba D1 y R2 y distingue
+      # desplegado de operativo. "degraded" es advertencia, no bloquea; "unhealthy"
+      # bloquea el job. No sustituye la verificacion manual registrada en
+      # docs/runbooks/CI-CD-Y-MIGRACIONES.md.
+      - name: Verify deployment health
+        run: |
+          set -e
+          URL="https://alejandra-agente.alejandra-app.workers.dev/health"
+          RESPONSE=""
+          for i in 1 2 3 4 5; do
+            if RESPONSE=$(curl -sf "$URL"); then
+              break
+            fi
+            echo "Intento $i sin respuesta, reintentando en 5s..."
+            sleep 5
+          done
+          if [ -z "$RESPONSE" ]; then
+            echo "::error::/health no respondio tras 5 intentos."
+            exit 1
+          fi
+          echo "$RESPONSE"
+          ESTADO=$(echo "$RESPONSE" | jq -r '.estado // "desconocido"')
+          if [ "$ESTADO" = "unhealthy" ]; then
+            echo "::error::/health devolvio unhealthy. Revisar D1/R2 antes de dar por bueno el despliegue."
+            exit 1
+          elif [ "$ESTADO" = "degraded" ]; then
+            echo "::warning::/health devolvio degraded. Investigar antes de dar por bueno el despliegue."
+          elif [ "$ESTADO" != "healthy" ]; then
+            echo "::warning::/health devolvio un estado inesperado: $ESTADO."
+          else
+            echo "Estado healthy."
+          fi
