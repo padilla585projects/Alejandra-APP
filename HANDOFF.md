@@ -42,6 +42,15 @@ autoriza continuar automáticamente con la siguiente tarea oficial desbloqueada 
 documentación, sin esperar nueva autorización salvo que la propia documentación reserve
 expresamente una decisión al Director.
 
+## Limpieza de DDL en runtime — ARC-012 (2026-08-02, continuación autónoma)
+
+Extendido el mismo patrón del vertical `checklists` a las tres columnas de ARC-012, ya
+aplicadas y verificadas desde ese mismo día: `inventario_seg.ubicacion`,
+`empresas.retencion_config` y `planos.circuitos_json`. PR #54 comenta (no borra) su `ALTER
+TABLE` en runtime, con referencia a la migración correspondiente. Verificado por lectura
+antes del cambio (las 3 columnas presentes), desplegado `worker.js` (run `30759551828`) y
+verificado después: `/health` → `healthy`, las 3 columnas siguen presentes.
+
 ## Despliegue verificado (2026-08-02) — F-1.2/F-1.3 en producción
 
 Tras cerrar F-1.2 y F-1.3 (núcleo cognitivo aislado + catálogos de tools de los dos Workers
