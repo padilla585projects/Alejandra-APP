@@ -25,7 +25,7 @@
       "run": "30758297243",
       "verticalARC011": "checklists",
       "verificado": "2026-08-02",
-      "nota": "Autorizada por el Director en chat (2026-08-02). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas): las 4 tablas ya existian creadas por el DDL en runtime, columna por columna identicas a la migracion antes y despues (verificacion de solo lectura); CREATE TABLE IF NOT EXISTS confirmado como no-op (0 rows_written). El DDL en runtime de este vertical (worker.js:14196-14221, 18122-18152) sigue intacto: retirarlo es el paso 3 del ciclo de ADR-0011, no esta tarea."
+      "nota": "Autorizada por el Director en chat (2026-08-02). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas): las 4 tablas ya existian creadas por el DDL en runtime, columna por columna identicas a la migracion antes y despues (verificacion de solo lectura); CREATE TABLE IF NOT EXISTS confirmado como no-op (0 rows_written). Ciclo de ADR-0011 completo (5 pasos): DDL en runtime retirado en PR #53 (runMigrations()/ensureQATablas(), comentado con referencia a esta migracion) y verificado en produccion tras desplegar worker.js (run 30759124864, /health healthy)."
     },
     {
       "archivo": "migrate_trazas.sql",
@@ -43,6 +43,14 @@
       "fase": "F-2.1",
       "verificado": "2026-08-02",
       "nota": "Autorizada por el Director en chat (2026-08-02). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas). Tabla 'memoria_gobernada' creada con las 16 columnas declaradas (contrato ADR-0013 SS1-SS6) y los 2 indices, verificadas columna por columna tras aplicar; 0 filas. La tabla legada 'alejandra_memoria' (memory_save/memory_read) se verifico sin cambios en su CREATE. Ningun Worker lee ni escribe la tabla nueva todavia; nucleo-cognitivo/src/memory.js sigue siendo interfaz pura."
+    },
+    {
+      "archivo": "migrate_rfis.sql",
+      "aplicada": false,
+      "run": null,
+      "verticalARC011": "rfis",
+      "verificado": "2026-08-02",
+      "nota": "Paso 1 (declarar) completado el 2026-08-02, tercer vertical del ciclo de ADR-0011 (tras checklists). Tabla unica 'rfis' (NEW-34), CREATE + ALTER (departamento, DEPT-01) unificados en un solo CREATE TABLE IF NOT EXISTS con las 19 columnas, verificadas una a una contra D1 real (PRAGMA table_info, solo lectura). Paso 2 (aplicar y verificar contra D1) pendiente de autorizacion del Director, igual que checklists y memoria_gobernada."
     }
   ]
 }

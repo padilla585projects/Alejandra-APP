@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **F-0.2-CFG** pospuesta (tarea administrativa del Director, sin trabajo de ingeniería pendiente). **ARC-011-FASE3-CHECKLISTS** y **F-2.1-MEMORIA-DECLARAR completadas (2026-08-02)**: el Director autorizó en chat el paso 2 (aplicar contra D1) de ambas; `checklists` completó además los pasos 3-4 (retirar el DDL en runtime y verificar en producción tras desplegar `worker.js`), cerrando el ciclo de 5 pasos de ADR-0011 para ese vertical. `F-2.1-MEMORIA-DECLARAR` queda con la tabla `memoria_gobernada` aplicada y verificada; su paso 3 (persistencia real) sigue bloqueado por ARC-008 §8, no por decisión del Director. **F-1.3-MIGRAR-RESTO-TOOLS completada (2026-08-02)**: los catálogos de tools de los dos Workers quedan migrados al completo a ADR-0010 (96/103 tools; 7 excluidas a propósito, dominio ADR-0013). Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**; por ADR-0007 enmienda 1 se abrió **F-2.1** (Época 2, gobierno de memoria), cuyo modelo ya está aceptado por el Director en ADR-0013. **No queda ninguna tarea activa de ingeniería sin decisión pendiente del Director.** No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **F-0.2-CFG** pospuesta (tarea administrativa del Director, sin trabajo de ingeniería pendiente). **ARC-011-FASE3-CHECKLISTS** y **F-2.1-MEMORIA-DECLARAR completadas (2026-08-02)**: el Director autorizó en chat el paso 2 (aplicar contra D1) de ambas; `checklists` completó además los pasos 3-4 (retirar el DDL en runtime y verificar en producción tras desplegar `worker.js`), cerrando el ciclo de 5 pasos de ADR-0011 para ese vertical. `F-2.1-MEMORIA-DECLARAR` queda con la tabla `memoria_gobernada` aplicada y verificada; su paso 3 (persistencia real) sigue bloqueado por ARC-008 §8, no por decisión del Director. **F-1.3-MIGRAR-RESTO-TOOLS completada (2026-08-02)**: los catálogos de tools de los dos Workers quedan migrados al completo a ADR-0010 (96/103 tools; 7 excluidas a propósito, dominio ADR-0013). Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**; por ADR-0007 enmienda 1 se abrió **F-2.1** (Época 2, gobierno de memoria), cuyo modelo ya está aceptado por el Director en ADR-0013. **ARC-011-FASE3-RFIS, nueva (2026-08-02)**: segundo vertical del ciclo de ADR-0011, paso 1 (declarar) completo de forma autónoma (código reversible); paso 2 pendiente de autorización del Director, igual que `checklists` en su momento. **La única tarea activa que exige algo del Director es ARC-011-FASE3-RFIS (paso 2); el resto está resuelto o es su tarea administrativa (F-0.2-CFG).** No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
@@ -37,7 +37,30 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). Quedan las tareas pospuestas por decisión del Director más **F-2.1-MEMORIA-DECLARAR**, abierta el mismo día.
+Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). Queda **ARC-011-FASE3-RFIS**, siguiente vertical del ciclo de ADR-0011, con su paso 1 (declarar) completo.
+
+### ARC-011-FASE3-RFIS — Declarar la migración del vertical `rfis`
+
+- ID: ARC-011-FASE3-RFIS
+- Título: Segundo vertical de la migración por fases de ARC-011 (ADR-0011), tras `checklists`
+- Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
+- Estado: **paso 1 (declarar) completo (2026-08-02); paso 2 (aplicar) pendiente de autorización del Director**
+- Prioridad: Media
+- Rama: `main` (declarado directamente, código reversible, sin rama propia)
+- Responsable actual: Director del Proyecto (autorización para aplicar contra D1)
+- Objetivo: declarar en una migración `.sql` versionada el esquema real de la tabla `rfis` (consultas técnicas de obra, NEW-34), única en su vertical, siguiendo el ciclo de ADR-0011.
+- Criterios de aceptación:
+  1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con el esquema exacto verificado contra D1 real (`migrate_rfis.sql`), incorporando en el mismo `CREATE` la columna `departamento` (añadida en runtime, DEPT-01) para evitar un `ALTER` no idempotente.
+  2. ✅ Verificado columna por columna contra D1 (`PRAGMA table_info`, solo lectura): las 19 columnas coinciden exactamente.
+  3. No se ejecuta contra D1 en esta tarea: eso es una migración y requiere autorización explícita del Director (ADR-0007).
+  4. El DDL en runtime de este vertical se deja intacto (`worker.js`, `ensureRfisTable()`) hasta que la migración esté aplicada y verificada — ADR-0011 prohíbe retirarlo antes.
+  5. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: false`.
+- Dependencias: ADR-0011 aceptado como estrategia (2026-08-02); `checklists` como ciclo de referencia ya completo.
+- Bloqueos: aplicar la migración contra D1 exige decisión del Director.
+- Archivos principales: `migrate_rfis.sql` (nuevo), `migrate_manifiesto.json`.
+- Pruebas: verificación manual de que las 19 columnas coinciden con `PRAGMA table_info(rfis)` real; `node -e "JSON.parse(...)"` sobre el manifiesto.
+- Última actualización: 2026-08-02
+- Siguiente acción exacta: **pendiente de decisión del Director**, igual que `checklists` y `memoria_gobernada` en su momento.
 
 ### F-2.1-MEMORIA-DECLARAR — Declarar el esquema de Memory (ADR-0013)
 
