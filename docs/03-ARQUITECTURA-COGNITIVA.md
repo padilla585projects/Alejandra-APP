@@ -1,8 +1,12 @@
 # Arquitectura cognitiva v1.0
 
-- Estado: especificación para revisión de arquitectura
-- Alcance: contrato futuro del núcleo cognitivo; no modifica NEXUS, prompts, herramientas ni comportamiento actual
-- Relación con el estado actual: el agente actual contiene NEXUS, memoria y tools en un Worker. Esta especificación define límites a extraer gradualmente, no una reescritura.
+- Estado: arquitectura objetivo aceptada; implementación parcial y aislada en F-1.2
+- Alcance: contrato de evolución del núcleo cognitivo; no modifica NEXUS, prompts, herramientas ni el comportamiento de producción por sí solo
+- Relación con el estado actual: `nucleo-cognitivo/` implementa Estado Cognitivo efímero y Policy Engine, y fija interfaces para Context Engine, Planner, Motor de Decisión y Memory. No está integrado en los Workers. Esta especificación define límites a extraer gradualmente, no una reescritura.
+
+## Estado de implementación
+
+La arquitectura objetivo fue aceptada en `ADR-0004`. `ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010`, `ADR-0013` y `ADR-0014` ya resuelven la matriz de riesgo, Nexo, QA, catálogo de tools, gobierno de memoria y trazas respectivamente. La implementación real conserva sus límites: no hay memoria persistente ni decisiones automatizadas en el núcleo; las trazas reales se implementan en cada Worker, fuera del paquete aislado.
 
 ## Propósito y reglas gobernantes
 
@@ -56,7 +60,7 @@ El flujo no representa razonamiento oculto: representa responsabilidades observa
 | Estado Cognitivo | Mantiene estado efímero de la tarea: fase, riesgo, plan, evidencias y confianza. | Ser memoria persistente o fuente de verdad. |
 | Memory | Almacena recuerdos gobernados con procedencia, alcance, confianza y caducidad. | Sustituir datos transaccionales actuales o políticas. |
 | NEXUS | Enrutamiento/orquestación de intención, modelos o expertos conforme a contrato. | Ser el dueño de permisos, memoria o herramientas. |
-| Nexo | Capa de coordinación e integración entre módulos/canales, si se aprueba. | Nueva capacidad autónoma; su alcance sigue `PREGUNTA ABIERTA`. |
+| Nexo | Capa de integración con sistemas externos, según ADR-0008. | Ser Motor de Decisión, multiagente o nueva capacidad autónoma. |
 | Capability Registry | Catálogo declarativo de capacidades, versiones, límites y estado. | Ejecutar ni conceder autorización. |
 | Tool Registry | Catálogo de tools, esquemas, efectos, permisos, propiedad y observabilidad. | Decidir política global. |
 | Policy Engine | Evalúa identidad, rol, tenant, riesgo, consentimiento y reglas. | Inventar contexto o ejecutar negocio. |
@@ -93,7 +97,7 @@ flowchart LR
 | La evidencia puede estar desactualizada o es material para la decisión | Buscar conocimiento con fuente y fecha; si no aporta valor, no buscar. |
 | Un resultado exige lectura/escritura/acción externa | Seleccionar tool solo si Policy Engine la permite y el plan la necesita. |
 | Faltan entidad, alcance, impacto, dato crítico o consentimiento | Solicitar información concreta; no adivinar. |
-| Acción irreversible, sensible, costosa, externa o que modifica permisos/datos | Requerir aprobación humana según política aplicable. Umbrales exactos: `PREGUNTA ABIERTA`. |
+| Acción irreversible, sensible, costosa, externa o que modifica permisos/datos | Requerir aprobación humana según la matriz N0–N3 de ADR-0006. |
 | Solicitud prohibida, fuera de permiso o insegura | Rechazar de forma clara y ofrecer alternativa segura cuando exista. |
 | Carencia repetida o capacidad ausente | Registrar propuesta en ideas con evidencia; no crear capacidad. |
 
@@ -129,10 +133,5 @@ El núcleo debe poder declarar, sin revelar secretos: capacidades habilitadas, c
 
 ## Preguntas abiertas
 
-1. ¿Qué es exactamente Nexo: bus de integración, orquestador, producto o nombre de una capacidad futura?
-2. ¿Cuál es la taxonomía de riesgo y qué umbrales activan aprobación humana?
-3. ¿Qué memorias son privadas, de empresa, compartidas o efímeras; cuánto duran y quién puede corregirlas?
-4. ¿Qué fuentes de conocimiento son autorizadas, cómo se citan y cómo se evalúa su actualidad?
-5. ¿Qué controles QA son deterministas, cuáles son asistidos por IA y cuáles requieren revisión humana?
-6. ¿Qué trazas se guardan, durante cuánto tiempo y con qué garantías de privacidad?
-7. ¿Qué métricas definen confianza, calidad, coste y degradación aceptable?
+1. ¿Qué fuentes de conocimiento son autorizadas, cómo se citan y cómo se evalúa su actualidad?
+2. ¿Qué métricas definen confianza, calidad, coste y degradación aceptable?

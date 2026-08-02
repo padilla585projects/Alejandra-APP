@@ -1,13 +1,13 @@
 # Roadmap
 
-## Ahora — Fase 0
+## Estado actual
 
-Auditar, ordenar y establecer controles para evolucionar sin cambios funcionales.
+Fase 0 está completada: la entrega segura y los inventarios de rutas, bindings y esquema han sido ejecutados. Época 1 está en curso con F-1.2, un núcleo cognitivo aislado y sin tráfico real.
 
-## Después — sujeto a aprobación de Fase 0
+## Próximos pasos aprobados
 
-1. Estabilización de entrega y seguridad (CI/CD, migraciones, observabilidad y pruebas).
-2. Modularización incremental del núcleo por dominios.
-3. Evolución de capacidades IA mediante ADRs y contratos específicos.
+1. Declarar la migración del vertical `checklists` conforme a ADR-0011; no aplicarla contra D1 sin autorización humana.
+2. Mantener la evolución del núcleo en interfaces y contratos hasta que sus dependencias estén autorizadas e implementadas.
+3. Continuar la modernización incremental de presentación dentro de la arquitectura aceptada y sus rebanadas aprobadas.
 
-No se calendarizan fases posteriores hasta que se aprueben alcance, riesgos y métricas. Los elementos en `docs/ideas/` no son compromisos de producto.
+`MASTER_ROADMAP.md` es la fuente de fases, dependencias y ejecución. Los elementos en `docs/ideas/` no son compromisos de producto.
