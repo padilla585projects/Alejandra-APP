@@ -269,6 +269,35 @@ describe('filtrarToolsPorAuth', () => {
     }
   });
 
+  // F-1.3-MIGRAR-RESTO-TOOLS, lote 6 (2026-08-02): tools administrativas y de
+  // escritura amplia, revisadas linea a linea antes de clasificar. Aqui
+  // acceso/cron/nivel_riesgo varian por tool (a diferencia de los lotes
+  // anteriores), asi que se verifica cada una contra su propio Set real.
+  it('lote 6 (escribir_bd, validar_cambios_bd, github_escribir, test_endpoint, rollback, verificar_deploy, ejecutar_deploy, patch_codigo, nexus_manage, configurar_alerta): metadato ADR-0010 no cambia el filtrado', () => {
+    const lote6 = [
+      { name: 'escribir_bd', acceso: 'sesion', cron: 'prohibido', nivel_riesgo: 'N2' },
+      { name: 'validar_cambios_bd', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N0' },
+      { name: 'github_escribir', acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2' },
+      { name: 'test_endpoint', acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2' },
+      { name: 'rollback', acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2' },
+      { name: 'verificar_deploy', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' },
+      { name: 'ejecutar_deploy', acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N3' },
+      { name: 'patch_codigo', acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2' },
+      { name: 'nexus_manage', acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N2' },
+      { name: 'configurar_alerta', acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N1' },
+    ];
+    for (const { name, acceso, cron, nivel_riesgo } of lote6) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso, cron, nivel_riesgo };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+        expect(filtrarToolsCron(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado)).map(t => t.name))
+          .toEqual(filtrarToolsCron(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado)).map(t => t.name));
+      }
+    }
+  });
+
   // F-1.3-MIGRAR-RESTO-TOOLS, lote 3 (2026-08-02): 7 tools públicas
   // (SEC-ANON-01 las dejó deliberadamente sin sesión porque no tocan datos de
   // nadie: búsqueda externa y cálculos de ingeniería deterministas).

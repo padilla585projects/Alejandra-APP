@@ -177,11 +177,20 @@ lectura más (`descubrir_herramientas`, `recuperar_conversacion`, `leer_estado`,
 `consultar_bd`, `listar_archivos`, `ver_archivo`, `consultar_conocimiento`, `ram_read`,
 `github_listar`, `github_leer`, `github_buscar`, `grep_codigo`), verificando que ninguna
 escribe (las 4 de GitHub comparten `case` con `github_escribir`/`patch_codigo`, que sí
-escriben). 118/118 pruebas del agente en verde. **35/103 tools migradas**; quedan 34 en el
-agente y 34 en `worker.js` raíz. `memory_save`/`memory_read`/`propose_mejora`/`tomar_decision`
-quedan deliberadamente sin clasificar — su dominio es ADR-0013 (memoria), no ADR-0010.
-Siguiente lote: tools de escritura restantes, revisadas una por una (algunas serán N2 o
-`dev_verificado`).
+escriben). 118/118 pruebas del agente en verde. 35/103 tools migradas tras el lote 5.
+
+**Lote 6 completado (2026-08-02)** — las 10 tools administrativas más sensibles hasta ahora:
+`ejecutar_deploy` (**N3**, literalmente "despliegue" per ADR-0006); `github_escribir`,
+`patch_codigo`, `rollback`, `test_endpoint`, `nexus_manage` (**N2**, cambian código/historia
+de git/config de enrutamiento en vivo o pueden invocar cualquier endpoint propio);
+`escribir_bd` (**N2**, ya exige "CONFIRMO BORRADO" del humano en el propio código para
+DELETE/UPDATE masivo — coincide textualmente con la definición de N2 de ADR-0006);
+`verificar_deploy`/`configurar_alerta` (**N1**); `validar_cambios_bd` (**N0**, solo `SELECT`).
+`acceso`/`cron` de cada una copian su membresía real en los tres `Set` de `lib.js`. 119/119
+pruebas en verde. **45/103 tools migradas**; quedan 24 en el agente y 34 en `worker.js` raíz.
+`memory_save`/`memory_read`/`propose_mejora`/`tomar_decision` siguen sin clasificar (dominio
+de ADR-0013). Siguiente lote: `enviar_email`/`enviar_telegram_informe` (probablemente N2,
+salen de la organización) y el resto de tools de escritura restantes.
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen

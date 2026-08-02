@@ -76,7 +76,11 @@ sanear el metadato de ADR-0010 antes de construir `body.tools`. `F-1.3-MIGRAR-RE
 resultó ser N0 pese al nombre (solo análisis, sin escritura). Bug real corregido de paso:
 SQL interpolado sin parametrizar en `gestionar_calidad`/`resolver`. Lote 5: 12 tools de
 lectura más, incluidas las 4 de GitHub que comparten `case` con las que sí escriben.
-118/118 en verde. **35/103 tools migradas**; quedan 34 en el agente y 34 en `worker.js` raíz.
+118/118 en verde tras el lote 5. **Lote 6 completado:** las 10 tools administrativas más
+sensibles (`ejecutar_deploy` N3, `github_escribir`/`patch_codigo`/`rollback`/`test_endpoint`/
+`nexus_manage`/`escribir_bd` N2, `verificar_deploy`/`configurar_alerta` N1,
+`validar_cambios_bd` N0), cada una revisada línea a línea. 119/119 en verde. **45/103 tools
+migradas**; quedan 24 en el agente y 34 en `worker.js` raíz.
 `memory_save`/`memory_read`/`propose_mejora`/`tomar_decision` sin clasificar a propósito
 (dominio de ADR-0013, no de ADR-0010).
 
