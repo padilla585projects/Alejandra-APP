@@ -143,11 +143,16 @@ registrada en el handoff. No queda ningún pendiente de ADR-0014.
 directamente contra `nucleo-cognitivo/` — `node --check` sobre los módulos y `node --test
 nucleo-cognitivo/test/*.js` en verde (20/20). `TASKS.md` describía como pendiente un paso
 (`registrarTraza()` real en los Workers) que ya estaba hecho desde PR #24/#25; corregido.
+
 **F-1.3 abierta (2026-08-02)** por `ADR-0007` enmienda 1: sus dependencias (F-1.2, ARC-004,
-ARC-006) están cerradas. Primer entregable en curso: esqueleto y contratos del Tool Registry
-(validación pura del metadato `acceso`/`cron`/`nivel_riesgo` de ADR-0010) y las interfaces de
-Verifier según los tres niveles de ADR-0009, mismo patrón que F-1.2 — sin migrar el catálogo
-real de tools de ningún Worker, sin integrarse en producción.
+ARC-006) están cerradas. **Primer entregable completado:** `nucleo-cognitivo/tool-registry.js`
+(validación pura del metadato `acceso`/`cron`/`nivel_riesgo` de ADR-0010, `registrarTool`,
+`filtrarToolsPorAcceso`, `filtrarToolsParaCron`) y `verifier.js` (nivel determinista real;
+revisión humana asíncrona y explicabilidad como interfaces con error explícito, ADR-0009).
+33/33 pruebas en verde. Sin migrar el catálogo real de tools de ningún Worker, sin integrarse
+en producción. **Siguiente entregable en curso:** `F-1.3-TOOL-PILOTO-MIGRADA` — migrar una
+sola tool real de `alejandra-agente/worker.js` al formato de ADR-0010, sin cambiar su
+comportamiento observable, como piloto de la migración incremental tool por tool.
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen

@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **tareas activas**: F-0.2-CFG (pospuesta, ver decisión del Director), ARC-011-FASE3-CHECKLISTS (paso 2 pospuesto, ver decisión del Director) y F-1.3-TOOL-REGISTRY-ESQUELETO (primer entregable en curso). **F-1.2-NUCLEO-ESQUELETO se verificó completa (2026-08-02)** — sus 6 criterios de aceptación se cumplen y las 20 pruebas pasan (`node --test nucleo-cognitivo/test/*.js`) — y pasa a la tabla de completadas, junto con P-ARCH-002, ARC-008-TRAZAS-MIGRACION y ARC-013. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **tareas activas**: F-0.2-CFG (pospuesta, ver decisión del Director), ARC-011-FASE3-CHECKLISTS (paso 2 pospuesto, ver decisión del Director) y F-1.3-TOOL-PILOTO-MIGRADA (siguiente entregable de F-1.3, en curso). **F-1.3-TOOL-REGISTRY-ESQUELETO completada (2026-08-02)**: sus 5 criterios de aceptación se cumplen (33/33 pruebas en verde) y pasa a la tabla de completadas, junto con F-1.2-NUCLEO-ESQUELETO, P-ARCH-002, ARC-008-TRAZAS-MIGRACION y ARC-013. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
@@ -37,28 +37,28 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-### F-1.3-TOOL-REGISTRY-ESQUELETO — Esqueleto y contratos del Capability/Tool Registry
+### F-1.3-TOOL-PILOTO-MIGRADA — Migrar una tool real como piloto del Tool Registry
 
-- ID: F-1.3-TOOL-REGISTRY-ESQUELETO
-- Título: Primer entregable de F-1.3 tras cerrar F-1.2
+- ID: F-1.3-TOOL-PILOTO-MIGRADA
+- Título: Siguiente entregable de F-1.3 tras cerrar el esqueleto del Tool Registry/Verifier
 - Fase: Época 1 — Núcleo Cognitivo (F-1.3)
 - Estado: en curso
 - Prioridad: Alta
-- Rama: `feat/f-1.3-tool-registry-esqueleto`
+- Rama: `feat/f-1.3-tool-piloto-migrada`
 - Responsable actual: Agente de Ingeniería
-- Objetivo: declarar, como paquete aislado (mismo patrón que F-1.2: contratos y pruebas, sin integrar en `worker.js` ni `alejandra-agente/worker.js`), el contrato del Tool Registry — validación pura del metadato `acceso`/`cron`/`nivel_riesgo` por tool que fija ADR-0010 — y las interfaces de Verifier según los tres niveles de ADR-0009 (determinista, revisión humana asíncrona, explicabilidad como deuda).
+- Objetivo: migrar **una sola** tool real de `alejandra-agente/worker.js` al formato de declaración de ADR-0010 (`acceso`/`cron`/`nivel_riesgo` como metadato en la propia tool), sin cambiar su comportamiento observable, como piloto de la migración incremental que ADR-0010 exige tool por tool.
 - Criterios de aceptación:
-  1. Tool Registry: función pura que valida la forma de una declaración de tool (nombre, descripción, `acceso`, `cron`, `nivel_riesgo` ∈ {N0,N1,N2,N3} de ADR-0006) — sin leer el catálogo real de ninguno de los dos Workers, sin ejecutar tools.
-  2. Verifier: interfaz para los tres niveles de ADR-0009; el nivel determinista puede tener implementación real si es función pura sobre datos ya provistos (p. ej. validación de esquema); revisión humana y explicabilidad quedan como interfaz que lanza error explícito, citando la dependencia que falta.
-  3. QA: no se construye en esta tarea — depende de Verifier real y de tools ya registradas; ver `docs/decisions/ADR-0009-ALCANCE-DE-QA-Y-VERIFICACION.md`.
-  4. Ningún catálogo de tools real de `worker.js` ni `alejandra-agente/lib.js` se migra ni se toca en esta tarea — eso es trabajo posterior, vertical por vertical, no de golpe (mismo principio que ARC-011/ADR-0011).
-  5. Pruebas (`node --test`) verifican los puntos 1-2; CI ejecuta `node --check` y las pruebas del paquete.
-- Dependencias: F-1.2 completada (2026-08-02); ARC-004 (ADR-0009) y ARC-006 (ADR-0010) cerrados.
-- Bloqueos: ninguno para el esqueleto. Migrar el catálogo real de tools de cada Worker al Registry es alcance posterior, fuera de esta tarea.
-- Archivos principales: `nucleo-cognitivo/` o paquete nuevo equivalente (a decidir en la implementación, documentando el porqué).
-- Pruebas: `node --check` sobre cada módulo; `node --test` sobre el paquete correspondiente.
+  1. Elegir una tool de bajo riesgo (candidata: `consultar_personal` o similar, N0/N1, ya cubierta por pruebas existentes) y añadirle los tres campos de ADR-0010 en su declaración real.
+  2. El resultado de `filtrarToolsPorAuth()`/`filtrarToolsCron()` (o su equivalente actual en `lib.js`) para esa tool debe ser idéntico antes y después — verificable con una prueba negativa que compare ambos resultados.
+  3. Los tres `Set` de `lib.js` (`TOOLS_REQUIEREN_SESION`, `TOOLS_SOLO_DEV_VERIFICADO`, `TOOLS_PROHIBIDAS_CRON`) NO se retiran todavía — ADR-0010 exige migración incremental hasta que la última tool esté migrada.
+  4. `nucleo-cognitivo/src/tool-registry.js` (`validarDeclaracionTool`) valida la declaración real de esa tool sin cambios en su contrato.
+  5. Pruebas del agente (`npm --prefix alejandra-agente test`) en verde, sin regresión; nueva prueba negativa del punto 2.
+- Dependencias: F-1.3-TOOL-REGISTRY-ESQUELETO completada (2026-08-02).
+- Bloqueos: ninguno. No toca D1, secretos ni infraestructura — solo código de `alejandra-agente/worker.js`/`lib.js`, autónomo y reversible (ADR-0007).
+- Archivos principales: `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `alejandra-agente/lib.test.js`.
+- Pruebas: `npm --prefix alejandra-agente test`; `node --check alejandra-agente/worker.js`.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: construir el esqueleto (Tool Registry + Verifier) siguiendo el mismo patrón de interfaces con error explícito que usó F-1.2.
+- Siguiente acción exacta: elegir la tool piloto, añadir su metadato ADR-0010, y escribir la prueba negativa de comportamiento idéntico antes de tocar nada más.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 
@@ -131,3 +131,4 @@ Siguiente acción exacta:
 | fix/version-fallback-adr0014 | `index.html`: desactivar fallback de versión roto por el cambio de `/health` | Completada | PR #26. `hj.version` pasó a ser un UUID de despliegue; el fallback comparaba contra `APP_VERSION` y habría forzado recargas falsas (patrón de los incidentes de recarga infinita). Corregido en `main`; publicar a Pages sigue siendo un paso de entrega aparte. |
 | P-ARCH-002 | Componente compartido de notificaciones temporales | **Aprobada por el Director (2026-08-02)** | `packages/design-system/src/components/toast.js`. API heredada `mostrarToast()` compatible, 12 invocaciones sin cambios, sin backend ni permisos afectados. Evidencia en `docs/architecture/FRONTEND_SLICE_TOAST.md`. Desbloquea la siguiente rebanada de presentación. |
 | F-1.2-NUCLEO-ESQUELETO | Esqueleto, contratos e interfaces del núcleo cognitivo | Completada — verificada (2026-08-02) | `nucleo-cognitivo/`: Estado Cognitivo y Policy Engine implementados; Context Engine, Planner y Motor de Decisión como interfaces con error explícito; `memory.js` (ADR-0013 §8) y contrato `registrarTraza()` (ADR-0014 §5) añadidos en PR #20. Los 6 criterios de aceptación verificados contra el código: `node --check nucleo-cognitivo/src/*.js` y `node --test nucleo-cognitivo/test/*.js` (20/20 en verde). Cierra F-1.2 y desbloquea F-1.3. |
+| F-1.3-TOOL-REGISTRY-ESQUELETO | Esqueleto y contratos del Tool Registry y Verifier | Completada (2026-08-02) | `nucleo-cognitivo/src/tool-registry.js` (validación pura ADR-0010: `acceso`/`cron`/`nivel_riesgo`, `registrarTool`, `filtrarToolsPorAcceso`, `filtrarToolsParaCron`) y `verifier.js` (nivel determinista real; revisión humana asíncrona y explicabilidad como interfaces con error explícito, ADR-0009; `nivelesRequeridosPara()`). 13 pruebas nuevas, 33/33 en verde. No migra ningún catálogo real de tools — eso es `F-1.3-TOOL-PILOTO-MIGRADA`. |
