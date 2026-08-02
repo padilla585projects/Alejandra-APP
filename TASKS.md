@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **dos tareas activas** (F-0.2-CFG y ARC-011-FASE3-CHECKLISTS). ARC-013 ya está desplegado y pasa a la tabla de completadas. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **tareas activas**: F-0.2-CFG, ARC-011-FASE3-CHECKLISTS, F-1.2-NUCLEO-ESQUELETO y P-ARCH-002 (línea de presentación, independiente). ARC-013 ya está desplegado y pasa a la tabla de completadas. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Reglas
 
@@ -47,6 +47,30 @@ Siguiente acción exacta:
 - Pruebas: sintaxis del componente, DOM/temporizador simulados, encoding y diff check.
 - Última actualización: 2026-08-02
 - Siguiente acción exacta: el Director revisa la evidencia P-ARCH-002; detenerse hasta decidir si autoriza la siguiente rebanada.
+
+### F-1.2-NUCLEO-ESQUELETO — Esqueleto, contratos e interfaces del núcleo cognitivo
+
+- ID: F-1.2-NUCLEO-ESQUELETO
+- Título: Primer entregable de F-1.2 tras aceptar ADR-0004
+- Fase: Época 1 — Núcleo Cognitivo (F-1.2)
+- Estado: en curso
+- Prioridad: Alta
+- Rama: `feat/f-1.2-nucleo-cognitivo-esqueleto`
+- Responsable actual: Agente de Ingeniería
+- Objetivo: construir `nucleo-cognitivo/` como paquete aislado con Estado Cognitivo, Policy Engine y las interfaces de Context Engine, Planner y Motor de Decisión, sin integrarlo en `worker.js` ni `alejandra-agente/worker.js`.
+- Criterios de aceptación:
+  1. Estado Cognitivo: implementación real, pero estrictamente efímera (objeto en memoria de proceso, sin escritura a D1/R2/disco).
+  2. Policy Engine: clasificación de riesgo N0–N3 según la matriz de ADR-0006, como función pura sobre metadato declarado — sin leer sesión, permisos ni datos reales.
+  3. Context Engine, Planner y Motor de Decisión: interfaz y forma de datos definidas (JSDoc/typedef); la implementación lanza un error explícito citando la dependencia que falta (no un stub silencioso).
+  4. El contrato del Motor de Decisión exige, en su forma de datos, los campos de traza de `docs/architecture/04-MOTOR-DE-DECISION.md` (decisión, motivos, evidencia, confianza, riesgo, permisos efectivos, modo, criterio de salida).
+  5. Ningún componente de Memory, Nexo, Capability/Tool Registry, Verifier o QA se construye en esta tarea.
+  6. Pruebas (`node --test`) verifican los puntos 1-4; CI ejecuta `node --check` y las pruebas del paquete.
+- Dependencias: ADR-0004 aceptado (2026-08-02); F-1.1 cerrada.
+- Bloqueos: ARC-002 (memoria) y ARC-008 (trazas) impiden ampliar más allá de este esqueleto.
+- Archivos principales: `nucleo-cognitivo/` (nuevo).
+- Pruebas: `node --check` sobre cada módulo; `node --test nucleo-cognitivo/test`.
+- Última actualización: 2026-08-02
+- Siguiente acción exacta: ampliar el esqueleto solo cuando F-1.3/F-2.1 se abran con sus propias dependencias resueltas; mientras tanto, esta tarea queda en curso sin fecha de cierre fija.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 
@@ -105,6 +129,7 @@ Siguiente acción exacta:
 | ARC-013 | Retirar la supresión de errores del DDL en runtime | Completada y **desplegada** | `eb772ee` + posteriores. `runDDL()`/`ddlPaso()` en producción en los dos workers (`alejandra-app-api` `a5ccf770`, `alejandra-agente` `a67353ec`). Ningún DDL falla ya en silencio. |
 | ARC-015 | Esquema descrito a Alejandra distinto del real | Cerrado | `5c8b2b9` + auditoría remota de Cloudflare. Esquema verificado contra D1 real: 57/60 correcto. |
 | F-0.2 | Catálogo de rutas, checks de CI y contratos base | **Completada (2026-08-02)** | `2cc6f5b`, `16dd55d`, `7dcf084`, `42eb2c2`. 544 rutas inventariadas; inventario de bindings/secretos limpio; cuatro validaciones en CI; auditoría remota de Cloudflare cierra la fase. Hallazgo ARC-018 registrado, no bloqueante. |
+| ADR-0004 | Motor de Decisión y modos cognitivos v1.0 | **Aceptado (2026-08-02)** | Arquitectura objetivo aceptada. Cierra F-1.1. Autoriza esqueleto/contratos, no activación (memoria/trazas siguen pendientes de ARC-002/ARC-008). |
 | ADR-0006 | Matriz de riesgo y aprobación humana (ARC-001) | **Aceptado (2026-08-02)** | `run_migration` pasa a capacidad administrativa fuera del alcance autónomo. Desbloquea ADR-0004. |
 | ADR-0008 | Definición de Nexo (ARC-003) | **Aceptado (2026-08-02)** | Nexo = capa de integración con sistemas externos (interpretación A). |
 | ADR-0009 | Alcance de QA y verificación (ARC-004) | **Aceptado (2026-08-02)** | Tres niveles de verificación; explicabilidad como deuda hasta F-4.1. |

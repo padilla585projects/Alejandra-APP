@@ -14,7 +14,7 @@ Foundation v0.1 aprobada. F-0.1 está **cerrada localmente**: CI, CD, secretos y
 
 **F-0.2 completada** (2026-08-02): catálogo de rutas, CI de calidad y auditoría remota de Cloudflare, con el hallazgo **ARC-018** (worker/bucket huérfanos) pendiente de decisión.
 
-**Cinco ADR de Época 1 aceptados** (2026-08-02): `ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010` y `ADR-0011` (este último como estrategia). Cierran ARC-001, ARC-003, ARC-004 y ARC-006. Solo `ADR-0004` (Motor de Decisión) sigue pendiente, y es el único bloqueo que le queda a F-1.1.
+**Seis ADR de Época 1 aceptados** (2026-08-02): `ADR-0004`, `ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010` y `ADR-0011` (este último como estrategia). Cierran ARC-001, ARC-003, ARC-004 y ARC-006, y con `ADR-0004` se cierra **F-1.1**. Se abre **F-1.2**, acotada a esqueleto y contratos del núcleo cognitivo (`nucleo-cognitivo/`), sin activar memoria persistente ni decisiones sin trazabilidad.
 
 ## Lectura obligatoria
 
@@ -34,14 +34,19 @@ Trabajo autónomo habilitado ahora mismo: **ARC-011 fase 3, vertical `checklists
 declarar la migración `.sql` a partir del esquema real ya verificado en ARC-015 (código
 reversible). **Aplicarla contra D1 sigue exigiendo autorización explícita del Director.**
 
-El resto de la Época 1 (F-1.1 en adelante) sigue bloqueada por **`ADR-0004`** (Motor de
-Decisión), el único ADR de Época 1 que sigue Propuesto — es una decisión, no la puede tomar
-el agente.
+**`ADR-0004` aceptado el 2026-08-02**: cierra F-1.1 y abre F-1.2. Primer entregable en curso:
+`nucleo-cognitivo/`, paquete aislado con Estado Cognitivo, Policy Engine y las interfaces de
+Context Engine, Planner y Motor de Decisión — sin integrarlo en `worker.js` ni
+`alejandra-agente/worker.js`. Por restricción expresa del Director: no se activa memoria
+persistente sensible (ARC-002 sigue sin ADR) ni se toman decisiones sin trazabilidad
+suficiente (ARC-008 sigue abierto). Memory, Nexo, Capability/Tool Registry, Verifier y QA
+quedan fuera — son F-1.3/F-2.1/F-2.2, no abiertas.
 
 En paralelo, y solo por el Director: **`F-0.2-CFG`** (secretos al entorno `production`),
-**ARC-018** (worker/bucket huérfanos) y **ARC-014** (autoaprobación de despliegue).
+**ARC-018** (worker/bucket huérfanos), **ARC-014** (autoaprobación de despliegue), y
+**ARC-002**/**ARC-008** (memoria y trazas, condición para ampliar F-1.2).
 
-No iniciar el Núcleo Cognitivo (F-1.2 en adelante) ni aceptar ADR-0004 por cuenta propia.
+No integrar `nucleo-cognitivo/` en producción ni activar memoria persistente en él.
 
 **Presentación:** `ADR-0012` fue aceptado. La arquitectura vigente está en
 `docs/architecture/FRONTEND_ARCHITECTURE.md`; el piloto de salud P-ARCH-001 fue aprobado.
