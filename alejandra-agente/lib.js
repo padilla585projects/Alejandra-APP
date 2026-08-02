@@ -208,6 +208,22 @@ function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   });
 }
 
+// F-1.3 (ADR-0010): el catálogo de tools se migra incrementalmente para llevar
+// acceso/cron/nivel_riesgo como metadato declarado en la propia tool (ver
+// nucleo-cognitivo/src/tool-registry.js). Ese objeto es el mismo que
+// llamarAnthropic() envía tal cual en `body.tools` — sin este whitelist, el
+// metadato de ADR-0010 viajaría dentro del JSON real que recibe la API de
+// Anthropic. Se extrae aquí para poder testearlo antes de migrar ninguna
+// tool: solo deja pasar los campos que la API de Anthropic espera.
+function toolsParaAnthropic(tools) {
+  const lista = tools || [];
+  return lista.map((t, i) => {
+    const limpia = { name: t.name, description: t.description, input_schema: t.input_schema };
+    if (i === lista.length - 1) limpia.cache_control = { type: 'ephemeral' };
+    return limpia;
+  });
+}
+
 // Valida que una query sea SOLO SELECT (sin verbos de escritura). Extraída de la
 // lógica ya usada en consultar_bd para poder reutilizarla también en
 // configurar_alerta (condicion_sql) y exportar_datos (sql_custom) -- fix
@@ -490,6 +506,7 @@ export {
   TOOLS_PROHIBIDAS_CRON,
   esInvocacionCron,
   filtrarToolsCron,
+  toolsParaAnthropic,
   TABLAS_EMPRESA_PERMITIDAS,
   COLUMNA_BLOQUEADA_BD,
   extraerTablasQuery,

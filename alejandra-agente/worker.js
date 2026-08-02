@@ -30,6 +30,7 @@ import {
   filtrarToolsPorAuth,
   esInvocacionCron,
   filtrarToolsCron,
+  toolsParaAnthropic,
   TOOLS_SOLO_DEV_VERIFICADO,
   TOOLS_REQUIEREN_SESION,
   extraerTablasQuery,
@@ -2096,6 +2097,14 @@ const TOOL_BUSCAR_TAREAS = {
   }
 };
 
+// F-1.3/ADR-0010 (piloto de migración, 2026-08-02): primera tool con el
+// metadato acceso/cron/nivel_riesgo declarado. acceso:'sesion' porque está en
+// TOOLS_REQUIEREN_SESION (lib.js); cron:'permitido' porque NO está en
+// TOOLS_PROHIBIDAS_CRON; nivel_riesgo:'N0' porque es solo lectura (ADR-0006).
+// Estos tres campos NO se envían a la API de Anthropic — ver
+// toolsParaAnthropic() en lib.js. Los `Set` de lib.js siguen siendo la fuente
+// de verdad hasta que la última tool esté migrada (decisión del Director en
+// ADR-0010): este metadato es descriptivo, no sustituye el gating todavía.
 const TOOL_CONSULTAR_PERSONAL = {
   name: 'consultar_personal',
   description: 'Busca personal por nombre, departamento o puesto. Devuelve nombre, rol, contacto y departamento.',
@@ -2108,7 +2117,10 @@ const TOOL_CONSULTAR_PERSONAL = {
       limit:      { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
     },
     required: ['query']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_CONSULTAR_INVENTARIO = {
@@ -10455,10 +10467,10 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
   if (systemBlocks) body.system = systemBlocks;
 
   if (tools && tools.length > 0) {
-    const toolsArray = tools.map((t, i) => i === tools.length - 1
-      ? { ...t, cache_control: { type: 'ephemeral' } }
-      : t);
-    body.tools = toolsArray;
+    // F-1.3/ADR-0010: usa el whitelist de lib.js para que el metadato de
+    // acceso/cron/nivel_riesgo del catálogo de tools no viaje en el body real
+    // de la API de Anthropic.
+    body.tools = toolsParaAnthropic(tools);
   }
 
   const resp = await fetchAnthropicConReintentos(ANTHROPIC_API, {

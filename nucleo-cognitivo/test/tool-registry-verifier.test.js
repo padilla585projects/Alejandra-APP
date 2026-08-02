@@ -112,3 +112,30 @@ test('Verifier: nivelesRequeridosPara sigue la tabla de ADR-0009/0006', () => {
   assert.deepEqual(nivelesRequeridosPara('N3'), ['fuera_del_alcance_autonomo']);
   assert.throws(() => nivelesRequeridosPara('N9'));
 });
+
+// F-1.3-TOOL-PILOTO-MIGRADA: copia literal de la declaración real de
+// TOOL_CONSULTAR_PERSONAL en alejandra-agente/worker.js (piloto de migración,
+// 2026-08-02). No se importa desde alejandra-agente/ a propósito —
+// nucleo-cognitivo/ se mantiene aislado, sin dependencias cruzadas con ningún
+// Worker. Si este test falla, es porque la declaración real cambió y esta
+// copia quedó desactualizada: hay que sincronizarla a mano.
+test('Tool Registry: la declaración real de consultar_personal (piloto ADR-0010) valida', () => {
+  const toolConsultarPersonal = {
+    name: 'consultar_personal',
+    description: 'Busca personal por nombre, departamento o puesto. Devuelve nombre, rol, contacto y departamento.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Nombre, DNI o palabra clave a buscar' },
+        departamento: { type: 'string', description: 'Filtrar por departamento (opcional, ej: "electrico", "prl")' },
+        activos_solo: { type: 'boolean', description: 'Solo mostrar personal activo (default true)' },
+        limit: { type: 'number', description: 'Máximo de resultados (default 10, max 50)' },
+      },
+      required: ['query'],
+    },
+    acceso: 'sesion',
+    cron: 'permitido',
+    nivel_riesgo: 'N0',
+  };
+  assert.equal(validarDeclaracionTool(toolConsultarPersonal), true);
+});
