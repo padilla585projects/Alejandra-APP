@@ -43,7 +43,7 @@ Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan cerra
 
 - **P-ARCH-002 — componente compartido de presentación, en revisión.** P-ARCH-001 (salud del panel) fue aprobado. Se extrajo la primitiva de notificaciones temporales a `packages/design-system`, manteniendo las 12 invocaciones, iconos, cierre, caducidad y fallback. No llama a backend ni trata permisos. Evidencia, pruebas y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md`. No ampliar hasta revisión del Director.
 
-- **F-1.2, núcleo cognitivo, en curso — ampliable.** `ADR-0004` aceptado, F-1.1 cerrada. `nucleo-cognitivo/` construido como paquete aislado (Estado Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión). Con ADR-0013/0014 aceptados, puede ampliarse con la interfaz `memory.js` y el helper `registrarTraza()` — ambos sin persistencia real hasta aplicar sus migraciones. No integrado en `worker.js` ni `alejandra-agente/worker.js`.
+- **F-1.2, núcleo cognitivo, en curso — ampliada.** `ADR-0004` aceptado, F-1.1 cerrada. `nucleo-cognitivo/` construido como paquete aislado (Estado Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión). Con ADR-0013/0014 aceptados, se amplió (PR #20) con la interfaz `memory.js` y el contrato `registrarTraza()` — ambos sin persistencia real. La tabla `alejandra_trazas` ya está aplicada y verificada (ARC-008-TRAZAS-MIGRACION); nada escribe en ella todavía. No integrado en `worker.js` ni `alejandra-agente/worker.js`.
 - **ARC-011 fase 3, trabajo de código** — declarar la migración `.sql` del vertical `checklists` (autónomo); aplicarla contra D1 sigue exigiendo autorización del Director.
 - **ARC-014 — la aprobación de entorno no frena a un token de administración.** Evaluar `prevent_self_review`, revisores distintos del solicitante, o un token de menor privilegio para agentes.
 - **Secretos aún a nivel de repositorio (`F-0.2-CFG`).** Moverlos al entorno `production` exige reintroducir los valores a mano: la API no los expone.
@@ -60,11 +60,12 @@ Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan cerra
 
 ## Próximo trabajo autónomo
 
-Con `ADR-0004`, `ADR-0013` y `ADR-0014` aceptados, el trabajo autónomo en curso es F-1.2:
-ampliar `nucleo-cognitivo/` con las interfaces `memory.js` y `registrarTraza()`, sin
-activarlas en producción ni persistir datos reales hasta que sus migraciones se apliquen. En
-paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla
-contra D1 sigue exigiendo autorización del Director.
+Con `memory.js`, `registrarTraza()` y `alejandra_trazas` ya en pie, el siguiente trabajo real
+de F-1.2 es de alcance mayor y toca código de producción: implementar `registrarTraza()` en
+cada Worker (regla de los dos cerebros) y `GET /admin/trazas` en `alejandra-app-api` (ADR-0014
+§3/§5) — fuera del aislamiento actual del núcleo, conviene acordar su alcance explícito antes
+de abrirlo. En paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`);
+aplicarla contra D1 sigue exigiendo autorización del Director.
 
 ## Otras acciones pendientes del Director
 
