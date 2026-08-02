@@ -38,7 +38,7 @@ Consecuencia: ARC-001, ARC-003, ARC-004 y ARC-006 quedan cerrados en `ARCHITECT_
 
 ## Qué está pendiente
 
-- **P-ARCH-001 — piloto de presentación, en revisión.** `ADR-0012` fue aceptado. Se extrajo únicamente el indicador de salud de solo lectura del panel de conversación a cliente API y feature aislados, manteniendo URL, contrato, fallback y autoridad del Worker. Evidencia, pruebas y rollback: `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md`. No ampliar hasta revisión del Director.
+- **P-ARCH-002 — componente compartido de presentación, en revisión.** P-ARCH-001 (salud del panel) fue aprobado. Se extrajo la primitiva de notificaciones temporales a `packages/design-system`, manteniendo las 12 invocaciones, iconos, cierre, caducidad y fallback. No llama a backend ni trata permisos. Evidencia, pruebas y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md`. No ampliar hasta revisión del Director.
 
 - **`ADR-0004` (Motor de Decisión) — el único ADR de Época 1 sin aceptar.** Es lo único que le falta a F-1.1 para abrirse; es una fase de decisión que ADR-0007 enmienda 1 excluye de la apertura autónoma.
 - **ARC-011 fase 3, trabajo de código** — declarar la migración `.sql` del vertical `checklists` (autónomo); aplicarla contra D1 sigue exigiendo autorización del Director.
@@ -76,7 +76,7 @@ resto de la Época 1.
 
 **`ARC-014`** — decidir cómo separar la aprobación de entorno del token que lanza el despliegue.
 
-**P-ARCH-001 — revisar el piloto de presentación.** No bloquea el backend ni el Núcleo
+**P-ARCH-002 — revisar la rebanada de notificaciones.** No bloquea el backend ni el Núcleo
 Cognitivo; sí bloquea la siguiente extracción de frontend hasta que se revise su evidencia.
 
 ## No tocar sin nueva autorización
@@ -86,4 +86,4 @@ Cognitivo; sí bloquea la siguiente extracción de frontend hasta que se revise 
 - No modificar secretos, bindings, Cloudflare, D1, R2 ni producción.
 - No iniciar el Núcleo Cognitivo (F-1.2 en adelante).
 - No aceptar `ADR-0004` por cuenta propia.
-- No ampliar la migración de presentación más allá de P-ARCH-001 hasta su revisión.
+- No ampliar la migración de presentación más allá de P-ARCH-002 hasta su revisión.

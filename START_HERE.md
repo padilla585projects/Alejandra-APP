@@ -44,5 +44,6 @@ En paralelo, y solo por el Director: **`F-0.2-CFG`** (secretos al entorno `produ
 No iniciar el Núcleo Cognitivo (F-1.2 en adelante) ni aceptar ADR-0004 por cuenta propia.
 
 **Presentación:** `ADR-0012` fue aceptado. La arquitectura vigente está en
-`docs/architecture/FRONTEND_ARCHITECTURE.md`; el primer piloto de salud del panel de
-conversación está en revisión. No ampliar la migración hasta revisar su evidencia.
+`docs/architecture/FRONTEND_ARCHITECTURE.md`; el piloto de salud P-ARCH-001 fue aprobado.
+La rebanada compartida de notificaciones P-ARCH-002 está en revisión: no ampliar hasta revisar
+`docs/architecture/FRONTEND_SLICE_TOAST.md`.

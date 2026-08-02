@@ -30,23 +30,23 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-### P-ARCH-001 — Revisión de la arquitectura de la capa de presentación
+### P-ARCH-002 — Componente compartido de notificaciones temporales
 
-- ID: P-ARCH-001
-- Título: Decidir la arquitectura objetivo del frontend antes de iniciar el refactor
+- ID: P-ARCH-002
+- Título: Extraer la primitiva de toast del panel de conversación
 - Fase: Época transversal — P-1
 - Estado: en revisión
 - Prioridad: Alta
 - Rama: `docs/presentacion-arquitectura` (PENDIENTE de integración)
-- Responsable actual: Arquitecto del Proyecto para el piloto; Director del Proyecto para su revisión antes de ampliar
-- Objetivo: validar una rebanada de bajo riesgo de la arquitectura aceptada sin cambiar el contrato ni comportamiento del Worker.
-- Criterios de aceptación: piloto de salud documentado, cliente API aislado, fallback compatible, pruebas de contrato/renderizado, rollback por Git y evidencia de menor acoplamiento.
-- Dependencias: `ADR-0012` aceptado; análisis documentado del frontend actual.
-- Bloqueos: no ampliar la migración hasta revisar `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md`.
-- Archivos principales: `apps/conversacion/src/api/agent-client.js`, `apps/conversacion/src/features/system-health/index.js`, `alejandra-panel.html`, documentación de arquitectura.
-- Pruebas: sintaxis de módulos, contrato HTTP/feature con `fetch` simulado, encoding y diff check.
+- Responsable actual: Arquitecto del Proyecto; Director del Proyecto para la revisión antes de ampliar
+- Objetivo: aislar un componente visual reutilizable sin modificar funcionalidad, backend ni permisos.
+- Criterios de aceptación: API heredada compatible, 12 invocaciones sin cambios, escape/cierre/caducidad conservados, accesibilidad del cierre, pruebas y rollback por Git.
+- Dependencias: `ADR-0012` aceptado; P-ARCH-001 aprobado.
+- Bloqueos: no ampliar la migración hasta revisar `docs/architecture/FRONTEND_SLICE_TOAST.md`.
+- Archivos principales: `packages/design-system/src/components/toast.js`, `alejandra-panel.html`, documentación de arquitectura.
+- Pruebas: sintaxis del componente, DOM/temporizador simulados, encoding y diff check.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: el Director revisa la evidencia P-ARCH-001; detenerse hasta decidir si autoriza la siguiente rebanada.
+- Siguiente acción exacta: el Director revisa la evidencia P-ARCH-002; detenerse hasta decidir si autoriza la siguiente rebanada.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 

@@ -334,6 +334,7 @@ a{color:var(--acc2);text-decoration:none}
   </div>
 </div>
 
+<script src="packages/design-system/src/components/toast.js"></script>
 <script src="apps/conversacion/src/api/agent-client.js"></script>
 <script src="apps/conversacion/src/features/system-health/index.js"></script>
 <script>
@@ -2004,6 +2005,17 @@ function cancelarScanRequest() {
 
 // ── Toast ──────────────────────────────────────────
 function mostrarToast(titulo, mensaje, tipo = 'info') {
+  const createToast = window.AlejandraPresentation?.designSystem?.createToast;
+  if (createToast) {
+    return createToast({
+      container: document.getElementById('toastContainer'),
+      title: titulo,
+      message: mensaje,
+      type: tipo,
+    });
+  }
+
+  // Compatibilidad temporal si el componente compartido no llega a cargarse.
   const iconos = { scan: '📸', warn: '⚠️', error: '❌', info: 'ℹ️', success: '✅' };
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');

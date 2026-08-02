@@ -101,7 +101,8 @@ permanece bloqueado hasta que el Director resuelva ADR-0004.
 
 `ADR-0012` fue aceptado el 2026-08-02. La arquitectura vigente
 `docs/architecture/FRONTEND_ARCHITECTURE.md` define aplicaciones, features, sistema de diseño
-y clientes API. El piloto P-ARCH-001 extrajo el indicador de salud de solo lectura del panel de
-conversación; su evidencia está en `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md`. No es
-dependencia del Núcleo Cognitivo y avanza en paralelo con backend/motor de decisión, pero la
-migración no se amplía hasta revisar el piloto.
+y clientes API. P-ARCH-001 (indicador de salud) fue aprobado. P-ARCH-002 extrae la primitiva
+compartida de notificaciones temporales sin contrato de backend; su evidencia está en
+`docs/architecture/FRONTEND_SLICE_TOAST.md`. No es dependencia del Núcleo Cognitivo y avanza
+en paralelo con backend/motor de decisión, pero la migración no se amplía hasta revisar esta
+rebanada.
