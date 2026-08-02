@@ -187,10 +187,18 @@ de git/config de enrutamiento en vivo o pueden invocar cualquier endpoint propio
 DELETE/UPDATE masivo — coincide textualmente con la definición de N2 de ADR-0006);
 `verificar_deploy`/`configurar_alerta` (**N1**); `validar_cambios_bd` (**N0**, solo `SELECT`).
 `acceso`/`cron` de cada una copian su membresía real en los tres `Set` de `lib.js`. 119/119
-pruebas en verde. **45/103 tools migradas**; quedan 24 en el agente y 34 en `worker.js` raíz.
+pruebas en verde. 45/103 tools migradas tras el lote 6.
+
+**Lote 7 completado (2026-08-02):** `enviar_email`/`enviar_telegram_informe` (**N2**, salen
+literalmente de la organización, el ejemplo textual de ADR-0006); `enviar_push`,
+`iniciar_conversacion`, `controlar_app` (**N1**, se quedan dentro del ecosistema propio de la
+app vía FCM/comandos acotados por `puedeNotificarUsuario`); `generar_informe`, `subir_archivo`,
+`ram_save`, `ram_clear` (**N1**). 120/120 pruebas en verde. **54/103 tools migradas**; quedan
+15 en el agente y 34 en `worker.js` raíz.
 `memory_save`/`memory_read`/`propose_mejora`/`tomar_decision` siguen sin clasificar (dominio
-de ADR-0013). Siguiente lote: `enviar_email`/`enviar_telegram_informe` (probablemente N2,
-salen de la organización) y el resto de tools de escritura restantes.
+de ADR-0013). Siguiente lote: `analizar_foto`, `generar_esquema`, `listar_esquemas`,
+`borrar_esquema`, `generar_grafico`, `preguntar_usuario`, `generar_plano`, `generar_documento`,
+`historico_materiales`, `exportar_datos`.
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen
