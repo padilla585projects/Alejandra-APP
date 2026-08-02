@@ -38,7 +38,7 @@ Consecuencia: ARC-001, ARC-003, ARC-004 y ARC-006 quedan cerrados en `ARCHITECT_
 
 ## Qué está pendiente
 
-- **P-ARCH-002 — componente compartido de presentación, en revisión.** P-ARCH-001 (salud del panel) fue aprobado. Se extrajo la primitiva de notificaciones temporales a `packages/design-system`, manteniendo las 12 invocaciones, iconos, cierre, caducidad y fallback. No llama a backend ni trata permisos. Evidencia, pruebas y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md`. No ampliar hasta revisión del Director.
+- **P-ARCH-002/P-ARCH-003 — presentación, completadas localmente.** P-ARCH-001 (salud del panel) fue aprobado. P-ARCH-002 extrajo la primitiva de notificaciones a `packages/design-system`, manteniendo 12 invocaciones, iconos, cierre, caducidad y fallback. P-ARCH-003 extrajo los 12 tokens base de color a `packages/design-system/src/tokens/base.css`, sin cambiar sus 299 consumidores. No llaman a backend ni tratan permisos. Evidencias y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md` y `docs/architecture/FRONTEND_SLICE_TOKENS.md`.
 
 - **`ADR-0004` (Motor de Decisión) — el único ADR de Época 1 sin aceptar.** Es lo único que le falta a F-1.1 para abrirse; es una fase de decisión que ADR-0007 enmienda 1 excluye de la apertura autónoma.
 - **ARC-011 fase 3, trabajo de código** — declarar la migración `.sql` del vertical `checklists` (autónomo); aplicarla contra D1 sigue exigiendo autorización del Director.
@@ -76,8 +76,8 @@ resto de la Época 1.
 
 **`ARC-014`** — decidir cómo separar la aprobación de entorno del token que lanza el despliegue.
 
-**P-ARCH-002 — revisar la rebanada de notificaciones.** No bloquea el backend ni el Núcleo
-Cognitivo; sí bloquea la siguiente extracción de frontend hasta que se revise su evidencia.
+**Presentación — siguiente rebanada.** Puede continuar con un componente reutilizado de verdad
+en más de un flujo del panel, sin tocar backend ni el núcleo cognitivo.
 
 ## No tocar sin nueva autorización
 
@@ -86,4 +86,4 @@ Cognitivo; sí bloquea la siguiente extracción de frontend hasta que se revise 
 - No modificar secretos, bindings, Cloudflare, D1, R2 ni producción.
 - No iniciar el Núcleo Cognitivo (F-1.2 en adelante).
 - No aceptar `ADR-0004` por cuenta propia.
-- No ampliar la migración de presentación más allá de P-ARCH-002 hasta su revisión.
+- No extraer un componente que afecte a autorización, llamadas HTTP o lógica de negocio.

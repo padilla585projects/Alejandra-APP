@@ -213,10 +213,10 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **P-1 — Arquitectura de la capa de presentación**
 
-- Estado/prioridad/tamaño: **P-ARCH-001 aprobado; P-ARCH-002 en revisión** / Alta / M.
+- Estado/prioridad/tamaño: **P-ARCH-001/P-ARCH-002/P-ARCH-003 completadas localmente** / Alta / M.
 - Objetivo/alcance: separar de forma gradual la presentación de la lógica de negocio mediante aplicaciones de campo, oficina, administración y conversación, features aisladas, sistema de diseño y clientes de API; no implementa aún el refactor.
-- Dependencias/bloqueantes/paralelo: `ADR-0012` aceptado y P-ARCH-001 aprobado. La ampliación queda bloqueada hasta revisar P-ARCH-002; es independiente de `ADR-0004` y puede continuar en paralelo con Workers, motor de decisión y núcleo cognitivo sin cambiar sus contratos unilateralmente.
-- Pruebas/aceptación: piloto de un vertical, compatibilidad funcional, revisión de accesibilidad/responsive y rollback por PR. Referencias: `docs/architecture/FRONTEND_ARCHITECTURE.md`, `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md` y `docs/architecture/FRONTEND_SLICE_TOAST.md`.
+- Dependencias/bloqueantes/paralelo: `ADR-0012` aceptado; rebanadas de bajo riesgo continúan en paralelo con Workers, motor de decisión y núcleo cognitivo sin cambiar sus contratos unilateralmente.
+- Pruebas/aceptación: piloto de un vertical, compatibilidad funcional, revisión de accesibilidad/responsive y rollback por PR. Referencias: `docs/architecture/FRONTEND_ARCHITECTURE.md`, `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md`, `docs/architecture/FRONTEND_SLICE_TOAST.md` y `docs/architecture/FRONTEND_SLICE_TOKENS.md`.
 
 **T-1 — Calidad transversal**
 

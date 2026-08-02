@@ -30,23 +30,23 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-### P-ARCH-002 — Componente compartido de notificaciones temporales
+### P-ARCH-002/P-ARCH-003 — Primitivas y tokens del sistema de diseño
 
-- ID: P-ARCH-002
-- Título: Extraer la primitiva de toast del panel de conversación
+- ID: P-ARCH-002/P-ARCH-003
+- Título: Extraer toast compartido y tokens base de color
 - Fase: Época transversal — P-1
-- Estado: en revisión
+- Estado: completada
 - Prioridad: Alta
 - Rama: `docs/presentacion-arquitectura` (PENDIENTE de integración)
 - Responsable actual: Arquitecto del Proyecto; Director del Proyecto para la revisión antes de ampliar
-- Objetivo: aislar un componente visual reutilizable sin modificar funcionalidad, backend ni permisos.
-- Criterios de aceptación: API heredada compatible, 12 invocaciones sin cambios, escape/cierre/caducidad conservados, accesibilidad del cierre, pruebas y rollback por Git.
+- Objetivo: aislar una primitiva visual reutilizable y tokens sin modificar funcionalidad, backend ni permisos.
+- Criterios de aceptación: API heredada compatible, 12 invocaciones sin cambios, escape/cierre/caducidad conservados, accesibilidad del cierre; 12 tokens con los mismos valores; pruebas y rollback por Git.
 - Dependencias: `ADR-0012` aceptado; P-ARCH-001 aprobado.
-- Bloqueos: no ampliar la migración hasta revisar `docs/architecture/FRONTEND_SLICE_TOAST.md`.
-- Archivos principales: `packages/design-system/src/components/toast.js`, `alejandra-panel.html`, documentación de arquitectura.
-- Pruebas: sintaxis del componente, DOM/temporizador simulados, encoding y diff check.
+- Bloqueos: ninguno para otra rebanada de presentación de bajo riesgo.
+- Archivos principales: `packages/design-system/src/components/toast.js`, `packages/design-system/src/tokens/base.css`, `alejandra-panel.html`, documentación de arquitectura.
+- Pruebas: sintaxis del componente, DOM/temporizador simulados, inventario de tokens, encoding y diff check.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: el Director revisa la evidencia P-ARCH-002; detenerse hasta decidir si autoriza la siguiente rebanada.
+- Siguiente acción exacta: elegir un componente utilizado por dos flujos que no dependa de HTTP, autorización ni reglas de negocio.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 

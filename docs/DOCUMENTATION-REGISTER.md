@@ -11,6 +11,7 @@ Actualizado: 2026-08-02.
 | `docs/architecture/FRONTEND_ARCHITECTURE.md` | Vigente | Referencia de arquitectura objetivo de presentación, aceptada por `ADR-0012`. |
 | `docs/architecture/FRONTEND_PILOT_SYSTEM_HEALTH.md` | En revisión | Evidencia y límites de la primera rebanada vertical de presentación. |
 | `docs/architecture/FRONTEND_SLICE_TOAST.md` | En revisión | Evidencia y límites de la segunda rebanada: componente compartido de notificaciones. |
+| `docs/architecture/FRONTEND_SLICE_TOKENS.md` | Vigente | Evidencia y límites de la tercera rebanada: tokens base de color. |
 | `docs/decisions/ADR-0012-ARQUITECTURA-CAPA-PRESENTACION.md` | Aceptado | Decisión de adopción y migración incremental de la arquitectura de presentación. |
 | `docs/00-09`, `docs/architecture/`, ADRs, otros runbooks e ideas | Vigente | Detalle normativo y técnico. |
 | `docs/archive/` | Archivada de consulta | Trazabilidad; no son fuentes vigentes ni planes ejecutables. |
