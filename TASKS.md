@@ -68,7 +68,7 @@ Siguiente acción exacta:
 - Criterios de aceptación:
   1. Los secretos de Cloudflare y de aplicación recreados en el entorno `production` y retirados del nivel de repositorio **solo después** de verificarlos allí.
   2. Ensayo con confirmación errónea sobre un workflow de producción: el job debe salir `skipped`, sin ejecutar.
-  3. Decidir si `required_approving_review_count` sigue en 1 (exige bypass de administrador al ser un repositorio de un solo mantenedor) o baja a 0.
+  3. ✅ **Decidido y aplicado el 2026-08-02: baja a 0.** El Director lo autorizó de forma expresa. Motivo: al ser un repositorio de un solo mantenedor, GitHub no permite auto-aprobar, así que cada merge exigía el bypass de administrador — fricción sin protección real. La protección efectiva sigue siendo el check `Syntax and agent tests` y la aprobación del entorno `production`, ambos intactos. Verificado tras el cambio: PR obligatoria, rama al día, sin force-push ni borrado, todo sin tocar.
   4. Decidir si la política de rama de `github-pages` sigue limitada a `main` o se amplía para publicar por tag.
   5. Nada desplegado ni migrado durante la validación.
 - Dependencias: F-0.1-R completada; acceso a los valores reales de los secretos.

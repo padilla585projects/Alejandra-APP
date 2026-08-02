@@ -54,7 +54,7 @@ Primer uso real del circuito de entrega segura. Se comportó como estaba diseña
 - **ARC-014 — la aprobación de entorno no frena a un token de administración.** La barrera detiene automatismos accidentales, no a un actor con ese token. Evaluar `prevent_self_review`, revisores distintos del solicitante, o un token de menor privilegio para agentes.
 - **Secretos aún a nivel de repositorio.** Moverlos al entorno `production` exige reintroducir los valores a mano: la API no los expone. No borrarlos del repositorio hasta haberlos verificado en el entorno.
 - **Ensayo de confirmación errónea** sobre un workflow de producción: debe salir `skipped`.
-- **`required_approving_review_count` está en 1.** Al ser un repositorio de un solo mantenedor, GitHub no permite auto-aprobar: el merge exige el bypass de administrador (`enforce_admins` está en `false` precisamente para conservar esa vía). Decidir si se mantiene o baja a 0.
+- ~~`required_approving_review_count` en 1~~ → **bajado a 0 el 2026-08-02** por decisión expresa del Director. Al ser repositorio de un solo mantenedor, exigía el bypass de administrador en cada merge: fricción sin protección real. La protección efectiva —check de CI requerido y aprobación del entorno `production`— queda intacta y verificada.
 - **Política de rama de `github-pages`** limitada a `main`: publicar desde un tag fallaría. Decidir si se amplía.
 - **`usuario_obras` no existe en producción**, pese a estar declarada en código y en `migrate_roles_multiobra.sql`. Comprobar qué depende de ella antes de aplicar nada.
 - Auditoría remota de Cloudflare: pendiente.
