@@ -74,23 +74,43 @@ no código existente.
 
 ---
 
-## ⛔ Prohibiciones operativas
+## ⛔ Qué requiere decisión humana
 
-Estas acciones **requieren autorización humana explícita y runbook aprobado**. No se
-ejecutan por rutina ni por iniciativa de una IA:
+> **Fuente única: `docs/decisions/ADR-0007-AUTONOMIA-DE-AGENTES-EN-DESARROLLO.md`.**
+> Lo de aquí es un resumen; ante cualquier duda o contradicción, manda el ADR.
 
-- **No desplegar.** Ni `npx wrangler deploy`, ni promoción, ni ningún equivalente.
-- **No ejecutar migraciones** contra D1 remoto.
-- **No modificar secretos** en Cloudflare ni GitHub.
-- **No alterar** Cloudflare, D1, R2 ni configuración de GitHub.
-- **No hacer refactors masivos** ni cambios funcionales fuera del alcance acordado.
-- **No inventar decisiones**: marcar `PENDIENTE` y pedir aprobación.
+El criterio **no es la categoría de la acción, sino si se puede deshacer**. El código es
+reversible; los datos no.
+
+**Autónomo, sin preguntar:** crear ramas, commits, `push`, abrir y fusionar PR con el CI en
+verde, ejecutar pruebas, **desplegar Workers** y encadenar tareas ya aprobadas en `TASKS.md`.
+
+**Requiere decisión humana**, porque no hay vuelta atrás razonable:
+
+- **Migraciones contra D1.** Alteran datos reales, y ARC-011 demostró que el esquema no es
+  reproducible desde el repositorio: si se corrompe, no hay de dónde restaurarlo.
+- **Secretos** en Cloudflare o GitHub. Una exposición no se deshace.
+- **`DELETE`, `DROP`, `TRUNCATE` o `UPDATE` masivo.** Se mantiene la barrera
+  `CONFIRMO BORRADO` (SEC-08/SEC-09).
+- **Borrado en R2.** Los ficheros no tienen copia.
+- **Aceptar un ADR** (pasarlo de Propuesto a Aceptado). Redactarlo sí es autónomo; abrir una fase también, si sus dependencias están cerradas — ADR-0007, enmienda 1.
+
+Además, con independencia de la autonomía: **no hacer refactors masivos** ni cambios fuera
+del alcance acordado, y **no inventar decisiones** — marcar `PENDIENTE` y pedir aprobación.
+
+Todo despliegue autónomo exige **verificación posterior registrada**.
 
 > ✅ **Entrega segura (F-0.1):** una PR solo ejecuta validaciones; un `push`, incluido a
 > `main`, no despliega Pages ni Workers, no ejecuta migraciones D1 y no reescribe secretos.
-> Producción requiere iniciar manualmente el workflow correspondiente, seleccionar un SHA/tag
-> aprobado, introducir su confirmación exacta y superar la protección del entorno GitHub
-> `production`. Ver `docs/decisions/ADR-0001-ENTREGA-DELIBERADA.md` y
+> Un despliegue exige iniciar el workflow correspondiente, indicar un SHA/tag, introducir su
+> confirmación exacta y superar la protección del entorno GitHub `production`.
+>
+> ADR-0007 permite que un agente **inicie** ese workflow por su cuenta, porque desplegar es
+> reversible. Lo que **no** cambia es la aprobación del entorno: sigue siendo humana. Es la
+> última barrera real y ARC-014 ya la señala como debilitada.
+>
+> Ver `docs/decisions/ADR-0001-ENTREGA-DELIBERADA.md`,
+> `docs/decisions/ADR-0007-AUTONOMIA-DE-AGENTES-EN-DESARROLLO.md` y
 > `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
 
 ---
@@ -103,7 +123,7 @@ ejecutan por rutina ni por iniciativa de una IA:
 4. Implementar una unidad coherente; no mezclar limpieza, seguridad y funcionalidades sin relación.
 5. Ejecutar las pruebas pertinentes y registrar resultado, omisiones y motivo.
 6. Actualizar `PROJECT_STATE.md`, `HANDOFF.md`, `CHANGELOG.md` y ADR/runbook cuando corresponda.
-7. Entregar para revisión. **No continuar a una nueva fase sin autorización explícita.**
+7. Entregar para revisión y **tomar la siguiente tarea aprobada de `TASKS.md` sin pedir permiso** (ADR-0007). Se puede **abrir la siguiente fase** si todas sus dependencias están cerradas y sus ADR aceptados (enmienda 1), dejando constancia. **Aceptar un ADR nunca es autónomo.**
 
 Ramas: una tarea principal por rama, con prefijos `docs/`, `chore/`, `feat/`, `fix/` y
 formato `tipo/area-descripcion`. Nunca trabajar directamente sobre `main`.
@@ -126,7 +146,7 @@ git commit -m "tipo: descripción"
 ```powershell
 node --check worker.js
 node --check alejandra-agente/worker.js
-npm --prefix alejandra-agente test    # 85 tests de políticas y tools
+npm --prefix alejandra-agente test    # 94 tests de políticas y tools
 ```
 
 Ejecutar la sintaxis de los Workers cuando se modifiquen, y los tests del agente ante

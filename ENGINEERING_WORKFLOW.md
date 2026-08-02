@@ -74,7 +74,7 @@ Detenerse
 7. **Validación.** Ejecutar las pruebas pertinentes, registrar resultado y justificar expresamente cualquier omisión.
 8. **Entregables.** Actualizar código, documentos, ADR, runbook, backlog o idea solo cuando el alcance lo requiera.
 9. **Criterios de aceptación.** Verificar cada criterio solicitado con evidencia objetiva antes de declarar el trabajo en revisión.
-10. **Detenerse.** Entregar el estado y esperar autorización; no iniciar la siguiente tarea o fase por iniciativa propia.
+10. **Continuar o detenerse, según ADR-0007.** Si la siguiente tarea ya está aprobada en `TASKS.md`, el agente **continúa sin pedir autorización**. Puede además **abrir la siguiente fase** si todas sus dependencias están cerradas y sus ADR aceptados (enmienda 1), dejando constancia de la comprobación. Se detiene ante lo no recuperable —migraciones D1, secretos, borrado de datos—, ante un ADR aún propuesto, y para **aceptar** cualquier ADR.
 
 ## Inicio obligatorio de una tarea
 

@@ -3,6 +3,8 @@ import {
   PRECIOS_USD,
   calcularCosteYProveedor,
   filtrarToolsPorAuth,
+  filtrarToolsCron,
+  esInvocacionCron,
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
@@ -87,6 +89,80 @@ describe('filtrarToolsPorAuth', () => {
   it('sin auth ni dev: solo deja pasar tools públicas', () => {
     const r = filtrarToolsPorAuth(tools, false, false);
     expect(r.map(t => t.name)).toEqual(['buscar_web']);
+  });
+
+  // SEC-ANON-01 (02/08/2026): pruebas negativas de autorización.
+  // `/api/chat` acepta peticiones sin sesión a propósito, y sin sesión el `empresa_id`
+  // sale del body sin verificar. Estas tools estaban FUERA del gateo, así que un anónimo
+  // podía leer datos de la empresa que eligiera y código privado de GitHub.
+  // Si alguien las saca de TOOLS_REQUIEREN_SESION, este test tiene que romperse.
+  it('sin sesión: ninguna tool de datos de empresa es alcanzable', () => {
+    const datos = ['consultar_personal', 'consultar_inventario', 'estado_obra',
+      'buscar_documentos', 'buscar_proveedores', 'consultar_precios',
+      'consultar_punch_list', 'buscar_tareas', 'recuperar_conversacion']
+      .map(name => ({ name }));
+    expect(filtrarToolsPorAuth(datos, false, false)).toEqual([]);
+  });
+
+  it('sin sesión: ninguna tool que escriba datos de empresa es alcanzable', () => {
+    const escritura = ['gestionar_tarea', 'gestionar_rfi', 'gestionar_oc', 'gestionar_acta',
+      'gestionar_calidad', 'generar_documento', 'editar_plano']
+      .map(name => ({ name }));
+    expect(filtrarToolsPorAuth(escritura, false, false)).toEqual([]);
+  });
+
+  it('sin sesión: el código fuente de GitHub no es alcanzable', () => {
+    const codigo = ['github_leer', 'github_listar', 'github_buscar', 'grep_codigo']
+      .map(name => ({ name }));
+    expect(filtrarToolsPorAuth(codigo, false, false)).toEqual([]);
+  });
+
+  it('sin sesión: siguen pasando las tools que no tocan datos de nadie', () => {
+    // El chat anónimo existe por diseño y debe seguir sirviendo para consultas técnicas.
+    const publicas = ['buscar_web', 'buscar_normativa', 'pensar', 'planificar',
+      'calcular_cable', 'calcular_bandeja', 'calcular_proteccion'].map(name => ({ name }));
+    expect(filtrarToolsPorAuth(publicas, false, false).map(t => t.name)).toEqual(
+      publicas.map(t => t.name)
+    );
+  });
+
+  // ARC-017 / SEC-CRON-01 (02/08/2026): el cron llama al modelo con esDevVerificado=true
+  // seis veces al día y sin nadie delante. El flag no se puede bajar porque
+  // puedeNotificarUsuario depende de él, así que la barrera es la lista de tools.
+  it('el cron NO recibe tools de produccion ni de codigo, aunque venga como dev', () => {
+    const peligrosas = ['ejecutar_deploy', 'rollback', 'patch_codigo', 'github_escribir',
+      'nexus_manage', 'test_endpoint'].map(name => ({ name }));
+    // Como dev verificado las recibiría todas...
+    expect(filtrarToolsPorAuth(peligrosas, true, true)).toHaveLength(peligrosas.length);
+    // ...pero el filtro del cron las quita.
+    expect(filtrarToolsCron(filtrarToolsPorAuth(peligrosas, true, true))).toEqual([]);
+  });
+
+  it('el cron NO puede escribir en la BD ni cambiar su propia configuracion', () => {
+    const escritura = ['escribir_bd', 'configurar_alerta', 'tomar_decision'].map(name => ({ name }));
+    expect(filtrarToolsCron(filtrarToolsPorAuth(escritura, true, true))).toEqual([]);
+  });
+
+  it('el cron SI conserva lo que necesita para analizar y avisar', () => {
+    const necesarias = ['consultar_bd', 'estado_obra', 'enviar_telegram_informe',
+      'enviar_push', 'pensar', 'memory_read'].map(name => ({ name }));
+    expect(filtrarToolsCron(filtrarToolsPorAuth(necesarias, true, true)).map(t => t.name))
+      .toEqual(necesarias.map(t => t.name));
+  });
+
+  it('esInvocacionCron solo reconoce la identidad real del cron', () => {
+    expect(esInvocacionCron('system', 'cron')).toBe(true);
+    expect(esInvocacionCron('system', 1)).toBe(false);
+    expect(esInvocacionCron('3', 'cron')).toBe(false);
+    // Un usuario no puede hacerse pasar por el cron: su identidad sale de la sesión.
+    expect(esInvocacionCron('anon:system', 'cron')).toBe(false);
+  });
+
+  it('con sesión: las tools de datos vuelven a estar disponibles (sin regresión)', () => {
+    const datos = ['consultar_personal', 'estado_obra', 'github_leer'].map(name => ({ name }));
+    expect(filtrarToolsPorAuth(datos, true, false).map(t => t.name)).toEqual(
+      ['consultar_personal', 'estado_obra', 'github_leer']
+    );
   });
 
   it('con sesión pero sin dev verificado: deja consultar_bd pero no patch_codigo', () => {

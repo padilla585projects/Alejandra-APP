@@ -16,6 +16,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Inventario del esquema real de D1 (`docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`), con las dos fases de ARC-011: análisis estático de los dos workers y contraste con producción.
 - `runDDL()` en ambos workers: ejecuta DDL en caliente sin lanzar, pero registrando todo error que no sea el duplicado esperado. `ddlPaso()` para `runMigrations()`, que distingue aplicada / ya existía / ERROR.
 - ARC-013 y ARC-014 en el backlog, abiertos a raíz del arreglo de ARC-012.
+- F-0.2: cuatro scripts de inventario y validación en `scripts/` —rutas y su autorización, encoding, sincronía de versiones, y secretos/bindings/migraciones—, todos de solo lectura y enganchados al job de CI existente. Ninguno contacta con Cloudflare ni lee valores de secretos.
+- ADR-0006, ADR-0008, ADR-0009, ADR-0010 y ADR-0011, redactados y **aceptados por el Director el mismo día** (2026-08-02): matriz de riesgo N0–N3 (ARC-001), definición de Nexo como capa de integración (ARC-003), QA en tres niveles (ARC-004), catálogo de tools con metadato de acceso (ARC-006), y migrador por vertical como estrategia (ARC-011 fase 3). Cierran ARC-001, ARC-003, ARC-004 y ARC-006 en el backlog.
+- Tarea `ARC-011-FASE3-CHECKLISTS` en `TASKS.md`: primer vertical de la migración por fases, habilitado por ADR-0011.
 
 ### Changed
 
@@ -29,4 +32,5 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - ARC-012 resuelto: `planos.circuitos_json`, `inventario_seg.ubicacion` y `empresas.retencion_config` aplicadas por el workflow manual y verificadas contra el esquema real. Cierra SEG-01 de verdad —el fix del 25/07 nunca llegó a funcionar— y restaura la retención RGPD, que estaba inoperante.
 - ARC-013: se retira la supresión de errores del DDL en runtime en los dos workers (48 llamadas a `runDDL`, 10 pasos a `ddlPaso`). No cambia comportamiento observable —el helper nunca lanza— pero un `no such table` deja de ser invisible. Requiere despliegue de `worker.js` para surtir efecto.
 - Puesta al día del estado tras las PR #10 y #11: `START_HERE.md`, `PROJECT_STATE.md`, `HANDOFF.md`, `TASKS.md`, `MASTER_ROADMAP.md` y `ARCHITECT_BACKLOG.md` seguían reflejando solo hasta la PR #9.
-- Sin cambios de datos ni despliegues. El único cambio de código es de observabilidad.
+- `PUT /sesion/departamento` comprobaba que el header `X-Token` existiera, pero no que la sesión fuese real ni que no hubiera caducado, y devolvía `ok:true` aunque no actualizara ninguna fila. El `UPDATE` está acotado por token, así que no permitía tocar la sesión de otro, pero una sesión ya caducada podía seguir cambiando su departamento —cosa que el resto de endpoints impide desde SEC-08/SEC-09—. Detectado por el catálogo de rutas de F-0.2.
+- Sin cambios de datos ni despliegues. Los cambios de código son de observabilidad, de corrección del prompt y de esa comprobación de sesión.

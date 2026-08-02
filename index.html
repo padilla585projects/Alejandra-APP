@@ -21158,6 +21158,20 @@ window.turnoToggle   = turnoToggle;
                 bubbleEl.innerHTML = _escHtml(textoAcumulado).replace(/\n/g, '<br>');
                 document.getElementById('iaMessages').scrollTop = document.getElementById('iaMessages').scrollHeight;
                 break;
+              // SSE-PARIDAD-01 (02/08/2026): el servidor emitía estos tres eventos y NINGÚN
+              // frontend los pintaba — mismo patrón que el incidente de `token` (29/07).
+              // `progreso` era el peor: al generar un plano el worker manda un contador cada
+              // 5s (alejandra-agente/worker.js:7327) y el usuario veía el spinner congelado
+              // entre 30 y 120 segundos, sin señal de que siguiera vivo.
+              case 'progreso':
+                _iaSetEstado(typing, ev.mensaje || 'Trabajando…');
+                break;
+              case 'thinking':
+                _iaSetEstado(typing, '🤔 ' + (ev.siguiente_paso || ev.problema || 'Pensando…'));
+                break;
+              case 'plan':
+                _iaSetEstado(typing, '📋 ' + (ev.objetivo || 'Planificando…'));
+                break;
               case 'cost':
                 break; // No mostrar coste
               case 'done':
@@ -21761,6 +21775,39 @@ async function alejandraEnviar() {
       scrollBottom();
     }
 
+    // SSE-PARIDAD-01 (02/08/2026): el servidor emite `progreso`, `thinking` y `plan` y
+    // este parser los descartaba en silencio. `progreso` era el más visible: generando o
+    // editando un plano SVG el worker manda un contador cada 5 s
+    // (alejandra-agente/worker.js:7327) y aquí no se pintaba nada, así que el usuario veía
+    // el indicador congelado entre 30 y 120 segundos sin señal de que siguiera vivo.
+    // Mismo patrón que el incidente de `token` del 29/07/2026.
+    let progresoEl = null;
+    function _chipRuta(texto) {
+      const el = document.createElement('div');
+      el.className = 'ale-tool-route';
+      const dot = document.createElement('span');
+      dot.className = 'ale-route-dot';
+      const txt = document.createElement('span');
+      txt.textContent = texto;   // textContent, no innerHTML: el mensaje viene del servidor
+      el.append(dot, txt);
+      return el;
+    }
+    function setProgreso(msg) {
+      thinkingEl.remove();
+      // Un único chip que se actualiza, no uno nuevo cada 5 s.
+      if (!progresoEl) {
+        progresoEl = _chipRuta(msg);
+        respDiv.insertBefore(progresoEl, respDiv.firstChild);
+      } else {
+        progresoEl.lastChild.textContent = msg;
+      }
+      scrollBottom();
+    }
+    function addAviso(texto) {
+      respDiv.insertBefore(_chipRuta(texto), respDiv.firstChild);
+      scrollBottom();
+    }
+
     function addToolStart(d) {
       thinkingEl.remove();
       const tc = getToolsContainer();
@@ -21852,12 +21899,17 @@ async function alejandraEnviar() {
             case 'token':     appendToken(ev.texto); break;
             case 'text':      appendToken(ev.texto); break; // fallback texto completo
             case 'cost':      addCostInfo(ev); break;
+            case 'progreso': setProgreso(ev.mensaje || 'Trabajando…'); break;
+            case 'thinking': addAviso('🤔 ' + (ev.siguiente_paso || ev.problema || 'Pensando…')); break;
+            case 'plan':     addAviso('📋 ' + (ev.objetivo || 'Planificando…')); break;
             case 'done':
               // Finalizar — quitar thinking si aún existe
               thinkingEl.remove();
+              if (progresoEl) { progresoEl.remove(); progresoEl = null; }
               break;
             case 'error':
               thinkingEl.remove();
+              if (progresoEl) { progresoEl.remove(); progresoEl = null; }
               appendToken('❌ ' + (ev.mensaje || 'Error desconocido'));
               break;
           }

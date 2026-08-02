@@ -29,13 +29,14 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 | Fase 0 — auditoría | Completada documentalmente. |
 | Fase 0.5 — continuidad | Completada documentalmente. |
 | Foundation v0.1 | Aprobada. COH-001 cerrado por ADR-0005 y COH-002 por ADR-0002; sin bloqueos de coherencia abiertos. |
-| Fase 1 — contrato cognitivo | Documentada; ADR-0002 **aceptado** como arquitectura objetivo, implementación bloqueada por ARC-001/002/003/004/005. |
+| Fase 1 — contrato cognitivo | Documentada; ADR-0002 **aceptado** como arquitectura objetivo. ARC-001/003/004 cerrados el 2026-08-02 (ADR-0006/0008/0009/0010); implementación sigue bloqueada por ADR-0004 (propuesto) y ARC-002 (gobierno de memoria, pendiente). |
 | Fase 2 — motor/modos | Documentada; ADR-0004 propuesto. |
 | Núcleo Cognitivo | No implementado. |
 | Entrega segura | **F-0.1 integrada y activa en remoto** (PR #9, 2026-08-02): workflows antiguos retirados, `main` protegida, entorno `production` con revisor requerido. El P0 está neutralizado. Queda mover los secretos a nivel de entorno (`F-0.2-CFG`). |
 | Esquema D1 | **ARC-011 fases 1 y 2 verificadas** (PR #10): 105 de 150 tablas existen solo porque el código las crea y 27 tablas reales no las declara nadie; el esquema **no es reproducible desde el repositorio**. ARC-012 resuelto (PR #11): las 3 columnas que faltaban se aplicaron y verificaron. ARC-013 corregido en código (`eb772ee`), pendiente de despliegue. Fase 3 pendiente, exige ADR propio. |
 | Auditoría remota GitHub | Realizada 2026-08-02 en solo lectura. Sus cinco hallazgos quedaron corregidos al activar F-0.1, salvo los secretos, que siguen a nivel de repositorio. |
-| Auditoría remota Cloudflare | Pendiente, solo lectura autorizada. |
+| Auditoría remota Cloudflare | **Realizada el 2026-08-02**, solo lectura autorizada por el Director. Workers, D1, R2, KV y secretos (solo nombres) inventariados. Esquema de Alejandra verificado contra D1 real: 57/60 correcto (ARC-015 cerrado). Ningún secreto ni binding sin declarar. Hallazgo: Worker y bucket R2 huérfanos sin documentar (ARC-018), pendiente de decisión — no tocados. Cierra la última tarea pendiente de F-0.2. |
+| ADR de Época 1 (ARC-001/003/004/006/011-fase3) | **Los cinco aceptados el 2026-08-02**: ADR-0006 (matriz de riesgo N0–N3, `run_migration` capacidad administrativa), ADR-0008 (Nexo = interpretación A, capa de integración), ADR-0009 (QA en tres niveles), ADR-0010 (catálogo de tools con metadato de acceso) y ADR-0011 (migrador por vertical, aceptado como estrategia — implementación al ritmo del roadmap). Único ADR de Época 1 que sigue **Propuesto**: ADR-0004 (Motor de Decisión), que es lo único que sigue bloqueando F-1.1. |
 
 ## Épocas y fases
 
@@ -56,7 +57,7 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-0.2 — Inventario remoto, calidad y contratos base**
 
-- Estado/prioridad/tamaño: Pendiente / Alta / L.
+- Estado/prioridad/tamaño: **Completada (2026-08-02)** / Alta / L.
 - Objetivo y valor: conocer recursos reales y establecer pruebas/contratos para evolucionar sin regresiones.
 - Alcance/fuera: auditoría de solo lectura, inventario de bindings/secretos/migraciones, CI de calidad y catálogo de rutas; no cambia datos/producción.
 - Dependencias/bloqueantes/paralelo: F-0.1 para evitar despliegue; acceso remoto autorizado; paralelo limitado con diseño UX.
@@ -64,15 +65,16 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 - Áreas/migraciones: scripts, tests, docs; migraciones solo se inventarían si evidencia exige corrección aprobada.
 - Riesgos/compliance/pruebas: exposición de metadatos; secretos minimizados; pruebas de contrato y negativas de autorización.
 - Aceptación/recuperación/entregables: inventario verificable y CI sin CD; revertir scripts/documentación; habilita implementaciones seguras.
+- Estado de aceptación: **cumplido**. Catálogo de 544 rutas con autorización (0 sin proteger tras corregir `PUT /sesion/departamento`), inventario de bindings/secretos limpio, cuatro validaciones en CI (encoding, versiones, autorización de rutas, secretos declarados), y auditoría remota de Cloudflare en solo lectura (Workers/D1/R2/KV/secretos) con un hallazgo nuevo registrado (ARC-018, pendiente de decisión del Director, no bloquea el cierre de la fase).
 
 ### Época 1 — Núcleo Cognitivo
 
 **F-1.1 — Aprobar contrato cognitivo y Motor de Decisión**
 
-- Estado/prioridad/tamaño: En revisión / Crítica / S.
+- Estado/prioridad/tamaño: En revisión — **bloqueada solo por ADR-0004** / Crítica / S.
 - Objetivo y valor: resolver ADR-0002/0004 y sus preguntas antes de código.
 - Alcance/fuera: decisiones de diseño, riesgo, modos y límites; no implementación.
-- Dependencias/bloqueantes/paralelo: ARC-001, ARC-003, ARC-004, ARC-006; puede ir en paralelo con F-0.1 documental.
+- Dependencias/bloqueantes/paralelo: ~~ARC-001, ARC-003, ARC-004, ARC-006~~ **cerrados el 2026-08-02** por ADR-0006/0008/0009/0010, todos aceptados. Único bloqueo restante: **ADR-0004 (Motor de Decisión) sigue Propuesto** — es una fase de decisión, no de construcción, y ADR-0007 enmienda 1 excluye explícitamente que el agente la abra o la resuelva por su cuenta. Puede ir en paralelo con F-0.1 documental.
 - Referencias/ADR/módulos: ADN, Arquitectura Cognitiva, Motor de Decisión; ADR-0002/0003/0004.
 - Áreas/migraciones: docs/decisions y backlog; ninguna migración.
 - Riesgos/compliance/pruebas: autonomía ambigua; revisión arquitectónica de coherencia; evidencia de aprobación ADR.
@@ -233,7 +235,7 @@ F-0.1 Entrega segura → F-0.2 Calidad/contratos → F-1.1 Decisiones aprobadas
 | F-3.1 y F-4.1 | Contrato común de trazas acordado antes de integrar. |
 | F-5.1 e investigación F-6.2 | Sin acceso a proveedores/productivo. |
 
-Bloqueantes arquitectónicos: ADR-0001 y ADR-0002 aceptados; ADR-0004 pendiente; ARC-001, 002, 003, 004, 006 y 008 abiertos. ARC-005 está mitigado localmente y requiere validación remota; ARC-009 y ARC-010 están cerrados. Bloqueantes de seguridad: controles remotos de despliegue, permisos de tokens, aislamiento D1/R2 y retención. Dependencias externas: acceso GitHub/Cloudflare solo lectura, proveedores IA, cumplimiento/asesoría, contratos de integraciones y presupuesto de observabilidad.
+Bloqueantes arquitectónicos: ADR-0001, ADR-0002, ADR-0006, ADR-0008, ADR-0009, ADR-0010 y ADR-0011 (como estrategia) aceptados; **ADR-0004 sigue pendiente y es ahora el único bloqueo de F-1.1**. ARC-001, 003, 004 y 006 cerrados el 2026-08-02; ARC-002 y 008 siguen abiertos. ARC-005 está mitigado localmente y requiere validación remota; ARC-009 y ARC-010 están cerrados. Bloqueantes de seguridad: controles remotos de despliegue, permisos de tokens, aislamiento D1/R2 y retención. Dependencias externas: acceso GitHub/Cloudflare solo lectura, proveedores IA, cumplimiento/asesoría, contratos de integraciones y presupuesto de observabilidad.
 
 ## Estrategia de ramas y relevo
 
@@ -283,4 +285,4 @@ Bloqueantes arquitectónicos: ADR-0001 y ADR-0002 aceptados; ADR-0004 pendiente;
 
 - COH-001 y COH-002 quedaron resueltos el 2026-08-01 por ADR-0005 y ADR-0002 respectivamente.
 - Simplificación recomendada: validar un vertical por época antes de generalizar; evitar reescribir los dos Workers o crear Marketplace/multiagente antes de registries, permisos y observabilidad.
-- Preguntas: estado de ADR-0004; definición de Nexo; matriz de riesgo/aprobación; gobierno de memoria; alcance de QA; fuentes de conocimiento y métricas de éxito. Todas están enlazadas al backlog o ADRs, no se asumen resueltas. ADR-0001 y ADR-0002 ya están aceptados.
+- Preguntas: definición de Nexo, matriz de riesgo/aprobación y alcance de QA quedaron resueltas el 2026-08-02 por ADR-0008, ADR-0006 y ADR-0009. Sigue abierto: estado de ADR-0004 (Motor de Decisión, único bloqueo de F-1.1); gobierno de memoria (ARC-002); fuentes de conocimiento y métricas de éxito. Todas están enlazadas al backlog o ADRs, no se asumen resueltas. ADR-0001, ADR-0002, ADR-0006, ADR-0008, ADR-0009, ADR-0010 y ADR-0011 (estrategia) ya están aceptados.
