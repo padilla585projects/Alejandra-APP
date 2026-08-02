@@ -164,9 +164,12 @@ agente en verde (4 nuevas) + 1 nueva en `nucleo-cognitivo` que valida la declara
 copiada literalmente (sin importar entre paquetes). Los tres `Set` de `lib.js` siguen intactos
 — ADR-0010 exige migración incremental hasta que la última tool esté migrada.
 
-**Siguiente entregable en curso:** `F-1.3-MIGRAR-RESTO-TOOLS` — continuar la migración,
-tool por tool o en lotes pequeños, del resto del catálogo (68 tools restantes en el agente, 34
-en `worker.js` raíz con gating independiente).
+**`F-1.3-MIGRAR-RESTO-TOOLS` en curso — lote 2 completado (2026-08-02):** 8 tools de solo
+lectura más migradas (`buscar_documentos`, `buscar_tareas`, `consultar_inventario`,
+`buscar_precios`, `buscar_procedimientos`, `consultar_punch_list`, `buscar_proveedores`,
+`consultar_precios`), mismo patrón que el piloto. 115/115 pruebas del agente en verde. 9/103
+tools migradas; quedan 60 en el agente y 34 en `worker.js` raíz (gating independiente, regla
+de los dos cerebros).
 
 En paralelo, ARC-011 fase 3 (ADR-0011) sigue con su paso 1 completo (`migrate_checklists.sql`);
 aplicarla contra D1 sigue requiriendo autorización del Director. `F-0.2-CFG` y `ARC-014` siguen

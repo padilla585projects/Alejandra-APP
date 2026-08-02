@@ -2067,6 +2067,10 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 // Implementadas manualmente (no por agentes) siguiendo protocolo de prepared statements
 // y aislamiento por empresa_id. Prioridad: máxima calidad. (2026-07-16)
 
+// F-1.3/ADR-0010 (lote 2, 2026-08-02): tools de solo lectura que ya exigían
+// sesión en TOOLS_REQUIEREN_SESION, sin escritura de datos de negocio. Mismo
+// criterio que el piloto (consultar_personal): acceso:'sesion',
+// cron:'permitido' (ninguna está en TOOLS_PROHIBIDAS_CRON), nivel_riesgo:'N0'.
 const TOOL_BUSCAR_DOCUMENTOS = {
   name: 'buscar_documentos',
   description: 'Busca documentos de obra (PSS, ESS, EBSS, planos, EPI, etc.) en la BD por nombre, descripción o tipo. Filtra por estado (vigente/vencido/pendiente) y tipo de documento.',
@@ -2079,7 +2083,10 @@ const TOOL_BUSCAR_DOCUMENTOS = {
       limit:  { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
     },
     required: ['query']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_BUSCAR_TAREAS = {
@@ -2094,7 +2101,10 @@ const TOOL_BUSCAR_TAREAS = {
       limit:   { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
     },
     required: ['query']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 // F-1.3/ADR-0010 (piloto de migración, 2026-08-02): primera tool con el
@@ -2133,7 +2143,10 @@ const TOOL_CONSULTAR_INVENTARIO = {
       limite:  { type: 'number', description: 'Máximo de resultados (default 10, max 50)' }
     },
     required: ['query']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 // Tools de "capacidades avanzadas" (ver módulo de prompt `capacidades_avanzadas`).
@@ -2153,7 +2166,10 @@ const TOOL_BUSCAR_PRECIOS = {
       cantidad:   { type: 'number', description: 'Cantidad a presupuestar (default 1)' }
     },
     required: ['producto']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_MARCAR_PLANO = {
@@ -2265,7 +2281,10 @@ const TOOL_BUSCAR_PROCEDIMIENTOS = {
       limit:    { type: 'number', description: 'Máximo de resultados (default: 10)', default: 10 }
     },
     required: ['query']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_CONSULTAR_PUNCH_LIST = {
@@ -2277,7 +2296,10 @@ const TOOL_CONSULTAR_PUNCH_LIST = {
       estado: { type: 'string', enum: ['pendiente', 'completado', 'rechazado'], description: 'Filtrar por estado del item - opcional' },
       limit: { type: 'number', description: 'Máximo de resultados (default: 30)', default: 30 }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_BUSCAR_PROVEEDORES = {
@@ -2290,7 +2312,10 @@ const TOOL_BUSCAR_PROVEEDORES = {
       estado:       { type: 'string', enum: ['activo', 'inactivo'], description: 'Filtrar por estado - opcional' },
       limit:        { type: 'number', description: 'Máximo de resultados (default: 15)', default: 15 }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_CONSULTAR_PRECIOS = {
@@ -2304,7 +2329,10 @@ const TOOL_CONSULTAR_PRECIOS = {
       limit: { type: 'number', description: 'Máximo de resultados (default: 20)', default: 20 }
     },
     required: ['query']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOLS_POR_EXPERTO = {

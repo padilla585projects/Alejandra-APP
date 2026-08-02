@@ -71,9 +71,9 @@ del handoff. No queda pendiente de ADR-0014.
 Tool Registry/Verifier (ADR-0010/ADR-0009) y el piloto de migración (`consultar_personal`)
 están **completados**. El piloto encontró y corrigió un riesgo real: `TOOL_CONSULTAR_PERSONAL`
 se envía tal cual a la API de Anthropic — se añadió `toolsParaAnthropic()` en `lib.js` para
-sanear el metadato de ADR-0010 antes de construir `body.tools`. Siguiente entregable en curso:
-`F-1.3-MIGRAR-RESTO-TOOLS`, continuar la migración incremental del resto del catálogo (68
-tools del agente, 34 de `worker.js` raíz).
+sanear el metadato de ADR-0010 antes de construir `body.tools`. `F-1.3-MIGRAR-RESTO-TOOLS` en curso: lote 2 completado (8 tools de solo lectura más
+migradas, mismo patrón que el piloto, 115/115 en verde). 9/103 tools migradas; quedan 60 en
+el agente y 34 en `worker.js` raíz (gating independiente).
 
 En paralelo, ARC-011 fase 3 sigue con su paso 1 completo (`migrate_checklists.sql`); aplicarla
 contra D1 sigue exigiendo autorización del Director.

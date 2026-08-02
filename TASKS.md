@@ -58,7 +58,8 @@ Siguiente acción exacta:
 - Archivos principales: `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `alejandra-agente/lib.test.js`, y eventualmente `worker.js` raíz.
 - Pruebas: `npm --prefix alejandra-agente test`; `node --check` sobre los ficheros tocados.
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: elegir el siguiente lote (recomendado: las tools de solo lectura N0 ya cubiertas por pruebas, antes que las de escritura o `dev_verificado`) y repetir el patrón del piloto.
+- Progreso: **lote 2 completado (2026-08-02)** — 8 tools de solo lectura migradas (`buscar_documentos`, `buscar_tareas`, `consultar_inventario`, `buscar_precios`, `buscar_procedimientos`, `consultar_punch_list`, `buscar_proveedores`, `consultar_precios`), todas `acceso:'sesion'`, `cron:'permitido'`, `nivel_riesgo:'N0'`. 9 tools migradas de 103 (1 piloto + 8 del lote 2); quedan 60 en el agente y 34 en `worker.js` raíz.
+- Siguiente acción exacta: elegir el siguiente lote (recomendado: tools públicas sin sesión — `buscar_web`, `calcular_cable`, `calcular_bandeja`, `calcular_proteccion`, `pensar`, `planificar`, `buscar_normativa` — antes que las de escritura o `dev_verificado`) y repetir el patrón del piloto/lote 2.
 
 ### ARC-011-FASE3-CHECKLISTS — Declarar la migración del vertical `checklists`
 
