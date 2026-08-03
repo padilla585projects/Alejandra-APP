@@ -59,7 +59,7 @@
       "verticalARC011": "calidad",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas): las dos tablas (control_calidad NEW-37, punch_list NEW-44) ya existian creadas por el DDL en runtime, 17 columnas cada una identicas a la migracion antes y despues (verificacion de solo lectura); CREATE TABLE IF NOT EXISTS confirmado como no-op (0 rows_written). El DDL en runtime de este vertical (worker.js, ensureCalidadTable()/ensurePunchListTable()) sigue intacto: retirarlo es el paso 3 del ciclo de ADR-0011."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas): las dos tablas (control_calidad NEW-37, punch_list NEW-44) ya existian creadas por el DDL en runtime, 17 columnas cada una identicas a la migracion antes y despues (verificacion de solo lectura); CREATE TABLE IF NOT EXISTS confirmado como no-op (0 rows_written). Paso 3 (retirar DDL en runtime, autorizado por el Director) completo: ensureCalidadTable()/ensurePunchListTable() comentadas con referencia a esta migracion. Paso 4 (verificar en produccion) completo: worker.js desplegado (run 30791398680, version d26261b6-bf34-4e5b-bef5-478653648930), /health healthy (d1:true, r2:true), 17 columnas de cada tabla verificadas presentes tras el despliegue. Ciclo de ADR-0011 completo (5 pasos) -- tercer vertical cerrado tras checklists y rfis."
     }
   ]
 }

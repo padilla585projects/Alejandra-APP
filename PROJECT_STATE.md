@@ -149,11 +149,14 @@ de ARC-013 en `ARCHITECT_BACKLOG.md` (decía "pendiente de despliegue"; está de
 el 2026-08-02 y su dependencia de ARC-008 ya se cerró). Detalle en
 `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`.
 
-**Tercer vertical declarado: `calidad`.** `migrate_calidad.sql` declara `control_calidad`
+**Tercer vertical completo: `calidad`.** `migrate_calidad.sql` declara `control_calidad`
 (NEW-37) y `punch_list` (NEW-44), reutilizando el esquema ya verificado en la ronda anterior
-(17 columnas cada una, incluida `departamento` incorporada al `CREATE`). Paso 1 de 5 completo
-(PR #59); paso 2 (aplicar contra D1) espera autorización del Director, igual que `checklists`
-y `rfis` en su momento. Ver `TASKS.md` (`ARC-011-FASE3-CALIDAD`).
+(17 columnas cada una, incluida `departamento` incorporada al `CREATE`). Ciclo de 5 pasos
+cerrado el mismo día (2026-08-03): aplicada contra D1 (run `30790988608`, no-op confirmado),
+DDL en runtime retirado (`ensureCalidadTable()`/`ensurePunchListTable()`), verificado en
+producción tras desplegar `worker.js` (run `30791398680`, versión `d26261b6-...`, `/health`
+healthy, 17 columnas de cada tabla presentes). Tercer vertical con el ciclo completo, tras
+`checklists` y `rfis`. Ver `TASKS.md` (`ARC-011-FASE3-CALIDAD`).
 
 ## Siguiente objetivo
 
