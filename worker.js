@@ -14854,20 +14854,25 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('ai_usage: creada');
   } catch(e) { results.push('ai_usage: ' + e.message); }
-  // nexus_experts (NEXUS health scores)
-  try {
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS nexus_experts (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      nombre      TEXT UNIQUE NOT NULL,
-      score       INTEGER DEFAULT 80,
-      total_calls INTEGER DEFAULT 0,
-      tokens_in   INTEGER DEFAULT 0,
-      tokens_out  INTEGER DEFAULT 0,
-      cost_cents  INTEGER DEFAULT 0,
-      updated_at  TEXT DEFAULT (datetime('now'))
-    )`).run();
-    results.push('nexus_experts: creada');
-  } catch(e) { results.push('nexus_experts: ' + e.message); }
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "nexus_experts"
+  // queda declarada y aplicada en migrate_nexus_experts.sql (run
+  // 30836583358, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // try {
+  //   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS nexus_experts (
+  //     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  //     nombre      TEXT UNIQUE NOT NULL,
+  //     score       INTEGER DEFAULT 80,
+  //     total_calls INTEGER DEFAULT 0,
+  //     tokens_in   INTEGER DEFAULT 0,
+  //     tokens_out  INTEGER DEFAULT 0,
+  //     cost_cents  INTEGER DEFAULT 0,
+  //     updated_at  TEXT DEFAULT (datetime('now'))
+  //   )`).run();
+  //   results.push('nexus_experts: creada');
+  // } catch(e) { results.push('nexus_experts: ' + e.message); }
   // alejandra_alert_cache — deduplicación de alertas de watchers
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS alejandra_alert_cache (
@@ -16437,24 +16442,30 @@ async function devAICostes(request, env) {
 }
 
 async function ensureFasesObraTable(env) {
-  await runDDL(env, `
-    CREATE TABLE IF NOT EXISTS fases_obra (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      obra_id INTEGER NOT NULL,
-      empresa_id INTEGER NOT NULL,
-      nombre TEXT NOT NULL,
-      descripcion TEXT,
-      fecha_inicio_plan TEXT,
-      fecha_fin_plan TEXT,
-      fecha_inicio_real TEXT,
-      fecha_fin_real TEXT,
-      porcentaje INTEGER DEFAULT 0,
-      estado TEXT DEFAULT 'pendiente',
-      responsable TEXT,
-      orden INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "fases_obra"
+  // queda declarada y aplicada en migrate_planificacion_produccion.sql (run
+  // 30836558620, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await runDDL(env, `
+  //   CREATE TABLE IF NOT EXISTS fases_obra (
+  //     id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //     obra_id INTEGER NOT NULL,
+  //     empresa_id INTEGER NOT NULL,
+  //     nombre TEXT NOT NULL,
+  //     descripcion TEXT,
+  //     fecha_inicio_plan TEXT,
+  //     fecha_fin_plan TEXT,
+  //     fecha_inicio_real TEXT,
+  //     fecha_fin_real TEXT,
+  //     porcentaje INTEGER DEFAULT 0,
+  //     estado TEXT DEFAULT 'pendiente',
+  //     responsable TEXT,
+  //     orden INTEGER DEFAULT 0,
+  //     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  //   )
+  // `);
 }
 
 async function getFasesObra(request, env) {
@@ -16520,24 +16531,30 @@ async function eliminarFaseObra(id, request, env) {
 
 // ── Diario de obra (NEW-31) ──────────────────────────────────────────────────
 async function ensureDiarioObraTable(env) {
-  await runDDL(env, `
-    CREATE TABLE IF NOT EXISTS diario_obra (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      obra_id INTEGER NOT NULL,
-      empresa_id INTEGER NOT NULL,
-      fecha TEXT NOT NULL,
-      clima TEXT,
-      temperatura TEXT,
-      trabajos TEXT NOT NULL,
-      personal_presente INTEGER DEFAULT 0,
-      equipos_activos TEXT,
-      incidencias_dia TEXT,
-      visitantes TEXT,
-      observaciones TEXT,
-      creado_por TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "diario_obra"
+  // queda declarada y aplicada en migrate_planificacion_produccion.sql (run
+  // 30836558620, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await runDDL(env, `
+  //   CREATE TABLE IF NOT EXISTS diario_obra (
+  //     id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //     obra_id INTEGER NOT NULL,
+  //     empresa_id INTEGER NOT NULL,
+  //     fecha TEXT NOT NULL,
+  //     clima TEXT,
+  //     temperatura TEXT,
+  //     trabajos TEXT NOT NULL,
+  //     personal_presente INTEGER DEFAULT 0,
+  //     equipos_activos TEXT,
+  //     incidencias_dia TEXT,
+  //     visitantes TEXT,
+  //     observaciones TEXT,
+  //     creado_por TEXT,
+  //     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  //   )
+  // `);
 }
 
 async function getDiarioObra(request, env) {
@@ -16712,20 +16729,26 @@ async function eliminarTareaObra(id, request, env) {
 
 // ── Presupuesto de obra (NEW-33) ──────────────────────────────────────────────────
 async function ensurePresupuestoObraTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS presupuesto_obra (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    obra_id INTEGER NOT NULL,
-    empresa_id INTEGER NOT NULL,
-    categoria TEXT NOT NULL DEFAULT 'Otros',
-    descripcion TEXT NOT NULL,
-    importe_previsto REAL DEFAULT 0,
-    importe_real REAL DEFAULT 0,
-    unidades REAL DEFAULT 1,
-    unidad TEXT DEFAULT 'ud',
-    proveedor TEXT,
-    notas TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "presupuesto_obra"
+  // queda declarada y aplicada en migrate_finanzas_obra.sql (run 30836563260,
+  // verificada columna por columna contra D1 real antes y despues). Se retira
+  // el CREATE en runtime -- no hay entorno donde este runtime pudiera crearla
+  // de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS presupuesto_obra (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   obra_id INTEGER NOT NULL,
+  //   empresa_id INTEGER NOT NULL,
+  //   categoria TEXT NOT NULL DEFAULT 'Otros',
+  //   descripcion TEXT NOT NULL,
+  //   importe_previsto REAL DEFAULT 0,
+  //   importe_real REAL DEFAULT 0,
+  //   unidades REAL DEFAULT 1,
+  //   unidad TEXT DEFAULT 'ud',
+  //   proveedor TEXT,
+  //   notas TEXT,
+  //   created_at TEXT DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getPresupuestoObra(request, env) {
@@ -17372,23 +17395,29 @@ async function eliminarHitoObra(id, request, env) {
 
 // ── CORRESPONDENCIA DE OBRA (NEW-40) ─────────────────────────────────────────
 async function ensureCorrespondenciaTable(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS correspondencia (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id INTEGER NOT NULL,
-    obra_id INTEGER,
-    numero TEXT,
-    tipo TEXT DEFAULT 'saliente',
-    asunto TEXT NOT NULL,
-    emisor TEXT,
-    receptor TEXT,
-    fecha DATE NOT NULL,
-    referencia TEXT,
-    estado TEXT DEFAULT 'enviada',
-    respuesta_requerida INTEGER DEFAULT 0,
-    fecha_respuesta_limite DATE,
-    notas TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "correspondencia"
+  // queda declarada y aplicada en migrate_relaciones_obra.sql (run
+  // 30836573067, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS correspondencia (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id INTEGER NOT NULL,
+  //   obra_id INTEGER,
+  //   numero TEXT,
+  //   tipo TEXT DEFAULT 'saliente',
+  //   asunto TEXT NOT NULL,
+  //   emisor TEXT,
+  //   receptor TEXT,
+  //   fecha DATE NOT NULL,
+  //   referencia TEXT,
+  //   estado TEXT DEFAULT 'enviada',
+  //   respuesta_requerida INTEGER DEFAULT 0,
+  //   fecha_respuesta_limite DATE,
+  //   notas TEXT,
+  //   created_at TEXT DEFAULT (datetime('now'))
+  // )`);
 }
 async function getCorrespondencia(request, env) {
   const auth = await getAuth(request, env);
@@ -17577,21 +17606,27 @@ async function eliminarObsSeguridad(id, request, env) {
 //  NEW-42 — TOOLBOX TALKS / CHARLAS DE SEGURIDAD
 // ═══════════════════════════════════════════════════════════════════════════
 async function ensureToolboxTalksTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS toolbox_talks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id INTEGER NOT NULL,
-    obra_id INTEGER,
-    tema TEXT NOT NULL,
-    descripcion TEXT,
-    fecha TEXT NOT NULL,
-    hora TEXT,
-    duracion_min INTEGER DEFAULT 15,
-    facilitador TEXT,
-    asistentes TEXT,
-    firma_facilitador TEXT,
-    observaciones TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "toolbox_talks"
+  // queda declarada y aplicada en migrate_seguridad_cumplimiento.sql (run
+  // 30836567914, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS toolbox_talks (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id INTEGER NOT NULL,
+  //   obra_id INTEGER,
+  //   tema TEXT NOT NULL,
+  //   descripcion TEXT,
+  //   fecha TEXT NOT NULL,
+  //   hora TEXT,
+  //   duracion_min INTEGER DEFAULT 15,
+  //   facilitador TEXT,
+  //   asistentes TEXT,
+  //   firma_facilitador TEXT,
+  //   observaciones TEXT,
+  //   created_at TEXT DEFAULT (datetime('now'))
+  // )`).run();
 }
 async function getToolboxTalks(request, env) {
   const auth = await getAuth(request, env);
@@ -17928,21 +17963,27 @@ async function eliminarPunchItem(id, request, env) {
 //  NEW-45 — CONTROL DE COSTES DE OBRA
 // ═══════════════════════════════════════════════════════════════════════════
 async function ensureCostesObraTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS costes_obra (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id INTEGER NOT NULL,
-    obra_id INTEGER,
-    fase_id INTEGER,
-    concepto TEXT NOT NULL,
-    tipo TEXT DEFAULT 'otros',
-    importe REAL NOT NULL DEFAULT 0,
-    fecha TEXT,
-    proveedor TEXT,
-    factura_ref TEXT,
-    notas TEXT,
-    creado_por TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "costes_obra"
+  // queda declarada y aplicada en migrate_finanzas_obra.sql (run 30836563260,
+  // verificada columna por columna contra D1 real antes y despues). Se retira
+  // el CREATE en runtime -- no hay entorno donde este runtime pudiera crearla
+  // de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS costes_obra (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id INTEGER NOT NULL,
+  //   obra_id INTEGER,
+  //   fase_id INTEGER,
+  //   concepto TEXT NOT NULL,
+  //   tipo TEXT DEFAULT 'otros',
+  //   importe REAL NOT NULL DEFAULT 0,
+  //   fecha TEXT,
+  //   proveedor TEXT,
+  //   factura_ref TEXT,
+  //   notas TEXT,
+  //   creado_por TEXT,
+  //   created_at TEXT DEFAULT (datetime('now'))
+  // )`).run();
 }
 async function getCostesObra(request, env) {
   const auth = await getAuth(request, env);
@@ -18040,20 +18081,26 @@ async function eliminarCosteObra(id, request, env) {
 //  NEW-46 — DIRECTORIO DE CONTACTOS DE OBRA
 // ═══════════════════════════════════════════════════════════════════════════
 async function ensureContactosObraTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS contactos_obra (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id INTEGER,
-    obra_id INTEGER,
-    nombre TEXT NOT NULL,
-    rol TEXT,
-    empresa TEXT,
-    email TEXT,
-    telefono TEXT,
-    movil TEXT,
-    notas TEXT,
-    activo INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "contactos_obra"
+  // queda declarada y aplicada en migrate_relaciones_obra.sql (run
+  // 30836573067, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS contactos_obra (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id INTEGER,
+  //   obra_id INTEGER,
+  //   nombre TEXT NOT NULL,
+  //   rol TEXT,
+  //   empresa TEXT,
+  //   email TEXT,
+  //   telefono TEXT,
+  //   movil TEXT,
+  //   notas TEXT,
+  //   activo INTEGER DEFAULT 1,
+  //   created_at TEXT DEFAULT (datetime('now'))
+  // )`).run();
 }
 async function getContactosObra(request, env) {
   const auth = await getAuth(request, env);
@@ -19098,26 +19145,32 @@ async function eliminarEntregaMaterial(id, request, env) {
 // ============================================================
 
 async function ensurePresupuestoTable(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS presupuesto_lineas (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id            INTEGER NOT NULL,
-    obra_id               INTEGER NOT NULL,
-    capitulo              TEXT DEFAULT '01',
-    codigo                TEXT,
-    descripcion           TEXT NOT NULL,
-    unidad                TEXT DEFAULT 'ud',
-    cantidad_presupuestada REAL DEFAULT 0,
-    precio_unitario       REAL DEFAULT 0,
-    importe_presupuestado REAL DEFAULT 0,
-    cantidad_ejecutada    REAL DEFAULT 0,
-    importe_ejecutado     REAL DEFAULT 0,
-    porcentaje_avance     REAL DEFAULT 0,
-    fase_id               INTEGER,
-    orden                 INTEGER DEFAULT 0,
-    notas                 TEXT,
-    created_at            TEXT DEFAULT (datetime('now')),
-    updated_at            TEXT DEFAULT (datetime('now'))
-  )`);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "presupuesto_lineas"
+  // queda declarada y aplicada en migrate_finanzas_obra.sql (run 30836563260,
+  // verificada columna por columna contra D1 real antes y despues). Se retira
+  // el CREATE en runtime -- no hay entorno donde este runtime pudiera crearla
+  // de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS presupuesto_lineas (
+  //   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id            INTEGER NOT NULL,
+  //   obra_id               INTEGER NOT NULL,
+  //   capitulo              TEXT DEFAULT '01',
+  //   codigo                TEXT,
+  //   descripcion           TEXT NOT NULL,
+  //   unidad                TEXT DEFAULT 'ud',
+  //   cantidad_presupuestada REAL DEFAULT 0,
+  //   precio_unitario       REAL DEFAULT 0,
+  //   importe_presupuestado REAL DEFAULT 0,
+  //   cantidad_ejecutada    REAL DEFAULT 0,
+  //   importe_ejecutado     REAL DEFAULT 0,
+  //   porcentaje_avance     REAL DEFAULT 0,
+  //   fase_id               INTEGER,
+  //   orden                 INTEGER DEFAULT 0,
+  //   notas                 TEXT,
+  //   created_at            TEXT DEFAULT (datetime('now')),
+  //   updated_at            TEXT DEFAULT (datetime('now'))
+  // )`);
 }
 
 async function getPresupuestoLineas(request, env) {
@@ -19508,22 +19561,28 @@ async function eliminarAccionItem(id, request, env) {
 // ============================================================
 
 async function ensurePlanSemanalTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS plan_semanal (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id          INTEGER NOT NULL,
-    obra_id             INTEGER NOT NULL,
-    semana_inicio       TEXT NOT NULL,
-    gremio              TEXT NOT NULL,
-    responsable         TEXT,
-    descripcion         TEXT,
-    actividades         TEXT DEFAULT '[]',
-    workers_num         INTEGER DEFAULT 1,
-    horas_planificadas  REAL DEFAULT 0,
-    estado              TEXT DEFAULT 'planificado',
-    ppc                 INTEGER DEFAULT 0,
-    notas               TEXT,
-    created_at          TEXT DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "plan_semanal"
+  // queda declarada y aplicada en migrate_planificacion_produccion.sql (run
+  // 30836558620, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS plan_semanal (
+  //   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id          INTEGER NOT NULL,
+  //   obra_id             INTEGER NOT NULL,
+  //   semana_inicio       TEXT NOT NULL,
+  //   gremio              TEXT NOT NULL,
+  //   responsable         TEXT,
+  //   descripcion         TEXT,
+  //   actividades         TEXT DEFAULT '[]',
+  //   workers_num         INTEGER DEFAULT 1,
+  //   horas_planificadas  REAL DEFAULT 0,
+  //   estado              TEXT DEFAULT 'planificado',
+  //   ppc                 INTEGER DEFAULT 0,
+  //   notas               TEXT,
+  //   created_at          TEXT DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 function calcPpcFromActividades(actStr) {
@@ -19820,27 +19879,33 @@ async function eliminarSubcontrata(id, request, env) {
 // ============================================================
 
 async function ensureRegistroAmbientalTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS registro_ambiental (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id        INTEGER NOT NULL,
-    obra_id           INTEGER NOT NULL,
-    tipo              TEXT DEFAULT 'observacion',
-    categoria         TEXT,
-    descripcion       TEXT NOT NULL,
-    ubicacion         TEXT,
-    cantidad          REAL,
-    unidad            TEXT,
-    gestor_autorizado TEXT,
-    numero_documento  TEXT,
-    estado            TEXT DEFAULT 'abierto',
-    gravedad          TEXT DEFAULT 'baja',
-    responsable       TEXT,
-    fecha_evento      TEXT,
-    fecha_cierre      TEXT,
-    accion_tomada     TEXT,
-    notas             TEXT,
-    created_at        TEXT DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "registro_ambiental"
+  // queda declarada y aplicada en migrate_seguridad_cumplimiento.sql (run
+  // 30836567914, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS registro_ambiental (
+  //   id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id        INTEGER NOT NULL,
+  //   obra_id           INTEGER NOT NULL,
+  //   tipo              TEXT DEFAULT 'observacion',
+  //   categoria         TEXT,
+  //   descripcion       TEXT NOT NULL,
+  //   ubicacion         TEXT,
+  //   cantidad          REAL,
+  //   unidad            TEXT,
+  //   gestor_autorizado TEXT,
+  //   numero_documento  TEXT,
+  //   estado            TEXT DEFAULT 'abierto',
+  //   gravedad          TEXT DEFAULT 'baja',
+  //   responsable       TEXT,
+  //   fecha_evento      TEXT,
+  //   fecha_cierre      TEXT,
+  //   accion_tomada     TEXT,
+  //   notas             TEXT,
+  //   created_at        TEXT DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getRegistroAmbiental(request, env) {
@@ -19921,23 +19986,29 @@ async function eliminarRegistroAmbiental(id, request, env) {
 // ============================================================
 
 async function ensureCierreObraTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cierre_obra_items (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id      INTEGER NOT NULL,
-    obra_id         INTEGER NOT NULL,
-    categoria       TEXT DEFAULT 'documentacion',
-    titulo          TEXT NOT NULL,
-    descripcion     TEXT,
-    responsable     TEXT,
-    estado          TEXT DEFAULT 'pendiente',
-    fecha_limite    TEXT,
-    fecha_completado TEXT,
-    completado_por  TEXT,
-    evidencia       TEXT,
-    notas           TEXT,
-    orden           INTEGER DEFAULT 0,
-    created_at      TEXT DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "cierre_obra_items"
+  // queda declarada y aplicada en migrate_relaciones_obra.sql (run
+  // 30836573067, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cierre_obra_items (
+  //   id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id      INTEGER NOT NULL,
+  //   obra_id         INTEGER NOT NULL,
+  //   categoria       TEXT DEFAULT 'documentacion',
+  //   titulo          TEXT NOT NULL,
+  //   descripcion     TEXT,
+  //   responsable     TEXT,
+  //   estado          TEXT DEFAULT 'pendiente',
+  //   fecha_limite    TEXT,
+  //   fecha_completado TEXT,
+  //   completado_por  TEXT,
+  //   evidencia       TEXT,
+  //   notas           TEXT,
+  //   orden           INTEGER DEFAULT 0,
+  //   created_at      TEXT DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 const CIERRE_PLANTILLA = [
@@ -20963,27 +21034,33 @@ async function eliminarEquipoMedicion(id, request, env) {
 // ── Field Reports / Informes de Campo (NEW-78) ────────────────────────────
 
 async function ensureFieldReportTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS field_reports (
-    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id             INTEGER NOT NULL,
-    obra_id                INTEGER,
-    numero                 TEXT,
-    fecha                  TEXT NOT NULL,
-    preparado_por          TEXT,
-    estado                 TEXT NOT NULL DEFAULT 'borrador',
-    clima_manana           TEXT,
-    clima_tarde            TEXT,
-    temperatura            REAL,
-    trabajadores_presentes INTEGER DEFAULT 0,
-    equipos_presentes      TEXT,
-    trabajo_realizado      TEXT,
-    materiales_recibidos   TEXT,
-    issues                 TEXT,
-    visitas                TEXT,
-    observaciones          TEXT,
-    created_at             TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "field_reports"
+  // queda declarada y aplicada en migrate_planificacion_produccion.sql (run
+  // 30836558620, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS field_reports (
+  //   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id             INTEGER NOT NULL,
+  //   obra_id                INTEGER,
+  //   numero                 TEXT,
+  //   fecha                  TEXT NOT NULL,
+  //   preparado_por          TEXT,
+  //   estado                 TEXT NOT NULL DEFAULT 'borrador',
+  //   clima_manana           TEXT,
+  //   clima_tarde            TEXT,
+  //   temperatura            REAL,
+  //   trabajadores_presentes INTEGER DEFAULT 0,
+  //   equipos_presentes      TEXT,
+  //   trabajo_realizado      TEXT,
+  //   materiales_recibidos   TEXT,
+  //   issues                 TEXT,
+  //   visitas                TEXT,
+  //   observaciones          TEXT,
+  //   created_at             TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getFieldReports(request, env) {
@@ -21395,25 +21472,31 @@ async function eliminarEntregable(id, request, env) {
 
 // ── Lecciones Aprendidas / Lessons Learned (NEW-82) ──────────────────────────
 async function ensureLeccionesTable(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS lecciones_aprendidas (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id    INTEGER NOT NULL,
-    obra_id       INTEGER,
-    numero        TEXT,
-    titulo        TEXT NOT NULL,
-    categoria     TEXT NOT NULL DEFAULT 'tecnica',
-    fase          TEXT NOT NULL DEFAULT 'ejecucion',
-    impacto       TEXT NOT NULL DEFAULT 'medio',
-    descripcion_problema TEXT,
-    causa_raiz    TEXT,
-    leccion       TEXT NOT NULL,
-    recomendacion TEXT,
-    autor         TEXT,
-    estado        TEXT NOT NULL DEFAULT 'borrador',
-    published_at  TEXT,
-    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
-  )`);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "lecciones_aprendidas"
+  // queda declarada y aplicada en migrate_relaciones_obra.sql (run
+  // 30836573067, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS lecciones_aprendidas (
+  //   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id    INTEGER NOT NULL,
+  //   obra_id       INTEGER,
+  //   numero        TEXT,
+  //   titulo        TEXT NOT NULL,
+  //   categoria     TEXT NOT NULL DEFAULT 'tecnica',
+  //   fase          TEXT NOT NULL DEFAULT 'ejecucion',
+  //   impacto       TEXT NOT NULL DEFAULT 'medio',
+  //   descripcion_problema TEXT,
+  //   causa_raiz    TEXT,
+  //   leccion       TEXT NOT NULL,
+  //   recomendacion TEXT,
+  //   autor         TEXT,
+  //   estado        TEXT NOT NULL DEFAULT 'borrador',
+  //   published_at  TEXT,
+  //   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`);
 }
 
 async function getLecciones(request, env) {
@@ -21493,25 +21576,31 @@ async function eliminarLeccion(id, request, env) {
 
 // ── Rendimientos de Produccion / Productivity Tracking (NEW-83) ──────────────
 async function ensureRendimientosTable(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS rendimientos (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id     INTEGER NOT NULL,
-    obra_id        INTEGER,
-    fase_id        INTEGER,
-    fecha          TEXT NOT NULL,
-    actividad      TEXT NOT NULL,
-    unidad         TEXT NOT NULL DEFAULT 'ud',
-    cantidad_plan  REAL,
-    cantidad_real  REAL NOT NULL,
-    trabajadores   INTEGER DEFAULT 1,
-    horas_hombre   REAL,
-    rendimiento    REAL,
-    turno          TEXT DEFAULT 'manana',
-    responsable    TEXT,
-    observaciones  TEXT,
-    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
-  )`);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "rendimientos"
+  // queda declarada y aplicada en migrate_planificacion_produccion.sql (run
+  // 30836558620, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS rendimientos (
+  //   id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id     INTEGER NOT NULL,
+  //   obra_id        INTEGER,
+  //   fase_id        INTEGER,
+  //   fecha          TEXT NOT NULL,
+  //   actividad      TEXT NOT NULL,
+  //   unidad         TEXT NOT NULL DEFAULT 'ud',
+  //   cantidad_plan  REAL,
+  //   cantidad_real  REAL NOT NULL,
+  //   trabajadores   INTEGER DEFAULT 1,
+  //   horas_hombre   REAL,
+  //   rendimiento    REAL,
+  //   turno          TEXT DEFAULT 'manana',
+  //   responsable    TEXT,
+  //   observaciones  TEXT,
+  //   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`);
 }
 
 async function getRendimientos(request, env) {
@@ -22889,29 +22978,35 @@ async function eliminarPrecioUnitario(id, request, env) {
 // NEW-96: SEGUROS DE OBRA / INSURANCE POLICIES
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureSegurosObraTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS seguros_obra (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id          INTEGER NOT NULL,
-    obra_id             INTEGER,
-    tipo                TEXT NOT NULL DEFAULT 'responsabilidad_civil',
-    compania            TEXT NOT NULL,
-    numero_poliza       TEXT NOT NULL,
-    tomador             TEXT,
-    asegurado           TEXT,
-    capital_asegurado   REAL,
-    prima_anual         REAL,
-    fecha_inicio        TEXT NOT NULL,
-    fecha_vencimiento   TEXT NOT NULL,
-    forma_pago          TEXT DEFAULT 'anual',
-    estado              TEXT NOT NULL DEFAULT 'activo',
-    alertar_dias        INTEGER DEFAULT 30,
-    contacto_agente     TEXT,
-    adjunto_url         TEXT,
-    notas               TEXT,
-    created_by          TEXT,
-    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "seguros_obra"
+  // queda declarada y aplicada en migrate_seguridad_cumplimiento.sql (run
+  // 30836567914, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS seguros_obra (
+  //   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id          INTEGER NOT NULL,
+  //   obra_id             INTEGER,
+  //   tipo                TEXT NOT NULL DEFAULT 'responsabilidad_civil',
+  //   compania            TEXT NOT NULL,
+  //   numero_poliza       TEXT NOT NULL,
+  //   tomador             TEXT,
+  //   asegurado           TEXT,
+  //   capital_asegurado   REAL,
+  //   prima_anual         REAL,
+  //   fecha_inicio        TEXT NOT NULL,
+  //   fecha_vencimiento   TEXT NOT NULL,
+  //   forma_pago          TEXT DEFAULT 'anual',
+  //   estado              TEXT NOT NULL DEFAULT 'activo',
+  //   alertar_dias        INTEGER DEFAULT 30,
+  //   contacto_agente     TEXT,
+  //   adjunto_url         TEXT,
+  //   notas               TEXT,
+  //   created_by          TEXT,
+  //   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getSegurosObra(request, env) {
@@ -23071,30 +23166,36 @@ async function eliminarComparativoOferta(id, request, env) {
 // NEW-98: DOCUMENTACIÓN CAE / SAFETY COMPLIANCE PER SUBCONTRACTOR (RD 171/2004)
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureCaeDocumentacionTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cae_documentacion (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id       INTEGER NOT NULL,
-    obra_id          INTEGER,
-    subcontrata      TEXT NOT NULL,
-    cif              TEXT,
-    actividad        TEXT,
-    tipo_doc         TEXT NOT NULL DEFAULT 'plan_prevencion',
-    titulo           TEXT NOT NULL,
-    numero           TEXT,
-    fecha_emision    TEXT,
-    fecha_caducidad  TEXT,
-    organismo        TEXT,
-    estado           TEXT NOT NULL DEFAULT 'pendiente',
-    adjunto_url      TEXT,
-    alertar_dias     INTEGER DEFAULT 30,
-    trabajadores     INTEGER,
-    notas            TEXT,
-    validado_por     TEXT,
-    fecha_validacion TEXT,
-    created_by       TEXT,
-    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "cae_documentacion"
+  // queda declarada y aplicada en migrate_seguridad_cumplimiento.sql (run
+  // 30836567914, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cae_documentacion (
+  //   id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id       INTEGER NOT NULL,
+  //   obra_id          INTEGER,
+  //   subcontrata      TEXT NOT NULL,
+  //   cif              TEXT,
+  //   actividad        TEXT,
+  //   tipo_doc         TEXT NOT NULL DEFAULT 'plan_prevencion',
+  //   titulo           TEXT NOT NULL,
+  //   numero           TEXT,
+  //   fecha_emision    TEXT,
+  //   fecha_caducidad  TEXT,
+  //   organismo        TEXT,
+  //   estado           TEXT NOT NULL DEFAULT 'pendiente',
+  //   adjunto_url      TEXT,
+  //   alertar_dias     INTEGER DEFAULT 30,
+  //   trabajadores     INTEGER,
+  //   notas            TEXT,
+  //   validado_por     TEXT,
+  //   fecha_validacion TEXT,
+  //   created_by       TEXT,
+  //   created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getCaeDocumentacion(request, env) {
@@ -23267,25 +23368,31 @@ async function eliminarOrdenTrabajo(id, request, env) {
 // NEW-100: CONTROL DE AUSENCIAS Y PERMISOS / LEAVE MANAGEMENT
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureAusenciasTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ausencias (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id        INTEGER NOT NULL,
-    usuario_id        INTEGER,
-    externo_id        INTEGER,
-    nombre_trabajador TEXT NOT NULL,
-    tipo              TEXT NOT NULL DEFAULT 'vacaciones',
-    fecha_inicio      TEXT NOT NULL,
-    fecha_fin         TEXT NOT NULL,
-    dias_habiles      INTEGER,
-    estado            TEXT NOT NULL DEFAULT 'pendiente',
-    aprobado_por      TEXT,
-    fecha_aprobacion  TEXT,
-    motivo            TEXT,
-    notas             TEXT,
-    created_by        TEXT,
-    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "ausencias"
+  // queda declarada y aplicada en migrate_seguridad_cumplimiento.sql (run
+  // 30836567914, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ausencias (
+  //   id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id        INTEGER NOT NULL,
+  //   usuario_id        INTEGER,
+  //   externo_id        INTEGER,
+  //   nombre_trabajador TEXT NOT NULL,
+  //   tipo              TEXT NOT NULL DEFAULT 'vacaciones',
+  //   fecha_inicio      TEXT NOT NULL,
+  //   fecha_fin         TEXT NOT NULL,
+  //   dias_habiles      INTEGER,
+  //   estado            TEXT NOT NULL DEFAULT 'pendiente',
+  //   aprobado_por      TEXT,
+  //   fecha_aprobacion  TEXT,
+  //   motivo            TEXT,
+  //   notas             TEXT,
+  //   created_by        TEXT,
+  //   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getAusencias(request, env) {
@@ -23610,30 +23717,36 @@ async function eliminarFacturaProveedor(id, request, env) {
 // NEW-104: COBROS Y CUENTAS POR COBRAR / ACCOUNTS RECEIVABLE
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureCobrosClienteTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cobros_cliente (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id        INTEGER NOT NULL,
-    obra_id           INTEGER,
-    certificacion_id  INTEGER,
-    numero            TEXT,
-    cliente_nombre    TEXT,
-    concepto          TEXT,
-    fecha_emision     TEXT    NOT NULL,
-    fecha_vencimiento TEXT,
-    importe_bruto     REAL    NOT NULL DEFAULT 0,
-    importe_retencion REAL    NOT NULL DEFAULT 0,
-    importe_liquido   REAL    NOT NULL DEFAULT 0,
-    importe_cobrado   REAL    NOT NULL DEFAULT 0,
-    estado            TEXT    NOT NULL DEFAULT 'pendiente',
-    fecha_cobro       TEXT,
-    metodo_cobro      TEXT,
-    referencia_cobro  TEXT,
-    dias_vencimiento  INTEGER,
-    notas             TEXT,
-    created_by        TEXT,
-    created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "cobros_cliente"
+  // queda declarada y aplicada en migrate_finanzas_obra.sql (run 30836563260,
+  // verificada columna por columna contra D1 real antes y despues). Se retira
+  // el CREATE en runtime -- no hay entorno donde este runtime pudiera crearla
+  // de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cobros_cliente (
+  //   id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id        INTEGER NOT NULL,
+  //   obra_id           INTEGER,
+  //   certificacion_id  INTEGER,
+  //   numero            TEXT,
+  //   cliente_nombre    TEXT,
+  //   concepto          TEXT,
+  //   fecha_emision     TEXT    NOT NULL,
+  //   fecha_vencimiento TEXT,
+  //   importe_bruto     REAL    NOT NULL DEFAULT 0,
+  //   importe_retencion REAL    NOT NULL DEFAULT 0,
+  //   importe_liquido   REAL    NOT NULL DEFAULT 0,
+  //   importe_cobrado   REAL    NOT NULL DEFAULT 0,
+  //   estado            TEXT    NOT NULL DEFAULT 'pendiente',
+  //   fecha_cobro       TEXT,
+  //   metodo_cobro      TEXT,
+  //   referencia_cobro  TEXT,
+  //   dias_vencimiento  INTEGER,
+  //   notas             TEXT,
+  //   created_by        TEXT,
+  //   created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+  //   updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getCobrosCliente(request, env) {
@@ -23750,34 +23863,40 @@ async function eliminarCobroCliente(id, request, env) {
 // NEW-106: GESTIÓN DE LICITACIONES / BID PIPELINE MANAGEMENT
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureLicitacionesTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS licitaciones (
-    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id           INTEGER NOT NULL,
-    nombre               TEXT    NOT NULL,
-    cliente              TEXT,
-    expediente           TEXT,
-    tipo_obra            TEXT,
-    provincia            TEXT,
-    presupuesto_base     REAL    DEFAULT 0,
-    nuestra_oferta       REAL    DEFAULT 0,
-    margen_pct           REAL,
-    estado               TEXT    NOT NULL DEFAULT 'prospectando',
-    probabilidad         INTEGER DEFAULT 50,
-    fecha_presentacion   TEXT,
-    fecha_apertura       TEXT,
-    fecha_adjudicacion   TEXT,
-    responsable          TEXT,
-    competidores         TEXT,
-    criterios_adj        TEXT,
-    puntuacion_tecnica   REAL,
-    puntuacion_economica REAL,
-    motivo_perdida       TEXT,
-    notas                TEXT,
-    obra_id              INTEGER,
-    created_by           TEXT,
-    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "licitaciones"
+  // queda declarada y aplicada en migrate_finanzas_obra.sql (run 30836563260,
+  // verificada columna por columna contra D1 real antes y despues). Se retira
+  // el CREATE en runtime -- no hay entorno donde este runtime pudiera crearla
+  // de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS licitaciones (
+  //   id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id           INTEGER NOT NULL,
+  //   nombre               TEXT    NOT NULL,
+  //   cliente              TEXT,
+  //   expediente           TEXT,
+  //   tipo_obra            TEXT,
+  //   provincia            TEXT,
+  //   presupuesto_base     REAL    DEFAULT 0,
+  //   nuestra_oferta       REAL    DEFAULT 0,
+  //   margen_pct           REAL,
+  //   estado               TEXT    NOT NULL DEFAULT 'prospectando',
+  //   probabilidad         INTEGER DEFAULT 50,
+  //   fecha_presentacion   TEXT,
+  //   fecha_apertura       TEXT,
+  //   fecha_adjudicacion   TEXT,
+  //   responsable          TEXT,
+  //   competidores         TEXT,
+  //   criterios_adj        TEXT,
+  //   puntuacion_tecnica   REAL,
+  //   puntuacion_economica REAL,
+  //   motivo_perdida       TEXT,
+  //   notas                TEXT,
+  //   obra_id              INTEGER,
+  //   created_by           TEXT,
+  //   created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getLicitaciones(request, env) {
@@ -23867,36 +23986,42 @@ async function eliminarLicitacion(id, request, env) {
 // NEW-107: GASTOS Y DIETAS DE PERSONAL / WORKER EXPENSE CLAIMS
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureGastosDietasTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gastos_dietas (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id        INTEGER NOT NULL,
-    usuario_id        INTEGER,
-    nombre_trabajador TEXT    NOT NULL,
-    obra_id           INTEGER,
-    fecha             TEXT    NOT NULL,
-    tipo              TEXT    NOT NULL DEFAULT 'dieta',
-    concepto          TEXT,
-    km                REAL    DEFAULT 0,
-    precio_km         REAL    DEFAULT 0.26,
-    importe_km        REAL    GENERATED ALWAYS AS (ROUND(km * precio_km, 2)) VIRTUAL,
-    dieta_media_dia   REAL    DEFAULT 0,
-    dieta_completa    REAL    DEFAULT 0,
-    alojamiento       REAL    DEFAULT 0,
-    peajes            REAL    DEFAULT 0,
-    parking           REAL    DEFAULT 0,
-    otros             REAL    DEFAULT 0,
-    total             REAL    NOT NULL DEFAULT 0,
-    estado            TEXT    NOT NULL DEFAULT 'pendiente',
-    aprobado_por      TEXT,
-    fecha_aprobacion  TEXT,
-    pagado            INTEGER DEFAULT 0,
-    fecha_pago        TEXT,
-    justificante_url  TEXT,
-    notas             TEXT,
-    created_by        TEXT,
-    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "gastos_dietas"
+  // queda declarada y aplicada en migrate_finanzas_obra.sql (run 30836563260,
+  // verificada columna por columna contra D1 real antes y despues). Se retira
+  // el CREATE en runtime -- no hay entorno donde este runtime pudiera crearla
+  // de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gastos_dietas (
+  //   id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id        INTEGER NOT NULL,
+  //   usuario_id        INTEGER,
+  //   nombre_trabajador TEXT    NOT NULL,
+  //   obra_id           INTEGER,
+  //   fecha             TEXT    NOT NULL,
+  //   tipo              TEXT    NOT NULL DEFAULT 'dieta',
+  //   concepto          TEXT,
+  //   km                REAL    DEFAULT 0,
+  //   precio_km         REAL    DEFAULT 0.26,
+  //   importe_km        REAL    GENERATED ALWAYS AS (ROUND(km * precio_km, 2)) VIRTUAL,
+  //   dieta_media_dia   REAL    DEFAULT 0,
+  //   dieta_completa    REAL    DEFAULT 0,
+  //   alojamiento       REAL    DEFAULT 0,
+  //   peajes            REAL    DEFAULT 0,
+  //   parking           REAL    DEFAULT 0,
+  //   otros             REAL    DEFAULT 0,
+  //   total             REAL    NOT NULL DEFAULT 0,
+  //   estado            TEXT    NOT NULL DEFAULT 'pendiente',
+  //   aprobado_por      TEXT,
+  //   fecha_aprobacion  TEXT,
+  //   pagado            INTEGER DEFAULT 0,
+  //   fecha_pago        TEXT,
+  //   justificante_url  TEXT,
+  //   notas             TEXT,
+  //   created_by        TEXT,
+  //   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getGastosDietas(request, env) {
@@ -24006,37 +24131,43 @@ async function eliminarGastoDieta(id, request, env) {
 // NEW-108: FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureFlorVehiculosTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS flota_vehiculos (
-    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id           INTEGER NOT NULL,
-    matricula            TEXT    NOT NULL,
-    tipo                 TEXT    NOT NULL DEFAULT 'furgoneta',
-    marca                TEXT,
-    modelo               TEXT,
-    color                TEXT,
-    anno_fabricacion     INTEGER,
-    bastidor             TEXT,
-    asignado_a           TEXT,
-    obra_id              INTEGER,
-    km_actual            INTEGER DEFAULT 0,
-    km_ultimo_servicio   INTEGER DEFAULT 0,
-    km_proximo_servicio  INTEGER DEFAULT 0,
-    fecha_itv            TEXT,
-    prox_itv             TEXT,
-    fecha_seguro         TEXT,
-    prox_renovacion_seguro TEXT,
-    aseguradora          TEXT,
-    poliza_seguro        TEXT,
-    fecha_revision       TEXT,
-    prox_revision        TEXT,
-    estado               TEXT    NOT NULL DEFAULT 'disponible',
-    combustible          TEXT    DEFAULT 'diesel',
-    notas                TEXT,
-    activo               INTEGER NOT NULL DEFAULT 1,
-    created_by           TEXT,
-    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "flota_vehiculos"
+  // queda declarada y aplicada en migrate_flota.sql (run 30836578226,
+  // verificada columna por columna contra D1 real antes y despues). Se retira
+  // el CREATE en runtime -- no hay entorno donde este runtime pudiera crearla
+  // de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS flota_vehiculos (
+  //   id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id           INTEGER NOT NULL,
+  //   matricula            TEXT    NOT NULL,
+  //   tipo                 TEXT    NOT NULL DEFAULT 'furgoneta',
+  //   marca                TEXT,
+  //   modelo               TEXT,
+  //   color                TEXT,
+  //   anno_fabricacion     INTEGER,
+  //   bastidor             TEXT,
+  //   asignado_a           TEXT,
+  //   obra_id              INTEGER,
+  //   km_actual            INTEGER DEFAULT 0,
+  //   km_ultimo_servicio   INTEGER DEFAULT 0,
+  //   km_proximo_servicio  INTEGER DEFAULT 0,
+  //   fecha_itv            TEXT,
+  //   prox_itv             TEXT,
+  //   fecha_seguro         TEXT,
+  //   prox_renovacion_seguro TEXT,
+  //   aseguradora          TEXT,
+  //   poliza_seguro        TEXT,
+  //   fecha_revision       TEXT,
+  //   prox_revision        TEXT,
+  //   estado               TEXT    NOT NULL DEFAULT 'disponible',
+  //   combustible          TEXT    DEFAULT 'diesel',
+  //   notas                TEXT,
+  //   activo               INTEGER NOT NULL DEFAULT 1,
+  //   created_by           TEXT,
+  //   created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getFlotaVehiculos(request, env) {
@@ -24137,27 +24268,33 @@ async function eliminarVehiculo(id, request, env) {
 // Obligatorio por Ley 32/2006 de subcontratación en el sector de la construcción
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureLibroSubcontratacionTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS libro_subcontratacion (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id            INTEGER NOT NULL,
-    obra_id               INTEGER NOT NULL,
-    numero_entrada        INTEGER NOT NULL,
-    nivel                 INTEGER NOT NULL DEFAULT 1,
-    subcontratista        TEXT    NOT NULL,
-    nif_subcontratista    TEXT,
-    actividad             TEXT    NOT NULL,
-    fecha_inicio          TEXT    NOT NULL,
-    fecha_fin             TEXT,
-    num_trabajadores      INTEGER DEFAULT 0,
-    responsable_seguridad TEXT,
-    autorizado_por        TEXT,
-    regimen_especial      INTEGER DEFAULT 0,
-    observaciones         TEXT,
-    estado                TEXT    NOT NULL DEFAULT 'activo',
-    created_by            TEXT,
-    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "libro_subcontratacion"
+  // queda declarada y aplicada en migrate_seguridad_cumplimiento.sql (run
+  // 30836567914, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS libro_subcontratacion (
+  //   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id            INTEGER NOT NULL,
+  //   obra_id               INTEGER NOT NULL,
+  //   numero_entrada        INTEGER NOT NULL,
+  //   nivel                 INTEGER NOT NULL DEFAULT 1,
+  //   subcontratista        TEXT    NOT NULL,
+  //   nif_subcontratista    TEXT,
+  //   actividad             TEXT    NOT NULL,
+  //   fecha_inicio          TEXT    NOT NULL,
+  //   fecha_fin             TEXT,
+  //   num_trabajadores      INTEGER DEFAULT 0,
+  //   responsable_seguridad TEXT,
+  //   autorizado_por        TEXT,
+  //   regimen_especial      INTEGER DEFAULT 0,
+  //   observaciones         TEXT,
+  //   estado                TEXT    NOT NULL DEFAULT 'activo',
+  //   created_by            TEXT,
+  //   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getLibroSubcontratacion(request, env) {
