@@ -1,7 +1,7 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-02
-- Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas.
+- Actualizado: 2026-08-03
+- Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. ARC-011 fase 3: **ocho verticales con el ciclo completo** y **seis más declarados (paso 1)** el 2026-08-03 (PR #70) — las 23 tablas "solo de código" que quedaban en el inventario original quedan todas declaradas, a la espera de autorización del Director para el paso 2.
 
 ## Autonomía de los agentes
 
@@ -181,6 +181,19 @@ completos en total.** Ver `TASKS.md` (`ARC-011-FASE3-OC-PROVEEDORES`).
 despliegues seguidos en poco tiempo (5 despliegues del Worker raíz en menos de 14 horas). Los
 siguientes lotes de ARC-011 fase 3 deben espaciarse más en el tiempo y agrupar más verticales
 por despliegue de lo que se ha hecho hasta ahora (2-3 por lote).
+
+**Tercer lote agrupado, paso 1 completo (2026-08-03, PR #70):** las 23 tablas restantes del
+inventario original de ARC-011 que solo existían en código (patrón lazy) quedaron declaradas
+en 6 verticales por dominio: `planificacion_produccion`, `finanzas_obra`,
+`seguridad_cumplimiento`, `relaciones_obra`, `flota` y `nexus_experts` (este último aparte,
+dominio distinto sin tenant, creado dentro de `runMigrations()` en vez de una función
+`ensureXxxTable()`). Verificado verbatim contra `worker.js` línea por línea y, contra D1 real
+(solo lectura), que ninguna de las 23 tablas existe todavía en producción — a diferencia de
+los ocho verticales anteriores, el paso 2 de este lote no será un no-op. Ver `TASKS.md`
+(`ARC-011-FASE3-LOTE3`). Misma sesión: **ARC-014 revisado sin cambios** (el Director confirmó
+que ninguna condición de reapertura cambió) y **F-0.2-CFG** — el Director pidió mover los
+secretos directamente ("muévelos tú"); se declinó por ser una acción prohibida para cualquier
+agente (CLAUDE.md, reglas globales de seguridad de la sesión), sigue como tarea personal suya.
 
 ## Siguiente objetivo
 
