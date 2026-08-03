@@ -186,7 +186,7 @@ Tres merecen atención:
 | 2 | Crear y aplicar migración para `inventario_seg.ubicacion` | ✅ Aplicada, run 30722072138. SEG-01 cerrado de verdad |
 | 3 | Crear y aplicar migración para `empresas.retencion_config` | ✅ Aplicada, run 30722103191. Retención RGPD restaurada |
 | 4 | Revisar `usuario_obras` | ✅ Revisado 2026-08-02: **no es un bug** — ver abajo |
-| 5 | Sustituir los `catch` vacíos de los 18 DDL por registro de error | ⬜ Pendiente — **ARC-013**. Exige despliegue |
+| 5 | Sustituir los `catch` vacíos de los 18 DDL por registro de error | ✅ **ARC-013**, desplegado 2026-08-02. Persiste además en `alejandra_trazas` vía ADR-0014 |
 
 Las tres migraciones se aplicaron por el workflow manual, con confirmación textual y aprobación
 de entorno, y se verificaron después contra el esquema real:
@@ -239,6 +239,37 @@ Corregidas las 8 tablas cuyo `CREATE` vive en `worker.js` y es por tanto autorit
 **Las ~29 restantes no se pueden cerrar con análisis estático.** Las 27 tablas huérfanas no
 tienen `CREATE` en ninguna parte del repositorio, así que la única referencia posible es
 D1. Verificarlas requiere una consulta de metadatos autorizada, igual que la fase 2.
+
+## Segunda ronda de verificación de DDL silenciado (2026-08-03) — sin bugs nuevos
+
+Tras cerrar ARC-012 (3 de 3 columnas verificadas resultaron ser bugs activos), quedaban 15
+columnas/tabla más del listado original de "DDL con el error silenciado" sin contrastar
+contra D1 real: `reset_tokens.usado`, `reset_tokens.empresa_id`, `login_attempts.email`,
+`auth_nonces` (tabla completa), `partes_trabajo.updated_at`, `partes_trabajo.modificado_por`,
+`fotos_obra.ubicacion`, `fotos_obra.fecha_foto`, `escaneos_remotos.num_albaran`,
+`tareas_obra.departamento`, `actas_reunion.updated_at`, `actas_reunion.departamento`,
+`control_calidad.departamento`, `punch_list.departamento` (`rfis.departamento`, la quinta del
+grupo "departamento", ya se había verificado y aplicado en el vertical `rfis` de ARC-011 fase
+3).
+
+**Autorizada la lectura de solo metadatos por el Director (2026-08-03)**, mismo método que la
+fase 2 (`PRAGMA table_info`, sin tocar datos de negocio). Resultado: **las 15 están presentes
+en producción**, incluidas las 4 columnas `departamento` restantes y `auth_nonces` (que
+coincide columna por columna — `nonce`, `result`, `created_at` — con lo que crea el código).
+
+A diferencia de ARC-012, esta ronda **no encontró bugs activos**. Dos lecturas posibles, no
+excluyentes: (a) las tres columnas de ARC-012 fueron mala suerte concentrada, no la norma; o
+(b) al estar estas 15 detrás de rutas de código más antiguas/usadas con más frecuencia que las
+de ARC-012, cualquier fallo real ya se habría manifestado y arreglado a mano antes de que
+existiera este inventario. No hay forma de distinguir entre ambas sin más datos, y no cambia
+la acción: el patrón de `catch` vacío/DDL en runtime sigue siendo deuda (ya mitigada en cuanto
+a visibilidad por ARC-013/ADR-0014), pendiente de migrar a versionado por ARC-011 fase 3.
+
+Nota sobre `partes_trabajo.updated_at`/`modificado_por`: el propio inventario señalaba que
+aparecen **dos veces** en el código (`worker.js:14236-14238` y `14399-14400`), sugiriendo que
+la misma migración se reintrodujo sin comprobar que ya existía. Confirmado que ambas están
+presentes; la duplicación en código es ruido inofensivo (el segundo `ALTER` es un no-op), no
+un bug — se deja como nota de limpieza menor, no urgente.
 
 > 📌 Misma lección que con la migración 008: sobre este esquema, leer código no basta.
 
