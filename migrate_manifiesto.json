@@ -81,24 +81,30 @@
     },
     {
       "archivo": "migrate_ordenes_cambio.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "30805220909",
       "verticalARC011": "ordenes_cambio",
       "declarado": "2026-08-03",
-      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible). Sexto vertical, agrupado con ordenes_compra/proveedores_gestion antes de un despliegue conjunto. Tabla ordenes_cambio (gestionar_oc), 17 columnas, sin ALTER (sin departamento/DEPT-01 en este vertical). Verificada columna por columna contra D1 real (PRAGMA table_info, autorizado por el Director 2026-08-03). Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
+      "verificado": "2026-08-03",
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 17 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Sexto vertical, agrupado con ordenes_compra/proveedores_gestion antes de un unico despliegue de verificacion (paso 3-4 pendientes)."
     },
     {
       "archivo": "migrate_ordenes_compra.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "30805238082",
       "verticalARC011": "ordenes_compra",
       "declarado": "2026-08-03",
-      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible). Septimo vertical, agrupado con ordenes_cambio/proveedores_gestion. Dos tablas: ordenes_compra (15 columnas) y su detalle oc_lineas (8 columnas, FK oc_id -> ordenes_compra.id), sin ALTER. Verificadas columna por columna contra D1 real (PRAGMA table_info, autorizado por el Director 2026-08-03). Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
+      "verificado": "2026-08-03",
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: ambas tablas (ordenes_compra 15 columnas, oc_lineas 8 columnas) ya existian identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Septimo vertical, agrupado con ordenes_cambio/proveedores_gestion antes de un unico despliegue de verificacion (paso 3-4 pendientes)."
     },
     {
       "archivo": "migrate_proveedores_gestion.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "30805254063",
       "verticalARC011": "proveedores_gestion",
       "declarado": "2026-08-03",
-      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible). Octavo vertical, agrupado con ordenes_cambio/ordenes_compra. Tabla proveedores_gestion (23 columnas, sin ALTER), distinta de la tabla legada 'proveedores' de schema_completo.sql, sin relacion de FK. Verificada columna por columna contra D1 real (PRAGMA table_info, autorizado por el Director 2026-08-03). Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
+      "verificado": "2026-08-03",
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 23 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Octavo vertical, agrupado con ordenes_cambio/ordenes_compra antes de un unico despliegue de verificacion (paso 3-4 pendientes)."
     }
   ]
 }
