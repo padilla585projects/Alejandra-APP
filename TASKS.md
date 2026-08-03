@@ -37,7 +37,30 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). **ARC-011-FASE3-RFIS, ARC-011-FASE3-CALIDAD, ARC-011-FASE3-TAREAS y ARC-011-FASE3-ACTAS completas** (ciclo de 5 pasos cerrado en las cuatro). No queda ninguna tarea activa de ARC-011 fase 3 sin decisión del Director pendiente.
+Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). **Ocho verticales de ARC-011 fase 3 completos** (`checklists`, `rfis`, `calidad`, `tareas_obra`, `actas_reunion`, `ordenes_cambio`, `ordenes_compra`, `proveedores_gestion`), ciclo de 5 pasos cerrado en todos. No queda ninguna tarea activa de ARC-011 fase 3 sin decisión del Director pendiente. **Nota operativa (2026-08-03):** el Director señaló que se estaban acumulando demasiados despliegues seguidos en poco tiempo (5 en <14h); los siguientes lotes deben espaciarse más y agrupar más verticales por despliegue.
+
+### ARC-011-FASE3-OC-PROVEEDORES — Migración agrupada de `ordenes_cambio`, `ordenes_compra` y `proveedores_gestion`
+
+- ID: ARC-011-FASE3-ORDENES-CAMBIO, ARC-011-FASE3-ORDENES-COMPRA, ARC-011-FASE3-PROVEEDORES-GESTION
+- Título: Sexto, séptimo y octavo vertical de la migración por fases de ARC-011 (ADR-0011), segundo lote agrupado tras `tareas_obra`/`actas_reunion`
+- Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
+- Estado: **completadas — ciclo de ADR-0011 (5 pasos) cerrado en las tres (2026-08-03)**
+- Prioridad: Media
+- Rama: `docs/arc011-fase3-oc-proveedores-declarar` (paso 1, PR #67), `feat/arc011-oc-proveedores-aplicar-retirar-ddl` (pasos 2-3, PR #68)
+- Responsable actual: —
+- Objetivo: declarar, aplicar y retirar el DDL en runtime de `ordenes_cambio` (`gestionar_oc`), `ordenes_compra`+`oc_lineas` y `proveedores_gestion`, siguiendo el ciclo completo de ADR-0011.
+- Criterios de aceptación (los tres verticales):
+  1. ✅ Migraciones `.sql` idempotentes verificadas contra D1 real: `migrate_ordenes_cambio.sql` (17 columnas), `migrate_ordenes_compra.sql` (15+8 columnas), `migrate_proveedores_gestion.sql` (23 columnas). Ninguna tiene `departamento`/DEPT-01.
+  2. ✅ **Aplicadas contra D1** (`ordenes_cambio` run `30805220909`, `ordenes_compra` run `30805238082`, `proveedores_gestion` run `30805254063`, 2026-08-03), autorizadas por el Director en chat. `0 rows_written` en las tres.
+  3. ✅ **DDL en runtime retirado** en las tres (PR #68): `ensureOrdenesCambioTable()`, `ensureOcTable()`, `ensureProveedoresGestionTable()` comentadas con referencia a su migración.
+  4. ✅ **Verificado en producción en un único despliegue para los tres:** `worker.js` (run `30806109041`, versión `1475c65b-d1b2-4db1-be3f-8f8b45386e00`), `/health` → `healthy`, 17+15+8+23 columnas verificadas presentes.
+  5. ✅ Registradas en `migrate_manifiesto.json` como `aplicada: true`.
+- Dependencias: ADR-0011 aceptado como estrategia; verticales anteriores como ciclo de referencia.
+- Bloqueos: ninguno. Ciclo completo en las tres.
+- Archivos principales: `migrate_ordenes_cambio.sql`, `migrate_ordenes_compra.sql`, `migrate_proveedores_gestion.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, `worker.js`.
+- Pruebas: verificación manual columna por columna antes y después contra D1 real; `node --check worker.js`; `/health` tras desplegar.
+- Última actualización: 2026-08-03
+- Siguiente acción exacta: ninguna — los tres verticales completos. **Antes del siguiente lote: espaciar más los despliegues y agrupar más verticales por despliegue, según lo señalado por el Director.**
 
 ### ARC-011-FASE3-TAREAS y ARC-011-FASE3-ACTAS — Migración agrupada de `tareas_obra` y `actas_reunion`
 

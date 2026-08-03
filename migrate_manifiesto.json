@@ -86,7 +86,7 @@
       "verticalARC011": "ordenes_cambio",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 17 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Sexto vertical, agrupado con ordenes_compra/proveedores_gestion antes de un unico despliegue de verificacion (paso 3-4 pendientes)."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 17 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Paso 3 (retirar DDL, PR #68) completo: ensureOrdenesCambioTable() comentada. Paso 4 (verificar en produccion, agrupado con ordenes_compra/proveedores_gestion) completo: worker.js desplegado (run 30806109041, version 1475c65b-d1b2-4db1-be3f-8f8b45386e00), /health healthy, 17 columnas verificadas presentes. Ciclo de ADR-0011 completo (5 pasos) -- sexto vertical cerrado."
     },
     {
       "archivo": "migrate_ordenes_compra.sql",
@@ -95,7 +95,7 @@
       "verticalARC011": "ordenes_compra",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: ambas tablas (ordenes_compra 15 columnas, oc_lineas 8 columnas) ya existian identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Septimo vertical, agrupado con ordenes_cambio/proveedores_gestion antes de un unico despliegue de verificacion (paso 3-4 pendientes)."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: ambas tablas (ordenes_compra 15 columnas, oc_lineas 8 columnas) ya existian identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Paso 3 (retirar DDL, PR #68) completo: ensureOcTable() comentada. Paso 4 (verificar en produccion, agrupado con ordenes_cambio/proveedores_gestion) completo: worker.js desplegado (run 30806109041, version 1475c65b-d1b2-4db1-be3f-8f8b45386e00), /health healthy, 15+8 columnas verificadas presentes. Ciclo de ADR-0011 completo (5 pasos) -- septimo vertical cerrado."
     },
     {
       "archivo": "migrate_proveedores_gestion.sql",
@@ -104,7 +104,7 @@
       "verticalARC011": "proveedores_gestion",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 23 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Octavo vertical, agrupado con ordenes_cambio/ordenes_compra antes de un unico despliegue de verificacion (paso 3-4 pendientes)."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 23 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Paso 3 (retirar DDL, PR #68) completo: ensureProveedoresGestionTable() comentada. Paso 4 (verificar en produccion, agrupado con ordenes_cambio/ordenes_compra) completo: worker.js desplegado (run 30806109041, version 1475c65b-d1b2-4db1-be3f-8f8b45386e00), /health healthy, 23 columnas verificadas presentes. Ciclo de ADR-0011 completo (5 pasos) -- octavo vertical cerrado. Con este lote, ocho verticales de ARC-011 fase 3 completos (checklists, rfis, calidad, tareas_obra, actas_reunion, ordenes_cambio, ordenes_compra, proveedores_gestion)."
     }
   ]
 }

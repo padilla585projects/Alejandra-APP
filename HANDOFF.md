@@ -284,6 +284,36 @@ barrera de datos no se agrupa), pero **un solo despliegue y una sola aprobación
 `production`** para verificar ambas — la reducción de coste que pidió el Director. Ver
 `TASKS.md` (`ARC-011-FASE3-TAREAS`, `ARC-011-FASE3-ACTAS`).
 
+**Segundo lote agrupado: `ordenes_cambio`, `ordenes_compra`+`oc_lineas` y
+`proveedores_gestion` (2026-08-03).** Sexto, séptimo y octavo vertical, mismo criterio de
+lote. Ninguno tiene `departamento`/DEPT-01.
+
+1. **Declarar** (PR #67): las tres migraciones verificadas contra D1 real sin necesitar nueva
+   lectura para dos de ellas (esquemas ya en mano de una consulta previa autorizada); la
+   tercera (`ordenes_cambio`) exigió una consulta nueva, autorizada por el Director en chat.
+2. **Aplicar** (PR #68, tres autorizaciones separadas en chat): `ordenes_cambio` run
+   [30805220909](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30805220909), `ordenes_compra` run
+   [30805238082](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30805238082), `proveedores_gestion` run
+   [30805254063](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30805254063). Las tres no-op.
+3. **Retirar DDL en runtime** (mismo PR #68): `ensureOrdenesCambioTable()`, `ensureOcTable()`,
+   `ensureProveedoresGestionTable()` comentadas.
+4. **Verificar en producción — un único despliegue para los tres:** `worker.js` (run
+   [30806109041](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30806109041), versión
+   `1475c65b-d1b2-4db1-be3f-8f8b45386e00`), `/health` → `healthy`, 17+15+8+23 columnas
+   verificadas presentes.
+5. Registradas en `migrate_manifiesto.json` como `aplicada: true`.
+
+**Con este lote, ocho verticales de ARC-011 fase 3 completos** (`checklists`, `rfis`,
+`calidad`, `tareas_obra`, `actas_reunion`, `ordenes_cambio`, `ordenes_compra`,
+`proveedores_gestion`). Ver `TASKS.md` (`ARC-011-FASE3-OC-PROVEEDORES`).
+
+**Aviso operativo del Director (2026-08-03), a aplicar en el próximo lote:** se han encadenado
+5 despliegues de `worker.js` en menos de 14 horas (21:15, 22:34, 06:52, 09:17, 10:42), y el
+Director señaló que esto es demasiado seguido. Ningún despliegue falló ni dio señal de límite
+real de Cloudflare, pero el criterio pasa a ser explícitamente más conservador: agrupar más
+verticales por lote (3+ en vez de 2-3) y espaciar los despliegues en el tiempo en vez de
+encadenarlos en la misma sesión de trabajo.
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.
