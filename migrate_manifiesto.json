@@ -63,17 +63,21 @@
     },
     {
       "archivo": "migrate_tareas_obra.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "30798028360",
       "verticalARC011": "tareas_obra",
       "declarado": "2026-08-03",
-      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible). Cuarto vertical, agrupado con actas_reunion antes de un despliegue conjunto (decision operativa del Director 2026-08-03: reducir aprobaciones de entorno production por vertical). Tabla tareas_obra (gestionar_tarea), con su ALTER departamento (DEPT-01) incorporado directamente al CREATE. Verificada columna por columna contra D1 real (PRAGMA table_info, misma ronda que confirmo ARC-013): 16 columnas, identicas al codigo. Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
+      "verificado": "2026-08-03",
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 16 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado. Paso 3 (retirar DDL en runtime, PR #65) completo: ensureTareasObraTable() comentada con referencia a esta migracion. Paso 4 (verificar en produccion, agrupado con actas_reunion) completo: worker.js desplegado (run 30799296203, version ae5317c5-ecaa-4471-8cb6-3297c8057e56), /health healthy (d1:true, r2:true), 16 columnas verificadas presentes tras el despliegue. Ciclo de ADR-0011 completo (5 pasos) -- cuarto vertical cerrado, primero aplicado en lote junto a actas_reunion (decision operativa del Director 2026-08-03: un solo despliegue de verificacion para varios verticales)."
     },
     {
       "archivo": "migrate_actas_reunion.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "30798043436",
       "verticalARC011": "actas_reunion",
       "declarado": "2026-08-03",
-      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible). Quinto vertical, agrupado con tareas_obra antes de un despliegue conjunto. Tabla actas_reunion (gestionar_acta, NEW-49), con sus 9 columnas ALTER (incluida departamento/DEPT-01) incorporadas directamente al CREATE. Verificada columna por columna contra D1 real (PRAGMA table_info, misma ronda que confirmo ARC-013): 23 columnas, identicas al codigo. Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
+      "verificado": "2026-08-03",
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 23 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado. Paso 3 (retirar DDL en runtime, PR #65) completo: ensureActasTable() comentada con referencia a esta migracion. Paso 4 (verificar en produccion, agrupado con tareas_obra) completo: worker.js desplegado (run 30799296203, version ae5317c5-ecaa-4471-8cb6-3297c8057e56), /health healthy (d1:true, r2:true), 23 columnas verificadas presentes tras el despliegue. Ciclo de ADR-0011 completo (5 pasos) -- quinto vertical cerrado, primero aplicado en lote junto a tareas_obra."
     }
   ]
 }

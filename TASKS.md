@@ -37,7 +37,31 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). **ARC-011-FASE3-RFIS y ARC-011-FASE3-CALIDAD completas** (ciclo de 5 pasos cerrado en ambas). No queda ninguna tarea activa de ARC-011 fase 3 sin decisión del Director pendiente.
+Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). **ARC-011-FASE3-RFIS, ARC-011-FASE3-CALIDAD, ARC-011-FASE3-TAREAS y ARC-011-FASE3-ACTAS completas** (ciclo de 5 pasos cerrado en las cuatro). No queda ninguna tarea activa de ARC-011 fase 3 sin decisión del Director pendiente.
+
+### ARC-011-FASE3-TAREAS y ARC-011-FASE3-ACTAS — Migración agrupada de `tareas_obra` y `actas_reunion`
+
+- ID: ARC-011-FASE3-TAREAS, ARC-011-FASE3-ACTAS
+- Título: Cuarto y quinto vertical de la migración por fases de ARC-011 (ADR-0011), tras `checklists`, `rfis` y `calidad`
+- Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
+- Estado: **completadas — ciclo de ADR-0011 (5 pasos) cerrado para ambos verticales (2026-08-03)**
+- Prioridad: Media
+- Rama: `docs/arc011-fase3-tareas-actas-declarar` (paso 1, PR #64), `feat/arc011-tareas-actas-retirar-ddl-runtime` (paso 3, PR #65)
+- Responsable actual: —
+- Objetivo: declarar, aplicar y retirar el DDL en runtime del esquema real de `tareas_obra` (`gestionar_tarea`) y `actas_reunion` (`gestionar_acta`, NEW-49), siguiendo el ciclo completo de ADR-0011.
+- **Primer par de verticales agrupados** (decisión operativa del Director, 2026-08-03): en vez de un despliegue de verificación por vertical, se aplicaron ambas migraciones por separado (cada una con su propia autorización) pero se retiró el DDL de las dos antes de un único despliegue de verificación — reduce las aprobaciones de entorno `production` sin cambiar la barrera de autorización por migración D1.
+- Criterios de aceptación (ambos verticales):
+  1. ✅ Migraciones `.sql` idempotentes con el esquema exacto verificado contra D1 real (`migrate_tareas_obra.sql`, 16 columnas; `migrate_actas_reunion.sql`, 23 columnas), incorporando `departamento` (DEPT-01) y el resto de columnas `ALTER` directamente en cada `CREATE`.
+  2. ✅ **Aplicadas contra D1** (`tareas_obra` run `30798028360`, `actas_reunion` run `30798043436`, 2026-08-03), autorizadas por el Director en chat. Verificado antes y después: columnas idénticas en ambas; no-op confirmado.
+  3. ✅ **DDL en runtime retirado** en ambas (PR #65): comentado, no borrado, en `ensureTareasObraTable()`/`ensureActasTable()`, con referencia a su migración.
+  4. ✅ **Verificado en producción sin el DDL en caliente, en un único despliegue:** desplegado `worker.js` (run `30799296203`, versión `ae5317c5-ecaa-4471-8cb6-3297c8057e56`), `/health` → `healthy` (d1:true, r2:true), 16 columnas de `tareas_obra` y 23 de `actas_reunion` verificadas presentes tras el despliegue.
+  5. ✅ Registradas en `migrate_manifiesto.json` como `aplicada: true`.
+- Dependencias: ADR-0011 aceptado como estrategia; `checklists`/`rfis`/`calidad` como ciclo de referencia ya completo. Verificación de columnas reutilizó la lectura de D1 autorizada el 2026-08-03 para la segunda ronda de DDL silenciado.
+- Bloqueos: ninguno. Ciclo completo en ambos.
+- Archivos principales: `migrate_tareas_obra.sql`, `migrate_actas_reunion.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, `worker.js`.
+- Pruebas: verificación manual columna por columna antes y después contra D1 real; `node --check worker.js`; `/health` tras desplegar.
+- Última actualización: 2026-08-03
+- Siguiente acción exacta: ninguna — ambos verticales completos. Primer par con despliegue de verificación agrupado, plantilla para futuros lotes.
 
 ### ARC-011-FASE3-CALIDAD — Migración del vertical `calidad`
 

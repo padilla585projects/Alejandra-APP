@@ -158,6 +158,16 @@ producción tras desplegar `worker.js` (run `30791398680`, versión `d26261b6-..
 healthy, 17 columnas de cada tabla presentes). Tercer vertical con el ciclo completo, tras
 `checklists` y `rfis`. Ver `TASKS.md` (`ARC-011-FASE3-CALIDAD`).
 
+**Cuarto y quinto vertical completos: `tareas_obra` y `actas_reunion` — primer lote agrupado.**
+Tras la observación del Director sobre el coste operativo de desplegar una vez por vertical, se
+aplicaron ambas migraciones por separado (autorización propia cada una: `tareas_obra` run
+`30798028360`, `actas_reunion` run `30798043436`), se retiró el DDL en runtime de las dos
+(`ensureTareasObraTable()`/`ensureActasTable()`) y se verificaron **en un único despliegue**
+de `worker.js` (run `30799296203`, versión `ae5317c5-ecaa-4471-8cb6-3297c8057e56`, `/health`
+healthy, 16 columnas de `tareas_obra` y 23 de `actas_reunion` presentes). Mismo ciclo de 5
+pasos de ADR-0011, misma barrera de autorización por migración D1 — solo se agrupó el paso 4.
+Ver `TASKS.md` (`ARC-011-FASE3-TAREAS`, `ARC-011-FASE3-ACTAS`).
+
 ## Siguiente objetivo
 
 ADR-0014 queda implementado de extremo a extremo (interfaz en `nucleo-cognitivo/`, tabla D1,
