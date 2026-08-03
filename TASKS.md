@@ -1,13 +1,13 @@
 # TASKS — Cola operativa inmediata
 
-Estado: **F-0.2-CFG** pospuesta (tarea administrativa del Director, sin trabajo de ingeniería pendiente). **ARC-011-FASE3-CHECKLISTS** y **F-2.1-MEMORIA-DECLARAR completadas (2026-08-02)**: el Director autorizó en chat el paso 2 (aplicar contra D1) de ambas; `checklists` completó además los pasos 3-4 (retirar el DDL en runtime y verificar en producción tras desplegar `worker.js`), cerrando el ciclo de 5 pasos de ADR-0011 para ese vertical. `F-2.1-MEMORIA-DECLARAR` queda con la tabla `memoria_gobernada` aplicada y verificada; su paso 3 (persistencia real) sigue bloqueado por ARC-008 §8, no por decisión del Director. **F-1.3-MIGRAR-RESTO-TOOLS completada (2026-08-02)**: los catálogos de tools de los dos Workers quedan migrados al completo a ADR-0010 (96/103 tools; 7 excluidas a propósito, dominio ADR-0013). Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**; por ADR-0007 enmienda 1 se abrió **F-2.1** (Época 2, gobierno de memoria), cuyo modelo ya está aceptado por el Director en ADR-0013. **ARC-011-FASE3-RFIS, nueva (2026-08-02)**: segundo vertical del ciclo de ADR-0011, paso 1 (declarar) completo de forma autónoma (código reversible); paso 2 pendiente de autorización del Director, igual que `checklists` en su momento. **La única tarea activa que exige algo del Director es ARC-011-FASE3-RFIS (paso 2); el resto está resuelto o es su tarea administrativa (F-0.2-CFG).** No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
+Estado: **Ocho verticales de ARC-011 fase 3 completos** (ciclo de 5 pasos cerrado), **seis más declarados el 2026-08-03** (tercer lote agrupado, paso 1 solamente: `planificacion_produccion`, `finanzas_obra`, `seguridad_cumplimiento`, `relaciones_obra`, `flota`, `nexus_experts` — ver `ARC-011-FASE3-LOTE3` abajo). **F-0.2-CFG revisada el 2026-08-03: sigue siendo tarea administrativa del Director** (ningún agente debe leer, imprimir ni versionar secretos reales — ver CLAUDE.md, "Prohibido" — el Director pidió moverlos y se le explicó por qué no se puede ejecutar esa acción por él). **ARC-014 revisada el 2026-08-03: ninguna condición de reapertura cambió** (sigue en desarrollo, único mantenedor), permanece como riesgo aceptado sin acción de ingeniería. `F-2.1-MEMORIA-DECLARAR` queda con la tabla `memoria_gobernada` aplicada y verificada; su paso 3 (persistencia real) sigue bloqueado por ARC-008 §8, no por decisión del Director. **F-1.3-MIGRAR-RESTO-TOOLS completada (2026-08-02)**: los catálogos de tools de los dos Workers quedan migrados al completo a ADR-0010 (96/103 tools; 7 excluidas a propósito, dominio ADR-0013). Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**; por ADR-0007 enmienda 1 se abrió **F-2.1** (Época 2, gobierno de memoria), cuyo modelo ya está aceptado por el Director en ADR-0013. **La única tarea activa que exige algo del Director es el paso 2 (aplicar contra D1) de los seis verticales del tercer lote; el resto está resuelto o es su tarea administrativa (F-0.2-CFG).** No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
 - **P-ARCH-002 — aprobada.** El componente de notificaciones temporales queda cerrado; desbloquea la siguiente rebanada de presentación.
-- **ARC-014 — riesgo aceptado temporalmente.** Mientras el proyecto tenga un único mantenedor en fase de desarrollo, no se exige revisor distinto del solicitante. Se reabre en cuanto exista producción real o más de un mantenedor. Detalle en `ARCHITECT_BACKLOG.md`.
-- **ARC-011-FASE3-CHECKLISTS (paso 2, aplicar contra D1) — pospuesta.** No se autoriza todavía; se retoma cuando exista una ventana específica para cambios de esquema con verificación de D1 antes y después, tras completar la validación de la interfaz y del núcleo cognitivo.
-- **F-0.2-CFG — pospuesta.** Los secretos se mueven al entorno `production` cuando el proyecto entre en preproducción/producción estable. Mientras tanto se mantiene la configuración a nivel de repositorio; ningún agente debe conocer ni manipular los valores reales.
+- **ARC-014 — riesgo aceptado temporalmente.** Mientras el proyecto tenga un único mantenedor en fase de desarrollo, no se exige revisor distinto del solicitante. Se reabre en cuanto exista producción real o más de un mantenedor. Detalle en `ARCHITECT_BACKLOG.md`. **Revisada el 2026-08-03: el Director confirmó que ninguna de las dos condiciones cambió — sigue sin acción de ingeniería.**
+- **ARC-011-FASE3-CHECKLISTS (paso 2, aplicar contra D1) — pospuesta.** No se autoriza todavía; se retoma cuando exista una ventana específica para cambios de esquema con verificación de D1 antes y después, tras completar la validación de la interfaz y del núcleo cognitivo. (Nota: esta postura quedó superada de hecho — el Director autorizó ese mismo paso 2 más tarde el 2026-08-02, ver tabla de completadas.)
+- **F-0.2-CFG — pospuesta.** Los secretos se mueven al entorno `production` cuando el proyecto entre en preproducción/producción estable. Mientras tanto se mantiene la configuración a nivel de repositorio; ningún agente debe conocer ni manipular los valores reales. **Revisada el 2026-08-03: el Director pidió moverlos ahora ("muévelos tú"); se declinó ejecutar la acción porque entrar/mover secretos reales de Cloudflare/GitHub es una acción prohibida para cualquier agente (CLAUDE.md, "Los secretos no se leen, imprimen ni versionan"; reglas globales de seguridad de la sesión, categoría "Prohibido"). Sigue pendiente como tarea que solo el Director puede ejecutar personalmente en las UI de Cloudflare/GitHub.**
 
 ## Reglas
 
@@ -37,7 +37,38 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). **Ocho verticales de ARC-011 fase 3 completos** (`checklists`, `rfis`, `calidad`, `tareas_obra`, `actas_reunion`, `ordenes_cambio`, `ordenes_compra`, `proveedores_gestion`), ciclo de 5 pasos cerrado en todos. No queda ninguna tarea activa de ARC-011 fase 3 sin decisión del Director pendiente. **Nota operativa (2026-08-03):** el Director señaló que se estaban acumulando demasiados despliegues seguidos en poco tiempo (5 en <14h); los siguientes lotes deben espaciarse más y agrupar más verticales por despliegue.
+Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). **Ocho verticales de ARC-011 fase 3 completos** (`checklists`, `rfis`, `calidad`, `tareas_obra`, `actas_reunion`, `ordenes_cambio`, `ordenes_compra`, `proveedores_gestion`), ciclo de 5 pasos cerrado en todos. **Seis verticales más declarados el 2026-08-03** (tercer lote agrupado, paso 1 solamente — ver `ARC-011-FASE3-LOTE3` abajo), a la espera de autorización del Director para el paso 2. **Nota operativa (2026-08-03):** el Director señaló que se estaban acumulando demasiados despliegues seguidos en poco tiempo (5 en <14h); los siguientes lotes deben espaciarse más y agrupar más verticales por despliegue — este lote de 6 sigue ese criterio (declarar los 6 de una vez, sin desplegar todavía).
+
+### ARC-011-FASE3-LOTE3 — Declarar 6 verticales: `planificacion_produccion`, `finanzas_obra`, `seguridad_cumplimiento`, `relaciones_obra`, `flota`, `nexus_experts`
+
+- ID: ARC-011-FASE3-PLANIFICACION-PRODUCCION, ARC-011-FASE3-FINANZAS-OBRA, ARC-011-FASE3-SEGURIDAD-CUMPLIMIENTO, ARC-011-FASE3-RELACIONES-OBRA, ARC-011-FASE3-FLOTA, ARC-011-FASE3-NEXUS-EXPERTS
+- Título: Noveno a decimocuarto vertical de la migración por fases de ARC-011 (ADR-0011), tercer lote agrupado — cubre las últimas 23 tablas "solo de código" que quedaban sin declarar de ARC-011 fase 1/2 (ver `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`)
+- Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
+- Estado: **paso 1 (declarar) completo en los 6 (2026-08-03); paso 2 (aplicar) pendiente de autorización del Director**
+- Prioridad: Media
+- Rama: (pendiente de PR)
+- Responsable actual: —
+- Objetivo: declarar el esquema de las 23 tablas restantes de ARC-011 que solo existen en `worker.js` (patrón lazy, nunca invocadas todavía en producción), agrupadas en 6 verticales por dominio de negocio:
+  1. `planificacion_produccion`: `fases_obra`, `diario_obra`, `plan_semanal`, `rendimientos`, `field_reports`
+  2. `finanzas_obra`: `presupuesto_obra`, `presupuesto_lineas`, `costes_obra`, `cobros_cliente`, `gastos_dietas`, `licitaciones`
+  3. `seguridad_cumplimiento`: `registro_ambiental`, `seguros_obra`, `cae_documentacion`, `ausencias`, `libro_subcontratacion`, `toolbox_talks`
+  4. `relaciones_obra`: `correspondencia`, `contactos_obra`, `lecciones_aprendidas`, `cierre_obra_items`
+  5. `flota`: `flota_vehiculos`
+  6. `nexus_experts`: `nexus_experts` (dominio distinto — telemetría de Nexus/ADR-0008, sin tenant — migrado aparte a propósito)
+- Criterios de aceptación:
+  1. ✅ Las 6 migraciones `.sql` escritas, cada `CREATE TABLE IF NOT EXISTS` verbatim contra worker.js (verificado línea por línea, no solo por subagente — incluida la columna generada `gastos_dietas.importe_km`).
+  2. ✅ Verificado contra D1 real (solo lectura, `SELECT name FROM sqlite_master WHERE type='table' AND name IN (...)`, 2026-08-03): ninguna de las 23 tablas existe todavía en producción. A diferencia de los 8 verticales anteriores, el paso 2 de este lote **no será un no-op** sobre filas existentes — creará las tablas por primera vez.
+  3. ✅ Registradas en `migrate_manifiesto.json` como `aplicada: false`.
+  4. ⬜ Paso 2 (aplicar contra D1): exige autorización explícita del Director, una por vertical (la barrera de datos no se agrupa, mismo criterio que el segundo lote).
+  5. ⬜ Paso 3 (retirar DDL en runtime): pendiente. `nexus_experts` es un caso especial — su DDL vive dentro de `runMigrations()` (endpoint de un solo uso), no en una función `ensureXxxTable()` reutilizable; su paso 3 puede requerir un tratamiento distinto al patrón habitual de comentar la función.
+  6. ⬜ Paso 4 (verificar en producción tras desplegar, agrupando los 6): pendiente.
+  7. ⬜ Registradas en `migrate_manifiesto.json` como `aplicada: true` tras el paso 2.
+- Dependencias: ADR-0011 aceptado como estrategia; verticales anteriores como ciclo de referencia.
+- Bloqueos: paso 2 en adelante bloqueado por autorización del Director (ADR-0007: una migración D1 no es acción reversible sin ella, aunque el SQL sea aditivo).
+- Archivos principales: `migrate_planificacion_produccion.sql`, `migrate_finanzas_obra.sql`, `migrate_seguridad_cumplimiento.sql`, `migrate_relaciones_obra.sql`, `migrate_flota.sql`, `migrate_nexus_experts.sql`, `migrate_manifiesto.json`.
+- Pruebas: verificación manual línea por línea contra `worker.js` (23/23 tablas, una única ocurrencia de `CREATE TABLE IF NOT EXISTS` cada una, sin duplicados ni variantes de nombre); verificación de existencia contra D1 real (0 de 23 existen).
+- Última actualización: 2026-08-03
+- Siguiente acción exacta: pedir al Director autorización para el paso 2 (aplicar) de cada uno de los 6 verticales, cuando decida abrir la siguiente ventana de cambios de esquema.
 
 ### ARC-011-FASE3-OC-PROVEEDORES — Migración agrupada de `ordenes_cambio`, `ordenes_compra` y `proveedores_gestion`
 
