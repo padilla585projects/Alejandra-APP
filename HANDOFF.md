@@ -356,6 +356,31 @@ dentro de `runMigrations()`) y paso 4 (verificar en producción) quedan pendient
 ventana de despliegue separada** — decisión explícita del Director de espaciar los despliegues,
 tras los 5 encadenados en <14h el mismo día. Ver `TASKS.md` (`ARC-011-FASE3-LOTE3`).
 
+## Tercer lote de ARC-011 fase 3 — paso 3 fusionado a `main` (2026-08-03)
+
+**Paso 3 del ciclo de ADR-0011 (retirar el DDL en runtime) completo para los 6 verticales del
+tercer lote** (`planificacion_produccion`, `finanzas_obra`, `seguridad_cumplimiento`,
+`relaciones_obra`, `flota`, `nexus_experts`, 23 tablas), tras el paso 2 (aplicar contra D1)
+del mismo día. Se comentó (no se borró) el `CREATE TABLE IF NOT EXISTS` en runtime de las 22
+funciones `ensureXxxTable()` correspondientes, mismo patrón exacto ya usado en los ocho
+verticales anteriores; el bloque de `nexus_experts` (dentro de `runMigrations()`, try/catch de
+un solo uso, no una función reutilizable) se comentó con el mismo criterio, sin tocar los
+bloques vecinos (`ai_usage`, `alejandra_alert_cache`).
+
+Circuito: PR [#75](https://github.com/padilla585projects/Alejandra-APP/pull/75) (rama
+`feat/arc011-lote3-retirar-ddl-runtime`) → CI verde (`Syntax and agent tests`, dos runs) →
+fusionado a `main` (fast-forward, sin conflictos). Verificación antes de fusionar: `node
+--check worker.js` limpio, verificación de encoding (`Ã|Â|â€|ï»¿`) limpia sobre el diff, y
+revisión línea por línea confirmando que **solo** se comentaron las 23 sentencias `CREATE
+TABLE`/llamada `.run()`/`runDDL()` correspondientes — ninguna otra línea del archivo tocada.
+
+**`main` ya contiene el código sin el DDL en runtime, pero no está desplegado.** Producción
+sigue sirviendo la versión anterior (con el DDL activo, sin riesgo mientras tanto). El paso 4
+(desplegar `worker.js` una sola vez para verificar los 6 verticales agrupados — `/health` +
+columnas de las 23 tablas) queda pendiente de que el Director abra la ventana de despliegue,
+por la misma decisión operativa de espaciar despliegues del 2026-08-03. Ver `TASKS.md`
+(`ARC-011-FASE3-LOTE3`).
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.
