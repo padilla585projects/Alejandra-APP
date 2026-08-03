@@ -16947,25 +16947,31 @@ async function eliminarRfi(id, request, env) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function ensureOrdenesCambioTable(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS ordenes_cambio (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    obra_id          INTEGER,
-    empresa_id       INTEGER NOT NULL,
-    numero           TEXT,
-    titulo           TEXT NOT NULL,
-    descripcion      TEXT,
-    rfi_id           INTEGER,
-    estado           TEXT DEFAULT 'propuesta',
-    categoria        TEXT DEFAULT 'general',
-    coste_adicional  REAL DEFAULT 0,
-    dias_extension   INTEGER DEFAULT 0,
-    solicitado_por   TEXT,
-    aprobado_por     TEXT,
-    fecha_propuesta  TEXT,
-    fecha_aprobacion TEXT,
-    notas            TEXT,
-    created_at       TEXT DEFAULT (datetime('now'))
-  )`);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "ordenes_cambio"
+  // queda declarada y aplicada en migrate_ordenes_cambio.sql (run 30805220909,
+  // verificada columna por columna contra D1 real antes y despues). Se retira
+  // el CREATE en runtime -- no hay entorno donde este runtime pudiera crearla
+  // de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS ordenes_cambio (
+  //   id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   obra_id          INTEGER,
+  //   empresa_id       INTEGER NOT NULL,
+  //   numero           TEXT,
+  //   titulo           TEXT NOT NULL,
+  //   descripcion      TEXT,
+  //   rfi_id           INTEGER,
+  //   estado           TEXT DEFAULT 'propuesta',
+  //   categoria        TEXT DEFAULT 'general',
+  //   coste_adicional  REAL DEFAULT 0,
+  //   dias_extension   INTEGER DEFAULT 0,
+  //   solicitado_por   TEXT,
+  //   aprobado_por     TEXT,
+  //   fecha_propuesta  TEXT,
+  //   fecha_aprobacion TEXT,
+  //   notas            TEXT,
+  //   created_at       TEXT DEFAULT (datetime('now'))
+  // )`);
 }
 
 async function getOrdenesCambio(request, env) {
@@ -20438,33 +20444,39 @@ async function eliminarVisitaObra(id, request, env) {
 // ── Ordenes de Compra / Purchase Orders (NEW-74) ──────────────────────────
 
 async function ensureOcTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ordenes_compra (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id    INTEGER NOT NULL,
-    obra_id       INTEGER,
-    numero        TEXT NOT NULL,
-    proveedor     TEXT NOT NULL,
-    descripcion   TEXT,
-    fecha_emision TEXT,
-    fecha_entrega TEXT,
-    estado        TEXT NOT NULL DEFAULT 'borrador',
-    importe_total REAL DEFAULT 0,
-    notas         TEXT,
-    aprobado_por  TEXT,
-    aprobado_at   TEXT,
-    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS oc_lineas (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    oc_id       INTEGER NOT NULL REFERENCES ordenes_compra(id) ON DELETE CASCADE,
-    descripcion TEXT NOT NULL,
-    unidad      TEXT DEFAULT 'ud',
-    cantidad    REAL DEFAULT 1,
-    precio_unit REAL DEFAULT 0,
-    recibido    REAL DEFAULT 0,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): "ordenes_compra" y
+  // "oc_lineas" quedan declaradas y aplicadas en migrate_ordenes_compra.sql
+  // (run 30805238082, verificadas columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearlas de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ordenes_compra (
+  //   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id    INTEGER NOT NULL,
+  //   obra_id       INTEGER,
+  //   numero        TEXT NOT NULL,
+  //   proveedor     TEXT NOT NULL,
+  //   descripcion   TEXT,
+  //   fecha_emision TEXT,
+  //   fecha_entrega TEXT,
+  //   estado        TEXT NOT NULL DEFAULT 'borrador',
+  //   importe_total REAL DEFAULT 0,
+  //   notas         TEXT,
+  //   aprobado_por  TEXT,
+  //   aprobado_at   TEXT,
+  //   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  //   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS oc_lineas (
+  //   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   oc_id       INTEGER NOT NULL REFERENCES ordenes_compra(id) ON DELETE CASCADE,
+  //   descripcion TEXT NOT NULL,
+  //   unidad      TEXT DEFAULT 'ud',
+  //   cantidad    REAL DEFAULT 1,
+  //   precio_unit REAL DEFAULT 0,
+  //   recibido    REAL DEFAULT 0,
+  //   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getOrdenesCompra(request, env) {
@@ -23359,31 +23371,37 @@ async function eliminarAusencia(id, request, env) {
 // NEW-102: GESTIÓN DE PROVEEDORES / SUPPLIER MANAGEMENT
 // ════════════════════════════════════════════════════════════════════════════════
 async function ensureProveedoresGestionTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS proveedores_gestion (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id        INTEGER NOT NULL,
-    nombre            TEXT    NOT NULL,
-    cif               TEXT,
-    tipo              TEXT    NOT NULL DEFAULT 'proveedor',
-    categoria         TEXT,
-    contacto_nombre   TEXT,
-    contacto_cargo    TEXT,
-    telefono          TEXT,
-    email             TEXT,
-    web               TEXT,
-    direccion         TEXT,
-    ciudad            TEXT,
-    cp                TEXT,
-    pais              TEXT    DEFAULT 'España',
-    activo            INTEGER NOT NULL DEFAULT 1,
-    valoracion        INTEGER DEFAULT NULL,
-    homologado        INTEGER NOT NULL DEFAULT 0,
-    fecha_homologacion TEXT,
-    notas             TEXT,
-    created_by        TEXT,
-    created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
-  )`).run();
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "proveedores_gestion"
+  // queda declarada y aplicada en migrate_proveedores_gestion.sql (run
+  // 30805254063, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE en runtime -- no hay entorno donde este
+  // runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS proveedores_gestion (
+  //   id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id        INTEGER NOT NULL,
+  //   nombre            TEXT    NOT NULL,
+  //   cif               TEXT,
+  //   tipo              TEXT    NOT NULL DEFAULT 'proveedor',
+  //   categoria         TEXT,
+  //   contacto_nombre   TEXT,
+  //   contacto_cargo    TEXT,
+  //   telefono          TEXT,
+  //   email             TEXT,
+  //   web               TEXT,
+  //   direccion         TEXT,
+  //   ciudad            TEXT,
+  //   cp                TEXT,
+  //   pais              TEXT    DEFAULT 'España',
+  //   activo            INTEGER NOT NULL DEFAULT 1,
+  //   valoracion        INTEGER DEFAULT NULL,
+  //   homologado        INTEGER NOT NULL DEFAULT 0,
+  //   fecha_homologacion TEXT,
+  //   notas             TEXT,
+  //   created_by        TEXT,
+  //   created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+  //   updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+  // )`).run();
 }
 
 async function getProveedoresGestion(request, env) {
