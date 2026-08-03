@@ -113,7 +113,7 @@
       "verticalARC011": "planificacion_produccion",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: las 5 tablas no existian antes (verificado por lectura); creadas por primera vez, no un no-op. Verificado despues via PRAGMA table_xinfo: fases_obra 14 columnas, diario_obra 14, plan_semanal 14, rendimientos 17, field_reports 19 -- las cinco coinciden exactamente con la migracion. Paso 3 (retirar DDL en runtime) y paso 4 (verificar en produccion tras desplegar) pendientes, agrupados con el resto del lote."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: las 5 tablas no existian antes (verificado por lectura); creadas por primera vez, no un no-op. Verificado despues via PRAGMA table_xinfo: fases_obra 14 columnas, diario_obra 14, plan_semanal 14, rendimientos 17, field_reports 19 -- las cinco coinciden exactamente con la migracion. Paso 3 (retirar DDL en runtime, PR #75) y paso 4 (verificar en produccion) completos: worker.js desplegado (run 30839201968, version 400421b4-06dd-4943-93d1-2c422c9b4f6a, 2026-08-03T18:02:46Z), /health healthy (d1:true, r2:true), las 5 tablas verificadas presentes tras el despliegue. Ciclo de ADR-0011 completo (5 pasos)."
     },
     {
       "archivo": "migrate_finanzas_obra.sql",
@@ -122,7 +122,7 @@
       "verticalARC011": "finanzas_obra",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: las 6 tablas no existian antes; creadas por primera vez. Verificado despues via PRAGMA table_xinfo: presupuesto_obra 12, presupuesto_lineas 18, costes_obra 13, cobros_cliente 22, gastos_dietas 28 (incluida importe_km, columna GENERATED ALWAYS AS VIRTUAL -- PRAGMA table_info la oculta por ser hidden=2; confirmada presente via table_xinfo), licitaciones 26 -- las seis coinciden exactamente. Paso 3/4 pendientes, agrupados con el resto del lote."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: las 6 tablas no existian antes; creadas por primera vez. Verificado despues via PRAGMA table_xinfo: presupuesto_obra 12, presupuesto_lineas 18, costes_obra 13, cobros_cliente 22, gastos_dietas 28 (incluida importe_km, columna GENERATED ALWAYS AS VIRTUAL -- PRAGMA table_info la oculta por ser hidden=2; confirmada presente via table_xinfo), licitaciones 26 -- las seis coinciden exactamente. Paso 3 (retirar DDL en runtime, PR #75) y paso 4 (verificar en produccion) completos: worker.js desplegado (run 30839201968, version 400421b4-06dd-4943-93d1-2c422c9b4f6a, 2026-08-03T18:02:46Z), /health healthy (d1:true, r2:true), las 6 tablas verificadas presentes tras el despliegue. Ciclo de ADR-0011 completo (5 pasos)."
     },
     {
       "archivo": "migrate_seguridad_cumplimiento.sql",
@@ -131,7 +131,7 @@
       "verticalARC011": "seguridad_cumplimiento",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: las 6 tablas no existian antes; creadas por primera vez. Verificado despues via PRAGMA table_xinfo: registro_ambiental 19, seguros_obra 21, cae_documentacion 22, ausencias 17, libro_subcontratacion 19, toolbox_talks 13 -- las seis coinciden exactamente. Paso 3/4 pendientes, agrupados con el resto del lote."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: las 6 tablas no existian antes; creadas por primera vez. Verificado despues via PRAGMA table_xinfo: registro_ambiental 19, seguros_obra 21, cae_documentacion 22, ausencias 17, libro_subcontratacion 19, toolbox_talks 13 -- las seis coinciden exactamente. Paso 3 (retirar DDL en runtime, PR #75) y paso 4 (verificar en produccion) completos: worker.js desplegado (run 30839201968, version 400421b4-06dd-4943-93d1-2c422c9b4f6a, 2026-08-03T18:02:46Z), /health healthy (d1:true, r2:true), las 6 tablas verificadas presentes tras el despliegue. Ciclo de ADR-0011 completo (5 pasos)."
     },
     {
       "archivo": "migrate_relaciones_obra.sql",
@@ -140,7 +140,7 @@
       "verticalARC011": "relaciones_obra",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: las 4 tablas no existian antes; creadas por primera vez. Verificado despues via PRAGMA table_xinfo: correspondencia 15, contactos_obra 12, lecciones_aprendidas 17, cierre_obra_items 15 -- las cuatro coinciden exactamente. Paso 3/4 pendientes, agrupados con el resto del lote."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: las 4 tablas no existian antes; creadas por primera vez. Verificado despues via PRAGMA table_xinfo: correspondencia 15, contactos_obra 12, lecciones_aprendidas 17, cierre_obra_items 15 -- las cuatro coinciden exactamente. Paso 3 (retirar DDL en runtime, PR #75) y paso 4 (verificar en produccion) completos: worker.js desplegado (run 30839201968, version 400421b4-06dd-4943-93d1-2c422c9b4f6a, 2026-08-03T18:02:46Z), /health healthy (d1:true, r2:true), las 4 tablas verificadas presentes tras el despliegue. Ciclo de ADR-0011 completo (5 pasos)."
     },
     {
       "archivo": "migrate_flota.sql",
@@ -149,7 +149,7 @@
       "verticalARC011": "flota",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: flota_vehiculos no existia antes; creada por primera vez. Verificado despues via PRAGMA table_xinfo: 29 columnas, coincide exactamente. Paso 3/4 pendientes, agrupados con el resto del lote."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: flota_vehiculos no existia antes; creada por primera vez. Verificado despues via PRAGMA table_xinfo: 29 columnas, coincide exactamente. Paso 3 (retirar DDL en runtime, PR #75) y paso 4 (verificar en produccion) completos: worker.js desplegado (run 30839201968, version 400421b4-06dd-4943-93d1-2c422c9b4f6a, 2026-08-03T18:02:46Z), /health healthy (d1:true, r2:true), tabla verificada presente tras el despliegue. Ciclo de ADR-0011 completo (5 pasos)."
     },
     {
       "archivo": "migrate_nexus_experts.sql",
@@ -158,7 +158,7 @@
       "verticalARC011": "nexus_experts",
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
-      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: nexus_experts no existia antes; creada por primera vez. Verificado despues via PRAGMA table_xinfo: 8 columnas, coincide exactamente. Con este lote, las 23 tablas del tercer lote agrupado (14 verticales de ARC-011 fase 3 en total) tienen su paso 2 completo: checklists, rfis, calidad, tareas_obra, actas_reunion, ordenes_cambio, ordenes_compra, proveedores_gestion (ciclo completo, 5 pasos) + planificacion_produccion, finanzas_obra, seguridad_cumplimiento, relaciones_obra, flota, nexus_experts (paso 2 aplicado y verificado; pasos 3-4 -- retirar DDL en runtime y verificar en produccion -- pendientes de autorizacion y despliegue agrupado)."
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: nexus_experts no existia antes; creada por primera vez. Verificado despues via PRAGMA table_xinfo: 8 columnas, coincide exactamente. Paso 3 (retirar el bloque CREATE TABLE dentro de runMigrations(), PR #75) y paso 4 (verificar en produccion) completos: worker.js desplegado (run 30839201968, version 400421b4-06dd-4943-93d1-2c422c9b4f6a, 2026-08-03T18:02:46Z), /health healthy (d1:true, r2:true), tabla verificada presente tras el despliegue. Ciclo de ADR-0011 completo (5 pasos). Con este vertical, las 14 verticales de ARC-011 fase 3 quedan completas (checklists, rfis, calidad, tareas_obra, actas_reunion, ordenes_cambio, ordenes_compra, proveedores_gestion, planificacion_produccion, finanzas_obra, seguridad_cumplimiento, relaciones_obra, flota, nexus_experts), todas con el ciclo de 5 pasos cerrado."
     }
   ]
 }

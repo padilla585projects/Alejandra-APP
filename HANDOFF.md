@@ -381,6 +381,32 @@ columnas de las 23 tablas) queda pendiente de que el Director abra la ventana de
 por la misma decisión operativa de espaciar despliegues del 2026-08-03. Ver `TASKS.md`
 (`ARC-011-FASE3-LOTE3`).
 
+## Tercer lote de ARC-011 fase 3 — paso 4 completo, ciclo cerrado (2026-08-03)
+
+**Desplegado y verificado en producción.** El Director aprobó el entorno `production` para el
+run [30839201968](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30839201968)
+(`deploy-worker.yml`, `ref=main`, confirmación `DEPLOY_API_WORKER`), tras el merge del paso 3
+(PR #75). Versión desplegada `400421b4-06dd-4943-93d1-2c422c9b4f6a` (2026-08-03T18:02:46Z),
+coincide con `wrangler deployments list`. `/health` → `{"estado":"healthy","d1":true,"r2":true}`.
+
+Verificación posterior (solo lectura, `wrangler d1 execute alejandra-db --command "SELECT name
+FROM sqlite_master WHERE type='table' AND name IN (...)" --remote`, `rows_written: 0`): las 23
+tablas del tercer lote (`fases_obra`, `diario_obra`, `plan_semanal`, `rendimientos`,
+`field_reports`, `presupuesto_obra`, `presupuesto_lineas`, `costes_obra`, `cobros_cliente`,
+`gastos_dietas`, `licitaciones`, `registro_ambiental`, `seguros_obra`, `cae_documentacion`,
+`ausencias`, `libro_subcontratacion`, `toolbox_talks`, `correspondencia`, `contactos_obra`,
+`lecciones_aprendidas`, `cierre_obra_items`, `flota_vehiculos`, `nexus_experts`) siguen
+presentes tras retirar el DDL en runtime y desplegar sin él.
+
+**Con este despliegue, las 14 verticales de ARC-011 fase 3 quedan con el ciclo de 5 pasos de
+ADR-0011 completo: los ocho verticales del primer y segundo lote (`checklists`, `rfis`,
+`calidad`, `tareas_obra`, `actas_reunion`, `ordenes_cambio`, `ordenes_compra`,
+`proveedores_gestion`) más los seis de este tercer lote (`planificacion_produccion`,
+`finanzas_obra`, `seguridad_cumplimiento`, `relaciones_obra`, `flota`, `nexus_experts`). No
+queda ninguna tarea de ingeniería activa de ARC-011.** `migrate_manifiesto.json` actualizado:
+las 6 entradas del tercer lote registran el paso 3/4 completo. Ver `TASKS.md`
+(`ARC-011-FASE3-LOTE3`).
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.
