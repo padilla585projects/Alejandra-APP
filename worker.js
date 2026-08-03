@@ -16601,27 +16601,32 @@ async function eliminarEntradaDiario(id, request, env) {
 
 // ── Tareas de obra (NEW-32) ──────────────────────────────────────────────────
 async function ensureTareasObraTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tareas_obra (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    obra_id INTEGER,
-    empresa_id INTEGER NOT NULL,
-    titulo TEXT NOT NULL,
-    descripcion TEXT,
-    asignado_a TEXT,
-    fase_id INTEGER,
-    estado TEXT DEFAULT 'pendiente',
-    prioridad TEXT DEFAULT 'normal',
-    fecha_limite TEXT,
-    ubicacion TEXT,
-    notas TEXT,
-    created_by TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  )`).run();
-  // DEPT-01 (21/07/2026): aislamiento por departamento — cada departamento (electrico,
-  // mecanicas, construccion...) solo ve/edita sus propias tareas. Seguridad ve todo (solo lectura
-  // en departamentos ajenos). Columna nueva, tabla vacía en producción -> sin backfill necesario.
-  await runDDL(env, `ALTER TABLE tareas_obra ADD COLUMN departamento TEXT`);
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "tareas_obra" (con
+  // la columna departamento de DEPT-01 ya incorporada) queda declarada y
+  // aplicada en migrate_tareas_obra.sql (run 30798028360, verificada columna
+  // por columna contra D1 real antes y despues). Se retira el CREATE/ALTER en
+  // runtime -- no hay entorno donde este runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tareas_obra (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   obra_id INTEGER,
+  //   empresa_id INTEGER NOT NULL,
+  //   titulo TEXT NOT NULL,
+  //   descripcion TEXT,
+  //   asignado_a TEXT,
+  //   fase_id INTEGER,
+  //   estado TEXT DEFAULT 'pendiente',
+  //   prioridad TEXT DEFAULT 'normal',
+  //   fecha_limite TEXT,
+  //   ubicacion TEXT,
+  //   notas TEXT,
+  //   created_by TEXT,
+  //   created_at TEXT DEFAULT (datetime('now')),
+  //   updated_at TEXT DEFAULT (datetime('now'))
+  // )`).run();
+  // // DEPT-01 (21/07/2026): aislamiento por departamento -- cada departamento (electrico,
+  // // mecanicas, construccion...) solo ve/edita sus propias tareas.
+  // await runDDL(env, `ALTER TABLE tareas_obra ADD COLUMN departamento TEXT`);
 }
 
 // DEPT-01: true si el usuario ve/edita TODOS los departamentos (admins de siempre + Seguridad,
@@ -17055,28 +17060,35 @@ async function eliminarOrdenCambio(id, request, env) {
 // ── ACTAS DE REUNIÓN (NEW-36) ────────────────────────────────────────────────
 
 async function ensureActasTable(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS actas_reunion (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    obra_id INTEGER, empresa_id INTEGER NOT NULL,
-    numero TEXT, titulo TEXT NOT NULL,
-    tipo TEXT DEFAULT 'progreso',
-    fecha TEXT, convocante TEXT, asistentes TEXT,
-    resumen TEXT, acuerdos TEXT,
-    proxima_reunion TEXT, estado TEXT DEFAULT 'borrador',
-    created_at TEXT DEFAULT (datetime('now'))
-  )`);
-  // Add extended columns if not already present (NEW-49 enhancements)
-  for (const col of [
-    'ALTER TABLE actas_reunion ADD COLUMN hora TEXT',
-    'ALTER TABLE actas_reunion ADD COLUMN lugar TEXT',
-    'ALTER TABLE actas_reunion ADD COLUMN convocados TEXT',
-    'ALTER TABLE actas_reunion ADD COLUMN orden_dia TEXT',
-    'ALTER TABLE actas_reunion ADD COLUMN puntos_tratados TEXT',
-    'ALTER TABLE actas_reunion ADD COLUMN pendientes TEXT',
-    'ALTER TABLE actas_reunion ADD COLUMN redactor TEXT',
-    'ALTER TABLE actas_reunion ADD COLUMN updated_at TEXT',
-    'ALTER TABLE actas_reunion ADD COLUMN departamento TEXT', // DEPT-01 (21/07/2026)
-  ]) { await runDDL(env, col); }
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "actas_reunion"
+  // (con sus 9 columnas ALTER, incluida departamento de DEPT-01, ya
+  // incorporadas) queda declarada y aplicada en migrate_actas_reunion.sql
+  // (run 30798043436, verificada columna por columna contra D1 real antes y
+  // despues). Se retira el CREATE/ALTER en runtime -- no hay entorno donde
+  // este runtime pudiera crearla de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS actas_reunion (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   obra_id INTEGER, empresa_id INTEGER NOT NULL,
+  //   numero TEXT, titulo TEXT NOT NULL,
+  //   tipo TEXT DEFAULT 'progreso',
+  //   fecha TEXT, convocante TEXT, asistentes TEXT,
+  //   resumen TEXT, acuerdos TEXT,
+  //   proxima_reunion TEXT, estado TEXT DEFAULT 'borrador',
+  //   created_at TEXT DEFAULT (datetime('now'))
+  // )`);
+  // // Add extended columns if not already present (NEW-49 enhancements)
+  // for (const col of [
+  //   'ALTER TABLE actas_reunion ADD COLUMN hora TEXT',
+  //   'ALTER TABLE actas_reunion ADD COLUMN lugar TEXT',
+  //   'ALTER TABLE actas_reunion ADD COLUMN convocados TEXT',
+  //   'ALTER TABLE actas_reunion ADD COLUMN orden_dia TEXT',
+  //   'ALTER TABLE actas_reunion ADD COLUMN puntos_tratados TEXT',
+  //   'ALTER TABLE actas_reunion ADD COLUMN pendientes TEXT',
+  //   'ALTER TABLE actas_reunion ADD COLUMN redactor TEXT',
+  //   'ALTER TABLE actas_reunion ADD COLUMN updated_at TEXT',
+  //   'ALTER TABLE actas_reunion ADD COLUMN departamento TEXT', // DEPT-01 (21/07/2026)
+  // ]) { await runDDL(env, col); }
 }
 
 async function getActasReunion(request, env) {
