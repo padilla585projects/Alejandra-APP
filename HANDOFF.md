@@ -237,13 +237,29 @@ De paso se corrigió el estado desactualizado de ARC-013 en `ARCHITECT_BACKLOG.m
 de ARC-008 (persistencia de trazas) también se cerró ese día — los errores de DDL ya persisten
 en `alejandra_trazas` vía ADR-0014, no solo en `console.error`.
 
-**Tercer vertical de ARC-011 fase 3 declarado: `calidad`.** Reutilizando los esquemas ya
+**Tercer vertical de ARC-011 fase 3 completo: `calidad`.** Reutilizando los esquemas ya
 verificados en la ronda anterior, `migrate_calidad.sql` declara `control_calidad` (NEW-37) y
 `punch_list` (NEW-44) — dominio de control de calidad de obra, 17 columnas cada una (incluida
-`departamento`/DEPT-01, incorporada directamente al `CREATE`, mismo criterio que `rfis`). Paso
-1 de 5 del ciclo de ADR-0011 completo de forma autónoma (código reversible). PR #59, fusionado.
-**Paso 2 (aplicar contra D1) espera autorización explícita del Director**, igual que
-`checklists` y `rfis` en su momento — ver `TASKS.md` (`ARC-011-FASE3-CALIDAD`).
+`departamento`/DEPT-01, incorporada directamente al `CREATE`, mismo criterio que `rfis`). Ciclo
+de 5 pasos cerrado el mismo día (2026-08-03), cada paso autorizado por separado en chat:
+
+1. **Declarar** (PR #59): esquema verificado columna por columna contra D1 real.
+2. **Aplicar** (PR #61): run [30790988608](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30790988608), `0 rows_written` (no-op confirmado); 17 columnas idénticas antes y después en ambas tablas.
+3. **Retirar DDL en runtime** (PR #62): comentado, no borrado, en `ensureCalidadTable()`/`ensurePunchListTable()`.
+4. **Verificar en producción:** desplegado `worker.js` (run [30791398680](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30791398680), versión `d26261b6-bf34-4e5b-bef5-478653648930`), `/health` → `healthy` (d1:true, r2:true), 17 columnas de cada tabla verificadas presentes.
+5. Registrado en `migrate_manifiesto.json` como `aplicada: true`.
+
+Tercer vertical con el ciclo completo, tras `checklists` y `rfis` — ver `TASKS.md`
+(`ARC-011-FASE3-CALIDAD`).
+
+**Nota operativa (2026-08-03):** cada paso 2/3/4 de este ciclo exigió una aprobación de entorno
+`production` separada en GitHub (una por migración D1, otra por despliegue de Worker) — el
+Director señaló que ir vertical por vertical con un despliegue cada vez tiene coste operativo
+alto. A partir de aquí, para los siguientes verticales de ARC-011 fase 3 se agrupan varios
+pasos 1-3 (declarar + aplicar + retirar DDL de varios verticales) antes de desplegar una sola
+vez que verifique todos a la vez — mismo ciclo de 5 pasos, pero por lote en vez de uno a uno.
+Sigue exigiendo autorización explícita del Director en el paso 2 (aplicar) y en el despliegue,
+solo que agrupada.
 
 ## Qué está terminado
 
