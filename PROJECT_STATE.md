@@ -136,6 +136,25 @@ y sus dos índices (`idx_trazas_ts`, `idx_trazas_tipo`) coinciden exactamente co
 Ningún Worker escribe en ella todavía — la implementación de `registrarTraza()` por Worker y el
 endpoint `GET /admin/trazas` son trabajo aparte, fuera del núcleo aislado.
 
+## ARC-011 fase 3 — verificación de DDL silenciado y tercer vertical (2026-08-03)
+
+**Segunda ronda de verificación de DDL silenciado, sin bugs nuevos.** Tras el 100% de acierto
+de ARC-012 (3/3 columnas ausentes), se verificaron contra D1 real (autorizado por el Director,
+solo metadatos) las 15 columnas/tabla restantes del inventario original: `reset_tokens` ×2,
+`login_attempts.email`, `auth_nonces`, `partes_trabajo` ×2, `fotos_obra` ×2,
+`escaneos_remotos.num_albaran`, y los 4 `departamento` restantes (`tareas_obra`,
+`actas_reunion` ×2, `control_calidad`, `punch_list`). **Las 15 están presentes** — a diferencia
+de ARC-012, esta ronda no encontró bugs activos. De paso se corrigió el estado desactualizado
+de ARC-013 en `ARCHITECT_BACKLOG.md` (decía "pendiente de despliegue"; está desplegado desde
+el 2026-08-02 y su dependencia de ARC-008 ya se cerró). Detalle en
+`docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`.
+
+**Tercer vertical declarado: `calidad`.** `migrate_calidad.sql` declara `control_calidad`
+(NEW-37) y `punch_list` (NEW-44), reutilizando el esquema ya verificado en la ronda anterior
+(17 columnas cada una, incluida `departamento` incorporada al `CREATE`). Paso 1 de 5 completo
+(PR #59); paso 2 (aplicar contra D1) espera autorización del Director, igual que `checklists`
+y `rfis` en su momento. Ver `TASKS.md` (`ARC-011-FASE3-CALIDAD`).
+
 ## Siguiente objetivo
 
 ADR-0014 queda implementado de extremo a extremo (interfaz en `nucleo-cognitivo/`, tabla D1,
