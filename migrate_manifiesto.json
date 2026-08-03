@@ -51,6 +51,13 @@
       "verticalARC011": "rfis",
       "verificado": "2026-08-02",
       "nota": "Autorizada por el Director en chat (2026-08-02). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas): la tabla ya existia con las 19 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). El DDL en runtime de este vertical (worker.js, ensureRfisTable()) sigue intacto: retirarlo es el paso 3 del ciclo de ADR-0011, no esta tarea (el Director limito el alcance a la migracion, sin tocar Workers)."
+    },
+    {
+      "archivo": "migrate_calidad.sql",
+      "aplicada": false,
+      "verticalARC011": "calidad",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible, sin PR aun). Tablas control_calidad (NEW-37) y punch_list (NEW-44), ambas con su ALTER departamento (DEPT-01) incorporado directamente al CREATE. Verificadas columna por columna contra D1 real (PRAGMA table_info, autorizado por el Director 2026-08-03, misma ronda que confirmo ARC-013): 17 columnas cada una, identicas al codigo. Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
     }
   ]
 }
