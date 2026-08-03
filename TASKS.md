@@ -37,7 +37,30 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
-Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). Queda **ARC-011-FASE3-RFIS**, siguiente vertical del ciclo de ADR-0011, con su paso 1 (declarar) completo.
+Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). **ARC-011-FASE3-RFIS completa** (ciclo de 5 pasos cerrado). Activa: **ARC-011-FASE3-CALIDAD**, tercer vertical del ciclo de ADR-0011, con su paso 1 (declarar) completo — pendiente autorización del Director para el paso 2 (aplicar).
+
+### ARC-011-FASE3-CALIDAD — Declarar la migración del vertical `calidad`
+
+- ID: ARC-011-FASE3-CALIDAD
+- Título: Tercer vertical de la migración por fases de ARC-011 (ADR-0011), tras `checklists` y `rfis`
+- Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
+- Estado: **paso 1 (declarar) completo (2026-08-03)**
+- Prioridad: Media
+- Rama: `docs/arc011-fase3-calidad-declarar` (paso 1, PR #59, fusionado)
+- Responsable actual: — (espera autorización del Director para el paso 2)
+- Objetivo: declarar, aplicar y retirar el DDL en runtime del esquema real de `control_calidad` (NEW-37) y `punch_list` (NEW-44), único dominio de control de calidad de obra, siguiendo el ciclo completo de ADR-0011.
+- Criterios de aceptación:
+  1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS` ×2) con el esquema exacto verificado contra D1 real (`migrate_calidad.sql`), incorporando la columna `departamento` (DEPT-01) directamente en cada `CREATE`.
+  2. ⬜ Aplicar contra D1 — **pendiente de autorización del Director**.
+  3. ⬜ Retirar el DDL en runtime (`ensureCalidadTable()`/`ensurePunchListTable()` en `worker.js`) — paso posterior al 2.
+  4. ⬜ Verificar en producción sin el DDL en caliente.
+  5. ⬜ Registrar en `migrate_manifiesto.json` como `aplicada: true`.
+- Dependencias: ADR-0011 aceptado como estrategia; `checklists`/`rfis` como ciclo de referencia ya completo. Verificación de columnas reutiliza la lectura de D1 autorizada el 2026-08-03 para la segunda ronda de DDL silenciado (ver `ARCHITECT_BACKLOG.md`, ARC-013).
+- Bloqueos: paso 2 exige autorización explícita del Director (ADR-0007) — una migración D1 no es reversible sin ella, aunque el SQL sea aditivo.
+- Archivos principales: `migrate_calidad.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, `worker.js`.
+- Pruebas: verificación manual columna por columna contra D1 real (ya hecha); `node -e "JSON.parse(...)"` sobre el manifiesto.
+- Última actualización: 2026-08-03
+- Siguiente acción exacta: esperar autorización del Director para el paso 2 (aplicar contra D1).
 
 ### ARC-011-FASE3-RFIS — Declarar la migración del vertical `rfis`
 

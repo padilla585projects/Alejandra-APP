@@ -218,6 +218,32 @@ Verificación: `node --check` limpio en `worker.js`, `alejandra-agente/worker.js
 `alejandra-agente/lib.js`; `npm --prefix alejandra-agente test` 136/136 en verde (15 nuevas);
 `node --test nucleo-cognitivo/test/*.js` 36/36 sin cambios. Encoding limpio. Rama
 `feat/arc008-consultarmemoria-real` (continuación de la misma rama del trabajo de ARC-008 §8).
+**Fusionado en `main` — PR #57.**
+
+## ARC-011 fase 3 — segunda ronda de DDL silenciado y tercer vertical (2026-08-03)
+
+**Autorizada por el Director** la lectura de solo metadatos contra `alejandra-db` (`PRAGMA
+table_info`) para las 15 columnas/tabla restantes del inventario de ARC-011 fase 1 con el
+error de DDL silenciado (mismo patrón que ARC-012, que había encontrado 3/3 bugs activos):
+`reset_tokens.usado`, `reset_tokens.empresa_id`, `login_attempts.email`, `auth_nonces`,
+`partes_trabajo.updated_at`, `partes_trabajo.modificado_por`, `fotos_obra.ubicacion`,
+`fotos_obra.fecha_foto`, `escaneos_remotos.num_albaran`, `tareas_obra.departamento`,
+`actas_reunion.updated_at`, `actas_reunion.departamento`, `control_calidad.departamento`,
+`punch_list.departamento`. **Resultado: las 15 están presentes en producción** — a diferencia
+de ARC-012, esta ronda no encontró bugs nuevos. PR #58, fusionado.
+
+De paso se corrigió el estado desactualizado de ARC-013 en `ARCHITECT_BACKLOG.md`: decía
+"pendiente de despliegue", pero está desplegado desde el 2026-08-02 (PR #49) y su dependencia
+de ARC-008 (persistencia de trazas) también se cerró ese día — los errores de DDL ya persisten
+en `alejandra_trazas` vía ADR-0014, no solo en `console.error`.
+
+**Tercer vertical de ARC-011 fase 3 declarado: `calidad`.** Reutilizando los esquemas ya
+verificados en la ronda anterior, `migrate_calidad.sql` declara `control_calidad` (NEW-37) y
+`punch_list` (NEW-44) — dominio de control de calidad de obra, 17 columnas cada una (incluida
+`departamento`/DEPT-01, incorporada directamente al `CREATE`, mismo criterio que `rfis`). Paso
+1 de 5 del ciclo de ADR-0011 completo de forma autónoma (código reversible). PR #59, fusionado.
+**Paso 2 (aplicar contra D1) espera autorización explícita del Director**, igual que
+`checklists` y `rfis` en su momento — ver `TASKS.md` (`ARC-011-FASE3-CALIDAD`).
 
 ## Qué está terminado
 
