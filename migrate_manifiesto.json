@@ -105,6 +105,48 @@
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
       "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 23 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado (0 rows_written). Paso 3 (retirar DDL, PR #68) completo: ensureProveedoresGestionTable() comentada. Paso 4 (verificar en produccion, agrupado con ordenes_cambio/ordenes_compra) completo: worker.js desplegado (run 30806109041, version 1475c65b-d1b2-4db1-be3f-8f8b45386e00), /health healthy, 23 columnas verificadas presentes. Ciclo de ADR-0011 completo (5 pasos) -- octavo vertical cerrado. Con este lote, ocho verticales de ARC-011 fase 3 completos (checklists, rfis, calidad, tareas_obra, actas_reunion, ordenes_cambio, ordenes_compra, proveedores_gestion)."
+    },
+    {
+      "archivo": "migrate_planificacion_produccion.sql",
+      "aplicada": false,
+      "verticalARC011": "planificacion_produccion",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) del noveno vertical, primero del tercer lote agrupado. Cinco tablas (fases_obra, diario_obra, plan_semanal, rendimientos, field_reports), ninguna existe todavia en D1 (verificado por lectura, SELECT name FROM sqlite_master, 2026-08-03) -- a diferencia de los ocho verticales anteriores, el paso 2 de este lote no sera un no-op sobre filas existentes, creara las tablas por primera vez. Verbatim contra worker.js linea por linea (ensureFasesObraTable, ensureDiarioObraTable, ensurePlanSemanalTable, ensureRendimientosTable, ensureFieldReportTable). Paso 2 (aplicar) exige autorizacion explicita del Director."
+    },
+    {
+      "archivo": "migrate_finanzas_obra.sql",
+      "aplicada": false,
+      "verticalARC011": "finanzas_obra",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) del decimo vertical, segundo del tercer lote agrupado. Seis tablas (presupuesto_obra, presupuesto_lineas, costes_obra, cobros_cliente, gastos_dietas, licitaciones), ninguna existe todavia en D1 (verificado 2026-08-03). Verbatim contra worker.js, incluida la columna generada gastos_dietas.importe_km (GENERATED ALWAYS AS ... VIRTUAL), preservada tal cual. Paso 2 (aplicar) exige autorizacion explicita del Director."
+    },
+    {
+      "archivo": "migrate_seguridad_cumplimiento.sql",
+      "aplicada": false,
+      "verticalARC011": "seguridad_cumplimiento",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) del undecimo vertical, tercero del tercer lote agrupado. Seis tablas (registro_ambiental, seguros_obra, cae_documentacion, ausencias, libro_subcontratacion, toolbox_talks), ninguna existe todavia en D1 (verificado 2026-08-03). Verbatim contra worker.js. Paso 2 (aplicar) exige autorizacion explicita del Director."
+    },
+    {
+      "archivo": "migrate_relaciones_obra.sql",
+      "aplicada": false,
+      "verticalARC011": "relaciones_obra",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) del duodecimo vertical, cuarto del tercer lote agrupado. Cuatro tablas (correspondencia, contactos_obra, lecciones_aprendidas, cierre_obra_items), ninguna existe todavia en D1 (verificado 2026-08-03). Verbatim contra worker.js; contactos_obra preserva empresa_id/obra_id nullable tal como estan en el codigo. Paso 2 (aplicar) exige autorizacion explicita del Director."
+    },
+    {
+      "archivo": "migrate_flota.sql",
+      "aplicada": false,
+      "verticalARC011": "flota",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) del decimotercer vertical, quinto del tercer lote agrupado. Tabla flota_vehiculos, no existe todavia en D1 (verificado 2026-08-03). Verbatim contra worker.js (ensureFlorVehiculosTable(), nombre de funcion con errata cosmetica, no afecta al esquema). Paso 2 (aplicar) exige autorizacion explicita del Director."
+    },
+    {
+      "archivo": "migrate_nexus_experts.sql",
+      "aplicada": false,
+      "verticalARC011": "nexus_experts",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) del decimocuarto vertical, sexto y ultimo del tercer lote agrupado. Tabla nexus_experts, no existe todavia en D1 (verificado 2026-08-03). Migrada aparte de las demas: dominio distinto (telemetria de Nexus/ADR-0008, sin empresa_id/obra_id, sin tenant), creada dentro de runMigrations() en vez de una funcion ensureXxxTable() reutilizable -- el paso 3 (retirar DDL en runtime) de este vertical puede requerir un tratamiento distinto al patron habitual, a revisar en su momento. Verbatim contra worker.js. Paso 2 (aplicar) exige autorizacion explicita del Director. Con este lote de seis archivos, 14 verticales de ARC-011 fase 3 declarados (8 completos + 6 con paso 1 completo): checklists, rfis, calidad, tareas_obra, actas_reunion, ordenes_cambio, ordenes_compra, proveedores_gestion (aplicados) + planificacion_produccion, finanzas_obra, seguridad_cumplimiento, relaciones_obra, flota, nexus_experts (declarados, pendientes de paso 2)."
     }
   ]
 }
