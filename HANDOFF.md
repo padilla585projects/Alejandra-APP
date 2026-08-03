@@ -261,6 +261,29 @@ vez que verifique todos a la vez — mismo ciclo de 5 pasos, pero por lote en ve
 Sigue exigiendo autorización explícita del Director en el paso 2 (aplicar) y en el despliegue,
 solo que agrupada.
 
+**Primer lote agrupado aplicado: `tareas_obra` + `actas_reunion` (2026-08-03).** Cuarto y
+quinto vertical de ARC-011 fase 3, ambos de una sola tabla (`gestionar_tarea`,
+`gestionar_acta`/NEW-49), con esquemas ya verificados contra D1 real en la segunda ronda de
+DDL silenciado — declarados sin necesitar nueva lectura de D1.
+
+1. **Declarar** (PR #64): `migrate_tareas_obra.sql` (16 columnas) y `migrate_actas_reunion.sql`
+   (23 columnas), ambas con `departamento`/DEPT-01 y el resto de `ALTER` incorporados al
+   `CREATE`.
+2. **Aplicar** (autorizado por el Director en chat, una autorización por migración — esa
+   barrera no se agrupa): `tareas_obra` run [30798028360](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30798028360), `actas_reunion` run [30798043436](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30798043436). Ambas no-op, columnas idénticas antes y después.
+3. **Retirar DDL en runtime** (PR #65, autorización única para ambas): comentado, no borrado,
+   en `ensureTareasObraTable()`/`ensureActasTable()`.
+4. **Verificar en producción — un único despliegue para los dos verticales:** `worker.js`
+   (run [30799296203](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30799296203), versión `ae5317c5-ecaa-4471-8cb6-3297c8057e56`), `/health` → `healthy`
+   (d1:true, r2:true), 16 columnas de `tareas_obra` y 23 de `actas_reunion` verificadas
+   presentes tras el despliegue.
+5. Registradas en `migrate_manifiesto.json` como `aplicada: true`.
+
+Primer caso real del ajuste operativo: dos migraciones, dos autorizaciones de aplicar (la
+barrera de datos no se agrupa), pero **un solo despliegue y una sola aprobación de entorno
+`production`** para verificar ambas — la reducción de coste que pidió el Director. Ver
+`TASKS.md` (`ARC-011-FASE3-TAREAS`, `ARC-011-FASE3-ACTAS`).
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.
