@@ -36,6 +36,8 @@ on:
           - migrate_memoria_gobernada.sql
           - migrate_rfis.sql
           - migrate_calidad.sql
+          - migrate_tareas_obra.sql
+          - migrate_actas_reunion.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true
