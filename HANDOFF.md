@@ -324,6 +324,38 @@ encadenarlos en la misma sesión de trabajo.
 
 **3. ARC-014 — revisado, sin cambios.** El Director confirmó explícitamente que ninguna de las dos condiciones de reapertura (producción real / más de un mantenedor) cambió. Queda anotado como revisado en esta fecha en `ARCHITECT_BACKLOG.md` y `TASKS.md`; sigue como riesgo aceptado sin acción de ingeniería.
 
+## Tercer lote de ARC-011 fase 3 — paso 2 aplicado (2026-08-03)
+
+**Autorizado por el Director en chat:** paso 2 (aplicar contra D1) de los 6 verticales
+declarados el mismo día (`planificacion_produccion`, `finanzas_obra`, `seguridad_cumplimiento`,
+`relaciones_obra`, `flota`, `nexus_experts`, 23 tablas). A diferencia de los 8 verticales
+anteriores, estas tablas no existían en producción — el paso 2 las creó por primera vez, no
+fue un no-op.
+
+Circuito: PR #72 (añade los 6 archivos al selector cerrado de `migrate-d1-agent.yml`, fusionada
+tras CI verde) → `workflow_dispatch` por vertical (`ref=main`, confirmación
+`APPLY_D1_MIGRATION`) → aprobación del entorno `production` por el Director, una vez por cada
+uno de los 6 runs → `wrangler d1 execute --remote`. Runs:
+[30836558620](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836558620) (planificacion_produccion),
+[30836563260](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836563260) (finanzas_obra),
+[30836567914](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836567914) (seguridad_cumplimiento),
+[30836573067](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836573067) (relaciones_obra),
+[30836578226](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836578226) (flota),
+[30836583358](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836583358) (nexus_experts).
+
+Verificación posterior: las 23 tablas existen (`SELECT name FROM sqlite_master`) y cada una
+tiene el número exacto de columnas declarado en su migración, comprobado con
+`PRAGMA table_xinfo` — no `PRAGMA table_info`, que omite columnas ocultas. Se investigó un caso
+que parecía un bug real: `gastos_dietas.importe_km` no aparecía en `table_info`; resultó ser el
+comportamiento esperado de SQLite para columnas `GENERATED ALWAYS AS (...) VIRTUAL`
+(`hidden=2`), no un fallo de la migración — confirmada presente con `table_xinfo`.
+`migrate_manifiesto.json` actualizado (PR #73): las 6 entradas pasan a `aplicada: true`.
+
+**Paso 3 (retirar DDL en runtime de las 6 `ensureXxxTable()`, más el bloque de `nexus_experts`
+dentro de `runMigrations()`) y paso 4 (verificar en producción) quedan pendientes para una
+ventana de despliegue separada** — decisión explícita del Director de espaciar los despliegues,
+tras los 5 encadenados en <14h el mismo día. Ver `TASKS.md` (`ARC-011-FASE3-LOTE3`).
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.

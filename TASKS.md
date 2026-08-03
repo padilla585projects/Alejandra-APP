@@ -44,7 +44,7 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
 - ID: ARC-011-FASE3-PLANIFICACION-PRODUCCION, ARC-011-FASE3-FINANZAS-OBRA, ARC-011-FASE3-SEGURIDAD-CUMPLIMIENTO, ARC-011-FASE3-RELACIONES-OBRA, ARC-011-FASE3-FLOTA, ARC-011-FASE3-NEXUS-EXPERTS
 - Título: Noveno a decimocuarto vertical de la migración por fases de ARC-011 (ADR-0011), tercer lote agrupado — cubre las últimas 23 tablas "solo de código" que quedaban sin declarar de ARC-011 fase 1/2 (ver `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`)
 - Fase: Época 0 — deuda de esquema (derivada de ARC-011 fase 3)
-- Estado: **paso 1 (declarar) completo en los 6 (2026-08-03); paso 2 (aplicar) pendiente de autorización del Director**
+- Estado: **paso 1 (declarar) y paso 2 (aplicar) completos en los 6 (2026-08-03), verificados columna por columna contra D1 real; paso 3 (retirar DDL en runtime) y paso 4 (verificar en producción) pendientes, en ventana separada por decisión del Director (espaciar despliegues)**
 - Prioridad: Media
 - Rama: (pendiente de PR)
 - Responsable actual: —
@@ -59,16 +59,16 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
   1. ✅ Las 6 migraciones `.sql` escritas, cada `CREATE TABLE IF NOT EXISTS` verbatim contra worker.js (verificado línea por línea, no solo por subagente — incluida la columna generada `gastos_dietas.importe_km`).
   2. ✅ Verificado contra D1 real (solo lectura, `SELECT name FROM sqlite_master WHERE type='table' AND name IN (...)`, 2026-08-03): ninguna de las 23 tablas existe todavía en producción. A diferencia de los 8 verticales anteriores, el paso 2 de este lote **no será un no-op** sobre filas existentes — creará las tablas por primera vez.
   3. ✅ Registradas en `migrate_manifiesto.json` como `aplicada: false`.
-  4. ⬜ Paso 2 (aplicar contra D1): exige autorización explícita del Director, una por vertical (la barrera de datos no se agrupa, mismo criterio que el segundo lote).
-  5. ⬜ Paso 3 (retirar DDL en runtime): pendiente. `nexus_experts` es un caso especial — su DDL vive dentro de `runMigrations()` (endpoint de un solo uso), no en una función `ensureXxxTable()` reutilizable; su paso 3 puede requerir un tratamiento distinto al patrón habitual de comentar la función.
-  6. ⬜ Paso 4 (verificar en producción tras desplegar, agrupando los 6): pendiente.
-  7. ⬜ Registradas en `migrate_manifiesto.json` como `aplicada: true` tras el paso 2.
+  4. ✅ **Paso 2 (aplicar contra D1) completo (2026-08-03)**, autorizado por el Director en chat para los 6 verticales. Runs: `planificacion_produccion` [30836558620](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836558620), `finanzas_obra` [30836563260](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836563260), `seguridad_cumplimiento` [30836567914](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836567914), `relaciones_obra` [30836573067](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836573067), `flota` [30836578226](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836578226), `nexus_experts` [30836583358](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30836583358). Las 23 tablas verificadas columna por columna tras aplicar vía `PRAGMA table_xinfo` (no `table_info`, que oculta la columna generada `gastos_dietas.importe_km`, `hidden=2`): todas coinciden exactamente con lo declarado.
+  5. ⬜ Paso 3 (retirar DDL en runtime): pendiente, **en ventana separada por decisión del Director** (espaciar despliegues tras los 5 encadenados el 2026-08-03). `nexus_experts` es un caso especial — su DDL vive dentro de `runMigrations()` (endpoint de un solo uso), no en una función `ensureXxxTable()` reutilizable; su paso 3 puede requerir un tratamiento distinto al patrón habitual de comentar la función.
+  6. ⬜ Paso 4 (verificar en producción tras desplegar, agrupando los 6): pendiente, misma ventana separada que el paso 3.
+  7. ✅ Registradas en `migrate_manifiesto.json` como `aplicada: true` tras el paso 2 (PR #73).
 - Dependencias: ADR-0011 aceptado como estrategia; verticales anteriores como ciclo de referencia.
-- Bloqueos: paso 2 en adelante bloqueado por autorización del Director (ADR-0007: una migración D1 no es acción reversible sin ella, aunque el SQL sea aditivo).
-- Archivos principales: `migrate_planificacion_produccion.sql`, `migrate_finanzas_obra.sql`, `migrate_seguridad_cumplimiento.sql`, `migrate_relaciones_obra.sql`, `migrate_flota.sql`, `migrate_nexus_experts.sql`, `migrate_manifiesto.json`.
-- Pruebas: verificación manual línea por línea contra `worker.js` (23/23 tablas, una única ocurrencia de `CREATE TABLE IF NOT EXISTS` cada una, sin duplicados ni variantes de nombre); verificación de existencia contra D1 real (0 de 23 existen).
+- Bloqueos: paso 3/4 pendientes de que el Director abra una ventana separada de despliegue (decisión operativa de espaciar, no autorización de dato).
+- Archivos principales: `migrate_planificacion_produccion.sql`, `migrate_finanzas_obra.sql`, `migrate_seguridad_cumplimiento.sql`, `migrate_relaciones_obra.sql`, `migrate_flota.sql`, `migrate_nexus_experts.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, `worker.js`.
+- Pruebas: verificación manual línea por línea contra `worker.js` (23/23 tablas); verificación de existencia contra D1 real antes de aplicar (0 de 23 existían); verificación columna por columna tras aplicar vía `PRAGMA table_xinfo` (23/23 coinciden).
 - Última actualización: 2026-08-03
-- Siguiente acción exacta: pedir al Director autorización para el paso 2 (aplicar) de cada uno de los 6 verticales, cuando decida abrir la siguiente ventana de cambios de esquema.
+- Siguiente acción exacta: cuando el Director abra la siguiente ventana de despliegue, retirar (comentar) el DDL en runtime de las 6 funciones `ensureXxxTable()` (más el bloque de `nexus_experts` en `runMigrations()`) y desplegar `worker.js` una sola vez para verificar los 6 verticales agrupados.
 
 ### ARC-011-FASE3-OC-PROVEEDORES — Migración agrupada de `ordenes_cambio`, `ordenes_compra` y `proveedores_gestion`
 
