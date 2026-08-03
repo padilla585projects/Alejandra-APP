@@ -11108,6 +11108,10 @@ function iniciarApp() {
   cargarObrasPanel();
   navTo('dashboard');
   if (typeof showAIBtn === 'function') showAIBtn();
+  // FIX-ALEJANDRA-FAB-05 (03/08/2026): Adrián: el historial (compartido a propósito entre
+  // app+panel+telegram) tiene que estar al día en cuanto se entra al panel, aunque no se
+  // abra el chat todavía -- antes solo se cargaba al pulsar el FAB de Alejandra.
+  if (typeof cargarAlejandraChat === 'function') cargarAlejandraChat();
   if (['superadmin', 'desarrollador'].includes(SESSION.rol)) {
     _registrarPushDeveloper().catch(() => {});
   }
@@ -16612,10 +16616,19 @@ function chatVolverContactos() { chatMostrarContactos(); }
 
 let alejandraChatAbierto = false;
 let alejandrPolling = null;
+// FIX-ALEJANDRA-FAB-05 (03/08/2026): array (no string) de firmas `created_at|rol|contenido`
+// de los mensajes YA pintados, en orden. Se compara contra lo que devuelve el servidor en
+// cada sondeo para saber si solo hay que AÑADIR mensajes nuevos al final (caso normal: algo
+// llegó desde otra plataforma) en vez de repintar toda la ventana -- eso último es lo que
+// causaba el salto que reportó Adrián ("escribo, contesta, pero de repente saltan los mensajes
+// de antes actualizándose"). Se mantiene entre aperturas/cierres del chat porque el DOM no se
+// destruye al cerrar (solo se oculta), así que debe seguir reflejando lo que hay pintado.
+let alejandraMensajesRenderizados = [];
 
 function alejandraFabAbrir() {
   const panel = document.getElementById('alejandraChatPanel');
   panel.style.display = 'flex';
+  if (typeof window._alejandraAplicarGeometriaGuardada === 'function') window._alejandraAplicarGeometriaGuardada();
   alejandraChatAbierto = true;
   cargarAlejandraChat();
   if (!alejandrPolling) alejandrPolling = setInterval(cargarAlejandraChat, 5000);
@@ -16628,6 +16641,90 @@ function alejandraChatCerrar() {
   clearInterval(alejandrPolling); alejandrPolling = null;
   document.getElementById('fabAlejandra').style.display = 'flex';
 }
+
+// FIX-ALEJANDRA-FAB-06 (03/08/2026): arrastrar (por la cabecera) y redimensionar (esquina
+// inferior derecha) la ventana del chat. Se usan Pointer Events (cubren ratón y táctil con
+// una sola API) y setPointerCapture para que el arrastre no se corte si el cursor sale del
+// elemento momentáneamente. La geometría (posición+tamaño) se guarda en localStorage para que
+// se recuerde entre sesiones -- si no, cada vez que se cierra y reabre el chat volvería al
+// tamaño/sitio por defecto, sensación de "no se guardó nada".
+(function _alejandraDragResizeInit() {
+  const panel = document.getElementById('alejandraChatPanel');
+  const header = document.getElementById('alejandraChatHeader');
+  const handle = document.getElementById('alejandraResizeHandle');
+  if (!panel || !header || !handle) return;
+  const GEOM_KEY = 'alejandra_chat_geom';
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  function fijarPosicionActual() {
+    const r = panel.getBoundingClientRect();
+    panel.style.left = r.left + 'px';
+    panel.style.top = r.top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    return r;
+  }
+
+  function guardarGeometria() {
+    const r = panel.getBoundingClientRect();
+    try { localStorage.setItem(GEOM_KEY, JSON.stringify({ left: r.left, top: r.top, width: r.width, height: r.height })); } catch {}
+  }
+
+  window._alejandraAplicarGeometriaGuardada = function () {
+    let g = null;
+    try { g = JSON.parse(localStorage.getItem(GEOM_KEY) || 'null'); } catch {}
+    if (!g) return;
+    const w = clamp(g.width || panel.offsetWidth, 280, window.innerWidth * 0.92);
+    const h = clamp(g.height || panel.offsetHeight, 320, window.innerHeight * 0.85);
+    panel.style.width = w + 'px';
+    panel.style.height = h + 'px';
+    panel.style.left = clamp(g.left, 0, window.innerWidth - w) + 'px';
+    panel.style.top = clamp(g.top, 0, window.innerHeight - h) + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  };
+
+  // Arrastrar (por la cabecera, salvo el botón de cerrar)
+  let dragging = false, dragOffsetX = 0, dragOffsetY = 0;
+  header.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    const r = fijarPosicionActual();
+    dragging = true;
+    dragOffsetX = e.clientX - r.left;
+    dragOffsetY = e.clientY - r.top;
+    header.setPointerCapture(e.pointerId);
+  });
+  header.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    panel.style.left = clamp(e.clientX - dragOffsetX, 0, window.innerWidth - w) + 'px';
+    panel.style.top = clamp(e.clientY - dragOffsetY, 0, window.innerHeight - h) + 'px';
+  });
+  const pararDrag = () => { if (dragging) { dragging = false; guardarGeometria(); } };
+  header.addEventListener('pointerup', pararDrag);
+  header.addEventListener('pointercancel', pararDrag);
+
+  // Redimensionar (esquina inferior derecha)
+  let resizing = false, startW = 0, startH = 0, startX = 0, startY = 0;
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const r = fijarPosicionActual();
+    resizing = true;
+    startW = r.width; startH = r.height; startX = e.clientX; startY = e.clientY;
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!resizing) return;
+    const r = panel.getBoundingClientRect();
+    const maxW = Math.min(window.innerWidth - r.left - 8, window.innerWidth * 0.92);
+    const maxH = Math.min(window.innerHeight - r.top - 8, window.innerHeight * 0.85);
+    panel.style.width = clamp(startW + (e.clientX - startX), 280, maxW) + 'px';
+    panel.style.height = clamp(startH + (e.clientY - startY), 320, maxH) + 'px';
+  });
+  const pararResize = () => { if (resizing) { resizing = false; guardarGeometria(); } };
+  handle.addEventListener('pointerup', pararResize);
+  handle.addEventListener('pointercancel', pararResize);
+})();
 
 async function cargarAlejandraChat() {
   const usuarioId = SESSION?.usuario_id || null;
@@ -16645,18 +16742,70 @@ async function cargarAlejandraChat() {
     const data = await r.json();
     const msgs = (data.mensajes || []).reverse();
     const cont = document.getElementById('alejandraMensajes');
+    // FIX-ALEJANDRA-FAB-04/05 (03/08/2026): alejandra_historial es una tabla compartida a
+    // propósito entre app+panel+telegram (sync entre dispositivos), y este fetch se repite
+    // cada 5s mientras el chat está abierto -- así ves en vivo, sin recargar, un mensaje
+    // mandado desde el móvil o Telegram mientras tienes el panel abierto. El problema no era
+    // sondear en vivo: era que cada sondeo repintaba TODA la ventana desde cero aunque solo
+    // hubiera un mensaje nuevo, dando un salto/parpadeo visible en plena conversación que
+    // Adrián reportó como "me contesta cosas raras". Ahora se compara la lista de firmas
+    // (created_at+rol+contenido) ya pintadas contra la que llega del servidor: si son iguales,
+    // no se toca el DOM; si el historial nuevo es exactamente el viejo más mensajes al final,
+    // solo se AÑADEN esos mensajes nuevos (sin rehacer los que ya estaban); solo se repinta
+    // todo si el historial cambió de forma que no es un simple añadido al final (caso raro:
+    // primera carga, o un mensaje se borró/reordenó).
+    const firmas = msgs.map(m => `${m.created_at}|${m.rol}|${m.contenido}`);
+    if (firmas.length === alejandraMensajesRenderizados.length &&
+        firmas.every((f, i) => f === alejandraMensajesRenderizados[i])) {
+      return; // nada cambió
+    }
     if (!msgs.length) {
       cont.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">Hola, pregúntame lo que necesites</div></div>';
+      alejandraMensajesRenderizados = [];
       return;
     }
-    // FIX-ALEJANDRA-FAB-03 (29/07/2026): /ia-chat-history devuelve {rol, contenido} (español),
-    // no {role, content} -- por eso cada burbuja salía en blanco/"undefined". De paso se escapa
-    // el contenido (antes iba directo a innerHTML sin escapar, un mensaje de usuario con '<'
-    // podía romper el render o inyectar HTML).
-    cont.innerHTML = msgs.map(_alejandraBurbujaHTML).join('');
-    cont.scrollTop = cont.scrollHeight;
+    const esAmpliacionSimple = firmas.length > alejandraMensajesRenderizados.length &&
+      alejandraMensajesRenderizados.every((f, i) => f === firmas[i]);
+    // Auto-scroll solo si ya estabas viendo el final -- si subiste a leer mensajes antiguos,
+    // un mensaje nuevo no debe arrastrarte de vuelta abajo de golpe.
+    const cercaDelFinal = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 80;
+    if (esAmpliacionSimple) {
+      cont.querySelector('.empty-state')?.remove();
+      const nuevos = msgs.slice(alejandraMensajesRenderizados.length);
+      cont.insertAdjacentHTML('beforeend', nuevos.map(_alejandraBurbujaHTML).join(''));
+    } else {
+      // FIX-ALEJANDRA-FAB-03 (29/07/2026): /ia-chat-history devuelve {rol, contenido}
+      // (español), no {role, content} -- por eso cada burbuja salía en blanco/"undefined".
+      // De paso se escapa el contenido (antes iba directo a innerHTML sin escapar, un
+      // mensaje de usuario con '<' podía romper el render o inyectar HTML).
+      cont.innerHTML = msgs.map(_alejandraBurbujaHTML).join('');
+    }
+    alejandraMensajesRenderizados = firmas;
+    if (cercaDelFinal) cont.scrollTop = cont.scrollHeight;
   } catch (e) {
     console.error('Error cargando chat Alejandra:', e);
+  }
+}
+
+// FIX-ALEJANDRA-FAB-05 (03/08/2026): tras un envío propio (alejandrEnviar ya pintó sus
+// burbujas al instante, sin pasar por cargarAlejandraChat), hay que poner al día
+// alejandraMensajesRenderizados con lo que el servidor confirme -- si no, el siguiente
+// sondeo de los 5s vería esos mismos mensajes como "nuevos" (porque el array de firmas
+// nunca se enteró de ellos) y los duplicaría en pantalla. No toca el DOM, solo sincroniza
+// el registro de qué ya está pintado.
+async function _alejandraResincronizarFirmas() {
+  const usuarioId = SESSION?.usuario_id || null;
+  if (!usuarioId) return;
+  try {
+    const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}`, {
+      headers: { 'X-Token': TOKEN }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const msgs = (data.mensajes || []).reverse();
+    alejandraMensajesRenderizados = msgs.map(m => `${m.created_at}|${m.rol}|${m.contenido}`);
+  } catch (e) {
+    console.error('Error resincronizando firmas Alejandra:', e);
   }
 }
 
@@ -16740,6 +16889,10 @@ async function alejandrEnviar() {
       cont.scrollTop = cont.scrollHeight;
       if (opciones && opciones.length) _alejandraRenderOpciones(cont, opciones);
     }
+    // FIX-ALEJANDRA-FAB-05 (03/08/2026): sin esto, el siguiente sondeo de los 5s vería este
+    // mismo intercambio como "mensajes nuevos" (el array de firmas no se enteró de ellos,
+    // solo se pintaron aquí de forma optimista) y los duplicaría en pantalla.
+    _alejandraResincronizarFirmas();
   } catch (e) {
     document.getElementById(typingId)?.remove();
     console.error('Error enviando mensaje:', e);
@@ -21154,9 +21307,13 @@ document.getElementById('wInput').focus();
 </button>
 
 <!-- ── Modal Alejandra Chat ── -->
-<div id="alejandraChatPanel" style="display:none;position:fixed;bottom:90px;right:20px;width:380px;height:540px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:498;display:none;flex-direction:column">
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--border)">
-    <h3 style="margin:0;font-size:14px;font-weight:700">✨ Alejandra IA</h3>
+<!-- FIX-ALEJANDRA-FAB-06 (03/08/2026): Adrián pidió poder mover y redimensionar esta ventana.
+     min-width/min-height evitan que se encoja hasta ser inusable; max-width/max-height evitan
+     que se salga de la pantalla al redimensionar. La lógica de arrastre/redimensión vive en
+     _alejandraDragResizeInit(), más abajo en este mismo <script>. -->
+<div id="alejandraChatPanel" style="display:none;position:fixed;bottom:90px;right:20px;width:380px;height:540px;min-width:280px;min-height:320px;max-width:92vw;max-height:85vh;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:498;flex-direction:column">
+  <div id="alejandraChatHeader" style="display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--border);cursor:move;user-select:none;touch-action:none">
+    <h3 style="margin:0;font-size:14px;font-weight:700;pointer-events:none">✨ Alejandra IA</h3>
     <button onclick="alejandraChatCerrar()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px">✕</button>
   </div>
   <div id="alejandraMensajes" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
@@ -21166,6 +21323,7 @@ document.getElementById('wInput').focus();
     <input id="alejandrInput" class="form-input" placeholder="Escribe tu pregunta..." style="flex:1;padding:8px 12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandrEnviar()}">
     <button class="btn btn-primary" onclick="alejandrEnviar()" style="padding:8px 14px">➤</button>
   </div>
+  <div id="alejandraResizeHandle" title="Redimensionar" style="position:absolute;bottom:0;right:0;width:18px;height:18px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg, transparent 50%, var(--border) 50%);border-bottom-right-radius:16px"></div>
 </div>
 
 <script>
