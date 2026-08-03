@@ -17171,20 +17171,26 @@ async function getActaReunionById(id, request, env) {
 // ── CONTROL DE CALIDAD / PUNCH LIST (NEW-37) ─────────────────────────────────
 
 async function ensureCalidadTable(env) {
-  await runDDL(env, `CREATE TABLE IF NOT EXISTS control_calidad (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    obra_id INTEGER, empresa_id INTEGER NOT NULL,
-    numero TEXT, titulo TEXT NOT NULL,
-    descripcion TEXT, ubicacion TEXT,
-    categoria TEXT DEFAULT 'otro',
-    prioridad TEXT DEFAULT 'normal',
-    estado TEXT DEFAULT 'abierto',
-    responsable TEXT,
-    fecha_limite TEXT, fecha_resolucion TEXT,
-    resuelto_por TEXT, notas_resolucion TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`);
-  await runDDL(env, `ALTER TABLE control_calidad ADD COLUMN departamento TEXT`); // DEPT-01 (21/07/2026)
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "control_calidad"
+  // (con la columna departamento de DEPT-01 ya incorporada) queda declarada y
+  // aplicada en migrate_calidad.sql (run 30790988608, verificada columna por
+  // columna contra D1 real antes y despues). Se retira el CREATE/ALTER en
+  // runtime -- no hay entorno donde este runtime pudiera crearla de cero.
+  //
+  // await runDDL(env, `CREATE TABLE IF NOT EXISTS control_calidad (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   obra_id INTEGER, empresa_id INTEGER NOT NULL,
+  //   numero TEXT, titulo TEXT NOT NULL,
+  //   descripcion TEXT, ubicacion TEXT,
+  //   categoria TEXT DEFAULT 'otro',
+  //   prioridad TEXT DEFAULT 'normal',
+  //   estado TEXT DEFAULT 'abierto',
+  //   responsable TEXT,
+  //   fecha_limite TEXT, fecha_resolucion TEXT,
+  //   resuelto_por TEXT, notas_resolucion TEXT,
+  //   created_at TEXT DEFAULT (datetime('now'))
+  // )`);
+  // await runDDL(env, `ALTER TABLE control_calidad ADD COLUMN departamento TEXT`); // DEPT-01 (21/07/2026)
 }
 
 async function getControlCalidad(request, env) {
@@ -17793,25 +17799,31 @@ async function eliminarPlanoObra(id, request, env) {
 //  NEW-44 — PUNCH LIST / LISTA DE VERIFICACION DE OBRA
 // ═══════════════════════════════════════════════════════════════════════════
 async function ensurePunchListTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS punch_list (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id INTEGER NOT NULL,
-    obra_id INTEGER,
-    numero TEXT,
-    descripcion TEXT NOT NULL,
-    categoria TEXT DEFAULT 'acabados',
-    ubicacion TEXT,
-    responsable TEXT,
-    prioridad TEXT DEFAULT 'media',
-    estado TEXT DEFAULT 'abierto',
-    fecha_limite TEXT,
-    fecha_cierre TEXT,
-    notas_resolucion TEXT,
-    foto_key TEXT,
-    creado_por TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`).run();
-  await runDDL(env, `ALTER TABLE punch_list ADD COLUMN departamento TEXT`); // DEPT-01 (21/07/2026)
+  // ARC-011 fase 3 / ADR-0011, paso 3 (2026-08-03): la tabla "punch_list" (con
+  // la columna departamento de DEPT-01 ya incorporada) queda declarada y
+  // aplicada en migrate_calidad.sql (run 30790988608, verificada columna por
+  // columna contra D1 real antes y despues). Se retira el CREATE/ALTER en
+  // runtime -- no hay entorno donde este runtime pudiera crearla de cero.
+  //
+  // await env.DB.prepare(`CREATE TABLE IF NOT EXISTS punch_list (
+  //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //   empresa_id INTEGER NOT NULL,
+  //   obra_id INTEGER,
+  //   numero TEXT,
+  //   descripcion TEXT NOT NULL,
+  //   categoria TEXT DEFAULT 'acabados',
+  //   ubicacion TEXT,
+  //   responsable TEXT,
+  //   prioridad TEXT DEFAULT 'media',
+  //   estado TEXT DEFAULT 'abierto',
+  //   fecha_limite TEXT,
+  //   fecha_cierre TEXT,
+  //   notas_resolucion TEXT,
+  //   foto_key TEXT,
+  //   creado_por TEXT,
+  //   created_at TEXT DEFAULT (datetime('now'))
+  // )`).run();
+  // await runDDL(env, `ALTER TABLE punch_list ADD COLUMN departamento TEXT`); // DEPT-01 (21/07/2026)
 }
 async function getPunchList(request, env) {
   const auth = await getAuth(request, env);
