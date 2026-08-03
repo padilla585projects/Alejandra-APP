@@ -38,6 +38,9 @@ on:
           - migrate_calidad.sql
           - migrate_tareas_obra.sql
           - migrate_actas_reunion.sql
+          - migrate_ordenes_cambio.sql
+          - migrate_ordenes_compra.sql
+          - migrate_proveedores_gestion.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true

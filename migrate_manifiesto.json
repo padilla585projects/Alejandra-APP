@@ -78,6 +78,27 @@
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
       "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: la tabla ya existia con las 23 columnas identicas a la migracion, verificadas antes y despues (solo lectura); no-op confirmado. Paso 3 (retirar DDL en runtime, PR #65) completo: ensureActasTable() comentada con referencia a esta migracion. Paso 4 (verificar en produccion, agrupado con tareas_obra) completo: worker.js desplegado (run 30799296203, version ae5317c5-ecaa-4471-8cb6-3297c8057e56), /health healthy (d1:true, r2:true), 23 columnas verificadas presentes tras el despliegue. Ciclo de ADR-0011 completo (5 pasos) -- quinto vertical cerrado, primero aplicado en lote junto a tareas_obra."
+    },
+    {
+      "archivo": "migrate_ordenes_cambio.sql",
+      "aplicada": false,
+      "verticalARC011": "ordenes_cambio",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible). Sexto vertical, agrupado con ordenes_compra/proveedores_gestion antes de un despliegue conjunto. Tabla ordenes_cambio (gestionar_oc), 17 columnas, sin ALTER (sin departamento/DEPT-01 en este vertical). Verificada columna por columna contra D1 real (PRAGMA table_info, autorizado por el Director 2026-08-03). Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
+    },
+    {
+      "archivo": "migrate_ordenes_compra.sql",
+      "aplicada": false,
+      "verticalARC011": "ordenes_compra",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible). Septimo vertical, agrupado con ordenes_cambio/proveedores_gestion. Dos tablas: ordenes_compra (15 columnas) y su detalle oc_lineas (8 columnas, FK oc_id -> ordenes_compra.id), sin ALTER. Verificadas columna por columna contra D1 real (PRAGMA table_info, autorizado por el Director 2026-08-03). Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
+    },
+    {
+      "archivo": "migrate_proveedores_gestion.sql",
+      "aplicada": false,
+      "verticalARC011": "proveedores_gestion",
+      "declarado": "2026-08-03",
+      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible). Octavo vertical, agrupado con ordenes_cambio/ordenes_compra. Tabla proveedores_gestion (23 columnas, sin ALTER), distinta de la tabla legada 'proveedores' de schema_completo.sql, sin relacion de FK. Verificada columna por columna contra D1 real (PRAGMA table_info, autorizado por el Director 2026-08-03). Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
     }
   ]
 }
