@@ -54,10 +54,12 @@
     },
     {
       "archivo": "migrate_calidad.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "30790988608",
       "verticalARC011": "calidad",
       "declarado": "2026-08-03",
-      "nota": "Paso 1 (declarar) completo de forma autonoma (codigo reversible, sin PR aun). Tablas control_calidad (NEW-37) y punch_list (NEW-44), ambas con su ALTER departamento (DEPT-01) incorporado directamente al CREATE. Verificadas columna por columna contra D1 real (PRAGMA table_info, autorizado por el Director 2026-08-03, misma ronda que confirmo ARC-013): 17 columnas cada una, identicas al codigo. Paso 2 (aplicar) pendiente de autorizacion explicita del Director."
+      "verificado": "2026-08-03",
+      "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente (alejandra-db, entorno actual de desarrollo/pruebas): las dos tablas (control_calidad NEW-37, punch_list NEW-44) ya existian creadas por el DDL en runtime, 17 columnas cada una identicas a la migracion antes y despues (verificacion de solo lectura); CREATE TABLE IF NOT EXISTS confirmado como no-op (0 rows_written). El DDL en runtime de este vertical (worker.js, ensureCalidadTable()/ensurePunchListTable()) sigue intacto: retirarlo es el paso 3 del ciclo de ADR-0011."
     }
   ]
 }
