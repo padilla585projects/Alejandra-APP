@@ -67,10 +67,10 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
 - ID: F-2.1-MEMORIA-DECLARAR
 - Título: Declarar en una migración `.sql` versionada el esquema de memoria gobernada de ADR-0013
 - Fase: Época 2 — Conocimiento y Memoria (F-2.1), abierta el 2026-08-02 por ADR-0007 enmienda 1 al cerrarse F-1.1/F-1.2/F-1.3 (Época 1 completa)
-- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (implementar `memory.js` real) bloqueado por ARC-008 §8**
+- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (implementar `memory.js` real) — ARC-008 §8 resuelto (2026-08-02), CRUD real en los dos Workers, sin exponer todavía vía ninguna tool/ruta**
 - Prioridad: Crítica
-- Rama: `feat/f21-memoria-declarar` (paso 1), `feat/migrar-checklists-memoria-d1` (paso 2, PR #52)
-- Responsable actual: Agente de Ingeniería (paso 3 exige revisar los dos Workers antes de retomar)
+- Rama: `feat/f21-memoria-declarar` (paso 1), `feat/migrar-checklists-memoria-d1` (paso 2, PR #52), `feat/arc008-consultarmemoria-real` (paso 3, ARC-008 §8)
+- Responsable actual: — (siguiente decisión: qué tool(s) exponen esta memoria al modelo, fuera de esta tarea)
 - Objetivo: declarar y aplicar la tabla `memoria_gobernada`, con los siete elementos del contrato de ADR-0013 (privacidad/lista blanca, aislamiento por tenant, procedencia, confianza, caducidad, corrección versionada, borrado), siguiendo el ciclo de ADR-0011. Es una tabla **nueva**, sin relación con la legada `alejandra_memoria` (`memory_save`/`memory_read`, ya en producción, dominio excluido de ADR-0010).
 - Criterios de aceptación:
   1. ✅ Migración `.sql` idempotente (`CREATE TABLE IF NOT EXISTS`) con las columnas de ADR-0013 §1-§6 (`migrate_memoria_gobernada.sql`), sin tocar la tabla legada.
@@ -79,11 +79,11 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
   4. ✅ Ningún Worker escribe ni lee la tabla nueva todavía; `nucleo-cognitivo/src/memory.js` sigue siendo interfaz pura sin cambios.
   5. ✅ Registrada en `migrate_manifiesto.json` como `aplicada: true`.
 - Dependencias: ADR-0013 aceptado con modificaciones (2026-08-02); ADR-0011 aceptado como estrategia.
-- Bloqueos: la implementación real de `memory.js`/tools (paso 3, activar lectura/escritura) sigue exigiendo que ARC-008 permita trazabilidad completa de una decisión que consulte memoria (ADR-0013 §8) y revisar los dos Workers (regla de los dos cerebros). No es una decisión del Director pendiente; es trabajo de ingeniería sin desbloquear todavía por dependencia técnica real.
-- Archivos principales: `migrate_memoria_gobernada.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`.
-- Pruebas: `node -e "JSON.parse(...)"` sobre el manifiesto; verificación manual columna por columna antes y después contra D1 real.
+- Bloqueos: ninguno técnico. **ARC-008 §8 resuelto (2026-08-02):** `consultarMemoria()` real en los dos Workers registra una traza `memoria_consulta` con los recuerdos exactos devueltos, cerrando la trazabilidad completa que exigía ADR-0013 §8. `listarCandidatasPendientes()`/`confirmarCandidata()`/`rechazarCandidata()` completan el CRUD. `nucleo-cognitivo/src/memory.js` acepta las cuatro como dependencia inyectada (`inyectarMemoria()`), sin integrarse en ningún Worker (sigue prohibido por `CLAUDE.md`). **Primera tool expuesta al modelo — decisión del Director (2026-08-02, "Opción A"):** `memoria_consultar`, solo lectura, `nivel_riesgo:'N0'`, `acceso:'sesion'`, en `alejandra-agente/worker.js` únicamente (el catálogo de `worker.js` raíz es enteramente `dev_verificado`, decisión consciente documentada en `HANDOFF.md`, no omisión). Escritura (`confirmarCandidata`/`listarCandidatasPendientes`/`rechazarCandidata` como tools) queda **pendiente de una decisión específica posterior del Director**, tal como pidió explícitamente.
+- Archivos principales: `migrate_memoria_gobernada.sql`, `migrate_manifiesto.json`, `.github/workflows/migrate-d1-agent.yml`, `worker.js`, `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `nucleo-cognitivo/src/memory.js`.
+- Pruebas: `node -e "JSON.parse(...)"` sobre el manifiesto; verificación manual columna por columna antes y después contra D1 real; `node --check` en los dos Workers y en `lib.js`; `node --test nucleo-cognitivo/test/*.js` (36/36); `npm --prefix alejandra-agente test` (136/136, 15 nuevas: aislamiento por tenant, caducidad, confianza, ausencia de resultados cruzados sobre `construirConsultaMemoriaGobernada()`).
 - Última actualización: 2026-08-02
-- Siguiente acción exacta: sin acción inmediata — el paso 3 (persistencia real) espera avance de ARC-008 §8. Ver `HANDOFF.md`.
+- Siguiente acción exacta: sin acción inmediata sobre lectura (completa y verificada). Escritura sobre `memoria_gobernada` (candidatas, confirmación, memoria compartida) espera decisión específica del Director — no se ha propuesto todavía. Ver `HANDOFF.md`.
 
 ### ARC-011-FASE3-CHECKLISTS — Migración del vertical `checklists`
 

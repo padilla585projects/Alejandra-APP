@@ -17,16 +17,12 @@
 | `context-engine.js` | Interfaz | Requiere acceso real a D1 acotado por tenant. Fuera de alcance hasta que se decida cómo extraerlo de forma segura. |
 | `planner.js` | Interfaz | Depende de Context Engine y Policy Engine reales. |
 | `motor-decision.js` | Interfaz + contrato de traza | Coordina los anteriores (ADR-0004). Fija los campos de traza obligatorios de `docs/architecture/04-MOTOR-DE-DECISION.md`, pero no implementa la decisión real: sin eso, cualquier decisión sería una decisión sin trazabilidad suficiente, que el Director excluyó explícitamente. Además fija el contrato de la dependencia inyectada `registrarTraza()` que `decidir()` aceptará cuando se implemente, sin romper el aislamiento actual (ADR-0014 §5). |
-| `memory.js` | Interfaz + constantes puras | Contrato exacto de `ADR-0013-GOBIERNO-DE-MEMORIA.md` §8: `consultarMemoria`, `listarCandidatasPendientes`, `confirmarCandidata` y `rechazarCandidata` lanzan porque la persistencia real (D1, migrador de ADR-0011) no existe todavía. Las categorías de la lista blanca, los valores de `metodo`/`estado` y `caducidadPorDefecto()` sí son lógica pura ya calculable, igual que `policy-engine.js` sobre metadato declarado. |
+| `memory.js` | **Implementado (dependencia inyectada)** | Contrato exacto de `ADR-0013-GOBIERNO-DE-MEMORIA.md` §8: `consultarMemoria`, `listarCandidatasPendientes`, `confirmarCandidata` y `rechazarCandidata` aceptan una implementación real inyectada vía `inyectarMemoria()`, mismo patrón que `registrarTraza()` en `motor-decision.js`. Sin inyección devuelven `[]`/no-op, nunca lanzan. Cada Worker (`worker.js`, `alejandra-agente/worker.js`) inyecta su propia lectura/escritura de `memoria_gobernada` en D1; `consultarMemoria()` de cada Worker registra además una traza `memoria_consulta` (ARC-008 §8) con los recuerdos devueltos, para trazabilidad completa de qué memoria usó una decisión. Las categorías de la lista blanca, los valores de `metodo`/`estado` y `caducidadPorDefecto()` siguen siendo lógica pura, igual que `policy-engine.js` sobre metadato declarado. |
 | `tool-registry.js` | **Implementado** | Validación pura de la declaración de una tool (`acceso`/`cron`/`nivel_riesgo`, ADR-0010) y filtrado de un catálogo ya declarado (`filtrarToolsPorAcceso`, `filtrarToolsParaCron`). No lee el catálogo real de ningún Worker ni ejecuta tools. |
 | `verifier.js` | **Implementado (parcial)** | Nivel determinista (ADR-0009) real: aplica una condición pura ya provista. Revisión humana asíncrona y explicabilidad son interfaces que lanzan error explícito — dependen de un canal (Telegram, `alejandra_trazas`) que vive en cada Worker, no aquí. `nivelesRequeridosPara()` fija, por función pura, qué niveles exige cada `nivel_riesgo`. |
 
 ## Qué NO hay aquí, y por qué
 
-- **Persistencia de Memory.** `memory.js` fija el contrato (ADR-0013), pero ninguna de sus
-  funciones de consulta o escritura tiene implementación real: requiere el esquema de
-  `alejandra_trazas`-equivalente para Memory pasando por el migrador único de ADR-0011 y la
-  autorización de migración contra D1 que exige `CLAUDE.md`.
 - **Persistencia y consulta de trazas.** `registrarTraza()` es solo un contrato inyectable en
   `motor-decision.js` (ADR-0014 §5); escribir realmente en `alejandra_trazas` es trabajo de
   cada Worker, fuera de este paquete.
@@ -47,6 +43,12 @@
 Un stub que devuelve `null` u `{}` puede pasar desapercibido en un caller real y producir una
 decisión sin fundamento. Lanzar un error explícito, citando la dependencia que falta, hace
 imposible que este esqueleto se use por accidente como si fuera una implementación real.
+
+**Excepción: `memory.js`.** Sus cuatro funciones usan dependencia inyectada (`inyectarMemoria()`)
+en vez de lanzar, porque ARC-008 §8 exige que una consulta de memoria rota no bloquee la
+decisión que la solicitó — mismo criterio de resiliencia que `registrarTraza()` en cada Worker
+(nunca lanza; un fallo de traza no puede tumbar la petición que la originó). Sin implementación
+inyectada (fuera de un Worker real, p.ej. en tests), devuelve `[]`/no-op en vez de simular datos.
 
 ## Pruebas
 

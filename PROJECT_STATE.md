@@ -258,10 +258,38 @@ ADR-0011, sin aplicar) la tabla `memoria_gobernada`, nueva y sin relación con l
 del catálogo ADR-0010). Las columnas cubren los siete elementos del contrato de ADR-0013:
 aislamiento por `empresa_id`/`ambito`, procedencia (`origen`/`metodo`/`tarea_id`), `confianza`,
 `caduca_en`, corrección versionada (`version_anterior_id`/`estado`) y `aprobada_por`. Registrada
-en `migrate_manifiesto.json` como `aplicada: false`. Ningún Worker escribe ni lee esta tabla
-todavía; `nucleo-cognitivo/src/memory.js` sigue siendo interfaz pura sin cambios. Aplicarla
-contra D1 exige autorización explícita del Director, igual que `checklists` — ver
-`TASKS.md` (`F-2.1-MEMORIA-DECLARAR`).
+en `migrate_manifiesto.json` como `aplicada: false`. Aplicarla contra D1 exige autorización
+explícita del Director, igual que `checklists` — ver `TASKS.md` (`F-2.1-MEMORIA-DECLARAR`).
+
+**ARC-008 §8 resuelto, paso 3 en curso (2026-08-02).** El bloqueo que impedía activar
+`nucleo-cognitivo/src/memory.js` era la falta de trazabilidad completa de una decisión que
+consulta memoria (ADR-0013 §8). Resuelto: `consultarMemoria()` real en los dos Workers lee
+`memoria_gobernada` (empresa/categoría/ámbito/confianza, solo `confirmada` y no caducada) y
+registra una traza `memoria_consulta` con los recuerdos exactos devueltos — la cadena
+"decisión → consulta de memoria → recuerdos usados" queda completa en `alejandra_trazas`.
+`listarCandidatasPendientes()`, `confirmarCandidata()` (traza `memoria_confirmacion`) y
+`rechazarCandidata()` completan el CRUD sobre `memoria_gobernada` en ambos Workers. **Nada de
+esto se expone todavía vía ninguna ruta ni tool** — son funciones internas listas para que una
+tool futura las use, siguiendo la regla de "UNA Alejandra, DOS cerebros" (implementación
+idéntica en los dos Workers). `nucleo-cognitivo/src/memory.js` pasa de lanzar error a aceptar
+las cuatro funciones como dependencia inyectada (`inyectarMemoria()`), mismo patrón que
+`registrarTraza()` en `motor-decision.js`; sin inyección devuelve `[]`/no-op. **Ninguno de los
+dos Workers importa `nucleo-cognitivo/` todavía** — sigue prohibido por `CLAUDE.md`. 36/36
+pruebas en verde en `nucleo-cognitivo`.
+
+**`memoria_consultar` — primera tool de lectura sobre memoria gobernada, aprobada por el
+Director (2026-08-02, "Opción A").** Solo lectura, `nivel_riesgo:'N0'`, `acceso:'sesion'`,
+expuesta únicamente en `alejandra-agente/worker.js` (decisión consciente: el catálogo de
+`worker.js` raíz es enteramente `dev_verificado`). `empresa_id` sale de la sesión, nunca del
+input del modelo; `categoria` se valida contra la lista blanca de ADR-0013 §1 antes de tocar
+la BD; nunca devuelve candidatas, caducadas ni memoria de otra empresa. Las tools legadas
+`memory_save`/`memory_read` (tabla `alejandra_memoria`) quedan intactas — coexistencia
+documentada en `HANDOFF.md`. La construcción del SQL se extrajo a
+`construirConsultaMemoriaGobernada()` (`alejandra-agente/lib.js`), función pura con 15 pruebas
+nuevas (aislamiento por tenant, caducidad, confianza, ausencia de resultados cruzados).
+136/136 pruebas en `alejandra-agente`, `node --check` limpio en los dos Workers y en `lib.js`.
+**Escritura sobre `memoria_gobernada` (candidatas, confirmación) queda pendiente de una
+decisión específica posterior del Director** — no forma parte de este entregable.
 
 ## Arquitectura de presentación
 

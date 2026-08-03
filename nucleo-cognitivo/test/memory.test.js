@@ -6,29 +6,50 @@ import {
   listarCandidatasPendientes,
   confirmarCandidata,
   rechazarCandidata,
+  inyectarMemoria,
   caducidadPorDefecto,
   CATEGORIAS_LISTA_BLANCA,
   METODOS_VALIDOS,
   ESTADOS_VALIDOS,
 } from '../src/memory.js';
 
-test('Memory: consultarMemoria lanza un error explícito (sin persistencia real)', () => {
-  assert.throws(
-    () => consultarMemoria({ empresaId: 'e1', consulta: 'x', filtros: {} }),
-    /ADR-0013/
-  );
+test('Memory: consultarMemoria sin implementación inyectada devuelve []', async () => {
+  assert.deepEqual(await consultarMemoria({ empresaId: 'e1', consulta: 'x' }), []);
 });
 
-test('Memory: listarCandidatasPendientes lanza un error explícito', () => {
-  assert.throws(() => listarCandidatasPendientes({ empresaId: 'e1' }), /ADR-0013/);
+test('Memory: listarCandidatasPendientes sin implementación inyectada devuelve []', async () => {
+  assert.deepEqual(await listarCandidatasPendientes({ empresaId: 'e1' }), []);
 });
 
-test('Memory: confirmarCandidata lanza un error explícito', () => {
-  assert.throws(() => confirmarCandidata({ id: '1', aprobadaPor: 'u1' }), /ADR-0013/);
+test('Memory: confirmarCandidata sin implementación inyectada no lanza', async () => {
+  await assert.doesNotReject(() => confirmarCandidata({ id: '1', aprobadaPor: 'u1' }));
 });
 
-test('Memory: rechazarCandidata lanza un error explícito', () => {
-  assert.throws(() => rechazarCandidata({ id: '1' }), /ADR-0013/);
+test('Memory: rechazarCandidata sin implementación inyectada no lanza', async () => {
+  await assert.doesNotReject(() => rechazarCandidata({ id: '1' }));
+});
+
+test('Memory: inyectarMemoria conecta consultarMemoria a la implementación real', async () => {
+  const recuerdosFalsos = [{ id: '1', contenido: 'x', estado: 'confirmada' }];
+  inyectarMemoria({
+    consultarMemoria: async (params) => {
+      assert.equal(params.empresaId, 'e1');
+      return recuerdosFalsos;
+    },
+  });
+  assert.deepEqual(await consultarMemoria({ empresaId: 'e1' }), recuerdosFalsos);
+
+  // Reset para no afectar otros tests del mismo proceso.
+  inyectarMemoria({ consultarMemoria: async () => [] });
+});
+
+test('Memory: inyectarMemoria conecta confirmarCandidata a la implementación real', async () => {
+  let llamado = null;
+  inyectarMemoria({
+    confirmarCandidata: async (params) => { llamado = params; },
+  });
+  await confirmarCandidata({ id: '5', aprobadaPor: 'u9' });
+  assert.deepEqual(llamado, { id: '5', aprobadaPor: 'u9' });
 });
 
 test('Memory: la lista blanca de categorías coincide exactamente con ADR-0013 §1', () => {

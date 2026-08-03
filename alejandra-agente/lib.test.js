@@ -22,6 +22,8 @@ import {
   redactarDetalle,
   extraerTablaDDL,
   determinarEstadoSalud,
+  construirConsultaMemoriaGobernada,
+  RANGO_CONFIANZA,
 } from './lib.js';
 
 // ── calcularCosteYProveedor (fix continuación 9) ────────────────────────────
@@ -986,5 +988,126 @@ describe('toolsParaAnthropic', () => {
   it('lista vacía o null no rompe', () => {
     expect(toolsParaAnthropic(null)).toEqual([]);
     expect(toolsParaAnthropic([])).toEqual([]);
+  });
+});
+
+// ── construirConsultaMemoriaGobernada (ARC-008 §8, tool memoria_consultar) ──
+// Decisión del Director (2026-08-02): "Añadir pruebas de aislamiento, caducidad,
+// confianza y ausencia de resultados cruzados". Esta función pura es la ÚNICA
+// fuente del WHERE/binds que ejecuta consultarMemoria() contra D1 real -- probar
+// aquí que nunca omite empresa_id/estado/caduca_en es probar el aislamiento real,
+// sin necesitar un D1 real.
+describe('construirConsultaMemoriaGobernada', () => {
+  const AHORA = '2026-08-02T12:00:00.000Z';
+
+  it('aislamiento: siempre filtra por empresa_id, primero y con el valor exacto pasado', () => {
+    const { sql, binds } = construirConsultaMemoriaGobernada({ empresaId: 42, ahora: AHORA });
+    expect(sql).toMatch(/WHERE empresa_id = \?/);
+    expect(binds[0]).toBe('42');
+  });
+
+  it('aislamiento: dos empresas distintas producen binds con empresa_id distinto, mismo SQL', () => {
+    const a = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA });
+    const b = construirConsultaMemoriaGobernada({ empresaId: 2, ahora: AHORA });
+    expect(a.sql).toBe(b.sql);
+    expect(a.binds[0]).toBe('1');
+    expect(b.binds[0]).toBe('2');
+    expect(a.binds[0]).not.toBe(b.binds[0]);
+  });
+
+  it('ausencia de resultados cruzados: no existe combinación de parámetros que omita empresa_id del WHERE', () => {
+    const combinaciones = [
+      {},
+      { categorias: ['hechos_operativos'] },
+      { ambito: 'compartida' },
+      { confianzaMinima: 'alta' },
+      { consulta: 'algo' },
+      { categorias: ['correcciones'], ambito: 'personal', confianzaMinima: 'baja', consulta: 'x', limit: 5 },
+    ];
+    for (const extra of combinaciones) {
+      const { sql, binds } = construirConsultaMemoriaGobernada({ empresaId: 7, ahora: AHORA, ...extra });
+      expect(sql).toMatch(/empresa_id = \?/);
+      expect(binds[0]).toBe('7');
+    }
+  });
+
+  it('caducidad: siempre exige caduca_en > ahora, con el timestamp exacto pasado', () => {
+    const { sql, binds } = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA });
+    expect(sql).toMatch(/caduca_en > \?/);
+    expect(binds).toContain(AHORA);
+  });
+
+  it('caducidad: nunca se puede pedir memoria caducada ni con otro estado que "confirmada"', () => {
+    const { sql, binds } = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA });
+    expect(sql).toMatch(/estado = \?/);
+    expect(binds).toContain('confirmada');
+    // No hay ningún parámetro que permita pedir 'candidata_pendiente_validacion' o 'sustituido'.
+    expect(binds).not.toContain('candidata_pendiente_validacion');
+    expect(binds).not.toContain('sustituido');
+  });
+
+  it('confianza: "alta" solo acepta alta (nunca media ni baja)', () => {
+    const { sql, binds } = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, confianzaMinima: 'alta' });
+    expect(sql).toMatch(/confianza IN \(\?\)/);
+    expect(binds).toContain('alta');
+    expect(binds).not.toContain('media');
+    expect(binds).not.toContain('baja');
+  });
+
+  it('confianza: "media" acepta media y alta, no baja', () => {
+    const { sql, binds } = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, confianzaMinima: 'media' });
+    expect(binds).toEqual(expect.arrayContaining(['media', 'alta']));
+    expect(binds).not.toContain('baja');
+  });
+
+  it('confianza: "baja" acepta los tres niveles', () => {
+    const { binds } = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, confianzaMinima: 'baja' });
+    expect(binds).toEqual(expect.arrayContaining(['baja', 'media', 'alta']));
+  });
+
+  it('confianza: sin confianzaMinima no añade filtro de confianza', () => {
+    const { sql } = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA });
+    expect(sql).not.toMatch(/confianza IN/);
+  });
+
+  it('confianza: un valor desconocido se ignora en vez de romper o filtrar todo', () => {
+    const { sql } = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, confianzaMinima: 'urgente' });
+    expect(sql).not.toMatch(/confianza IN/);
+  });
+
+  it('RANGO_CONFIANZA ordena baja < media < alta', () => {
+    expect(RANGO_CONFIANZA.baja).toBeLessThan(RANGO_CONFIANZA.media);
+    expect(RANGO_CONFIANZA.media).toBeLessThan(RANGO_CONFIANZA.alta);
+  });
+
+  it('categoría: filtra por IN con la lista exacta pasada', () => {
+    const { sql, binds } = construirConsultaMemoriaGobernada({
+      empresaId: 1, ahora: AHORA, categorias: ['hechos_operativos', 'correcciones'],
+    });
+    expect(sql).toMatch(/categoria IN \(\?,\?\)/);
+    expect(binds).toEqual(expect.arrayContaining(['hechos_operativos', 'correcciones']));
+  });
+
+  it('ámbito: filtra solo cuando se pasa explícitamente', () => {
+    const sinAmbito = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA });
+    expect(sinAmbito.sql).not.toMatch(/ambito = \?/);
+    const conAmbito = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, ambito: 'personal' });
+    expect(conAmbito.sql).toMatch(/ambito = \?/);
+    expect(conAmbito.binds).toContain('personal');
+  });
+
+  it('texto: consulta hace LIKE parametrizado sobre contenido, nunca interpolado', () => {
+    const { sql, binds } = construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, consulta: "'; DROP TABLE x; --" });
+    expect(sql).toMatch(/contenido LIKE \?/);
+    expect(sql).not.toContain('DROP TABLE');
+    expect(binds).toContain("%'; DROP TABLE x; --%");
+  });
+
+  it('límite: se acota entre 1 y 50 aunque se pida más o menos', () => {
+    expect(construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, limit: 1000 }).binds.at(-1)).toBe(50);
+    // limit: 0 es falsy en JS -- parseInt(0,10) || 10 cae al default, igual que "sin limit".
+    expect(construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, limit: 0 }).binds.at(-1)).toBe(10);
+    expect(construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, limit: -5 }).binds.at(-1)).toBe(1);
+    expect(construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA }).binds.at(-1)).toBe(10);
   });
 });

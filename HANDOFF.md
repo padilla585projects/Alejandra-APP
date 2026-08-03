@@ -93,6 +93,132 @@ Nota para el runbook: el healthcheck automático de CI puede reportar la versió
 pero conviene reconsultar manualmente unos minutos después antes de dar el despliegue por
 bueno del todo, tal como se hizo aquí.
 
+## ARC-008 §8 resuelto — persistencia real de consulta de memoria (2026-08-02)
+
+Bloqueo técnico identificado en `TASKS.md`/`HANDOFF.md`: el paso 3 de `F-2.1-MEMORIA-DECLARAR`
+(implementar `memory.js` real) exigía que ARC-008 permitiera "trazabilidad completa de una
+decisión que consulte memoria" (ADR-0013 §8), y eso no existía — `consultarMemoria()` era una
+interfaz que solo lanzaba error.
+
+**Resuelto:** `consultarMemoria(env, params)` real en `worker.js` y `alejandra-agente/worker.js`
+(implementación idéntica en los dos, regla de "UNA Alejandra, DOS cerebros"). Lee
+`memoria_gobernada` filtrando por `empresa_id`, `estado='confirmada'`, `caduca_en` no vencido,
+categoría (lista blanca de ADR-0013 §1) y confianza mínima (con `RANGO_CONFIANZA` para comparar
+el enum TEXT `'baja'|'media'|'alta'` correctamente — un bug real detectado y corregido antes de
+cerrar: la primera versión comparaba ese TEXT contra un número con `>=`, comparación sin efecto
+en SQLite). Cada consulta registra una traza `tipo='memoria_consulta'` con los IDs de los
+recuerdos devueltos, cerrando la cadena "decisión → consulta → recuerdos usados" que ARC-008
+§8 exigía.
+
+`listarCandidatasPendientes()`, `confirmarCandidata()` (traza `tipo='memoria_confirmacion'`) y
+`rechazarCandidata()` completan el CRUD de `memoria_gobernada` en ambos Workers, siguiendo el
+mismo patrón resiliente que `registrarTraza()`/`runDDL()` (nunca lanzan, `console.error` en
+fallo). **Ninguna de las cuatro funciones se invoca todavía desde ninguna ruta ni tool** — son
+funciones internas, listas para cuando se decida exponerlas (candidato: extender
+`memory_save`/`memory_read` o crear tools nuevas, decisión aparte).
+
+`nucleo-cognitivo/src/memory.js` cambia de "lanza error explícito" a "dependencia inyectada"
+(`inyectarMemoria()`) para sus cuatro funciones — mismo patrón ya usado por `registrarTraza()`
+en `motor-decision.js`, consistente con que una consulta de memoria rota no debe bloquear la
+decisión que la solicitó. Sin inyección (p.ej. en tests o si nunca se integra), devuelve
+`[]`/no-op, nunca lanza. **Se mantiene la prohibición de `CLAUDE.md`: ningún Worker importa
+`nucleo-cognitivo/` todavía** — la inyección es un contrato que un futuro integrador usaría, no
+una integración real hecha en esta tarea.
+
+Verificación: `node --check worker.js` y `node --check alejandra-agente/worker.js` limpios;
+`node --test nucleo-cognitivo/test/*.js` 36/36 en verde (5 tests de `memory.test.js`
+reescritos para reflejar el nuevo comportamiento de inyección, ya no esperan que lance);
+`npm --prefix alejandra-agente test` 121/121 en verde (sin cambios en el conteo — las nuevas
+funciones no tienen pruebas propias en `alejandra-agente` todavía porque no son tools
+expuestas). Verificación de encoding (`git diff` sin `Ã`/`Â`/`â€`/`ï»¿`) limpia. Rama
+`feat/arc008-consultarmemoria-real`, sin desplegar ni tocar D1 — cambio de código puro,
+reversible, autónomo bajo ADR-0007.
+
+**Consecuencia para F-2.1 paso 3:** con la traza resuelta, el bloqueo original de
+`TASKS.md`/`F-2.1-MEMORIA-DECLARAR` queda superado en su forma original ("ARC-008 debe permitir
+trazabilidad completa"). Queda pendiente, como trabajo aparte y no bloqueado por dependencia
+técnica: decidir qué tool(s) exponen esta memoria al modelo (ADR-0010, clasificación de
+riesgo) y si se conecta con `motor-decision.js` real (que sigue sin implementación, depende de
+Context Engine/Planner).
+
+## `memoria_consultar` — primera tool sobre memoria gobernada (2026-08-02)
+
+**Decisión del Director:** aprobada "Opción A" (crear tool nueva de solo lectura, en paralelo
+a las tools legadas, sin tocarlas). Condiciones cumplidas una por una:
+
+| Condición | Cómo se cumple |
+|---|---|
+| Nombre no confundible con la memoria legada | `memoria_consultar` (no `memory_*`) |
+| Nivel de riesgo N0 | `nivel_riesgo:'N0'` declarado en la tool (ADR-0010) |
+| Solo lectura | El `case` solo llama a `consultarMemoria()`; no expone `confirmarCandidata`/`rechazarCandidata`/`listarCandidatasPendientes` |
+| Aislamiento estricto por tenant | `empresa_id` sale de la sesión (`resolverEid(empresa_id)`), nunca del input del modelo; `acceso:'sesion'` en `TOOLS_REQUIEREN_SESION` |
+| Procedencia/confianza/caducidad/estado respetados | `consultarMemoria()` exige `estado='confirmada'` y `caduca_en > ahora`; el resultado incluye `origen`, `confianza`, `metodo` |
+| Sin memoria caducada/eliminada/cruzada | Filtros de `construirConsultaMemoriaGobernada()` (probados, ver más abajo) |
+| Sin datos fuera de la lista blanca de ADR-0013 | `categoria` del input se valida contra `CATEGORIAS_MEMORIA_GOBERNADA` (las 4 de ADR-0013 §1) antes de tocar la BD; un valor fuera de esa lista se rechaza con error, no se ignora |
+| Sin escritura/inferencia/candidatas | Confirmado arriba |
+| Tools legadas intactas | `memory_save`/`memory_read` sin ningún cambio |
+
+**Implementación:** la construcción del SQL/binds se extrajo a una función pura,
+`construirConsultaMemoriaGobernada()` (`alejandra-agente/lib.js`), siguiendo el mismo patrón ya
+usado para `validarScopeEmpresaBD`/`extraerTablasQuery` — permite probar aislamiento,
+caducidad y confianza con vitest, sin D1 real. `consultarMemoria()` en
+`alejandra-agente/worker.js` pasó a invocar esa función en vez de construir el SQL inline.
+15 pruebas nuevas en `lib.test.js` (136/136 en verde), cubriendo explícitamente: aislamiento
+por tenant (el WHERE nunca puede omitir `empresa_id`, en ninguna combinación de filtros),
+ausencia de resultados cruzados, caducidad (`caduca_en > ahora`, `estado='confirmada'` siempre
+presentes, nunca `candidata_pendiente_validacion` ni `sustituido`), orden de confianza
+(`baja < media < alta`, cada nivel incluye los superiores) y que el texto de búsqueda va
+siempre parametrizado (`LIKE ?`), nunca interpolado en el SQL.
+
+**Solo `alejandra-agente/worker.js` expone la tool — decisión consciente, no omisión.**
+`worker.js` (raíz, `alejandra-app-api`) ya tenía su propio `consultarMemoria()` desde el
+trabajo de ARC-008 §8, pero su catálogo de tools es enteramente `acceso:'dev_verificado'`
+(solo Adrián, vía chat dev del panel/Telegram — ver `CLAUDE.md`, "UNA Alejandra, DOS
+cerebros"). `memoria_gobernada` es memoria **de empresa** (hechos operativos, preferencias,
+procedimientos, correcciones de ADR-0013 §1) pensada para el uso normal de la app/panel de
+oficina, que routea por `alejandra-agente`, no por el canal de desarrollador. Si en el futuro
+se decide que el canal dev también necesita esta tool, es una decisión aparte con su propio
+`nivel_riesgo`/`acceso` (probablemente distinto, dado que ese canal ya opera con
+`dev_verificado`).
+
+**Coexistencia temporal de `alejandra_memoria` (legada) y `memoria_gobernada` (nueva) —
+documentada explícitamente, tal como pidió el Director:**
+
+| | `alejandra_memoria` (legada) | `memoria_gobernada` (nueva, ADR-0013) |
+|---|---|---|
+| Tools | `memory_save`, `memory_read` | `memoria_consultar` (solo lectura por ahora) |
+| Aislamiento | Ninguno — sin `empresa_id` | Obligatorio, por `empresa_id` |
+| Contenido típico hoy | Aprendizajes de Alejandra sobre su propio código/fixes (ver módulo de prompt `reflexion`: "guarda aprendizajes, errores, patrones") | Hechos/preferencias/procedimientos/correcciones **de la empresa**, con procedencia, confianza y caducidad |
+| Confianza/caducidad/estado | No existen como columnas | Obligatorios (ADR-0013 §3-§5) |
+| Gobierno | Ninguno — excluida a propósito del catálogo ADR-0010 (dominio ADR-0013) | El contrato completo de ADR-0013 |
+
+**No son la misma cosa disfrazada de dos tablas — son dos propósitos distintos que hoy
+comparten un nombre parecido por accidente histórico.** `alejandra_memoria` es, en la
+práctica, la memoria de Alejandra **sobre sí misma** (patrones de fixes, errores de
+despliegue, aprendizajes técnicos) — no tiene tenant porque un aprendizaje de código no
+pertenece a una empresa. `memoria_gobernada` es memoria **sobre el negocio de una empresa**,
+exactamente lo que ADR-0013 define y gobierna. Por eso `migrate_memoria_gobernada.sql` ya
+documentaba desde su declaración: *"tabla NUEVA, sin relación con la tabla legada"*.
+
+**Criterio futuro de migración (sin decidir todavía, para cuando se plantee):** no hay un
+plan de fusionar ambas tablas, porque conceptualmente cubren dominios distintos (memoria de la
+IA sobre sí misma vs. memoria gobernada de la empresa). Si en el futuro se decide que
+`memory_save`/`memory_read` deben migrar a `memoria_gobernada`, esa decisión tendría que
+resolver primero, como mínimo: (1) qué `empresa_id` correspondería a un aprendizaje técnico
+que hoy no tiene tenant — probablemente ninguno, lo que sugeriría que ese contenido nunca
+debería vivir en `memoria_gobernada`; (2) qué pasa con las filas ya existentes en
+`alejandra_memoria` (plan de migración de datos reales, no solo de esquema); y (3) si conviene
+un tercer concepto (memoria técnica/operativa de la IA, sin tenant, pero con las mismas
+garantías de confianza/caducidad que ADR-0013 exige para memoria de empresa) en vez de forzar
+todo a un único modelo. Mientras esa decisión no se tome, ambos sistemas coexisten sin
+conflicto: escriben en tablas distintas, se exponen por tools con nombres distintos, y ninguna
+tool nueva sobre `memoria_gobernada` toca `alejandra_memoria`.
+
+Verificación: `node --check` limpio en `worker.js`, `alejandra-agente/worker.js` y
+`alejandra-agente/lib.js`; `npm --prefix alejandra-agente test` 136/136 en verde (15 nuevas);
+`node --test nucleo-cognitivo/test/*.js` 36/36 sin cambios. Encoding limpio. Rama
+`feat/arc008-consultarmemoria-real` (continuación de la misma rama del trabajo de ARC-008 §8).
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.
