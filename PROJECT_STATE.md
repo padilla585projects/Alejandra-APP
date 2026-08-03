@@ -168,6 +168,20 @@ healthy, 16 columnas de `tareas_obra` y 23 de `actas_reunion` presentes). Mismo 
 pasos de ADR-0011, misma barrera de autorización por migración D1 — solo se agrupó el paso 4.
 Ver `TASKS.md` (`ARC-011-FASE3-TAREAS`, `ARC-011-FASE3-ACTAS`).
 
+**Sexto, séptimo y octavo vertical completos: `ordenes_cambio`, `ordenes_compra`+`oc_lineas` y
+`proveedores_gestion` — segundo lote agrupado.** Mismo patrón: tres migraciones aplicadas por
+separado (`ordenes_cambio` run `30805220909`, `ordenes_compra` run `30805238082`,
+`proveedores_gestion` run `30805254063`), DDL en runtime retirado de las tres
+(`ensureOrdenesCambioTable()`/`ensureOcTable()`/`ensureProveedoresGestionTable()`) y verificadas
+**en un único despliegue** (run `30806109041`, versión `1475c65b-d1b2-4db1-be3f-8f8b45386e00`,
+`/health` healthy, 17+15+8+23 columnas presentes). **Ocho verticales de ARC-011 fase 3
+completos en total.** Ver `TASKS.md` (`ARC-011-FASE3-OC-PROVEEDORES`).
+
+**Nota operativa (2026-08-03):** el Director señaló que se estaban acumulando demasiados
+despliegues seguidos en poco tiempo (5 despliegues del Worker raíz en menos de 14 horas). Los
+siguientes lotes de ARC-011 fase 3 deben espaciarse más en el tiempo y agrupar más verticales
+por despliegue de lo que se ha hecho hasta ahora (2-3 por lote).
+
 ## Siguiente objetivo
 
 ADR-0014 queda implementado de extremo a extremo (interfaz en `nucleo-cognitivo/`, tabla D1,
