@@ -633,8 +633,10 @@ Verificación: `node --check` limpio en `worker.js`/`lib.js` de `alejandra-agent
 `npm --prefix alejandra-agente test` 138/138 en verde (2 pruebas nuevas: sesión obligatoria en
 las tres, exclusión del cron en confirmar/rechazar). Encoding limpio en el diff completo de la
 sesión. Ver `TASKS.md` (`F-2.1-MEMORIA-ESCRITURA`). **Fusionado a `main` (PR #81, commit
-`75c1200`).** Pendiente desplegar `alejandra-agente/worker.js` para que las tres tools lleguen
-a producción — requiere autorización del Director (aprobación del entorno `production`).
+`75c1200`) y desplegado en producción (2026-08-04), autorizado por el Director:** run
+[30937911736](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30937911736),
+versión `0f8cff03-d37e-4eb1-a57c-7b37c970b199`, `/health` → `healthy` (d1:true, r2:true),
+coincide con `wrangler deployments list`. Las tres tools ya están disponibles en producción.
 
 ## P-ARCH-003 — Consulta de versión remota (2026-08-04)
 
@@ -668,9 +670,11 @@ Verificación: `node --test packages/design-system/src/platform/version-check.te
 verificado en el navegador (Browser pane, `file://`) sobre `index.html` y `panel.html` reales —
 sin errores de consola, `checkVersionAndUpdate()`/`_checkPanelVersion()` corren igual que antes.
 Encoding limpio. Ver `docs/architecture/FRONTEND_SLICE_VERSION_CHECK.md` y `TASKS.md`
-(`P-ARCH-003`). **Fusionado a `main` (PR #82, commit `4171b41`).** Pendiente publicar a Pages
-para que llegue a producción; no se ampliará la migración hasta revisar esta evidencia (mismo
-criterio que las dos rebanadas anteriores).
+(`P-ARCH-003`). **Fusionado a `main` (PR #82, commit `4171b41`) y publicado en Pages
+(2026-08-04)**, run
+[30937918388](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30937918388),
+éxito; no se ampliará la migración hasta revisar esta evidencia (mismo criterio que las dos
+rebanadas anteriores).
 
 ## No tocar sin nueva autorización
 
