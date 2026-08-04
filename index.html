@@ -20199,7 +20199,7 @@ function renderMunecoEpis(trabajadorValue, nombreTrabajador, episTrabajador) {
   const otros = episTrabajador.filter(e => !EPI_ZONAS[e.tipo_epi] && e.estado === 'activo');
 
   const svg = `
-  <svg viewBox="0 0 300 620" style="width:100%;max-width:240px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">
+  <svg viewBox="0 0 300 620" style="width:100%;max-width:170px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">
     <ellipse cx="150" cy="602" rx="80" ry="10" fill="#000" opacity=".3"/>
     <path d="M55,118 L90,120 L78,328 L54,328 Z" fill="var(--surface2)"/>
     <path d="M245,118 L210,120 L222,328 L246,328 Z" fill="var(--surface2)"/>
@@ -20305,19 +20305,29 @@ async function cargarEpis() {
 
     // Rellenar selector con TODO el personal (antes solo salían quienes ya tenían
     // algún EPI asignado, así que no había forma de empezar de cero con alguien nuevo).
+    // Se añade departamento/id al texto porque hay cuentas con el mismo nombre
+    // (p.ej. dos "Adrián") sin ningún dato que las distinga a simple vista — bug
+    // real encontrado al probar este flujo en vivo (04/08/2026).
     const sel = document.getElementById('episFiltroTrabajador');
     if (sel && sel.options.length <= 1) {
       const trabajadores = window._perTrabajadores?.length ? window._perTrabajadores : await perCargarTrabajadores();
       [...trabajadores].sort((a, b) => (a.nombre||'').localeCompare(b.nombre||'')).forEach(t => {
         const o = document.createElement('option');
         o.value = `${t.tipo}:${t.id}`;
-        o.textContent = t.nombre + (t.obra_nombre ? ' · ' + t.obra_nombre : '');
+        const extra = [t.departamento, t.obra_nombre].filter(Boolean).join(' · ');
+        o.textContent = t.nombre + (extra ? ` · ${extra}` : '') + ` (#${t.id})`;
         sel.appendChild(o);
       });
     }
 
+    // Filtro de estado: solo tiene sentido con "Todos los trabajadores" (filtra la
+    // lista de abajo); con un trabajador concreto seleccionado no hay lista que
+    // filtrar (ver más abajo), así que se oculta para no dejar un control muerto.
+    const selEstado = document.getElementById('episFiltroEstado');
+    if (selEstado) selEstado.style.display = filtroT ? 'none' : '';
+
     // Muñeco: solo cuando hay un trabajador concreto elegido, con SU dotación
-    // completa (independiente del filtro de estado, que es para la lista de abajo).
+    // completa (los EPIs 'activo' son los que se ven puestos encima).
     if (filtroT && muneco) {
       const [tTipo, tId] = filtroT.split(':');
       const meta = (window._perTrabajadores||[]).find(t => String(t.tipo) === tTipo && String(t.id) === tId);
@@ -20329,12 +20339,13 @@ async function cargarEpis() {
       muneco.innerHTML = renderMunecoEpis(filtroT, nombreTrabajador, episTrabajador);
     }
 
-    let epis = filtroT
-      ? episObra.filter(e => {
-          const [tTipo, tId] = filtroT.split(':');
-          return (tTipo === 'app' && String(e.usuario_id||'') === tId) || (tTipo === 'externo' && String(e.externo_id||'') === tId);
-        })
-      : episObra;
+    // Con un trabajador concreto seleccionado, el muñeco+chips ya muestran su
+    // dotación — repetirla otra vez como lista de tarjetas debajo era la misma
+    // información tres veces (bug real de flujo confuso, encontrado al probar
+    // esto en vivo). La lista de tarjetas queda solo para "Todos los trabajadores".
+    if (filtroT) { lista.innerHTML = ''; return; }
+
+    let epis = episObra;
     if (filtroE) epis = epis.filter(e => e.estado === filtroE);
 
     if (!epis.length) { lista.innerHTML = '<div class="empty-state">Sin EPIs asignados</div>'; return; }
@@ -20380,7 +20391,10 @@ async function abrirModalEpi(id, preset) {
   const trabajadores = window._perTrabajadores || await perCargarTrabajadores();
   const selT = `<select id="epiTrabajador" class="form-input" style="width:100%;margin-bottom:10px">
     <option value="">— Selecciona trabajador —</option>
-    ${trabajadores.map(t => `<option value="${t.tipo}:${t.id}:${encodeURIComponent(t.nombre)}">${t.nombre}${t.obra_nombre ? ' · ' + t.obra_nombre : ''}</option>`).join('')}
+    ${trabajadores.map(t => {
+      const extra = [t.departamento, t.obra_nombre].filter(Boolean).join(' · ');
+      return `<option value="${t.tipo}:${t.id}:${encodeURIComponent(t.nombre)}">${t.nombre}${extra ? ' · ' + extra : ''} (#${t.id})</option>`;
+    }).join('')}
   </select>`;
 
   let datos = { tipo_epi: preset?.tipo_epi || '', talla:'', numero_serie:'', fecha_entrega:'', fecha_caducidad:'', proxima_revision:'', estado:'activo', observaciones:'', nombre_trabajador:'', usuario_id:null, externo_id:null, obra_id:null };
