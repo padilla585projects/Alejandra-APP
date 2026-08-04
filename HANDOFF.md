@@ -500,23 +500,22 @@ Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan cerra
 
 ## Qué está pendiente
 
-- **P-ARCH-002 — aprobada por el Director (2026-08-02).** P-ARCH-001 (salud del panel) fue aprobado. Se extrajo la primitiva de notificaciones temporales a `packages/design-system`, manteniendo las 12 invocaciones, iconos, cierre, caducidad y fallback. No llama a backend ni trata permisos. Evidencia, pruebas y rollback: `docs/architecture/FRONTEND_SLICE_TOAST.md`. Queda desbloqueada la siguiente rebanada de presentación, aún sin definir ni abrir.
+> Esta sección era un snapshot congelado del 2026-08-02 que nunca se podó; varios puntos ya
+> quedaron resueltos por secciones fechadas más abajo en este mismo documento. Reescrita el
+> 2026-08-04 para reflejar el estado real — ver el log cronológico completo para el detalle de
+> cada cierre.
 
-- **F-1.2, núcleo cognitivo, en curso — ampliada.** `ADR-0004` aceptado, F-1.1 cerrada. `nucleo-cognitivo/` construido como paquete aislado (Estado Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión). Con ADR-0013/0014 aceptados, se amplió (PR #20) con la interfaz `memory.js` y el contrato `registrarTraza()` — ambos sin persistencia real. `memory.js` sigue sin implementación real (exige el migrador de ADR-0011). El helper `registrarTraza()` sí tiene implementación real, pero **fuera** de `nucleo-cognitivo/`: cada Worker tiene su propia versión (PR #24, #25) que escribe en `alejandra_trazas`, conectada a ARC-013. El paquete `nucleo-cognitivo/` en sí sigue sin integrarse en `worker.js` ni `alejandra-agente/worker.js`.
-- **ADR-0014 — implementado, desplegado y verificado (2026-08-02).** `/health` real (`healthy`/`degraded`/`unhealthy`, D1 + objeto centinela en R2) en los dos Workers; `GET /admin/trazas` en `alejandra-app-api`; ARC-013 conectado a `alejandra_trazas`. Verificado en vivo contra producción. **Bug lateral encontrado y corregido en el mismo ciclo:** `index.html` comparaba el `version` de `/health` (ahora un UUID de despliegue) contra `APP_VERSION`, lo que habría forzado recargas falsas (PR #26) — mismo patrón que los incidentes de recarga infinita del 22/04 y 26/04. Corregido en `main`; publicar a Pages sigue siendo un paso de entrega aparte.
-- **ARC-011 fase 3, paso 1 completo** — migración `.sql` del vertical `checklists` declarada. **Paso 2 (aplicar contra D1) pospuesto por decisión del Director (2026-08-02):** se retoma cuando exista una ventana específica para cambios de esquema, con verificación de D1 antes y después.
-- **ARC-014 — riesgo aceptado temporalmente por el Director (2026-08-02).** Mientras el proyecto tenga un único mantenedor en desarrollo, no se exige revisor distinto del solicitante. Se reabre en cuanto exista producción real o más de un mantenedor.
-- **Secretos ya movidos al entorno `production` (`F-0.2-CFG`, 2026-08-04).** Ejecutado por el Director; ver sección dedicada arriba. Quedan sin fecha el ensayo de confirmación errónea y la política de rama de `github-pages`.
-- **Ensayo de confirmación errónea** sobre un workflow de producción: debe salir `skipped`.
-- **`usuario_obras` no existe en producción**, pese a estar declarada en código y en `migrate_roles_multiobra.sql`. Comprobar qué depende de ella antes de aplicar nada.
+- **F-1.2, núcleo cognitivo — sigue sin integrar, a propósito.** `nucleo-cognitivo/` construido como paquete aislado (Estado Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión, `memory.js` con inyección de dependencia). `registrarTraza()` sí tiene implementación real, pero **fuera** de `nucleo-cognitivo/` (cada Worker tiene la suya). El paquete en sí sigue sin integrarse en ningún Worker — prohibido explícitamente por `CLAUDE.md` hasta nueva decisión.
+- **`memory.js` real** sigue sin persistencia propia dentro de `nucleo-cognitivo/` (la persistencia real vive directamente en cada Worker vía `consultarMemoria()`/`confirmarCandidata()`/`rechazarCandidata()`/`listarCandidatasPendientes()`, ya desplegadas — ver `ARC-008 §8` y `F-2.1-MEMORIA-ESCRITURA` arriba).
+- **Siguiente rebanada de presentación tras P-ARCH-003** — aún sin definir ni abrir. Decisión exclusiva del Director.
+- **Motor de Decisión real** (Context Engine/Planner) sigue como interfaz con error explícito — depende de que se decida activar `nucleo-cognitivo/`.
 
 ## Riesgos abiertos
 
-- **ARC-011 fase 3.** Estrategia aceptada (ADR-0011); implementación por vertical, empezando por `checklists`, al ritmo del roadmap. Cada aplicación real contra D1 exige autorización aparte.
-- **`run_migration`.** Sigue siendo una vía de divergencia del esquema hasta que su gating en código refleje la clasificación N3 de ADR-0006/0010.
-- **ARC-005** mitigado solo para el código, no para el esquema, y pendiente de validación remota.
-- Migraciones de raíz sin manifiesto único (lo resuelve la implementación de ADR-0011).
+- **ARC-005** mitigado solo para el código (F-0.1), no para el esquema (D1 sigue con DDL en runtime fuera de las 14 verticales ya migradas de ARC-011 fase 3).
 - La migración de `alejandra_trazas` (ADR-0014) está autorizada solo en desarrollo/pruebas; aplicarla en una futura producción exige autorización aparte.
+- **ARC-014** — riesgo aceptado temporalmente mientras haya un único mantenedor; se reabre si cambia esa condición (ver sección dedicada arriba, revisada por última vez el 2026-08-03).
+- Resueltos y ya no son riesgo: `run_migration`/`sql_query` sin barrera para `CREATE` (cerrado por `ADR-0015`, `ARC-019`); manifiesto único de migraciones (lo resuelve `ADR-0011`, ya implementado en las 14 verticales); `usuario_obras` (revisado el 2026-08-02, no es un bug — patrón lazy funcionando como se espera, ver `docs/architecture/07-INVENTARIO-DDL-RUNTIME.md`).
 
 ## Próximo trabajo autónomo
 
