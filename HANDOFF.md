@@ -440,10 +440,13 @@ añade esos mensajes sin rehacer los ya pintados; solo repinta todo si el cambio
 añadido al final. De paso se añadió mover/redimensionar la ventana del chat. Único archivo
 tocado: `panel.html` (176 líneas). Fusionada a `main`.
 
-**Pendiente de verificar paridad (regla "una Alejandra, dos cerebros"/frontends, ver
-`CLAUDE.md`):** el fix solo tocó `panel.html`. No se ha comprobado todavía si `index.html` o
-`alejandra-panel.html` tienen el mismo patrón de sondeo-y-repintado completo; si lo tienen,
-sufren el mismo bug y deberían recibir el mismo fix.
+**Paridad verificada (2026-08-04) — no aplica a los otros dos frontends.** El patrón del bug
+(sondeo periódico de `alejandra_historial` con repintado completo) es exclusivo del widget FAB
+de `panel.html`. `index.html` usa streaming SSE (`ALEJANDRA_STREAM_API`/`/api/chat/stream`) para
+el chat de Alejandra, sin sondeo de historial; su único `setInterval` cercano (`checkIABtn`,
+2s) solo controla visibilidad de un botón. `alejandra-panel.html` también usa SSE para el chat;
+su `setInterval` de 3s (`pollEventos`) es sincronización incremental de eventos de
+escaneo/fotos (`desde=`), no repintado de chat. Ningún cambio adicional necesario.
 
 ## Qué está terminado
 
