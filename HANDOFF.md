@@ -448,6 +448,23 @@ el chat de Alejandra, sin sondeo de historial; su único `setInterval` cercano (
 su `setInterval` de 3s (`pollEventos`) es sincronización incremental de eventos de
 escaneo/fotos (`desde=`), no repintado de chat. Ningún cambio adicional necesario.
 
+## F-0.2-CFG — secretos movidos al entorno `production`, ejecutado por el Director (2026-08-04)
+
+El Director ejecutó personalmente el checklist (`docs/runbooks/CHECKLIST-F02-CFG-SECRETOS-ENTORNO.md`):
+creó los 5 secretos (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `ADMIN_TOKEN`) en el entorno `production` el 2026-08-03 (18:32-18:46), los
+verificó con un despliegue exitoso (`Deploy API Worker`, run `30843489418`, 18:56 — éxito
+inmediatamente después de crearlos, confirma que el job resolvió los secretos desde el entorno)
+y, el 2026-08-04, borró la copia de nivel repositorio. Ningún agente leyó ni tocó valores reales
+en ningún momento — verificación siempre en solo lectura sobre nombres/fechas
+(`gh secret list`), nunca sobre valores. Confirmado tras el borrado: `gh secret list`
+(repositorio) vacío; `gh secret list --env production` con los 5 intactos.
+
+**Quedan dos criterios menores de la tarea original `F-0.2-CFG`, sin fecha, decisión del
+Director:** el ensayo de confirmación errónea sobre un workflow de producción (debe salir
+`skipped`) y decidir si la política de rama de `github-pages` sigue limitada a `main` o se
+amplía por tag. Ver `TASKS.md` (`F-0.2-CFG`).
+
 ## Qué está terminado
 
 **F-0.1 — Entrega segura.** CI, despliegues, publicación de Pages, migraciones D1 y configuración de secretos son cinco flujos independientes. Ningún push o merge activa producción desde los workflows versionados. Cada promoción exige iniciar el workflow a mano, indicar un `ref` y escribir una confirmación exacta.
@@ -489,7 +506,7 @@ Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan cerra
 - **ADR-0014 — implementado, desplegado y verificado (2026-08-02).** `/health` real (`healthy`/`degraded`/`unhealthy`, D1 + objeto centinela en R2) en los dos Workers; `GET /admin/trazas` en `alejandra-app-api`; ARC-013 conectado a `alejandra_trazas`. Verificado en vivo contra producción. **Bug lateral encontrado y corregido en el mismo ciclo:** `index.html` comparaba el `version` de `/health` (ahora un UUID de despliegue) contra `APP_VERSION`, lo que habría forzado recargas falsas (PR #26) — mismo patrón que los incidentes de recarga infinita del 22/04 y 26/04. Corregido en `main`; publicar a Pages sigue siendo un paso de entrega aparte.
 - **ARC-011 fase 3, paso 1 completo** — migración `.sql` del vertical `checklists` declarada. **Paso 2 (aplicar contra D1) pospuesto por decisión del Director (2026-08-02):** se retoma cuando exista una ventana específica para cambios de esquema, con verificación de D1 antes y después.
 - **ARC-014 — riesgo aceptado temporalmente por el Director (2026-08-02).** Mientras el proyecto tenga un único mantenedor en desarrollo, no se exige revisor distinto del solicitante. Se reabre en cuanto exista producción real o más de un mantenedor.
-- **Secretos aún a nivel de repositorio (`F-0.2-CFG`) — pospuesto por decisión del Director (2026-08-02).** Se mueven al entorno `production` cuando el proyecto entre en fase estable de preproducción/producción; ningún agente maneja los valores reales mientras tanto.
+- **Secretos ya movidos al entorno `production` (`F-0.2-CFG`, 2026-08-04).** Ejecutado por el Director; ver sección dedicada arriba. Quedan sin fecha el ensayo de confirmación errónea y la política de rama de `github-pages`.
 - **Ensayo de confirmación errónea** sobre un workflow de producción: debe salir `skipped`.
 - **`usuario_obras` no existe en producción**, pese a estar declarada en código y en `migrate_roles_multiobra.sql`. Comprobar qué depende de ella antes de aplicar nada.
 

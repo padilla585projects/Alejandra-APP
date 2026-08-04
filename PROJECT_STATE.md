@@ -1,7 +1,7 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-04
-- Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. El mismo día se dejó listo el checklist de referencia de `F-0.2-CFG` (sin valores reales) y se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, ver más abajo).
+- Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo.
 
 ## Autonomía de los agentes
 
@@ -79,7 +79,7 @@ como exige el alcance de F-1.2). Verificación completa registrada en `HANDOFF.m
 
 ## Riesgos activos
 
-- Los secretos siguen a nivel de repositorio, no de entorno: cualquier workflow puede leerlos. **Pospuesto por decisión del Director (2026-08-02, F-0.2-CFG):** se mueven cuando el proyecto entre en fase estable de preproducción/producción; ningún agente maneja los valores reales mientras tanto.
+- **Resuelto (2026-08-04, `F-0.2-CFG`):** los secretos ya no están a nivel de repositorio. El Director los recreó en el entorno `production` (2026-08-03) y borró la copia de repositorio (2026-08-04), tras verificar con un despliegue exitoso. Ver sección dedicada más abajo. Quedan sin fecha el ensayo de confirmación errónea y la política de rama de `github-pages` (criterios menores de la tarea original).
 - **ARC-011 (crítico):** el esquema real de D1 lo define DDL ejecutado desde `worker.js` en producción, no las migraciones versionadas. Fases 1 y 2 verificadas. **Fase 3: `ADR-0011` aceptado el 2026-08-02** como estrategia (migración por vertical, empezando por `checklists`, con manifiesto de estado). Paso 1 (declarar `migrate_checklists.sql`) completo. **Paso 2 (aplicar contra D1) pospuesto por decisión del Director (2026-08-02):** se retoma cuando exista una ventana específica para cambios de esquema, con verificación de D1 antes y después.
 - **ARC-014 (medio) — riesgo aceptado temporalmente por el Director (2026-08-02).** La aprobación del entorno `production` se concedió con la misma credencial que lanzó el workflow; un agente con token de administración puede aprobar su propio despliegue. Mientras el proyecto tenga un único mantenedor en desarrollo, se acepta sin mitigación adicional. Se reabre en cuanto exista producción real o más de un mantenedor: entonces será obligatorio un revisor de identidad distinta al solicitante. Detalle en `ARCHITECT_BACKLOG.md`.
 - ARC-005 queda mitigado en los workflows versionados, pendiente de validación remota.
@@ -204,13 +204,20 @@ esto, las 14 verticales de ARC-011 fase 3 quedan con el ciclo de 5 pasos de ADR-
 en su totalidad.** No queda ninguna tarea de ingeniería activa de ARC-011. Ver `TASKS.md`
 (`ARC-011-FASE3-LOTE3`).
 
-**F-0.2-CFG — checklist de referencia creada.** Sin tarea de ingeniería activa y tras declinar
-ejecutar F-0.2-CFG directamente (acción prohibida para cualquier agente), se preparó
+**F-0.2-CFG — checklist de referencia creada (2026-08-03) y ejecutada por el Director
+(2026-08-04).** Sin tarea de ingeniería activa y tras declinar ejecutar F-0.2-CFG directamente
+(acción prohibida para cualquier agente), se preparó
 `docs/runbooks/CHECKLIST-F02-CFG-SECRETOS-ENTORNO.md`: procedimiento exacto y los 5 nombres de
 variable (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`,
-`OPENAI_API_KEY`, `ADMIN_TOKEN`) para que el Director los mueva personalmente de repositorio a
-entorno `production`, sin ningún valor real. No requiere cambios de workflow. Sigue pospuesta
-por decisión del Director.
+`OPENAI_API_KEY`, `ADMIN_TOKEN`), sin ningún valor real. **El Director lo ejecutó él mismo:**
+creó los 5 en el entorno `production` el 2026-08-03 (18:32-18:46), lo verificó con un
+despliegue exitoso inmediatamente después (`Deploy API Worker`, run `30843489418`, 18:56 —
+éxito confirma que el job resolvió los secretos desde el entorno) y, el 2026-08-04, borró la
+copia de nivel repositorio. Confirmado en solo lectura tras el borrado (`gh secret list`,
+nunca valores): repositorio vacío, entorno `production` con los 5 intactos. Ningún agente leyó
+ni tocó valores reales. Quedan sin fecha dos criterios menores de la tarea original: el ensayo
+de confirmación errónea sobre un workflow de producción y la política de rama de
+`github-pages`.
 
 ## Fix — salto del chat de Alejandra en `panel.html` (2026-08-03)
 
