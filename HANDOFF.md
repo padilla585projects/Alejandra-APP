@@ -707,9 +707,12 @@ ignorarla.
 
 `ADR-0015` pasa a **Aceptado**; `ARC-019` cerrado en `ARCHITECT_BACKLOG.md`. Verificación:
 `node --check worker.js` limpio; encoding limpio en el diff completo. Ver `TASKS.md`
-(`ARC-019-ADR0015-IMPLEMENTAR`). **Sin commitear/PR/desplegar todavía** — cambio de código
-puro sobre una tool `dev_verificado` (chat dev/Telegram), pendiente del circuito normal de
-revisión antes de tocar producción.
+(`ARC-019-ADR0015-IMPLEMENTAR`). **Fusionado a `main` (PR #85) y desplegado en producción
+(2026-08-04), autorizado por el Director:** run
+[30939265650](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30939265650),
+versión `db4a1e20-303a-4a26-9c4e-5bd5a5dacff1`, `/health` → `healthy` (d1:true, r2:true),
+coincide con `wrangler deployments list`. La barrera `CONFIRMO MIGRACION` para `CREATE
+TABLE`/`CREATE INDEX` ya está activa en `sql_query`/`run_migration` en producción.
 
 ## No tocar sin nueva autorización
 
