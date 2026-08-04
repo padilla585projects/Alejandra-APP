@@ -108,14 +108,14 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-2.1 — Gobierno de memoria y conocimiento**
 
-- Estado/prioridad/tamaño: **Abierta (2026-08-02, ADR-0007 enmienda 1)** — dependencias (F-1.1, ARC-002) cerradas vía ADR-0004/ADR-0013; modelo y contrato de gobierno ya aceptados por el Director (ADR-0013, con modificaciones). Primer entregable completado: declaración (paso 1 de ADR-0011) de `migrate_memoria_gobernada.sql`, sin aplicar contra D1. / Crítica / XL.
+- Estado/prioridad/tamaño: **Abierta (2026-08-02, ADR-0007 enmienda 1)** — dependencias (F-1.1, ARC-002) cerradas vía ADR-0004/ADR-0013; modelo y contrato de gobierno ya aceptados por el Director (ADR-0013, con modificaciones). Esquema `migrate_memoria_gobernada.sql` declarado **y aplicado contra D1** (run `30758423450`, 2026-08-02, autorizado por el Director); tabla `memoria_gobernada` en producción, sin filas. Persistencia real de lectura resuelta: `consultarMemoria()` en los dos Workers + primera tool expuesta al modelo, `memoria_consultar` (solo lectura, `nivel_riesgo:'N0'`, en `alejandra-agente/worker.js`), con traza `memoria_consulta` por cada consulta (ARC-008 §8). Escritura (candidatas, confirmación, memoria compartida) queda pendiente de una decisión específica posterior del Director — no forma parte del entregable de lectura. / Crítica / XL.
 - Objetivo y valor: separar memoria, conocimiento, estado temporal y fuentes para evitar fugas/degradación.
 - Alcance/fuera: modelo de autoridad, vigencia, procedencia, relaciones, backlinks, contradicciones e ingesta segura; no aprendizaje autónomo amplio.
 - Dependencias/bloqueantes/paralelo: F-1.1 y ARC-002; paralelo documental con F-1.3.
 - Referencias/ADR/módulos: ADN, Arquitectura Cognitiva, compliance; Memory/Context Engine/D1/R2; ADR-0013.
-- Áreas/migraciones: esquema declarado (`migrate_memoria_gobernada.sql`, sin aplicar); aplicar contra D1 exige autorización del Director (ADR-0007), igual que `checklists`.
-- Riesgos/compliance/pruebas: RGPD, multiempresa, contenido inyectado; aislamiento, retención, borrado y pruebas IDOR.
-- Aceptación/recuperación/entregables: política y modelo aprobados (hecho, ADR-0013); recuperación híbrida limitada y auditada; rollback/retención documentados; habilita F-2.2.
+- Áreas/migraciones: esquema declarado y aplicado (`migrate_memoria_gobernada.sql`); registrado en `migrate_manifiesto.json` como `aplicada: true`.
+- Riesgos/compliance/pruebas: RGPD, multiempresa, contenido inyectado; aislamiento, retención, borrado y pruebas IDOR — cubiertas para lectura por las 15 pruebas de `construirConsultaMemoriaGobernada()` (aislamiento por tenant, caducidad, confianza, ausencia de resultados cruzados).
+- Aceptación/recuperación/entregables: política y modelo aprobados (hecho, ADR-0013); recuperación híbrida limitada y auditada (hecho para lectura: `memoria_consultar`, auditada vía traza `memoria_consulta`); rollback/retención documentados (caducidad 6/12 meses de ADR-0013, sin borrado real todavía documentado como rollback); habilita F-2.2 — **no declarada cerrada todavía**, la escritura sigue abierta y sin decisión del Director.
 
 **F-2.2 — Nexo v1**
 
