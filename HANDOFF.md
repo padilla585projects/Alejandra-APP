@@ -1,10 +1,10 @@
 # Handoff — Alejandra 2.0
 
-- Fecha: 2026-08-02
+- Fecha: 2026-08-03
 - Agentes que entregan: Codex y Claude, Agentes de Ingeniería
-- Trabajo entregado: F-0.1/F-0.1-R (entrega segura), GOV-001 (proceso de ingeniería), ARC-011 fases 1-2 (inventario de esquema), ARC-012 (tres columnas ausentes), ARC-013/015/016/017 (desplegados en producción), F-0.2 (completada), ARC-018 (Worker/bucket R2 huérfanos borrados), ADR-0007 y su enmienda 1, y los siete ADR de Época 1 (`ADR-0004`, `ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010`, `ADR-0011`, `ADR-0013`, `ADR-0014`) — **todos aceptados por el Director el 2026-08-02**
-- Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno) y `ARC-014` (decisión pendiente). **Época 1 abierta y sin ADR propuesto pendiente**: `ADR-0004` aceptado, F-1.1 cerrada; F-1.2 en curso, ampliable con las interfaces de memoria (ADR-0013) y trazas (ADR-0014), ambos aceptados con modificaciones.
-- PRs integradas: #9 (F-0.1), #10 (ARC-011), #11 (ARC-012)
+- Trabajo entregado: F-0.1/F-0.1-R (entrega segura), GOV-001 (proceso de ingeniería), ARC-011 fases 1-2 (inventario de esquema), ARC-012 (tres columnas ausentes), ARC-013/015/016/017 (desplegados en producción), F-0.2 (completada), ARC-018 (Worker/bucket R2 huérfanos borrados), ADR-0007 y su enmienda 1, los siete ADR de Época 1 (`ADR-0004`, `ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010`, `ADR-0011`, `ADR-0013`, `ADR-0014`) — **todos aceptados por el Director el 2026-08-02** —, las 14 verticales de ARC-011 fase 3 con el ciclo de ADR-0011 cerrado, el checklist de referencia de `F-0.2-CFG` y el fix del salto del chat de Alejandra en `panel.html` (PR #76)
+- Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno, checklist lista, ejecución exclusiva del Director) y `ARC-014` (riesgo aceptado temporalmente). **Época 1 completa** (F-1.1/F-1.2/F-1.3 cerradas). **Época 2 abierta**: F-2.1 (gobierno de memoria) con modelo aceptado (`ADR-0013`) y primer esquema declarado y aplicado (`memoria_gobernada`); su paso 3 (persistencia real) resuelto para lectura (`memoria_consultar`), escritura pendiente de decisión del Director. **No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.**
+- PRs integradas: #9 (F-0.1), #10 (ARC-011), #11 (ARC-012), ... #75 (ARC-011 lote 3, retirar DDL), #76 (fix panel.html, chat de Alejandra)
 
 ## Migraciones D1 aplicadas (2026-08-02) — checklists y memoria gobernada
 
@@ -406,6 +406,44 @@ ADR-0011 completo: los ocho verticales del primer y segundo lote (`checklists`, 
 queda ninguna tarea de ingeniería activa de ARC-011.** `migrate_manifiesto.json` actualizado:
 las 6 entradas del tercer lote registran el paso 3/4 completo. Ver `TASKS.md`
 (`ARC-011-FASE3-LOTE3`).
+
+## F-0.2-CFG — checklist de referencia creada (2026-08-03)
+
+Con las 14 verticales de ARC-011 fase 3 cerradas, no quedaba ninguna tarea de ingeniería activa;
+se preparó la alternativa ofrecida al Director tras declinar ejecutar F-0.2-CFG directamente
+(ver sección anterior, punto 2 del tercer lote): un documento de referencia,
+`docs/runbooks/CHECKLIST-F02-CFG-SECRETOS-ENTORNO.md`, con los pasos exactos y los 5 nombres de
+variable (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+`ADMIN_TOKEN`) para que el Director los mueva personalmente de nivel repositorio a nivel entorno
+`production`, sin ningún valor real. Contexto verificado en solo lectura (`gh secret list`,
+`gh secret list --env production`): los 5 siguen a nivel de repositorio; el entorno `production`
+no tiene secretos propios todavía. Ningún agente leyó, imprimió ni movió ningún valor. No
+requiere cambios de workflow: los 4 que consumen secretos ya declaran `environment: production`,
+así que en cuanto exista un secreto con el mismo nombre a nivel de entorno, GitHub lo resuelve
+automáticamente. Sigue pospuesta por decisión del Director; el checklist queda listo para cuando
+decida ejecutarla.
+
+## Fix `panel.html` — salto del chat de Alejandra + mover/redimensionar (2026-08-03)
+
+**Bug real reportado por Adrián** ("escribo, contesta, pero de repente saltan los mensajes de
+antes actualizándose"): el chat de Alejandra en `panel.html` sondeaba `alejandra_historial` cada
+5 s mientras estaba abierto y repintaba toda la ventana en cada sondeo aunque solo hubiera un
+mensaje nuevo. Como esa tabla es compartida a propósito entre app/panel/Telegram (sincronización
+entre dispositivos), cualquier mensaje llegado desde otra plataforma disparaba el repintado
+completo en plena conversación.
+
+**Corregido en PR [#76](https://github.com/padilla585projects/Alejandra-APP/pull/76)
+(`fix/panel-alejandra-chat-sync-drag-resize`):** `cargarAlejandraChat()` ahora compara la lista
+de firmas ya pintadas (`created_at`+`rol`+`contenido`) contra la del servidor. Si no cambió nada,
+no toca el DOM; si el historial nuevo es el viejo más mensajes al final (caso normal), solo
+añade esos mensajes sin rehacer los ya pintados; solo repinta todo si el cambio no es un simple
+añadido al final. De paso se añadió mover/redimensionar la ventana del chat. Único archivo
+tocado: `panel.html` (176 líneas). Fusionada a `main`.
+
+**Pendiente de verificar paridad (regla "una Alejandra, dos cerebros"/frontends, ver
+`CLAUDE.md`):** el fix solo tocó `panel.html`. No se ha comprobado todavía si `index.html` o
+`alejandra-panel.html` tienen el mismo patrón de sondeo-y-repintado completo; si lo tienen,
+sufren el mismo bug y deberían recibir el mismo fix.
 
 ## Qué está terminado
 
