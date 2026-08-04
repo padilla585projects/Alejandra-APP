@@ -5,16 +5,21 @@ La documentación versionada del repositorio es la fuente oficial.
 ## Estado actual
 
 Foundation v0.1 aprobada. **F-0.1 activa en producción desde el 2026-08-02** (PR #9): workflows
-antiguos retirados, `main` protegida, entorno `production` con revisor requerido. Queda mover
-los secretos a nivel de entorno (`F-0.2-CFG`, pospuesta). Detalle en
+antiguos retirados, `main` protegida, entorno `production` con revisor requerido. **F-0.2-CFG
+completada (2026-08-04):** secretos ya movidos al entorno `production`, ensayo de confirmación
+errónea probado (`skipped`), política de rama de `github-pages` ampliada a tags. Detalle en
 `docs/runbooks/CI-CD-Y-MIGRACIONES.md`. Healthcheck automático post-despliegue reincorporado
 (PR #36).
 
-**ARC-011 fases 1 y 2 verificadas** (PR #10); **ARC-012 resuelto** (PR #11); **ARC-013, 015,
-016, 017 corregidos y desplegados en producción.** ARC-011 fase 3 (`ADR-0011`, migrador por
-vertical) tiene su paso 1 completo (`migrate_checklists.sql`); aplicarla contra D1 exige
-autorización del Director. **ARC-018 resuelto** (worker/bucket R2 huérfanos borrados).
-**ARC-014**: riesgo aceptado temporalmente por el Director mientras haya un único mantenedor.
+**ARC-011 fases 1-2 verificadas** (PR #10); **ARC-012 resuelto** (PR #11); **ARC-013, 015, 016,
+017 corregidos, desplegados y verificados en producción.** **ARC-011 fase 3 completa: las 14
+verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (declarar, aplicar, retirar DDL en
+runtime, verificar en producción, registrar en manifiesto) — no queda ninguna tarea de
+ingeniería activa de ARC-011. **ARC-018 resuelto** (worker/bucket R2 huérfanos borrados).
+**ARC-014**: riesgo aceptado temporalmente por el Director mientras haya un único mantenedor,
+revisado sin cambios el 2026-08-03. **ARC-019 resuelto** (`ADR-0015` aceptado e implementado el
+2026-08-04): `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana
+(`CONFIRMO MIGRACION <código>`) en `sql_query`/`run_migration`, desplegado y verificado.
 
 **F-0.2 completada** (2026-08-02): catálogo de rutas, CI de calidad y auditoría remota de
 Cloudflare.
@@ -28,16 +33,26 @@ ARC-004, ARC-006 y ARC-008, y con `ADR-0004` se cierra **F-1.1**.
 Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión, `memory.js`
 (ADR-0013) y el contrato `registrarTraza()` (ADR-0014). `registrarTraza()` real, `/health` de
 tres estados y `GET /admin/trazas` ya están desplegados en producción (ADR-0014, fuera del
-paquete aislado, en cada Worker).
+paquete aislado, en cada Worker). El paquete `nucleo-cognitivo/` en sí sigue sin integrarse en
+ningún Worker, prohibido por `CLAUDE.md` hasta nueva decisión.
 
 **F-1.3 completada** (2026-08-02): Tool Registry (ADR-0010) y Verifier (ADR-0009) migrados a
 todo el catálogo real de tools de los dos Workers (96/103, 7 excluidas a propósito). Cierra la
-Época 1 completa. **Época 2 abierta** (`ADR-0007` enmienda 1): F-2.1 (gobierno de memoria) con
-su modelo aceptado en `ADR-0013` y primer esquema declarado (`migrate_memoria_gobernada.sql`,
-sin aplicar) — ver `TASKS.md`.
+Época 1 completa.
 
-**Presentación (P-1):** `ADR-0012` aceptado. P-ARCH-001 y **P-ARCH-002 aprobados** por el
-Director. Queda desbloqueada la siguiente rebanada, aún sin definir.
+**Época 2 (gobierno de memoria) — lectura y escritura completas y desplegadas.** Esquema
+`memoria_gobernada` aplicado (ADR-0013). Lectura: `memoria_consultar` (N0, solo
+`alejandra-agente`). **Escritura, decisión del Director (2026-08-04, "Exponer como tools
+nuevas"):** `memoria_listar_pendientes` (N0), `memoria_confirmar_candidata`/
+`memoria_rechazar_candidata` (N1, excluidas del cron), gate de rol `encargado`+, desplegadas y
+verificadas en producción (PR #81). `memory.js` de `nucleo-cognitivo/` sigue sin persistencia
+propia (la real vive en cada Worker), y el paquete sigue sin integrarse en ningún Worker.
+
+**Presentación:** `ADR-0012` aceptado. P-ARCH-001 y P-ARCH-002 aprobados. **P-ARCH-003**
+(consulta de versión remota compartida, `packages/design-system`) implementada, fusionada y
+**publicada en Pages (2026-08-04)**. Queda sin definir ni abrir la siguiente rebanada.
+
+No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
 **Migraciones D1 aplicadas (2026-08-02):** el Director autorizó en chat el paso 2 de
 `migrate_checklists.sql` (ARC-011 fase 3) y `migrate_memoria_gobernada.sql` (F-2.1), sobre la
@@ -55,17 +70,14 @@ verificado en producción sin él) — plantilla probada para el próximo vertic
 
 ## Siguiente paso
 
-**F-1.3 completada (2026-08-02):** catálogo de tools de los dos Workers migrado a ADR-0010
-(96/103, 7 excluidas a propósito). Con F-1.1/F-1.2/F-1.3 cerradas, **la Época 1 queda completa**
-y, por `ADR-0007` enmienda 1, se abre **F-2.1** (Época 2, gobierno de memoria) — ver `TASKS.md`
-(`F-2.1-MEMORIA-DECLARAR`). Primer entregable completado: `migrate_memoria_gobernada.sql`
-declara (sin aplicar) el esquema de memoria gobernada de `ADR-0013`, tabla nueva sin relación
-con la legada `alejandra_memoria`.
+Con `F-0.2-CFG`, las 14 verticales de ARC-011 fase 3, la escritura de `memoria_gobernada`
+(F-2.1), `P-ARCH-003` y `ADR-0015`/ARC-019 cerrados y desplegados, **no queda ninguna tarea de
+ingeniería activa.** Lo único abierto son decisiones exclusivas del Director:
 
-En paralelo, sigue pendiente de decisión exclusiva del Director: **`F-0.2-CFG`** (secretos al
-entorno `production`), **ARC-014** (reapertura si cambia el número de mantenedores o entra en
-producción real), **ARC-011-FASE3-CHECKLISTS paso 2** y **F-2.1-MEMORIA-DECLARAR paso 2**
-(aplicar cada migración contra D1), y definir la siguiente rebanada de presentación (P-1) tras
-P-ARCH-002.
+- **Definir la siguiente rebanada de presentación** tras P-ARCH-003 (aún sin proponer).
+- **ARC-014** — revisar si cambian sus condiciones de reapertura (más de un mantenedor o
+  producción real).
+- **Motor de Decisión real / integrar `nucleo-cognitivo/`** — sigue prohibido hasta nueva
+  decisión explícita.
 
 No integrar `nucleo-cognitivo/` en producción ni activar memoria persistente en él.

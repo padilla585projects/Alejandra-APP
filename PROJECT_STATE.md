@@ -1,7 +1,7 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-04
-- Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo.
+- Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
 ## Autonomía de los agentes
 
@@ -105,10 +105,13 @@ Consecuencia: ARC-001, ARC-002, ARC-003, ARC-004, ARC-006 y ARC-008 quedan **cer
 
 ## Decisiones aún pendientes del Director
 
-Ninguna decisión de las cuatro planteadas el 2026-08-02 sigue abierta: **P-ARCH-002** aprobada,
-**ARC-014** aceptada como riesgo temporal, **ARC-011-FASE3-CHECKLISTS** (paso 2) y **`F-0.2-CFG`**
-pospuestas hasta una fase de preproducción/producción estable. Detalle de cada una en `TASKS.md`
-y `ARCHITECT_BACKLOG.md`.
+Todas las decisiones planteadas hasta el 2026-08-04 quedaron resueltas: **P-ARCH-002** aprobada;
+**ARC-014** aceptada como riesgo temporal (revisada sin cambios el 2026-08-03); **`F-0.2-CFG`**
+completada (secretos movidos, ensayo probado, política de rama ampliada); **ARC-011 fase 3**
+completa (14/14 verticales); **escritura de `memoria_gobernada`** decidida y desplegada
+("Exponer como tools nuevas"); **`ADR-0015`/ARC-019** aceptado e implementado. Lo único abierto
+es decisión exclusiva del Director: definir la siguiente rebanada de presentación tras
+P-ARCH-003. Detalle en `TASKS.md` y `ARCHITECT_BACKLOG.md`.
 
 ## Época 1 — Núcleo Cognitivo (iniciada 2026-08-02)
 
@@ -329,10 +332,13 @@ Adrián) que un fix ya estaba en producción cuando solo estaba commiteado — e
 "estado percibido ≠ estado real" que ya causó los incidentes de recarga infinita del 22/04 y
 26/04. Corregido en ambas tools.
 
-**Hallazgo anotado, sin resolver (candidato a ADR aparte):** `sql_query` permite DDL
-(`CREATE`/`ALTER`/`DROP`), con la misma barrera humana (`CONFIRMO BORRADO`) que `run_migration`,
-pero sin la distinción N3 explícita que ADR-0006 sí le da a `run_migration` por su capacidad de
-alterar el esquema. No se cambió su comportamiento en esta tarea, solo se documentó.
+**Hallazgo resuelto (2026-08-04, `ADR-0015`/ARC-019):** `sql_query` permitía DDL
+(`CREATE`/`ALTER`/`DROP`) con la misma barrera humana (`CONFIRMO BORRADO`) que `run_migration`,
+sin la distinción N3 explícita, y ninguna de las dos tools exigía confirmación para `CREATE
+TABLE`/`CREATE INDEX`. Decisión del Director: `sql_query` sube a N3; se extiende la barrera a
+`CREATE` con frase distinta (`CONFIRMO MIGRACION`); `alejandra-agente` revisado, sin brecha
+equivalente. Implementado, desplegado y verificado (PR #85, run 30939265650). Ver sección
+dedicada más abajo.
 
 **96/103 tools totales con metadato ADR-0010** (65 en el agente + 31 en `worker.js` raíz); 7
 excluidas a propósito (dominio ADR-0013). Ninguna migración cambia comportamiento observable —
@@ -387,8 +393,17 @@ documentada en `HANDOFF.md`. La construcción del SQL se extrajo a
 `construirConsultaMemoriaGobernada()` (`alejandra-agente/lib.js`), función pura con 15 pruebas
 nuevas (aislamiento por tenant, caducidad, confianza, ausencia de resultados cruzados).
 136/136 pruebas en `alejandra-agente`, `node --check` limpio en los dos Workers y en `lib.js`.
-**Escritura sobre `memoria_gobernada` (candidatas, confirmación) queda pendiente de una
-decisión específica posterior del Director** — no forma parte de este entregable.
+
+**Escritura sobre `memoria_gobernada` — decidida y desplegada (2026-08-04).** El Director
+decidió "Exponer como tools nuevas": `memoria_listar_pendientes` (N0, disponible al cron),
+`memoria_confirmar_candidata`/`memoria_rechazar_candidata` (N1, excluidas del cron a propósito
+— aprobar una candidata sin humano delante contradice la validación que exige ADR-0013 §3).
+Gate de rol `encargado`+ nuevo (`esEncargadoOSuperior()`), `empresa_id` siempre de sesión. Antes
+de exponerlas se corrigió un hallazgo real: `confirmarCandidata()`/`rechazarCandidata()`
+filtraban solo por `id`/`estado`, sin `empresa_id` (mismo patrón de fuga que ARC-016) —
+corregido antes de exponer nada. 138/138 pruebas en verde. Desplegado y verificado en
+producción (PR #81, run 30937911736, `/health` healthy). Ver `TASKS.md`
+(`F-2.1-MEMORIA-ESCRITURA`).
 
 ## Arquitectura de presentación
 
@@ -397,5 +412,11 @@ decisión específica posterior del Director** — no forma parte de este entreg
 y clientes API. P-ARCH-001 (indicador de salud) fue aprobado. **P-ARCH-002 (componente
 compartido de notificaciones temporales) fue aprobado por el Director el 2026-08-02** — su
 evidencia está en `docs/architecture/FRONTEND_SLICE_TOAST.md`. No es dependencia del Núcleo
-Cognitivo y avanza en paralelo con backend/motor de decisión. Con P-ARCH-002 cerrada, queda
-desbloqueada la siguiente rebanada de presentación (aún sin definir ni abrir).
+Cognitivo y avanza en paralelo con backend/motor de decisión. **P-ARCH-003 (consulta de versión
+remota compartida) implementada, fusionada y publicada en Pages (2026-08-04)** —
+`packages/design-system/src/platform/version-check.js`, usada por `index.html` y `panel.html`
+sin cambiar su banner/toast/recarga. De paso se corrigió que `pages.yml` nunca copiaba
+`packages/` a `_site/`, así que `toast.js` (P-ARCH-002) llevaba desde su fusión sirviendo su
+fallback local en cualquier publicación real. Evidencia en
+`docs/architecture/FRONTEND_SLICE_VERSION_CHECK.md`. Queda desbloqueada la siguiente rebanada
+de presentación (aún sin definir ni abrir).
