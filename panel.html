@@ -9518,6 +9518,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   </div>
 </div>
 
+<!-- P-ARCH-003: consulta pura de version.json, compartida con index.html.
+     No decide banner/toast/recarga -- eso sigue en el script de abajo. -->
+<script src="packages/design-system/src/platform/version-check.js"></script>
 <script>
 // ── CONFIGURACIÓN ──────────────────────────────────────────────
 const API_DEFAULT = 'https://alejandra-app-api.alejandra-app.workers.dev';
@@ -19485,38 +19488,37 @@ const PANEL_APP_VERSION = '8.99';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
-  try {
-    const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return;
-    const j = await res.json();
-    if (!j.v) return;
-    const tag = document.getElementById('panelVersionTag');
-    if (tag) tag.textContent = 'v' + PANEL_APP_VERSION;
-    if (j.v !== PANEL_APP_VERSION) {
-      const intento = Number(sessionStorage.getItem('panel_update_attempt') || 0);
-      if (Date.now() - intento < 30000) return;
-      sessionStorage.setItem('panel_update_attempt', String(Date.now()));
-      _panelActualizando = true;
-      toast('🔄 Nueva versión v' + j.v + ' disponible — recargando...', 'ok');
-      try {
-        if ('serviceWorker' in navigator) {
-          const regs = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(regs.map(reg => reg.update()));
-          regs.forEach(reg => reg.waiting?.postMessage({ tipo: 'SKIP_WAITING' }));
-        }
-        if ('caches' in window) {
-          const names = await caches.keys();
-          await Promise.all(names.map(name => caches.delete(name)));
-        }
-      } catch {}
-      setTimeout(() => {
-        const url = new URL(location.href);
-        url.searchParams.set('_v', j.v);
-        url.searchParams.set('_r', Date.now());
-        location.replace(url.toString());
-      }, 1500);
-    }
-  } catch {}
+  // P-ARCH-003: fetch + comparación viven en el componente compartido
+  // (packages/design-system/src/platform/version-check.js); esta función
+  // conserva el badge/toast/recarga, sin cambios de comportamiento.
+  const { ok, remoteVersion, matches } = await AlejandraPresentation.platform.checkRemoteVersion({ currentVersion: PANEL_APP_VERSION });
+  if (!ok) return;
+  const tag = document.getElementById('panelVersionTag');
+  if (tag) tag.textContent = 'v' + PANEL_APP_VERSION;
+  if (!matches) {
+    const intento = Number(sessionStorage.getItem('panel_update_attempt') || 0);
+    if (Date.now() - intento < 30000) return;
+    sessionStorage.setItem('panel_update_attempt', String(Date.now()));
+    _panelActualizando = true;
+    toast('🔄 Nueva versión v' + remoteVersion + ' disponible — recargando...', 'ok');
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(reg => reg.update()));
+        regs.forEach(reg => reg.waiting?.postMessage({ tipo: 'SKIP_WAITING' }));
+      }
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map(name => caches.delete(name)));
+      }
+    } catch {}
+    setTimeout(() => {
+      const url = new URL(location.href);
+      url.searchParams.set('_v', remoteVersion);
+      url.searchParams.set('_r', Date.now());
+      location.replace(url.toString());
+    }, 1500);
+  }
 }
 _checkPanelVersion();
 setInterval(_checkPanelVersion, 2 * 60 * 1000);

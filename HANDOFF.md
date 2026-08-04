@@ -635,6 +635,42 @@ las tres, exclusión del cron en confirmar/rechazar). Encoding limpio en el diff
 sesión. Ver `TASKS.md` (`F-2.1-MEMORIA-ESCRITURA`). **Sin commitear/PR/desplegar todavía** —
 cambio de código puro, pendiente del circuito normal de revisión antes de tocar producción.
 
+## P-ARCH-003 — Consulta de versión remota (2026-08-04)
+
+Con `F-0.2-CFG` y la escritura de `memoria_gobernada` resueltas en la misma sesión, quedaba la
+única decisión pendiente del roadmap: la siguiente rebanada de presentación tras P-ARCH-002.
+
+**Candidato descartado en el momento, antes de tocar código:** el candidato inicial
+(`copyToClipboard`, 8 sitios en los tres frontends) resultó no tener "usos reales compatibles"
+al revisar el código exacto — cada sitio usa un mecanismo de feedback distinto (toast, `alert`,
+log de desarrollador, cambio de texto de botón), uno mezcla `navigator.share`. Se cambió al
+candidato siguiente en vez de forzar la abstracción, siguiendo el propio criterio de
+`FRONTEND_ARCHITECTURE.md` ("un componente compartido se promueve solo tras dos usos reales
+compatibles").
+
+**Implementada la consulta de versión remota** (`packages/design-system/src/platform/
+version-check.js`): extrae la única parte realmente idéntica de `checkVersionAndUpdate()`
+(`index.html`) y `_checkPanelVersion()` (`panel.html`) — el `fetch` a `version.json` con
+anulación de caché y la comparación contra la versión local — como función pura sin efectos
+secundarios. El banner, el toast, el desregistro de Service Worker, el borrado de cachés y la
+recarga forzada siguen en cada archivo, sin cambios de comportamiento (son flujos distintos por
+aplicación: campo recarga sin aviso a los 3s, oficina avisa y espera 1,5s).
+
+**Hallazgo real corregido de paso:** `.github/workflows/pages.yml` nunca copiaba `packages/` a
+`_site/` — desde que se fusionó P-ARCH-002, `toast.js` llevaba sirviendo siempre su fallback
+local en cualquier publicación real de Pages, sin que nadie lo notara (el fallback documentado
+en `FRONTEND_SLICE_TOAST.md` evitaba que se rompiera nada visible, pero la componentización no
+llegaba a producción). Corregido añadiendo `packages` al bucle de directorios copiados — mismo
+PR, ya que el nuevo componente tenía la misma dependencia.
+
+Verificación: `node --test packages/design-system/src/platform/version-check.test.js` (7/7);
+verificado en el navegador (Browser pane, `file://`) sobre `index.html` y `panel.html` reales —
+sin errores de consola, `checkVersionAndUpdate()`/`_checkPanelVersion()` corren igual que antes.
+Encoding limpio. Ver `docs/architecture/FRONTEND_SLICE_VERSION_CHECK.md` y `TASKS.md`
+(`P-ARCH-003`). **Sin commitear/PR/desplegar todavía** — pendiente del circuito normal de
+revisión; no se ampliará la migración hasta revisar esta evidencia (mismo criterio que las dos
+rebanadas anteriores).
+
 ## No tocar sin nueva autorización
 
 - No desplegar Pages ni Workers sin verificación posterior registrada.

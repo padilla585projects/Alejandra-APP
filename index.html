@@ -13157,6 +13157,9 @@ async function activarPushDevApp() {
 }
 </script>
 
+<!-- P-ARCH-003: consulta pura de version.json, compartida con panel.html.
+     No decide banner/toast/recarga -- eso sigue aquí abajo, sin cambios. -->
+<script src="packages/design-system/src/platform/version-check.js"></script>
 <script>
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
@@ -13201,25 +13204,23 @@ async function forzarActualizacion() {
 
 async function checkVersionAndUpdate(useWorkerFallback = false) {
   if (_actualizando) return;
-  try {
-    let remoteV = null;
-    // version.json con cache-bust (1 fetch ligero ~100 bytes)
-    const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
-    if (res.ok) { const j = await res.json(); remoteV = j.v; }
-    // Solo al volver a primer plano: fallback al worker si version.json falló.
-    // ADR-0014 cambió /health: `version` es ahora el id de despliegue de Cloudflare
-    // (UUID), no la versión semántica de la app (X.XX) — nunca coincidiría con
-    // APP_VERSION, lo que forzaría una recarga en cada fallback. Sin fuente de
-    // versión semántica en /health, este fallback queda inactivo a propósito
-    // (no forzar actualización) en vez de comparar contra un campo que ya no
-    // significa lo mismo.
-    if (remoteV && remoteV !== APP_VERSION) {
-      if (new URLSearchParams(location.search).has('code')) return;
-      _actualizando = true;
-      mostrarBannerActualizacion(remoteV);
-      setTimeout(forzarActualizacion, 3000);
-    }
-  } catch {}
+  // P-ARCH-003: fetch + comparación viven en el componente compartido
+  // (packages/design-system/src/platform/version-check.js); esta función
+  // conserva la decisión de banner/recarga, sin cambios de comportamiento.
+  const { remoteVersion, matches } = await AlejandraPresentation.platform.checkRemoteVersion({ currentVersion: APP_VERSION });
+  // Solo al volver a primer plano: fallback al worker si version.json falló.
+  // ADR-0014 cambió /health: `version` es ahora el id de despliegue de Cloudflare
+  // (UUID), no la versión semántica de la app (X.XX) — nunca coincidiría con
+  // APP_VERSION, lo que forzaría una recarga en cada fallback. Sin fuente de
+  // versión semántica en /health, este fallback queda inactivo a propósito
+  // (no forzar actualización) en vez de comparar contra un campo que ya no
+  // significa lo mismo.
+  if (remoteVersion && !matches) {
+    if (new URLSearchParams(location.search).has('code')) return;
+    _actualizando = true;
+    mostrarBannerActualizacion(remoteVersion);
+    setTimeout(forzarActualizacion, 3000);
+  }
 }
 
 // Al arrancar + cada 5 min (1 solo fetch ligero — no gasta batería)

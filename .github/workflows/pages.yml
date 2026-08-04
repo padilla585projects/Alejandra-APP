@@ -56,7 +56,7 @@ jobs:
           for asset in alejandra-panel.html sw.js .nojekyll manifest.json icon-192.png icon-512.png icon.svg favicon.ico; do
             if [ -f "$asset" ]; then cp "$asset" _site/; fi
           done
-          for directory in icons fonts img; do
+          for directory in icons fonts img packages; do
             if [ -d "$directory" ]; then cp -r "$directory" _site/; fi
           done
           VERSION=$(grep -oP "(?<=APP_VERSION = ')[\d.]+" index.html | head -1)
