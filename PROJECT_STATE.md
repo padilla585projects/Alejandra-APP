@@ -1,7 +1,7 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-03
-- Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. ARC-011 fase 3: **ocho verticales con el ciclo completo** y **seis más declarados (paso 1)** el 2026-08-03 (PR #70) — las 23 tablas "solo de código" que quedaban en el inventario original quedan todas declaradas, a la espera de autorización del Director para el paso 2.
+- Actualizado: 2026-08-04
+- Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. El mismo día se dejó listo el checklist de referencia de `F-0.2-CFG` (sin valores reales) y se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, ver más abajo).
 
 ## Autonomía de los agentes
 
@@ -194,6 +194,37 @@ los ocho verticales anteriores, el paso 2 de este lote no será un no-op. Ver `T
 que ninguna condición de reapertura cambió) y **F-0.2-CFG** — el Director pidió mover los
 secretos directamente ("muévelos tú"); se declinó por ser una acción prohibida para cualquier
 agente (CLAUDE.md, reglas globales de seguridad de la sesión), sigue como tarea personal suya.
+
+## ARC-011 fase 3 — tercer lote, ciclo completo (2026-08-03)
+
+**Paso 4 (desplegar y verificar) cerrado para el tercer lote:** el Director aprobó el entorno
+`production` (run `30839201968`, versión `400421b4-06dd-4943-93d1-2c422c9b4f6a`), `/health`
+healthy, las 23 tablas del lote verificadas presentes tras retirar el DDL en runtime. **Con
+esto, las 14 verticales de ARC-011 fase 3 quedan con el ciclo de 5 pasos de ADR-0011 completo
+en su totalidad.** No queda ninguna tarea de ingeniería activa de ARC-011. Ver `TASKS.md`
+(`ARC-011-FASE3-LOTE3`).
+
+**F-0.2-CFG — checklist de referencia creada.** Sin tarea de ingeniería activa y tras declinar
+ejecutar F-0.2-CFG directamente (acción prohibida para cualquier agente), se preparó
+`docs/runbooks/CHECKLIST-F02-CFG-SECRETOS-ENTORNO.md`: procedimiento exacto y los 5 nombres de
+variable (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `ADMIN_TOKEN`) para que el Director los mueva personalmente de repositorio a
+entorno `production`, sin ningún valor real. No requiere cambios de workflow. Sigue pospuesta
+por decisión del Director.
+
+## Fix — salto del chat de Alejandra en `panel.html` (2026-08-03)
+
+**Bug real reportado por Adrián**, corregido en PR
+[#76](https://github.com/padilla585projects/Alejandra-APP/pull/76): el chat de Alejandra en
+`panel.html` sondeaba `alejandra_historial` cada 5 s y repintaba toda la ventana en cada
+sondeo, aunque solo hubiera un mensaje nuevo — como esa tabla se comparte a propósito entre
+app/panel/Telegram, un mensaje de otra plataforma disparaba el repintado completo en plena
+conversación ("saltan los mensajes de antes actualizándose"). `cargarAlejandraChat()` ahora
+compara firmas (`created_at`+`rol`+`contenido`) contra el servidor y solo añade mensajes
+nuevos al final, sin rehacer lo ya pintado. De paso se añadió mover/redimensionar la ventana
+del chat. Único archivo tocado: `panel.html`. **Pendiente de comprobar paridad** (regla de
+frontends de Alejandra, `CLAUDE.md`): no verificado todavía si `index.html`/
+`alejandra-panel.html` tienen el mismo patrón de sondeo-y-repintado y necesitan el mismo fix.
 
 ## Siguiente objetivo
 
