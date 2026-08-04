@@ -2,7 +2,7 @@
 
 - Identificador: ADR-0015
 - Fecha: 2026-08-04
-- Estado: **Propuesto**
+- Estado: **Aceptado (2026-08-04)**
 - Decisores: Director del Proyecto
 - Resuelve: ARC-019
 
@@ -88,19 +88,63 @@ Ninguna alternativa se ha aplicado. Este ADR no cambia comportamiento por sí mi
   interpreta como cubierta por el gate `ctx.dev===true`, no por una confirmación por uso — una
   lectura distinta a la que el propio ADR-0006 parece dar a entender.
 
-## Preguntas que solo el Director puede responder
+## Decisión del Director (2026-08-04)
 
-1. **¿Se sube `sql_query` a N3**, igual que `run_migration`, dado que tiene la misma capacidad
-   de alterar el esquema?
-2. **¿Se extiende la barrera humana para cubrir `CREATE TABLE`/`CREATE INDEX`** en las dos
-   tools, o se acepta que la protección real de la N3 de `run_migration` es solo "quién puede
-   invocarla" (`dev_verificado`), no "cada uso individual"?
-3. Si se extiende la barrera: **¿misma frase `CONFIRMO BORRADO`, o una distinta** (p. ej.
-   `CONFIRMO MIGRACION`) para no mezclar en la cabeza del humano "esto borra datos" con "esto
-   crea una tabla"?
-4. **¿Alcance de la revisión**: solo el catálogo de `worker.js` raíz (`sql_query`,
-   `run_migration`), o también revisar si `escribir_bd`/`gestionar_*` en `alejandra-agente`
-   tienen el mismo tipo de brecha para algún caso de escritura amplia no cubierto?
+Las cuatro preguntas se resolvieron así, en el mismo orden:
+
+1. **`sql_query` sube a N3**, igual que `run_migration` — misma capacidad de alterar el esquema,
+   misma clasificación.
+2. **Se extiende la barrera humana a `CREATE TABLE`/`CREATE INDEX`** en las dos tools. La
+   protección N3 deja de ser solo "quién puede invocarla" — pasa a ser también "cada uso
+   individual", igual que ya regía para `DROP`/`TRUNCATE`/`ALTER`/`DELETE`/`UPDATE`.
+3. **Frase distinta**: `CONFIRMO MIGRACION <código>`, para no mezclar "esto borra datos" con
+   "esto crea una tabla" en la cabeza del humano que confirma.
+4. **Alcance ampliado a `alejandra-agente`.**
+
+## Implementación (2026-08-04)
+
+**`worker.js` raíz** (`sql_query`, `run_migration`):
+
+- `sql_query` pasa de `nivel_riesgo:'N2'` a `'N3'`.
+- Nueva función `detectarSqlCreacion(sql)` (`worker.js:1521-1528`), compartida por las dos
+  tools, análoga a `detectarSqlDestructivo()`: detecta `CREATE TABLE`/`CREATE INDEX`/`CREATE
+  UNIQUE INDEX` al inicio de la sentencia.
+- Nueva constante `FRASE_CONFIRMACION_MIGRACION = 'CONFIRMO MIGRACION'`, junto a la ya existente
+  `FRASE_CONFIRMACION_DESTRUCTIVA = 'CONFIRMO BORRADO'`.
+- `extraerCodigosConfirmacion(mensajeHumano, frase)` generalizada para aceptar cualquier frase
+  (antes hardcodeaba `CONFIRMO BORRADO`); construye el regex escapando la frase dada. Verificado
+  a mano que las dos frases no se cruzan: un código confirmado con `CONFIRMO BORRADO` no
+  autoriza una operación que pide `CONFIRMO MIGRACION`, y viceversa.
+- `exigirConfirmacionHumana(ctx, descriptor, motivo, efecto, frase)` acepta ahora qué frase
+  exigir; según la frase, consulta `ctx.codigosConfirmados` (destructivo, comportamiento
+  anterior sin cambios) o `ctx.codigosConfirmadosMigracion` (nuevo, para `CREATE`).
+- Los dos puntos de entrada del bucle de tool-use (chat dev del panel y Telegram, únicos
+  canales que llegan a `executeAITool` con `dev:true`) construyen ahora también
+  `codigosConfirmadosMigracion` a partir del mensaje real del humano.
+- `sql_query` y `run_migration` comprueban `detectarSqlCreacion()` además de
+  `detectarSqlDestructivo()`; si hay creación sin confirmar, bloquean con la frase
+  `CONFIRMO MIGRACION`. `ALTER TABLE` sigue cubierto por la barrera destructiva existente (sin
+  cambios) — el hueco real era solo `CREATE TABLE`/`CREATE INDEX`.
+- Verificado con casos manuales (`CREATE TABLE`, `CREATE INDEX`, `CREATE UNIQUE INDEX`,
+  `ALTER TABLE`, `SELECT`, `INSERT`, `DROP TABLE`): cada sentencia activa exactamente la barrera
+  esperada, ninguna se cuela sin barrera. `node --check worker.js` limpio. Sin suite de tests
+  dedicada para `worker.js` raíz (mismo patrón documentado ya en `F-1.3-MIGRAR-RESTO-TOOLS` para
+  `esDeveloperAgente()`).
+
+**`alejandra-agente`** (alcance ampliado, punto 4): revisado el catálogo completo en busca del
+mismo tipo de brecha (escritura amplia sin barrera para DDL no destructivo):
+
+- `escribir_bd` (`alejandra-agente/worker.js:7328-7361`) **no tiene la brecha**: rechaza
+  explícitamente `DROP`/`ALTER`/`TRUNCATE` (línea 7331) y solo permite sentencias que empiecen
+  por `INSERT`/`UPDATE`/`DELETE`/`REPLACE` (línea 7337) — `CREATE` no está en esa lista blanca,
+  así que ya se rechaza de raíz, no solo sin barrera.
+- `consultar_bd`, `configurar_alerta` y la rama `custom` de `exportar_datos` pasan por
+  `validarSoloSelectBD()` — solo `SELECT`, sin capacidad de escritura ni DDL.
+- Ningún otro tool del catálogo de `alejandra-agente` ejecuta SQL arbitrario procedente del
+  input del modelo; los `CREATE TABLE`/`CREATE INDEX` que aparecen en el archivo son DDL interno
+  de migración (`ensureXxxTable()`, `runMigrations()`), no alcanzable desde ningún `tool_input`.
+- **Conclusión: no hay cambio de código en `alejandra-agente`** — la revisión confirma que no
+  existe la brecha, no que se decidiera ignorarla.
 
 ## Referencias
 

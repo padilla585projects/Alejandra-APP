@@ -676,6 +676,41 @@ Encoding limpio. Ver `docs/architecture/FRONTEND_SLICE_VERSION_CHECK.md` y `TASK
 éxito; no se ampliará la migración hasta revisar esta evidencia (mismo criterio que las dos
 rebanadas anteriores).
 
+## ADR-0015 aceptado e implementado — barrera de DDL para `CREATE TABLE`/`CREATE INDEX` (2026-08-04)
+
+Con `TASKS.md`/`HANDOFF.md` sincronizados y `alejandra-agente`/Pages ya desplegados, se revisó
+`ADR-0015` (`ARC-019`, redactado antes en la misma sesión). El Director respondió las cuatro
+preguntas pendientes: **`sql_query` sube a N3; se extiende la barrera humana a `CREATE
+TABLE`/`CREATE INDEX` en las dos tools (`sql_query`, `run_migration`), con frase distinta
+`CONFIRMO MIGRACION <código>` (no `CONFIRMO BORRADO`); alcance de revisión ampliado a
+`alejandra-agente`.**
+
+**Implementado en `worker.js`:** nueva `detectarSqlCreacion()` (análoga a
+`detectarSqlDestructivo()`, detecta `CREATE TABLE`/`CREATE INDEX`/`CREATE UNIQUE INDEX`);
+`FRASE_CONFIRMACION_MIGRACION` junto a la ya existente `FRASE_CONFIRMACION_DESTRUCTIVA`;
+`extraerCodigosConfirmacion()` generalizada para aceptar cualquier frase (antes hardcodeaba
+`CONFIRMO BORRADO`); `exigirConfirmacionHumana()` generalizada para exigir la frase que
+corresponda y consultar el set de `ctx` correcto (`codigosConfirmados` para destructivo,
+`codigosConfirmadosMigracion` para creación). Los dos puntos de entrada del bucle de tool-use
+(chat dev del panel y Telegram, únicos canales `dev:true`) construyen ahora también el segundo
+set a partir del mensaje real del humano. Verificado a mano que las dos frases no se cruzan
+(un código confirmado con una no autoriza una operación que pide la otra) y que
+`CREATE`/`ALTER`/`DROP`/`SELECT`/`INSERT` activan exactamente la barrera esperada cada uno.
+
+**Alcance ampliado a `alejandra-agente` (punto 4) — revisado, sin brecha equivalente:**
+`escribir_bd` ya rechazaba `CREATE`/`DROP`/`ALTER`/`TRUNCATE` de raíz (lista blanca
+`INSERT`/`UPDATE`/`DELETE`/`REPLACE`); `consultar_bd`, `configurar_alerta` y la rama `custom`
+de `exportar_datos` solo permiten `SELECT` vía `validarSoloSelectBD()`. Ningún otro tool
+ejecuta SQL arbitrario procedente del input del modelo. **Sin cambios de código en
+`alejandra-agente`** — la revisión confirma que no existe la brecha, no que se decidiera
+ignorarla.
+
+`ADR-0015` pasa a **Aceptado**; `ARC-019` cerrado en `ARCHITECT_BACKLOG.md`. Verificación:
+`node --check worker.js` limpio; encoding limpio en el diff completo. Ver `TASKS.md`
+(`ARC-019-ADR0015-IMPLEMENTAR`). **Sin commitear/PR/desplegar todavía** — cambio de código
+puro sobre una tool `dev_verificado` (chat dev/Telegram), pendiente del circuito normal de
+revisión antes de tocar producción.
+
 ## No tocar sin nueva autorización
 
 - No desplegar Pages ni Workers sin verificación posterior registrada.

@@ -37,6 +37,28 @@ Siguiente acción exacta:
 
 ## TAREAS ACTIVAS
 
+### ARC-019-ADR0015-IMPLEMENTAR — Clasificación de `sql_query` y barrera de DDL no destructivo
+
+- ID: ARC-019-ADR0015-IMPLEMENTAR
+- Título: Implementar la decisión del Director sobre ADR-0015 (subir `sql_query` a N3, extender la barrera humana a `CREATE TABLE`/`CREATE INDEX`)
+- Fase: deuda de seguridad (ARC-019), fuera de Épocas — hallazgo propio, no parte del roadmap por fases
+- Estado: **código completo (2026-08-04); sin commitear/PR/desplegar todavía**
+- Prioridad: Alta
+- Rama: `PENDIENTE` (por commitear/PR)
+- Responsable actual: —
+- Objetivo: cerrar la brecha real detectada en `ADR-0015`: ni `sql_query` ni `run_migration` exigían confirmación humana para `CREATE TABLE`/`CREATE INDEX`, pese a que ADR-0006 dice de `run_migration` que "no es una decisión que Alejandra pueda tomar por su cuenta en ningún caso".
+- Criterios de aceptación (decisión del Director, 2026-08-04):
+  1. ✅ `sql_query` sube de `nivel_riesgo:'N2'` a `'N3'` (`worker.js`).
+  2. ✅ Barrera humana extendida a `CREATE TABLE`/`CREATE INDEX`/`CREATE UNIQUE INDEX` en `sql_query` y `run_migration`, vía nueva `detectarSqlCreacion()`, compartida por las dos tools.
+  3. ✅ Frase de confirmación distinta para no destructivo: `CONFIRMO MIGRACION <código>` (`FRASE_CONFIRMACION_MIGRACION`), separada de `CONFIRMO BORRADO`. `extraerCodigosConfirmacion()`/`exigirConfirmacionHumana()` generalizadas para aceptar la frase; verificado que los códigos de una frase no autorizan operaciones de la otra.
+  4. ✅ Alcance ampliado a `alejandra-agente`: revisado `escribir_bd`/`consultar_bd`/`configurar_alerta`/`exportar_datos` — **no hay brecha equivalente** (`escribir_bd` ya rechazaba `CREATE`/`DROP`/`ALTER`/`TRUNCATE` de raíz; el resto solo permite `SELECT` vía `validarSoloSelectBD()`). Sin cambios de código ahí — hallazgo de "no hay brecha", no una omisión.
+- Dependencias: `ADR-0015` aceptado por el Director (2026-08-04).
+- Bloqueos: ninguno.
+- Archivos principales: `worker.js` (`detectarSqlCreacion`, `FRASE_CONFIRMACION_MIGRACION`, `extraerCodigosConfirmacion`, `exigirConfirmacionHumana`, casos `sql_query`/`run_migration`, los dos puntos de entrada del bucle de tool-use).
+- Pruebas: `node --check worker.js` limpio; verificación manual de `detectarSqlDestructivo()`/`detectarSqlCreacion()` sobre `CREATE TABLE`, `CREATE INDEX`, `CREATE UNIQUE INDEX`, `ALTER TABLE`, `SELECT`, `INSERT`, `DROP TABLE` (cada uno activa la barrera esperada, ninguno se cuela); verificación manual de que las dos frases de confirmación no se cruzan. Sin suite de tests dedicada para `worker.js` raíz (mismo patrón ya documentado para `esDeveloperAgente()`).
+- Última actualización: 2026-08-04
+- Siguiente acción exacta: commitear, abrir PR, CI verde, fusionar a `main`; desplegar `worker.js` requiere autorización del Director (aprobación del entorno `production`).
+
 Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-RESTO-TOOLS se completó el 2026-08-02** (ver tabla de completadas). **Las 14 verticales de ARC-011 fase 3 completas** (`checklists`, `rfis`, `calidad`, `tareas_obra`, `actas_reunion`, `ordenes_cambio`, `ordenes_compra`, `proveedores_gestion`, `planificacion_produccion`, `finanzas_obra`, `seguridad_cumplimiento`, `relaciones_obra`, `flota`, `nexus_experts`), ciclo de 5 pasos cerrado en todas — ver `ARC-011-FASE3-LOTE3` abajo para el detalle del tercer lote, cuyo paso 4 (desplegar y verificar) se cerró el 2026-08-03 (run 30839201968, un único despliegue para los 6 verticales, siguiendo el criterio de agrupar que pidió el Director). **No queda ninguna tarea activa de ARC-011.**
 
 ### ARC-011-FASE3-LOTE3 — Declarar 6 verticales: `planificacion_produccion`, `finanzas_obra`, `seguridad_cumplimiento`, `relaciones_obra`, `flota`, `nexus_experts`

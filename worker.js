@@ -874,21 +874,18 @@ const AI_TOOLS = [
   // tools (declaracion de cara al futuro, no aplicada todavia).
   //
   // sql_query: permite CREATE/ALTER/DROP igual que run_migration -- no solo
-  // DML. Tiene la misma barrera humana (CONFIRMO BORRADO) que gestiona
-  // operaciones destructivas, por eso se clasifica N2 igual que escribir_bd
-  // en alejandra-agente (mismo patron de barrera). Queda anotado: a
-  // diferencia de run_migration, que ADR-0006 saca explicitamente del
-  // alcance autonomo (N3) por su capacidad de alterar el esquema, sql_query
-  // tiene esa MISMA capacidad de DDL sin esa distincion explicita -- posible
-  // brecha a revisar en una decision aparte, no se cambia el comportamiento
-  // en esta tarea.
+  // DML. ADR-0015 (aceptado): misma capacidad de alterar el esquema que
+  // run_migration, por lo que se sube a N3 igual que esta. Ademas de la
+  // barrera para DROP/TRUNCATE/ALTER/DELETE/UPDATE (CONFIRMO BORRADO), ahora
+  // CREATE TABLE/CREATE INDEX tambien exige confirmacion humana, con la frase
+  // distinta CONFIRMO MIGRACION (detectarSqlCreacion/FRASE_CONFIRMACION_MIGRACION).
   {
     name: 'sql_query',
-    description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total. IMPORTANTE: las operaciones catastroficas (DROP/TRUNCATE/ALTER TABLE, o DELETE/UPDATE sin WHERE) estan bloqueadas por una barrera humana: al intentarlas recibes un codigo unico ligado a esa consulta exacta, y solo se ejecutan si el usuario humano escribe literalmente "CONFIRMO BORRADO <codigo>" en su mensaje. Ese codigo autoriza SOLO ese SQL concreto, no cualquier otro. Tu NO puedes autoconfirmar ni teclear el codigo; muestraselo al humano, explica que borrara, y espera a que lo escriba.',
+    description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total. IMPORTANTE: las operaciones catastroficas (DROP/TRUNCATE/ALTER TABLE, o DELETE/UPDATE sin WHERE) estan bloqueadas por una barrera humana: al intentarlas recibes un codigo unico ligado a esa consulta exacta, y solo se ejecutan si el usuario humano escribe literalmente "CONFIRMO BORRADO <codigo>" en su mensaje. CREATE TABLE/CREATE INDEX tienen su PROPIA barrera, con una frase distinta: "CONFIRMO MIGRACION <codigo>". Cada codigo autoriza SOLO esa operacion concreta, no cualquier otra. Tu NO puedes autoconfirmar ni teclear el codigo; muestraselo al humano, explica el efecto, y espera a que lo escriba.',
     input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' } }, required: ['sql'] },
     acceso: 'dev_verificado',
     cron: 'prohibido',
-    nivel_riesgo: 'N2',
+    nivel_riesgo: 'N3',
   },
   // ADR-0010/ADR-0006: solo alcanzable via executeAITool() con { dev: true } (canales
   // ya restringidos a Adrian). Solo lee internet (Tavily), no toca D1/R2 -> N0.
@@ -1209,10 +1206,13 @@ const AI_TOOLS = [
   // ADR-0006 lo exige explicitamente: "run_migration debe declararse
   // nivel_riesgo: 'N3' cuando se migre, reflejando que ADR-0006 la saca del
   // alcance autonomo del agente" (decision del Director, 2026-08-02). No es
-  // una clasificacion mia -- es la que manda el propio ADR.
+  // una clasificacion mia -- es la que manda el propio ADR. ADR-0015
+  // (aceptado, 2026-08-04) cierra la brecha de comportamiento que quedaba
+  // pendiente: CREATE TABLE/CREATE INDEX tambien exige confirmacion humana
+  // (frase distinta, CONFIRMO MIGRACION), no solo DROP/TRUNCATE/ALTER.
   {
     name: 'run_migration',
-    description: 'Ejecuta SQL DDL directamente en la base de datos D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN, CREATE INDEX, etc.). Úsalo para crear tablas nuevas, añadir columnas, crear índices. Admite múltiples sentencias separadas por punto y coma.',
+    description: 'Ejecuta SQL DDL directamente en la base de datos D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN, CREATE INDEX, etc.). Úsalo para crear tablas nuevas, añadir columnas, crear índices. Admite múltiples sentencias separadas por punto y coma. IMPORTANTE (ADR-0015): DROP/TRUNCATE/ALTER TABLE exigen que el humano escriba "CONFIRMO BORRADO <codigo>"; CREATE TABLE/CREATE INDEX exigen "CONFIRMO MIGRACION <codigo>" (frase distinta). Tu NO puedes autoconfirmar ni teclear el codigo; muestraselo al humano y espera.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1497,14 +1497,19 @@ async function esUrlSeguraFetch(rawUrl, env) {
 // en su propio mensaje. El modelo no puede fabricar el mensaje del usuario, asi
 // que no puede autoconfirmarse.
 const FRASE_CONFIRMACION_DESTRUCTIVA = 'CONFIRMO BORRADO';
-// Extrae los codigos de confirmacion presentes en el mensaje real del humano.
-// Formato exigido: "CONFIRMO BORRADO <CODIGO>" donde <CODIGO> son 6 hex. Devuelve
-// un Set en mayusculas. El modelo no puede inyectar esto: se deriva del mensaje
-// del usuario, no del tool_input que el LLM genera.
-function extraerCodigosConfirmacion(mensajeHumano) {
+// ADR-0015: frase distinta para DDL no destructivo (CREATE TABLE/CREATE INDEX),
+// a proposito diferente de CONFIRMO BORRADO para no mezclar en la cabeza del
+// humano "esto borra datos" con "esto crea una tabla".
+const FRASE_CONFIRMACION_MIGRACION = 'CONFIRMO MIGRACION';
+// Extrae los codigos de confirmacion presentes en el mensaje real del humano,
+// para una frase de confirmacion dada. Formato exigido: "<FRASE> <CODIGO>" donde
+// <CODIGO> son 6 hex. Devuelve un Set en mayusculas. El modelo no puede inyectar
+// esto: se deriva del mensaje del usuario, no del tool_input que el LLM genera.
+function extraerCodigosConfirmacion(mensajeHumano, frase = FRASE_CONFIRMACION_DESTRUCTIVA) {
   const codigos = new Set();
   if (typeof mensajeHumano !== 'string') return codigos;
-  const re = /CONFIRMO\s+BORRADO\s+([0-9A-Fa-f]{6})\b/g;
+  const fraseEscapada = frase.trim().split(/\s+/).map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+  const re = new RegExp(fraseEscapada + '\\s+([0-9A-Fa-f]{6})\\b', 'g');
   let m;
   while ((m = re.exec(mensajeHumano)) !== null) codigos.add(m[1].toUpperCase());
   return codigos;
@@ -1530,18 +1535,30 @@ function detectarSqlDestructivo(sql) {
   if (/^\s*UPDATE\b/i.test(sql)) return /\bWHERE\b/i.test(sql) ? 'UPDATE (afecta filas)' : 'UPDATE sin WHERE (toda la tabla)';
   return null;
 }
-// Barrera humana generica para operaciones destructivas. Si la operacion ya esta
-// confirmada por el humano (ctx.codigosConfirmados contiene el codigo del
-// descriptor) devuelve null y la operacion procede. Si no, devuelve el JSON-string
-// de bloqueo listo para return. El codigo se deriva del descriptor y solo el
-// humano puede teclearlo en su mensaje: el modelo no puede autoconfirmarse.
-async function exigirConfirmacionHumana(ctx, descriptor, motivo, efecto = '') {
+// ADR-0015: DDL no destructivo (crear tabla o indice). Antes de este ADR no exigia
+// ninguna barrera humana pese a que ADR-0006 dice de run_migration que "no es una
+// decision que Alejandra pueda tomar por su cuenta en ningun caso". Compartida por
+// sql_query y run_migration, igual que detectarSqlDestructivo.
+function detectarSqlCreacion(sql) {
+  if (/^\s*CREATE\s+(TABLE|INDEX|UNIQUE\s+INDEX)\b/i.test(sql)) return 'CREATE TABLE/INDEX';
+  return null;
+}
+// Barrera humana generica para operaciones sensibles. Si la operacion ya esta
+// confirmada por el humano (el set correspondiente a `frase` contiene el codigo
+// del descriptor) devuelve null y la operacion procede. Si no, devuelve el
+// JSON-string de bloqueo listo para return. El codigo se deriva del descriptor y
+// solo el humano puede teclearlo en su mensaje: el modelo no puede autoconfirmarse.
+// `frase` decide que set de ctx se consulta y que frase se le pide al humano:
+// FRASE_CONFIRMACION_DESTRUCTIVA -> ctx.codigosConfirmados (DROP/TRUNCATE/ALTER/DELETE/UPDATE)
+// FRASE_CONFIRMACION_MIGRACION -> ctx.codigosConfirmadosMigracion (CREATE TABLE/INDEX)
+async function exigirConfirmacionHumana(ctx, descriptor, motivo, efecto = '', frase = FRASE_CONFIRMACION_DESTRUCTIVA) {
   const codigo = await codigoConfirmacionOp(descriptor);
-  const codigosOk = ctx && ctx.codigosConfirmados instanceof Set ? ctx.codigosConfirmados : new Set();
+  const campoSet = frase === FRASE_CONFIRMACION_MIGRACION ? 'codigosConfirmadosMigracion' : 'codigosConfirmados';
+  const codigosOk = ctx && ctx[campoSet] instanceof Set ? ctx[campoSet] : new Set();
   if (codigosOk.has(codigo)) return null;
   return JSON.stringify({
     ok: false, needs_confirmation: true, confirm_code: codigo,
-    error: `Operacion destructiva bloqueada (${motivo}).${efecto ? ' ' + efecto + '.' : ''} Para autorizar SOLO esta operacion exacta, el usuario humano debe escribir literalmente "CONFIRMO BORRADO ${codigo}" en su proximo mensaje. NO puedes autoconfirmar ni teclear el codigo en su nombre: debe escribirlo el humano. Muestraselo (${codigo}), explica el efecto, y espera. No reintentes hasta que el humano lo haya escrito.`
+    error: `Operacion bloqueada (${motivo}).${efecto ? ' ' + efecto + '.' : ''} Para autorizar SOLO esta operacion exacta, el usuario humano debe escribir literalmente "${frase} ${codigo}" en su proximo mensaje. NO puedes autoconfirmar ni teclear el codigo en su nombre: debe escribirlo el humano. Muestraselo (${codigo}), explica el efecto, y espera. No reintentes hasta que el humano lo haya escrito.`
   });
 }
 
@@ -1591,6 +1608,13 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
         const motivoDestructivo = detectarSqlDestructivo(sql);
         if (motivoDestructivo) {
           const bloqueo = await exigirConfirmacionHumana(ctx, sql, motivoDestructivo, 'Operacion destructiva sobre la BD');
+          if (bloqueo) return bloqueo;
+        }
+        // ADR-0015: CREATE TABLE/INDEX tambien exige confirmacion humana, con una
+        // frase distinta (CONFIRMO MIGRACION) para no mezclarlo con un borrado.
+        const motivoCreacion = detectarSqlCreacion(sql);
+        if (motivoCreacion) {
+          const bloqueo = await exigirConfirmacionHumana(ctx, sql, motivoCreacion, 'Crea una tabla o indice nuevo en la BD', FRASE_CONFIRMACION_MIGRACION);
           if (bloqueo) return bloqueo;
         }
         if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
@@ -2298,6 +2322,16 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
         if (motivoMigracion) {
           const bloqueo = await exigirConfirmacionHumana(ctx, sql, `migracion con ${motivoMigracion}`, 'Puede afectar tablas enteras');
           if (bloqueo) return bloqueo;
+        }
+        // ADR-0015: si ninguna sentencia es destructiva pero alguna crea tabla/indice,
+        // exige confirmacion con la frase distinta CONFIRMO MIGRACION.
+        if (!motivoMigracion) {
+          let motivoCreacion = null;
+          for (const stmt of stmts) { const m = detectarSqlCreacion(stmt); if (m) { motivoCreacion = m; break; } }
+          if (motivoCreacion) {
+            const bloqueo = await exigirConfirmacionHumana(ctx, sql, `migracion con ${motivoCreacion}`, 'Crea una tabla o indice nuevo en la BD', FRASE_CONFIRMACION_MIGRACION);
+            if (bloqueo) return bloqueo;
+          }
         }
         const results = [];
         for (const stmt of stmts) {
@@ -3734,7 +3768,7 @@ async function handleDevAI(env, chatId, userMessage) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
         type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input, { dev: true, codigosConfirmados: extraerCodigosConfirmacion(userMessage) })
+        content: await executeAITool(env, tb.name, tb.input, { dev: true, codigosConfirmados: extraerCodigosConfirmacion(userMessage), codigosConfirmadosMigracion: extraerCodigosConfirmacion(userMessage, FRASE_CONFIRMACION_MIGRACION) })
       })));
       messages.push({ role: 'assistant', content: result.content });
       messages.push({ role: 'user', content: toolResults });
@@ -15672,7 +15706,7 @@ async function devAIChat(request, env) {
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
         type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input, { dev: true, codigosConfirmados: extraerCodigosConfirmacion(message) })
+        content: await executeAITool(env, tb.name, tb.input, { dev: true, codigosConfirmados: extraerCodigosConfirmacion(message), codigosConfirmadosMigracion: extraerCodigosConfirmacion(message, FRASE_CONFIRMACION_MIGRACION) })
       })));
       msgs.push({ role: 'assistant', content: result.content });
       msgs.push({ role: 'user', content: toolResults });
