@@ -5377,6 +5377,7 @@ async function apiCallRaw(path, options = {}) {
   }
   return res;
 }
+const apiFetch = apiCall; // alias — RdP/registro-hormigonado/formación-en-obra usan este nombre
 
 // ══════════════════════════════════════════════════════
 // TOAST
@@ -9562,21 +9563,10 @@ function renderStock(items, mod) {
       dl.innerHTML = marcas.map(m => `<option value="${m}">`).join('');
     }
   }
-  // Poblar filtros proveedor/tipo con datos reales de los items
-  if (mod === 'bobinas') {
-    const provSel = document.getElementById('stockProvSelect');
-    if (provSel) {
-      const cur = provSel.value;
-      const provs = [...new Set(items.map(b => b.proveedor).filter(Boolean))].sort();
-      provSel.innerHTML = '<option value="">📦 Proveedor</option>' + provs.map(p => `<option value="${p}"${p===cur?' selected':''}>${p}</option>`).join('');
-    }
-    const tipoSel = document.getElementById('stockTipoSelect');
-    if (tipoSel) {
-      const cur = tipoSel.value;
-      const tipos = [...new Set(items.map(b => b.tipo_cable).filter(Boolean))].sort();
-      tipoSel.innerHTML = '<option value="">🔌 Tipo cable</option>' + tipos.map(t => `<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
-    }
-  }
+  // NOTA: los <select> de proveedor/tipo cable se pueblan una sola vez desde el catálogo
+  // completo en cargarCatalogos() (#stockProvSelect/#stockTipoSelect) — repoblarlos aquí con
+  // los `items` ya filtrados por el backend dejaba solo la opción seleccionada en la lista,
+  // haciendo parecer que "los filtros desaparecen" tras aplicar uno (sugerencia #214).
   const c = document.getElementById('stockList');
   if (!items.length) { c.innerHTML = '<div class="empty-state">No hay elementos</div>'; return; }
 
@@ -12885,8 +12875,11 @@ async function forzarSync() {
   toast('⏳ Sincronizando con Sheets...', '');
   try {
     const res = await apiCall('/sync-sheets', { method: 'POST' });
-    if (res.ok) toast('✅ Sincronización completada', 'ok');
-    else toast('⚠️ El worker no tiene endpoint de sync manual', 'err');
+    if (res.ok) { toast('✅ Sincronización completada', 'ok'); return; }
+    // El endpoint /sync-sheets sí existe (worker.js) — mostrar el motivo real del fallo
+    // en vez del mensaje fijo anterior, que afirmaba (incorrectamente) que no existía (#209).
+    const e = await res.json().catch(() => ({}));
+    toast('⚠️ ' + (e.error || `Error al sincronizar (HTTP ${res.status})`), 'err');
   } catch { toast('❌ Error de conexión', 'err'); }
 }
 
@@ -15108,8 +15101,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!files || !files.length) return;
     const id = window._incEditId;
     if (!id) {
-      // Guardar primero la incidencia, luego subir fotos
-      toast('⚠️ Guarda la incidencia primero para adjuntar fotos', 'err');
+      // Incidencia nueva sin guardar todavía: _guardarIncidenciaBase() ya sube estos
+      // mismos ficheros (#incFotoFile/#incFotoCam) al crear el registro — aquí solo
+      // mostramos una vista previa local para confirmar que la foto quedó "en cola"
+      // (antes se mostraba un error que hacía parecer roto el adjuntar fotos, #212).
+      const c = document.getElementById('incFotosList');
+      if (c) {
+        c.innerHTML += Array.from(files).map(f =>
+          `<div style="position:relative;display:inline-block">
+            <img src="${URL.createObjectURL(f)}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid var(--border);opacity:.7">
+            <span style="position:absolute;bottom:2px;right:2px;background:#0009;color:#fff;font-size:9px;padding:1px 4px;border-radius:4px">pendiente</span>
+          </div>`
+        ).join('');
+      }
+      toast('📎 Foto en cola — se sube al guardar la incidencia');
       return;
     }
     const sub = document.getElementById('incFotoSubiendo');

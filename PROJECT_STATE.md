@@ -238,6 +238,41 @@ SSE para el chat de Alejandra (sin sondeo de historial con repintado), y sus `se
 cercanos hacen otra cosa (visibilidad de botón / sincronización incremental de eventos). Ningún
 cambio adicional necesario.
 
+## Fix — 4 bugs reales de la app móvil reportados con foto (2026-08-04)
+
+**Bug real reportado por Adrián**, vía el sistema de sugerencias con foto de la app (sugerencias
+#209/#211/#212/#213/#214, tabla `sugerencias` en D1). Diagnóstico contra las capturas adjuntas y
+el código real, no contra `IDEAS_PENDIENTES.txt` (archivo histórico, no backlog activo):
+
+- **#213 — "No funciona Formación en obra":** `formacionCargarMobile()`, y también los módulos
+  de RdP (Registro Diario de Prevención) y Registro de Hormigonado, llamaban a `apiFetch()`, una
+  función que **nunca existió** en `index.html` (solo `apiCall`/`apiCallRaw`) — los tres módulos
+  de Seguridad estaban rotos de raíz desde que se crearon, no solo Formación. `panel.html` sí
+  tiene el alias (`const apiFetch = apiRaw`) desde su creación — la falta era exclusiva de
+  `index.html`. Fix: `const apiFetch = apiCall;`.
+- **#214 — "el filtro de proveedor desaparece":** al filtrar Bobinas por proveedor,
+  `renderStock()` repoblaba `#stockProvSelect`/`#stockTipoSelect` usando solo los ítems ya
+  filtrados por el backend — quedaba una única opción (la elegida) y el resto de proveedores
+  parecían haber desaparecido. Fix: se quita esa repoblación; el catálogo completo ya lo puebla
+  `cargarCatalogos()` una vez al cargar.
+- **#212 — "no se puede subir foto a incidencias":** al crear una incidencia nueva (sin guardar
+  aún) y elegir una foto, el `onchange` disparaba un aviso de error ("guarda la incidencia
+  primero"), aunque `_guardarIncidenciaBase()` ya subía esas mismas fotos al guardar — no estaba
+  roto, pero parecía. Fix: vista previa local "pendiente" en vez de un error.
+- **#211 — "Falta el nombre de la empresa" al guardar Departamentos activos:** ya estaba
+  corregido en producción desde v8.84 (30/07/2026, ver `ESTADO_APP.txt`); el reporte (28/07) es
+  anterior a ese fix. Sin cambios de código, solo confirmado que sigue resuelto.
+- **#209 — "Error sincro Google Sheets":** el endpoint `/sync-sheets` sí existe en `worker.js` —
+  el mensaje de la app afirmaba lo contrario. Fix: se muestra el error real devuelto por el
+  servidor en vez de ese mensaje fijo incorrecto; la causa raíz original de la sincronización (no
+  diagnosticable sin ver el error real) queda visible la próxima vez que falle.
+
+Único archivo tocado: `index.html` (no aplica a `panel.html`/`alejandra-agente` — módulos y
+patrón de filtro exclusivos de la app móvil). Sintaxis verificada (`node --check worker.js`
+limpio, sin tocarlo; los 3 bloques `<script>` de `index.html` parsean con `new Function()` sin
+error). Fuera del roadmap de Alejandra 2.0 (Núcleo Cognitivo), mismo criterio que el fix de
+`panel.html` de 2026-08-03.
+
 ## Siguiente objetivo
 
 ADR-0014 queda implementado de extremo a extremo (interfaz en `nucleo-cognitivo/`, tabla D1,
