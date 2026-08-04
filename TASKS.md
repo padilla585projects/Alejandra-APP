@@ -163,12 +163,37 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
 - Última actualización: 2026-08-02
 - Siguiente acción exacta: ninguna — vertical `rfis` completo. Segundo vertical con el ciclo de 5 pasos cerrado, tras `checklists`.
 
+### F-2.1-MEMORIA-ESCRITURA — Exponer confirmarCandidata/rechazarCandidata/listarCandidatasPendientes como tools
+
+- ID: F-2.1-MEMORIA-ESCRITURA
+- Título: Exponer la escritura sobre `memoria_gobernada` como tools de `alejandra-agente`, decisión del Director (2026-08-04)
+- Fase: Época 2 — F-2.1 paso 3 (continuación de `F-2.1-MEMORIA-DECLARAR`)
+- Estado: **completada (2026-08-04)**
+- Prioridad: Media
+- Rama: `PENDIENTE` (por commitear/PR)
+- Responsable actual: —
+- Objetivo: dar a Alejandra tres tools nuevas de solo `alejandra-agente/worker.js` (mismo criterio que `memoria_consultar`: no expuestas en `worker.js` raíz, catálogo `dev_verificado`) para que un humano con rol `encargado`+ pueda revisar y decidir sobre candidatas de memoria gobernada, sin que el modelo pueda auto-aprobar su propia inferencia.
+- Criterios de aceptación:
+  1. ✅ **Hallazgo real corregido antes de exponer:** `confirmarCandidata()`/`rechazarCandidata()` (`alejandra-agente/worker.js`, desde ARC-008 §8) filtraban solo por `id`/`estado`, sin `empresa_id` — un id de otra empresa se habría podido confirmar/rechazar igual, mismo patrón de fuga que ARC-016. Ambas funciones ahora exigen `empresaId` y lo añaden al `WHERE`; `rechazarCandidata()` además registra traza `memoria_rechazo` (antes no registraba ninguna).
+  2. ✅ Tres tools nuevas (ADR-0010: `acceso`/`cron`/`nivel_riesgo`): `memoria_listar_pendientes` (N0, `cron:'permitido'`), `memoria_confirmar_candidata` (N1, `cron:'prohibido'`), `memoria_rechazar_candidata` (N1, `cron:'prohibido'`). Excluidas del cron a propósito: aprobar una candidata sin humano delante contradice el propósito de la validación que ADR-0013 §3 exige.
+  3. ✅ Gate de rol `encargado`+ nuevo (`esEncargadoOSuperior()`, mismo patrón de consulta que `esDeveloperAgente()`), comprobado en cada `case` contra la BD por `usuario_id`, no contra lo que el modelo afirme.
+  4. ✅ `empresa_id` sale siempre de la sesión (`resolverEid(empresa_id)`), nunca del input — mismo aislamiento por tenant que `memoria_consultar`.
+  5. ✅ Añadidas a `TOOLS_REQUIEREN_SESION` (`lib.js`) las tres; `memoria_confirmar_candidata`/`memoria_rechazar_candidata` añadidas también a `TOOLS_PROHIBIDAS_CRON`.
+  6. ✅ Cableadas en los cuatro `TOOLS_POR_EXPERTO` donde ya vivía `TOOL_MEMORIA_CONSULTAR` (`app`, `tecnico`, `completo`, `ingenieria`).
+  7. ✅ Solo `alejandra-agente/worker.js` — mismo criterio documentado que `memoria_consultar` (el catálogo de `worker.js` raíz es enteramente `dev_verificado`).
+- Dependencias: `F-2.1-MEMORIA-DECLARAR` (paso 2 aplicado), ARC-008 §8 (trazabilidad), decisión del Director 2026-08-04 ("Exponer como tools nuevas").
+- Bloqueos: ninguno.
+- Archivos principales: `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `alejandra-agente/lib.test.js`.
+- Pruebas: `node --check` limpio en `worker.js`/`lib.js`; `npm --prefix alejandra-agente test` 138/138 en verde (2 nuevas: sesión obligatoria en las tres, exclusión del cron en confirmar/rechazar). El gate de rol (`esEncargadoOSuperior`) vive en `worker.js`, sin suite de tests dedicada — mismo patrón que `esDeveloperAgente()`, que tampoco la tiene.
+- Última actualización: 2026-08-04
+- Siguiente acción exacta: ninguna — pendiente de commit/PR/CI, sin desplegar todavía.
+
 ### F-2.1-MEMORIA-DECLARAR — Declarar el esquema de Memory (ADR-0013)
 
 - ID: F-2.1-MEMORIA-DECLARAR
 - Título: Declarar en una migración `.sql` versionada el esquema de memoria gobernada de ADR-0013
 - Fase: Época 2 — Conocimiento y Memoria (F-2.1), abierta el 2026-08-02 por ADR-0007 enmienda 1 al cerrarse F-1.1/F-1.2/F-1.3 (Época 1 completa)
-- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (implementar `memory.js` real) — ARC-008 §8 resuelto (2026-08-02), CRUD real en los dos Workers, sin exponer todavía vía ninguna tool/ruta**
+- Estado: **paso 2 (aplicar) completado y verificado (2026-08-02); paso 3 (implementar `memory.js` real) — ARC-008 §8 resuelto (2026-08-02), CRUD real en los dos Workers; escritura expuesta como tools el 2026-08-04 (ver `F-2.1-MEMORIA-ESCRITURA` arriba)**
 - Prioridad: Crítica
 - Rama: `feat/f21-memoria-declarar` (paso 1), `feat/migrar-checklists-memoria-d1` (paso 2, PR #52), `feat/arc008-consultarmemoria-real` (paso 3, ARC-008 §8)
 - Responsable actual: — (siguiente decisión: qué tool(s) exponen esta memoria al modelo, fuera de esta tarea)
@@ -214,23 +239,23 @@ Ninguna tarea de migración de catálogo de tools sigue activa: **F-1.3-MIGRAR-R
 - ID: F-0.2-CFG
 - Título: Cerrar los controles remotos que F-0.1-R no pudo completar
 - Fase: Época 0 — Fundación y entrega segura
-- Estado: en curso — criterio 1 (secretos) completado; criterios 2 y 4 pendientes
+- Estado: **completada (2026-08-04)** — los 4 criterios de comportamiento cerrados
 - Prioridad: Alta
 - Rama: `PENDIENTE` — es configuración remota; solo requiere rama si cambia documentación
-- Responsable actual: Director del Proyecto (requiere manejar valores de secretos)
+- Responsable actual: — (cerrada)
 - Objetivo: que los secretos de producción queden acotados al entorno `production` y que el circuito manual de despliegue quede probado en vacío.
 - Criterios de aceptación:
   1. ✅ **Secretos recreados en el entorno `production` y retirados del repositorio (2026-08-04).** Los 5 secretos (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `ADMIN_TOKEN`) se crearon en el entorno `production` el 2026-08-03 (18:32-18:46), verificados con un despliegue exitoso inmediatamente después (`Deploy API Worker`, run `30843489418`, 18:56, éxito). El Director borró la copia de nivel repositorio el 2026-08-04, ejecutándolo él mismo (`gh secret delete` o interfaz web) tras confirmar la verificación — ningún agente leyó ni tocó valores reales en ningún momento. Verificado en solo lectura tras el borrado: `gh secret list` (repositorio) vacío; `gh secret list --env production` con los 5 intactos.
-  2. Ensayo con confirmación errónea sobre un workflow de producción: el job debe salir `skipped`, sin ejecutar.
+  2. ✅ **Ensayo con confirmación errónea completado (2026-08-04).** `gh workflow run deploy-worker.yml -f ref=main -f confirmation=CONFIRMACION_INCORRECTA_ENSAYO`: run [30886880983](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30886880983), job `Deploy API Worker` → `skipped`, 0 pasos ejecutados, sin solicitud de aprobación del entorno `production`, sin despliegue. Confirma el comportamiento documentado en `docs/runbooks/CI-CD-Y-MIGRACIONES.md`.
   3. ✅ **Decidido y aplicado el 2026-08-02: baja a 0.** El Director lo autorizó de forma expresa. Motivo: al ser un repositorio de un solo mantenedor, GitHub no permite auto-aprobar, así que cada merge exigía el bypass de administrador — fricción sin protección real. La protección efectiva sigue siendo el check `Syntax and agent tests` y la aprobación del entorno `production`, ambos intactos. Verificado tras el cambio: PR obligatoria, rama al día, sin force-push ni borrado, todo sin tocar.
-  4. Decidir si la política de rama de `github-pages` sigue limitada a `main` o se amplía para publicar por tag.
-  5. Nada desplegado ni migrado durante la validación.
+  4. ✅ **Decidido y aplicado el 2026-08-04: se amplía a tags.** El Director eligió permitir publicar `github-pages` también desde un tag, no solo `main`. Aplicado vía `gh api` (acción reversible de configuración de repositorio, autónoma bajo ADR-0007): `POST .../environments/github-pages/deployment-branch-policies` con `{name:'*', type:'tag'}`. Verificado tras el cambio: la política del entorno incluye `main` (branch) y `*` (tag).
+  5. ✅ Nada desplegado ni migrado durante la validación — el ensayo del criterio 2 confirmó exactamente eso (job `skipped`, 0 pasos).
 - Dependencias: F-0.1-R completada; acceso a los valores reales de los secretos.
-- Bloqueos: los valores de los secretos no son legibles desde la API; solo el Director puede reintroducirlos.
-- Archivos principales: ninguno; es configuración remota.
-- Pruebas: verificación en Actions de que el ensayo sale `skipped` y de que no se genera ningún despliegue.
+- Bloqueos: ninguno. Cerrada.
+- Archivos principales: ninguno; es configuración remota (entornos de GitHub).
+- Pruebas: run 30886880983 (`skipped`, sin aprobación de entorno solicitada); lectura de `deployment-branch-policies` antes/después del criterio 4.
 - Última actualización: 2026-08-04
-- Siguiente acción exacta: criterio 1 completo. Quedan el ensayo de confirmación errónea (criterio 2) y decidir la política de rama de `github-pages` (criterio 4) — ambos siguen siendo decisión/ejecución del Director, sin fecha fijada.
+- Siguiente acción exacta: ninguna — F-0.2-CFG completa.
 
 ## Completadas — pendientes de aprobación
 
