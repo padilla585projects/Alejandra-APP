@@ -222,9 +222,11 @@ app/panel/Telegram, un mensaje de otra plataforma disparaba el repintado complet
 conversación ("saltan los mensajes de antes actualizándose"). `cargarAlejandraChat()` ahora
 compara firmas (`created_at`+`rol`+`contenido`) contra el servidor y solo añade mensajes
 nuevos al final, sin rehacer lo ya pintado. De paso se añadió mover/redimensionar la ventana
-del chat. Único archivo tocado: `panel.html`. **Pendiente de comprobar paridad** (regla de
-frontends de Alejandra, `CLAUDE.md`): no verificado todavía si `index.html`/
-`alejandra-panel.html` tienen el mismo patrón de sondeo-y-repintado y necesitan el mismo fix.
+del chat. Único archivo tocado: `panel.html`. **Paridad verificada (2026-08-04):** el patrón
+del bug es exclusivo de este widget FAB. `index.html` y `alejandra-panel.html` usan streaming
+SSE para el chat de Alejandra (sin sondeo de historial con repintado), y sus `setInterval`
+cercanos hacen otra cosa (visibilidad de botón / sincronización incremental de eventos). Ningún
+cambio adicional necesario.
 
 ## Siguiente objetivo
 
