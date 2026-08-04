@@ -4228,8 +4228,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <option value="baja">Baja</option>
         </select>
       </div>
-      <div id="episLista" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
-        <div class="empty-state">Cargando…</div>
+      <div style="overflow-y:auto;flex:1;padding:10px 14px 80px">
+        <div id="episMuneco"></div>
+        <div id="episLista">
+          <div class="empty-state">Cargando…</div>
+        </div>
       </div>
     </div>
 
@@ -20139,26 +20142,200 @@ async function galeriaBorrarFoto() {
 // ── NEW-23: Dotación EPIs ────────────────────────────────────────────────────
 const TIPOS_EPI = ['Casco','Arnés anticaídas','Guantes','Botas de seguridad','Gafas/visera','Chaleco reflectante','Protección auditiva','Mascarilla/respirador','Ropa de trabajo','Cinturón lumbar','Rodilleras','Otro'];
 
+// ── Muñeco de EPIs (petición de Adrián, 04/08/2026): al elegir un trabajador
+// concreto se dibuja una silueta con una zona clicable por cada EPI corporal,
+// coloreada según su estado, para ver/asignar de un vistazo qué lleva encima.
+// 'Otro' no tiene zona propia en el dibujo (se lista aparte).
+const EPI_ZONAS = {
+  'Casco':                 'casco',
+  'Gafas/visera':          'gafas',
+  'Protección auditiva':   'auditiva',
+  'Mascarilla/respirador': 'mascarilla',
+  'Chaleco reflectante':   'chaleco',
+  'Arnés anticaídas':      'arnes',
+  'Ropa de trabajo':       'ropa',
+  'Cinturón lumbar':       'cinturon',
+  'Guantes':               'guantes',
+  'Rodilleras':            'rodilleras',
+  'Botas de seguridad':    'botas',
+};
+const ZONA_EPI = Object.fromEntries(Object.entries(EPI_ZONAS).map(([tipo, zona]) => [zona, tipo]));
+
+function _epiZonaColor(status) {
+  return status === 'ok' ? 'var(--green)' : status === 'caduca_pronto' ? 'var(--accent)' : status === 'caducado' ? 'var(--red)' : 'var(--surface2)';
+}
+
+function calcularEstadoZonasEpi(episTrabajador) {
+  const hoy = new Date(); const pronto = new Date(hoy); pronto.setDate(pronto.getDate() + 30);
+  const zonas = {};
+  Object.values(EPI_ZONAS).forEach(z => { zonas[z] = { status: 'sin_asignar', epi: null }; });
+  episTrabajador.forEach(e => {
+    const zona = EPI_ZONAS[e.tipo_epi];
+    if (!zona || e.estado !== 'activo') return;
+    const cad = e.fecha_caducidad ? new Date(e.fecha_caducidad) : null;
+    let status = 'ok';
+    if (cad && cad < hoy) status = 'caducado';
+    else if (cad && cad <= pronto) status = 'caduca_pronto';
+    zonas[zona] = { status, epi: e };
+  });
+  return zonas;
+}
+
+window._epiZonasActuales      = {};
+window._epiZonaTrabajadorVal  = '';
+function epiZonaClick(zona) {
+  const info = window._epiZonasActuales[zona];
+  if (info && info.epi) { editarEpi(info.epi.id); return; }
+  if (!window._epiZonaTrabajadorVal) { toast('Selecciona primero un trabajador', 'err'); return; }
+  abrirModalEpi(null, { tipo_epi: ZONA_EPI[zona], trabajadorValue: window._epiZonaTrabajadorVal });
+}
+window.epiZonaClick = epiZonaClick;
+
+function renderMunecoEpis(trabajadorValue, nombreTrabajador, episTrabajador) {
+  window._epiZonaTrabajadorVal = trabajadorValue;
+  const z = calcularEstadoZonasEpi(episTrabajador);
+  window._epiZonasActuales = z;
+  const c = zona => _epiZonaColor(z[zona].status);
+  const otros = episTrabajador.filter(e => !EPI_ZONAS[e.tipo_epi] && e.estado === 'activo');
+
+  const svg = `
+  <svg viewBox="0 0 300 620" style="width:100%;max-width:240px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="150" cy="602" rx="80" ry="10" fill="#000" opacity=".3"/>
+    <path d="M55,118 L90,120 L78,328 L54,328 Z" fill="var(--surface2)"/>
+    <path d="M245,118 L210,120 L222,328 L246,328 Z" fill="var(--surface2)"/>
+    <circle cx="150" cy="62" r="40" fill="var(--surface2)"/>
+    <rect x="136" y="96" width="28" height="22" rx="4" fill="var(--surface2)"/>
+    <g onclick="epiZonaClick('ropa')" style="cursor:pointer">
+      <path d="M85,115 L215,115 L207,180 L202,260 L212,290 L230,555 L172,555 L162,300 Q150,308 138,300 L128,555 L70,555 L88,290 L98,260 L93,180 Z" fill="${c('ropa')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M93,180 L100,180 L96,260 L101,260 L96,290 L88,290 L98,260 Z" fill="#fff" opacity=".07"/>
+    </g>
+    <g onclick="epiZonaClick('guantes')" style="cursor:pointer">
+      <ellipse cx="64" cy="340" rx="26" ry="30" fill="${c('guantes')}" stroke="var(--border)" stroke-width="3"/>
+      <ellipse cx="236" cy="340" rx="26" ry="30" fill="${c('guantes')}" stroke="var(--border)" stroke-width="3"/>
+      <ellipse cx="56" cy="330" rx="8" ry="10" fill="${c('guantes')}" stroke="var(--border)" stroke-width="2"/>
+      <ellipse cx="244" cy="330" rx="8" ry="10" fill="${c('guantes')}" stroke="var(--border)" stroke-width="2"/>
+    </g>
+    <g onclick="epiZonaClick('rodilleras')" style="cursor:pointer">
+      <rect x="83" y="435" width="52" height="42" rx="14" fill="${c('rodilleras')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="165" y="435" width="52" height="42" rx="14" fill="${c('rodilleras')}" stroke="var(--border)" stroke-width="3"/>
+      <line x1="90" y1="456" x2="128" y2="456" stroke="var(--border)" stroke-width="2" opacity=".5"/>
+      <line x1="172" y1="456" x2="210" y2="456" stroke="var(--border)" stroke-width="2" opacity=".5"/>
+    </g>
+    <g onclick="epiZonaClick('botas')" style="cursor:pointer">
+      <path d="M62,545 Q62,535 74,533 L104,533 Q116,533 116,545 L116,575 Q116,595 96,595 L82,595 Q62,595 62,575 Z" fill="${c('botas')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M184,545 Q184,535 196,533 L226,533 Q238,533 238,545 L238,575 Q238,595 218,595 L204,595 Q184,595 184,575 Z" fill="${c('botas')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M62,572 Q89,580 116,572 L116,580 Q89,588 62,580 Z" fill="#000" opacity=".18"/>
+      <path d="M184,572 Q211,580 238,572 L238,580 Q211,588 184,580 Z" fill="#000" opacity=".18"/>
+    </g>
+    <g onclick="epiZonaClick('cinturon')" style="cursor:pointer">
+      <rect x="95" y="255" width="110" height="24" rx="6" fill="${c('cinturon')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="138" y="251" width="24" height="32" rx="4" fill="var(--border)"/>
+      <circle cx="150" cy="267" r="3.5" fill="#94a3b8"/>
+    </g>
+    <g onclick="epiZonaClick('chaleco')" style="cursor:pointer">
+      <path d="M108,120 L128,120 L150,148 L172,120 L192,120 L200,262 L100,262 Z" fill="${c('chaleco')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="108" y="168" width="80" height="10" fill="#facc15" opacity=".9"/>
+      <rect x="108" y="218" width="80" height="10" fill="#facc15" opacity=".9"/>
+      <path d="M116,120 L128,120 L150,148 L136,156 Z" fill="#fff" opacity=".12"/>
+    </g>
+    <g onclick="epiZonaClick('arnes')" style="cursor:pointer">
+      <line x1="100" y1="124" x2="176" y2="260" stroke="${c('arnes')}" stroke-width="13" stroke-linecap="round"/>
+      <line x1="200" y1="124" x2="124" y2="260" stroke="${c('arnes')}" stroke-width="13" stroke-linecap="round"/>
+      <circle cx="150" cy="192" r="10" fill="var(--border)"/>
+      <circle cx="150" cy="192" r="4" fill="#94a3b8"/>
+    </g>
+    <g onclick="epiZonaClick('casco')" style="cursor:pointer">
+      <ellipse cx="150" cy="26" rx="52" ry="10" fill="${c('casco')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M98,26 C98,-22 202,-22 202,26 L98,26 Z" fill="${c('casco')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M106,22 Q150,-16 194,22 Q150,-4 106,22 Z" fill="#fff" opacity=".15"/>
+    </g>
+    <g onclick="epiZonaClick('auditiva')" style="cursor:pointer">
+      <circle cx="112" cy="66" r="13" fill="${c('auditiva')}" stroke="var(--border)" stroke-width="3"/>
+      <circle cx="188" cy="66" r="13" fill="${c('auditiva')}" stroke="var(--border)" stroke-width="3"/>
+    </g>
+    <g onclick="epiZonaClick('gafas')" style="cursor:pointer">
+      <rect x="128" y="56" width="44" height="14" rx="7" fill="${c('gafas')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="133" y="59" width="12" height="5" rx="2.5" fill="#fff" opacity=".18"/>
+    </g>
+    <g onclick="epiZonaClick('mascarilla')" style="cursor:pointer">
+      <path d="M130,78 Q150,74 170,78 L170,96 Q150,103 130,96 Z" fill="${c('mascarilla')}" stroke="var(--border)" stroke-width="3"/>
+      <line x1="134" y1="86" x2="166" y2="86" stroke="var(--border)" stroke-width="2" opacity=".5"/>
+    </g>
+  </svg>`;
+
+  const chips = Object.entries(ZONA_EPI).map(([zona, tipo]) => {
+    const info = z[zona];
+    const bg = info.status === 'sin_asignar' ? 'var(--surface)' : _epiZonaColor(info.status);
+    const txtColor = info.status === 'sin_asignar' ? 'var(--text)' : '#000';
+    const label = info.status === 'sin_asignar' ? 'sin asignar' : info.status === 'ok' ? 'ok' : info.status === 'caduca_pronto' ? 'caduca pronto' : 'CADUCADO';
+    return `<div onclick="epiZonaClick('${zona}')" style="display:flex;flex-direction:column;gap:2px;padding:6px 8px;background:${bg};border:1px solid var(--border);border-radius:8px;cursor:pointer">
+      <span style="font-size:11px;font-weight:700;color:${txtColor}">${tipo}</span>
+      <span style="font-size:9px;font-weight:700;color:${txtColor};opacity:.8">${label}</span>
+    </div>`;
+  }).join('');
+
+  const otrosHtml = otros.length ? `
+    <div style="margin-top:10px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Otros EPIs asignados</div>
+    ${otros.map(e => `<div onclick="editarEpi(${e.id})" style="padding:7px 9px;background:var(--green);border-radius:8px;margin-top:5px;font-size:11px;font-weight:700;color:#000;cursor:pointer">${e.observaciones || 'Otro'}${e.talla ? ' (' + e.talla + ')' : ''}</div>`).join('')}
+  ` : '';
+
+  return `
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);margin-bottom:10px;text-align:center">👤 ${nombreTrabajador}</div>
+    ${svg}
+    <div style="font-size:10px;color:var(--muted);text-align:center;margin:8px 0 12px">Toca una zona del muñeco (o la lista de abajo) para ver o asignar ese EPI</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${chips}</div>
+    ${otrosHtml}
+  </div>`;
+}
+
 async function cargarEpis() {
-  const lista = document.getElementById('episLista');
+  const lista  = document.getElementById('episLista');
+  const muneco = document.getElementById('episMuneco');
   if (!lista) return;
   lista.innerHTML = '<div class="empty-state">Cargando…</div>';
+  if (muneco) muneco.innerHTML = '';
   const s = getSession();
   const obraId = s?.obra_id || '';
-  const filtroT = document.getElementById('episFiltroTrabajador')?.value || '';
+  const filtroT = document.getElementById('episFiltroTrabajador')?.value || ''; // "tipo:id" o ''
   const filtroE = document.getElementById('episFiltroEstado')?.value || '';
   try {
     const res  = await apiCall('/epis-asignados' + (obraId ? `?obra_id=${obraId}` : ''));
-    let epis = res.ok ? await res.json() : [];
-    if (filtroT) epis = epis.filter(e => String(e.usuario_id||e.externo_id||'') === filtroT || e.nombre_trabajador === filtroT);
-    if (filtroE) epis = epis.filter(e => e.estado === filtroE);
+    const episObra = res.ok ? await res.json() : [];
 
-    // Rellenar selector de trabajadores
+    // Rellenar selector con TODO el personal (antes solo salían quienes ya tenían
+    // algún EPI asignado, así que no había forma de empezar de cero con alguien nuevo).
     const sel = document.getElementById('episFiltroTrabajador');
     if (sel && sel.options.length <= 1) {
-      const nombres = [...new Set(epis.map(e => e.nombre_trabajador))].sort();
-      nombres.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+      const trabajadores = window._perTrabajadores?.length ? window._perTrabajadores : await perCargarTrabajadores();
+      [...trabajadores].sort((a, b) => (a.nombre||'').localeCompare(b.nombre||'')).forEach(t => {
+        const o = document.createElement('option');
+        o.value = `${t.tipo}:${t.id}`;
+        o.textContent = t.nombre + (t.obra_nombre ? ' · ' + t.obra_nombre : '');
+        sel.appendChild(o);
+      });
     }
+
+    // Muñeco: solo cuando hay un trabajador concreto elegido, con SU dotación
+    // completa (independiente del filtro de estado, que es para la lista de abajo).
+    if (filtroT && muneco) {
+      const [tTipo, tId] = filtroT.split(':');
+      const meta = (window._perTrabajadores||[]).find(t => String(t.tipo) === tTipo && String(t.id) === tId);
+      const episTrabajador = episObra.filter(e =>
+        (tTipo === 'app'     && String(e.usuario_id||'')  === tId) ||
+        (tTipo === 'externo' && String(e.externo_id||'')  === tId)
+      );
+      const nombreTrabajador = meta?.nombre || episTrabajador[0]?.nombre_trabajador || '—';
+      muneco.innerHTML = renderMunecoEpis(filtroT, nombreTrabajador, episTrabajador);
+    }
+
+    let epis = filtroT
+      ? episObra.filter(e => {
+          const [tTipo, tId] = filtroT.split(':');
+          return (tTipo === 'app' && String(e.usuario_id||'') === tId) || (tTipo === 'externo' && String(e.externo_id||'') === tId);
+        })
+      : episObra;
+    if (filtroE) epis = epis.filter(e => e.estado === filtroE);
 
     if (!epis.length) { lista.innerHTML = '<div class="empty-state">Sin EPIs asignados</div>'; return; }
 
@@ -20195,7 +20372,9 @@ async function cargarEpis() {
 }
 
 let _epiEditId = null;
-async function abrirModalEpi(id) {
+// preset: { tipo_epi, trabajadorValue:"tipo:id" } — usado al pulsar una zona sin asignar
+// del muñeco de EPIs, para abrir el modal ya con trabajador+tipo listos.
+async function abrirModalEpi(id, preset) {
   _epiEditId = id || null;
   // Cargar trabajadores para el selector
   const trabajadores = window._perTrabajadores || await perCargarTrabajadores();
@@ -20204,7 +20383,7 @@ async function abrirModalEpi(id) {
     ${trabajadores.map(t => `<option value="${t.tipo}:${t.id}:${encodeURIComponent(t.nombre)}">${t.nombre}${t.obra_nombre ? ' · ' + t.obra_nombre : ''}</option>`).join('')}
   </select>`;
 
-  let datos = { tipo_epi:'', talla:'', numero_serie:'', fecha_entrega:'', fecha_caducidad:'', proxima_revision:'', estado:'activo', observaciones:'', nombre_trabajador:'', usuario_id:null, externo_id:null, obra_id:null };
+  let datos = { tipo_epi: preset?.tipo_epi || '', talla:'', numero_serie:'', fecha_entrega:'', fecha_caducidad:'', proxima_revision:'', estado:'activo', observaciones:'', nombre_trabajador:'', usuario_id:null, externo_id:null, obra_id:null };
   if (id) {
     const lista = document.getElementById('episLista');
     // Re-fetch the item
@@ -20213,7 +20392,11 @@ async function abrirModalEpi(id) {
     if (found) datos = { ...datos, ...found };
   }
 
-  const tVal = datos.usuario_id ? `app:${datos.usuario_id}:${encodeURIComponent(datos.nombre_trabajador||'')}` : datos.externo_id ? `externo:${datos.externo_id}:${encodeURIComponent(datos.nombre_trabajador||'')}` : '';
+  let tVal = datos.usuario_id ? `app:${datos.usuario_id}:${encodeURIComponent(datos.nombre_trabajador||'')}` : datos.externo_id ? `externo:${datos.externo_id}:${encodeURIComponent(datos.nombre_trabajador||'')}` : '';
+  if (!id && preset?.trabajadorValue) {
+    const t = trabajadores.find(t => `${t.tipo}:${t.id}` === preset.trabajadorValue);
+    if (t) tVal = `${t.tipo}:${t.id}:${encodeURIComponent(t.nombre)}`;
+  }
 
   document.body.insertAdjacentHTML('beforeend', `
   <div class="modal-overlay show" id="modalEpi" onclick="if(event.target===this)cerrarModalEpi()" style="align-items:flex-end;justify-content:center;padding:0">
