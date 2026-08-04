@@ -578,6 +578,63 @@ Las cuatro decisiones planteadas quedaron resueltas el mismo día: **P-ARCH-002*
 fase de preproducción/producción estable. Ninguna queda abierta como pregunta al Director;
 detalle completo en `TASKS.md` y `ARCHITECT_BACKLOG.md`.
 
+## F-0.2-CFG cerrada + ADR-0015 propuesto + escritura de memoria expuesta (2026-08-04)
+
+Con las 14 verticales de ARC-011 fase 3 y F-0.2-CFG (secretos) ya cerradas, el Director pidió
+avanzar en tres frentes pendientes del backlog en la misma sesión: los dos criterios menores de
+`F-0.2-CFG`, el hallazgo ARC-019 (`sql_query` vs `run_migration`) y la decisión sobre la
+escritura de `memoria_gobernada`.
+
+**1. `F-0.2-CFG` completada.** Los dos criterios que quedaban eran de decisión/ejecución
+autónoma dentro del alcance ya aprobado:
+
+- **Ensayo de confirmación errónea (criterio 2):** `gh workflow run deploy-worker.yml -f
+  ref=main -f confirmation=CONFIRMACION_INCORRECTA_ENSAYO` → run
+  [30886880983](https://github.com/padilla585projects/Alejandra-APP/actions/runs/30886880983),
+  job `Deploy API Worker` → `skipped`, 0 pasos, sin aprobación de entorno solicitada, sin
+  despliegue. Es "ejecutar una prueba" (autónomo, `CLAUDE.md`), no un despliegue.
+- **Política de rama de `github-pages` (criterio 4):** el Director eligió ampliarla a tags.
+  Aplicado vía `gh api POST .../environments/github-pages/deployment-branch-policies -f
+  name='*' -f type='tag'` (configuración de repositorio reversible, autónoma bajo ADR-0007).
+  Verificado tras el cambio: la política incluye `main` (branch) y `*` (tag). Ver `TASKS.md`
+  (`F-0.2-CFG`).
+
+**2. ADR-0015 redactado (Propuesto, sin aceptar) para ARC-019.** Al revisar el código para
+decidir si `sql_query` merece la misma clasificación N3 que `run_migration` (ADR-0006), apareció
+un hallazgo más importante que la etiqueta: **ni `sql_query` ni `run_migration` exigen ninguna
+barrera humana para `CREATE TABLE`/`CREATE INDEX`** — `detectarSqlDestructivo()`
+(`worker.js:1521-1525`) solo dispara `CONFIRMO BORRADO` ante `DROP`/`TRUNCATE`/`ALTER
+TABLE`/`DELETE`/`UPDATE`. El caso más común de migración (crear una tabla nueva) se ejecuta hoy
+sin que nadie confirme nada, en las dos tools, pese a que ADR-0006 dice explícitamente sobre
+`run_migration` que "no es una decisión que Alejandra pueda tomar por su cuenta en ningún caso".
+`docs/decisions/ADR-0015-CLASIFICACION-SQL-QUERY-Y-BARRERA-DDL.md` documenta el estado real
+(tabla comparativa código a código), cuatro alternativas sin aplicar ninguna, y cuatro preguntas
+para el Director. No se cambió ningún comportamiento — redactar un ADR es autónomo, aceptarlo o
+cambiar código no.
+
+**3. Escritura de `memoria_gobernada` expuesta como tools — decisión del Director (2026-08-04,
+"Exponer como tools nuevas").** Antes de exponer `confirmarCandidata()`/`rechazarCandidata()`
+(internas desde ARC-008 §8), se encontró y corrigió un hallazgo real: **ninguna de las dos
+filtraba por `empresa_id`**, solo por `id`/`estado` — un id de otra empresa se habría podido
+confirmar o rechazar igual, mismo patrón de fuga que ARC-016 en el chat anónimo. Corregido antes
+de exponer nada: ambas exigen ahora `empresaId` en el `WHERE`; `rechazarCandidata()` además pasó
+a registrar traza (`memoria_rechazo`), que antes no registraba ninguna.
+
+Tres tools nuevas en `alejandra-agente/worker.js` (solo ahí, mismo criterio ya documentado para
+`memoria_consultar` — el catálogo de `worker.js` raíz es enteramente `dev_verificado`):
+`memoria_listar_pendientes` (N0, disponible para el cron), `memoria_confirmar_candidata` y
+`memoria_rechazar_candidata` (N1, **excluidas del cron** — aprobar una candidata sin humano
+delante contradice el propósito de la validación que ADR-0013 §3 exige). Las tres exigen rol
+`encargado`+, comprobado contra la BD con un helper nuevo (`esEncargadoOSuperior()`, mismo
+patrón que `esDeveloperAgente()`), no contra lo que el modelo afirme sobre quién pregunta.
+`empresa_id` sale siempre de la sesión, nunca del input, igual que `memoria_consultar`.
+
+Verificación: `node --check` limpio en `worker.js`/`lib.js` de `alejandra-agente`;
+`npm --prefix alejandra-agente test` 138/138 en verde (2 pruebas nuevas: sesión obligatoria en
+las tres, exclusión del cron en confirmar/rechazar). Encoding limpio en el diff completo de la
+sesión. Ver `TASKS.md` (`F-2.1-MEMORIA-ESCRITURA`). **Sin commitear/PR/desplegar todavía** —
+cambio de código puro, pendiente del circuito normal de revisión antes de tocar producción.
+
 ## No tocar sin nueva autorización
 
 - No desplegar Pages ni Workers sin verificación posterior registrada.

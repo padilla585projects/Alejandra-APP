@@ -1465,36 +1465,59 @@ async function listarCandidatasPendientes(env, { empresaId }) {
 // existente (candidata → confirmada), no crea una fila nueva. Registra una
 // traza porque aprobar memoria compartida/candidata es en sí una decisión con
 // efecto persistente (ARC-008 §8).
-async function confirmarCandidata(env, { id, aprobadaPor }) {
+//
+// F-2.1 paso 3 (2026-08-04), al exponerla por primera vez como tool: la firma
+// original solo filtraba por `id` y `estado`, sin `empresa_id` -- un id de
+// otra empresa se habría podido confirmar igual, mismo patrón de fuga que
+// ARC-016 detectó en el chat anónimo. `empresaId` ahora es obligatorio y
+// entra en el WHERE, igual que ya hace consultarMemoria()/
+// listarCandidatasPendientes().
+async function confirmarCandidata(env, { id, empresaId, aprobadaPor }) {
   try {
-    if (!env?.DB || !id || !aprobadaPor) return;
+    if (!env?.DB || !id || !empresaId || !aprobadaPor) return false;
     const res = await env.DB.prepare(
       `UPDATE memoria_gobernada SET estado = 'confirmada', aprobada_por = ?, updated_at = datetime('now')
-       WHERE id = ? AND estado = 'candidata_pendiente_validacion'`
-    ).bind(String(aprobadaPor), id).run();
-    if (res?.meta?.changes) {
+       WHERE id = ? AND empresa_id = ? AND estado = 'candidata_pendiente_validacion'`
+    ).bind(String(aprobadaPor), id, String(empresaId)).run();
+    const cambiada = !!res?.meta?.changes;
+    if (cambiada) {
       await registrarTraza(env, {
         tipo: 'memoria_confirmacion',
+        empresaId,
         usuarioId: aprobadaPor,
         resumen: `Candidata de memoria ${id} confirmada por ${aprobadaPor}`,
         detalle: { recuerdo_id: id, aprobada_por: aprobadaPor },
       });
     }
+    return cambiada;
   } catch (e) {
     console.error('[MEMORIA]', 'confirmarCandidata error:', (e && e.message) || String(e));
+    return false;
   }
 }
 
 // rechazarCandidata — ADR-0013 §1. Elimina la candidata sin que su contenido
-// llegue a ser memoria vigente.
-async function rechazarCandidata(env, { id }) {
+// llegue a ser memoria vigente. Mismo fix de aislamiento que confirmarCandidata.
+async function rechazarCandidata(env, { id, empresaId, rechazadaPor }) {
   try {
-    if (!env?.DB || !id) return;
-    await env.DB.prepare(
-      `DELETE FROM memoria_gobernada WHERE id = ? AND estado = 'candidata_pendiente_validacion'`
-    ).bind(id).run();
+    if (!env?.DB || !id || !empresaId) return false;
+    const res = await env.DB.prepare(
+      `DELETE FROM memoria_gobernada WHERE id = ? AND empresa_id = ? AND estado = 'candidata_pendiente_validacion'`
+    ).bind(id, String(empresaId)).run();
+    const cambiada = !!res?.meta?.changes;
+    if (cambiada) {
+      await registrarTraza(env, {
+        tipo: 'memoria_rechazo',
+        empresaId,
+        usuarioId: rechazadaPor,
+        resumen: `Candidata de memoria ${id} rechazada${rechazadaPor ? ` por ${rechazadaPor}` : ''}`,
+        detalle: { recuerdo_id: id, rechazada_por: rechazadaPor || null },
+      });
+    }
+    return cambiada;
   } catch (e) {
     console.error('[MEMORIA]', 'rechazarCandidata error:', (e && e.message) || String(e));
+    return false;
   }
 }
 
@@ -2540,6 +2563,56 @@ const TOOL_MEMORIA_CONSULTAR = {
   nivel_riesgo: 'N0',
 };
 
+// F-2.1 paso 3 (2026-08-04) — decisión del Director: exponer la escritura sobre
+// memoria_gobernada, hasta ahora funciones internas sin tool desde ARC-008 §8.
+// Tres tools nuevas, mismo criterio que memoria_consultar (nombre no confundible
+// con memory_*, acceso:'sesion', empresa_id solo de la sesión):
+//   - memoria_listar_pendientes: lectura de candidatas (inferidas o compartidas
+//     sin aprobar) de la empresa. Gateada a encargado+ en el propio case,
+//     porque revisar candidatas ajenas es lo que ADR-0013 §3/§8 reserva a ese
+//     rol -- ver esEncargadoOSuperior().
+//   - memoria_confirmar_candidata / memoria_rechazar_candidata: escriben sobre
+//     una fila existente (promocionan o descartan), nunca crean memoria nueva
+//     directamente. Gateadas al mismo rol. N1 (alcance de una fila, con
+//     registro), no N0, porque cambian estado persistente. Excluidas del cron
+//     (TOOLS_PROHIBIDAS_CRON, lib.js): aprobar/rechazar sin humano delante
+//     contradice el propósito de la propia validación (ADR-0013 §3, "no puede
+//     pasar a confirmada sin que un humano lo revise").
+const TOOL_MEMORIA_LISTAR_PENDIENTES = {
+  name: 'memoria_listar_pendientes',
+  description: 'Lista las candidatas de memoria gobernada pendientes de validación humana (inferidas por el sistema, o memoria compartida propuesta sin aprobar todavía). Requiere rol encargado o superior. Úsalo antes de memoria_confirmar_candidata/memoria_rechazar_candidata.',
+  input_schema: { type: 'object', properties: {}, required: [] },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
+};
+
+const TOOL_MEMORIA_CONFIRMAR_CANDIDATA = {
+  name: 'memoria_confirmar_candidata',
+  description: 'Promueve una candidata de memoria gobernada (obtenida con memoria_listar_pendientes) a memoria confirmada y consultable. Requiere rol encargado o superior. Irreversible en el sentido de que no existe una tool para "desconfirmar" — para corregirla después hay que declarar una corrección nueva.',
+  input_schema: {
+    type: 'object',
+    properties: { id: { type: 'number', description: 'ID de la candidata (memoria_listar_pendientes lo devuelve)' } },
+    required: ['id'],
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
+};
+
+const TOOL_MEMORIA_RECHAZAR_CANDIDATA = {
+  name: 'memoria_rechazar_candidata',
+  description: 'Descarta una candidata de memoria gobernada (obtenida con memoria_listar_pendientes) sin que su contenido llegue a ser memoria vigente. Requiere rol encargado o superior.',
+  input_schema: {
+    type: 'object',
+    properties: { id: { type: 'number', description: 'ID de la candidata (memoria_listar_pendientes lo devuelve)' } },
+    required: ['id'],
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
+};
+
 const TOOL_CONSULTAR_INVENTARIO = {
   name: 'consultar_inventario',
   description: 'Busca materiales en el inventario por nombre, tipo o referencia. Devuelve cantidad disponible, precio y ubicación.',
@@ -2786,12 +2859,12 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -6272,6 +6345,36 @@ async function esDeveloperAgente(env, usuario_id) {
   } catch (_) { return false; }
 }
 
+// ── Helper: verificar si el usuario actual tiene rol 'encargado' o superior ──
+// F-2.1 paso 3 (2026-08-04): ADR-0013 §2/§3 exige rol encargado+ para aprobar
+// memoria compartida y para revisar/confirmar/rechazar candidatas pendientes
+// (inferidas o compartidas sin aprobar). Mismo patrón de consulta que
+// esDeveloperAgente(), un umbral de rol distinto -- ver CLAUDE.md, tabla de
+// roles: encargado, jefe_de_obra, oficina, empresa_admin, superadmin y
+// desarrollador quedan por encima de operario en autoridad de escritura.
+const ROLES_ENCARGADO_O_SUPERIOR = new Set([
+  'encargado', 'jefe_de_obra', 'oficina', 'empresa_admin', 'superadmin', 'desarrollador',
+]);
+async function esEncargadoOSuperior(env, usuario_id) {
+  if (!usuario_id) return false;
+  const uid = String(usuario_id).toLowerCase().trim();
+  if (uid === 'adrian' || uid === 'adrián' || uid === '3' || uid === '35') return true;
+  try {
+    const num = parseInt(uid, 10);
+    let row = null;
+    if (!isNaN(num)) {
+      row = await env.DB.prepare("SELECT rol, roles_extra FROM usuarios WHERE id = ? LIMIT 1").bind(num).first();
+    }
+    if (!row) {
+      row = await env.DB.prepare("SELECT rol, roles_extra FROM usuarios WHERE LOWER(nombre) = ? LIMIT 1").bind(uid).first();
+    }
+    if (!row) return false;
+    if (ROLES_ENCARGADO_O_SUPERIOR.has(row.rol)) return true;
+    const extra = (row.roles_extra || '').toLowerCase();
+    return [...ROLES_ENCARGADO_O_SUPERIOR].some(r => extra.includes(r));
+  } catch (_) { return false; }
+}
+
 // ── Ejecutar tools ────────────────────────────────────────────────────────────
 // Fix continuación 20: el default de authOk era `true` (fail-open). El único
 // call site que dependía de estos defaults era ejecutarReflexion() (no pasaba
@@ -6793,6 +6896,66 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `Encontrados ${recuerdos.length} recuerdos:\n\n${items.join('\n\n')}`;
       } catch (err) {
         return `Error consultando memoria: ${err.message}`;
+      }
+    }
+
+    // F-2.1 paso 3 (2026-08-04) — memoria_listar_pendientes/confirmar/rechazar.
+    // Las tres exigen rol encargado+ (ADR-0013 §2/§3), comprobado aquí contra la
+    // BD por usuario_id -- el mismo patrón que esDeveloperAgente(), sin depender
+    // de lo que el modelo diga sobre quién pregunta.
+    case 'memoria_listar_pendientes': {
+      try {
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+        if (!(await esEncargadoOSuperior(env, usuario_id))) {
+          return 'Solo un usuario con rol encargado o superior puede revisar candidatas de memoria pendientes.';
+        }
+        const candidatas = await listarCandidatasPendientes(env, { empresaId: eid });
+        if (!candidatas.length) return 'No hay candidatas de memoria pendientes de validación.';
+        const items = candidatas.map(r =>
+          `🕓 **#${r.id} — ${r.contenido}**\n` +
+          `   Categoría: ${r.categoria} | Confianza: ${r.confianza} | Ámbito: ${r.ambito} | Método: ${r.metodo}\n` +
+          `   Origen: ${r.origen} | Propuesta: ${r.fecha_creacion} | Caduca: ${r.caduca_en}`
+        );
+        return `${candidatas.length} candidatas pendientes:\n\n${items.join('\n\n')}`;
+      } catch (err) {
+        return `Error listando candidatas de memoria: ${err.message}`;
+      }
+    }
+
+    case 'memoria_confirmar_candidata': {
+      try {
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+        if (!(await esEncargadoOSuperior(env, usuario_id))) {
+          return 'Solo un usuario con rol encargado o superior puede confirmar una candidata de memoria.';
+        }
+        const id = parseInt(input.id, 10);
+        if (!Number.isInteger(id) || id <= 0) return 'id inválido.';
+        const ok = await confirmarCandidata(env, { id, empresaId: eid, aprobadaPor: usuario_id });
+        return ok
+          ? `Candidata #${id} confirmada. Ya es memoria consultable.`
+          : `No se pudo confirmar la candidata #${id} (no existe, no pertenece a tu empresa, o ya no está pendiente).`;
+      } catch (err) {
+        return `Error confirmando candidata de memoria: ${err.message}`;
+      }
+    }
+
+    case 'memoria_rechazar_candidata': {
+      try {
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+        if (!(await esEncargadoOSuperior(env, usuario_id))) {
+          return 'Solo un usuario con rol encargado o superior puede rechazar una candidata de memoria.';
+        }
+        const id = parseInt(input.id, 10);
+        if (!Number.isInteger(id) || id <= 0) return 'id inválido.';
+        const ok = await rechazarCandidata(env, { id, empresaId: eid, rechazadaPor: usuario_id });
+        return ok
+          ? `Candidata #${id} rechazada. No pasa a ser memoria.`
+          : `No se pudo rechazar la candidata #${id} (no existe, no pertenece a tu empresa, o ya no está pendiente).`;
+      } catch (err) {
+        return `Error rechazando candidata de memoria: ${err.message}`;
       }
     }
 

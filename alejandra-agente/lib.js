@@ -167,6 +167,12 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   // input -- sin sesión no hay tenant al que acotar la consulta, mismo criterio que el
   // resto de esta lista.
   'memoria_consultar',
+
+  // F-2.1 paso 3 (2026-08-04), decisión del Director: exponer la escritura sobre
+  // memoria_gobernada. Mismo motivo que memoria_consultar -- empresa_id sale de la
+  // sesión, y confirmar/rechazar exige además rol encargado+ (comprobado en
+  // worker.js, esEncargadoOSuperior()).
+  'memoria_listar_pendientes', 'memoria_confirmar_candidata', 'memoria_rechazar_candidata',
 ]);
 // SEC-CRON-01 / ARC-017 (02/08/2026): el cron llama al modelo con esDevVerificado=true,
 // así que filtrarToolsPorAuth no le filtraba NADA. Seis veces al día, sin nadie delante,
@@ -194,6 +200,11 @@ const TOOLS_PROHIBIDAS_CRON = new Set([
   'escribir_bd', 'configurar_alerta', 'nexus_manage',
   // tomar_decision con confianza>=0.8 y auto_aplicar escribe agente_config por su cuenta
   'tomar_decision',
+  // F-2.1 paso 3 (2026-08-04): confirmar/rechazar una candidata de memoria ES la
+  // validación humana que ADR-0013 §3 exige antes de que algo inferido pase a
+  // memoria vigente -- que el cron las apruebe sin nadie delante contradice el
+  // propósito de la propia barrera, no solo su nivel de riesgo.
+  'memoria_confirmar_candidata', 'memoria_rechazar_candidata',
 ]);
 
 // Se detecta por identidad, no por un flag que haya que acordarse de pasar: el cron

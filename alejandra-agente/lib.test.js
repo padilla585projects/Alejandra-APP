@@ -1111,3 +1111,34 @@ describe('construirConsultaMemoriaGobernada', () => {
     expect(construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA }).binds.at(-1)).toBe(10);
   });
 });
+
+// ── memoria_listar_pendientes / memoria_confirmar_candidata / memoria_rechazar_candidata ──
+// F-2.1 paso 3 (2026-08-04), decisión del Director: exponer la escritura sobre
+// memoria_gobernada. Las tres exigen sesión (TOOLS_REQUIEREN_SESION), igual que
+// memoria_consultar; confirmar/rechazar además quedan excluidas del cron
+// (TOOLS_PROHIBIDAS_CRON) porque aprobar una candidata sin humano delante
+// contradice el propósito de la propia validación de ADR-0013 §3. El gate de rol
+// encargado+ vive en worker.js (esEncargadoOSuperior), no en lib.js -- estas
+// pruebas cubren solo el filtrado por sesión/cron que sí vive aquí.
+describe('memoria_listar_pendientes / memoria_confirmar_candidata / memoria_rechazar_candidata', () => {
+  it('las tres exigen sesión, con o sin metadato ADR-0010', () => {
+    const nombres = ['memoria_listar_pendientes', 'memoria_confirmar_candidata', 'memoria_rechazar_candidata'];
+    const niveles = { memoria_listar_pendientes: 'N0', memoria_confirmar_candidata: 'N1', memoria_rechazar_candidata: 'N1' };
+    for (const name of nombres) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso: 'sesion', cron: name === 'memoria_listar_pendientes' ? 'permitido' : 'prohibido', nivel_riesgo: niveles[name] };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+      }
+      expect(filtrarToolsPorAuth([sinMetadato], false, false)).toEqual([]);
+      expect(filtrarToolsPorAuth([sinMetadato], true, false)).toEqual([sinMetadato]);
+    }
+  });
+
+  it('memoria_listar_pendientes SÍ está disponible para el cron; confirmar/rechazar NO', () => {
+    expect(filtrarToolsCron([{ name: 'memoria_listar_pendientes' }])).toEqual([{ name: 'memoria_listar_pendientes' }]);
+    expect(filtrarToolsCron([{ name: 'memoria_confirmar_candidata' }])).toEqual([]);
+    expect(filtrarToolsCron([{ name: 'memoria_rechazar_candidata' }])).toEqual([]);
+  });
+});
