@@ -6,26 +6,34 @@
 - Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno, checklist lista, ejecución exclusiva del Director) y `ARC-014` (riesgo aceptado temporalmente). **Época 1 completa** (F-1.1/F-1.2/F-1.3 cerradas). **Época 2 abierta**: F-2.1 (gobierno de memoria) con modelo aceptado (`ADR-0013`) y primer esquema declarado y aplicado (`memoria_gobernada`); su paso 3 (persistencia real) resuelto para lectura (`memoria_consultar`), escritura pendiente de decisión del Director. **No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.**
 - PRs integradas: #9 (F-0.1), #10 (ARC-011), #11 (ARC-012), ... #75 (ARC-011 lote 3, retirar DDL), #76 (fix panel.html, chat de Alejandra)
 
-## Sondas CPD — módulo nuevo en rama sin fusionar (2026-08-05)
+## Departamento "Control" — módulo nuevo en rama sin fusionar (2026-08-05)
 
-Rama `feat/sondas-cpd`, sin fusionar a `main` todavía. Módulo de departamento eléctrico
-(sondas de temp/humedad/presión diferencial sobre plano de sala CPD) en `index.html` +
-`panel.html`, backend en `worker.js` con tablas autoprovisionadas en runtime (sin migración
-D1 manual). Incluye dos plantillas de plano en SVG dibujado (`img/cpd-plantillas/dh304.svg`,
-`dh302.svg`, tituladas "Modelo Liquid Cooling 1/2"), diseñadas iterativamente con el Director
-a partir de dos fotos reales de sala que aportó (sustituidas por el SVG por quedar
-giradas/poco nítidas como fondo). Colocar una sonda pasó de "tocar el plano → `prompt()`
-nativo" a una barra de herramientas por tipo (sin diálogo, doble tap/clic para editar), sobre
-un modelo de datos genérico (`plano_elementos`, categoría+tipo) pensado para admitir cámaras
-u otro equipamiento sobre el mismo editor más adelante. Detalle completo en `CHANGELOG.md` y
-`PROJECT_STATE.md`.
+Rama `feat/control-departamento`, sin fusionar a `main` todavía (continúa a `feat/sondas-cpd`,
+ya integrada). "Sondas CPD" se traslada de Eléctrico (donde vivía provisionalmente) a un
+departamento nuevo, **Control**, y el editor de plano se generaliza a tres módulos que
+comparten pantallas/funciones: **Sondas Salas** (renombrada), **Cámaras de seguridad**
+(fija/PTZ/domo) y **Control de acceso** (lector de tarjeta, puerta motorizada, biométrico).
+Nueva tabla `cpd_plantillas` (gestión de plantillas de plano por el propio usuario, R2-backed)
+con 4 endpoints nuevos. Backend con tablas/columnas autoprovisionadas en runtime (sin
+migración D1 manual). Detalle completo en `CHANGELOG.md` y `PROJECT_STATE.md`.
 
-Desplegado (Worker + Pages) desde la propia rama, no desde `main`, para poder probarlo antes
-de fusionar — cada despliegue pasó por la aprobación del entorno `production` del Director,
-igual que un despliegue normal. Verificado en producción en Chrome real, en los dos
-frontales: crear plano con plantilla, colocar/editar elementos, doble tap/clic, selector de
-etiqueta. **Pendiente: abrir revisión de la PR y fusionar a `main`; decidir la ubicación
-definitiva del módulo (hoy vive en Eléctrico solo de forma temporal).**
+Durante la verificación en Chrome real (`panel.html`) aparecieron y se corrigieron 4 bugs
+reales específicos de ese frontal (no aplican a `index.html`): el `<select>` de
+previsualización de departamento del admin no incluía "Control" (lista hardcodeada aparte de
+`_DEPTS_CATALOG`); `_MENU_ROL_DEPT_CONFIG` sin entrada `control` dejaba el sidebar sin curar
+(un admin previsualizando Control veía todas las secciones); los 3 botones de módulo vivían
+dentro de la sección "Inventarios" que se oculta para Control, tapándolos — se les dio su
+propia sección en la raíz del departamento; y cambiar entre los 3 módulos se quedaba en
+blanco porque comparten la misma página interna y `navTo()` no recarga si ya estás en ella.
+
+Desplegado (Worker + Pages) desde la propia rama para poder probarlo antes de fusionar, cada
+despliegue con aprobación del entorno `production` del Director. Verificado en Chrome real en
+`panel.html`: dropdown, sidebar propio, cambio entre módulos, toolbar filtrada, plano
+existente de Sondas Salas. **Pendiente antes de fusionar a `main`: verificar `index.html` en
+vivo (código no tocado en esta iteración, pero sin probar); colocar un elemento de
+cámara/control de acceso y probar la subida de una plantilla nueva — el entorno de este
+agente no puede automatizar subidas de archivo en el navegador real, requiere clic manual del
+Director.**
 
 ## Migraciones D1 aplicadas (2026-08-02) — checklists y memoria gobernada
 

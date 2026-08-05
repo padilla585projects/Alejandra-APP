@@ -3,23 +3,42 @@
 - Actualizado: 2026-08-04
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
-## Sondas CPD — nuevo módulo (2026-08-05, rama `feat/sondas-cpd`)
+## Departamento "Control" — Sondas Salas + Cámaras + Control de acceso (2026-08-05, rama `feat/control-departamento`)
 
-Módulo del departamento eléctrico para colocar sondas de temperatura/humedad/presión
-diferencial sobre el plano de una sala de CPD (3 zonas, cada una con su pasillo caliente),
-en `index.html` y `panel.html` (paridad de frontales). Barra de herramientas con un icono
-por tipo (colocar sin diálogo, doble tap/clic para editar); modelo de datos genérico
-(`plano_elementos`: categoría+tipo, pensado para cámaras/control de acceso a futuro sobre el
-mismo editor). Backend nuevo en `worker.js` (`/cpd/planos`, `/cpd/sondas`,
-`/cpd/sondas/:id/lecturas`); tablas autoprovisionadas en runtime con el mismo patrón que el
-resto del esquema (`_ensureCpdTables`, ver "Esquema de datos" más abajo) — no requirió
-migración D1 manual. Detalle completo en `CHANGELOG.md`.
+"Sondas CPD" (nacida en Eléctrico como hueco provisional) se traslada a un departamento
+nuevo, **Control**, y se generaliza el mismo editor de plano a tres módulos: **Sondas Salas**
+(renombrada), **Cámaras de seguridad** (fija/PTZ/domo) y **Control de acceso** (lector de
+tarjeta/puerta motorizada/biométrico). Un único editor reutilizado 3 veces — no tres
+pantallas distintas — mediante un concepto de "módulo" (`sondas`|`camaras`|`control_acceso`)
+que determina catálogo de tipos/iconos, título y qué planos se listan.
+
+Backend: `cpd_planos` gana columna `modulo` (default `'sondas'`, compatible con los planos ya
+existentes); `CPD_TIPOS_PERMITIDOS`/`CPD_TIPO_LABEL` ampliados con las 6 combinaciones nuevas;
+`'control'` añadido al whitelist de departamentos (`actualizarSesionDepartamento`). Nueva
+tabla `cpd_plantillas` (gestión de plantillas de plano por el propio usuario, R2-backed) con
+sus 4 endpoints — al crear un plano, el modal mezcla las plantillas SVG "de fábrica" (solo en
+Sondas Salas) con las subidas por cualquier usuario de la empresa, más una casilla
+"+ Nueva plantilla" para subir una nueva sin tocar código.
+
+Bugs reales encontrados y corregidos durante la verificación en `panel.html` (no aplican a
+`index.html`, que no comparte ese código): el `<select>` de previsualización de departamento
+del admin era una lista `<option>` hardcodeada aparte de `_DEPTS_CATALOG`, sin "Control";
+`_MENU_ROL_DEPT_CONFIG` no tenía entrada `control`, así que el sidebar no se curaba para ese
+departamento (admin veía todas las secciones sin filtrar); los 3 botones de módulo vivían
+físicamente dentro de la sección "Inventarios" del sidebar, que se oculta para Control (sin
+`material` propio) — se les dio su propia sección `sidebar-section` "🎛️ Control"; y
+`cpdOfficeAbrirModulo()` llamaba a `navTo('cpdSondas')`, que no recarga si ya estás en esa
+página — como los 3 módulos comparten la misma página interna, cambiar de Sondas Salas a
+Cámaras se quedaba en blanco (corregido con recarga directa cuando `currentPage` ya coincide).
 
 Desplegado (Worker + Pages) desde la rama para pruebas en producción, con aprobación del
-entorno `production` del Director en cada despliegue, tal como exige ADR-0007. Verificado
-en Chrome real en los dos frontales (táctil y ratón). **Pendiente: fusionar a `main`; decidir
-ubicación definitiva del módulo (hoy en Eléctrico solo de forma temporal, ver memoria del
-agente).**
+entorno `production` del Director en cada despliegue, tal como exige ADR-0007. Verificado en
+Chrome real en `panel.html`: sidebar, cambio entre módulos, toolbar filtrada por módulo y
+carga del plano existente de Sondas Salas. **Pendiente antes de fusionar a `main`:** probar en
+`index.html` (no se ha tocado código touch-específico, pero no se ha verificado en vivo esta
+iteración); probar en vivo la colocación de un elemento de cámara/control de acceso y la
+subida de una plantilla nueva (el entorno de este agente no puede automatizar subidas de
+archivo en el navegador real — requiere clic manual del Director).
 
 ## Autonomía de los agentes
 
