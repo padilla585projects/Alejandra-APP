@@ -1,0 +1,35 @@
+<svg viewBox="0 0 700 718" xmlns="http://www.w3.org/2000/svg" font-family="Arial,sans-serif">
+  <rect x="0" y="0" width="700" height="718" fill="#f8fafc"/>
+  <rect x="12" y="12" width="676" height="694" rx="8" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="30" y="40" font-size="20" font-weight="900" fill="#0f172a">CPD — Sala DH302</text>
+  
+    <rect x="46" y="60" width="608" height="196" rx="6" fill="none" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
+    <text x="56" y="80" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#334155">PARTE 1</text>
+    <rect x="60.0" y="94" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="158.0" y="94" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="256.0" y="94" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="354.0" y="94" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="452.0" y="94" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="550.0" y="94" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="60" y="150" width="580" height="34" fill="#f97316" opacity="0.18"/>
+    <line x1="60" y1="150" x2="640" y2="150" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <line x1="60" y1="184" x2="640" y2="184" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="350" y="172" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#c2410c" text-anchor="middle" letter-spacing="1">PASILLO CALIENTE</text>
+    <rect x="60.0" y="184" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="158.0" y="184" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="256.0" y="184" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="354.0" y="184" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="452.0" y="184" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="550.0" y="184" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/>
+  
+
+    <rect x="46" y="276" width="608" height="196" rx="6" fill="none" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
+    <text x="56" y="296" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#334155">PARTE 2</text>
+    <rect x="60.0" y="310" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="158.0" y="310" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="256.0" y="310" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="354.0" y="310" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="452.0" y="310" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="550.0" y="310" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="60" y="366" width="580" height="34" fill="#f97316" opacity="0.18"/>
+    <line x1="60" y1="366" x2="640" y2="366" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <line x1="60" y1="400" x2="640" y2="400" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="350" y="388" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#c2410c" text-anchor="middle" letter-spacing="1">PASILLO CALIENTE</text>
+    <rect x="60.0" y="400" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="158.0" y="400" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="256.0" y="400" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="354.0" y="400" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="452.0" y="400" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="550.0" y="400" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/>
+  
+
+    <rect x="46" y="492" width="608" height="196" rx="6" fill="none" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
+    <text x="56" y="512" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#334155">PARTE 3</text>
+    <rect x="60.0" y="526" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="158.0" y="526" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="256.0" y="526" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="354.0" y="526" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="452.0" y="526" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="550.0" y="526" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="60" y="582" width="580" height="34" fill="#f97316" opacity="0.18"/>
+    <line x1="60" y1="582" x2="640" y2="582" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <line x1="60" y1="616" x2="640" y2="616" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="350" y="604" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#c2410c" text-anchor="middle" letter-spacing="1">PASILLO CALIENTE</text>
+    <rect x="60.0" y="616" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="158.0" y="616" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="256.0" y="616" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="354.0" y="616" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="452.0" y="616" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/><rect x="550.0" y="616" width="90.0" height="56" rx="3" fill="#dbeafe" stroke="#1e293b" stroke-width="1.5"/>
+  
+</svg>

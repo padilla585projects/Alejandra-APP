@@ -27104,7 +27104,7 @@ async function crearCpdPlano(request, env) {
   if (!file || !file.name) return err('Falta la imagen del plano', 400);
   if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
   const mime = file.type || 'image/jpeg';
-  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/svg+xml'];
   if (!allowed.includes(mime)) return err('Solo se permiten imagenes', 400);
   const obra_id = parseInt(form.get('obra_id') || sesionObra || 0) || null;
   const titulo  = (form.get('titulo') || '').trim();
