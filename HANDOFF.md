@@ -6,6 +6,22 @@
 - Estado: Época 0 cerrada salvo `F-0.2-CFG` (secretos por entorno, checklist lista, ejecución exclusiva del Director) y `ARC-014` (riesgo aceptado temporalmente). **Época 1 completa** (F-1.1/F-1.2/F-1.3 cerradas). **Época 2 abierta**: F-2.1 (gobierno de memoria) con modelo aceptado (`ADR-0013`) y primer esquema declarado y aplicado (`memoria_gobernada`); su paso 3 (persistencia real) resuelto para lectura (`memoria_consultar`), escritura pendiente de decisión del Director. **No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.**
 - PRs integradas: #9 (F-0.1), #10 (ARC-011), #11 (ARC-012), ... #75 (ARC-011 lote 3, retirar DDL), #76 (fix panel.html, chat de Alejandra)
 
+## Sondas CPD — módulo nuevo en rama sin fusionar (2026-08-05)
+
+Rama `feat/sondas-cpd`, sin fusionar a `main` todavía. Módulo de departamento eléctrico
+(sondas de temp/humedad/presión diferencial sobre plano de sala CPD) en `index.html` +
+`panel.html`, backend en `worker.js` con tablas autoprovisionadas en runtime (sin migración
+D1 manual). Incluye dos plantillas de plano en SVG dibujado (`img/cpd-plantillas/dh304.svg`,
+`dh302.svg`), diseñadas iterativamente con el Director a partir de dos fotos reales de sala
+que aportó (sustituidas por el SVG por quedar giradas/poco nítidas como fondo). Detalle
+completo en `CHANGELOG.md` y `PROJECT_STATE.md`.
+
+Desplegado (Worker + Pages) desde la propia rama, no desde `main`, para poder probarlo antes
+de fusionar — cada despliegue pasó por la aprobación del entorno `production` del Director,
+igual que un despliegue normal. Verificado en producción: `/health` healthy, ruta `/cpd/planos`
+responde, plano de prueba creado y navegado en Chrome real por el agente. **Pendiente: abrir
+revisión de la PR y fusionar a `main`.**
+
 ## Migraciones D1 aplicadas (2026-08-02) — checklists y memoria gobernada
 
 El Director autorizó en chat (2026-08-02) el paso 2 de ambos verticales pendientes de
