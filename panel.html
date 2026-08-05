@@ -11211,6 +11211,18 @@ function iniciarApp() {
   organizarSidebarEncargado();
   organizarSidebarIngenieria();
 
+  // CONTROL-02: los 3 botones de nav-control-section viven físicamente dentro del bloque
+  // "Inventarios" del HTML (junto a Bobinas) — organizarSidebarEncargado() oculta esa
+  // sección entera para 'control' (sin config.material), lo que los tapaba de nuevo pese a
+  // haberse revelado antes (línea ~11136). Se re-revelan aquí, después de la reorganización,
+  // igual que el propio botón de Bobinas sobrevive por estar en la lista config.material.
+  if (verComoAdmin || deptActual === 'control') {
+    document.querySelectorAll('.nav-control-section').forEach(el => {
+      el.style.display = '';
+      el.removeAttribute('data-hidden-by-perms');
+    });
+  }
+
   if (isNonAdmin) {
     // Ocultar: Analítica y los 5 grupos ex-Seguimiento (DEPT-01: Construcción y Obra
     // ya no se ocultan, el filtrado real es por departamento en el backend), más
