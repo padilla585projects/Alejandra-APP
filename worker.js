@@ -27050,13 +27050,20 @@ async function _ensureCpdTables(env) {
       actualizado_en TEXT DEFAULT (datetime('now'))
     )
   `).run();
+  // plano_elementos: cualquier cosa que se coloca sobre un cpd_planos (sondas hoy,
+  // camaras/control de acceso manana) — categoria+tipo genericos, icono se deriva
+  // en el frontend a partir de "tipo" (catalogo CPD_TIPOS_ELEMENTO), no se guarda aqui.
   await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS cpd_sondas (
+    CREATE TABLE IF NOT EXISTS plano_elementos (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       plano_id       INTEGER NOT NULL,
       empresa_id     INTEGER NOT NULL,
+      categoria      TEXT    NOT NULL DEFAULT 'sonda_ambiental',
+      tipo           TEXT    NOT NULL DEFAULT 'temp_hum',
       nombre         TEXT    NOT NULL,
       numero_serie   TEXT,
+      modelo         TEXT,
+      notas          TEXT,
       zona           TEXT,
       pos_x          REAL    NOT NULL,
       pos_y          REAL    NOT NULL,
@@ -27076,7 +27083,7 @@ async function _ensureCpdTables(env) {
     )
   `).run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_planos_obra ON cpd_planos(obra_id)').run();
-  await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_sondas_plano ON cpd_sondas(plano_id)').run();
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_plano_elementos_plano ON plano_elementos(plano_id)').run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_lecturas_sonda_fecha ON cpd_lecturas(sonda_id, fecha)').run();
 }
 
@@ -27136,7 +27143,7 @@ async function getCpdPlano(request, env, path) {
                           'presion_diferencial', l.presion_diferencial, 'fecha', l.fecha)
       FROM cpd_lecturas l WHERE l.sonda_id = s.id ORDER BY l.fecha DESC LIMIT 1
     ) AS ultima_lectura
-    FROM cpd_sondas s WHERE s.plano_id = ? ORDER BY s.id ASC
+    FROM plano_elementos s WHERE s.plano_id = ? ORDER BY s.id ASC
   `).bind(id).all();
   return json({ ok: true, plano, sondas: sondas.results || [] });
 }
@@ -27184,15 +27191,19 @@ async function eliminarCpdPlano(request, env, path) {
   await _ensureCpdTables(env);
   const plano = await env.DB.prepare('SELECT r2_key FROM cpd_planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!plano) return err('Plano no encontrado', 404);
-  const sondas = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE plano_id=?').bind(id).all();
+  const sondas = await env.DB.prepare('SELECT id FROM plano_elementos WHERE plano_id=?').bind(id).all();
   for (const s of (sondas.results || [])) {
     await env.DB.prepare('DELETE FROM cpd_lecturas WHERE sonda_id=?').bind(s.id).run();
   }
-  await env.DB.prepare('DELETE FROM cpd_sondas WHERE plano_id=?').bind(id).run();
+  await env.DB.prepare('DELETE FROM plano_elementos WHERE plano_id=?').bind(id).run();
   await env.DB.prepare('DELETE FROM cpd_planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   await env.FILES.delete(plano.r2_key).catch(() => {});
   return json({ ok: true });
 }
+
+// categoria:tipo permitidos hoy — ampliar aqui cuando se anadan camaras/control de acceso.
+const CPD_TIPOS_PERMITIDOS = new Set(['sonda_ambiental:temp_hum', 'sonda_ambiental:presion_diferencial']);
+const CPD_TIPO_LABEL = { temp_hum: 'Temp/Hum', presion_diferencial: 'Presión Dif.' };
 
 async function crearCpdSonda(request, env) {
   const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
@@ -27200,20 +27211,26 @@ async function crearCpdSonda(request, env) {
   await _ensureCpdTables(env);
   const body = await request.json().catch(() => ({}));
   const plano_id = parseInt(body.plano_id || 0);
-  const nombre = (body.nombre || '').trim();
   const pos_x = Number(body.pos_x), pos_y = Number(body.pos_y);
   if (!plano_id) return err('plano_id es obligatorio', 400);
-  if (!nombre) return err('nombre es obligatorio', 400);
   if (!Number.isFinite(pos_x) || !Number.isFinite(pos_y)) return err('pos_x y pos_y son obligatorios', 400);
+  const categoria = (body.categoria || 'sonda_ambiental').trim();
+  const tipo = (body.tipo || 'temp_hum').trim();
+  if (!CPD_TIPOS_PERMITIDOS.has(`${categoria}:${tipo}`)) return err('categoria/tipo no valido', 400);
   const plano = await env.DB.prepare('SELECT id FROM cpd_planos WHERE id=? AND empresa_id=?').bind(plano_id, empresa_id).first();
   if (!plano) return err('Plano no encontrado', 404);
+  let nombre = (body.nombre || '').trim();
+  if (!nombre) {
+    const { c } = await env.DB.prepare('SELECT COUNT(*) AS c FROM plano_elementos WHERE plano_id=? AND tipo=?').bind(plano_id, tipo).first();
+    nombre = `${CPD_TIPO_LABEL[tipo] || tipo} ${(c || 0) + 1}`;
+  }
   const numero_serie = (body.numero_serie || '').trim() || null;
   const zona = (body.zona || '').trim() || null;
   const r = await env.DB.prepare(`
-    INSERT INTO cpd_sondas (plano_id, empresa_id, nombre, numero_serie, zona, pos_x, pos_y)
-    VALUES (?,?,?,?,?,?,?)
-  `).bind(plano_id, empresa_id, nombre, numero_serie, zona, pos_x, pos_y).run();
-  return json({ ok: true, id: r.meta.last_row_id }, 201);
+    INSERT INTO plano_elementos (plano_id, empresa_id, categoria, tipo, nombre, numero_serie, zona, pos_x, pos_y)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).bind(plano_id, empresa_id, categoria, tipo, nombre, numero_serie, zona, pos_x, pos_y).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre }, 201);
 }
 
 async function actualizarCpdSonda(request, env, path) {
@@ -27222,19 +27239,21 @@ async function actualizarCpdSonda(request, env, path) {
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
-  const row = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const row = await env.DB.prepare('SELECT id FROM plano_elementos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!row) return err('Sonda no encontrada', 404);
   const body = await request.json().catch(() => ({}));
   const sets = [], params = [];
   if (typeof body.nombre === 'string' && body.nombre.trim()) { sets.push('nombre=?'); params.push(body.nombre.trim()); }
   if (typeof body.numero_serie === 'string') { sets.push('numero_serie=?'); params.push(body.numero_serie.trim() || null); }
+  if (typeof body.modelo === 'string') { sets.push('modelo=?'); params.push(body.modelo.trim() || null); }
+  if (typeof body.notas === 'string') { sets.push('notas=?'); params.push(body.notas.trim() || null); }
   if (typeof body.zona === 'string') { sets.push('zona=?'); params.push(body.zona.trim() || null); }
   if (body.pos_x !== undefined && Number.isFinite(Number(body.pos_x))) { sets.push('pos_x=?'); params.push(Number(body.pos_x)); }
   if (body.pos_y !== undefined && Number.isFinite(Number(body.pos_y))) { sets.push('pos_y=?'); params.push(Number(body.pos_y)); }
   if (!sets.length) return err('Nada que actualizar', 400);
   sets.push("actualizado_en=datetime('now')");
   params.push(id, empresa_id);
-  await env.DB.prepare(`UPDATE cpd_sondas SET ${sets.join(', ')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  await env.DB.prepare(`UPDATE plano_elementos SET ${sets.join(', ')} WHERE id=? AND empresa_id=?`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -27244,10 +27263,10 @@ async function eliminarCpdSonda(request, env, path) {
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
-  const row = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const row = await env.DB.prepare('SELECT id FROM plano_elementos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!row) return err('Sonda no encontrada', 404);
   await env.DB.prepare('DELETE FROM cpd_lecturas WHERE sonda_id=?').bind(id).run();
-  await env.DB.prepare('DELETE FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM plano_elementos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 
@@ -27257,7 +27276,7 @@ async function crearCpdLectura(request, env, path) {
   const sonda_id = parseInt(path.split('/')[3]);
   if (!sonda_id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
-  const sonda = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(sonda_id, empresa_id).first();
+  const sonda = await env.DB.prepare('SELECT id FROM plano_elementos WHERE id=? AND empresa_id=?').bind(sonda_id, empresa_id).first();
   if (!sonda) return err('Sonda no encontrada', 404);
   const body = await request.json().catch(() => ({}));
   const temperatura = body.temperatura !== undefined && body.temperatura !== '' ? Number(body.temperatura) : null;
@@ -27279,7 +27298,7 @@ async function listarCpdLecturas(request, env, path) {
   const sonda_id = parseInt(path.split('/')[3]);
   if (!sonda_id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
-  const sonda = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(sonda_id, empresa_id).first();
+  const sonda = await env.DB.prepare('SELECT id FROM plano_elementos WHERE id=? AND empresa_id=?').bind(sonda_id, empresa_id).first();
   if (!sonda) return err('Sonda no encontrada', 404);
   const url = new URL(request.url);
   const desde = url.searchParams.get('desde');

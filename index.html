@@ -1668,8 +1668,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       <div style="flex:1;min-width:0;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="cpdPlanoDetTitulo">—</div>
       <button onclick="eliminarCpdPlanoActual()" title="Eliminar plano" style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:4px">🗑</button>
     </div>
-    <div style="padding:6px 16px;border-bottom:1px solid var(--border);flex-shrink:0;font-size:11px;color:var(--muted)">
-      Toca sobre el plano para añadir una sonda · Mantén pulsada una sonda para moverla
+    <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:6px">
+      <div id="cpdToolbar" style="display:flex;gap:6px;overflow-x:auto"></div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)">
+        <span id="cpdToolbarHint">Elige un tipo arriba y toca el plano para colocarlo · doble toque en un icono para editarlo</span>
+        <select id="cpdEtiquetaModo" onchange="cpdCambiarEtiquetaModo(this.value)" style="margin-left:auto;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text)">
+          <option value="nombre">Ver: nombre</option>
+          <option value="serie">Ver: nº serie</option>
+          <option value="ambos">Ver: nombre + serie</option>
+          <option value="ninguno">Ver: nada</option>
+        </select>
+      </div>
     </div>
     <div id="cpdPlanoWrap" style="flex:1;overflow:auto;background:#0b0f14;position:relative;touch-action:pan-y">
       <div class="empty-state">Cargando plano…</div>
@@ -1695,32 +1704,44 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <input id="cpdSondaSerie" type="text" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
           </div>
         </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Modelo</label>
+            <input id="cpdSondaModelo" type="text" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
+          </div>
+          <div style="flex:1">
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Zona</label>
+            <select id="cpdSondaZona" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
+              <option value="">Sin especificar</option>
+              <option value="parte_1">Parte 1</option>
+              <option value="parte_2">Parte 2</option>
+              <option value="parte_3">Parte 3</option>
+              <option value="pasillo_caliente">Pasillo caliente</option>
+            </select>
+          </div>
+        </div>
         <div>
-          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Zona</label>
-          <select id="cpdSondaZona" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
-            <option value="">Sin especificar</option>
-            <option value="parte_1">Parte 1</option>
-            <option value="parte_2">Parte 2</option>
-            <option value="parte_3">Parte 3</option>
-            <option value="pasillo_caliente">Pasillo caliente</option>
-          </select>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Notas</label>
+          <textarea id="cpdSondaNotas" rows="2" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);resize:vertical"></textarea>
         </div>
         <button onclick="cpdSondaGuardarDatos()" class="btn-primary" style="margin-top:0">Guardar cambios</button>
 
-        <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Nueva lectura</div>
-          <div style="display:flex;gap:6px">
-            <input id="cpdLecturaTemp" type="number" step="0.1" placeholder="Temp °C" style="flex:1;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
-            <input id="cpdLecturaHum" type="number" step="0.1" placeholder="Hum %" style="flex:1;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
-            <input id="cpdLecturaPresion" type="number" step="0.01" placeholder="ΔP Pa" style="flex:1;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
+        <div id="cpdSondaLecturasWrap">
+          <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Nueva lectura</div>
+            <div style="display:flex;gap:6px">
+              <input id="cpdLecturaTemp" type="number" step="0.1" placeholder="Temp °C" style="flex:1;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
+              <input id="cpdLecturaHum" type="number" step="0.1" placeholder="Hum %" style="flex:1;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
+              <input id="cpdLecturaPresion" type="number" step="0.01" placeholder="ΔP Pa" style="flex:1;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
+            </div>
+            <button onclick="cpdLecturaGuardar()" class="btn-primary" style="margin-top:8px">Guardar lectura</button>
           </div>
-          <button onclick="cpdLecturaGuardar()" class="btn-primary" style="margin-top:8px">Guardar lectura</button>
-        </div>
 
-        <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Tendencia</div>
-          <canvas id="cpdSondaCanvas" width="460" height="160" style="width:100%;height:160px;background:var(--surface2);border-radius:8px"></canvas>
-          <div id="cpdSondaLeyenda" style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted)"></div>
+          <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Tendencia</div>
+            <canvas id="cpdSondaCanvas" width="460" height="160" style="width:100%;height:160px;background:var(--surface2);border-radius:8px"></canvas>
+            <div id="cpdSondaLeyenda" style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted)"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -15570,6 +15591,58 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   };
   window._cpdPlantillaSeleccionada = null;
 
+  // Catálogo de tipos de elemento colocables en el plano — hoy solo sondas
+  // ambientales, mañana cámaras/control de acceso: añadir aquí, sin tocar el
+  // editor (arrastre, ficha, etc. son genéricos).
+  const CPD_TIPOS_ELEMENTO = [
+    { categoria: 'sonda_ambiental', tipo: 'temp_hum',            icono: '🌡️', label: 'Temp/Hum' },
+    { categoria: 'sonda_ambiental', tipo: 'presion_diferencial', icono: '📉', label: 'Presión Dif.' },
+  ];
+  function cpdTipoInfo(tipo) {
+    return CPD_TIPOS_ELEMENTO.find(t => t.tipo === tipo) || CPD_TIPOS_ELEMENTO[0];
+  }
+  window._cpdHerramientaActiva = null; // {categoria, tipo} o null
+
+  function cpdRenderToolbar() {
+    const cont = document.getElementById('cpdToolbar');
+    if (!cont) return;
+    const activa = window._cpdHerramientaActiva;
+    cont.innerHTML = CPD_TIPOS_ELEMENTO.map(t => `
+      <button onclick="cpdArmarHerramienta('${t.tipo}')" data-tipo="${t.tipo}"
+        style="flex-shrink:0;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
+          background:${activa?.tipo === t.tipo ? 'var(--accent)' : 'var(--surface2)'};
+          color:${activa?.tipo === t.tipo ? '#fff' : 'var(--text)'};
+          border:1px solid ${activa?.tipo === t.tipo ? 'var(--accent)' : 'var(--border)'}">
+        <span>${t.icono}</span><span>${esc(t.label)}</span>
+      </button>`).join('');
+  }
+
+  function cpdArmarHerramienta(tipo) {
+    const info = cpdTipoInfo(tipo);
+    window._cpdHerramientaActiva = (window._cpdHerramientaActiva?.tipo === tipo) ? null : { categoria: info.categoria, tipo: info.tipo };
+    cpdRenderToolbar();
+    const hint = document.getElementById('cpdToolbarHint');
+    if (hint) hint.textContent = window._cpdHerramientaActiva
+      ? `Toca el plano para colocar: ${info.icono} ${info.label}`
+      : 'Elige un tipo arriba y toca el plano para colocarlo · doble toque en un icono para editarlo';
+  }
+
+  // Qué mostrar bajo cada icono del plano — persistido por dispositivo.
+  function cpdEtiquetaModo() {
+    return localStorage.getItem('cpd_etiqueta_modo') || 'nombre';
+  }
+  function cpdCambiarEtiquetaModo(modo) {
+    localStorage.setItem('cpd_etiqueta_modo', modo);
+    if (window._cpdPlanoActual) cpdRenderEditor();
+  }
+  function cpdTextoEtiqueta(sonda) {
+    const modo = cpdEtiquetaModo();
+    if (modo === 'ninguno') return '';
+    if (modo === 'serie') return sonda.numero_serie || '';
+    if (modo === 'ambos') return [sonda.nombre, sonda.numero_serie].filter(Boolean).join(' · ');
+    return sonda.nombre || '';
+  }
+
   function cpdSeleccionarPlantilla(key) {
     window._cpdPlantillaSeleccionada = key;
     if (key) document.getElementById('cpdNuevoPlanoFile').value = '';
@@ -15635,6 +15708,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const data = await res.json().catch(() => ({}));
       window._cpdPlanoActual = { plano: data.plano, sondas: data.sondas || [] };
       if (titEl) titEl.textContent = data.plano.titulo || 'Plano';
+      window._cpdHerramientaActiva = null;
       cpdRenderEditor();
     } catch {
       if (wrap) wrap.innerHTML = '<div class="empty-state">Error de red</div>';
@@ -15652,42 +15726,48 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const canvas = document.getElementById('cpdPlanoCanvas');
     st.sondas.forEach(s => cpdAddSondaMarker(canvas, s));
     canvas.addEventListener('click', cpdOnCanvasClick);
+    cpdRenderToolbar();
+    const sel = document.getElementById('cpdEtiquetaModo');
+    if (sel) sel.value = cpdEtiquetaModo();
   }
 
   function cpdOnCanvasClick(e) {
+    const herramienta = window._cpdHerramientaActiva;
+    if (!herramienta) { toast('Elige un tipo de sonda en la barra de arriba', 'error'); return; }
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    cpdCrearSondaEn(x, y);
+    cpdCrearSondaEn(x, y, herramienta);
   }
 
-  async function cpdCrearSondaEn(x, y) {
-    const nombre = prompt('Nombre de la sonda:');
-    if (!nombre || !nombre.trim()) return;
+  async function cpdCrearSondaEn(x, y, herramienta) {
     const st = window._cpdPlanoActual;
     try {
       const res = await apiCall('/cpd/sondas', {
         method: 'POST',
-        body: JSON.stringify({ plano_id: st.plano.id, nombre: nombre.trim(), pos_x: x, pos_y: y })
+        body: JSON.stringify({ plano_id: st.plano.id, categoria: herramienta.categoria, tipo: herramienta.tipo, pos_x: x, pos_y: y })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Error al crear la sonda');
       await abrirCpdPlano(st.plano.id);
+      window._cpdHerramientaActiva = herramienta;
+      cpdRenderToolbar();
     } catch (e) {
       toast('❌ ' + e.message, 'error');
     }
   }
 
   function cpdAddSondaMarker(canvas, sonda) {
+    const info = cpdTipoInfo(sonda.tipo);
     const el = document.createElement('div');
     el.className = 'cpd-sonda-marker';
     el.dataset.id = sonda.id;
     el.style.cssText = `position:absolute;left:${sonda.pos_x}%;top:${sonda.pos_y}%;transform:translate(-50%,-50%);
       width:26px;height:26px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
       display:flex;align-items:center;justify-content:center;font-size:13px;cursor:grab;touch-action:none;z-index:5`;
-    el.textContent = '🌡';
+    el.textContent = info.icono;
     const label = document.createElement('div');
-    label.textContent = sonda.nombre;
+    label.textContent = cpdTextoEtiqueta(sonda);
     label.style.cssText = 'position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;margin-top:2px;pointer-events:none';
     el.appendChild(label);
     canvas.appendChild(el);
@@ -15743,7 +15823,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     };
     el.addEventListener('pointerup', finish);
     el.addEventListener('pointercancel', finish);
-    el.addEventListener('click', e => {
+    el.addEventListener('click', e => e.stopPropagation());
+    el.addEventListener('dblclick', e => {
       e.stopPropagation();
       if (justDragged || _cpdJustDraggedGlobal) return;
       cpdAbrirModalSonda(el.dataset.id);
@@ -15755,14 +15836,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const sonda = st?.sondas.find(s => String(s.id) === String(id));
     if (!sonda) return;
     window._cpdSondaActualId = sonda.id;
+    const info = cpdTipoInfo(sonda.tipo);
     document.getElementById('cpdSondaNombre').value = sonda.nombre || '';
     document.getElementById('cpdSondaSerie').value = sonda.numero_serie || '';
+    document.getElementById('cpdSondaModelo').value = sonda.modelo || '';
+    document.getElementById('cpdSondaNotas').value = sonda.notas || '';
     document.getElementById('cpdSondaZona').value = sonda.zona || '';
     document.getElementById('cpdLecturaTemp').value = '';
     document.getElementById('cpdLecturaHum').value = '';
     document.getElementById('cpdLecturaPresion').value = '';
+    const lecturasWrap = document.getElementById('cpdSondaLecturasWrap');
+    const esSonda = sonda.categoria === 'sonda_ambiental';
+    if (lecturasWrap) lecturasWrap.style.display = esSonda ? '' : 'none';
     document.getElementById('modalCpdSonda').style.display = 'flex';
-    cpdCargarLecturas(sonda.id);
+    if (esSonda) cpdCargarLecturas(sonda.id);
   }
   function cerrarModalCpdSonda() {
     document.getElementById('modalCpdSonda').style.display = 'none';
@@ -15774,13 +15861,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!id) return;
     const nombre = document.getElementById('cpdSondaNombre').value.trim();
     const numero_serie = document.getElementById('cpdSondaSerie').value.trim();
+    const modelo = document.getElementById('cpdSondaModelo').value.trim();
+    const notas = document.getElementById('cpdSondaNotas').value.trim();
     const zona = document.getElementById('cpdSondaZona').value;
     if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
     try {
-      await apiCall(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify({ nombre, numero_serie, zona }) });
+      await apiCall(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify({ nombre, numero_serie, modelo, notas, zona }) });
       const st = window._cpdPlanoActual;
       const sonda = st?.sondas.find(s => String(s.id) === String(id));
-      if (sonda) { sonda.nombre = nombre; sonda.numero_serie = numero_serie; sonda.zona = zona; }
+      if (sonda) { sonda.nombre = nombre; sonda.numero_serie = numero_serie; sonda.modelo = modelo; sonda.notas = notas; sonda.zona = zona; }
       toast('✅ Guardado');
       cpdRenderEditor();
     } catch { toast('❌ Error al guardar', 'error'); }
@@ -15888,6 +15977,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.abrirCpdPlano            = abrirCpdPlano;
   window.eliminarCpdPlanoActual   = eliminarCpdPlanoActual;
   window.cerrarModalCpdSonda      = cerrarModalCpdSonda;
+  window.cpdArmarHerramienta      = cpdArmarHerramienta;
+  window.cpdCambiarEtiquetaModo   = cpdCambiarEtiquetaModo;
   window.cpdSondaGuardarDatos     = cpdSondaGuardarDatos;
   window.cpdSondaEliminar         = cpdSondaEliminar;
   window.cpdLecturaGuardar        = cpdLecturaGuardar;
