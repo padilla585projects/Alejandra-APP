@@ -12020,15 +12020,15 @@ function cpdOfficeRenderToolbar() {
     <button class="btn ${activa?.tipo === t.tipo ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="cpdOfficeArmarHerramienta('${t.tipo}')">
       ${t.icono} ${escHtml(t.label)}
     </button>`).join('');
+  const hint = document.getElementById('cpdOfficeToolbarHint');
+  if (hint) hint.textContent = activa
+    ? `Clic en el plano para colocar: ${cpdOfficeTipoInfo(activa.tipo).icono} ${cpdOfficeTipoInfo(activa.tipo).label}`
+    : 'Elige un tipo y haz clic en el plano para colocarlo · doble clic en un icono para editarlo';
 }
 function cpdOfficeArmarHerramienta(tipo) {
   const info = cpdOfficeTipoInfo(tipo);
   window._cpdOfficeHerramientaActiva = (window._cpdOfficeHerramientaActiva?.tipo === tipo) ? null : { categoria: info.categoria, tipo: info.tipo };
   cpdOfficeRenderToolbar();
-  const hint = document.getElementById('cpdOfficeToolbarHint');
-  if (hint) hint.textContent = window._cpdOfficeHerramientaActiva
-    ? `Clic en el plano para colocar: ${info.icono} ${info.label}`
-    : 'Elige un tipo y haz clic en el plano para colocarlo · doble clic en un icono para editarlo';
 }
 
 function cpdOfficeEtiquetaModo() {

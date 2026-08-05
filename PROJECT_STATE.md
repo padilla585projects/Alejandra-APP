@@ -7,14 +7,19 @@
 
 Módulo del departamento eléctrico para colocar sondas de temperatura/humedad/presión
 diferencial sobre el plano de una sala de CPD (3 zonas, cada una con su pasillo caliente),
-en `index.html` y `panel.html` (paridad de frontales). Backend nuevo en `worker.js`
-(`/cpd/planos`, `/cpd/sondas`, `/cpd/sondas/:id/lecturas`); tablas autoprovisionadas en
-runtime con el mismo patrón que el resto del esquema (`_ensureCpdTables`, ver "Esquema de
-datos" más abajo) — no requirió migración D1 manual. Detalle completo en `CHANGELOG.md`.
+en `index.html` y `panel.html` (paridad de frontales). Barra de herramientas con un icono
+por tipo (colocar sin diálogo, doble tap/clic para editar); modelo de datos genérico
+(`plano_elementos`: categoría+tipo, pensado para cámaras/control de acceso a futuro sobre el
+mismo editor). Backend nuevo en `worker.js` (`/cpd/planos`, `/cpd/sondas`,
+`/cpd/sondas/:id/lecturas`); tablas autoprovisionadas en runtime con el mismo patrón que el
+resto del esquema (`_ensureCpdTables`, ver "Esquema de datos" más abajo) — no requirió
+migración D1 manual. Detalle completo en `CHANGELOG.md`.
 
 Desplegado (Worker + Pages) desde la rama para pruebas en producción, con aprobación del
 entorno `production` del Director en cada despliegue, tal como exige ADR-0007. Verificado
-`/health` healthy y creación real de un plano de prueba. **Pendiente: fusionar a `main`.**
+en Chrome real en los dos frontales (táctil y ratón). **Pendiente: fusionar a `main`; decidir
+ubicación definitiva del módulo (hoy en Eléctrico solo de forma temporal, ver memoria del
+agente).**
 
 ## Autonomía de los agentes
 
