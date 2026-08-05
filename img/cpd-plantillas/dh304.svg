@@ -19,12 +19,10 @@
   
     <rect x="294" y="80" width="560" height="404" rx="6" fill="none" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
     <text x="304" y="98" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#334155">304.1</text>
-    <rect x="314.0" y="125" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="380.0" y="125" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="446.0" y="125" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="512.0" y="125" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="578.0" y="125" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="644.0" y="125" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="710.0" y="125" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="776.0" y="125" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/>
     <rect x="314" y="217" width="520" height="130" fill="#f97316" opacity="0.18"/>
     <line x1="314" y1="217" x2="834" y2="217" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
     <line x1="314" y1="347" x2="834" y2="347" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
     <text x="574" y="287" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#c2410c" text-anchor="middle" letter-spacing="1">PASILLO CALIENTE</text>
-    <rect x="314.0" y="347" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="380.0" y="347" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="446.0" y="347" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="512.0" y="347" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="578.0" y="347" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="644.0" y="347" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="710.0" y="347" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="776.0" y="347" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/>
   
 
     
@@ -36,12 +34,10 @@
   
     <rect x="294" y="484" width="560" height="404" rx="6" fill="none" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
     <text x="304" y="502" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#334155">304.2</text>
-    <rect x="314.0" y="529" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="380.0" y="529" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="446.0" y="529" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="512.0" y="529" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="578.0" y="529" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="644.0" y="529" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="710.0" y="529" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="776.0" y="529" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/>
     <rect x="314" y="621" width="520" height="130" fill="#f97316" opacity="0.18"/>
     <line x1="314" y1="621" x2="834" y2="621" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
     <line x1="314" y1="751" x2="834" y2="751" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
     <text x="574" y="691" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#c2410c" text-anchor="middle" letter-spacing="1">PASILLO CALIENTE</text>
-    <rect x="314.0" y="751" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="380.0" y="751" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="446.0" y="751" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="512.0" y="751" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="578.0" y="751" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="644.0" y="751" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="710.0" y="751" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="776.0" y="751" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/>
   
 
     
@@ -53,12 +49,10 @@
   
     <rect x="294" y="888" width="560" height="404" rx="6" fill="none" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
     <text x="304" y="906" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#334155">304.3</text>
-    <rect x="314.0" y="933" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="380.0" y="933" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="446.0" y="933" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="512.0" y="933" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="578.0" y="933" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="644.0" y="933" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="710.0" y="933" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="776.0" y="933" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/>
     <rect x="314" y="1025" width="520" height="130" fill="#f97316" opacity="0.18"/>
     <line x1="314" y1="1025" x2="834" y2="1025" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
     <line x1="314" y1="1155" x2="834" y2="1155" stroke="#f97316" stroke-width="1.5" stroke-dasharray="6 4"/>
     <text x="574" y="1095" font-family="Arial,sans-serif" font-size="12" font-weight="700" fill="#c2410c" text-anchor="middle" letter-spacing="1">PASILLO CALIENTE</text>
-    <rect x="314.0" y="1155" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="380.0" y="1155" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="446.0" y="1155" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="512.0" y="1155" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="578.0" y="1155" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="644.0" y="1155" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="710.0" y="1155" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/><rect x="776.0" y="1155" width="58.0" height="92" rx="3" fill="#e2e8f0" stroke="#1e293b" stroke-width="1.5"/>
   
   
     <text x="1009" y="70" font-family="Arial,sans-serif" font-size="10" font-weight="700" fill="#64748b" text-anchor="middle">PASILLO TÉCNICO</text>
