@@ -10513,6 +10513,14 @@ const _MENU_ROL_DEPT_CONFIG = {
       soloMaterial: true,
       filtroDeptModal: true,
     },
+    // CONTROL-01: sin inventario propio (sus 3 módulos — Sondas Salas/Cámaras/Control de
+    // acceso — viven en nav-control-section, revelada aparte en iniciarApp() vía
+    // deptActual==='control', no en "Material y maquinaria") ni seccionExtra — usa el
+    // bloque "Hoy en obra"/"Documentación y control" por defecto (Documentos, Incidencias,
+    // Planos, Galería de fotos), igual que el resto de departamentos 'trade' genéricos.
+    control: {
+      icono: '🎛️',
+    },
   },
   // ORG-05 (25/07/2026): Adrián pidió completar Operario también en Eléctrico y
   // Mecánicas, igual que ya tiene Encargado — mismo bloque de "Material y maquinaria"
@@ -10604,6 +10612,12 @@ const _MENU_ROL_DEPT_CONFIG = {
       seccionExtra: { sid: 'pedidosSec', etiqueta: '📥 Pedidos', paginas: ['pedidos', 'entregasMaterial'] },
       soloMaterial: true,
       filtroDeptModal: true,
+      ocultarSensibles: true,
+    },
+    // CONTROL-01: mismo criterio que encargado.control (sin inventario propio), más
+    // ocultarSensibles como el resto de departamentos 'trade' en operario.
+    control: {
+      icono: '🎛️',
       ocultarSensibles: true,
     },
   },
