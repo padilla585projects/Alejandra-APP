@@ -3,6 +3,24 @@
 - Actualizado: 2026-08-04
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
+## Sondas CPD — nuevo módulo (2026-08-05, rama `feat/sondas-cpd`)
+
+Módulo del departamento eléctrico para colocar sondas de temperatura/humedad/presión
+diferencial sobre el plano de una sala de CPD (3 zonas, cada una con su pasillo caliente),
+en `index.html` y `panel.html` (paridad de frontales). Barra de herramientas con un icono
+por tipo (colocar sin diálogo, doble tap/clic para editar); modelo de datos genérico
+(`plano_elementos`: categoría+tipo, pensado para cámaras/control de acceso a futuro sobre el
+mismo editor). Backend nuevo en `worker.js` (`/cpd/planos`, `/cpd/sondas`,
+`/cpd/sondas/:id/lecturas`); tablas autoprovisionadas en runtime con el mismo patrón que el
+resto del esquema (`_ensureCpdTables`, ver "Esquema de datos" más abajo) — no requirió
+migración D1 manual. Detalle completo en `CHANGELOG.md`.
+
+Desplegado (Worker + Pages) desde la rama para pruebas en producción, con aprobación del
+entorno `production` del Director en cada despliegue, tal como exige ADR-0007. Verificado
+en Chrome real en los dos frontales (táctil y ratón). **Pendiente: fusionar a `main`; decidir
+ubicación definitiva del módulo (hoy en Eléctrico solo de forma temporal, ver memoria del
+agente).**
+
 ## Autonomía de los agentes
 
 **ADR-0007 (aceptado, 2026-08-02)** sustituye las prohibiciones absolutas por un criterio de
