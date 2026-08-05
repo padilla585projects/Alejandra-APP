@@ -12006,7 +12006,20 @@ const CPD_OFFICE_MODULO_INFO = {
 };
 function cpdOfficeAbrirModulo(modulo) {
   window._cpdOfficeModuloActivo = modulo;
-  navTo('cpdSondas');
+  // Los 3 módulos comparten la misma página interna (data-page="cpdSondas") — navTo()
+  // no hace nada si ya estás en ella (mismo page = mismo botón, no recarga), así que
+  // cambiar de Sondas Salas a Cámaras (o viceversa) se quedaba en blanco. Si ya estamos
+  // en la pantalla, recargar el contenido directamente en vez de pasar por navTo().
+  if (currentPage === 'cpdSondas') {
+    cpdOfficeCargarPlanos();
+  } else {
+    navTo('cpdSondas');
+  }
+  // Los 3 botones comparten data-page="cpdSondas" — navTo() solo marca activo el primero
+  // que encuentra (querySelector), así que el resaltado del sidebar se corrige a mano.
+  document.querySelectorAll('.nav-item[data-page="cpdSondas"]').forEach(b => b.classList.remove('active'));
+  const btnActivo = document.querySelector(`.nav-item[data-page="cpdSondas"][onclick*="'${modulo}'"]`);
+  if (btnActivo) btnActivo.classList.add('active');
 }
 
 async function cpdOfficeCargarPlanos() {
