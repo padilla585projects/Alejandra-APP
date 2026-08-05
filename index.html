@@ -1637,7 +1637,20 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <div>
           <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Foto del plano real *</label>
           <input id="cpdNuevoPlanoFile" type="file" accept="image/*" capture="environment"
-                 style="width:100%;font-size:12px;color:var(--text)">
+                 style="width:100%;font-size:12px;color:var(--text)" onchange="cpdSeleccionarPlantilla(null)">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">…o usa una plantilla</label>
+          <div id="cpdNuevoPlanoPlantillas" style="display:flex;gap:8px">
+            <div class="cpd-plantilla-opt" data-plantilla="dh304" onclick="cpdSeleccionarPlantilla('dh304')" style="flex:1;border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
+              <img src="img/cpd-plantillas/dh304.jpg" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+              <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">DH304</div>
+            </div>
+            <div class="cpd-plantilla-opt" data-plantilla="dh302" onclick="cpdSeleccionarPlantilla('dh302')" style="flex:1;border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
+              <img src="img/cpd-plantillas/dh302.jpg" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+              <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">DH302</div>
+            </div>
+          </div>
         </div>
         <div id="cpdNuevoPlanoStatus" style="display:none;font-size:12px;color:var(--muted);text-align:center;padding:10px">⏳ Subiendo…</div>
       </div>
@@ -15549,10 +15562,27 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     } catch { c.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Error de red</div>'; }
   }
 
+  // Plantillas: fotos de ejemplo de salas reales (busbar/datahall), servidas como
+  // asset estático de la propia app — se puede partir de ellas en vez de subir foto.
+  const CPD_PLANTILLAS = {
+    dh304: { url: 'img/cpd-plantillas/dh304.jpg', nombre: 'plantilla-dh304.jpg' },
+    dh302: { url: 'img/cpd-plantillas/dh302.jpg', nombre: 'plantilla-dh302.jpg' },
+  };
+  window._cpdPlantillaSeleccionada = null;
+
+  function cpdSeleccionarPlantilla(key) {
+    window._cpdPlantillaSeleccionada = key;
+    if (key) document.getElementById('cpdNuevoPlanoFile').value = '';
+    document.querySelectorAll('#cpdNuevoPlanoPlantillas .cpd-plantilla-opt').forEach(el => {
+      el.style.borderColor = (el.dataset.plantilla === key) ? 'var(--accent)' : 'var(--border)';
+    });
+  }
+
   function abrirModalCpdNuevoPlano() {
     document.getElementById('cpdNuevoPlanoTitulo').value = '';
     document.getElementById('cpdNuevoPlanoFile').value = '';
     document.getElementById('cpdNuevoPlanoStatus').style.display = 'none';
+    cpdSeleccionarPlantilla(null);
     document.getElementById('modalCpdNuevoPlano').style.display = 'flex';
   }
   function cerrarModalCpdNuevoPlano() {
@@ -15561,14 +15591,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function ejecutarCpdNuevoPlano() {
     const titulo = document.getElementById('cpdNuevoPlanoTitulo').value.trim();
-    const file = document.getElementById('cpdNuevoPlanoFile').files[0];
+    let file = document.getElementById('cpdNuevoPlanoFile').files[0];
+    const plantillaKey = window._cpdPlantillaSeleccionada;
     if (!titulo) { toast('Introduce un título', 'error'); return; }
-    if (!file)   { toast('Selecciona la foto del plano', 'error'); return; }
+    if (!file && !plantillaKey) { toast('Selecciona la foto del plano o una plantilla', 'error'); return; }
     const s = getSession();
     document.getElementById('cpdNuevoPlanoStatus').style.display = 'block';
     const btn = document.getElementById('btnCpdNuevoPlano');
     if (btn) btn.disabled = true;
     try {
+      if (!file && plantillaKey) {
+        const plantilla = CPD_PLANTILLAS[plantillaKey];
+        const blob = await fetch(plantilla.url).then(r => r.blob());
+        file = new File([blob], plantilla.nombre, { type: blob.type || 'image/jpeg' });
+      }
       const fd = new FormData();
       fd.append('file', file);
       fd.append('titulo', titulo);
@@ -15845,6 +15881,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
 
   window.cargarCpdPlanos          = cargarCpdPlanos;
+  window.cpdSeleccionarPlantilla  = cpdSeleccionarPlantilla;
   window.abrirModalCpdNuevoPlano  = abrirModalCpdNuevoPlano;
   window.cerrarModalCpdNuevoPlano = cerrarModalCpdNuevoPlano;
   window.ejecutarCpdNuevoPlano    = ejecutarCpdNuevoPlano;

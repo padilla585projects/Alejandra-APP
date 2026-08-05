@@ -1787,7 +1787,20 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </div>
           <div class="form-group">
             <label>Foto del plano real *</label>
-            <input class="form-input" id="cpdOfficeNuevoFile" type="file" accept="image/*">
+            <input class="form-input" id="cpdOfficeNuevoFile" type="file" accept="image/*" onchange="cpdOfficeSeleccionarPlantilla(null)">
+          </div>
+          <div class="form-group">
+            <label>…o usa una plantilla</label>
+            <div id="cpdOfficeNuevoPlantillas" style="display:flex;gap:8px">
+              <div class="cpd-plantilla-opt" data-plantilla="dh304" onclick="cpdOfficeSeleccionarPlantilla('dh304')" style="flex:1;border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
+                <img src="img/cpd-plantillas/dh304.jpg" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+                <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">DH304</div>
+              </div>
+              <div class="cpd-plantilla-opt" data-plantilla="dh302" onclick="cpdOfficeSeleccionarPlantilla('dh302')" style="flex:1;border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
+                <img src="img/cpd-plantillas/dh302.jpg" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+                <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">DH302</div>
+              </div>
+            </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:16px">
             <button class="btn btn-secondary" style="flex:1" onclick="cpdOfficeCerrarNuevo()">Cancelar</button>
@@ -11970,11 +11983,28 @@ async function cpdOfficeCargarPlanos() {
   }
 }
 
+// Plantillas: fotos de ejemplo de salas reales (busbar/datahall), servidas como
+// asset estatico de la propia app — se puede partir de ellas en vez de subir foto.
+const CPD_OFFICE_PLANTILLAS = {
+  dh304: { url: 'img/cpd-plantillas/dh304.jpg', nombre: 'plantilla-dh304.jpg' },
+  dh302: { url: 'img/cpd-plantillas/dh302.jpg', nombre: 'plantilla-dh302.jpg' },
+};
+window._cpdOfficePlantillaSeleccionada = null;
+
+function cpdOfficeSeleccionarPlantilla(key) {
+  window._cpdOfficePlantillaSeleccionada = key;
+  if (key) document.getElementById('cpdOfficeNuevoFile').value = '';
+  document.querySelectorAll('#cpdOfficeNuevoPlantillas .cpd-plantilla-opt').forEach(el => {
+    el.style.borderColor = (el.dataset.plantilla === key) ? 'var(--accent)' : 'var(--border)';
+  });
+}
+
 function cpdOfficeAbrirNuevo() {
   document.getElementById('cpdOfficeNuevoTitulo').value = '';
   document.getElementById('cpdOfficeNuevoFile').value = '';
   const obraSel = document.getElementById('cpdOfficeObra');
   if (obraSel?.value) document.getElementById('cpdOfficeNuevoObra').value = obraSel.value;
+  cpdOfficeSeleccionarPlantilla(null);
   document.getElementById('modalCpdOfficeNuevo').style.display = 'flex';
 }
 function cpdOfficeCerrarNuevo() {
@@ -11984,13 +12014,19 @@ function cpdOfficeCerrarNuevo() {
 async function cpdOfficeGuardarNuevo() {
   const titulo = document.getElementById('cpdOfficeNuevoTitulo').value.trim();
   const obraId = document.getElementById('cpdOfficeNuevoObra').value;
-  const file = document.getElementById('cpdOfficeNuevoFile').files[0];
+  let file = document.getElementById('cpdOfficeNuevoFile').files[0];
+  const plantillaKey = window._cpdOfficePlantillaSeleccionada;
   if (!titulo) { toast('Introduce un título', 'err'); return; }
   if (!obraId) { toast('Selecciona una obra', 'err'); return; }
-  if (!file)   { toast('Selecciona la foto del plano', 'err'); return; }
+  if (!file && !plantillaKey) { toast('Selecciona la foto del plano o una plantilla', 'err'); return; }
   const btn = document.getElementById('cpdOfficeNuevoBtn');
   if (btn) btn.disabled = true;
   try {
+    if (!file && plantillaKey) {
+      const plantilla = CPD_OFFICE_PLANTILLAS[plantillaKey];
+      const blob = await fetch(plantilla.url).then(r => r.blob());
+      file = new File([blob], plantilla.nombre, { type: blob.type || 'image/jpeg' });
+    }
     const fd = new FormData();
     fd.append('file', file);
     fd.append('titulo', titulo);
