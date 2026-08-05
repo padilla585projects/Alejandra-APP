@@ -597,10 +597,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <span class="nav-icon">📷</span> Registro de Seguridad
     </button>
 
-    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="inventarios"><span>📦 Inventarios</span><span class="sec-chevron">▼</span></div>
-    <button class="nav-item nav-electrico-section" data-page="bobinas" onclick="navTo('bobinas')" style="display:none">
-      <span class="nav-icon">⚡</span> Bobinas
-    </button>
+    <div class="sidebar-section nav-control-section" onclick="sidebarToggle(this)" data-sid="control" style="display:none"><span>🎛️ Control</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-control-section" data-page="cpdSondas" onclick="cpdOfficeAbrirModulo('sondas')" style="display:none">
       <span class="nav-icon">🌡️</span> Sondas Salas
     </button>
@@ -609,6 +606,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     </button>
     <button class="nav-item nav-control-section" data-page="cpdSondas" onclick="cpdOfficeAbrirModulo('control_acceso')" style="display:none">
       <span class="nav-icon">🔐</span> Control de acceso
+    </button>
+
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="inventarios"><span>📦 Inventarios</span><span class="sec-chevron">▼</span></div>
+    <button class="nav-item nav-electrico-section" data-page="bobinas" onclick="navTo('bobinas')" style="display:none">
+      <span class="nav-icon">⚡</span> Bobinas
     </button>
     <button class="nav-item" data-page="pemp" onclick="navTo('pemp')">
       <span class="nav-icon">🚜</span> PEMP
@@ -11210,18 +11212,6 @@ function iniciarApp() {
   ocultarItemsPorOficio();
   organizarSidebarEncargado();
   organizarSidebarIngenieria();
-
-  // CONTROL-02: los 3 botones de nav-control-section viven físicamente dentro del bloque
-  // "Inventarios" del HTML (junto a Bobinas) — organizarSidebarEncargado() oculta esa
-  // sección entera para 'control' (sin config.material), lo que los tapaba de nuevo pese a
-  // haberse revelado antes (línea ~11136). Se re-revelan aquí, después de la reorganización,
-  // igual que el propio botón de Bobinas sobrevive por estar en la lista config.material.
-  if (verComoAdmin || deptActual === 'control') {
-    document.querySelectorAll('.nav-control-section').forEach(el => {
-      el.style.display = '';
-      el.removeAttribute('data-hidden-by-perms');
-    });
-  }
 
   if (isNonAdmin) {
     // Ocultar: Analítica y los 5 grupos ex-Seguimiento (DEPT-01: Construcción y Obra
