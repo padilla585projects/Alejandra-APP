@@ -6750,6 +6750,19 @@ export default {
       if (/^\/planos\/\d+$/.test(path)            && method === 'PUT')    return await actualizarPlanoSvg(request, env, path);
       if (/^\/planos\/\d+$/.test(path)            && method === 'DELETE') return await eliminarPlano(request, env, path);
 
+      // ── Modulo Sondas CPD ─────────────────────────────────────────
+      if (path === '/cpd/planos'                            && method === 'GET')    return await listarCpdPlanos(request, env);
+      if (path === '/cpd/planos'                            && method === 'POST')   return await crearCpdPlano(request, env);
+      if (/^\/cpd\/planos\/\d+$/.test(path)                 && method === 'GET')    return await getCpdPlano(request, env, path);
+      if (/^\/cpd\/planos\/\d+\/imagen$/.test(path)         && method === 'GET')    return await getCpdPlanoImagen(request, env, path);
+      if (/^\/cpd\/planos\/\d+$/.test(path)                 && method === 'PATCH')  return await actualizarCpdPlano(request, env, path);
+      if (/^\/cpd\/planos\/\d+$/.test(path)                 && method === 'DELETE') return await eliminarCpdPlano(request, env, path);
+      if (path === '/cpd/sondas'                            && method === 'POST')   return await crearCpdSonda(request, env);
+      if (/^\/cpd\/sondas\/\d+$/.test(path)                 && method === 'PATCH')  return await actualizarCpdSonda(request, env, path);
+      if (/^\/cpd\/sondas\/\d+$/.test(path)                 && method === 'DELETE') return await eliminarCpdSonda(request, env, path);
+      if (/^\/cpd\/sondas\/\d+\/lecturas$/.test(path)       && method === 'POST')   return await crearCpdLectura(request, env, path);
+      if (/^\/cpd\/sondas\/\d+\/lecturas$/.test(path)       && method === 'GET')    return await listarCpdLecturas(request, env, path);
+
       return err('Ruta no encontrada', 404);
     } catch (e) {
       console.error(e);
@@ -27015,4 +27028,267 @@ async function eliminarPlano(request, env, path) {
   if (!row) return err('Plano no encontrado', 404);
   await env.DB.prepare('DELETE FROM planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
+}
+
+// ── Modulo Sondas CPD (temp/humedad/presion diferencial sobre foto real) ──
+// Distinto del modulo "Planos" de arriba (ese es generativo por IA, solo
+// lectura). Aqui la foto es real (subida por el usuario) y las sondas se
+// colocan/mueven a mano. Ver docs/decisions y CLAUDE.md sobre DDL en caliente:
+// igual que _ensurePlanosTable, las tablas se autoprovisionan con
+// CREATE TABLE IF NOT EXISTS (idempotente, no altera datos existentes).
+async function _ensureCpdTables(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS cpd_planos (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id     INTEGER NOT NULL,
+      obra_id        INTEGER NOT NULL,
+      titulo         TEXT    NOT NULL,
+      r2_key         TEXT    NOT NULL,
+      zonas_json     TEXT,
+      creado_por     TEXT,
+      creado_en      TEXT DEFAULT (datetime('now')),
+      actualizado_en TEXT DEFAULT (datetime('now'))
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS cpd_sondas (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      plano_id       INTEGER NOT NULL,
+      empresa_id     INTEGER NOT NULL,
+      nombre         TEXT    NOT NULL,
+      numero_serie   TEXT,
+      zona           TEXT,
+      pos_x          REAL    NOT NULL,
+      pos_y          REAL    NOT NULL,
+      creado_en      TEXT DEFAULT (datetime('now')),
+      actualizado_en TEXT DEFAULT (datetime('now'))
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS cpd_lecturas (
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      sonda_id              INTEGER NOT NULL,
+      temperatura           REAL,
+      humedad               REAL,
+      presion_diferencial   REAL,
+      fecha                 TEXT NOT NULL DEFAULT (datetime('now')),
+      usuario               TEXT
+    )
+  `).run();
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_planos_obra ON cpd_planos(obra_id)').run();
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_sondas_plano ON cpd_sondas(plano_id)').run();
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_lecturas_sonda_fecha ON cpd_lecturas(sonda_id, fecha)').run();
+}
+
+async function listarCpdPlanos(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  await _ensureCpdTables(env);
+  const url = new URL(request.url);
+  const obra_id = parseInt(url.searchParams.get('obra_id') || 0);
+  let q = 'SELECT id, obra_id, titulo, zonas_json, creado_en FROM cpd_planos WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (obra_id) { q += ' AND obra_id=?'; params.push(obra_id); }
+  q += ' ORDER BY creado_en DESC LIMIT 100';
+  const rows = await env.DB.prepare(q).bind(...params).all();
+  return json({ ok: true, planos: rows.results || [] });
+}
+
+async function crearCpdPlano(request, env) {
+  const { empresa_id, obra_id: sesionObra, nombre: userNombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  await _ensureCpdTables(env);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta la imagen del plano', 400);
+  if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+  if (!allowed.includes(mime)) return err('Solo se permiten imagenes', 400);
+  const obra_id = parseInt(form.get('obra_id') || sesionObra || 0) || null;
+  const titulo  = (form.get('titulo') || '').trim();
+  if (!obra_id) return err('obra_id es obligatorio', 400);
+  if (!titulo)  return err('titulo es obligatorio', 400);
+  const zonas_json = (form.get('zonas_json') || '').trim() || null;
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = `e${empresa_id}/cpd/${obra_id}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
+  const r = await env.DB.prepare(`
+    INSERT INTO cpd_planos (empresa_id, obra_id, titulo, r2_key, zonas_json, creado_por)
+    VALUES (?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id, titulo, r2Key, zonas_json, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function getCpdPlano(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[3]);
+  if (!id) return err('ID invalido', 400);
+  await _ensureCpdTables(env);
+  const plano = await env.DB.prepare('SELECT * FROM cpd_planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!plano) return err('Plano no encontrado', 404);
+  const sondas = await env.DB.prepare(`
+    SELECT s.*, (
+      SELECT json_object('temperatura', l.temperatura, 'humedad', l.humedad,
+                          'presion_diferencial', l.presion_diferencial, 'fecha', l.fecha)
+      FROM cpd_lecturas l WHERE l.sonda_id = s.id ORDER BY l.fecha DESC LIMIT 1
+    ) AS ultima_lectura
+    FROM cpd_sondas s WHERE s.plano_id = ? ORDER BY s.id ASC
+  `).bind(id).all();
+  return json({ ok: true, plano, sondas: sondas.results || [] });
+}
+
+function _cpdPlanoImagenUrl(id) { return `/cpd/planos/${id}/imagen`; }
+
+async function getCpdPlanoImagen(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[3]);
+  if (!id) return err('ID invalido', 400);
+  const meta = await env.DB.prepare('SELECT r2_key FROM cpd_planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!meta) return err('Plano no encontrado', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Imagen no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
+async function actualizarCpdPlano(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[3]);
+  if (!id) return err('ID invalido', 400);
+  const body = await request.json().catch(() => ({}));
+  await _ensureCpdTables(env);
+  const row = await env.DB.prepare('SELECT id FROM cpd_planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!row) return err('Plano no encontrado', 404);
+  const sets = [], params = [];
+  if (typeof body.titulo === 'string' && body.titulo.trim()) { sets.push('titulo=?'); params.push(body.titulo.trim()); }
+  if (typeof body.zonas_json === 'string') { sets.push('zonas_json=?'); params.push(body.zonas_json); }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  sets.push("actualizado_en=datetime('now')");
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE cpd_planos SET ${sets.join(', ')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarCpdPlano(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[3]);
+  if (!id) return err('ID invalido', 400);
+  await _ensureCpdTables(env);
+  const plano = await env.DB.prepare('SELECT r2_key FROM cpd_planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!plano) return err('Plano no encontrado', 404);
+  const sondas = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE plano_id=?').bind(id).all();
+  for (const s of (sondas.results || [])) {
+    await env.DB.prepare('DELETE FROM cpd_lecturas WHERE sonda_id=?').bind(s.id).run();
+  }
+  await env.DB.prepare('DELETE FROM cpd_sondas WHERE plano_id=?').bind(id).run();
+  await env.DB.prepare('DELETE FROM cpd_planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  await env.FILES.delete(plano.r2_key).catch(() => {});
+  return json({ ok: true });
+}
+
+async function crearCpdSonda(request, env) {
+  const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  await _ensureCpdTables(env);
+  const body = await request.json().catch(() => ({}));
+  const plano_id = parseInt(body.plano_id || 0);
+  const nombre = (body.nombre || '').trim();
+  const pos_x = Number(body.pos_x), pos_y = Number(body.pos_y);
+  if (!plano_id) return err('plano_id es obligatorio', 400);
+  if (!nombre) return err('nombre es obligatorio', 400);
+  if (!Number.isFinite(pos_x) || !Number.isFinite(pos_y)) return err('pos_x y pos_y son obligatorios', 400);
+  const plano = await env.DB.prepare('SELECT id FROM cpd_planos WHERE id=? AND empresa_id=?').bind(plano_id, empresa_id).first();
+  if (!plano) return err('Plano no encontrado', 404);
+  const numero_serie = (body.numero_serie || '').trim() || null;
+  const zona = (body.zona || '').trim() || null;
+  const r = await env.DB.prepare(`
+    INSERT INTO cpd_sondas (plano_id, empresa_id, nombre, numero_serie, zona, pos_x, pos_y)
+    VALUES (?,?,?,?,?,?,?)
+  `).bind(plano_id, empresa_id, nombre, numero_serie, zona, pos_x, pos_y).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarCpdSonda(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[3]);
+  if (!id) return err('ID invalido', 400);
+  await _ensureCpdTables(env);
+  const row = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!row) return err('Sonda no encontrada', 404);
+  const body = await request.json().catch(() => ({}));
+  const sets = [], params = [];
+  if (typeof body.nombre === 'string' && body.nombre.trim()) { sets.push('nombre=?'); params.push(body.nombre.trim()); }
+  if (typeof body.numero_serie === 'string') { sets.push('numero_serie=?'); params.push(body.numero_serie.trim() || null); }
+  if (typeof body.zona === 'string') { sets.push('zona=?'); params.push(body.zona.trim() || null); }
+  if (body.pos_x !== undefined && Number.isFinite(Number(body.pos_x))) { sets.push('pos_x=?'); params.push(Number(body.pos_x)); }
+  if (body.pos_y !== undefined && Number.isFinite(Number(body.pos_y))) { sets.push('pos_y=?'); params.push(Number(body.pos_y)); }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  sets.push("actualizado_en=datetime('now')");
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE cpd_sondas SET ${sets.join(', ')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarCpdSonda(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[3]);
+  if (!id) return err('ID invalido', 400);
+  await _ensureCpdTables(env);
+  const row = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!row) return err('Sonda no encontrada', 404);
+  await env.DB.prepare('DELETE FROM cpd_lecturas WHERE sonda_id=?').bind(id).run();
+  await env.DB.prepare('DELETE FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function crearCpdLectura(request, env, path) {
+  const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const sonda_id = parseInt(path.split('/')[3]);
+  if (!sonda_id) return err('ID invalido', 400);
+  await _ensureCpdTables(env);
+  const sonda = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(sonda_id, empresa_id).first();
+  if (!sonda) return err('Sonda no encontrada', 404);
+  const body = await request.json().catch(() => ({}));
+  const temperatura = body.temperatura !== undefined && body.temperatura !== '' ? Number(body.temperatura) : null;
+  const humedad = body.humedad !== undefined && body.humedad !== '' ? Number(body.humedad) : null;
+  const presion_diferencial = body.presion_diferencial !== undefined && body.presion_diferencial !== '' ? Number(body.presion_diferencial) : null;
+  if (temperatura === null && humedad === null && presion_diferencial === null) {
+    return err('Introduce al menos un valor (temperatura, humedad o presion diferencial)', 400);
+  }
+  const r = await env.DB.prepare(`
+    INSERT INTO cpd_lecturas (sonda_id, temperatura, humedad, presion_diferencial, usuario)
+    VALUES (?,?,?,?,?)
+  `).bind(sonda_id, temperatura, humedad, presion_diferencial, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function listarCpdLecturas(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const sonda_id = parseInt(path.split('/')[3]);
+  if (!sonda_id) return err('ID invalido', 400);
+  await _ensureCpdTables(env);
+  const sonda = await env.DB.prepare('SELECT id FROM cpd_sondas WHERE id=? AND empresa_id=?').bind(sonda_id, empresa_id).first();
+  if (!sonda) return err('Sonda no encontrada', 404);
+  const url = new URL(request.url);
+  const desde = url.searchParams.get('desde');
+  const hasta = url.searchParams.get('hasta');
+  let q = 'SELECT temperatura, humedad, presion_diferencial, fecha, usuario FROM cpd_lecturas WHERE sonda_id=?';
+  const params = [sonda_id];
+  if (desde) { q += ' AND fecha >= ?'; params.push(desde); }
+  if (hasta) { q += ' AND fecha <= ?'; params.push(hasta); }
+  q += ' ORDER BY fecha ASC LIMIT 500';
+  const rows = await env.DB.prepare(q).bind(...params).all();
+  return json({ ok: true, lecturas: rows.results || [] });
 }

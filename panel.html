@@ -601,6 +601,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     <button class="nav-item nav-electrico-section" data-page="bobinas" onclick="navTo('bobinas')" style="display:none">
       <span class="nav-icon">⚡</span> Bobinas
     </button>
+    <button class="nav-item nav-electrico-section" data-page="cpdSondas" onclick="navTo('cpdSondas')" style="display:none">
+      <span class="nav-icon">🌡️</span> Sondas CPD
+    </button>
     <button class="nav-item" data-page="pemp" onclick="navTo('pemp')">
       <span class="nav-icon">🚜</span> PEMP
     </button>
@@ -1751,6 +1754,95 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <button class="btn btn-secondary" onclick="cargarKits()">🔄 Actualizar</button>
           </div>
           <div class="tbl-wrap"><div id="tblKits"></div></div>
+        </div>
+      </div>
+
+      <!-- SONDAS CPD -->
+      <div class="page" id="pageCpdSondas">
+        <div class="page-title">🌡️ Sondas CPD</div>
+        <div class="page-sub">Temperatura, humedad y presión diferencial sobre el plano real de la sala</div>
+        <div class="tbl-toolbar">
+          <select class="tbl-search" id="cpdOfficeObra" style="min-width:210px" onchange="cpdOfficeCargarPlanos()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-primary" onclick="cpdOfficeAbrirNuevo()">+ Nuevo plano</button>
+          <button class="btn btn-secondary" onclick="cpdOfficeCargarPlanos()">🔄 Actualizar</button>
+        </div>
+        <div class="card" style="padding:18px">
+          <div id="cpdOfficeBreadcrumb" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:'Montserrat',sans-serif;font-weight:800;font-size:14px;margin-bottom:14px">🌡️ Sondas CPD</div>
+          <div id="cpdOfficeContent"><div class="empty-state">Cargando…</div></div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="modalCpdOfficeNuevo" style="display:none" onclick="if(event.target===this)cpdOfficeCerrarNuevo()">
+        <div class="modal" style="max-width:480px">
+          <div class="modal-title">Nuevo plano de sala</div>
+          <div class="form-group">
+            <label>Título *</label>
+            <input class="form-input" id="cpdOfficeNuevoTitulo" type="text" placeholder='Ej: "CPD Getafe - Sala DH304"'>
+          </div>
+          <div class="form-group">
+            <label>Obra *</label>
+            <select class="form-input" id="cpdOfficeNuevoObra"><option value="">Selecciona obra…</option></select>
+          </div>
+          <div class="form-group">
+            <label>Foto del plano real *</label>
+            <input class="form-input" id="cpdOfficeNuevoFile" type="file" accept="image/*">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn btn-secondary" style="flex:1" onclick="cpdOfficeCerrarNuevo()">Cancelar</button>
+            <button class="btn btn-primary" style="flex:1" id="cpdOfficeNuevoBtn" onclick="cpdOfficeGuardarNuevo()">Crear</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="modalCpdOfficeSonda" style="display:none" onclick="if(event.target===this)cpdOfficeCerrarSonda()">
+        <div class="modal" style="max-width:520px">
+          <div class="modal-title">Sonda</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Nombre</label>
+              <input class="form-input" id="cpdOfficeSondaNombre" type="text">
+            </div>
+            <div class="form-group">
+              <label>Nº de serie</label>
+              <input class="form-input" id="cpdOfficeSondaSerie" type="text">
+            </div>
+            <div class="form-group">
+              <label>Zona</label>
+              <select class="form-input" id="cpdOfficeSondaZona">
+                <option value="">Sin especificar</option>
+                <option value="parte_1">Parte 1</option>
+                <option value="parte_2">Parte 2</option>
+                <option value="parte_3">Parte 3</option>
+                <option value="pasillo_caliente">Pasillo caliente</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-secondary" style="flex:1;color:var(--danger)" onclick="cpdOfficeSondaEliminar()">🗑 Eliminar sonda</button>
+            <button class="btn btn-primary" style="flex:1" onclick="cpdOfficeSondaGuardarDatos()">Guardar cambios</button>
+          </div>
+
+          <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Nueva lectura</div>
+            <div class="form-grid">
+              <div class="form-group"><label>Temp °C</label><input class="form-input" id="cpdOfficeLecturaTemp" type="number" step="0.1"></div>
+              <div class="form-group"><label>Hum %</label><input class="form-input" id="cpdOfficeLecturaHum" type="number" step="0.1"></div>
+              <div class="form-group"><label>ΔP Pa</label><input class="form-input" id="cpdOfficeLecturaPresion" type="number" step="0.01"></div>
+            </div>
+            <button class="btn btn-primary" style="width:100%" onclick="cpdOfficeLecturaGuardar()">Guardar lectura</button>
+          </div>
+
+          <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Tendencia</div>
+            <canvas id="cpdOfficeSondaCanvas" width="460" height="160" style="width:100%;height:160px;background:#f8fafc;border-radius:8px"></canvas>
+            <div id="cpdOfficeSondaLeyenda" style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted)"></div>
+          </div>
+
+          <div style="margin-top:16px">
+            <button class="btn btn-secondary" style="width:100%" onclick="cpdOfficeCerrarSonda()">Cerrar</button>
+          </div>
         </div>
       </div>
 
@@ -9905,6 +9997,7 @@ const _DEPTS_CATALOG = {
 const _ALL_DEPTS = Object.keys(_DEPTS_CATALOG);
 const _HOME_TRADE_MODS = [
   { card: 'cardBobinas', label: '⚡ Bobinas', soloElectrico: true },
+  { card: 'cardCpdSondas', label: '🌡️ Sondas CPD', soloElectrico: true },
   { card: 'cardPemp', label: '🛠 PEMP' },
   { card: 'cardCarretillas', label: '🚜 Carretillas' },
   { card: 'cardPedidos', label: '📥 Pedidos' },
@@ -11822,12 +11915,396 @@ async function telecomOfficeInformeIdf(idfId) {
   }
 }
 
+// ── SONDAS CPD (temp/humedad/presión diferencial sobre foto real) ──
+// Mismo backend/endpoints que index.html (paridad de frontales, CLAUDE.md).
+// Arrastre de sondas por pulsación larga + pointermove: funciona igual con
+// ratón (oficina) que con dedo, sin duplicar lógica.
+window._cpdOfficePlano = null; // { plano, sondas }
+window._cpdOfficeSondaId = null;
+let _cpdOfficeJustDragged = false;
+
+function _cpdOfficeImagenUrl(planoId) {
+  return `${API}/cpd/planos/${planoId}/imagen?token=${encodeURIComponent(TOKEN)}`;
+}
+
+async function cpdOfficeCargar() {
+  const sel = document.getElementById('cpdOfficeObra');
+  const selNuevo = document.getElementById('cpdOfficeNuevoObra');
+  if (!sel) return;
+  let obras = Array.isArray(window._obrasPanel) ? window._obrasPanel : [];
+  if (!obras.length) {
+    try { const data = await api('/obras'); obras = Array.isArray(data) ? data : (data.obras || []); window._obrasPanel = obras; } catch {}
+  }
+  if (!obras.length && SESSION?.obra_id) obras = [{ id: SESSION.obra_id, nombre: SESSION.obra_nombre || `Obra ${SESSION.obra_id}` }];
+  const actual = sel.value || (SESSION?.obra_id ? String(SESSION.obra_id) : '');
+  sel.innerHTML = '<option value="">🏗 Todas las obras</option>' + obras.map(o => `<option value="${Number(o.id)}">${escHtml(o.nombre)}</option>`).join('');
+  if (actual && obras.some(o => String(o.id) === String(actual))) sel.value = actual;
+  if (selNuevo) selNuevo.innerHTML = '<option value="">Selecciona obra…</option>' + obras.map(o => `<option value="${Number(o.id)}">${escHtml(o.nombre)}</option>`).join('');
+  await cpdOfficeCargarPlanos();
+}
+
+async function cpdOfficeCargarPlanos() {
+  window._cpdOfficePlano = null;
+  const obraId = document.getElementById('cpdOfficeObra')?.value || '';
+  document.getElementById('cpdOfficeBreadcrumb').innerHTML = '🌡️ Sondas CPD';
+  const cont = document.getElementById('cpdOfficeContent');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  try {
+    const data = await api('/cpd/planos' + (obraId ? '?obra_id=' + encodeURIComponent(obraId) : ''));
+    if (data?.ok === false) throw new Error(data.error || 'Error al cargar');
+    const planos = data.planos || [];
+    if (!planos.length) {
+      cont.innerHTML = '<div class="empty-state">Sin planos todavía. Crea uno con "+ Nuevo plano".</div>';
+      return;
+    }
+    cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">` +
+      planos.map(p => `
+        <div style="border-radius:10px;overflow:hidden;background:var(--surface2);border:1px solid var(--border);cursor:pointer" onclick="cpdOfficeAbrirPlano(${p.id})">
+          <div style="aspect-ratio:4/3;background:#0b0f14;overflow:hidden">
+            <img src="${_cpdOfficeImagenUrl(p.id)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">
+          </div>
+          <div style="padding:8px 10px;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.titulo)}</div>
+        </div>`).join('') + `</div>`;
+  } catch (e) {
+    cont.innerHTML = `<div class="empty-state">${escHtml(e.message || 'Error al cargar')}</div>`;
+  }
+}
+
+function cpdOfficeAbrirNuevo() {
+  document.getElementById('cpdOfficeNuevoTitulo').value = '';
+  document.getElementById('cpdOfficeNuevoFile').value = '';
+  const obraSel = document.getElementById('cpdOfficeObra');
+  if (obraSel?.value) document.getElementById('cpdOfficeNuevoObra').value = obraSel.value;
+  document.getElementById('modalCpdOfficeNuevo').style.display = 'flex';
+}
+function cpdOfficeCerrarNuevo() {
+  document.getElementById('modalCpdOfficeNuevo').style.display = 'none';
+}
+
+async function cpdOfficeGuardarNuevo() {
+  const titulo = document.getElementById('cpdOfficeNuevoTitulo').value.trim();
+  const obraId = document.getElementById('cpdOfficeNuevoObra').value;
+  const file = document.getElementById('cpdOfficeNuevoFile').files[0];
+  if (!titulo) { toast('Introduce un título', 'err'); return; }
+  if (!obraId) { toast('Selecciona una obra', 'err'); return; }
+  if (!file)   { toast('Selecciona la foto del plano', 'err'); return; }
+  const btn = document.getElementById('cpdOfficeNuevoBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('titulo', titulo);
+    fd.append('obra_id', obraId);
+    const res = await apiRaw('/cpd/planos', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Error al crear el plano');
+    cpdOfficeCerrarNuevo();
+    await cpdOfficeCargarPlanos();
+    cpdOfficeAbrirPlano(data.id);
+  } catch (e) {
+    toast(e.message || 'Error al crear el plano', 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function cpdOfficeAbrirPlano(id) {
+  const cont = document.getElementById('cpdOfficeContent');
+  cont.innerHTML = '<div class="empty-state">Cargando plano…</div>';
+  try {
+    const data = await api(`/cpd/planos/${id}`);
+    if (data?.ok === false) throw new Error(data.error || 'Plano no encontrado');
+    window._cpdOfficePlano = { plano: data.plano, sondas: data.sondas || [] };
+    document.getElementById('cpdOfficeBreadcrumb').innerHTML =
+      `<button class="btn btn-secondary btn-sm" onclick="cpdOfficeCargarPlanos()">← Sondas CPD</button>` +
+      `<span>${escHtml(data.plano.titulo)}</span>` +
+      `<button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="cpdOfficeGenerarInforme()">📄 Informe</button>` +
+      `<button class="btn btn-secondary btn-sm" style="color:var(--danger)" onclick="cpdOfficeEliminarPlano()">🗑 Eliminar plano</button>`;
+    cont.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Clic en el plano para añadir una sonda · Mantén pulsado y arrastra una sonda para moverla</div>
+      <div id="cpdOfficeCanvas" style="position:relative;width:100%;max-width:900px;background:#0b0f14;border-radius:8px;overflow:hidden">
+        <img id="cpdOfficeImg" src="${_cpdOfficeImagenUrl(data.plano.id)}" style="width:100%;display:block;user-select:none" draggable="false">
+      </div>`;
+    const canvas = document.getElementById('cpdOfficeCanvas');
+    window._cpdOfficePlano.sondas.forEach(s => _cpdOfficeAddMarker(canvas, s));
+    canvas.addEventListener('click', e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      cpdOfficeCrearSondaEn(x, y);
+    });
+  } catch (e) {
+    cont.innerHTML = `<div class="empty-state">${escHtml(e.message || 'Error al cargar')}</div>`;
+  }
+}
+
+async function cpdOfficeCrearSondaEn(x, y) {
+  const nombre = prompt('Nombre de la sonda:');
+  if (!nombre || !nombre.trim()) return;
+  const st = window._cpdOfficePlano;
+  if (!st) return;
+  try {
+    const data = await api('/cpd/sondas', { method: 'POST', body: JSON.stringify({ plano_id: st.plano.id, nombre: nombre.trim(), pos_x: x, pos_y: y }) });
+    if (data?.ok === false) throw new Error(data.error || 'Error al crear la sonda');
+    await cpdOfficeAbrirPlano(st.plano.id);
+  } catch (e) {
+    toast(e.message || 'Error al crear la sonda', 'err');
+  }
+}
+
+function _cpdOfficeAddMarker(canvas, sonda) {
+  const el = document.createElement('div');
+  el.dataset.id = sonda.id;
+  el.style.cssText = `position:absolute;left:${sonda.pos_x}%;top:${sonda.pos_y}%;transform:translate(-50%,-50%);
+    width:26px;height:26px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
+    display:flex;align-items:center;justify-content:center;font-size:13px;cursor:grab;touch-action:none;z-index:5`;
+  el.textContent = '🌡';
+  const label = document.createElement('div');
+  label.textContent = sonda.nombre;
+  label.style.cssText = 'position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;margin-top:2px;pointer-events:none';
+  el.appendChild(label);
+  canvas.appendChild(el);
+  _cpdOfficeWireDrag(el);
+}
+
+function _cpdOfficeWireDrag(el) {
+  let dragging = false, timer = null, startX = 0, startY = 0, justDragged = false;
+  const canvas = () => document.getElementById('cpdOfficeCanvas');
+  el.addEventListener('pointerdown', e => {
+    startX = e.clientX; startY = e.clientY; dragging = false;
+    timer = setTimeout(() => {
+      dragging = true;
+      try { el.setPointerCapture(e.pointerId); } catch {}
+      el.style.cursor = 'grabbing';
+    }, 350);
+  });
+  el.addEventListener('pointermove', e => {
+    if (!dragging) {
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) clearTimeout(timer);
+      return;
+    }
+    e.preventDefault();
+    const rect = canvas().getBoundingClientRect();
+    let x = ((e.clientX - rect.left) / rect.width) * 100;
+    let y = ((e.clientY - rect.top) / rect.height) * 100;
+    x = Math.max(0, Math.min(100, x));
+    y = Math.max(0, Math.min(100, y));
+    el.style.left = x + '%';
+    el.style.top = y + '%';
+    el._cpdX = x; el._cpdY = y;
+  });
+  const finish = async () => {
+    clearTimeout(timer);
+    el.style.cursor = 'grab';
+    if (!dragging) return;
+    dragging = false;
+    justDragged = true; _cpdOfficeJustDragged = true;
+    setTimeout(() => { justDragged = false; _cpdOfficeJustDragged = false; }, 80);
+    const id = el.dataset.id;
+    const x = el._cpdX, y = el._cpdY;
+    if (x === undefined || y === undefined) return;
+    try {
+      await api(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify({ pos_x: x, pos_y: y }) });
+      const s = window._cpdOfficePlano?.sondas.find(s => String(s.id) === String(id));
+      if (s) { s.pos_x = x; s.pos_y = y; }
+    } catch {}
+  };
+  el.addEventListener('pointerup', finish);
+  el.addEventListener('pointercancel', finish);
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    if (justDragged || _cpdOfficeJustDragged) return;
+    cpdOfficeAbrirSonda(el.dataset.id);
+  });
+}
+
+function cpdOfficeAbrirSonda(id) {
+  const sonda = window._cpdOfficePlano?.sondas.find(s => String(s.id) === String(id));
+  if (!sonda) return;
+  window._cpdOfficeSondaId = sonda.id;
+  document.getElementById('cpdOfficeSondaNombre').value = sonda.nombre || '';
+  document.getElementById('cpdOfficeSondaSerie').value = sonda.numero_serie || '';
+  document.getElementById('cpdOfficeSondaZona').value = sonda.zona || '';
+  document.getElementById('cpdOfficeLecturaTemp').value = '';
+  document.getElementById('cpdOfficeLecturaHum').value = '';
+  document.getElementById('cpdOfficeLecturaPresion').value = '';
+  document.getElementById('modalCpdOfficeSonda').style.display = 'flex';
+  cpdOfficeCargarLecturas(sonda.id);
+}
+function cpdOfficeCerrarSonda() {
+  document.getElementById('modalCpdOfficeSonda').style.display = 'none';
+  window._cpdOfficeSondaId = null;
+}
+
+async function cpdOfficeSondaGuardarDatos() {
+  const id = window._cpdOfficeSondaId;
+  if (!id) return;
+  const nombre = document.getElementById('cpdOfficeSondaNombre').value.trim();
+  const numero_serie = document.getElementById('cpdOfficeSondaSerie').value.trim();
+  const zona = document.getElementById('cpdOfficeSondaZona').value;
+  if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
+  try {
+    const data = await api(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify({ nombre, numero_serie, zona }) });
+    if (data?.ok === false) throw new Error(data.error);
+    const s = window._cpdOfficePlano?.sondas.find(s => String(s.id) === String(id));
+    if (s) { s.nombre = nombre; s.numero_serie = numero_serie; s.zona = zona; }
+    toast('Sonda actualizada');
+    cpdOfficeAbrirPlano(window._cpdOfficePlano.plano.id);
+  } catch (e) { toast(e.message || 'Error al guardar', 'err'); }
+}
+
+async function cpdOfficeSondaEliminar() {
+  const id = window._cpdOfficeSondaId;
+  if (!id) return;
+  if (!confirm('¿Eliminar esta sonda y su histórico de lecturas?')) return;
+  try {
+    await api(`/cpd/sondas/${id}`, { method: 'DELETE' });
+    cpdOfficeCerrarSonda();
+    cpdOfficeAbrirPlano(window._cpdOfficePlano.plano.id);
+  } catch (e) { toast(e.message || 'Error al eliminar', 'err'); }
+}
+
+async function cpdOfficeLecturaGuardar() {
+  const id = window._cpdOfficeSondaId;
+  if (!id) return;
+  const temperatura = document.getElementById('cpdOfficeLecturaTemp').value;
+  const humedad = document.getElementById('cpdOfficeLecturaHum').value;
+  const presion_diferencial = document.getElementById('cpdOfficeLecturaPresion').value;
+  if (!temperatura && !humedad && !presion_diferencial) { toast('Introduce al menos un valor', 'err'); return; }
+  try {
+    const data = await api(`/cpd/sondas/${id}/lecturas`, { method: 'POST', body: JSON.stringify({ temperatura, humedad, presion_diferencial }) });
+    if (data?.ok === false) throw new Error(data.error);
+    document.getElementById('cpdOfficeLecturaTemp').value = '';
+    document.getElementById('cpdOfficeLecturaHum').value = '';
+    document.getElementById('cpdOfficeLecturaPresion').value = '';
+    toast('Lectura guardada');
+    cpdOfficeCargarLecturas(id);
+  } catch (e) { toast(e.message || 'Error al guardar la lectura', 'err'); }
+}
+
+async function cpdOfficeCargarLecturas(id) {
+  const canvas = document.getElementById('cpdOfficeSondaCanvas');
+  const leyenda = document.getElementById('cpdOfficeSondaLeyenda');
+  if (leyenda) leyenda.innerHTML = 'Cargando…';
+  try {
+    const data = await api(`/cpd/sondas/${id}/lecturas`);
+    _cpdOfficeDibujarGrafica(canvas, data.lecturas || []);
+    if (leyenda) leyenda.innerHTML = `<span style="color:#f97316">■ Temp °C</span><span style="color:#38bdf8">■ Hum %</span><span style="color:#a78bfa">■ ΔP Pa</span>`;
+  } catch { if (leyenda) leyenda.textContent = 'Error al cargar lecturas'; }
+}
+
+function _cpdOfficeDibujarGrafica(canvas, lecturas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  if (!lecturas.length) {
+    ctx.fillStyle = '#64748b'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Sin lecturas todavía', w / 2, h / 2);
+    return;
+  }
+  const series = [
+    { key: 'temperatura', color: '#f97316' },
+    { key: 'humedad', color: '#38bdf8' },
+    { key: 'presion_diferencial', color: '#a78bfa' },
+  ];
+  const pad = 10;
+  series.forEach(s => {
+    const vals = lecturas.map(l => l[s.key]).filter(v => v !== null && v !== undefined);
+    if (vals.length < 1) return;
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const range = (max - min) || 1;
+    ctx.beginPath();
+    let started = false;
+    lecturas.forEach((l, i) => {
+      const v = l[s.key];
+      const x = pad + (i / Math.max(1, lecturas.length - 1)) * (w - pad * 2);
+      if (v === null || v === undefined) { started = false; return; }
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+    });
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+}
+
+async function cpdOfficeGenerarInforme() {
+  const st = window._cpdOfficePlano;
+  if (!st) return;
+  const w = window.open('', '_blank');
+  if (!w) { toast('Permite las ventanas emergentes para abrir el informe', 'err'); return; }
+  w.document.write('<!doctype html><html><body style="font-family:sans-serif;padding:40px">Generando informe…</body></html>');
+  w.document.close();
+  try {
+    const lecturas = await Promise.all(st.sondas.map(s =>
+      api(`/cpd/sondas/${s.id}/lecturas`).then(d => (d.lecturas || []).slice(-1)[0] || null).catch(() => null)
+    ));
+    const imgUrl = _cpdOfficeImagenUrl(st.plano.id);
+    const marcadoresHtml = st.sondas.map((s, i) => `
+      <div style="position:absolute;left:${s.pos_x}%;top:${s.pos_y}%;transform:translate(-50%,-50%);
+        width:22px;height:22px;border-radius:50%;background:#22c55e;border:2px solid #fff;
+        display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff">${i + 1}</div>`).join('');
+    const filas = st.sondas.map((s, i) => {
+      const l = lecturas[i];
+      return `<tr>
+        <td>${i + 1}</td><td>${escHtml(s.nombre)}</td><td>${escHtml(s.numero_serie || '—')}</td>
+        <td>${escHtml(s.zona || '—')}</td>
+        <td>${l?.temperatura ?? '—'}</td><td>${l?.humedad ?? '—'}</td><td>${l?.presion_diferencial ?? '—'}</td>
+        <td>${l?.fecha ? fmtFecha(l.fecha) : '—'}</td>
+      </tr>`;
+    }).join('');
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Informe ${escHtml(st.plano.titulo)}</title>
+      <style>
+        body{font-family:Arial,sans-serif;color:#101823;padding:0 40px 50px;background:#f6f8fa}
+        .acciones{position:sticky;top:0;background:#f6f8fa;padding:14px 0;display:flex;gap:8px;justify-content:flex-end}
+        button{padding:8px 14px;border-radius:6px;border:1px solid #ccc;cursor:pointer;font-weight:700}
+        .plano-wrap{position:relative;max-width:900px;margin:0 auto 24px;border:1px solid #ddd;border-radius:8px;overflow:hidden}
+        .plano-wrap img{width:100%;display:block}
+        table{width:100%;border-collapse:collapse;font-size:13px;margin-top:20px}
+        th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}
+        th{background:#e3f1f1}
+        @media print{.acciones{display:none}}
+      </style></head><body>
+      <div class="acciones"><button onclick="window.print()">🖨 Imprimir / guardar PDF</button><button onclick="window.close()">Cerrar</button></div>
+      <h1>${escHtml(st.plano.titulo)}</h1>
+      <p style="color:#5b6472">Sondas CPD · generado ${new Date().toLocaleDateString('es-ES')}</p>
+      <div class="plano-wrap"><img src="${imgUrl}">${marcadoresHtml}</div>
+      <table>
+        <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Zona</th><th>Temp °C</th><th>Hum %</th><th>ΔP Pa</th><th>Última lectura</th></tr></thead>
+        <tbody>${filas || '<tr><td colspan="8">Sin sondas</td></tr>'}</tbody>
+      </table>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+  } catch (e) {
+    if (!w.closed) {
+      w.document.open();
+      w.document.write(`<div style="padding:40px;font-family:sans-serif">Error: ${escHtml(e.message || 'desconocido')}</div>`);
+      w.document.close();
+    }
+    toast(e.message || 'No se pudo generar el informe', 'err');
+  }
+}
+
+async function cpdOfficeEliminarPlano() {
+  const st = window._cpdOfficePlano;
+  if (!st) return;
+  if (!confirm(`¿Eliminar el plano "${st.plano.titulo}" y todas sus sondas?`)) return;
+  try {
+    await api(`/cpd/planos/${st.plano.id}`, { method: 'DELETE' });
+    window._cpdOfficePlano = null;
+    cpdOfficeCargarPlanos();
+  } catch (e) { toast(e.message || 'Error al eliminar', 'err'); }
+}
+
 // ── NAVEGACIÓN ─────────────────────────────────────────────────
 const PAGE_TITLES = {
   dashboard: 'Dashboard', globalDashboard: '🌐 Dashboard Global Multi-Obra', personal: 'Trabajadores', fichajes: 'Fichajes',
   turnos: 'Turnos', epis: 'EPIs', carnets: 'Carnets', bobinas: 'Bobinas',
   pemp: 'PEMP', carretillas: 'Carretillas', repostajes: 'Repostajes', herramientas: 'Herramientas',
   telecomRacks: '🗄️ Racks / Cableado',
+  cpdSondas: '🌡️ Sondas CPD',
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
   pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
   empresa: 'Mi Empresa', logs: 'Logs', devtools: '🛠️ DevTools',
@@ -12153,6 +12630,7 @@ const PAGE_LOADERS = {
   repostajes: cargarRepostajes,
   herramientas: cargarHerramientas,
   telecomRacks: (...a) => telecomOfficeCargar(...a),
+  cpdSondas: (...a) => cpdOfficeCargar(...a),
   seguridad: cargarSeguridad,
   obras: cargarObras,
   documentos: cargarDocumentos,
@@ -12328,6 +12806,7 @@ const SYNC_INTERVALS = {
   carretillas:   60,
   herramientas:  60,
   telecomRacks:  60,
+  cpdSondas:     60,
   seguridad:     60,
   epis:         120,
   carnets:      120,
