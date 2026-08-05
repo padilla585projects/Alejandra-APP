@@ -601,8 +601,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     <button class="nav-item nav-electrico-section" data-page="bobinas" onclick="navTo('bobinas')" style="display:none">
       <span class="nav-icon">⚡</span> Bobinas
     </button>
-    <button class="nav-item nav-electrico-section" data-page="cpdSondas" onclick="navTo('cpdSondas')" style="display:none">
-      <span class="nav-icon">🌡️</span> Sondas CPD
+    <button class="nav-item nav-control-section" data-page="cpdSondas" onclick="cpdOfficeAbrirModulo('sondas')" style="display:none">
+      <span class="nav-icon">🌡️</span> Sondas Salas
+    </button>
+    <button class="nav-item nav-control-section" data-page="cpdSondas" onclick="cpdOfficeAbrirModulo('camaras')" style="display:none">
+      <span class="nav-icon">📷</span> Cámaras de seguridad
+    </button>
+    <button class="nav-item nav-control-section" data-page="cpdSondas" onclick="cpdOfficeAbrirModulo('control_acceso')" style="display:none">
+      <span class="nav-icon">🔐</span> Control de acceso
     </button>
     <button class="nav-item" data-page="pemp" onclick="navTo('pemp')">
       <span class="nav-icon">🚜</span> PEMP
@@ -1759,8 +1765,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
       <!-- SONDAS CPD -->
       <div class="page" id="pageCpdSondas">
-        <div class="page-title">🌡️ Sondas CPD</div>
-        <div class="page-sub">Temperatura, humedad y presión diferencial sobre el plano real de la sala</div>
+        <div class="page-title" id="cpdOfficeTitulo">🌡️ Sondas Salas</div>
+        <div class="page-sub">Sondas, cámaras y control de acceso sobre el plano real de la sala</div>
         <div class="tbl-toolbar">
           <select class="tbl-search" id="cpdOfficeObra" style="min-width:210px" onchange="cpdOfficeCargarPlanos()">
             <option value="">🏗 Todas las obras</option>
@@ -1769,7 +1775,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           <button class="btn btn-secondary" onclick="cpdOfficeCargarPlanos()">🔄 Actualizar</button>
         </div>
         <div class="card" style="padding:18px">
-          <div id="cpdOfficeBreadcrumb" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:'Montserrat',sans-serif;font-weight:800;font-size:14px;margin-bottom:14px">🌡️ Sondas CPD</div>
+          <div id="cpdOfficeBreadcrumb" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:'Montserrat',sans-serif;font-weight:800;font-size:14px;margin-bottom:14px">🌡️ Sondas Salas</div>
           <div id="cpdOfficeContent"><div class="empty-state">Cargando…</div></div>
         </div>
       </div>
@@ -1791,14 +1797,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </div>
           <div class="form-group">
             <label>…o usa una plantilla</label>
-            <div id="cpdOfficeNuevoPlantillas" style="display:flex;gap:8px">
-              <div class="cpd-plantilla-opt" data-plantilla="dh304" onclick="cpdOfficeSeleccionarPlantilla('dh304')" style="flex:1;border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
-                <img src="img/cpd-plantillas/dh304.svg" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
-                <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">Modelo Liquid Cooling 1</div>
-              </div>
-              <div class="cpd-plantilla-opt" data-plantilla="dh302" onclick="cpdOfficeSeleccionarPlantilla('dh302')" style="flex:1;border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
-                <img src="img/cpd-plantillas/dh302.svg" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
-                <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">Modelo Liquid Cooling 2</div>
+            <div id="cpdOfficeNuevoPlantillas" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <div class="empty-state" style="grid-column:1/-1;padding:6px;font-size:11px">Cargando plantillas…</div>
+            </div>
+            <div id="cpdOfficeNuevaPlantillaForm" style="display:none;margin-top:10px;padding:10px;border:1px dashed var(--border);border-radius:8px;gap:8px;flex-direction:column">
+              <input class="form-input" id="cpdOfficeNuevaPlantillaNombre" type="text" placeholder="Nombre de la plantilla">
+              <input class="form-input" id="cpdOfficeNuevaPlantillaFile" type="file" accept="image/*">
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-secondary" style="flex:1" onclick="cpdOfficeCancelarNuevaPlantilla()">Cancelar</button>
+                <button class="btn btn-primary" style="flex:1" id="btnCpdOfficeGuardarPlantilla" onclick="cpdOfficeGuardarNuevaPlantilla()">Guardar plantilla</button>
               </div>
             </div>
           </div>
@@ -10016,11 +10023,14 @@ const _DEPTS_CATALOG = {
   telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
   almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
   ingenieria:  { icon: '📐',  name: 'Ingeniería',          desc: 'Planificación, mediciones y documentación técnica', template: 'trade'  },
+  control:     { icon: '🎛️',  name: 'Control',            desc: 'Sondas ambientales, cámaras y control de acceso', template: 'trade'    },
 };
 const _ALL_DEPTS = Object.keys(_DEPTS_CATALOG);
 const _HOME_TRADE_MODS = [
   { card: 'cardBobinas', label: '⚡ Bobinas', soloElectrico: true },
-  { card: 'cardCpdSondas', label: '🌡️ Sondas CPD', soloElectrico: true },
+  { card: 'cardCpdSondas', label: '🌡️ Sondas Salas', soloControl: true },
+  { card: 'cardCpdCamaras', label: '📷 Cámaras de seguridad', soloControl: true },
+  { card: 'cardCpdAccesos', label: '🔐 Control de acceso', soloControl: true },
   { card: 'cardPemp', label: '🛠 PEMP' },
   { card: 'cardCarretillas', label: '🚜 Carretillas' },
   { card: 'cardPedidos', label: '📥 Pedidos' },
@@ -10052,7 +10062,7 @@ function _modsParaDept(dept) {
   if (tpl === 'seguridad') return _SEG_MODS;
   if (tpl === 'personal')  return _PER_MODS;
   return _HOME_TRADE_MODS
-    .filter(m => !m.soloElectrico || dept === 'electrico')
+    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloControl || dept === 'control'))
     .map(m => ({ key: `home_${dept}_${m.card}`, label: m.label, _card: m.card }));
 }
 function _renderDeptConModulos(containerId, prefijo, activeDepts, existingCfg) {
@@ -11122,6 +11132,9 @@ function iniciarApp() {
   if (verComoAdmin || deptActual === 'electrico') {
     document.querySelectorAll('.nav-electrico-section').forEach(el => el.style.display = '');
   }
+  if (verComoAdmin || deptActual === 'control') {
+    document.querySelectorAll('.nav-control-section').forEach(el => el.style.display = '');
+  }
   mostrarInventarioSeguridadSiAplica(deptActual, previsualizandoDepto);
 
   // CONSTR-01 (24/07/2026): la sección "Construcción" (RFIs, calidad, actas...)
@@ -11966,14 +11979,33 @@ async function cpdOfficeCargar() {
   await cpdOfficeCargarPlanos();
 }
 
+// Modulo activo del editor de plano compartido (igual que index.html):
+// "sondas" | "camaras" | "control_acceso".
+window._cpdOfficeModuloActivo = 'sondas';
+const CPD_OFFICE_MODULO_INFO = {
+  sondas:          { icono: '🌡️', label: 'Sondas Salas' },
+  camaras:         { icono: '📷', label: 'Cámaras de seguridad' },
+  control_acceso:  { icono: '🔐', label: 'Control de acceso' },
+};
+function cpdOfficeAbrirModulo(modulo) {
+  window._cpdOfficeModuloActivo = modulo;
+  navTo('cpdSondas');
+}
+
 async function cpdOfficeCargarPlanos() {
   window._cpdOfficePlano = null;
   const obraId = document.getElementById('cpdOfficeObra')?.value || '';
-  document.getElementById('cpdOfficeBreadcrumb').innerHTML = '🌡️ Sondas CPD';
+  const info = CPD_OFFICE_MODULO_INFO[window._cpdOfficeModuloActivo] || CPD_OFFICE_MODULO_INFO.sondas;
+  const tituloTxt = `${info.icono} ${info.label}`;
+  document.getElementById('cpdOfficeBreadcrumb').innerHTML = tituloTxt;
+  const tit = document.getElementById('cpdOfficeTitulo');
+  if (tit) tit.textContent = tituloTxt;
   const cont = document.getElementById('cpdOfficeContent');
   cont.innerHTML = '<div class="empty-state">Cargando…</div>';
   try {
-    const data = await api('/cpd/planos' + (obraId ? '?obra_id=' + encodeURIComponent(obraId) : ''));
+    const qs = new URLSearchParams({ modulo: window._cpdOfficeModuloActivo });
+    if (obraId) qs.set('obra_id', obraId);
+    const data = await api('/cpd/planos?' + qs.toString());
     if (data?.ok === false) throw new Error(data.error || 'Error al cargar');
     const planos = data.planos || [];
     if (!planos.length) {
@@ -11993,19 +12025,29 @@ async function cpdOfficeCargarPlanos() {
   }
 }
 
-// Plantillas: fotos de ejemplo de salas reales (busbar/datahall), servidas como
-// asset estatico de la propia app — se puede partir de ellas en vez de subir foto.
-const CPD_OFFICE_PLANTILLAS = {
-  dh304: { url: 'img/cpd-plantillas/dh304.svg', nombre: 'plantilla-dh304.svg' },
-  dh302: { url: 'img/cpd-plantillas/dh302.svg', nombre: 'plantilla-dh302.svg' },
+// Plantillas "de fabrica" (solo modulo sondas) — asset estatico de la app.
+const CPD_OFFICE_PLANTILLAS_FABRICA = {
+  dh304: { url: 'img/cpd-plantillas/dh304.svg', nombre: 'plantilla-dh304.svg', label: 'Modelo Liquid Cooling 1' },
+  dh302: { url: 'img/cpd-plantillas/dh302.svg', nombre: 'plantilla-dh302.svg', label: 'Modelo Liquid Cooling 2' },
 };
-window._cpdOfficePlantillaSeleccionada = null;
+window._cpdOfficePlantillaSeleccionada = null; // { origen, key, url, nombre }
+window._cpdOfficePlantillasCustomCache = [];
 
-// Catalogo de tipos de elemento colocables en el plano — igual que index.html,
-// hoy solo sondas ambientales, manana camaras/control de acceso.
+function cpdOfficePlantillaImagenUrl(id) {
+  return `${API}/cpd/plantillas/${id}/imagen?token=${encodeURIComponent(TOKEN)}`;
+}
+
+// Catalogo de tipos de elemento colocables en el plano, agrupado por modulo —
+// igual que index.html.
 const CPD_OFFICE_TIPOS_ELEMENTO = [
-  { categoria: 'sonda_ambiental', tipo: 'temp_hum',            icono: '🌡️', label: 'Temp/Hum' },
-  { categoria: 'sonda_ambiental', tipo: 'presion_diferencial', icono: '📉', label: 'Presión Dif.' },
+  { modulo: 'sondas',         categoria: 'sonda_ambiental', tipo: 'temp_hum',            icono: '🌡️', label: 'Temp/Hum' },
+  { modulo: 'sondas',         categoria: 'sonda_ambiental', tipo: 'presion_diferencial', icono: '📉', label: 'Presión Dif.' },
+  { modulo: 'camaras',        categoria: 'camara',          tipo: 'fija',                icono: '📷', label: 'Cámara fija' },
+  { modulo: 'camaras',        categoria: 'camara',          tipo: 'ptz',                 icono: '🎥', label: 'Cámara PTZ' },
+  { modulo: 'camaras',        categoria: 'camara',          tipo: 'domo',                icono: '🎦', label: 'Cámara domo' },
+  { modulo: 'control_acceso', categoria: 'control_acceso',  tipo: 'lector_tarjeta',       icono: '💳', label: 'Lector tarjeta' },
+  { modulo: 'control_acceso', categoria: 'control_acceso',  tipo: 'puerta',               icono: '🚪', label: 'Puerta motorizada' },
+  { modulo: 'control_acceso', categoria: 'control_acceso',  tipo: 'biometrico',           icono: '🖐️', label: 'Lector biométrico' },
 ];
 function cpdOfficeTipoInfo(tipo) {
   return CPD_OFFICE_TIPOS_ELEMENTO.find(t => t.tipo === tipo) || CPD_OFFICE_TIPOS_ELEMENTO[0];
@@ -12016,7 +12058,8 @@ function cpdOfficeRenderToolbar() {
   const cont = document.getElementById('cpdOfficeToolbar');
   if (!cont) return;
   const activa = window._cpdOfficeHerramientaActiva;
-  cont.innerHTML = CPD_OFFICE_TIPOS_ELEMENTO.map(t => `
+  const tipos = CPD_OFFICE_TIPOS_ELEMENTO.filter(t => t.modulo === window._cpdOfficeModuloActivo);
+  cont.innerHTML = tipos.map(t => `
     <button class="btn ${activa?.tipo === t.tipo ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="cpdOfficeArmarHerramienta('${t.tipo}')">
       ${t.icono} ${escHtml(t.label)}
     </button>`).join('');
@@ -12046,12 +12089,81 @@ function cpdOfficeTextoEtiqueta(sonda) {
   return sonda.nombre || '';
 }
 
-function cpdOfficeSeleccionarPlantilla(key) {
-  window._cpdOfficePlantillaSeleccionada = key;
-  if (key) document.getElementById('cpdOfficeNuevoFile').value = '';
+function cpdOfficeSeleccionarPlantilla(origen, key) {
+  if (!origen) { window._cpdOfficePlantillaSeleccionada = null; }
+  else if (origen === 'fabrica') {
+    const p = CPD_OFFICE_PLANTILLAS_FABRICA[key];
+    window._cpdOfficePlantillaSeleccionada = { origen, key, url: p.url, nombre: p.nombre };
+  } else {
+    const p = window._cpdOfficePlantillasCustomCache.find(x => String(x.id) === String(key));
+    if (p) window._cpdOfficePlantillaSeleccionada = { origen, key, url: cpdOfficePlantillaImagenUrl(p.id), nombre: `plantilla-${p.id}.jpg` };
+  }
+  if (window._cpdOfficePlantillaSeleccionada) document.getElementById('cpdOfficeNuevoFile').value = '';
   document.querySelectorAll('#cpdOfficeNuevoPlantillas .cpd-plantilla-opt').forEach(el => {
-    el.style.borderColor = (el.dataset.plantilla === key) ? 'var(--accent)' : 'var(--border)';
+    const activa = window._cpdOfficePlantillaSeleccionada && el.dataset.origen === window._cpdOfficePlantillaSeleccionada.origen && el.dataset.key === String(window._cpdOfficePlantillaSeleccionada.key);
+    el.style.borderColor = activa ? 'var(--accent)' : 'var(--border)';
   });
+}
+
+async function cpdOfficeCargarPlantillas() {
+  const cont = document.getElementById('cpdOfficeNuevoPlantillas');
+  if (!cont) return;
+  const modulo = window._cpdOfficeModuloActivo;
+  let custom = [];
+  try {
+    const data = await api(`/cpd/plantillas?modulo=${encodeURIComponent(modulo)}`);
+    custom = data?.plantillas || [];
+  } catch {}
+  window._cpdOfficePlantillasCustomCache = custom;
+  const fabricaHtml = modulo === 'sondas' ? Object.entries(CPD_OFFICE_PLANTILLAS_FABRICA).map(([key, p]) => `
+    <div class="cpd-plantilla-opt" data-origen="fabrica" data-key="${key}" onclick="cpdOfficeSeleccionarPlantilla('fabrica','${key}')" style="border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
+      <img src="${p.url}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+      <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">${escHtml(p.label)}</div>
+    </div>`).join('') : '';
+  const customHtml = custom.map(p => `
+    <div class="cpd-plantilla-opt" data-origen="custom" data-key="${p.id}" onclick="cpdOfficeSeleccionarPlantilla('custom','${p.id}')" style="border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
+      <img src="${cpdOfficePlantillaImagenUrl(p.id)}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+      <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">${escHtml(p.nombre)}</div>
+    </div>`).join('');
+  const addHtml = `
+    <div onclick="cpdOfficeAbrirNuevaPlantilla()" style="border-radius:8px;border:2px dashed var(--border);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:4/3;color:var(--muted);font-size:11px;font-weight:700;gap:4px">
+      <span style="font-size:20px">+</span><span>Nueva plantilla</span>
+    </div>`;
+  cont.innerHTML = fabricaHtml + customHtml + addHtml;
+}
+
+function cpdOfficeAbrirNuevaPlantilla() {
+  document.getElementById('cpdOfficeNuevaPlantillaNombre').value = '';
+  document.getElementById('cpdOfficeNuevaPlantillaFile').value = '';
+  document.getElementById('cpdOfficeNuevaPlantillaForm').style.display = 'flex';
+}
+function cpdOfficeCancelarNuevaPlantilla() {
+  document.getElementById('cpdOfficeNuevaPlantillaForm').style.display = 'none';
+}
+
+async function cpdOfficeGuardarNuevaPlantilla() {
+  const nombre = document.getElementById('cpdOfficeNuevaPlantillaNombre').value.trim();
+  const file = document.getElementById('cpdOfficeNuevaPlantillaFile').files[0];
+  if (!nombre) { toast('Introduce un nombre para la plantilla', 'err'); return; }
+  if (!file)   { toast('Selecciona una imagen', 'err'); return; }
+  const btn = document.getElementById('btnCpdOfficeGuardarPlantilla');
+  if (btn) btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('nombre', nombre);
+    fd.append('modulo', window._cpdOfficeModuloActivo);
+    const res = await apiRaw('/cpd/plantillas', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Error al guardar la plantilla');
+    cpdOfficeCancelarNuevaPlantilla();
+    await cpdOfficeCargarPlantillas();
+    toast('Plantilla guardada');
+  } catch (e) {
+    toast(e.message || 'Error al guardar la plantilla', 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function cpdOfficeAbrirNuevo() {
@@ -12059,8 +12171,10 @@ function cpdOfficeAbrirNuevo() {
   document.getElementById('cpdOfficeNuevoFile').value = '';
   const obraSel = document.getElementById('cpdOfficeObra');
   if (obraSel?.value) document.getElementById('cpdOfficeNuevoObra').value = obraSel.value;
+  cpdOfficeCancelarNuevaPlantilla();
   cpdOfficeSeleccionarPlantilla(null);
   document.getElementById('modalCpdOfficeNuevo').style.display = 'flex';
+  cpdOfficeCargarPlantillas();
 }
 function cpdOfficeCerrarNuevo() {
   document.getElementById('modalCpdOfficeNuevo').style.display = 'none';
@@ -12070,15 +12184,14 @@ async function cpdOfficeGuardarNuevo() {
   const titulo = document.getElementById('cpdOfficeNuevoTitulo').value.trim();
   const obraId = document.getElementById('cpdOfficeNuevoObra').value;
   let file = document.getElementById('cpdOfficeNuevoFile').files[0];
-  const plantillaKey = window._cpdOfficePlantillaSeleccionada;
+  const plantilla = window._cpdOfficePlantillaSeleccionada;
   if (!titulo) { toast('Introduce un título', 'err'); return; }
   if (!obraId) { toast('Selecciona una obra', 'err'); return; }
-  if (!file && !plantillaKey) { toast('Selecciona la foto del plano o una plantilla', 'err'); return; }
+  if (!file && !plantilla) { toast('Selecciona la foto del plano o una plantilla', 'err'); return; }
   const btn = document.getElementById('cpdOfficeNuevoBtn');
   if (btn) btn.disabled = true;
   try {
-    if (!file && plantillaKey) {
-      const plantilla = CPD_OFFICE_PLANTILLAS[plantillaKey];
+    if (!file && plantilla) {
       const blob = await fetch(plantilla.url).then(r => r.blob());
       file = new File([blob], plantilla.nombre, { type: blob.type || 'image/jpeg' });
     }
@@ -12086,6 +12199,7 @@ async function cpdOfficeGuardarNuevo() {
     fd.append('file', file);
     fd.append('titulo', titulo);
     fd.append('obra_id', obraId);
+    fd.append('modulo', window._cpdOfficeModuloActivo);
     const res = await apiRaw('/cpd/planos', { method: 'POST', body: fd });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Error al crear el plano');
@@ -12106,8 +12220,10 @@ async function cpdOfficeAbrirPlano(id) {
     const data = await api(`/cpd/planos/${id}`);
     if (data?.ok === false) throw new Error(data.error || 'Plano no encontrado');
     window._cpdOfficePlano = { plano: data.plano, sondas: data.sondas || [] };
+    if (data.plano.modulo) window._cpdOfficeModuloActivo = data.plano.modulo;
+    const moduloInfo = CPD_OFFICE_MODULO_INFO[window._cpdOfficeModuloActivo] || CPD_OFFICE_MODULO_INFO.sondas;
     document.getElementById('cpdOfficeBreadcrumb').innerHTML =
-      `<button class="btn btn-secondary btn-sm" onclick="cpdOfficeCargarPlanos()">← Sondas CPD</button>` +
+      `<button class="btn btn-secondary btn-sm" onclick="cpdOfficeCargarPlanos()">← ${escHtml(moduloInfo.label)}</button>` +
       `<span>${escHtml(data.plano.titulo)}</span>` +
       `<button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="cpdOfficeGenerarInforme()">📄 Informe</button>` +
       `<button class="btn btn-secondary btn-sm" style="color:var(--danger)" onclick="cpdOfficeEliminarPlano()">🗑 Eliminar plano</button>`;
@@ -12383,7 +12499,7 @@ async function cpdOfficeGenerarInforme() {
       </style></head><body>
       <div class="acciones"><button onclick="window.print()">🖨 Imprimir / guardar PDF</button><button onclick="window.close()">Cerrar</button></div>
       <h1>${escHtml(st.plano.titulo)}</h1>
-      <p style="color:#5b6472">Sondas CPD · generado ${new Date().toLocaleDateString('es-ES')}</p>
+      <p style="color:#5b6472">Sondas Salas · generado ${new Date().toLocaleDateString('es-ES')}</p>
       <div class="plano-wrap"><img src="${imgUrl}">${marcadoresHtml}</div>
       <table>
         <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Zona</th><th>Temp °C</th><th>Hum %</th><th>ΔP Pa</th><th>Última lectura</th></tr></thead>
@@ -12419,7 +12535,7 @@ const PAGE_TITLES = {
   turnos: 'Turnos', epis: 'EPIs', carnets: 'Carnets', bobinas: 'Bobinas',
   pemp: 'PEMP', carretillas: 'Carretillas', repostajes: 'Repostajes', herramientas: 'Herramientas',
   telecomRacks: '🗄️ Racks / Cableado',
-  cpdSondas: '🌡️ Sondas CPD',
+  cpdSondas: '🎛️ Control',
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
   pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
   empresa: 'Mi Empresa', logs: 'Logs', devtools: '🛠️ DevTools',

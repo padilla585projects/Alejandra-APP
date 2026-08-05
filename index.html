@@ -1064,11 +1064,27 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" id="cardCpdSondas" onclick="navTo('cpdSondas')" style="display:none;border-left:3px solid #22c55e">
+      <div class="module-card" id="cardCpdSondas" onclick="cpdAbrirModulo('sondas')" style="display:none;border-left:3px solid #22c55e">
         <div class="module-emoji">🌡️</div>
         <div class="module-info">
-          <div class="module-name">Sondas CPD</div>
+          <div class="module-name">Sondas Salas</div>
           <div class="module-desc">Temp/humedad/presión sobre plano real</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" id="cardCpdCamaras" onclick="cpdAbrirModulo('camaras')" style="display:none;border-left:3px solid #0ea5e9">
+        <div class="module-emoji">📷</div>
+        <div class="module-info">
+          <div class="module-name">Cámaras de seguridad</div>
+          <div class="module-desc">Cobertura de cámaras sobre plano real</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" id="cardCpdAccesos" onclick="cpdAbrirModulo('control_acceso')" style="display:none;border-left:3px solid #a855f7">
+        <div class="module-emoji">🔐</div>
+        <div class="module-info">
+          <div class="module-name">Control de acceso</div>
+          <div class="module-desc">Puntos de acceso sobre plano real</div>
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
@@ -1612,7 +1628,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
   <!-- SONDAS CPD: lista de planos -->
   <div id="screenCpdSondas" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
-      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">🌡️ Sondas CPD</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1" id="cpdSondasTitulo">🌡️ Sondas Salas</div>
       <button onclick="abrirModalCpdNuevoPlano()" style="background:var(--accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;padding:7px 12px;border-radius:8px;white-space:nowrap">+ Nuevo plano</button>
       <button onclick="cargarCpdPlanos()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px" title="Actualizar">↻</button>
     </div>
@@ -1641,14 +1657,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
         <div>
           <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">…o usa una plantilla</label>
-          <div id="cpdNuevoPlanoPlantillas" style="display:flex;gap:8px">
-            <div class="cpd-plantilla-opt" data-plantilla="dh304" onclick="cpdSeleccionarPlantilla('dh304')" style="flex:1;border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
-              <img src="img/cpd-plantillas/dh304.svg" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
-              <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">Modelo Liquid Cooling 1</div>
-            </div>
-            <div class="cpd-plantilla-opt" data-plantilla="dh302" onclick="cpdSeleccionarPlantilla('dh302')" style="flex:1;border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
-              <img src="img/cpd-plantillas/dh302.svg" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
-              <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">Modelo Liquid Cooling 2</div>
+          <div id="cpdNuevoPlanoPlantillas" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div class="empty-state" style="grid-column:1/-1;padding:6px;font-size:11px">Cargando plantillas…</div>
+          </div>
+          <div id="cpdNuevaPlantillaForm" style="display:none;margin-top:10px;padding:10px;border:1px dashed var(--border);border-radius:8px;gap:8px;flex-direction:column">
+            <input id="cpdNuevaPlantillaNombre" type="text" placeholder="Nombre de la plantilla"
+                   style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
+            <input id="cpdNuevaPlantillaFile" type="file" accept="image/*" style="width:100%;font-size:12px;color:var(--text)">
+            <div style="display:flex;gap:8px">
+              <button onclick="cpdCancelarNuevaPlantilla()" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-weight:700">Cancelar</button>
+              <button id="btnCpdGuardarPlantilla" onclick="cpdGuardarNuevaPlantilla()" class="btn-primary" style="flex:1;margin-top:0">Guardar plantilla</button>
             </div>
           </div>
         </div>
@@ -6177,6 +6195,7 @@ const _DEPTS_CATALOG = {
   telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
   almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
   ingenieria:  { icon: '📐',  name: 'Ingeniería',          desc: 'Planificación, mediciones y documentación técnica', template: 'trade'  },
+  control:     { icon: '🎛️',  name: 'Control',            desc: 'Sondas ambientales, cámaras y control de acceso', template: 'trade'    },
 };
 const DEPT_INFO = Object.fromEntries(Object.entries(_DEPTS_CATALOG).map(([k, v]) => [k, { icon: v.icon, name: v.name }]));
 
@@ -6306,6 +6325,8 @@ function setupHomeModules() {
   const cardPlanos  = document.getElementById('cardPlanos');
   const cardTelecomRacks = document.getElementById('cardTelecomRacks');
   const cardCpdSondas = document.getElementById('cardCpdSondas');
+  const cardCpdCamaras = document.getElementById('cardCpdCamaras');
+  const cardCpdAccesos = document.getElementById('cardCpdAccesos');
   // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard, Incidencias y Galería
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
@@ -6313,6 +6334,8 @@ function setupHomeModules() {
     if (cardC) cardC.style.display = 'none';
     if (cardTelecomRacks) cardTelecomRacks.style.display = 'none';
     if (cardCpdSondas) cardCpdSondas.style.display = 'none';
+    if (cardCpdCamaras) cardCpdCamaras.style.display = 'none';
+    if (cardCpdAccesos) cardCpdAccesos.style.display = 'none';
     if (cardPed) cardPed.style.display = 'flex';
     if (btnNuevo) btnNuevo.style.display = 'flex';
     if (cardDocs) cardDocs.style.display = 'flex';
@@ -6336,8 +6359,10 @@ function setupHomeModules() {
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
   // Racks/Cableado: solo telecomunicaciones
   if (cardTelecomRacks) cardTelecomRacks.style.display = (dept === 'telecom') ? 'flex' : 'none';
-  // Sondas CPD: solo departamento eléctrico
-  if (cardCpdSondas) cardCpdSondas.style.display = (dept === 'electrico') ? 'flex' : 'none';
+  // Sondas Salas / Cámaras / Control de acceso: solo departamento Control
+  if (cardCpdSondas) cardCpdSondas.style.display = (dept === 'control') ? 'flex' : 'none';
+  if (cardCpdCamaras) cardCpdCamaras.style.display = (dept === 'control') ? 'flex' : 'none';
+  if (cardCpdAccesos) cardCpdAccesos.style.display = (dept === 'control') ? 'flex' : 'none';
   if (cardP) cardP.style.display = esOficinaTecnica ? 'none' : 'flex';
   if (cardC) cardC.style.display = esOficinaTecnica ? 'none' : 'flex';
   // Pedidos: visible para todos excepto seguridad
@@ -6717,7 +6742,9 @@ window.guardarModulosConfig = guardarModulosConfig;
 const _HOME_TRADE_MODS = [
   { card: 'cardBobinas',          label: '⚡ Bobinas',           soloElectrico: true },
   { card: 'cardTelecomRacks',     label: '🗄️ Racks / Cableado', soloTelecom: true },
-  { card: 'cardCpdSondas',        label: '🌡️ Sondas CPD',       soloElectrico: true },
+  { card: 'cardCpdSondas',        label: '🌡️ Sondas Salas',     soloControl: true },
+  { card: 'cardCpdCamaras',       label: '📷 Cámaras de seguridad', soloControl: true },
+  { card: 'cardCpdAccesos',       label: '🔐 Control de acceso', soloControl: true },
   { card: 'cardPemp',             label: '🛠 PEMP' },
   { card: 'cardCarretillas',      label: '🚜 Carretillas' },
   { card: 'cardPedidos',          label: '📥 Pedidos' },
@@ -6752,7 +6779,7 @@ function _modsParaDept(dept) {
   if (tpl === 'personal')  return _PER_MODS;
   // trade
   return _HOME_TRADE_MODS
-    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloTelecom || dept === 'telecom'))
+    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloTelecom || dept === 'telecom') && (!m.soloControl || dept === 'control'))
     .map(m => ({ key: `home_${dept}_${m.card}`, label: m.label, _card: m.card }));
 }
 
@@ -15560,12 +15587,29 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function _cpdTok() { return encodeURIComponent(getSession()?.token || ''); }
   function cpdImagenUrl(planoId) { return `${getAPI()}/cpd/planos/${planoId}/imagen?token=${_cpdTok()}`; }
 
+  // Módulo activo del editor de plano compartido — determina qué catálogo de
+  // tipos/iconos se ofrece, el título de pantalla y qué planos se listan.
+  // "sondas" (Sondas Salas) | "camaras" (Cámaras de seguridad) | "control_acceso".
+  window._cpdModuloActivo = 'sondas';
+  const CPD_MODULO_INFO = {
+    sondas:          { icono: '🌡️', label: 'Sondas Salas' },
+    camaras:         { icono: '📷', label: 'Cámaras de seguridad' },
+    control_acceso:  { icono: '🔐', label: 'Control de acceso' },
+  };
+  function cpdAbrirModulo(modulo) {
+    window._cpdModuloActivo = modulo;
+    navTo('cpdSondas');
+  }
+
   async function cargarCpdPlanos() {
     const c = document.getElementById('cpdPlanoList');
     if (!c) return;
+    const info = CPD_MODULO_INFO[window._cpdModuloActivo] || CPD_MODULO_INFO.sondas;
+    const tit = document.getElementById('cpdSondasTitulo');
+    if (tit) tit.textContent = `${info.icono} ${info.label}`;
     c.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Cargando…</div>';
     try {
-      const res = await apiCall('/cpd/planos');
+      const res = await apiCall(`/cpd/planos?modulo=${encodeURIComponent(window._cpdModuloActivo)}`);
       if (!res.ok) { c.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Error al cargar</div>'; return; }
       const data = await res.json().catch(() => ({}));
       window._cpdPlanosCache = data.planos || [];
@@ -15583,20 +15627,26 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     } catch { c.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Error de red</div>'; }
   }
 
-  // Plantillas: fotos de ejemplo de salas reales (busbar/datahall), servidas como
-  // asset estático de la propia app — se puede partir de ellas en vez de subir foto.
-  const CPD_PLANTILLAS = {
-    dh304: { url: 'img/cpd-plantillas/dh304.svg', nombre: 'plantilla-dh304.svg' },
-    dh302: { url: 'img/cpd-plantillas/dh302.svg', nombre: 'plantilla-dh302.svg' },
+  // Plantillas "de fábrica" (solo módulo sondas) — asset estático de la propia app.
+  const CPD_PLANTILLAS_FABRICA = {
+    dh304: { url: 'img/cpd-plantillas/dh304.svg', nombre: 'plantilla-dh304.svg', label: 'Modelo Liquid Cooling 1' },
+    dh302: { url: 'img/cpd-plantillas/dh302.svg', nombre: 'plantilla-dh302.svg', label: 'Modelo Liquid Cooling 2' },
   };
-  window._cpdPlantillaSeleccionada = null;
+  window._cpdPlantillaSeleccionada = null; // { origen:'fabrica'|'custom', key|id, url|imagenUrl, nombre }
+  window._cpdPlantillasCustomCache = [];
 
-  // Catálogo de tipos de elemento colocables en el plano — hoy solo sondas
-  // ambientales, mañana cámaras/control de acceso: añadir aquí, sin tocar el
-  // editor (arrastre, ficha, etc. son genéricos).
+  // Catálogo de tipos de elemento colocables en el plano, agrupado por módulo —
+  // añadir aquí un tipo nuevo (o un módulo nuevo) no requiere tocar el editor
+  // (arrastre, ficha, etc. son genéricos).
   const CPD_TIPOS_ELEMENTO = [
-    { categoria: 'sonda_ambiental', tipo: 'temp_hum',            icono: '🌡️', label: 'Temp/Hum' },
-    { categoria: 'sonda_ambiental', tipo: 'presion_diferencial', icono: '📉', label: 'Presión Dif.' },
+    { modulo: 'sondas',         categoria: 'sonda_ambiental', tipo: 'temp_hum',            icono: '🌡️', label: 'Temp/Hum' },
+    { modulo: 'sondas',         categoria: 'sonda_ambiental', tipo: 'presion_diferencial', icono: '📉', label: 'Presión Dif.' },
+    { modulo: 'camaras',        categoria: 'camara',          tipo: 'fija',                icono: '📷', label: 'Cámara fija' },
+    { modulo: 'camaras',        categoria: 'camara',          tipo: 'ptz',                 icono: '🎥', label: 'Cámara PTZ' },
+    { modulo: 'camaras',        categoria: 'camara',          tipo: 'domo',                icono: '🎦', label: 'Cámara domo' },
+    { modulo: 'control_acceso', categoria: 'control_acceso',  tipo: 'lector_tarjeta',       icono: '💳', label: 'Lector tarjeta' },
+    { modulo: 'control_acceso', categoria: 'control_acceso',  tipo: 'puerta',               icono: '🚪', label: 'Puerta motorizada' },
+    { modulo: 'control_acceso', categoria: 'control_acceso',  tipo: 'biometrico',           icono: '🖐️', label: 'Lector biométrico' },
   ];
   function cpdTipoInfo(tipo) {
     return CPD_TIPOS_ELEMENTO.find(t => t.tipo === tipo) || CPD_TIPOS_ELEMENTO[0];
@@ -15607,7 +15657,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const cont = document.getElementById('cpdToolbar');
     if (!cont) return;
     const activa = window._cpdHerramientaActiva;
-    cont.innerHTML = CPD_TIPOS_ELEMENTO.map(t => `
+    const tipos = CPD_TIPOS_ELEMENTO.filter(t => t.modulo === window._cpdModuloActivo);
+    cont.innerHTML = tipos.map(t => `
       <button onclick="cpdArmarHerramienta('${t.tipo}')" data-tipo="${t.tipo}"
         style="flex-shrink:0;display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
           background:${activa?.tipo === t.tipo ? 'var(--accent)' : 'var(--surface2)'};
@@ -15643,20 +15694,96 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     return sonda.nombre || '';
   }
 
-  function cpdSeleccionarPlantilla(key) {
-    window._cpdPlantillaSeleccionada = key;
-    if (key) document.getElementById('cpdNuevoPlanoFile').value = '';
+  function cpdPlantillaImagenUrl(id) {
+    return `${getAPI()}/cpd/plantillas/${id}/imagen?token=${encodeURIComponent(getSession()?.token || '')}`;
+  }
+
+  function cpdSeleccionarPlantilla(origen, key) {
+    if (!origen) { window._cpdPlantillaSeleccionada = null; }
+    else if (origen === 'fabrica') {
+      const p = CPD_PLANTILLAS_FABRICA[key];
+      window._cpdPlantillaSeleccionada = { origen, key, url: p.url, nombre: p.nombre };
+    } else {
+      const p = window._cpdPlantillasCustomCache.find(x => String(x.id) === String(key));
+      if (p) window._cpdPlantillaSeleccionada = { origen, key, url: cpdPlantillaImagenUrl(p.id), nombre: `plantilla-${p.id}.jpg` };
+    }
+    if (window._cpdPlantillaSeleccionada) document.getElementById('cpdNuevoPlanoFile').value = '';
     document.querySelectorAll('#cpdNuevoPlanoPlantillas .cpd-plantilla-opt').forEach(el => {
-      el.style.borderColor = (el.dataset.plantilla === key) ? 'var(--accent)' : 'var(--border)';
+      const activa = window._cpdPlantillaSeleccionada && el.dataset.origen === window._cpdPlantillaSeleccionada.origen && el.dataset.key === String(window._cpdPlantillaSeleccionada.key);
+      el.style.borderColor = activa ? 'var(--accent)' : 'var(--border)';
     });
+  }
+
+  async function cpdCargarPlantillas() {
+    const cont = document.getElementById('cpdNuevoPlanoPlantillas');
+    if (!cont) return;
+    const modulo = window._cpdModuloActivo;
+    let custom = [];
+    try {
+      const res = await apiCall(`/cpd/plantillas?modulo=${encodeURIComponent(modulo)}`);
+      const data = await res.json().catch(() => ({}));
+      custom = data.plantillas || [];
+    } catch {}
+    window._cpdPlantillasCustomCache = custom;
+    const fabricaHtml = modulo === 'sondas' ? Object.entries(CPD_PLANTILLAS_FABRICA).map(([key, p]) => `
+      <div class="cpd-plantilla-opt" data-origen="fabrica" data-key="${key}" onclick="cpdSeleccionarPlantilla('fabrica','${key}')" style="border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
+        <img src="${p.url}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+        <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">${esc(p.label)}</div>
+      </div>`).join('') : '';
+    const customHtml = custom.map(p => `
+      <div class="cpd-plantilla-opt" data-origen="custom" data-key="${p.id}" onclick="cpdSeleccionarPlantilla('custom','${p.id}')" style="border-radius:8px;overflow:hidden;border:2px solid var(--border);cursor:pointer">
+        <img src="${cpdPlantillaImagenUrl(p.id)}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+        <div style="font-size:10px;text-align:center;padding:3px;color:var(--muted)">${esc(p.nombre)}</div>
+      </div>`).join('');
+    const addHtml = `
+      <div onclick="cpdAbrirNuevaPlantilla()" style="border-radius:8px;border:2px dashed var(--border);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:4/3;color:var(--muted);font-size:11px;font-weight:700;gap:4px">
+        <span style="font-size:20px">+</span><span>Nueva plantilla</span>
+      </div>`;
+    cont.innerHTML = fabricaHtml + customHtml + addHtml;
+  }
+
+  function cpdAbrirNuevaPlantilla() {
+    document.getElementById('cpdNuevaPlantillaNombre').value = '';
+    document.getElementById('cpdNuevaPlantillaFile').value = '';
+    document.getElementById('cpdNuevaPlantillaForm').style.display = 'flex';
+  }
+  function cpdCancelarNuevaPlantilla() {
+    document.getElementById('cpdNuevaPlantillaForm').style.display = 'none';
+  }
+
+  async function cpdGuardarNuevaPlantilla() {
+    const nombre = document.getElementById('cpdNuevaPlantillaNombre').value.trim();
+    const file = document.getElementById('cpdNuevaPlantillaFile').files[0];
+    if (!nombre) { toast('Introduce un nombre para la plantilla', 'error'); return; }
+    if (!file)   { toast('Selecciona una imagen', 'error'); return; }
+    const btn = document.getElementById('btnCpdGuardarPlantilla');
+    if (btn) btn.disabled = true;
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('nombre', nombre);
+      fd.append('modulo', window._cpdModuloActivo);
+      const res = await apiCallRaw('/cpd/plantillas', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Error al guardar la plantilla');
+      cpdCancelarNuevaPlantilla();
+      await cpdCargarPlantillas();
+      toast('✅ Plantilla guardada');
+    } catch (e) {
+      toast('❌ ' + e.message, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   function abrirModalCpdNuevoPlano() {
     document.getElementById('cpdNuevoPlanoTitulo').value = '';
     document.getElementById('cpdNuevoPlanoFile').value = '';
     document.getElementById('cpdNuevoPlanoStatus').style.display = 'none';
+    cpdCancelarNuevaPlantilla();
     cpdSeleccionarPlantilla(null);
     document.getElementById('modalCpdNuevoPlano').style.display = 'flex';
+    cpdCargarPlantillas();
   }
   function cerrarModalCpdNuevoPlano() {
     document.getElementById('modalCpdNuevoPlano').style.display = 'none';
@@ -15665,22 +15792,22 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   async function ejecutarCpdNuevoPlano() {
     const titulo = document.getElementById('cpdNuevoPlanoTitulo').value.trim();
     let file = document.getElementById('cpdNuevoPlanoFile').files[0];
-    const plantillaKey = window._cpdPlantillaSeleccionada;
+    const plantilla = window._cpdPlantillaSeleccionada;
     if (!titulo) { toast('Introduce un título', 'error'); return; }
-    if (!file && !plantillaKey) { toast('Selecciona la foto del plano o una plantilla', 'error'); return; }
+    if (!file && !plantilla) { toast('Selecciona la foto del plano o una plantilla', 'error'); return; }
     const s = getSession();
     document.getElementById('cpdNuevoPlanoStatus').style.display = 'block';
     const btn = document.getElementById('btnCpdNuevoPlano');
     if (btn) btn.disabled = true;
     try {
-      if (!file && plantillaKey) {
-        const plantilla = CPD_PLANTILLAS[plantillaKey];
+      if (!file && plantilla) {
         const blob = await fetch(plantilla.url).then(r => r.blob());
         file = new File([blob], plantilla.nombre, { type: blob.type || 'image/jpeg' });
       }
       const fd = new FormData();
       fd.append('file', file);
       fd.append('titulo', titulo);
+      fd.append('modulo', window._cpdModuloActivo);
       if (s?.obra_id) fd.append('obra_id', s.obra_id);
       const res = await apiCallRaw('/cpd/planos', { method: 'POST', body: fd });
       const data = await res.json().catch(() => ({}));
@@ -15707,6 +15834,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (!res.ok) { if (wrap) wrap.innerHTML = '<div class="empty-state">No se pudo cargar</div>'; return; }
       const data = await res.json().catch(() => ({}));
       window._cpdPlanoActual = { plano: data.plano, sondas: data.sondas || [] };
+      if (data.plano.modulo) window._cpdModuloActivo = data.plano.modulo;
       if (titEl) titEl.textContent = data.plano.titulo || 'Plano';
       window._cpdHerramientaActiva = null;
       cpdRenderEditor();
@@ -15970,7 +16098,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
 
   window.cargarCpdPlanos          = cargarCpdPlanos;
+  window.cpdAbrirModulo           = cpdAbrirModulo;
   window.cpdSeleccionarPlantilla  = cpdSeleccionarPlantilla;
+  window.cpdAbrirNuevaPlantilla   = cpdAbrirNuevaPlantilla;
+  window.cpdCancelarNuevaPlantilla = cpdCancelarNuevaPlantilla;
+  window.cpdGuardarNuevaPlantilla = cpdGuardarNuevaPlantilla;
   window.abrirModalCpdNuevoPlano  = abrirModalCpdNuevoPlano;
   window.cerrarModalCpdNuevoPlano = cerrarModalCpdNuevoPlano;
   window.ejecutarCpdNuevoPlano    = ejecutarCpdNuevoPlano;

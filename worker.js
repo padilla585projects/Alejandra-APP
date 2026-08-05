@@ -6762,6 +6762,10 @@ export default {
       if (/^\/cpd\/sondas\/\d+$/.test(path)                 && method === 'DELETE') return await eliminarCpdSonda(request, env, path);
       if (/^\/cpd\/sondas\/\d+\/lecturas$/.test(path)       && method === 'POST')   return await crearCpdLectura(request, env, path);
       if (/^\/cpd\/sondas\/\d+\/lecturas$/.test(path)       && method === 'GET')    return await listarCpdLecturas(request, env, path);
+      if (path === '/cpd/plantillas'                        && method === 'GET')    return await listarCpdPlantillas(request, env);
+      if (path === '/cpd/plantillas'                        && method === 'POST')   return await crearCpdPlantilla(request, env);
+      if (/^\/cpd\/plantillas\/\d+\/imagen$/.test(path)     && method === 'GET')    return await getCpdPlantillaImagen(request, env, path);
+      if (/^\/cpd\/plantillas\/\d+$/.test(path)             && method === 'DELETE') return await eliminarCpdPlantilla(request, env, path);
 
       return err('Ruta no encontrada', 404);
     } catch (e) {
@@ -7159,7 +7163,7 @@ async function actualizarSesionDepartamento(request, env) {
   // SEC-14: lista completa de departamentos válidos (debe reflejar _DEPTS_CATALOG en index.html).
   // Antes solo tenía 4 de 11 — cambiar a "oficina" (u otros 6) fallaba en silencio aquí y
   // dejaba el departamento de la sesión desactualizado en D1.
-  const validos = ['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil', 'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'ingenieria'];
+  const validos = ['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil', 'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'ingenieria', 'control'];
   if (!departamento || !validos.includes(departamento)) return err('Departamento inválido', 400);
   const res = await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
   if (!res?.meta?.changes) return err('Sesión no encontrada', 404);
@@ -27045,9 +27049,24 @@ async function _ensureCpdTables(env) {
       titulo         TEXT    NOT NULL,
       r2_key         TEXT    NOT NULL,
       zonas_json     TEXT,
+      modulo         TEXT    NOT NULL DEFAULT 'sondas',
       creado_por     TEXT,
       creado_en      TEXT DEFAULT (datetime('now')),
       actualizado_en TEXT DEFAULT (datetime('now'))
+    )
+  `).run();
+  // Departamento "Control" (2026-08-05): cpd_planos ya existia sin "modulo" — anadida
+  // via ALTER para las filas creadas antes de este cambio, todas quedan como 'sondas'.
+  await env.DB.prepare(`ALTER TABLE cpd_planos ADD COLUMN modulo TEXT NOT NULL DEFAULT 'sondas'`).run().catch(() => {});
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS cpd_plantillas (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id     INTEGER NOT NULL,
+      modulo         TEXT    NOT NULL DEFAULT 'sondas',
+      nombre         TEXT    NOT NULL,
+      r2_key         TEXT    NOT NULL,
+      creado_por     TEXT,
+      creado_en      TEXT DEFAULT (datetime('now'))
     )
   `).run();
   // plano_elementos: cualquier cosa que se coloca sobre un cpd_planos (sondas hoy,
@@ -27085,6 +27104,7 @@ async function _ensureCpdTables(env) {
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_planos_obra ON cpd_planos(obra_id)').run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_plano_elementos_plano ON plano_elementos(plano_id)').run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_lecturas_sonda_fecha ON cpd_lecturas(sonda_id, fecha)').run();
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_plantillas_modulo ON cpd_plantillas(empresa_id, modulo)').run();
 }
 
 async function listarCpdPlanos(request, env) {
@@ -27093,9 +27113,11 @@ async function listarCpdPlanos(request, env) {
   await _ensureCpdTables(env);
   const url = new URL(request.url);
   const obra_id = parseInt(url.searchParams.get('obra_id') || 0);
-  let q = 'SELECT id, obra_id, titulo, zonas_json, creado_en FROM cpd_planos WHERE empresa_id=?';
+  const modulo = (url.searchParams.get('modulo') || '').trim();
+  let q = 'SELECT id, obra_id, titulo, zonas_json, modulo, creado_en FROM cpd_planos WHERE empresa_id=?';
   const params = [empresa_id];
   if (obra_id) { q += ' AND obra_id=?'; params.push(obra_id); }
+  if (modulo)  { q += ' AND modulo=?'; params.push(modulo); }
   q += ' ORDER BY creado_en DESC LIMIT 100';
   const rows = await env.DB.prepare(q).bind(...params).all();
   return json({ ok: true, planos: rows.results || [] });
@@ -27118,14 +27140,16 @@ async function crearCpdPlano(request, env) {
   if (!obra_id) return err('obra_id es obligatorio', 400);
   if (!titulo)  return err('titulo es obligatorio', 400);
   const zonas_json = (form.get('zonas_json') || '').trim() || null;
+  const modulo = (form.get('modulo') || 'sondas').trim();
+  if (!CPD_MODULOS_VALIDOS.has(modulo)) return err('modulo no valido', 400);
   const ts = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const r2Key = `e${empresa_id}/cpd/${obra_id}/${ts}_${safeName}`;
   await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
   const r = await env.DB.prepare(`
-    INSERT INTO cpd_planos (empresa_id, obra_id, titulo, r2_key, zonas_json, creado_por)
-    VALUES (?,?,?,?,?,?)
-  `).bind(empresa_id, obra_id, titulo, r2Key, zonas_json, userNombre || rol).run();
+    INSERT INTO cpd_planos (empresa_id, obra_id, titulo, r2_key, zonas_json, modulo, creado_por)
+    VALUES (?,?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id, titulo, r2Key, zonas_json, modulo, userNombre || rol).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -27202,8 +27226,17 @@ async function eliminarCpdPlano(request, env, path) {
 }
 
 // categoria:tipo permitidos hoy — ampliar aqui cuando se anadan camaras/control de acceso.
-const CPD_TIPOS_PERMITIDOS = new Set(['sonda_ambiental:temp_hum', 'sonda_ambiental:presion_diferencial']);
-const CPD_TIPO_LABEL = { temp_hum: 'Temp/Hum', presion_diferencial: 'Presión Dif.' };
+const CPD_MODULOS_VALIDOS = new Set(['sondas', 'camaras', 'control_acceso']);
+const CPD_TIPOS_PERMITIDOS = new Set([
+  'sonda_ambiental:temp_hum', 'sonda_ambiental:presion_diferencial',
+  'camara:fija', 'camara:ptz', 'camara:domo',
+  'control_acceso:lector_tarjeta', 'control_acceso:puerta', 'control_acceso:biometrico',
+]);
+const CPD_TIPO_LABEL = {
+  temp_hum: 'Temp/Hum', presion_diferencial: 'Presión Dif.',
+  fija: 'Cámara fija', ptz: 'Cámara PTZ', domo: 'Cámara domo',
+  lector_tarjeta: 'Lector tarjeta', puerta: 'Puerta motorizada', biometrico: 'Lector biométrico',
+};
 
 async function crearCpdSonda(request, env) {
   const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
@@ -27310,4 +27343,75 @@ async function listarCpdLecturas(request, env, path) {
   q += ' ORDER BY fecha ASC LIMIT 500';
   const rows = await env.DB.prepare(q).bind(...params).all();
   return json({ ok: true, lecturas: rows.results || [] });
+}
+
+// ── Plantillas de plano subidas por el usuario (por modulo) ──────────
+// Gestion propia sin tocar codigo: se suben desde "Nuevo plano" -> "+ Nueva
+// plantilla" y quedan disponibles para toda la empresa. Se mezclan en el
+// frontend con las plantillas "de fabrica" (SVG estaticos, solo modulo sondas).
+async function listarCpdPlantillas(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  await _ensureCpdTables(env);
+  const url = new URL(request.url);
+  const modulo = (url.searchParams.get('modulo') || '').trim();
+  let q = 'SELECT id, modulo, nombre, creado_en FROM cpd_plantillas WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (modulo) { q += ' AND modulo=?'; params.push(modulo); }
+  q += ' ORDER BY creado_en DESC LIMIT 100';
+  const rows = await env.DB.prepare(q).bind(...params).all();
+  return json({ ok: true, plantillas: rows.results || [] });
+}
+
+async function crearCpdPlantilla(request, env) {
+  const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  await _ensureCpdTables(env);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta la imagen de la plantilla', 400);
+  if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/svg+xml'];
+  if (!allowed.includes(mime)) return err('Solo se permiten imagenes', 400);
+  const nombre = (form.get('nombre') || '').trim();
+  if (!nombre) return err('nombre es obligatorio', 400);
+  const modulo = (form.get('modulo') || 'sondas').trim();
+  if (!CPD_MODULOS_VALIDOS.has(modulo)) return err('modulo no valido', 400);
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = `e${empresa_id}/cpd/plantillas/${modulo}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
+  const r = await env.DB.prepare(`
+    INSERT INTO cpd_plantillas (empresa_id, modulo, nombre, r2_key, creado_por)
+    VALUES (?,?,?,?,?)
+  `).bind(empresa_id, modulo, nombre, r2Key, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function getCpdPlantillaImagen(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[3]);
+  if (!id) return err('ID invalido', 400);
+  const meta = await env.DB.prepare('SELECT r2_key FROM cpd_plantillas WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!meta) return err('Plantilla no encontrada', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Imagen no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
+async function eliminarCpdPlantilla(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[3]);
+  if (!id) return err('ID invalido', 400);
+  const meta = await env.DB.prepare('SELECT r2_key FROM cpd_plantillas WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!meta) return err('Plantilla no encontrada', 404);
+  await env.DB.prepare('DELETE FROM cpd_plantillas WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  await env.FILES.delete(meta.r2_key).catch(() => {});
+  return json({ ok: true });
 }
