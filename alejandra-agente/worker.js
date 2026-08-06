@@ -4106,6 +4106,7 @@ export default {
           try {
             const authCheck = await getAuth(req, env);
             if (authCheck?.usuario_id) usuarioAutenticado = String(authCheck.usuario_id);
+            var empresaAutenticada = authCheck?.empresa_id || null;
           } catch (_) {}
           // Normalizamos ya aquí (mismo criterio que normalizarUsuarioId en el resto
           // del código) para que el usuario_id guardado en customMetadata sea el id
@@ -4153,7 +4154,7 @@ export default {
           });
 
           // Auto-aprendizaje: analizar archivos subidos en background
-          ctx.waitUntil(autoLearnUpload(env, key, mimeType, file.name, usuario_id, arrayBuffer));
+          ctx.waitUntil(autoLearnUpload(env, key, mimeType, file.name, usuario_id, empresaAutenticada, arrayBuffer));
 
           return json({
             ok: true,
@@ -11657,7 +11658,7 @@ async function guardarMensajeChat(env, usuario_id, empresa_id, mensaje, respuest
   } catch (err) { console.error('guardarChat:', err.message); }
 }
 
-async function autoLearnUpload(env, key, mimeType, filename, usuario_id, arrayBuffer) {
+async function autoLearnUpload(env, key, mimeType, filename, usuario_id, empresa_id, arrayBuffer) {
   try {
     let resumen = null;
 
@@ -11681,9 +11682,9 @@ async function autoLearnUpload(env, key, mimeType, filename, usuario_id, arrayBu
 
     if (resumen) {
       await env.DB.prepare(
-        `INSERT INTO alejandra_memoria (tipo, canal, titulo, contenido, importancia, created_at)
-         VALUES ('documento', ?, ?, ?, 2, datetime('now'))`
-      ).bind(usuario_id || 'anon', `Archivo: ${filename}`, `[R2: ${key}] ${resumen}`).run();
+        `INSERT INTO alejandra_memoria (tipo, canal, empresa_id, titulo, contenido, importancia, created_at)
+         VALUES ('documento', ?, ?, ?, ?, 2, datetime('now'))`
+      ).bind(usuario_id || 'anon', empresa_id || 'system', `Archivo: ${filename}`, `[R2: ${key}] ${resumen}`).run();
       console.log(`autoLearnUpload: guardado resumen de ${filename}`);
     }
   } catch (err) {
