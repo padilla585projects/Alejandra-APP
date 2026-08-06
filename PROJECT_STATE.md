@@ -7,7 +7,7 @@
 
 La auditoría detectó que el constructor del prompt consultaba memoria, reglas, historial y métricas legacy globales sin `empresa_id` ni `usuario_id`. El fix `SEC-CHAT-CONTEXTO-LEGACY` desactiva esas lecturas de forma fail-closed: el prompt conserva módulos estáticos y las tools visibles, mientras que la memoria gobernada continúa disponible únicamente mediante su tool acotada por sesión. No se modifica ningún dato.
 
-`ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md` fue aceptado por el Director. La rebanada 1 integra el Motor de Decisión solo para tools N0 ofrecidas: genera decisión y traza antes de ejecutar; una tool no ofrecida se rechaza. N1-N3 conservan sus gates existentes.
+`ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md` fue **aceptado por el Director el 2026-08-06**. La rebanada 1 integra el Motor de Decisión solo para tools N0: una tool ofrecida recibe decisión/traza previa y una no ofrecida se rechaza. N1-N3 conservan los gates existentes; no hay despliegue realizado.
 
 ## Sondas CPD — nuevo módulo (2026-08-05, rama `feat/sondas-cpd`)
 

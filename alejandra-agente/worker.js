@@ -49,6 +49,7 @@ import {
   determinarEstadoSalud,
   construirConsultaMemoriaGobernada,
 } from './lib.js';
+import { decidirInvocacionPilotoN0, tieneTrazaSuficiente } from '../nucleo-cognitivo/src/motor-decision.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -1352,6 +1353,33 @@ async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, r
   } catch (e) {
     console.error('[TRAZA]', tipo, '->', (e && e.message) || String(e));
   }
+}
+
+// ADR-0020, rebanada 1: el paquete cognitivo gobierna las tools N0 antes de
+// ejecutarlas. N1-N3 conservan el flujo y gates existentes hasta contar con sus
+// verificadores específicos. Un nombre no ofrecido se rechaza siempre.
+async function evaluarInvocacionCognitivaN0(env, toolName, tools, usuarioId, empresaId, authOk, esDevVerificado, modo) {
+  const tool = (tools || []).find((candidata) => candidata?.name === toolName);
+  const resultado = decidirInvocacionPilotoN0({
+    tool,
+    toolOfrecida: !!tool,
+    authOk,
+    esDevVerificado,
+    esCron: esInvocacionCron(usuarioId, empresaId),
+    modo,
+  });
+
+  if (resultado.aplicaPiloto && tieneTrazaSuficiente(resultado.decision)) {
+    await registrarTraza(env, {
+      tipo: 'decision',
+      empresaId,
+      usuarioId,
+      resumen: `Decisión cognitiva ${resultado.decision.decision}: ${toolName}`,
+      detalle: resultado.decision,
+    });
+  }
+
+  return resultado;
 }
 
 // consultarMemoria — ARC-008 §8 (trazabilidad de decisiones que consultan memoria).
@@ -4886,7 +4914,10 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
       for (const tb of toolBlocks) {
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
-        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados);
+        const control = await evaluarInvocacionCognitivaN0(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
+        const resultado = control.permitida
+          ? await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados)
+          : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // ver_archivo con imágenes devuelve JSON con content blocks para visión
         const content = parseToolResultContent(resultado);
@@ -5058,7 +5089,10 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         const t0 = Date.now();
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
-        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados);
+        const control = await evaluarInvocacionCognitivaN0(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
+        const resultado = control.permitida
+          ? await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
+          : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // Para SSE preview, extraer solo texto (no base64 de imágenes)
         const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
@@ -5142,7 +5176,10 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           herramientasUsadas.push({ nombre: tb.name, input: tb.input });
           const t0 = Date.now();
           await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
-          const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados);
+          const control = await evaluarInvocacionCognitivaN0(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
+          const resultado = control.permitida
+            ? await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
+            : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
           const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
             ? '(imagen analizada)'
             : String(resultado).substring(0, 200);

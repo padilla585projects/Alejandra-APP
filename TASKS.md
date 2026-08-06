@@ -29,9 +29,11 @@ Estado: **Las 14 verticales de ARC-011 fase 3 completas** (ciclo de 5 pasos cerr
 
 ### ADR-0020 — Integración gradual del Motor de Decisión
 
-- Estado: **propuesto; bloqueado hasta aceptación explícita del Director**
-- Alcance propuesto: adaptador sin I/O dentro de `nucleo-cognitivo/`, contexto seguro por tenant, traza previa y piloto restringido a respuesta directa/tools N0.
-- Siguiente acción exacta: el Director acepta, ajusta o rechaza `docs/decisions/ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md`; no integrar el núcleo mientras siga propuesto.
+- Estado: **en revisión — rebanada 1 implementada**
+- Decisión: aceptado por el Director el 2026-08-06.
+- Alcance implementado: adaptador sin I/O dentro de `nucleo-cognitivo/`; toda invocación N0 ofrecida genera una decisión estructurada y una traza antes de ejecutar; una tool no ofrecida se rechaza. N1-N3 conservan gates existentes.
+- Pruebas: `node --test nucleo-cognitivo/test/*.test.js` (39/39); `npm --prefix alejandra-agente test` (139/139); importación del módulo del Worker correcta en Node.
+- Siguiente acción exacta: revisar el diff, resolver la validación de bundle local si está disponible e integrar; no desplegar sin verificación posterior registrada.
 
 ## Plantilla
 

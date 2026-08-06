@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0020
 - Fecha: 2026-08-06
-- Estado: **Propuesto**
-- Decisores: Director del Proyecto — PENDIENTE de aceptación explícita
+- Estado: **Aceptado** (2026-08-06)
+- Decisores: Director del Proyecto
 
 ## Contexto
 
@@ -22,7 +22,7 @@ No se modifica ni borra dato alguno.
 fijan los controles necesarios para una activación gradual. Falta decidir el
 contrato de adaptación y la primera rebanada que recibe tráfico.
 
-## Decisión propuesta
+## Decisión
 
 Activar el núcleo solo mediante un adaptador en `alejandra-agente`, sin I/O
 dentro de `nucleo-cognitivo/` y en cuatro rebanadas revisables:
@@ -51,7 +51,7 @@ mediante el Motor de Decisión.
 |---|---|
 | Conectar todo el paquete al Worker de una vez | Descartada: mezcla cambios de contexto, memoria, planificación, trazas y ejecución sin un rollback evaluable. |
 | Mantener el Worker legacy sin cambios | Descartada: conserva decisiones dispersas y no proporciona el comportamiento esperado. |
-| Adaptador incremental con piloto N0 | Propuesta: conserva gates probados, permite medir trazas y limita el radio de impacto. |
+| Adaptador incremental con piloto N0 | Elegida: conserva gates probados, permite medir trazas y limita el radio de impacto. |
 
 ## Consecuencias
 
@@ -59,8 +59,11 @@ mediante el Motor de Decisión.
   inyección automática de datos globales no gobernados.
 - Cada rebanada exigirá pruebas unitarias y de integración negativas de tenant,
   rol, tool sin metadato, riesgo y ausencia de traza.
-- La activación posterior requerirá actualizar `TASKS.md`, `PROJECT_STATE.md`,
-  `HANDOFF.md`, el backlog y esta decisión una vez aceptada.
+- La rebanada 1 queda autorizada: invocaciones N0 ofrecidas por el catálogo pasan
+  por el Motor de Decisión y registran una traza estructurada antes de ejecutarse;
+  una tool no ofrecida se rechaza. N1-N3 conservan sus gates actuales.
+- Las rebanadas posteriores requerirán actualizar `TASKS.md`, `PROJECT_STATE.md`,
+  `HANDOFF.md`, el backlog y esta decisión antes de ampliar alcance.
 - El despliegue no está autorizado por este ADR; exige el runbook y verificación
   posterior aplicables.
 

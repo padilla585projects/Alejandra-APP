@@ -41,6 +41,82 @@ export function tieneTrazaSuficiente(decision) {
 }
 
 /**
+ * Primera rebanada ejecutable del Motor de Decisión (ADR-0020).
+ * Decide únicamente sobre una invocación de tool ya seleccionada por el modelo.
+ * No clasifica riesgo: exige el nivel declarado por el catálogo y solo gobierna
+ * N0 en este piloto. Las tools N1-N3 continúan por sus gates legacy hasta que
+ * tengan verificadores propios en una rebanada posterior.
+ *
+ * @param {{tool?: object, toolOfrecida: boolean, authOk: boolean, esDevVerificado: boolean, esCron: boolean, modo: string}} params
+ * @returns {{aplicaPiloto: boolean, permitida: boolean, decision: object}}
+ */
+export function decidirInvocacionPilotoN0({
+  tool,
+  toolOfrecida,
+  authOk = false,
+  esDevVerificado = false,
+  esCron = false,
+  modo = 'conversacion',
+} = {}) {
+  const permisosEfectivos = Object.freeze({
+    sesion_autenticada: authOk === true,
+    desarrollador_verificado: esDevVerificado === true,
+    cron: esCron === true,
+  });
+  const nombreTool = typeof tool?.name === 'string' ? tool.name : 'desconocida';
+
+  if (toolOfrecida !== true) {
+    return {
+      aplicaPiloto: true,
+      permitida: false,
+      decision: {
+        decision: 'rechazar',
+        motivos: ['La tool no figura en el catálogo ofrecido a esta sesión.'],
+        evidencia: { tool: nombreTool, ofrecida: false },
+        confianza: 1,
+        riesgo: 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'tool_no_ofrecida',
+      },
+    };
+  }
+
+  // El piloto no altera todavía N1-N3; el Worker conserva sus gates existentes.
+  if (tool?.nivel_riesgo !== 'N0') {
+    return {
+      aplicaPiloto: false,
+      permitida: true,
+      decision: {
+        decision: 'posponer',
+        motivos: ['La tool queda fuera del piloto N0.'],
+        evidencia: { tool: nombreTool, nivel_riesgo: tool?.nivel_riesgo ?? null },
+        confianza: 1,
+        riesgo: tool?.nivel_riesgo ?? 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'fuera_piloto_n0',
+      },
+    };
+  }
+
+  return {
+    aplicaPiloto: true,
+    permitida: true,
+    decision: {
+      decision: 'invocar_tool',
+      motivos: ['Tool N0 declarada y ofrecida por el catálogo efectivo.'],
+      evidencia: { tool: nombreTool, nivel_riesgo: 'N0', ofrecida: true },
+      confianza: 1,
+      riesgo: 'N0',
+      permisos_efectivos: permisosEfectivos,
+      modo,
+      criterio_salida: 'tool_n0_ofrecida',
+    },
+  };
+}
+
+/**
  * Contrato de `registrarTraza` — ADR-0014 §5 ("El helper que necesita
  * `motor-decision.js`, sin romper el aislamiento actual"). No es un módulo
  * aparte: es una dependencia inyectada en `decidir()`, nunca un cliente de D1
