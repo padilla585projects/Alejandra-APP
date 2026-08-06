@@ -1,6 +1,6 @@
 # Backlog arquitectónico — Alejandra 2.0
 
-- Actualizado: 2026-08-04
+- Actualizado: 2026-08-06
 - Foundation: v0.1 congelada como línea base, sin bloqueos documentales activos (COH-001 y COH-002 cerrados)
 
 ## Cómo usarlo

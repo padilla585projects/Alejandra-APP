@@ -34,7 +34,7 @@ Desplegado (Worker + Pages) desde la propia rama, no desde `main`, para poder pr
 de fusionar — cada despliegue pasó por la aprobación del entorno `production` del Director,
 igual que un despliegue normal. Verificado en producción en Chrome real, en los dos
 frontales: crear plano con plantilla, colocar/editar elementos, doble tap/clic, selector de
-etiqueta. **Pendiente: abrir revisión de la PR y fusionar a `main`; decidir la ubicación
+etiqueta. **Fusionado a `main` (PR #97, 2026-08-05). Pendiente decidir la ubicación
 definitiva del módulo (hoy vive en Eléctrico solo de forma temporal).**
 
 ## Migraciones D1 aplicadas (2026-08-02) — checklists y memoria gobernada
