@@ -1357,6 +1357,27 @@ async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, t
   }
 }
 
+// ADR-0021: Registrar consulta a fuente externa en trazas y telemetría
+async function registrarNexoConsulta(env, { fuenteId, empresaId, usuarioId, consulta, resultados_count, latencia_ms, cache_hit }) {
+  try {
+    await registrarTraza(env, {
+      tipo: 'nexo_consulta',
+      empresaId,
+      usuarioId,
+      resumen: `Nexo: ${fuenteId} → ${resultados_count} resultados (${latencia_ms}ms, cache:${cache_hit})`,
+      detalle: { fuenteId, consulta, resultados_count, latencia_ms, cache_hit },
+    });
+    // Telemetría persistente para métricas por fuente/empresa
+    await env.DB.prepare(
+      `INSERT INTO nexo_fuentes_telemetria (fuente_id, empresa_id, usuario_id, consulta, resultados, latencia_ms, cache_hit)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(fuenteId, empresaId||null, usuarioId||null, String(consulta||'').slice(0,200), resultados_count||0, latencia_ms||0, cache_hit ? 1 : 0)
+      .run().catch(e => console.error('[NEXO_TELEM]', e.message));
+  } catch (e) {
+    console.error('[NEXO]', fuenteId, '->', (e && e.message) || String(e));
+  }
+}
+
 // ADR-0020, rebanada 1: el paquete cognitivo gobierna las tools N0 antes de
 // ejecutarlas. N1-N3 conservan el flujo y gates existentes hasta contar con sus
 // verificadores específicos. Un nombre no ofrecido se rechaza siempre.
@@ -2643,6 +2664,7 @@ const TOOL_BUSCAR_PRECIOS = {
   acceso: 'sesion',
   cron: 'permitido',
   nivel_riesgo: 'N0',
+  nexo: { fuenteId: 'precios_distribuidores', tipo: 'scraping', fallback: null, registraTraza: true },
 };
 
 // Pese al nombre ("marcar"), el case 'marcar_plano' (worker.js) es de solo
@@ -2700,6 +2722,7 @@ const TOOL_BUSCAR_NORMATIVA = {
   acceso: 'publico',
   cron: 'permitido',
   nivel_riesgo: 'N0',
+  nexo: { fuenteId: 'normativa_rebt', tipo: 'local_index', fallback: 'buscar_web', registraTraza: true },
 };
 
 // accion='registrar' hace un INSERT de una fila en materiales_obra, acotado
@@ -9269,6 +9292,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
       const fabricante = (input.fabricante || '').trim();
       const cantidad = input.cantidad || 1;
       if (!producto) return 'Falta "producto" para buscar precios.';
+      const t0 = Date.now();
       try {
         // 1. Buscar en caché (válido 7 días)
         const cacheKey = fabricante ? `${producto} ${fabricante}` : producto;
@@ -9278,6 +9302,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (cached) {
           const total_min = cached.precio_min * cantidad;
           const total_max = cached.precio_max * cantidad;
+          const latencia = Date.now() - t0;
+          registrarNexoConsulta(env, { fuenteId: 'precios_distribuidores', empresaId: empresa_id, usuarioId: usuario_id, consulta: cacheKey, resultados_count: 1, latencia_ms: latencia, cache_hit: true }).catch(() => {});
           return JSON.stringify({
             ok: true, cached: true, producto: cached.producto, fabricante: cached.fabricante,
             precio_min: cached.precio_min, precio_max: cached.precio_max, moneda: cached.moneda,
@@ -9306,6 +9332,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         }
         const total_min = precio_min * cantidad;
         const total_max = precio_max * cantidad;
+        const latencia = Date.now() - t0;
+        registrarNexoConsulta(env, { fuenteId: 'precios_distribuidores', empresaId: empresa_id, usuarioId: usuario_id, consulta: query, resultados_count: precios.length, latencia_ms: latencia, cache_hit: false }).catch(() => {});
         return JSON.stringify({
           ok: true, cached: false, producto, fabricante: fabricante || 'N/A',
           precio_min, precio_max, moneda: 'EUR', cantidad, total_min, total_max,
@@ -9516,6 +9544,7 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
       const itc = (input.itc || '').trim();
       const tema = (input.tema || '').trim();
       if (!consulta) return 'Falta "consulta" para buscar normativa.';
+      const t0 = Date.now();
       try {
         let sql = "SELECT norma, seccion, titulo, contenido, palabras_clave FROM normativa_index WHERE 1=1";
         const binds = [];
@@ -9541,8 +9570,11 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         if (binds.length > 0) stmt = stmt.bind(...binds);
         const rows = await stmt.all();
         const resultados = rows.results || [];
+        const latencia = Date.now() - t0;
+        // ADR-0021: traza de consulta Nexo
+        registrarNexoConsulta(env, { fuenteId: 'normativa_rebt', empresaId: empresa_id, usuarioId: usuario_id, consulta, resultados_count: resultados.length, latencia_ms: latencia, cache_hit: false }).catch(() => {});
         if (resultados.length === 0) {
-          return JSON.stringify({ ok: true, resultados: [], mensaje: `No se encontró normativa para "${consulta}". Prueba con buscar_web para consultar online.` });
+          return JSON.stringify({ ok: true, resultados: [], mensaje: `No se encontró normativa para "${consulta}". Prueba con buscar_web para consultar online.`, sugerencia: 'buscar_web' });
         }
         return JSON.stringify({ ok: true, consulta, itc: itc || 'todas', resultados_count: resultados.length, resultados });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
