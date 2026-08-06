@@ -3255,21 +3255,25 @@ export default {
         if (!autorizado) return json({ error: 'No autorizado' }, 403);
         await ensureNewTables(env).catch(() => {});
 
-        // GET /conocimiento — lista entradas activas
+        // GET /conocimiento — lista entradas activas (filtrado por empresa_id si se provee)
         if (path === '/conocimiento' && req.method === 'GET') {
-          const rows = await env.DB.prepare(
-            `SELECT id, tipo, titulo, valor, descripcion, tags, creado_por, creado_at FROM alejandra_conocimiento WHERE activo=1 ORDER BY creado_at DESC`
-          ).all();
+          const urlCon = new URL(req.url);
+          const eidCon = urlCon.searchParams.get('empresa_id');
+          let qCon = `SELECT id, tipo, titulo, valor, descripcion, tags, creado_por, empresa_id, creado_at FROM alejandra_conocimiento WHERE activo=1`;
+          const bindsCon = [];
+          if (eidCon) { qCon += ` AND empresa_id=?`; bindsCon.push(eidCon); }
+          qCon += ` ORDER BY creado_at DESC`;
+          const rows = await env.DB.prepare(qCon).bind(...bindsCon).all();
           return json({ ok: true, entradas: rows.results || [] });
         }
 
         // POST /conocimiento — crear entrada (texto/url)
         if (path === '/conocimiento' && req.method === 'POST') {
-          const { tipo, titulo, valor, descripcion, tags, creado_por } = await req.json().catch(() => ({}));
+          const { tipo, titulo, valor, descripcion, tags, creado_por, empresa_id } = await req.json().catch(() => ({}));
           if (!tipo || !titulo || !valor) return json({ error: 'tipo, titulo y valor requeridos' }, 400);
           const r = await env.DB.prepare(
-            `INSERT INTO alejandra_conocimiento (tipo, titulo, valor, descripcion, tags, creado_por) VALUES (?,?,?,?,?,?)`
-          ).bind(tipo, titulo, valor, descripcion||'', tags||'', creado_por||'admin').run();
+            `INSERT INTO alejandra_conocimiento (tipo, titulo, valor, descripcion, tags, creado_por, empresa_id) VALUES (?,?,?,?,?,?,?)`
+          ).bind(tipo, titulo, valor, descripcion||'', tags||'', creado_por||'admin', empresa_id||null).run();
           return json({ ok: true, id: r.meta?.last_row_id });
         }
 
@@ -4689,8 +4693,9 @@ async function ensureNewTables(env) {
     `CREATE INDEX IF NOT EXISTS idx_normativa_buscar ON normativa_index(norma, seccion)`,
     `CREATE TABLE IF NOT EXISTS alejandra_errores (id INTEGER PRIMARY KEY AUTOINCREMENT, error TEXT NOT NULL, causa TEXT, solucion TEXT, categoria TEXT, veces_visto INTEGER DEFAULT 1, ultimo_visto TEXT DEFAULT (datetime('now')), created_at TEXT DEFAULT (datetime('now')))`,
     `CREATE INDEX IF NOT EXISTS idx_alejandra_errores_error ON alejandra_errores(error)`,
-    `CREATE TABLE IF NOT EXISTS alejandra_conocimiento (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, titulo TEXT NOT NULL, valor TEXT NOT NULL, descripcion TEXT, tags TEXT, creado_por TEXT, creado_at TEXT DEFAULT (datetime('now')), activo INTEGER DEFAULT 1)`,
+    `CREATE TABLE IF NOT EXISTS alejandra_conocimiento (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, titulo TEXT NOT NULL, valor TEXT NOT NULL, descripcion TEXT, tags TEXT, creado_por TEXT, empresa_id TEXT, creado_at TEXT DEFAULT (datetime('now')), activo INTEGER DEFAULT 1)`,
     `CREATE INDEX IF NOT EXISTS idx_conocimiento_activo ON alejandra_conocimiento(activo, tipo)`,
+    `CREATE INDEX IF NOT EXISTS idx_conocimiento_empresa ON alejandra_conocimiento(empresa_id)`,
     // Tareas proactivas de Alejandra — seguimiento de pendientes hasta resolución
     `CREATE TABLE IF NOT EXISTS tareas_alejandra (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -6602,9 +6607,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       try {
         let row;
         if (input.id) {
-          row = await env.DB.prepare(`SELECT * FROM alejandra_conocimiento WHERE id=? AND activo=1`).bind(input.id).first();
+          row = await env.DB.prepare(`SELECT * FROM alejandra_conocimiento WHERE id=? AND activo=1 AND (empresa_id=? OR empresa_id IS NULL)`).bind(input.id, empresa_id).first();
         } else if (input.titulo) {
-          row = await env.DB.prepare(`SELECT * FROM alejandra_conocimiento WHERE titulo LIKE ? AND activo=1 LIMIT 1`).bind(`%${input.titulo}%`).first();
+          row = await env.DB.prepare(`SELECT * FROM alejandra_conocimiento WHERE titulo LIKE ? AND activo=1 AND (empresa_id=? OR empresa_id IS NULL) LIMIT 1`).bind(`%${input.titulo}%`, empresa_id).first();
         }
         if (!row) return 'No encontrado en la base de conocimiento.';
         // Si es imagen, devolver URL firmada o la key de R2
