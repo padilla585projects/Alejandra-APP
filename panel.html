@@ -18,6 +18,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/interactjs@1.10.27/dist/interact.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
 :root {
   --bg:#0d1020; --surface:#171b30; --surface2:#222842;
@@ -346,6 +349,24 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .page.active{display:block!important}
   .informe-print{border:none!important;padding:0!important}
 }
+/* FAB Alejandra markdown */
+.ale-fab-md p{margin:0 0 10px}.ale-fab-md p:last-child{margin-bottom:0}
+.ale-fab-md h1,.ale-fab-md h2,.ale-fab-md h3{font-family:'Montserrat',sans-serif;font-weight:700;margin:16px 0 8px;color:#fb923c}
+.ale-fab-md h1{font-size:18px}.ale-fab-md h2{font-size:16px}.ale-fab-md h3{font-size:14px}
+.ale-fab-md ul,.ale-fab-md ol{margin:6px 0 10px 20px}.ale-fab-md li{margin-bottom:4px}
+.ale-fab-md strong{color:#fff;font-weight:600}.ale-fab-md em{color:#fb923c}
+.ale-fab-md code{background:#0f172a;padding:2px 6px;border-radius:4px;font-size:12px;color:#f97316;font-family:'Courier New',monospace}
+.ale-fab-md pre{background:#1e1e2e;border:1px solid #334155;border-radius:10px;margin:10px 0;overflow:hidden}
+.ale-fab-md pre code{background:none;color:#cba6f7;padding:14px 16px;display:block;overflow-x:auto;font-size:13px;line-height:1.5}
+.ale-fab-md blockquote{border-left:3px solid #f97316;padding:6px 12px;color:#94a3b8;margin:8px 0;font-style:italic}
+.ale-fab-md hr{border:none;border-top:1px solid #334155;margin:12px 0}
+.ale-fab-md table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+.ale-fab-md th{padding:6px 10px;border:1px solid #334155;background:#1e2d40;color:#fb923c;text-align:left}
+.ale-fab-md td{padding:6px 10px;border:1px solid #334155}
+.ale-fab-md .code-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#181825;border-bottom:1px solid #313244;border-radius:10px 10px 0 0}
+.ale-fab-md .code-lang{font-size:11px;color:#6c7086;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:1px}
+.ale-fab-md .code-copy{font-size:11px;color:#6c7086;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .2s}
+.ale-fab-md .code-copy:hover{color:#fb923c}
 </style>
 </head>
 <body>
@@ -17406,6 +17427,88 @@ async function _alejandraResincronizarFirmas() {
   }
 }
 
+// Renderizado markdown global para el FAB (paridad con index.html y alejandra-panel.html)
+function _panelRenderMd(txt) {
+  if (typeof marked === 'undefined') return String(txt).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  return marked.parse(txt);
+}
+function _panelAddCopyBtns(el) {
+  if (!el) return;
+  el.querySelectorAll('pre').forEach(pre => {
+    if (pre.querySelector('.code-header')) return;
+    const code = pre.querySelector('code');
+    const lang = (code?.className || '').replace('language-','').replace('hljs ','').split(' ')[0] || '';
+    const header = document.createElement('div');
+    header.className = 'code-header';
+    header.innerHTML = '<span class="code-lang">' + lang + '</span><button class="code-copy" onclick="navigator.clipboard.writeText(this.closest(\'pre\').querySelector(\'code\').innerText).then(()=>{this.textContent=\'Copiado!\';setTimeout(()=>this.textContent=\'Copiar\',2000)})">Copiar</button>';
+    pre.insertBefore(header, pre.firstChild);
+  });
+}
+
+// TTS para el FAB — lee respuestas de Alejandra en voz alta
+let _fabTtsOn = false;
+function _fabToggleTts() {
+  _fabTtsOn = !_fabTtsOn;
+  if (!_fabTtsOn) window.speechSynthesis?.cancel();
+}
+function _fabHablar(txt) {
+  if (!_fabTtsOn) return;
+  const synth = window.speechSynthesis; if (!synth) return;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(txt.substring(0, 500));
+  u.lang = 'es-ES'; u.rate = 1.05;
+  const voz = synth.getVoices().find(v => v.lang.startsWith('es') && /female|lucia|maria/i.test(v.name)) || synth.getVoices().find(v => v.lang.startsWith('es'));
+  if (voz) u.voice = voz;
+  synth.speak(u);
+}
+
+// Archivos adjuntos del FAB
+let _fabAttachments = [];
+const _fabMaxFiles = 5, _fabMaxSizeMB = 5;
+const _fabAllowedTypes = [
+  'image/png','image/jpeg','image/webp','image/gif','image/heic',
+  'application/pdf',
+  'text/plain','text/csv','text/html',
+  'application/json',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'model/vnd.dxf','image/vnd.dwg'
+];
+
+function alejandrOnFiles(ev) {
+  const files = Array.from(ev.target.files || []);
+  for (const f of files) {
+    if (_fabAttachments.length >= _fabMaxFiles) { _alejandraToast(`Máximo ${_fabMaxFiles} archivos`); break; }
+    if (f.size > _fabMaxSizeMB * 1024 * 1024) { _alejandraToast(`${f.name} superiza ${_fabMaxSizeMB}MB`); continue; }
+    const ok = _fabAllowedTypes.some(t => f.type === t || f.name.toLowerCase().endsWith(t.split('/').pop()));
+    if (!ok) { _alejandraToast(`Formato no soportado: ${f.name}`); continue; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64 = reader.result.split(',')[1];
+      _fabAttachments.push({ b64, mime: f.type || 'application/octet-stream', name: f.name, size: f.size });
+      _fabRenderAdjuntos();
+    };
+    reader.readAsDataURL(f);
+  }
+  ev.target.value = '';
+}
+
+function _fabRenderAdjuntos() {
+  const box = document.getElementById('alejandraAdjuntos');
+  if (!box) return;
+  if (!_fabAttachments.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'flex';
+  box.innerHTML = _fabAttachments.map((a, i) =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:var(--border);font-size:11px;color:var(--text)">` +
+    `${a.name.length > 18 ? a.name.substring(0,15)+'…' : a.name}` +
+    `<button onclick="alejandrQuitarAdjunto(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0;font-size:14px;line-height:1">×</button></span>`
+  ).join('');
+}
+
+function alejandrQuitarAdjunto(i) {
+  _fabAttachments.splice(i, 1);
+  _fabRenderAdjuntos();
+}
+
 // FIX-ALEJANDRA-FAB-03: extraído de cargarAlejandraChat() para reutilizarlo también en
 // el eco optimista de alejandrEnviar() — un solo sitio que sabe pintar una burbuja.
 function _alejandraBurbujaHTML(m) {
@@ -17429,71 +17532,160 @@ async function alejandrEnviar() {
     return;
   }
   const cont = document.getElementById('alejandraMensajes');
-  // FIX-ALEJANDRA-FAB-04 (29/07/2026): Adrián: "no veo los mensajes que mando en el chat
-  // y después me contesta de golpe y nada que ver con lo que le pregunto" — este envío no
-  // pintaba el mensaje propio al momento (esperaba al polling de 5s de cargarAlejandraChat,
-  // que releía TODO el historial cross-canal, incluyendo avisos automáticos/briefings que
-  // Alejandra manda sola sin pregunta). Resultado: tu pregunta tardaba en aparecer y, para
-  // cuando el polling refrescaba, podía haberse colado un mensaje automático de por medio,
-  // dando la sensación de una respuesta que no venía a cuento. Ahora se pinta el mensaje
-  // propio al instante y la respuesta real (la de ESTA petición, no la del polling).
   if (cont?.querySelector('.empty-state')) cont.innerHTML = '';
+  const userBubble = msg + (_fabAttachments.length ? ` <span style="opacity:.7">📎 ${_fabAttachments.length} archivo(s)</span>` : '');
   if (cont) {
-    cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'user', contenido: msg }));
+    cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'user', contenido: userBubble }));
     cont.scrollTop = cont.scrollHeight;
   }
+  // Typing indicator — removable
   const typingId = 'alej-typing-' + Date.now();
   if (cont) {
     cont.insertAdjacentHTML('beforeend', `<div id="${typingId}" style="display:flex;justify-content:flex-start;margin-bottom:8px"><div style="padding:10px 14px;border-radius:12px;background:var(--surface2);color:var(--muted);font-size:13px">Escribiendo…</div></div>`);
     cont.scrollTop = cont.scrollHeight;
   }
   try {
-    // AYUDA-01: se informa a Alejandra de en qué sección del panel está el usuario
-    // (mismo mecanismo "pantalla" que ya usa la app móvil), para que pueda explicarla
-    // si pregunta "¿qué es esto?" sin que el usuario tenga que decirle el nombre.
     const tituloActual = (PAGE_TITLES[currentPage] || currentPage || '').replace(/^[^\wÁÉÍÓÚáéíóúñÑ]+/, '').trim();
     const descActual = AYUDA_SECCIONES[currentPage];
     const pantallaActual = currentPage
       ? `Panel Office > ${tituloActual}${descActual ? ' — ' + descActual : ''}`
       : null;
-    const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat', {
+
+    // Subir archivos adjuntos a R2 y obtener URLs
+    const adjuntosR2 = [];
+    for (const a of _fabAttachments) {
+      try {
+        const blob = await fetch(`data:${a.mime};base64,${a.b64}`).then(r => r.blob());
+        const fd = new FormData();
+        fd.append('file', blob, a.name);
+        fd.append('usuario_id', usuarioId);
+        const upRes = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method: 'POST', body: fd });
+        const upData = await upRes.json();
+        if (upData.ok) adjuntosR2.push(upData.url);
+      } catch (ue) { console.warn('Upload error:', ue); }
+    }
+
+    const res = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
-      // FIX-ALEJANDRA-FAB-01 (29/07/2026): este endpoint espera 'mensaje' (español), no
-      // 'message' — el typo hacía que TODO envío desde este FAB devolviera 400 ("mensaje y
-      // usuario_id requeridos") y el alert() bloqueante que saltaba después dejaba la
-      // pestaña congelada hasta cerrarlo. Adrián: "da error al enviar mensaje".
-      body: JSON.stringify({ mensaje: msg, usuario_id: usuarioId, canal: 'panel', rol: SESSION?.rol || null, pantalla: pantallaActual })
+      body: JSON.stringify({
+        mensaje: msg,
+        usuario_id: usuarioId,
+        empresa_id: SESSION?.empresa_id || null,
+        canal: 'panel',
+        adjuntos: adjuntosR2,
+        rol: SESSION?.rol || null,
+        pantalla: pantallaActual,
+        dom_actual: null
+      })
     });
-    document.getElementById(typingId)?.remove();
-    if (!r.ok) {
-      _alejandraMostrarError(`Error al enviar (${r.status}). Vuelve a intentarlo.`);
+    if (!res.ok) {
+      document.getElementById(typingId)?.remove();
+      _alejandraMostrarError(`Error al enviar (${res.status}). Vuelve a intentarlo.`);
       return;
     }
-    const data = await r.json().catch(() => ({}));
-    // Opciones pinchables (paridad con index.html/PWA): Alejandra termina preguntas
-    // de confirmación/elección cerrada con <<OPCIONES: A|B|C>> — se quita del texto
-    // y se pintan como botones que mandan esa opción tal cual.
-    let texto = data.texto || 'Sin respuesta';
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let textoAcum = '';
+    let bubbleEl = null;
+    const typingEl = document.getElementById(typingId);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+        switch (ev.type) {
+          case 'routing':
+            if (typingEl) typingEl.querySelector('div').textContent = '🔍 ' + (ev.experto || 'Procesando…');
+            break;
+          case 'tool_start':
+            if (typingEl) typingEl.querySelector('div').textContent = '⚡ ' + (ev.nombre || 'tool') + '…';
+            break;
+          case 'tool_end':
+            if (typingEl) typingEl.querySelector('div').textContent = '✓ ' + (ev.nombre || 'tool');
+            break;
+          case 'token':
+          case 'text':
+            if (typingEl) typingEl.remove();
+            if (!bubbleEl && cont) {
+              bubbleEl = document.createElement('div');
+              bubbleEl.style.cssText = 'display:flex;justify-content:flex-start;margin-bottom:8px';
+              const inner = document.createElement('div');
+              inner.className = 'ale-fab-md';
+              inner.style.cssText = 'max-width:85%;padding:10px 14px;border-radius:12px;background:var(--surface2);color:var(--text);font-size:13px;word-break:break-word;line-height:1.45;border:1px solid var(--border)';
+              bubbleEl.appendChild(inner);
+              cont.appendChild(bubbleEl);
+            }
+            textoAcum += ev.texto;
+            if (bubbleEl) {
+              const md = bubbleEl.querySelector('.ale-fab-md');
+              if (md) md.innerHTML = _escHtml(textoAcum).replace(/\n/g, '<br>');
+            }
+            if (cont) cont.scrollTop = cont.scrollHeight;
+            break;
+          case 'progreso':
+            if (typingEl) typingEl.querySelector('div').textContent = '⏳ ' + (ev.mensaje || 'Trabajando…');
+            break;
+          case 'thinking':
+            if (typingEl) typingEl.querySelector('div').textContent = '🤔 ' + (ev.siguiente_paso || 'Pensando…');
+            break;
+          case 'plan':
+            if (typingEl) typingEl.querySelector('div').textContent = '📋 ' + (ev.objetivo || 'Planificando…');
+            break;
+          case 'cost':
+            break;
+          case 'done':
+            if (typingEl) typingEl.remove();
+            break;
+          case 'error':
+            if (typingEl) typingEl.remove();
+            _alejandraMostrarError('❌ ' + (ev.mensaje || 'Error'));
+            break;
+        }
+      }
+    }
+
+    if (typingEl) typingEl.remove();
+    if (!textoAcum) {
+      _alejandraMostrarError('Sin respuesta');
+      return;
+    }
+
+    // Extract <plan>, <guia>, <<OPCIONES>> and render final markdown
+    let reply = textoAcum.replace(/<plan>[\s\S]*?<\/plan>/g, '').replace(/<guia>[\s\S]*?<\/guia>/g, '').trim();
     let opciones = null;
-    const opcionesMatch = texto.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
+    const opcionesMatch = reply.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
     if (opcionesMatch) {
-      texto = texto.replace(/<<OPCIONES:[^>]+>>\s*$/, '').trim();
+      reply = reply.replace(/<<OPCIONES:[^>]+>>\s*$/, '').trim();
       opciones = opcionesMatch[1].split('|').map(o => o.trim()).filter(Boolean);
     }
-    if (cont) {
-      cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'assistant', contenido: texto }));
-      cont.scrollTop = cont.scrollHeight;
-      if (opciones && opciones.length) _alejandraRenderOpciones(cont, opciones);
+    if (bubbleEl) {
+      const md = bubbleEl.querySelector('.ale-fab-md');
+      if (md) {
+        md.innerHTML = _panelRenderMd(reply);
+        _panelAddCopyBtns(md);
+      }
     }
-    // FIX-ALEJANDRA-FAB-05 (03/08/2026): sin esto, el siguiente sondeo de los 5s vería este
-    // mismo intercambio como "mensajes nuevos" (el array de firmas no se enteró de ellos,
-    // solo se pintaron aquí de forma optimista) y los duplicaría en pantalla.
+    if (cont && opciones && opciones.length) _alejandraRenderOpciones(cont, opciones);
+    _fabHablar(reply);
+
+    _fabAttachments = []; _fabRenderAdjuntos();
     _alejandraResincronizarFirmas();
   } catch (e) {
     document.getElementById(typingId)?.remove();
     console.error('Error enviando mensaje:', e);
     _alejandraMostrarError('Error de conexión. Vuelve a intentarlo.');
+    _fabAttachments = []; _fabRenderAdjuntos();
   }
 }
 
@@ -20146,6 +20338,22 @@ document.addEventListener('visibilitychange', () => {
 .ai-msg.user{background:#f97316;color:#000;align-self:flex-end;border-bottom-right-radius:4px;font-family:'Montserrat',sans-serif;font-weight:600}
 .ai-msg.bot{background:#1e2d40;color:#e5e7eb;align-self:flex-start;border:1px solid #334155;border-bottom-left-radius:4px}
 .ai-msg.bot code{background:#0f172a;padding:1px 5px;border-radius:4px;font-size:12px;color:#f97316}
+.ai-msg.bot p{margin:0 0 10px}.ai-msg.bot p:last-child{margin-bottom:0}
+.ai-msg.bot h1,.ai-msg.bot h2,.ai-msg.bot h3{font-family:'Montserrat',sans-serif;font-weight:700;margin:16px 0 8px;color:#fb923c}
+.ai-msg.bot h1{font-size:18px}.ai-msg.bot h2{font-size:16px}.ai-msg.bot h3{font-size:14px}
+.ai-msg.bot ul,.ai-msg.bot ol{margin:6px 0 10px 20px}.ai-msg.bot li{margin-bottom:4px}
+.ai-msg.bot strong{color:#fff;font-weight:600}.ai-msg.bot em{color:#fb923c}
+.ai-msg.bot pre{background:#1e1e2e;border:1px solid #334155;border-radius:10px;margin:10px 0;overflow:hidden}
+.ai-msg.bot pre code{background:none;color:#cba6f7;padding:14px 16px;display:block;overflow-x:auto;font-size:13px;line-height:1.5}
+.ai-msg.bot blockquote{border-left:3px solid #f97316;padding:6px 12px;color:#94a3b8;margin:8px 0;font-style:italic}
+.ai-msg.bot hr{border:none;border-top:1px solid #334155;margin:12px 0}
+.ai-msg.bot table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+.ai-msg.bot th{padding:6px 10px;border:1px solid #334155;background:#1e2d40;color:#fb923c;text-align:left}
+.ai-msg.bot td{padding:6px 10px;border:1px solid #334155}
+.ai-msg.bot .code-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#181825;border-bottom:1px solid #313244;border-radius:10px 10px 0 0}
+.ai-msg.bot .code-lang{font-size:11px;color:#6c7086;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:1px}
+.ai-msg.bot .code-copy{font-size:11px;color:#6c7086;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .2s}
+.ai-msg.bot .code-copy:hover{color:#fb923c}
 .ai-typing{display:flex;gap:4px;align-items:center;padding:8px 12px}
 .ai-typing span{width:6px;height:6px;border-radius:50%;background:#a855f7;animation:aiDot .9s infinite}
 .ai-typing span:nth-child(2){animation-delay:.2s}
@@ -20167,6 +20375,7 @@ document.addEventListener('visibilitychange', () => {
   <div id="aiChatHeader">
     <span>Alejandra IA</span>
     <small>● ONLINE</small>
+    <button class="ai-hdr-btn" id="aiTtsBtn" title="Voz de Alejandra (TTS)" onclick="aiToggleTts()" style="font-size:14px">🔇</button>
     <button class="ai-hdr-btn" title="Abrir en ventana nueva" onclick="aiNewWindow()">⧉</button>
     <button class="ai-hdr-btn" id="aiFullscreenBtn" title="Pantalla completa" onclick="aiToggleFullscreen()">⛶</button>
     <button class="ai-hdr-btn" onclick="toggleAIChat()">✕</button>
@@ -20182,6 +20391,7 @@ document.addEventListener('visibilitychange', () => {
   <div id="aiInputRow">
     <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="aiOnImageSelect(event)">
     <button id="aiAttachBtn" onclick="document.getElementById('aiFileInput').click()" title="Adjuntar imagen">📎</button>
+    <button id="aiMicBtn" onclick="aiToggleMic()" title="Micrófono" style="background:none;border:1px solid #334155;border-radius:8px;color:#a855f7;padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s">🎙️</button>
     <textarea id="aiInput" placeholder="Escribe tu mensaje..." rows="1" onkeydown="aiKeydown(event)"></textarea>
     <button id="aiSendBtn" onclick="aiSend()">↑</button>
   </div>
@@ -20557,6 +20767,73 @@ document.getElementById('wInput').focus();
     }
     function _aiEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+    function _setupMarked() {
+      if (typeof marked === 'undefined' || typeof hljs === 'undefined') return;
+      marked.setOptions({
+        breaks: true,
+        gfm: true,
+        highlight: (code, lang) => {
+          if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+          return hljs.highlightAuto(code).value;
+        }
+      });
+    }
+    function _aiRenderMd(txt) {
+      if (typeof marked === 'undefined') return '<p>' + _aiEsc(txt) + '</p>';
+      return marked.parse(txt);
+    }
+    function _aiAddCopyBtns(el) {
+      el.querySelectorAll('pre').forEach(pre => {
+        if (pre.querySelector('.code-header')) return;
+        const code = pre.querySelector('code');
+        const lang = (code?.className || '').replace('language-','').replace('hljs ','').split(' ')[0] || '';
+        const header = document.createElement('div');
+        header.className = 'code-header';
+        header.innerHTML = '<span class="code-lang">' + lang + '</span><button class="code-copy" onclick="_aiCopyCode(this)">Copiar</button>';
+        pre.insertBefore(header, pre.firstChild);
+      });
+    }
+    function _aiCopyCode(btn) {
+      const code = btn.closest('pre')?.querySelector('code')?.innerText || '';
+      navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copiado!'; setTimeout(() => btn.textContent = 'Copiar', 2000); });
+    }
+
+    // TTS (Text-to-Speech) para DevTools
+    let _aiTtsOn = false;
+    window.aiToggleTts = function() {
+      _aiTtsOn = !_aiTtsOn;
+      const btn = document.getElementById('aiTtsBtn');
+      if (btn) { btn.textContent = _aiTtsOn ? '🔊' : '🔇'; }
+      if (!_aiTtsOn) window.speechSynthesis?.cancel();
+    };
+    function _aiHablar(txt) {
+      if (!_aiTtsOn) return;
+      const synth = window.speechSynthesis; if (!synth) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(txt.substring(0, 500));
+      u.lang = 'es-ES'; u.rate = 1.05;
+      const voz = synth.getVoices().find(v => v.lang.startsWith('es') && /female|lucia|maria/i.test(v.name)) || synth.getVoices().find(v => v.lang.startsWith('es'));
+      if (voz) u.voice = voz;
+      synth.speak(u);
+    }
+
+    // STT (Speech-to-Text) para DevTools
+    let _aiRec = null, _aiEscuchando = false;
+    window.aiToggleMic = function() {
+      if (_aiEscuchando) { _aiRec?.stop(); return; }
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { alert('Usa Chrome para voz'); return; }
+      _aiRec = new SR(); _aiRec.lang = 'es-ES'; _aiRec.continuous = false; _aiRec.interimResults = false;
+      const btn = document.getElementById('aiMicBtn');
+      _aiRec.onstart = () => { _aiEscuchando = true; if (btn) { btn.textContent = '⏹️'; btn.style.borderColor = '#ef4444'; btn.style.color = '#ef4444'; } window.speechSynthesis?.cancel(); };
+      _aiRec.onresult = e => { const t = e.results[0][0].transcript.trim(); const i = document.getElementById('aiInput'); if (i) i.value = t; window.aiSend(); };
+      _aiRec.onerror = e => { if (e.error !== 'aborted') console.error('STT:', e.error); };
+      _aiRec.onend = () => { _aiEscuchando = false; if (btn) { btn.textContent = '🎙️'; btn.style.borderColor = '#334155'; btn.style.color = '#a855f7'; } };
+      _aiRec.start();
+    };
+
+    _setupMarked();
+
     let textoAcum = '', bubbleEl = null;
     try {
       const res = await fetch(AGENTE_STREAM_API, {
@@ -20703,8 +20980,9 @@ document.getElementById('wInput').focus();
         reply = reply.replace(/<<OPCIONES:[^>]+>>\s*$/, '').trim();
         aiOpciones = aiOpcMatch[1].split('|').map(o => o.trim()).filter(Boolean);
       }
-      if (bubbleEl) bubbleEl.innerHTML = _aiEsc(reply).replace(/\n/g, '<br>');
+      if (bubbleEl) { bubbleEl.innerHTML = _aiRenderMd(reply); _aiAddCopyBtns(bubbleEl); }
       if (aiOpciones && aiOpciones.length) _aiRenderOpciones(aiOpciones);
+      _aiHablar(reply);
 
       aiHistory.push({ role: 'user', content: msgText });
       aiHistory.push({ role: 'assistant', content: reply });
@@ -21915,7 +22193,10 @@ document.getElementById('wInput').focus();
   <div id="alejandraMensajes" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
     <div class="empty-state"><div class="empty-icon">✨</div><div class="empty-text">Hola, pregúntame lo que necesites</div></div>
   </div>
+  <div id="alejandraAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border);background:var(--surface)"></div>
   <div style="display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)">
+    <input type="file" id="alejandrFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandrOnFiles(event)">
+    <button onclick="document.getElementById('alejandrFile').click()" title="Adjuntar archivo" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s">📎</button>
     <input id="alejandrInput" class="form-input" placeholder="Escribe tu pregunta..." style="flex:1;padding:8px 12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandrEnviar()}">
     <button class="btn btn-primary" onclick="alejandrEnviar()" style="padding:8px 14px">➤</button>
   </div>

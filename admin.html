@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Alejandra Agente — Panel de Control</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -496,6 +499,22 @@
         max-width: 85%;
       }
     }
+    .admin-md p{margin:0 0 10px}.admin-md p:last-child{margin-bottom:0}
+    .admin-md h1,.admin-md h2,.admin-md h3{font-weight:700;margin:16px 0 8px;color:#8b5cf6}
+    .admin-md h1{font-size:18px}.admin-md h2{font-size:16px}.admin-md h3{font-size:14px}
+    .admin-md ul,.admin-md ol{margin:6px 0 10px 20px}.admin-md li{margin-bottom:4px}
+    .admin-md strong{color:#fff;font-weight:600}.admin-md em{color:#c4b5fd}
+    .admin-md code{background:#1e1e2e;padding:2px 6px;border-radius:4px;font-size:12px;color:#a78bfa;font-family:'Courier New',monospace}
+    .admin-md pre{background:#1e1e2e;border:1px solid #334155;border-radius:10px;margin:10px 0;overflow:hidden}
+    .admin-md pre code{background:none;color:#c4b5fd;padding:14px 16px;display:block;overflow-x:auto;font-size:13px;line-height:1.5}
+    .admin-md blockquote{border-left:3px solid #8b5cf6;padding:6px 12px;color:#94a3b8;margin:8px 0;font-style:italic}
+    .admin-md table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+    .admin-md th{padding:6px 10px;border:1px solid #334155;background:#1e2d40;color:#c4b5fd;text-align:left}
+    .admin-md td{padding:6px 10px;border:1px solid #334155}
+    .code-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#181825;border-bottom:1px solid #313244;border-radius:10px 10px 0 0}
+    .code-lang{font-size:11px;color:#6c7086;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:1px}
+    .code-copy{font-size:11px;color:#6c7086;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .2s}
+    .code-copy:hover{color:#c4b5fd}
   </style>
 </head>
 <body>
@@ -845,7 +864,6 @@
 
       if (!mensaje) return;
 
-      // Add user message to UI
       const messagesDiv = document.getElementById('chatMessages');
       const userBubble = document.createElement('div');
       userBubble.className = 'message user';
@@ -854,29 +872,83 @@
 
       input.value = '';
 
-      // Call API
+      const typingEl = document.createElement('div');
+      typingEl.className = 'message bot';
+      typingEl.innerHTML = '<div class="message-bubble" style="color:#94a3b8">Escribiendo…</div>';
+      messagesDiv.appendChild(typingEl);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
       try {
-        const res = await fetch('https://alejandra-agente.workers.dev/api/chat', {
+        const res = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mensaje,
-            usuario_id: 'admin_web',
-            empresa_id: 'admin',
-            canal: 'web'
-          })
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${typeof ADMIN_TOKEN !== 'undefined' ? ADMIN_TOKEN : ''}` },
+          body: JSON.stringify({ mensaje, usuario_id: 'admin_web', empresa_id: 'admin', canal: 'web' })
         });
 
-        const data = await res.json();
+        if (!res.ok) {
+          typingEl.remove();
+          const errBub = document.createElement('div');
+          errBub.className = 'message bot';
+          errBub.innerHTML = `<div class="message-bubble">❌ Error HTTP ${res.status}</div>`;
+          messagesDiv.appendChild(errBub);
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          return;
+        }
 
-        // Add bot response
-        const botBubble = document.createElement('div');
-        botBubble.className = 'message bot';
-        botBubble.innerHTML = `<div class="message-bubble">${escapeHtml(data.texto)}</div>`;
-        messagesDiv.appendChild(botBubble);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '', textoAcum = '', bubbleEl = null;
 
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            let ev;
+            try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+            if (ev.type === 'token' || ev.type === 'text') {
+              typingEl.remove();
+              if (!bubbleEl) {
+                bubbleEl = document.createElement('div');
+                bubbleEl.className = 'message bot';
+                const bc = document.createElement('div');
+                bc.className = 'message-bubble admin-md';
+                bubbleEl.appendChild(bc);
+                messagesDiv.appendChild(bubbleEl);
+              }
+              textoAcum += ev.texto;
+              const mdEl = bubbleEl.querySelector('.admin-md');
+              if (mdEl) mdEl.innerHTML = escapeHtml(textoAcum).replace(/\n/g, '<br>');
+              messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            } else if (ev.type === 'done') {
+              typingEl.remove();
+            } else if (ev.type === 'error') {
+              typingEl.remove();
+              const eb = document.createElement('div');
+              eb.className = 'message bot';
+              eb.innerHTML = `<div class="message-bubble">❌ ${escapeHtml(ev.mensaje || 'Error')}</div>`;
+              messagesDiv.appendChild(eb);
+              messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+          }
+        }
+
+        typingEl.remove();
+        if (bubbleEl && textoAcum) {
+          const mdEl = bubbleEl.querySelector('.admin-md');
+          if (mdEl) { mdEl.innerHTML = renderMd(textoAcum); addCopyBtns(mdEl); }
+        } else if (!textoAcum) {
+          const eb = document.createElement('div');
+          eb.className = 'message bot';
+          eb.innerHTML = '<div class="message-bubble">Sin respuesta</div>';
+          messagesDiv.appendChild(eb);
+        }
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
       } catch (err) {
+        typingEl.remove();
         console.error('Error enviando mensaje:', err);
       }
     }
@@ -907,6 +979,7 @@
 
     // Load dashboard data on page load
     window.addEventListener('load', async () => {
+      setupMarked();
       await cargarConfiguracion();
       // Load stats
       document.getElementById('statMensajes').textContent = '127';

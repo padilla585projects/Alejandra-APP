@@ -27,6 +27,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
 :root {
   --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
@@ -4913,6 +4916,33 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
 .ia-bubble.user{background:#f97316;color:#000;align-self:flex-end;border-bottom-right-radius:4px;font-family:'Montserrat',sans-serif;font-weight:600}
 .ia-bubble.bot{background:var(--surface);color:var(--text);align-self:flex-start;border:1px solid var(--border);border-bottom-left-radius:4px}
 .ia-bubble.bot code{background:#0f172a;padding:1px 5px;border-radius:4px;font-size:12px;color:#f97316}
+.ia-bubble.bot p{margin:0 0 10px}.ia-bubble.bot p:last-child{margin-bottom:0}
+.ia-bubble.bot h1,.ia-bubble.bot h2,.ia-bubble.bot h3{font-family:'Montserrat',sans-serif;font-weight:700;margin:16px 0 8px;color:#fb923c}
+.ia-bubble.bot h1{font-size:18px}.ia-bubble.bot h2{font-size:16px}.ia-bubble.bot h3{font-size:14px}
+.ia-bubble.bot ul,.ia-bubble.bot ol{margin:6px 0 10px 20px}.ia-bubble.bot li{margin-bottom:4px}
+.ia-bubble.bot strong{color:#fff;font-weight:600}.ia-bubble.bot em{color:#fb923c}
+.ia-bubble.bot pre{background:#1e1e2e;border:1px solid #334155;border-radius:10px;margin:10px 0;overflow:hidden}
+.ia-bubble.bot pre code{background:none;color:#cba6f7;padding:14px 16px;display:block;overflow-x:auto;font-size:13px;line-height:1.5}
+.ia-bubble.bot blockquote{border-left:3px solid #f97316;padding:6px 12px;color:#94a3b8;margin:8px 0;font-style:italic}
+.ia-bubble.bot hr{border:none;border-top:1px solid #334155;margin:12px 0}
+.ia-bubble.bot table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+.ia-bubble.bot th{padding:6px 10px;border:1px solid #334155;background:#1e2d40;color:#fb923c;text-align:left}
+.ia-bubble.bot td{padding:6px 10px;border:1px solid #334155}
+.ale-stream-bubble p{margin:0 0 10px}.ale-stream-bubble p:last-child{margin-bottom:0}
+.ale-stream-bubble h1,.ale-stream-bubble h2,.ale-stream-bubble h3{font-family:'Montserrat',sans-serif;font-weight:700;margin:16px 0 8px;color:#fb923c}
+.ale-stream-bubble h1{font-size:18px}.ale-stream-bubble h2{font-size:16px}.ale-stream-bubble h3{font-size:14px}
+.ale-stream-bubble ul,.ale-stream-bubble ol{margin:6px 0 10px 20px}.ale-stream-bubble li{margin-bottom:4px}
+.ale-stream-bubble strong{color:#fff;font-weight:600}.ale-stream-bubble em{color:#fb923c}
+.ale-stream-bubble pre{background:#1e1e2e;border:1px solid #334155;border-radius:10px;margin:10px 0;overflow:hidden}
+.ale-stream-bubble pre code{background:none;color:#cba6f7;padding:14px 16px;display:block;overflow-x:auto;font-size:13px;line-height:1.5}
+.ale-stream-bubble blockquote{border-left:3px solid #f97316;padding:6px 12px;color:#94a3b8;margin:8px 0;font-style:italic}
+.ale-stream-bubble table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+.ale-stream-bubble th{padding:6px 10px;border:1px solid #334155;background:#1e2d40;color:#fb923c;text-align:left}
+.ale-stream-bubble td{padding:6px 10px;border:1px solid #334155}
+.code-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#181825;border-bottom:1px solid #313244;border-radius:10px 10px 0 0}
+.code-lang{font-size:11px;color:#6c7086;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:1px}
+.code-copy{font-size:11px;color:#6c7086;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .2s}
+.code-copy:hover{color:#fb923c}
 .ia-typing-bubble{display:flex;gap:5px;align-items:center;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start}
 .ia-typing-bubble span{width:7px;height:7px;border-radius:50%;background:#a855f7;animation:iaDot .9s infinite}
 .ia-typing-bubble span:nth-child(2){animation-delay:.2s}
@@ -12793,6 +12823,37 @@ function _chatRenderMensajes(msgs, append) {
 
 function _escHtml(t) {
   return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _setupMarked() {
+  if (typeof marked === 'undefined' || typeof hljs === 'undefined') return;
+  marked.setOptions({
+    breaks: true,
+    gfm: true,
+    highlight: (code, lang) => {
+      if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+      return hljs.highlightAuto(code).value;
+    }
+  });
+}
+function _renderMd(txt) {
+  if (typeof marked === 'undefined') return '<p>' + _escHtml(txt) + '</p>';
+  return marked.parse(txt);
+}
+function _addCopyBtns(el) {
+  el.querySelectorAll('pre').forEach(pre => {
+    if (pre.querySelector('.code-header')) return;
+    const code = pre.querySelector('code');
+    const lang = (code?.className || '').replace('language-','').replace('hljs ','').split(' ')[0] || '';
+    const header = document.createElement('div');
+    header.className = 'code-header';
+    header.innerHTML = '<span class="code-lang">' + lang + '</span><button class="code-copy" onclick="_copyCode(this)">Copiar</button>';
+    pre.insertBefore(header, pre.firstChild);
+  });
+}
+function _copyCode(btn) {
+  const code = btn.closest('pre')?.querySelector('code')?.innerText || '';
+  navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copiado!'; setTimeout(() => btn.textContent = 'Copiar', 2000); });
 }
 
 async function chatEnviar() {
@@ -22016,13 +22077,13 @@ window.turnoToggle   = turnoToggle;
         if (planMatch) {
           try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
           reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
-          if (bubbleEl) bubbleEl.innerHTML = _escHtml(reply).replace(/\n/g, '<br>');
+          if (bubbleEl) { bubbleEl.innerHTML = _renderMd(reply); _addCopyBtns(bubbleEl); }
         }
         const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
         if (guiaMatch) {
           try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
           reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
-          if (bubbleEl) bubbleEl.innerHTML = _escHtml(reply).replace(/\n/g, '<br>');
+          if (bubbleEl) { bubbleEl.innerHTML = _renderMd(reply); _addCopyBtns(bubbleEl); }
         }
 
         // Opciones pinchables: Alejandra termina preguntas de confirmación/elección
@@ -22031,7 +22092,7 @@ window.turnoToggle   = turnoToggle;
         const opcionesMatch = reply.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
         if (opcionesMatch) {
           reply = reply.replace(/<<OPCIONES:[^>]+>>\s*$/, '').trim();
-          if (bubbleEl) bubbleEl.innerHTML = _escHtml(reply).replace(/\n/g, '<br>');
+          if (bubbleEl) { bubbleEl.innerHTML = _renderMd(reply); _addCopyBtns(bubbleEl); }
           const opciones = opcionesMatch[1].split('|').map(o => o.trim()).filter(Boolean);
           if (opciones.length) _iaRenderOpciones(opciones);
         }
@@ -22758,13 +22819,13 @@ async function alejandraEnviar() {
       if (planMatch) {
         try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
         textoLimpio = textoLimpio.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
-        if (bubbleEl) bubbleEl.innerHTML = _escHtml(textoLimpio);
+        if (bubbleEl) { bubbleEl.innerHTML = _renderMd(textoLimpio); _addCopyBtns(bubbleEl); }
       }
       const guiaMatch = textoLimpio.match(/<guia>([\s\S]*?)<\/guia>/);
       if (guiaMatch) {
         try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
         textoLimpio = textoLimpio.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
-        if (bubbleEl) bubbleEl.innerHTML = _escHtml(textoLimpio);
+        if (bubbleEl) { bubbleEl.innerHTML = _renderMd(textoLimpio); _addCopyBtns(bubbleEl); }
       }
 
       if (planDetectado) _alejandraOfrecerPlan(planDetectado);
@@ -23237,5 +23298,6 @@ async function formacionCargarMobile() {
 }
 
 </script>
+<script>if(typeof _setupMarked==='function')_setupMarked();</script>
 </body>
 </html>
