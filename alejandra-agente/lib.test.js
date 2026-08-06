@@ -24,6 +24,7 @@ import {
   extraerTablaDDL,
   determinarEstadoSalud,
   construirConsultaMemoriaGobernada,
+  construirQueryAprendizajesEmpresa,
   RANGO_CONFIANZA,
 } from './lib.js';
 
@@ -1123,6 +1124,65 @@ describe('construirConsultaMemoriaGobernada', () => {
     expect(construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, limit: 0 }).binds.at(-1)).toBe(10);
     expect(construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA, limit: -5 }).binds.at(-1)).toBe(1);
     expect(construirConsultaMemoriaGobernada({ empresaId: 1, ahora: AHORA }).binds.at(-1)).toBe(10);
+  });
+});
+
+// ── construirQueryAprendizajesEmpresa (SEC-CHAT-CONTEXTO-LEGACY / ARC-016) ───
+// Aislamiento cross-tenant de los "aprendizajes"/"contexto" que obtenetContextoChat
+// inyecta en el mensaje de usuario. La query legada leía alejandra_memoria sin
+// filtro de empresa_id; este builder impone `empresa_id = ?` obligatorio.
+describe('construirQueryAprendizajesEmpresa (aislamiento cross-tenant de aprendizajes)', () => {
+  it('fail-closed: sin empresa_id devuelve WHERE 1=0 (0 filas), nunca un filtro global', () => {
+    const { sql, binds } = construirQueryAprendizajesEmpresa({ empresaId: null });
+    expect(sql).toMatch(/WHERE 1=0/);
+    expect(binds).toEqual([]);
+    // Garantía de seguridad: imposible obtener filas sin scoping de empresa.
+    expect(sql).not.toMatch(/aprendizaje/);
+  });
+
+  it("fail-closed: empresa_id en blanco o 'default' sin tabla no devuelve global", () => {
+    for (const bad of ['', undefined]) {
+      const { sql, binds } = construirQueryAprendizajesEmpresa({ empresaId: bad });
+      expect(sql).toMatch(/WHERE 1=0/);
+      expect(binds).toEqual([]);
+    }
+  });
+
+  it('aislamiento: empresa A y B producen binds distintos, mismo SQL', () => {
+    const a = construirQueryAprendizajesEmpresa({ empresaId: 1 });
+    const b = construirQueryAprendizajesEmpresa({ empresaId: 2 });
+    expect(a.sql).toBe(b.sql);
+    expect(a.binds[0]).toBe('1');
+    expect(b.binds[0]).toBe('2');
+    expect(a.binds[0]).not.toBe(b.binds[0]);
+  });
+
+  it('el WHERE siempre lleva empresa_id = ? antes que el filtro de tipo (imposible omitirlo)', () => {
+    const { sql } = construirQueryAprendizajesEmpresa({ empresaId: 7 });
+    expect(sql).toMatch(/WHERE empresa_id = \?/);
+    expect(sql.indexOf('empresa_id = ?')).toBeLessThan(sql.indexOf("tipo = 'aprendizaje'"));
+  });
+
+  it('solo lee tipos aprendizaje/contexto (no fcm_token/mejora/decision/documento)', () => {
+    const { sql } = construirQueryAprendizajesEmpresa({ empresaId: 7 });
+    expect(sql).toMatch(/tipo = 'aprendizaje' OR tipo = 'contexto'/);
+  });
+
+  it('clampea limit a [1, 50] igual que construirConsultaMemoriaGobernada', () => {
+    expect(construirQueryAprendizajesEmpresa({ empresaId: 1, limit: 1000 }).binds[1]).toBe(50);
+    // limit: 0 es falsy en JS -- parseInt(0,10) || 10 cae al default, igual que "sin limit".
+    expect(construirQueryAprendizajesEmpresa({ empresaId: 1, limit: 0 }).binds[1]).toBe(10);
+    expect(construirQueryAprendizajesEmpresa({ empresaId: 1, limit: -5 }).binds[1]).toBe(1);
+    expect(construirQueryAprendizajesEmpresa({ empresaId: 1 }).binds[1]).toBe(10);
+    expect(construirQueryAprendizajesEmpresa({ empresaId: 1, limit: 7 }).binds[1]).toBe(7);
+  });
+
+  it('el bind de empresa_id es string (coherencia con TEXT) y el limit es numérico', () => {
+    const { binds } = construirQueryAprendizajesEmpresa({ empresaId: 5, limit: 3 });
+    expect(typeof binds[0]).toBe('string');
+    expect(binds[0]).toBe('5');
+    expect(typeof binds[1]).toBe('number');
+    expect(binds[1]).toBe(3);
   });
 });
 

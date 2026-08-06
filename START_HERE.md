@@ -33,8 +33,10 @@ ARC-004, ARC-006 y ARC-008, y con `ADR-0004` se cierra **F-1.1**.
 Cognitivo, Policy Engine, interfaces de Context Engine/Planner/Motor de Decisión, `memory.js`
 (ADR-0013) y el contrato `registrarTraza()` (ADR-0014). `registrarTraza()` real, `/health` de
 tres estados y `GET /admin/trazas` ya están desplegados en producción (ADR-0014, fuera del
-paquete aislado, en cada Worker). El paquete `nucleo-cognitivo/` en sí sigue sin integrarse en
-ningún Worker, prohibido por `CLAUDE.md` hasta nueva decisión.
+paquete aislado, en cada Worker). **Excepción acotada por ADR-0020 (2026-08-06):** el adaptador
+del Worker IA usa `decidirInvocacionPilotoN0()` para tools N0 ofrecidas y el rechazo de tools no
+ofrecidas; no integra Context Engine, Planner, memoria propia ni los flujos N1–N3. PR #98
+desplegada y verificada por el run 31089065117 (`/health` manual: `healthy`, D1/R2 disponibles).
 
 **F-1.3 completada** (2026-08-02): Tool Registry (ADR-0010) y Verifier (ADR-0009) migrados a
 todo el catálogo real de tools de los dos Workers (96/103, 7 excluidas a propósito). Cierra la
@@ -77,7 +79,9 @@ ingeniería activa.** Lo único abierto son decisiones exclusivas del Director:
 - **Definir la siguiente rebanada de presentación** tras P-ARCH-003 (aún sin proponer).
 - **ARC-014** — revisar si cambian sus condiciones de reapertura (más de un mantenedor o
   producción real).
-- **Motor de Decisión real / integrar `nucleo-cognitivo/`** — sigue prohibido hasta nueva
-  decisión explícita.
+- **Siguiente rebanada del Motor de Decisión** — analizar las trazas N0 del piloto antes de
+  proponerla. Sigue prohibido ampliar la integración a Context Engine, Planner, memoria propia o
+  N1–N3 sin una nueva decisión explícita.
 
-No integrar `nucleo-cognitivo/` en producción ni activar memoria persistente en él.
+No ampliar la integración acotada de ADR-0020 ni activar memoria persistente propia en
+`nucleo-cognitivo/`.

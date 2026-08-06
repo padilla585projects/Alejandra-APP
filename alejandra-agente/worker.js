@@ -48,6 +48,7 @@ import {
   extraerTablaDDL,
   determinarEstadoSalud,
   construirConsultaMemoriaGobernada,
+  construirQueryAprendizajesEmpresa,
 } from './lib.js';
 import { decidirInvocacionPilotoN0, tieneTrazaSuficiente } from '../nucleo-cognitivo/src/motor-decision.js';
 const EUR_RATE = 0.92;
@@ -4869,8 +4870,11 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
     // PASO 4: Historial dinámico
     const limitHistorial      = clas.experto === 'simple' ? 3 : 6;
-    // Aprendizajes solo para expertos técnicos donde aportan valor real
-    const incluirAprendizajes = ['tecnico','ingenieria','reflexion','completo'].includes(clas.experto);
+    // Aprendizajes para todo experto salvo 'simple'. Unificado con el criterio
+    // de procesarConNEXUSStream (linea ~5023) para evitar que app/panel vean un
+    // comportamiento distinto segun usen streaming o no — 'simple' excluye
+    // contexto extra por su naturaleza de charla corta (cascada gratis de OpenRouter).
+    const incluirAprendizajes = clas.experto !== 'simple';
     const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto, usuario_label, empresa_id);
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
@@ -6482,9 +6486,9 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
     case 'memory_save': {
       try {
         await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (tipo,usuario_id,titulo,contenido,importancia,created_at)
-           VALUES(?,?,?,?,?,datetime('now'))`
-        ).bind(input.tipo, usuario_id || 'system', input.titulo, input.contenido, input.importancia||3).run();
+          `INSERT INTO alejandra_memoria (tipo,usuario_id,empresa_id,titulo,contenido,importancia,created_at)
+           VALUES(?,?,?,?,?,?,datetime('now'))`
+        ).bind(input.tipo, usuario_id || 'system', empresa_id || 'system', input.titulo, input.contenido, input.importancia||3).run();
         return `Guardado en memoria: [${input.tipo}] "${input.titulo}"`;
       } catch (err) {
         return `Error al guardar: ${err.message}`;
@@ -6495,9 +6499,13 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
       try {
         const tipo  = input.tipo;
         const limit = input.limit || 10;
+        // SEC-CHAT-CONTEXTO-LEGACY: scopear por empresa_id (sesion) para que
+        // memory_read no devuelva recuerdos de otra empresa. empresa_id proviene
+        // de ejecutarTool (resuelta del token de sesion), nunca del input del modelo.
+        const eid = empresa_id ? String(empresa_id) : null;
         const rows  = tipo
-          ? await env.DB.prepare('SELECT tipo,titulo,contenido,importancia,created_at FROM alejandra_memoria WHERE tipo=? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(tipo,limit).all()
-          : await env.DB.prepare('SELECT tipo,titulo,contenido,importancia,created_at FROM alejandra_memoria ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(limit).all();
+          ? await env.DB.prepare('SELECT tipo,titulo,contenido,importancia,created_at FROM alejandra_memoria WHERE empresa_id = ? AND tipo=? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, tipo, limit).all()
+          : await env.DB.prepare('SELECT tipo,titulo,contenido,importancia,created_at FROM alejandra_memoria WHERE empresa_id = ? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, limit).all();
         const items = rows.results || [];
         if (!items.length) return 'No hay registros en memoria para ese filtro.';
         return items.map(r => `[${r.tipo}|imp:${r.importancia}] ${r.titulo}: ${r.contenido}`).join('\n');
@@ -6512,9 +6520,9 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
 DESCRIPCIÓN: ${input.descripcion}
 ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
+          `INSERT INTO alejandra_memoria (tipo,canal,empresa_id,titulo,contenido,importancia,created_at)
            VALUES('mejora',?,?,?,?,datetime('now'))`
-        ).bind(usuario_id||'system', `Mejora: ${input.descripcion.substring(0,60)}`, contenido, input.prioridad==='alta'?5:input.prioridad==='media'?3:1).run();
+        ).bind(usuario_id||'system', empresa_id || 'system', `Mejora: ${input.descripcion.substring(0,60)}`, contenido, input.prioridad==='alta'?5:input.prioridad==='media'?3:1).run();
         return `Mejora guardada con prioridad ${input.prioridad}. Adrián la verá en el panel de memoria.`;
       } catch (err) {
         return `Error al guardar mejora: ${err.message}`;
@@ -6561,9 +6569,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         const titulo  = `Decisión [${tipo}]: ${decision.substring(0, 60)}`;
         const contenido = `DECISIÓN: ${decision}\nCONFIANZA: ${confianza}\nAPLICADA: ${aplicado}${resultado ? '\nRESULTADO: ' + resultado : ''}`;
         await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
+          `INSERT INTO alejandra_memoria (tipo,canal,empresa_id,titulo,contenido,importancia,created_at)
            VALUES('decision',?,?,?,?,datetime('now'))`
-        ).bind(usuario_id||'system', titulo, contenido, imp).run();
+        ).bind(usuario_id||'system', empresa_id || 'system', titulo, contenido, imp).run();
 
         if (aplicado) return `Decisión tomada y aplicada (confianza ${Math.round(confianza*100)}%). ${resultado}`;
         const razon = confianza < 0.8 ? 'Confianza insuficiente (<80%).' : tipo !== 'config' ? `Tipo "${tipo}" no se aplica automáticamente.` : 'auto_aplicar=false.';
@@ -10374,8 +10382,8 @@ Datos:\n${resumen}`
     const conclusion = respAPI.content?.find(b => b.type === 'text')?.text || '';
     if (conclusion) {
       await env.DB.prepare(
-        `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
-         VALUES('contexto','system','Auto-reflexión',?,4,datetime('now'))`
+        `INSERT INTO alejandra_memoria (tipo,canal,empresa_id,titulo,contenido,importancia,created_at)
+         VALUES('contexto','system','system','Auto-reflexión',?,4,datetime('now'))`
       ).bind(conclusion.substring(0, 1000)).run();
     }
 
@@ -11506,9 +11514,12 @@ async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
     const historial = await env.DB.prepare(
       `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? AND rol IN ('user','assistant') ORDER BY created_at DESC LIMIT ?`
     ).bind(uid, 10).all();
-    const aprendizajes = await env.DB.prepare(
-      `SELECT titulo,contenido,tipo FROM alejandra_memoria WHERE (tipo='aprendizaje' OR tipo='contexto') ORDER BY importancia DESC,created_at DESC LIMIT 10`
-    ).all();
+    // SEC-CHAT-CONTEXTO-LEGACY / ARC-016: filtrar aprendizajes por empresa_id
+    // (sale de la sesion, nunca del input del modelo). La query legada leia
+    // aprendizajes de TODAS las empresas -> fuga cross-tenant. Si empresa_id
+    // falta, el builder devuelve 0 filas (fail-closed).
+    const { sql: sqlAp, binds: bindsAp } = construirQueryAprendizajesEmpresa({ empresaId: empresa_id, limit: 10 });
+    const aprendizajes = await env.DB.prepare(sqlAp).bind(...bindsAp).all();
     const conocimiento = await env.DB.prepare(
       `SELECT id, tipo, titulo, descripcion, tags FROM alejandra_conocimiento WHERE activo=1 ORDER BY creado_at DESC LIMIT 20`
     ).all().catch(() => ({ results: [] }));
@@ -11685,8 +11696,8 @@ async function autoLearnChat(env, usuario_id, empresa_id, respuesta) {
     if (respuesta.acciones?.length > 0) {
       const str = respuesta.acciones.map(a=>`${a.tipo}: ${a.descripcion}`).join('; ');
       await env.DB.prepare(
-        `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at) VALUES('aprendizaje',?,'Chat acción',?,2,datetime('now'))`
-      ).bind(usuario_id, str).run();
+        `INSERT INTO alejandra_memoria (tipo,canal,empresa_id,titulo,contenido,importancia,created_at) VALUES('aprendizaje',?,?,'Chat acción',?,2,datetime('now'))`
+      ).bind(usuario_id, empresa_id || 'system', str).run();
     }
   } catch (err) { console.error('autoLearn:', err.message); }
 }
