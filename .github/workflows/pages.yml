@@ -17,9 +17,18 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: github-pages-production
-  cancel-in-progress: false
+# NOTA (2026-08-06): el bloque de `concurrency` se retiró temporalmente. Un run
+# quedó en estado zombie `waiting` (en espera de aprobación de un entorno que,
+# con un solo mantenedor, no se puede auto-aprobar — ARC-014) y GitHub no lo
+# libera ni cancela (HTTP 502 persistente), dejando bloqueado para siempre el
+# grupo `github-pages-production` y colgando todas las publicaciones nuevas en
+# `pending`. Con el entorno `github-pages` ya configurado con
+# `protected_branches: true` (permite desplegar sin aprobación manual), se
+# quita el grupo de concurrency para que una publicación no quede secuestrada
+# por un run zombie. GitHub Pages solo admite un deployment activo; si se
+# lanzan dos publicaciones casi a la vez, la segunda puede fallar al ocupar el
+# deployment activo — se reintenta manualmente hasta, no debe ser el bloqueo
+# que nos impida publicar.-in-progress nunca se usó (siempre false).
 
 jobs:
   deploy:
