@@ -3715,6 +3715,22 @@ export default {
           await env.DB.prepare('UPDATE alejandra_tokens SET token=? WHERE token=?').bind(token_nuevo, adminToken).run();
           return json({ ok: true });
         }
+        // ADR-0014/0021: consulta de trazas para el dashboard de admin.html.
+        // Mismo patrón de auth que el resto de /api/admin/* (verificarAdminToken).
+        // Leer es de solo lectura, nunca accesible por el cron.
+        if (path === '/api/admin/trazas' && req.method === 'GET') {
+          const tipo  = url.searchParams.get('tipo');
+          const worker = url.searchParams.get('worker');
+          const limit = parseInt(url.searchParams.get('limit') || '50');
+          let sql = "SELECT id, ts, worker, tipo, empresa_id, usuario_id, trace_id, resumen FROM alejandra_trazas WHERE 1=1";
+          const binds = [];
+          if (tipo)   { sql += " AND tipo = ?";      binds.push(tipo); }
+          if (worker) { sql += " AND worker = ?";    binds.push(worker); }
+          sql += ` ORDER BY ts DESC LIMIT ?`;
+          binds.push(Math.min(limit, 200));
+          const rows = await env.DB.prepare(sql).bind(...binds).all().catch(() => ({ results: [] }));
+          return json(rows.results || []);
+        }
 
         return json({ error: 'Ruta no encontrada' }, 404);
       }

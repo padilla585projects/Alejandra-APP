@@ -542,6 +542,9 @@
         <div class="nav-item" onclick="switchTab('memory')">
           <span>🧠 Memoria</span>
         </div>
+        <div class="nav-item" onclick="switchTab('trazas')">
+          <span>🧵 Trazas</span>
+        </div>
       </nav>
 
       <div class="status-badge" id="statusBadge">
@@ -749,12 +752,41 @@
           </div>
         </div>
 
+        <!-- TRAZAS TAB -->
+        <div id="tab-trazas" class="tab-content">
+          <h2 style="margin-bottom: 20px;">🧵 Trazas (ADR-0014 / ADR-0021)</h2>
+          <div class="config-section" style="margin-bottom: 16px;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+              <input type="text" id="trazasTipo" placeholder="Filtrar por tipo (ej: decision, nexo_consulta)" style="flex:1;min-width:220px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);">
+              <button onclick="cargarTrazas()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;">Filtrar</button>
+              <button onclick="document.getElementById('trazasTipo').value='';cargarTrazas()" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);cursor:pointer;">Limpiar</button>
+            </div>
+          </div>
+          <div class="config-section">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Worker</th>
+                  <th>Tipo</th>
+                  <th>Empresa</th>
+                  <th>Usuario</th>
+                  <th>Resumen</th>
+                </tr>
+              </thead>
+              <tbody id="trazasTableBody">
+                <tr><td colspan="6" style="text-align:center;color:#64748b;">Cargando trazas…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 
   <script>
-    const ADMIN_WORKER_URL = 'https://alejandra-agente.workers.dev/api/admin';
+    const ADMIN_WORKER_URL = 'https://alejandra-agente.alejandra-app.workers.dev/api/admin';
     const ADMIN_TOKEN = localStorage.getItem('alejandra_admin_token') || 'admin_inicial_setup_alejandra_2026';
 
     function switchTab(tabName) {
@@ -775,7 +807,8 @@
         config: '⚙️ Configuración',
         chat: '💬 Chat',
         logs: '📋 Audit Logs',
-        memory: '🧠 Memoria'
+        memory: '🧠 Memoria',
+        trazas: '🧵 Trazas'
       };
       document.getElementById('pageTitle').textContent = titles[tabName] || 'Dashboard';
 
@@ -783,6 +816,7 @@
       if (tabName === 'config') cargarConfiguracion();
       if (tabName === 'logs') cargarLogs();
       if (tabName === 'memory') cargarMemoria();
+      if (tabName === 'trazas') cargarTrazas();
     }
 
     async function cargarConfiguracion() {
@@ -855,6 +889,40 @@
         // Render memoria...
       } catch (err) {
         console.error('Error cargando memoria:', err);
+      }
+    }
+
+    function escaparHTML(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      })[c]);
+    }
+
+    async function cargarTrazas() {
+      const tipo = (document.getElementById('trazasTipo').value || '').trim();
+      const tbody = document.getElementById('trazasTableBody');
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;">Cargando trazas…</td></tr>';
+      try {
+        const url = `${ADMIN_WORKER_URL}/trazas?limit=100${tipo ? '&tipo=' + encodeURIComponent(tipo) : ''}`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const trazas = await res.json();
+        const filas = Array.isArray(trazas) ? trazas : [];
+        if (filas.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;">Sin trazas.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = filas.map(t => `
+          <tr>
+            <td>${escaparHTML((t.ts || '').replace('T', ' ').slice(0, 19))}</td>
+            <td><span class="badge" style="background:rgba(59,130,246,0.1);color:#60a5fa;">${escaparHTML(t.worker)}</span></td>
+            <td><span class="badge badge-success">${escaparHTML(t.tipo)}</span></td>
+            <td>${escaparHTML(t.empresa_id)}</td>
+            <td>${escaparHTML(t.usuario_id)}</td>
+            <td title="${escaparHTML(t.trace_id || '')}">${escaparHTML(t.resumen)}</td>
+          </tr>`).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ef4444;">Error cargando trazas: ${escaparHTML(err.message)}</td></tr>`;
       }
     }
 
