@@ -2959,7 +2959,11 @@ const RATE_LIMIT_POR_MINUTO = 15;
 const TOPE_GASTO_DIARIO_USD = 10;
 
 async function validarRateLimit(env, identidad) {
-  if (!env.RATE_LIMIT_KV) return { ok: true }; // fail-open si el binding no está disponible
+  if (!env.RATE_LIMIT_KV) {
+    // SEC-RL-01: fail-closed cuando KV no está disponible — no permitir requests ilimitados
+    console.warn('[rate-limit] KV binding no disponible, rechazando request');
+    return { ok: false, reintentarEnSeg: 60 };
+  }
   try {
     const ventana = Math.floor(Date.now() / 60000); // bucket de 1 minuto
     const key = `rl:${identidad}:${ventana}`;
@@ -2970,7 +2974,9 @@ async function validarRateLimit(env, identidad) {
     await env.RATE_LIMIT_KV.put(key, String(actual + 1), { expirationTtl: 120 });
     return { ok: true };
   } catch (_) {
-    return { ok: true }; // ante error de KV, no bloquear el servicio (fail-open)
+    // SEC-RL-01: fail-closed en caso de error de KV
+    console.warn('[rate-limit] Error en KV, rechazando request');
+    return { ok: false, reintentarEnSeg: 60 };
   }
 }
 
@@ -3130,8 +3136,8 @@ export default {
           // consume este endpoint (p.ej. index.html usa `.version` como
           // fallback de actualización).
           status: estado === 'unhealthy' ? 'error' : 'ok',
-          nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true,
-          vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true,
+          nexus: true, reflexion: true, decisiones: true, web_search: true, upload: true,
+          vision: true, ingenieria: true, gemini_vision: true, prompt_caching: true,
           razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true,
         }, estado === 'unhealthy' ? 503 : 200);
       }
@@ -3663,9 +3669,9 @@ export default {
         if (path === '/api/admin/tokens' && req.method === 'POST') {
           const { nombre, token_valor } = await req.json();
           if (!nombre || !token_valor) return json({ error: 'nombre y token_valor requeridos' }, 400);
-          if (token_valor.length < 6) return json({ error: 'Mínimo 6 caracteres' }, 400);
+          if (token_valor.length < 32) return json({ error: 'Mínimo 32 caracteres para seguridad' }, 400);
           await env.DB.prepare(
-            `INSERT INTO alejandra_tokens (token, tipo, descripcion, activo, created_at) VALUES (?, 'admin', ?, 1, datetime('now'))`
+            `INSERT INTO alejandra_tokens (token, tipo, descripcion, activo, created_at, expires_at) VALUES (?, 'admin', ?, 1, datetime('now'), datetime('now', '+30 days'))`
           ).bind(token_valor, nombre).run();
           return json({ ok: true });
         }
@@ -3677,7 +3683,7 @@ export default {
         }
         if (path === '/api/admin/tokens/change' && req.method === 'POST') {
           const { token_nuevo } = await req.json();
-          if (!token_nuevo || token_nuevo.length < 6) return json({ error: 'Mínimo 6 caracteres' }, 400);
+          if (!token_nuevo || token_nuevo.length < 32) return json({ error: 'Mínimo 32 caracteres para seguridad' }, 400);
           await env.DB.prepare('UPDATE alejandra_tokens SET token=? WHERE token=?').bind(token_nuevo, adminToken).run();
           return json({ ok: true });
         }
@@ -3882,9 +3888,13 @@ export default {
         // Fallback: tokens admin antiguos en alejandra_tokens
         try {
           const row = await environment.DB.prepare(
-            `SELECT id FROM alejandra_tokens WHERE token = ? AND activo = 1`
+            `SELECT id, expires_at FROM alejandra_tokens WHERE token = ? AND activo = 1`
           ).bind(token).first();
-          if (row) return { usuario_id: 'adrian', empresa_id: 'default' };
+          if (row) {
+            // SEC-AUTH-01: comprobar expiración si el token tiene expires_at
+            if (row.expires_at && new Date(row.expires_at) < new Date()) return null;
+            return { usuario_id: 'adrian', empresa_id: 'default' };
+          }
         } catch {}
         return null;
       }
@@ -4113,7 +4123,9 @@ export default {
           // REAL de `usuarios` siempre que se pueda resolver — de eso depende que
           // puedeAccederArchivo() en /files/<key> pueda determinar la empresa dueña.
           // No requiere ningún cambio en la app (sigue sin mandar Authorization aquí).
-          const usuario_id = usuarioAutenticado || await normalizarUsuarioId(env, formData.get('usuario_id') || 'anon');
+          // SEC-UPLOAD-01: sin autenticación, NO resolver usernames a IDs reales
+          // (file planting cross-empresa). Solo se usa 'anon' como fallback.
+          const usuario_id = usuarioAutenticado || 'anon';
 
           if (!file || !(file instanceof File)) {
             return json({ error: 'Campo "file" requerido' }, 400);
@@ -4185,7 +4197,8 @@ export default {
       if (env.TELEGRAM_BOT_TOKEN) {
         ctx.waitUntil(enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, `⚠️ <b>Error interno</b> en ${path}\n${String(err.message).slice(0, 300)}`).catch(() => {}));
       }
-      return json({ error: err.message }, 500);
+      // SEC-ERROR-01: no filtrar err.message al cliente — puede contener SQL internals, paths, etc.
+      return json({ error: 'Error interno del servidor' }, 500);
     }
   },
   // ── Cron: Alejandra despierta cada hora y decide si actuar ──────────────
@@ -6486,10 +6499,13 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
 
     case 'memory_save': {
       try {
+        // SEC-MEM-01: sanitizar contenido antes de persistir en memoria
+        const contenido = String(input.contenido || '').replace(/(ignore|olvida|descarta)\s+(all|todas|tus)\s+(instructions|instrucciones|reglas)/gi, '[REDACTED]');
+        const titulo = String(input.titulo || '').substring(0, 200);
         await env.DB.prepare(
           `INSERT INTO alejandra_memoria (tipo,usuario_id,empresa_id,titulo,contenido,importancia,created_at)
            VALUES(?,?,?,?,?,?,datetime('now'))`
-        ).bind(input.tipo, usuario_id || 'system', empresa_id || 'system', input.titulo, input.contenido, input.importancia||3).run();
+        ).bind(input.tipo, usuario_id || 'system', empresa_id || 'system', titulo, contenido, input.importancia||3).run();
         return `Guardado en memoria: [${input.tipo}] "${input.titulo}"`;
       } catch (err) {
         return `Error al guardar: ${err.message}`;
@@ -11521,9 +11537,11 @@ async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
     // falta, el builder devuelve 0 filas (fail-closed).
     const { sql: sqlAp, binds: bindsAp } = construirQueryAprendizajesEmpresa({ empresaId: empresa_id, limit: 10 });
     const aprendizajes = await env.DB.prepare(sqlAp).bind(...bindsAp).all();
-    const conocimiento = await env.DB.prepare(
-      `SELECT id, tipo, titulo, descripcion, tags FROM alejandra_conocimiento WHERE activo=1 ORDER BY creado_at DESC LIMIT 20`
-    ).all().catch(() => ({ results: [] }));
+    const conocimiento = empresa_id
+      ? await env.DB.prepare(
+          `SELECT id, tipo, titulo, descripcion, tags FROM alejandra_conocimiento WHERE activo=1 AND empresa_id=? ORDER BY creado_at DESC LIMIT 20`
+        ).bind(empresa_id).all().catch(() => ({ results: [] }))
+      : { results: [] };
 
     // Recuperar el resumen más reciente para este usuario (cualquier canal)
     let resumen_anterior = null;
@@ -11675,9 +11693,12 @@ async function autoLearnUpload(env, key, mimeType, filename, usuario_id, empresa
       // Leer contenido de texto y resumir
       const decoder = new TextDecoder();
       const text = decoder.decode(arrayBuffer);
-      resumen = text.length > 500
-        ? `Archivo de texto (${text.length} caracteres). Inicio: ${text.substring(0, 400)}...`
-        : `Archivo de texto: ${text}`;
+      // SEC-LLM-02: sanitizar contenido para evitar inyección de prompt
+      const sanitized = text.replace(/(ignore|olvida|descarta)\s+(all|todas|tus)\s+(instructions|instrucciones|reglas)/gi, '[REDACTED]')
+        .replace(/(you are now|ahora eres|actua como|actúa como|modo debug|debug mode)/gi, '[REDACTED]');
+      resumen = sanitized.length > 500
+        ? `Archivo de texto (${sanitized.length} caracteres). Inicio: ${sanitized.substring(0, 400)}...`
+        : `Archivo de texto: ${sanitized}`;
     }
 
     if (resumen) {
