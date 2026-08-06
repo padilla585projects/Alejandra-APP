@@ -1337,17 +1337,18 @@ const DDL_DUPLICADO = /duplicate column name|already exists/i;
 // serializar detalle_json -- nunca se persiste un email/teléfono en crudo ni
 // el cuerpo de una conversación. Resiliente: un fallo de INSERT jamás debe
 // tumbar el flujo que llama a esto, igual que runDDL() ya hace con DDL.
-async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, resumen, detalle }) {
+async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, traceId = null, resumen, detalle }) {
   try {
     const resumenRedactado = redactarTexto(String(resumen || ''));
     const detalleRedactado = redactarDetalle(detalle ?? {});
     await env.DB.prepare(
-      `INSERT INTO alejandra_trazas (worker, tipo, empresa_id, usuario_id, resumen, detalle_json)
-       VALUES ('agente', ?, ?, ?, ?, ?)`
+      `INSERT INTO alejandra_trazas (worker, tipo, empresa_id, usuario_id, trace_id, resumen, detalle_json)
+       VALUES ('agente', ?, ?, ?, ?, ?, ?)`
     ).bind(
       String(tipo),
       empresaId != null ? String(empresaId) : null,
       usuarioId != null ? String(usuarioId) : null,
+      traceId || null,
       resumenRedactado,
       JSON.stringify(detalleRedactado)
     ).run();
@@ -4211,6 +4212,16 @@ export default {
       const hora = new Date().getUTCHours();
       const horaLocal = (hora + 2) % 24; // UTC+2 España
 
+      // F-4.1.2: Purge diario de trazas antiguas (04:00 UTC, antes del resto de crons)
+      if (hora === 4) {
+        ctx.waitUntil(
+          env.DB.prepare(`DELETE FROM alejandra_trazas WHERE created_at < datetime('now', '-90 days')`)
+            .run()
+            .then(r => console.log(`[Purge] trazas eliminadas: ${r.meta?.changes || 0}`))
+            .catch(e => console.error('[Purge] error:', e.message))
+        );
+      }
+
       // Auto-actualización de la cascada de modelos gratis (una vez al día, en el
       // primer tick del cron — 05:00 UTC). No depende del horario "no molestar":
       // no es una acción de cara al usuario, solo mantenimiento interno.
@@ -4898,7 +4909,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
     let respAPI  = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
-    if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+    if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
 
     // SALVAGUARDA — "plan diferido sin ejecutar" (ver misma logica en
     // procesarConNEXUSStream): el modelo a veces escribe el plan completo en
@@ -4912,7 +4923,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
         messages.push({ role: 'assistant', content: respAPI.content });
         messages.push({ role: 'user', content: [{ type: 'text', text: '[INSTRUCCIÓN: Acabas de describir un plan pero todavía no has ejecutado ninguna herramienta. Ejecuta AHORA MISMO, en esta respuesta, la accion/herramienta que acabas de anunciar. No repitas el plan en texto, invoca la herramienta directamente.]' }] });
         respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
-        if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+        if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
       }
     }
 
@@ -5050,7 +5061,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
     let tokensIn = respAPI.usage?.input_tokens || 0;
     let tokensOut = respAPI.usage?.output_tokens || 0;
-    if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+    if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
 
     // SALVAGUARDA — "plan diferido sin ejecutar": con tareas complejas (varias
     // herramientas/pasos), el modelo a veces sigue el modulo de razonamiento
@@ -5071,7 +5082,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         if (respAPI.usage) {
           tokensIn  += respAPI.usage.input_tokens  || 0;
           tokensOut += respAPI.usage.output_tokens || 0;
-          registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+          registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
         }
       }
     }
@@ -5150,7 +5161,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       if (respAPI.usage) {
         tokensIn  += respAPI.usage.input_tokens  || 0;
         tokensOut += respAPI.usage.output_tokens || 0;
-        registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+        registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
       }
       iter++;
     }
@@ -11293,7 +11304,7 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
       // mal etiquetado) — ese gasto real no contaba ni para las estadísticas ni
       // para el tope de gasto diario. modelo_real='gpt-4o' viene del fallback.
       if (fallback.usage) {
-        registrarTokenUso(env, fallback.modelo_real || 'gpt-4o', 'chat_stream_fallback', fallback.usage.input_tokens||0, fallback.usage.output_tokens||0, usuario_id);
+        registrarTokenUso(env, fallback.modelo_real || 'gpt-4o', 'chat_stream_fallback', fallback.usage.input_tokens||0, fallback.usage.output_tokens||0, usuario_id, empresa_id);
       }
       // SALVAGUARDA — esta fase de "cierre" normalmente no lleva tools (solo
       // pedimos texto final), pero algunos modelos gratuitos de la cascada
@@ -11729,13 +11740,13 @@ async function autoLearnChat(env, usuario_id, empresa_id, respuesta) {
   } catch (err) { console.error('autoLearn:', err.message); }
 }
 
-async function registrarTokenUso(env, modelo, tipo, entrada, salida, usuario_id) {
+async function registrarTokenUso(env, modelo, tipo, entrada, salida, usuario_id, empresa_id) {
   try {
     const { proveedor, coste } = calcularCosteYProveedor(modelo, entrada, salida);
     await env.DB.prepare(
-      `INSERT INTO alejandra_token_uso (proveedor,modelo,tipo,tokens_entrada,tokens_salida,coste_usd,usuario_id,created_at)
-       VALUES(?,?,?,?,?,?,?,datetime('now'))`
-    ).bind(proveedor, modelo, tipo, entrada, salida, coste, usuario_id||'system').run();
+      `INSERT INTO alejandra_token_uso (proveedor,modelo,tipo,tokens_entrada,tokens_salida,coste_usd,usuario_id,empresa_id,created_at)
+       VALUES(?,?,?,?,?,?,?,?,datetime('now'))`
+    ).bind(proveedor, modelo, tipo, entrada, salida, coste, usuario_id||'system', empresa_id||null).run();
   } catch (err) { console.error('tokenUso:', err.message); }
 }
 
