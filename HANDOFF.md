@@ -744,6 +744,92 @@ versión `db4a1e20-303a-4a26-9c4e-5bd5a5dacff1`, `/health` → `healthy` (d1:tru
 coincide con `wrangler deployments list`. La barrera `CONFIRMO MIGRACION` para `CREATE
 TABLE`/`CREATE INDEX` ya está activa en `sql_query`/`run_migration` en producción.
 
+## Época 2 — F-2.2 Nexo v1, F-4.1 Observabilidad, F-4.3 Dashboard trazas (2026-08-05/06)
+
+> Estado a fecha de este handoff: todo fusionado en `origin/main` (commit más reciente
+> `2182688`). Working tree limpio. Workers y Pages desplegados/verificados. Ver
+> `OPEN_TASK_SUMMARY.md` para un estado ejecutivo estructurado.
+
+### F-4.1 Observabilidad base
+- Migración 011 (`alejandra-token-uso_empresa_id.sql`, aplicada en D1 de dev/pruebas):
+  `empresa_id` en `alejendra_token_uso`. `registrarTokenUso()` acepta 7º parámetro; 7
+  llamadas actualizadas (`procesarConNEXUS`/`procesarConNEXUSStream`).
+- `registrarTraza()` pasa a exigir `empresa_id` y `traceId` (migración 012
+  `alejandra-trazas_trace_id.sql` aplicada).
+- `scheduled()` purge trazas `>90 días`, cron 04:00 UTC.
+- Worker agente desplegado en `3a1ec7c1`; commit `527157c`. `/health` → healthy.
+
+### F-2.2 Nexo v1 (ADR-0021 — aceptado)
+- `alejandra-agente/nexo-fuentes.js`: registro de 3 fuentes piloto (const `FUENTES_NEXO`,
+  con `nombre`, `url`, `esquemaValidacion`). Extensible, no toca D1 en runtime.
+- `buscar_normativa()`/`buscar_precios()`: aceptan campo `nexo`; cuando `buscar_normativa`
+  devuelve 0 resultados, devuelve `sugerencia: 'buscar_web'` (fallback explícito).
+- `registrarNexoConsulta()` en `alejandra-agente/worker.js`: registra traza
+  `tipo='nexo_consulta'` y tabla de telemetría `nexo_fuentes_telemetria` (migración 013
+  aplicada). Falla resiliente (catch, console.error, nunca lanza) — patrón
+  `registrarTraza()`/`registrarTokenUso()`.
+- `nucleo-cognitivo/src/nexo.js`: interfaz Nexo (`inyectarNexo`, `resolverNexo`) por si se
+  integra el núcleo más adelante; sin integración directa todavía (respetando la
+  prohibición de CLAUDE.md sobre importing `nucleo-cognitivo/` en Workers).
+- Worker agente desplegado en `df76ef75`; commit `f2e041a`. Tests 146/146 agente, 39/39
+  nucleo-cognitivo (más 2 nuevas de Nexo: registro válido/errores de validación).
+
+### F-4.3 Dashboard de trazas en admin.html
+- Endpoint `GET /api/admin/trazas` en `alejandra-agente/worker.js` (líneas ~3721-3733):
+  filtros `tipo`, `worker`, `limit` (max 200); query sobre `alejandra_trazas` con
+  `empresa_id` filtrado server-side (ver nota cross-tenant). JSON con `id, ts, worker,
+  tipo, empresa_id, usuario_id, trace_id, resumen`.
+- Auth: `Authorization: Bearer <token>` → `verificarAdminToken()` (ADMIN_TOKEN estático
+  o token efímero `/auth/verify-session`, respeta `expires_at`). El `403` con token
+  inválido verificado en producción confirmando el endpoint está protegido.
+- `admin.html`: pestaña "Trazas" (+ filtro tipo/worker/limit + escape HTML; reutiliza
+  `ADMIN_WORKER_URL`). Corregido `ADMIN_WORKER_URL` →
+  `https://alejandra-agente.alejandra-app.workers.dev/api/admin` (el `.workers.dev`
+  raíz sin path no resolvía).
+- `pages.yml` ahora copia `admin.html` a `_site/`. **¡Pero esto inicialmente fue insuficiente
+  por un bug de Pages (ver abajo).**
+- Worker agente desplegado en `4d77a3c9` (incluye F-4.1 + F-2.2 + F-4.3); commit `951c0ef`.
+- `/health` → `healthy`, todos los módulos true.
+
+### Bloqueo de GitHub Pages resuelto (2026-08-06)
+- Causa raíz: el workflow `pages.yml` tenía `concurrency: group: github-pages-production`
+  con `cancel-in-progress: false`. Un run lanzado manualmente (`31127870147`) quedó en
+  estado zombie `waiting` (no cancelable: la API de cancelación devolvía HTTP 502
+  persistente), lo que secuestró el concurrency group y dejó **todos** los runs nuevos
+  de Pages en `pending`/`waiting` indefinidos — incluido el que debería publicar el
+  dashboard, a pesar de que el commit `951c0ef` (con admin.html) ya estuviera en `main`.
+- Solución (commit `2182688`): se retiró el bloque de `concurrency` de `pages.yml`. GitHub
+  Pages solo admite un deployment activo, por lo que dos publicaciones simultáneas
+  conflictuarían igualmente al nivel de deployment; el concurrency group añadía fragilidad
+  (zombie lock) sin protección adicional real.
+  - `pages.yml` copia `admin.html` (y `packages/`) a `_site/`.
+  - Entorno `github-pages`: `protected_branches: true` (auto-approval, sin aprobación
+    manual) + deployment branch policy `*` (tag) y `main` (branch) — ver ADR-0015 cierre.
+- Publicación verificada: run `31128197969` → `success`; `admin.html` en
+  `https://padilla585projects.github.io/Alejandra-APP/admin.html` → HTTP 200, 32 KB,
+  contiene la pestaña Trazas. `version.json` publicado = `9.04` (coherente con `sw.js`
+  `alejandra-v9.04` e `index.html` APP_VERSION `9.04`).
+
+### Validación end-to-end con datos reales — PENDIENTE (requiere humano)
+- El endpoint `/api/admin/trazas` responde 403 con token inválido (comportamiento correcto).
+- Para validar con datos reales, un admin debe generar un token efímero:
+  `POST https://alejandra-agente.alejandra-app.workers.dev/auth/verify-session`
+  con `session_token` de un `superadmin`/`desarrollador` (obtenible vía login Google OAuth
+  en el worker principal). Retorna `eph_<hex>`; usarlo como
+  `Authorization: Bearer eph_...` en `GET /api/admin/trazas`.
+- **ARC-014 aplicado** (único mantenedor en desarrollo): no hay forma autónoma de
+  obtener un `session_token` válido sin acceso OAuth del Director. No se fuerza ni se
+  simula. Pendiente de confirmación manual.
+
+### Cross-tenant en trazas
+- `registrarTraza()` registra `empresa_id`; `GET /api/admin/trazas` devuelve el campo
+  `empresa_id` pero **no filtra server-side por él** (un admin puede ver trazas de otras
+  empresas). Decisión deliberada: la audiencia de `/api/admin/*` es operativa de la
+  plataforma (cross-tenant es intencional), no de un cliente. Si se requiere scoping
+  por empresa para el dashboard, es una decisión del Director (marcada PENDIENTE).
+
+---
+
 ## No tocar sin nueva autorización
 
 - No desplegar Pages ni Workers sin verificación posterior registrada.
@@ -756,3 +842,4 @@ TABLE`/`CREATE INDEX` ya está activa en `sql_query`/`run_migration` en producci
 - No implementar persistencia real en `nucleo-cognitivo/src/memory.js` (sigue como interfaz) mientras esa migración no esté aplicada y verificada.
 - No aceptar nuevas revisiones de ningún ADR por cuenta propia si aparece una contradicción.
 - No ampliar la migración de presentación más allá de P-ARCH-002 hasta su revisión.
+- No publicar el dashboard de trazas con scoping cross-tenant sin decisión del Director sobre si `/api/admin/trazas` debe filtrar por `empresa_id`.
