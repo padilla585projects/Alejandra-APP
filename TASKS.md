@@ -15,6 +15,26 @@ Estado: **Las 14 verticales de ARC-011 fase 3 completas** (ciclo de 5 pasos cerr
 - Una tarea activa tiene una única rama y responsable actual.
 - Actualizar al iniciar, bloquear, relevar, revisar y completar.
 
+## Auditoría e integración del cerebro de Alejandra Chat (2026-08-06)
+
+### SEC-CHAT-CONTEXTO-LEGACY — Aislamiento fail-closed del prompt
+
+- Estado: **en revisión**
+- Prioridad: Crítica
+- Rama: `codex/fix-chat-context-isolation`
+- Objetivo: impedir que el prompt del chat incorpore automáticamente tablas legacy globales sin ámbito de empresa ni usuario.
+- Alcance: `buildAnthropicSystemBlocks()` deja de leer `alejandra_ram`, `alejandra_errores`, `alejandra_memoria`, logs e historial; conserva solo módulos estáticos y el catálogo de tools visible. No modifica datos ni permisos.
+- Pruebas: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` (139/139); `node --test nucleo-cognitivo/test/*.test.js` (36/36); `node scripts/check-encoding.js`; `git diff --check`.
+- Siguiente acción exacta: revisar y, si procede, integrar el fix. No desplegar sin verificación posterior registrada.
+
+### ADR-0020 — Integración gradual del Motor de Decisión
+
+- Estado: **en revisión — rebanada 1 implementada**
+- Decisión: aceptado por el Director el 2026-08-06.
+- Alcance implementado: adaptador sin I/O dentro de `nucleo-cognitivo/`; toda invocación N0 ofrecida genera una decisión estructurada y una traza antes de ejecutar; una tool no ofrecida se rechaza. N1-N3 conservan gates existentes.
+- Pruebas: `node --test nucleo-cognitivo/test/*.test.js` (39/39); `npm --prefix alejandra-agente test` (139/139); importación del módulo del Worker correcta en Node.
+- Siguiente acción exacta: revisar el diff, resolver la validación de bundle local si está disponible e integrar; no desplegar sin verificación posterior registrada.
+
 ## Plantilla
 
 ```text

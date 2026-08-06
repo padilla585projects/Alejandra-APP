@@ -1,5 +1,20 @@
 # Handoff — Alejandra 2.0
 
+## SEC-CHAT-CONTEXTO-LEGACY — en revisión (2026-08-06)
+
+- Rama: `codex/fix-chat-context-isolation`.
+- Cambio: `alejandra-agente/worker.js` deja de inyectar datos de tablas legacy globales en `buildAnthropicSystemBlocks()`. Se mantiene el catálogo de tools; las consultas de memoria gobernada siguen pasando por su tool con sesión/tenant.
+- Evidencia: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` 139/139; `node --test nucleo-cognitivo/test/*.test.js` 36/36; `node scripts/check-encoding.js`; `git diff --check`.
+- Riesgo/rollback: reduce temporalmente el contexto automático, pero no borra ni modifica datos. Revertir el commit restaura el comportamiento anterior, incluido el riesgo de mezcla de tenants.
+- Decisión de aquella entrega: `docs/decisions/ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md` quedó propuesto; fue aceptado por el Director el 2026-08-06 (ver entrada siguiente).
+
+## ADR-0020 — rebanada 1 del Motor de Decisión (2026-08-06)
+
+- Decisión: **aceptada por el Director**.
+- Cambio en curso: `alejandra-agente/worker.js` importa `decidirInvocacionPilotoN0()` del núcleo. Antes de ejecutar una tool N0 ofrecida, registra `tipo='decision'` con los ocho campos contractuales; una tool no ofrecida se rechaza. Está cableado en chat normal, streaming y recuperación de tool-use de streaming.
+- Límites: N1-N3 conservan los gates existentes; no se modifica D1, permisos, secretos ni se despliega.
+- Pruebas: `node --test nucleo-cognitivo/test/*.test.js` 39/39; `npm --prefix alejandra-agente test` 139/139; `node --check alejandra-agente/worker.js`; importación del módulo correcta en Node. `wrangler deploy --dry-run` agotó el tiempo local sin desplegar; la validación de bundle queda pendiente antes de entrega remota.
+
 - Fecha: 2026-08-03
 - Agentes que entregan: Codex y Claude, Agentes de Ingeniería
 - Trabajo entregado: F-0.1/F-0.1-R (entrega segura), GOV-001 (proceso de ingeniería), ARC-011 fases 1-2 (inventario de esquema), ARC-012 (tres columnas ausentes), ARC-013/015/016/017 (desplegados en producción), F-0.2 (completada), ARC-018 (Worker/bucket R2 huérfanos borrados), ADR-0007 y su enmienda 1, los siete ADR de Época 1 (`ADR-0004`, `ADR-0006`, `ADR-0008`, `ADR-0009`, `ADR-0010`, `ADR-0011`, `ADR-0013`, `ADR-0014`) — **todos aceptados por el Director el 2026-08-02** —, las 14 verticales de ARC-011 fase 3 con el ciclo de ADR-0011 cerrado, el checklist de referencia de `F-0.2-CFG` y el fix del salto del chat de Alejandra en `panel.html` (PR #76). **2026-08-04, fuera del roadmap:** 4 bugs reales de `index.html` reportados por Adrián vía sugerencias con foto (#209/#211/#212/#213/#214) — ver `PROJECT_STATE.md` ("Fix — 4 bugs reales de la app móvil...").

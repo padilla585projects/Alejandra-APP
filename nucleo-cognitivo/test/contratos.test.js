@@ -5,7 +5,7 @@ import { crearEstadoCognitivo, actualizarEstadoCognitivo } from '../src/estado-c
 import { evaluarAccion, permitidoParaCron } from '../src/policy-engine.js';
 import { construirContexto } from '../src/context-engine.js';
 import { construirPlan } from '../src/planner.js';
-import { decidir, tieneTrazaSuficiente, CAMPOS_TRAZA_OBLIGATORIOS } from '../src/motor-decision.js';
+import { decidir, decidirInvocacionPilotoN0, tieneTrazaSuficiente, CAMPOS_TRAZA_OBLIGATORIOS } from '../src/motor-decision.js';
 
 test('Estado Cognitivo: se crea en fase percibir y es inmutable al actualizar', () => {
   const estado = crearEstadoCognitivo('tarea-1');
@@ -69,4 +69,38 @@ test('Motor de Decisión: el contrato exige los campos de traza de 04-MOTOR-DE-D
   assert.equal(tieneTrazaSuficiente(decisionIncompleta), false);
 
   assert.equal(tieneTrazaSuficiente(null), false);
+});
+
+test('Motor de Decisión: el piloto permite y deja trazada una tool N0 ofrecida', () => {
+  const resultado = decidirInvocacionPilotoN0({
+    tool: { name: 'consultar_personal', nivel_riesgo: 'N0' },
+    toolOfrecida: true,
+    authOk: true,
+    modo: 'gestion',
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, true);
+  assert.equal(resultado.decision.decision, 'invocar_tool');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+test('Motor de Decisión: el piloto rechaza una tool no ofrecida', () => {
+  const resultado = decidirInvocacionPilotoN0({
+    tool: { name: 'escribir_bd', nivel_riesgo: 'N2' },
+    toolOfrecida: false,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'tool_no_ofrecida');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+test('Motor de Decisión: N1-N3 siguen fuera del piloto sin cambiar sus gates', () => {
+  const resultado = decidirInvocacionPilotoN0({
+    tool: { name: 'gestionar_tarea', nivel_riesgo: 'N1' },
+    toolOfrecida: true,
+  });
+  assert.equal(resultado.aplicaPiloto, false);
+  assert.equal(resultado.permitida, true);
+  assert.equal(resultado.decision.criterio_salida, 'fuera_piloto_n0');
 });
