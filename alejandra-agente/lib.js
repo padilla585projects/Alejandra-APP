@@ -381,6 +381,35 @@ function construirConsultaMemoriaGobernada({
   return { sql, binds: [...binds, limitSeguro] };
 }
 
+// construirQueryAprendizajesEmpresa — builder puro para los recuerdos de tipo
+// 'aprendizaje'/'contexto' que injectaContextoChat.
+//
+// SEC-CHAT-CONTEXTO-LEGACY / ARC-016: la query legada de injectarContextoChat
+// leía alejandra_memoria SIN filtro de empresa_id, inyectando aprendizajes de
+// TODAS las empresas en el contexto del chat actual (fuga cross-tenant). Este
+// builder impone `empresa_id = ?` de forma OBLIGATORIA y verificable — misma
+// garantía que construirConsultaMemoriaGobernada, pero sobre la tabla legada
+// `alejandra_memoria` (que sigue activa hasta que ADR-0011/0013 migren a
+// memoria_gobernada, migración todavía NO aplicada por requerir autorización).
+//
+// empresa_id es obligatorio y sale de la sesión autenticada (nunca del input
+// del modelo): si falta, la query devuelve 0 filas (fail-closed) en vez de
+// filtrar globalmente.
+function construirQueryAprendizajesEmpresa({ empresaId, limit = 10 }) {
+  const limitSeguro = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+  if (!empresaId) {
+    return {
+      sql: "SELECT titulo, contenido, tipo FROM alejandra_memoria WHERE 1=0",
+      binds: [],
+    };
+  }
+  const sql = `SELECT titulo, contenido, tipo FROM alejandra_memoria
+               WHERE empresa_id = ? AND (tipo = 'aprendizaje' OR tipo = 'contexto')
+               ORDER BY importancia DESC, created_at DESC LIMIT ?`;
+
+  return { sql, binds: [String(empresaId), limitSeguro] };
+}
+
 // ── Barrera humana para escrituras destructivas en escribir_bd ──────────────
 // Misma filosofía que la barrera del worker web (alejandra-app-api): la
 // confirmación NUNCA la controla el modelo (que genera el tool_input) — debe
@@ -599,4 +628,5 @@ export {
   determinarEstadoSalud,
   RANGO_CONFIANZA,
   construirConsultaMemoriaGobernada,
+  construirQueryAprendizajesEmpresa,
 };
