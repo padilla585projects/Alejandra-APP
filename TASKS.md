@@ -19,21 +19,23 @@ Estado: **Las 14 verticales de ARC-011 fase 3 completas** (ciclo de 5 pasos cerr
 
 ### SEC-CHAT-CONTEXTO-LEGACY — Aislamiento fail-closed del prompt
 
-- Estado: **en revisión**
+- Estado: **completada, desplegada y verificada**
 - Prioridad: Crítica
-- Rama: `codex/fix-chat-context-isolation`
+- Rama de implementación: `codex/agent-n0-production` (integrada por PR #98)
 - Objetivo: impedir que el prompt del chat incorpore automáticamente tablas legacy globales sin ámbito de empresa ni usuario.
 - Alcance: `buildAnthropicSystemBlocks()` deja de leer `alejandra_ram`, `alejandra_errores`, `alejandra_memoria`, logs e historial; conserva solo módulos estáticos y el catálogo de tools visible. No modifica datos ni permisos.
-- Pruebas: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` (139/139); `node --test nucleo-cognitivo/test/*.test.js` (36/36); `node scripts/check-encoding.js`; `git diff --check`.
-- Siguiente acción exacta: revisar y, si procede, integrar el fix. No desplegar sin verificación posterior registrada.
+- Pruebas: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` (139/139); `node --test nucleo-cognitivo/test/*.test.js` (36/36); `node scripts/check-encoding.js`; `git diff --check`; CI de PR #98 y [despliegue 31089065117](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31089065117) correctos.
+- Verificación posterior: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`).
+- Siguiente acción exacta: ninguna para este fix; conservar el fail-closed hasta que una rebanada posterior de contexto seguro esté aprobada.
 
 ### ADR-0020 — Integración gradual del Motor de Decisión
 
-- Estado: **en revisión — rebanada 1 implementada**
+- Estado: **completada, desplegada y verificada — rebanada 1**
 - Decisión: aceptado por el Director el 2026-08-06.
 - Alcance implementado: adaptador sin I/O dentro de `nucleo-cognitivo/`; toda invocación N0 ofrecida genera una decisión estructurada y una traza antes de ejecutar; una tool no ofrecida se rechaza. N1-N3 conservan gates existentes.
-- Pruebas: `node --test nucleo-cognitivo/test/*.test.js` (39/39); `npm --prefix alejandra-agente test` (139/139); importación del módulo del Worker correcta en Node.
-- Siguiente acción exacta: revisar el diff, resolver la validación de bundle local si está disponible e integrar; no desplegar sin verificación posterior registrada.
+- Pruebas: `node --test nucleo-cognitivo/test/*.test.js` (39/39); `npm --prefix alejandra-agente test` (139/139); importación del módulo del Worker correcta en Node; CI de PR #98 y [despliegue 31089065117](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31089065117) correctos.
+- Verificación posterior: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`.
+- Siguiente acción exacta: observar las trazas N0 y definir, mediante tarea/ADR aprobados, la siguiente rebanada; no ampliar el Motor de Decisión a N1-N3.
 
 ## Plantilla
 

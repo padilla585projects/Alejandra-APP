@@ -1,19 +1,14 @@
 # Handoff — Alejandra 2.0
 
-## SEC-CHAT-CONTEXTO-LEGACY — en revisión (2026-08-06)
+## SEC-CHAT-CONTEXTO-LEGACY y ADR-0020 rebanada 1 — desplegados y verificados (2026-08-06)
 
-- Rama: `codex/fix-chat-context-isolation`.
-- Cambio: `alejandra-agente/worker.js` deja de inyectar datos de tablas legacy globales en `buildAnthropicSystemBlocks()`. Se mantiene el catálogo de tools; las consultas de memoria gobernada siguen pasando por su tool con sesión/tenant.
-- Evidencia: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` 139/139; `node --test nucleo-cognitivo/test/*.test.js` 36/36; `node scripts/check-encoding.js`; `git diff --check`.
-- Riesgo/rollback: reduce temporalmente el contexto automático, pero no borra ni modifica datos. Revertir el commit restaura el comportamiento anterior, incluido el riesgo de mezcla de tenants.
-- Decisión de aquella entrega: `docs/decisions/ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md` quedó propuesto; fue aceptado por el Director el 2026-08-06 (ver entrada siguiente).
-
-## ADR-0020 — rebanada 1 del Motor de Decisión (2026-08-06)
-
-- Decisión: **aceptada por el Director**.
-- Cambio en curso: `alejandra-agente/worker.js` importa `decidirInvocacionPilotoN0()` del núcleo. Antes de ejecutar una tool N0 ofrecida, registra `tipo='decision'` con los ocho campos contractuales; una tool no ofrecida se rechaza. Está cableado en chat normal, streaming y recuperación de tool-use de streaming.
-- Límites: N1-N3 conservan los gates existentes; no se modifica D1, permisos, secretos ni se despliega.
-- Pruebas: `node --test nucleo-cognitivo/test/*.test.js` 39/39; `npm --prefix alejandra-agente test` 139/139; `node --check alejandra-agente/worker.js`; importación del módulo correcta en Node. `wrangler deploy --dry-run` agotó el tiempo local sin desplegar; la validación de bundle queda pendiente antes de entrega remota.
+- Rama/PR: `codex/agent-n0-production`, integrada por PR #98 en `main` como `5352dc5c74176540843f7b6147d452b316cb275d`.
+- Cambio: `alejandra-agente/worker.js` deja de inyectar datos de tablas legacy globales en `buildAnthropicSystemBlocks()`. Además importa `decidirInvocacionPilotoN0()` del núcleo: antes de una tool N0 ofrecida registra `tipo='decision'` con los ocho campos contractuales; una tool no ofrecida se rechaza. Está cableado en chat normal, streaming y recuperación de tool-use de streaming.
+- Límites: N1-N3 conservan los gates existentes; no se modifica D1, permisos ni secretos. El fail-closed permanece hasta que se apruebe una rebanada de contexto seguro.
+- Evidencia previa: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` 139/139; `node --test nucleo-cognitivo/test/*.test.js` 39/39; importación del módulo correcta en Node; `node scripts/check-encoding.js`; `git diff --check`.
+- Despliegue/verificación: [run 31089065117](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31089065117) completado correctamente tras aprobación del entorno `production`; CI y healthcheck automático correctos. Verificación manual posterior: `GET https://alejandra-agente.alejandra-app.workers.dev/health` → `healthy`, `d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`.
+- Riesgo/rollback: reduce temporalmente el contexto automático, pero no borra ni modifica datos. Revertir `5352dc5` restaura el comportamiento anterior, incluido el riesgo de mezcla de tenants.
+- Siguiente acción: observar trazas N0 y proponer la siguiente rebanada solo mediante tarea/ADR aprobados; no ampliar N1-N3.
 
 - Fecha: 2026-08-03
 - Agentes que entregan: Codex y Claude, Agentes de Ingeniería
