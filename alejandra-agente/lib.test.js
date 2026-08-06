@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   PRECIOS_USD,
   calcularCosteYProveedor,
@@ -25,6 +26,19 @@ import {
   construirConsultaMemoriaGobernada,
   RANGO_CONFIANZA,
 } from './lib.js';
+
+describe('aislamiento del contexto del chat', () => {
+  it('no inyecta las tablas legacy globales en el prompt de sistema', () => {
+    const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = worker.indexOf('async function buildAnthropicSystemBlocks');
+    const fin = worker.indexOf('// ── Tools disponibles', inicio);
+    const funcion = worker.slice(inicio, fin);
+
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    expect(funcion).not.toMatch(/alejandra_(ram|errores|memoria|logs|historial)/);
+  });
+});
 
 // ── calcularCosteYProveedor (fix continuación 9) ────────────────────────────
 describe('calcularCosteYProveedor', () => {

@@ -15,6 +15,24 @@ Estado: **Las 14 verticales de ARC-011 fase 3 completas** (ciclo de 5 pasos cerr
 - Una tarea activa tiene una única rama y responsable actual.
 - Actualizar al iniciar, bloquear, relevar, revisar y completar.
 
+## Auditoría e integración del cerebro de Alejandra Chat (2026-08-06)
+
+### SEC-CHAT-CONTEXTO-LEGACY — Aislamiento fail-closed del prompt
+
+- Estado: **en revisión**
+- Prioridad: Crítica
+- Rama: `codex/fix-chat-context-isolation`
+- Objetivo: impedir que el prompt del chat incorpore automáticamente tablas legacy globales sin ámbito de empresa ni usuario.
+- Alcance: `buildAnthropicSystemBlocks()` deja de leer `alejandra_ram`, `alejandra_errores`, `alejandra_memoria`, logs e historial; conserva solo módulos estáticos y el catálogo de tools visible. No modifica datos ni permisos.
+- Pruebas: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` (139/139); `node --test nucleo-cognitivo/test/*.test.js` (36/36); `node scripts/check-encoding.js`; `git diff --check`.
+- Siguiente acción exacta: revisar y, si procede, integrar el fix. No desplegar sin verificación posterior registrada.
+
+### ADR-0020 — Integración gradual del Motor de Decisión
+
+- Estado: **propuesto; bloqueado hasta aceptación explícita del Director**
+- Alcance propuesto: adaptador sin I/O dentro de `nucleo-cognitivo/`, contexto seguro por tenant, traza previa y piloto restringido a respuesta directa/tools N0.
+- Siguiente acción exacta: el Director acepta, ajusta o rechaza `docs/decisions/ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md`; no integrar el núcleo mientras siga propuesto.
+
 ## Plantilla
 
 ```text

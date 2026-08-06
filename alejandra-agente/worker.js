@@ -1007,49 +1007,12 @@ async function buildAnthropicSystemBlocks(modulos, tools, env) {
   const l1 = modulos.filter(m => !L0_MODULES.includes(m)).map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
   const staticPart = [l0, l1].filter(Boolean).join('\n\n');
 
-  // L2: Contexto dinámico
-  const l2Parts = [];
-  try {
-    // Pending thoughts — cosas que debe mencionar proactivamente
-    const pending = await env.DB.prepare(
-      `SELECT contenido FROM alejandra_ram WHERE clave='pending_thoughts' AND expires_at > datetime('now') LIMIT 1`
-    ).first().catch(() => null);
-    if (pending?.valor) l2Parts.push(`⚠️ ASUNTOS PENDIENTES:\n${pending.valor}`);
-
-    // Reglas destiladas (comprimidas por cron cada 6h) — preferencia sobre crudas
-    const distilled = await env.DB.prepare(
-      `SELECT valor FROM alejandra_ram WHERE clave='distilled_rules' AND expires_at > datetime('now') LIMIT 1`
-    ).first().catch(() => null);
-    if (distilled?.valor) {
-      l2Parts.push(`REGLAS APRENDIDAS (destiladas):\n${distilled.valor}`);
-    } else {
-      // Fallback: reglas crudas de alejandra_errores
-      const rules = await env.DB.prepare(
-        `SELECT error, solucion FROM alejandra_errores ORDER BY veces_visto DESC, ultimo_visto DESC LIMIT 10`
-      ).all().catch(() => ({ results: [] }));
-      if (rules.results?.length > 0) {
-        l2Parts.push(`REGLAS APRENDIDAS (${rules.results.length}):\n${rules.results.map(r => `• ${r.error} → ${r.solucion}`).join('\n')}`);
-      }
-    }
-
-    // Self-knowledge — lo que sabe de sí misma
-    const selfK = await env.DB.prepare(
-      `SELECT titulo, contenido FROM alejandra_memoria WHERE tipo='contexto' AND importancia >= 4 ORDER BY created_at DESC LIMIT 5`
-    ).all().catch(() => ({ results: [] }));
-    if (selfK.results?.length > 0) {
-      l2Parts.push(`AUTOCONOCIMIENTO:\n${selfK.results.map(s => `• ${s.titulo}`).join('\n')}`);
-    }
-  } catch (_) {}
-
-  // L3: Estado live del sistema
-  let l3 = '';
-  try {
-    const [errores, activos] = await Promise.all([
-      env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_logs WHERE tipo='error' AND created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
-      env.DB.prepare(`SELECT COUNT(DISTINCT usuario_id) as n FROM alejandra_historial WHERE created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0}))
-    ]);
-    l3 = `ESTADO LIVE: ${errores?.n || 0} errores/hora | ${activos?.n || 0} usuarios activos`;
-  } catch (_) {}
+  // L2/L3: desactivados de forma fail-closed. Las fuentes legacy eran globales y
+  // no recibían empresa ni usuario, así que no se pueden incorporar al prompt de
+  // un chat autenticado sin riesgo de mezclar tenants. La memoria gobernada solo
+  // se consulta mediante su tool, que sí deriva el ámbito de la sesión.
+  // ADR-0020 documenta la futura reintroducción de contexto, exclusivamente con
+  // procedencia, alcance y filtros verificables.
 
   // L4: Catálogo de tools visibles
   let l4 = '';
@@ -1057,7 +1020,7 @@ async function buildAnthropicSystemBlocks(modulos, tools, env) {
     l4 = `HERRAMIENTAS DISPONIBLES (${tools.length}):\n${tools.map(t => `- ${t.name}: ${(t.description || '').split('.')[0]}`).join('\n')}`;
   }
 
-  const dynamicPart = [l2Parts.join('\n\n'), l3, l4].filter(Boolean).join('\n\n');
+  const dynamicPart = [l4].filter(Boolean).join('\n\n');
 
   const blocks = [];
   if (staticPart) blocks.push({ type: 'text', text: staticPart, cache_control: { type: 'ephemeral' } });
