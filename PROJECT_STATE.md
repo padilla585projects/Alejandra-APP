@@ -479,3 +479,77 @@ sin cambiar su banner/toast/recarga. De paso se corrigió que `pages.yml` nunca 
 fallback local en cualquier publicación real. Evidencia en
 `docs/architecture/FRONTEND_SLICE_VERSION_CHECK.md`. Queda desbloqueada la siguiente rebanada
 de presentación (aún sin definir ni abrir).
+
+## Aislamiento cross-tenant de `alejandra_memoria` — SEC-CHAT-CONTEXTO-LEGACY
+
+### Contexto y hallazgos (2026-08-06)
+
+**Producción `alejandra_memoria`:** tiene `usuario_id TEXT` (default `'system'`), pero **NO tiene
+`empresa_id`**. La raíz es que `migrate_003_fix_schema.sql` ejecuta `CREATE TABLE IF NOT EXISTS`
+— la tabla preexistente del root migration (`migrate_alejandra_memoria.sql`) no define esa
+columna, así que el AGENTE nunca la creó. `wrangler.toml` no tiene `[migrations]`, por lo que
+los scripts DDL se aplican manualmente.
+
+**`PRAGMA table_info('alejandra_memoria')` en productiva:**
+`id` INTEGER (pk), `tipo` TEXT (notnull, default `'contexto'`), `canal` TEXT (default
+`'general'`), `titulo` TEXT (notnull), `contenido` TEXT (notnull), `importancia` INTEGER (default
+1), `created_at` TEXT, `updated_at` TEXT, `usuario_id` TEXT (default `'system'`).
+**Sin `empresa_id` column.**
+
+**`PRAGMA table_info('usuarios')`:** `id` INTEGER (pk), `empresa_id` INTEGER (default 1), 6
+tenants en productiva.
+
+**Distribución de 169 filas:** 137 `system`/NULL + 142 especiales + 0 anónimas + 24 resolubles
+(`usuario_id ∈ {'2','3','4'}|empadronado` — users reales) + 3 no resolubles (`'2'`, `'encargado_juan'`).
+Join SQLite aplica integer affinity correctamente (`'3' = 3` → `usuarios.empresa_id = 1`).
+
+### Implementación
+
+1. **`construirQueryAprendizajesEmpresa()`** (`lib.js`): helper SQL con `WHERE empresa_id = ?`
+   (fail-closed: si falta, `WHERE 1=0`). Exportado para `obtenerContextoChat`.
+
+2. **`obtenerContextoChat`** (`worker.js`): reemplaza la query global por la del helper (line
+   ~11509). `memory_read` (line ~6498) scopeado por `empresa_id` de sesión.
+
+3. **Writes scopeados:** `memory_save`, `propose_mejora`, `tomar_decision`, `autoLearnChat`,
+   `ejecutarReflexion` — todos bindean `empresa_id` from session.
+
+4. **`incluirAprendizajes`** unificado: `experto !== 'simple'` en lugar de `experto === 'lucia'`
+   (elimina asimetría app/panel).
+
+5. **Tests cross-tenant:** 7 tests (146/146). `construirQueryAprendizajesEmpresa` — fail-closed
+   sin empresa_id, query correcta con empresa_id.
+
+6. **Migración D1 `migrate_009_memoria_empresa_id.sql`:** `ALTER TABLE ADD COLUMN empresa_id TEXT`
+   + backfill 169 filas: 24 real→`usuarios.empresa_id` (0 mismatches), 145→`'system'`, 0 anon.
+   Aplicada contra D1 productiva.
+
+7. **PR #99** merged (`b04a2ff`). Worker `6ed738a8` desplegado. `/health` verificado.
+
+8. **fcm_token cleanup:** id=91 DELETE ejecutado (token `fri7sTTOSfu21hjxXCg7nS:APA91b...`
+   almacenado en tabla equivocada). **Pendiente: rotar token en Firebase Console.**
+
+9. **`autoLearnUpload` fix** (`worker.js:11684`): bindea `empresa_id` from session (committed
+   `25c879d`, deployed `6ed738a8`).
+
+### Estado
+
+- **Aislamiento completado y desplegado.** 0 fuga cross-tenant verificada en D1 productiva.
+- fcm_token rotación manual pendiente (Firebase Console).
+- Tabla `alejandra_memoria` sigue sin `empresa_id` como columna real en D1 — el `empresa_id` se
+  almacena en el contenido JSON de cada fila, no como columna. Esto es correcto: la tabla es un
+  almacén de documentos flexibles.
+
+## Motor de Decisión — ADR-0020
+
+### Estado: Aceptado (2026-08-06)
+
+`nucleo-cognitivo/src/motor-decision.js` (154 líneas): `decidirInvocacionPilotoN0` (N0 gate),
+`tieneTrazaSuficiente` (2+ trazas, 2+ días), `decidir()` stub (necesita Context Engine +
+Planner).
+
+**Piloto N0 vivo** en 3 call sites (4925, 5097, 5184) de `worker.js`. N0 tools gated:
+`consultar_personal`, `memory_read`, `consultar_almacen`. N1-N3 siguen con gates existentes.
+
+**Pendientes ADR-0020:** rebanadas 2-4 (contexto seguro, política determinista, ampliación
+N1-N3) — requieren ADRs separados + Director. `DECISIONES_PENDIENTES.md` actualizado.
