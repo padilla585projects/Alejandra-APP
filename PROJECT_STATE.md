@@ -7,7 +7,7 @@
 
 La auditoría detectó que el constructor del prompt consultaba memoria, reglas, historial y métricas legacy globales sin `empresa_id` ni `usuario_id`. El fix `SEC-CHAT-CONTEXTO-LEGACY` desactiva esas lecturas de forma fail-closed: el prompt conserva módulos estáticos y las tools visibles, mientras que la memoria gobernada continúa disponible únicamente mediante su tool acotada por sesión. No se modifica ningún dato.
 
-`ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md` fue **aceptado por el Director el 2026-08-06**. La rebanada 1 integra el Motor de Decisión solo para tools N0: una tool ofrecida recibe decisión/traza previa y una no ofrecida se rechaza. N1-N3 conservan los gates existentes. El cambio se integró mediante PR #98 y se desplegó con el [run 31089065117](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31089065117) sobre `5352dc5`; la comprobación manual posterior de `GET /health` devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`).
+`ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md` fue **aceptado por el Director el 2026-08-06**. La rebanada 1 integra el Motor de Decisión solo para tools N0: una tool ofrecida recibe decisión/traza previa y una no ofrecida se rechaza. N1-N3 conservan los gates existentes. El cambio se integró mediante PR #98 y se desplegó con el [run 31089065117](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31089065117) sobre `5352dc5`; la comprobación manual posterior de `GET /health` devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`). **Enmienda 1 (2026-08-07):** la rebanada 2 amplió el piloto a todo el catálogo N0 (36 tools) — ver sección "Motor de Decisión (ADR-0020)" al final de este documento.
 
 ## Sondas CPD — nuevo módulo (2026-08-05, rama `feat/sondas-cpd`)
 
@@ -551,11 +551,20 @@ Join SQLite aplica integer affinity correctamente (`'3' = 3` → `usuarios.empre
 **Piloto N0 vivo** en 3 call sites de `worker.js`. N0 tools gated:
 `consultar_personal`, `memory_read`, `consultar_almacen`. N1-N3 siguen con gates existentes.
 
+**Rebanada 2 (2026-08-07, ADR-0020 enmienda 1):** piloto ampliado a **todo el catálogo
+N0** (36 tools), no solo `consultar_bd`. Análisis de trazas N0 (47 decisiones, 100% cron
+`consultar_bd`) confirmó el mecanismo. Completado metadato ADR-0010 de 4 tools sin
+`nivel_riesgo`: `memory_read` (N0), `memory_save` (N1), `propose_mejora` (N1),
+`tomar_decision` (N2; cron `prohibido` en las 3 de escritura). Cobertura de test del
+catálogo N0 completo en `cognitive-core/test/contratos.test.js`.
+
 **Subcarpetas locales (2026-08-07):** núcleo dividido en
 `packages/cognitive-core/` y `packages/cognitive-core-policy/` (sin paquetes npm).
 `alejandra-agente/worker.js:54` importa directamente del subpaquete
 (`../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js`),
-bundleado por wrangler. Tests: cognitive-core 35/35, cognitive-core-policy 4/4.
+bundleado por wrangler. Tests: cognitive-core 37/37, cognitive-core-policy 4/4,
+agente 168/168.
 
-**Pendientes ADR-0020:** rebanadas 2-4 (contexto seguro, política determinista, ampliación
-N1-N3) — requieren ADRs separados + Director. `DECISIONES_PENDIENTES.md` actualizado.
+**Pendientes ADR-0020:** rebanada 3 (verificadores de lectura N1 en `verifier.js`),
+rebanada 4 (contexto seguro, política determinista) y extensión N1-N3 — requieren
+ADRs/enmiendas + Director. Ver `ARCHITECT_BACKLOG.md` (ARC-020) y `TASKS.md`.

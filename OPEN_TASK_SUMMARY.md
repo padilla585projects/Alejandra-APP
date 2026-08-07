@@ -1,72 +1,90 @@
 # OPEN TASK SUMMARY — Handoff
 
 Estado del repositorio para el siguiente chat. Repo: `padilla585projects/Alejandra-APP`.
-Working tree limpio. Todo fusionado en `origin/main`.
+Working tree debe estar limpio. Todo fusionado en `origin/main`.
 
 Últimos commits (más reciente primero):
 ```
-5b1b8ae  ci: validate-trazas con diagnóstico 403 ADMIN_TOKEN mismatch
-fad772a  ci: workflow de validación read-only /api/admin/trazas
-4d0c9fe  docs(handoff): actualizar para F-2.2/F-4.1/F-4.3 y bloqueo Pages
-2182688  fix(ci): retirar concurrency de pages.yml por run zombie
-951c0ef  feat(f-4.1): dashboard de trazas en admin.html
-f2e041a  feat(f-2.2): Nexo v1 — capa integración fuentes externas
-527157c  feat(f-4.1): observabilidad — empresa_id, purge trazas, trace_id
-c3f81ca  fix(security): aislamiento cross-tenant en alejandra_conocimiento
+b03e369  feat(ARC-020): rebanada 2 — ampliar piloto del Motor de Decision a todo el catalogo N0 (ADR-0020 enmienda 1)
+5641de9  chore(F-2.2): aplicar y verificar migracion D1 nexo_fuentes_telemetria (ADR-0021)
+02ea344  feat(f-2.2): implementar Nexo v1 (ADR-0021) — capa de integracion con fuentes externas
+d6eb154  fix(f-1.3): retirar approach npm — nucleo v2 como subcarpetas locales bundleadas por wrangler
+b5f42b1  docs: registrar reestructura del nucleo cognitivo v2 en documentacion de proyecto
+a9b7db1  feat(f-1.3): publicar nucleo-cognitivo v2 (luego retirado el approach npm en d6eb154)
 ```
 
 ## Estado de despliegues
 
-### Workers (Cloudflare)
-| Worker | Versión (hash) | Estado |
-|--------|-----------------|--------|
-| `alejandra-agente` | `4d77a3c9` (latest, incluye F-4.1 + F-2.2 + F-4.3) | ✅ healthy (`/`health: estado healthy, todo true) |
+### Worker `alejandra-agente` (Cloudflare)
+| Worker | Versión (id despliegue) | Estado |
+|--------|-------------------------|--------|
+| `alejandra-agente` | `e8fba7ca-b38a-401d-b0ca-94703fd6dddd` (rebanada 2 ARC-020) | ✅ healthy (`/health`: healthy, d1:true, r2:true) |
 
-`wrangler deploy` no requiere git, por eso los workers se desplegaron antes que los pushes a `origin/main`.
+Desplegado con `wrangler deploy` tras el commit `b03e8a` y verificado `/health`.
 
-### GitHub Pages
-- URL productiva: `https://padilla585projects.github.io/Alejandra-APP/`
-- admin.html publicado: HTTP 200, 32 KB, contiene pestaña Trazas verificada.
-- Versión publicada: `9.04` (coherente con `sw.js`/`index.html`).
-
-### Bloqueo de Pages resuelto (2026-08-06)
-- Causa: `pages.yml` tenía `concurrency: group: github-pages-production` (`cancel-in-progress: false`).
-  Un run zombie en estado `waiting` (`31127870147`, no cancelable — 502 persistente) secuestró el grupo,
-  dejando pendientes todos los runs nuevos de Pages en `pending`/`waiting`.
-- Solución: commit `2182688` retira el bloque de `concurrency`. GitHub Pages admite un deployment
-  activo a la vez; el concurrency añadía fragilidad (zombie lock) sin protección.
-- Publicación verificada: run `31128197969` → `success`.
-
-## Pruebas
+## Pruebas (todas en verde)
 ```
-npm --prefix alejandra-agente test   → 146 passing (0 failing)
-npm --prefix nucleo-cognitivo test →  39 passing (0 failing)
+cd nucleo-cognitivo/packages/cognitive-core        → npm test = 37 pass (0 fail)
+cd nucleo-cognitivo/packages/cognitive-core-policy → npm test = 4 pass  (0 fail)
+alejandra-agente                                   → npx vitest run = 168 pass (0 fail)
 ```
-Tests de autorización negativa incluidos (token faltante/expirado cross-tenant → 403).
+No se usa npm como gestor de paquetes del proyecto; wrangler bundlea los imports
+de `nucleo-cognitivo/packages/*` directamente (sin paquetes públicos).
 
 ## Pendientes (requieren humano / Director)
 
-### Workflow `validate-trazas.yml` → 403 con ADMIN_TOKEN
-- Run `31164176355` falló: el endpoint `/api/admin/trazas` devolvió **403 "No autorizado"** aunque el workflow pasa `secrets.ADMIN_TOKEN` (entorno `production`) como `Authorization: Bearer`.
-- **Diagnóstico:** el secret `ADMIN_TOKEN` de GitHub secrets **no coincide** con el `ADMIN_TOKEN` configurado en el worker de Cloudflare (`wrangler secret put`). `verificarAdminToken()` compara con `env.ADMIN_TOKEN` vía `timingSafeEqual` (worker.js:11997) — cualquier desajuste = 403.
-- **Healthcheck sí pasa** (HTTP 200, versión `4d77a3c9` healthy). Endpoint protegido correctamente (403 con token inválido).
-- Workflow mejorado (commit `5b1b8ae`) para diagnosticar el 403 de forma explícita.
-- **Acción:** sincronizar `ADMIN_TOKEN` de GitHub (`gh secret list --env production`) con el de Cloudflare (`wrangler secret list --remote`), o validar el endpoint usando un token efímero de `/auth/verify-session` (login Google OAuth como `superadmin`). → ARC-014.
+### Rebanada 3 de ARC-020 — verificadores N1 de lectura (siguiente paso)
+- ADR-0020 enmienda 1 (rebanada 2) completada: el piloto gobierna las 36 tools N0.
+- **Siguiente:** implementar verificadores de lectura N1 en
+  `nucleo-cognitivo/packages/cognitive-core/src/verifier.js` (hoy `verificarDeterminista`
+  acepta una condición pura; `solicitarRevisionHumanaAsincrona`/`registrarExplicabilidad`
+  lanzan error /ADR-0009/ por diseño) y activar N1 de solo lectura bajo el Motor con
+  pruebas de rechazo (tenant, rol, tool sin metadato, riesgo, ausencia de traza).
+- Requiere ADR/enmienda + aprobación del Director antes de ampliar alcance.
 
-- **Validación end-to-end con datos reales en UI**: `admin.html` → login Google OAuth como `superadmin` → pestaña Trazas. → ARC-014 (único mantenedor, no hay staging separado).
-- **Cross-tenant en trazas**: `/api/admin/trazas` devuelve `empresa_id` pero no filtra server-side (auditoría cross-tenant intencional para admins; ver HANDOFF.md). Si se requiere scoping, decisión del Director.
+### Migraciones D1 pendientes en manofiesto
+- `migrate_manifiesto.json` → verificar que todas las migraciones aplicadas están
+  registradas con `aplicada: true`. Nexo (`migrate_013`) ya aplicada y verificada.
+
+### Temporales de esta sesión (no dejar en repo)
+- `alejandra-agente/_n0_scan.cjs` (escáner temporal) fue eliminado tras su uso.
+
+## Notas operativas
+- El proyecto **no usa npm** como enfoque de paquetes: el núcleo es código local
+  bundleado por wrangler (commits `a9b7db1` + `b5f42b1` + `d6eb154`). No recuperar
+  el enfoque `@alejandra/cognitive-core` registrado en `a9b7db1`.
+- La D1 **`alejandra-db`** de producción (id `0c9eccde-...`) tiene el esquema completo
+  del worker (trazas, memoria, nexos, etc.). Las queries `wrangler d1 execute` REQUIEREN
+  `--remote` para ver producción; sin `--remote` se ve la base local de desarrollo
+  (está casi vacía).
+- ADMIN_TOKEN (GitHub secrets vs `wrangler secret put`) sigue sin sincronizar → el
+  workflow `validate-trazas.yml` da 403 (ARC-014). El endpoint 403 es correcto
+  (protegido). Healthcheck pasa OK.
 
 ## Comandos de interés
 ```bash
-npm --prefix alejandra-agente test            # tests → 146/146
-npm --prefix nucleo-cognitivo test           # tests → 39/39
-npm --prefix alejandra-agente run deploy     # despliegue worker (no requiere git)
-gh workflow run pages.yml -f ref=main -f confirmation=PUBLISH_GITHUB_PAGES --repo padilla585projects/Alejandra-APP
-gh workflow run validate-trazas.yml -f ref=main -f confirmation=VALIDATE_TRAZAS_ENDPOINT --repo padilla585projects/Alejandra-APP   # requiere aprobacion entorno production
-curl -s https://alejandra-agente.alejandra-app.workers.dev/health | jq
+# Pruebas
+npm --prefix alejandra-agente test                       # (vitest) 168/168
+node --test nucleo-cognitivo/packages/cognitive-core    # 37/37
+node --test nucleo-cognitivo/packages/cognitive-core-policy/test  # 4/4
+
+# Despliegue del worker (no requiere git)
+cd alejandra-agente && npx wrangler deploy
+
+# Verificación producción
+curl -s https://alejandra-agente.alejandra-app.workers.dev/health
+
+# D1 producción (¡USAR --remote!)
+cd alejandra-agente && npx wrangler d1 execute alejandra-db --remote --command "SELECT ..."
+
+# Git
+git pull --rebase origin main && git push origin main
 ```
 
-Vea también: `HANDOFF.md` (sección cronológica 2026-08-06), `PROJECT_STATE.md`, `ARCHITECT_BACKLOG.md`, `docs/decisions/ADR-0021-NEXO-V1-CAPA-INTEGRACION.md`.
+Vea también: `HANDOFF.md` (cronológico), `PROJECT_STATE.md`, `ARCHITECT_BACKLOG.md`,
+`TASKS.md`, `docs/decisions/ADR-0020-...`, `docs/decisions/ADR-0021-...`,
+`CHANGELOG.md`.
 
 ---
-Fuentes de verdad: `HANDOFF.md` (documento cronológico vivo) y este `OPEN_TASK_SUMMARY.md`.
+Fuentes de verdad: `HANDOFF.md` (documento cronológico vivo), `TASKS.md`, este
+`OPEN_TASK_SUMMARY.md`.
