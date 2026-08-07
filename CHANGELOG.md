@@ -6,10 +6,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Added
 
-- **Cerebro v2 — reestructura del núcleo cognitivo como paquetes npm publicables (2026-08-07):** `nucleo-cognitivo/` dividido en dos paquetes dentro de un monorepo con workspaces (`package.json` raíz declara `nucleo-cognitivo/packages/*`):
-  - `@alejandra/cognitive-core` `0.1.0` — motor de decisión, memoria, tool-registry, verifier, nexo, planner, estado cognitivo y context engine. Entry `lib.js`, 35 pruebas.
-  - `@alejandra/cognitive-core-policy` `0.1.0` — policy engine de riesgo N0–N3 (ADR-0006). Entry `lib.js`, 4 pruebas.
-  Cada paquete incluye `verify_nucleo.sh` que valida que `src/*` se expone por `src/index.js` (integrado en `ci.yml`). Publicación en npm vía workflow manual `publish-nucleo.yml` (requiere `NPM_TOKEN` + cuenta `@alejandra`). El worker (`alejandra-agente/worker.js`) sigue importando `motor-decision` a través de un shim transitorio en `nucleo-cognitivo/src/motor-decision.js` — comportamiento sin cambios, 161/161 pruebas del agente en verde. Commit `a9b7db1`, push a `main`. Publicación pendiente de ejecución.
+- **Cerebro v2 — reestructura del núcleo cognitivo en subcarpetas locales (2026-08-07):** `nucleo-cognitivo/` dividido en dos subcarpetas locales (**sin paquetes npm**):
+  - `packages/cognitive-core/` — motor de decisión, memoria, tool-registry, verifier, nexo, planner, estado cognitivo y context engine. `src/index.js` re-exporta, 35 pruebas.
+  - `packages/cognitive-core-policy/` — policy engine de riesgo N0–N3 (ADR-0006), 4 pruebas.
+  `alejandra-agente/worker.js:54` importa `motor-decision` directamente de `packages/cognitive-core/src`; wrangler lo bundlea en despliegue. `ci.yml` actualizado con `node --check` + `node --test` de ambas subcarpetas. Commits `a9b7db1` + `b5f42b1`. No se usa npm en este proyecto.
 
 - **Seguridad del chat — aislamiento de contexto legacy (2026-08-06):** el prompt de Alejandra deja de cargar automáticamente memoria, reglas, historial y métricas globales sin ámbito de empresa ni usuario. La memoria gobernada mantiene su acceso explícito y acotado por sesión mediante tool. No se han modificado datos ni permisos.
 

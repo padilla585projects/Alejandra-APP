@@ -542,19 +542,20 @@ Join SQLite aplica integer affinity correctamente (`'3' = 3` → `usuarios.empre
 
 ## Motor de Decisión — ADR-0020
 
-### Estado: Aceptado (2026-08-06); reestructurado en paquetes npm (2026-08-07)
+### Estado: Aceptado (2026-08-06); reestructurado en subcarpetas locales (2026-08-07)
 
-`@alejandra/cognitive-core` (`nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js`,
-154 líneas): `decidirInvocacionPilotoN0` (N0 gate), `tieneTrazaSuficiente`,
-`decidir()` stub (necesita Context Engine + Planner).
+`nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js` (154 líneas):
+`decidirInvocacionPilotoN0` (N0 gate), `tieneTrazaSuficiente`, `decidir()` stub
+(necesita Context Engine + Planner).
 
 **Piloto N0 vivo** en 3 call sites de `worker.js`. N0 tools gated:
 `consultar_personal`, `memory_read`, `consultar_almacen`. N1-N3 siguen con gates existentes.
 
-**Paquetes npm (2026-08-07):** núcleo dividido en `@alejandra/cognitive-core` y
-`@alejandra/cognitive-core-policy`. `alejandra-agente/worker.js` importa a través de un shim
-transitorio (`nucleo-cognitivo/src/motor-decision.js`). Publicación en npm pendiente
-(workflow `publish-nucleo.yml`, requiere `NPM_TOKEN` + cuenta `@alejandra`).
+**Subcarpetas locales (2026-08-07):** núcleo dividido en
+`packages/cognitive-core/` y `packages/cognitive-core-policy/` (sin paquetes npm).
+`alejandra-agente/worker.js:54` importa directamente del subpaquete
+(`../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js`),
+bundleado por wrangler. Tests: cognitive-core 35/35, cognitive-core-policy 4/4.
 
 **Pendientes ADR-0020:** rebanadas 2-4 (contexto seguro, política determinista, ampliación
 N1-N3) — requieren ADRs separados + Director. `DECISIONES_PENDIENTES.md` actualizado.

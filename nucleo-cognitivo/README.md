@@ -1,100 +1,76 @@
 # Núcleo cognitivo — cerebro v2 de Alejandra
 
-- Estado: reestructurado como monorepo npm (2026-08-07). Dos paquetes publicables:
-  `@alejandra/cognitive-core` y `@alejandra/cognitive-core-policy`.
-- No integrado directamente en `worker.js` ni en `alejandra-agente/worker.js` vía npm todavía
-  (el worker importa `motor-decision.js` a través de un shim transitorio en
-  `nucleo-cognitivo/src/`). No recibe tráfico real propio.
+- Estado: reestructurado en subcarpetas locales (2026-08-07). Sin paquetes npm: el worker
+  importa directamente vía wrangler bundling.
+- No integrado en `worker.js` raíz. `alejandra-agente/worker.js` SÍ importa
+  `motor-decision` del subpaquete `cognitive-core` (bundleado por wrangler en despliegue).
 - Autorizado por: `ADR-0004` (F-1.2) y `ADR-0010`/`ADR-0009` (F-1.3, Tool Registry y Verifier).
   Alcance fijado por el Director: construir esqueleto y contratos, sin activar memoria
   persistente sensible, sin tomar decisiones sin trazabilidad suficiente, y sin migrar el
   catálogo real de tools de ningún Worker.
 
-## Estructura de paquetes
+## Estructura
 
 ```
 nucleo-cognitivo/
   packages/
-    cognitive-core/            # @alejandra/cognitive-core — motor de decisión, memoria, tool-registry, verifier, nexo, planner, estado, contexto
+    cognitive-core/              # motor de decisión, memoria, tool-registry, verifier, nexo, planner, estado, contexto
       src/ *.js
+      index.js                   # re-exporta todos los módulos del core
       test/ *.test.js
-      lib.js                   # re-exporta src/index.js
-      verify_nucleo.sh         # valida que src/* se expone por lib.js
-      package.json
-    cognitive-core-policy/     # @alejandra/cognitive-core-policy — matriz de riesgo N0–N3 (ADR-0006)
+    cognitive-core-policy/       # policy-engine N0–N3 (ADR-0006)
       src/policy-engine.js
+      src/index.js
       test/policy.test.js
-      lib.js
-      verify_nucleo.sh
-      package.json
 ```
 
-Cada paquete se publica de forma independiente con `npm publish --access public` desde su
-directorio (workflow `publish-nucleo.yml`). El entry point público es `lib.js`, que re-exporta
-todo lo expuesto por `src/index.js`.
+Los módulos dentro de cada subpaquete **no tienen dependencias cruzadas** (solo `index.js`
+re-exporta). El import que hace el worker es:
+
+```js
+// alejandra-agente/worker.js
+import { decidirInvocacionPilotoN0, tieneTrazaSuficiente }
+  from '../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js';
+```
+
+Wrangler resuelve y bundlea este import en el despliegue — no requiere paso adicional.
 
 ## Qué hay aquí
 
 | Módulo | Estado | Por qué |
 |---|---|---|
-| `estado-cognitivo.js` | **Implementado** | Estado efímero (objeto en memoria de proceso). No persiste nada, así que no depende de ARC-002. |
-| `policy-engine.js` | **Implementado (parcial)** | Clasificación de riesgo N0–N3 según la matriz de `ADR-0006`, como función pura sobre un `nivel_riesgo` **ya declarado** — nunca inferido, tal como exige ADR-0006. No lee sesión, permisos ni datos reales. |
-| `context-engine.js` | Interfaz | Requiere acceso real a D1 acotado por tenant. Fuera de alcance hasta que se decida cómo extraerlo de forma segura. |
+| `estado-cognitivo.js` | **Implementado** | Estado efímero (objeto en memoria de proceso). No persiste nada. |
+| `policy-engine.js` | **Implementado (parcial)** | Clasificación de riesgo N0–N3 según ADR-0006, como función pura sobre `nivel_riesgo` **ya declarado** — nunca inferido. No lee sesión ni datos reales. |
+| `context-engine.js` | Interfaz | Requiere acceso real a D1 acotado por tenant. Fuera de alcance hasta decidir extracción segura. |
 | `planner.js` | Interfaz | Depende de Context Engine y Policy Engine reales. |
-| `motor-decision.js` | Interfaz + contrato de traza | Coordina los anteriores (ADR-0004). Fija los campos de traza obligatorios de `docs/architecture/04-MOTOR-DE-DECISION.md`, pero no implementa la decisión real: sin eso, cualquier decisión sería una decisión sin trazabilidad suficiente, que el Director excluyó explícitamente. Además fija el contrato de la dependencia inyectada `registrarTraza()` que `decidir()` aceptará cuando se implemente, sin romper el aislamiento actual (ADR-0014 §5). |
-| `memory.js` | **Implementado (dependencia inyectada)** | Contrato exacto de `ADR-0013-GOBIERNO-DE-MEMORIA.md` §8: `consultarMemoria`, `listarCandidatasPendientes`, `confirmarCandidata` y `rechazarCandidata` aceptan una implementación real inyectada vía `inyectarMemoria()`, mismo patrón que `registrarTraza()` en `motor-decision.js`. Sin inyección devuelven `[]`/no-op, nunca lanzan. Cada Worker (`worker.js`, `alejandra-agente/worker.js`) inyecta su propia lectura/escritura de `memoria_gobernada` en D1; `consultarMemoria()` de cada Worker registra además una traza `memoria_consulta` (ARC-008 §8) con los recuerdos devueltos, para trazabilidad completa de qué memoria usó una decisión. Las categorías de la lista blanca, los valores de `metodo`/`estado` y `caducidadPorDefecto()` siguen siendo lógica pura, igual que `policy-engine.js` sobre metadato declarado. |
-| `tool-registry.js` | **Implementado** | Validación pura de la declaración de una tool (`acceso`/`cron`/`nivel_riesgo`, ADR-0010) y filtrado de un catálogo ya declarado (`filtrarToolsPorAcceso`, `filtrarToolsParaCron`). No lee el catálogo real de ningún Worker ni ejecuta tools. |
-| `verifier.js` | **Implementado (parcial)** | Nivel determinista (ADR-0009) real: aplica una condición pura ya provista. Revisión humana asíncrona y explicabilidad son interfaces que lanzan error explícito — dependen de un canal (Telegram, `alejandra_trazas`) que vive en cada Worker, no aquí. `nivelesRequeridosPara()` fija, por función pura, qué niveles exige cada `nivel_riesgo`. |
-
-## Qué NO hay aquí, y por qué
-
-- **Persistencia y consulta de trazas.** `registrarTraza()` es solo un contrato inyectable en
-  `motor-decision.js` (ADR-0014 §5); escribir realmente en `alejandra_trazas` es trabajo de
-  cada Worker, fuera de este paquete.
-- **Migración del catálogo real de tools.** `tool-registry.js` fija el contrato que ADR-0010
-  exige; migrar las 69+34 tools reales de `worker.js`/`alejandra-agente/worker.js` es trabajo
-  posterior, incremental y tool por tool (decisión del Director en ADR-0010), fuera de este
-  entregable.
-- **QA.** Depende de Verifier real (los dos niveles que hoy lanzan error) y de tools ya
-  registradas. Ver `docs/decisions/ADR-0009-ALCANCE-DE-QA-Y-VERIFICACION.md`.
-- **Nexo.** Pertenece a F-2.2, no abierta.
-- **Persistencia de trazas / explicabilidad.** Bloqueado por `ARC-008`. El contrato del Motor
-  de Decisión exige la *forma* de los campos de traza (`tieneTrazaSuficiente()`), no su
-  almacenamiento ni consulta; ADR-0009 deja explícitamente la explicabilidad como deuda hasta
-  F-4.1, sin bloquear ninguna acción mientras tanto.
-
-## Por qué las interfaces lanzan un error en vez de devolver un stub silencioso
-
-Un stub que devuelve `null` u `{}` puede pasar desapercibido en un caller real y producir una
-decisión sin fundamento. Lanzar un error explícito, citando la dependencia que falta, hace
-imposible que este esqueleto se use por accidente como si fuera una implementación real.
-
-**Excepción: `memory.js`.** Sus cuatro funciones usan dependencia inyectada (`inyectarMemoria()`)
-en vez de lanzar, porque ARC-008 §8 exige que una consulta de memoria rota no bloquee la
-decisión que la solicitó — mismo criterio de resiliencia que `registrarTraza()` en cada Worker
-(nunca lanza; un fallo de traza no puede tumbar la petición que la originó). Sin implementación
-inyectada (fuera de un Worker real, p.ej. en tests), devuelve `[]`/no-op en vez de simular datos.
+| `motor-decision.js` | Interfaz + piloto N0 | `decidirInvocacionPilotoN0()` decide sobre invocaciones N0 trazadas; `decidir()` sigue como stub (necesita Context Engine + Planner). Importado por `alejandra-agente/worker.js`. |
+| `memory.js` | **Implementado (dependencia inyectada)** | Contrato ADR-0013 §8: `consultarMemoria`, `listarCandidatasPendientes`, `confirmarCandidata`, `rechazarCandidata` con inyección vía `inyectarMemoria()`. Sin inyección devuelve `[]`/no-op. |
+| `tool-registry.js` | **Implementado** | Validación pura ADR-0010 (`acceso`/`cron`/`nivel_riesgo`) + `registrarTool()` + filtrados. No lee el catálogo real de ningún Worker. |
+| `verifier.js` | **Implementado (parcial)** | Nivel determinista (ADR-0009) real; revisión humana y explicabilidad como interfaces con error explícito. `nivelesRequeridosPara()`. |
 
 ## Pruebas
 
 ```bash
-# Core
+# Core (35 tests)
 cd nucleo-cognitivo/packages/cognitive-core
 node --check src/*.js test/*.js
-bash verify_nucleo.sh
-npm test
+node --test test/contratos.test.js test/memory.test.js test/tool-registry-verifier.test.js
 
-# Policy
+# Policy (4 tests)
 cd ../cognitive-core-policy
 node --check src/*.js test/*.js
-bash verify_nucleo.sh
+node --test test/policy.test.js
+```
+
+O todo desde el raíz del nucleo:
+```bash
+cd nucleo-cognitivo
 npm test
 ```
 
 ## Referencias
 
 - `docs/decisions/ADR-0004-MOTOR-DE-DECISION-Y-MODOS.md`
-- `docs/decisions/ADR-0002-NUCLEO-COGNITIVO-V1.md`
 - `docs/decisions/ADR-0006-MATRIZ-RIESGO-Y-APROBACION.md`
 - `docs/decisions/ADR-0013-GOBIERNO-DE-MEMORIA.md` — contrato de `memory.js` (§8)
 - `docs/decisions/ADR-0014-OBSERVABILIDAD-Y-TRAZAS.md` — contrato de `registrarTraza()` (§5)
@@ -102,4 +78,3 @@ npm test
 - `docs/decisions/ADR-0009-ALCANCE-DE-QA-Y-VERIFICACION.md` — contrato de `verifier.js`
 - `docs/architecture/04-MOTOR-DE-DECISION.md`
 - `docs/03-ARQUITECTURA-COGNITIVA.md`
-- `MASTER_ROADMAP.md` — F-1.2, F-1.3

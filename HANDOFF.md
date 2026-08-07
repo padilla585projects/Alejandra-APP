@@ -1,27 +1,25 @@
 # Handoff — Alejandra 2.0
 
-## F-1.3 Núcleo cognitivo v2 — reestructurado como paquetes npm (2026-08-07)
+## F-1.3 Núcleo cognitivo v2 — reestructurado en subcarpetas locales (2026-08-07)
 
-- Rama/PR: `main`, commit `a9b7db1` (push directo, sin PR).
-- `nucleo-cognitivo/` reestructurado como monorepo npm con workspaces
-  (`package.json` raíz declara `nucleo-cognitivo/packages/*`).
-- Dos paquetes publicables:
-  - `@alejandra/cognitive-core` `0.1.0` — motor-decision, memory, tool-registry,
-    verifier, nexo, planner, estado-cognitivo, context-entry. Entry `lib.js`.
-    Tests: 35/35 (`npm test`).
-  - `@alejandra/cognitive-core-policy` `0.1.0` — policy-engine N0–N3 (ADR-0006).
-    Entry `lib.js`. Tests: 4/4 (`npm test`).
-- Cada paquete incluye `verify_nucleo.sh` que valida que `src/*` se expone por
-  `src/index.js` (integrado en `ci.yml`).
-- `alejandra-agente/worker.js` importa `motor-decision` a través de un shim
-  transitorio en `nucleo-cognitivo/src/motor-decision.js` (re-exporta desde el
-  paquete). El worker no cambia; tests 161/161 en verde.
-- Publicación en npm **pendiente**: requiere secreto `NPM_TOKEN` en GitHub y cuenta
-  `@alejandra`. Workflow listo en `.github/workflows/publish-nucleo.yml`
-  (manual, confirmación `PUBLISH_NUCLEO_COGNITIVO`).
-- ARC-014 (publicación/autorreview de paquetes) queda resuelto en cuanto se
-  ejecute el publish; el bloqueo #2 (política de fallback ADR-0020) sigue
-  pendiente de decisión del Director.
+- Rama/PR: `main`, commits `a9b7db1` + `b5f42b1` (push directo, sin PR).
+- `nucleo-cognitivo/` reestructurado en dos subcarpetas locales (**sin paquetes npm**):
+  - `packages/cognitive-core/` — motor-decision, memory, tool-registry, verifier,
+    nexo, planner, estado-cognitivo, context-engine. `src/index.js` re-exporta.
+    Tests: 35/35 (`node --test`).
+  - `packages/cognitive-core-policy/` — policy-engine N0–N3 (ADR-0006).
+    `src/index.js` + `test/policy.test.js`. Tests: 4/4.
+- `alejandra-agente/worker.js:54` importa directamente:
+  `import { decidirInvocacionPilotoN0, tieneTrazaSuficiente }`
+  `from '../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js';`
+  Wrangler bundlea el import en el despliegue — no requiere npm.
+- `ci.yml` actualizado: `node --check` + `node --test` de ambas subcarpetas.
+- `nucleo-cognitivo/package.json` conserva el script `test` que corre los 39 tests.
+- Tests verdes: cognitive-core 35/35, cognitive-core-policy 4/4, agente 161/161.
+- ARC-020 rebanada 1 (piloto N0) sigue desplegada y verificada. Siguiente decisión:
+  analizar trazas N0 antes de proponer rebanada posterior (política fallback ADR-0020).
+- **No se usa npm en este proyecto.** Los workspaces/`package.json` de paquetes se
+  retiraron; el núcleo es código local bundleado por wrangler.
 
 ## F-4.4 Telemetría de uso de herramientas — desplegado y verificado (2026-08-07)
 
@@ -867,8 +865,7 @@ TABLE`/`CREATE INDEX` ya está activa en `sql_query`/`run_migration` en producci
 - No desplegar Pages ni Workers sin verificación posterior registrada.
 - No ejecutar migraciones D1 remotas (incluida la del vertical `checklists`, aunque se declare en código).
 - No modificar secretos, bindings, Cloudflare, D1, R2 ni producción.
-- No integrar `nucleo-cognitivo/` directamente en `worker.js` ni `alejandra-agente/worker.js` vía npm todavía (el worker usa un shim transitorio en `nucleo-cognitivo/src/motor-decision.js` que re-exporta desde `@alejandra/cognitive-core`).
-- No publicar `@alejandra/cognitive-core` ni `@alejandra/cognitive-core-policy` en npm sin autorización expresa (workflow `publish-nucleo.yml` + secreto `NPM_TOKEN`).
+- No integrar `nucleo-cognitivo/` en `worker.js` raíz (solo `alejandra-agente/worker.js` importa `motor-decision` del subpaquete `cognitive-core`).
 - No persistir memoria ni trazas reales sin aplicar antes la migración D1 correspondiente con autorización explícita (la de trazas ya autorizada, pero solo en desarrollo/pruebas).
 - No aplicar la migración de `alejandra_trazas` contra una futura producción sin autorización aparte.
 - No aplicar `migrate_memoria_gobernada.sql` (F-2.1) contra D1 sin autorización explícita del Director.

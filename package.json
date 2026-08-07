@@ -1,8 +1,5 @@
 {
   "devDependencies": {
     "tweetsodium": "^0.0.4"
-  },
-  "workspaces": [
-    "nucleo-cognitivo/packages/*"
-  ]
+  }
 }

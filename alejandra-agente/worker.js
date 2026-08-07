@@ -51,7 +51,9 @@ import {
   construirCacheKeyNormativa,
   construirQueryAprendizajesEmpresa,
 } from './lib.js';
-import { decidirInvocacionPilotoN0, tieneTrazaSuficiente } from '../nucleo-cognitivo/src/motor-decision.js';
+// Cerebro v2 (F-1.3/ADR-0020): nucleo-cognitivo dividido en subcarpetas locales.
+// Wrangler bundlea el import directamente — no requiere npm.
+import { decidirInvocacionPilotoN0, tieneTrazaSuficiente } from '../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -2597,11 +2599,12 @@ const TOOL_CONSULTAR_PERSONAL = {
 };
 
 // Categorías de la lista blanca de ADR-0013 §1 — duplicado literal de
-// CATEGORIAS_LISTA_BLANCA en nucleo-cognitivo/src/memory.js. No se importa
-// desde ahí porque nucleo-cognitivo/ no está integrado en ningún Worker
-// (prohibido por CLAUDE.md); mantener ambas listas idénticas es la
-// responsabilidad de quien las toque, igual que el resto de metadato
+// CATEGORIAS_LISTA_BLANCA en nucleo-cognitivo/packages/cognitive-core/src/memory.js.
+// No se importa desde ahí (se mantiene duplicado a propósito); mantener ambas listas
+// idénticas es la responsabilidad de quien las toque, igual que el resto de metadato
 // duplicado a propósito en este archivo (ver F-1.3-TOOL-PILOTO-MIGRADA).
+// NOTA (2026-08-07): alejandra-agente/worker.js SÍ importa motor-decision del subpaquete
+// cognitive-core (F-1.3/ADR-0020); esta duplicación de CATEGORIAS sigue siendo intencional.
 const CATEGORIAS_MEMORIA_GOBERNADA = new Set([
   'hechos_operativos', 'preferencias_trabajo', 'procedimientos_internos', 'correcciones',
 ]);

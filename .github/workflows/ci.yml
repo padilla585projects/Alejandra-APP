@@ -45,9 +45,8 @@ jobs:
       - name: Run agent tests
         working-directory: alejandra-agente
         run: npm test
-      # F-1.2/F-1.3: nucleo-cognitivo v2 dividido en dos paquetes (@alejandra/cognitive-core,
-      # @alejandra/cognitive-core-policy). Sintaxis de todos los fuentes y tests.
-      - name: Check nucleo-cognitivo packages syntax
+      # F-1.2/F-1.3: nucleo-cognitivo v2 dividido en dos subcarpetas.
+      - name: Check nucleo-cognitivo syntax
         run: |
           for f in nucleo-cognitivo/packages/cognitive-core/src/*.js \
                    nucleo-cognitivo/packages/cognitive-core/test/*.js \
@@ -55,13 +54,7 @@ jobs:
                    nucleo-cognitivo/packages/cognitive-core-policy/test/*.js; do
             node --check "$f"
           done
-      - name: Verify modules are exposed by lib.js
+      - name: Run nucleo-cognitivo tests
         run: |
-          cd nucleo-cognitivo/packages/cognitive-core && bash verify_nucleo.sh
-          cd ../cognitive-core-policy && bash verify_nucleo.sh
-      - name: Run cognitive-core tests
-        working-directory: nucleo-cognitivo/packages/cognitive-core
-        run: npm test
-      - name: Run cognitive-core-policy tests
-        working-directory: nucleo-cognitivo/packages/cognitive-core-policy
-        run: npm test
+          cd nucleo-cognitivo/packages/cognitive-core && node --test test/contratos.test.js test/memory.test.js test/tool-registry-verifier.test.js
+          cd ../../cognitive-core-policy && node --test test/policy.test.js
