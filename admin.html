@@ -545,6 +545,9 @@
         <div class="nav-item" onclick="switchTab('trazas')">
           <span>🧵 Trazas</span>
         </div>
+        <div class="nav-item" onclick="switchTab('telemetrica')">
+          <span>📈 Telemetría</span>
+        </div>
       </nav>
 
       <div class="status-badge" id="statusBadge">
@@ -774,8 +777,33 @@
                   <th>Resumen</th>
                 </tr>
               </thead>
-              <tbody id="trazasTableBody">
-                <tr><td colspan="6" style="text-align:center;color:#64748b;">Cargando trazas…</td></tr>
+               <tbody id="trazasTableBody">
+                 <tr><td colspan="6" style="text-align:center;color:#64748b;">Cargando trazas…</td></tr>
+               </tbody>
+             </table>
+           </div>
+         </div>
+
+        <!-- TELEMETRY TAB -->
+        <div id="tab-telemetrica" class="tab-content">
+          <h2 style="margin-bottom: 20px;">📈 Telemetría de uso de herramientas (F-4.4)</h2>
+          <div class="config-section" style="margin-bottom: 16px;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+              <input type="number" id="telemEmpresaId" placeholder="Empresa ID" value="1" min="1" style="flex:0 0 140px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);">
+              <button onclick="cargarTelemetrica()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;">Cargar top tools</button>
+            </div>
+          </div>
+          <div class="config-section">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Herramienta</th>
+                  <th>Invocaciones (7d)</th>
+                </tr>
+              </thead>
+              <tbody id="telemTableBody">
+                <tr><td colspan="3" style="text-align:center;color:#64748b;">Selecciona una empresa y pulsa cargar.</td></tr>
               </tbody>
             </table>
           </div>
@@ -808,7 +836,8 @@
         chat: '💬 Chat',
         logs: '📋 Audit Logs',
         memory: '🧠 Memoria',
-        trazas: '🧵 Trazas'
+        trazas: '🧵 Trazas',
+        telemetrica: '📈 Telemetría'
       };
       document.getElementById('pageTitle').textContent = titles[tabName] || 'Dashboard';
 
@@ -816,7 +845,8 @@
       if (tabName === 'config') cargarConfiguracion();
       if (tabName === 'logs') cargarLogs();
       if (tabName === 'memory') cargarMemoria();
-      if (tabName === 'trazas') cargarTrazas();
+       if (tabName === 'trazas') cargarTrazas();
+       if (tabName === 'telemetrica') cargarTelemetrica();
     }
 
     async function cargarConfiguracion() {
@@ -923,6 +953,35 @@
           </tr>`).join('');
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ef4444;">Error cargando trazas: ${escaparHTML(err.message)}</td></tr>`;
+      }
+    }
+
+    async function cargarTelemetrica() {
+      const empresaId = (document.getElementById('telemEmpresaId').value || '').trim();
+      const tbody = document.getElementById('telemTableBody');
+      if (!empresaId) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#ef4444;">Empresa ID requerida.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#64748b;">Cargando…</td></tr>';
+      try {
+        const url = `${ADMIN_WORKER_URL}/metrics/tools?empresa_id=${encodeURIComponent(empresaId)}`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const top = Array.isArray(data.top_tools) ? data.top_tools : [];
+        if (top.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#64748b;">Sin datos de uso en los últimos 7 días.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = top.map((t, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${escaparHTML(t.tool)}</td>
+            <td>${Number(t.n) || 0}</td>
+          </tr>`).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#ef4444;">Error cargando telemetría: ${escaparHTML(err.message)}</td></tr>`;
       }
     }
 

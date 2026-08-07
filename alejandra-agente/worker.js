@@ -1373,10 +1373,75 @@ async function registrarNexoConsulta(env, { fuenteId, empresaId, usuarioId, cons
       `INSERT INTO nexo_fuentes_telemetria (fuente_id, empresa_id, usuario_id, consulta, resultados, latencia_ms, cache_hit)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).bind(fuenteId, empresaId||null, usuarioId||null, String(consulta||'').slice(0,200), resultados_count||0, latencia_ms||0, cache_hit ? 1 : 0)
-      .run().catch(e => console.error('[NEXO_TELEM]', e.message));
+        .run().catch(e => console.error('[NEXO_TELEM]', e.message));
   } catch (e) {
     console.error('[NEXO]', fuenteId, '->', (e && e.message) || String(e));
   }
+}
+
+// ── F-4.4 Telemetría de uso de features ─────────────────────────────────────
+// Contador de invocations/tools por empresa_id con TTL de 90 días (retención
+// operativa, suficiente para métricas de adopción). Live en RATE_LIMIT_KV con
+// prefijo "tools:{empresa_id}:{tool_name}" — MISMA KV que rate limit, aislada
+// por prefijo para no colisionar (ver construirCacheKeyNormativa de lib.js).
+//
+// Registra:
+//   - traza tipo='feature_usage' en D1 (cross-tenant, empresa_id del sistema).
+//   - contador incrementado en KV (HINCR-like vía GET+PUT, tolerante a fallos).
+//
+// Fail-open: jamás lanza. Si KV o D1 fallan, solo se logea en console.error y
+// se ignora — el uso del tool sigue funcionando (no es una escritura crítica).
+//
+// Cross-tenant safe: el contador incluye empresa_id en la key; nunca un counter
+// global. El cron (empresa_id='cron') se aisla igual (key emp:cron:tool).
+async function registrarUsoTool(env, { tool, empresaId = null, usuarioId = null, ok = true, error = null }) {
+  const eid = empresaId != null ? String(empresaId) : 'unknown';
+  const key = `tools:${eid}:${String(tool)}`;
+  try {
+    // Counter: GET + PUT (HINCR no existe en KV; tolerante a race condition
+    // por diseño — la telemetría no necesita exactitud perfecta).
+    const actual = parseInt((await env.RATE_LIMIT_KV.get(key)) || '0', 10);
+    await env.RATE_LIMIT_KV.put(key, String(Number.isInteger(actual) ? actual + 1 : 1), {
+      expirationTtl: 90 * 86400,
+    }).catch(() => {});
+  } catch (e) {
+    console.error('[TELEM]', tool, '->', (e && e.message) || String(e));
+  }
+  try {
+    await registrarTraza(env, {
+      tipo: 'feature_usage',
+      empresaId: eid,
+      usuarioId: usuarioId != null ? String(usuarioId) : null,
+      resumen: `${tool}: ${ok ? 'ok' : 'error'}${error ? ' :: ' + String(error).slice(0, 80) : ''}`,
+      detalle: { tool, ok, error: error ? String(error).slice(0, 200) : null, empresa_id: eid },
+    });
+  } catch (e) {
+    console.error('[TELEM_TRAZA]', tool, '->', (e && e.message) || String(e));
+  }
+}
+
+// F-4.4 wrapper: ejecuta la tool real y registra su uso en telemetría.
+// Envuelve executarTool() para capturar success/error sin tocar cada case
+// del switch. Fail-open: si registrarUsoTool falla, el resultado de la tool
+// se devuelve igual (la telemetría nunca debe romper el chat).
+async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados) {
+  let resultado, err;
+  try {
+    resultado = await ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados);
+  } catch (e) {
+    err = e && e.message ? e.message : String(e);
+    resultado = JSON.stringify({ ok: false, error: `Error ejecutando "${nombre}": ${err}`, tool: nombre });
+  }
+  // Extraer éxito de la respuesta JSON sin parsear (puede no ser JSON válido).
+  const ok = typeof resultado === 'string' && /"ok"\s*:\s*true/.test(resultado);
+  await registrarUsoTool(env, {
+    tool: nombre,
+    empresaId: empresa_id,
+    usuarioId: usuario_id,
+    ok: ok,
+    error: !ok ? (err || (!resultado ? 'sin resultado' : String(resultado).slice(0, 120))) : null,
+  }).catch(() => {});
+  return resultado;
 }
 
 // ADR-0020, rebanada 1: el paquete cognitivo gobierna las tools N0 antes de
@@ -3733,6 +3798,32 @@ export default {
           return json(rows.results || []);
         }
 
+        // F-4.4 Telemetría de uso de features: contador de invocations/tools
+        // por empresa en KV (tools:{empresa_id}:{tool}). Read-only, admin-only.
+        // No escanea todo KV (no hay list de keys en KV); devuelve el counter de
+        // la key explícita pedida, o el top-N de la traza feature_usage en D1
+        // para una visión agregada. Fail-closed: sin empresa_id, error 400.
+        if (path === '/api/admin/metrics/tools' && req.method === 'GET') {
+          const empresa = url.searchParams.get('empresa_id');
+          const tool = url.searchParams.get('tool');
+          if (!empresa) return json({ error: 'empresa_id requerido' }, 400);
+          const eid = String(empresa);
+          if (tool) {
+            const key = `tools:${eid}:${String(tool)}`;
+            const valor = await env.RATE_LIMIT_KV.get(key).catch(() => null);
+            return json({ empresa_id: eid, tool: String(tool), invocaciones: parseInt(valor || '0', 10) });
+          }
+          // Aggregado: top-10 tools por empresa vía trazas feature_usage (últimos 7 días)
+          const aggRows = await env.DB.prepare(
+            `SELECT substr(detalle_json, instr(detalle_json, '"tool":"') + 8, instr(substr(detalle_json, instr(detalle_json, '"tool":"') + 8), '"')) AS tool,
+                    COUNT(*) AS n
+             FROM alejandra_trazas
+             WHERE tipo = 'feature_usage' AND empresa_id = ? AND ts >= datetime('now', '-7 days')
+             GROUP BY tool ORDER BY n DESC LIMIT 10`
+          ).bind(eid).all().catch(() => ({ results: [] }));
+          return json({ empresa_id: eid, top_tools: aggRows.results || [] });
+        }
+
         return json({ error: 'Ruta no encontrada' }, 404);
       }
 
@@ -4990,7 +5081,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         const control = await evaluarInvocacionCognitivaN0(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
-          ? await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados)
+          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // ver_archivo con imágenes devuelve JSON con content blocks para visión
@@ -5165,7 +5256,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
         const control = await evaluarInvocacionCognitivaN0(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
-          ? await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
+          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // Para SSE preview, extraer solo texto (no base64 de imágenes)
@@ -5252,7 +5343,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
           const control = await evaluarInvocacionCognitivaN0(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
           const resultado = control.permitida
-            ? await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
+            ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
             : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
           const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
             ? '(imagen analizada)'
