@@ -607,7 +607,18 @@ barrera real. Antes, N2/N3 eran invisibles para el Motor; ahora quedan
 trazadas sin que ningún permiso cambie. Tests: cognitive-core 50/50,
 cognitive-core-policy 4/4, agente 178/178. **Sin desplegar todavía.**
 
-**Pendientes ADR-0020:** extensión a N1 de escritura; diseñar revisión
-humana asíncrona real para N2 (requiere ADR propio, cablear el canal de
-Telegram — cambio mayor, no autónomo). Ver `ARCHITECT_BACKLOG.md` (ARC-020)
-y `TASKS.md`.
+**Rebanada 7 (2026-08-07, enmienda 6):** N1 se amplía a escritura.
+`decidirInvocacionN1Lectura()` generalizada a `decidirInvocacionN1()` —
+ADR-0009 exige el mismo `explicabilidad` para todo N1 sin distinguir
+lectura/escritura; la restricción anterior era cautela de pilotaje, no un
+límite de ADR-0006 (N1 = "reversible, acotado" por definición).
+`esInvocacionN1DeLectura()` deja de gatear, pasa a enriquecer la traza
+(`es_lectura`). El Motor gobierna ahora el catálogo N1 completo (26 tools),
+sin cambiar ningún gate legacy (sesión, `empresa_id`, IDOR de cada `case`).
+Tests: cognitive-core 57/57 (con policy), agente 178/178. **Sin desplegar
+todavía.**
+
+**Pendientes ADR-0020:** diseñar revisión humana asíncrona real para N2
+(requiere ADR propio, cablear el canal de Telegram — cambio mayor, no
+autónomo); N3 sigue fuera del alcance autónomo por mandato de ADR-0006. Ver
+`ARCHITECT_BACKLOG.md` (ARC-020) y `TASKS.md`.

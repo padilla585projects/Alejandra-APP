@@ -1418,10 +1418,11 @@ describe('ADR-0020 rebanada 3 — piloto N1 de lectura (ARC-020, enmienda 2)', (
     expect(cuerpo).not.toMatch(/env\.R2\.(put|delete)/);
   });
 
-  it('worker.js gobierna el piloto N1 de lectura vía evaluarInvocacionCognitiva (regresión de wiring)', () => {
+  it('worker.js gobierna el piloto N1 (lectura y escritura, rebanada 7) vía evaluarInvocacionCognitiva (regresión de wiring)', () => {
     const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
     expect(src).toMatch(/async function evaluarInvocacionCognitiva\(/);
-    expect(src).toMatch(/decidirInvocacionN1Lectura/);
+    expect(src).toMatch(/decidirInvocacionN1\(/);
+    expect(src).not.toMatch(/decidirInvocacionN1Lectura/);
     expect(src).toMatch(/esInvocacionN1DeLectura\(toolName, input\)/);
     // Los 3 call sites (chat normal, streaming, recuperación de tool-use) deben
     // seguir invocando la función renombrada, no la N0 original, y pasar tb.input.

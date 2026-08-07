@@ -175,11 +175,12 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   'memoria_listar_pendientes', 'memoria_confirmar_candidata', 'memoria_rechazar_candidata',
 ]);
 
-// ADR-0020, rebanada 3 (2026-08-07, enmienda 2): allowlist curada de tools N1
-// de LECTURA gobernadas por el Motor de Decisión (decidirInvocacionN1Lectura,
-// nucleo-cognitivo/). `verificar_deploy` es la única tool ENTERA de solo
-// lectura: su `case` solo hace `fetch` GET contra la API de GitHub Actions,
-// sin `env.DB`/`env.R2` en ningún camino.
+// ADR-0020, rebanada 3 (2026-08-07, enmienda 2). Desde la rebanada 7
+// (enmienda 6), el Motor gobierna TODO N1 (lectura y escritura por igual) —
+// este `Set` ya NO gatea permisos, solo alimenta `esInvocacionN1DeLectura()`
+// para que la traza distinga qué invocaciones eran de lectura. `verificar_deploy`
+// es la única tool ENTERA de solo lectura: su `case` solo hace `fetch` GET
+// contra la API de GitHub Actions, sin `env.DB`/`env.R2` en ningún camino.
 const TOOLS_N1_LECTURA_PILOTO = new Set(['verificar_deploy']);
 
 // ADR-0020, rebanada 5 (2026-08-07): clasificación N1 POR INVOCACIÓN, no por
