@@ -1331,3 +1331,63 @@ describe('F-4.4 ejecutarToolConTelemetria wiring', () => {
     expect(worker).toContain('/"ok"\\s*:\\s*true/');
   });
 });
+
+// ── Nexo v1 (ADR-0021) — registro de fuentes externas ─────────────────────────
+import {
+  FUENTES_NEXO,
+  obtenerFuente,
+  obtenerFuentePorConector,
+  listarFuentes,
+} from './nexo-fuentes.js';
+
+describe('Nexo v1 — registro de fuentes (ADR-0021)', () => {
+  it('declara las 3 fuentes del piloto', () => {
+    const fuentes = listarFuentes();
+    expect(fuentes.length).toBe(3);
+    const ids = fuentes.map(f => f.id).sort();
+    expect(ids).toEqual(['normativa_rebt', 'precios_distribuidores', 'web_general']);
+  });
+
+  it('cada fuente tiene los campos obligatorios', () => {
+    for (const f of listarFuentes()) {
+      expect(f.id).toBeTruthy();
+      expect(f.nombre).toBeTruthy();
+      expect(f.tipo).toBeTruthy();
+      expect(['alta', 'media', 'variable']).toContain(f.fiabilidad);
+      expect(f.ttl_horas).toBeGreaterThan(0);
+      expect(f.ambito).toBeTruthy();
+      expect(f.conector).toBeTruthy();
+    }
+  });
+
+  it('normativa_rebt declara fallback a buscar_web', () => {
+    const f = obtenerFuente('normativa_rebt');
+    expect(f).toBeTruthy();
+    expect(f.fallback).toBe('buscar_web');
+    expect(f.conector).toBe('buscar_normativa');
+  });
+
+  it('obtenerFuentePorConector resuelve por nombre de tool', () => {
+    expect(obtenerFuentePorConector('buscar_normativa')?.id).toBe('normativa_rebt');
+    expect(obtenerFuentePorConector('buscar_precios')?.id).toBe('precios_distribuidores');
+    expect(obtenerFuentePorConector('buscar_google')?.id).toBe('web_general');
+  });
+
+  it('obtenerFuente devuelve null para fuente inexistente', () => {
+    expect(obtenerFuente('no_existe')).toBeNull();
+  });
+});
+
+// ── Nexo v1 — metadata `nexo` en tools ───────────────────────────────────────
+describe('Nexo v1 — metadata nexo en tools (ADR-0021)', () => {
+  it('buscar_normativa declara nexo.fuenteId y fallback', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(src).toMatch(/name:\s*'buscar_normativa'[\s\S]*?nexo:\s*\{\s*fuenteId:\s*'normativa_rebt'/);
+    expect(src).toMatch(/name:\s*'buscar_normativa'[\s\S]*?fallback:\s*'buscar_web'/);
+  });
+
+  it('buscar_precios declara nexo.fuenteId', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(src).toMatch(/name:\s*'buscar_precios'[\s\S]*?nexo:\s*\{\s*fuenteId:\s*'precios_distribuidores'/);
+  });
+});

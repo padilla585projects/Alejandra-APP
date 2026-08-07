@@ -6,6 +6,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Added
 
+- **F-2.2 Nexo v1 — capa de integración con fuentes externas (ADR-0021, 2026-08-07):** implementado y cableado sobre las tools existentes (`buscar_normativa`, `buscar_precios`) sin crear una tool nueva. Cambios:
+  - `alejandra-agente/nexo-fuentes.js`: registro de 3 fuentes piloto (REBT/ITC-BT local, precios distribuidores, web general) con metadato de fiabilidad/TTL/ambito/fallback. Helpers `obtenerFuente()`, `obtenerFuentePorConector()`, `listarFuentes()`.
+  - Metadata `nexo` añadido a `buscar_normativa` (fuenteId, fallback: 'buscar_web') y `buscar_precios` en el catálogo ADR-0010.
+  - `registrarNexoConsulta()`: registra traza `tipo='nexo_consulta'` (ADR-0014) + INSERT en `nexo_fuentes_telemetria`. Valida que la fuente esté registrada antes de trazar.
+  - Fallback coordinado: `buscar_normativa` devuelve `sugerencia:'buscar_web'` cuando obtiene 0 resultados.
+  - Migración `migrate_013_nexo_fuentes_telemetria.sql` añadida al workflow `migrate-d1-agent.yml` y al manifiesto (pendiente de aplicar — requiere autorización humana).
+  - `nucleo-cognitivo/packages/cognitive-core/src/nexo.js` exporta interfaz `crearNexo()`.
+  - 7 tests Nexo añadidos a `lib.test.js` (168/168 en verde).
+
 - **Cerebro v2 — reestructura del núcleo cognitivo en subcarpetas locales (2026-08-07):** `nucleo-cognitivo/` dividido en dos subcarpetas locales (**sin paquetes npm**):
   - `packages/cognitive-core/` — motor de decisión, memoria, tool-registry, verifier, nexo, planner, estado cognitivo y context engine. `src/index.js` re-exporta, 35 pruebas.
   - `packages/cognitive-core-policy/` — policy engine de riesgo N0–N3 (ADR-0006), 4 pruebas.

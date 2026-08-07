@@ -18,6 +18,11 @@
 - Tests verdes: cognitive-core 35/35, cognitive-core-policy 4/4, agente 161/161.
 - ARC-020 rebanada 1 (piloto N0) sigue desplegada y verificada. Siguiente decisión:
   analizar trazas N0 antes de proponer rebanada posterior (política fallback ADR-0020).
+- **F-2.2 Nexo v1 (ADR-0021) — implementado y cableado (2026-08-07):** registro de
+  fuentes (`nexo-fuentes.js`), metadata `nexo` en `buscar_normativa`/`buscar_precios`,
+  `registrarNexoConsulta()` (traza + telemetría D1), fallback `sugerencia:'buscar_web'`
+  cuando normativa devuelve 0 resultados, migración `migrate_013_nexo_fuentes_telemetria.sql`
+  (pendiente de aplicar vía workflow — requiere autorización). 7 tests Nexo añadidos (168/168).
 - **No se usa npm en este proyecto.** Los workspaces/`package.json` de paquetes se
   retiraron; el núcleo es código local bundleado por wrangler.
 

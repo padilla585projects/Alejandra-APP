@@ -54,6 +54,8 @@ import {
 // Cerebro v2 (F-1.3/ADR-0020): nucleo-cognitivo dividido en subcarpetas locales.
 // Wrangler bundlea el import directamente — no requiere npm.
 import { decidirInvocacionPilotoN0, tieneTrazaSuficiente } from '../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js';
+// Nexo v1 (ADR-0021): registro de fuentes externas para validar y consultar metadato.
+import { obtenerFuente } from './nexo-fuentes.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -1363,6 +1365,12 @@ async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, t
 // ADR-0021: Registrar consulta a fuente externa en trazas y telemetría
 async function registrarNexoConsulta(env, { fuenteId, empresaId, usuarioId, consulta, resultados_count, latencia_ms, cache_hit }) {
   try {
+    // Validar que la fuente está registrada (FUENTES_NEXO en nexo-fuentes.js)
+    const fuente = obtenerFuente(fuenteId);
+    if (!fuente) {
+      console.warn('[NEXO] fuente no registrada:', fuenteId);
+      return;
+    }
     await registrarTraza(env, {
       tipo: 'nexo_consulta',
       empresaId,

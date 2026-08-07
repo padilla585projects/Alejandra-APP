@@ -47,6 +47,7 @@ on:
           - migrate_relaciones_obra.sql
           - migrate_flota.sql
           - migrate_nexus_experts.sql
+          - alejandra-agente/migrate_013_nexo_fuentes_telemetria.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true

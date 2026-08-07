@@ -159,6 +159,14 @@
       "declarado": "2026-08-03",
       "verificado": "2026-08-03",
       "nota": "Autorizada por el Director en chat (2026-08-03). Aplicada contra la unica D1 existente: nexus_experts no existia antes; creada por primera vez. Verificado despues via PRAGMA table_xinfo: 8 columnas, coincide exactamente. Paso 3 (retirar el bloque CREATE TABLE dentro de runMigrations(), PR #75) y paso 4 (verificar en produccion) completos: worker.js desplegado (run 30839201968, version 400421b4-06dd-4943-93d1-2c422c9b4f6a, 2026-08-03T18:02:46Z), /health healthy (d1:true, r2:true), tabla verificada presente tras el despliegue. Ciclo de ADR-0011 completo (5 pasos). Con este vertical, las 14 verticales de ARC-011 fase 3 quedan completas (checklists, rfis, calidad, tareas_obra, actas_reunion, ordenes_cambio, ordenes_compra, proveedores_gestion, planificacion_produccion, finanzas_obra, seguridad_cumplimiento, relaciones_obra, flota, nexus_experts), todas con el ciclo de 5 pasos cerrado."
+    },
+    {
+      "archivo": "alejandra-agente/migrate_013_nexo_fuentes_telemetria.sql",
+      "aplicada": false,
+      "run": null,
+      "declarado": "2026-08-07",
+      "verificado": null,
+      "nota": "ADR-0021 (Nexo v1): crea tabla nexo_fuentes_telemetria para metricas de consultas a fuentes externas. Pendiente de aplicar contra D1 via workflow migrate-d1-agent.yml (requiere autorizacion, migracion D1 = decision humana). El worker maneja la ausencia de tabla con .catch silencioso."
     }
   ]
 }
