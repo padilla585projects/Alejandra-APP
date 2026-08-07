@@ -1,5 +1,15 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0020 rebanada 6 — refuerzo N2/N3, sin ampliar permisos (enmienda 5, 2026-08-07)
+
+- Rama/commit: pendiente de commit sobre `main` (código puro, aún sin desplegar).
+- Contexto: el Director pidió extender el Motor a N2/N3. Aclarado antes de escribir código — ninguna versión de "gobernar" N2/N3 puede significar *permitir* nada: ADR-0006 fija que N3 "no es una decisión que Alejandra pueda tomar por su cuenta en ningún caso"; N2 exige revisión humana asíncrona (ADR-0009) que `solicitarRevisionHumanaAsincrona()` sigue sin implementar (depende del canal Telegram real). El Director confirmó: solo refuerzo de traza, cero cambio de permisos.
+- **`decidirInvocacionN2N3()`** (`motor-decision.js`): para una tool N2/N3 ofrecida con metadato válido, **siempre** devuelve `decision: 'posponer'` con `permitida: true` — nunca `'invocar_tool'`. No sustituye ni debilita `CONFIRMO BORRADO`/`CONFIRMO MIGRACION`, que siguen viviendo dentro de cada `case`. Su único efecto es dejar traza donde hoy no hay ninguna (antes, N2/N3 eran invisibles para el Motor: `aplicaPiloto: false` sin registro).
+- Cableada en `evaluarInvocacionCognitiva()` (`worker.js`) tras el piloto N0/N1, mismo patrón que las rebanadas anteriores — no cambia el flujo `control.permitida ? ejecutarToolConTelemetria(...) : rechazada`, porque `permitida` sigue siendo `true` para N2/N3 en alcance.
+- Pruebas: `node --check` limpio; cognitive-core 50/50 (5 tests nuevos: no ofrecida, fuera de alcance, metadato inválido, y dos que verifican explícitamente que N2 y N3 nunca reciben `'invocar_tool'`); agente 178/178 (1 test de wiring nuevo confirmando que `CONFIRMO BORRADO` sigue intacto en el código).
+- Riesgo/rollback: cero cambio de comportamiento — ninguna tool que hoy funciona (con o sin confirmación humana) cambia su resultado. Solo añade trazas nuevas en `alejandra_trazas`. Revertir el commit las quita sin afectar a nada más.
+- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health`; decidir si se extiende el Motor a N1 de escritura, o si se aborda el diseño de revisión humana asíncrona real para N2 (ADR propio, fuera de este ciclo).
+
 ## ADR-0020 rebanada 5 — clasificación N1 por invocación (enmienda 4, 2026-08-07)
 
 - Rama/commit: pendiente de commit sobre `main` (código puro, aún sin desplegar).

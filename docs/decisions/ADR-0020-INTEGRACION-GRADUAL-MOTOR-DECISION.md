@@ -131,6 +131,25 @@ mediante el Motor de Decisión.
   llegan a evaluarse. Tests: 6 nuevos (clasificación tool entera/acción de
   lectura/acción de escritura/fail-closed + auditoría automática de los 6
   `case` reales contra `ACCIONES_N1_LECTURA_POR_TOOL`), agente 177/177.
+- **Enmienda 5 — Rebanada 6 (2026-08-07): refuerzo N2/N3, sin ampliar
+  permisos.** Ninguna versión de "gobernar N2/N3" tiene sentido como
+  *permitir* nada: ADR-0006 fija que N3 "no es una decisión que Alejandra
+  pueda tomar por su cuenta en ningún caso", y N2 exige revisión humana
+  asíncrona (`nivelesRequeridosPara('N2')`) que `solicitarRevisionHumanaAsincrona()`
+  sigue sin implementar (depende del canal Telegram real, fuera de este
+  paquete aislado). `decidirInvocacionN2N3()` nueva en `motor-decision.js`:
+  para una tool N2/N3 ofrecida con metadato válido, **siempre** devuelve
+  `decision: 'posponer'` (nunca `'invocar_tool'`) con `permitida: true` —
+  no bloquea ni sustituye `CONFIRMO BORRADO`/`CONFIRMO MIGRACION`, que siguen
+  viviendo dentro de cada `case` sin tocarse. El único efecto es dejar traza
+  explícita donde hoy no hay ninguna (`aplicaPiloto: false` del piloto N0
+  para N2/N3 significaba invisible para el Motor). Cableada en
+  `evaluarInvocacionCognitiva()` tras el piloto N0/N1, mismo patrón que las
+  rebanadas anteriores. Tests: 5 nuevos de contrato (no ofrecida, fuera de
+  alcance, metadato inválido, y dos explícitos verificando que N2/N3 nunca
+  reciben `'invocar_tool'`), 1 de wiring en `lib.test.js` confirmando que
+  `CONFIRMO BORRADO` sigue intacto en el código. cognitive-core 50/50,
+  cognitive-core-policy 4/4, agente 178/178.
 - Las rebanadas posteriores requerirán actualizar `TASKS.md`, `PROJECT_STATE.md`,
   `HANDOFF.md`, el backlog y esta decisión antes de ampliar alcance.
 - El despliegue no está autorizado por este ADR; exige el runbook y verificación

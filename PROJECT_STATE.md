@@ -599,6 +599,15 @@ igual que `verificar_deploy`, sin tocar ningún gate legacy existente. Tests:
 cognitive-core 45/45, cognitive-core-policy 4/4, agente 177/177. **Sin
 desplegar todavía.**
 
-**Pendientes ADR-0020:** extensión a N1 de escritura, N2 y N3 — requieren
-ADRs/enmiendas + Director. Ver `ARCHITECT_BACKLOG.md` (ARC-020) y
-`TASKS.md`.
+**Rebanada 6 (2026-08-07, enmienda 5):** refuerzo N2/N3, sin ampliar
+permisos. `decidirInvocacionN2N3()` deja traza explícita de una tool N2/N3
+ofrecida, pero **siempre** decide `'posponer'`, nunca `'invocar_tool'` —
+`CONFIRMO BORRADO`/`CONFIRMO MIGRACION` no se tocan, siguen siendo la única
+barrera real. Antes, N2/N3 eran invisibles para el Motor; ahora quedan
+trazadas sin que ningún permiso cambie. Tests: cognitive-core 50/50,
+cognitive-core-policy 4/4, agente 178/178. **Sin desplegar todavía.**
+
+**Pendientes ADR-0020:** extensión a N1 de escritura; diseñar revisión
+humana asíncrona real para N2 (requiere ADR propio, cablear el canal de
+Telegram — cambio mayor, no autónomo). Ver `ARCHITECT_BACKLOG.md` (ARC-020)
+y `TASKS.md`.

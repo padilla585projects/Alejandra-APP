@@ -294,6 +294,115 @@ export function decidirInvocacionN1Lectura({
 }
 
 /**
+ * Refuerzo N2/N3 (ADR-0020, rebanada 6, 2026-08-07). NO gobierna N2 ni N3 —
+ * ninguna versión de "gobernar" tiene sentido como *permitir* nada: ADR-0006
+ * es literal en que N3 "no es una decisión que Alejandra pueda tomar por su
+ * cuenta en ningún caso", y N2 exige revisión humana asíncrona
+ * (`nivelesRequeridosPara('N2')`) que `solicitarRevisionHumanaAsincrona()`
+ * sigue sin implementar (depende del canal real de Telegram, fuera de este
+ * paquete aislado). Esta función SIEMPRE devuelve `permitida: true` para una
+ * tool N2/N3 ofrecida con metadato válido — **no sustituye ni debilita**
+ * `CONFIRMO BORRADO`/`CONFIRMO MIGRACION`, que siguen viviendo dentro de cada
+ * `case` y son la única barrera real. Su único efecto es dejar traza
+ * explícita ("el Motor consideró esta invocación y la dejó fuera a
+ * propósito") donde hoy no hay ninguna: sin esta función, N2/N3 son
+ * invisibles para el Motor (`aplicaPiloto: false` del piloto N0, sin traza).
+ *
+ * @param {{tool?: object, toolOfrecida: boolean, authOk: boolean, esDevVerificado: boolean, esCron: boolean, modo: string}} params
+ * @returns {{aplicaPiloto: boolean, permitida: boolean, decision: object}}
+ */
+export function decidirInvocacionN2N3({
+  tool,
+  toolOfrecida,
+  authOk = false,
+  esDevVerificado = false,
+  esCron = false,
+  modo = 'conversacion',
+} = {}) {
+  const permisosEfectivos = Object.freeze({
+    sesion_autenticada: authOk === true,
+    desarrollador_verificado: esDevVerificado === true,
+    cron: esCron === true,
+  });
+  const nombreTool = typeof tool?.name === 'string' ? tool.name : 'desconocida';
+  const nivel = tool?.nivel_riesgo;
+
+  if (toolOfrecida !== true) {
+    return {
+      aplicaPiloto: true,
+      permitida: false,
+      decision: {
+        decision: 'rechazar',
+        motivos: ['La tool no figura en el catálogo ofrecido a esta sesión.'],
+        evidencia: { tool: nombreTool, ofrecida: false },
+        confianza: 1,
+        riesgo: 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'tool_no_ofrecida',
+      },
+    };
+  }
+
+  if (nivel !== 'N2' && nivel !== 'N3') {
+    return {
+      aplicaPiloto: false,
+      permitida: true,
+      decision: {
+        decision: 'posponer',
+        motivos: ['La tool no es N2 ni N3; este refuerzo no le aplica.'],
+        evidencia: { tool: nombreTool, nivel_riesgo: nivel ?? null },
+        confianza: 1,
+        riesgo: nivel ?? 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'fuera_alcance_n2_n3',
+      },
+    };
+  }
+
+  const metadato = validarMetadatoTool(tool);
+  if (!metadato.ok) {
+    return {
+      aplicaPiloto: true,
+      permitida: false,
+      decision: {
+        decision: 'rechazar',
+        motivos: ['Metadato de la tool inválido o incompleto (ADR-0010).', metadato.motivo],
+        evidencia: { tool: nombreTool, ofrecida: true },
+        confianza: 1,
+        riesgo: 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'metadato_invalido',
+      },
+    };
+  }
+
+  const motivoNivel = nivel === 'N3'
+    ? 'N3 fuera del alcance autónomo por mandato de ADR-0006: exige autorización explícita del Director en cada uso, nunca decisión del Motor.'
+    : 'N2 exige revisión humana asíncrona (ADR-0009), sin implementación real todavía (depende del canal Telegram/alejandra_fixes, fuera de este paquete aislado).';
+
+  return {
+    aplicaPiloto: true,
+    permitida: true,
+    decision: {
+      decision: 'posponer',
+      motivos: [
+        motivoNivel,
+        'La barrera humana real (CONFIRMO BORRADO/CONFIRMO MIGRACION) sigue viviendo en la tool y no se toca.',
+      ],
+      evidencia: { tool: nombreTool, nivel_riesgo: nivel, ofrecida: true },
+      confianza: 1,
+      riesgo: nivel,
+      permisos_efectivos: permisosEfectivos,
+      modo,
+      criterio_salida: nivel === 'N3' ? 'n3_fuera_alcance_autonomo' : 'n2_revision_humana_no_implementada',
+    },
+  };
+}
+
+/**
  * Contrato de `registrarTraza` — ADR-0014 §5 ("El helper que necesita
  * `motor-decision.js`, sin romper el aislamiento actual"). No es un módulo
  * aparte: es una dependencia inyectada en `decidir()`, nunca un cliente de D1

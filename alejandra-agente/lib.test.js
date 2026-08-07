@@ -1521,3 +1521,17 @@ const ACCIONES_N1_LECTURA_POR_TOOL_TEST = {
   gestionar_calidad: ['listar', 'resumen'],
   historico_materiales: ['consultar', 'comparar'],
 };
+
+// ── ADR-0020 rebanada 6 — refuerzo N2/N3 (regresión de wiring) ─────────────
+describe('ADR-0020 rebanada 6 — refuerzo N2/N3 (ARC-020, enmienda 5)', () => {
+  it('worker.js invoca decidirInvocacionN2N3 solo cuando el piloto N0/N1 no aplicó, sin tocar la barrera humana', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(src).toMatch(/decidirInvocacionN2N3/);
+    expect(src).toMatch(/tool\?\.\s*nivel_riesgo === 'N2' \|\| tool\?\.\s*nivel_riesgo === 'N3'/);
+    // La barrera humana real de este Worker (escribir_bd, N2) no se toca:
+    // sigue exigiendo "CONFIRMO BORRADO <código>" igual que siempre. (sql_query/
+    // run_migration con "CONFIRMO MIGRACION" viven en worker.js raíz, N3 de
+    // catálogo dev_verificado — no en alejandra-agente.)
+    expect(src).toMatch(/CONFIRMO BORRADO/);
+  });
+});

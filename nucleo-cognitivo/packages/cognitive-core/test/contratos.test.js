@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { crearEstadoCognitivo, actualizarEstadoCognitivo } from '../src/estado-cognitivo.js';
 import { construirContexto } from '../src/context-engine.js';
 import { construirPlan } from '../src/planner.js';
-import { decidir, decidirInvocacionPilotoN0, decidirInvocacionN1Lectura, tieneTrazaSuficiente, CAMPOS_TRAZA_OBLIGATORIOS } from '../src/motor-decision.js';
+import { decidir, decidirInvocacionPilotoN0, decidirInvocacionN1Lectura, decidirInvocacionN2N3, tieneTrazaSuficiente, CAMPOS_TRAZA_OBLIGATORIOS } from '../src/motor-decision.js';
 
 test('Estado Cognitivo: se crea en fase percibir y es inmutable al actualizar', () => {
   const estado = crearEstadoCognitivo('tarea-1');
@@ -218,5 +218,75 @@ test('Motor de Decisión: rebanada 4 rechaza una tool N1 de lectura ofrecida con
   assert.equal(resultado.aplicaPiloto, true);
   assert.equal(resultado.permitida, false);
   assert.equal(resultado.decision.criterio_salida, 'metadato_invalido');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+// ADR-0020, rebanada 6 (2026-08-07, enmienda 5): refuerzo N2/N3. NUNCA
+// permite nada de forma autónoma para N2/N3 (permitida siempre true en el
+// caso "en alcance", que es "posponer y dejar traza", nunca "invocar_tool")
+// — la barrera humana real (CONFIRMO BORRADO/CONFIRMO MIGRACION) sigue
+// viviendo en cada tool sin tocarse. Objetivo único: dejar traza donde hoy
+// no hay ninguna.
+
+test('Motor de Decisión: refuerzo N2/N3 rechaza una tool no ofrecida', () => {
+  const resultado = decidirInvocacionN2N3({
+    tool: { name: 'escribir_bd', description: 'x', acceso: 'sesion', cron: 'prohibido', nivel_riesgo: 'N2' },
+    toolOfrecida: false,
+    authOk: true,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'tool_no_ofrecida');
+});
+
+test('Motor de Decisión: refuerzo N2/N3 deja fuera tools que no son N2 ni N3', () => {
+  const resultado = decidirInvocacionN2N3({
+    tool: { name: 'verificar_deploy', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' },
+    toolOfrecida: true,
+    authOk: true,
+  });
+  assert.equal(resultado.aplicaPiloto, false);
+  assert.equal(resultado.permitida, true);
+  assert.equal(resultado.decision.criterio_salida, 'fuera_alcance_n2_n3');
+});
+
+test('Motor de Decisión: refuerzo N2/N3 rechaza metadato inválido (política determinista)', () => {
+  const resultado = decidirInvocacionN2N3({
+    tool: { name: 'escribir_bd', nivel_riesgo: 'N2' }, // sin acceso/cron/description
+    toolOfrecida: true,
+    authOk: true,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'metadato_invalido');
+});
+
+test('Motor de Decisión: refuerzo N2 nunca permite invocar_tool — siempre posponer con traza, nunca autoriza', () => {
+  const resultado = decidirInvocacionN2N3({
+    tool: { name: 'escribir_bd', description: 'x', acceso: 'sesion', cron: 'prohibido', nivel_riesgo: 'N2' },
+    toolOfrecida: true,
+    authOk: true,
+    modo: 'gestion',
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, true, 'no bloquea CONFIRMO BORRADO, que sigue viviendo en la tool');
+  assert.equal(resultado.decision.decision, 'posponer');
+  assert.notEqual(resultado.decision.decision, 'invocar_tool', 'el Motor NUNCA autoriza N2 por su cuenta');
+  assert.equal(resultado.decision.criterio_salida, 'n2_revision_humana_no_implementada');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+test('Motor de Decisión: refuerzo N3 nunca permite invocar_tool — siempre posponer con traza, nunca autoriza', () => {
+  const resultado = decidirInvocacionN2N3({
+    tool: { name: 'run_migration', description: 'x', acceso: 'dev_verificado', cron: 'prohibido', nivel_riesgo: 'N3' },
+    toolOfrecida: true,
+    authOk: true,
+    esDevVerificado: true,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, true, 'no bloquea el flujo existente de la tool');
+  assert.equal(resultado.decision.decision, 'posponer');
+  assert.notEqual(resultado.decision.decision, 'invocar_tool', 'el Motor NUNCA autoriza N3 — mandato explícito de ADR-0006');
+  assert.equal(resultado.decision.criterio_salida, 'n3_fuera_alcance_autonomo');
   assert.equal(tieneTrazaSuficiente(resultado.decision), true);
 });

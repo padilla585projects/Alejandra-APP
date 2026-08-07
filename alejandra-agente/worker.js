@@ -55,7 +55,7 @@ import {
 } from './lib.js';
 // Cerebro v2 (F-1.3/ADR-0020): nucleo-cognitivo dividido en subcarpetas locales.
 // Wrangler bundlea el import directamente — no requiere npm.
-import { decidirInvocacionPilotoN0, decidirInvocacionN1Lectura, tieneTrazaSuficiente } from '../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js';
+import { decidirInvocacionPilotoN0, decidirInvocacionN1Lectura, decidirInvocacionN2N3, tieneTrazaSuficiente } from '../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js';
 // Nexo v1 (ADR-0021): registro de fuentes externas para validar y consultar metadato.
 import { obtenerFuente } from './nexo-fuentes.js';
 const EUR_RATE = 0.92;
@@ -1472,9 +1472,12 @@ async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa
 // ejecutarlas. Rebanada 1/2 (piloto N0 completo) + rebanada 3 (piloto N1 de
 // lectura) + rebanada 5 (clasificación N1 POR INVOCACIÓN vía
 // esInvocacionN1DeLectura: tool entera en TOOLS_N1_LECTURA_PILOTO, o
-// `accion` de una tool CRUD compuesta en la allowlist de lectura). El resto
-// de N1, N2 y N3 conservan el flujo y gates existentes hasta contar con sus
-// verificadores específicos. Un nombre no ofrecido se rechaza siempre.
+// `accion` de una tool CRUD compuesta en la allowlist de lectura) + rebanada
+// 6 (refuerzo N2/N3: SOLO deja traza de que el Motor las consideró y las
+// dejó fuera — nunca las permite ni sustituye CONFIRMO BORRADO/MIGRACION,
+// que siguen viviendo en cada `case`). N1 de escritura conserva el flujo y
+// gates existentes sin ningún cambio. Un nombre no ofrecido se rechaza
+// siempre.
 async function evaluarInvocacionCognitiva(env, toolName, input, tools, usuarioId, empresaId, authOk, esDevVerificado, modo) {
   const tool = (tools || []).find((candidata) => candidata?.name === toolName);
   const esCron = esInvocacionCron(usuarioId, empresaId);
@@ -1482,6 +1485,10 @@ async function evaluarInvocacionCognitiva(env, toolName, input, tools, usuarioId
 
   if (!resultado.aplicaPiloto && tool?.nivel_riesgo === 'N1' && esInvocacionN1DeLectura(toolName, input)) {
     resultado = decidirInvocacionN1Lectura({ tool, toolOfrecida: !!tool, authOk, esDevVerificado, esCron, modo });
+  }
+
+  if (!resultado.aplicaPiloto && (tool?.nivel_riesgo === 'N2' || tool?.nivel_riesgo === 'N3')) {
+    resultado = decidirInvocacionN2N3({ tool, toolOfrecida: !!tool, authOk, esDevVerificado, esCron, modo });
   }
 
   if (resultado.aplicaPiloto && tieneTrazaSuficiente(resultado.decision)) {
