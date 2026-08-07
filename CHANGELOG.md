@@ -15,6 +15,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   - `nucleo-cognitivo/packages/cognitive-core/src/nexo.js` exporta interfaz `crearNexo()`.
   - 7 tests Nexo añadidos a `lib.test.js` (168/168 en verde).
 
+### Nexo v1 — migración D1 aplicada (2026-08-07)
+- **D2a** `migrate_013_nexo_fuentes_telemetria.sql` aplicado contra D1 de producción (`alejandra-db`) vía `wrangler d1 execute`, autorizado por el Director. Tabla `nexo_fuentes_telemetria` creada y verificada (`PRAGMA table_info`: 9 columnas: id, fuente_id, empresa_id, usuario_id, consulta, resultados, latencia_ms, cache_hit, created_at). Manifiesto actualizado (`aplicada: true`).
+
 - **Cerebro v2 — reestructura del núcleo cognitivo en subcarpetas locales (2026-08-07):** `nucleo-cognitivo/` dividido en dos subcarpetas locales (**sin paquetes npm**):
   - `packages/cognitive-core/` — motor de decisión, memoria, tool-registry, verifier, nexo, planner, estado cognitivo y context engine. `src/index.js` re-exporta, 35 pruebas.
   - `packages/cognitive-core-policy/` — policy engine de riesgo N0–N3 (ADR-0006), 4 pruebas.

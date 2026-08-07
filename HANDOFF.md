@@ -22,7 +22,8 @@
   fuentes (`nexo-fuentes.js`), metadata `nexo` en `buscar_normativa`/`buscar_precios`,
   `registrarNexoConsulta()` (traza + telemetría D1), fallback `sugerencia:'buscar_web'`
   cuando normativa devuelve 0 resultados, migración `migrate_013_nexo_fuentes_telemetria.sql`
-  (pendiente de aplicar vía workflow — requiere autorización). 7 tests Nexo añadidos (168/168).
+  aplicada y verificada en D1 de producción (tabla `nexo_fuentes_telemetria`, 9 columnas;
+  manifiesto `aplicada: true`). 7 tests Nexo añadidos (168/168). **F-2.2 Nexo v1 completa.**
 - **No se usa npm en este proyecto.** Los workspaces/`package.json` de paquetes se
   retiraron; el núcleo es código local bundleado por wrangler.
 

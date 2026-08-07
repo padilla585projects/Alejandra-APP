@@ -162,11 +162,11 @@
     },
     {
       "archivo": "alejandra-agente/migrate_013_nexo_fuentes_telemetria.sql",
-      "aplicada": false,
-      "run": null,
+      "aplicada": true,
+      "run": "wrangler d1 execute alejandra-db --file=migrate_013_nexo_fuentes_telemetria.sql",
       "declarado": "2026-08-07",
-      "verificado": null,
-      "nota": "ADR-0021 (Nexo v1): crea tabla nexo_fuentes_telemetria para metricas de consultas a fuentes externas. Pendiente de aplicar contra D1 via workflow migrate-d1-agent.yml (requiere autorizacion, migracion D1 = decision humana). El worker maneja la ausencia de tabla con .catch silencioso."
+      "verificado": "2026-08-07",
+      "nota": "ADR-002 (Nexo v1): tabla nexo_fuentes_telemetria creada con 9 columnas (id, fuente_id, empresa_id, usuario_id, consulta, resultados, latencia_ms, cache_hit, created_at). Aplicada y verificada via PRAGMA table_xinfo. Autorizada por el Director en chat. Commit 02ea344 desplegado."
     }
   ]
 }
