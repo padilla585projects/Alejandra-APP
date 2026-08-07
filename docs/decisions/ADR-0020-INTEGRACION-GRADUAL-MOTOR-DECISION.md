@@ -114,6 +114,23 @@ mediante el Motor de Decisión.
   - Tests: 3 nuevos de contrato (rechazo por metadato incompleto/inválido en
     N0 y N1 lectura), cognitive-core 45/45, agente 172/172 sin cambios (ningún
     tool real del catálogo pierde disponibilidad).
+- **Enmienda 4 — Rebanada 5 (2026-08-07):** clasificación N1 POR INVOCACIÓN,
+  no por tool. Auditados los `case` de las 6 tools CRUD compuestas
+  (`gestionar_tarea/rfi/oc/acta/calidad`, `historico_materiales`):
+  `listar`/`resumen`/`consultar`/`comparar` solo ejecutan `SELECT` (alguna con
+  un `CREATE TABLE IF NOT EXISTS` idempotente de bootstrap, no escritura de
+  negocio); el resto de acciones escribe. `esInvocacionN1DeLectura(toolName,
+  input)` (`lib.js`) decide por invocación: tool entera en
+  `TOOLS_N1_LECTURA_PILOTO` (`verificar_deploy`) o `input.accion` en la
+  allowlist de lectura de esa tool (`ACCIONES_N1_LECTURA_POR_TOOL`) —
+  fail-closed ante `accion` ausente, desconocida o tool no clasificada.
+  `evaluarInvocacionCognitiva()` (`worker.js`) recibe ahora `input` y usa esta
+  función en vez del chequeo estático anterior; los 3 call sites pasan
+  `tb.input`. El resto del comportamiento de `decidirInvocacionN1Lectura()`
+  (sesión, explicabilidad, metadato) no cambia — solo cambia qué invocaciones
+  llegan a evaluarse. Tests: 6 nuevos (clasificación tool entera/acción de
+  lectura/acción de escritura/fail-closed + auditoría automática de los 6
+  `case` reales contra `ACCIONES_N1_LECTURA_POR_TOOL`), agente 177/177.
 - Las rebanadas posteriores requerirán actualizar `TASKS.md`, `PROJECT_STATE.md`,
   `HANDOFF.md`, el backlog y esta decisión antes de ampliar alcance.
 - El despliegue no está autorizado por este ADR; exige el runbook y verificación

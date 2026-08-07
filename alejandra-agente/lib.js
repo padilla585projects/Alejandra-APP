@@ -177,17 +177,48 @@ const TOOLS_REQUIEREN_SESION    = new Set([
 
 // ADR-0020, rebanada 3 (2026-08-07, enmienda 2): allowlist curada de tools N1
 // de LECTURA gobernadas por el Motor de Decisión (decidirInvocacionN1Lectura,
-// nucleo-cognitivo/). Alcance deliberadamente estrecho tras auditar cada
-// `case` de las 26 tools N1 del catálogo: la inmensa mayoría son CRUD
-// compuesto por `accion` (gestionar_tarea/rfi/oc/acta/calidad) o escriben sin
-// más (generar_*, editar_plano, enviar_*, subir_archivo, ram_save/clear,
-// memoria_confirmar/rechazar_candidata, configurar_alerta, historico_materiales
-// —tiene accion:'registrar' que hace INSERT—). `verificar_deploy` es la ÚNICA
-// confirmada de solo lectura: su `case` solo hace `fetch` GET contra la API de
-// GitHub Actions, sin `env.DB`/`env.R2` en ningún camino. Ampliar esta lista
-// exige clasificar por invocación (`accion`), no por tool — decisión aparte,
-// pendiente en ARCHITECT_BACKLOG.md (ARC-020).
+// nucleo-cognitivo/). `verificar_deploy` es la única tool ENTERA de solo
+// lectura: su `case` solo hace `fetch` GET contra la API de GitHub Actions,
+// sin `env.DB`/`env.R2` en ningún camino.
 const TOOLS_N1_LECTURA_PILOTO = new Set(['verificar_deploy']);
+
+// ADR-0020, rebanada 5 (2026-08-07): clasificación N1 POR INVOCACIÓN, no por
+// tool. Las 6 tools CRUD compuestas (`accion` en el input) mezclan lectura y
+// escritura en la misma declaración — auditados los `case` de las seis,
+// `listar`/`resumen`/`consultar`/`comparar` solo hacen `SELECT` (más, en
+// algunas, un `CREATE TABLE IF NOT EXISTS` idempotente de bootstrap vía
+// `runDDL()`, no escritura de datos de negocio); el resto de acciones
+// (`crear`/`actualizar`/`eliminar`/`aprobar`/`rechazar`/`resolver`/
+// `completar`/`responder`/`registrar`/`crear_tareas_desde_acuerdos`) sí
+// escriben. Cualquier tool/acción no listada aquí cae a escritura por
+// defecto (fail-closed) — ver `esInvocacionN1DeLectura()`.
+const ACCIONES_N1_LECTURA_POR_TOOL = new Map([
+  ['gestionar_tarea', new Set(['listar'])],
+  ['gestionar_rfi', new Set(['listar'])],
+  ['gestionar_oc', new Set(['listar', 'resumen'])],
+  ['gestionar_acta', new Set(['listar'])],
+  ['gestionar_calidad', new Set(['listar', 'resumen'])],
+  ['historico_materiales', new Set(['consultar', 'comparar'])],
+]);
+
+/**
+ * Decide si UNA invocación concreta de una tool N1 es de solo lectura.
+ * Dos caminos: (1) la tool entera está en `TOOLS_N1_LECTURA_PILOTO`
+ * (`verificar_deploy`, sin parámetro `accion`); (2) la tool es CRUD
+ * compuesta y su `input.accion` está en la allowlist de lectura de
+ * `ACCIONES_N1_LECTURA_POR_TOOL`. Fail-closed: tool/acción desconocida o
+ * `accion` ausente → false (se trata como escritura, gates legacy intactos).
+ * @param {string} toolName
+ * @param {object} input
+ * @returns {boolean}
+ */
+function esInvocacionN1DeLectura(toolName, input) {
+  if (TOOLS_N1_LECTURA_PILOTO.has(toolName)) return true;
+  const accionesLectura = ACCIONES_N1_LECTURA_POR_TOOL.get(toolName);
+  if (!accionesLectura) return false;
+  const accion = input && typeof input.accion === 'string' ? input.accion : null;
+  return accion !== null && accionesLectura.has(accion);
+}
 
 // SEC-CRON-01 / ARC-017 (02/08/2026): el cron llama al modelo con esDevVerificado=true,
 // así que filtrarToolsPorAuth no le filtraba NADA. Seis veces al día, sin nadie delante,
@@ -645,6 +676,7 @@ export {
   TOOLS_SOLO_DEV_VERIFICADO,
   TOOLS_REQUIEREN_SESION,
   TOOLS_N1_LECTURA_PILOTO,
+  esInvocacionN1DeLectura,
   filtrarToolsPorAuth,
   TOOLS_PROHIBIDAS_CRON,
   esInvocacionCron,

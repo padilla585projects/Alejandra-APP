@@ -34,6 +34,7 @@ import {
   TOOLS_SOLO_DEV_VERIFICADO,
   TOOLS_REQUIEREN_SESION,
   TOOLS_N1_LECTURA_PILOTO,
+  esInvocacionN1DeLectura,
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
@@ -1469,15 +1470,17 @@ async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa
 
 // ADR-0020: el paquete cognitivo gobierna tools ya identificadas antes de
 // ejecutarlas. Rebanada 1/2 (piloto N0 completo) + rebanada 3 (piloto N1 de
-// lectura, allowlist TOOLS_N1_LECTURA_PILOTO). El resto de N1, N2 y N3
-// conservan el flujo y gates existentes hasta contar con sus verificadores
-// específicos. Un nombre no ofrecido se rechaza siempre.
-async function evaluarInvocacionCognitiva(env, toolName, tools, usuarioId, empresaId, authOk, esDevVerificado, modo) {
+// lectura) + rebanada 5 (clasificación N1 POR INVOCACIÓN vía
+// esInvocacionN1DeLectura: tool entera en TOOLS_N1_LECTURA_PILOTO, o
+// `accion` de una tool CRUD compuesta en la allowlist de lectura). El resto
+// de N1, N2 y N3 conservan el flujo y gates existentes hasta contar con sus
+// verificadores específicos. Un nombre no ofrecido se rechaza siempre.
+async function evaluarInvocacionCognitiva(env, toolName, input, tools, usuarioId, empresaId, authOk, esDevVerificado, modo) {
   const tool = (tools || []).find((candidata) => candidata?.name === toolName);
   const esCron = esInvocacionCron(usuarioId, empresaId);
   let resultado = decidirInvocacionPilotoN0({ tool, toolOfrecida: !!tool, authOk, esDevVerificado, esCron, modo });
 
-  if (!resultado.aplicaPiloto && tool?.nivel_riesgo === 'N1' && TOOLS_N1_LECTURA_PILOTO.has(toolName)) {
+  if (!resultado.aplicaPiloto && tool?.nivel_riesgo === 'N1' && esInvocacionN1DeLectura(toolName, input)) {
     resultado = decidirInvocacionN1Lectura({ tool, toolOfrecida: !!tool, authOk, esDevVerificado, esCron, modo });
   }
 
@@ -5103,7 +5106,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
       for (const tb of toolBlocks) {
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
-        const control = await evaluarInvocacionCognitiva(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
+        const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
           ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
@@ -5278,7 +5281,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         const t0 = Date.now();
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
-        const control = await evaluarInvocacionCognitiva(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
+        const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
           ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
@@ -5365,7 +5368,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           herramientasUsadas.push({ nombre: tb.name, input: tb.input });
           const t0 = Date.now();
           await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
-          const control = await evaluarInvocacionCognitiva(env, tb.name, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
+          const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
           const resultado = control.permitida
             ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
             : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });

@@ -20,6 +20,7 @@ import {
   detectarEscrituraDestructivaBalanceada,
   TOOLS_SOLO_DEV_VERIFICADO,
   TOOLS_N1_LECTURA_PILOTO,
+  esInvocacionN1DeLectura,
   redactarTexto,
   redactarDetalle,
   extraerTablaDDL,
@@ -1421,11 +1422,102 @@ describe('ADR-0020 rebanada 3 — piloto N1 de lectura (ARC-020, enmienda 2)', (
     const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
     expect(src).toMatch(/async function evaluarInvocacionCognitiva\(/);
     expect(src).toMatch(/decidirInvocacionN1Lectura/);
-    expect(src).toMatch(/TOOLS_N1_LECTURA_PILOTO\.has\(toolName\)/);
+    expect(src).toMatch(/esInvocacionN1DeLectura\(toolName, input\)/);
     // Los 3 call sites (chat normal, streaming, recuperación de tool-use) deben
-    // seguir invocando la función renombrada, no la N0 original.
-    const llamadas = src.match(/await evaluarInvocacionCognitiva\(/g) || [];
+    // seguir invocando la función renombrada, no la N0 original, y pasar tb.input.
+    const llamadas = src.match(/await evaluarInvocacionCognitiva\(env, tb\.name, tb\.input, tools/g) || [];
     expect(llamadas.length).toBe(3);
     expect(src).not.toMatch(/evaluarInvocacionCognitivaN0/);
   });
 });
+
+// ── ADR-0020 rebanada 5 — clasificación N1 por invocación ───────────────────
+describe('ADR-0020 rebanada 5 — clasificación N1 por invocación (ARC-020, enmienda 4)', () => {
+  it('verificar_deploy es de lectura sin importar el input (tool entera)', () => {
+    expect(esInvocacionN1DeLectura('verificar_deploy', {})).toBe(true);
+    expect(esInvocacionN1DeLectura('verificar_deploy', { worker: 'app' })).toBe(true);
+  });
+
+  it('las acciones "listar"/"resumen"/"consultar"/"comparar" de las tools CRUD compuestas son de lectura', () => {
+    expect(esInvocacionN1DeLectura('gestionar_tarea', { accion: 'listar' })).toBe(true);
+    expect(esInvocacionN1DeLectura('gestionar_rfi', { accion: 'listar' })).toBe(true);
+    expect(esInvocacionN1DeLectura('gestionar_oc', { accion: 'listar' })).toBe(true);
+    expect(esInvocacionN1DeLectura('gestionar_oc', { accion: 'resumen' })).toBe(true);
+    expect(esInvocacionN1DeLectura('gestionar_acta', { accion: 'listar' })).toBe(true);
+    expect(esInvocacionN1DeLectura('gestionar_calidad', { accion: 'listar' })).toBe(true);
+    expect(esInvocacionN1DeLectura('gestionar_calidad', { accion: 'resumen' })).toBe(true);
+    expect(esInvocacionN1DeLectura('historico_materiales', { accion: 'consultar' })).toBe(true);
+    expect(esInvocacionN1DeLectura('historico_materiales', { accion: 'comparar' })).toBe(true);
+  });
+
+  it('las acciones de escritura de esas mismas tools NO son de lectura', () => {
+    expect(esInvocacionN1DeLectura('gestionar_tarea', { accion: 'crear' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_tarea', { accion: 'actualizar' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_tarea', { accion: 'completar' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_tarea', { accion: 'eliminar' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_rfi', { accion: 'responder' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_oc', { accion: 'aprobar' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_oc', { accion: 'rechazar' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_acta', { accion: 'crear_tareas_desde_acuerdos' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_calidad', { accion: 'resolver' })).toBe(false);
+    expect(esInvocacionN1DeLectura('historico_materiales', { accion: 'registrar' })).toBe(false);
+  });
+
+  it('fail-closed: accion ausente, desconocida o tool no clasificada nunca es lectura', () => {
+    expect(esInvocacionN1DeLectura('gestionar_tarea', {})).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_tarea', { accion: 'inventada' })).toBe(false);
+    expect(esInvocacionN1DeLectura('gestionar_tarea', null)).toBe(false);
+    expect(esInvocacionN1DeLectura('enviar_push', { accion: 'listar' })).toBe(false);
+  });
+
+  it('las 6 acciones de lectura auditadas contra worker.js no ejecutan SQL mutante ni escriben en R2', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const casosLectura = [
+      { tool: 'gestionar_tarea', inicio: "case 'gestionar_tarea':", fin: "case 'gestionar_rfi':" },
+      { tool: 'gestionar_rfi', inicio: "case 'gestionar_rfi':", fin: "case 'gestionar_oc':" },
+      { tool: 'gestionar_oc', inicio: "case 'gestionar_oc':", fin: "case 'gestionar_acta':" },
+      { tool: 'gestionar_acta', inicio: "case 'gestionar_acta':", fin: "case 'gestionar_calidad':" },
+      { tool: 'gestionar_calidad', inicio: "case 'gestionar_calidad':", fin: "case 'analizar_archivo':" },
+      { tool: 'historico_materiales', inicio: "case 'historico_materiales':", fin: "case 'configurar_alerta':" },
+    ];
+    for (const { tool, inicio: marcaInicio, fin: marcaFin } of casosLectura) {
+      const inicio = src.indexOf(marcaInicio);
+      const fin = src.indexOf(marcaFin, inicio + 1);
+      expect(inicio, `case '${tool}' no encontrado`).toBeGreaterThanOrEqual(0);
+      expect(fin, `case siguiente a '${tool}' no encontrado`).toBeGreaterThan(inicio);
+      const cuerpo = src.slice(inicio, fin);
+      const accionesLectura = [...ACCIONES_N1_LECTURA_POR_TOOL_TEST[tool]];
+      for (const accion of accionesLectura) {
+        // Dos patrones en el código real: `if (accion === 'x')` (la mayoría)
+        // y `case 'x': {` dentro de un switch(accion) (historico_materiales).
+        const marcaIf = `accion === '${accion}'`;
+        const marcaCase = `case '${accion}': {`;
+        const iIf = cuerpo.indexOf(marcaIf);
+        const iCase = cuerpo.indexOf(marcaCase);
+        const iAccion = iIf >= 0 ? iIf : iCase;
+        const longitudMarca = iIf >= 0 ? marcaIf.length : marcaCase.length;
+        expect(iAccion, `bloque de "${accion}" no encontrado en ${tool}`).toBeGreaterThanOrEqual(0);
+        // Bloque hasta el siguiente disparador de acción (if o case) o fin del case.
+        const siguienteIf = cuerpo.indexOf('if (accion ===', iAccion + longitudMarca);
+        const siguienteCase = cuerpo.indexOf("\n          case '", iAccion + longitudMarca);
+        const candidatos = [siguienteIf, siguienteCase].filter((i) => i > iAccion);
+        const siguiente = candidatos.length ? Math.min(...candidatos) : -1;
+        const bloque = cuerpo.slice(iAccion, siguiente > iAccion ? siguiente : cuerpo.length);
+        expect(bloque, `${tool}/${accion} ejecuta SQL mutante`).not.toMatch(/env\.DB\.prepare\(\s*[`'"]?\s*(INSERT|UPDATE|DELETE)/i);
+        expect(bloque, `${tool}/${accion} escribe en R2`).not.toMatch(/env\.R2\.(put|delete)/);
+      }
+    }
+  });
+});
+
+// Copia literal de ACCIONES_N1_LECTURA_POR_TOOL (no exportado desde lib.js a
+// propósito, es detalle interno) — si se desincroniza con la real, el test
+// de arriba deja de auditar lo que de verdad gobierna el Motor.
+const ACCIONES_N1_LECTURA_POR_TOOL_TEST = {
+  gestionar_tarea: ['listar'],
+  gestionar_rfi: ['listar'],
+  gestionar_oc: ['listar', 'resumen'],
+  gestionar_acta: ['listar'],
+  gestionar_calidad: ['listar', 'resumen'],
+  historico_materiales: ['consultar', 'comparar'],
+};

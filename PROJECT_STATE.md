@@ -589,7 +589,16 @@ Con esto los 4 puntos originales de ADR-0020 quedan resueltos. Tests:
 cognitive-core 45/45, cognitive-core-policy 4/4, agente 172/172. **Sin
 desplegar todavía.**
 
-**Pendientes ADR-0020:** ampliar el piloto N1 por invocación (`accion`) en vez
-de por tool para gobernar las tools CRUD compuestas, y extensión a N2-N3 —
-requieren ADRs/enmiendas + Director. Ver `ARCHITECT_BACKLOG.md` (ARC-020) y
+**Rebanada 5 (2026-08-07, enmienda 4):** clasificación N1 por invocación.
+Auditados los `case` de las 6 tools CRUD compuestas (`gestionar_tarea/rfi/oc/
+acta/calidad`, `historico_materiales`): `listar`/`resumen`/`consultar`/
+`comparar` son puro `SELECT`, el resto escribe. `esInvocacionN1DeLectura()`
+(`lib.js`) decide por tool+`accion`, fail-closed ante acción desconocida.
+`evaluarInvocacionCognitiva()` recibe `input` y gobierna estas invocaciones
+igual que `verificar_deploy`, sin tocar ningún gate legacy existente. Tests:
+cognitive-core 45/45, cognitive-core-policy 4/4, agente 177/177. **Sin
+desplegar todavía.**
+
+**Pendientes ADR-0020:** extensión a N1 de escritura, N2 y N3 — requieren
+ADRs/enmiendas + Director. Ver `ARCHITECT_BACKLOG.md` (ARC-020) y
 `TASKS.md`.
