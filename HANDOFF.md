@@ -1,5 +1,14 @@
 # Handoff — Alejandra 2.0
 
+## F-4.4 Telemetría de uso de herramientas — desplegado y verificado (2026-08-07)
+
+- Rama/PR: `feat/f-4-telemetrica-uso-tools`, integrada por PR #100 en `main` como `9c379ed`.
+- Cambio: `ejecutarToolConTelemetria` envuelve `ejecutarTool` en los 3 paths de usuario (NEXUS no-stream, streaming x2), registrando `feature_usage` (KV counter cross-tenant `tools:{empresa_id}:{tool}` TTL 90d + traza D1 vía `registrarTraza`); `/api/admin/metrics/tools` admin read-only (gated por `verificarAdminToken`); pestaña "📈 Telemetría" en `admin.html`. El path interno `reflexion` se mantiene fuera de la telemetría. 5 tests de regresión de wiring (161/161). La traza escribe en `alejandra_trazas` (tabla existente, ADR-0014) — no hay migración D1; el wrapper es fail-open y preserva el resultado del tool.
+- Verificación de código: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` 161/161; `git diff --check` limpio. CI de PR #100 verde (2 jobs "Syntax and agent tests", 15s + 19s).
+- Despliegue/verificación: entorno `production` aprobado (auto-aprobado como owner tras autorización "dispara", `workflow_dispatch` con `confirmation=DEPLOY_ALEJANDRA_AGENT`); run [31170999186](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31170999186) ("Deploy Alejandra Agent Worker (manual)", +24s, OK incl. healthcheck automático). Verificación manual posterior: `GET https://alejandra-agente.alejandra-app.workers.dev/health` → `{"estado":"healthy","d1":true,"r2":true,...}` HTTP 200 (versión observada `96d21329-1769-477d-b0c9-a228bd699351`); `GET /api/admin/metrics/tools?empresa_id=1` → HTTP 403 con token dev (confirma la ruta existe y el gate admin funciona; no se usan ni tocan secretos prod).
+- Riesgo/rollback: telemetría fail-open + traza en tabla existente; revertir `9c379ed` desactiva la telemetría sin cambiar el comportamiento del chat.
+- Pendiente: frontend `admin.html` (pestaña Telemetría) no publicado a Pages — `pages.yml` es manual (`PUBLISH_GITHUB_PAGES`) y hay runs zombie del 2026-08-06 en `github-pages` que conviene limpiar antes de publicar. Endpoint API ya responde en prod (403 verificado). Pendiente ADR futura para columna `tool` dedicada en `detalle_json` (el top-10 actual parsea el nombre vía `instr/substr`).
+
 ## SEC-CHAT-CONTEXTO-LEGACY y ADR-0020 rebanada 1 — desplegados y verificados (2026-08-06)
 
 - Rama/PR: `codex/agent-n0-production`, integrada por PR #98 en `main` como `5352dc5c74176540843f7b6147d452b316cb275d`.
