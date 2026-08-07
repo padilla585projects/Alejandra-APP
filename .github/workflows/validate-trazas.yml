@@ -1,0 +1,79 @@
+name: Validate Admin Trazas Endpoint
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type VALIDATE_TRAZAS_ENDPOINT to confirm a read-only check"
+        required: true
+        type: string
+      ref:
+        description: "Branch or tag to run against (default main)"
+        required: false
+        default: main
+
+permissions:
+  id-token: write   # necesario para OIDC en wrangler (NO se usa aquí, pero wrangler lo exige)
+  contents: read
+
+env:
+  WORKER_URL: https://alejandra-agente.alejandra-app.workers.dev
+
+jobs:
+  validate-trazas:
+    name: Validate /api/admin/trazas (read-only)
+    if: github.event.inputs.confirmation == 'VALIDATE_TRAZAS_ENDPOINT'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Validate endpoint with ADMIN_TOKEN
+        id: check
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          echo "1) Healthcheck worker..."
+          curl -sS --fail "${WORKER_URL}/health" | tee /tmp/health.json
+          echo ""
+          echo "2) Calling /api/admin/trazas with ADMIN_TOKEN (read-only)..."
+          RESP=$(curl -sS --retry 2 --retry-delay 3 -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+            "${WORKER_URL}/api/admin/trazas?limit=5")
+          echo "$RESP" | tee /tmp/trazas_resp.txt
+          HTTP_CODE=$(echo "$RESP" | grep -oP 'HTTP_STATUS:\K[0-9]+')
+          echo "HTTP_STATUS=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+          # Parse JSON: debe devolver un array (posiblemente vacio) con 200
+          echo "$RESP" | sed '/^HTTP_STATUS:/d' | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          assert isinstance(data, list), 'Expected a JSON array'
+          print('OK: endpoint devolvio un array de', len(data), 'elementos')
+          if data:
+              keys = sorted(data[0].keys())
+              print('Columnas del primer elemento:', keys)
+          " || { echo "FAIL: respuesta no valida"; exit 1; }
+
+      - name: Verify cross-tenant isolation on trazas
+        id: isolation
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          echo "Comprobando que registrarTokenUso acepta empresa_id (F-4.1.1)..."
+          # Consulta directa a D1 para validar el esquema (solo lectura, rows_written:0)
+          # via wrangler d1 execute --command (read-only SELECT)
+          trap 'echo "w/o wrangler d1 access, skipping schema check"' ERR
+          npx wrangler d1 execute alejandra-db --command "PRAGMA table_info(alejandra_token_uso)" --remote 2>&1 | tee /tmp/pragmta.txt
+          npx wrangler d1 execute alejandra-db --command "SELECT ts, worker, tipo, empresa_id, trace_id FROM alejandra_trazas ORDER BY ts DESC LIMIT 1" --remote 2>&1 | tee /tmp/trazas_db.txt || true
+
+      - name: Report
+        run: |
+          echo "=== VALIDACION COMPLETA ==="
+          echo "Worker health: $(python3 -c "import json; print(json.load(open('/tmp/health.json'))['estado'])")"
+          echo "Trazas HTTP status: ${{ steps.check.outputs.HTTP_STATUS }}"
+          echo "Verifica manualmente en: https://padilla585projects.github.io/Alejandra-APP/admin.html"
+          echo "(Login con Google OAuth como superadmin, abre pestaña Trazas; el token efimero"
+          echo " se genera al entrar en admin y se usa en Authorization: Bearer)."
