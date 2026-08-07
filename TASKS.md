@@ -38,12 +38,12 @@ Estado (actualizado 2026-08-07): **No hay ninguna tarea activa, en curso ni bloq
 
 ### ADR-0020 — Integración gradual del Motor de Decisión
 
-- Estado: **completada — rebanadas 1-7** (1, 3-6 desplegadas y verificadas; rebanada 7 implementada, con tests en verde, pendiente de desplegar)
+- Estado: **completada — rebanadas 1-7** (las siete desplegadas y verificadas en producción)
 - Decisión: aceptado por el Director el 2026-08-06; enmiendas 1-6 (rebanadas 2-7) aceptadas el 2026-08-07.
 - Alcance implementado: adaptador sin I/O dentro de `nucleo-cognitivo/`; toda invocación N0 ofrecida genera una decisión estructurada y una traza antes de ejecutar; una tool no ofrecida se rechaza. **Rebanada 4:** contexto seguro declarado cumplido (sin código nuevo); política determinista real vía `validarDeclaracionTool()`. **Rebanada 6:** refuerzo N2/N3 — `decidirInvocacionN2N3()` deja traza explícita de una tool N2/N3 ofrecida, pero **siempre** decide `'posponer'`, nunca `'invocar_tool'`; `CONFIRMO BORRADO`/`CONFIRMO MIGRACION` no se tocan. **Rebanada 7:** `decidirInvocacionN1Lectura()` generalizada a `decidirInvocacionN1()` — gobierna TODO N1 (lectura y escritura), no solo lectura; `esInvocacionN1DeLectura()` deja de gatear, pasa a enriquecer la traza (`es_lectura`). El catálogo N1 completo (26 tools) queda bajo el Motor.
 - Pruebas: cognitive-core 57/57 (con policy), agente 178/178; `node --check` limpio en los archivos tocados.
-- Verificación posterior de rebanada 1: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`. Rebanada 3: commit `8039daf`, versión `01e0ea44-a379-497f-a971-c6e8f0ac1471`. Rebanada 4: commit `d725fe3`, versión `a1cc6103-2999-4394-aea8-05d8f373589f`. Rebanada 5: commit `634b86f`, versión `9eaa503b-909a-416e-bf40-1b568e7e2200`. Rebanada 6: commit `634e8a3`, versión `4a814224-2db7-4a2c-b880-fca4e2a5afdb`. **Rebanada 7 sin desplegar todavía.**
-- Siguiente acción exacta: desplegar y verificar rebanada 7; decidir si se diseña la revisión humana asíncrona real para N2 (ADR propio, cablear Telegram) — N3 sigue fuera del alcance autónomo por mandato de ADR-0006.
+- Verificación posterior de rebanada 1: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`. Rebanada 3: commit `8039daf`, versión `01e0ea44-a379-497f-a971-c6e8f0ac1471`. Rebanada 4: commit `d725fe3`, versión `a1cc6103-2999-4394-aea8-05d8f373589f`. Rebanada 5: commit `634b86f`, versión `9eaa503b-909a-416e-bf40-1b568e7e2200`. Rebanada 6: commit `634e8a3`, versión `4a814224-2db7-4a2c-b880-fca4e2a5afdb`. **Rebanada 7 (2026-08-07):** commit `c3d9936` (cherry-pick de `50cc822`, creado por error sobre `feat/panel-office-chat-parity` — ver incidente de rama en `HANDOFF.md`), `wrangler deploy` directo, `/health` → `healthy`, versión `3fa2f9e9-f747-44a8-9498-b93d3bf9833e` coincide de inmediato.
+- Siguiente acción exacta: decidir si se diseña la revisión humana asíncrona real para N2 (ADR propio, cablear Telegram) — N3 sigue fuera del alcance autónomo por mandato de ADR-0006.
 
 ## Plantilla
 
