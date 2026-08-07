@@ -42,8 +42,8 @@ Estado (actualizado 2026-08-07): **No hay ninguna tarea activa, en curso ni bloq
 - Decisión: aceptado por el Director el 2026-08-06; enmienda 1 (rebanada 2) y enmienda 2 (rebanada 3) aceptadas el 2026-08-07.
 - Alcance implementado: adaptador sin I/O dentro de `nucleo-cognitivo/`; toda invocación N0 ofrecida genera una decisión estructurada y una traza antes de ejecutar; una tool no ofrecida se rechaza. **Rebanada 3:** `verificar_deploy` (única tool N1 confirmada de solo lectura) pasa por `decidirInvocacionN1Lectura()`, que exige además sesión autenticada y explicabilidad real (ADR-0009). Resto de N1, N2-N3 conservan gates existentes.
 - Pruebas: cognitive-core 42/42, cognitive-core-policy 4/4, agente 172/172; `node --check` limpio en los tres archivos tocados.
-- Verificación posterior de rebanada 1: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`. **Rebanada 3 sin desplegar todavía** — cambio de código puro en `main` en cuanto se commitee, verificación posterior pendiente del siguiente despliegue de `alejandra-agente`.
-- Siguiente acción exacta: desplegar y verificar rebanada 3 en producción; decidir si se abre una rebanada/enmienda para clasificar N1 por invocación (`accion`) y ampliar `TOOLS_N1_LECTURA_PILOTO` más allá de `verificar_deploy`.
+- Verificación posterior de rebanada 1: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`. **Rebanada 3 desplegada y verificada (2026-08-07):** commit `8039daf`, `wrangler deploy` directo, `/health` → `healthy` (d1:true, r2:true), versión `01e0ea44-a379-497f-a971-c6e8f0ac1471` coincide con el despliegue.
+- Siguiente acción exacta: decidir si se abre una rebanada/enmienda para clasificar N1 por invocación (`accion`) y ampliar `TOOLS_N1_LECTURA_PILOTO` más allá de `verificar_deploy`.
 
 ## Plantilla
 
