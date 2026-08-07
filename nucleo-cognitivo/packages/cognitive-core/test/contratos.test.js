@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { crearEstadoCognitivo, actualizarEstadoCognitivo } from '../src/estado-cognitivo.js';
 import { construirContexto } from '../src/context-engine.js';
 import { construirPlan } from '../src/planner.js';
-import { decidir, decidirInvocacionPilotoN0, decidirInvocacionN1Lectura, decidirInvocacionN2N3, tieneTrazaSuficiente, CAMPOS_TRAZA_OBLIGATORIOS } from '../src/motor-decision.js';
+import { decidir, decidirInvocacionPilotoN0, decidirInvocacionN1, decidirInvocacionN2N3, tieneTrazaSuficiente, CAMPOS_TRAZA_OBLIGATORIOS } from '../src/motor-decision.js';
 
 test('Estado Cognitivo: se crea en fase percibir y es inmutable al actualizar', () => {
   const estado = crearEstadoCognitivo('tarea-1');
@@ -126,15 +126,14 @@ test('Motor de Decisión: rechaza una tool N0 no ofrecida en el catálogo efecti
   assert.equal(resultado.decision.criterio_salida, 'tool_no_ofrecida');
 });
 
-// ADR-0020, rebanada 3 (2026-08-07, enmienda 2): piloto de tools N1 de LECTURA.
-// Alcance deliberadamente estrecho — `verificar_deploy` es la única tool N1
-// del catálogo real confirmada de solo lectura (consulta GitHub Actions, sin
-// escritura en D1/R2); el resto de N1 mezcla lectura y escritura por `accion`
-// (gestionar_*) y queda fuera hasta que exista clasificación por invocación,
-// pendiente de decisión aparte (ver ARCHITECT_BACKLOG.md, ARC-020).
+// ADR-0020, rebanada 3 (2026-08-07, enmienda 2): piloto de tools N1. Nació
+// acotado a lectura (`verificar_deploy` era la única N1 confirmada de solo
+// lectura); la rebanada 7 (enmienda 6, más abajo) lo amplía a escritura —
+// decidirInvocacionN1() ya no distingue, gobierna cualquier N1 ofrecida con
+// sesión + metadato + explicabilidad, igual para lectura o escritura.
 
 test('Motor de Decisión: rebanada 3 rechaza una tool N1 no ofrecida', () => {
-  const resultado = decidirInvocacionN1Lectura({
+  const resultado = decidirInvocacionN1({
     tool: { name: 'verificar_deploy', nivel_riesgo: 'N1' },
     toolOfrecida: false,
     authOk: true,
@@ -145,18 +144,18 @@ test('Motor de Decisión: rebanada 3 rechaza una tool N1 no ofrecida', () => {
 });
 
 test('Motor de Decisión: rebanada 3 deja fuera tools que no son N1 (riesgo distinto)', () => {
-  const resultado = decidirInvocacionN1Lectura({
+  const resultado = decidirInvocacionN1({
     tool: { name: 'consultar_bd', nivel_riesgo: 'N0' },
     toolOfrecida: true,
     authOk: true,
   });
   assert.equal(resultado.aplicaPiloto, false);
   assert.equal(resultado.permitida, true);
-  assert.equal(resultado.decision.criterio_salida, 'fuera_piloto_n1_lectura');
+  assert.equal(resultado.decision.criterio_salida, 'fuera_piloto_n1');
 });
 
 test('Motor de Decisión: rebanada 3 rechaza N1 de lectura sin sesión autenticada', () => {
-  const resultado = decidirInvocacionN1Lectura({
+  const resultado = decidirInvocacionN1({
     tool: { name: 'verificar_deploy', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' },
     toolOfrecida: true,
     authOk: false,
@@ -168,7 +167,7 @@ test('Motor de Decisión: rebanada 3 rechaza N1 de lectura sin sesión autentica
 });
 
 test('Motor de Decisión: rebanada 3 permite y deja traza con explicabilidad para N1 de lectura ofrecida con sesión', () => {
-  const resultado = decidirInvocacionN1Lectura({
+  const resultado = decidirInvocacionN1({
     tool: { name: 'verificar_deploy', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' },
     toolOfrecida: true,
     authOk: true,
@@ -177,7 +176,7 @@ test('Motor de Decisión: rebanada 3 permite y deja traza con explicabilidad par
   assert.equal(resultado.aplicaPiloto, true);
   assert.equal(resultado.permitida, true);
   assert.equal(resultado.decision.decision, 'invocar_tool');
-  assert.equal(resultado.decision.criterio_salida, 'tool_n1_lectura_ofrecida');
+  assert.equal(resultado.decision.criterio_salida, 'tool_n1_ofrecida');
   assert.equal(tieneTrazaSuficiente(resultado.decision), true);
 });
 
@@ -210,7 +209,7 @@ test('Motor de Decisión: rebanada 4 rechaza una tool N0 con "acceso" fuera de l
 });
 
 test('Motor de Decisión: rebanada 4 rechaza una tool N1 de lectura ofrecida con metadato incompleto', () => {
-  const resultado = decidirInvocacionN1Lectura({
+  const resultado = decidirInvocacionN1({
     tool: { name: 'verificar_deploy', nivel_riesgo: 'N1' }, // sin acceso/cron/description
     toolOfrecida: true,
     authOk: true,
@@ -289,4 +288,51 @@ test('Motor de Decisión: refuerzo N3 nunca permite invocar_tool — siempre pos
   assert.notEqual(resultado.decision.decision, 'invocar_tool', 'el Motor NUNCA autoriza N3 — mandato explícito de ADR-0006');
   assert.equal(resultado.decision.criterio_salida, 'n3_fuera_alcance_autonomo');
   assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+// ADR-0020, rebanada 7 (2026-08-07, enmienda 6): decidirInvocacionN1() se
+// amplía a ESCRITURA. ADR-0009 exige el mismo nivel `explicabilidad` para
+// todo N1, sin distinguir lectura/escritura — la restricción anterior era
+// cautela de pilotaje, no un límite real de riesgo (N1 = "reversible,
+// acotado" por definición de ADR-0006). Cada `case` conserva sus propias
+// comprobaciones de tenant/IDOR; el Motor solo añade trazabilidad encima.
+
+test('Motor de Decisión: rebanada 7 permite y traza una tool N1 de ESCRITURA (gestionar_tarea/crear)', () => {
+  const resultado = decidirInvocacionN1({
+    tool: { name: 'gestionar_tarea', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' },
+    toolOfrecida: true,
+    authOk: true,
+    modo: 'app',
+    esLectura: false,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, true);
+  assert.equal(resultado.decision.decision, 'invocar_tool');
+  assert.equal(resultado.decision.criterio_salida, 'tool_n1_ofrecida');
+  assert.equal(resultado.decision.evidencia.es_lectura, false, 'la traza distingue lectura/escritura aunque no la use para decidir');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+test('Motor de Decisión: rebanada 7 rechaza N1 de escritura sin sesión, igual que lectura', () => {
+  const resultado = decidirInvocacionN1({
+    tool: { name: 'gestionar_tarea', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' },
+    toolOfrecida: true,
+    authOk: false,
+    esLectura: false,
+  });
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'sin_sesion');
+});
+
+test('Motor de Decisión: rebanada 7 — esLectura es informativo, no cambia el resultado (mismo authOk, misma tool, distinto esLectura)', () => {
+  const base = { tool: { name: 'gestionar_tarea', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' }, toolOfrecida: true, authOk: true };
+  const comoLectura = decidirInvocacionN1({ ...base, esLectura: true });
+  const comoEscritura = decidirInvocacionN1({ ...base, esLectura: false });
+  const sinClasificar = decidirInvocacionN1({ ...base });
+  assert.equal(comoLectura.permitida, true);
+  assert.equal(comoEscritura.permitida, true);
+  assert.equal(sinClasificar.permitida, true);
+  assert.equal(comoLectura.decision.evidencia.es_lectura, true);
+  assert.equal(comoEscritura.decision.evidencia.es_lectura, false);
+  assert.equal('es_lectura' in sinClasificar.decision.evidencia, false, 'sin esLectura explícito, no se inventa un valor');
 });

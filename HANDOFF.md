@@ -1,5 +1,17 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0020 rebanada 7 — N1 se amplía a escritura (enmienda 6, 2026-08-07)
+
+- Rama/commit: pendiente de commit sobre `main` (código puro, aún sin desplegar).
+- Contexto: el Director pidió extender el Motor a N1 de escritura. Revisado antes de tocar código: `nivelesRequeridosPara('N1')` en `verifier.js` exige el mismo `explicabilidad` para N1 sin distinguir lectura de escritura — la restricción "solo lectura" de las rebanadas 3/5 fue cautela de pilotaje incremental, no un límite real que ADR-0009/0006 impongan. N1 es "reversible, acotado" por definición de ADR-0006, ya sea que la tool lea o escriba, y cada `case` conserva sus propias comprobaciones de tenant/IDOR (mismo patrón defensa-en-profundidad de siempre) sin que el Motor las toque.
+- **`decidirInvocacionN1Lectura()` generalizada a `decidirInvocacionN1()`** (`motor-decision.js`): ya no filtra por lectura/escritura, gobierna cualquier tool N1 ofrecida con sesión + metadato válido + explicabilidad. Gana un parámetro opcional `esLectura` (booleano) que, si se pasa, viaja como `es_lectura` en la evidencia de la traza — puramente informativo, no cambia si se permite o no.
+- **`esInvocacionN1DeLectura()`** (`lib.js`) deja de ser una condición de gateo y pasa a ser solo el cálculo de ese `esLectura` informativo — sigue existiendo, sigue clasificando las 6 tools CRUD compuestas por `accion` más `verificar_deploy`, pero ya no decide si se gobierna, solo qué se registra en la traza.
+- **`evaluarInvocacionCognitiva()`** (`worker.js`): la condición `tool?.nivel_riesgo === 'N1' && esInvocacionN1DeLectura(...)` pasa a `tool?.nivel_riesgo === 'N1'` a secas — toda tool N1 entra ahora al piloto, sea cual sea la acción.
+- Con esto, el Motor gobierna el catálogo N1 completo (26 tools: `gestionar_tarea/rfi/oc/acta/calidad`, `historico_materiales`, `generar_esquema_electrico`, `borrar_esquema`, `generar_grafico`, `preguntar_usuario`, `generar_plano`, `editar_plano`, `enviar_push`, `generar_informe`, `iniciar_conversacion`, `subir_archivo`, `ram_save`, `ram_clear`, `verificar_deploy`, `controlar_app`, `memoria_confirmar_candidata`, `memoria_rechazar_candidata`, `generar_documento`, `configurar_alerta`, `memory_save`, `propose_mejora`), no solo 7.
+- Pruebas: `node --check` limpio; cognitive-core 57/57 (3 tests nuevos: permite y traza escritura, rechaza sin sesión igual que lectura, `esLectura` es informativo y no cambia el resultado); agente 178/178 (wiring test actualizado confirmando `decidirInvocacionN1(` sin el sufijo `Lectura`).
+- Riesgo/rollback: amplía qué invocaciones N1 llegan al piloto, pero no cambia ningún gate existente (sesión, `empresa_id`, IDOR de cada `case`, roles) — el Motor añade trazabilidad y explicabilidad encima, nunca sustituye la barrera legacy. Revertir el commit vuelve al alcance de solo lectura.
+- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health`; decidir si se aborda el diseño de revisión humana asíncrona real para N2 (ADR propio, fuera de este ciclo) — N3 sigue fuera del alcance autónomo por mandato de ADR-0006.
+
 ## ADR-0020 rebanada 6 — refuerzo N2/N3, sin ampliar permisos (enmienda 5, 2026-08-07)
 
 - Rama/commit: pendiente de commit sobre `main` (código puro, aún sin desplegar).

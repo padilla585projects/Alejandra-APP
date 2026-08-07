@@ -150,6 +150,22 @@ mediante el Motor de Decisión.
   reciben `'invocar_tool'`), 1 de wiring en `lib.test.js` confirmando que
   `CONFIRMO BORRADO` sigue intacto en el código. cognitive-core 50/50,
   cognitive-core-policy 4/4, agente 178/178.
+- **Enmienda 6 — Rebanada 7 (2026-08-07): N1 se amplía a ESCRITURA.**
+  `decidirInvocacionN1Lectura()` se generaliza a `decidirInvocacionN1()` —
+  ADR-0009 exige el mismo nivel `explicabilidad` para todo N1 sin distinguir
+  lectura de escritura (`nivelesRequeridosPara('N1')`); la restricción a
+  "solo lectura" de las rebanadas 3/5 fue cautela de pilotaje incremental,
+  no un mandato de ADR-0009/0006 — N1 es "reversible, acotado" por
+  definición (ADR-0006), ya sea que lea o escriba, y cada `case` conserva
+  intactas sus propias comprobaciones de tenant/IDOR; el Motor solo añade
+  trazabilidad encima, nunca las sustituye. `esInvocacionN1DeLectura()`
+  (`lib.js`) deja de gatear y pasa a ser puramente informativa: su resultado
+  viaja como `es_lectura` en la evidencia de la traza, para poder distinguir
+  después qué invocaciones N1 eran lectura y cuáles escritura. Con esto, el
+  Motor gobierna el catálogo N1 completo (26 tools), no solo 7. Tests: 3
+  nuevos de contrato (permite y traza escritura, rechaza sin sesión igual
+  que lectura, `esLectura` es informativo y no cambia el resultado),
+  cognitive-core 57/57 (con policy), agente 178/178.
 - Las rebanadas posteriores requerirán actualizar `TASKS.md`, `PROJECT_STATE.md`,
   `HANDOFF.md`, el backlog y esta decisión antes de ampliar alcance.
 - El despliegue no está autorizado por este ADR; exige el runbook y verificación

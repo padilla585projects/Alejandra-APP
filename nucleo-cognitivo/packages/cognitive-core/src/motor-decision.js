@@ -163,24 +163,32 @@ export function decidirInvocacionPilotoN0({
 }
 
 /**
- * Segunda rebanada ejecutable del Motor de Decisión (ADR-0020, rebanada 3,
- * 2026-08-07). Gobierna tools N1 de LECTURA ya identificadas por el Worker
- * (allowlist curada, este módulo no clasifica lectura/escritura por su cuenta
- * — la mayoría de tools N1 del catálogo mezclan lectura y escritura por
- * `accion`, decisión de alcance explícita en la enmienda 2). Exige, además de
- * lo que ya exige el piloto N0, que la decisión pase el nivel `explicabilidad`
- * que ADR-0009 fija para N1 (`nivelesRequeridosPara('N1')`).
+ * Gobierna TODO N1 — lectura y escritura (ADR-0020: rebanada 3, 2026-08-07,
+ * nació acotada a lectura por enmienda 2; rebanada 7, enmienda 6, la amplía
+ * a escritura). ADR-0009 exige el mismo nivel `explicabilidad` para N1 sin
+ * distinguir lectura de escritura (`nivelesRequeridosPara('N1')`) — la
+ * restricción a "solo lectura" de las rebanadas 3/5 fue una cautela de
+ * pilotaje incremental, no un mandato de ADR-0009/0006: N1 es por
+ * definición "reversible, acotado" (ADR-0006), ya sea que lea o escriba, y
+ * cada `case` conserva sus propias comprobaciones de tenant/IDOR intactas —
+ * el Motor añade trazabilidad encima, nunca las sustituye.
  *
- * @param {{tool?: object, toolOfrecida: boolean, authOk: boolean, esDevVerificado: boolean, esCron: boolean, modo: string}} params
+ * `esLectura` es opcional y puramente informativo: si el Worker lo calcula
+ * (vía `esInvocacionN1DeLectura()` en `lib.js`), queda en la evidencia de la
+ * traza para poder distinguir después qué invocaciones N1 eran lectura y
+ * cuáles escritura — no cambia si se permite o no.
+ *
+ * @param {{tool?: object, toolOfrecida: boolean, authOk: boolean, esDevVerificado: boolean, esCron: boolean, modo: string, esLectura?: boolean|null}} params
  * @returns {{aplicaPiloto: boolean, permitida: boolean, decision: object}}
  */
-export function decidirInvocacionN1Lectura({
+export function decidirInvocacionN1({
   tool,
   toolOfrecida,
   authOk = false,
   esDevVerificado = false,
   esCron = false,
   modo = 'conversacion',
+  esLectura = null,
 } = {}) {
   const permisosEfectivos = Object.freeze({
     sesion_autenticada: authOk === true,
@@ -188,6 +196,7 @@ export function decidirInvocacionN1Lectura({
     cron: esCron === true,
   });
   const nombreTool = typeof tool?.name === 'string' ? tool.name : 'desconocida';
+  const infoLectura = typeof esLectura === 'boolean' ? { es_lectura: esLectura } : {};
 
   if (toolOfrecida !== true) {
     return {
@@ -215,13 +224,13 @@ export function decidirInvocacionN1Lectura({
       permitida: true,
       decision: {
         decision: 'posponer',
-        motivos: ['La tool queda fuera del piloto N1 de lectura.'],
+        motivos: ['La tool queda fuera del piloto N1.'],
         evidencia: { tool: nombreTool, nivel_riesgo: tool?.nivel_riesgo ?? null },
         confianza: 1,
         riesgo: tool?.nivel_riesgo ?? 'no_evaluable',
         permisos_efectivos: permisosEfectivos,
         modo,
-        criterio_salida: 'fuera_piloto_n1_lectura',
+        criterio_salida: 'fuera_piloto_n1',
       },
     };
   }
@@ -236,7 +245,7 @@ export function decidirInvocacionN1Lectura({
       decision: {
         decision: 'rechazar',
         motivos: ['Metadato de la tool inválido o incompleto (ADR-0010).', metadato.motivo],
-        evidencia: { tool: nombreTool, ofrecida: true },
+        evidencia: { tool: nombreTool, ofrecida: true, ...infoLectura },
         confianza: 1,
         riesgo: 'no_evaluable',
         permisos_efectivos: permisosEfectivos,
@@ -252,8 +261,8 @@ export function decidirInvocacionN1Lectura({
       permitida: false,
       decision: {
         decision: 'rechazar',
-        motivos: ['N1 de lectura exige sesión autenticada (ADR-0006).'],
-        evidencia: { tool: nombreTool, nivel_riesgo: 'N1', authOk: false },
+        motivos: ['N1 exige sesión autenticada (ADR-0006).'],
+        evidencia: { tool: nombreTool, nivel_riesgo: 'N1', authOk: false, ...infoLectura },
         confianza: 1,
         riesgo: 'N1',
         permisos_efectivos: permisosEfectivos,
@@ -265,13 +274,13 @@ export function decidirInvocacionN1Lectura({
 
   const decisionBase = {
     decision: 'invocar_tool',
-    motivos: ['Tool N1 de lectura declarada, ofrecida por el catálogo efectivo y con sesión autenticada.'],
-    evidencia: { tool: nombreTool, nivel_riesgo: 'N1', ofrecida: true },
+    motivos: ['Tool N1 declarada, ofrecida por el catálogo efectivo y con sesión autenticada.'],
+    evidencia: { tool: nombreTool, nivel_riesgo: 'N1', ofrecida: true, ...infoLectura },
     confianza: 1,
     riesgo: 'N1',
     permisos_efectivos: permisosEfectivos,
     modo,
-    criterio_salida: 'tool_n1_lectura_ofrecida',
+    criterio_salida: 'tool_n1_ofrecida',
   };
 
   const requiereExplicabilidad = nivelesRequeridosPara('N1').includes('explicabilidad');
