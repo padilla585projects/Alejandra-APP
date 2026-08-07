@@ -48,6 +48,7 @@ import {
   extraerTablaDDL,
   determinarEstadoSalud,
   construirConsultaMemoriaGobernada,
+  construirCacheKeyNormativa,
   construirQueryAprendizajesEmpresa,
 } from './lib.js';
 import { decidirInvocacionPilotoN0, tieneTrazaSuficiente } from '../nucleo-cognitivo/src/motor-decision.js';
@@ -9561,6 +9562,23 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
       const tema = (input.tema || '').trim();
       if (!consulta) return 'Falta "consulta" para buscar normativa.';
       const t0 = Date.now();
+      // F-2.3 Nexo v2: cache KV de 24h (TTL) para evitar repetir queries de la
+      // misma normativa. La key incluye empresa_id (fail-closed: trazas de una
+      // empresa no deben servir de cache a otra). Solo cachea si hay empresa_id
+      // real (nunca para el cron con empresa='cron', que es cross-tenant).
+      const eidCache = empresa_id && empresa_id !== 'cron' ? String(empresa_id) : null;
+      let cacheKey = null;
+      try {
+        if (eidCache && env.RATE_LIMIT_KV) {
+          cacheKey = construirCacheKeyNormativa({ consulta, itc, tema });
+          const cachedStr = await env.RATE_LIMIT_KV.get(`emp:${eidCache}:${cacheKey}`);
+          if (cachedStr) {
+            const latencia = Date.now() - t0;
+            registrarNexoConsulta(env, { fuenteId: 'normativa_rebt', empresaId: empresa_id, usuarioId: usuario_id, consulta, resultados_count: JSON.parse(cachedStr).resultados_count || 0, latencia_ms: latencia, cache_hit: true }).catch(() => {});
+            return cachedStr;
+          }
+        }
+      } catch { cacheKey = null; }
       try {
         let sql = "SELECT norma, seccion, titulo, contenido, palabras_clave FROM normativa_index WHERE 1=1";
         const binds = [];
@@ -9587,13 +9605,24 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         const rows = await stmt.all();
         const resultados = rows.results || [];
         const latencia = Date.now() - t0;
-        // ADR-0021: traza de consulta Nexo
-        registrarNexoConsulta(env, { fuenteId: 'normativa_rebt', empresaId: empresa_id, usuarioId: usuario_id, consulta, resultados_count: resultados.length, latencia_ms: latencia, cache_hit: false }).catch(() => {});
+        let response;
         if (resultados.length === 0) {
-          return JSON.stringify({ ok: true, resultados: [], mensaje: `No se encontró normativa para "${consulta}". Prueba con buscar_web para consultar online.`, sugerencia: 'buscar_web' });
+          // ADR-0021: fallback al sugerir buscar_web
+          response = JSON.stringify({ ok: true, resultados: [], mensaje: `No se encontró normativa para "${consulta}". Prueba con buscar_web para consultar online.`, sugerencia: 'buscar_web' });
+        } else {
+          response = JSON.stringify({ ok: true, consulta, itc: itc || 'todas', resultados_count: resultados.length, resultados });
         }
-        return JSON.stringify({ ok: true, consulta, itc: itc || 'todas', resultados_count: resultados.length, resultados });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+        // F-2.3: cachear respuesta (24h) solo para empresa real
+        if (cacheKey && eidCache && env.RATE_LIMIT_KV) {
+          env.RATE_LIMIT_KV.put(`emp:${eidCache}:${cacheKey}`, response, { expirationTtl: 86400 }).catch(() => {});
+        }
+        registrarNexoConsulta(env, { fuenteId: 'normativa_rebt', empresaId: empresa_id, usuarioId: usuario_id, consulta, resultados_count: resultados.length, latencia_ms: latencia, cache_hit: !!cached && cacheKey != null }).catch(() => {});
+        return response;
+      } catch (e) {
+        // F-2.3: si falla la cache/KV, sigue sirviendo desde BD (fail-open de cache)
+        if (cacheKey && eidCache && env.RATE_LIMIT_KV) env.RATE_LIMIT_KV.delete?.(`emp:${eidCache}:${cacheKey}`).catch(() => {});
+        return JSON.stringify({ ok: false, error: e.message });
+      }
     }
 
     case 'historico_materiales': {

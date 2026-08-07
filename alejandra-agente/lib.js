@@ -596,6 +596,33 @@ function determinarEstadoSalud(d1Ok, r2Ok) {
   return 'healthy';
 }
 
+// ── Cache de Nexo v2 (F-2.3) ───────────────────────────────────────────────
+// construirCacheKeyNormativa: construye una clave de cache determinista y
+// redactada (sin PII) para cachear resultados de buscar_normativa en KV.
+//
+// - Normaliza (lowercase + trim) para que "Tema X" y "tema x" compartan cache.
+// - Usa un hash simple de la consulta para evitar keys gigantes o con
+//   caracteres especiales que rompan KV (espacios, símbolos, etc.).
+// - Prefixa con "nxcache:" para aislar en el namespace de RATE_LIMIT_KV y poder
+//   borrar/inspeccionar sin tocar las claves de rate-limit.
+// - Redacta emails/teléfonos de la consulta con redactarTexto() para evitar
+//   persistir PII en KV, siguiendo el mismo patrón que redactarDetalle/trazas.
+const NX_CACHE_PREFIX = 'nxcache:';
+
+function construirCacheKeyNormativa({ consulta, itc, tema }) {
+  const inputNormalizado = [consulta, itc, tema]
+    .filter((v) => v && String(v).trim())
+    .map((v) => String(v).trim().toLowerCase())
+    .join('|');
+  const redactado = redactarTexto(inputNormalizado);
+  let hash = 0;
+  for (let i = 0; i < redactado.length; i++) {
+    hash = ((hash << 5) - hash + redactado.charCodeAt(i)) | 0;
+  }
+  const hashHex = (hash >>> 0).toString(16).padStart(8, '0');
+  return `${NX_CACHE_PREFIX}${hashHex}`;
+}
+
 export {
   timingSafeEqual,
   PRECIOS_USD,
@@ -626,6 +653,7 @@ export {
   redactarDetalle,
   extraerTablaDDL,
   determinarEstadoSalud,
+  construirCacheKeyNormativa,
   RANGO_CONFIANZA,
   construirConsultaMemoriaGobernada,
   construirQueryAprendizajesEmpresa,

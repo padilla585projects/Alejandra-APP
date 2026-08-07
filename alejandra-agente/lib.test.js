@@ -26,6 +26,7 @@ import {
   construirConsultaMemoriaGobernada,
   construirQueryAprendizajesEmpresa,
   RANGO_CONFIANZA,
+  construirCacheKeyNormativa,
 } from './lib.js';
 
 describe('aislamiento del contexto del chat', () => {
@@ -1214,5 +1215,82 @@ describe('memoria_listar_pendientes / memoria_confirmar_candidata / memoria_rech
     expect(filtrarToolsCron([{ name: 'memoria_listar_pendientes' }])).toEqual([{ name: 'memoria_listar_pendientes' }]);
     expect(filtrarToolsCron([{ name: 'memoria_confirmar_candidata' }])).toEqual([]);
     expect(filtrarToolsCron([{ name: 'memoria_rechazar_candidata' }])).toEqual([]);
+  });
+});
+
+// ── construirCacheKeyNormativa (F-2.3 Nexo v2: cache KV de buscar_normativa) ──
+describe('construirCacheKeyNormativa', () => {
+  it('prefija con nxcache: y devuelve hash hex de 8 chars', () => {
+    const key = construirCacheKeyNormativa({ consulta: 'cable nyu', itc: '', tema: '' });
+    expect(key.startsWith('nxcache:')).toBe(true);
+    const hash = key.slice('nxcache:'.length);
+    expect(hash).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('es determinista: misma entrada → misma key', () => {
+    const a = construirCacheKeyNormativa({ consulta: 'cobranza instalar en obra', itc: '51', tema: 'iluminacion' });
+    const b = construirCacheKeyNormativa({ consulta: 'cobranza instalar en obra', itc: '51', tema: 'iluminacion' });
+    expect(a).toBe(b);
+  });
+
+  it('normaliza mayúsculas/minúsculas y espacios', () => {
+    const a = construirCacheKeyNormativa({ consulta: 'Tema X', itc: '51', tema: 'iluminacion' });
+    const b = construirCacheKeyNormativa({ consulta: 'tema x', itc: '51', tema: 'iluminacion' });
+    expect(a).toBe(b);
+  });
+
+  it('diferencia inputs distintos', () => {
+    const a = construirCacheKeyNormativa({ consulta: 'consulta A', itc: '', tema: '' });
+    const b = construirCacheKeyNormativa({ consulta: 'consulta B', itc: '', tema: '' });
+    expect(a).not.toBe(b);
+  });
+
+  it('redacta PII (email) antes de hashear — no persiste email en la key', () => {
+    const conEmail = construirCacheKeyNormativa({ consulta: 'contacto@x.com tema', itc: '', tema: '' });
+    const sinEmail = construirCacheKeyNormativa({ consulta: '[email-redactado] tema', itc: '', tema: '' });
+    expect(conEmail).toBe(sinEmail);
+    expect(conEmail).not.toMatch(/contacto@x\.com/);
+  });
+
+  it('ignora undefined/null/empty fields', () => {
+    const a = construirCacheKeyNormativa({ consulta: 'tema x', itc: undefined, tema: null });
+    const b = construirCacheKeyNormativa({ consulta: 'tema x', itc: '', tema: '' });
+    expect(a).toBe(b);
+  });
+});
+
+// ── ADR-0014 §2.1: redacción de trazas (PII en detalle/trazas) ─────────────
+// Verifica que registrarTraza (que usa redactarTexto/redactarDetalle) no
+// persiste emails ni teléfonos en texto plano. La construcción de la traza
+// real vive en worker.js; estas pruebas validan las funciones puras que ella
+// consume, garantizando defensa en profundidad sobre datos sensibleS.
+describe('redactarTexto / redactarDetalle', () => {
+  it('redacta emails con [email-redactado], conservando el texto aambiente', () => {
+    expect(redactarTexto('contacto@x.com')).toBe('[email-redactado]');
+    expect(redactarTexto('email admin@x.es aqui')).toBe('email [email-redactado] aqui');
+    expect(redactarTexto('antes user@dominio.com después')).toBe('antes [email-redactado] después');
+  });
+
+  it('redacta teléfonos españoles (9 dígitos) con [telefono-redactado], conservando texto aambiente', () => {
+    expect(redactarTexto('tel 600 123 456')).toBe('tel [telefono-redactado]');
+    expect(redactarTexto('600123456')).toBe('[telefono-redactado]');
+    expect(redactarTexto('+34 600 123 456')).toBe('[telefono-redactado]');
+    expect(redactarTexto('llamar al 600 123 456 ahora')).toBe('llamar al [telefono-redactado] ahora');
+  });
+
+  it('no redacta IDs largos ni importes (>9 dígitos)', () => {
+    expect(redactarTexto('obra 1234567890123')).toBe('obra 1234567890123');
+    expect(redactarTexto('1500.50€')).toBe('1500.50€');
+  });
+
+  it('redacta recursivamente en objetos/arrays anidados (redactarDetalle)', () => {
+    const input = { email: 'a@b.com', email2: 'email admin@x.es aqui', tel: '600 123 456', ok: true, anidado: { x: 'c@d.com' }, lista: ['e@f.com', 'sin email'] };
+    const out = redactarDetalle(input);
+    expect(out.email).toBe('[email-redactado]');
+    expect(out.email2).toBe('email [email-redactado] aqui');
+    expect(out.tel).toBe('[telefono-redactado]');
+    expect(out.ok).toBe(true);
+    expect(out.anidado).toEqual({ x: '[email-redactado]' });
+    expect(out.lista).toEqual(['[email-redactado]', 'sin email']);
   });
 });
