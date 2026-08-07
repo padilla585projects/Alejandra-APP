@@ -1,5 +1,13 @@
 # Handoff — Alejandra 2.0
 
+## ARC-021 — dos despliegues de `alejandra-agente` sin pasar por el workflow gobernado (auditoría 2026-08-07)
+
+**Riesgo de proceso, aceptado por decisión del Director como práctica habitual. Detalle completo en `ARCHITECT_BACKLOG.md` (ARC-021).**
+
+Auditoría de "qué cambió recientemente" contrastando `wrangler deployments list --name alejandra-agente` (solo lectura) contra `gh run list`: de los tres despliegues del 2026-08-07, solo el primero (`96d21329`, 10:45:18 UTC, F-4.4 telemetría) corresponde a un `workflow_dispatch` real de `deploy-alejandra-agente.yml` (run `31170999186`). Los otros dos —`a92ec4ce` (12:55:58 UTC, subcarpetas locales + Nexo v1) y `e8fba7ca` (16:25:01 UTC, rebanada 2 de ARC-020, 24s después del commit `b03e369`)— no tienen ningún run de GitHub Actions asociado; consistente con `wrangler deploy` directo desde sesión/terminal, sin workflow ni confirmación.
+
+El bypass lo autorizó el propio Director, por comodidad propia — no una acción no autorizada de ningún agente. Ninguno de los dos despliegues quedó registrado aquí ni en `PROJECT_STATE.md` en su momento — se documentan ahora, retroactivamente. El código desplegado coincide con lo ya fusionado y verificado por tests en `main`. **Decisión del Director (2026-08-07): se acepta `wrangler deploy` directo como práctica habitual**, mismo criterio y misma condición de reapertura que ARC-014 (producción real con impacto en terceros, o más de un mantenedor). `OPEN_TASK_SUMMARY.md` mantiene su recomendación sin cambios. Sin acción de ingeniería pendiente.
+
 ## F-1.3 Núcleo cognitivo v2 — reestructurado en subcarpetas locales (2026-08-07)
 
 - Rama/PR: `main`, commits `a9b7db1` + `b5f42b1` (push directo, sin PR).

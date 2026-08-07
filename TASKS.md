@@ -15,6 +15,14 @@ Estado: **Las 14 verticales de ARC-011 fase 3 completas** (ciclo de 5 pasos cerr
 - Una tarea activa tiene una única rama y responsable actual.
 - Actualizar al iniciar, bloquear, relevar, revisar y completar.
 
+## ARC-021 — Despliegues de `alejandra-agente` sin workflow gobernado (2026-08-07)
+
+- Estado: **cerrado — riesgo de proceso aceptado por el Director como práctica habitual**
+- Prioridad: Media
+- Hallazgo: dos despliegues de `alejandra-agente` el 2026-08-07 (`a92ec4ce`, `e8fba7ca`) sin `workflow_dispatch` de `deploy-alejandra-agente.yml` asociado — `wrangler deploy` directo, autorizado por el Director por comodidad propia. Detalle en `ARCHITECT_BACKLOG.md` (ARC-021) y `HANDOFF.md`.
+- **Decisión del Director (2026-08-07): acepta el atajo como práctica habitual**, mismo criterio y condición de reapertura que ARC-014.
+- Siguiente acción exacta: ninguna. Sin trabajo de ingeniería pendiente.
+
 ## Auditoría e integración del cerebro de Alejandra Chat (2026-08-06)
 
 ### SEC-CHAT-CONTEXTO-LEGACY — Aislamiento fail-closed del prompt
