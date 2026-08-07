@@ -16,8 +16,8 @@
 - `ci.yml` actualizado: `node --check` + `node --test` de ambas subcarpetas.
 - `nucleo-cognitivo/package.json` conserva el script `test` que corre los 39 tests.
 - Tests verdes: cognitive-core 35/35, cognitive-core-policy 4/4, agente 161/161.
-- ARC-020 rebanada 1 (piloto N0) sigue desplegada y verificada. Siguiente decisión:
-  analizar trazas N0 antes de proponer rebanada posterior (política fallback ADR-0020).
+- ARC-020 rebanada 2 (piloto N0 ampliado a todo el catálogo) completada (2026-08-07).
+  Siguiente: rebanada 3 — verificadores N1 lectura en `verifier.js`.
 - **F-2.2 Nexo v1 (ADR-0021) — implementado y cableado (2026-08-07):** registro de
   fuentes (`nexo-fuentes.js`), metadata `nexo` en `buscar_normativa`/`buscar_precios`,
   `registrarNexoConsulta()` (traza + telemetría D1), fallback `sugerencia:'buscar_web'`

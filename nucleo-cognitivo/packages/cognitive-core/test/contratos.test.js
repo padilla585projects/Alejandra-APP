@@ -81,3 +81,47 @@ test('Motor de Decisión: N1-N3 siguen fuera del piloto sin cambiar sus gates', 
   assert.equal(resultado.permitida, true);
   assert.equal(resultado.decision.criterio_salida, 'fuera_piloto_n0');
 });
+
+// ARC-020, rebanada 2 (2026-08-07): el piloto gobierna TODO el catálogo N0 real del
+// Worker, no solo consultar_personal. LISTA_N0 refleja las tools declaradas con
+// `nivel_riesgo: 'N0'` en alejandra-agente/worker.js (escaneo _n0_scan.cjs).
+// Copia literal, no importada desde alejandra-agente/ — nucleo-cognitivo/ se
+// mantiene aislado. Si falla, la declaración real cambió y hay que sincronizar.
+const LISTA_N0_CATALOGO = Object.freeze([
+  'buscar_web', 'memory_read', 'listar_archivos', 'ver_archivo', 'leer_estado',
+  'consultar_bd', 'calcular_cable', 'calcular_bandeja', 'calcular_proteccion',
+  'analizar_foto_obra', 'listar_esquemas', 'estado_obra', 'pensar', 'planificar',
+  'descubrir_herramientas', 'recuperar_conversacion', 'validar_cambios_bd',
+  'github_listar', 'github_leer', 'github_buscar', 'grep_codigo', 'ram_read',
+  'consultar_conocimiento', 'buscar_documentos', 'buscar_tareas',
+  'memoria_consultar', 'memoria_listar_pendientes', 'consultar_inventario',
+  'consultar_personal', 'buscar_precios', 'marcar_plano', 'buscar_normativa',
+  'buscar_procedimientos', 'consultar_punch_list', 'buscar_proveedores',
+  'consultar_precios',
+]);
+
+test('Motor de Decisión: acepta y traza toda tool N0 del catálogo real (ARC-020 rebanada 2)', () => {
+  for (const nombre of LISTA_N0_CATALOGO) {
+    const resultado = decidirInvocacionPilotoN0({
+      tool: { name: nombre, nivel_riesgo: 'N0' },
+      toolOfrecida: true,
+      authOk: true,
+      modo: 'app',
+    });
+    assert.equal(resultado.aplicaPiloto, true, `${nombre} debe entrar al piloto`);
+    assert.equal(resultado.permitida, true, `${nombre} debe ser permitida`);
+    assert.equal(resultado.decision.decision, 'invocar_tool', `${nombre} debe decidir invocar_tool`);
+    assert.equal(tieneTrazaSuficiente(resultado.decision), true, `${nombre} debe dejar traza suficiente`);
+  }
+});
+
+test('Motor de Decisión: rechaza una tool N0 no ofrecida en el catálogo efectivo (ARC-2)', () => {
+  const resultado = decidirInvocacionPilotoN0({
+    tool: { name: 'consultar_bd', nivel_riesgo: 'N0' },
+    toolOfrecida: false,
+    authOk: true,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'tool_no_ofrecida');
+});

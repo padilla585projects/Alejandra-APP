@@ -62,6 +62,17 @@ mediante el Motor de Decisión.
 - La rebanada 1 queda autorizada: invocaciones N0 ofrecidas por el catálogo pasan
   por el Motor de Decisión y registran una traza estructurada antes de ejecutarse;
   una tool no ofrecida se rechaza. N1-N3 conservan sus gates actuales.
+- **Enmienda 1 — Rebanada 2 (2026-08-07):** el piloto se amplía a **todo el
+  catálogo N0** del Worker (36 tools), no solo a `consultar_bd`. Análisis de
+  trazas N0 (47 decisiones, todas de cron/`consultar_bd`) mostró que el mecanismo
+  funciona pero solo se había ejercitado una tool. Se completa el metadato
+  ADR-0010 de 4 tools que carecían de `nivel_riesgo`: `memory_read` (N0),
+  `memory_save` (N1), `propose_mejora` (N1), `tomar_decision` (N2, puede
+  auto-aplicar `agente_config`). `memory_save`/`propose_mejora`/`tomar_decision`
+  se declaran `cron: 'prohibido'` (coherente con TOOLS_PROHIBIDAS_CRON) y
+  `acceso: 'sesion'` (ya estaban en TOOLS_REQUIEREN_SESION). Se añade cobertura
+  de test del catálogo N0 completo (aceptación + traza) y rechazo de N0 no
+  ofrecida en `cognitive-core/test/contratos.test.js`.
 - Las rebanadas posteriores requerirán actualizar `TASKS.md`, `PROJECT_STATE.md`,
   `HANDOFF.md`, el backlog y esta decisión antes de ampliar alcance.
 - El despliegue no está autorizado por este ADR; exige el runbook y verificación

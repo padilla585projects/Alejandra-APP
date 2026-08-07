@@ -6,6 +6,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Added
 
+- **ARC-020 rebanada 2 — piloto del Motor de Decisión ampliado a todo el catálogo N0 (2026-08-07, ADR-0020 enmienda 1):**
+  - Análisis de las 47 trazas N0 en D1 (`alejandra_trazas`): 100% `consultar_bd`, 100% cron — el mecanismo funciona y registra decisión previa estructurada, pero solo una herramienta se había ejercitado.
+  - Completado metadato ADR-0010 de 4 tools que carecían de `nivel_riesgo`: `memory_read` (N0), `memory_save` (N1), `propose_mejora` (N1), `tomar_decision` (N2). Las tres últimas se declaran `cron: 'prohibido'` y todas `acceso: 'sesion'`.
+  - Cobertura de test del catálogo N0 completo (36 tools) + rechazo de N0 no ofrecida en `cognitive-core/test/contratos.test.js`.
+  - Tests: cognitive-core 37/37, cognitive-core-policy 4/4, agente 168/168.
+
 - **F-2.2 Nexo v1 — capa de integración con fuentes externas (ADR-0021, 2026-08-07):** implementado y cableado sobre las tools existentes (`buscar_normativa`, `buscar_precios`) sin crear una tool nueva. Cambios:
   - `alejandra-agente/nexo-fuentes.js`: registro de 3 fuentes piloto (REBT/ITC-BT local, precios distribuidores, web general) con metadato de fiabilidad/TTL/ambito/fallback. Helpers `obtenerFuente()`, `obtenerFuentePorConector()`, `listarFuentes()`.
   - Metadata `nexo` añadido a `buscar_normativa` (fuenteId, fallback: 'buscar_web') y `buscar_precios` en el catálogo ADR-0010.

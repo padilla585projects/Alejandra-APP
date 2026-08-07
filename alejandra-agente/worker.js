@@ -1065,7 +1065,10 @@ const TOOL_MEMORY_SAVE = {
       importancia:{ type: 'number', description: 'De 1 (trivial) a 5 (crítico)', minimum: 1, maximum: 5 }
     },
     required: ['tipo', 'titulo', 'contenido']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_MEMORY_READ = {
@@ -1077,7 +1080,10 @@ const TOOL_MEMORY_READ = {
       tipo:  { type: 'string', description: 'Filtrar por tipo (opcional)' },
       limit: { type: 'number', description: 'Cuántos registros leer (default 10)' }
     }
-  }
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_PROPOSE_MEJORA = {
@@ -1092,7 +1098,10 @@ const TOOL_PROPOSE_MEJORA = {
       codigo_sugerido: { type: 'string', description: 'Pseudocódigo o descripción técnica del cambio (opcional)' }
     },
     required: ['descripcion', 'tipo', 'prioridad']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_LISTAR_ARCHIVOS = {
@@ -1146,7 +1155,10 @@ const TOOL_TOMAR_DECISION = {
       parametros:   { type: 'object', description: 'Para tipo=config: {modo?, max_iterations?}' }
     },
     required: ['decision', 'tipo', 'confianza']
-  }
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
 };
 
 const TOOL_CONSULTAR_BD = {
