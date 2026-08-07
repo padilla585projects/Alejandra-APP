@@ -578,7 +578,18 @@ allowlist, hoy con ese único elemento. N1 de escritura, N2 y N3 sin cambios.
 Tests: cognitive-core 42/42, cognitive-core-policy 4/4, agente 172/172.
 **Sin desplegar todavía.**
 
+**Rebanada 4 (2026-08-07, enmienda 3):** cierra los dos puntos que quedaban
+del ADR original. Contexto seguro se declara cumplido (ya satisfecho por
+`SEC-CHAT-CONTEXTO-LEGACY` + `memoria_consultar`, sin código nuevo). Política
+determinista real: `motor-decision.js` reutiliza `validarDeclaracionTool()`
+(ADR-0010) para rechazar una tool candidata al piloto (N0 o N1 lectura) con
+metadato ausente/inválido, en vez de asumirla disponible — sin ampliar qué
+tools gobierna el Motor (el filtro de `nivel_riesgo` sigue yendo primero).
+Con esto los 4 puntos originales de ADR-0020 quedan resueltos. Tests:
+cognitive-core 45/45, cognitive-core-policy 4/4, agente 172/172. **Sin
+desplegar todavía.**
+
 **Pendientes ADR-0020:** ampliar el piloto N1 por invocación (`accion`) en vez
-de por tool, rebanada 4 (contexto seguro, política determinista) y extensión a
-N2-N3 — requieren ADRs/enmiendas + Director. Ver `ARCHITECT_BACKLOG.md`
-(ARC-020) y `TASKS.md`.
+de por tool para gobernar las tools CRUD compuestas, y extensión a N2-N3 —
+requieren ADRs/enmiendas + Director. Ver `ARCHITECT_BACKLOG.md` (ARC-020) y
+`TASKS.md`.

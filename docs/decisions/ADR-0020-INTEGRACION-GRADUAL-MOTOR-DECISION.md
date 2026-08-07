@@ -94,6 +94,26 @@ mediante el Motor de Decisión.
   `contratos.test.js`, 2 de `verifier.js` reescritos, 4 de wiring en
   `lib.test.js` (cognitive-core 42/42, cognitive-core-policy 4/4, agente
   172/172).
+- **Enmienda 3 — Rebanada 4 (2026-08-07):** cierra los dos puntos que quedaban
+  del alcance original de esta decisión.
+  - **Punto 1, contexto seguro: declarado cumplido, sin código nuevo.** Ya
+    satisfecho por trabajo previo no atado formalmente a esta rebanada:
+    `SEC-CHAT-CONTEXTO-LEGACY` (2026-08-06) saca las tablas legacy globales del
+    prompt; `memoria_consultar` es N0, aislada por `empresa_id` de sesión (nunca
+    del input) y deja traza `memoria_consulta` en cada llamada.
+  - **Punto 3, política determinista: implementada, alcance acotado.**
+    `motor-decision.js` reutiliza `validarDeclaracionTool()` (`tool-registry.js`,
+    ADR-0010) como comprobación estructural sin I/O: una tool candidata al
+    piloto (N0 o N1 lectura) con `acceso`/`cron`/`nivel_riesgo` ausente o
+    inválido se rechaza (`criterio_salida: 'metadato_invalido'`), en vez de
+    asumirse disponible. El filtro de `nivel_riesgo` sigue yendo primero a
+    propósito: una tool fuera del piloto no empieza a rechazarse por su
+    metadato solo porque este ADR ahora lo valida — eso ampliaría el alcance
+    sin decisión explícita. Punto 2 (decisión previa) y punto 4 (piloto N0) ya
+    estaban resueltos desde la rebanada 1.
+  - Tests: 3 nuevos de contrato (rechazo por metadato incompleto/inválido en
+    N0 y N1 lectura), cognitive-core 45/45, agente 172/172 sin cambios (ningún
+    tool real del catálogo pierde disponibilidad).
 - Las rebanadas posteriores requerirán actualizar `TASKS.md`, `PROJECT_STATE.md`,
   `HANDOFF.md`, el backlog y esta decisión antes de ampliar alcance.
 - El despliegue no está autorizado por este ADR; exige el runbook y verificación

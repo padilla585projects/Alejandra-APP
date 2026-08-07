@@ -1,5 +1,15 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0020 rebanada 4 — contexto seguro (cierre documental) + política determinista (enmienda 3, 2026-08-07)
+
+- Rama/commit: pendiente de commit sobre `main` (código puro, aún sin desplegar).
+- **Contexto seguro (punto 1 del ADR): declarado cumplido, sin código nuevo.** Ya satisfecho por `SEC-CHAT-CONTEXTO-LEGACY` (tablas legacy fuera del prompt) y `memoria_consultar` (N0, aislada por `empresa_id` de sesión, traza `memoria_consulta`).
+- **Política determinista (punto 3): implementada.** `motor-decision.js` importa `validarDeclaracionTool()` (`tool-registry.js`, ADR-0010) y la aplica dentro de `decidirInvocacionPilotoN0()`/`decidirInvocacionN1Lectura()`: una tool candidata al piloto (ya filtrada por `nivel_riesgo` N0 o N1-lectura) con `acceso`/`cron`/`nivel_riesgo`/`description` ausente o inválido se rechaza (`criterio_salida: 'metadato_invalido'`) en vez de asumirse disponible. El filtro de `nivel_riesgo` va **antes** que la validación de metadato a propósito: una tool fuera del piloto no empieza a rechazarse por su metadato solo porque ahora se valida — eso ampliaría el alcance del Motor sin decisión explícita.
+- Con esto, los 4 puntos originales del ADR-0020 (contexto seguro, decisión previa, política determinista, piloto N0) quedan resueltos — la ampliación a N1 de escritura, N2 y N3 sigue como trabajo futuro sin decidir.
+- Pruebas: `node --check` limpio; cognitive-core 45/45 (3 tests nuevos: rechazo por metadato incompleto/inválido en N0 y N1 lectura); agente 172/172 sin cambios (confirma que ningún tool real del catálogo pierde disponibilidad — todos ya tenían metadato completo desde F-1.3/ARC-020 rebanada 2).
+- Riesgo/rollback: cambio puramente defensivo — con el catálogo real íntegro no rechaza nada que hoy funcione; protege contra una futura edición que borre metadato por accidente. Revertir el commit desactiva la validación sin afectar a ninguna otra tool.
+- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health`; decidir si se abre una rebanada/enmienda para clasificar N1 por invocación y ampliar `TOOLS_N1_LECTURA_PILOTO`.
+
 ## ADR-0020 rebanada 3 — piloto N1 de lectura (enmienda 2, 2026-08-07)
 
 - Rama/commit: pendiente de commit sobre `main` (código puro, aún sin desplegar).

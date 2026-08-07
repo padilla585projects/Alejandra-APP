@@ -50,7 +50,7 @@ test('Motor de Decisión: el contrato exige los campos de traza de 04-MOTOR-DE-D
 
 test('Motor de Decisión: el piloto permite y deja trazada una tool N0 ofrecida', () => {
   const resultado = decidirInvocacionPilotoN0({
-    tool: { name: 'consultar_personal', nivel_riesgo: 'N0' },
+    tool: { name: 'consultar_personal', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N0' },
     toolOfrecida: true,
     authOk: true,
     modo: 'gestion',
@@ -103,7 +103,7 @@ const LISTA_N0_CATALOGO = Object.freeze([
 test('Motor de Decisión: acepta y traza toda tool N0 del catálogo real (ARC-020 rebanada 2)', () => {
   for (const nombre of LISTA_N0_CATALOGO) {
     const resultado = decidirInvocacionPilotoN0({
-      tool: { name: nombre, nivel_riesgo: 'N0' },
+      tool: { name: nombre, description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N0' },
       toolOfrecida: true,
       authOk: true,
       modo: 'app',
@@ -157,7 +157,7 @@ test('Motor de Decisión: rebanada 3 deja fuera tools que no son N1 (riesgo dist
 
 test('Motor de Decisión: rebanada 3 rechaza N1 de lectura sin sesión autenticada', () => {
   const resultado = decidirInvocacionN1Lectura({
-    tool: { name: 'verificar_deploy', nivel_riesgo: 'N1' },
+    tool: { name: 'verificar_deploy', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' },
     toolOfrecida: true,
     authOk: false,
   });
@@ -169,7 +169,7 @@ test('Motor de Decisión: rebanada 3 rechaza N1 de lectura sin sesión autentica
 
 test('Motor de Decisión: rebanada 3 permite y deja traza con explicabilidad para N1 de lectura ofrecida con sesión', () => {
   const resultado = decidirInvocacionN1Lectura({
-    tool: { name: 'verificar_deploy', nivel_riesgo: 'N1' },
+    tool: { name: 'verificar_deploy', description: 'x', acceso: 'sesion', cron: 'permitido', nivel_riesgo: 'N1' },
     toolOfrecida: true,
     authOk: true,
     modo: 'app',
@@ -178,5 +178,45 @@ test('Motor de Decisión: rebanada 3 permite y deja traza con explicabilidad par
   assert.equal(resultado.permitida, true);
   assert.equal(resultado.decision.decision, 'invocar_tool');
   assert.equal(resultado.decision.criterio_salida, 'tool_n1_lectura_ofrecida');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+// ADR-0020, rebanada 4 (2026-08-07, enmienda 3): política determinista —
+// metadato ausente/inválido bloquea, no se asume disponible. Solo se evalúa
+// para tools que ya son candidatas del piloto (N0 o N1 lectura); una tool
+// fuera de alcance sigue "posponer" sin que su metadato importe (ver el test
+// de arriba con gestionar_tarea, que no declara acceso/cron a propósito).
+
+test('Motor de Decisión: rebanada 4 rechaza una tool N0 ofrecida con metadato incompleto', () => {
+  const resultado = decidirInvocacionPilotoN0({
+    tool: { name: 'consultar_personal', nivel_riesgo: 'N0' }, // sin acceso/cron/description
+    toolOfrecida: true,
+    authOk: true,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'metadato_invalido');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+test('Motor de Decisión: rebanada 4 rechaza una tool N0 con "acceso" fuera de la lista de ADR-0010', () => {
+  const resultado = decidirInvocacionPilotoN0({
+    tool: { name: 'consultar_personal', description: 'x', acceso: 'inventado', cron: 'permitido', nivel_riesgo: 'N0' },
+    toolOfrecida: true,
+    authOk: true,
+  });
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'metadato_invalido');
+});
+
+test('Motor de Decisión: rebanada 4 rechaza una tool N1 de lectura ofrecida con metadato incompleto', () => {
+  const resultado = decidirInvocacionN1Lectura({
+    tool: { name: 'verificar_deploy', nivel_riesgo: 'N1' }, // sin acceso/cron/description
+    toolOfrecida: true,
+    authOk: true,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'metadato_invalido');
   assert.equal(tieneTrazaSuficiente(resultado.decision), true);
 });

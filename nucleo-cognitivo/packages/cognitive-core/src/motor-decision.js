@@ -11,6 +11,26 @@
  */
 
 import { nivelesRequeridosPara, registrarExplicabilidad } from './verifier.js';
+import { validarDeclaracionTool } from './tool-registry.js';
+
+/**
+ * Política determinista (ADR-0020 rebanada 4, punto 3, 2026-08-07): la
+ * disponibilidad efectiva se calcula a partir del metadato de la tool, no se
+ * asume. Reutiliza `validarDeclaracionTool()` (ADR-0010) como comprobación
+ * estructural pura, sin I/O — devuelve el motivo si la tool ofrecida no trae
+ * `acceso`/`cron`/`nivel_riesgo` válidos, en vez de dejar pasar una tool con
+ * metadato ausente o corrupto.
+ * @param {object} tool
+ * @returns {{ok: true} | {ok: false, motivo: string}}
+ */
+function validarMetadatoTool(tool) {
+  try {
+    validarDeclaracionTool(tool);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, motivo: (e && e.message) || String(e) };
+  }
+}
 
 export const SALIDAS_VALIDAS = Object.freeze([
   'respuesta_directa', 'solicitar_informacion', 'recuperar_contexto', 'consultar_memoria',
@@ -85,6 +105,9 @@ export function decidirInvocacionPilotoN0({
   }
 
   // El piloto no altera todavía N1-N3; el Worker conserva sus gates existentes.
+  // Este filtro va ANTES de validar metadato a propósito: una tool fuera del
+  // piloto no debe empezar a rechazarse por un metadato imperfecto que hoy no
+  // gobierna el Motor — eso sería ampliar el alcance sin decisión explícita.
   if (tool?.nivel_riesgo !== 'N0') {
     return {
       aplicaPiloto: false,
@@ -98,6 +121,27 @@ export function decidirInvocacionPilotoN0({
         permisos_efectivos: permisosEfectivos,
         modo,
         criterio_salida: 'fuera_piloto_n0',
+      },
+    };
+  }
+
+  // Política determinista (ADR-0020 rebanada 4): metadato ausente o inválido
+  // bloquea la ejecución, no se asume disponible. Solo se llega aquí para
+  // tools que ya declaran nivel_riesgo:'N0' — sigue sin ampliar alcance a N1-N3.
+  const metadato = validarMetadatoTool(tool);
+  if (!metadato.ok) {
+    return {
+      aplicaPiloto: true,
+      permitida: false,
+      decision: {
+        decision: 'rechazar',
+        motivos: ['Metadato de la tool inválido o incompleto (ADR-0010).', metadato.motivo],
+        evidencia: { tool: nombreTool, ofrecida: true },
+        confianza: 1,
+        riesgo: 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'metadato_invalido',
       },
     };
   }
@@ -162,6 +206,9 @@ export function decidirInvocacionN1Lectura({
     };
   }
 
+  // El filtro de nivel_riesgo va ANTES de validar metadato a propósito: una
+  // tool fuera de este piloto no debe empezar a rechazarse por un metadato
+  // imperfecto que hoy no gobierna el Motor.
   if (tool?.nivel_riesgo !== 'N1') {
     return {
       aplicaPiloto: false,
@@ -175,6 +222,26 @@ export function decidirInvocacionN1Lectura({
         permisos_efectivos: permisosEfectivos,
         modo,
         criterio_salida: 'fuera_piloto_n1_lectura',
+      },
+    };
+  }
+
+  // Política determinista (ADR-0020 rebanada 4): metadato ausente o inválido
+  // bloquea la ejecución, no se asume disponible.
+  const metadato = validarMetadatoTool(tool);
+  if (!metadato.ok) {
+    return {
+      aplicaPiloto: true,
+      permitida: false,
+      decision: {
+        decision: 'rechazar',
+        motivos: ['Metadato de la tool inválido o incompleto (ADR-0010).', metadato.motivo],
+        evidencia: { tool: nombreTool, ofrecida: true },
+        confianza: 1,
+        riesgo: 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'metadato_invalido',
       },
     };
   }
