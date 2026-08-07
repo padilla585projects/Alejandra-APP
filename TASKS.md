@@ -38,11 +38,11 @@ Estado (actualizado 2026-08-07): **No hay ninguna tarea activa, en curso ni bloq
 
 ### ADR-0020 — Integración gradual del Motor de Decisión
 
-- Estado: **completada — rebanadas 1-4, alcance objetivo original del ADR cerrado** (rebanadas 1 y 3 desplegadas y verificadas; rebanada 4 implementada, con tests en verde, pendiente de desplegar)
+- Estado: **completada — rebanadas 1-4, alcance objetivo original del ADR cerrado** (las cuatro desplegadas y verificadas en producción)
 - Decisión: aceptado por el Director el 2026-08-06; enmienda 1 (rebanada 2), enmienda 2 (rebanada 3) y enmienda 3 (rebanada 4) aceptadas el 2026-08-07.
 - Alcance implementado: adaptador sin I/O dentro de `nucleo-cognitivo/`; toda invocación N0 ofrecida genera una decisión estructurada y una traza antes de ejecutar; una tool no ofrecida se rechaza. **Rebanada 3:** `verificar_deploy` (única tool N1 confirmada de solo lectura) pasa por `decidirInvocacionN1Lectura()`, que exige además sesión autenticada y explicabilidad real (ADR-0009). **Rebanada 4:** contexto seguro declarado cumplido (trabajo previo, sin código nuevo); política determinista real vía `validarDeclaracionTool()` — metadato ausente/inválido en una tool candidata al piloto (N0 o N1 lectura) bloquea la ejecución. Resto de N1, N2-N3 conservan gates existentes.
 - Pruebas: cognitive-core 45/45, cognitive-core-policy 4/4, agente 172/172; `node --check` limpio en los archivos tocados.
-- Verificación posterior de rebanada 1: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`. Rebanada 3 desplegada y verificada (2026-08-07): commit `8039daf`, `wrangler deploy` directo, `/health` → `healthy`, versión `01e0ea44-a379-497f-a971-c6e8f0ac1471`. **Rebanada 4 sin desplegar todavía.**
+- Verificación posterior de rebanada 1: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`. Rebanada 3: commit `8039daf`, `/health` → `healthy`, versión `01e0ea44-a379-497f-a971-c6e8f0ac1471`. **Rebanada 4 (2026-08-07):** commit `d725fe3`, `wrangler deploy` directo, `/health` → `healthy`, versión `a1cc6103-2999-4394-aea8-05d8f373589f` coincide con el despliegue.
 - Siguiente acción exacta: desplegar y verificar rebanada 4; decidir si se abre una rebanada/enmienda para clasificar N1 por invocación (`accion`) y ampliar `TOOLS_N1_LECTURA_PILOTO` más allá de `verificar_deploy`.
 
 ## Plantilla

@@ -8,7 +8,8 @@
 - Con esto, los 4 puntos originales del ADR-0020 (contexto seguro, decisión previa, política determinista, piloto N0) quedan resueltos — la ampliación a N1 de escritura, N2 y N3 sigue como trabajo futuro sin decidir.
 - Pruebas: `node --check` limpio; cognitive-core 45/45 (3 tests nuevos: rechazo por metadato incompleto/inválido en N0 y N1 lectura); agente 172/172 sin cambios (confirma que ningún tool real del catálogo pierde disponibilidad — todos ya tenían metadato completo desde F-1.3/ARC-020 rebanada 2).
 - Riesgo/rollback: cambio puramente defensivo — con el catálogo real íntegro no rechaza nada que hoy funcione; protege contra una futura edición que borre metadato por accidente. Revertir el commit desactiva la validación sin afectar a ninguna otra tool.
-- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health`; decidir si se abre una rebanada/enmienda para clasificar N1 por invocación y ampliar `TOOLS_N1_LECTURA_PILOTO`.
+- Despliegue/verificación (2026-08-07): commit `d725fe3` en `main`, desplegado con `wrangler deploy` directo (ARC-021). `GET /health` → `{"estado":"healthy","d1":true,"r2":true,"version":"a1cc6103-2999-4394-aea8-05d8f373589f"}`, versión coincide con el despliegue.
+- Siguiente acción exacta: decidir si se abre una rebanada/enmienda para clasificar N1 por invocación y ampliar `TOOLS_N1_LECTURA_PILOTO`.
 
 ## ADR-0020 rebanada 3 — piloto N1 de lectura (enmienda 2, 2026-08-07)
 
