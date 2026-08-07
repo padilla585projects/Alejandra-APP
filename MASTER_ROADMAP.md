@@ -1,10 +1,20 @@
 # Master Roadmap — Alejandra 2.0
 
 - Versión: 0.1 (borrador para revisión humana y arquitectónica)
-- Fecha: 2026-08-01
+- Fecha: 2026-08-01 — **sincronizado 2026-08-07** (ver nota abajo)
 - Estado: activo; no autoriza implementación por sí mismo
 - Propietario: Director del Proyecto
 - Custodia técnica: Arquitecto del Proyecto y Arquitecto Técnico
+
+## Sincronización 2026-08-07
+
+Este documento no se había actualizado desde el 2026-08-04. Deltas frente al estado real (`PROJECT_STATE.md`/`TASKS.md`, fuente viva):
+
+- **F-2.2 — Nexo v1: completa** (2026-08-07, ADR-0021), no "Investigación" como decía la ficha original. Ver detalle en su sección abajo.
+- **F-4.1 — Observabilidad: parcialmente adelantada** fuera de esta fase formal, sin ADR propio de F-4.1: `registrarTraza()`/`GET /admin/trazas` (ADR-0014, 2026-08-02), dashboard de trazas en `admin.html` y telemetría de uso de tools (`F-4.4`, 2026-08-07). Sigue "Pendiente" en el sentido estricto del roadmap (sin `trace_id`/spans/evaluaciones/reproducciones), pero la base de observabilidad ya no es cero.
+- **ADR-0020 — Integración gradual del Motor de Decisión (2026-08-06/07):** iniciativa fuera de la lista de fases de este roadmap, activa sobre la Época 1 ya cerrada (F-1.1/F-1.2/F-1.3). Tres rebanadas completadas: piloto N0 (rebanada 1, ampliado a las 36 tools en rebanada 2), piloto N1 de lectura con `verificar_deploy` (rebanada 3, enmienda 2). Ver `ARCHITECT_BACKLOG.md` (ARC-020) y `docs/decisions/ADR-0020-INTEGRACION-GRADUAL-MOTOR-DECISION.md`.
+- **ARC-021 (2026-08-07):** riesgo de proceso (bypass del workflow de despliegue vía `wrangler deploy` directo) aceptado como práctica habitual por el Director. No afecta a ninguna fase de este roadmap.
+- La cadena de dependencias (`F-2.1 → F-3.1 → F-3.2 → F-4.1 → ...`) sigue siendo la que ordena qué fase formal abrir después. **F-3.1 (Herramientas semánticas) es la siguiente fase sin abrir**, con dependencias (F-1.3, F-2.1, ARC-006) cerradas — pendiente de elegir vertical piloto antes de empezar.
 
 ## Propósito, alcance y uso
 
@@ -119,14 +129,14 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-2.2 — Nexo v1**
 
-- Estado/prioridad/tamaño: Investigación / Alta / XL.
+- Estado/prioridad/tamaño: **Completa (2026-08-07, ADR-0021)** / Alta / XL.
 - Objetivo y valor: definir e implementar coordinación entre fuentes/módulos solo tras aclarar su propósito.
 - Alcance/fuera: definición, ADR y vertical piloto; no multiagente general.
-- Dependencias/bloqueantes/paralelo: F-2.1, ARC-003; paralelo con observabilidad base.
-- Referencias/ADR/módulos: Arquitectura Cognitiva, ARC-003; `PENDIENTE` ADR de Nexo.
-- Áreas/migraciones: `PENDIENTE`.
-- Riesgos/compliance/pruebas: acoplamiento y autoridad difusa; contratos/aislamiento/e2e.
-- Aceptación/recuperación/entregables: propósito aprobado y una integración reversible; habilita conocimiento operacional.
+- Dependencias/bloqueantes/paralelo: F-2.1, ARC-003 — ambas cerradas.
+- Referencias/ADR/módulos: Arquitectura Cognitiva, ARC-003; `ADR-0021` (Nexo = capa de integración con fuentes externas, interpretación A de ADR-0008).
+- Áreas/migraciones: `nexo-fuentes.js` (registro de 3 fuentes piloto), metadata `nexo` en `buscar_normativa`/`buscar_precios`, `nucleo-cognitivo/packages/cognitive-core/src/nexo.js`; `migrate_013_nexo_fuentes_telemetria.sql` aplicada y verificada en D1 de producción.
+- Riesgos/compliance/pruebas: acoplamiento y autoridad difusa; 7 tests de contrato en `lib.test.js` (168/168 en verde en el momento del cierre).
+- Aceptación/recuperación/entregables: **cumplido.** Extensivo, no reemplazante: cableado sobre tools existentes (`buscar_normativa`/`buscar_precios`), con fallback coordinado (`sugerencia:'buscar_web'`) y traza+telemetría por consulta (`registrarNexoConsulta()`). Habilita conocimiento operacional.
 
 ### Época 3 — Herramientas y trabajo operativo
 
@@ -156,14 +166,14 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-4.1 — Observabilidad, evaluación y DevTools seguros**
 
-- Estado/prioridad/tamaño: Pendiente / Alta / L.
+- Estado/prioridad/tamaño: **Parcialmente adelantada, fase formal sin abrir con ADR propio** / Alta / L.
 - Objetivo y valor: trazabilidad reproducible de decisiones, costes, salud y calidad.
 - Alcance/fuera: `trace_id`, spans, logs estructurados, auditoría, métricas, evaluaciones, reproducciones seguras y DevTools; no exponer secretos/datos.
-- Dependencias/bloqueantes/paralelo: F-0.1, F-0.2; puede avanzar en paralelo con F-1.2 mediante contratos.
-- Referencias/ADR/módulos: ARC-004/008; Workers, IA, CI.
-- Áreas/migraciones: observabilidad y almacenamiento `PENDIENTE`.
-- Riesgos/compliance/pruebas: retención/PII/coste; redacción, acceso mínimo, carga y pruebas de trazas.
-- Aceptación/recuperación/entregables: traza de una decisión piloto y panel/consulta segura; desactivación controlada; habilita Observabilidad v1.
+- Dependencias/bloqueantes/paralelo: F-0.1, F-0.2 — cerradas.
+- Referencias/ADR/módulos: ARC-004/008, ADR-0014; Workers, IA, CI.
+- Áreas/migraciones: tabla `alejandra_trazas` (ADR-0014) aplicada; `trace_id` presente en `registrarTraza()`.
+- Riesgos/compliance/pruebas: retención/PII/coste; redacción y minimización ya implementadas en `registrarTraza()`.
+- Aceptación/recuperación/entregables: **adelantado sin declarar la fase formal cerrada.** Ya cumplido: `registrarTraza()`/`GET /admin/trazas` (ADR-0014, 2026-08-02), dashboard de trazas en `admin.html` (F-4.1 parcial, 2026-08-06), telemetría de uso de tools por empresa/tool (`F-4.4`, 2026-08-07, `/api/admin/metrics/tools`). Pendiente para cerrar F-4.1 de verdad: costes, evaluaciones automáticas y reproducciones seguras — no hay ADR ni criterio de aceptación formal todavía, decisión aparte.
 
 ### Época 5 — Capacidades instalables
 
