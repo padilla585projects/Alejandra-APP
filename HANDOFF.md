@@ -8,7 +8,8 @@
 - Cableada en `evaluarInvocacionCognitiva()` (`worker.js`) tras el piloto N0/N1, mismo patrón que las rebanadas anteriores — no cambia el flujo `control.permitida ? ejecutarToolConTelemetria(...) : rechazada`, porque `permitida` sigue siendo `true` para N2/N3 en alcance.
 - Pruebas: `node --check` limpio; cognitive-core 50/50 (5 tests nuevos: no ofrecida, fuera de alcance, metadato inválido, y dos que verifican explícitamente que N2 y N3 nunca reciben `'invocar_tool'`); agente 178/178 (1 test de wiring nuevo confirmando que `CONFIRMO BORRADO` sigue intacto en el código).
 - Riesgo/rollback: cero cambio de comportamiento — ninguna tool que hoy funciona (con o sin confirmación humana) cambia su resultado. Solo añade trazas nuevas en `alejandra_trazas`. Revertir el commit las quita sin afectar a nada más.
-- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health`; decidir si se extiende el Motor a N1 de escritura, o si se aborda el diseño de revisión humana asíncrona real para N2 (ADR propio, fuera de este ciclo).
+- Despliegue/verificación (2026-08-07): commit `634e8a3` en `main`, desplegado con `wrangler deploy` directo (ARC-021). `GET /health` → `{"estado":"healthy","d1":true,"r2":true,"version":"4a814224-2db7-4a2c-b880-fca4e2a5afdb"}`, versión coincide de inmediato con el despliegue.
+- Siguiente acción exacta: decidir si se extiende el Motor a N1 de escritura, o si se aborda el diseño de revisión humana asíncrona real para N2 (ADR propio, fuera de este ciclo).
 
 ## ADR-0020 rebanada 5 — clasificación N1 por invocación (enmienda 4, 2026-08-07)
 
