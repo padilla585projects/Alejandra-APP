@@ -38,12 +38,12 @@ Estado (actualizado 2026-08-07): **No hay ninguna tarea activa, en curso ni bloq
 
 ### ADR-0020 — Integración gradual del Motor de Decisión
 
-- Estado: **completada — rebanadas 1-5** (rebanadas 1, 3 y 4 desplegadas y verificadas; rebanada 5 implementada, con tests en verde, pendiente de desplegar)
+- Estado: **completada — rebanadas 1-5** (las cinco desplegadas y verificadas en producción)
 - Decisión: aceptado por el Director el 2026-08-06; enmienda 1 (rebanada 2), enmienda 2 (rebanada 3), enmienda 3 (rebanada 4) y enmienda 4 (rebanada 5) aceptadas el 2026-08-07.
 - Alcance implementado: adaptador sin I/O dentro de `nucleo-cognitivo/`; toda invocación N0 ofrecida genera una decisión estructurada y una traza antes de ejecutar; una tool no ofrecida se rechaza. **Rebanada 3:** `verificar_deploy` pasa por `decidirInvocacionN1Lectura()`, sesión autenticada + explicabilidad real (ADR-0009). **Rebanada 4:** contexto seguro declarado cumplido (sin código nuevo); política determinista real vía `validarDeclaracionTool()`. **Rebanada 5:** clasificación N1 por invocación — `esInvocacionN1DeLectura(toolName, input)` (`lib.js`) gobierna también `listar`/`resumen`/`consultar`/`comparar` de 6 tools CRUD compuestas (`gestionar_tarea/rfi/oc/acta/calidad`, `historico_materiales`), fail-closed ante `accion` desconocida. Resto de N1 (escritura), N2-N3 conservan gates existentes.
 - Pruebas: cognitive-core 45/45, cognitive-core-policy 4/4, agente 177/177; `node --check` limpio en los archivos tocados.
-- Verificación posterior de rebanada 1: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`. Rebanada 3: commit `8039daf`, `/health` → `healthy`, versión `01e0ea44-a379-497f-a971-c6e8f0ac1471`. Rebanada 4: commit `d725fe3`, `/health` → `healthy`, versión `a1cc6103-2999-4394-aea8-05d8f373589f`. **Rebanada 5 sin desplegar todavía.**
-- Siguiente acción exacta: desplegar y verificar rebanada 5; decidir si se extiende el Motor a N1 de escritura, N2 o N3.
+- Verificación posterior de rebanada 1: `GET /health` manual devolvió `healthy` (`d1:true`, `r2:true`, versión `6e908ded-5578-405b-9044-37efc06b57ad`) tras desplegar `5352dc5`. Rebanada 3: commit `8039daf`, `/health` → `healthy`, versión `01e0ea44-a379-497f-a971-c6e8f0ac1471`. Rebanada 4: commit `d725fe3`, `/health` → `healthy`, versión `a1cc6103-2999-4394-aea8-05d8f373589f`. **Rebanada 5 (2026-08-07):** commit `634b86f`, `wrangler deploy` directo, versión `9eaa503b-909a-416e-bf40-1b568e7e2200` (`/health` reportó primero la versión anterior por lag de edge, reconsultado ~15s después con la versión correcta).
+- Siguiente acción exacta: decidir si se extiende el Motor a N1 de escritura, N2 o N3.
 
 ## Plantilla
 

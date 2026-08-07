@@ -8,7 +8,8 @@
 - **`evaluarInvocacionCognitiva()`** (`worker.js`) gana el parámetro `input` y sustituye el chequeo estático `TOOLS_N1_LECTURA_PILOTO.has(toolName)` por `esInvocacionN1DeLectura(toolName, input)`. Los 3 call sites (chat normal, streaming, recuperación de tool-use) pasan `tb.input`. El resto de `decidirInvocacionN1Lectura()` (sesión, explicabilidad, metadato) no cambia.
 - Pruebas: `node --check` limpio; agente 177/177 (6 tests nuevos: tool entera de lectura, acciones de lectura de las 6 CRUD, acciones de escritura de esas mismas tools, fail-closed, y una auditoría automática que re-verifica contra el código real de `worker.js` que cada acción clasificada como lectura sigue sin SQL mutante ni escritura en R2 — detecta regresión si alguien edita un `case` sin actualizar la clasificación).
 - Riesgo/rollback: amplía qué invocaciones llegan al piloto N1, pero no cambia ningún gate existente (sesión, `empresa_id`, `esEncargadoOSuperior()` donde aplique) — el Motor añade trazabilidad y explicabilidad encima, nunca sustituye la barrera legacy. Revertir el commit vuelve al alcance de un único elemento (`verificar_deploy`).
-- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health`; decidir si se extiende el Motor a N1 de escritura, N2 o N3.
+- Despliegue/verificación (2026-08-07): commit `634b86f` en `main`, desplegado con `wrangler deploy` directo (ARC-021). `GET /health` reportó primero la versión anterior por lag de propagación del edge (patrón ya documentado en el runbook); reconsultado ~15s después, versión correcta `9eaa503b-909a-416e-bf40-1b568e7e2200`, `{"estado":"healthy","d1":true,"r2":true}`.
+- Siguiente acción exacta: decidir si se extiende el Motor a N1 de escritura, N2 o N3.
 
 ## ADR-0020 rebanada 4 — contexto seguro (cierre documental) + política determinista (enmienda 3, 2026-08-07)
 
