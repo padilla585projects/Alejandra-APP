@@ -174,6 +174,21 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   // worker.js, esEncargadoOSuperior()).
   'memoria_listar_pendientes', 'memoria_confirmar_candidata', 'memoria_rechazar_candidata',
 ]);
+
+// ADR-0020, rebanada 3 (2026-08-07, enmienda 2): allowlist curada de tools N1
+// de LECTURA gobernadas por el Motor de Decisión (decidirInvocacionN1Lectura,
+// nucleo-cognitivo/). Alcance deliberadamente estrecho tras auditar cada
+// `case` de las 26 tools N1 del catálogo: la inmensa mayoría son CRUD
+// compuesto por `accion` (gestionar_tarea/rfi/oc/acta/calidad) o escriben sin
+// más (generar_*, editar_plano, enviar_*, subir_archivo, ram_save/clear,
+// memoria_confirmar/rechazar_candidata, configurar_alerta, historico_materiales
+// —tiene accion:'registrar' que hace INSERT—). `verificar_deploy` es la ÚNICA
+// confirmada de solo lectura: su `case` solo hace `fetch` GET contra la API de
+// GitHub Actions, sin `env.DB`/`env.R2` en ningún camino. Ampliar esta lista
+// exige clasificar por invocación (`accion`), no por tool — decisión aparte,
+// pendiente en ARCHITECT_BACKLOG.md (ARC-020).
+const TOOLS_N1_LECTURA_PILOTO = new Set(['verificar_deploy']);
+
 // SEC-CRON-01 / ARC-017 (02/08/2026): el cron llama al modelo con esDevVerificado=true,
 // así que filtrarToolsPorAuth no le filtraba NADA. Seis veces al día, sin nadie delante,
 // el modelo alcanzaba desplegar, hacer rollback, escribir en el repo y escribir en la BD
@@ -629,6 +644,7 @@ export {
   calcularCosteYProveedor,
   TOOLS_SOLO_DEV_VERIFICADO,
   TOOLS_REQUIEREN_SESION,
+  TOOLS_N1_LECTURA_PILOTO,
   filtrarToolsPorAuth,
   TOOLS_PROHIBIDAS_CRON,
   esInvocacionCron,

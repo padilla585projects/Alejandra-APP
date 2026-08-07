@@ -10,6 +10,8 @@
  * todavía sin fabricar una decisión sin fundamento real.
  */
 
+import { nivelesRequeridosPara, registrarExplicabilidad } from './verifier.js';
+
 export const SALIDAS_VALIDAS = Object.freeze([
   'respuesta_directa', 'solicitar_informacion', 'recuperar_contexto', 'consultar_memoria',
   'buscar_conocimiento', 'plan', 'solicitar_aprobacion', 'invocar_tool',
@@ -114,6 +116,114 @@ export function decidirInvocacionPilotoN0({
       criterio_salida: 'tool_n0_ofrecida',
     },
   };
+}
+
+/**
+ * Segunda rebanada ejecutable del Motor de Decisión (ADR-0020, rebanada 3,
+ * 2026-08-07). Gobierna tools N1 de LECTURA ya identificadas por el Worker
+ * (allowlist curada, este módulo no clasifica lectura/escritura por su cuenta
+ * — la mayoría de tools N1 del catálogo mezclan lectura y escritura por
+ * `accion`, decisión de alcance explícita en la enmienda 2). Exige, además de
+ * lo que ya exige el piloto N0, que la decisión pase el nivel `explicabilidad`
+ * que ADR-0009 fija para N1 (`nivelesRequeridosPara('N1')`).
+ *
+ * @param {{tool?: object, toolOfrecida: boolean, authOk: boolean, esDevVerificado: boolean, esCron: boolean, modo: string}} params
+ * @returns {{aplicaPiloto: boolean, permitida: boolean, decision: object}}
+ */
+export function decidirInvocacionN1Lectura({
+  tool,
+  toolOfrecida,
+  authOk = false,
+  esDevVerificado = false,
+  esCron = false,
+  modo = 'conversacion',
+} = {}) {
+  const permisosEfectivos = Object.freeze({
+    sesion_autenticada: authOk === true,
+    desarrollador_verificado: esDevVerificado === true,
+    cron: esCron === true,
+  });
+  const nombreTool = typeof tool?.name === 'string' ? tool.name : 'desconocida';
+
+  if (toolOfrecida !== true) {
+    return {
+      aplicaPiloto: true,
+      permitida: false,
+      decision: {
+        decision: 'rechazar',
+        motivos: ['La tool no figura en el catálogo ofrecido a esta sesión.'],
+        evidencia: { tool: nombreTool, ofrecida: false },
+        confianza: 1,
+        riesgo: 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'tool_no_ofrecida',
+      },
+    };
+  }
+
+  if (tool?.nivel_riesgo !== 'N1') {
+    return {
+      aplicaPiloto: false,
+      permitida: true,
+      decision: {
+        decision: 'posponer',
+        motivos: ['La tool queda fuera del piloto N1 de lectura.'],
+        evidencia: { tool: nombreTool, nivel_riesgo: tool?.nivel_riesgo ?? null },
+        confianza: 1,
+        riesgo: tool?.nivel_riesgo ?? 'no_evaluable',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'fuera_piloto_n1_lectura',
+      },
+    };
+  }
+
+  if (authOk !== true) {
+    return {
+      aplicaPiloto: true,
+      permitida: false,
+      decision: {
+        decision: 'rechazar',
+        motivos: ['N1 de lectura exige sesión autenticada (ADR-0006).'],
+        evidencia: { tool: nombreTool, nivel_riesgo: 'N1', authOk: false },
+        confianza: 1,
+        riesgo: 'N1',
+        permisos_efectivos: permisosEfectivos,
+        modo,
+        criterio_salida: 'sin_sesion',
+      },
+    };
+  }
+
+  const decisionBase = {
+    decision: 'invocar_tool',
+    motivos: ['Tool N1 de lectura declarada, ofrecida por el catálogo efectivo y con sesión autenticada.'],
+    evidencia: { tool: nombreTool, nivel_riesgo: 'N1', ofrecida: true },
+    confianza: 1,
+    riesgo: 'N1',
+    permisos_efectivos: permisosEfectivos,
+    modo,
+    criterio_salida: 'tool_n1_lectura_ofrecida',
+  };
+
+  const requiereExplicabilidad = nivelesRequeridosPara('N1').includes('explicabilidad');
+  const explicabilidad = requiereExplicabilidad ? registrarExplicabilidad(decisionBase) : { aprobado: true };
+
+  if (!explicabilidad.aprobado) {
+    return {
+      aplicaPiloto: true,
+      permitida: false,
+      decision: {
+        ...decisionBase,
+        decision: 'rechazar',
+        motivos: [...decisionBase.motivos, 'Explicabilidad (ADR-0009) no satisfecha: la decisión no trae razonamiento verificable.'],
+        criterio_salida: 'explicabilidad_insuficiente',
+      },
+    };
+  }
+
+  return { aplicaPiloto: true, permitida: true, decision: decisionBase };
 }
 
 /**

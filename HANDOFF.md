@@ -1,5 +1,14 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0020 rebanada 3 — piloto N1 de lectura (enmienda 2, 2026-08-07)
+
+- Rama/commit: pendiente de commit sobre `main` (código puro, aún sin desplegar).
+- Cambio: `nucleo-cognitivo/packages/cognitive-core/src/verifier.js` — `registrarExplicabilidad()` deja de lanzar error y pasa a validar sin I/O que una decisión trae razonamiento real (`motivos` no vacíos, `evidencia` con contenido). `motor-decision.js` gana `decidirInvocacionN1Lectura()` (sesión + `nivelesRequeridosPara('N1')` = explicabilidad). `alejandra-agente/lib.js` añade `TOOLS_N1_LECTURA_PILOTO` (allowlist curada). `alejandra-agente/worker.js` generaliza `evaluarInvocacionCognitivaN0` a `evaluarInvocacionCognitiva` (3 call sites) para gobernar también N1 de lectura cuando la tool está en esa allowlist.
+- Alcance: se auditaron las 26 tools N1 del catálogo real de `alejandra-agente`. Solo `verificar_deploy` es de solo lectura confirmada (su `case` solo hace `fetch` GET a la API de GitHub Actions; no toca `env.DB`/`env.R2`). El resto mezcla lectura y escritura por parámetro `accion` (`gestionar_tarea/rfi/oc/acta/calidad`) o escribe directamente (`generar_*`, `editar_plano`, `enviar_*`, `subir_archivo`, `ram_save/clear`, `memoria_confirmar/rechazar_candidata`, `configurar_alerta`, `historico_materiales` — tiene `accion:'registrar'` que hace `INSERT`). Ampliar el piloto exige clasificar por invocación, no por tool — pendiente, sin decisión tomada (ver `ARCHITECT_BACKLOG.md`, ARC-020).
+- Pruebas: `node --check` limpio en los 4 archivos tocados; cognitive-core 42/42 (4 tests nuevos de contrato, 2 de `verifier.js` reescritos); cognitive-core-policy 4/4 (sin cambios); agente 172/172 (4 tests nuevos de wiring/regresión en `lib.test.js`: allowlist de un solo elemento, metadato N1 real, ausencia de escritura en el `case`, los 3 call sites siguen invocando la función renombrada).
+- Riesgo/rollback: N1 de escritura, N2 y N3 no se tocan — siguen con sus gates actuales sin cambio de comportamiento. `verificar_deploy` ya exigía sesión (`TOOLS_REQUIEREN_SESION`); el Motor añade una capa de traza + explicabilidad encima, no la sustituye. Revertir el commit desactiva el piloto N1 sin afectar a ninguna otra tool.
+- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health` (paso pendiente, sin autorizar todavía); decidir si se abre una rebanada/enmienda para clasificar N1 por invocación.
+
 ## ARC-021 — dos despliegues de `alejandra-agente` sin pasar por el workflow gobernado (auditoría 2026-08-07)
 
 **Riesgo de proceso, aceptado por decisión del Director como práctica habitual. Detalle completo en `ARCHITECT_BACKLOG.md` (ARC-021).**

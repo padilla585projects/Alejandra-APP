@@ -563,9 +563,22 @@ catálogo N0 completo en `cognitive-core/test/contratos.test.js`.
 `packages/cognitive-core/` y `packages/cognitive-core-policy/` (sin paquetes npm).
 `alejandra-agente/worker.js:54` importa directamente del subpaquete
 (`../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js`),
-bundleado por wrangler. Tests: cognitive-core 37/37, cognitive-core-policy 4/4,
-agente 168/168.
+bundleado por wrangler.
 
-**Pendientes ADR-0020:** rebanada 3 (verificadores de lectura N1 en `verifier.js`),
-rebanada 4 (contexto seguro, política determinista) y extensión N1-N3 — requieren
-ADRs/enmiendas + Director. Ver `ARCHITECT_BACKLOG.md` (ARC-020) y `TASKS.md`.
+**Rebanada 3 (2026-08-07, enmienda 2):** piloto de tools N1 de lectura.
+`registrarExplicabilidad()` (`verifier.js`) gana implementación real sin I/O
+(valida motivos/evidencia con contenido, no solo presencia — salda la deuda de
+F-1.2/ADR-0009 apoyada en que F-4.1 ya está en producción).
+`decidirInvocacionN1Lectura()` (`motor-decision.js`) exige sesión + esa
+explicabilidad. De las 26 tools N1 del catálogo, solo `verificar_deploy` es de
+solo lectura confirmada — el resto mezcla lectura/escritura por `accion`
+(`gestionar_*`) y queda fuera hasta clasificar por invocación (pendiente, sin
+decisión tomada). `TOOLS_N1_LECTURA_PILOTO` (`alejandra-agente/lib.js`) es la
+allowlist, hoy con ese único elemento. N1 de escritura, N2 y N3 sin cambios.
+Tests: cognitive-core 42/42, cognitive-core-policy 4/4, agente 172/172.
+**Sin desplegar todavía.**
+
+**Pendientes ADR-0020:** ampliar el piloto N1 por invocación (`accion`) en vez
+de por tool, rebanada 4 (contexto seguro, política determinista) y extensión a
+N2-N3 — requieren ADRs/enmiendas + Director. Ver `ARCHITECT_BACKLOG.md`
+(ARC-020) y `TASKS.md`.

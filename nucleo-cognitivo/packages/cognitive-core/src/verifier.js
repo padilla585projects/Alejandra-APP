@@ -7,12 +7,14 @@
  * No responsabilidad: ejecutar acciones, sustituir esos mecanismos ya
  * probados, ni decidir cuándo se invoca — eso es del Motor de Decisión.
  *
- * El nivel determinista es el único con implementación real aquí: es una
- * condición programable que no depende de I/O. Revisión humana asíncrona y
- * explicabilidad dependen de un canal real (Telegram, D1 de `alejandra_trazas`)
- * que este paquete aislado no tiene — lanzan un error explícito citando la
- * dependencia que falta, mismo patrón que `context-engine.js`/`planner.js` en
- * F-1.2, para que no puedan usarse por accidente como si verificaran de verdad.
+ * Determinista y explicabilidad tienen implementación real aquí, ambas sin
+ * I/O: determinista aplica una condición programable ya provista; explicabilidad
+ * (ADR-0020 rebanada 3, 2026-08-07) valida que una decisión trae razonamiento
+ * real (motivos/evidencia con contenido), no solo campos presentes. Revisión
+ * humana asíncrona sigue dependiendo de un canal real (Telegram) que este
+ * paquete aislado no tiene — lanza un error explícito citando la dependencia
+ * que falta, mismo patrón que `context-engine.js`/`planner.js` en F-1.2, para
+ * que no pueda usarse por accidente como si verificara de verdad.
  */
 
 export const NIVELES_VERIFICACION = Object.freeze([
@@ -54,19 +56,28 @@ export function solicitarRevisionHumanaAsincrona() {
 
 /**
  * Nivel explicabilidad (ADR-0009): toda decisión N1 en adelante debe quedar
- * registrada con su razonamiento. El Director aceptó que este nivel NO
- * bloquea ninguna acción mientras no exista traza real — queda como deuda
- * explícita hasta F-4.1 (observabilidad). Este paquete aislado no persiste
- * nada; la persistencia real vive en `registrarTraza()` de cada Worker
- * (ADR-0014 §5, ya implementado fuera de `nucleo-cognitivo/`).
- * @returns {never}
+ * registrada con su razonamiento. F-4.1 (dashboard de trazas, `GET
+ * /admin/trazas`) y `registrarTraza()` (ADR-0014 §5) ya están en producción
+ * en los dos Workers, así que la deuda que dejaba esta función como stub
+ * (2026-08-02) queda saldada en ADR-0020 rebanada 3 (2026-08-07): valida,
+ * sin I/O, que una decisión trae un razonamiento real, no solo campos
+ * presentes — motivos no vacíos y evidencia con contenido. La persistencia
+ * en sí (INSERT en `alejandra_trazas`) sigue siendo responsabilidad de cada
+ * Worker vía `registrarTraza()`, fuera de este paquete aislado.
+ * @param {object} decision - forma de `tieneTrazaSuficiente()` (motor-decision.js)
+ * @returns {{nivel: 'explicabilidad', aprobado: boolean}}
  */
-export function registrarExplicabilidad() {
-  throw new Error(
-    'Verifier: explicabilidad sin implementación real en este paquete aislado. ADR-0009 la ' +
-    'deja como deuda explícita hasta F-4.1 (observabilidad); no bloquea ninguna acción. ' +
-    'Motor de Decisión debe seguir operando sin invocar esta función mientras no exista traza.'
-  );
+export function registrarExplicabilidad(decision) {
+  if (!decision || typeof decision !== 'object') {
+    return { nivel: 'explicabilidad', aprobado: false };
+  }
+  const motivosOk = Array.isArray(decision.motivos)
+    && decision.motivos.length > 0
+    && decision.motivos.every((m) => typeof m === 'string' && m.trim().length > 0);
+  const evidenciaOk = decision.evidencia
+    && typeof decision.evidencia === 'object'
+    && Object.keys(decision.evidencia).length > 0;
+  return { nivel: 'explicabilidad', aprobado: motivosOk === true && evidenciaOk === true };
 }
 
 /**

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { crearEstadoCognitivo, actualizarEstadoCognitivo } from '../src/estado-cognitivo.js';
 import { construirContexto } from '../src/context-engine.js';
 import { construirPlan } from '../src/planner.js';
-import { decidir, decidirInvocacionPilotoN0, tieneTrazaSuficiente, CAMPOS_TRAZA_OBLIGATORIOS } from '../src/motor-decision.js';
+import { decidir, decidirInvocacionPilotoN0, decidirInvocacionN1Lectura, tieneTrazaSuficiente, CAMPOS_TRAZA_OBLIGATORIOS } from '../src/motor-decision.js';
 
 test('Estado Cognitivo: se crea en fase percibir y es inmutable al actualizar', () => {
   const estado = crearEstadoCognitivo('tarea-1');
@@ -124,4 +124,59 @@ test('Motor de Decisión: rechaza una tool N0 no ofrecida en el catálogo efecti
   assert.equal(resultado.aplicaPiloto, true);
   assert.equal(resultado.permitida, false);
   assert.equal(resultado.decision.criterio_salida, 'tool_no_ofrecida');
+});
+
+// ADR-0020, rebanada 3 (2026-08-07, enmienda 2): piloto de tools N1 de LECTURA.
+// Alcance deliberadamente estrecho — `verificar_deploy` es la única tool N1
+// del catálogo real confirmada de solo lectura (consulta GitHub Actions, sin
+// escritura en D1/R2); el resto de N1 mezcla lectura y escritura por `accion`
+// (gestionar_*) y queda fuera hasta que exista clasificación por invocación,
+// pendiente de decisión aparte (ver ARCHITECT_BACKLOG.md, ARC-020).
+
+test('Motor de Decisión: rebanada 3 rechaza una tool N1 no ofrecida', () => {
+  const resultado = decidirInvocacionN1Lectura({
+    tool: { name: 'verificar_deploy', nivel_riesgo: 'N1' },
+    toolOfrecida: false,
+    authOk: true,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'tool_no_ofrecida');
+});
+
+test('Motor de Decisión: rebanada 3 deja fuera tools que no son N1 (riesgo distinto)', () => {
+  const resultado = decidirInvocacionN1Lectura({
+    tool: { name: 'consultar_bd', nivel_riesgo: 'N0' },
+    toolOfrecida: true,
+    authOk: true,
+  });
+  assert.equal(resultado.aplicaPiloto, false);
+  assert.equal(resultado.permitida, true);
+  assert.equal(resultado.decision.criterio_salida, 'fuera_piloto_n1_lectura');
+});
+
+test('Motor de Decisión: rebanada 3 rechaza N1 de lectura sin sesión autenticada', () => {
+  const resultado = decidirInvocacionN1Lectura({
+    tool: { name: 'verificar_deploy', nivel_riesgo: 'N1' },
+    toolOfrecida: true,
+    authOk: false,
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, false);
+  assert.equal(resultado.decision.criterio_salida, 'sin_sesion');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
+});
+
+test('Motor de Decisión: rebanada 3 permite y deja traza con explicabilidad para N1 de lectura ofrecida con sesión', () => {
+  const resultado = decidirInvocacionN1Lectura({
+    tool: { name: 'verificar_deploy', nivel_riesgo: 'N1' },
+    toolOfrecida: true,
+    authOk: true,
+    modo: 'app',
+  });
+  assert.equal(resultado.aplicaPiloto, true);
+  assert.equal(resultado.permitida, true);
+  assert.equal(resultado.decision.decision, 'invocar_tool');
+  assert.equal(resultado.decision.criterio_salida, 'tool_n1_lectura_ofrecida');
+  assert.equal(tieneTrazaSuficiente(resultado.decision), true);
 });

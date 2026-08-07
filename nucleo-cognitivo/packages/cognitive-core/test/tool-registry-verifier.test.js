@@ -100,9 +100,17 @@ test('Verifier: nivel determinista aplica una condición pura ya provista, no in
   assert.throws(() => verificarDeterminista('no es una función', 'x'));
 });
 
-test('Verifier: revisión humana asíncrona y explicabilidad lanzan error explícito (ADR-0009)', () => {
+test('Verifier: revisión humana asíncrona sigue sin implementación real (ADR-0009)', () => {
   assert.throws(() => solicitarRevisionHumanaAsincrona(), /ADR-0009/);
-  assert.throws(() => registrarExplicabilidad(), /ADR-0009/);
+});
+
+test('Verifier: explicabilidad valida razonamiento real, no solo campos presentes (ADR-0020 rebanada 3)', () => {
+  assert.equal(registrarExplicabilidad().aprobado, false);
+  assert.equal(registrarExplicabilidad({}).aprobado, false);
+  assert.equal(registrarExplicabilidad({ motivos: [], evidencia: { x: 1 } }).aprobado, false, 'motivos vacío no basta');
+  assert.equal(registrarExplicabilidad({ motivos: ['  '], evidencia: { x: 1 } }).aprobado, false, 'motivo en blanco no cuenta');
+  assert.equal(registrarExplicabilidad({ motivos: ['ok'], evidencia: {} }).aprobado, false, 'evidencia vacía no basta');
+  assert.equal(registrarExplicabilidad({ motivos: ['ok'], evidencia: { x: 1 } }).aprobado, true);
 });
 
 test('Verifier: nivelesRequeridosPara sigue la tabla de ADR-0009/0006', () => {

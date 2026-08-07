@@ -73,6 +73,27 @@ mediante el Motor de Decisión.
   `acceso: 'sesion'` (ya estaban en TOOLS_REQUIEREN_SESION). Se añade cobertura
   de test del catálogo N0 completo (aceptación + traza) y rechazo de N0 no
   ofrecida en `cognitive-core/test/contratos.test.js`.
+- **Enmienda 2 — Rebanada 3 (2026-08-07):** se activan verificadores de lectura
+  N1 bajo el Motor. `verifier.js` gana una implementación real de
+  `registrarExplicabilidad()` (sin I/O): valida que una decisión trae
+  razonamiento real (`motivos` no vacíos, `evidencia` con contenido), no solo
+  campos presentes — salda la deuda que dejaba como stub desde 2026-08-02,
+  apoyada en que F-4.1 (`registrarTraza()`, `GET /admin/trazas`) ya está en
+  producción. `motor-decision.js` gana `decidirInvocacionN1Lectura()`, que
+  exige además sesión autenticada y el nivel `explicabilidad` que
+  `nivelesRequeridosPara('N1')` fija (ADR-0009).
+  **Alcance deliberadamente estrecho:** de las 26 tools N1 del catálogo real,
+  solo `verificar_deploy` es de solo lectura confirmada (su `case` únicamente
+  consulta la API de GitHub Actions, sin `env.DB`/`env.R2` mutantes). El resto
+  mezcla lectura y escritura por parámetro `accion` (`gestionar_tarea/rfi/oc/
+  acta/calidad`) o escribe sin más — clasificarlas exige gobernar por
+  invocación, no por tool, una decisión de diseño aparte que queda pendiente
+  (ver `ARCHITECT_BACKLOG.md`, ARC-020). `TOOLS_N1_LECTURA_PILOTO` (`lib.js`)
+  es la allowlist curada, hoy con un único elemento. N1 de escritura, N2 y N3
+  no se tocan — siguen con sus gates actuales. 4 tests nuevos de contrato en
+  `contratos.test.js`, 2 de `verifier.js` reescritos, 4 de wiring en
+  `lib.test.js` (cognitive-core 42/42, cognitive-core-policy 4/4, agente
+  172/172).
 - Las rebanadas posteriores requerirán actualizar `TASKS.md`, `PROJECT_STATE.md`,
   `HANDOFF.md`, el backlog y esta decisión antes de ampliar alcance.
 - El despliegue no está autorizado por este ADR; exige el runbook y verificación

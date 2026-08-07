@@ -19,6 +19,7 @@ import {
   whereEsTrivialmenteCierto,
   detectarEscrituraDestructivaBalanceada,
   TOOLS_SOLO_DEV_VERIFICADO,
+  TOOLS_N1_LECTURA_PILOTO,
   redactarTexto,
   redactarDetalle,
   extraerTablaDDL,
@@ -1389,5 +1390,42 @@ describe('Nexo v1 — metadata nexo en tools (ADR-0021)', () => {
   it('buscar_precios declara nexo.fuenteId', () => {
     const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
     expect(src).toMatch(/name:\s*'buscar_precios'[\s\S]*?nexo:\s*\{\s*fuenteId:\s*'precios_distribuidores'/);
+  });
+});
+
+// ── ADR-0020 rebanada 3 — piloto N1 de lectura ──────────────────────────────
+describe('ADR-0020 rebanada 3 — piloto N1 de lectura (ARC-020, enmienda 2)', () => {
+  it('TOOLS_N1_LECTURA_PILOTO contiene únicamente verificar_deploy (alcance estrecho, deliberado)', () => {
+    expect([...TOOLS_N1_LECTURA_PILOTO]).toEqual(['verificar_deploy']);
+  });
+
+  it('verificar_deploy está declarada nivel_riesgo N1 en el catálogo real', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(src).toMatch(/name:\s*'verificar_deploy'[\s\S]{0,600}?nivel_riesgo:\s*'N1'/);
+  });
+
+  it('el case "verificar_deploy" no ejecuta SQL mutante ni escribe en R2 (confirma que es de solo lectura de negocio)', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("case 'verificar_deploy':");
+    const fin = src.indexOf("\n    case 'nexus_manage':", inicio + 1);
+    const cuerpo = src.slice(inicio, fin);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    // Puede leer D1 (SELECT, ej. token FCM para avisar del resultado) pero no
+    // debe mutar datos de negocio ni escribir en R2.
+    expect(cuerpo).not.toMatch(/env\.DB\.prepare\(\s*[`'"]?\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)/i);
+    expect(cuerpo).not.toMatch(/env\.R2\.(put|delete)/);
+  });
+
+  it('worker.js gobierna el piloto N1 de lectura vía evaluarInvocacionCognitiva (regresión de wiring)', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(src).toMatch(/async function evaluarInvocacionCognitiva\(/);
+    expect(src).toMatch(/decidirInvocacionN1Lectura/);
+    expect(src).toMatch(/TOOLS_N1_LECTURA_PILOTO\.has\(toolName\)/);
+    // Los 3 call sites (chat normal, streaming, recuperación de tool-use) deben
+    // seguir invocando la función renombrada, no la N0 original.
+    const llamadas = src.match(/await evaluarInvocacionCognitiva\(/g) || [];
+    expect(llamadas.length).toBe(3);
+    expect(src).not.toMatch(/evaluarInvocacionCognitivaN0/);
   });
 });
