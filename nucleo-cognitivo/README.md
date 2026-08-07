@@ -1,12 +1,37 @@
-# Núcleo cognitivo — esqueleto, contratos e interfaces
+# Núcleo cognitivo — cerebro v2 de Alejandra
 
-- Estado: F-1.2 completada y verificada (2026-08-02); F-1.3 iniciada el mismo día, primer
-  entregable en curso
-- No integrado en `worker.js` ni en `alejandra-agente/worker.js`. No recibe tráfico real.
+- Estado: reestructurado como monorepo npm (2026-08-07). Dos paquetes publicables:
+  `@alejandra/cognitive-core` y `@alejandra/cognitive-core-policy`.
+- No integrado directamente en `worker.js` ni en `alejandra-agente/worker.js` vía npm todavía
+  (el worker importa `motor-decision.js` a través de un shim transitorio en
+  `nucleo-cognitivo/src/`). No recibe tráfico real propio.
 - Autorizado por: `ADR-0004` (F-1.2) y `ADR-0010`/`ADR-0009` (F-1.3, Tool Registry y Verifier).
   Alcance fijado por el Director: construir esqueleto y contratos, sin activar memoria
   persistente sensible, sin tomar decisiones sin trazabilidad suficiente, y sin migrar el
   catálogo real de tools de ningún Worker.
+
+## Estructura de paquetes
+
+```
+nucleo-cognitivo/
+  packages/
+    cognitive-core/            # @alejandra/cognitive-core — motor de decisión, memoria, tool-registry, verifier, nexo, planner, estado, contexto
+      src/ *.js
+      test/ *.test.js
+      lib.js                   # re-exporta src/index.js
+      verify_nucleo.sh         # valida que src/* se expone por lib.js
+      package.json
+    cognitive-core-policy/     # @alejandra/cognitive-core-policy — matriz de riesgo N0–N3 (ADR-0006)
+      src/policy-engine.js
+      test/policy.test.js
+      lib.js
+      verify_nucleo.sh
+      package.json
+```
+
+Cada paquete se publica de forma independiente con `npm publish --access public` desde su
+directorio (workflow `publish-nucleo.yml`). El entry point público es `lib.js`, que re-exporta
+todo lo expuesto por `src/index.js`.
 
 ## Qué hay aquí
 
@@ -53,8 +78,17 @@ inyectada (fuera de un Worker real, p.ej. en tests), devuelve `[]`/no-op en vez 
 ## Pruebas
 
 ```bash
-node --check nucleo-cognitivo/src/*.js
-node --test nucleo-cognitivo/test/contratos.test.js nucleo-cognitivo/test/memory.test.js nucleo-cognitivo/test/tool-registry-verifier.test.js
+# Core
+cd nucleo-cognitivo/packages/cognitive-core
+node --check src/*.js test/*.js
+bash verify_nucleo.sh
+npm test
+
+# Policy
+cd ../cognitive-core-policy
+node --check src/*.js test/*.js
+bash verify_nucleo.sh
+npm test
 ```
 
 ## Referencias

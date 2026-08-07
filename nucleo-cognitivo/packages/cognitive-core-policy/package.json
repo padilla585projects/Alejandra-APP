@@ -1,0 +1,22 @@
+{
+  "name": "@alejandra/cognitive-core-policy",
+  "version": "0.1.0",
+  "description": "Política de aprobación del núcleo cognitivo de Alejandra — clasificación de riesgo N0–N3 (ADR-0006) para el cerebro v2.",
+  "type": "module",
+  "main": "./lib.js",
+  "exports": {
+    ".": "./lib.js",
+    "./policy-engine": "./src/policy-engine.js"
+  },
+  "files": [
+    "src",
+    "lib.js",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/policy.test.js",
+    "verify": "bash verify_nucleo.sh"
+  },
+  "license": "UNLICENSED",
+  "private": false
+}

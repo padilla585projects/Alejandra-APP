@@ -2,8 +2,5 @@
   "name": "nucleo-cognitivo",
   "private": true,
   "type": "module",
-  "description": "Esqueleto, contratos e interfaces del nucleo cognitivo (F-1.2/F-1.3, ADR-0004). No integrado en produccion.",
-  "scripts": {
-    "test": "node --test test/contratos.test.js test/memory.test.js test/tool-registry-verifier.test.js"
-  }
+  "description": "Monorepo del nucleo cognitivo de Alejandra: @alejandra/cognitive-core y @alejandra/cognitive-core-policy."
 }
