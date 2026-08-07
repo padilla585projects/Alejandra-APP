@@ -36,6 +36,7 @@ jobs:
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
+          set -e
           echo "1) Healthcheck worker..."
           curl -sS --fail "${WORKER_URL}/health" | tee /tmp/health.json
           echo ""
@@ -46,8 +47,21 @@ jobs:
           echo "$RESP" | tee /tmp/trazas_resp.txt
           HTTP_CODE=$(echo "$RESP" | grep -oP 'HTTP_STATUS:\K[0-9]+')
           echo "HTTP_STATUS=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+          echo "3) Checking response..."
+          BODY=$(echo "$RESP" | sed '/^HTTP_STATUS:/d')
+          if [ "$HTTP_CODE" = "403" ]; then
+            echo "FAIL: /api/admin/trazas devolvio 403 con ADMIN_TOKEN."
+            echo "Posible causa: el secret ADMIN_TOKEN de GitHub no coincide con el"
+            echo "ADMIN_TOKEN configurado en el worker de Cloudflare (wrangler secret put)."
+            echo "Verifique: gh secret list --env production | grep ADMIN_TOKEN"
+            echo "vs:         wrangler secret list --remote (en alejandra-agente)."
+            echo "El token efimero de /auth/verify-session tambien es valido si el humano"
+            echo "lo prefiere (requiere session_token de superadmin)."
+            echo "Response body: $BODY"
+            exit 1
+          fi
           # Parse JSON: debe devolver un array (posiblemente vacio) con 200
-          echo "$RESP" | sed '/^HTTP_STATUS:/d' | python3 -c "
+          echo "$BODY" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
           assert isinstance(data, list), 'Expected a JSON array'
@@ -55,7 +69,7 @@ jobs:
           if data:
               keys = sorted(data[0].keys())
               print('Columnas del primer elemento:', keys)
-          " || { echo "FAIL: respuesta no valida"; exit 1; }
+          "
 
       - name: Verify cross-tenant isolation on trazas
         id: isolation
