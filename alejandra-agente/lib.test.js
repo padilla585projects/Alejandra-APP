@@ -1294,3 +1294,40 @@ describe('redactarTexto / redactarDetalle', () => {
     expect(out.lista).toEqual(['[email-redactado]', 'sin email']);
   });
 });
+
+// ── F-4.4 Wiring de telemetría de uso de tools ────────────────────────────────
+// ejecutarToolConTelemetria envuelve ejecutarTool en los paths de herramienta con
+// tráfico usuario, registrando feature_usage (D1 traza + KV counter cross-tenant).
+// El path interno 'reflexion' (sistema, sin sesión usuario) debe seguir llamando
+// a ejecutarTool directamente — no es telemetría de uso y no debe inflar métricas.
+// Estas pruebas son de regresión estática sobre el texto de worker.js (misma
+// técnica que 'aislamiento del contexto del chat'): bloquean slips donde quede
+// un path usuario sin telemetría, o viceversa, un path sistema telemetrado.
+describe('F-4.4 ejecutarToolConTelemetria wiring', () => {
+  const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+
+  it('define el wrapper que envuelve ejecutarTool', () => {
+    expect(worker).toContain('async function ejecutarToolConTelemetria(');
+    // el wrapper delega al tool real y dispara la traza:
+    expect(worker).toContain('await ejecutarTool(env, nombre, input,');
+    expect(worker).toContain('registrarUsoTool(env, {');
+  });
+
+  it('envuelve exactamente los 3 paths con tráfico usuario', () => {
+    const llamadas = worker.match(/await ejecutarToolConTelemetria\(/g) || [];
+    expect(llamadas.length).toBe(3);
+  });
+
+  it('mantiene exactamente 2 llamadas directas a ejecutarTool (wrapper interno + reflexion interno)', () => {
+    const directas = worker.match(/await ejecutarTool\(/g) || [];
+    expect(directas.length).toBe(2);
+  });
+
+  it('mantiene el path interno "reflexion" fuera de la telemetría', () => {
+    expect(worker).toContain("await ejecutarTool(env, tb.name, tb.input, 'reflexion', 'system'");
+  });
+
+  it('clasifica ok/error con el regex de detección de éxito JSON', () => {
+    expect(worker).toContain('/"ok"\\s*:\\s*true/');
+  });
+});
