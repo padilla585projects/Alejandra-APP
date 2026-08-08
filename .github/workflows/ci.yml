@@ -57,4 +57,4 @@ jobs:
       - name: Run nucleo-cognitivo tests
         run: |
           cd nucleo-cognitivo/packages/cognitive-core && node --test test/contratos.test.js test/memory.test.js test/tool-registry-verifier.test.js
-          cd ../../cognitive-core-policy && node --test test/policy.test.js
+          cd ../cognitive-core-policy && node --test test/policy.test.js
