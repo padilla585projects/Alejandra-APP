@@ -17643,6 +17643,58 @@ function _alejandraFabLocalIntercept(msg) {
   return null;
 }
 
+// ── Reconocimiento de voz (STT) — popup del FAB ───────────────────────────
+let _alejandrEscuchando = false;
+let _alejandrRecognition = null;
+
+function alejandrToggleVoz() {
+  if (_alejandrEscuchando) {
+    _alejandrRecognition?.stop();
+    return;
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    toast('Tu navegador no soporta reconocimiento de voz (usa Chrome)', 'err');
+    return;
+  }
+
+  const rec = new SR();
+  rec.lang           = 'es-ES';
+  rec.continuous     = false;
+  rec.interimResults = false;
+  _alejandrRecognition = rec;
+
+  const btn    = document.getElementById('alejandrVozBtn');
+  const status = document.getElementById('alejandrVozStatus');
+
+  rec.onstart = () => {
+    _alejandrEscuchando = true;
+    if (btn)    { btn.textContent = '⏹️'; btn.style.background = '#ef4444'; btn.style.borderColor = '#ef4444'; btn.style.color = '#fff'; }
+    if (status) status.style.display = 'block';
+  };
+
+  rec.onresult = (e) => {
+    const transcript = e.results[0][0].transcript.trim();
+    const input = document.getElementById('alejandrInput');
+    if (input) input.value = transcript;
+    alejandrEnviar();
+  };
+
+  rec.onerror = (e) => {
+    console.error('STT error:', e.error);
+    if (e.error !== 'aborted') toast('Error de micrófono: ' + e.error, 'err');
+  };
+
+  rec.onend = () => {
+    _alejandrEscuchando = false;
+    if (btn)    { btn.textContent = '🎙️'; btn.style.background = 'none'; btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--muted)'; }
+    if (status) status.style.display = 'none';
+  };
+
+  rec.start();
+}
+
 async function alejandrEnviar() {
   const input = document.getElementById('alejandrInput');
   const msg = input.value.trim();
@@ -22912,7 +22964,11 @@ document.getElementById('wInput').focus();
     <input type="file" id="alejandrFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandrOnFiles(event)">
     <button onclick="document.getElementById('alejandrFile').click()" title="Adjuntar archivo" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s">📎</button>
     <input id="alejandrInput" class="form-input" placeholder="Escribe tu pregunta..." style="flex:1;padding:8px 12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandrEnviar()}">
+    <button id="alejandrVozBtn" onclick="alejandrToggleVoz()" title="Voz" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s,background .2s">🎙️</button>
     <button class="btn btn-primary" onclick="alejandrEnviar()" style="padding:8px 14px">➤</button>
+  </div>
+  <div id="alejandrVozStatus" style="display:none;font-size:11px;color:#a855f7;text-align:center;padding:4px 12px 8px;animation:pulse 1s infinite">
+    🎙️ Escuchando... (habla ahora)
   </div>
   <div id="alejandraResizeHandle" title="Redimensionar" style="position:absolute;bottom:0;right:0;width:18px;height:18px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg, transparent 50%, var(--border) 50%);border-bottom-right-radius:16px"></div>
 </div>
