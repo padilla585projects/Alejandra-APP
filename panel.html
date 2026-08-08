@@ -1281,6 +1281,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <div class="page-sub">Equipos de protección individual por trabajador</div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchEpis" placeholder="🔍 Buscar..." oninput="tblEpis && tblEpis.setFilter('trabajador','like',this.value)">
+          <select id="filterEpiEstado" class="form-select" style="width:140px" onchange="cargarEpis()">
+            <option value="">Todos los estados</option>
+            <option value="activo">Activos</option>
+            <option value="devuelto">Devueltos</option>
+            <option value="baja">Baja</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalEpi()">+ Asignar EPI</button>
           <button class="btn btn-secondary" onclick="cargarEpis()">🔄 Actualizar</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblEpis,'epis')">⬇ CSV</button>
@@ -13546,57 +13552,117 @@ async function cargarFichajes() {
 })();
 
 // ── EPIs ───────────────────────────────────────────────────────
+const TIPOS_EPI = ['Casco','Arnés anticaídas','Guantes','Botas de seguridad','Gafas/visera','Chaleco reflectante','Protección auditiva','Mascarilla/respirador','Ropa de trabajo','Cinturón lumbar','Rodilleras','Otro'];
 let tblEpis = null;
-function abrirModalEpi() {
-  abrirModal('Asignar EPI', `
+let _epiEditId = null;
+async function abrirModalEpi(id) {
+  _epiEditId = id || null;
+  const trabajadores = window._perTrabajadores?.length ? window._perTrabajadores : await (async () => {
+    const r = await api('/personal/trabajadores');
+    window._perTrabajadores = toArr(r, 'trabajadores');
+    return window._perTrabajadores;
+  })();
+
+  let datos = { tipo_epi:'', talla:'', numero_serie:'', fecha_entrega:'', fecha_caducidad:'', estado:'activo', observaciones:'', usuario_id:null, externo_id:null };
+  if (id) {
+    const r = await api('/epis-asignados');
+    const found = toArr(r, 'epis').find(e => e.id === id);
+    if (found) datos = { ...datos, ...found };
+  }
+  const tVal = datos.usuario_id ? `app:${datos.usuario_id}` : datos.externo_id ? `externo:${datos.externo_id}` : '';
+
+  const selT = `<select class="form-select" id="mEpiTrab">
+    <option value="">— Selecciona trabajador —</option>
+    ${[...trabajadores].sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'')).map(t => {
+      const extra = [t.departamento, t.obra_nombre].filter(Boolean).join(' · ');
+      const val = `${t.tipo}:${t.id}`;
+      return `<option value="${val}"${val === tVal ? ' selected' : ''}>${t.nombre}${extra ? ' · ' + extra : ''} (#${t.id})</option>`;
+    }).join('')}
+  </select>`;
+
+  abrirModal(id ? '✏️ Editar EPI' : 'Asignar EPI', `
+    <div class="form-group"><div class="form-label">Trabajador *</div>${selT}</div>
     <div class="form-group"><div class="form-label">Tipo de EPI</div>
       <select class="form-select" id="mEpiTipo">
-        <option>Casco de seguridad</option><option>Chaleco reflectante</option>
-        <option>Botas de seguridad</option><option>Guantes</option>
-        <option>Gafas de protección</option><option>Arnés anticaídas</option>
-        <option>Protección auditiva</option><option>Mascarilla FFP2</option>
-        <option>Ropa ignífuga</option><option>Otro</option>
+        ${TIPOS_EPI.map(t => `<option value="${t}"${t === datos.tipo_epi ? ' selected' : ''}>${t}</option>`).join('')}
       </select>
     </div>
-    <div class="form-group"><div class="form-label">Trabajador (ID)</div><input class="form-input" id="mEpiTrab" type="number" placeholder="ID del trabajador"></div>
     <div class="form-row">
-      <div class="form-group"><div class="form-label">Talla</div><input class="form-input" id="mEpiTalla" placeholder="L, XL, 42..."></div>
-      <div class="form-group"><div class="form-label">Fecha entrega</div><input class="form-input" id="mEpiFecha" type="date"></div>
+      <div class="form-group"><div class="form-label">Talla</div><input class="form-input" id="mEpiTalla" value="${datos.talla||''}" placeholder="L, XL, 42..."></div>
+      <div class="form-group"><div class="form-label">Nº serie</div><input class="form-input" id="mEpiSerie" value="${datos.numero_serie||''}" placeholder="Opcional"></div>
     </div>
-    <div class="form-group"><div class="form-label">Fecha caducidad</div><input class="form-input" id="mEpiCad" type="date"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha entrega</div><input class="form-input" id="mEpiFecha" type="date" value="${datos.fecha_entrega||''}"></div>
+      <div class="form-group"><div class="form-label">Fecha caducidad</div><input class="form-input" id="mEpiCad" type="date" value="${datos.fecha_caducidad||''}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Estado</div>
+      <select class="form-select" id="mEpiEstado">
+        <option value="activo"${datos.estado==='activo'?' selected':''}>Activo</option>
+        <option value="devuelto"${datos.estado==='devuelto'?' selected':''}>Devuelto</option>
+        <option value="baja"${datos.estado==='baja'?' selected':''}>Baja</option>
+      </select>
+    </div>
+    <div class="form-group"><div class="form-label">Observaciones</div><textarea class="form-input" id="mEpiObs" rows="2" style="resize:vertical">${datos.observaciones||''}</textarea></div>
+    ${id ? `<button type="button" class="btn btn-danger" style="width:100%;margin-top:4px" onclick="borrarEpi(${id})">🗑 Borrar EPI</button>` : ''}
   `, async () => {
+    const tVal = document.getElementById('mEpiTrab').value;
+    if (!tVal) { toast('Selecciona un trabajador', 'err'); return; }
+    const [tipo, tid] = tVal.split(':');
+    const trabajador = trabajadores.find(t => String(t.id) === tid && t.tipo === tipo);
     const body = {
+      nombre_trabajador: trabajador?.nombre || '',
+      usuario_id: tipo === 'app' ? parseInt(tid) : null,
+      externo_id: tipo === 'externo' ? parseInt(tid) : null,
       tipo_epi: document.getElementById('mEpiTipo').value,
-      usuario_id: parseInt(document.getElementById('mEpiTrab').value),
-      talla: document.getElementById('mEpiTalla').value.trim(),
-      fecha_entrega: document.getElementById('mEpiFecha').value,
+      talla: document.getElementById('mEpiTalla').value.trim() || null,
+      numero_serie: document.getElementById('mEpiSerie').value.trim() || null,
+      fecha_entrega: document.getElementById('mEpiFecha').value || null,
       fecha_caducidad: document.getElementById('mEpiCad').value || null,
+      estado: document.getElementById('mEpiEstado').value,
+      observaciones: document.getElementById('mEpiObs').value.trim() || null,
     };
-    if (!body.usuario_id) { toast('Indica el ID del trabajador', 'err'); return; }
-    const r = await api('/epis-asignados', { method: 'POST', body: JSON.stringify(body) });
-    if (r.ok) { cerrarModal(); toast('EPI asignado ✓', 'ok'); tblEpis = null; cargarEpis(); }
+    const url = _epiEditId ? `/epis-asignados/${_epiEditId}` : '/epis-asignados';
+    const method = _epiEditId ? 'PUT' : 'POST';
+    const r = await api(url, { method, body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast(_epiEditId ? 'EPI actualizado ✓' : 'EPI asignado ✓', 'ok'); tblEpis = null; cargarEpis(); }
     else toast(r.error || 'Error al guardar', 'err');
   });
 }
+function editarEpi(id) { abrirModalEpi(id); }
+async function borrarEpi(id) {
+  if (!confirm('¿Borrar este EPI asignado?')) return;
+  const r = await api(`/epis-asignados/${id}`, { method: 'DELETE' });
+  if (r.ok) { cerrarModal(); toast('EPI eliminado 🗑', 'ok'); tblEpis = null; cargarEpis(); }
+  else toast(r.error || 'Error al borrar', 'err');
+}
 async function cargarEpis() {
   const r = await api('/epis-asignados');
-  const data = toArr(r, 'epis').map(e => ({
+  const filtroE = document.getElementById('filterEpiEstado')?.value || '';
+  let data = toArr(r, 'epis').map(e => ({
     ...e,
-    trabajador: e.nombre_usuario || e.nombre_externo || '—',
+    trabajador: e.nombre_trabajador || e.nombre_usuario || e.nombre_externo || '—',
     diasRestantes: diasParaCaducar(e.fecha_caducidad),
   }));
+  if (filtroE) data = data.filter(e => e.estado === filtroE);
   if (tblEpis) { tblEpis.replaceData(data); return; }
+  const canEdit = hasSessionRole('empresa_admin', 'superadmin', 'desarrollador', 'oficina', 'encargado', 'jefe_de_obra');
   tblEpis = new Tabulator('#tblEpis', {
     data, layout: 'fitColumns',
     pagination: 'local', paginationSize: 20,
     columns: [
       { title: 'Trabajador', field: 'trabajador', sorter: 'string', minWidth: 160 },
-      { title: 'EPI', field: 'tipo_epi', sorter: 'string', minWidth: 160 },
-      { title: 'Talla', field: 'talla', width: 80 },
-      { title: 'F. entrega', field: 'fecha_entrega', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: 'Caducidad', field: 'fecha_caducidad', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: 'Estado', field: 'diasRestantes', width: 160,
-        formatter: c => badgeDias(c.getValue()), sorter: 'number' },
+      { title: 'EPI', field: 'tipo_epi', sorter: 'string', minWidth: 140 },
+      { title: 'Talla', field: 'talla', width: 70 },
+      { title: 'Nº serie', field: 'numero_serie', width: 100 },
+      { title: 'F. entrega', field: 'fecha_entrega', width: 100, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Caducidad', field: 'fecha_caducidad', width: 100, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Estado', field: 'estado', width: 90,
+        formatter: c => { const v = c.getValue(); const cls = v==='activo'?'ok':v==='devuelto'?'muted':'danger'; return `<span class="badge badge-${cls}">${v||'—'}</span>`; } },
+      { title: 'Caduca', field: 'diasRestantes', width: 140, formatter: c => badgeDias(c.getValue()), sorter: 'number' },
+      { title: 'Obs.', field: 'observaciones', minWidth: 140 },
+      { title: '', field: 'id', width: 60, hozAlign: 'center', headerSort: false,
+        formatter: c => canEdit ? '<button class="btn btn-sm btn-secondary" title="Editar">✏️</button>' : '',
+        cellClick: canEdit ? (e, c) => editarEpi(c.getRow().getData().id) : undefined },
     ]
   });
 }
