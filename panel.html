@@ -17477,10 +17477,10 @@ const _fabAllowedTypes = [
 function alejandrOnFiles(ev) {
   const files = Array.from(ev.target.files || []);
   for (const f of files) {
-    if (_fabAttachments.length >= _fabMaxFiles) { _alejandraToast(`Máximo ${_fabMaxFiles} archivos`); break; }
-    if (f.size > _fabMaxSizeMB * 1024 * 1024) { _alejandraToast(`${f.name} superiza ${_fabMaxSizeMB}MB`); continue; }
+    if (_fabAttachments.length >= _fabMaxFiles) { toast(`Máximo ${_fabMaxFiles} archivos`); break; }
+    if (f.size > _fabMaxSizeMB * 1024 * 1024) { toast(`${f.name} superiza ${_fabMaxSizeMB}MB`); continue; }
     const ok = _fabAllowedTypes.some(t => f.type === t || f.name.toLowerCase().endsWith(t.split('/').pop()));
-    if (!ok) { _alejandraToast(`Formato no soportado: ${f.name}`); continue; }
+    if (!ok) { toast(`Formato no soportado: ${f.name}`); continue; }
     const reader = new FileReader();
     reader.onload = () => {
       const b64 = reader.result.split(',')[1];
@@ -17521,6 +17521,180 @@ function _alejandraBurbujaHTML(m) {
   </div>`;
 }
 
+// FEAT-ALEJANDRA-FAB-PARIDAD (07/08/2026): auto-caché — paridad con index.html
+// (ALE_CACHE_*/_aleCacheLookup/_aleCacheRecord, ~línea 22396-22459). Aprende preguntas
+// repetidas y las sirve sin gastar tokens del backend tras ALE_FAB_CACHE_HIT_MIN
+// repeticiones, con TTL propio para no servir datos obsoletos.
+const ALE_FAB_CACHE_KEY = 'ale_fab_response_cache';
+const ALE_FAB_CACHE_MAX = 80;
+const ALE_FAB_CACHE_HIT_MIN = 2;
+const ALE_FAB_CACHE_TTL_H = 48;
+const ALE_FAB_CACHE_NOCACHE = /\b(hoy|ahora|actual|ultimo|ultima|reciente|nuevo|nueva|acaba|ayer|esta semana|este mes|cuantos? hay|cuantas? hay|stock|estado de)\b/;
+
+function _aleFabCacheNormalize(msg) {
+  return msg.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+function _aleFabCacheLoad() {
+  try { return JSON.parse(localStorage.getItem(ALE_FAB_CACHE_KEY) || '{}'); } catch { return {}; }
+}
+function _aleFabCacheSave(cache) {
+  const now = Date.now();
+  const entries = Object.entries(cache).filter(([, v]) => now - v.ts < ALE_FAB_CACHE_TTL_H * 3600000);
+  entries.sort((a, b) => b[1].hits - a[1].hits);
+  const pruned = Object.fromEntries(entries.slice(0, ALE_FAB_CACHE_MAX));
+  try { localStorage.setItem(ALE_FAB_CACHE_KEY, JSON.stringify(pruned)); } catch {}
+}
+function _aleFabCacheRecord(msgOriginal, respuesta) {
+  if (!respuesta || respuesta.length < 20) return;
+  if (respuesta.startsWith('❌')) return;
+  const norm = _aleFabCacheNormalize(msgOriginal);
+  if (!norm || norm.length < 5) return;
+  if (ALE_FAB_CACHE_NOCACHE.test(norm)) return;
+  const cache = _aleFabCacheLoad();
+  const existing = cache[norm];
+  if (existing) { existing.hits++; existing.resp = respuesta; existing.ts = Date.now(); }
+  else { cache[norm] = { resp: respuesta, hits: 1, ts: Date.now() }; }
+  _aleFabCacheSave(cache);
+}
+function _aleFabCacheLookup(msgOriginal) {
+  const norm = _aleFabCacheNormalize(msgOriginal);
+  if (!norm || norm.length < 5) return null;
+  if (ALE_FAB_CACHE_NOCACHE.test(norm)) return null;
+  const cache = _aleFabCacheLoad();
+  const entry = cache[norm];
+  if (!entry) return null;
+  if (entry.hits < ALE_FAB_CACHE_HIT_MIN) return null;
+  if (Date.now() - entry.ts > ALE_FAB_CACHE_TTL_H * 3600000) return null;
+  entry.hits++; entry.ts = Date.now();
+  _aleFabCacheSave(cache);
+  return entry.resp;
+}
+
+// FEAT-ALEJANDRA-FAB-PARIDAD (07/08/2026): interceptor local — paridad con index.html
+// (_alejandraLocalIntercept, ~línea 22462-22543). Resuelve preguntas concretas (saludo,
+// hora, sesión, navegación, ayuda) sin llamar al backend. Se omite deliberadamente la
+// rama de "limpiar chat" del original: el popup del FAB no tiene una función local de
+// borrado de historial (se sincroniza siempre con el servidor), así que no hay un
+// equivalente seguro al que portarla.
+const ALE_FAB_NAV_MAP = {
+  'inicio': 'dashboard', 'dashboard': 'dashboard', 'principal': 'dashboard',
+  'trabajadores': 'personal', 'personal': 'personal',
+  'fichajes': 'fichajes', 'fichaje': 'fichajes',
+  'bobinas': 'bobinas', 'inventario': 'bobinas', 'almacen': 'bobinas',
+  'herramientas': 'herramientas',
+  'pedidos': 'pedidos', 'compras': 'pedidos',
+  'incidencias': 'incidencias', 'problemas': 'incidencias', 'averias': 'incidencias',
+  'seguridad': 'seguridad',
+  'usuarios': 'usuarios',
+  'obras': 'obras',
+  'mantenimientos': 'mantenimientos',
+  'devtools': 'devtools',
+};
+function _alejandraFabLocalIntercept(msg) {
+  const m = msg.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
+  // 1. Saludos simples
+  if (/^(hola|buenas|hey|ey|buenos dias|buenas tardes|buenas noches|que tal|hi|hello)\s*[!.?]*$/.test(m)) {
+    const hora = new Date().getHours();
+    const saludo = hora < 12 ? 'Buenos días' : hora < 20 ? 'Buenas tardes' : 'Buenas noches';
+    const nombre = SESSION?.nombre ? `, ${SESSION.nombre.split(' ')[0]}` : '';
+    return `${saludo}${nombre} 👋 ¿En qué te ayudo?`;
+  }
+
+  // 2. Hora / fecha
+  if (/^(que hora es|hora actual|que dia es|fecha de hoy|que fecha)\s*[?]*$/.test(m)) {
+    const now = new Date();
+    const dias = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+    const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    return `📅 ${dias[now.getDay()]} ${now.getDate()} de ${meses[now.getMonth()]} de ${now.getFullYear()}, ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  }
+
+  // 3. Quién soy / sesión
+  if (/^(quien soy|mi sesion|mi usuario|que empresa|mi rol|mis datos|mi perfil)\s*[?]*$/.test(m)) {
+    if (!SESSION) return '❌ No hay sesión activa.';
+    const lines = [`👤 **${SESSION.nombre || 'Sin nombre'}**`];
+    if (SESSION.rol) lines.push(`🏷️ Rol: ${SESSION.rol}`);
+    if (SESSION.empresa_nombre) lines.push(`🏢 Empresa: ${SESSION.empresa_nombre}`);
+    if (SESSION.obra_nombre) lines.push(`🏗️ Obra: ${SESSION.obra_nombre}`);
+    if (SESSION.departamento) lines.push(`📁 Departamento: ${SESSION.departamento}`);
+    return lines.join('\n');
+  }
+
+  // 4. Navegación — "ir a X", "abre X", "muéstrame X"
+  const navMatch = m.match(/^(?:ir a|abre|abrir|abreme|muestrame|ensenname|lleva(?:me)? a|ve a|vamos a|navega a)\s+(.+?)\s*[.!?]*$/);
+  if (navMatch) {
+    const target = ALE_FAB_NAV_MAP[navMatch[1]];
+    if (target) {
+      setTimeout(() => { if (typeof navTo === 'function') navTo(target); }, 300);
+      return `📲 Navegando a **${PAGE_TITLES[target] || target}**...`;
+    }
+  }
+
+  // 5. Ayuda rápida
+  if (/^(ayuda|help|que puedes hacer|que sabes hacer|funciones|comandos)\s*[?]*$/.test(m)) {
+    return `Puedo ayudarte con:\n\n🔍 **Consultas** — buscar bobinas, equipos, personal\n📊 **Datos** — informes, estadísticas, historial\n🔧 **Acciones** — crear registros, fichajes, incidencias\n📲 **Navegación** — "ir a personal", "abre bobinas"\n💬 **Conversación** — preguntas generales\n\nPrueba: "busca bobinas con stock bajo" o "ir a personal"`;
+  }
+
+  // 6. Auto-caché — preguntas repetidas se sirven localmente
+  const cached = _aleFabCacheLookup(msg);
+  if (cached) return '⚡ ' + cached;
+
+  // No interceptado — enviar al servidor
+  return null;
+}
+
+// ── Reconocimiento de voz (STT) — popup del FAB ───────────────────────────
+let _alejandrEscuchando = false;
+let _alejandrRecognition = null;
+
+function alejandrToggleVoz() {
+  if (_alejandrEscuchando) {
+    _alejandrRecognition?.stop();
+    return;
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    toast('Tu navegador no soporta reconocimiento de voz (usa Chrome)', 'err');
+    return;
+  }
+
+  const rec = new SR();
+  rec.lang           = 'es-ES';
+  rec.continuous     = false;
+  rec.interimResults = false;
+  _alejandrRecognition = rec;
+
+  const btn    = document.getElementById('alejandrVozBtn');
+  const status = document.getElementById('alejandrVozStatus');
+
+  rec.onstart = () => {
+    _alejandrEscuchando = true;
+    if (btn)    { btn.textContent = '⏹️'; btn.style.background = '#ef4444'; btn.style.borderColor = '#ef4444'; btn.style.color = '#fff'; }
+    if (status) status.style.display = 'block';
+  };
+
+  rec.onresult = (e) => {
+    const transcript = e.results[0][0].transcript.trim();
+    const input = document.getElementById('alejandrInput');
+    if (input) input.value = transcript;
+    alejandrEnviar();
+  };
+
+  rec.onerror = (e) => {
+    console.error('STT error:', e.error);
+    if (e.error !== 'aborted') toast('Error de micrófono: ' + e.error, 'err');
+  };
+
+  rec.onend = () => {
+    _alejandrEscuchando = false;
+    if (btn)    { btn.textContent = '🎙️'; btn.style.background = 'none'; btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--muted)'; }
+    if (status) status.style.display = 'none';
+  };
+
+  rec.start();
+}
+
 async function alejandrEnviar() {
   const input = document.getElementById('alejandrInput');
   const msg = input.value.trim();
@@ -17538,6 +17712,19 @@ async function alejandrEnviar() {
     cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'user', contenido: userBubble }));
     cont.scrollTop = cont.scrollHeight;
   }
+
+  // Interceptor local — si se puede resolver sin tokens (y no hay adjuntos), hacerlo
+  if (_fabAttachments.length === 0) {
+    const localResp = _alejandraFabLocalIntercept(msg);
+    if (localResp !== null) {
+      if (cont) {
+        cont.insertAdjacentHTML('beforeend', _alejandraBurbujaHTML({ rol: 'assistant', contenido: localResp }));
+        cont.scrollTop = cont.scrollHeight;
+      }
+      return;
+    }
+  }
+
   // Typing indicator — removable
   const typingId = 'alej-typing-' + Date.now();
   if (cont) {
@@ -17590,7 +17777,74 @@ async function alejandrEnviar() {
     let buffer = '';
     let textoAcum = '';
     let bubbleEl = null;
+    let toolsContainer = null;
     const typingEl = document.getElementById(typingId);
+
+    // FEAT-ALEJANDRA-FAB-PARIDAD (07/08/2026): un chip por herramienta en curso, en vez
+    // de sobrescribir un único texto de "escribiendo..." -- paridad con index.html
+    // (addToolStart/addToolEnd/getToolsContainer, ~línea 22607-22719). Permite ver varias
+    // tools ejecutándose (o ya completadas) a la vez en lugar de perder el rastro de las
+    // anteriores cada vez que arranca una nueva.
+    function _fabToolFriendly(nombre) {
+      const map = {
+        buscar_web:        ['🌐', 'Buscando en internet'],
+        consultar_bd:      ['🔍', 'Consultando datos'],
+        ejecutar_sql:      ['💾', 'Actualizando datos'],
+        leer_archivo:      ['📄', 'Leyendo archivo'],
+        escribir_archivo:  ['✏️', 'Guardando archivo'],
+        listar_archivos:   ['📂', 'Revisando archivos'],
+        analizar_imagen:   ['🖼️', 'Analizando imagen'],
+        crear_bobina:      ['🔧', 'Registrando bobina'],
+        buscar_bobinas:    ['🔍', 'Buscando bobinas'],
+        telegram_send:     ['📨', 'Enviando mensaje'],
+        reflexionar:       ['🧠', 'Pensando'],
+        proponer_correccion:['🛠️', 'Preparando corrección'],
+        crear_incidencia:  ['🚨', 'Creando incidencia'],
+        crear_fichaje:     ['⏱️', 'Registrando fichaje'],
+        buscar_equipos:    ['⚙️', 'Buscando equipos'],
+        calendario:        ['📅', 'Revisando calendario'],
+        memory_read:       ['🧠', 'Recordando'],
+        memory_write:      ['🧠', 'Memorizando'],
+        listar_bobinas:    ['📋', 'Listando bobinas'],
+        crear_equipo:      ['⚙️', 'Registrando equipo'],
+        crear_pedido:      ['📦', 'Creando pedido'],
+      };
+      const [icon, desc] = map[nombre] || ['⚡', (nombre || 'tool').replace(/_/g, ' ')];
+      return { icon, desc: desc + '…' };
+    }
+    function _fabGetToolsContainer() {
+      if (!toolsContainer) {
+        toolsContainer = document.createElement('div');
+        toolsContainer.style.cssText = 'display:flex;flex-direction:column;gap:4px;width:100%;margin-bottom:4px';
+        if (cont && typingEl) cont.insertBefore(toolsContainer, typingEl);
+        else if (cont) cont.appendChild(toolsContainer);
+      }
+      return toolsContainer;
+    }
+    function _fabAddToolStart(d) {
+      const tc = _fabGetToolsContainer();
+      const { icon, desc } = _fabToolFriendly(d.nombre);
+      const chip = document.createElement('div');
+      chip.className = 'ale-fab-tool';
+      chip.id = 'ale-fab-tool-' + (d.nombre || 'tool') + '-' + Date.now();
+      chip.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);font-size:12px;color:var(--muted)';
+      chip.innerHTML = `<span>${icon}</span><span style="flex:1">${escHtml(desc)}</span><span class="ale-fab-tool-spin" style="width:11px;height:11px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:spin .7s linear infinite"></span>`;
+      tc.appendChild(chip);
+      if (cont) cont.scrollTop = cont.scrollHeight;
+    }
+    function _fabAddToolEnd(d) {
+      if (!toolsContainer) return;
+      const chips = toolsContainer.querySelectorAll('.ale-fab-tool');
+      let target = null;
+      for (let i = chips.length - 1; i >= 0; i--) {
+        if (chips[i].id.startsWith('ale-fab-tool-' + (d.nombre || 'tool'))) { target = chips[i]; break; }
+      }
+      if (!target) return;
+      target.style.opacity = '.75';
+      const spin = target.querySelector('.ale-fab-tool-spin');
+      if (spin) { spin.style.cssText = 'color:#22c55e;font-size:12px;line-height:1'; spin.textContent = '✓'; }
+      if (cont) cont.scrollTop = cont.scrollHeight;
+    }
 
     while (true) {
       const { done, value } = await reader.read();
@@ -17609,10 +17863,10 @@ async function alejandrEnviar() {
             if (typingEl) typingEl.querySelector('div').textContent = '🔍 ' + (ev.experto || 'Procesando…');
             break;
           case 'tool_start':
-            if (typingEl) typingEl.querySelector('div').textContent = '⚡ ' + (ev.nombre || 'tool') + '…';
+            _fabAddToolStart(ev);
             break;
           case 'tool_end':
-            if (typingEl) typingEl.querySelector('div').textContent = '✓ ' + (ev.nombre || 'tool');
+            _fabAddToolEnd(ev);
             break;
           case 'token':
           case 'text':
@@ -17629,7 +17883,7 @@ async function alejandrEnviar() {
             textoAcum += ev.texto;
             if (bubbleEl) {
               const md = bubbleEl.querySelector('.ale-fab-md');
-              if (md) md.innerHTML = _escHtml(textoAcum).replace(/\n/g, '<br>');
+              if (md) md.innerHTML = escHtml(textoAcum).replace(/\n/g, '<br>');
             }
             if (cont) cont.scrollTop = cont.scrollHeight;
             break;
@@ -17661,8 +17915,23 @@ async function alejandrEnviar() {
       return;
     }
 
-    // Extract <plan>, <guia>, <<OPCIONES>> and render final markdown
-    let reply = textoAcum.replace(/<plan>[\s\S]*?<\/plan>/g, '').replace(/<guia>[\s\S]*?<\/guia>/g, '').trim();
+    // FEAT-ALEJANDRA-FAB-PARIDAD (07/08/2026): antes <plan> y <guia> solo se borraban con
+    // esta misma regex, sin ofrecer nada al usuario -- paridad con index.html
+    // (_alejandraOfrecerPlan/_alejandraOfrecerGuia, ~línea 22818-22832): se extrae el JSON,
+    // se limpia el texto y se pinta una tarjeta accionable.
+    let reply = textoAcum;
+    let planDetectado = null;
+    let guiaDetectada = null;
+    const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
+    if (planMatch) {
+      try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+      reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+    }
+    const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
+    if (guiaMatch) {
+      try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+      reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+    }
     let opciones = null;
     const opcionesMatch = reply.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
     if (opcionesMatch) {
@@ -17677,8 +17946,11 @@ async function alejandrEnviar() {
       }
     }
     if (cont && opciones && opciones.length) _alejandraRenderOpciones(cont, opciones);
+    if (planDetectado) _alejandraFabOfrecerPlan(planDetectado);
+    if (guiaDetectada) _alejandraFabOfrecerGuia(guiaDetectada);
     _fabHablar(reply);
 
+    _aleFabCacheRecord(msg, reply);
     _fabAttachments = []; _fabRenderAdjuntos();
     _alejandraResincronizarFirmas();
   } catch (e) {
@@ -17706,6 +17978,167 @@ function _alejandraRenderOpciones(cont, opciones) {
     };
     div.appendChild(btn);
   });
+  cont.appendChild(div);
+  cont.scrollTop = cont.scrollHeight;
+}
+
+// ── Plan ejecutable — paridad con index.html (_alejandraOfrecerPlan/_alejandraEjecutarPlan/
+// _alejandraEjecutarAccion, ~línea 22919-23054). Tarjeta con la lista de acciones propuestas
+// y dos botones: Cancelar o Adelante, hazlo -- que ejecuta las acciones una por una con un
+// overlay de progreso. Adaptado al contenedor #alejandraMensajes del popup del FAB.
+let _alejandraFabPlanActivo = null;
+
+function _alejandraFabOfrecerPlan(plan) {
+  if (!plan?.acciones?.length) return;
+  const cont = document.getElementById('alejandraMensajes');
+  if (!cont) return;
+
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:8px;width:100%';
+
+  const accHtml = plan.acciones.map((a, i) =>
+    `<div style="padding:4px 0;font-size:12px"><b>${i+1}.</b> ${escHtml(a.desc || a.tipo)}</div>`
+  ).join('');
+
+  div.innerHTML = `
+    <div style="max-width:95%;width:100%;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #8b5cf6;border-radius:14px;padding:12px;color:#e0e7ff">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">🤖 ${escHtml(plan.titulo || 'Alejandra quiere actuar')}</div>
+      <div style="border-top:1px solid #4c1d95;padding-top:6px;margin-bottom:8px">${accHtml}</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="_alejandraFabCancelarPlan(this)" style="flex:1;padding:6px;border-radius:8px;border:1px solid #6b7280;background:transparent;color:#d1d5db;font-size:12px;cursor:pointer">Cancelar</button>
+        <button onclick="_alejandraFabConfirmarPlan(this)" style="flex:1;padding:6px;border-radius:8px;border:none;background:#8b5cf6;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Adelante, hazlo</button>
+      </div>
+    </div>`;
+
+  _alejandraFabPlanActivo = plan;
+  cont.appendChild(div);
+  cont.scrollTop = cont.scrollHeight;
+}
+
+function _alejandraFabCancelarPlan(btn) {
+  _alejandraFabPlanActivo = null;
+  const card = btn.closest('div[style*="linear-gradient"]');
+  if (card) card.innerHTML = '<div style="color:#9ca3af;font-size:12px;padding:4px">Plan cancelado</div>';
+}
+
+function _alejandraFabConfirmarPlan(btn) {
+  const plan = _alejandraFabPlanActivo;
+  if (!plan) return;
+  _alejandraFabPlanActivo = null;
+  const card = btn.closest('div[style*="linear-gradient"]');
+  if (card) card.innerHTML = '<div style="color:#a78bfa;font-size:12px;padding:4px">⚡ Ejecutando...</div>';
+  _alejandraFabEjecutarPlan(plan);
+}
+
+async function _alejandraFabEjecutarPlan(plan) {
+  const overlay = document.createElement('div');
+  overlay.id = 'alejandraFabPlanOverlay';
+  overlay.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:1100;background:linear-gradient(135deg,#1e1b4b,#312e81);border-top:2px solid #8b5cf6;padding:12px 16px;color:#e0e7ff;font-size:13px;transition:transform .3s';
+  overlay.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><span>🤖</span><span id="aleFabPlanStatus">Preparando...</span><button onclick="_alejandraFabAbortarPlan()" style="margin-left:auto;background:#ef4444;color:#fff;border:none;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer">Cancelar</button></div>
+    <div style="height:3px;background:#4c1d95;border-radius:2px;margin-top:8px"><div id="aleFabPlanProgress" style="height:100%;background:#8b5cf6;border-radius:2px;width:0;transition:width .3s"></div></div>`;
+  document.body.appendChild(overlay);
+
+  let abortado = false;
+  window._alejandraFabAbortarPlan = () => { abortado = true; };
+
+  const total = plan.acciones.length;
+  for (let i = 0; i < total; i++) {
+    if (abortado) break;
+    const acc = plan.acciones[i];
+    const status = document.getElementById('aleFabPlanStatus');
+    const progress = document.getElementById('aleFabPlanProgress');
+    if (status) status.textContent = `${i+1}/${total}: ${acc.desc || acc.tipo}`;
+    if (progress) progress.style.width = `${((i+1)/total)*100}%`;
+
+    try {
+      await _alejandraFabEjecutarAccion(acc);
+    } catch (e) {
+      toast(`❌ Error en paso ${i+1}: ${e.message}`, 'err');
+      break;
+    }
+    await new Promise(r => setTimeout(r, acc.tipo === 'esperar' ? (acc.ms || 500) : 400));
+  }
+
+  const ov = document.getElementById('alejandraFabPlanOverlay');
+  if (ov) {
+    const st = document.getElementById('aleFabPlanStatus');
+    if (st) st.textContent = abortado ? 'Cancelado' : 'Plan completado';
+    setTimeout(() => ov.remove(), 2000);
+  }
+  if (!abortado) toast('🤖 Plan completado', 'ok');
+}
+
+async function _alejandraFabEjecutarAccion(acc) {
+  switch (acc.tipo) {
+    case 'navegar': {
+      const destino = acc.destino || acc.valor;
+      if (destino && typeof navTo === 'function') navTo(destino);
+      break;
+    }
+    case 'click': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      await new Promise(r => setTimeout(r, 300));
+      el.click();
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'rellenar': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      el.focus();
+      el.value = acc.valor || '';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'seleccionar': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      el.value = acc.valor || '';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'esperar':
+      break;
+    case 'scroll': {
+      const el = document.querySelector(acc.selector);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// ── Guía paso a paso (visual, no ejecuta) — paridad con index.html
+// (_alejandraOfrecerGuia, ~línea 23056-23076).
+function _alejandraFabOfrecerGuia(guia) {
+  if (!guia?.pasos?.length) return;
+  const cont = document.getElementById('alejandraMensajes');
+  if (!cont) return;
+
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:8px;width:100%';
+
+  const pasosHtml = guia.pasos.map((p, i) =>
+    `<div style="padding:4px 0;font-size:12px"><b>${i+1}.</b> ${escHtml(p)}</div>`
+  ).join('');
+
+  div.innerHTML = `
+    <div style="max-width:95%;width:100%;background:var(--surface2);border:1px solid #22c55e;border-radius:14px;padding:12px;color:var(--text)">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">📋 ${escHtml(guia.titulo || 'Guía paso a paso')}</div>
+      <div style="border-top:1px solid var(--border);padding-top:6px">${pasosHtml}</div>
+    </div>`;
+
   cont.appendChild(div);
   cont.scrollTop = cont.scrollHeight;
 }
@@ -20369,6 +20802,30 @@ document.addEventListener('visibilitychange', () => {
 #aiImagePreview{display:none;padding:6px 10px;background:#0f172a;border-top:1px solid #334155;align-items:center;gap:8px;font-size:12px;color:#94a3b8}
 #aiImagePreview img{width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #334155}
 #aiImagePreview button{background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0 4px}
+/* PANEL-DEV-PARIDAD-01 (07/08/2026): contenedor de chips de tools en columna (paridad con
+   index.html), tarjetas de plan/guía accionables -- ver _pdOfrecerPlan/_pdOfrecerGuia. */
+.ai-tools-container{display:flex;flex-direction:column;gap:3px;width:100%;align-self:flex-start;max-width:85%}
+.ai-tool-chip{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:12px;border-radius:10px;background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.25);color:#cbd5e1}
+.ai-tool-chip .ai-tool-icon{font-size:13px;flex-shrink:0}
+.ai-tool-chip .ai-tool-name{font-weight:600;flex:1;color:#e5e7eb}
+.ai-tool-chip .ai-tool-spinner{width:11px;height:11px;border:2px solid rgba(168,85,247,.3);border-top-color:#a855f7;border-radius:50%;animation:aiToolSpin .6s linear infinite;flex-shrink:0}
+.ai-tool-chip .ai-tool-check{color:#22c55e;font-size:13px;flex-shrink:0}
+@keyframes aiToolSpin{to{transform:rotate(360deg)}}
+.ai-plan-card,.ai-guia-card{max-width:90%;border-radius:16px;padding:14px;font-size:13px;align-self:flex-start;margin-bottom:2px}
+.ai-plan-card{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #8b5cf6;color:#e0e7ff}
+.ai-guia-card{background:#1e2d40;border:1px solid #22c55e;color:#e5e7eb}
+.ai-plan-card .ai-plan-title,.ai-guia-card .ai-guia-title{font-weight:700;font-size:14px;margin-bottom:8px}
+.ai-plan-card .ai-plan-steps,.ai-guia-card .ai-guia-steps{border-top:1px solid rgba(255,255,255,.15);padding-top:8px;margin-bottom:10px}
+.ai-plan-card .ai-plan-steps>div,.ai-guia-card .ai-guia-steps>div{padding:4px 0}
+.ai-plan-card .ai-plan-actions{display:flex;gap:8px}
+.ai-plan-card .ai-plan-actions button{flex:1;padding:8px;border-radius:10px;font-size:13px;cursor:pointer}
+.ai-plan-cancel{border:1px solid #6b7280;background:transparent;color:#d1d5db}
+.ai-plan-confirm{border:none;background:#8b5cf6;color:#fff;font-weight:600}
+#aiPlanOverlay{position:absolute;bottom:0;left:0;right:0;z-index:20;background:linear-gradient(135deg,#1e1b4b,#312e81);border-top:2px solid #8b5cf6;padding:10px 14px;color:#e0e7ff;font-size:12px}
+#aiPlanOverlay .ai-plan-ov-row{display:flex;align-items:center;gap:8px}
+#aiPlanOverlay .ai-plan-ov-row button{margin-left:auto;background:#ef4444;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer}
+#aiPlanOverlay .ai-plan-ov-bar{height:3px;background:#4c1d95;border-radius:2px;margin-top:6px}
+#aiPlanOverlay .ai-plan-ov-fill{height:100%;background:#8b5cf6;border-radius:2px;width:0;transition:width .3s}
 </style>
 
 <div id="aiChatPanel">
@@ -20751,19 +21208,20 @@ document.getElementById('wInput').focus();
     document.getElementById('aiSendBtn').disabled = true;
     aiClearImage();
 
-    // Helper: descripciones amigables
+    // Helper: descripciones amigables (icono + texto por separado, para el chip de tool)
     function _aiToolFriendly(n) {
       const m = {
-        buscar_web:'🌐 Buscando en internet', consultar_bd:'🔍 Consultando datos',
-        ejecutar_sql:'💾 Actualizando datos', leer_archivo:'📄 Leyendo archivo',
-        escribir_archivo:'✏️ Guardando archivo', listar_archivos:'📂 Revisando archivos',
-        analizar_imagen:'🖼️ Analizando imagen', crear_bobina:'🔧 Registrando bobina',
-        buscar_bobinas:'🔍 Buscando bobinas', telegram_send:'📨 Enviando mensaje',
-        reflexionar:'🧠 Pensando', crear_incidencia:'🚨 Creando incidencia',
-        buscar_equipos:'⚙️ Buscando equipos', calendario:'📅 Revisando calendario',
-        memory_read:'🧠 Recordando', memory_write:'🧠 Memorizando'
+        buscar_web:['🌐','Buscando en internet'], consultar_bd:['🔍','Consultando datos'],
+        ejecutar_sql:['💾','Actualizando datos'], leer_archivo:['📄','Leyendo archivo'],
+        escribir_archivo:['✏️','Guardando archivo'], listar_archivos:['📂','Revisando archivos'],
+        analizar_imagen:['🖼️','Analizando imagen'], crear_bobina:['🔧','Registrando bobina'],
+        buscar_bobinas:['🔍','Buscando bobinas'], telegram_send:['📨','Enviando mensaje'],
+        reflexionar:['🧠','Pensando'], crear_incidencia:['🚨','Creando incidencia'],
+        buscar_equipos:['⚙️','Buscando equipos'], calendario:['📅','Revisando calendario'],
+        memory_read:['🧠','Recordando'], memory_write:['🧠','Memorizando']
       };
-      return m[n] || ('⚡ ' + n.replace(/_/g, ' '));
+      const [icon, desc] = m[n] || ['⚡', n.replace(/_/g, ' ')];
+      return { icon, desc };
     }
     function _aiEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -20834,7 +21292,65 @@ document.getElementById('wInput').focus();
 
     _setupMarked();
 
-    let textoAcum = '', bubbleEl = null;
+    let textoAcum = '', bubbleEl = null, toolsContainer = null;
+
+    // PANEL-DEV-PARIDAD-01 (07/08/2026): caché de respuestas -- paridad con
+    // _aleCacheLookup/_aleCacheRecord de index.html (líneas ~22396-22462). Si esta misma
+    // pregunta ya se hizo varias veces y la respuesta no depende de datos vivos, se sirve
+    // desde localStorage sin gastar tokens ni esperar al worker.
+    if (adjuntos.length === 0) {
+      const cachedResp = _aiCacheLookup(msg);
+      if (cachedResp !== null) {
+        typing.remove();
+        const bubble = document.createElement('div');
+        bubble.className = 'ai-msg bot';
+        document.getElementById('aiMessages').appendChild(bubble);
+        bubble.innerHTML = _aiRenderMd('⚡ ' + cachedResp);
+        _aiAddCopyBtns(bubble);
+        document.getElementById('aiMessages').scrollTop = document.getElementById('aiMessages').scrollHeight;
+        _aiHablar(cachedResp);
+        aiHistory.push({ role: 'user', content: msgText });
+        aiHistory.push({ role: 'assistant', content: cachedResp });
+        if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
+        try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
+        document.getElementById('aiSendBtn').disabled = false;
+        return;
+      }
+    }
+
+    // Contenedor dedicado (columna) para los chips de tools en curso -- paridad con
+    // getToolsContainer/addToolStart/addToolEnd de index.html (líneas ~22607-22719).
+    function getToolsContainer() {
+      if (!toolsContainer) {
+        toolsContainer = document.createElement('div');
+        toolsContainer.className = 'ai-tools-container';
+        document.getElementById('aiMessages').appendChild(toolsContainer);
+      }
+      return toolsContainer;
+    }
+    function addToolStart(d) {
+      typing.remove();
+      const tc = getToolsContainer();
+      const el = document.createElement('div');
+      el.className = 'ai-tool-chip';
+      el.id = 'ai-tool-' + d.nombre + '-' + Date.now();
+      const { icon, desc } = _aiToolFriendly(d.nombre);
+      el.innerHTML = `<span class="ai-tool-icon">${icon}</span><span class="ai-tool-name">${_aiEsc(desc)}...</span><div class="ai-tool-spinner"></div>`;
+      tc.appendChild(el);
+      document.getElementById('aiMessages').scrollTop = document.getElementById('aiMessages').scrollHeight;
+    }
+    function addToolEnd(d) {
+      if (!toolsContainer) return;
+      const chips = toolsContainer.querySelectorAll('.ai-tool-chip');
+      let target = null;
+      for (let i = chips.length - 1; i >= 0; i--) {
+        if (chips[i].id.startsWith('ai-tool-' + d.nombre)) { target = chips[i]; break; }
+      }
+      if (!target) return;
+      const spinner = target.querySelector('.ai-tool-spinner');
+      if (spinner) { spinner.className = 'ai-tool-check'; spinner.textContent = '✓'; }
+    }
+
     try {
       const res = await fetch(AGENTE_STREAM_API, {
         method: 'POST',
@@ -20876,27 +21392,8 @@ document.getElementById('wInput').focus();
           try { ev = JSON.parse(line.slice(6)); } catch { continue; }
 
           switch (ev.type) {
-            case 'tool_start': {
-              typing.remove();
-              const box = document.getElementById('aiMessages');
-              const ch = document.createElement('div');
-              ch.className = 'ai-msg bot';
-              ch.id = 'ai-tool-' + ev.nombre + '-' + Date.now();
-              ch.style.cssText = 'font-size:12px;opacity:0.8';
-              ch.innerHTML = _aiEsc(_aiToolFriendly(ev.nombre)) + '... ⏳';
-              box.appendChild(ch);
-              box.scrollTop = box.scrollHeight;
-              break;
-            }
-            case 'tool_end': {
-              const box = document.getElementById('aiMessages');
-              const chips = box.querySelectorAll('[id^="ai-tool-' + ev.nombre + '"]');
-              if (chips.length) {
-                const last = chips[chips.length - 1];
-                last.innerHTML = last.innerHTML.replace('⏳', '✓');
-              }
-              break;
-            }
+            case 'tool_start': addToolStart(ev); break;
+            case 'tool_end':   addToolEnd(ev); break;
             case 'token':
             case 'text':
               typing.remove();
@@ -20970,8 +21467,21 @@ document.getElementById('wInput').focus();
       typing.remove();
       if (!textoAcum) { appendMsg('bot', 'Sin respuesta'); textoAcum = 'Sin respuesta'; }
 
-      // Limpiar plan/guia del texto
-      let reply = textoAcum.replace(/<plan>[\s\S]*?<\/plan>/g, '').replace(/<guia>[\s\S]*?<\/guia>/g, '').trim();
+      // Extraer <plan> y <guia> de la respuesta -- paridad con index.html
+      // (_alejandraOfrecerPlan/_alejandraOfrecerGuia, líneas ~22814-22832): en vez de
+      // eliminarlos con una regex sin más, se ofrece una tarjeta accionable.
+      let reply = textoAcum;
+      let planDetectado = null, guiaDetectada = null;
+      const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
+      if (planMatch) {
+        try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+        reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+      }
+      const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
+      if (guiaMatch) {
+        try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+        reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+      }
 
       // Opciones pinchables (paridad con index.html/PWA y el FAB de este mismo panel.html)
       const aiOpcMatch = reply.match(/<<OPCIONES:\s*([^>]+)>>\s*$/);
@@ -20982,12 +21492,17 @@ document.getElementById('wInput').focus();
       }
       if (bubbleEl) { bubbleEl.innerHTML = _aiRenderMd(reply); _aiAddCopyBtns(bubbleEl); }
       if (aiOpciones && aiOpciones.length) _aiRenderOpciones(aiOpciones);
+      if (planDetectado) _pdOfrecerPlan(planDetectado);
+      if (guiaDetectada) _pdOfrecerGuia(guiaDetectada);
       _aiHablar(reply);
 
       aiHistory.push({ role: 'user', content: msgText });
       aiHistory.push({ role: 'assistant', content: reply });
       if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
       try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
+
+      // Auto-caché: aprender esta pregunta-respuesta (paridad con _aleCacheRecord de index.html)
+      _aiCacheRecord(msg, reply);
 
     } catch(e) {
       typing.remove();
@@ -21036,6 +21551,257 @@ document.getElementById('wInput').focus();
       div.appendChild(btn);
     });
     box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // ── Auto-caché de respuestas -- paridad con ALE_CACHE_*/_aleCacheLookup/_aleCacheRecord
+  // de index.html (líneas ~22396-22462). Clave propia (distinta a 'ale_response_cache')
+  // para no mezclar respuestas del chat dev con las del chat de la app/oficina. ──────────
+  const AI_CACHE_KEY = 'alejandra_panel_dev_response_cache';
+  const AI_CACHE_MAX = 80;
+  const AI_CACHE_HIT_MIN = 2;
+  const AI_CACHE_TTL_H = 48;
+  const AI_CACHE_NOCACHE = /\b(hoy|ahora|actual|ultimo|ultima|reciente|nuevo|nueva|acaba|ayer|esta semana|este mes|cuantos? hay|cuantas? hay|stock|estado de)\b/;
+
+  function _aiCacheNormalize(msg) {
+    return String(msg).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function _aiCacheLoad() {
+    try { return JSON.parse(localStorage.getItem(AI_CACHE_KEY) || '{}'); } catch { return {}; }
+  }
+  function _aiCacheSave(cache) {
+    const now = Date.now();
+    const entries = Object.entries(cache).filter(([, v]) => now - v.ts < AI_CACHE_TTL_H * 3600000);
+    entries.sort((a, b) => b[1].hits - a[1].hits);
+    const pruned = Object.fromEntries(entries.slice(0, AI_CACHE_MAX));
+    try { localStorage.setItem(AI_CACHE_KEY, JSON.stringify(pruned)); } catch {}
+  }
+  function _aiCacheRecord(msgOriginal, respuesta) {
+    if (!respuesta || respuesta.length < 20) return;
+    if (respuesta.startsWith('❌')) return;
+    const norm = _aiCacheNormalize(msgOriginal);
+    if (!norm || norm.length < 5) return;
+    if (AI_CACHE_NOCACHE.test(norm)) return;
+    const cache = _aiCacheLoad();
+    const existing = cache[norm];
+    if (existing) { existing.hits++; existing.resp = respuesta; existing.ts = Date.now(); }
+    else { cache[norm] = { resp: respuesta, hits: 1, ts: Date.now() }; }
+    _aiCacheSave(cache);
+  }
+  function _aiCacheLookup(msgOriginal) {
+    const norm = _aiCacheNormalize(msgOriginal);
+    if (!norm || norm.length < 5) return null;
+    if (AI_CACHE_NOCACHE.test(norm)) return null;
+    const cache = _aiCacheLoad();
+    const entry = cache[norm];
+    if (!entry) return null;
+    if (entry.hits < AI_CACHE_HIT_MIN) return null;
+    if (Date.now() - entry.ts > AI_CACHE_TTL_H * 3600000) return null;
+    entry.hits++; entry.ts = Date.now();
+    _aiCacheSave(cache);
+    return entry.resp;
+  }
+
+  // ── Plan interactivo accionable -- paridad con _alejandraOfrecerPlan/
+  // _alejandraEjecutarPlan/_alejandraEjecutarAccion de index.html (líneas ~22919-23053).
+  // Antes, el bloque <plan> del drawer dev se eliminaba con una regex sin ofrecer nada. ──
+  let _pdPlanActivo = null;
+
+  function _pdOfrecerPlan(plan) {
+    if (!plan?.acciones?.length) return;
+    const box = document.getElementById('aiMessages');
+    if (!box) return;
+
+    const card = document.createElement('div');
+    card.className = 'ai-plan-card';
+
+    const title = document.createElement('div');
+    title.className = 'ai-plan-title';
+    title.textContent = '🤖 ' + (plan.titulo || 'Alejandra quiere actuar');
+
+    const steps = document.createElement('div');
+    steps.className = 'ai-plan-steps';
+    plan.acciones.forEach((a, i) => {
+      const row = document.createElement('div');
+      const b = document.createElement('b');
+      b.textContent = (i + 1) + '. ';
+      row.appendChild(b);
+      row.appendChild(document.createTextNode(a.desc || a.tipo || ''));
+      steps.appendChild(row);
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'ai-plan-actions';
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.className = 'ai-plan-cancel';
+    btnCancel.textContent = 'Cancelar';
+    const btnGo = document.createElement('button');
+    btnGo.type = 'button';
+    btnGo.className = 'ai-plan-confirm';
+    btnGo.textContent = 'Adelante, hazlo';
+
+    btnCancel.onclick = () => {
+      _pdPlanActivo = null;
+      card.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:6px">Plan cancelado</div>';
+    };
+    btnGo.onclick = () => {
+      if (!_pdPlanActivo) return;
+      const p = _pdPlanActivo;
+      _pdPlanActivo = null;
+      card.innerHTML = '<div style="color:#a78bfa;font-size:13px;padding:6px">⚡ Ejecutando...</div>';
+      _pdEjecutarPlan(p);
+    };
+
+    actions.appendChild(btnCancel);
+    actions.appendChild(btnGo);
+    card.appendChild(title);
+    card.appendChild(steps);
+    card.appendChild(actions);
+
+    _pdPlanActivo = plan;
+    box.appendChild(card);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function _pdEjecutarPlan(plan) {
+    const panel = document.getElementById('aiChatPanel');
+    if (!panel) return;
+    const old = document.getElementById('aiPlanOverlay');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'aiPlanOverlay';
+    const row = document.createElement('div');
+    row.className = 'ai-plan-ov-row';
+    const icon = document.createElement('span');
+    icon.textContent = '🤖';
+    const status = document.createElement('span');
+    status.id = 'aiPlanStatus';
+    status.textContent = 'Preparando...';
+    const btnAbort = document.createElement('button');
+    btnAbort.type = 'button';
+    btnAbort.textContent = 'Cancelar';
+    row.appendChild(icon); row.appendChild(status); row.appendChild(btnAbort);
+    const bar = document.createElement('div');
+    bar.className = 'ai-plan-ov-bar';
+    const fill = document.createElement('div');
+    fill.className = 'ai-plan-ov-fill';
+    fill.id = 'aiPlanProgress';
+    bar.appendChild(fill);
+    overlay.appendChild(row);
+    overlay.appendChild(bar);
+    panel.appendChild(overlay);
+
+    let abortado = false;
+    btnAbort.onclick = () => { abortado = true; };
+
+    const total = plan.acciones.length;
+    for (let i = 0; i < total; i++) {
+      if (abortado) break;
+      const acc = plan.acciones[i];
+      const st = document.getElementById('aiPlanStatus');
+      const pr = document.getElementById('aiPlanProgress');
+      if (st) st.textContent = (i + 1) + '/' + total + ': ' + (acc.desc || acc.tipo);
+      if (pr) pr.style.width = (((i + 1) / total) * 100) + '%';
+
+      try {
+        await _pdEjecutarAccion(acc);
+      } catch (e) {
+        if (typeof toast === 'function') toast('❌ Error en paso ' + (i + 1) + ': ' + e.message, 'err');
+        break;
+      }
+      await new Promise(r => setTimeout(r, acc.tipo === 'esperar' ? (acc.ms || 500) : 400));
+    }
+
+    const ov = document.getElementById('aiPlanOverlay');
+    if (ov) {
+      const st = document.getElementById('aiPlanStatus');
+      if (st) st.textContent = abortado ? 'Cancelado' : 'Plan completado';
+      setTimeout(() => ov.remove(), 2000);
+    }
+    if (!abortado && typeof toast === 'function') toast('🤖 Plan completado', 'ok');
+  }
+
+  async function _pdEjecutarAccion(acc) {
+    switch (acc.tipo) {
+      case 'navegar': {
+        const destino = acc.destino || acc.valor;
+        if (destino && typeof navTo === 'function') navTo(destino);
+        break;
+      }
+      case 'click': {
+        const el = document.querySelector(acc.selector);
+        if (!el) throw new Error('No encontré: ' + acc.selector);
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.boxShadow = '0 0 0 3px #8b5cf6';
+        await new Promise(r => setTimeout(r, 300));
+        el.click();
+        setTimeout(() => el.style.boxShadow = '', 1000);
+        break;
+      }
+      case 'rellenar': {
+        const el = document.querySelector(acc.selector);
+        if (!el) throw new Error('No encontré: ' + acc.selector);
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.boxShadow = '0 0 0 3px #8b5cf6';
+        el.focus();
+        el.value = acc.valor || '';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        setTimeout(() => el.style.boxShadow = '', 1000);
+        break;
+      }
+      case 'seleccionar': {
+        const el = document.querySelector(acc.selector);
+        if (!el) throw new Error('No encontré: ' + acc.selector);
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.boxShadow = '0 0 0 3px #8b5cf6';
+        el.value = acc.valor || '';
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        setTimeout(() => el.style.boxShadow = '', 1000);
+        break;
+      }
+      case 'esperar':
+        break;
+      case 'scroll': {
+        const el = document.querySelector(acc.selector);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  // ── Guía paso a paso (visual, no ejecuta) -- paridad con _alejandraOfrecerGuia de
+  // index.html (líneas ~23056-23076). ─────────────────────────────────────────────────
+  function _pdOfrecerGuia(guia) {
+    if (!guia?.pasos?.length) return;
+    const box = document.getElementById('aiMessages');
+    if (!box) return;
+
+    const card = document.createElement('div');
+    card.className = 'ai-guia-card';
+
+    const title = document.createElement('div');
+    title.className = 'ai-guia-title';
+    title.textContent = '📋 ' + (guia.titulo || 'Guía paso a paso');
+
+    const steps = document.createElement('div');
+    steps.className = 'ai-guia-steps';
+    guia.pasos.forEach((p, i) => {
+      const row = document.createElement('div');
+      const b = document.createElement('b');
+      b.textContent = (i + 1) + '. ';
+      row.appendChild(b);
+      row.appendChild(document.createTextNode(p));
+      steps.appendChild(row);
+    });
+
+    card.appendChild(title);
+    card.appendChild(steps);
+    box.appendChild(card);
     box.scrollTop = box.scrollHeight;
   }
 
@@ -22198,7 +22964,11 @@ document.getElementById('wInput').focus();
     <input type="file" id="alejandrFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandrOnFiles(event)">
     <button onclick="document.getElementById('alejandrFile').click()" title="Adjuntar archivo" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s">📎</button>
     <input id="alejandrInput" class="form-input" placeholder="Escribe tu pregunta..." style="flex:1;padding:8px 12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandrEnviar()}">
+    <button id="alejandrVozBtn" onclick="alejandrToggleVoz()" title="Voz" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s,background .2s">🎙️</button>
     <button class="btn btn-primary" onclick="alejandrEnviar()" style="padding:8px 14px">➤</button>
+  </div>
+  <div id="alejandrVozStatus" style="display:none;font-size:11px;color:#a855f7;text-align:center;padding:4px 12px 8px;animation:pulse 1s infinite">
+    🎙️ Escuchando... (habla ahora)
   </div>
   <div id="alejandraResizeHandle" title="Redimensionar" style="position:absolute;bottom:0;right:0;width:18px;height:18px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg, transparent 50%, var(--border) 50%);border-bottom-right-radius:16px"></div>
 </div>
