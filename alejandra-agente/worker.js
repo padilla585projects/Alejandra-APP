@@ -35,6 +35,7 @@ import {
   TOOLS_REQUIEREN_SESION,
   TOOLS_N1_LECTURA_PILOTO,
   esInvocacionN1DeLectura,
+  clasificarResultadoTool,
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
@@ -1456,8 +1457,11 @@ async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa
     err = e && e.message ? e.message : String(e);
     resultado = JSON.stringify({ ok: false, error: `Error ejecutando "${nombre}": ${err}`, tool: nombre });
   }
-  // Extraer éxito de la respuesta JSON sin parsear (puede no ser JSON válido).
-  const ok = typeof resultado === 'string' && /"ok"\s*:\s*true/.test(resultado);
+  // Extraer éxito sin parsear JSON — ver clasificarResultadoTool() en lib.js
+  // (bug real de producción encontrado el 2026-08-07: el criterio anterior
+  // marcaba como "error" cualquier tool que no devolviera JSON con "ok":true,
+  // que es la mayoría del catálogo).
+  const ok = clasificarResultadoTool(resultado, err);
   await registrarUsoTool(env, {
     tool: nombre,
     empresaId: empresa_id,

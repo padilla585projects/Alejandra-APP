@@ -21,6 +21,7 @@ import {
   TOOLS_SOLO_DEV_VERIFICADO,
   TOOLS_N1_LECTURA_PILOTO,
   esInvocacionN1DeLectura,
+  clasificarResultadoTool,
   redactarTexto,
   redactarDetalle,
   extraerTablaDDL,
@@ -1329,8 +1330,39 @@ describe('F-4.4 ejecutarToolConTelemetria wiring', () => {
     expect(worker).toContain("await ejecutarTool(env, tb.name, tb.input, 'reflexion', 'system'");
   });
 
-  it('clasifica ok/error con el regex de detección de éxito JSON', () => {
-    expect(worker).toContain('/"ok"\\s*:\\s*true/');
+  it('clasifica ok/error vía clasificarResultadoTool(), no con el regex viejo que solo reconocía JSON', () => {
+    expect(worker).toContain('clasificarResultadoTool(resultado, err)');
+  });
+});
+
+// ── clasificarResultadoTool (fix del bug de telemetría F-4.4, 2026-08-07) ──
+describe('clasificarResultadoTool — F-4.4 (regresión del bug "todo es error")', () => {
+  it('excepción capturada (err presente) siempre es error, aunque el resultado "parezca" éxito', () => {
+    expect(clasificarResultadoTool('✅ Todo bien', 'algo falló')).toBe(false);
+  });
+
+  it('respeta el contrato JSON "ok":true/"ok":false cuando existe', () => {
+    expect(clasificarResultadoTool(JSON.stringify({ ok: true, count: 3 }))).toBe(true);
+    expect(clasificarResultadoTool(JSON.stringify({ ok: false, error: 'x' }))).toBe(false);
+  });
+
+  it('sin contrato JSON, texto plano de éxito se clasifica como éxito (regresión del bug real)', () => {
+    // Estos son ejemplos literales de resúmenes reales que estaban mal
+    // clasificados como "error" en D1 antes del fix.
+    expect(clasificarResultadoTool('Conversación iniciada con adrian. Mensaje guardado en historial.')).toBe(true);
+    expect(clasificarResultadoTool('5 registro(s):\n[\n  {\n    "id": 92\n  }\n]')).toBe(true);
+    expect(clasificarResultadoTool('✅ Tarea creada con ID #12:\n📋 Revisar cuadro eléctrico')).toBe(true);
+    expect(clasificarResultadoTool('Consulta ejecutada correctamente. Sin resultados.')).toBe(true);
+  });
+
+  it('sin contrato JSON, texto que empieza en ❌ o "Error" se clasifica como error', () => {
+    expect(clasificarResultadoTool('❌ El título es obligatorio para crear una tarea.')).toBe(false);
+    expect(clasificarResultadoTool('Error en consulta BD: D1_ERROR: no such column: referencia')).toBe(false);
+    expect(clasificarResultadoTool('Error: falta el ID')).toBe(false);
+  });
+
+  it('un ❌/Error en medio del texto (no al principio) no dispara falso negativo', () => {
+    expect(clasificarResultadoTool('5 tareas encontradas, 0 marcadas con ❌ vencidas')).toBe(true);
   });
 });
 

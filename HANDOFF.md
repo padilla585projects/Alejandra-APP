@@ -1,5 +1,14 @@
 # Handoff — Alejandra 2.0
 
+## Fix — telemetría F-4.4 clasificaba todo como "error" (2026-08-07)
+
+- Contexto: investigando qué vertical elegir para F-3.1 (herramientas semánticas), se auditaron las trazas `feature_usage` reales en D1 (`SELECT resumen FROM alejandra_trazas WHERE tipo='feature_usage'`, solo lectura). Las 86 trazas existentes (F-4.4 se desplegó ese mismo día) decían "error" el 100% de las veces, incluidas ejecuciones obviamente correctas (`iniciar_conversacion: error :: Conversación iniciada con adrian...`).
+- Causa raíz: `ejecutarToolConTelemetria()` clasificaba éxito solo si el resultado traía `"ok":true` explícito en JSON. La inmensa mayoría de las 100+ tools del catálogo devuelven texto plano (`✅ Tarea creada...`, `5 registro(s):...`), nunca ese contrato — así que quedaban marcadas como error siempre, salvo el puñado de tools que sí devuelven JSON con `ok`.
+- Fix: lógica extraída a `clasificarResultadoTool(resultado, err)` (`lib.js`, función pura). Criterio: excepción capturada → error; contrato JSON `"ok"` explícito → se respeta; sin contrato JSON → éxito salvo que el texto empiece por `❌` o `Error`/`Error:` (la misma convención que ya usan las tools para hablar con el usuario).
+- Pruebas: 6 tests nuevos en `lib.test.js` (excepción siempre error, contrato JSON respetado, texto plano de éxito clasifica bien — con los ejemplos reales que estaban mal en D1 —, texto de error por prefijo, no hay falso negativo si `❌`/`Error` aparece a mitad de frase). Agente 183/183 en verde.
+- Riesgo/rollback: cambio aislado a la clasificación de telemetría — no toca el resultado devuelto al usuario ni ningún gate de permisos. Los datos ya escritos en `alejandra_trazas` (86 filas, todas "error") no se corrigen retroactivamente; solo lo nuevo desde el despliegue queda bien clasificado.
+- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health`.
+
 ## ADR-0020 rebanada 7 — N1 se amplía a escritura (enmienda 6, 2026-08-07)
 
 - Rama/commit: pendiente de commit sobre `main` (código puro, aún sin desplegar).

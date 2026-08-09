@@ -221,6 +221,25 @@ function esInvocacionN1DeLectura(toolName, input) {
   return accion !== null && accionesLectura.has(accion);
 }
 
+// Bug real encontrado en producción (2026-08-07, auditoría de trazas F-4.4):
+// `ejecutarToolConTelemetria()` clasificaba éxito solo si el resultado traía
+// `"ok":true` explícito en JSON. La mayoría de las 100+ tools del catálogo
+// devuelven texto plano ("✅ Tarea creada...", "5 registro(s):...", nunca ese
+// contrato), así que el 100% de las 86 trazas `feature_usage` reales en D1
+// decían "error" -- incluidas ejecuciones obviamente correctas
+// (`iniciar_conversacion: ... Conversación iniciada...`). Nuevo criterio: si
+// hubo excepción, es error; si el resultado declara "ok" explícitamente
+// (JSON), se respeta ese valor; si no hay contrato JSON, se asume éxito salvo
+// que el texto empiece con la marca de error que las tools ya usan para
+// hablar con el usuario (❌ o "Error").
+function clasificarResultadoTool(resultado, err) {
+  if (err) return false;
+  if (typeof resultado === 'string' && /"ok"\s*:\s*(true|false)/.test(resultado)) {
+    return /"ok"\s*:\s*true/.test(resultado);
+  }
+  return !(typeof resultado === 'string' && /^\s*(❌|Error[:\s])/.test(resultado));
+}
+
 // SEC-CRON-01 / ARC-017 (02/08/2026): el cron llama al modelo con esDevVerificado=true,
 // así que filtrarToolsPorAuth no le filtraba NADA. Seis veces al día, sin nadie delante,
 // el modelo alcanzaba desplegar, hacer rollback, escribir en el repo y escribir en la BD
@@ -678,6 +697,7 @@ export {
   TOOLS_REQUIEREN_SESION,
   TOOLS_N1_LECTURA_PILOTO,
   esInvocacionN1DeLectura,
+  clasificarResultadoTool,
   filtrarToolsPorAuth,
   TOOLS_PROHIBIDAS_CRON,
   esInvocacionCron,
