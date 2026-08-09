@@ -10569,6 +10569,10 @@ async function eliminarEpiAsignado(id, request, env) {
 async function getCarnets(request, env) {
   const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  // DEPT-CPD-01 (09/08/2026): panel.html oculta Carnets a "oficina" (nav-sensitive-data,
+  // dato personal) pero el backend no comprobaba nada -- cualquier oficina podia pedirlo
+  // directamente por API. Se bloquea aqui, igual que hace el frontend.
+  if (rol === 'oficina' && !isSuperadmin && !isEmpresaAdmin && !isDesarrollador) return err('Sin permisos', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
   let sql = 'SELECT * FROM carnets WHERE empresa_id=?';
@@ -10625,6 +10629,10 @@ async function eliminarCarnet(id, request, env) {
 async function getReconocimientos(request, env) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  // DEPT-CPD-01 (09/08/2026): panel.html oculta Reconocimientos a "oficina"
+  // (nav-sensitive-data, dato de salud LPRL art. 22) pero el backend no comprobaba nada.
+  // Se bloquea aqui, igual que hace el frontend.
+  if (rol === 'oficina' && !isSuperadmin && !isEmpresaAdmin && !isDesarrollador) return err('Sin permisos', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const resultado = url.searchParams.get('resultado');
@@ -10778,9 +10786,17 @@ async function eliminarDocumentoObra(id, request, env) {
 }
 
 // ── Permisos de trabajo (PTR) ─────────────────────────────────────────────────
+// DEPT-CPD-01 (09/08/2026): Permisos de Trabajo y ATS son documentacion de PRL, propia
+// de Seguridad -- no tenian NINGUN filtro de departamento server-side (permisos_trabajo/
+// ats_jha no tienen columna departamento, BUG-CARNETS), asi que cualquier usuario
+// autenticado de la empresa podia leerlos/editarlos. Se restringe a Seguridad +
+// privilegiados via isDeptPrivileged (ya incluye isSeguridad = departamento==='seguridad'),
+// sin necesidad de anadir columna nueva ni tocar el esquema de D1.
 async function getPermisosTrabajo(request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, departamento } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = auth;
   if (!empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const tipo = url.searchParams.get('tipo');
@@ -10803,9 +10819,10 @@ async function getPermisosTrabajo(request, env) {
 }
 
 async function crearPermisoTrabajo(request, env) {
-  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre, rol, obra_id: obraAuth } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  if (rol === 'operario') return err('Sin permisos', 403);
+  if (rol === 'operario' || !isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const b = await request.json();
   if (!b.tipo)        return err('Falta tipo de permiso', 400);
   if (!b.descripcion) return err('Falta descripcion', 400);
@@ -10822,9 +10839,10 @@ async function crearPermisoTrabajo(request, env) {
 }
 
 async function actualizarPermisoTrabajo(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  if (rol === 'operario') return err('Sin permisos', 403);
+  if (rol === 'operario' || !isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const b = await request.json();
   const campos = ['descripcion','ubicacion','fecha_inicio','fecha_fin','turno','riesgos','medidas_preventivas','epis_requeridos','estado','autorizado_por','notas'];
   const sets = []; const vals = [];
@@ -10837,9 +10855,10 @@ async function actualizarPermisoTrabajo(id, request, env) {
 }
 
 async function eliminarPermisoTrabajo(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  if (rol === 'operario') return err('Sin permisos', 403);
+  if (rol === 'operario' || !isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM permisos_trabajo WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true });
 }
@@ -16834,6 +16853,7 @@ async function ensurePresupuestoObraTable(env) {
 async function getPresupuestoObra(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await ensurePresupuestoObraTable(env);
   const url = new URL(request.url);
   const obraId = url.searchParams.get('obra_id');
@@ -16858,6 +16878,7 @@ async function getPresupuestoObra(request, env) {
 async function crearPartidaPresupuesto(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await ensurePresupuestoObraTable(env);
   const b = await request.json();
   if (!b.obra_id) return err('obra_id requerido', 400);
@@ -16878,6 +16899,7 @@ async function crearPartidaPresupuesto(request, env) {
 async function actualizarPartidaPresupuesto(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   const b = await request.json();
   const sets = []; const params = [];
   if (b.categoria !== undefined)        { sets.push('categoria=?');         params.push(b.categoria); }
@@ -16897,6 +16919,7 @@ async function actualizarPartidaPresupuesto(id, request, env) {
 async function eliminarPartidaPresupuesto(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM presupuesto_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
@@ -18068,6 +18091,7 @@ async function ensureCostesObraTable(env) {
 async function getCostesObra(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await ensureCostesObraTable(env);
   const u = new URL(request.url);
   const obraId = u.searchParams.get('obra_id');
@@ -18137,6 +18161,7 @@ async function crearCosteObra(request, env) {
 async function actualizarCosteObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   const b = await request.json();
   await env.DB.prepare(
     `UPDATE costes_obra SET concepto=COALESCE(?,concepto), tipo=COALESCE(?,tipo),
@@ -18153,6 +18178,7 @@ async function actualizarCosteObra(id, request, env) {
 async function eliminarCosteObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM costes_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
@@ -18448,6 +18474,7 @@ async function eliminarSubmittal(id, request, env) {
 async function getFinancieroObra(obraId, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
 
   const empId = auth.empresa_id;
 
@@ -19256,6 +19283,7 @@ async function ensurePresupuestoTable(env) {
 async function getPresupuestoLineas(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await ensurePresupuestoTable(env);
   const url = new URL(request.url);
   const obraId   = url.searchParams.get('obra_id');
@@ -19277,6 +19305,7 @@ async function getPresupuestoLineas(request, env) {
 async function crearPresupuestoLinea(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await ensurePresupuestoTable(env);
   const b = await request.json();
   if (!b.obra_id) return err('obra_id requerido', 400);
@@ -19304,6 +19333,7 @@ async function crearPresupuestoLinea(request, env) {
 async function actualizarPresupuestoLinea(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   const b = await request.json();
   const cantPres  = parseFloat(b.cantidad_presupuestada) || 0;
   const precUnit  = parseFloat(b.precio_unitario)        || 0;
@@ -19329,6 +19359,7 @@ async function actualizarPresupuestoLinea(id, request, env) {
 async function eliminarPresupuestoLinea(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM presupuesto_lineas WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
@@ -19336,6 +19367,7 @@ async function eliminarPresupuestoLinea(id, request, env) {
 async function getPresupuestoResumen(obraId, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   await ensurePresupuestoTable(env);
   const { results: lineas } = await env.DB.prepare(
     `SELECT * FROM presupuesto_lineas WHERE obra_id=? AND empresa_id=? ORDER BY capitulo, orden, codigo`
@@ -20421,6 +20453,7 @@ async function eliminarCertLinea(id, request, env) {
 async function getDashboardGlobal(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   const eid = auth.empresa_id;
 
   // Parallel fetch of all aggregation queries
@@ -21793,8 +21826,10 @@ async function ensureAtsTable(env) {
 }
 
 async function getAts(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = auth;
   if (!empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureAtsTable(env);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
@@ -21802,6 +21837,10 @@ async function getAts(request, env) {
   const hasta   = url.searchParams.get('hasta');
   let q = `SELECT * FROM ats_jha WHERE empresa_id=?`;
   const p = [empresa_id];
+  // DEPT-CPD-01 (09/08/2026): antes no se acotaba a la obra propia por defecto -- un
+  // no-admin podia pedir ATS de CUALQUIER obra pasando otro obra_id (gap de aislamiento
+  // por obra, no solo por departamento). Mismo patron que permisos_trabajo.
+  if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { q += ` AND obra_id=?`; p.push(obraAuth); }
   if (obra_id) { q += ` AND obra_id=?`; p.push(parseInt(obra_id)); }
   if (desde)   { q += ` AND fecha>=?`;  p.push(desde); }
   if (hasta)   { q += ` AND fecha<=?`;  p.push(hasta); }
@@ -21811,8 +21850,10 @@ async function getAts(request, env) {
 }
 
 async function crearAts(request, env) {
-  const { empresa_id, nombre } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre } = auth;
   if (!empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureAtsTable(env);
   const b = await request.json();
   if (!b.tarea || !b.fecha) return err('tarea y fecha son requeridos', 400);
@@ -21845,8 +21886,10 @@ async function crearAts(request, env) {
 }
 
 async function actualizarAts(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureAtsTable(env);
   const b = await request.json();
   const allowed = ['fecha','hora_inicio','tarea','ubicacion','responsable','trabajadores',
@@ -21867,8 +21910,10 @@ async function actualizarAts(id, request, env) {
 }
 
 async function eliminarAts(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM ats_jha WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
@@ -22702,8 +22747,9 @@ async function ensureFlujoCajaTable(env) {
 }
 
 async function getFlujoCaja(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const { empresa_id, rol } = await getAuthContext(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const tipo    = url.searchParams.get('tipo');
@@ -23177,7 +23223,8 @@ async function ensureComparativosOfertaTable(env) {
 }
 
 async function getComparativosOferta(request, env) {
-  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  if (user?.rol === 'operario') return err('Sin permisos', 403);
   await ensureComparativosOfertaTable(env);
   const u = new URL(request.url);
   const obra_id = u.searchParams.get('obra_id');
@@ -23199,6 +23246,7 @@ async function getComparativosOferta(request, env) {
 
 async function crearComparativoOferta(request, env) {
   const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  if (user?.rol === 'operario') return err('Sin permisos', 403);
   await ensureComparativosOfertaTable(env);
   const b = await request.json();
   if (!b.titulo || !b.fecha) return jsonError('titulo y fecha son obligatorios', 400);
@@ -23221,7 +23269,8 @@ async function crearComparativoOferta(request, env) {
 }
 
 async function actualizarComparativoOferta(id, request, env) {
-  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  if (user?.rol === 'operario') return err('Sin permisos', 403);
   await ensureComparativosOfertaTable(env);
   const b = await request.json();
   const campos = ['obra_id','titulo','descripcion','fecha','fecha_limite','tipo','estado','criterio_adj','adjudicado_a','importe_adj','notas'];
@@ -23236,7 +23285,8 @@ async function actualizarComparativoOferta(id, request, env) {
 }
 
 async function eliminarComparativoOferta(id, request, env) {
-  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  if (user?.rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM comparativos_oferta WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return jsonOk({ ok: true });
 }
@@ -23700,8 +23750,9 @@ async function ensureFacturasProveedorTable(env) {
 
 async function getFacturasProveedor(request, env) {
   await ensureFacturasProveedorTable(env);
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const url    = new URL(request.url);
   const obra_id  = url.searchParams.get('obra_id');
   const estado   = url.searchParams.get('estado');
@@ -23741,8 +23792,9 @@ async function getFacturasProveedor(request, env) {
 
 async function crearFacturaProveedor(request, env) {
   await ensureFacturasProveedorTable(env);
-  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  const { empresa_id, rol, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   if (!safeStr(body.numero_factura).trim()) return err('El número de factura es obligatorio');
   if (!body.fecha_factura)          return err('La fecha de factura es obligatoria');
@@ -23764,8 +23816,9 @@ async function crearFacturaProveedor(request, env) {
 
 async function actualizarFacturaProveedor(id, request, env) {
   await ensureFacturasProveedorTable(env);
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   if (!safeStr(body.numero_factura).trim()) return err('El número de factura es obligatorio');
   await env.DB.prepare(`
@@ -23831,8 +23884,9 @@ async function ensureCobrosClienteTable(env) {
 
 async function getCobrosCliente(request, env) {
   await ensureCobrosClienteTable(env);
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const url   = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const estado  = url.searchParams.get('estado');
@@ -23884,8 +23938,9 @@ async function getCobrosCliente(request, env) {
 
 async function crearCobroCliente(request, env) {
   await ensureCobrosClienteTable(env);
-  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  const { empresa_id, rol, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   if (!body.fecha_emision) return err('La fecha de emisión es obligatoria');
   if (body.importe_bruto === undefined) return err('El importe bruto es obligatorio');
@@ -23908,8 +23963,9 @@ async function crearCobroCliente(request, env) {
 
 async function actualizarCobroCliente(id, request, env) {
   await ensureCobrosClienteTable(env);
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   if (!body.fecha_emision) return err('La fecha de emisión es obligatoria');
   const liq = (parseFloat(body.importe_bruto)||0) - (parseFloat(body.importe_retencion)||0);
@@ -25042,8 +25098,9 @@ async function ensureEscandalloTable(env) {
 
 async function getEscandallo(request, env) {
   await ensureEscandalloTable(env);
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const url    = new URL(request.url);
   const obra   = url.searchParams.get('obra_id');
   const cap    = url.searchParams.get('capitulo');
@@ -25078,8 +25135,9 @@ async function getEscandallo(request, env) {
 
 async function crearEscandallo(request, env) {
   await ensureEscandalloTable(env);
-  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  const { empresa_id, rol, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   if (!safeStr(body.codigo).trim())      return err('El código es obligatorio');
   if (!safeStr(body.descripcion).trim()) return err('La descripción es obligatoria');
@@ -25102,8 +25160,9 @@ async function crearEscandallo(request, env) {
 
 async function actualizarEscandallo(id, request, env) {
   await ensureEscandalloTable(env);
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   if (!safeStr(body.descripcion).trim()) return err('La descripción es obligatoria');
   await env.DB.prepare(`
@@ -25159,8 +25218,9 @@ async function ensureCronogramaPagosTable(env) {
 
 async function getCronogramaPagos(request, env) {
   await ensureCronogramaPagosTable(env);
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const url    = new URL(request.url);
   const obra   = url.searchParams.get('obra_id');
   const estado = url.searchParams.get('estado');
@@ -25197,8 +25257,9 @@ async function getCronogramaPagos(request, env) {
 
 async function crearHitoPago(request, env) {
   await ensureCronogramaPagosTable(env);
-  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  const { empresa_id, rol, nombre: createdBy } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   if (!safeStr(body.descripcion).trim()) return err('La descripción del hito es obligatoria');
   if (!body.fecha_prevista)      return err('La fecha prevista es obligatoria');
@@ -25222,8 +25283,9 @@ async function crearHitoPago(request, env) {
 
 async function actualizarHitoPago(id, request, env) {
   await ensureCronogramaPagosTable(env);
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   if (!safeStr(body.descripcion).trim()) return err('La descripción es obligatoria');
   // Auto-set fecha_cobro when marking as cobrado

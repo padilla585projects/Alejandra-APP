@@ -11188,8 +11188,21 @@ function iniciarApp() {
   // siempre-admin (el propio selector).
 
   // mostrar páginas financieras: todos excepto operario
+  // DEPT-CPD-01 (09/08/2026): igual que nav-electrico-section etc — antes solo mostraba,
+  // nunca ocultaba+marcaba explícitamente, así que sidebarToggle() exponía Presupuesto/
+  // Costes/Finanzas de Obra/Flujo de Caja/Facturas/Cobros/Comparativos/Escandallo/
+  // Cronograma de Pagos/Dashboard Global a un operario en cuanto expandía "Principal",
+  // "Planificación", "Finanzas de Obra" o "Analítica" (secciones sin protección propia).
   if (!hasSessionRole('operario')) {
-    document.querySelectorAll('.nav-finance').forEach(el => el.style.display = '');
+    document.querySelectorAll('.nav-finance').forEach(el => {
+      el.style.display = '';
+      el.removeAttribute('data-hidden-by-perms');
+    });
+  } else {
+    document.querySelectorAll('.nav-finance').forEach(el => {
+      el.style.display = 'none';
+      el.setAttribute('data-hidden-by-perms', 'true');
+    });
   }
 
   // ocultar datos sensibles para "oficina" (Trabajadores, Carnets, Reconocimientos)
