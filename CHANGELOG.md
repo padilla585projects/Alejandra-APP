@@ -6,6 +6,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Added
 
+- **Departamento Control, EPIs compartido y aislamiento por departamento (2026-08-09/10, v9.05):**
+  - Departamento "Control" para Sondas CPD (antes atada a Eléctrico); Racks/Cableado movido a Telecom.
+  - "Dotación EPIs" compartido entre todos los departamentos, con muñeco SVG interactivo portado a panel.html.
+  - Documentos (panel.html): pestañas por departamento generadas dinámicamente, ya no fijas.
+  - Corregidos varios bugs preexistentes de aislamiento por departamento: Sondas CPD/Racks/EPIs sin
+    filtro server-side real, Carnets/Reconocimientos/Permisos de Trabajo/ATS sin control de acceso,
+    10 páginas financieras sin bloqueo de `operario` en el servidor, y `sidebarToggle()` en panel.html
+    exponiendo elementos ocultos por departamento al expandir una sección. Detalle completo en HANDOFF.md.
+
+### Added
+
 - **ARC-020 rebanada 2 — piloto del Motor de Decisión ampliado a todo el catálogo N0 (2026-08-07, ADR-0020 enmienda 1):**
   - Análisis de las 47 trazas N0 en D1 (`alejandra_trazas`): 100% `consultar_bd`, 100% cron — el mecanismo funciona y registra decisión previa estructurada, pero solo una herramienta se había ejercitado.
   - Completado metadato ADR-0010 de 4 tools que carecían de `nivel_riesgo`: `memory_read` (N0), `memory_save` (N1), `propose_mejora` (N1), `tomar_decision` (N2). Las tres últimas se declaran `cron: 'prohibido'` y todas `acceso: 'sesion'`.

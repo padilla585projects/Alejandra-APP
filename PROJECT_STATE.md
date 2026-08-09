@@ -23,9 +23,13 @@ migración D1 manual. Detalle completo en `CHANGELOG.md`.
 
 Desplegado (Worker + Pages) desde la rama para pruebas en producción, con aprobación del
 entorno `production` del Director en cada despliegue, tal como exige ADR-0007. Verificado
-en Chrome real en los dos frontales (táctil y ratón). **Pendiente: fusionar a `main`; decidir
-ubicación definitiva del módulo (hoy en Eléctrico solo de forma temporal, ver memoria del
-agente).**
+en Chrome real en los dos frontales (táctil y ratón).
+
+**Resuelto (2026-08-09/10, v9.05):** se creó el departamento "Control" dedicado y Sondas
+CPD se movió ahí en ambos frontales (ya no vive en Eléctrico ni de forma temporal). De paso
+se encontraron y corrigieron varios bugs reales de aislamiento por departamento (server-side
+y en el sidebar de `panel.html`) — ver `HANDOFF.md` y `CHANGELOG.md` para el detalle
+completo. Fusionado a `main` (PR #104) y desplegado (Worker + Pages, healthcheck en verde).
 
 ## Autonomía de los agentes
 

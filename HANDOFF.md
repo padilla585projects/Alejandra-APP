@@ -1,5 +1,61 @@
 # Handoff — Alejandra 2.0
 
+## Departamento Control, EPIs compartido y aislamiento por departamento (2026-08-09/10)
+
+- Rama/commits: `fix/aislamiento-departamentos-control-epis` (4 commits), mergeada a `main`
+  vía PR #104 (squash) + `chore: bump version 9.04 -> 9.05` directo sobre `main`.
+- Contexto: Adrián pidió reorganizar "Sondas CPD" y "Racks/Cableado" (atados a Eléctrico
+  provisionalmente desde 05/08, ver ADR histórico en memoria de sesión) y compartir "Dotación
+  EPIs" entre departamentos. Al probarlo en vivo salieron varios bugs reales de aislamiento
+  por departamento, no relacionados con la reorganización en sí.
+- Cambios de producto:
+  - Departamento "Control" creado en `_DEPTS_CATALOG` (index.html y panel.html), con Sondas
+    CPD movida ahí (antes en Eléctrico); Racks/Cableado movido a Telecom. panel.html: sección
+    propia en el sidebar (antes anidada en "Inventarios"), entrada en el selector de
+    previsualización del topbar y config en `_MENU_ROL_DEPT_CONFIG`.
+  - "Dotación EPIs" visible para todos los departamentos (cada uno ve/gestiona solo los EPIs
+    de su propio equipo). Muñeco SVG interactivo portado de index.html a panel.html.
+  - Documentos (panel.html): pestañas por departamento generadas dinámicamente desde
+    `_DEPTS_CATALOG` (antes fijas: solo Eléctrico/Mecánicas/Seguridad), sin Personal.
+- Bugs de seguridad encontrados y corregidos en worker.js (ninguno introducido por la
+  reorganización, preexistentes):
+  - Sondas CPD (`/cpd/*`) sin ningún filtro server-side (solo `empresa_id`) — cualquier
+    usuario autenticado de la empresa podía leer/editar/borrar planos y sondas de cualquier
+    obra. Racks/Cableado accesible a cualquier oficina/encargado/jefe_de_obra de cualquier
+    departamento, no solo Telecom, incluido el borrado. EPIs: `getEpisAsignados` solo
+    filtraba por departamento para oficina/encargado (operario veía todos los departamentos);
+    crear/actualizar/eliminar EPI no comprobaban departamento en absoluto.
+  - Carnets/Reconocimientos médicos (dato LPRL art. 22): sin ningún check de rol en lectura —
+    "oficina" podía pedirlos por API aunque el panel se los oculte. Bloqueado.
+  - Permisos de Trabajo y ATS: sin filtro alguno; ATS ni siquiera se acotaba a la obra propia
+    por defecto. Restringidos a Seguridad + privilegiados (`isDeptPrivileged`).
+  - 31 funciones de los 10 endpoints financieros (presupuesto, costes de obra, dashboard
+    global, escandallo, cronograma de pagos, cobros, facturas, comparativos, flujo de caja,
+    financiero por obra) no bloqueaban a `operario` en el servidor pese a que el sidebar les
+    oculta toda la sección.
+- Bug de frontend encontrado (panel.html): `sidebarToggle()` (acordeón del sidebar) revelaba
+  a ciegas TODOS los hijos de una sección al expandirla, sin respetar lo que el filtrado por
+  departamento/rol ya había ocultado — porque varios sitios solo hacían "mostrar si aplica" y
+  confiaban en el `display:none` de fábrica del HTML para el resto. Corregido marcando
+  `data-hidden-by-perms="true"` de forma consistente al ocultar (patrón documentado junto a
+  `_DEPTS_CATALOG` en panel.html para que no se repita al añadir nav-items nuevos).
+- Pruebas: `node --check worker.js` limpio en cada commit; sin corrupción de encoding
+  (verificado por diff en cada commit); verificado en vivo contra el backend real vía proxy
+  local (login, CRUD de Sondas CPD y EPIs con datos reales, simulación de departamentos
+  Eléctrico/Control/Telecom/Seguridad/Personal en el sidebar, expand/collapse del acordeón).
+  Sin tests automatizados nuevos — no hay suite de tests para estos dos frontends.
+- Riesgo/rollback: cambios de autorización server-side son más restrictivos que antes (nunca
+  menos), así que el peor caso de un fallo es "alguien pierde acceso que sí debería tener",
+  no una fuga nueva. Revertir el commit de `sidebarToggle()` (`1aaa58d`) deja el acordeón
+  como antes si diera problemas.
+- Despliegue/verificación (2026-08-09): version.json/sw.js/index.html sincronizados a 9.05.
+  `deploy-worker.yml` (aprobación manual del entorno `production` por Adrián) y `pages.yml`
+  ejecutados sobre `main`. `GET /health` → `{"estado":"healthy","d1":true,"r2":true}`.
+  `version.json` servido por Pages → `{"v":"9.05"}`, coincide con lo publicado.
+- Siguiente acción exacta: ninguna pendiente de esta tarea. Si surge duda sobre aislamiento
+  por departamento en otra pantalla, seguir el patrón documentado junto a `_DEPTS_CATALOG`
+  en panel.html antes de asumir que "ya funciona".
+
 ## Fix — telemetría F-4.4 clasificaba todo como "error" (2026-08-07)
 
 - Contexto: investigando qué vertical elegir para F-3.1 (herramientas semánticas), se auditaron las trazas `feature_usage` reales en D1 (`SELECT resumen FROM alejandra_trazas WHERE tipo='feature_usage'`, solo lectura). Las 86 trazas existentes (F-4.4 se desplegó ese mismo día) decían "error" el 100% de las veces, incluidas ejecuciones obviamente correctas (`iniciar_conversacion: error :: Conversación iniciada con adrian...`).
