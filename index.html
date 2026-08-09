@@ -1075,6 +1075,18 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <!-- DEPT-CPD-01 (09/08/2026): "Dotación EPIs" visible para todos los departamentos
+           de oficio, cada uno viendo solo los EPIs de su propio equipo (getEpisAsignados,
+           worker.js, ya filtra por departamento salvo roles privilegiados). Reutiliza la
+           misma pantalla/lógica de la pestaña de Personal (personalSelTab(4)). -->
+      <div class="module-card" id="cardEpisDotacion" onclick="navTo('episDotacion')">
+        <div class="module-emoji">🦺</div>
+        <div class="module-info">
+          <div class="module-name">Dotación EPIs</div>
+          <div class="module-desc">EPIs asignados a cada trabajador</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardPemp" onclick="selectModule('pemp')">
         <div class="module-emoji">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
@@ -4362,7 +4374,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
     <!-- PANEL 4: DOTACIÓN EPIs (NEW-23) -->
     <div id="perPanelEpis" style="display:none;flex-direction:column;flex:1;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
-        <button onclick="personalSelTab(-1)" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <button onclick="_epiVolver()" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
         <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;flex:1">🦺 Dotación EPIs</span>
         <button id="btnNuevoEpi" onclick="abrirModalEpi()" style="padding:6px 12px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap">+ Asignar</button>
       </div>
@@ -6207,6 +6219,7 @@ const _DEPTS_CATALOG = {
   telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
   almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
   ingenieria:  { icon: '📐',  name: 'Ingeniería',          desc: 'Planificación, mediciones y documentación técnica', template: 'trade'  },
+  control:     { icon: '🌡️',  name: 'Control',            desc: 'Monitorización de salas CPD (sondas de temperatura y humedad)', template: 'trade' },
 };
 const DEPT_INFO = Object.fromEntries(Object.entries(_DEPTS_CATALOG).map(([k, v]) => [k, { icon: v.icon, name: v.name }]));
 
@@ -6305,6 +6318,7 @@ const _HOME_DEPT_ALLOWED_CARDS = {
     'cardPlanos',
     'cardAlejandraIA',
     'cardObraDashboard',
+    'cardEpisDotacion',
   ]),
 };
 
@@ -6366,8 +6380,8 @@ function setupHomeModules() {
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
   // Racks/Cableado: solo telecomunicaciones
   if (cardTelecomRacks) cardTelecomRacks.style.display = (dept === 'telecom') ? 'flex' : 'none';
-  // Sondas CPD: solo departamento eléctrico
-  if (cardCpdSondas) cardCpdSondas.style.display = (dept === 'electrico') ? 'flex' : 'none';
+  // Sondas CPD: solo departamento Control
+  if (cardCpdSondas) cardCpdSondas.style.display = (dept === 'control') ? 'flex' : 'none';
   if (cardP) cardP.style.display = esOficinaTecnica ? 'none' : 'flex';
   if (cardC) cardC.style.display = esOficinaTecnica ? 'none' : 'flex';
   // Pedidos: visible para todos excepto seguridad
@@ -6747,7 +6761,8 @@ window.guardarModulosConfig = guardarModulosConfig;
 const _HOME_TRADE_MODS = [
   { card: 'cardBobinas',          label: '⚡ Bobinas',           soloElectrico: true },
   { card: 'cardTelecomRacks',     label: '🗄️ Racks / Cableado', soloTelecom: true },
-  { card: 'cardCpdSondas',        label: '🌡️ Sondas CPD',       soloElectrico: true },
+  { card: 'cardCpdSondas',        label: '🌡️ Sondas CPD',       soloControl: true },
+  { card: 'cardEpisDotacion',     label: '🦺 Dotación EPIs' },
   { card: 'cardPemp',             label: '🛠 PEMP' },
   { card: 'cardCarretillas',      label: '🚜 Carretillas' },
   { card: 'cardPedidos',          label: '📥 Pedidos' },
@@ -6782,7 +6797,7 @@ function _modsParaDept(dept) {
   if (tpl === 'personal')  return _PER_MODS;
   // trade
   return _HOME_TRADE_MODS
-    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloTelecom || dept === 'telecom'))
+    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloTelecom || dept === 'telecom') && (!m.soloControl || dept === 'control'))
     .map(m => ({ key: `home_${dept}_${m.card}`, label: m.label, _card: m.card }));
 }
 
@@ -6807,6 +6822,7 @@ function applyModulosConfig() {
     _HOME_TRADE_MODS.forEach(m => {
       if (m.soloElectrico && dept !== 'electrico') return;
       if (m.soloTelecom && dept !== 'telecom') return;
+      if (m.soloControl && dept !== 'control') return;
       const el = document.getElementById(m.card);
       if (!el) return;
       const k = `home_${dept}_${m.card}`;
@@ -7662,6 +7678,15 @@ function navTo(target) {
   if (target === 'personal') {
     _applyScreen('personal');
     personalSelTab(-1);
+    actualizarBtnAtras();
+    return;
+  }
+  // DEPT-CPD-01 (09/08/2026): entrada directa a "Dotación EPIs" para departamentos de
+  // oficio (reutiliza la pantalla/pestaña de Personal sin pasar por su selector de
+  // pestañas, que no pinta nada fuera del departamento Personal). Ver _epiVolver().
+  if (target === 'episDotacion') {
+    _applyScreen('personal');
+    personalSelTab(4);
     actualizarBtnAtras();
     return;
   }
@@ -18598,6 +18623,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (n === 0) window._perTabTimer = setInterval(() => { if (!document.hidden) cargarHoy(); }, 30000); // fichajes hoy cada 30s
     if (n === 6) window._perTabTimer = setInterval(() => { if (!document.hidden) cargarTurnos(); }, 60000); // turnos cada 60s
   }
+
+  // DEPT-CPD-01 (09/08/2026): el botón "←" del panel de Dotación EPIs siempre llamaba a
+  // personalSelTab(-1), que muestra el selector de pestañas de Personal (Fichajes,
+  // Semana...) — no tiene sentido para alguien de otro departamento que entró directo a
+  // EPIs vía navTo('episDotacion'). Si el usuario no es de Personal, volver a su home.
+  window._epiVolver = function _epiVolver() {
+    const s = getSession();
+    if (s?.departamento && s.departamento !== 'personal') { navTo('home'); return; }
+    personalSelTab(-1);
+  };
 
   // ── Cargar trabajadores (cache) ──
   async function perCargarTrabajadores() {

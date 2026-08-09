@@ -593,11 +593,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <span class="nav-icon">🎓</span> Formación de Obra
       <span class="nav-badge" id="formacionBadge" style="display:none">0</span>
     </button>
-
-    <div class="sidebar-section nav-seguridad-section" onclick="sidebarToggle(this)" data-sid="seguridad" style="display:none"><span>🔺 Seguridad</span><span class="sec-chevron">▼</span></div>
-    <button class="nav-item nav-seguridad-section" data-page="epis" onclick="navTo('epis')" style="display:none">
+    <!-- DEPT-CPD-01 (09/08/2026): "Dotación EPIs" es la misma feature en index.html
+         (per_epis) — Adrian (09/08/2026, tras probarlo): "debería estar en la sección de
+         Personal de TODOS los departamentos, cada uno el suyo" — visible para todos, el
+         backend ya filtra por el departamento propio de cada oficina/encargado
+         (getEpisAsignados, worker.js), así que cada uno solo ve/gestiona los EPIs de su
+         propio equipo. Antes vivía oculta bajo nav-seguridad-section/nav-personal-section. -->
+    <button class="nav-item" data-page="epis" onclick="navTo('epis')">
       <span class="nav-icon">🦺</span> EPIs
     </button>
+
+    <div class="sidebar-section nav-seguridad-section" onclick="sidebarToggle(this)" data-sid="seguridad" style="display:none"><span>🔺 Seguridad</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-sensitive-data nav-seguridad-section" data-page="carnets" onclick="navTo('carnets')" style="display:none">
       <span class="nav-icon">🪪</span> Carnets
     </button>
@@ -618,12 +624,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <span class="nav-icon">📷</span> Registro de Seguridad
     </button>
 
+    <!-- DEPT-CPD-01 (09/08/2026): Sondas CPD tenía su propia sección aparte pero Adrian
+         señaló que seguía viviendo dentro de "Inventarios" — se le da su propia
+         sidebar-section, igual que Personal/Seguridad, en vez de anidarla ahí. -->
+    <div class="sidebar-section nav-control-section" onclick="sidebarToggle(this)" data-sid="control" style="display:none"><span>🌡️ Control</span><span class="sec-chevron">▼</span></div>
+    <button class="nav-item nav-control-section" data-page="cpdSondas" onclick="navTo('cpdSondas')" style="display:none">
+      <span class="nav-icon">🌡️</span> Sondas CPD
+    </button>
+
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="inventarios"><span>📦 Inventarios</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-electrico-section" data-page="bobinas" onclick="navTo('bobinas')" style="display:none">
       <span class="nav-icon">⚡</span> Bobinas
-    </button>
-    <button class="nav-item nav-electrico-section" data-page="cpdSondas" onclick="navTo('cpdSondas')" style="display:none">
-      <span class="nav-icon">🌡️</span> Sondas CPD
     </button>
     <button class="nav-item" data-page="pemp" onclick="navTo('pemp')">
       <span class="nav-icon">🚜</span> PEMP
@@ -1051,6 +1062,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <option value="carpinteria">🪟 Carpintería</option>
         <option value="telecom">🌐 Telecom</option>
         <option value="almacen">📦 Almacén</option>
+        <option value="control">🌡️ Control</option>
       </select>
       <div class="topbar-user" id="topbarUser">
         <span>👤</span>
@@ -1280,6 +1292,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <div class="page-title">🦺 EPIs asignados</div>
         <div class="page-sub">Equipos de protección individual por trabajador</div>
         <div class="tbl-toolbar">
+          <select id="filterEpiTrabajador" class="form-select" style="width:220px" onchange="cargarEpis()">
+            <option value="">— Todos los trabajadores —</option>
+          </select>
           <input class="tbl-search" id="searchEpis" placeholder="🔍 Buscar..." oninput="tblEpis && tblEpis.setFilter('trabajador','like',this.value)">
           <select id="filterEpiEstado" class="form-select" style="width:140px" onchange="cargarEpis()">
             <option value="">Todos los estados</option>
@@ -1291,6 +1306,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           <button class="btn btn-secondary" onclick="cargarEpis()">🔄 Actualizar</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblEpis,'epis')">⬇ CSV</button>
         </div>
+        <!-- DEPT-CPD-01 (09/08/2026): mismo muñeco/silueta corporal de index.html
+             (NEW-23), portado a panel.html — solo visible con un trabajador
+             concreto seleccionado en filterEpiTrabajador. -->
+        <div id="epiMuneco"></div>
         <div class="tbl-wrap"><div id="tblEpis"></div></div>
       </div>
 
@@ -8782,11 +8801,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </select>
           <button class="btn btn-secondary" onclick="docsRecargar()">🔄</button>
         </div>
+        <!-- DEPT-CPD-01 (09/08/2026): las pestañas por departamento (antes solo
+             Eléctrico/Mecánicas/Seguridad, fijas en el HTML) se generan ahora en JS desde
+             _DEPTS_CATALOG (ver _construirDocsTabs) — así ningún departamento nuevo se
+             queda fuera, mismo motivo que el selector del topbar (topbarDeptoSelect). -->
         <div id="docsTabBar" style="display:flex;gap:4px;padding:12px 0 0;border-bottom:1px solid var(--border);margin-bottom:14px;overflow-x:auto">
-          <button class="docs-tab active" data-tab="fotos"     onclick="docsSetTab('fotos')">📷 Fotos</button>
-          <button class="docs-tab"        data-tab="electrico" onclick="docsSetTab('electrico')">⚡ Eléctrico</button>
-          <button class="docs-tab"        data-tab="mecanicas" onclick="docsSetTab('mecanicas')">🔧 Mecánicas</button>
-          <button class="docs-tab"        data-tab="seguridad" onclick="docsSetTab('seguridad')">🔺 Seguridad</button>
+          <button class="docs-tab active" data-tab="fotos" onclick="docsSetTab('fotos')">📷 Fotos</button>
         </div>
         <div id="docsContenido"></div>
       </div>
@@ -10043,11 +10063,12 @@ const _DEPTS_CATALOG = {
   telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
   almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
   ingenieria:  { icon: '📐',  name: 'Ingeniería',          desc: 'Planificación, mediciones y documentación técnica', template: 'trade'  },
+  control:     { icon: '🌡️',  name: 'Control',            desc: 'Monitorización de salas CPD (sondas de temperatura y humedad)', template: 'trade' },
 };
 const _ALL_DEPTS = Object.keys(_DEPTS_CATALOG);
 const _HOME_TRADE_MODS = [
   { card: 'cardBobinas', label: '⚡ Bobinas', soloElectrico: true },
-  { card: 'cardCpdSondas', label: '🌡️ Sondas CPD', soloElectrico: true },
+  { card: 'cardCpdSondas', label: '🌡️ Sondas CPD', soloControl: true },
   { card: 'cardPemp', label: '🛠 PEMP' },
   { card: 'cardCarretillas', label: '🚜 Carretillas' },
   { card: 'cardPedidos', label: '📥 Pedidos' },
@@ -10079,7 +10100,7 @@ function _modsParaDept(dept) {
   if (tpl === 'seguridad') return _SEG_MODS;
   if (tpl === 'personal')  return _PER_MODS;
   return _HOME_TRADE_MODS
-    .filter(m => !m.soloElectrico || dept === 'electrico')
+    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloControl || dept === 'control'))
     .map(m => ({ key: `home_${dept}_${m.card}`, label: m.label, _card: m.card }));
 }
 function _renderDeptConModulos(containerId, prefijo, activeDepts, existingCfg) {
@@ -10450,6 +10471,14 @@ const _MENU_ROL_DEPT_CONFIG = {
       // bobinas/pemp/carretillas no aplican a este departamento.
       icono: '🔺',
       material: ['herramientas', 'alertasStock'],
+    },
+    // DEPT-CPD-01 (09/08/2026): Control es un departamento de un solo módulo — Sondas CPD
+    // vive en su propia sección (nav-control-section), no en "Material y maquinaria", así
+    // que sin 'material' esa sección se oculta entera (mismo patrón que Ingeniería, ver
+    // comentario de abajo). hoyEnObra/controlObra se dejan sin definir (comportamiento por
+    // defecto) — Control sigue viendo Incidencias/Documentación como cualquier departamento.
+    control: {
+      icono: '🌡️',
     },
     // INGENIERIA-02 (25/07/2026): antes vivía aparte en organizarSidebarIngenieria(),
     // gateada solo por departamento (sin distinguir encargado/operario) — Adrián pidió
@@ -11148,6 +11177,19 @@ function iniciarApp() {
   // que para ellos el backend siempre devolvería la lista vacía
   if (verComoAdmin || deptActual === 'electrico') {
     document.querySelectorAll('.nav-electrico-section').forEach(el => el.style.display = '');
+  }
+  // DEPT-CPD-01 (09/08/2026): "Sondas CPD" tenía su nav-item bajo nav-electrico-section
+  // solo porque Eléctrico era el hueco disponible más rápido al desarrollarlo — Adrian
+  // confirmó el 05/08/2026 que ahí no podía quedarse. Se crea el departamento "Control"
+  // dedicado y se mueve el nav-item a su propia clase.
+  if (verComoAdmin || deptActual === 'control') {
+    document.querySelectorAll('.nav-control-section').forEach(el => el.style.display = '');
+  }
+  // DEPT-CPD-01 (09/08/2026): nav-telecom-section (Racks/Cableado) tenía el mismo
+  // style="display:none" de partida que nav-electrico-section/nav-control-section pero
+  // le faltaba el bloque que lo vuelve a mostrar — el nav-item no aparecía para nadie.
+  if (verComoAdmin || deptActual === 'telecom') {
+    document.querySelectorAll('.nav-telecom-section').forEach(el => el.style.display = '');
   }
   mostrarInventarioSeguridadSiAplica(deptActual, previsualizandoDepto);
 
@@ -13555,7 +13597,153 @@ async function cargarFichajes() {
 const TIPOS_EPI = ['Casco','Arnés anticaídas','Guantes','Botas de seguridad','Gafas/visera','Chaleco reflectante','Protección auditiva','Mascarilla/respirador','Ropa de trabajo','Cinturón lumbar','Rodilleras','Otro'];
 let tblEpis = null;
 let _epiEditId = null;
-async function abrirModalEpi(id) {
+
+// DEPT-CPD-01 (09/08/2026): muñeco de EPIs — portado tal cual de index.html (NEW-23) al
+// compartirse "Dotación EPIs" entre Personal y Seguridad también en panel.html.
+const EPI_ZONAS = {
+  'Casco':                 'casco',
+  'Gafas/visera':          'gafas',
+  'Protección auditiva':   'auditiva',
+  'Mascarilla/respirador': 'mascarilla',
+  'Chaleco reflectante':   'chaleco',
+  'Arnés anticaídas':      'arnes',
+  'Ropa de trabajo':       'ropa',
+  'Cinturón lumbar':       'cinturon',
+  'Guantes':               'guantes',
+  'Rodilleras':            'rodilleras',
+  'Botas de seguridad':    'botas',
+};
+const ZONA_EPI = Object.fromEntries(Object.entries(EPI_ZONAS).map(([tipo, zona]) => [zona, tipo]));
+
+function _epiZonaColor(status) {
+  return status === 'ok' ? 'var(--green)' : status === 'caduca_pronto' ? 'var(--accent)' : status === 'caducado' ? 'var(--red)' : 'var(--surface2)';
+}
+
+function calcularEstadoZonasEpi(episTrabajador) {
+  const hoy = new Date(); const pronto = new Date(hoy); pronto.setDate(pronto.getDate() + 30);
+  const zonas = {};
+  Object.values(EPI_ZONAS).forEach(z => { zonas[z] = { status: 'sin_asignar', epi: null }; });
+  episTrabajador.forEach(e => {
+    const zona = EPI_ZONAS[e.tipo_epi];
+    if (!zona || e.estado !== 'activo') return;
+    const cad = e.fecha_caducidad ? new Date(e.fecha_caducidad) : null;
+    let status = 'ok';
+    if (cad && cad < hoy) status = 'caducado';
+    else if (cad && cad <= pronto) status = 'caduca_pronto';
+    zonas[zona] = { status, epi: e };
+  });
+  return zonas;
+}
+
+window._epiZonasActuales     = {};
+window._epiZonaTrabajadorVal = '';
+function epiZonaClick(zona) {
+  const info = window._epiZonasActuales[zona];
+  if (info && info.epi) { editarEpi(info.epi.id); return; }
+  if (!window._epiZonaTrabajadorVal) { toast('Selecciona primero un trabajador', 'err'); return; }
+  abrirModalEpi(null, { tipo_epi: ZONA_EPI[zona], trabajadorValue: window._epiZonaTrabajadorVal });
+}
+window.epiZonaClick = epiZonaClick;
+
+function renderMunecoEpis(trabajadorValue, nombreTrabajador, episTrabajador) {
+  window._epiZonaTrabajadorVal = trabajadorValue;
+  const z = calcularEstadoZonasEpi(episTrabajador);
+  window._epiZonasActuales = z;
+  const c = zona => _epiZonaColor(z[zona].status);
+  const otros = episTrabajador.filter(e => !EPI_ZONAS[e.tipo_epi] && e.estado === 'activo');
+
+  const svg = `
+  <svg viewBox="0 0 300 620" style="width:100%;max-width:170px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="150" cy="602" rx="80" ry="10" fill="#000" opacity=".3"/>
+    <path d="M55,118 L90,120 L78,328 L54,328 Z" fill="var(--surface2)"/>
+    <path d="M245,118 L210,120 L222,328 L246,328 Z" fill="var(--surface2)"/>
+    <circle cx="150" cy="62" r="40" fill="var(--surface2)"/>
+    <rect x="136" y="96" width="28" height="22" rx="4" fill="var(--surface2)"/>
+    <g onclick="epiZonaClick('ropa')" style="cursor:pointer">
+      <path d="M85,115 L215,115 L207,180 L202,260 L212,290 L230,555 L172,555 L162,300 Q150,308 138,300 L128,555 L70,555 L88,290 L98,260 L93,180 Z" fill="${c('ropa')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M93,180 L100,180 L96,260 L101,260 L96,290 L88,290 L98,260 Z" fill="#fff" opacity=".07"/>
+    </g>
+    <g onclick="epiZonaClick('guantes')" style="cursor:pointer">
+      <ellipse cx="64" cy="340" rx="26" ry="30" fill="${c('guantes')}" stroke="var(--border)" stroke-width="3"/>
+      <ellipse cx="236" cy="340" rx="26" ry="30" fill="${c('guantes')}" stroke="var(--border)" stroke-width="3"/>
+      <ellipse cx="56" cy="330" rx="8" ry="10" fill="${c('guantes')}" stroke="var(--border)" stroke-width="2"/>
+      <ellipse cx="244" cy="330" rx="8" ry="10" fill="${c('guantes')}" stroke="var(--border)" stroke-width="2"/>
+    </g>
+    <g onclick="epiZonaClick('rodilleras')" style="cursor:pointer">
+      <rect x="83" y="435" width="52" height="42" rx="14" fill="${c('rodilleras')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="165" y="435" width="52" height="42" rx="14" fill="${c('rodilleras')}" stroke="var(--border)" stroke-width="3"/>
+      <line x1="90" y1="456" x2="128" y2="456" stroke="var(--border)" stroke-width="2" opacity=".5"/>
+      <line x1="172" y1="456" x2="210" y2="456" stroke="var(--border)" stroke-width="2" opacity=".5"/>
+    </g>
+    <g onclick="epiZonaClick('botas')" style="cursor:pointer">
+      <path d="M62,545 Q62,535 74,533 L104,533 Q116,533 116,545 L116,575 Q116,595 96,595 L82,595 Q62,595 62,575 Z" fill="${c('botas')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M184,545 Q184,535 196,533 L226,533 Q238,533 238,545 L238,575 Q238,595 218,595 L204,595 Q184,595 184,575 Z" fill="${c('botas')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M62,572 Q89,580 116,572 L116,580 Q89,588 62,580 Z" fill="#000" opacity=".18"/>
+      <path d="M184,572 Q211,580 238,572 L238,580 Q211,588 184,580 Z" fill="#000" opacity=".18"/>
+    </g>
+    <g onclick="epiZonaClick('cinturon')" style="cursor:pointer">
+      <rect x="95" y="255" width="110" height="24" rx="6" fill="${c('cinturon')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="138" y="251" width="24" height="32" rx="4" fill="var(--border)"/>
+      <circle cx="150" cy="267" r="3.5" fill="#94a3b8"/>
+    </g>
+    <g onclick="epiZonaClick('chaleco')" style="cursor:pointer">
+      <path d="M108,120 L128,120 L150,148 L172,120 L192,120 L200,262 L100,262 Z" fill="${c('chaleco')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="108" y="168" width="80" height="10" fill="#facc15" opacity=".9"/>
+      <rect x="108" y="218" width="80" height="10" fill="#facc15" opacity=".9"/>
+      <path d="M116,120 L128,120 L150,148 L136,156 Z" fill="#fff" opacity=".12"/>
+    </g>
+    <g onclick="epiZonaClick('arnes')" style="cursor:pointer">
+      <line x1="100" y1="124" x2="176" y2="260" stroke="${c('arnes')}" stroke-width="13" stroke-linecap="round"/>
+      <line x1="200" y1="124" x2="124" y2="260" stroke="${c('arnes')}" stroke-width="13" stroke-linecap="round"/>
+      <circle cx="150" cy="192" r="10" fill="var(--border)"/>
+      <circle cx="150" cy="192" r="4" fill="#94a3b8"/>
+    </g>
+    <g onclick="epiZonaClick('casco')" style="cursor:pointer">
+      <ellipse cx="150" cy="26" rx="52" ry="10" fill="${c('casco')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M98,26 C98,-22 202,-22 202,26 L98,26 Z" fill="${c('casco')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M106,22 Q150,-16 194,22 Q150,-4 106,22 Z" fill="#fff" opacity=".15"/>
+    </g>
+    <g onclick="epiZonaClick('auditiva')" style="cursor:pointer">
+      <circle cx="112" cy="66" r="13" fill="${c('auditiva')}" stroke="var(--border)" stroke-width="3"/>
+      <circle cx="188" cy="66" r="13" fill="${c('auditiva')}" stroke="var(--border)" stroke-width="3"/>
+    </g>
+    <g onclick="epiZonaClick('gafas')" style="cursor:pointer">
+      <rect x="128" y="56" width="44" height="14" rx="7" fill="${c('gafas')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="133" y="59" width="12" height="5" rx="2.5" fill="#fff" opacity=".18"/>
+    </g>
+    <g onclick="epiZonaClick('mascarilla')" style="cursor:pointer">
+      <path d="M130,78 Q150,74 170,78 L170,96 Q150,103 130,96 Z" fill="${c('mascarilla')}" stroke="var(--border)" stroke-width="3"/>
+      <line x1="134" y1="86" x2="166" y2="86" stroke="var(--border)" stroke-width="2" opacity=".5"/>
+    </g>
+  </svg>`;
+
+  const chips = Object.entries(ZONA_EPI).map(([zona, tipo]) => {
+    const info = z[zona];
+    const bg = info.status === 'sin_asignar' ? 'var(--surface)' : _epiZonaColor(info.status);
+    const txtColor = info.status === 'sin_asignar' ? 'var(--text)' : '#000';
+    const label = info.status === 'sin_asignar' ? 'sin asignar' : info.status === 'ok' ? 'ok' : info.status === 'caduca_pronto' ? 'caduca pronto' : 'CADUCADO';
+    return `<div onclick="epiZonaClick('${zona}')" style="display:flex;flex-direction:column;gap:2px;padding:6px 8px;background:${bg};border:1px solid var(--border);border-radius:8px;cursor:pointer">
+      <span style="font-size:11px;font-weight:700;color:${txtColor}">${tipo}</span>
+      <span style="font-size:9px;font-weight:700;color:${txtColor};opacity:.8">${label}</span>
+    </div>`;
+  }).join('');
+
+  const otrosHtml = otros.length ? `
+    <div style="margin-top:10px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Otros EPIs asignados</div>
+    ${otros.map(e => `<div onclick="editarEpi(${e.id})" style="padding:7px 9px;background:var(--green);border-radius:8px;margin-top:5px;font-size:11px;font-weight:700;color:#000;cursor:pointer">${e.observaciones || 'Otro'}${e.talla ? ' (' + e.talla + ')' : ''}</div>`).join('')}
+  ` : '';
+
+  return `
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;max-width:360px">
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);margin-bottom:10px;text-align:center">👤 ${nombreTrabajador}</div>
+    ${svg}
+    <div style="font-size:10px;color:var(--muted);text-align:center;margin:8px 0 12px">Haz clic en una zona del muñeco (o la lista de abajo) para ver o asignar ese EPI</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${chips}</div>
+    ${otrosHtml}
+  </div>`;
+}
+
+async function abrirModalEpi(id, preset) {
   _epiEditId = id || null;
   const trabajadores = window._perTrabajadores?.length ? window._perTrabajadores : await (async () => {
     const r = await api('/personal/trabajadores');
@@ -13563,13 +13751,13 @@ async function abrirModalEpi(id) {
     return window._perTrabajadores;
   })();
 
-  let datos = { tipo_epi:'', talla:'', numero_serie:'', fecha_entrega:'', fecha_caducidad:'', estado:'activo', observaciones:'', usuario_id:null, externo_id:null };
+  let datos = { tipo_epi: preset?.tipo_epi || '', talla:'', numero_serie:'', fecha_entrega:'', fecha_caducidad:'', estado:'activo', observaciones:'', usuario_id:null, externo_id:null };
   if (id) {
     const r = await api('/epis-asignados');
     const found = toArr(r, 'epis').find(e => e.id === id);
     if (found) datos = { ...datos, ...found };
   }
-  const tVal = datos.usuario_id ? `app:${datos.usuario_id}` : datos.externo_id ? `externo:${datos.externo_id}` : '';
+  const tVal = datos.usuario_id ? `app:${datos.usuario_id}` : datos.externo_id ? `externo:${datos.externo_id}` : (preset?.trabajadorValue || '');
 
   const selT = `<select class="form-select" id="mEpiTrab">
     <option value="">— Selecciona trabajador —</option>
@@ -13636,9 +13824,53 @@ async function borrarEpi(id) {
   else toast(r.error || 'Error al borrar', 'err');
 }
 async function cargarEpis() {
-  const r = await api('/epis-asignados');
+  const filtroT = document.getElementById('filterEpiTrabajador')?.value || '';
   const filtroE = document.getElementById('filterEpiEstado')?.value || '';
-  let data = toArr(r, 'epis').map(e => ({
+  const muneco  = document.getElementById('epiMuneco');
+  const tblWrap = document.getElementById('tblEpis')?.closest('.tbl-wrap');
+
+  // Rellenar el selector con TODO el personal (no solo quienes ya tienen EPI
+  // asignado), igual que en index.html — para poder empezar de cero con alguien nuevo.
+  const selT = document.getElementById('filterEpiTrabajador');
+  if (selT && selT.options.length <= 1) {
+    const trabajadores = window._perTrabajadores?.length ? window._perTrabajadores : await (async () => {
+      const rr = await api('/personal/trabajadores');
+      window._perTrabajadores = toArr(rr, 'trabajadores');
+      return window._perTrabajadores;
+    })();
+    [...trabajadores].sort((a, b) => (a.nombre||'').localeCompare(b.nombre||'')).forEach(t => {
+      const o = document.createElement('option');
+      o.value = `${t.tipo}:${t.id}`;
+      const extra = [t.departamento, t.obra_nombre].filter(Boolean).join(' · ');
+      o.textContent = t.nombre + (extra ? ` · ${extra}` : '') + ` (#${t.id})`;
+      selT.appendChild(o);
+    });
+  }
+
+  const r = await api('/epis-asignados');
+  const episTodos = toArr(r, 'epis');
+
+  // Filtro de estado solo tiene sentido con "Todos los trabajadores"; con uno
+  // concreto seleccionado, el muñeco ya muestra su dotación completa (activo/caducado/etc).
+  const selEstado = document.getElementById('filterEpiEstado');
+  if (selEstado) selEstado.style.display = filtroT ? 'none' : '';
+
+  if (filtroT && muneco) {
+    const [tTipo, tId] = filtroT.split(':');
+    const meta = (window._perTrabajadores || []).find(t => String(t.tipo) === tTipo && String(t.id) === tId);
+    const episTrabajador = episTodos.filter(e =>
+      (tTipo === 'app'     && String(e.usuario_id || '')  === tId) ||
+      (tTipo === 'externo' && String(e.externo_id || '')  === tId)
+    );
+    const nombreTrabajador = meta?.nombre || episTrabajador[0]?.nombre_trabajador || '—';
+    muneco.innerHTML = renderMunecoEpis(filtroT, nombreTrabajador, episTrabajador);
+    if (tblWrap) tblWrap.style.display = 'none';
+    return;
+  }
+  if (muneco) muneco.innerHTML = '';
+  if (tblWrap) tblWrap.style.display = '';
+
+  let data = episTodos.map(e => ({
     ...e,
     trabajador: e.nombre_trabajador || e.nombre_usuario || e.nombre_externo || '—',
     diasRestantes: diasParaCaducar(e.fecha_caducidad),
@@ -15691,13 +15923,28 @@ let _docsTab = 'fotos';
 let _docsCarpetaStack = []; // [{id, nombre}]
 let _docsObraId = '';       // obra persistente entre navegaciones
 
-const _DOCS_DEPTS = [
-  { key: 'electrico', icon: '⚡', label: 'Eléctrico' },
-  { key: 'mecanicas', icon: '🔧', label: 'Mecánicas' },
-  { key: 'seguridad', icon: '🔺', label: 'Seguridad' },
-];
+// DEPT-CPD-01 (09/08/2026): derivado de _DEPTS_CATALOG (antes lista fija de 3 deptos) —
+// cada departamento nuevo (p.ej. Control) aparece aquí automáticamente, sin recordar
+// tocar este archivo a mano. Sin 'personal' — Adrian (09/08/2026): "en personal no",
+// Documentos es solo para departamentos de oficio.
+const _DOCS_DEPTS = Object.entries(_DEPTS_CATALOG).filter(([key]) => key !== 'personal').map(([key, v]) => ({ key, icon: v.icon, label: v.name }));
+
+function _construirDocsTabs() {
+  const bar = document.getElementById('docsTabBar');
+  if (!bar || bar.querySelector('[data-generated]')) return;
+  _DOCS_DEPTS.forEach(d => {
+    const btn = document.createElement('button');
+    btn.className = 'docs-tab';
+    btn.dataset.tab = d.key;
+    btn.dataset.generated = '1';
+    btn.textContent = `${d.icon} ${d.label}`;
+    btn.onclick = () => docsSetTab(d.key);
+    bar.appendChild(btn);
+  });
+}
 
 async function cargarDocumentos() {
+  _construirDocsTabs();
   // poblar select de obras si está vacío
   const sel = document.getElementById('docsFiltroObra');
   if (sel && sel.options.length <= 1) {
