@@ -10051,6 +10051,32 @@ async function exportarPedidosExcel() {
 }
 
 // ── CATÁLOGO DEPARTAMENTOS + SUBMÓDULOS (sync con index.html) ─
+//
+// NORMA — DEPT-CPD-01 (09/08/2026): checklist obligatorio al añadir/mover cualquier
+// nav-item o sidebar-section restringido por departamento o rol en este sidebar.
+// Bug real encontrado por Adrián: varios sitios solo hacían "mostrar si aplica",
+// confiando en el display:none "de fábrica" del HTML para el resto — funcionaba en la
+// carga inicial (secciones colapsadas por defecto), pero sidebarToggle() revela TODOS
+// los hijos de una sección al expandirla, a ciegas, así que cualquier cosa que nunca se
+// hubiera ocultado explícitamente volvía a aparecer para departamentos a los que no
+// pertenece en cuanto el usuario abría esa sección.
+//
+// 1. Todo elemento nuevo (o departamento nuevo en _DEPTS_CATALOG) que deba ocultarse
+//    para ciertos departamentos/roles necesita CLASE propia (o entrar en una lista de
+//    permitidos ya existente) — nunca depender solo del style="display:none" del HTML.
+// 2. Al ocultar, hacer SIEMPRE las dos cosas juntas:
+//      el.style.display = 'none';
+//      el.setAttribute('data-hidden-by-perms', 'true');
+//    Al mostrar, limpiar la marca: el.removeAttribute('data-hidden-by-perms').
+//    (Ver _toggleDeptClase() más abajo — reutilizarla si encaja, en vez de repetir el patrón a mano.)
+// 3. Si el elemento se añade a un catálogo de "lista de permitidos" (p.ej. el hide-loop
+//    de material dentro de _organizarSidebarRolDept, o _HOME_DEPT_ALLOWED_CARDS en
+//    index.html), añadirlo también en el nuevo departamento aunque pareciera que "por
+//    defecto ya se ve" — las listas cerradas no heredan nada automáticamente.
+// 4. Si se añade un departamento nuevo (como "control"), revisar TODOS estos sitios,
+//    no solo el catálogo: _DEPTS_CATALOG, topbarDeptoSelect (HTML, selector del
+//    topbar), _MENU_ROL_DEPT_CONFIG.encargado (menú curado), y cualquier lista fija de
+//    departamentos que no se derive dinámicamente de _DEPTS_CATALOG.
 const _DEPTS_CATALOG = {
   electrico:   { icon: '⚡',  name: 'Eléctrico',          desc: 'Tendido de cable · Plataformas · Carretillas',  template: 'trade'     },
   mecanicas:   { icon: '🔧',  name: 'Mecánicas',          desc: 'Climatización, fontanería y mantenimiento',     template: 'trade'     },
@@ -11067,7 +11093,17 @@ function mostrarInventarioSeguridadSiAplica(deptActual, previsualizandoDepto) {
   // Para esta vista cuenta el rol activo, no roles extra conservados en la
   // cuenta.
   const esAdminActivo = ['superadmin', 'empresa_admin', 'desarrollador', 'project_manager'].includes(SESSION?.rol);
-  if ((!esAdminActivo || previsualizandoDepto) && deptActual !== 'seguridad') return;
+  // DEPT-CPD-01 (09/08/2026): antes esta rama solo hacía return sin ocultar nada,
+  // confiando en el display:none "de fábrica" del HTML — igual que nav-electrico-section
+  // etc, quedaba expuesto en cuanto sidebarToggle() expandía "Inventarios" (ver fix ahí).
+  // Se oculta y marca explícitamente para que ese fix también lo proteja.
+  if ((!esAdminActivo || previsualizandoDepto) && deptActual !== 'seguridad') {
+    document.querySelectorAll('.nav-inventario-seguridad').forEach(el => {
+      el.style.display = 'none';
+      el.setAttribute('data-hidden-by-perms', 'true');
+    });
+    return;
+  }
   document.querySelectorAll('.nav-inventario-seguridad').forEach(el => {
     el.style.display = '';
     el.removeAttribute('data-hidden-by-perms');
@@ -11157,8 +11193,14 @@ function iniciarApp() {
   }
 
   // ocultar datos sensibles para "oficina" (Trabajadores, Carnets, Reconocimientos)
+  // DEPT-CPD-01 (09/08/2026): sin data-hidden-by-perms, sidebarToggle() los volvía a
+  // mostrar en cuanto se expandía su sección (Personal/Seguridad) -- más grave que el
+  // resto por ser datos personales. Ver mismo fix en sidebarToggle().
   if (hasSessionRole('oficina') && !hasSessionRole('superadmin', 'desarrollador', 'empresa_admin')) {
-    document.querySelectorAll('.nav-sensitive-data').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.nav-sensitive-data').forEach(el => {
+      el.style.display = 'none';
+      el.setAttribute('data-hidden-by-perms', 'true');
+    });
   }
 
   // mostrar sección Seguridad si el usuario es del departamento de Seguridad
@@ -11168,29 +11210,34 @@ function iniciarApp() {
   // abajo). Hacía falta para que el nuevo Registro de Seguridad, confirmado como
   // "todo el departamento de Seguridad + admins", llegue realmente a los admins.
   const deptActual = SESSION.departamento || 'electrico';
-  if (verComoAdmin || deptActual === 'seguridad') {
-    document.querySelectorAll('.nav-seguridad-section').forEach(el => el.style.display = '');
-  }
-
+  // DEPT-CPD-01 (09/08/2026): bug real encontrado por Adrian -- estas clases solo
+  // marcaban display='' al mostrar, nunca 'none'+data-hidden-by-perms al ocultar, así
+  // que quedaban expuestas a display:none "de fábrica" del HTML nada más; en cuanto
+  // sidebarToggle() expandía la sección que las contiene (p.ej. "Inventarios"), volvían
+  // a aparecer para cualquier departamento sin importar el filtro (ver fix en
+  // sidebarToggle). Ahora se ocultan y marcan explícitamente igual que
+  // organizarSidebarEncargado(), para que ese fix también las proteja.
+  const _toggleDeptClase = (clase, mostrar) => {
+    document.querySelectorAll(`.${clase}`).forEach(el => {
+      el.style.display = mostrar ? '' : 'none';
+      if (mostrar) el.removeAttribute('data-hidden-by-perms');
+      else el.setAttribute('data-hidden-by-perms', 'true');
+    });
+  };
+  _toggleDeptClase('nav-seguridad-section', verComoAdmin || deptActual === 'seguridad');
   // INV-01 (22/07/2026): "Bobinas" es material exclusivo de electricistas (ver
   // _HOME_TRADE_MODS, soloElectrico:true) — se oculta a otros departamentos, ya
   // que para ellos el backend siempre devolvería la lista vacía
-  if (verComoAdmin || deptActual === 'electrico') {
-    document.querySelectorAll('.nav-electrico-section').forEach(el => el.style.display = '');
-  }
+  _toggleDeptClase('nav-electrico-section', verComoAdmin || deptActual === 'electrico');
   // DEPT-CPD-01 (09/08/2026): "Sondas CPD" tenía su nav-item bajo nav-electrico-section
   // solo porque Eléctrico era el hueco disponible más rápido al desarrollarlo — Adrian
   // confirmó el 05/08/2026 que ahí no podía quedarse. Se crea el departamento "Control"
   // dedicado y se mueve el nav-item a su propia clase.
-  if (verComoAdmin || deptActual === 'control') {
-    document.querySelectorAll('.nav-control-section').forEach(el => el.style.display = '');
-  }
+  _toggleDeptClase('nav-control-section', verComoAdmin || deptActual === 'control');
   // DEPT-CPD-01 (09/08/2026): nav-telecom-section (Racks/Cableado) tenía el mismo
   // style="display:none" de partida que nav-electrico-section/nav-control-section pero
   // le faltaba el bloque que lo vuelve a mostrar — el nav-item no aparecía para nadie.
-  if (verComoAdmin || deptActual === 'telecom') {
-    document.querySelectorAll('.nav-telecom-section').forEach(el => el.style.display = '');
-  }
+  _toggleDeptClase('nav-telecom-section', verComoAdmin || deptActual === 'telecom');
   mostrarInventarioSeguridadSiAplica(deptActual, previsualizandoDepto);
 
   // CONSTR-01 (24/07/2026): la sección "Construcción" (RFIs, calidad, actas...)
@@ -11391,9 +11438,16 @@ function sidebarToggle(el) {
   const sid = el.dataset.sid;
   const collapsed = el.classList.toggle('sec-collapsed');
   // Find siblings between this section and the next .sidebar-section
+  // DEPT-CPD-01 (09/08/2026): bug real encontrado por Adrian -- expandir una sección
+  // volvía a mostrar TODOS sus items a ciegas, sin respetar lo que el filtrado por
+  // departamento/rol ya había ocultado (marcado con data-hidden-by-perms="true" por
+  // organizarSidebarEncargado/ocultarSeccion). Colapsar sigue ocultando todo sin
+  // excepción; expandir respeta esa marca y deja oculto lo que no toca a este depto.
   let next = el.nextElementSibling;
   while (next && !next.classList.contains('sidebar-section')) {
-    next.style.display = collapsed ? 'none' : '';
+    if (collapsed || next.getAttribute('data-hidden-by-perms') !== 'true') {
+      next.style.display = collapsed ? 'none' : '';
+    }
     next = next.nextElementSibling;
   }
   // Persist state
