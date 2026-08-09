@@ -7548,10 +7548,12 @@ async function crearObra(request, env) {
 // ── Telecom: racks/cableado ─────────────────────────────────────────────────
 // Jerarquia: obra -> IDF (por planta/ubicacion) -> rack -> patch panel -> puerto.
 // Documenta donde esta conectado cada puerto para entregar un informe al cliente.
+// DEPT-CPD-01 (09/08/2026): antes cualquier oficina/encargado/jefe_de_obra de CUALQUIER
+// departamento veía Racks/Cableado — se acota a Telecom + roles privilegiados (Adrian,
+// 09/08/2026: "Restringir a solo Telecom").
 function puedeVerTelecom(auth) {
   return !!(auth?.empresa_id && (
-    isDeptPrivileged(auth) || auth.isOficina || auth.isEncargado ||
-    auth.isJefeObra || auth.isProjectManager || auth.departamento === 'telecom'
+    isDeptPrivileged(auth) || auth.departamento === 'telecom'
   ));
 }
 
@@ -7562,11 +7564,18 @@ function puedeEditarTelecom(auth) {
 }
 
 function puedeEliminarTelecom(auth) {
+  return puedeVerTelecom(auth);
+}
+
+// DEPT-CPD-01 (09/08/2026): Sondas CPD no tenia NINGUN filtro de departamento server-side
+// (solo empresa_id) — el boton estaba oculto por CSS ("solo electrico") pero la API era
+// visible para cualquier usuario autenticado de la empresa. Se acota a Control + privilegiados.
+function puedeVerCpd(auth) {
   return !!(auth?.empresa_id && (
-    isDeptPrivileged(auth) || auth.isOficina || auth.isEncargado ||
-    auth.isJefeObra || auth.isProjectManager
+    isDeptPrivileged(auth) || auth.departamento === 'control'
   ));
 }
+function puedeEditarCpd(auth) { return puedeVerCpd(auth); }
 
 function telecomVeTodasLasObras(auth) {
   return !!(isDeptPrivileged(auth) || auth.isOficina);
@@ -10474,15 +10483,18 @@ async function getTrabajadores(request, env) {
 
 // ── EPIs asignados (NEW-23) ────────────────────────────────────────────────
 async function getEpisAsignados(request, env) {
-  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, departamento } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url     = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
   let sql = 'SELECT * FROM epis_asignados WHERE empresa_id=?';
   const params = [empresa_id];
   if (obra_id) { sql += ' AND obra_id=?'; params.push(parseInt(obra_id)); }
-  // Filtrar por departamento si es oficina/encargado
-  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) {
+  // DEPT-CPD-01 (09/08/2026): "cada departamento es independiente del resto salvo que se
+  // comparta explícitamente" — antes solo se filtraba para oficina/encargado, dejando a
+  // operario (y a cualquier otro rol) ver los EPIs de TODOS los departamentos.
+  if (!isDeptPrivileged(auth)) {
     sql += ' AND departamento = ?';
     params.push(departamento);
   }
@@ -10492,12 +10504,23 @@ async function getEpisAsignados(request, env) {
 }
 
 async function crearEpiAsignado(request, env, ctx) {
-  const { empresa_id, nombre, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   const b = await request.json();
   const { obra_id, usuario_id, externo_id, nombre_trabajador, tipo_epi, talla, numero_serie, fecha_entrega, fecha_caducidad, proxima_revision, estado, observaciones } = b;
   if (!tipo_epi || !nombre_trabajador) return err('Faltan campos obligatorios');
+  // DEPT-CPD-01 (09/08/2026): un encargado/oficina solo puede asignar EPIs a trabajadores
+  // de SU PROPIO departamento — antes se podía asignar a cualquiera de la empresa.
+  if (!isDeptPrivileged(auth)) {
+    const trabajador = usuario_id
+      ? await env.DB.prepare('SELECT departamento FROM usuarios WHERE id=?').bind(usuario_id).first()
+      : externo_id
+      ? await env.DB.prepare('SELECT departamento FROM personal_externo WHERE id=?').bind(externo_id).first()
+      : null;
+    if (!trabajador || trabajador.departamento !== auth.departamento) return err('Sin permisos sobre ese trabajador', 403);
+  }
   const r = await env.DB.prepare(
     `INSERT INTO epis_asignados (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,tipo_epi,talla,numero_serie,fecha_entrega,fecha_caducidad,proxima_revision,estado,observaciones,created_by,departamento)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT departamento FROM usuarios WHERE id=?), (SELECT departamento FROM personal_externo WHERE id=?), 'seguridad'))`
@@ -10509,9 +10532,14 @@ async function crearEpiAsignado(request, env, ctx) {
 }
 
 async function actualizarEpiAsignado(id, request, env, ctx) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  if (!isDeptPrivileged(auth)) {
+    const actual = await env.DB.prepare('SELECT departamento FROM epis_asignados WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+    if (!actual || actual.departamento !== auth.departamento) return err('Sin permisos sobre ese EPI', 403);
+  }
   const b = await request.json();
   const campos = [], vals = [];
   ['obra_id','usuario_id','externo_id','nombre_trabajador','tipo_epi','talla','numero_serie','fecha_entrega','fecha_caducidad','proxima_revision','estado','observaciones'].forEach(k => {
@@ -10525,9 +10553,14 @@ async function actualizarEpiAsignado(id, request, env, ctx) {
 }
 
 async function eliminarEpiAsignado(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  if (!isDeptPrivileged(auth)) {
+    const actual = await env.DB.prepare('SELECT departamento FROM epis_asignados WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+    if (!actual || actual.departamento !== auth.departamento) return err('Sin permisos sobre ese EPI', 403);
+  }
   await env.DB.prepare('DELETE FROM epis_asignados WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
@@ -27088,8 +27121,10 @@ async function _ensureCpdTables(env) {
 }
 
 async function listarCpdPlanos(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeVerCpd(auth)) return err('No autorizado', 403);
   await _ensureCpdTables(env);
   const url = new URL(request.url);
   const obra_id = parseInt(url.searchParams.get('obra_id') || 0);
@@ -27102,8 +27137,10 @@ async function listarCpdPlanos(request, env) {
 }
 
 async function crearCpdPlano(request, env) {
-  const { empresa_id, obra_id: sesionObra, nombre: userNombre, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id: sesionObra, nombre: userNombre, rol } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCpd(auth)) return err('No autorizado', 403);
   await _ensureCpdTables(env);
   const form = await request.formData().catch(() => null);
   if (!form) return err('Falta el formulario', 400);
@@ -27130,8 +27167,10 @@ async function crearCpdPlano(request, env) {
 }
 
 async function getCpdPlano(request, env, path) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeVerCpd(auth)) return err('No autorizado', 403);
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
@@ -27151,8 +27190,10 @@ async function getCpdPlano(request, env, path) {
 function _cpdPlanoImagenUrl(id) { return `/cpd/planos/${id}/imagen`; }
 
 async function getCpdPlanoImagen(request, env, path) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeVerCpd(auth)) return err('No autorizado', 403);
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   const meta = await env.DB.prepare('SELECT r2_key FROM cpd_planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
@@ -27165,8 +27206,10 @@ async function getCpdPlanoImagen(request, env, path) {
 }
 
 async function actualizarCpdPlano(request, env, path) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCpd(auth)) return err('No autorizado', 403);
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   const body = await request.json().catch(() => ({}));
@@ -27184,8 +27227,10 @@ async function actualizarCpdPlano(request, env, path) {
 }
 
 async function eliminarCpdPlano(request, env, path) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCpd(auth)) return err('No autorizado', 403);
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
@@ -27206,8 +27251,10 @@ const CPD_TIPOS_PERMITIDOS = new Set(['sonda_ambiental:temp_hum', 'sonda_ambient
 const CPD_TIPO_LABEL = { temp_hum: 'Temp/Hum', presion_diferencial: 'Presión Dif.' };
 
 async function crearCpdSonda(request, env) {
-  const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre: userNombre, rol } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCpd(auth)) return err('No autorizado', 403);
   await _ensureCpdTables(env);
   const body = await request.json().catch(() => ({}));
   const plano_id = parseInt(body.plano_id || 0);
@@ -27234,8 +27281,10 @@ async function crearCpdSonda(request, env) {
 }
 
 async function actualizarCpdSonda(request, env, path) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCpd(auth)) return err('No autorizado', 403);
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
@@ -27258,8 +27307,10 @@ async function actualizarCpdSonda(request, env, path) {
 }
 
 async function eliminarCpdSonda(request, env, path) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCpd(auth)) return err('No autorizado', 403);
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
@@ -27271,8 +27322,10 @@ async function eliminarCpdSonda(request, env, path) {
 }
 
 async function crearCpdLectura(request, env, path) {
-  const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre: userNombre, rol } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCpd(auth)) return err('No autorizado', 403);
   const sonda_id = parseInt(path.split('/')[3]);
   if (!sonda_id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
@@ -27293,8 +27346,10 @@ async function crearCpdLectura(request, env, path) {
 }
 
 async function listarCpdLecturas(request, env, path) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 401);
+  if (!puedeVerCpd(auth)) return err('No autorizado', 403);
   const sonda_id = parseInt(path.split('/')[3]);
   if (!sonda_id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
