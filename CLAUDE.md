@@ -157,14 +157,22 @@ cambios de seguridad.
 
 ## Versionado de la app
 
-La app tiene tres marcadores de versión que **deben estar sincronizados entre sí**:
-`version.json`, `sw.js` (`alejandra-vX.XX`) e `index.html` (`APP_VERSION`).
+La app tiene cuatro marcadores de versión que **deben estar sincronizados entre sí**:
+`version.json`, `sw.js` (`alejandra-vX.XX`), `index.html` (`APP_VERSION`) y `panel.html`
+(`PANEL_APP_VERSION`).
+
+> ⛔ **INCIDENTE 09/08/2026**: `PANEL_APP_VERSION` no estaba en este chequeo ni en el
+> precheck de `pages.yml` — se desincronizó de los otros tres sin que nada lo detectara, y
+> provocó el mismo bucle de recarga infinita que los incidentes de abril, pero solo en
+> `panel.html`. Ya está incluido abajo y en `pages.yml`; si se añade un quinto marcador de
+> versión en el futuro (otro frontend, otro archivo), incluirlo aquí también.
 
 ```powershell
 $v  = (gc version.json | ConvertFrom-Json).v
 $sw = [regex]::Match((gc sw.js -Raw), "alejandra-v([^']+)'").Groups[1].Value
 $h  = [regex]::Match((gc index.html -Raw), "APP_VERSION = '([^']+)'").Groups[1].Value
-if ($v -ne $sw -or $v -ne $h) { Write-Error "DESINCRONIZADO: json=$v sw=$sw html=$h" } else { Write-Host "OK: $v" }
+$p  = [regex]::Match((gc panel.html -Raw), "PANEL_APP_VERSION = '([^']+)'").Groups[1].Value
+if ($v -ne $sw -or $v -ne $h -or $v -ne $p) { Write-Error "DESINCRONIZADO: json=$v sw=$sw html=$h panel=$p" } else { Write-Host "OK: $v" }
 ```
 
 > ⛔ Desincronizarlos causó bucles de recarga infinita en producción (incidentes 22/04 y

@@ -44,15 +44,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
-      # Precheck: las tres versiones deben coincidir. Desincronizarlas provoco
-      # bucles de recarga infinita en produccion (incidentes 22/04 y 26/04/2026).
+      # Precheck: las cuatro versiones deben coincidir. Desincronizarlas provoco
+      # bucles de recarga infinita en produccion (incidentes 22/04, 26/04 y 09/08/2026 --
+      # este ultimo porque PANEL_APP_VERSION en panel.html no estaba en este chequeo).
       - name: Precheck version sync
         run: |
           V_JSON=$(grep -oP '(?<="v":")[^"]+' version.json)
           V_SW=$(grep -oP "(?<=alejandra-v)[\d.]+" sw.js | head -1)
           V_HTML=$(grep -oP "(?<=APP_VERSION = ')[\d.]+" index.html | head -1)
-          echo "version.json=$V_JSON sw.js=$V_SW index.html=$V_HTML"
-          if [ "$V_JSON" != "$V_SW" ] || [ "$V_JSON" != "$V_HTML" ]; then
+          V_PANEL=$(grep -oP "(?<=PANEL_APP_VERSION = ')[\d.]+" panel.html | head -1)
+          echo "version.json=$V_JSON sw.js=$V_SW index.html=$V_HTML panel.html=$V_PANEL"
+          if [ "$V_JSON" != "$V_SW" ] || [ "$V_JSON" != "$V_HTML" ] || [ "$V_JSON" != "$V_PANEL" ]; then
             echo "::error::Versiones desincronizadas. No se publica."
             exit 1
           fi
