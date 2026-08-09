@@ -7,7 +7,7 @@
 - Fix: lógica extraída a `clasificarResultadoTool(resultado, err)` (`lib.js`, función pura). Criterio: excepción capturada → error; contrato JSON `"ok"` explícito → se respeta; sin contrato JSON → éxito salvo que el texto empiece por `❌` o `Error`/`Error:` (la misma convención que ya usan las tools para hablar con el usuario).
 - Pruebas: 6 tests nuevos en `lib.test.js` (excepción siempre error, contrato JSON respetado, texto plano de éxito clasifica bien — con los ejemplos reales que estaban mal en D1 —, texto de error por prefijo, no hay falso negativo si `❌`/`Error` aparece a mitad de frase). Agente 183/183 en verde.
 - Riesgo/rollback: cambio aislado a la clasificación de telemetría — no toca el resultado devuelto al usuario ni ningún gate de permisos. Los datos ya escritos en `alejandra_trazas` (86 filas, todas "error") no se corrigen retroactivamente; solo lo nuevo desde el despliegue queda bien clasificado.
-- Siguiente acción exacta: desplegar `alejandra-agente` y verificar `/health`.
+- Despliegue/verificación (2026-08-07): commit `15db128` en `main`, desplegado con `wrangler deploy` directo (ARC-021). `GET /health` → `{"estado":"healthy","d1":true,"r2":true,"version":"1c25c400-b0f2-48fb-ae0a-9d8d9476c1d0"}`, versión coincide de inmediato.
 
 ## ADR-0020 rebanada 7 — N1 se amplía a escritura (enmienda 6, 2026-08-07)
 
