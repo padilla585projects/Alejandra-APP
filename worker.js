@@ -10637,12 +10637,18 @@ async function eliminarCarnet(id, request, env) {
 
 // ── Reconocimientos médicos (PRL — LPRL art. 22) ──────────────────────────────
 async function getReconocimientos(request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, departamento } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  // DEPT-CPD-01 (09/08/2026): panel.html oculta Reconocimientos a "oficina"
-  // (nav-sensitive-data, dato de salud LPRL art. 22) pero el backend no comprobaba nada.
-  // Se bloquea aqui, igual que hace el frontend.
-  if (rol === 'oficina' && !isSuperadmin && !isEmpresaAdmin && !isDesarrollador) return err('Sin permisos', 403);
+  // DEPT-CPD-01 (09/08/2026 -> corregido 10/08/2026): panel.html oculta Reconocimientos a
+  // "oficina" (nav-sensitive-data, dato de salud LPRL art. 22), pero el backend solo
+  // bloqueaba ese rol -- encargado/oficina de CUALQUIER otro departamento (compras,
+  // ingenieria, calidad...) veian todos los reconocimientos medicos de la empresa. La
+  // tabla no tiene columna departamento (mismo motivo que Carnets); en vez de anadirla,
+  // se restringe el modulo entero a Seguridad+admins, igual que permisos_trabajo/ats/
+  // obs_seguridad/toolbox_talks -- son datos de salud, no un dato "de obra" acotable por
+  // fila con sentido.
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
   const resultado = url.searchParams.get('resultado');
@@ -10652,11 +10658,6 @@ async function getReconocimientos(request, env) {
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND (obra_id=? OR obra_id IS NULL)`; binds.push(obraAuth); }
   if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
-  // BUG-CARNETS (21/07/2026): la tabla reconocimientos_medicos no tiene columna departamento ->
-  // este filtro causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Mismo
-  // bug que en getCarnets(). Quitado hasta que se implemente el flujo completo (columna +
-  // captura al crear + backfill). Mientras tanto, oficina/encargado ven todos los
-  // reconocimientos de su empresa, igual que superadmin/empresa_admin.
   if (resultado) { sql += ` AND resultado=?`; binds.push(resultado); }
   if (q) { sql += ` AND nombre_trabajador LIKE ?`; binds.push(`%${q}%`); }
   sql += ` ORDER BY fecha_caducidad ASC`;
@@ -10670,9 +10671,10 @@ async function getReconocimientos(request, env) {
 }
 
 async function crearReconocimiento(request, env, ctx) {
-  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre, obra_id: obraAuth } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  if (rol === 'operario') return err('Sin permisos', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const b = await request.json();
   if (!b.nombre_trabajador) return err('Falta nombre_trabajador', 400);
   if (!b.fecha_realizacion) return err('Falta fecha_realizacion', 400);
@@ -10688,9 +10690,10 @@ async function crearReconocimiento(request, env, ctx) {
 }
 
 async function actualizarReconocimiento(id, request, env, ctx) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  if (rol === 'operario') return err('Sin permisos', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const b = await request.json();
   const campos = ['resultado','restricciones','fecha_realizacion','fecha_caducidad','dias_aviso','centro_medico','medico_responsable','notas','tipo'];
   const sets = []; const vals = [];
@@ -10702,9 +10705,10 @@ async function actualizarReconocimiento(id, request, env, ctx) {
 }
 
 async function eliminarReconocimiento(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  if (rol === 'operario') return err('Sin permisos', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM reconocimientos_medicos WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true });
 }
@@ -22851,8 +22855,16 @@ async function ensureAccidentesTable(env) {
 }
 
 async function getAccidentes(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
+  // DEPT-01 (10/08/2026): accidentes_incidentes no tenia ningun control de departamento --
+  // encargado/oficina de cualquier departamento veian los accidentes/incidentes de TODA la
+  // empresa. Es un registro legal de Seguridad (nav-seguridad-section en panel.html), sin
+  // usuario_id/externo_id para un filtro por fila con sentido (afectado es texto libre), asi
+  // que se restringe el modulo entero a Seguridad+admins, igual que Reconocimientos/Obs
+  // Seguridad/Toolbox Talks.
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const url = new URL(request.url);
   const obra_id  = url.searchParams.get('obra_id');
   const tipo     = url.searchParams.get('tipo');
@@ -22869,8 +22881,10 @@ async function getAccidentes(request, env) {
 }
 
 async function crearAccidente(request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
-  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const d = await request.json();
   await ensureAccidentesTable(env);
   // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — registro legal de
@@ -22900,8 +22914,10 @@ async function crearAccidente(request, env) {
 }
 
 async function actualizarAccidente(id, request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
-  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   const d = await request.json();
   await ensureAccidentesTable(env);
   await env.DB.prepare(
@@ -22926,8 +22942,10 @@ async function actualizarAccidente(id, request, env) {
 }
 
 async function eliminarAccidente(id, request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
-  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureAccidentesTable(env);
   await env.DB.prepare(`DELETE FROM accidentes_incidentes WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
