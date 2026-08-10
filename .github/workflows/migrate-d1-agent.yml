@@ -53,6 +53,7 @@ on:
           - migrate_dept_cambios_calidad.sql
           - migrate_dept_compras_material.sql
           - migrate_dept_checklists.sql
+          - migrate_dept_faltantes.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true

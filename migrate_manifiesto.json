@@ -170,33 +170,49 @@
     },
     {
       "archivo": "migrate_dept_ingenieria.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "31366716103",
       "declarado": "2026-08-10",
-      "nota": "Aislamiento por departamento (DEPT-01), auditoria de Alejandra Office. ALTER fases_obra/plan_semanal (ya declaradas) + CREATE hitos_obra/instrucciones_obra/visitas_obra/itp_obra (nunca declaradas, 100% DDL runtime) con departamento incluido. Sintaxis validada localmente (wrangler d1 execute sin --remote). Paso 2 (aplicar) pendiente de autorizacion del Director."
+      "verificado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01), auditoria de Alejandra Office. ALTER fases_obra/plan_semanal aplicado correctamente (verificado con PRAGMA table_info: columna presente). Los CREATE TABLE IF NOT EXISTS de hitos_obra/instrucciones_obra/visitas_obra/itp_obra fueron un NO-OP: las 4 tablas ya existian en produccion (creadas en runtime, no declaradas en ninguna migracion previa) -- corregido en migrate_dept_faltantes.sql (ALTER)."
     },
     {
       "archivo": "migrate_dept_documental.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "31366718650",
       "declarado": "2026-08-10",
-      "nota": "Aislamiento por departamento (DEPT-01). ALTER contactos_obra (ya declarada) + CREATE contratos_obra/submittals/transmittals_obra (nunca declaradas) con departamento incluido. Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
+      "verificado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01). ALTER contactos_obra aplicado correctamente. Los CREATE TABLE IF NOT EXISTS de contratos_obra/submittals/transmittals_obra fueron un NO-OP (tablas ya existian en runtime) -- corregido en migrate_dept_faltantes.sql."
     },
     {
       "archivo": "migrate_dept_cambios_calidad.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "31366721148",
       "declarado": "2026-08-10",
-      "nota": "Aislamiento por departamento (DEPT-01). ALTER ordenes_cambio (ya declarada) + CREATE ncrs_obra/riesgos_obra (nunca declaradas) con departamento incluido. Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
+      "verificado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01). ALTER ordenes_cambio aplicado correctamente. Los CREATE TABLE IF NOT EXISTS de ncrs_obra/riesgos_obra fueron un NO-OP (tablas ya existian en runtime) -- corregido en migrate_dept_faltantes.sql."
     },
     {
       "archivo": "migrate_dept_compras_material.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "31366723963",
       "declarado": "2026-08-10",
-      "nota": "Aislamiento por departamento (DEPT-01). ALTER ordenes_compra (ya declarada) + CREATE entregas_material/consumos_material/solicitudes_material (nunca declaradas) con departamento incluido. Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
+      "verificado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01). ALTER ordenes_compra aplicado correctamente. Los CREATE TABLE IF NOT EXISTS de entregas_material/consumos_material/solicitudes_material fueron un NO-OP (tablas ya existian en runtime) -- corregido en migrate_dept_faltantes.sql."
     },
     {
       "archivo": "migrate_dept_checklists.sql",
+      "aplicada": true,
+      "run": "31366726629",
+      "declarado": "2026-08-10",
+      "verificado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01), decision del Director: checklists por departamento, no transversal. ALTER checklist_plantillas/checklist_ejecuciones aplicado y verificado correctamente."
+    },
+    {
+      "archivo": "migrate_dept_faltantes.sql",
       "aplicada": false,
       "declarado": "2026-08-10",
-      "nota": "Aislamiento por departamento (DEPT-01), decision del Director: checklists por departamento, no transversal. ALTER checklist_plantillas/checklist_ejecuciones (ya declaradas). Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
+      "nota": "Correccion de un fallo propio: las 12 tablas declaradas como CREATE TABLE IF NOT EXISTS en las 4 migraciones anteriores YA EXISTIAN en produccion (DDL en runtime, nunca antes declaradas en una migracion), asi que el CREATE fue un no-op silencioso. ALTER TABLE ADD COLUMN para las 12. Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
     }
   ]
 }
