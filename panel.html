@@ -16868,8 +16868,16 @@ async function cargarUsuarios() {
   if (!window._obrasPanel) await cargarObrasPanel();
   cargarInvitaciones();
   cargarPendientes();
-  const r = await api('/personal/trabajadores');
-  const data = toArr(r, 'trabajadores');
+  // USUARIOS-ENDPOINT-01 (10/08/2026): esta tabla usaba /personal/trabajadores, un
+  // endpoint ligero pensado para selectores de trabajador (EPIs/Carnets/Fichajes) que
+  // solo devuelve id/nombre/rol/departamento/obra_id — SIN email, roles_extra ni el
+  // nombre de la obra (solo el id). Editar/guardar esos 3 campos parecía no funcionar
+  // porque, aunque el PUT sí se guardaba, al recargar la tabla desde este endpoint
+  // siempre volvían vacíos. El endpoint correcto para esta tabla es GET /usuarios
+  // (getUsuarios en worker.js), que ya hace el JOIN con obras y devuelve el registro
+  // completo del usuario.
+  const r = await api('/usuarios');
+  const data = toArr(r, 'usuarios');
 
   const activos   = data.filter(u => u.activo).length;
   const admins    = data.filter(u => ['empresa_admin','encargado','jefe_de_obra','oficina'].includes(u.rol)).length;
