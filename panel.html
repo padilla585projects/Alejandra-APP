@@ -10820,8 +10820,14 @@ async function construirDirectorioDepartamentos() {
     if (!paginas.length) return;
     const catalogo = _DEPTS_CATALOG[deptKey];
 
+    // SIDEBAR-COLAPSO-04 (10/08/2026): este directorio crea secciones NUEVAS en cada
+    // ejecución (al elegir "Todos los departamentos") que nunca pasan por
+    // inicializarEstadoSidebar() — nacían siempre expandidas (clone.style.display=''
+    // directo, sin la clase sec-collapsed en la cabecera), deshaciendo el "todo colapsado
+    // por defecto" de SIDEBAR-COLAPSO-01/02 cada vez que se construían. Se crean ya
+    // colapsadas, igual que el resto del sidebar al entrar.
     const header = document.createElement('div');
-    header.className = 'sidebar-section';
+    header.className = 'sidebar-section sec-collapsed';
     header.dataset.sid = `dept-${deptKey}`;
     header.setAttribute('onclick', 'sidebarToggle(this)');
     header.innerHTML = `<span>${catalogo?.icon || cfg.icono || '📁'} ${catalogo?.name || deptKey}</span><span class="sec-chevron">▼</span>`;
@@ -10831,7 +10837,7 @@ async function construirDirectorioDepartamentos() {
       const original = document.querySelector(`.nav-item[data-page="${page}"]`);
       if (!original) return;
       const clone = original.cloneNode(true);
-      clone.style.display = '';
+      clone.style.display = 'none';
       clone.removeAttribute('data-hidden-by-perms');
       clone.classList.add('nav-item-directorio-clone');
       // ORG-DIR-02: el clon apuntaba a la misma página compartida sin fijar departamento
