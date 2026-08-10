@@ -11624,7 +11624,13 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
     if (item.rol && item.contenido) {
       if (item.rol === 'system') continue;
       // Si el mensaje de usuario tiene [adjuntos: key] en texto, reconstruir content blocks reales
-      if (item.rol === 'user' && item.contenido.includes('[adjuntos:') && env.FILES) {
+      // BUG-CHAT-CONTEXTO-FOTO (10/08/2026): sin límite de antigüedad, un adjunto de hace días
+      // dentro de la ventana de los últimos 10 mensajes se reconstruía como imagen real y el
+      // modelo respondía sobre esa foto vieja en vez del turno actual (ver HANDOFF.md). Solo se
+      // reconstruye la imagen si el mensaje es de la sesión activa (menos de 2h); si no, se
+      // trata como texto y se retira la referencia a la key de R2 para no filtrarla al modelo.
+      const esAdjuntoReciente = item.created_at && (Date.now() - new Date(item.created_at.replace(' ', 'T') + 'Z').getTime()) < 2 * 60 * 60 * 1000;
+      if (item.rol === 'user' && item.contenido.includes('[adjuntos:') && env.FILES && esAdjuntoReciente) {
         const adjMatch = item.contenido.match(/\[adjuntos:\s*([^\]]+)\]/);
         if (adjMatch) {
           const keys = adjMatch[1].split(',').map(k => k.trim()).filter(Boolean);
@@ -11633,12 +11639,19 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
             // Timeout de 5s para reconstruir imagen del historial — si R2 tarda mas, texto plano
             const _timeout = new Promise(r => setTimeout(() => r(null), 5000));
             const blocks = await Promise.race([buildUserContentWithAdjuntos(env, texto, keys), _timeout]);
-            messages.push({ role: 'user', content: blocks || item.contenido });
+            messages.push({ role: 'user', content: blocks || `${texto}\n[el usuario adjuntó una imagen en este turno]` });
           } catch (_) {
-            messages.push({ role: item.rol, content: item.contenido });
+            messages.push({ role: item.rol, content: `${texto}\n[el usuario adjuntó una imagen en este turno]` });
           }
           continue;
         }
+      }
+      if (item.rol === 'user' && item.contenido.includes('[adjuntos:')) {
+        // Adjunto fuera de la sesión activa (o sin env.FILES): no se re-adjunta la imagen ni se
+        // expone la key de R2 como texto — solo queda el texto del mensaje, si lo había.
+        const texto = item.contenido.replace(/\[adjuntos:[^\]]+\]/, '').trim();
+        messages.push({ role: item.rol, content: texto || '[el usuario adjuntó una imagen en un turno anterior, ya fuera de contexto]' });
+        continue;
       }
       messages.push({ role: item.rol, content: item.contenido });
     } else {
