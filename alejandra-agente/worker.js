@@ -4475,7 +4475,12 @@ export default {
       let negocio = {};
       try {
         const [obrasActivas, bobinasStock, fichajesHoy, equiposRevision, gastosRecientes, incidenciasAbiertas, personalActivo, materialesObra] = await Promise.all([
-          env.DB.prepare(`SELECT id, nombre FROM obras WHERE estado IN ('activa','en_curso','abierta') LIMIT 20`).all().catch(() => ({results:[]})),
+          // OBRAS-ACTIVAS-01 (10/08/2026): `obras` no tiene columna `estado` (columnas reales:
+          // id, nombre, codigo, activa, created_at, empresa_id, comunidad — verificado contra D1
+          // real). La consulta fallaba en SILENCIO desde siempre (mismo patrón que
+          // BOBINAS-STOCK-01/FICHAJES-PROACTIVO-01/EQUIPOS-REVISION-01 de abajo), así que
+          // "obras" en el bloque de inteligencia de negocio del cron nunca traía datos reales.
+          env.DB.prepare(`SELECT id, nombre FROM obras WHERE activa = 1 LIMIT 20`).all().catch(() => ({results:[]})),
           // BOBINAS-STOCK-01 (01/08/2026): `bobinas` no tiene metros_restantes/metros_totales
           // (columnas reales: codigo, tipo, seccion, longitud, estado...). Una bobina se
           // gestiona como unidad completa (entra/sale de obra), no como consumible con metros
