@@ -2525,14 +2525,20 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
           soluciones.push({ accion: 'Asignar obra', tool: 'sql_query', sql: `UPDATE usuarios SET obra_id=<OBRA_ID> WHERE id=${user.id}` });
         }
 
-        if (!user.password_hash && !user.google_id) {
-          problemas.push('Sin método de autenticación (ni contraseña ni Google)');
+        // DIAGNOSTICAR-USUARIO-01 (10/08/2026): `usuarios` no tiene `google_id` ni `aprobado`
+        // (verificado contra D1 real) — la comprobación de Google comparaba contra un campo
+        // inexistente (siempre `undefined`, nunca la detectaba) y no existe un `aprobado`
+        // genérico. El flujo real de aprobación es el de alta por Google: `google_pending=1
+        // AND activo=0` (`aprobarUsuarioPendiente`/`rechazarUsuarioPendiente`, más abajo en
+        // este archivo) — se sustituye la comprobación muerta por la real y con la acción
+        // correcta (antes sugería `manage_user activate`, que no completa el alta: no asigna
+        // empresa_id/rol/departamento como sí hace la aprobación real).
+        if (user.google_pending) {
+          problemas.push('Alta por Google PENDIENTE de aprobación — no puede hacer login');
+          soluciones.push({ accion: 'Aprobar alta por Google', tool: 'sql_query', sql: `-- usar el endpoint de aprobación (asigna empresa_id/rol/departamento), no un UPDATE directo` });
+        } else if (!user.password_hash) {
+          problemas.push('Sin contraseña configurada');
           soluciones.push({ accion: 'Resetear contraseña', tool: 'manage_user', params: { action: 'reset_password', user_id: user.id, value: 'temp1234' } });
-        }
-
-        if (user.aprobado === 0 || user.aprobado === '0') {
-          problemas.push('Pendiente de APROBACIÓN — no puede hacer login');
-          soluciones.push({ accion: 'Aprobar usuario', tool: 'sql_query', sql: `UPDATE usuarios SET aprobado=1 WHERE id=${user.id}` });
         }
 
         // SEC-AUDIT-06 (27/07/2026): "success" nunca existió en login_attempts — esta
@@ -3816,9 +3822,14 @@ async function nexusWatchers(env) {
   } catch(e) { watcherErrors.push('UserAccess: ' + e.message); }
 
   // 2. PendingUsersWatcher — usuarios pendientes >24h
+  // PENDING-USERS-WATCHER-01 (10/08/2026): `usuarios` no tiene columna `aprobado` (verificado
+  // contra D1 real) — el SELECT fallaba entero. El único estado real de "pendiente" es el alta
+  // por Google sin aprobar (`google_pending=1 AND activo=0`, ver DIAGNOSTICAR-USUARIO-01 más
+  // arriba); un `activo=0` sin `google_pending` es una cuenta desactivada a propósito, no una
+  // solicitud pendiente, así que se retira ese caso genérico para no generar falsos avisos.
   try {
     const pending = await env.DB.prepare(
-      "SELECT nombre, email, created_at FROM usuarios WHERE (aprobado=0 OR activo=0) AND created_at < datetime('now','-24 hours') LIMIT 10"
+      "SELECT nombre, email, created_at FROM usuarios WHERE google_pending=1 AND activo=0 AND created_at < datetime('now','-24 hours') LIMIT 10"
     ).all();
     for (const u of (pending.results || [])) {
       alerts.push({ watcher: 'PendingUsers', severity: 'MEDIUM', msg: `Usuario pendiente >24h: ${u.nombre} (${u.email}) — registrado ${u.created_at}` });
