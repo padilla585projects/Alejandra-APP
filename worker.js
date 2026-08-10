@@ -9862,14 +9862,19 @@ async function getObrasOverview(request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   const { empresa_id } = auth;
 
+  // OBRAS-OVERVIEW-01 (10/08/2026): `obras` no tiene columna `estado` (es `activa`, INTEGER) y
+  // `presupuesto_obra` no tiene `coste_previsto`/`coste_real` (son `importe_previsto`/
+  // `importe_real` — verificado contra D1 real y contra el resto de queries de este archivo que
+  // sí usan los nombres correctos, ej. línea ~12389). Ambas consultas fallaban en SILENCIO desde
+  // siempre, así que el dashboard ejecutivo por obra nunca traía datos reales.
   const { results: obras } = await env.DB.prepare(
-    `SELECT id, nombre FROM obras WHERE empresa_id=? AND estado='activa' ORDER BY nombre LIMIT 20`
+    `SELECT id, nombre FROM obras WHERE empresa_id=? AND activa=1 ORDER BY nombre LIMIT 20`
   ).bind(empresa_id).all().catch(() => ({ results: [] }));
 
   const overview = await Promise.all(obras.map(async (o) => {
     const [presR, fasesR, tareasR, rfisR, ocsR, incR] = await Promise.all([
       env.DB.prepare(
-        `SELECT COUNT(*) as cnt, COALESCE(SUM(coste_previsto),0) as prev, COALESCE(SUM(coste_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`
+        `SELECT COUNT(*) as cnt, COALESCE(SUM(importe_previsto),0) as prev, COALESCE(SUM(importe_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`
       ).bind(o.id, empresa_id).first().catch(() => null),
       env.DB.prepare(
         `SELECT COUNT(*) as total, SUM(CASE WHEN estado='completada' THEN 1 ELSE 0 END) as completadas, COALESCE(AVG(porcentaje),0) as avg_pct FROM fases_obra WHERE obra_id=? AND empresa_id=?`
@@ -9931,11 +9936,17 @@ async function getObraDetail(obraId, request, env) {
     presR, fasesR, tareasR, rfisR, hitosR, incR, diarioR,
     segR, punchR, planosR, submR, contratosR, costesR, actasR, contactosR
   ] = await Promise.all([
-    env.DB.prepare(`SELECT COALESCE(SUM(coste_previsto),0) as prev, COALESCE(SUM(coste_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    // OBRAS-OVERVIEW-01 (10/08/2026): mismo fix que getObrasOverview — importe_previsto/
+    // importe_real, no coste_previsto/coste_real (verificado contra D1 real).
+    env.DB.prepare(`SELECT COALESCE(SUM(importe_previsto),0) as prev, COALESCE(SUM(importe_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
     env.DB.prepare(`SELECT COUNT(*) as total, COALESCE(AVG(porcentaje),0) as avg_pct, SUM(CASE WHEN estado='completada' THEN 1 ELSE 0 END) as completadas FROM fases_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
     env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN prioridad='urgente' THEN 1 ELSE 0 END) as urgentes, SUM(CASE WHEN estado='completada' THEN 1 ELSE 0 END) as completadas FROM tareas_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
     env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado IN ('abierta','en_revision') THEN 1 ELSE 0 END) as abiertas FROM rfis WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
-    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completados, SUM(CASE WHEN retrasado=1 OR (fecha < ? AND estado!='completado') THEN 1 ELSE 0 END) as retrasados FROM hitos_obra WHERE obra_id=? AND empresa_id=?`).bind(hoy, obraId, eid).first().catch(()=>null),
+    // HITOS-RETRASADOS-01 (10/08/2026): `hitos_obra` no tiene columna `retrasado` (es un campo
+    // calculado en JS en otras rutas, nunca persistido — verificado contra D1 real). La consulta
+    // fallaba en SILENCIO desde siempre; se retira `retrasado=1 OR` y se deja solo el cálculo
+    // real por fecha.
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completados, SUM(CASE WHEN fecha < ? AND estado!='completado' THEN 1 ELSE 0 END) as retrasados FROM hitos_obra WHERE obra_id=? AND empresa_id=?`).bind(hoy, obraId, eid).first().catch(()=>null),
     env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado IN ('abierta','en_progreso') THEN 1 ELSE 0 END) as abiertas FROM incidencias WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
     env.DB.prepare(`SELECT COUNT(*) as total FROM diario_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
     // New modules
@@ -12811,17 +12822,23 @@ async function alertasDiarias(env) {
       }
     } catch(e) { console.error('deficiencias alert error:', e.message); }
 
-    // Subcontratas — seguros y habilitaciones que vencen en 30 días
+    // Subcontratas — seguros y CAE que vencen en 30 días
+    // SUBCONTRATAS-EXPIRY-01 (10/08/2026): `subcontratas` no tiene `seguro_rc_expiry` ni
+    // `habilitacion_expiry` (mezcla inglés/nombre inventado) — las columnas reales son
+    // `seguro_rc_expira` y `cae_expira` (verificado contra D1 real e INSERT/UPDATE reales de la
+    // tabla; no existe un concepto de "habilitación" separado, el equivalente real más cercano
+    // es la CAE — Coordinación de Actividades Empresariales). La consulta fallaba en SILENCIO
+    // desde siempre: esta alerta de cumplimiento nunca se disparaba.
     try {
       const en30s = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
       const hoyStr4 = hoy.toISOString().slice(0,10);
       const { results: subcVencen } = await env.DB.prepare(
-        `SELECT s.empresa_id, s.nombre, s.seguro_rc_expiry, s.habilitacion_expiry
+        `SELECT s.empresa_id, s.nombre, s.seguro_rc_expira, s.cae_expira
          FROM subcontratas s
          WHERE s.estado='activa' AND (
-           (s.seguro_rc_expiry IS NOT NULL AND s.seguro_rc_expiry BETWEEN ? AND ?) OR
-           (s.habilitacion_expiry IS NOT NULL AND s.habilitacion_expiry BETWEEN ? AND ?)
-         ) ORDER BY s.empresa_id, COALESCE(s.seguro_rc_expiry,s.habilitacion_expiry)`
+           (s.seguro_rc_expira IS NOT NULL AND s.seguro_rc_expira BETWEEN ? AND ?) OR
+           (s.cae_expira IS NOT NULL AND s.cae_expira BETWEEN ? AND ?)
+         ) ORDER BY s.empresa_id, COALESCE(s.seguro_rc_expira,s.cae_expira)`
       ).bind(hoyStr4, en30s, hoyStr4, en30s).all().catch(()=>({results:[]}));
       if (subcVencen && subcVencen.length) {
         const porEmpSub = {};
@@ -12832,10 +12849,10 @@ async function alertasDiarias(env) {
         for (const [eid, subcs] of Object.entries(porEmpSub)) {
           let msg = `🏢 <b>Certificaciones de subcontratas por vencer</b>${empLabel(parseInt(eid))} (${subcs.length}):\n\n`;
           for (const s of subcs) {
-            if (s.seguro_rc_expiry && s.seguro_rc_expiry <= en30s)
-              msg += `⚠️ <b>${s.nombre}</b> — Seguro RC vence: ${s.seguro_rc_expiry}\n`;
-            if (s.habilitacion_expiry && s.habilitacion_expiry <= en30s)
-              msg += `⚠️ <b>${s.nombre}</b> — Habilitación vence: ${s.habilitacion_expiry}\n`;
+            if (s.seguro_rc_expira && s.seguro_rc_expira <= en30s)
+              msg += `⚠️ <b>${s.nombre}</b> — Seguro RC vence: ${s.seguro_rc_expira}\n`;
+            if (s.cae_expira && s.cae_expira <= en30s)
+              msg += `⚠️ <b>${s.nombre}</b> — CAE vence: ${s.cae_expira}\n`;
           }
           await sendTelegram(env, msg);
         }
@@ -20629,14 +20646,20 @@ async function getDashboardGlobal(request, env) {
   ] = await Promise.all([
     env.DB.prepare(`SELECT id, nombre, codigo, activa, comunidad FROM obras WHERE empresa_id=? AND activa=1 ORDER BY nombre`).bind(eid).all(),
     env.DB.prepare(`SELECT obra_id, estado, porcentaje FROM fases_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
-    env.DB.prepare(`SELECT obra_id, estado, fecha, retrasado FROM hitos_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    // HITOS-RETRASADOS-01 (10/08/2026): `hitos_obra` no tiene columna `retrasado` (verificado
+    // contra D1 real) — el SELECT fallaba por completo y el .catch dejaba `hitosR` siempre
+    // vacío. Se retira la columna inexistente; "retrasado" ya se calcula por fecha más abajo.
+    env.DB.prepare(`SELECT obra_id, estado, fecha FROM hitos_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado FROM rfis WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado, tipo FROM incidencias WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado, vencido FROM punch_list WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado, fecha_limite FROM accion_items WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado, score FROM riesgos_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado, gravedad FROM ncrs_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
-    env.DB.prepare(`SELECT obra_id, estado, importe FROM ordenes_cambio WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    // ORDENES-CAMBIO-IMPORTE-01 (10/08/2026): `ordenes_cambio` no tiene columna `importe` (es
+    // `coste_adicional` — verificado contra D1 real e INSERT real de la tabla). El SELECT
+    // fallaba por completo, `ocsValor` siempre calculaba 0.
+    env.DB.prepare(`SELECT obra_id, estado, coste_adicional FROM ordenes_cambio WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, importe_certificado, importe_liquido, estado FROM certificaciones WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado FROM cierre_obra_items WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
     env.DB.prepare(`SELECT obra_id, estado FROM instrucciones_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
@@ -20662,13 +20685,13 @@ async function getDashboardGlobal(request, env) {
     const inst     = (instR.results||[]).filter(x=>x.obra_id===oid);
 
     const avgAvance    = fases.length ? Math.round(fases.reduce((s,f)=>s+(f.porcentaje||0),0)/fases.length) : null;
-    const hitosRet     = hitos.filter(h=>h.retrasado||h.estado!=='completado'&&h.fecha&&h.fecha<hoy).length;
+    const hitosRet     = hitos.filter(h=>h.estado!=='completado'&&h.fecha&&h.fecha<hoy).length;
     const rfisAbiertas = rfis.filter(r=>r.estado==='abierta'||r.estado==='en_revision').length;
     const aiVencidas   = acciones.filter(a=>a.estado!=='cerrado'&&a.fecha_limite&&a.fecha_limite<hoy).length;
     const riesgosAltos = riesgos.filter(r=>r.estado==='activo'&&(r.score||0)>=6).length;
     const ncrsAbiertas = ncrs.filter(n=>n.estado!=='cerrada').length;
     const totalCert    = certs.reduce((s,c)=>s+(c.importe_certificado||0),0);
-    const ocsValor     = ocs.filter(o=>o.estado==='aprobada').reduce((s,o)=>s+(o.importe||0),0);
+    const ocsValor     = ocs.filter(o=>o.estado==='aprobada').reduce((s,o)=>s+(o.coste_adicional||0),0);
     const cierrePct    = cierre.length ? Math.round(cierre.filter(c=>c.estado==='completado'||c.estado==='no_aplica').length/cierre.length*100) : null;
     const punchAb      = punch.filter(p=>p.estado!=='cerrado').length;
     const instPend     = inst.filter(i=>i.estado==='emitida'||i.estado==='acuse_recibido').length;
@@ -20690,7 +20713,7 @@ async function getDashboardGlobal(request, env) {
     ncrs_abiertas:   (ncrsR.results||[]).filter(n=>n.estado!=='cerrada').length,
     riesgos_altos:   (riesgosR.results||[]).filter(r=>r.estado==='activo'&&(r.score||0)>=6).length,
     ai_vencidas:     (accionR.results||[]).filter(a=>a.estado!=='cerrado'&&a.fecha_limite&&a.fecha_limite<hoy).length,
-    hitos_retrasados:(hitosR.results||[]).filter(h=>h.retrasado||h.estado!=='completado'&&h.fecha&&h.fecha<hoy).length,
+    hitos_retrasados:(hitosR.results||[]).filter(h=>h.estado!=='completado'&&h.fecha&&h.fecha<hoy).length,
     punch_abiertos:  (punchR.results||[]).filter(p=>p.estado!=='cerrado').length,
     inst_pendientes: (instR.results||[]).filter(i=>i.estado==='emitida'||i.estado==='acuse_recibido').length,
   };
