@@ -671,6 +671,69 @@ describe('validarScopeEmpresaBD', () => {
     const r = validarScopeEmpresaBD('SELECT * FROM obras', [], 1, false, true);
     expect(r).toMatch(/debes filtrar explícitamente/);
   });
+
+  // ── INSERT-SCOPE-01: un INSERT no tiene WHERE, empresa_id va en la lista de columnas ──
+  describe('INSERT (INSERT-SCOPE-01)', () => {
+    it('acepta un INSERT con empresa_id como columna y placeholder ? que coincide', () => {
+      const r = validarScopeEmpresaBD(
+        'INSERT INTO permisos_trabajo (empresa_id, obra_id, tipo) VALUES (?, ?, ?)',
+        [1, 5, 'espacio_confinado'],
+        1,
+        false
+      );
+      expect(r).toBeNull();
+    });
+
+    it('acepta cuando empresa_id no es la primera columna (índice de params correcto)', () => {
+      const r = validarScopeEmpresaBD(
+        'INSERT INTO permisos_trabajo (obra_id, empresa_id, tipo) VALUES (?, ?, ?)',
+        [5, 1, 'espacio_confinado'],
+        1,
+        false
+      );
+      expect(r).toBeNull();
+    });
+
+    it('rechaza un INSERT cuyo empresa_id en params no coincide con el del que llama', () => {
+      const r = validarScopeEmpresaBD(
+        'INSERT INTO permisos_trabajo (empresa_id, obra_id) VALUES (?, ?)',
+        [2, 5],
+        1,
+        false
+      );
+      expect(r).toMatch(/no coincide con tu empresa/);
+    });
+
+    it('rechaza un INSERT sin columna empresa_id', () => {
+      const r = validarScopeEmpresaBD(
+        'INSERT INTO permisos_trabajo (obra_id, tipo) VALUES (?, ?)',
+        [5, 'espacio_confinado'],
+        1,
+        false
+      );
+      expect(r).toMatch(/debe incluir la columna empresa_id/);
+    });
+
+    it('acepta un INSERT con empresa_id como literal numérico que coincide', () => {
+      const r = validarScopeEmpresaBD(
+        'INSERT INTO permisos_trabajo (empresa_id, obra_id) VALUES (1, ?)',
+        [5],
+        1,
+        false
+      );
+      expect(r).toBeNull();
+    });
+
+    it('REPLACE INTO se valida igual que INSERT', () => {
+      const r = validarScopeEmpresaBD(
+        'REPLACE INTO permisos_trabajo (empresa_id, obra_id) VALUES (?, ?)',
+        [1, 5],
+        1,
+        false
+      );
+      expect(r).toBeNull();
+    });
+  });
 });
 
 // ── debeOmitirRateLimitDev (fix continuación 15: interruptor dev-bypass) ────

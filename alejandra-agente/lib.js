@@ -374,6 +374,48 @@ function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypass
       return `Consulta rechazada: la tabla "${t}" no está permitida sin sesión de desarrollador verificada.`;
     }
   }
+  // INSERT-SCOPE-01 (10/08/2026): un INSERT no tiene WHERE — empresa_id se declara en la
+  // lista de columnas ("INSERT INTO t (empresa_id, ...) VALUES (?, ...)"), nunca como
+  // "empresa_id = ?". La lógica de abajo está pensada para SELECT/UPDATE/DELETE (con WHERE)
+  // y, sin este caso aparte, rechazaba SIEMPRE cualquier INSERT legítimo con empresa_id como
+  // columna — bloqueando de raíz cualquier alta nueva vía escribir_bd para usuarios reales
+  // (no dev verificado). Reportado por Katherine (usuario_id=45): no podía crear un Permiso
+  // de Trabajo desde el chat del panel, "restricción de seguridad en escrituras sin WHERE
+  // previo" — exactamente este bug. Sin test previo (los existentes de esta función solo
+  // cubren SELECT con WHERE).
+  if (/^\s*(INSERT|REPLACE)\b/i.test(query)) {
+    const colMatch = query.match(/INTO\s+\S+\s*\(([^)]*)\)/i);
+    if (!colMatch) {
+      return 'Consulta rechazada: no se pudo determinar las columnas del INSERT.';
+    }
+    const columnas = colMatch[1].split(',').map(c => c.trim());
+    const idxCol = columnas.findIndex(c => /^empresa_id$/i.test(c));
+    if (idxCol === -1) {
+      return 'Consulta rechazada: el INSERT debe incluir la columna empresa_id.';
+    }
+    const valuesMatch = query.match(/VALUES\s*\(([^)]*)\)/i);
+    if (!valuesMatch) {
+      return 'Consulta rechazada: no se pudo determinar los valores del INSERT.';
+    }
+    const valores = valuesMatch[1].split(',').map(v => v.trim());
+    if (valores.length !== columnas.length) {
+      return 'Consulta rechazada: el número de valores no coincide con las columnas del INSERT.';
+    }
+    const valorEmpresaRaw = valores[idxCol];
+    let valorEmpresa;
+    if (valorEmpresaRaw === '?') {
+      const idxParam = valores.slice(0, idxCol).filter(v => v === '?').length;
+      valorEmpresa = (params || [])[idxParam];
+    } else {
+      const litMatch = valorEmpresaRaw.match(/^'?(\d+)'?$/);
+      valorEmpresa = litMatch ? litMatch[1] : undefined;
+    }
+    if (valorEmpresa === undefined || String(parseInt(valorEmpresa, 10)) !== String(parseInt(empresaId, 10))) {
+      return 'Consulta rechazada: el valor de empresa_id en el INSERT no coincide con tu empresa (o falta).';
+    }
+    return null;
+  }
+
   const literal = query.match(/\bempresa_id\s*=\s*'?(\d+)'?/i);
   if (literal) {
     if (String(parseInt(literal[1], 10)) !== String(parseInt(empresaId, 10))) {
