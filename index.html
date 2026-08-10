@@ -11742,16 +11742,25 @@ async function cargarUsuariosAdmin() {
     const usuarios = await res.json();
     const c = document.getElementById('adminUsuariosList');
     if (!usuarios.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin usuarios</div>'; return; }
-    const deptLabel = { electrico: '⚡ Eléctrico', mecanica: '🔧 Mecánicas', seguridad: '🔺 Seguridad' };
+    // AJUSTES-USUARIOS-01 (10/08/2026): deptLabel solo tenía 3 de los 12 departamentos
+    // reales (_DEPTS_CATALOG) y con una clave ('mecanica') que ni siquiera coincide con la
+    // real ('mecanicas') — cualquier usuario de un departamento nuevo (Control, Telecom,
+    // Ingeniería...) mostraba el valor crudo en vez de una etiqueta. Se reutiliza
+    // DEPT_INFO (derivado de _DEPTS_CATALOG, la misma fuente que usa el resto de la app).
+    // Email tampoco se mostraba ni se podía editar en ningún sitio — mismo gap que en
+    // panel.html (GESTION-ROLES-01), ya corregido ahí; se porta aquí para tener paridad.
     c.innerHTML = usuarios.map(u => {
       const dept = u.departamento || 'electrico';
+      const deptInfo = DEPT_INFO[dept];
       return `
       <div class="admin-list-item" id="urow-${u.id}">
         <div class="admin-item-info" style="flex:1;min-width:0">
           <div class="admin-item-name">${u.nombre}</div>
-          <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptLabel[dept] || dept}</div>
+          <div class="admin-item-sub">${u.email || 'sin email'}</div>
+          <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptInfo ? deptInfo.icon + ' ' + deptInfo.name : dept}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0" id="uact-${u.id}">
+          <button class="btn-sm" onclick="editarEmailUsuario(${u.id},'${(u.email||'').replace(/'/g,"\\'")}')" title="Cambiar email" style="font-size:13px">✉️</button>
           <button class="btn-sm" onclick="editarRolUsuario(${u.id},'${u.rol}')" title="Cambiar rol / permisos" style="font-size:13px">🎖️</button>
           <button class="btn-sm" onclick="editarObraUsuario(${u.id},${u.obra_id||'null'})" title="Asignar obra" style="font-size:13px">📍</button>
           <button class="btn-sm" onclick="editarDeptUsuario(${u.id},'${dept}')" title="Cambiar departamento" style="font-size:13px">🏢</button>
@@ -11765,17 +11774,38 @@ async function cargarUsuariosAdmin() {
 async function editarDeptUsuario(id, deptActual) {
   const actDiv = document.getElementById(`uact-${id}`);
   if (!actDiv) return;
-  const opts = [
-    { val: 'electrico', label: '⚡ Eléctrico' },
-    { val: 'mecanica',  label: '🔧 Mecánicas' },
-    { val: 'seguridad', label: '🔺 Seguridad' },
-  ];
+  // AJUSTES-USUARIOS-01 (10/08/2026): solo ofrecía 3 de los 12 departamentos reales (con
+  // 'mecanica' mal escrito, ni siquiera coincidente con el valor real 'mecanicas') — se
+  // deriva de _DEPTS_CATALOG, la misma fuente que el resto de la app.
+  const opts = Object.entries(_DEPTS_CATALOG).map(([val, info]) => ({ val, label: `${info.icon} ${info.name}` }));
   actDiv.innerHTML = `
     <select id="deptSel-${id}" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
       ${opts.map(o => `<option value="${o.val}"${o.val === deptActual ? ' selected' : ''}>${o.label}</option>`).join('')}
     </select>
     <button class="btn-sm ok" onclick="guardarDeptUsuario(${id})">✓</button>
     <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
+}
+
+function editarEmailUsuario(id, emailActual) {
+  const actDiv = document.getElementById(`uact-${id}`);
+  if (!actDiv) return;
+  actDiv.innerHTML = `
+    <input id="emailInput-${id}" type="email" value="${(emailActual||'').replace(/"/g,'&quot;')}" placeholder="usuario@empresa.com"
+      style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;width:160px">
+    <button class="btn-sm ok" onclick="guardarEmailUsuario(${id})">✓</button>
+    <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
+}
+async function guardarEmailUsuario(id) {
+  const input = document.getElementById(`emailInput-${id}`);
+  if (!input) return;
+  try {
+    const res = await apiCall(`/usuarios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ email: input.value.trim() })
+    });
+    if (res.ok) { toast('✅ Email actualizado', 'ok'); cargarUsuariosAdmin(); }
+    else { const d = await res.json().catch(()=>({})); toast(`❌ ${d.error || 'Error'}`, 'err'); }
+  } catch { toast('❌ Error de conexión', 'err'); }
 }
 
 async function guardarDeptUsuario(id) {

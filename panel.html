@@ -11236,9 +11236,22 @@ function iniciarApp() {
   // a aparecer para cualquier departamento sin importar el filtro (ver fix en
   // sidebarToggle). Ahora se ocultan y marcan explícitamente igual que
   // organizarSidebarEncargado(), para que ese fix también las proteja.
+  // SIDEBAR-COLAPSO-03 (10/08/2026): _toggleDeptClase escribía display='' directamente en
+  // cada nav-item al mostrarlo, sin mirar si la sección .sidebar-section a la que pertenece
+  // estaba colapsada — pisaba el trabajo de sidebarToggle()/inicializarEstadoSidebar() y
+  // reabría todas las secciones cada vez que cambiaba el departamento (incluido al
+  // seleccionar "Todos los departamentos", que es admin/superadmin y por tanto siempre
+  // "mostrar=true" para todas). Reportado por Adrián: quería todo colapsado por defecto al
+  // entrar y no se quedaba así. Ahora, al mostrar, respeta el colapso de la sección padre
+  // más cercana en vez de forzar visible.
+  const _seccionColapsada = (el) => {
+    let prev = el.previousElementSibling;
+    while (prev && !prev.classList.contains('sidebar-section')) prev = prev.previousElementSibling;
+    return !!(prev && prev.classList.contains('sec-collapsed'));
+  };
   const _toggleDeptClase = (clase, mostrar) => {
     document.querySelectorAll(`.${clase}`).forEach(el => {
-      el.style.display = mostrar ? '' : 'none';
+      el.style.display = (mostrar && !_seccionColapsada(el)) ? '' : 'none';
       if (mostrar) el.removeAttribute('data-hidden-by-perms');
       else el.setAttribute('data-hidden-by-perms', 'true');
     });
