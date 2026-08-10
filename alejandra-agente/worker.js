@@ -4446,7 +4446,10 @@ export default {
       let salud = {};
       try {
         const [erroresHoy, fichajesHoy, usersActivos, errorRate] = await Promise.all([
-          env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_logs WHERE tipo='error' AND created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
+          // MONITOR-LOGS-01 (10/08/2026): `alejandra_logs` no tiene columna `tipo` (es `status`,
+          // valores 'ok'/'error' — verificado contra D1 real). La consulta fallaba en SILENCIO,
+          // "errores_ultima_hora" del cron siempre daba 0.
+          env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_logs WHERE status='error' AND created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
           env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
           env.DB.prepare(`SELECT COUNT(DISTINCT usuario_id) as n FROM alejandra_historial WHERE created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
           env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_historial WHERE rol='assistant' AND contenido LIKE '%Error%' AND created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0}))
@@ -4552,10 +4555,18 @@ export default {
       else if (horaLocal >= 21 && horaLocal < 23) modoCron = 'reflexion';
 
       // ── PREDICCIÓN DE AGOTAMIENTO DE STOCK ──────────────────────────────
+      // STOCK-PREDICCION-01 (10/08/2026): mismo bug de fondo que BOBINAS-STOCK-01 (línea
+      // ~4484): `bobinas` no tiene `nombre`/`metros_restantes`/`metros_totales` — una bobina es
+      // una unidad completa (codigo, tipo, longitud, estado), no un consumible con un "total" y
+      // un "restante" por separado, así que el % de consumo original no tiene equivalente real.
+      // Redefinido con datos reales: metros disponibles ahora mismo por tipo de cable (suma de
+      // `longitud` de bobinas `disponible`) frente al consumo real de `consumo_historial`, para
+      // estimar días hasta agotarse al ritmo actual. Se retira el % de "capacidad total" — no
+      // existe ese concepto para bobinas gestionadas como unidad.
       let prediccionesStock = [];
       try {
         const bobinasConConsumo = await env.DB.prepare(`
-          SELECT b.nombre, b.metros_restantes, b.metros_totales,
+          SELECT b.tipo as nombre, SUM(COALESCE(b.longitud,0)) as metros_disponibles,
             COALESCE(c.consumo_7d, 0) as consumo_7d
           FROM bobinas b
           LEFT JOIN (
@@ -4563,44 +4574,48 @@ export default {
             FROM consumo_historial
             WHERE fecha >= date('now', '-7 days')
             GROUP BY material
-          ) c ON LOWER(c.material) = LOWER(b.nombre)
-          WHERE b.metros_restantes > 0 AND b.metros_totales > 0
+          ) c ON LOWER(c.material) = LOWER(b.tipo)
+          WHERE b.estado = 'disponible' AND b.tipo IS NOT NULL
+          GROUP BY b.tipo
         `).all().catch(() => ({results:[]}));
         for (const b of (bobinasConConsumo.results || [])) {
           const consumoDiario = b.consumo_7d > 0 ? b.consumo_7d / 7 : 0;
-          const pct = (b.metros_restantes / b.metros_totales * 100).toFixed(1);
           if (consumoDiario > 0) {
-            const diasRestantes = Math.floor(b.metros_restantes / consumoDiario);
+            const diasRestantes = Math.floor(b.metros_disponibles / consumoDiario);
             if (diasRestantes <= 7) {
-              prediccionesStock.push(`🔮 ${b.nombre}: ${b.metros_restantes}m (${pct}%), ~${consumoDiario.toFixed(1)}m/día → se agota en ~${diasRestantes} días`);
+              prediccionesStock.push(`🔮 ${b.nombre}: ${b.metros_disponibles}m disponibles, ~${consumoDiario.toFixed(1)}m/día → se agota en ~${diasRestantes} días`);
             }
-          } else if (parseFloat(pct) < 15) {
-            prediccionesStock.push(`📉 ${b.nombre}: ${b.metros_restantes}m (${pct}%) — sin datos de consumo para predecir`);
           }
         }
       } catch (e) { console.error('[CRON] Stock prediction error:', e.message); }
 
       // ── DETECCIÓN DE ANOMALÍAS ──────────────────────────────────────────
+      // ANOMALIAS-01 (10/08/2026): mismo patrón que FICHAJES-PROACTIVO-01 (línea ~4493) — no
+      // existe tabla `personal` (es `usuarios`/`personal_externo`) ni columnas `f.tipo`/`f.hora`
+      // en `fichajes` (es `hora_entrada`; no hay un `tipo` de fichaje separado, es una fila por
+      // día con entrada/salida). Tampoco existe una tabla `facturas` en D1 — no hay ningún
+      // registro de facturas de proveedor en el esquema real, así que esa comprobación se
+      // retira en vez de inventar una tabla equivalente. Las 3 consultas fallaban en SILENCIO.
       let anomalias = [];
       try {
-        const [fichajesDup, fichajesRaros, facturasDup] = await Promise.all([
-          env.DB.prepare(`SELECT p.nombre, f.tipo, f.fecha, f.hora, COUNT(*) as veces
-            FROM fichajes f LEFT JOIN personal p ON p.id=f.usuario_id
-            WHERE f.fecha>=date('now','-3 days') GROUP BY f.usuario_id,f.tipo,f.fecha,f.hora HAVING COUNT(*)>1 LIMIT 5
-          `).all().catch(() => ({results:[]})),
-          env.DB.prepare(`SELECT p.nombre, f.tipo, f.fecha, f.hora
-            FROM fichajes f LEFT JOIN personal p ON p.id=f.usuario_id
+        const [fichajesDup, fichajesRaros] = await Promise.all([
+          env.DB.prepare(`SELECT COALESCE(u.nombre, pe.nombre) as nombre, f.fecha, COUNT(*) as veces
+            FROM fichajes f
+            LEFT JOIN usuarios u ON u.id = f.usuario_id
+            LEFT JOIN personal_externo pe ON pe.id = f.personal_externo_id
             WHERE f.fecha>=date('now','-3 days')
-            AND (CAST(substr(f.hora,1,2) AS INTEGER)<5 OR CAST(substr(f.hora,1,2) AS INTEGER)>23) LIMIT 5
+            GROUP BY f.usuario_id, f.personal_externo_id, f.fecha HAVING COUNT(*)>1 LIMIT 5
           `).all().catch(() => ({results:[]})),
-          env.DB.prepare(`SELECT proveedor, importe, COUNT(*) as veces
-            FROM facturas WHERE fecha>=date('now','-30 days')
-            GROUP BY proveedor, importe HAVING COUNT(*)>1 LIMIT 5
+          env.DB.prepare(`SELECT COALESCE(u.nombre, pe.nombre) as nombre, f.fecha, f.hora_entrada as hora
+            FROM fichajes f
+            LEFT JOIN usuarios u ON u.id = f.usuario_id
+            LEFT JOIN personal_externo pe ON pe.id = f.personal_externo_id
+            WHERE f.fecha>=date('now','-3 days') AND f.hora_entrada IS NOT NULL
+            AND (CAST(substr(f.hora_entrada,1,2) AS INTEGER)<5 OR CAST(substr(f.hora_entrada,1,2) AS INTEGER)>23) LIMIT 5
           `).all().catch(() => ({results:[]}))
         ]);
-        for (const f of (fichajesDup.results||[])) anomalias.push(`🔄 Fichaje duplicado: ${f.nombre} (${f.tipo}) ${f.fecha} ${f.hora} — ${f.veces}x`);
-        for (const f of (fichajesRaros.results||[])) anomalias.push(`❓ Fichaje hora inusual: ${f.nombre} ${f.tipo} ${f.fecha} ${f.hora}`);
-        for (const f of (facturasDup.results||[])) anomalias.push(`⚠️ Posible factura duplicada: ${f.proveedor} ${f.importe}€ (${f.veces}x en 30 días)`);
+        for (const f of (fichajesDup.results||[])) anomalias.push(`🔄 Fichaje duplicado: ${f.nombre} ${f.fecha} — ${f.veces}x`);
+        for (const f of (fichajesRaros.results||[])) anomalias.push(`❓ Fichaje hora inusual: ${f.nombre} ${f.fecha} ${f.hora}`);
       } catch (e) { console.error('[CRON] Anomaly error:', e.message); }
 
       // ── SEGUIMIENTO DE TAREAS PROACTIVAS ────────────────────────────────
@@ -4623,9 +4638,11 @@ export default {
       let tendencias = [];
       if (horaLocal >= 12 && horaLocal < 14) {
         try {
+          // TENDENCIAS-GASTOS-01 (10/08/2026): mismo bug que GASTOS-SEMANA-01 (línea ~4516) —
+          // no existe tabla `gastos` (es `gastos_dietas`, columna `total` no `importe`).
           const [gP, gE, fP, fE] = await Promise.all([
-            env.DB.prepare(`SELECT COALESCE(SUM(importe),0) as t FROM gastos WHERE fecha>=date('now','-14 days') AND fecha<date('now','-7 days')`).first().catch(()=>({t:0})),
-            env.DB.prepare(`SELECT COALESCE(SUM(importe),0) as t FROM gastos WHERE fecha>=date('now','-7 days')`).first().catch(()=>({t:0})),
+            env.DB.prepare(`SELECT COALESCE(SUM(total),0) as t FROM gastos_dietas WHERE fecha>=date('now','-14 days') AND fecha<date('now','-7 days')`).first().catch(()=>({t:0})),
+            env.DB.prepare(`SELECT COALESCE(SUM(total),0) as t FROM gastos_dietas WHERE fecha>=date('now','-7 days')`).first().catch(()=>({t:0})),
             env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE fecha>=date('now','-14 days') AND fecha<date('now','-7 days')`).first().catch(()=>({n:0})),
             env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE fecha>=date('now','-7 days')`).first().catch(()=>({n:0}))
           ]);
@@ -4708,7 +4725,12 @@ export default {
 
       // Datos de negocio
       if (negocio.obras?.length > 0) partes.push(`OBRAS ACTIVAS (${negocio.obras.length}): ${negocio.obras.map(o => o.nombre).join(', ')}.`);
-      if (negocio.bobinas_bajas?.length > 0) partes.push(`⚠️ BOBINAS STOCK BAJO: ${negocio.bobinas_bajas.map(b => `${b.nombre} al ${b.pct}% (${b.metros_restantes}m de ${b.metros_totales}m)`).join('; ')}.`);
+      // BOBINAS-STOCK-02 (10/08/2026): esta línea seguía leyendo b.nombre/b.pct/b.metros_restantes/
+      // b.metros_totales, los campos de ANTES del fix BOBINAS-STOCK-01 (01/08/2026), que redefinió
+      // la consulta a {tipo, disponibles, metros_disponibles} pero no actualizó este consumidor —
+      // el briefing mostraba literalmente "undefined al undefined% (undefinedm de undefinedm)"
+      // (reportado por Adrián en el chat). Corregido a los campos reales.
+      if (negocio.bobinas_bajas?.length > 0) partes.push(`⚠️ BOBINAS STOCK BAJO: ${negocio.bobinas_bajas.map(b => `${b.tipo}: ${b.disponibles} disponible(s) (${b.metros_disponibles}m)`).join('; ')}.`);
       if (negocio.fichajes_hoy?.length > 0) {
         const presentes = negocio.fichajes_hoy.filter(f => ['presente','retraso'].includes(f.estado));
         const ausentes  = negocio.fichajes_hoy.filter(f => ['ausencia','baja','vacaciones','festivo'].includes(f.estado));
@@ -5006,10 +5028,19 @@ async function seedDefaultAlerts(env) {
     const count = await env.DB.prepare("SELECT COUNT(*) as c FROM alertas_config").first();
     if (count && count.c > 0) return;
   } catch { return; }
+  // ALERTAS-SEED-01 (10/08/2026): las 3 condicion_sql originales asumían columnas/tablas
+  // inexistentes (bobinas.metros_restantes/metros_totales, tabla `personal`, tabla `equipos`
+  // con `ultima_revision`) — mismos bugs de esquema ya documentados en el resto del archivo
+  // (BOBINAS-STOCK-01, FICHAJES-PROACTIVO-01, EQUIPOS-REVISION-01). Esta función solo siembra
+  // si `alertas_config` está vacía, así que nunca sobreescribió las 2 filas que ya existen en
+  // producción (corregidas a mano en algún momento, verificado contra D1 real) — pero seguía
+  // siendo código fuente incorrecto para cualquier entorno/empresa nueva. `bobina_baja` y
+  // `sin_fichaje` ahora coinciden con las filas reales ya en producción; `revision_equipo` se
+  // redefine con el mismo patrón de `pemp`+`carretillas` de EQUIPOS-REVISION-01.
   const defaults = [
-    ['bobina_baja', 'Bobina con stock bajo (<10%)', "SELECT id, nombre, metros_restantes, metros_totales FROM bobinas WHERE metros_restantes < (metros_totales * 0.10) AND metros_restantes > 0", 10, 'Bobina "{nombre}" al {pct}% — quedan {metros_restantes}m de {metros_totales}m'],
-    ['sin_fichaje', 'Operario sin fichar en 24h', "SELECT p.id, p.nombre FROM personal p WHERE p.activo=1 AND p.id NOT IN (SELECT DISTINCT usuario_id FROM fichajes WHERE date(fecha) = date('now'))", 0, 'Operario "{nombre}" no ha fichado hoy'],
-    ['revision_equipo', 'Equipo sin revisión en 30+ días', "SELECT id, nombre, tipo, ultima_revision FROM equipos WHERE date(ultima_revision) < date('now', '-30 days') OR ultima_revision IS NULL", 30, 'Equipo "{nombre}" ({tipo}) sin revisión desde {ultima_revision}']
+    ['bobina_baja', 'Bobina con stock bajo (<50m)', "SELECT id, codigo, tipo, seccion, longitud FROM bobinas WHERE estado = 'disponible' AND longitud < 50", 10, 'Bobina "{codigo}" ({tipo}) — quedan {longitud}m'],
+    ['sin_fichaje', 'Operario sin fichar en 24h', "SELECT u.id, u.nombre FROM usuarios u WHERE u.activo=1 AND u.rol='operario' AND u.id NOT IN (SELECT DISTINCT usuario_id FROM fichajes WHERE date(fecha) = date('now') AND usuario_id IS NOT NULL)", 0, 'Operario "{nombre}" no ha fichado hoy'],
+    ['revision_equipo', 'Equipo (PEMP/carretilla) sin revisión en 30+ días', "SELECT matricula as nombre, 'PEMP' as tipo, fecha_proxima_revision FROM pemp WHERE fecha_proxima_revision IS NOT NULL AND julianday(fecha_proxima_revision) - julianday('now') < 5 UNION ALL SELECT matricula as nombre, 'Carretilla' as tipo, fecha_proxima_revision FROM carretillas WHERE fecha_proxima_revision IS NOT NULL AND julianday(fecha_proxima_revision) - julianday('now') < 5", 30, 'Equipo "{nombre}" ({tipo}) — revisión el {fecha_proxima_revision}']
   ];
   for (const [tipo, nombre, condicion_sql, umbral, mensaje_template] of defaults) {
     await env.DB.prepare(
@@ -9927,17 +9958,31 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
           }
           return clauses.join(' AND ');
         };
+        // EXPORTAR-DATOS-01 (10/08/2026): 4 de los 5 tipos usaban columnas/tablas que no
+        // existen en D1 (bobinas.nombre/metros_totales/metros_restantes/ubicacion; tabla
+        // `personal` — es `usuarios`+`personal_externo`; fichajes.tipo/hora/ubicacion; tabla
+        // `gastos` — es `gastos_dietas`). A diferencia del resto de bugs de este archivo, este
+        // catch SÍ propaga el error al usuario (JSON.stringify({ok:false,...}) más abajo), así
+        // que la función llevaba dando error real cada vez que alguien la usaba, en vez de
+        // fallar en silencio. Corregido contra el esquema real de D1.
         switch (tipo) {
           case 'bobinas':
-            sql = `SELECT id, nombre, tipo, seccion, metros_totales, metros_restantes, ubicacion, created_at FROM bobinas WHERE ${construirWhere('', 'created_at')} ORDER BY nombre`;
+            sql = `SELECT id, codigo, tipo, seccion, longitud, estado, obra_nombre, created_at FROM bobinas WHERE ${construirWhere('', 'created_at')} ORDER BY codigo`;
             filename = `bobinas_${fecha}`;
             break;
           case 'personal':
-            sql = `SELECT id, nombre, apellidos, dni, puesto, departamento, activo, telefono, email FROM personal WHERE ${construirWhere('', null)} ORDER BY nombre`;
+            sql = `SELECT nombre, departamento, activo, rol as puesto, email, NULL as dni FROM usuarios WHERE ${construirWhere('', null)}
+                   UNION ALL
+                   SELECT nombre, departamento, activo, 'externo' as puesto, NULL as email, dni FROM personal_externo WHERE ${construirWhere('', null)}
+                   ORDER BY nombre`;
             filename = `personal_${fecha}`;
             break;
           case 'fichajes':
-            sql = `SELECT f.id, p.nombre, f.tipo, f.fecha, f.hora, f.ubicacion FROM fichajes f LEFT JOIN personal p ON p.id = f.usuario_id WHERE ${construirWhere('f.', 'f.fecha')} ORDER BY f.fecha DESC, f.hora DESC`;
+            sql = `SELECT f.id, COALESCE(u.nombre, pe.nombre) as nombre, f.fecha, f.hora_entrada, f.hora_salida, f.estado
+                   FROM fichajes f
+                   LEFT JOIN usuarios u ON u.id = f.usuario_id
+                   LEFT JOIN personal_externo pe ON pe.id = f.personal_externo_id
+                   WHERE ${construirWhere('f.', 'f.fecha')} ORDER BY f.fecha DESC, f.hora_entrada DESC`;
             filename = `fichajes_${fecha}`;
             break;
           case 'materiales':
@@ -9945,7 +9990,7 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
             filename = `materiales_${fecha}`;
             break;
           case 'gastos':
-            sql = `SELECT * FROM gastos WHERE ${construirWhere('', 'fecha')} ORDER BY fecha DESC`;
+            sql = `SELECT * FROM gastos_dietas WHERE ${construirWhere('', 'fecha')} ORDER BY fecha DESC`;
             filename = `gastos_${fecha}`;
             break;
           case 'custom': {
@@ -10011,17 +10056,25 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         // de todas las empresas en el informe) y concatenaban obraId sin
         // parametrizar. Se añade filtro empresa_id (bypass solo para dev
         // verificado/cron, que necesita informes cruzados) y bind para obraId.
-        // Se envuelve cada una en .catch() porque algunas tablas referenciadas
-        // (p.ej. "personal", "equipos_elevacion") no existen en producción --
-        // así una subconsulta rota no tira abajo el informe completo.
+        // Se envuelve cada una en .catch() porque una subconsulta rota no debe tirar
+        // abajo el informe completo.
+        // GENERAR-INFORME-01 (10/08/2026): las 5 subconsultas usaban columnas/tablas
+        // inexistentes en D1 (fichajes.tipo/hora/ubicacion + tabla "personal";
+        // incidencias.fecha_reporte/prioridad — son fecha/gravedad; bobinas.nombre/
+        // metros_totales/metros_restantes/ubicacion; tabla "equipos_elevacion" — no existe,
+        // los equipos con revisión son pemp+carretillas; pedidos.fecha_pedido — es
+        // fecha_solicitud). Las 5 fallaban en SILENCIO (el .catch de cada una), así que
+        // "generar_informe" llevaba generando informes con secciones vacías desde siempre.
         if (['general', 'fichajes', 'personal'].includes(tipo)) {
-          let sqlF = `SELECT p.nombre, f.tipo, f.fecha, f.hora, f.ubicacion
-                      FROM fichajes f LEFT JOIN personal p ON p.id=f.usuario_id
+          let sqlF = `SELECT COALESCE(u.nombre, pe.nombre) as nombre, f.fecha, f.hora_entrada, f.hora_salida, f.estado
+                      FROM fichajes f
+                      LEFT JOIN usuarios u ON u.id = f.usuario_id
+                      LEFT JOIN personal_externo pe ON pe.id = f.personal_externo_id
                       WHERE f.fecha >= date('now','-30 days')`;
           const bindsF = [];
           if (!esDevVerificado) { sqlF += ' AND f.empresa_id=?'; bindsF.push(empresa_id); }
           if (obraId) { sqlF += ' AND f.obra_id=?'; bindsF.push(obraId); }
-          sqlF += ' ORDER BY f.fecha DESC, f.hora DESC LIMIT 100';
+          sqlF += ' ORDER BY f.fecha DESC, f.hora_entrada DESC LIMIT 100';
           let stmtF = env.DB.prepare(sqlF);
           if (bindsF.length) stmtF = stmtF.bind(...bindsF);
           const rowsF = await stmtF.all().catch(() => ({ results: [] }));
@@ -10030,12 +10083,12 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
 
         // Incidencias
         if (['general', 'incidencias'].includes(tipo)) {
-          let sqlI = `SELECT titulo, tipo, estado, prioridad, fecha_reporte, descripcion
-                      FROM incidencias WHERE fecha_reporte >= date('now','-30 days')`;
+          let sqlI = `SELECT titulo, tipo, estado, gravedad, fecha, descripcion
+                      FROM incidencias WHERE fecha >= date('now','-30 days')`;
           const bindsI = [];
           if (!esDevVerificado) { sqlI += ' AND empresa_id=?'; bindsI.push(empresa_id); }
           if (obraId) { sqlI += ' AND obra_id=?'; bindsI.push(obraId); }
-          sqlI += ' ORDER BY prioridad DESC, fecha_reporte DESC LIMIT 50';
+          sqlI += ' ORDER BY gravedad DESC, fecha DESC LIMIT 50';
           let stmtI = env.DB.prepare(sqlI);
           if (bindsI.length) stmtI = stmtI.bind(...bindsI);
           const rowsI = await stmtI.all().catch(() => ({ results: [] }));
@@ -10044,12 +10097,12 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
 
         // Bobinas
         if (['general', 'bobinas', 'material'].includes(tipo)) {
-          let sqlB = `SELECT nombre, tipo, seccion, metros_totales, metros_restantes, ubicacion, estado
+          let sqlB = `SELECT codigo, tipo, seccion, longitud, obra_nombre, estado
                       FROM bobinas WHERE 1=1`;
           const bindsB = [];
           if (!esDevVerificado) { sqlB += ' AND empresa_id=?'; bindsB.push(empresa_id); }
           if (obraId) { sqlB += ' AND obra_id=?'; bindsB.push(obraId); }
-          sqlB += ' ORDER BY nombre LIMIT 80';
+          sqlB += ' ORDER BY codigo LIMIT 80';
           let stmtB = env.DB.prepare(sqlB);
           if (bindsB.length) stmtB = stmtB.bind(...bindsB);
           const rowsB = await stmtB.all().catch(() => ({ results: [] }));
@@ -10058,10 +10111,15 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
 
         // Equipos (PEMP / carretillas)
         if (['general', 'equipos'].includes(tipo)) {
-          let sqlE = `SELECT nombre, tipo, matricula, estado, fecha_revision_iteq,
-                             operador_habilitado, empresa_propietaria
-                      FROM equipos_elevacion WHERE 1=1`;
+          let sqlE = `SELECT matricula as nombre, tipo, estado, fecha_proxima_revision, obra_nombre
+                      FROM pemp WHERE 1=1`;
           const bindsE = [];
+          if (!esDevVerificado) { sqlE += ' AND empresa_id=?'; bindsE.push(empresa_id); }
+          if (obraId) { sqlE += ' AND obra_id=?'; bindsE.push(obraId); }
+          sqlE += `
+                      UNION ALL
+                      SELECT matricula as nombre, tipo, estado, fecha_proxima_revision, obra_nombre
+                      FROM carretillas WHERE 1=1`;
           if (!esDevVerificado) { sqlE += ' AND empresa_id=?'; bindsE.push(empresa_id); }
           if (obraId) { sqlE += ' AND obra_id=?'; bindsE.push(obraId); }
           sqlE += ' ORDER BY tipo, nombre LIMIT 60';
@@ -10073,12 +10131,12 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
 
         // Pedidos
         if (['general', 'pedidos'].includes(tipo)) {
-          let sqlP = `SELECT referencia, descripcion, estado, fecha_pedido, proveedor, cantidad, unidad
-                      FROM pedidos WHERE fecha_pedido >= date('now','-30 days')`;
+          let sqlP = `SELECT referencia, descripcion, estado, fecha_solicitud, proveedor, cantidad, unidad
+                      FROM pedidos WHERE fecha_solicitud >= date('now','-30 days')`;
           const bindsP = [];
           if (!esDevVerificado) { sqlP += ' AND empresa_id=?'; bindsP.push(empresa_id); }
           if (obraId) { sqlP += ' AND obra_id=?'; bindsP.push(obraId); }
-          sqlP += ' ORDER BY fecha_pedido DESC LIMIT 50';
+          sqlP += ' ORDER BY fecha_solicitud DESC LIMIT 50';
           let stmtP = env.DB.prepare(sqlP);
           if (bindsP.length) stmtP = stmtP.bind(...bindsP);
           const rowsP = await stmtP.all().catch(() => ({ results: [] }));
@@ -10486,50 +10544,52 @@ ${secciones}
 </html>`;
 }
 
+// GENERAR-INFORME-01 (10/08/2026): columnas actualizadas para coincidir con el esquema real
+// de D1 tras el fix de las consultas de arriba (ver ese comentario para el detalle completo).
 function generarTablaFichajes(rows) {
   if (!rows.length) return '<h2>Fichajes</h2><p class="empty">Sin registros en el periodo.</p>';
   const filas = rows.map(r =>
-    `<tr><td>${r.nombre || '-'}</td><td>${r.tipo || '-'}</td><td>${r.fecha || '-'}</td><td>${r.hora || '-'}</td><td>${r.ubicacion || '-'}</td></tr>`
+    `<tr><td>${r.nombre || '-'}</td><td>${r.fecha || '-'}</td><td>${r.hora_entrada || '-'}</td><td>${r.hora_salida || '-'}</td><td>${r.estado || '-'}</td></tr>`
   ).join('');
   return `<h2>📋 Fichajes</h2>
-<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Fecha</th><th>Hora</th><th>Ubicación</th></tr></thead>
+<table><thead><tr><th>Nombre</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr></thead>
 <tbody>${filas}</tbody></table>`;
 }
 
 function generarTablaIncidencias(rows) {
   if (!rows.length) return '<h2>Incidencias</h2><p class="empty">Sin incidencias en el periodo.</p>';
   const filas = rows.map(r =>
-    `<tr><td>${r.titulo || '-'}</td><td>${r.tipo || '-'}</td><td>${r.estado || '-'}</td><td>${r.prioridad || '-'}</td><td>${r.fecha_reporte || '-'}</td></tr>`
+    `<tr><td>${r.titulo || '-'}</td><td>${r.tipo || '-'}</td><td>${r.estado || '-'}</td><td>${r.gravedad || '-'}</td><td>${r.fecha || '-'}</td></tr>`
   ).join('');
   return `<h2>⚠️ Incidencias</h2>
-<table><thead><tr><th>Título</th><th>Tipo</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr></thead>
+<table><thead><tr><th>Título</th><th>Tipo</th><th>Estado</th><th>Gravedad</th><th>Fecha</th></tr></thead>
 <tbody>${filas}</tbody></table>`;
 }
 
 function generarTablaBobinas(rows) {
   if (!rows.length) return '<h2>Bobinas</h2><p class="empty">Sin bobinas registradas.</p>';
   const filas = rows.map(r =>
-    `<tr><td>${r.nombre || '-'}</td><td>${r.tipo || '-'}</td><td>${r.seccion || '-'}</td><td>${r.metros_totales ?? '-'}</td><td>${r.metros_restantes ?? '-'}</td><td>${r.ubicacion || '-'}</td><td>${r.estado || '-'}</td></tr>`
+    `<tr><td>${r.codigo || '-'}</td><td>${r.tipo || '-'}</td><td>${r.seccion || '-'}</td><td>${r.longitud ?? '-'}</td><td>${r.obra_nombre || '-'}</td><td>${r.estado || '-'}</td></tr>`
   ).join('');
   return `<h2>🔌 Bobinas de cable</h2>
-<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Sección</th><th>m. Total</th><th>m. Restantes</th><th>Ubicación</th><th>Estado</th></tr></thead>
+<table><thead><tr><th>Código</th><th>Tipo</th><th>Sección</th><th>Longitud (m)</th><th>Obra</th><th>Estado</th></tr></thead>
 <tbody>${filas}</tbody></table>`;
 }
 
 function generarTablaEquipos(rows) {
   if (!rows.length) return '<h2>Equipos</h2><p class="empty">Sin equipos registrados.</p>';
   const filas = rows.map(r =>
-    `<tr><td>${r.nombre || '-'}</td><td>${r.tipo || '-'}</td><td>${r.matricula || '-'}</td><td>${r.estado || '-'}</td><td>${r.fecha_revision_iteq || '-'}</td><td>${r.operador_habilitado || '-'}</td></tr>`
+    `<tr><td>${r.nombre || '-'}</td><td>${r.tipo || '-'}</td><td>${r.estado || '-'}</td><td>${r.fecha_proxima_revision || '-'}</td><td>${r.obra_nombre || '-'}</td></tr>`
   ).join('');
-  return `<h2>🏗️ Equipos de elevación</h2>
-<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Matrícula</th><th>Estado</th><th>Rev. ITEQ</th><th>Operador habilitado</th></tr></thead>
+  return `<h2>🏗️ Equipos (PEMP / carretillas)</h2>
+<table><thead><tr><th>Matrícula</th><th>Tipo</th><th>Estado</th><th>Próxima revisión</th><th>Obra</th></tr></thead>
 <tbody>${filas}</tbody></table>`;
 }
 
 function generarTablaPedidos(rows) {
   if (!rows.length) return '<h2>Pedidos</h2><p class="empty">Sin pedidos en el periodo.</p>';
   const filas = rows.map(r =>
-    `<tr><td>${r.referencia || '-'}</td><td>${r.descripcion || '-'}</td><td>${r.estado || '-'}</td><td>${r.fecha_pedido || '-'}</td><td>${r.proveedor || '-'}</td><td>${r.cantidad ?? '-'} ${r.unidad || ''}</td></tr>`
+    `<tr><td>${r.referencia || '-'}</td><td>${r.descripcion || '-'}</td><td>${r.estado || '-'}</td><td>${r.fecha_solicitud || '-'}</td><td>${r.proveedor || '-'}</td><td>${r.cantidad ?? '-'} ${r.unidad || ''}</td></tr>`
   ).join('');
   return `<h2>📦 Pedidos</h2>
 <table><thead><tr><th>Referencia</th><th>Descripción</th><th>Estado</th><th>Fecha</th><th>Proveedor</th><th>Cantidad</th></tr></thead>
