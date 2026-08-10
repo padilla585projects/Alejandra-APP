@@ -1365,8 +1365,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 </div>
 
 <!-- Modal Reconocimiento -->
-<div id="recModal" class="modal" style="display:none">
-  <div class="modal-content" style="max-width:520px">
+<div id="recModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)recCerrarModal()">
+  <div class="modal" style="max-width:520px">
     <div class="modal-header"><h3 id="recModalTitulo">Reconocimiento Médico</h3><span class="modal-close" onclick="recCerrarModal()">✕</span></div>
     <div class="modal-body">
       <div class="form-group"><label>Trabajador *</label><input id="recNombre" type="text" placeholder="Nombre completo"></div>
@@ -1432,8 +1432,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   </div>
 </div>
 
-<div id="docObraModal" class="modal" style="display:none">
-  <div class="modal-content" style="max-width:560px">
+<div id="docObraModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)document.getElementById('docObraModal').style.display='none'">
+  <div class="modal" style="max-width:560px">
     <div class="modal-header"><h3>Documento de Obra</h3><span class="modal-close" onclick="document.getElementById('docObraModal').style.display='none'">✕</span></div>
     <div class="modal-body">
       <div class="form-group"><label>Tipo de documento *</label><select id="docObraTipo">
@@ -1511,8 +1511,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   </div>
 </div>
 
-<div id="ptModal" class="modal" style="display:none">
-  <div class="modal-content" style="max-width:600px">
+<div id="ptModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)document.getElementById('ptModal').style.display='none'">
+  <div class="modal" style="max-width:600px">
     <div class="modal-header"><h3>Permiso de Trabajo</h3><span class="modal-close" onclick="document.getElementById('ptModal').style.display='none'">✕</span></div>
     <div class="modal-body">
       <div class="form-row">
@@ -1578,8 +1578,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   </div>
 </div>
 
-<div id="inspModal" class="modal" style="display:none">
-  <div class="modal-content" style="max-width:580px">
+<div id="inspModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)inspCerrarModal()">
+  <div class="modal" style="max-width:580px">
     <div class="modal-header"><h3 id="inspModalTitulo">Inspección de Seguridad</h3><span class="modal-close" onclick="inspCerrarModal()">✕</span></div>
     <div class="modal-body">
       <div class="form-row">
@@ -7016,9 +7016,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         </div>
 
         <!-- MODAL SUBIR FOTO -->
-        <div id="modalSubirFoto" class="modal" style="display:none">
-          <div class="modal-content" style="max-width:520px">
-            <div class="modal-header"><span class="modal-title">📷 Subir foto de obra</span><button class="modal-close" onclick="cerrarModal('modalSubirFoto')">✕</button></div>
+        <div id="modalSubirFoto" class="modal-overlay" style="display:none" onclick="if(event.target===this)document.getElementById('modalSubirFoto').style.display='none'">
+          <div class="modal" style="max-width:520px">
+            <div class="modal-header"><span class="modal-title">📷 Subir foto de obra</span><button class="modal-close" onclick="document.getElementById('modalSubirFoto').style.display='none'">✕</button></div>
             <div class="modal-body">
               <div style="border:2px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-bottom:16px;cursor:pointer;transition:.2s" id="fotoDrop"
                    onclick="document.getElementById('fotoFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--primary)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleFotoDrop(event)">
@@ -7038,7 +7038,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               </div>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-secondary" onclick="cerrarModal('modalSubirFoto')">Cancelar</button>
+              <button class="btn btn-secondary" onclick="document.getElementById('modalSubirFoto').style.display='none'">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarFoto()" id="btnSubirFoto">📤 Subir</button>
             </div>
           </div>
@@ -32080,7 +32080,7 @@ function abrirModalSubirFoto() {
   if (obraIdFilter && document.getElementById('fotoObraId')) {
     document.getElementById('fotoObraId').value = obraIdFilter;
   }
-  abrirModal('modalSubirFoto');
+  document.getElementById('modalSubirFoto').style.display = 'flex';
 }
 
 function handleFotoFileSelect(input) {
@@ -32137,7 +32137,7 @@ async function guardarFoto() {
     const d = await res.json();
     if (btn) { btn.disabled = false; btn.textContent = '📤 Subir'; }
     if (d.ok || d.id) {
-      cerrarModal('modalSubirFoto');
+      document.getElementById('modalSubirFoto').style.display = 'none';
       toast('Foto subida ✅', 'ok');
       cargarFotosObra();
     } else {
@@ -32479,11 +32479,11 @@ async function cargarTransmittals() {
 function abrirModalTransmittal(d={}) {
   const isEdit = !!d.id;
   const modalHtml = `
-    <div class="modal" id="modalTransmittal" style="display:flex">
-      <div class="modal-content" style="max-width:560px">
+    <div class="modal-overlay" id="modalTransmittal" style="display:flex" onclick="if(event.target===this)document.getElementById('modalTransmittal').remove()">
+      <div class="modal" style="max-width:560px">
         <div class="modal-header">
           <span class="modal-title">${isEdit?'✏️ Editar':'+ Nuevo'} Transmittal</span>
-          <button class="modal-close" onclick="cerrarModal('modalTransmittal')">✕</button>
+          <button class="modal-close" onclick="document.getElementById('modalTransmittal').remove()">✕</button>
         </div>
         <div class="modal-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -32510,7 +32510,7 @@ function abrirModalTransmittal(d={}) {
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="cerrarModal('modalTransmittal')">Cancelar</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('modalTransmittal').remove()">Cancelar</button>
           <button class="btn btn-primary" onclick="guardarTransmittal(${d.id||0})">💾 Guardar</button>
         </div>
       </div>
@@ -32553,7 +32553,6 @@ async function guardarTransmittal(id) {
     ? await api(`/transmittals-obra/${id}`, 'PUT', body)
     : await api('/transmittals-obra', 'POST', body);
   if (r?.ok || r?.id) {
-    cerrarModal('modalTransmittal');
     document.getElementById('modalTransmittal')?.remove();
     toast(id ? 'Transmittal actualizado ✅' : `Transmittal creado ✅ (${r.numero})`, 'ok');
     cargarTransmittals();
@@ -33592,11 +33591,11 @@ async function abrirModalEntrega(id = null) {
   const isEdit = !!id;
   const obrasOpts = await _getObrasOpts();
   const modalHtml = `
-    <div class="modal" id="modalEntrega" style="display:flex">
-      <div class="modal-content" style="max-width:700px">
+    <div class="modal-overlay" id="modalEntrega" style="display:flex" onclick="if(event.target===this)document.getElementById('modalEntrega').remove()">
+      <div class="modal" style="max-width:700px">
         <div class="modal-header">
           <span class="modal-title">${isEdit ? '✏️ Editar' : '+ Nueva'} Entrega de Material</span>
-          <button class="modal-close" onclick="cerrarModal('modalEntrega')">✕</button>
+          <button class="modal-close" onclick="document.getElementById('modalEntrega').remove()">✕</button>
         </div>
         <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <label style="grid-column:1/-1">Descripcion del material *
@@ -33623,12 +33622,13 @@ async function abrirModalEntrega(id = null) {
           <label style="grid-column:1/-1">Notas<textarea class="form-input" id="enNotas" rows="2" style="resize:vertical">${d.notas||''}</textarea></label>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="cerrarModal('modalEntrega')">Cancelar</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('modalEntrega').remove()">Cancelar</button>
           <button class="btn btn-primary" onclick="guardarEntrega(${id||0})">Guardar</button>
         </div>
       </div>
     </div>`;
-  abrirModal(modalHtml);
+  document.getElementById('modalEntrega')?.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 function calcImporte() {
@@ -33663,7 +33663,7 @@ async function guardarEntrega(id) {
   const method = id ? 'PUT' : 'POST';
   const r = await api(url, method, body);
   if (r?.ok || r?.id) {
-    cerrarModal('modalEntrega');
+    document.getElementById('modalEntrega')?.remove();
     toast(id ? 'Entrega actualizada ✅' : `Pedido creado ✅ (${r.numero||''})`, 'ok');
     tblEntregas = null; // force recreate
     cargarEntregasMaterial();
@@ -33775,11 +33775,11 @@ async function abrirModalAI(id = null) {
   const isEdit = !!id;
   const obrasOpts = await _getObrasOpts();
   const modalHtml = `
-    <div class="modal" id="modalAI" style="display:flex">
-      <div class="modal-content" style="max-width:620px">
+    <div class="modal-overlay" id="modalAI" style="display:flex" onclick="if(event.target===this)document.getElementById('modalAI').remove()">
+      <div class="modal" style="max-width:620px">
         <div class="modal-header">
           <span class="modal-title">${isEdit?'✏️ Editar':'+ Nuevo'} Punto de Accion</span>
-          <button class="modal-close" onclick="cerrarModal('modalAI')">✕</button>
+          <button class="modal-close" onclick="document.getElementById('modalAI').remove()">✕</button>
         </div>
         <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <label style="grid-column:1/-1">Descripcion *
@@ -33805,12 +33805,13 @@ async function abrirModalAI(id = null) {
             <textarea class="form-input" id="aiNotas" rows="2" style="resize:vertical">${d.notas||''}</textarea></label>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="cerrarModal('modalAI')">Cancelar</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('modalAI').remove()">Cancelar</button>
           <button class="btn btn-primary" onclick="guardarAccionItem(${id||0})">Guardar</button>
         </div>
       </div>
     </div>`;
-  abrirModal(modalHtml);
+  document.getElementById('modalAI')?.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 async function guardarAccionItem(id) {
@@ -33830,7 +33831,7 @@ async function guardarAccionItem(id) {
   const method = id ? 'PUT' : 'POST';
   const r = await api(url, method, body);
   if (r?.ok || r?.id) {
-    cerrarModal('modalAI');
+    document.getElementById('modalAI')?.remove();
     toast(id ? 'Punto actualizado ✅' : `Punto creado ✅ (${r.numero||''})`, 'ok');
     tblAccionItems = null;
     cargarAccionItems();
@@ -34224,11 +34225,11 @@ async function abrirModalRiesgo(id = null) {
   const isEdit = !!id;
   const obrasOpts = await _getObrasOpts();
   const modalHtml = `
-    <div class="modal" id="modalRiesgo" style="display:flex">
-      <div class="modal-content" style="max-width:720px;max-height:90vh;overflow-y:auto">
+    <div class="modal-overlay" id="modalRiesgo" style="display:flex" onclick="if(event.target===this)document.getElementById('modalRiesgo').remove()">
+      <div class="modal" style="max-width:720px;max-height:90vh;overflow-y:auto">
         <div class="modal-header">
           <span class="modal-title">${isEdit?'✏️ Editar':'+ Nuevo'} Riesgo</span>
-          <button class="modal-close" onclick="cerrarModal('modalRiesgo')">✕</button>
+          <button class="modal-close" onclick="document.getElementById('modalRiesgo').remove()">✕</button>
         </div>
         <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <label style="grid-column:1/-1">Titulo *
@@ -34276,12 +34277,13 @@ async function abrirModalRiesgo(id = null) {
             <textarea class="form-input" id="rgNotas" rows="2" style="resize:vertical">${d.notas||''}</textarea></label>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="cerrarModal('modalRiesgo')">Cancelar</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('modalRiesgo').remove()">Cancelar</button>
           <button class="btn btn-primary" onclick="guardarRiesgo(${id||0})">Guardar</button>
         </div>
       </div>
     </div>`;
-  abrirModal(modalHtml);
+  document.getElementById('modalRiesgo')?.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
   setTimeout(rgCalcScore, 100);
 }
 
@@ -34318,7 +34320,7 @@ async function guardarRiesgo(id) {
   const method = id ? 'PUT' : 'POST';
   const r = await api(url, method, body);
   if (r?.ok || r?.id) {
-    cerrarModal('modalRiesgo');
+    document.getElementById('modalRiesgo')?.remove();
     toast(id ? 'Riesgo actualizado ✅' : `Riesgo creado ✅ (${r.numero||''}) · Nivel: ${r.nivel||''}`, 'ok');
     cargarRiesgos();
   } else toast(r?.error || 'Error al guardar', 'err');
