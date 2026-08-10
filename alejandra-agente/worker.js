@@ -4025,7 +4025,15 @@ export default {
         // (perdiendo authOk y las tools de desarrollador) y el historial cross-dispositivo
         // (que exige sesión) daba 401. Se acepta X-Token como alternativa, mismo patrón que
         // ya usa el endpoint /conocimiento un poco más abajo en este archivo.
-        const token = authHeader.replace('Bearer ', '').trim() || (request.headers.get('X-Token') || '').trim();
+        // DESCARGA-INFORME-01 (10/08/2026): igual que ya hace getAuth() en worker.js raíz
+        // ("acepta también ?token= en URL pero SOLO para GET"), se añade el mismo fallback
+        // aquí — un enlace de descarga normal (<a href>) no puede mandar cabeceras, así que
+        // sin esto /files/<key> era inalcanzable como enlace clicable en el chat. Katherine
+        // pidió "quiero poder descargármelo" y no había forma de dárselo salvo email/Telegram
+        // (ambos rotos aparte). Solo GET; nunca para escrituras, para no filtrar el token por
+        // el Referer de una navegación.
+        const tokenUrl = request.method === 'GET' ? (new URL(request.url).searchParams.get('token') || '') : '';
+        const token = authHeader.replace('Bearer ', '').trim() || (request.headers.get('X-Token') || '').trim() || tokenUrl.trim();
         if (!token) return null;
         // Probar admin token primero
         if (environment.ADMIN_TOKEN && timingSafeEqual(token, environment.ADMIN_TOKEN)) {
@@ -10145,7 +10153,28 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
 
         const html = generarPlantillaInforme(titulo, periodo, fecha, secciones);
         const r2Key = `informes/${fecha}_${tipo}_${titulo.replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
-        await env.FILES.put(r2Key, html, { httpMetadata: { contentType: 'text/html; charset=utf-8' } });
+        // DESCARGA-INFORME-01 (10/08/2026): dos bugs encontrados a la vez al investigar por
+        // qué Katherine no podía descargarse un permiso generado (email roto por el dominio
+        // sandbox de Resend, Telegram sin vincular, y ningún tercer camino ofrecido):
+        // 1. Sin customMetadata, GET /files/<key> (puedeAccederArchivo → empresaDeArchivo)
+        //    denegaba SIEMPRE el acceso a cualquier informe generado, incluso al dueño real
+        //    con token válido — empresaDeArchivo no tiene ningún empresa_id de qué tirar.
+        // 2. No existía ningún enlace de descarga directo — el resultado de la tool solo
+        //    apuntaba a enviar_email/enviar_telegram_informe (ambos con fallos propios).
+        await env.FILES.put(r2Key, html, {
+          httpMetadata: { contentType: 'text/html; charset=utf-8' },
+          customMetadata: { usuario_id: String(usuario_id || '') },
+        });
+
+        let downloadUrl = null;
+        try {
+          const sesionActual = await env.DB.prepare(
+            `SELECT token FROM sesiones WHERE usuario_id = ? ORDER BY last_used DESC LIMIT 1`
+          ).bind(String(usuario_id)).first();
+          if (sesionActual?.token) {
+            downloadUrl = `https://alejandra-agente.alejandra-app.workers.dev/files/${encodeURIComponent(r2Key)}?token=${sesionActual.token}`;
+          }
+        } catch (_) {}
 
         return JSON.stringify({
           ok: true,
@@ -10154,7 +10183,10 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
           tipo,
           periodo,
           bytes: html.length,
-          msg: `Informe HTML generado (${html.length} bytes). Usa enviar_email o enviar_telegram_informe para enviarlo.`
+          download_url: downloadUrl,
+          msg: downloadUrl
+            ? `Informe HTML generado (${html.length} bytes). Enlace de descarga directo: ${downloadUrl} — ofrécelo siempre como primera opción; enviar_email/enviar_telegram_informe quedan como alternativas si el usuario las pide.`
+            : `Informe HTML generado (${html.length} bytes). No se pudo generar un enlace de descarga (sin sesión activa) — usa enviar_email o enviar_telegram_informe.`
         });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
