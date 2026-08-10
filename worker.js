@@ -10512,11 +10512,13 @@ async function getTrabajadores(request, env) {
   // aislamiento por departamento.
   const deptFilter = !isDeptPrivileged(auth) ? departamento : null;
 
-  let sqlU = 'SELECT id, nombre, rol, departamento, obra_id, NULL as dni, "app" as tipo, foto_r2_key, CASE WHEN telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios WHERE empresa_id=? AND activo=1';
+  // TRABAJADORES-COLS-01 (10/08/2026): el SELECT no traía obra_nombre ni email, pero el
+  // panel (tblPersonal) tiene columnas 'obra_nombre' y 'email' que quedaban siempre vacías.
+  let sqlU = 'SELECT u.id, u.nombre, u.rol, u.departamento, u.obra_id, o.nombre as obra_nombre, u.email, u.activo, NULL as dni, "app" as tipo, u.foto_r2_key, CASE WHEN u.telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios u LEFT JOIN obras o ON o.id = u.obra_id WHERE u.empresa_id=? AND u.activo=1';
   const paramsU = [empresa_id];
-  if (obra_id) { sqlU += ' AND obra_id=?'; paramsU.push(parseInt(obra_id)); }
-  if (deptFilter) { sqlU += ' AND departamento=?'; paramsU.push(deptFilter); }
-  sqlU += ' ORDER BY nombre';
+  if (obra_id) { sqlU += ' AND u.obra_id=?'; paramsU.push(parseInt(obra_id)); }
+  if (deptFilter) { sqlU += ' AND u.departamento=?'; paramsU.push(deptFilter); }
+  sqlU += ' ORDER BY u.nombre';
 
   let sqlP = 'SELECT id, nombre, NULL as rol, departamento, obra_id, dni, "externo" as tipo, foto_r2_key, 0 as tiene_telegram FROM personal_externo WHERE empresa_id=? AND activo=1';
   const paramsP = [empresa_id];
