@@ -3,6 +3,47 @@
 - Actualizado: 2026-08-10
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
+## Auditoría del módulo Personal en panel.html (2026-08-10)
+
+A petición de Adrián ("revisa todo lo referente a Personal, todos sus subdepartamentos, que
+los wizard funcionen y estén al mismo estilo de la app") se auditaron los sub-módulos de la
+sección Personal del panel de oficina (Trabajadores, Fichajes, Hojas de Tiempo, Turnos,
+Ausencias y Permisos, Horarios de Obra, Formación de Obra, EPIs). Fichajes ya se había
+auditado a fondo un día antes (ver sección "Fichajes" más abajo). Bugs encontrados y
+corregidos (commit `31fcc91`, desplegado: Worker + Pages):
+
+- `crearUsuario()` (`worker.js`) exige `nombre`+`codigo` (login por código, no por
+  email/contraseña) y nunca lee `email`/`password`. Los modales "+ Nuevo trabajador"
+  (Personal) y "+ Nuevo usuario" (Usuarios) mandaban `email`/`password` y fallaban SIEMPRE
+  al crear — el alta de personal desde el panel estaba completamente rota. Fix: ambos
+  modales piden ahora `codigo`; el email queda como campo opcional que se guarda con un PUT
+  posterior.
+- `getTrabajadores()` no seleccionaba `obra_nombre` ni `email` pese a que la tabla de
+  Personal del panel ya tenía esas columnas — quedaban siempre vacías. Se añadió un `LEFT
+  JOIN` con `obras` y `u.email` al SELECT.
+- Hojas de Tiempo (`poblarTrabajadoresTs()`) llamaba a `/personal`, endpoint que no existe
+  en el router (solo `/personal/trabajadores`, `/personal/semana`, `/personal/mes`) — el
+  selector de trabajador quedaba siempre vacío, imposible crear un Parte de Horas.
+- Bug de estilo más amplio de lo esperado: las clases `modal-box`, `modal-head`,
+  `modal-foot` y `modal-content` (usadas dentro de un `modal-overlay` correcto) **no tenían
+  CSS definido en ningún sitio** — las clases reales del sistema de diseño son `modal`,
+  `modal-header`, `modal-footer`. Afectaba a 14 modales del panel, incluido Formación de
+  Obra (Personal). Se corrigieron los 14 renombrando a la clase real.
+- 3 selects/input del toolbar de Ausencias y Permisos con `border:1px solid #ccc`
+  hardcoded rompían el tema oscuro — pasados a `var(--border)`.
+
+**Pendiente para mañana:** se detectó un bug de estilo distinto y más grave en otros 9
+modales (Reconocimiento, Documentación de obra, Permiso de Trabajo, Inspecciones, Subir
+Foto, Transmittal, Entrega, AI, Riesgo) — el div exterior usa `class="modal"` en vez de
+`class="modal-overlay"`, así que no tienen fondo oscuro ni centrado al abrirse. Tarea en
+curso en una sesión aparte (ver `HANDOFF.md`), sin publicar todavía.
+
+Adrián planteó además dos ideas de producto sin implementar aún: (1) que Alejandra le avise
+por Telegram casi en tiempo real cuando se tope con un problema real (tool que falla,
+permiso que falta, dato que no cuadra); (2) un "buzón" de incidencias/sugerencias donde
+Alejandra vaya anotando cosas para repasar más tarde, en vez de o además de avisar en
+caliente. Sin decisión de alcance ni implementación todavía.
+
 ## Contaminación de contexto en el chat + auditoría de bugs de esquema (2026-08-10)
 
 Adrián reportó que Alejandra respondía en la app con contenido de una conversación de hace

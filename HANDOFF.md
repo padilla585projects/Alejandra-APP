@@ -1,5 +1,56 @@
 # Handoff — Alejandra 2.0
 
+## Auditoría del módulo Personal en panel.html + estilo de modales (2026-08-10)
+
+- Contexto: tras cerrar la auditoría de Fichajes ("no puede fallar", ver sección más abajo),
+  Adrián pidió repetir el mismo tipo de revisión sobre el resto de sub-módulos de Personal
+  (Trabajadores, Hojas de Tiempo, Turnos, Ausencias y Permisos, Horarios de Obra, Formación
+  de Obra, EPIs) y sobre el estilo/consistencia de sus modales ("wizard"). Auditado con un
+  agente Explore de solo lectura; fixes aplicados a mano tras verificar cada caso.
+- **Trabajadores/Usuarios completamente rotos al crear.** `crearUsuario()` (`worker.js`)
+  exige `nombre`+`codigo` (esta app hace login por código de obra, no por email/contraseña)
+  y nunca lee `email`/`password`. Los modales "+ Nuevo trabajador" (Personal) y "+ Nuevo
+  usuario" (Usuarios) mandaban `{email,password}` — el alta fallaba SIEMPRE con "Faltan
+  nombre y código", sin excepción, desde que existen esos modales. Corregido: ambos piden
+  ahora `codigo`; email queda opcional y se guarda con un PUT tras el alta.
+- `getTrabajadores()` no traía `obra_nombre` ni `email` en el SELECT pese a que la tabla del
+  panel ya tenía esas columnas — quedaban siempre vacías. Añadido `LEFT JOIN obras` + `email`.
+- Hojas de Tiempo: `poblarTrabajadoresTs()` llamaba a `/personal` (no existe en el router —
+  solo `/personal/trabajadores`, `/personal/semana`, `/personal/mes`) — el selector de
+  trabajador quedaba siempre vacío, imposible crear un Parte de Horas.
+- **Hallazgo de estilo más amplio de lo esperado**, al investigar por qué un modal (Horarios
+  de Obra, reportado el día anterior) "no coincidía con el estilo de la app": las clases
+  `modal-box`, `modal-head`, `modal-foot` y `modal-content` (usadas dentro de un
+  `modal-overlay` correcto, la estructura de ~50 modales del panel) **no tenían CSS
+  definido en ningún sitio del archivo** — las clases reales del sistema de diseño son
+  `modal`/`modal-header`/`modal-footer`. El navegador simplemente ignora una clase que no
+  existe (sin error visible), así que esos modales se abrían sin card, sin fondo con
+  gradiente, sin `box-shadow` — solo el texto flotando sobre el overlay oscuro. Afectaba a
+  14 modales, incluido Formación de Obra (Personal). Corregidos los 14 (rename mecánico de
+  clase, sin tocar estructura ni lógica).
+- 3 selects/input del toolbar de Ausencias y Permisos con `border:1px solid #ccc` hardcoded
+  rompían el tema oscuro — pasados a `var(--border)`.
+- Verificación: `node --check worker.js` limpio; `<script>` de `panel.html` extraídos y
+  verificados con `node --check` (sin errores de sintaxis); sin patrones de encoding
+  corrupto en el diff.
+- Despliegue: commit `31fcc91`. `worker.js` → `wrangler deploy` directo (Current Version ID
+  `7fda7212-9981-4a69-8330-8520b172b71b`). `panel.html` → Pages publicado vía
+  `gh workflow run pages.yml` (run `31433007745`, verde, healthcheck incluido).
+- **Pendiente para mañana, sin publicar:** durante la misma auditoría se detectó un bug de
+  estilo distinto — 9 modales (`recModal`, `docObraModal`, `ptModal`, `inspModal`,
+  `modalSubirFoto`, `modalTransmittal`, `modalEntrega`, `modalAI`, `modalRiesgo`) tienen el
+  div EXTERIOR con `class="modal"` en vez de `class="modal-overlay"` — como `.modal` es la
+  clase de la card (no del overlay fijo con fondo oscuro/blur/centrado), estos modales no
+  tendrían backdrop ni centrado al abrirse. Root cause distinto al de arriba (estructura mal
+  formada, no solo nombre de clase erróneo), así que se dejó fuera del lote de hoy a
+  propósito. Se lanzó como tarea en segundo plano (sesión aparte, mismo working tree) con
+  instrucciones detalladas de qué cambiar y cómo verificarlo visualmente en el navegador
+  antes de dar por bueno el fix; seguía en curso al cierre de esta sesión.
+- Ideas de producto planteadas por Adrián, sin implementar: (1) aviso por Telegram
+  casi-en-tiempo-real cuando Alejandra se tope con un problema real; (2) un "buzón" de
+  incidencias/sugerencias donde Alejandra vaya anotando cosas para repasar más tarde. Nada
+  decidido sobre alcance ni prioridad todavía.
+
 ## Dos bugs reales encontrados investigando "Alejandra tiene problemas para hacer cosas" (2026-08-10)
 
 - Contexto: Adrián pidió revisar por qué el chat tenía problemas al pedirle cosas. Investigación contra D1 real (historial, trazas, logs) de la conversación de Katherine (usuario_id=45) intentando crear un Permiso de Trabajo desde el panel.
