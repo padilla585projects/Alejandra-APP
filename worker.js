@@ -10453,14 +10453,18 @@ async function eliminarPersonalExterno(id, request, env) {
 
 // ── Trabajadores (usuarios app + externo) ──────────────────────────────────
 async function getTrabajadores(request, env) {
-  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, departamento } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
 
-  // Filtro de departamento para usuarios no-admin
-  const isAdminRole = isSuperadmin || isEmpresaAdmin || isDesarrollador || isAdmin;
-  const deptFilter = !isAdminRole && (rol === 'oficina' || rol === 'encargado') ? departamento : null;
+  // DEPT-CPD-01 (09/08/2026, mismo criterio que getEpisAsignados): antes solo se filtraba
+  // para rol==='oficina'||'encargado', dejando a operario/jefe_de_obra (y cualquier otro
+  // rol) ver la plantilla de TODOS los departamentos en el selector de trabajador (EPIs,
+  // Carnets, Fichajes). isDeptPrivileged es el criterio correcto ya usado en el resto del
+  // aislamiento por departamento.
+  const deptFilter = !isDeptPrivileged(auth) ? departamento : null;
 
   let sqlU = 'SELECT id, nombre, rol, departamento, obra_id, NULL as dni, "app" as tipo, foto_r2_key, CASE WHEN telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios WHERE empresa_id=? AND activo=1';
   const paramsU = [empresa_id];
@@ -10567,7 +10571,8 @@ async function eliminarEpiAsignado(id, request, env) {
 
 // ── Carnets y certificaciones (NEW-19) ─────────────────────────────────────
 async function getCarnets(request, env) {
-  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, rol, departamento } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, rol, departamento } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   // DEPT-CPD-01 (09/08/2026): panel.html oculta Carnets a "oficina" (nav-sensitive-data,
   // dato personal) pero el backend no comprobaba nada -- cualquier oficina podia pedirlo
@@ -10575,14 +10580,19 @@ async function getCarnets(request, env) {
   if (rol === 'oficina' && !isSuperadmin && !isEmpresaAdmin && !isDesarrollador) return err('Sin permisos', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
-  let sql = 'SELECT * FROM carnets WHERE empresa_id=?';
+  // BUG-CARNETS (21/07/2026) resuelto (10/08/2026): la tabla carnets no tiene columna
+  // departamento propia, pero sí usuario_id/externo_id -- se deriva por JOIN contra
+  // usuarios/personal_externo en vez de añadir una columna nueva (evita migracion +
+  // backfill). Antes: sin filtro alguno, oficina/encargado (y cualquier rol no bloqueado
+  // arriba) veian carnets de TODOS los departamentos. Mismo criterio que getEpisAsignados.
+  let sql = `SELECT c.* FROM carnets c
+    LEFT JOIN usuarios u ON u.id = c.usuario_id
+    LEFT JOIN personal_externo pe ON pe.id = c.externo_id
+    WHERE c.empresa_id=?`;
   const params = [empresa_id];
-  if (obra_id) { sql += ' AND obra_id=?'; params.push(parseInt(obra_id)); }
-  // BUG-CARNETS (21/07/2026): la tabla carnets no tiene columna departamento -> este filtro
-  // causaba 500 (SQLITE_ERROR: no such column) para todo oficina/encargado. Quitado hasta que
-  // se implemente el flujo completo (columna + captura al crear + backfill). Mientras tanto,
-  // oficina/encargado ven todos los carnets de su empresa, igual que superadmin/empresa_admin.
-  sql += ' ORDER BY nombre_trabajador, tipo';
+  if (obra_id) { sql += ' AND c.obra_id=?'; params.push(parseInt(obra_id)); }
+  if (!isDeptPrivileged(auth)) { sql += ' AND COALESCE(u.departamento, pe.departamento) = ?'; params.push(departamento); }
+  sql += ' ORDER BY c.nombre_trabajador, c.tipo';
   const rows = await env.DB.prepare(sql).bind(...params).all();
   return json(rows.results);
 }

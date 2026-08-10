@@ -864,6 +864,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <!-- NEW-188: Control y Telecom fijos justo después de Eléctrico, a petición de Adrián (10/08/2026) -->
+      <div id="priorityDeptCards" style="display:flex;flex-direction:column;gap:14px"></div>
       <div id="deptCard_mecanicas" class="dept-card" onclick="seleccionarDepto('mecanicas')">
         <div class="dept-icon-wrap">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
@@ -6668,11 +6670,15 @@ const _ALL_DEPTS = Object.keys(_DEPTS_CATALOG);
 
 // NEW-187: depts extra del catálogo (los que no tienen card hardcodeada en HTML)
 const _CORE_DEPTS = ['electrico', 'mecanicas', 'seguridad', 'personal'];
-function _renderExtraDeptCards() {
-  const cont = document.getElementById('extraDeptCards');
+// NEW-188 (10/08/2026): Control y Telecom se sacan de la lista "extra" (orden alfabético
+// del catálogo) para fijarlos justo después de Eléctrico, a petición de Adrián.
+const _PRIORITY_DEPTS = ['control', 'telecom'];
+function _renderDeptCardsInto(contId, keys) {
+  const cont = document.getElementById(contId);
   if (!cont) return;
-  const html = Object.entries(_DEPTS_CATALOG)
-    .filter(([k]) => !_CORE_DEPTS.includes(k))
+  const html = keys
+    .map((k) => [k, _DEPTS_CATALOG[k]])
+    .filter(([, v]) => v)
     .map(([k, v]) => `
       <div id="deptCard_${k}" class="dept-card" onclick="seleccionarDepto('${k}')">
         <div class="dept-icon-wrap" style="display:flex;align-items:center;justify-content:center;font-size:36px">${v.icon}</div>
@@ -6684,8 +6690,16 @@ function _renderExtraDeptCards() {
       </div>`).join('');
   cont.innerHTML = html;
 }
+function _renderPriorityDeptCards() {
+  _renderDeptCardsInto('priorityDeptCards', _PRIORITY_DEPTS);
+}
+function _renderExtraDeptCards() {
+  const resto = Object.keys(_DEPTS_CATALOG).filter((k) => !_CORE_DEPTS.includes(k) && !_PRIORITY_DEPTS.includes(k));
+  _renderDeptCardsInto('extraDeptCards', resto);
+}
 
 async function aplicarDeptosActivos() {
+  _renderPriorityDeptCards();
   _renderExtraDeptCards();
   // Aplicar caché inmediatamente
   let activos = _ALL_DEPTS;
