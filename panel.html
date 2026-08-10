@@ -9696,9 +9696,15 @@ function hasSessionRole(...rols) {
   return rols.some(r => all.includes(r));
 }
 
+// ACCESO-OFFICE-01 (10/08/2026): no incluía 'empresa_admin' -- un empresa_admin (rol
+// principal, "su empresa completa" según CLAUDE.md) NO entraba al panel de oficina salvo
+// que además tuviera 'oficina' como rol extra, algo que ningún flujo de creación/edición de
+// usuario deja claro que haga falta. Adrián le subió el rol a Katherine a empresa_admin
+// esperando que eso le diera acceso a Office (como dice la documentación del rol) y no
+// entraba -- tuvo que además añadirle 'oficina' como rol extra a mano para que colara.
 function puedeEntrarOffice(rol, rolesExtra = []) {
   const roles = [rol, ...rolesExtra].filter(Boolean);
-  return roles.includes('oficina') || roles.includes('superadmin') || roles.includes('desarrollador');
+  return roles.includes('oficina') || roles.includes('superadmin') || roles.includes('desarrollador') || roles.includes('empresa_admin');
 }
 
 // ── UTILIDADES ─────────────────────────────────────────────────
@@ -13494,6 +13500,14 @@ async function cargarPersonal() {
   if (tblPersonal) { tblPersonal.replaceData(data); return; }
 
   const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
+  // GESTION-ROLES-01 (10/08/2026): la columna "Rol" solo pintaba un badge de solo lectura --
+  // no había ninguna forma de cambiar el rol de un usuario desde el panel (el backend, PUT
+  // /usuarios/:id, ya lo soportaba desde siempre; el único camino era pedírselo a Alejandra
+  // por chat). Editable solo para quien realmente puede asignar roles de verdad
+  // (empresa_admin/superadmin/desarrollador) -- encargado/oficina/jefe_de_obra podrían
+  // intentarlo pero el backend los restringe a roles no-admin, así que ni se les ofrece aquí.
+  const canEditRol = ['empresa_admin', 'superadmin', 'desarrollador'].includes(SESSION.rol);
+  const ROLES_ASIGNABLES_TABLA = ['operario', 'encargado', 'oficina', 'jefe_de_obra', 'project_manager', 'almacenero', 'ingeniero', 'empresa_admin', 'superadmin', 'desarrollador'];
 
   tblPersonal = new Tabulator('#tblPersonal', {
     data, layout: 'fitColumns', responsiveLayout: 'collapse',
@@ -13504,6 +13518,9 @@ async function cargarPersonal() {
         editor: canEdit ? 'input' : false,
         cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'nombre', cell.getValue()) },
       { title: 'Rol', field: 'rol', sorter: 'string', width: 130,
+        editor: canEditRol ? 'list' : false,
+        editorParams: { values: ROLES_ASIGNABLES_TABLA },
+        cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'rol', cell.getValue()),
         formatter: (cell) => {
           const v = cell.getValue();
           const cls = { empresa_admin:'accent', encargado:'warn', operario:'info', jefe_de_obra:'blue', oficina:'ok' }[v] || 'muted';
@@ -16874,7 +16891,9 @@ async function cargarUsuarios() {
       { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180,
         editor: canEdit ? 'input' : false,
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'nombre', c.getValue()) },
-      { title: 'Email', field: 'email', minWidth: 180 },
+      { title: 'Email', field: 'email', minWidth: 180,
+        editor: canEdit ? 'input' : false,
+        cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'email', c.getValue()) },
       { title: 'Rol', field: 'rol', width: 150,
         editor: canEdit ? 'select' : false,
         // ROLES-04: project_manager/almacenero ya existían desde v8.17 pero faltaban en

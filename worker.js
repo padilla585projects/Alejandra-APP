@@ -8806,8 +8806,22 @@ async function editarUsuario(id, request, env) {
   const esPlataformaAdminEd = isSuperadmin || isAdmin;
   const esAdminRealEd = esPlataformaAdminEd || isEmpresaAdmin;
   const campos = esPlataformaAdminEd
-    ? ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra']
-    : ['nombre', 'codigo', 'rol', 'obra_id', 'departamento'];
+    ? ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra', 'email']
+    : ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'email'];
+  // GESTION-USUARIOS-01 (10/08/2026): "email" no era editable en absoluto (ni en el
+  // frontend ni aceptado por este endpoint) — el único campo del panel de Usuarios que no
+  // se podía tocar. Es la identidad de login (password y Google la buscan por email), así
+  // que se valida formato y unicidad antes de guardar para no dejar a nadie sin poder
+  // entrar por una colisión o un email mal formado.
+  if (esAdminRealEd && body.email !== undefined) {
+    const emailNuevo = safeStr(body.email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNuevo)) {
+      return err('Email con formato no válido', 400);
+    }
+    const choque = await env.DB.prepare('SELECT id FROM usuarios WHERE LOWER(email) = ? AND id != ?').bind(emailNuevo, id).first();
+    if (choque) return err('Ya existe otro usuario con ese email', 409);
+    body.email = emailNuevo;
+  }
   if (!esPlataformaAdminEd && body.rol !== undefined) {
     const ROLES_ASIGNABLES_EMPRESA_ADMIN_ED = [...ROLES_ASIGNABLES_NO_ADMIN, 'empresa_admin'];
     const permitidosEd = isEmpresaAdmin ? ROLES_ASIGNABLES_EMPRESA_ADMIN_ED : ROLES_ASIGNABLES_NO_ADMIN;
@@ -15907,10 +15921,16 @@ async function syncPing(request, env) {
     });
     // Marcar inactivos los que no pingen en 60s
     await env.DB.prepare("UPDATE sync_dispositivos SET activo=0 WHERE ultimo_ping < datetime('now', '-60 seconds')").run();
-    // Devolver todos los activos de la misma empresa
+    // SYNC-DISPOSITIVOS-01 (10/08/2026): "empresa_id = ? OR usuario_id = ?" devolvía TODOS
+    // los dispositivos activos de la empresa entera, no solo los del usuario que pregunta —
+    // el indicador "📱 Móvil conectado" de escaneo remoto (pensado como emparejamiento 1:1
+    // entre el móvil propio y la sesión de Office propia) mostraba el móvil de CUALQUIER
+    // compañero activo en ese momento como si estuviera emparejado con tu sesión. Reportado
+    // por Adrián: "por qué sale que se conectó Katherine en mi sesión". Se acota a los
+    // dispositivos del propio usuario.
     const devs = await env.DB.prepare(
-      "SELECT tipo, nombre, ultimo_ping FROM sync_dispositivos WHERE activo=1 AND (empresa_id = ? OR usuario_id = ?) ORDER BY ultimo_ping DESC"
-    ).bind(empId, uid).all();
+      "SELECT tipo, nombre, ultimo_ping FROM sync_dispositivos WHERE activo=1 AND usuario_id = ? ORDER BY ultimo_ping DESC"
+    ).bind(uid).all();
     return json({ ok: true, dispositivos: devs.results || [] });
   } catch (e) {
     return json({ ok: false, error: e.message });

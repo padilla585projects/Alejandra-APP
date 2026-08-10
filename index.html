@@ -11752,6 +11752,7 @@ async function cargarUsuariosAdmin() {
           <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptLabel[dept] || dept}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0" id="uact-${u.id}">
+          <button class="btn-sm" onclick="editarRolUsuario(${u.id},'${u.rol}')" title="Cambiar rol / permisos" style="font-size:13px">🎖️</button>
           <button class="btn-sm" onclick="editarObraUsuario(${u.id},${u.obra_id||'null'})" title="Asignar obra" style="font-size:13px">📍</button>
           <button class="btn-sm" onclick="editarDeptUsuario(${u.id},'${dept}')" title="Cambiar departamento" style="font-size:13px">🏢</button>
           <button class="btn-sm danger" onclick="eliminarUsuario(${u.id})">🗑</button>
@@ -11787,6 +11788,45 @@ async function guardarDeptUsuario(id) {
     });
     if (res.ok) { toast('✅ Departamento actualizado', 'ok'); cargarUsuariosAdmin(); }
     else { const d = await res.json(); toast(`❌ ${d.error || 'Error'}`, 'err'); }
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+// GESTION-ROLES-01 (10/08/2026): el backend (PUT /usuarios/:id) ya soportaba cambiar el
+// rol desde siempre, pero ningún frontend tenía un control para hacerlo — solo
+// departamento y obra (editarDeptUsuario/editarObraUsuario, mismo patrón que se reutiliza
+// aquí). El único camino existente era pedírselo a Alejandra por chat.
+const ROLES_ASIGNABLES_UI = [
+  { val: 'operario', label: 'Operario' },
+  { val: 'encargado', label: 'Encargado' },
+  { val: 'oficina', label: 'Oficina' },
+  { val: 'jefe_de_obra', label: 'Jefe de obra' },
+  { val: 'project_manager', label: 'Project manager' },
+  { val: 'almacenero', label: 'Almacenero' },
+  { val: 'ingeniero', label: 'Ingeniero' },
+  { val: 'empresa_admin', label: 'Empresa admin' },
+  { val: 'superadmin', label: 'Superadmin' },
+  { val: 'desarrollador', label: 'Desarrollador' },
+];
+function editarRolUsuario(id, rolActual) {
+  const actDiv = document.getElementById(`uact-${id}`);
+  if (!actDiv) return;
+  actDiv.innerHTML = `
+    <select id="rolSel-${id}" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+      ${ROLES_ASIGNABLES_UI.map(o => `<option value="${o.val}"${o.val === rolActual ? ' selected' : ''}>${o.label}</option>`).join('')}
+    </select>
+    <button class="btn-sm ok" onclick="guardarRolUsuario(${id})">✓</button>
+    <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
+}
+async function guardarRolUsuario(id) {
+  const sel = document.getElementById(`rolSel-${id}`);
+  if (!sel) return;
+  try {
+    const res = await apiCall(`/usuarios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ rol: sel.value })
+    });
+    if (res.ok) { toast('✅ Rol actualizado', 'ok'); cargarUsuariosAdmin(); }
+    else { const d = await res.json().catch(()=>({})); toast(`❌ ${d.error || 'Error'}`, 'err'); }
   } catch { toast('❌ Error de conexión', 'err'); }
 }
 
