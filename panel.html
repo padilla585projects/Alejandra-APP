@@ -15335,11 +15335,21 @@ async function cargarPemp() {
       { title: 'Tipo', field: 'tipo', sorter: 'string', minWidth: 160 },
       { title: 'Marca', field: 'marca', minWidth: 120 },
       { title: 'Estado', field: 'estado', width: 110,
+        // TABULATOR-EDITOR-SELECT-01 (10/08/2026): esta y otras 8 columnas de todo
+        // panel.html usaban editor: 'select', que existía en Tabulator 5.x pero fue
+        // eliminado en Tabulator 6.3.0 (la versión cargada aquí, ver <script> de unpkg) —
+        // se renombró a 'list'. Con 'select' inválido, Tabulator solo dejaba un warning en
+        // consola ("Editor Error - No such editor found: select") y la celda quedaba de
+        // solo lectura SIN avisar en la interfaz: clic sin efecto, como si no hubiera
+        // editor configurado en absoluto. Reportado por Adrián: no podía cambiar rol,
+        // departamento ni obra de ningún usuario desde el panel. Mismo bug en las 9
+        // columnas que usaban 'select' en todo el archivo, todas corregidas a 'list'.
+        //
         // NOTA: valores capitalizados ("Disponible"/"Averiada") a propósito — el
         // backend (editarPemp) solo dispara fecha_averia/fecha_reparacion y las
         // notificaciones de Telegram con ese casing exacto, igual que ya envía
         // la app móvil (index.html). Si se guarda en minúscula, esa lógica no salta.
-        editor: canEdit ? 'select' : false,
+        editor: canEdit ? 'list' : false,
         editorParams: { values: ['Disponible','Averiada'] },
         formatter: c => {
           const v = c.getValue();
@@ -15382,7 +15392,7 @@ async function cargarCarretillas() {
       { title: 'Estado', field: 'estado', width: 110,
         // Mismo criterio que PEMP: valores capitalizados para no romper la
         // lógica de fecha_averia/fecha_reparacion de editarCarretilla.
-        editor: canEdit ? 'select' : false,
+        editor: canEdit ? 'list' : false,
         editorParams: { values: ['Disponible','Averiada'] },
         formatter: c => {
           const v = c.getValue();
@@ -15498,7 +15508,7 @@ async function cargarHerramientas() {
       { title: 'Marca', field: 'marca', minWidth: 120 },
       { title: 'N° serie', field: 'numero_serie', minWidth: 120 },
       { title: 'Estado', field: 'estado', width: 120,
-        editor: canEdit ? 'select' : false,
+        editor: canEdit ? 'list' : false,
         editorParams: { values: ['disponible','asignada','averiada'] },
         formatter: c => {
           const v = c.getValue();
@@ -16452,7 +16462,7 @@ async function cargarIncidencias() {
       { title: 'Tipo', field: 'tipo', width: 110,
         formatter: c => `<span class="badge badge-info">${c.getValue() || '—'}</span>` },
       { title: 'Estado', field: 'estado', width: 130,
-        editor: canEdit ? 'select' : false,
+        editor: canEdit ? 'list' : false,
         editorParams: { values: { abierta:'Abierta', en_progreso:'En progreso', cerrada:'Cerrada' } },
         formatter: c => {
           const v = c.getValue();
@@ -16608,7 +16618,7 @@ async function cargarPedidos() {
       { title: 'Cant.', field: 'cantidad', width: 70, hozAlign: 'center',
         formatter: c => `${c.getValue() || 1} ${c.getRow().getData().unidad || 'ud'}` },
       { title: 'Estado', field: 'estado', width: 130,
-        editor: canEdit ? 'select' : false,
+        editor: canEdit ? 'list' : false,
         editorParams: { values: { pendiente:'Pendiente', aprobado:'Aprobado', entregado:'Entregado', cancelado:'Cancelado' } },
         formatter: c => {
           const v = c.getValue();
@@ -16903,7 +16913,7 @@ async function cargarUsuarios() {
         editor: canEdit ? 'input' : false,
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'email', c.getValue()) },
       { title: 'Rol', field: 'rol', width: 150,
-        editor: canEdit ? 'select' : false,
+        editor: canEdit ? 'list' : false,
         // ROLES-04: project_manager/almacenero ya existían desde v8.17 pero faltaban en
         // este selector (no se podía asignar el rol principal desde aquí, solo por API o
         // como rol extra); añadidos junto con el nuevo rol ingeniero.
@@ -16928,12 +16938,12 @@ async function cargarUsuarios() {
         },
         cellClick: canEdit ? (e, c) => editarRolesExtra(c.getRow().getData()) : undefined },
       { title: 'Dpto.', field: 'departamento', width: 140,
-        editor: canEdit ? 'select' : false,
+        editor: canEdit ? 'list' : false,
         editorParams: { values: Object.fromEntries(_ALL_DEPTS.map(d => [d, _DEPTS_CATALOG[d].icon + ' ' + _DEPTS_CATALOG[d].name])) },
         formatter: c => { const v = c.getValue(); const info = _DEPTS_CATALOG[v]; return info ? `<span class="badge badge-muted">${info.icon} ${info.name}</span>` : (v || '—'); },
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'departamento', c.getValue()) },
       { title: 'Obra', field: 'obra_id', minWidth: 150,
-        editor: canEdit ? 'select' : false,
+        editor: canEdit ? 'list' : false,
         editorParams: () => ({ values: Object.fromEntries([['', '— Sin obra —'], ...(window._obrasPanel || []).map(o => [o.id, o.nombre])]) }),
         formatter: c => { const row = c.getRow().getData(); return row.obra_nombre ? `<span style="font-size:12px">🏗 ${row.obra_nombre}</span>` : '<span style="color:var(--muted)">—</span>'; },
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'obra_id', c.getValue() || null).then(() => { tblUsuarios = null; cargarUsuarios(); }) },
@@ -33151,7 +33161,7 @@ async function cargarItpItems(itpId) {
       { title:'Responsable', field:'responsable', width:130 },
       { title:'Doc. Ref.', field:'doc_ref', width:100 },
       { title:'Resultado', field:'resultado', width:140,
-        editor:'select', editorParams:{ values:{ pendiente:'⏳ Pendiente', conforme:'✅ Conforme', no_conforme:'❌ No conforme', na:'N/A' } },
+        editor:'list', editorParams:{ values:{ pendiente:'⏳ Pendiente', conforme:'✅ Conforme', no_conforme:'❌ No conforme', na:'N/A' } },
         cellEdited: async c => {
           const id=c.getRow().getData().id;
           await api(`/itp-obra/${itpId}/items/${id}`, { method:'PUT', body:JSON.stringify({ resultado:c.getValue() }) });
