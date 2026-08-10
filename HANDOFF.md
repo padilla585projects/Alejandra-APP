@@ -1,5 +1,24 @@
 # Handoff — Alejandra 2.0
 
+## Auditoría de aislamiento por departamento — Alejandra Office (2026-08-10)
+
+- Contexto: Adrián pidió revisar que ningún departamento vea datos de otro en Office ("que en los desplegables no salga nada que no tenga que estar ahí"). Auditoría completa (agente Explore, solo lectura) sobre `worker.js` cruzando cada `get*`/`list*` contra `isDeptPrivileged()` y el sidebar curado por departamento de `panel.html`.
+- **Resuelto sin migración (este commit, `a6d1a9b`):** `getObsSeguridad`/`crearObsSeguridad`/`actualizarObsSeguridad`/`eliminarObsSeguridad` y `getToolboxTalks`/`crearToolboxTalk`/`actualizarToolboxTalk`/`eliminarToolboxTalk` pasan a exigir `isDeptPrivileged(auth)` — decisión del Director: son exclusivos de Seguridad, no transversales (mismo criterio ya usado en `permisos_trabajo`/`ats`). `getRfiDetalle` corrige un IDOR: el listado ya acotaba por departamento pero el detalle por id no comprobaba nada (`rfis` ya tiene columna `departamento`, sin necesitar migración).
+- Decisiones del Director sobre los casos ambiguos: **Diario de obra** y **Correspondencia** son transversales (sin cambio); **Checklists** (plantillas/ejecuciones) y **Consumos/Solicitudes de material** deben acotarse por departamento (pendiente, necesitan migración — ver abajo).
+- Despliegue/verificación (2026-08-10): commit `a6d1a9b`, `wrangler deploy` directo (ARC-021), `GET /health` → `healthy`, versión `5d9bdc57-ec3d-494a-bac5-257be7c8db08` (reportó primero la versión anterior por lag de edge, confirmado tras reconsultar).
+
+### Pendiente — requiere migración D1 (18 tablas sin columna `departamento`)
+
+Confirmado con evidencia línea por línea que sirven datos curados por departamento en el sidebar de Office pero el backend solo filtra por `empresa_id`:
+
+`ordenes_cambio`, `hitos_obra`, `fases_obra`, `contactos_obra`, `contratos_obra`, `submittals`, `transmittals_obra`, `ncrs_obra`, `riesgos_obra`, `plan_semanal`, `instrucciones_obra`, `visitas_obra`, `itp_obra`, `ordenes_compra`, `entregas_material`, `checklist_plantillas`, `checklist_ejecuciones`, `consumos_material`, `solicitudes_material`.
+
+Además, cuatro endpoints de detalle-por-id sin `deptGuard` (mismo patrón de IDOR ya corregido en `getRfiDetalle`, pendientes de que sus tablas tengan la columna): `getEntregaMaterial`, `getChecklistPlantilla`, `getChecklistEjecucion`.
+
+Fix recomendado por tabla, mismo patrón ya usado en `rfis`/`tareas_obra`/`actas_reunion`/`control_calidad`/`punch_list` (ciclo de 5 pasos de ADR-0011): declarar migración `ALTER TABLE ADD COLUMN departamento TEXT`, autorización del Director para aplicar contra D1, añadir `deptGuard` (`if (!isDeptPrivileged(auth) && auth.departamento) { sql += ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }`) a listado/detalle/alta/edición/borrado de cada una, desplegar y verificar. `getCronogramaObra` es un caso especial: agrega `fases_obra`+`hitos_obra`+`tareas_obra`, el guard se añade a las tres subconsultas una vez tengan la columna.
+
+Detalle completo del hallazgo (18 tablas + IDOR) en el informe de la auditoría — sin persistir aquí por extensión; ver este HANDOFF como resumen ejecutivo y `TASKS.md` para la tarea formal cuando se abra.
+
 ## Fix — fuga cross-departamento en selectores de trabajador + reorden de departamentos (2026-08-10)
 
 - Contexto: Adrián reportó "los desplegables en cada departamento... aparecen a veces algunos que no deben estar ahí". Investigación (agente Explore, solo lectura) encontró causa raíz real en `worker.js`, no en frontend.
