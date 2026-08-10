@@ -1,5 +1,16 @@
 # Handoff — Alejandra 2.0
 
+## Cierre de la auditoría amplia — pendientes de menor prioridad (2026-08-10)
+
+- Contexto: Adrián pidió revisar también los puntos de menor prioridad dejados fuera de la auditoría anterior (endpoints `/api/admin/*`, catches con logging pero con la query interna silenciada antes de llegar al log).
+- Revisado `nexusWatchers` completo (`worker.js`) tabla por tabla contra D1 real: **2 bugs reales más** en el watcher #2 (`PendingUsersWatcher`) y en `diagnosticar_usuario` (tool de autodiagnóstico), ambos por el mismo motivo — `usuarios.aprobado` no existe (verificado). El resto de watchers (`UserAccess`, `ErrorPatrol`, `Carnets`, `Reconocimientos`, `PermisosTrabajo`, `Inspecciones`, `FixesStale`, `ErrorVelocity`, `DeployCorrelation`, `Security`) se verificaron contra D1 real y están todos correctos.
+- Hallazgo adicional al investigar el "pendiente de aprobación": no existe un flujo de aprobación genérico en `usuarios` — el único real es el alta por Google (`google_pending=1 AND activo=0`, funciones `aprobarUsuarioPendiente`/`rechazarUsuarioPendiente` ya existentes). `diagnosticar_usuario` también comparaba `user.google_id` (no existe, es `google_pending`) contra un valor que nunca coincidía, así que nunca detectaba correctamente una cuenta de Google.
+- Fix: `PendingUsersWatcher` y `diagnosticar_usuario` ahora usan `google_pending=1 AND activo=0` como criterio real de "pendiente"; `diagnosticar_usuario` sugiere aprobar por el flujo real en vez de un `UPDATE` directo que dejaría la cuenta sin `empresa_id`/`rol`/`departamento` asignados.
+- Revisados también (sin bugs, código correcto): `estado_obra` (tool de `alejandra-agente`, usa `importe_previsto/importe_real`/`coste_adicional` correctos) y los endpoints de admin de tokens/config (`agente_config`, `alejandra_token_uso`) — coinciden con el esquema real.
+- Con esto se da por cerrada la auditoría amplia de este tipo de bug para hoy; si se encuentra otro caso en el futuro, mismo criterio: verificar contra D1 real antes de tocar código, nunca asumir el esquema por el nombre de la columna.
+- Verificación: `node --check worker.js` limpio; sin patrones de encoding corrupto.
+- Despliegue/verificación (2026-08-10): commit `f8fa9dc`, `wrangler deploy` directo. `/health` → versión `8c3cd5b2-f6e4-4b7a-bbac-f2b4ee0ac591` (tras el lag de edge habitual de ~10s).
+
 ## Auditoría amplia — bugs de esquema en catches silenciosos (2026-08-10)
 
 - Contexto: tras OBRAS-ACTIVAS-01/GASTOS-SEMANA-01, Adrián preguntó directamente si esto significaba que "las mejoras cognitivas no funcionan" — se le explicó que el Motor de Decisión (ADR-0020, ya probado y verificado en vivo el mismo día) es un sistema aparte de este bloque de datos de negocio del cron, y pidió una auditoría amplia del mismo patrón (`.catch()` silencioso sobre columnas/tablas nunca verificadas contra D1 real) en el resto de los dos Workers. Dos agentes Explore en paralelo (solo lectura), uno por archivo.
