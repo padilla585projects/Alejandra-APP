@@ -4513,7 +4513,10 @@ export default {
               CAST(julianday(fecha_proxima_revision) - julianday('now') AS INTEGER) as dias_restantes
             FROM carretillas WHERE fecha_proxima_revision IS NOT NULL AND julianday(fecha_proxima_revision) - julianday('now') < 5
             ORDER BY dias_restantes ASC LIMIT 10`).all().catch(() => ({results:[]})),
-          env.DB.prepare(`SELECT SUM(importe) as total, COUNT(*) as n FROM gastos WHERE fecha >= date('now', '-7 days')`).first().catch(() => ({total:0,n:0})),
+          // GASTOS-SEMANA-01 (10/08/2026): no existe una tabla `gastos` en D1 (la real es
+          // `gastos_dietas`, columna `total` en vez de `importe` — verificado contra D1 real).
+          // Mismo patrón de fallo silencioso que las otras consultas de este bloque.
+          env.DB.prepare(`SELECT SUM(total) as total, COUNT(*) as n FROM gastos_dietas WHERE fecha >= date('now', '-7 days')`).first().catch(() => ({total:0,n:0})),
           env.DB.prepare(`SELECT COUNT(*) as n FROM incidencias WHERE estado IN ('abierta','pendiente')`).first().catch(() => ({n:0})),
           env.DB.prepare(`SELECT COUNT(*) as n FROM usuarios WHERE activo = 1`).first().catch(() => ({n:0})),
           env.DB.prepare(`SELECT obra_nombre, SUM(cantidad * precio_unitario) as coste_total, COUNT(*) as lineas FROM materiales_obra WHERE fecha >= date('now', '-7 days') GROUP BY obra_nombre LIMIT 10`).all().catch(() => ({results:[]}))
