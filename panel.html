@@ -1064,7 +1064,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <option value="carpinteria">🪟 Carpintería</option>
         <option value="almacen">📦 Almacén</option>
       </select>
-      <div class="topbar-user" id="topbarUser">
+      <div class="topbar-user" id="topbarUser" onclick="abrirMiCuenta()" style="cursor:pointer" title="Mi cuenta">
         <span>👤</span>
         <span id="topbarName">—</span>
         <span class="rol-badge" id="topbarRol"></span>
@@ -20520,11 +20520,77 @@ function cerrarModal() {
   // (borrarEmpresaDefinitivoTabla) lo personalizan a "Borrar definitivamente"/btn-danger y si
   // no se resetea aquí, el SIGUIENTE modal que use abrirModal() heredaría ese texto/color.
   const btn = document.getElementById('modalOkBtn');
-  if (btn) { btn.textContent = 'Guardar'; btn.classList.remove('btn-danger'); }
+  if (btn) { btn.textContent = 'Guardar'; btn.classList.remove('btn-danger'); btn.style.display = ''; }
 }
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modalOverlay')) cerrarModal();
 });
+
+// ════════════════════════════════════════════════════════════════
+// MI CUENTA — vincular Telegram personal (TELEGRAM-OFFICE-01, 10/08/2026)
+// ════════════════════════════════════════════════════════════════
+// El botón "Conectar mi Telegram" (vincularTelegram/telegram/vincular) ya existía en
+// index.html (app móvil) desde hace tiempo, pero nunca se portó a panel.html — Katherine
+// no tenía forma de vincular su cuenta desde Office, solo desde el móvil. Reutiliza los
+// mismos endpoints (/telegram/vincular, /telegram/estado, /telegram/desvincular) que ya
+// usa la app.
+async function abrirMiCuenta() {
+  let vinculado = false;
+  try {
+    const r = await api('/telegram/estado');
+    vinculado = !!r?.vinculado;
+  } catch {}
+  const nombre = SESSION?.nombre || '—';
+  const rol = SESSION?.rol || '—';
+  const cuerpo = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;color:var(--muted)">Usuario</div>
+      <div style="font-weight:700">${escHtml(nombre)} · ${escHtml(rol)}</div>
+    </div>
+    <div style="font-weight:700;margin-bottom:8px">📱 Notificaciones personales de Telegram</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Vincula tu Telegram para recibir avisos personales directamente en tu móvil.</div>
+    <div id="telegramOfficeEstado"></div>`;
+  abrirModal('👤 Mi cuenta', cuerpo, null);
+  document.getElementById('modalOkBtn').style.display = 'none';
+  _renderEstadoTelegramOffice(vinculado);
+}
+function _renderEstadoTelegramOffice(vinculado) {
+  const cont = document.getElementById('telegramOfficeEstado');
+  if (!cont) return;
+  cont.innerHTML = vinculado
+    ? `<div style="display:flex;align-items:center;gap:8px;padding:10px;background:#22c55e15;border:1px solid #22c55e30;border-radius:10px;margin-bottom:10px">
+         <span style="font-size:20px">✅</span><span style="font-size:13px;font-weight:700;color:#22c55e">Telegram vinculado</span>
+       </div>
+       <button class="btn btn-secondary" style="width:100%" onclick="desvincularTelegramPanel()">🔗 Desvincular Telegram</button>`
+    : `<button class="btn btn-primary" id="btnVincularTelegramPanel" style="width:100%" onclick="vincularTelegramPanel()">📱 Conectar mi Telegram</button>`;
+}
+async function vincularTelegramPanel() {
+  const btn = document.getElementById('btnVincularTelegramPanel');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generando enlace…'; }
+  try {
+    const r = await api('/telegram/vincular', { method: 'POST' });
+    if (r?.ok === false || !r?.link) { toast('Error al generar el enlace', 'err'); return; }
+    window.open(r.link, '_blank');
+    toast('👆 Pulsa "Start" en Telegram para vincular tu cuenta', 'ok');
+    let intentos = 0;
+    const check = setInterval(async () => {
+      intentos++;
+      const est = await api('/telegram/estado').catch(() => null);
+      if (est?.vinculado) { clearInterval(check); _renderEstadoTelegramOffice(true); toast('✅ ¡Telegram vinculado!', 'ok'); }
+      if (intentos >= 6) clearInterval(check);
+    }, 5000);
+  } catch { toast('Error de conexión', 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '📱 Conectar mi Telegram'; } }
+}
+async function desvincularTelegramPanel() {
+  if (!confirm('¿Desvincular tu cuenta de Telegram? Dejarás de recibir notificaciones personales.')) return;
+  try {
+    const r = await api('/telegram/desvincular', { method: 'POST' });
+    if (r?.ok === false) return toast('Error', 'err');
+    toast('✅ Telegram desvinculado', 'ok');
+    _renderEstadoTelegramOffice(false);
+  } catch { toast('Error de conexión', 'err'); }
+}
 
 // ════════════════════════════════════════════════════════════════
 // RECUPERAR / RESETEAR CONTRASEÑA
