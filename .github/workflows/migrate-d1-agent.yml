@@ -48,6 +48,11 @@ on:
           - migrate_flota.sql
           - migrate_nexus_experts.sql
           - alejandra-agente/migrate_013_nexo_fuentes_telemetria.sql
+          - migrate_dept_ingenieria.sql
+          - migrate_dept_documental.sql
+          - migrate_dept_cambios_calidad.sql
+          - migrate_dept_compras_material.sql
+          - migrate_dept_checklists.sql
       confirmation:
         description: Type APPLY_D1_MIGRATION to confirm this remote D1 action
         required: true

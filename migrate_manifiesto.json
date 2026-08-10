@@ -167,6 +167,36 @@
       "declarado": "2026-08-07",
       "verificado": "2026-08-07",
       "nota": "ADR-002 (Nexo v1): tabla nexo_fuentes_telemetria creada con 9 columnas (id, fuente_id, empresa_id, usuario_id, consulta, resultados, latencia_ms, cache_hit, created_at). Aplicada y verificada via PRAGMA table_xinfo. Autorizada por el Director en chat. Commit 02ea344 desplegado."
+    },
+    {
+      "archivo": "migrate_dept_ingenieria.sql",
+      "aplicada": false,
+      "declarado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01), auditoria de Alejandra Office. ALTER fases_obra/plan_semanal (ya declaradas) + CREATE hitos_obra/instrucciones_obra/visitas_obra/itp_obra (nunca declaradas, 100% DDL runtime) con departamento incluido. Sintaxis validada localmente (wrangler d1 execute sin --remote). Paso 2 (aplicar) pendiente de autorizacion del Director."
+    },
+    {
+      "archivo": "migrate_dept_documental.sql",
+      "aplicada": false,
+      "declarado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01). ALTER contactos_obra (ya declarada) + CREATE contratos_obra/submittals/transmittals_obra (nunca declaradas) con departamento incluido. Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
+    },
+    {
+      "archivo": "migrate_dept_cambios_calidad.sql",
+      "aplicada": false,
+      "declarado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01). ALTER ordenes_cambio (ya declarada) + CREATE ncrs_obra/riesgos_obra (nunca declaradas) con departamento incluido. Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
+    },
+    {
+      "archivo": "migrate_dept_compras_material.sql",
+      "aplicada": false,
+      "declarado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01). ALTER ordenes_compra (ya declarada) + CREATE entregas_material/consumos_material/solicitudes_material (nunca declaradas) con departamento incluido. Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
+    },
+    {
+      "archivo": "migrate_dept_checklists.sql",
+      "aplicada": false,
+      "declarado": "2026-08-10",
+      "nota": "Aislamiento por departamento (DEPT-01), decision del Director: checklists por departamento, no transversal. ALTER checklist_plantillas/checklist_ejecuciones (ya declaradas). Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
     }
   ]
 }
