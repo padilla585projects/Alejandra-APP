@@ -1,5 +1,14 @@
 # Handoff — Alejandra 2.0
 
+## Fix — GASTOS-SEMANA-01, quinto bug del bloque de negocio del cron (2026-08-10)
+
+- Al revisar el resto de las 8 consultas del bloque "INTELIGENCIA DE NEGOCIO" tras OBRAS-ACTIVAS-01 (ver sección siguiente), se verificaron las 8 contra el esquema real de D1. `incidencias.estado`, `usuarios.activo` y `materiales_obra` (obra_nombre/cantidad/precio_unitario/fecha) están bien. Pero `gastos` **no existe como tabla** — la real es `gastos_dietas` (columna `total`, no `importe`). Mismo patrón de fallo silencioso (`.catch(() => ({total:0,n:0}))`).
+- Con esto son **5 de las 8 consultas** de ese bloque las que estaban rotas en silencio en algún momento (3 arregladas el 01/08, 2 más hoy) — ver la pregunta directa de Adrián sobre si esto significa que "las mejoras cognitivas no funcionan" y la respuesta dada en el chat: el motor de decisión (ADR-0020) es un sistema aparte, ya probado (57/57 tests) y no depende de estas consultas; lo roto era específicamente el bloque de datos para briefings/inteligencia de negocio del cron, arrastrado desde antes de ADR-0020.
+- Fix: `gastos_dietas`/`total` en vez de `gastos`/`importe`.
+- Verificación: `node --check` limpio; `npm --prefix alejandra-agente test` 183/183; sin patrones de encoding corrupto.
+- Despliegue/verificación (2026-08-10): commit `9ec8f82`, `wrangler deploy` directo. Confirmado activo al 100% vía `wrangler deployments list` (versión `ff1af502-4e4d-4b61-9c63-0bab9ff6312f`) antes de que `/health` reflejara la versión nueva (mismo lag de edge de siempre).
+- Pendiente/recomendado, sin decidir: las 3 consultas restantes del bloque (`bobinas_bajas`, `equipos_revision`, `personal_activo` vía `incidencias`/`usuarios`) ya se verificaron correctas hoy contra D1 real, así que el bloque completo queda sano por ahora — pero dado que van ya 5 bugs de este mismo tipo (columna/tabla inexistente silenciada por `.catch`) solo en este bloque, valdría la pena una auditoría más amplia de otros `.catch(() => ...)` similares en `alejandra-agente/worker.js` y `worker.js` raíz que no se hayan verificado nunca contra D1 real. No se ha abierto todavía como tarea formal.
+
 ## Fix — OBRAS-ACTIVAS-01, consulta de obras activas del cron (2026-08-10)
 
 - Contexto: probando en Chrome real el fix del contexto de fotos (ver sección siguiente), se le preguntó a Alejandra "¿cuántas obras activas tenemos ahora mismo?" — respondió bien tras autocorregirse, pero una traza en D1 mostró `consultar_bd: error :: no such column: estado`. El modelo generó `WHERE estado=...` para la tabla `obras`, que no tiene esa columna (`PRAGMA table_info(obras)`: `id, nombre, codigo, activa, created_at, empresa_id, comunidad`); en su siguiente llamada ya usó la columna correcta y respondió bien — así que ese caso concreto ya era autocorrección normal del modelo, no un bug de código.
