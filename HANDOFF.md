@@ -1,5 +1,14 @@
 # Handoff — Alejandra 2.0
 
+## Auditoría de aislamiento — cierre (Reconocimientos médicos + Accidentes) (2026-08-10)
+
+- Contexto: Adrián pidió una comprobación final ("revisa que no queden más módulos sin aislar") tras cerrar el plan de las 19 tablas. Tercera auditoría (agente Explore, solo lectura) encontró dos fugas más, ambas ya insinuadas por comentarios propios del código.
+- **`getReconocimientos`/`crearReconocimiento`/`actualizarReconocimiento`/`eliminarReconocimiento`** (`worker.js`, tabla `reconocimientos_medicos`): el filtro solo bloqueaba `rol==='oficina'` (bug documentado desde el 21/07/2026, `BUG-CARNETS`, mismo motivo que Carnets: la tabla no tiene columna `departamento`). Encargado/oficina de cualquier departamento veían datos de salud (LPRL art. 22) de toda la empresa. Corregido sin migración: módulo entero restringido a `isDeptPrivileged(auth)` — es dato de salud exclusivo de Seguridad (`nav-seguridad-section`), no un dato de obra acotable por fila con sentido, mismo criterio ya aplicado hoy a Obs Seguridad/Toolbox Talks.
+- **`getAccidentes`/`crearAccidente`/`actualizarAccidente`/`eliminarAccidente`** (`worker.js`, tabla `accidentes_incidentes`): sin ningún control de departamento (solo bloqueaba `rol==='operario'` en escritura). Tabla sin `departamento` ni `usuario_id`/`externo_id` (`afectado` es texto libre, no FK), así que tampoco cabía un filtro por fila. Mismo fix: `isDeptPrivileged(auth)` en las 4 funciones.
+- Verificación: `node --check worker.js` limpio; `git diff` sin patrones de encoding corrupto.
+- Despliegue/verificación (2026-08-10): commit `df34fa9` en `main`. `wrangler deploy` directo (ARC-021) — dos primeros intentos fallaron por `fetch failed` transitorio (conectividad Cloudflare API, confirmada por curl a otros hosts mientras tanto), tercer intento correcto. `GET /health` → `200`. Versión `d2d9142c-3467-419f-97a4-7b0c61bbfe47`.
+- Con esto se cierra el plan de aislamiento por departamento de Alejandra Office abierto el 2026-08-10: no quedan módulos pendientes conocidos. Si aparece uno nuevo, tratarlo como los anteriores (criterio: ¿el dato es curado/exclusivo de un departamento pero el backend solo filtra por `empresa_id`?).
+
 ## Incidente — ALTER TABLE aplicado directamente contra D1 sin workflow (2026-08-10)
 
 - Contexto: durante el paso 3 (deptGuard en código) del plan de aislamiento por departamento, se descubrió que `checklists_plantillas` (con "s", la tabla que el código realmente usa en `getChecklistPlantillas`/`crearChecklistPlantilla`/etc.) es distinta de `checklist_plantillas` (sin "s", la que sí se migró vía `migrate_dept_checklists.sql`) — confusión histórica ya documentada en el propio código ("checklist_plantillas y checklists_plantillas coexisten, con y sin s").
