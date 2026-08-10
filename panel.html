@@ -4548,10 +4548,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
                   <input type="time" id="hoModalSalida" required style="width:100%" onchange="hoCalcularHorasDia()">
                 </div>
                 <div class="form-group">
-                  <label>Tolerancia (min)</label>
-                  <input type="number" id="hoModalTolerancia" min="0" max="60" value="10" style="width:100%">
-                </div>
-                <div class="form-group">
                   <label>Horas/día (calc.)</label>
                   <input type="text" id="hoModalHorasDia" readonly style="width:100%;background:var(--surface2)">
                 </div>
@@ -13610,37 +13606,47 @@ function abrirModalPersonal() {
 }
 
 // ── FICHAJES ───────────────────────────────────────────────────
+// FICHAJES-PANEL-01 (10/08/2026): este módulo mandaba/leía campos que el backend
+// (worker.js: crearFichaje/getFichajes) nunca ha aceptado — {entrada,salida,tipo} en vez de
+// {fecha,hora_entrada,hora_salida,estado}, y ?desde=/?hasta= en vez de ?fecha_ini=/?fecha_fin=
+// (ignorados en silencio). Dar de alta un fichaje desde el panel fallaba SIEMPRE con "Falta
+// la fecha", y el listado se veía permanentemente vacío ("—" en Entrada/Salida/Horas) aunque
+// hubiera datos reales, porque leía f.entrada/f.salida/f.horas (no existen) en vez de
+// f.hora_entrada/f.hora_salida/f.horas_trabajadas. index.html (guardarFichaje) es la
+// referencia correcta — mismos nombres de campo que el backend.
 let tblFichajes = null;
 function abrirModalFichaje() {
   const hoy = new Date().toISOString().slice(0, 10);
   abrirModal('Fichaje manual', `
-    <div class="form-group"><div class="form-label">Trabajador (ID)</div><input class="form-input" id="mFichTrab" type="number" placeholder="ID del trabajador"></div>
+    <div class="form-group"><div class="form-label">Trabajador (ID de usuario)</div><input class="form-input" id="mFichTrab" type="number" placeholder="ID del trabajador"></div>
     <div class="form-row">
-      <div class="form-group"><div class="form-label">Fecha entrada</div><input class="form-input" id="mFichFecha" type="date" value="${hoy}"></div>
+      <div class="form-group"><div class="form-label">Fecha</div><input class="form-input" id="mFichFecha" type="date" value="${hoy}"></div>
       <div class="form-group"><div class="form-label">Hora entrada</div><input class="form-input" id="mFichHoraE" type="time" value="08:00"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><div class="form-label">Fecha salida</div><input class="form-input" id="mFichFechaS" type="date" value="${hoy}"></div>
       <div class="form-group"><div class="form-label">Hora salida</div><input class="form-input" id="mFichHoraS" type="time" value="17:00"></div>
     </div>
-    <div class="form-group"><div class="form-label">Tipo</div>
-      <select class="form-select" id="mFichTipo">
-        <option value="normal">Normal</option>
-        <option value="extra">Extra</option>
-        <option value="guardia">Guardia</option>
+    <div class="form-group"><div class="form-label">Estado</div>
+      <select class="form-select" id="mFichEstado">
+        <option value="presente">Presente</option>
+        <option value="retraso">Retraso</option>
+        <option value="ausencia">Ausencia</option>
+        <option value="vacaciones">Vacaciones</option>
+        <option value="baja">Baja</option>
       </select>
     </div>
   `, async () => {
-    const entrada = `${document.getElementById('mFichFecha').value}T${document.getElementById('mFichHoraE').value}:00`;
-    const salida  = `${document.getElementById('mFichFechaS').value}T${document.getElementById('mFichHoraS').value}:00`;
     const body = {
-      usuario_id: parseInt(document.getElementById('mFichTrab').value),
-      entrada, salida,
-      tipo: document.getElementById('mFichTipo').value,
+      usuario_id: parseInt(document.getElementById('mFichTrab').value) || null,
+      fecha: document.getElementById('mFichFecha').value,
+      hora_entrada: document.getElementById('mFichHoraE').value || null,
+      hora_salida: document.getElementById('mFichHoraS').value || null,
+      estado: document.getElementById('mFichEstado').value,
     };
     if (!body.usuario_id) { toast('Indica el ID del trabajador', 'err'); return; }
-    const r = await api('/fichajes', { method: 'POST', body: JSON.stringify(body) });
-    if (r.ok) { cerrarModal(); toast('Fichaje registrado ✓', 'ok'); tblFichajes = null; cargarFichajes(); }
+    if (!body.fecha) { toast('Indica la fecha', 'err'); return; }
+    const res = await apiRaw('/fichajes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.status === 409) { toast('Ya existe un fichaje para ese trabajador en esa fecha', 'err'); return; }
+    const r = await res.json().catch(() => ({}));
+    if (res.ok) { cerrarModal(); toast('Fichaje registrado ✓', 'ok'); tblFichajes = null; cargarFichajes(); }
     else toast(r.error || 'Error al guardar', 'err');
   });
 }
@@ -13648,21 +13654,21 @@ async function cargarFichajes() {
   const desde = document.getElementById('fichajesFechaDesde').value;
   const hasta = document.getElementById('fichajesFechaHasta').value;
   let url = '/fichajes?limit=200';
-  if (desde) url += `&desde=${desde}`;
-  if (hasta) url += `&hasta=${hasta}`;
+  if (desde) url += `&fecha_ini=${desde}`;
+  if (hasta) url += `&fecha_fin=${hasta}`;
   const r = await api(url);
   const data = toArr(r, 'fichajes').map(f => ({
     ...f,
     nombre: f.nombre_usuario || f.nombre_externo || '—',
-    horaEntrada: fmtHora(f.entrada),
-    horaSalida: fmtHora(f.salida),
-    fechaDisplay: fmtFecha(f.entrada),
-    duracion: f.horas ? `${f.horas}h` : '—',
+    horaEntrada: f.hora_entrada || '—',
+    horaSalida: f.hora_salida || '—',
+    fechaDisplay: fmtFecha(f.fecha),
+    duracion: f.horas_trabajadas ? `${f.horas_trabajadas}h` : '—',
   }));
 
   // Resumen de horas
   const totalFichajes = data.length;
-  const totalHoras = data.reduce((s, f) => s + (parseFloat(f.horas) || 0), 0);
+  const totalHoras = data.reduce((s, f) => s + (parseFloat(f.horas_trabajadas) || 0), 0);
   const trabajadoresUnicos = new Set(data.map(f => f.nombre)).size;
   document.getElementById('fichajesResumen').innerHTML = [
     { icon:'⏱️', value: totalHoras.toFixed(1) + 'h', label:'Total horas' },
@@ -28378,7 +28384,6 @@ function filtrarHorariosObra() {
         { title:'Entrada', field:'hora_entrada', width:95, hozAlign:'center' },
         { title:'Salida', field:'hora_salida', width:95, hozAlign:'center' },
         { title:'h/día', field:'horas_dia', width:75, hozAlign:'center', formatter:(c)=>`${c.getValue()||'?'}h` },
-        { title:'Tolerancia', field:'tolerancia_min', width:100, hozAlign:'center', formatter:(c)=>`${c.getValue()||10} min` },
         { title:'Turnos variables', field:'horarios_dia', width:130, formatter:(c)=>{
             const v=c.getValue(); return (v&&v!=='null') ? '✅ Sí' : '—';
           }
@@ -28431,7 +28436,6 @@ function abrirModalHo(d = {}) {
   document.getElementById('hoModalDias').value        = d.dias_semana  || 'LMXJV';
   document.getElementById('hoModalEntrada').value     = d.hora_entrada || '07:00';
   document.getElementById('hoModalSalida').value      = d.hora_salida  || '15:30';
-  document.getElementById('hoModalTolerancia').value  = d.tolerancia_min ?? 10;
   document.getElementById('hoModalHorasDia').value    = d.horas_dia ? d.horas_dia+'h' : '';
   document.getElementById('hoModalNotas').value       = d.notas || '';
   // Populate obra select
@@ -28467,7 +28471,6 @@ async function guardarHo() {
     dias_semana:    document.getElementById('hoModalDias').value,
     hora_entrada:   document.getElementById('hoModalEntrada').value,
     hora_salida:    document.getElementById('hoModalSalida').value,
-    tolerancia_min: parseInt(document.getElementById('hoModalTolerancia').value) || 10,
     notas:          document.getElementById('hoModalNotas').value.trim(),
     horarios_dia:   Object.keys(horariosDia).length ? horariosDia : null
   };
