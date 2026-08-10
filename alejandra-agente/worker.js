@@ -10770,8 +10770,21 @@ async function clasificarConHaiku(env, mensaje) {
 // genérico en vez de retomar la tarea. Si el turno inmediatamente anterior de
 // este mismo usuario usó un experto "de trabajo" (no "simple") hace poco,
 // seguimos con ese mismo experto en vez de reclasificar a ciegas.
+//
+// CONTINUIDAD-EXPERTO-02 (10/08/2026): el mismo problema existe con el experto
+// "web" — TOOLS_POR_EXPERTO.web = [buscar_web, memory_read, memory_save], igual
+// de restringido que "simple" (nada de escribir_bd/generar_informe/enviar_email).
+// Katherine estaba a mitad de generar y enviar por email un Permiso de Trabajo
+// (experto "app") cuando un mensaje ambiguo ("CPD Getafe", respondiendo a "¿a
+// qué email lo envío?") se clasificó como "web" y disparó una búsqueda web no
+// pedida; los turnos siguientes ("si", su email) seguían clasificándose como
+// "web" y esta función no los rescataba porque solo miraba "simple". Alejandra
+// se quedó sin generar_informe/enviar_email a mitad de la tarea y lo reconoció
+// ella misma en el chat. Se amplía el conjunto de expertos "mínimos" que se
+// rescatan por continuidad.
+const EXPERTOS_MINIMOS = new Set(['simple', 'web']);
 async function mantenerContinuidadExperto(env, usuario_id, clas) {
-  if (clas.experto !== 'simple' || !usuario_id) return clas;
+  if (!EXPERTOS_MINIMOS.has(clas.experto) || !usuario_id) return clas;
   try {
     const ultimo = await env.DB.prepare(
       `SELECT parametros, created_at FROM alejandra_logs WHERE usuario_id=? AND accion='chat' ORDER BY created_at DESC LIMIT 1`
@@ -10780,8 +10793,8 @@ async function mantenerContinuidadExperto(env, usuario_id, clas) {
     const minutos = (Date.now() - new Date(ultimo.created_at.replace(' ', 'T') + 'Z').getTime()) / 60000;
     if (!(minutos >= 0) || minutos > 15) return clas;
     const expertoPrevio = /^\[(\w+)\]/.exec(ultimo.parametros || '')?.[1];
-    if (expertoPrevio && expertoPrevio !== 'simple' && NEXUS_EXPERTS[expertoPrevio]) {
-      console.log(`[NEXUS] continuidad de experto: "simple"→"${expertoPrevio}" (turno anterior hace ${minutos.toFixed(1)}min)`);
+    if (expertoPrevio && !EXPERTOS_MINIMOS.has(expertoPrevio) && NEXUS_EXPERTS[expertoPrevio]) {
+      console.log(`[NEXUS] continuidad de experto: "${clas.experto}"→"${expertoPrevio}" (turno anterior hace ${minutos.toFixed(1)}min)`);
       return { ...clas, experto: expertoPrevio, source: 'continuidad' };
     }
   } catch (err) {
