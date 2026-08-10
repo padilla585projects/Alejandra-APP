@@ -1,5 +1,24 @@
 # Handoff — Alejandra 2.0
 
+## Dos bugs reales encontrados investigando "Alejandra tiene problemas para hacer cosas" (2026-08-10)
+
+- Contexto: Adrián pidió revisar por qué el chat tenía problemas al pedirle cosas. Investigación contra D1 real (historial, trazas, logs) de la conversación de Katherine (usuario_id=45) intentando crear un Permiso de Trabajo desde el panel.
+
+### INSERT-SCOPE-01 — `validarScopeEmpresaBD` rechazaba todo INSERT real
+- Katherine no podía crear el permiso vía `escribir_bd`; Alejandra lo explicó como "restricción de seguridad en escrituras sin WHERE previo" — resultó ser exactamente eso, pero como bug, no como barrera intencionada.
+- `validarScopeEmpresaBD()` (`alejandra-agente/lib.js`) solo sabía buscar `empresa_id = ?`/`empresa_id = <literal>`, patrón de un `WHERE` (SELECT/UPDATE/DELETE). Un INSERT no tiene WHERE — `empresa_id` va en la lista de columnas (`INSERT INTO t (empresa_id, ...) VALUES (?, ...)`). Sin un caso aparte, la función nunca reconocía el patrón en ningún INSERT y rechazaba SIEMPRE la operación, incluso con `empresa_id` correctamente incluido — bloqueando de raíz cualquier alta nueva vía `escribir_bd` para cualquier usuario real (no dev verificado). Los tests existentes de esta función solo cubrían SELECT con WHERE, ningún test probaba INSERT.
+- Fix: nuevo caso que localiza `empresa_id` en la lista de columnas del INSERT/REPLACE y compara el valor correspondiente (parámetro posicional o literal) contra la empresa de la sesión. 6 tests nuevos (189/189 en verde).
+- Verificación: `node --check` limpio; `npm --prefix alejandra-agente test` 189/189.
+- Despliegue/verificación: commit `7c55a55`, `wrangler deploy` directo (ARC-021), `/health` → versión `aac309ee-c651-452e-8297-31edde8ba286` coincide de inmediato.
+
+### CONTINUIDAD-EXPERTO-02 — el experto "web" se quedaba pegado a media tarea
+- Tras el fix anterior, Katherine consiguió generar el informe (`generar_informe`, tool del experto "app") y pidió enviarlo por email — pero un mensaje ambiguo ("CPD Getafe", respondiendo mal a "¿a qué email lo envío?") se clasificó como experto "web" (dispara una búsqueda web no pedida) y los turnos siguientes ("si", su email) siguieron clasificándose como "web". Alejandra se quedó sin `enviar_email`/`generar_informe` a mitad de tarea y lo reconoció ella misma en el chat: "no tengo disponible la tool generar_informe... las tools que tengo activas aquí son buscar_web, memory_read y memory_save" — coincide exacto con `TOOLS_POR_EXPERTO.web`.
+- `mantenerContinuidadExperto()` (PROBLEMA-MEMORIA-01, 30/07/2026) ya existía para rescatar exactamente este patrón, pero solo miraba el experto "simple" — "web" es igual de restringido y no tenía ninguna protección. Generalizado a `EXPERTOS_MINIMOS = {simple, web}`: si el turno anterior reciente (<15min) del mismo usuario usó un experto "de trabajo", se sigue con ese en vez de reclasificar a ciegas.
+- Aclaración importante (el usuario pensó que se había perdido el historial del chat): **no se perdió ningún dato**. Verificado que la conversación completa sigue íntegra en `alejandra_historial` — lo que fallaba era el conjunto de tools disponibles para ese turno concreto, no el guardado del historial. La sensación de "desapareció" es un síntoma en el cliente (panel.html) del mismo turno roto, no pérdida real de datos — pendiente confirmar con Adrián si el panel necesita algún ajuste de UI aparte quando el asistente admite no tener una tool disponible.
+- Verificación: `node --check` limpio; `npm --prefix alejandra-agente test` 189/189 (función vive en `worker.js`, sin test unitario propio — mismo patrón que el resto de funciones de ese archivo).
+- Despliegue/verificación: commit `fcd7527`, `wrangler deploy` directo. `/health` → versión `a631dde6-8006-4901-9224-f9c33e16818b` coincide de inmediato.
+- Pendiente sin decidir: no se ha reproducido en vivo si el panel realmente "vacía" el historial visualmente ante este tipo de turno, o si fue una percepción momentánea del usuario — si vuelve a pasar tras este fix, revisar el cliente.
+
 ## Cierre de la auditoría amplia — pendientes de menor prioridad (2026-08-10)
 
 - Contexto: Adrián pidió revisar también los puntos de menor prioridad dejados fuera de la auditoría anterior (endpoints `/api/admin/*`, catches con logging pero con la query interna silenciada antes de llegar al log).
