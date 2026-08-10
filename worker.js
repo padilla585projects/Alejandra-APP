@@ -17137,6 +17137,8 @@ async function getOrdenesCambio(request, env) {
   const params = [auth.empresa_id];
   if (obra_id) { q += ` AND oc.obra_id=?`;  params.push(parseInt(obra_id)); }
   if (estado)  { q += ` AND oc.estado=?`;   params.push(estado); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (oc.departamento=? OR oc.departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY CASE oc.estado WHEN 'propuesta' THEN 0 WHEN 'en_revision' THEN 1 WHEN 'aprobada' THEN 2 ELSE 3 END, oc.created_at DESC`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   // Totales para resumen
@@ -17165,8 +17167,8 @@ async function crearOrdenCambio(request, env) {
   // SEC-AUDIT-08 (27/07/2026): mismo patrón no atómico que SEC-AUDIT-05 — número calculado
   // dentro del propio INSERT, atómico en D1.
   const { meta } = await env.DB.prepare(
-    `INSERT INTO ordenes_cambio (obra_id,empresa_id,numero,titulo,descripcion,rfi_id,estado,categoria,coste_adicional,dias_extension,solicitado_por,fecha_propuesta,notas)
-     SELECT ?,?, 'OC-' || printf('%03d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,4) AS INTEGER)) FROM ordenes_cambio WHERE empresa_id=? AND obra_id IS ?),0)+1), ?,?,?,?,?,?,?,?,?,?`
+    `INSERT INTO ordenes_cambio (obra_id,empresa_id,numero,titulo,descripcion,rfi_id,estado,categoria,coste_adicional,dias_extension,solicitado_por,fecha_propuesta,notas,departamento)
+     SELECT ?,?, 'OC-' || printf('%03d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,4) AS INTEGER)) FROM ordenes_cambio WHERE empresa_id=? AND obra_id IS ?),0)+1), ?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
     obraId, auth.empresa_id,
     auth.empresa_id, obraId,
@@ -17178,7 +17180,7 @@ async function crearOrdenCambio(request, env) {
     parseInt(b.dias_extension)    || 0,
     b.solicitado_por || auth.nombre || auth.email || null,
     b.fecha_propuesta || new Date().toISOString().slice(0,10),
-    b.notas || null
+    b.notas || null, auth.departamento || null
   ).run();
   const ocRow = await env.DB.prepare('SELECT numero FROM ordenes_cambio WHERE id=?').bind(meta.last_row_id).first();
   return json({ ok: true, id: meta.last_row_id, numero: ocRow?.numero }, 201);
@@ -17202,14 +17204,19 @@ async function actualizarOrdenCambio(id, request, env) {
   }
   if (!sets.length) return err('Nada que actualizar', 400);
   params.push(id, auth.empresa_id);
-  await env.DB.prepare(`UPDATE ordenes_cambio SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`UPDATE ordenes_cambio SET ${sets.join(',')} WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarOrdenCambio(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM ordenes_cambio WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM ordenes_cambio WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -18930,6 +18937,8 @@ async function getChecklistPlantillas(request, env) {
   let q = `SELECT * FROM checklists_plantillas WHERE empresa_id=?`;
   const params = [auth.empresa_id];
   if (cat) { q += ` AND categoria=?`; params.push(cat); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office, decision del Director: checklists por departamento).
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY nombre ASC`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   const plantillas = (results||[]).map(p=>({ ...p, items: tryParse(p.items, []) }));
@@ -18943,6 +18952,10 @@ async function getChecklistPlantilla(id, request, env) {
   const row = await env.DB.prepare(`SELECT * FROM checklists_plantillas WHERE id=? AND empresa_id=?`)
     .bind(id, auth.empresa_id).first();
   if (!row) return err('No encontrado', 404);
+  // IDOR (10/08/2026): el detalle por id no comprobaba departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento && row.departamento && row.departamento !== auth.departamento) {
+    return err('No encontrado', 404);
+  }
   return json({ plantilla: { ...row, items: tryParse(row.items, []) } });
 }
 
@@ -18953,9 +18966,9 @@ async function crearChecklistPlantilla(request, env) {
   const b = await request.json();
   const items = Array.isArray(b.items) ? JSON.stringify(b.items) : '[]';
   const { meta } = await env.DB.prepare(`
-    INSERT INTO checklists_plantillas (empresa_id, nombre, descripcion, categoria, items, activa)
-    VALUES (?,?,?,?,?,1)
-  `).bind(auth.empresa_id, b.nombre||'Plantilla', b.descripcion||null, b.categoria||'general', items).run();
+    INSERT INTO checklists_plantillas (empresa_id, nombre, descripcion, categoria, items, activa, departamento)
+    VALUES (?,?,?,?,?,1,?)
+  `).bind(auth.empresa_id, b.nombre||'Plantilla', b.descripcion||null, b.categoria||'general', items, auth.departamento || null).run();
   return json({ ok: true, id: meta.last_row_id });
 }
 
@@ -18964,21 +18977,27 @@ async function actualizarChecklistPlantilla(id, request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   const b = await request.json();
   const items = Array.isArray(b.items) ? JSON.stringify(b.items) : undefined;
-  await env.DB.prepare(`
-    UPDATE checklists_plantillas SET nombre=?, descripcion=?, categoria=?, items=?,
-    activa=?, updated_at=datetime('now') WHERE id=? AND empresa_id=?
-  `).bind(b.nombre||null, b.descripcion||null, b.categoria||null,
+  const params = [b.nombre||null, b.descripcion||null, b.categoria||null,
           items !== undefined ? items : '[]',
           b.activa!==undefined ? (b.activa?1:0) : 1,
-          id, auth.empresa_id).run();
+          id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`
+    UPDATE checklists_plantillas SET nombre=?, descripcion=?, categoria=?, items=?,
+    activa=?, updated_at=datetime('now') WHERE id=? AND empresa_id=?${deptGuard}
+  `).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarChecklistPlantilla(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM checklists_plantillas WHERE id=? AND empresa_id=?`)
-    .bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM checklists_plantillas WHERE id=? AND empresa_id=?${deptGuard}`)
+    .bind(...params).run();
   return json({ ok: true });
 }
 
@@ -18994,6 +19013,8 @@ async function getChecklistEjecuciones(request, env) {
   const params = [auth.empresa_id];
   if (obraId) { q += ` AND obra_id=?`; params.push(obraId); }
   if (estado)  { q += ` AND estado=?`;   params.push(estado); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY fecha DESC, id DESC LIMIT 200`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   const ejecuciones = (results||[]).map(e=>({ ...e, resultados: tryParse(e.resultados, []) }));
@@ -19011,6 +19032,10 @@ async function getChecklistEjecucion(id, request, env) {
   const row = await env.DB.prepare(`SELECT * FROM checklist_ejecuciones WHERE id=? AND empresa_id=?`)
     .bind(id, auth.empresa_id).first();
   if (!row) return err('No encontrado', 404);
+  // IDOR (10/08/2026): el detalle por id no comprobaba departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento && row.departamento && row.departamento !== auth.departamento) {
+    return err('No encontrado', 404);
+  }
   return json({ ejecucion: { ...row, resultados: tryParse(row.resultados, []) } });
 }
 
@@ -19033,12 +19058,12 @@ async function crearChecklistEjecucion(request, env) {
   }
   const { meta } = await env.DB.prepare(`
     INSERT INTO checklist_ejecuciones
-      (empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, resultados)
-    VALUES (?,?,?,?,?,?,?,'en_curso',?)
+      (empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, resultados, departamento)
+    VALUES (?,?,?,?,?,?,?,'en_curso',?,?)
   `).bind(auth.empresa_id, b.obra_id||null, b.plantilla_id||null,
           plantillaNombre, b.titulo||plantillaNombre||'Inspeccion',
           b.fecha||new Date().toISOString().slice(0,10),
-          b.inspector||auth.nombre||null, itemsInicial).run();
+          b.inspector||auth.nombre||null, itemsInicial, auth.departamento || null).run();
   return json({ ok: true, id: meta.last_row_id });
 }
 
@@ -19060,6 +19085,11 @@ async function actualizarChecklistEjecucion(id, request, env) {
   const resultados = Array.isArray(b.resultados) ? b.resultados : [];
   const stats = calcStats(resultados);
   const estadoFinal = b.estado || (stats.num_nok > 0 ? 'con_no_conformidades' : 'completado');
+  const ejec = await env.DB.prepare(`SELECT obra_id, departamento FROM checklist_ejecuciones WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).first();
+  if (!ejec) return err('No encontrado', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && ejec.departamento && ejec.departamento !== auth.departamento) {
+    return err('No encontrado', 404);
+  }
   await env.DB.prepare(`
     UPDATE checklist_ejecuciones SET titulo=?, fecha=?, inspector=?, estado=?,
       resultados=?, notas_generales=?,
@@ -19072,8 +19102,7 @@ async function actualizarChecklistEjecucion(id, request, env) {
 
   // Auto-generate NCRs for items marked nok that don't have an NCR yet
   const ncrItems = resultados.filter(i => i.resultado === 'nok' || i.resultado === 'no');
-  const execRow = await env.DB.prepare(`SELECT obra_id FROM checklist_ejecuciones WHERE id=?`).bind(id).first();
-  const obraId = execRow?.obra_id || null;
+  const obraId = ejec.obra_id || null;
   for (const item of ncrItems) {
     // Check if NCR already exists for this item in this ejecucion
     const exists = await env.DB.prepare(
@@ -19085,11 +19114,11 @@ async function actualizarChecklistEjecucion(id, request, env) {
       const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
       const gravedad = item.gravedad || 'moderado';
       await env.DB.prepare(`
-        INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado)
-        SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,'abierta'
+        INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado, departamento)
+        SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,'abierta',?
       `).bind(auth.empresa_id, obraId, id, yr,
               auth.empresa_id, yr,
-              item.descripcion || ('Item '+item.id), gravedad).run();
+              item.descripcion || ('Item '+item.id), gravedad, ejec.departamento || auth.departamento || null).run();
     }
   }
   return json({ ok: true, stats, estado: estadoFinal });
@@ -19098,7 +19127,10 @@ async function actualizarChecklistEjecucion(id, request, env) {
 async function eliminarChecklistEjecucion(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM checklist_ejecuciones WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM checklist_ejecuciones WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   await env.DB.prepare(`DELETE FROM ncrs_obra WHERE ejecucion_id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
@@ -19117,6 +19149,8 @@ async function getNcrs(request, env) {
   if (obraId) { q += ` AND obra_id=?`;    params.push(obraId); }
   if (estado)  { q += ` AND estado=?`;     params.push(estado); }
   if (grav)    { q += ` AND gravedad=?`;   params.push(grav); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY created_at DESC LIMIT 300`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   const ncrs = results || [];
@@ -19136,12 +19170,12 @@ async function crearNcr(request, env) {
   // dentro del propio INSERT, atómico en D1.
   const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const { meta } = await env.DB.prepare(`
-    INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado, responsable, fecha_limite, notas)
-    SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,?,?,?,?
+    INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado, responsable, fecha_limite, notas, departamento)
+    SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,?,?,?,?,?
   `).bind(auth.empresa_id, b.obra_id||null, b.ejecucion_id||null, yr,
           auth.empresa_id, yr,
           b.descripcion||'Sin descripcion', b.gravedad||'moderado', b.estado||'abierta',
-          b.responsable||null, b.fecha_limite||null, b.notas||null).run();
+          b.responsable||null, b.fecha_limite||null, b.notas||null, auth.departamento || null).run();
   const ncrRow = await env.DB.prepare('SELECT numero FROM ncrs_obra WHERE id=?').bind(meta.last_row_id).first();
   return json({ ok: true, id: meta.last_row_id, numero: ncrRow?.numero });
 }
@@ -19150,22 +19184,27 @@ async function actualizarNcr(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   const b = await request.json();
-  const cerradaAt = b.estado === 'cerrada' ? `datetime('now')` : null;
+  const params = [b.descripcion||null, b.gravedad||null, b.estado||null,
+          b.responsable||null, b.fecha_limite||null, b.accion_correctiva||null,
+          b.notas||null, b.estado||'', id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
   await env.DB.prepare(`
     UPDATE ncrs_obra SET descripcion=?, gravedad=?, estado=?,
       responsable=?, fecha_limite=?, accion_correctiva=?, notas=?,
       cerrada_at=CASE WHEN ?='cerrada' THEN datetime('now') ELSE cerrada_at END,
-      updated_at=datetime('now') WHERE id=? AND empresa_id=?
-  `).bind(b.descripcion||null, b.gravedad||null, b.estado||null,
-          b.responsable||null, b.fecha_limite||null, b.accion_correctiva||null,
-          b.notas||null, b.estado||'', id, auth.empresa_id).run();
+      updated_at=datetime('now') WHERE id=? AND empresa_id=?${deptGuard}
+  `).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarNcr(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM ncrs_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM ncrs_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -19218,6 +19257,8 @@ async function getEntregasMaterial(request, env) {
   if (obraId)  { q += ` AND obra_id=?`;   params.push(obraId); }
   if (estado)  { q += ` AND estado=?`;    params.push(estado); }
   if (proveed) { q += ` AND proveedor LIKE ?`; params.push(`%${proveed}%`); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY fecha_entrega_prevista ASC, id DESC LIMIT 500`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   const items = results || [];
@@ -19238,6 +19279,10 @@ async function getEntregaMaterial(id, request, env) {
   const row = await env.DB.prepare(`SELECT * FROM entregas_material WHERE id=? AND empresa_id=?`)
     .bind(id, auth.empresa_id).first();
   if (!row) return err('No encontrado', 404);
+  // IDOR (10/08/2026): el detalle por id no comprobaba departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento && row.departamento && row.departamento !== auth.departamento) {
+    return err('No encontrado', 404);
+  }
   return json({ entrega: row });
 }
 
@@ -19258,23 +19303,23 @@ async function crearEntregaMaterial(request, env) {
       INSERT INTO entregas_material
         (empresa_id, obra_id, fase_id, numero_pedido, descripcion, proveedor, contacto_prov,
          unidad, cantidad_pedida, cantidad_recibida, precio_unitario, importe_total,
-         fecha_pedido, fecha_entrega_prevista, estado, ubicacion_obra, notas)
-      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)
+         fecha_pedido, fecha_entrega_prevista, estado, ubicacion_obra, notas, departamento)
+      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?)
     `).bind(
       auth.empresa_id, b.obra_id||null, b.fase_id||null, b.numero_pedido,
       b.descripcion||'Material', b.proveedor||null, b.contacto_prov||null,
       b.unidad||'ud', cantPedida, precioUnit, importeTotal,
       b.fecha_pedido||new Date().toISOString().slice(0,10),
       b.fecha_entrega_prevista||null, b.estado||'pendiente',
-      b.ubicacion_obra||null, b.notas||null
+      b.ubicacion_obra||null, b.notas||null, auth.departamento || null
     ).run());
   } else {
     ({ meta } = await env.DB.prepare(`
       INSERT INTO entregas_material
         (empresa_id, obra_id, fase_id, numero_pedido, descripcion, proveedor, contacto_prov,
          unidad, cantidad_pedida, cantidad_recibida, precio_unitario, importe_total,
-         fecha_pedido, fecha_entrega_prevista, estado, ubicacion_obra, notas)
-      SELECT ?,?,?, 'PED-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM entregas_material WHERE empresa_id=? AND numero_pedido LIKE 'PED-'||?||'-%'),0)+1), ?,?,?,?,?,0,?,?,?,?,?,?,?
+         fecha_pedido, fecha_entrega_prevista, estado, ubicacion_obra, notas, departamento)
+      SELECT ?,?,?, 'PED-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM entregas_material WHERE empresa_id=? AND numero_pedido LIKE 'PED-'||?||'-%'),0)+1), ?,?,?,?,?,0,?,?,?,?,?,?,?,?
     `).bind(
       auth.empresa_id, b.obra_id||null, b.fase_id||null, yr,
       auth.empresa_id, yr,
@@ -19282,7 +19327,7 @@ async function crearEntregaMaterial(request, env) {
       b.unidad||'ud', cantPedida, precioUnit, importeTotal,
       b.fecha_pedido||new Date().toISOString().slice(0,10),
       b.fecha_entrega_prevista||null, b.estado||'pendiente',
-      b.ubicacion_obra||null, b.notas||null
+      b.ubicacion_obra||null, b.notas||null, auth.departamento || null
     ).run());
   }
   const entRow = await env.DB.prepare('SELECT numero_pedido FROM entregas_material WHERE id=?').bind(meta.last_row_id).first();
@@ -19304,14 +19349,7 @@ async function actualizarEntregaMaterial(id, request, env) {
     else if (cantRecibida < cantPedida)  estado = 'parcial';
     else                                  estado = 'recibido';
   }
-  await env.DB.prepare(`
-    UPDATE entregas_material SET descripcion=?, proveedor=?, contacto_prov=?, unidad=?,
-      cantidad_pedida=?, cantidad_recibida=?, precio_unitario=?, importe_total=?,
-      fecha_pedido=?, fecha_entrega_prevista=?, fecha_entrega_real=?, estado=?,
-      ubicacion_obra=?, notas=?, albaranado=?, numero_albaran=?,
-      obra_id=?, fase_id=?, updated_at=datetime('now')
-    WHERE id=? AND empresa_id=?
-  `).bind(
+  const params = [
     b.descripcion||null, b.proveedor||null, b.contacto_prov||null, b.unidad||'ud',
     cantPedida, cantRecibida, precioUnit, importeTotal,
     b.fecha_pedido||null, b.fecha_entrega_prevista||null, b.fecha_entrega_real||null, estado,
@@ -19319,14 +19357,27 @@ async function actualizarEntregaMaterial(id, request, env) {
     b.albaranado ? 1 : 0, b.numero_albaran||null,
     b.obra_id||null, b.fase_id||null,
     id, auth.empresa_id
-  ).run();
+  ];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`
+    UPDATE entregas_material SET descripcion=?, proveedor=?, contacto_prov=?, unidad=?,
+      cantidad_pedida=?, cantidad_recibida=?, precio_unitario=?, importe_total=?,
+      fecha_pedido=?, fecha_entrega_prevista=?, fecha_entrega_real=?, estado=?,
+      ubicacion_obra=?, notas=?, albaranado=?, numero_albaran=?,
+      obra_id=?, fase_id=?, updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?${deptGuard}
+  `).bind(...params).run();
   return json({ ok: true, estado });
 }
 
 async function eliminarEntregaMaterial(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM entregas_material WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM entregas_material WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -19529,6 +19580,8 @@ async function getRiesgos(request, env) {
   if (obraId) { q += ` AND obra_id=?`;   params.push(obraId); }
   if (estado) { q += ` AND estado=?`;    params.push(estado); }
   if (cat)    { q += ` AND categoria=?`; params.push(cat); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY score DESC, id DESC LIMIT 300`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   const riesgos = results || [];
@@ -19557,8 +19610,8 @@ async function crearRiesgo(request, env) {
         (empresa_id, obra_id, numero, titulo, descripcion, categoria,
          probabilidad, impacto, score, estado, propietario,
          plan_mitigacion, plan_contingencia,
-         fecha_identificacion, fecha_revision, coste_estimado, dias_impacto, notas)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         fecha_identificacion, fecha_revision, coste_estimado, dias_impacto, notas, departamento)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(
       auth.empresa_id, b.obra_id||null, b.numero,
       b.titulo||'Riesgo', b.descripcion||null, b.categoria||'general',
@@ -19568,7 +19621,7 @@ async function crearRiesgo(request, env) {
       b.fecha_identificacion||new Date().toISOString().slice(0,10),
       b.fecha_revision||null,
       parseFloat(b.coste_estimado)||0, parseInt(b.dias_impacto)||0,
-      b.notas||null
+      b.notas||null, auth.departamento || null
     ).run());
   } else {
     ({ meta } = await env.DB.prepare(`
@@ -19576,8 +19629,8 @@ async function crearRiesgo(request, env) {
         (empresa_id, obra_id, numero, titulo, descripcion, categoria,
          probabilidad, impacto, score, estado, propietario,
          plan_mitigacion, plan_contingencia,
-         fecha_identificacion, fecha_revision, coste_estimado, dias_impacto, notas)
-      SELECT ?,?, 'RIESGO-' || ? || '-' || printf('%03d', COALESCE((SELECT COUNT(*) FROM riesgos_obra WHERE empresa_id=? AND numero LIKE 'RIESGO-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+         fecha_identificacion, fecha_revision, coste_estimado, dias_impacto, notas, departamento)
+      SELECT ?,?, 'RIESGO-' || ? || '-' || printf('%03d', COALESCE((SELECT COUNT(*) FROM riesgos_obra WHERE empresa_id=? AND numero LIKE 'RIESGO-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
     `).bind(
       auth.empresa_id, b.obra_id||null, yr,
       auth.empresa_id, yr,
@@ -19588,7 +19641,7 @@ async function crearRiesgo(request, env) {
       b.fecha_identificacion||new Date().toISOString().slice(0,10),
       b.fecha_revision||null,
       parseFloat(b.coste_estimado)||0, parseInt(b.dias_impacto)||0,
-      b.notas||null
+      b.notas||null, auth.departamento || null
     ).run());
   }
   const riesgoRow = await env.DB.prepare('SELECT numero FROM riesgos_obra WHERE id=?').bind(meta.last_row_id).first();
@@ -19600,15 +19653,7 @@ async function actualizarRiesgo(id, request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   const b = await request.json();
   const score = calcRiskScore(b.probabilidad||'media', b.impacto||'medio');
-  await env.DB.prepare(`
-    UPDATE riesgos_obra SET titulo=?, descripcion=?, categoria=?,
-      probabilidad=?, impacto=?, score=?, estado=?, propietario=?,
-      plan_mitigacion=?, plan_contingencia=?,
-      fecha_identificacion=?, fecha_revision=?,
-      coste_estimado=?, dias_impacto=?, notas=?,
-      obra_id=?, updated_at=datetime('now')
-    WHERE id=? AND empresa_id=?
-  `).bind(
+  const params = [
     b.titulo||null, b.descripcion||null, b.categoria||'general',
     b.probabilidad||'media', b.impacto||'medio', score,
     b.estado||'activo', b.propietario||null,
@@ -19617,14 +19662,28 @@ async function actualizarRiesgo(id, request, env) {
     parseFloat(b.coste_estimado)||0, parseInt(b.dias_impacto)||0,
     b.notas||null, b.obra_id||null,
     id, auth.empresa_id
-  ).run();
+  ];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`
+    UPDATE riesgos_obra SET titulo=?, descripcion=?, categoria=?,
+      probabilidad=?, impacto=?, score=?, estado=?, propietario=?,
+      plan_mitigacion=?, plan_contingencia=?,
+      fecha_identificacion=?, fecha_revision=?,
+      coste_estimado=?, dias_impacto=?, notas=?,
+      obra_id=?, updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?${deptGuard}
+  `).bind(...params).run();
   return json({ ok: true, score, nivel: riskLevel(score) });
 }
 
 async function eliminarRiesgo(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM riesgos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM riesgos_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -20779,7 +20838,8 @@ async function ensureOcTable(env) {
 }
 
 async function getOrdenesCompra(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   await ensureOcTable(env);
   const url = new URL(request.url);
@@ -20792,13 +20852,16 @@ async function getOrdenesCompra(request, env) {
   const params = [empresa_id];
   if (obra_id) { q += ' AND oc.obra_id = ?';  params.push(parseInt(obra_id)); }
   if (estado)  { q += ' AND oc.estado = ?';   params.push(estado); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ' AND (oc.departamento=? OR oc.departamento IS NULL)'; params.push(auth.departamento); }
   q += ' ORDER BY oc.created_at DESC';
   const { results } = await env.DB.prepare(q).bind(...params).all();
   return json({ items: results });
 }
 
 async function crearOrdenCompra(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   await ensureOcTable(env);
   const body = await request.json();
@@ -20808,21 +20871,25 @@ async function crearOrdenCompra(request, env) {
   // dentro del propio INSERT, atómico en D1.
   const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
-    INSERT INTO ordenes_compra (empresa_id, obra_id, numero, proveedor, descripcion, fecha_emision, fecha_entrega, estado, notas)
-    SELECT ?,?, 'OC-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM ordenes_compra WHERE empresa_id=? AND numero LIKE 'OC-'||?||'-%'),0)+1), ?,?,?,?,?,?
+    INSERT INTO ordenes_compra (empresa_id, obra_id, numero, proveedor, descripcion, fecha_emision, fecha_entrega, estado, notas, departamento)
+    SELECT ?,?, 'OC-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM ordenes_compra WHERE empresa_id=? AND numero LIKE 'OC-'||?||'-%'),0)+1), ?,?,?,?,?,?,?
   `).bind(empresa_id, obra_id || null, year,
           empresa_id, year,
           proveedor, descripcion || null,
-          fecha_emision || null, fecha_entrega || null, estado, notas || null).run();
+          fecha_emision || null, fecha_entrega || null, estado, notas || null, auth.departamento || null).run();
   const ocRow2 = await env.DB.prepare('SELECT numero FROM ordenes_compra WHERE id=?').bind(r.meta.last_row_id).first();
   return json({ ok: true, id: r.meta.last_row_id, numero: ocRow2?.numero }, 201);
 }
 
 async function actualizarOrdenCompra(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  const oc = await env.DB.prepare('SELECT id FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const oc = await env.DB.prepare('SELECT id, departamento FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!oc) return err('Orden de compra no encontrada', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && oc.departamento && oc.departamento !== auth.departamento) {
+    return err('Orden de compra no encontrada', 404);
+  }
   const body = await request.json();
   const campos = ['proveedor','descripcion','obra_id','fecha_emision','fecha_entrega','estado','notas','importe_total','aprobado_por','aprobado_at'];
   const sets = [], vals = [];
@@ -20835,10 +20902,14 @@ async function actualizarOrdenCompra(id, request, env) {
 }
 
 async function eliminarOrdenCompra(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  const oc = await env.DB.prepare('SELECT id FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const oc = await env.DB.prepare('SELECT id, departamento FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!oc) return err('Orden de compra no encontrada', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && oc.departamento && oc.departamento !== auth.departamento) {
+    return err('Orden de compra no encontrada', 404);
+  }
   await env.DB.prepare('DELETE FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
@@ -22658,7 +22729,8 @@ async function ensureConsumosMaterialTable(env) {
 }
 
 async function getConsumosMaterial(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id');
@@ -22668,13 +22740,16 @@ async function getConsumosMaterial(request, env) {
   const p = [empresa_id];
   if (obra_id) { q += ` AND obra_id=?`;         p.push(obra_id); }
   if (tipo)    { q += ` AND tipo_movimiento=?`; p.push(tipo); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; p.push(auth.departamento); }
   q += ` ORDER BY fecha DESC, id DESC`;
   const rows = await env.DB.prepare(q).bind(...p).all();
   return jsonResp(rows.results || []);
 }
 
 async function crearConsumoMaterial(request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureConsumosMaterialTable(env);
@@ -22688,49 +22763,57 @@ async function crearConsumoMaterial(request, env) {
     `INSERT INTO consumos_material
      (empresa_id,obra_id,numero,fecha,tipo_movimiento,material,referencia,
       cantidad,unidad,almacen,solicitado_por,fase_trabajo,
-      coste_unitario,coste_total,observaciones)
-     SELECT ?,?, 'CM-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM consumos_material WHERE empresa_id=? AND numero LIKE 'CM-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?`
+      coste_unitario,coste_total,observaciones,departamento)
+     SELECT ?,?, 'CM-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM consumos_material WHERE empresa_id=? AND numero LIKE 'CM-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
     empresa_id, d.obra_id||null, anio,
     empresa_id, anio,
     d.fecha,
     d.tipo_movimiento||'salida', d.material, d.referencia||null,
     cant, d.unidad||'ud', d.almacen||null, d.solicitado_por||null, d.fase_trabajo||null,
-    costU, costT, d.observaciones||null
+    costU, costT, d.observaciones||null, auth.departamento || null
   ).run();
   const cmRow = await env.DB.prepare('SELECT numero FROM consumos_material WHERE id=?').bind(r.meta.last_row_id).first();
   return jsonResp({ id: r.meta.last_row_id, numero: cmRow?.numero, coste_total: costT }, 201);
 }
 
 async function actualizarConsumoMaterial(id, request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureConsumosMaterialTable(env);
   const cant  = Number(d.cantidad||0);
   const costU = parseFloat(d.coste_unitario)||null;
   const costT = costU ? Math.round(cant * costU * 100)/100 : (parseFloat(d.coste_total)||null);
+  const params = [
+    d.fecha, d.tipo_movimiento||'salida', d.material, d.referencia||null,
+    cant, d.unidad||'ud', d.almacen||null, d.solicitado_por||null, d.fase_trabajo||null,
+    costU, costT, d.observaciones||null,
+    id, empresa_id
+  ];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
   await env.DB.prepare(
     `UPDATE consumos_material SET
       fecha=?, tipo_movimiento=?, material=?, referencia=?,
       cantidad=?, unidad=?, almacen=?, solicitado_por=?, fase_trabajo=?,
       coste_unitario=?, coste_total=?, observaciones=?,
       updated_at=datetime('now')
-     WHERE id=? AND empresa_id=?`
-  ).bind(
-    d.fecha, d.tipo_movimiento||'salida', d.material, d.referencia||null,
-    cant, d.unidad||'ud', d.almacen||null, d.solicitado_por||null, d.fase_trabajo||null,
-    costU, costT, d.observaciones||null,
-    id, empresa_id
-  ).run();
+     WHERE id=? AND empresa_id=?${deptGuard}`
+  ).bind(...params).run();
   return jsonResp({ ok: true, coste_total: costT });
 }
 
 async function eliminarConsumoMaterial(id, request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureConsumosMaterialTable(env);
-  await env.DB.prepare(`DELETE FROM consumos_material WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  const params = [id, empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM consumos_material WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return jsonResp({ ok: true });
 }
 
@@ -22972,7 +23055,8 @@ async function ensureSolicitudesMaterialTable(env) {
 }
 
 async function getSolicitudesMaterial(request, env) {
-  const { empresa_id } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obra_id  = url.searchParams.get('obra_id');
@@ -22982,13 +23066,16 @@ async function getSolicitudesMaterial(request, env) {
   const p = [empresa_id];
   if (obra_id) { q += ` AND obra_id=?`; p.push(obra_id); }
   if (estado)  { q += ` AND estado=?`;  p.push(estado); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; p.push(auth.departamento); }
   q += ` ORDER BY fecha_solicitud DESC, id DESC`;
   const rows = await env.DB.prepare(q).bind(...p).all();
   return jsonResp(rows.results || []);
 }
 
 async function crearSolicitudMaterial(request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureSolicitudesMaterialTable(env);
@@ -22999,46 +23086,54 @@ async function crearSolicitudMaterial(request, env) {
   const r = await env.DB.prepare(
     `INSERT INTO solicitudes_material
      (empresa_id,obra_id,numero,fecha_solicitud,fecha_necesaria,solicitante,
-      fase_trabajo,prioridad,lineas,estado,aprobado_por,fecha_aprobacion,pedido_id,observaciones)
-     SELECT ?,?, 'SM-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM solicitudes_material WHERE empresa_id=? AND numero LIKE 'SM-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?`
+      fase_trabajo,prioridad,lineas,estado,aprobado_por,fecha_aprobacion,pedido_id,observaciones,departamento)
+     SELECT ?,?, 'SM-' || ? || '-' || printf('%04d', COALESCE((SELECT MAX(CAST(SUBSTR(numero,-4) AS INTEGER)) FROM solicitudes_material WHERE empresa_id=? AND numero LIKE 'SM-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
     empresa_id, d.obra_id||null, anio,
     empresa_id, anio,
     d.fecha_solicitud,
     d.fecha_necesaria||null, d.solicitante||null, d.fase_trabajo||null,
     d.prioridad||'normal', lineas, d.estado||'pendiente',
-    d.aprobado_por||null, d.fecha_aprobacion||null, d.pedido_id||null, d.observaciones||null
+    d.aprobado_por||null, d.fecha_aprobacion||null, d.pedido_id||null, d.observaciones||null, auth.departamento || null
   ).run();
   const smRow = await env.DB.prepare('SELECT numero FROM solicitudes_material WHERE id=?').bind(r.meta.last_row_id).first();
   return jsonResp({ id: r.meta.last_row_id, numero: smRow?.numero }, 201);
 }
 
 async function actualizarSolicitudMaterial(id, request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const d = await request.json();
   await ensureSolicitudesMaterialTable(env);
   const lineas = typeof d.lineas === 'string' ? d.lineas : JSON.stringify(d.lineas || []);
+  const params = [
+    d.fecha_solicitud, d.fecha_necesaria||null, d.solicitante||null, d.fase_trabajo||null,
+    d.prioridad||'normal', lineas, d.estado||'pendiente',
+    d.aprobado_por||null, d.fecha_aprobacion||null, d.pedido_id||null, d.observaciones||null,
+    id, empresa_id
+  ];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
   await env.DB.prepare(
     `UPDATE solicitudes_material SET
       fecha_solicitud=?, fecha_necesaria=?, solicitante=?, fase_trabajo=?,
       prioridad=?, lineas=?, estado=?, aprobado_por=?, fecha_aprobacion=?,
       pedido_id=?, observaciones=?, updated_at=datetime('now')
-     WHERE id=? AND empresa_id=?`
-  ).bind(
-    d.fecha_solicitud, d.fecha_necesaria||null, d.solicitante||null, d.fase_trabajo||null,
-    d.prioridad||'normal', lineas, d.estado||'pendiente',
-    d.aprobado_por||null, d.fecha_aprobacion||null, d.pedido_id||null, d.observaciones||null,
-    id, empresa_id
-  ).run();
+     WHERE id=? AND empresa_id=?${deptGuard}`
+  ).bind(...params).run();
   return jsonResp({ ok: true });
 }
 
 async function eliminarSolicitudMaterial(id, request, env) {
-  const { empresa_id, rol } = await getAuthContext(request, env);
+  const auth = await getAuthContext(request, env);
+  const { empresa_id, rol } = auth;
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await ensureSolicitudesMaterialTable(env);
-  await env.DB.prepare(`DELETE FROM solicitudes_material WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  const params = [id, empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM solicitudes_material WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return jsonResp({ ok: true });
 }
 
