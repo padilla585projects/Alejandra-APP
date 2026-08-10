@@ -12284,9 +12284,14 @@ async function cpdOfficeCrearSondaEn(x, y, herramienta) {
   try {
     const data = await api('/cpd/sondas', { method: 'POST', body: JSON.stringify({ plano_id: st.plano.id, categoria: herramienta.categoria, tipo: herramienta.tipo, pos_x: x, pos_y: y }) });
     if (data?.ok === false) throw new Error(data.error || 'Error al crear la sonda');
-    const herramientaPrevia = herramienta;
-    await cpdOfficeAbrirPlano(st.plano.id);
-    window._cpdOfficeHerramientaActiva = herramientaPrevia;
+    // CPD-FLICKER-01 (10/08/2026): mismo fix que index.html — cpdOfficeAbrirPlano()
+    // reconstruye todo el editor (recarga la imagen del plano incluida), se veía como
+    // un parpadeo cada vez que se colocaba una sonda. Solo se añade el marcador nuevo.
+    const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y };
+    st.sondas.push(nuevaSonda);
+    const canvas = document.getElementById('cpdOfficeCanvas');
+    if (canvas) _cpdOfficeAddMarker(canvas, nuevaSonda);
+    window._cpdOfficeHerramientaActiva = herramienta;
     cpdOfficeRenderToolbar();
   } catch (e) {
     toast(e.message || 'Error al crear la sonda', 'err');

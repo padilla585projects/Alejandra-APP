@@ -15849,7 +15849,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Error al crear la sonda');
-      await abrirCpdPlano(st.plano.id);
+      // CPD-FLICKER-01 (10/08/2026): antes se llamaba a abrirCpdPlano(), que reconstruye
+      // TODO el editor desde cero (muestra "Cargando plano…", vuelve a descargar la
+      // imagen del plano y recrea todos los marcadores) — se veía como un parpadeo de
+      // pantalla cada vez que se colocaba una sonda. Ahora solo se añade el marcador
+      // nuevo al canvas ya existente, con los datos que ya devuelve el POST.
+      const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y };
+      st.sondas.push(nuevaSonda);
+      const canvas = document.getElementById('cpdPlanoCanvas');
+      if (canvas) cpdAddSondaMarker(canvas, nuevaSonda);
       window._cpdHerramientaActiva = herramienta;
       cpdRenderToolbar();
     } catch (e) {
