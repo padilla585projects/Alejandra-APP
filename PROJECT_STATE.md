@@ -32,11 +32,13 @@ corregidos (commit `31fcc91`, desplegado: Worker + Pages):
 - 3 selects/input del toolbar de Ausencias y Permisos con `border:1px solid #ccc`
   hardcoded rompían el tema oscuro — pasados a `var(--border)`.
 
-**Pendiente para mañana:** se detectó un bug de estilo distinto y más grave en otros 9
+**Cerrado el mismo día:** se detectó un bug de estilo distinto y más grave en otros 9
 modales (Reconocimiento, Documentación de obra, Permiso de Trabajo, Inspecciones, Subir
-Foto, Transmittal, Entrega, AI, Riesgo) — el div exterior usa `class="modal"` en vez de
-`class="modal-overlay"`, así que no tienen fondo oscuro ni centrado al abrirse. Tarea en
-curso en una sesión aparte (ver `HANDOFF.md`), sin publicar todavía.
+Foto, Transmittal, Entrega, Puntos de Acción, Riesgos) — el div exterior usaba `class="modal"`
+en vez de `class="modal-overlay"`, así que no tenían fondo oscuro ni centrado al abrirse.
+Corregido en una sesión aparte (iniciada por Adrián desde una sugerencia), verificado contra
+el DOM real antes de publicar (backdrop/centrado/cierre-al-clicar-fuera confirmados en los 9)
+y desplegado en Pages (commit `4cc6463`, run `31434560088`). Detalle completo en `HANDOFF.md`.
 
 Adrián planteó además dos ideas de producto sin implementar aún: (1) que Alejandra le avise
 por Telegram casi en tiempo real cuando se tope con un problema real (tool que falla,

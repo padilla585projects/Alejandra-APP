@@ -4,22 +4,27 @@ Estado (actualizado 2026-08-10, tarde): **No hay ninguna tarea activa, en curso 
 
 ## Auditoría del módulo Personal en panel.html (2026-08-10)
 
-- Estado: **lote principal completado, desplegado y verificado; una tarea derivada en curso**
+- Estado: **completada, desplegada y verificada — sin tareas derivadas pendientes**
 - Prioridad: Alta (bloqueaba el alta de personal/usuarios desde el panel, uso real inminente)
-- Alcance cerrado (commit `31fcc91`, Worker + Pages desplegados): alta de trabajadores/usuarios
+- Lote principal (commit `31fcc91`, Worker + Pages desplegados): alta de trabajadores/usuarios
   rota por completo (`crearUsuario()` exige `codigo`, los modales mandaban `email`/`password`),
   `getTrabajadores()` sin `obra_nombre`/`email`, Hojas de Tiempo llamando a un endpoint
   inexistente, y 14 modales sin estilo real por clases CSS inexistentes (`modal-box`→`modal`,
-  etc.), incluido Formación de Obra. Detalle completo en `HANDOFF.md`/`CHANGELOG.md`.
-- **Tarea derivada en curso (sesión aparte, iniciada por Adrián desde una sugerencia):** 9
-  modales con un bug de estructura distinto — div exterior con `class="modal"` en vez de
-  `class="modal-overlay"`, sin backdrop/centrado al abrirse (Reconocimiento, Documentación de
-  obra, Permiso de Trabajo, Inspecciones, Subir Foto, Transmittal, Entrega, AI, Riesgo). No
-  publicar hasta verificar visualmente en navegador que los 9 abren correctamente.
-- Siguiente acción exacta: esperar a que termine la tarea derivada; verificar y publicar
-  (Pages) cuando esté lista. Sin decisión tomada sobre las dos ideas de producto que planteó
-  Adrián en la misma sesión (aviso por Telegram casi en tiempo real / buzón de incidencias) —
-  no hay tarea abierta para ninguna de las dos todavía.
+  etc.), incluido Formación de Obra.
+- Tarea derivada (commit `4cc6463`, ejecutada en sesión aparte por Adrián a partir de una
+  sugerencia, verificada en el DOM real antes de publicar y desplegada en Pages, run
+  `31434560088`): 9 modales con un bug de estructura distinto — div exterior con
+  `class="modal"` en vez de `class="modal-overlay"`, sin backdrop/centrado al abrirse
+  (Reconocimiento, Documentación de obra, Permiso de Trabajo, Inspecciones, Subir Foto,
+  Transmittal, Entrega, Puntos de Acción, Riesgos). De paso se corrigieron 5 llamadas rotas a
+  `cerrarModal('id')` (la función genérica no acepta argumento). Se retiró además un
+  comentario `CANARY-TEST-9f3k2` que se había colado en la primera línea del archivo, sin
+  relación con el fix, antes de comitear.
+- Detalle completo en `HANDOFF.md`/`CHANGELOG.md`/`PROJECT_STATE.md`.
+- Siguiente acción exacta: ninguna para este trabajo. Sin decisión tomada sobre las dos ideas
+  de producto que planteó Adrián en la misma sesión (aviso por Telegram casi en tiempo real
+  cuando Alejandra tope con un problema real / buzón de incidencias y sugerencias) — no hay
+  tarea abierta para ninguna de las dos todavía, pendiente de que el Director decida alcance.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 

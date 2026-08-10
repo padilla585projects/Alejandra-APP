@@ -36,16 +36,34 @@
 - Despliegue: commit `31fcc91`. `worker.js` → `wrangler deploy` directo (Current Version ID
   `7fda7212-9981-4a69-8330-8520b172b71b`). `panel.html` → Pages publicado vía
   `gh workflow run pages.yml` (run `31433007745`, verde, healthcheck incluido).
-- **Pendiente para mañana, sin publicar:** durante la misma auditoría se detectó un bug de
-  estilo distinto — 9 modales (`recModal`, `docObraModal`, `ptModal`, `inspModal`,
-  `modalSubirFoto`, `modalTransmittal`, `modalEntrega`, `modalAI`, `modalRiesgo`) tienen el
-  div EXTERIOR con `class="modal"` en vez de `class="modal-overlay"` — como `.modal` es la
-  clase de la card (no del overlay fijo con fondo oscuro/blur/centrado), estos modales no
-  tendrían backdrop ni centrado al abrirse. Root cause distinto al de arriba (estructura mal
-  formada, no solo nombre de clase erróneo), así que se dejó fuera del lote de hoy a
-  propósito. Se lanzó como tarea en segundo plano (sesión aparte, mismo working tree) con
-  instrucciones detalladas de qué cambiar y cómo verificarlo visualmente en el navegador
-  antes de dar por bueno el fix; seguía en curso al cierre de esta sesión.
+- **Tarea derivada, ya cerrada (2026-08-10, más tarde la misma sesión):** durante la misma
+  auditoría se detectó un bug de estilo distinto — 9 modales (`recModal`, `docObraModal`,
+  `ptModal`, `inspModal`, `modalSubirFoto`, `modalTransmittal`, `modalEntrega`, `modalAI`,
+  `modalRiesgo`) tenían el div EXTERIOR con `class="modal"` en vez de `class="modal-overlay"`
+  — como `.modal` es la clase de la card (no del overlay fijo con fondo oscuro/blur/centrado),
+  estos modales se abrían sin backdrop ni centrado. Root cause distinto al de arriba
+  (estructura mal formada, no solo nombre de clase erróneo), así que se dejó fuera del lote
+  principal a propósito y se lanzó como tarea en segundo plano (sesión aparte, mismo working
+  tree, iniciada por Adrián desde una sugerencia) con instrucciones detalladas de qué cambiar
+  y cómo verificarlo visualmente antes de dar por bueno el fix.
+  - Fix aplicado: exterior renombrado a `modal-overlay` (+ `onclick` de cierre al clicar
+    fuera, patrón ya usado en el resto de la app); interior de `modal-content` a `modal`. De
+    paso se corrigieron 5 llamadas rotas a `cerrarModal('id')` — la función genérica
+    (`cerrarModal()`, sin argumento) solo cierra el modal-overlay singleton; esas 5 llamadas
+    nunca cerraban nada — pasadas a cerrar su propio modal por id directamente.
+  - Antes de comitear se encontró y retiró un `<!-- CANARY-TEST-9f3k2 -->` colado en la
+    primera línea del archivo (junto al `<!DOCTYPE html>`), sin relación con el fix — no se
+    investigó su origen, simplemente no debía publicarse.
+  - Verificación (sin login, contra el DOM real vía `javascript_tool`, `file://panel.html`
+    local): los 9 modales, al forzar su apertura, muestran `position:fixed`,
+    `background:rgba(7,9,21,.76)` con blur y `display:flex` centrado en el overlay, y
+    `background:linear-gradient(...)`/`border-radius:18px`/`box-shadow` en la card interior
+    — igual que el resto de la app. El cierre al clicar fuera (`el.click()` simulando el
+    click en el propio overlay) deja los 5 modales estáticos en `display:none` y elimina del
+    DOM los 4 generados por plantilla JS (`modalTransmittal`/`modalEntrega`/`modalAI`/
+    `modalRiesgo`), como se espera de su patrón `remove()`.
+  - Despliegue: commit `4cc6463`. `panel.html` → Pages publicado vía `gh workflow run
+    pages.yml` (run `31434560088`, verde, healthcheck incluido).
 - Ideas de producto planteadas por Adrián, sin implementar: (1) aviso por Telegram
   casi-en-tiempo-real cuando Alejandra se tope con un problema real; (2) un "buzón" de
   incidencias/sugerencias donde Alejandra vaya anotando cosas para repasar más tarde. Nada
