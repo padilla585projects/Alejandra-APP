@@ -16997,6 +16997,12 @@ async function getRfiDetalle(id, request, env) {
   await ensureRfisTable(env);
   const rfi = await env.DB.prepare(`SELECT * FROM rfis WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).first();
   if (!rfi) return err('RFI no encontrada', 404);
+  // IDOR (10/08/2026, auditoria de aislamiento): el listado (getRfis) ya acota por
+  // departamento, pero el detalle por id no comprobaba nada -- un usuario podia leer
+  // el detalle de una RFI de otro departamento adivinando/enumerando el id.
+  if (!isDeptPrivileged(auth) && auth.departamento && rfi.departamento && rfi.departamento !== auth.departamento) {
+    return err('RFI no encontrada', 404);
+  }
   return json({ rfi });
 }
 
@@ -17645,6 +17651,10 @@ async function ensureObsSeguridadTable(env) {
 async function getObsSeguridad(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  // DEPT-CPD-01 (10/08/2026): exclusivo de Seguridad, mismo criterio que
+  // getPermisosTrabajo/getAts -- observaciones/no conformidades de seguridad no
+  // son de un departamento concreto de obra, las gestiona Seguridad transversalmente.
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureObsSeguridadTable(env);
   const u = new URL(request.url);
   const obraId = u.searchParams.get('obra_id');
@@ -17668,6 +17678,7 @@ async function getObsSeguridad(request, env) {
 async function crearObsSeguridad(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureObsSeguridadTable(env);
   const b = await request.json();
   if (!b.descripcion) return err('descripcion requerido', 400);
@@ -17690,6 +17701,7 @@ async function crearObsSeguridad(request, env) {
 async function actualizarObsSeguridad(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureObsSeguridadTable(env);
   const b = await request.json();
   const fechaCierre = b.estado === 'cerrada' ? (b.fecha_cierre || new Date().toISOString().slice(0,10)) : null;
@@ -17711,6 +17723,7 @@ async function actualizarObsSeguridad(id, request, env) {
 async function eliminarObsSeguridad(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM obs_seguridad WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
@@ -17744,6 +17757,9 @@ async function ensureToolboxTalksTable(env) {
 async function getToolboxTalks(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  // DEPT-CPD-01 (10/08/2026): exclusivo de Seguridad, mismo criterio que
+  // getPermisosTrabajo/getAts/getObsSeguridad.
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureToolboxTalksTable(env);
   const u = new URL(request.url);
   const obraId = u.searchParams.get('obra_id');
@@ -17762,6 +17778,7 @@ async function getToolboxTalks(request, env) {
 async function crearToolboxTalk(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureToolboxTalksTable(env);
   const b = await request.json();
   if (!b.tema || !b.fecha) return err('tema y fecha requeridos', 400);
@@ -17779,6 +17796,7 @@ async function crearToolboxTalk(request, env) {
 async function actualizarToolboxTalk(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await ensureToolboxTalksTable(env);
   const b = await request.json();
   const asistentesJson = b.asistentes != null
@@ -17800,6 +17818,7 @@ async function actualizarToolboxTalk(id, request, env) {
 async function eliminarToolboxTalk(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM toolbox_talks WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
