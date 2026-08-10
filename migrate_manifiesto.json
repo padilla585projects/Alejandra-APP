@@ -210,9 +210,11 @@
     },
     {
       "archivo": "migrate_dept_faltantes.sql",
-      "aplicada": false,
+      "aplicada": true,
+      "run": "31367123412",
       "declarado": "2026-08-10",
-      "nota": "Correccion de un fallo propio: las 12 tablas declaradas como CREATE TABLE IF NOT EXISTS en las 4 migraciones anteriores YA EXISTIAN en produccion (DDL en runtime, nunca antes declaradas en una migracion), asi que el CREATE fue un no-op silencioso. ALTER TABLE ADD COLUMN para las 12. Sintaxis validada localmente. Paso 2 pendiente de autorizacion del Director."
+      "verificado": "2026-08-10",
+      "nota": "Correccion de un fallo propio: las 12 tablas declaradas como CREATE TABLE IF NOT EXISTS en las 4 migraciones anteriores YA EXISTIAN en produccion (DDL en runtime, nunca antes declaradas en una migracion), asi que el CREATE fue un no-op silencioso. ALTER TABLE ADD COLUMN para las 12, aplicado y verificado (PRAGMA table_info: columna presente en las 12). Con esto, las 19 tablas del plan de aislamiento por departamento tienen la columna departamento en produccion."
     }
   ]
 }

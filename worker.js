@@ -16584,9 +16584,12 @@ async function getFasesObra(request, env) {
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : auth.obra_id;
   if (!obra_id) return json([]);
-  const { results } = await env.DB.prepare(
-    `SELECT * FROM fases_obra WHERE empresa_id=? AND obra_id=? ORDER BY orden ASC, id ASC`
-  ).bind(auth.empresa_id, obra_id).all();
+  let q = `SELECT * FROM fases_obra WHERE empresa_id=? AND obra_id=?`;
+  const params = [auth.empresa_id, obra_id];
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  q += ` ORDER BY orden ASC, id ASC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
   return json(results || []);
 }
 
@@ -16603,9 +16606,9 @@ async function crearFaseObra(request, env) {
     `SELECT COALESCE(MAX(orden),0) as m FROM fases_obra WHERE empresa_id=? AND obra_id=?`
   ).bind(auth.empresa_id, obra_id).first();
   const r = await env.DB.prepare(`
-    INSERT INTO fases_obra (obra_id, empresa_id, nombre, descripcion, fecha_inicio_plan, fecha_fin_plan, responsable, orden)
-    VALUES (?,?,?,?,?,?,?,?)
-  `).bind(obra_id, auth.empresa_id, safeStr(b.nombre).trim(), b.descripcion||null, b.fecha_inicio_plan||null, b.fecha_fin_plan||null, b.responsable||null, (maxOrden?.m||0)+1).run();
+    INSERT INTO fases_obra (obra_id, empresa_id, nombre, descripcion, fecha_inicio_plan, fecha_fin_plan, responsable, orden, departamento)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).bind(obra_id, auth.empresa_id, safeStr(b.nombre).trim(), b.descripcion||null, b.fecha_inicio_plan||null, b.fecha_fin_plan||null, b.responsable||null, (maxOrden?.m||0)+1, auth.departamento || null).run();
   return json({ ok: true, id: r.meta?.last_row_id });
 }
 
@@ -16627,14 +16630,19 @@ async function actualizarFaseObra(id, request, env) {
   if (b.orden !== undefined)           { campos.push('orden=?');            vals.push(parseInt(b.orden)||0); }
   if (!campos.length) return err('Nada que actualizar', 400);
   vals.push(id, auth.empresa_id);
-  await env.DB.prepare(`UPDATE fases_obra SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; vals.push(auth.departamento); }
+  await env.DB.prepare(`UPDATE fases_obra SET ${campos.join(',')} WHERE id=? AND empresa_id=?${deptGuard}`).bind(...vals).run();
   return json({ ok: true });
 }
 
 async function eliminarFaseObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM fases_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM fases_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -17469,6 +17477,8 @@ async function getHitosObra(request, env) {
   if (obraId) { sql += ' AND h.obra_id=?'; params.push(parseInt(obraId)); }
   if (estado) { sql += ' AND h.estado=?'; params.push(estado); }
   if (desde)  { sql += ' AND h.fecha >= ?'; params.push(desde); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { sql += ' AND (h.departamento=? OR h.departamento IS NULL)'; params.push(auth.departamento); }
   sql += ' ORDER BY h.fecha ASC';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   const hoy = new Date().toISOString().slice(0, 10);
@@ -17485,30 +17495,36 @@ async function crearHitoObra(request, env) {
   const b = await request.json();
   if (!b.nombre || !b.fecha || !b.obra_id) return err('nombre, fecha y obra_id son obligatorios');
   const { meta } = await env.DB.prepare(
-    `INSERT INTO hitos_obra (empresa_id, obra_id, nombre, descripcion, fecha, estado, tipo, responsable, alertar_dias, notas)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO hitos_obra (empresa_id, obra_id, nombre, descripcion, fecha, estado, tipo, responsable, alertar_dias, notas, departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(auth.empresa_id, b.obra_id, b.nombre, b.descripcion||null, b.fecha,
-    b.estado||'pendiente', b.tipo||'general', b.responsable||null, b.alertar_dias??7, b.notas||null).run();
+    b.estado||'pendiente', b.tipo||'general', b.responsable||null, b.alertar_dias??7, b.notas||null, auth.departamento || null).run();
   return json({ ok: true, id: meta.last_row_id });
 }
 async function actualizarHitoObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   const b = await request.json();
+  const params = [b.nombre||null, b.descripcion||null, b.fecha||null, b.estado||null, b.tipo||null,
+    b.responsable||null, b.alertar_dias??null, b.notas||null, id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
   await env.DB.prepare(
     `UPDATE hitos_obra SET nombre=COALESCE(?,nombre), descripcion=COALESCE(?,descripcion),
      fecha=COALESCE(?,fecha), estado=COALESCE(?,estado), tipo=COALESCE(?,tipo),
      responsable=COALESCE(?,responsable), alertar_dias=COALESCE(?,alertar_dias), notas=COALESCE(?,notas)
-     WHERE id=? AND empresa_id=?`
-  ).bind(b.nombre||null, b.descripcion||null, b.fecha||null, b.estado||null, b.tipo||null,
-    b.responsable||null, b.alertar_dias??null, b.notas||null, id, auth.empresa_id).run();
+     WHERE id=? AND empresa_id=?${deptGuard}`
+  ).bind(...params).run();
   return json({ ok: true });
 }
 async function eliminarHitoObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await ensureHitosObraTable(env);
-  await env.DB.prepare(`DELETE FROM hitos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM hitos_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -18248,6 +18264,8 @@ async function getContactosObra(request, env) {
   const params = [auth.empresa_id];
   if (obraId) { q += ` AND obra_id=?`; params.push(parseInt(obraId)); }
   if (rol)    { q += ` AND rol=?`;     params.push(rol); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY rol, nombre`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   return json({ contactos: results });
@@ -18259,29 +18277,35 @@ async function crearContactoObra(request, env) {
   const b = await request.json();
   if (!b.nombre) return err('nombre requerido', 400);
   const r = await env.DB.prepare(`
-    INSERT INTO contactos_obra (empresa_id, obra_id, nombre, rol, empresa, email, telefono, movil, notas, activo)
-    VALUES (?,?,?,?,?,?,?,?,?,1)
+    INSERT INTO contactos_obra (empresa_id, obra_id, nombre, rol, empresa, email, telefono, movil, notas, activo, departamento)
+    VALUES (?,?,?,?,?,?,?,?,?,1,?)
   `).bind(auth.empresa_id, b.obra_id||null, b.nombre, b.rol||null, b.empresa||null,
-          b.email||null, b.telefono||null, b.movil||null, b.notas||null).run();
+          b.email||null, b.telefono||null, b.movil||null, b.notas||null, auth.departamento || null).run();
   return json({ ok: true, id: r.meta?.last_row_id });
 }
 async function actualizarContactoObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   const b = await request.json();
+  const params = [b.nombre||null, b.rol||null, b.empresa||null, b.email||null,
+          b.telefono||null, b.movil||null, b.notas||null, b.obra_id||null,
+          id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
   await env.DB.prepare(`
     UPDATE contactos_obra SET nombre=?, rol=?, empresa=?, email=?, telefono=?, movil=?, notas=?, obra_id=?
-    WHERE id=? AND empresa_id=?
-  `).bind(b.nombre||null, b.rol||null, b.empresa||null, b.email||null,
-          b.telefono||null, b.movil||null, b.notas||null, b.obra_id||null,
-          id, auth.empresa_id).run();
+    WHERE id=? AND empresa_id=?${deptGuard}
+  `).bind(...params).run();
   return json({ ok: true });
 }
 async function eliminarContactoObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
   // Soft delete
-  await env.DB.prepare(`UPDATE contactos_obra SET activo=0 WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  await env.DB.prepare(`UPDATE contactos_obra SET activo=0 WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -18334,6 +18358,8 @@ async function getContratosObra(request, env) {
   const params = [auth.empresa_id];
   if (obraId) { q += ` AND c.obra_id=?`; params.push(parseInt(obraId)); }
   if (tipo)   { q += ` AND c.tipo=?`;    params.push(tipo); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (c.departamento=? OR c.departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY c.created_at DESC`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   // Totales
@@ -18353,21 +18379,26 @@ async function crearContratoObra(request, env) {
   const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
     INSERT INTO contratos_obra (empresa_id, obra_id, numero, tipo, titulo, contratista, contacto_id,
-      importe_original, importe_actual, estado, fecha_firma, fecha_inicio, fecha_fin, descripcion, notas)
-    SELECT ?,?, 'CONT-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM contratos_obra WHERE empresa_id=? AND numero LIKE 'CONT-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?
+      importe_original, importe_actual, estado, fecha_firma, fecha_inicio, fecha_fin, descripcion, notas, departamento)
+    SELECT ?,?, 'CONT-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM contratos_obra WHERE empresa_id=? AND numero LIKE 'CONT-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?
   `).bind(auth.empresa_id, b.obra_id||null, year,
           auth.empresa_id, year,
           b.tipo||'subcontrata', b.titulo,
           b.contratista||null, b.contacto_id||null,
           b.importe_original||0, b.importe_original||0,
           b.estado||'borrador', b.fecha_firma||null, b.fecha_inicio||null, b.fecha_fin||null,
-          b.descripcion||null, b.notas||null).run();
+          b.descripcion||null, b.notas||null, auth.departamento || null).run();
   const contRow = await env.DB.prepare('SELECT numero FROM contratos_obra WHERE id=?').bind(r.meta.last_row_id).first();
   return json({ ok: true, id: r.meta?.last_row_id, numero: contRow?.numero });
 }
 async function actualizarContratoObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  const contrato = await env.DB.prepare('SELECT departamento FROM contratos_obra WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+  if (!contrato) return err('Contrato no encontrado', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && contrato.departamento && contrato.departamento !== auth.departamento) {
+    return err('Contrato no encontrado', 404);
+  }
   const b = await request.json();
   // Recalc importe_actual = original + amendments aprobados
   const { results: ams } = await env.DB.prepare(
@@ -18387,7 +18418,10 @@ async function actualizarContratoObra(id, request, env) {
 async function eliminarContratoObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM contratos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM contratos_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   await env.DB.prepare(`DELETE FROM contratos_amendments WHERE contrato_id=?`).bind(id).run();
   return json({ ok: true });
 }
@@ -18434,6 +18468,8 @@ async function getSubmittals(request, env) {
   if (obraId) { q += ` AND obra_id=?`;   params.push(parseInt(obraId)); }
   if (estado) { q += ` AND estado=?`;    params.push(estado); }
   if (tipo)   { q += ` AND tipo=?`;      params.push(tipo); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY created_at DESC`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   const hoy = new Date().toISOString().slice(0,10);
@@ -18459,20 +18495,25 @@ async function crearSubmittal(request, env) {
   const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
     INSERT INTO submittals (empresa_id, obra_id, numero, tipo, titulo, descripcion, especificacion,
-      fabricante, modelo, estado, prioridad, responsable, revisor, revision, fecha_envio, fecha_limite, notas)
-    SELECT ?,?, 'SUB-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM submittals WHERE empresa_id=? AND numero LIKE 'SUB-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?
+      fabricante, modelo, estado, prioridad, responsable, revisor, revision, fecha_envio, fecha_limite, notas, departamento)
+    SELECT ?,?, 'SUB-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM submittals WHERE empresa_id=? AND numero LIKE 'SUB-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
   `).bind(auth.empresa_id, b.obra_id||null, year,
           auth.empresa_id, year,
           b.tipo||'material', b.titulo,
           b.descripcion||null, b.especificacion||null, b.fabricante||null, b.modelo||null,
           b.estado||'pendiente', b.prioridad||'normal', b.responsable||auth.nombre||null,
-          b.revisor||null, b.revision||'A', b.fecha_envio||null, b.fecha_limite||null, b.notas||null).run();
+          b.revisor||null, b.revision||'A', b.fecha_envio||null, b.fecha_limite||null, b.notas||null, auth.departamento || null).run();
   const subRow = await env.DB.prepare('SELECT numero FROM submittals WHERE id=?').bind(r.meta.last_row_id).first();
   return json({ ok: true, id: r.meta?.last_row_id, numero: subRow?.numero });
 }
 async function actualizarSubmittal(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  const sub = await env.DB.prepare('SELECT departamento FROM submittals WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+  if (!sub) return err('Submittal no encontrado', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && sub.departamento && sub.departamento !== auth.departamento) {
+    return err('Submittal no encontrado', 404);
+  }
   const b = await request.json();
   const fechaRespuesta = (b.estado==='aprobado'||b.estado==='rechazado'||b.estado==='aprobado_con_notas')
     ? (b.fecha_respuesta || new Date().toISOString().slice(0,10)) : b.fecha_respuesta||null;
@@ -18491,7 +18532,10 @@ async function actualizarSubmittal(id, request, env) {
 async function eliminarSubmittal(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM submittals WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM submittals WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -18745,6 +18789,8 @@ async function getTransmittals(request, env) {
   if (obraId) { q += ` AND obra_id=?`;  params.push(parseInt(obraId)); }
   if (estado) { q += ` AND estado=?`;   params.push(estado); }
   if (tipo)   { q += ` AND tipo=?`;     params.push(tipo); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY created_at DESC LIMIT 200`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   const hoy = new Date().toISOString().slice(0,10);
@@ -18769,21 +18815,26 @@ async function crearTransmittal(request, env) {
   const year = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const r = await env.DB.prepare(`
     INSERT INTO transmittals_obra (empresa_id, obra_id, numero, asunto, de_quien, para_quien,
-      fecha_envio, fecha_limite, tipo, estado, referencia, documentos, notas)
-    SELECT ?,?, 'TRANS-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM transmittals_obra WHERE empresa_id=? AND numero LIKE 'TRANS-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?
+      fecha_envio, fecha_limite, tipo, estado, referencia, documentos, notas, departamento)
+    SELECT ?,?, 'TRANS-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM transmittals_obra WHERE empresa_id=? AND numero LIKE 'TRANS-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?
   `).bind(auth.empresa_id, b.obra_id||null, year,
           auth.empresa_id, year,
           b.asunto,
           b.de_quien||auth.nombre||null, b.para_quien||null,
           b.fecha_envio||new Date().toISOString().slice(0,10), b.fecha_limite||null,
           b.tipo||'envio', b.estado||'enviado',
-          b.referencia||null, b.documentos||null, b.notas||null).run();
+          b.referencia||null, b.documentos||null, b.notas||null, auth.departamento || null).run();
   const transRow = await env.DB.prepare('SELECT numero FROM transmittals_obra WHERE id=?').bind(r.meta.last_row_id).first();
   return json({ ok: true, id: r.meta?.last_row_id, numero: transRow?.numero }, 201);
 }
 async function actualizarTransmittal(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
+  const t = await env.DB.prepare('SELECT departamento FROM transmittals_obra WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+  if (!t) return err('Transmittal no encontrado', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && t.departamento && t.departamento !== auth.departamento) {
+    return err('Transmittal no encontrado', 404);
+  }
   const b = await request.json();
   await env.DB.prepare(`
     UPDATE transmittals_obra SET asunto=?, de_quien=?, para_quien=?, fecha_envio=?, fecha_limite=?,
@@ -18798,7 +18849,10 @@ async function actualizarTransmittal(id, request, env) {
 async function eliminarTransmittal(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM transmittals_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM transmittals_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -19748,6 +19802,8 @@ async function getPlanSemanal(request, env) {
   if (obraId) { q += ` AND obra_id=?`; params.push(obraId); }
   if (semanaInicio) { q += ` AND semana_inicio >= ?`; params.push(semanaInicio); }
   if (semanaFin) { q += ` AND semana_inicio <= ?`; params.push(semanaFin); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY semana_inicio ASC, gremio ASC`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   return json({ planes: results });
@@ -19759,6 +19815,10 @@ async function getPlanSemanalItem(id, request, env) {
   await ensurePlanSemanalTable(env);
   const row = await env.DB.prepare(`SELECT * FROM plan_semanal WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).first();
   if (!row) return err('No encontrado', 404);
+  // IDOR (10/08/2026): el detalle por id no comprobaba departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento && row.departamento && row.departamento !== auth.departamento) {
+    return err('No encontrado', 404);
+  }
   return json(row);
 }
 
@@ -19770,13 +19830,13 @@ async function crearPlanSemanal(request, env) {
   const actStr = JSON.stringify(b.actividades || []);
   const ppc = calcPpcFromActividades(actStr);
   const { meta } = await env.DB.prepare(
-    `INSERT INTO plan_semanal (empresa_id,obra_id,semana_inicio,gremio,responsable,descripcion,actividades,workers_num,horas_planificadas,estado,ppc,notas)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO plan_semanal (empresa_id,obra_id,semana_inicio,gremio,responsable,descripcion,actividades,workers_num,horas_planificadas,estado,ppc,notas,departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     auth.empresa_id, b.obra_id, b.semana_inicio, b.gremio,
     b.responsable || null, b.descripcion || null, actStr,
     b.workers_num || 1, b.horas_planificadas || 0,
-    b.estado || 'planificado', ppc, b.notas || null
+    b.estado || 'planificado', ppc, b.notas || null, auth.departamento || null
   ).run();
   return json({ ok: true, id: meta.last_row_id });
 }
@@ -19788,26 +19848,32 @@ async function actualizarPlanSemanal(id, request, env) {
   const b = await request.json();
   const actStr = b.actividades !== undefined ? JSON.stringify(b.actividades) : undefined;
   const ppc = actStr !== undefined ? calcPpcFromActividades(actStr) : b.ppc;
+  const params = [
+    b.gremio || null, b.responsable || null, b.descripcion || null,
+    actStr || null, b.workers_num || null, b.horas_planificadas || null,
+    b.estado || null, ppc ?? null, b.notas || null,
+    id, auth.empresa_id
+  ];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
   await env.DB.prepare(
     `UPDATE plan_semanal SET
       gremio=COALESCE(?,gremio), responsable=COALESCE(?,responsable),
       descripcion=COALESCE(?,descripcion), actividades=COALESCE(?,actividades),
       workers_num=COALESCE(?,workers_num), horas_planificadas=COALESCE(?,horas_planificadas),
       estado=COALESCE(?,estado), ppc=COALESCE(?,ppc), notas=COALESCE(?,notas)
-     WHERE id=? AND empresa_id=?`
-  ).bind(
-    b.gremio || null, b.responsable || null, b.descripcion || null,
-    actStr || null, b.workers_num || null, b.horas_planificadas || null,
-    b.estado || null, ppc ?? null, b.notas || null,
-    id, auth.empresa_id
-  ).run();
+     WHERE id=? AND empresa_id=?${deptGuard}`
+  ).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarPlanSemanal(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM plan_semanal WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM plan_semanal WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -19848,6 +19914,8 @@ async function getInstruccionesObra(request, env) {
   if (obraId) { q += ` AND obra_id=?`; params.push(obraId); }
   if (estado) { q += ` AND estado=?`; params.push(estado); }
   if (prio)   { q += ` AND prioridad=?`; params.push(prio); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ` AND (departamento=? OR departamento IS NULL)`; params.push(auth.departamento); }
   q += ` ORDER BY created_at DESC LIMIT 500`;
   const { results } = await env.DB.prepare(q).bind(...params).all();
   return json({ instrucciones: results });
@@ -19862,8 +19930,8 @@ async function crearInstruccionObra(request, env) {
   // dentro del propio INSERT, atómico en D1.
   const yr = String(new Date().getFullYear()); // SEC-AUDIT-08: D1 binda numeros JS como REAL, '||' lo concatenaba como '2026.0'
   const { meta } = await env.DB.prepare(
-    `INSERT INTO instrucciones_obra (empresa_id,obra_id,numero,titulo,descripcion,destinatario,emitido_por,prioridad,estado,fecha_emision,fecha_respuesta_limite,notas_respuesta,rfi_id)
-     SELECT ?,?, 'IST-' || ? || '-' || printf('%03d', COALESCE((SELECT COUNT(*) FROM instrucciones_obra WHERE empresa_id=? AND obra_id=? AND numero LIKE 'IST-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?`
+    `INSERT INTO instrucciones_obra (empresa_id,obra_id,numero,titulo,descripcion,destinatario,emitido_por,prioridad,estado,fecha_emision,fecha_respuesta_limite,notas_respuesta,rfi_id,departamento)
+     SELECT ?,?, 'IST-' || ? || '-' || printf('%03d', COALESCE((SELECT COUNT(*) FROM instrucciones_obra WHERE empresa_id=? AND obra_id=? AND numero LIKE 'IST-'||?||'-%'),0)+1), ?,?,?,?,?,?,?,?,?,?,?`
   ).bind(
     auth.empresa_id, b.obra_id, yr,
     auth.empresa_id, b.obra_id, yr,
@@ -19872,7 +19940,7 @@ async function crearInstruccionObra(request, env) {
     b.prioridad || 'normal', b.estado || 'emitida',
     b.fecha_emision || new Date().toISOString().slice(0,10),
     b.fecha_respuesta_limite || null, b.notas_respuesta || null,
-    b.rfi_id || null
+    b.rfi_id || null, auth.departamento || null
   ).run();
   const istRow = await env.DB.prepare('SELECT numero FROM instrucciones_obra WHERE id=?').bind(meta.last_row_id).first();
   return json({ ok: true, id: meta.last_row_id, numero: istRow?.numero });
@@ -19883,6 +19951,15 @@ async function actualizarInstruccionObra(id, request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await ensureInstruccionesTable(env);
   const b = await request.json();
+  const params = [
+    b.titulo || null, b.descripcion || null, b.destinatario || null,
+    b.emitido_por || null, b.prioridad || null, b.estado || null,
+    b.fecha_emision || null, b.fecha_respuesta_limite || null,
+    b.notas_respuesta || null, b.rfi_id || null,
+    id, auth.empresa_id
+  ];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
   await env.DB.prepare(
     `UPDATE instrucciones_obra SET
       titulo=COALESCE(?,titulo), descripcion=COALESCE(?,descripcion),
@@ -19891,21 +19968,18 @@ async function actualizarInstruccionObra(id, request, env) {
       fecha_emision=COALESCE(?,fecha_emision),
       fecha_respuesta_limite=COALESCE(?,fecha_respuesta_limite),
       notas_respuesta=COALESCE(?,notas_respuesta), rfi_id=COALESCE(?,rfi_id)
-     WHERE id=? AND empresa_id=?`
-  ).bind(
-    b.titulo || null, b.descripcion || null, b.destinatario || null,
-    b.emitido_por || null, b.prioridad || null, b.estado || null,
-    b.fecha_emision || null, b.fecha_respuesta_limite || null,
-    b.notas_respuesta || null, b.rfi_id || null,
-    id, auth.empresa_id
-  ).run();
+     WHERE id=? AND empresa_id=?${deptGuard}`
+  ).bind(...params).run();
   return json({ ok: true });
 }
 
 async function eliminarInstruccionObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM instrucciones_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  const params = [id, auth.empresa_id];
+  let deptGuard = '';
+  if (!isDeptPrivileged(auth) && auth.departamento) { deptGuard = ' AND (departamento=? OR departamento IS NULL)'; params.push(auth.departamento); }
+  await env.DB.prepare(`DELETE FROM instrucciones_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
 
@@ -20585,7 +20659,8 @@ async function ensureVisitasObraTable(env) {
 }
 
 async function getVisitasObra(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   await ensureVisitasObraTable(env);
   const url = new URL(request.url);
@@ -20600,13 +20675,16 @@ async function getVisitasObra(request, env) {
   if (desde) { sql += ' AND v.fecha >= ?'; params.push(desde); }
   const hasta = url.searchParams.get('hasta');
   if (hasta) { sql += ' AND v.fecha <= ?'; params.push(hasta); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { sql += ' AND (v.departamento=? OR v.departamento IS NULL)'; params.push(auth.departamento); }
   sql += ' ORDER BY v.fecha DESC, v.hora_entrada DESC LIMIT 300';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
 }
 
 async function crearVisitaObra(request, env) {
-  const { empresa_id, obra_id, nombre } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id, nombre } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   await ensureVisitasObraTable(env);
   const body = await request.json().catch(() => ({}));
@@ -20615,18 +20693,22 @@ async function crearVisitaObra(request, env) {
   if (!fecha) return err('La fecha es obligatoria', 400);
   const obraFinal = body.obra_id ?? obra_id ?? null;
   const r = await env.DB.prepare(
-    `INSERT INTO visitas_obra (empresa_id, obra_id, fecha, hora_entrada, hora_salida, nombre, empresa_visitante, rol, proposito, areas_visitadas, observaciones, autorizado_por, creado_por)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(empresa_id, obraFinal, fecha, hora_entrada || null, hora_salida || null, safeStr(nombreV).trim(), empresa_visitante || null, rol, proposito || null, areas_visitadas || null, observaciones || null, autorizado_por || nombre || null, nombre || null).run();
+    `INSERT INTO visitas_obra (empresa_id, obra_id, fecha, hora_entrada, hora_salida, nombre, empresa_visitante, rol, proposito, areas_visitadas, observaciones, autorizado_por, creado_por, departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, obraFinal, fecha, hora_entrada || null, hora_salida || null, safeStr(nombreV).trim(), empresa_visitante || null, rol, proposito || null, areas_visitadas || null, observaciones || null, autorizado_por || nombre || null, nombre || null, auth.departamento || null).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
 async function actualizarVisitaObra(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const v = await env.DB.prepare('SELECT * FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!v) return err('Visita no encontrada', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && v.departamento && v.departamento !== auth.departamento) {
+    return err('Visita no encontrada', 404);
+  }
   const campos = [], vals = [];
   if (body.nombre !== undefined)           { campos.push('nombre=?');            vals.push(safeStr(body.nombre).trim()||v.nombre); }
   if (body.fecha !== undefined)            { campos.push('fecha=?');             vals.push(body.fecha||v.fecha); }
@@ -20646,10 +20728,14 @@ async function actualizarVisitaObra(id, request, env) {
 }
 
 async function eliminarVisitaObra(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  const v = await env.DB.prepare('SELECT id FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const v = await env.DB.prepare('SELECT id, departamento FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!v) return err('Visita no encontrada', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && v.departamento && v.departamento !== auth.departamento) {
+    return err('Visita no encontrada', 404);
+  }
   await env.DB.prepare('DELETE FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
@@ -20853,7 +20939,8 @@ async function ensureItpTable(env) {
 }
 
 async function getItp(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   await ensureItpTable(env);
   const url = new URL(request.url);
@@ -20872,30 +20959,37 @@ async function getItp(request, env) {
   const params = [empresa_id];
   if (obra_id) { q += ' AND itp.obra_id = ?'; params.push(parseInt(obra_id)); }
   if (estado)  { q += ' AND itp.estado = ?';  params.push(estado); }
+  // DEPT-01 (10/08/2026, auditoria Alejandra Office): aislamiento por departamento.
+  if (!isDeptPrivileged(auth) && auth.departamento) { q += ' AND (itp.departamento=? OR itp.departamento IS NULL)'; params.push(auth.departamento); }
   q += ' GROUP BY itp.id ORDER BY itp.created_at DESC';
   const { results } = await env.DB.prepare(q).bind(...params).all();
   return json({ items: results });
 }
 
 async function crearItp(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   await ensureItpTable(env);
   const body = await request.json();
   const { titulo, revision='R0', disciplina, estado='activo', responsable, notas, obra_id } = body;
   if (!titulo) return err('Titulo requerido', 400);
   const r = await env.DB.prepare(`
-    INSERT INTO itp_obra (empresa_id, obra_id, titulo, revision, disciplina, estado, responsable, notas)
-    VALUES (?,?,?,?,?,?,?,?)
-  `).bind(empresa_id, obra_id||null, titulo, revision, disciplina||null, estado, responsable||null, notas||null).run();
+    INSERT INTO itp_obra (empresa_id, obra_id, titulo, revision, disciplina, estado, responsable, notas, departamento)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id||null, titulo, revision, disciplina||null, estado, responsable||null, notas||null, auth.departamento || null).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
 async function actualizarItp(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  const itp = await env.DB.prepare('SELECT id FROM itp_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const itp = await env.DB.prepare('SELECT id, departamento FROM itp_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!itp) return err('ITP no encontrado', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && itp.departamento && itp.departamento !== auth.departamento) {
+    return err('ITP no encontrado', 404);
+  }
   const body = await request.json();
   const campos = ['titulo','revision','disciplina','estado','responsable','notas','obra_id'];
   const sets = [], vals = [];
@@ -20908,10 +21002,14 @@ async function actualizarItp(id, request, env) {
 }
 
 async function eliminarItp(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
-  const itp = await env.DB.prepare('SELECT id FROM itp_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const itp = await env.DB.prepare('SELECT id, departamento FROM itp_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!itp) return err('ITP no encontrado', 404);
+  if (!isDeptPrivileged(auth) && auth.departamento && itp.departamento && itp.departamento !== auth.departamento) {
+    return err('ITP no encontrado', 404);
+  }
   await env.DB.prepare('DELETE FROM itp_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
