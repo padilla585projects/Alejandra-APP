@@ -15,7 +15,18 @@
 - Decisiones del Director sobre los casos ambiguos: **Diario de obra** y **Correspondencia** son transversales (sin cambio); **Checklists** (plantillas/ejecuciones) y **Consumos/Solicitudes de material** deben acotarse por departamento (pendiente, necesitan migración — ver abajo).
 - Despliegue/verificación (2026-08-10): commit `a6d1a9b`, `wrangler deploy` directo (ARC-021), `GET /health` → `healthy`, versión `5d9bdc57-ec3d-494a-bac5-257be7c8db08` (reportó primero la versión anterior por lag de edge, confirmado tras reconsultar).
 
-### Pendiente — requiere migración D1 (18 tablas sin columna `departamento`)
+### Plan de aislamiento por departamento — completo (2026-08-10)
+
+19 tablas (`ordenes_cambio/compra`, `fases_obra`, `hitos_obra`, `plan_semanal`, `instrucciones_obra`, `visitas_obra`, `itp_obra`, `contactos/contratos_obra`, `submittals`, `transmittals_obra`, `ncrs_obra`, `riesgos_obra`, `entregas/consumos/solicitudes_material`, `checklists_plantillas`, `checklist_ejecuciones`).
+
+- Paso 1-2 (declarar + aplicar migraciones D1): 5 migraciones por dominio (`migrate_dept_ingenieria/documental/cambios_calidad/compras_material/checklists.sql`) + 1 correctiva (`migrate_dept_faltantes.sql`, 12 tablas que resultaron ya existir en runtime y cuyo `CREATE TABLE IF NOT EXISTS` fue un no-op silencioso) + 1 ALTER suelto fuera de proceso (`checklists_plantillas`, ver incidente arriba). Las 19 tablas verificadas con columna `departamento` presente vía `PRAGMA table_info` contra D1 real.
+- Paso 3 (código): `deptGuard` aplicado a cada `get`/`crear`/`actualizar`/`eliminar` de las 19 tablas, mismo patrón `isDeptPrivileged()` ya validado en `getTareasObra`/`getEpisAsignados`. Corregidos de paso IDOR en endpoints de detalle-por-id que no comprobaban departamento (`getPlanSemanalItem`, `actualizarContratoObra`, `actualizarSubmittal`, `actualizarTransmittal`, `getItp`/`eliminarItp`, `actualizarVisitaObra`/`eliminarVisitaObra`, `getEntregaMaterial`, `getChecklistPlantilla`, `getChecklistEjecucion`).
+- Decisiones del Director aplicadas: Diario de obra y Correspondencia quedan transversales (sin cambio); Observaciones de Seguridad y Toolbox Talks pasan a exclusivos de Seguridad (`isDeptPrivileged`, desplegado en `a6d1a9b`); Checklists y Consumos/Solicitudes de material se acotan por departamento.
+- Verificación: `node --check worker.js` limpio en cada commit intermedio (`a3fa4de`, `abf2cfc`).
+- Despliegue/verificación final (2026-08-10): commit `abf2cfc`, `wrangler deploy` directo. `GET /health` → `{"estado":"healthy","d1":true,"r2":true,"version":"f0624a8e-f81c-4c50-b47f-fb0a76a44dbe"}`, versión coincide de inmediato.
+- Siguiente acción exacta: ninguna sobre este plan — completo. Pendiente aparte: decidir si se diseña la revisión humana asíncrona real para N2 (ADR propio, cablear Telegram) — N3 sigue fuera del alcance autónomo por mandato de ADR-0006.
+
+### Pendiente — requiere migración D1 (18 tablas sin columna `departamento`) — RESUELTO, ver sección "Plan de aislamiento por departamento — completo" arriba
 
 Confirmado con evidencia línea por línea que sirven datos curados por departamento en el sidebar de Office pero el backend solo filtra por `empresa_id`:
 
