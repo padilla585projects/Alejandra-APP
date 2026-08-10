@@ -4961,7 +4961,10 @@ async function fichajesBatch(request, env, ctx) {
         : null;
       const horaEnt = horario ? (getHorarioParaDia(horario, fecha).hora_entrada || '07:00') : '07:00';
       const [hh, mm] = horaEnt.split(':').map(Number);
-      const salidaMins = hh * 60 + mm + (f.horas || 0) * 60;
+      // FICHAJES-BATCH-HORA-01 (10/08/2026): sin el módulo, un parte con f.horas grande (ej.
+      // error de OCR al escanear) generaba hora_salida fuera de rango ("27:30") — se guardaba
+      // tal cual y contaminaba cualquier cálculo posterior que la lea como hora del día.
+      const salidaMins = ((hh * 60 + mm + (f.horas || 0) * 60) % (24 * 60) + 24 * 60) % (24 * 60);
       const horaSal = String(Math.floor(salidaMins / 60)).padStart(2, '0') + ':' + String(salidaMins % 60).padStart(2, '0');
 
       await env.DB.prepare(
@@ -10367,11 +10370,18 @@ function calcMinutosRetraso(horaEntrada, horaHorario) {
   return toMin(horaEntrada.slice(0,5)) - toMin(horaHorario.slice(0,5));
 }
 
+// FICHAJES-NOCTURNO-01 (10/08/2026): sin el "+ 24h si cruza medianoche", un turno de
+// noche (ej. entrada 22:00, salida 06:00) daba horas_trabajadas=0 en vez de 8 --
+// mins salía negativo (360-1320=-960) y Math.max(0,...) lo dejaba en 0. Se propaga a
+// horas_extra, informeSemanal y cierreAutomaticoJornada, todos calculados a partir de
+// esta función. Confirmado por Adrián: va a usar fichajes en serio, incluye turnos de
+// noche/guardia (ver el tipo "guardia" en el modal de fichaje manual).
 function calcHoras(entrada, salida) {
   if (!entrada || !salida) return 0;
   const [eh, em] = entrada.split(':').map(Number);
   const [sh, sm] = salida.split(':').map(Number);
-  const mins = (sh * 60 + sm) - (eh * 60 + em);
+  let mins = (sh * 60 + sm) - (eh * 60 + em);
+  if (mins < 0) mins += 24 * 60; // turno que cruza medianoche
   return Math.max(0, Math.round(mins / 60 * 100) / 100);
 }
 
@@ -11129,8 +11139,20 @@ async function crearFichaje(request, env, ctx) {
 }
 
 async function actualizarFichaje(id, request, env, ctx) {
-  const { empresa_id, rol, nombre: encargadoNombre, obra_id: obraAuth } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, rol, nombre: encargadoNombre, obra_id: obraAuth, departamento } = auth;
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  // FICHAJES-AISLAMIENTO-01 (10/08/2026): solo comprobaba empresa_id -- un encargado/oficina
+  // de una obra/departamento podía editar o borrar el fichaje de OTRA obra/departamento de la
+  // misma empresa sabiendo (o probando) el id, aunque el listado (getFichajes) sí filtra
+  // correctamente. Mismo patrón de aislamiento ya aplicado hoy al resto de la app: 404 en vez
+  // de 403 para no confirmar la existencia del fichaje a quien no puede tocarlo.
+  if (!isDeptPrivileged(auth)) {
+    const propio = await env.DB.prepare('SELECT obra_id, departamento FROM fichajes WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+    if (!propio) return err('Fichaje no encontrado', 404);
+    if (obraAuth && propio.obra_id !== obraAuth) return err('Fichaje no encontrado', 404);
+    if (departamento && (rol === 'oficina' || rol === 'encargado') && propio.departamento !== departamento) return err('Fichaje no encontrado', 404);
+  }
   const body = await request.json().catch(() => ({}));
   const campos = []; const vals = [];
   if (body.hora_entrada !== undefined) { campos.push('hora_entrada=?'); vals.push(body.hora_entrada||null); }
@@ -11174,8 +11196,16 @@ async function actualizarFichaje(id, request, env, ctx) {
 }
 
 async function eliminarFichaje(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, rol, obra_id: obraAuth, departamento } = auth;
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  // FICHAJES-AISLAMIENTO-01: mismo fix que actualizarFichaje, ver comentario ahí.
+  if (!isDeptPrivileged(auth)) {
+    const propio = await env.DB.prepare('SELECT obra_id, departamento FROM fichajes WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+    if (!propio) return err('Fichaje no encontrado', 404);
+    if (obraAuth && propio.obra_id !== obraAuth) return err('Fichaje no encontrado', 404);
+    if (departamento && (rol === 'oficina' || rol === 'encargado') && propio.departamento !== departamento) return err('Fichaje no encontrado', 404);
+  }
   await env.DB.prepare('DELETE FROM fichajes WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
