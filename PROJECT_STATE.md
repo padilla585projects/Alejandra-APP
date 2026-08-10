@@ -1,6 +1,6 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-06
+- Actualizado: 2026-08-10
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
 ## Auditoría de Alejandra Chat — aislamiento de contexto (2026-08-06)
@@ -600,8 +600,9 @@ acta/calidad`, `historico_materiales`): `listar`/`resumen`/`consultar`/
 (`lib.js`) decide por tool+`accion`, fail-closed ante acción desconocida.
 `evaluarInvocacionCognitiva()` recibe `input` y gobierna estas invocaciones
 igual que `verificar_deploy`, sin tocar ningún gate legacy existente. Tests:
-cognitive-core 45/45, cognitive-core-policy 4/4, agente 177/177. **Sin
-desplegar todavía.**
+cognitive-core 45/45, cognitive-core-policy 4/4, agente 177/177. **Desplegado y verificado
+(2026-08-07):** commit `634b86f`, `wrangler deploy` directo, `/health` →
+`healthy`, versión `9eaa503b-909a-416e-bf40-1b568e7e2200`.
 
 **Rebanada 6 (2026-08-07, enmienda 5):** refuerzo N2/N3, sin ampliar
 permisos. `decidirInvocacionN2N3()` deja traza explícita de una tool N2/N3
@@ -609,7 +610,9 @@ ofrecida, pero **siempre** decide `'posponer'`, nunca `'invocar_tool'` —
 `CONFIRMO BORRADO`/`CONFIRMO MIGRACION` no se tocan, siguen siendo la única
 barrera real. Antes, N2/N3 eran invisibles para el Motor; ahora quedan
 trazadas sin que ningún permiso cambie. Tests: cognitive-core 50/50,
-cognitive-core-policy 4/4, agente 178/178. **Sin desplegar todavía.**
+cognitive-core-policy 4/4, agente 178/178. **Desplegado y verificado
+(2026-08-07):** commit `634e8a3`, `wrangler deploy` directo, `/health` →
+`healthy`, versión `4a814224-2db7-4a2c-b880-fca4e2a5afdb`.
 
 **Rebanada 7 (2026-08-07, enmienda 6):** N1 se amplía a escritura.
 `decidirInvocacionN1Lectura()` generalizada a `decidirInvocacionN1()` —
@@ -619,10 +622,20 @@ límite de ADR-0006 (N1 = "reversible, acotado" por definición).
 `esInvocacionN1DeLectura()` deja de gatear, pasa a enriquecer la traza
 (`es_lectura`). El Motor gobierna ahora el catálogo N1 completo (26 tools),
 sin cambiar ningún gate legacy (sesión, `empresa_id`, IDOR de cada `case`).
-Tests: cognitive-core 57/57 (con policy), agente 178/178. **Sin desplegar
-todavía.**
+Tests: cognitive-core 57/57 (con policy), agente 178/178. **Desplegado y
+verificado (2026-08-07):** commit `c3d9936` (cherry-pick tras un incidente
+de rama, ver `HANDOFF.md`), `wrangler deploy` directo, `/health` →
+`healthy`, versión `3fa2f9e9-f747-44a8-9498-b93d3bf9833e`.
+
+Con esto las 7 rebanadas de ADR-0020 quedan desplegadas y verificadas en
+producción; el catálogo N0+N1 completo opera bajo el Motor de Decisión.
 
 **Pendientes ADR-0020:** diseñar revisión humana asíncrona real para N2
 (requiere ADR propio, cablear el canal de Telegram — cambio mayor, no
 autónomo); N3 sigue fuera del alcance autónomo por mandato de ADR-0006. Ver
 `ARCHITECT_BACKLOG.md` (ARC-020) y `TASKS.md`.
+
+## Bug de telemetría F-4.4 y aislamiento por departamento en Alejandra Office (2026-08-07/10)
+
+- **F-4.4 (2026-08-07):** investigando qué vertical elegir para F-3.1 (herramientas semánticas), se auditaron las trazas `feature_usage` reales en D1 y se detectó que el 100% se clasificaban como "error" — incluidas ejecuciones correctas. Causa: la clasificación buscaba un contrato JSON `"ok"` que la mayoría de tools no devuelve. Fix: `clasificarResultadoTool()` (función pura en `alejandra-agente/lib.js`), desplegado y verificado. Detalle en `HANDOFF.md`. **F-3.1 queda a la espera de telemetría real de uso** (las trazas hasta ahora son del cron) antes de decidir la vertical piloto — decisión del Director ("esperamos").
+- **Aislamiento por departamento en Alejandra Office (2026-08-09/10):** a raíz de un reporte de Adrián sobre fugas en desplegables entre departamentos, tres auditorías sucesivas (agentes Explore, solo lectura) sobre `worker.js`/`panel.html` encontraron y cerraron, en orden: (1) `getTrabajadores`/`getCarnets` + reorden de departamentos (Control/Telecom tras Eléctrico); (2) 19 tablas de obra sin columna `departamento` (6 migraciones D1 + `deptGuard` en ~40 endpoints, ciclo de 5 pasos de ADR-0011) más `getObsSeguridad`/`getToolboxTalks` restringidos a Seguridad; (3) `getReconocimientos` (datos de salud) y `getAccidentes` (registro legal de seguridad), última fuga real encontrada, restringidos a Seguridad+admins. **No quedan módulos conocidos sin aislar.** Un incidente de proceso propio (ALTER directo sin workflow) fue autorreportado y aceptado como caso puntual, sin extender el bypass a futuras migraciones D1. Detalle completo, commits y versiones desplegadas en `HANDOFF.md` y `CHANGELOG.md`.
