@@ -13579,14 +13579,41 @@ async function cargarPersonal() {
     pagination: 'local', paginationSize: 20,
     placeholder: '<div class="empty-state"><div class="empty-icon">👷</div><div class="empty-text">Sin trabajadores</div></div>',
     columns: [
+      // TRABAJADORES-TIPO-01: foto + tarjeta para los dos tipos -- plantilla de Levitec
+      // (usuarios) y subcontratas de obra (personal_externo), que es a quien de verdad se
+      // quiere fichar con la tarjeta (Adrián, 11/08/2026).
+      { title: '', field: 'foto_r2_key', width: 46, hozAlign: 'center', headerSort: false,
+        formatter: c => {
+          const row = c.getRow().getData();
+          const src = row.foto_r2_key ? `${API}/foto-perfil/${row.tipo === 'externo' ? 'externo' : 'usuario'}/${row.id}?token=${TOKEN}` : '';
+          const inicial = (row.nombre || '?').charAt(0).toUpperCase();
+          const avatar = src
+            ? `<img src="${src}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="document.getElementById('fotoInputPers_${row.id}').click()">`
+            : `<div style="width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#000;cursor:pointer" onclick="document.getElementById('fotoInputPers_${row.id}').click()">${inicial}</div>`;
+          return canEdit ? `${avatar}<input type="file" id="fotoInputPers_${row.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilPanel('${row.tipo === 'externo' ? 'externo' : 'usuario'}',${row.id},this.files[0])">` : avatar;
+        }
+      },
       { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 160,
         editor: canEdit ? 'input' : false,
         cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'nombre', cell.getValue()) },
-      { title: 'Rol', field: 'rol', sorter: 'string', width: 130,
-        editor: canEditRol ? 'list' : false,
+      // Rol (usuarios) o DNI (subcontratas) -- son conceptos distintos, comparten columna
+      // porque nunca aplican los dos a la vez para la misma fila.
+      { title: 'Rol / DNI', field: 'rol', sorter: 'string', width: 150,
+        editor: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.tipo === 'externo') return canEdit ? 'input' : false;
+          return canEditRol ? 'list' : false;
+        },
         editorParams: { values: ROLES_ASIGNABLES_TABLA },
-        cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'rol', cell.getValue()),
+        mutateEditorValue: (value, cell) => cell.getRow().getData().tipo === 'externo' ? cell.getRow().getData().dni : value,
+        cellEdited: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.tipo === 'externo') guardarCampoPersonal(row, 'dni', cell.getValue());
+          else guardarCampoPersonal(row, 'rol', cell.getValue());
+        },
         formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.tipo === 'externo') return `<span class="badge badge-muted">🪪 DNI ${row.dni || '—'}</span>`;
           const v = cell.getValue();
           const cls = { empresa_admin:'accent', encargado:'warn', operario:'info', jefe_de_obra:'blue', oficina:'ok' }[v] || 'muted';
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
@@ -13594,12 +13621,22 @@ async function cargarPersonal() {
       },
       { title: 'Departamento', field: 'departamento', sorter: 'string', width: 140 },
       { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140 },
-      { title: 'Email', field: 'email', sorter: 'string', minWidth: 180 },
+      { title: 'Email', field: 'email', sorter: 'string', minWidth: 180,
+        // personal_externo no tiene columna email en el backend -- sin editor para esas filas.
+        editor: (cell) => cell.getRow().getData().tipo === 'externo' ? false : (canEdit ? 'input' : false),
+        cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'email', cell.getValue()),
+        formatter: c => c.getRow().getData().tipo === 'externo' ? '<span style="color:var(--muted)">—</span>' : (c.getValue() || '') },
       { title: 'Obras', width: 80, hozAlign: 'center', headerSort: false,
         formatter: c => {
           const row = c.getRow().getData();
           if (!canEdit || !['project_manager','jefe_de_obra'].includes(row.rol)) return '';
           return '<button class="btn btn-sm btn-secondary" onclick="editarObrasAsignadas(' + row.id + ')" title="Obras asignadas">🏗</button>';
+        } },
+      { title: '', width: 46, hozAlign: 'center', headerSort: false,
+        formatter: c => {
+          const row = c.getRow().getData();
+          if (!canEdit) return '';
+          return `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();generarTarjetaPersonalPanel(${row.id},'${row.tipo === 'externo' ? 'externo' : 'usuario'}')" title="Tarjeta con QR para fichar">🪪</button>`;
         } },
       { title: 'Activo', field: 'activo', width: 80, hozAlign: 'center',
         formatter: (cell) => cell.getValue() ? '✅' : '❌' },
@@ -13607,9 +13644,78 @@ async function cargarPersonal() {
   });
 }
 
+// TRABAJADORES-TIPO-01 (11/08/2026): esta tabla mezcla usuarios (plantilla de Levitec, con
+// cuenta) y personal_externo (subcontratas de obra, sin cuenta) desde siempre
+// (getTrabajadores), pero el guardado SIEMPRE mandaba a /usuarios/:id -- editar una fila de
+// subcontrata mandaba el PUT al id EQUIVOCADO en la tabla equivocada (podía tocar a un
+// usuario real que casualmente tuviera ese mismo id numérico). Adrián: "una cosa son los
+// usuarios de la app... y luego los trabajadores de la obra que son subcontratas... que son
+// los que queremos fichar" -- confirma que esta tabla debe seguir siendo el sitio único
+// para los dos, pero enrutando cada guardado a su endpoint real.
 async function guardarCampoPersonal(row, campo, valor) {
-  const r = await api(`/usuarios/${row.id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
-  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+  const endpoint = row.tipo === 'externo' ? `/personal-externo/${row.id}` : `/usuarios/${row.id}`;
+  const r = await api(endpoint, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast(r.error || 'Error al guardar', 'err');
+}
+
+// Genera la tarjeta con QR para cualquiera de los dos tipos -- mismo layout que index.html
+// (empresa+departamento+rol o DNI+obra), backfill de código bajo demanda para externos.
+async function generarTarjetaPersonalPanel(id, tipo) {
+  const row = tblPersonal?.getRow(id)?.getData();
+  if (!row) return;
+  let codigo = row.codigo;
+  if (!codigo && tipo === 'externo') {
+    const res = await api(`/personal-externo/${id}/codigo`, { method: 'POST' });
+    if (!res.ok || !res.codigo) { toast(res.error || 'No se pudo generar el código', 'err'); return; }
+    codigo = res.codigo;
+  }
+  if (!codigo) { toast('Este trabajador no tiene código asignado', 'err'); return; }
+
+  const tmp = document.createElement('div');
+  tmp.style.display = 'none';
+  document.body.appendChild(tmp);
+  new QRCode(tmp, { text: codigo, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  const canvas = tmp.querySelector('canvas');
+  const qrDataUrl = canvas ? canvas.toDataURL('image/png') : '';
+  document.body.removeChild(tmp);
+  if (!qrDataUrl) { toast('No se pudo generar el QR', 'err'); return; }
+
+  const fotoUrl = row.foto_r2_key ? `${API}/foto-perfil/${tipo}/${id}?token=${TOKEN}` : '';
+  const deptInfo = _DEPTS_CATALOG[row.departamento];
+  const departamento = deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (row.departamento || '');
+  const rolTexto = tipo === 'externo' ? ('Personal externo' + (row.dni ? ` · DNI ${row.dni}` : '')) : (row.rol || '');
+
+  const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>Tarjeta — ${row.nombre}</title>
+<style>
+@page { size: 85.6mm 54mm; margin: 0; }
+body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;align-items:center;background:#eee;min-height:100vh}
+.card{width:85.6mm;height:54mm;background:#fff;border:1px solid #ccc;border-radius:3mm;box-sizing:border-box;padding:3.5mm;display:flex;gap:3mm;align-items:center}
+.foto{width:19mm;height:19mm;border-radius:50%;object-fit:cover;flex-shrink:0}
+.foto-placeholder{width:19mm;height:19mm;border-radius:50%;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8mm;font-weight:900;flex-shrink:0}
+.info{flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column;gap:.6mm}
+.nombre{font-size:3.6mm;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#101823}
+.empresa{font-size:2.6mm;font-weight:700;color:#1e3a5f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.linea{font-size:2.3mm;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.codigo{font-size:2.4mm;color:#888;font-family:monospace;margin-top:.4mm}
+.qr{width:16mm;height:16mm;flex-shrink:0}
+@media print{body{background:#fff}.card{border:none}}
+</style></head><body>
+<div class="card">
+${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(row.nombre || '?').charAt(0).toUpperCase()}</div>`}
+<div class="info">
+  <div class="nombre">${row.nombre}</div>
+  <div class="empresa">${SESSION.empresa_nombre || ''}</div>
+  ${departamento || rolTexto ? `<div class="linea">${[departamento, rolTexto].filter(Boolean).join(' · ')}</div>` : ''}
+  ${row.obra_nombre ? `<div class="linea">🏗 ${row.obra_nombre}</div>` : ''}
+  <div class="codigo">${codigo}</div>
+</div>
+<img class="qr" src="${qrDataUrl}">
+</div>
+</body></html>`);
+  w.document.close();
+  w.print();
 }
 
 // TRABAJADORES-ALTA-01 (10/08/2026): este modal mandaba {nombre,email,password,rol,
@@ -13618,48 +13724,94 @@ async function guardarCampoPersonal(row, campo, valor) {
 // mandaba, así que dar de alta un trabajador fallaba SIEMPRE con "Faltan nombre y código".
 // Se sustituye el campo de contraseña por el código real, y el email queda como campo
 // opcional (sí lo acepta editarUsuario/PUT, útil para login con Google más adelante).
+//
+// TRABAJADORES-TIPO-01 (11/08/2026): Adrián — "una cosa son los usuarios de la app, que son
+// empleados de la empresa (Levitec) y luego los trabajadores de la obra que son
+// subcontratas... que son los que queremos fichar. ¿Cómo lo organizamos?" -- se pregunta el
+// tipo primero (empleado con cuenta vs subcontrata sin cuenta), cada uno con su formulario y
+// su endpoint real (POST /usuarios vs POST /personal-externo). Antes solo existía el camino
+// de "empleado", así que dar de alta una subcontrata desde "Trabajadores" no era posible en
+// absoluto pese a ser el caso de uso principal de esta pantalla.
 function abrirModalPersonal() {
   abrirModal('Nuevo trabajador', `
-    <div class="form-group"><div class="form-label">Nombre completo</div><input class="form-input" id="mNombre" placeholder="Juan García"></div>
-    <div class="form-group"><div class="form-label">Código (para fichar/entrar con código de obra)</div><input class="form-input" id="mCodigo" placeholder="JGARCIA01"></div>
-    <div class="form-group"><div class="form-label">Email (opcional)</div><input class="form-input" id="mEmail" type="email" placeholder="juan@empresa.com"></div>
-    <div class="form-row">
-      <div class="form-group"><div class="form-label">Rol</div>
-        <select class="form-select" id="mRol">
-          <option value="operario">Operario</option>
-          <option value="encargado">Encargado</option>
-          <option value="oficina">Oficina</option>
-          <option value="jefe_de_obra">Jefe de obra</option>
-          <option value="project_manager">Project Manager</option>
-          <option value="almacenero">Almacenero</option>
-          <option value="ingeniero">Ingeniero</option>
-          <option value="empresa_admin">Admin</option>
-        </select>
-      </div>
-      <div class="form-group"><div class="form-label">Departamento</div>
-        <!-- ROLES-04 (25/07/2026): esta lista estaba escrita a mano y quedó desactualizada
-             tras INGENIERIA-01 (v8.19) — seguía ofreciendo 'oficina' ("Oficina técnica"),
-             que ya NO es un departamento válido (ver validos[] en worker.js), y nunca llegó
-             a incluir 'ingenieria'. Se sustituye por el catálogo real _DEPTS_CATALOG, la
-             misma fuente que ya usa abrirModalUsuario(), para que no se desincronicen otra
-             vez. -->
-        <select class="form-select" id="mDept">${_ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('')}</select>
-      </div>
+    <div class="form-group"><div class="form-label">¿Qué tipo de trabajador es?</div></div>
+    <div style="display:flex;gap:10px;margin-bottom:8px">
+      <button class="btn btn-primary" style="flex:1;padding:16px" onclick="_abrirModalPersonalTipo('usuario')">
+        👤 Empleado de la empresa<br><span style="font-weight:400;font-size:11px">Tiene cuenta y código de acceso</span>
+      </button>
+      <button class="btn btn-primary" style="flex:1;padding:16px" onclick="_abrirModalPersonalTipo('externo')">
+        🪪 Subcontrata de obra<br><span style="font-weight:400;font-size:11px">Sin cuenta, con DNI y tarjeta</span>
+      </button>
     </div>
-  `, async () => {
-    const body = {
-      nombre: document.getElementById('mNombre').value.trim(),
-      codigo: document.getElementById('mCodigo').value.trim(),
-      rol: document.getElementById('mRol').value,
-      departamento: document.getElementById('mDept').value,
-    };
-    if (!body.nombre || !body.codigo) { toast('Nombre y código son obligatorios', 'err'); return; }
-    const r = await api('/usuarios', { method: 'POST', body: JSON.stringify(body) });
-    if (!r.ok) { toast(r.error || 'Error al crear', 'err'); return; }
-    const email = document.getElementById('mEmail').value.trim();
-    if (email && r.id) await api(`/usuarios/${r.id}`, { method: 'PUT', body: JSON.stringify({ email }) }).catch(() => {});
-    cerrarModal(); toast('Trabajador creado ✓', 'ok'); cargarPersonal();
-  });
+  `, null);
+  document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>';
+}
+
+function _abrirModalPersonalTipo(tipo) {
+  if (tipo === 'usuario') {
+    abrirModal('Nuevo empleado', `
+      <div class="form-group"><div class="form-label">Nombre completo</div><input class="form-input" id="mNombre" placeholder="Juan García"></div>
+      <div class="form-group"><div class="form-label">Código (para fichar/entrar con código de obra)</div><input class="form-input" id="mCodigo" placeholder="JGARCIA01"></div>
+      <div class="form-group"><div class="form-label">Email (opcional)</div><input class="form-input" id="mEmail" type="email" placeholder="juan@empresa.com"></div>
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">Rol</div>
+          <select class="form-select" id="mRol">
+            <option value="operario">Operario</option>
+            <option value="encargado">Encargado</option>
+            <option value="oficina">Oficina</option>
+            <option value="jefe_de_obra">Jefe de obra</option>
+            <option value="project_manager">Project Manager</option>
+            <option value="almacenero">Almacenero</option>
+            <option value="ingeniero">Ingeniero</option>
+            <option value="empresa_admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group"><div class="form-label">Departamento</div>
+          <select class="form-select" id="mDept">${_ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('')}</select>
+        </div>
+      </div>
+    `, async () => {
+      const body = {
+        nombre: document.getElementById('mNombre').value.trim(),
+        codigo: document.getElementById('mCodigo').value.trim(),
+        rol: document.getElementById('mRol').value,
+        departamento: document.getElementById('mDept').value,
+      };
+      if (!body.nombre || !body.codigo) { toast('Nombre y código son obligatorios', 'err'); return; }
+      const r = await api('/usuarios', { method: 'POST', body: JSON.stringify(body) });
+      if (!r.ok) { toast(r.error || 'Error al crear', 'err'); return; }
+      const email = document.getElementById('mEmail').value.trim();
+      if (email && r.id) await api(`/usuarios/${r.id}`, { method: 'PUT', body: JSON.stringify({ email }) }).catch(() => {});
+      cerrarModal(); toast('Empleado creado ✓', 'ok'); cargarPersonal();
+    });
+  } else {
+    const obraOpts = (window._obrasPanel || []).map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+    abrirModal('Nueva subcontrata de obra', `
+      <div class="form-group"><div class="form-label">Nombre completo</div><input class="form-input" id="mNombreExt" placeholder="Juan García"></div>
+      <div class="form-group"><div class="form-label">DNI (opcional)</div><input class="form-input" id="mDniExt" placeholder="12345678A"></div>
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">Departamento</div>
+          <select class="form-select" id="mDeptExt">${_ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('')}</select>
+        </div>
+        <div class="form-group"><div class="form-label">Obra</div>
+          <select class="form-select" id="mObraExt"><option value="">— Sin asignar —</option>${obraOpts}</select>
+        </div>
+      </div>
+      <div class="form-group"><div class="form-label">Notas (opcional)</div><textarea class="form-input" id="mNotasExt" rows="2"></textarea></div>
+    `, async () => {
+      const body = {
+        nombre: document.getElementById('mNombreExt').value.trim(),
+        dni: document.getElementById('mDniExt').value.trim() || null,
+        departamento: document.getElementById('mDeptExt').value,
+        obra_id: document.getElementById('mObraExt').value || null,
+        notas: document.getElementById('mNotasExt').value.trim() || null,
+      };
+      if (!body.nombre) { toast('El nombre es obligatorio', 'err'); return; }
+      const r = await api('/personal-externo', { method: 'POST', body: JSON.stringify(body) });
+      if (!r.ok) { toast(r.error || 'Error al crear', 'err'); return; }
+      cerrarModal(); toast('Subcontrata creada ✓', 'ok'); tblPersonal = null; cargarPersonal();
+    });
+  }
 }
 
 // ── FICHAJES ───────────────────────────────────────────────────

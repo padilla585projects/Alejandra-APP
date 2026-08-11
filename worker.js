@@ -10492,10 +10492,13 @@ function generarCodigoExterno() {
 async function crearPersonalExterno(request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
-  const { nombre, dni, obra_id, notas } = await request.json().catch(() => ({}));
+  // TRABAJADORES-TIPO-01 (11/08/2026): el INSERT no aceptaba departamento -- el formulario
+  // de alta de subcontratas de panel.html lo pedía pero se perdía siempre, quedando la fila
+  // con el DEFAULT de la columna ('personal') sin importar lo que se eligiera.
+  const { nombre, dni, obra_id, notas, departamento } = await request.json().catch(() => ({}));
   if (!safeStr(nombre).trim()) return err('Falta el nombre');
-  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas,codigo) VALUES (?,?,?,?,?,?)')
-    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null, generarCodigoExterno()).run();
+  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas,codigo,departamento) VALUES (?,?,?,?,?,?,?)')
+    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null, generarCodigoExterno(), departamento||'personal').run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -10552,17 +10555,19 @@ async function getTrabajadores(request, env) {
 
   // TRABAJADORES-COLS-01 (10/08/2026): el SELECT no traía obra_nombre ni email, pero el
   // panel (tblPersonal) tiene columnas 'obra_nombre' y 'email' que quedaban siempre vacías.
-  let sqlU = 'SELECT u.id, u.nombre, u.rol, u.departamento, u.obra_id, o.nombre as obra_nombre, u.email, u.activo, NULL as dni, "app" as tipo, u.foto_r2_key, CASE WHEN u.telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios u LEFT JOIN obras o ON o.id = u.obra_id WHERE u.empresa_id=? AND u.activo=1';
+  // TRABAJADORES-COLS-02 (11/08/2026): añadido codigo (tarjeta con QR, ARC-022) y
+  // obra_nombre también para personal_externo -- solo lo tenía la rama de usuarios.
+  let sqlU = 'SELECT u.id, u.nombre, u.rol, u.departamento, u.obra_id, o.nombre as obra_nombre, u.email, u.activo, u.codigo, NULL as dni, "app" as tipo, u.foto_r2_key, CASE WHEN u.telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios u LEFT JOIN obras o ON o.id = u.obra_id WHERE u.empresa_id=? AND u.activo=1';
   const paramsU = [empresa_id];
   if (obra_id) { sqlU += ' AND u.obra_id=?'; paramsU.push(parseInt(obra_id)); }
   if (deptFilter) { sqlU += ' AND u.departamento=?'; paramsU.push(deptFilter); }
   sqlU += ' ORDER BY u.nombre';
 
-  let sqlP = 'SELECT id, nombre, NULL as rol, departamento, obra_id, dni, "externo" as tipo, foto_r2_key, 0 as tiene_telegram FROM personal_externo WHERE empresa_id=? AND activo=1';
+  let sqlP = 'SELECT p.id, p.nombre, NULL as rol, p.departamento, p.obra_id, o.nombre as obra_nombre, p.dni, p.codigo, "externo" as tipo, p.foto_r2_key, 0 as tiene_telegram FROM personal_externo p LEFT JOIN obras o ON o.id = p.obra_id WHERE p.empresa_id=? AND p.activo=1';
   const paramsP = [empresa_id];
-  if (obra_id) { sqlP += ' AND obra_id=?'; paramsP.push(parseInt(obra_id)); }
-  if (deptFilter) { sqlP += ' AND departamento=?'; paramsP.push(deptFilter); }
-  sqlP += ' ORDER BY nombre';
+  if (obra_id) { sqlP += ' AND p.obra_id=?'; paramsP.push(parseInt(obra_id)); }
+  if (deptFilter) { sqlP += ' AND p.departamento=?'; paramsP.push(deptFilter); }
+  sqlP += ' ORDER BY p.nombre';
 
   const [ru, rp] = await Promise.all([
     env.DB.prepare(sqlU).bind(...paramsU).all(),

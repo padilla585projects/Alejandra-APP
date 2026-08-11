@@ -7162,7 +7162,12 @@ window.borrarFotoPerfilWorker = borrarFotoPerfilWorker;
 let _usuariosAdminCache = [];
 // Helper compartido: genera el QR y abre la ventana de impresión, usado tanto para
 // usuarios (generarTarjetaTrabajador) como para personal_externo (generarTarjetaExterno).
-function _imprimirTarjeta(nombre, codigo, fotoUrl) {
+// ARC-022 (11/08/2026, ampliada): Adrián — "la tarjeta que genera la app es muy corta en
+// info, hay que añadir más cosas" — empresa, departamento, rol/DNI y obra, manteniendo el
+// tamaño carnet CR80 (85.6×54mm). `datos` = {nombre, codigo, fotoUrl, empresa,
+// departamento, rolTexto, obra}.
+function _imprimirTarjeta(datos) {
+  const { nombre, codigo, fotoUrl, empresa, departamento, rolTexto, obra } = datos;
   const tmp = document.createElement('div');
   tmp.style.display = 'none';
   document.body.appendChild(tmp);
@@ -7178,18 +7183,26 @@ function _imprimirTarjeta(nombre, codigo, fotoUrl) {
 <style>
 @page { size: 85.6mm 54mm; margin: 0; }
 body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;align-items:center;background:#eee;min-height:100vh}
-.card{width:85.6mm;height:54mm;background:#fff;border:1px solid #ccc;border-radius:4mm;box-sizing:border-box;padding:4mm;display:flex;gap:4mm;align-items:center}
-.foto{width:22mm;height:22mm;border-radius:50%;object-fit:cover;flex-shrink:0}
-.foto-placeholder{width:22mm;height:22mm;border-radius:50%;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:900;flex-shrink:0}
-.info{flex:1;min-width:0;overflow:hidden}
-.nombre{font-size:4mm;font-weight:900;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.codigo{font-size:2.8mm;color:#555;font-family:monospace}
-.qr{width:18mm;height:18mm;flex-shrink:0}
+.card{width:85.6mm;height:54mm;background:#fff;border:1px solid #ccc;border-radius:3mm;box-sizing:border-box;padding:3.5mm;display:flex;gap:3mm;align-items:center}
+.foto{width:19mm;height:19mm;border-radius:50%;object-fit:cover;flex-shrink:0}
+.foto-placeholder{width:19mm;height:19mm;border-radius:50%;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8mm;font-weight:900;flex-shrink:0}
+.info{flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column;gap:.6mm}
+.nombre{font-size:3.6mm;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#101823}
+.empresa{font-size:2.6mm;font-weight:700;color:#1e3a5f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.linea{font-size:2.3mm;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.codigo{font-size:2.4mm;color:#888;font-family:monospace;margin-top:.4mm}
+.qr{width:16mm;height:16mm;flex-shrink:0}
 @media print{body{background:#fff}.card{border:none}}
 </style></head><body>
 <div class="card">
 ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(nombre || '?').charAt(0).toUpperCase()}</div>`}
-<div class="info"><div class="nombre">${nombre}</div><div class="codigo">${codigo}</div></div>
+<div class="info">
+  <div class="nombre">${nombre}</div>
+  ${empresa ? `<div class="empresa">${empresa}</div>` : ''}
+  ${departamento || rolTexto ? `<div class="linea">${[departamento, rolTexto].filter(Boolean).join(' · ')}</div>` : ''}
+  ${obra ? `<div class="linea">🏗 ${obra}</div>` : ''}
+  <div class="codigo">${codigo}</div>
+</div>
 <img class="qr" src="${qrDataUrl}">
 </div>
 </body></html>`);
@@ -7202,7 +7215,14 @@ async function generarTarjetaTrabajador(id) {
   if (!u) return;
   if (!u.codigo) { toast('❌ Este usuario no tiene código asignado', 'err'); return; }
   const fotoUrl = u.foto_r2_key ? `${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}` : '';
-  _imprimirTarjeta(u.nombre, u.codigo, fotoUrl);
+  const deptInfo = DEPT_INFO[u.departamento];
+  _imprimirTarjeta({
+    nombre: u.nombre, codigo: u.codigo, fotoUrl,
+    empresa: getSession()?.empresa_nombre || '',
+    departamento: deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (u.departamento || ''),
+    rolTexto: u.rol || '',
+    obra: u.obra_nombre || '',
+  });
 }
 window.generarTarjetaTrabajador = generarTarjetaTrabajador;
 
@@ -7222,7 +7242,14 @@ async function generarTarjetaExterno(id) {
     } catch { toast('❌ Error de red', 'err'); return; }
   }
   const fotoUrl = p.foto_r2_key ? `${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}` : '';
-  _imprimirTarjeta(p.nombre, codigo, fotoUrl);
+  const deptInfo = DEPT_INFO[p.departamento];
+  _imprimirTarjeta({
+    nombre: p.nombre, codigo, fotoUrl,
+    empresa: getSession()?.empresa_nombre || '',
+    departamento: deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (p.departamento || ''),
+    rolTexto: 'Personal externo' + (p.dni ? ` · DNI ${p.dni}` : ''),
+    obra: p.obra_nombre || '',
+  });
 }
 window.generarTarjetaExterno = generarTarjetaExterno;
 
