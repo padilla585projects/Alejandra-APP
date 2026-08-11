@@ -13617,13 +13617,33 @@ function _construirTablaPersonal(data) {
       // Rol (usuarios) o DNI (subcontratas) -- son conceptos distintos, comparten columna
       // porque nunca aplican los dos a la vez para la misma fila.
       { title: 'Rol / DNI', field: 'rol', sorter: 'string', width: 150,
+        // TABULATOR-RACE-02c: 'mutateEditorValue' no es una opcion valida en Tabulator 6.3
+        // (warning en consola: "Invalid column definition option") -- nunca precargaba el
+        // DNI actual en el input, el editor de las filas externo se abria siempre vacio
+        // aunque el guardado (cellEdited, mas abajo) si funcionaba. Editor custom real que
+        // precarga row.dni explicitamente, en vez de depender de field:'rol' (que para
+        // estas filas es null).
         editor: (cell) => {
           const row = cell.getRow().getData();
-          if (row.tipo === 'externo') return canEdit ? 'input' : false;
+          if (row.tipo === 'externo') {
+            if (!canEdit) return false;
+            return (cellEl, onRendered, success, cancel) => {
+              const input = document.createElement('input');
+              input.type = 'text';
+              input.value = row.dni || '';
+              input.style.cssText = 'width:100%;box-sizing:border-box;background:var(--surface);color:inherit;border:1px solid var(--border)';
+              onRendered(() => { input.focus(); input.select(); });
+              input.addEventListener('blur', () => success(input.value));
+              input.addEventListener('keydown', e => {
+                if (e.key === 'Enter') success(input.value);
+                else if (e.key === 'Escape') cancel();
+              });
+              return input;
+            };
+          }
           return canEditRol ? 'list' : false;
         },
         editorParams: { values: ROLES_ASIGNABLES_TABLA },
-        mutateEditorValue: (value, cell) => cell.getRow().getData().tipo === 'externo' ? cell.getRow().getData().dni : value,
         cellEdited: (cell) => {
           const row = cell.getRow().getData();
           if (row.tipo === 'externo') guardarCampoPersonal(row, 'dni', cell.getValue());
