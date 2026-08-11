@@ -57,7 +57,13 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;dis
 .idleListaItem .hora{font-size:12px;color:var(--muted);font-family:'Montserrat',sans-serif}
 
 #resultView{display:none;flex-direction:column;align-items:center;gap:14px;width:min(520px,92vw);text-align:center;position:relative}
-#resultFotoWrap{position:relative}
+/* KIOSCO-02-FIX (11/08/2026): #resultAlertaBadge vivía DENTRO de #resultFotoWrap, y
+   mostrarResultado() hace fotoWrap.innerHTML = ... -- eso borraba el badge por completo
+   antes de que el código intentara tocarlo (badge.style.display = ...), lanzando
+   "Cannot set properties of null" que caía en el catch y mostraba "Error de conexión" en
+   cualquier fichaje real, incluso exitoso. El badge pasa a ser hermano, no hijo, de
+   #resultFotoWrap, dentro de un contenedor común que no se toca con innerHTML. */
+#resultFotoOuter{position:relative}
 #resultFoto{width:160px;height:160px;border-radius:50%;object-fit:cover;border:4px solid var(--border)}
 #resultInicial{width:160px;height:160px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:64px;color:#000}
 #resultAlertaBadge{display:none;position:absolute;top:-4px;right:-4px;width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;align-items:center;justify-content:center;font-size:18px;border:3px solid var(--bg);cursor:default}
@@ -109,7 +115,8 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;dis
       </div>
     </div>
     <div id="resultView">
-      <div id="resultFotoWrap">
+      <div id="resultFotoOuter">
+        <div id="resultFotoWrap"></div>
         <div id="resultAlertaBadge" title="Tiene un aviso pendiente">⚠️</div>
       </div>
       <div id="resultNombre"></div>
@@ -219,20 +226,36 @@ document.getElementById('scanInput').addEventListener('keydown', e => {
   }
 });
 
+// KIOSCO-02-FIX: _kioscoBusy solo se liberaba dentro del setTimeout de mostrarResultado()
+// -- si mostrarResultado() (o cualquier otra cosa) lanzaba una excepción antes de llegar
+// a ese setTimeout, el quiosco quedaba bloqueado para siempre (nunca más ficha a nadie)
+// hasta recargar la página a mano. Se separa la llamada a mostrarResultado() de la
+// petición, con su propio try/catch, para que un fallo ahí nunca deje _kioscoBusy
+// atascado en true.
 let _kioscoBusy = false;
 async function ficharKiosco(codigo) {
   if (_kioscoBusy || !SESSION) return;
   _kioscoBusy = true;
+  let ok = false, data = { error: 'Error de conexión' };
   try {
     const res = await fetch(`${API}/fichajes/scan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Token': SESSION.token },
       body: JSON.stringify({ codigo }),
     });
-    const data = await res.json().catch(() => ({}));
-    mostrarResultado(res.ok, data);
-  } catch {
-    mostrarResultado(false, { error: 'Error de conexión' });
+    data = await res.json().catch(() => ({}));
+    ok = res.ok;
+  } catch {}
+  try {
+    mostrarResultado(ok, data);
+  } catch (e) {
+    console.error('mostrarResultado() falló:', e);
+    // Red de seguridad: si el propio render del resultado falla, no dejar el quiosco
+    // bloqueado -- se libera igualmente para que el siguiente escaneo pueda intentarlo.
+    _kioscoBusy = false;
+    document.getElementById('resultView').style.display = 'none';
+    document.getElementById('idleView').style.display = 'flex';
+    focusScanInput();
   }
 }
 
