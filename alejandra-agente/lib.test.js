@@ -93,6 +93,15 @@ describe('auditoría de aislamiento y trazabilidad del cerebro', () => {
     expect(cuerpo).toMatch(/permitida:\s*false/);
     expect(cuerpo).toMatch(/criterio_salida:\s*'traza_no_persistida'/);
   });
+
+  it('mantiene la compatibility date actualizada tanto en Wrangler como en el deploy directo', () => {
+    const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const wrangler = readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
+
+    expect(wrangler).toMatch(/compatibility_date = "2026-08-11"/);
+    expect(worker).toMatch(/compatibility_date: '2026-08-11'/);
+    expect(worker).not.toMatch(/compatibility_date: '2024-01-01'/);
+  });
 });
 
 // ── calcularCosteYProveedor (fix continuación 9) ────────────────────────────

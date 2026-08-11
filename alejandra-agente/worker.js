@@ -7376,7 +7376,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
           // 2. Subir directamente a Cloudflare Workers API (ES modules format)
           const boundary = 'AlejandraDeployBoundary' + Date.now();
-          const metadata = JSON.stringify({ main_module: 'worker.js', compatibility_date: '2024-01-01' });
+          const metadata = JSON.stringify({ main_module: 'worker.js', compatibility_date: '2026-08-11' });
           const multipartBody = [
             `--${boundary}`,
             `Content-Disposition: form-data; name="metadata"; filename="metadata.json"`,
