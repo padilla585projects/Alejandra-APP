@@ -1374,8 +1374,10 @@ async function registrarTraza(env, { tipo, empresaId = null, usuarioId = null, t
       resumenRedactado,
       JSON.stringify(detalleRedactado)
     ).run();
+    return true;
   } catch (e) {
     console.error('[TRAZA]', tipo, '->', (e && e.message) || String(e));
+    return false;
   }
 }
 
@@ -1496,13 +1498,25 @@ async function evaluarInvocacionCognitiva(env, toolName, input, tools, usuarioId
   }
 
   if (resultado.aplicaPiloto && tieneTrazaSuficiente(resultado.decision)) {
-    await registrarTraza(env, {
+    const trazaRegistrada = await registrarTraza(env, {
       tipo: 'decision',
       empresaId,
       usuarioId,
       resumen: `Decisión cognitiva ${resultado.decision.decision}: ${toolName}`,
       detalle: resultado.decision,
     });
+    if (!trazaRegistrada) {
+      return {
+        aplicaPiloto: true,
+        permitida: false,
+        decision: {
+          ...resultado.decision,
+          decision: 'rechazar',
+          motivos: [...resultado.decision.motivos, 'No se pudo persistir la traza obligatoria de la decisión.'],
+          criterio_salida: 'traza_no_persistida',
+        },
+      };
+    }
   }
 
   return resultado;
@@ -6714,8 +6728,9 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
         const like = `%${tema}%`;
         const rows = await env.DB.prepare(
           `SELECT tema, resumen, mensajes_cubiertos, canal, updated_at FROM conversacion_resumen
-           WHERE tema LIKE ? OR resumen LIKE ? ORDER BY updated_at DESC LIMIT 10`
-        ).bind(like, like).all().catch(() => ({ results: [] }));
+           WHERE usuario_id=? AND (tema LIKE ? OR resumen LIKE ?)
+           ORDER BY updated_at DESC LIMIT 10`
+        ).bind(String(usuario_id || ''), like, like).all().catch(() => ({ results: [] }));
         const items = rows.results || [];
         if (!items.length) return `No se encontraron conversaciones anteriores sobre "${tema}".`;
         return items.map((r, i) => `${i+1}. [${r.canal} · ${r.updated_at} · ${r.mensajes_cubiertos} msgs]\nTema: ${r.tema || '(sin tema)'}\nResumen: ${r.resumen}`).join('\n\n---\n\n');
@@ -6744,9 +6759,11 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
         // de memoria para repasar más tarde -- pedido explícito del Director. Reutiliza
         // el mismo canal fijo que el resto de avisos internos de este Worker (nunca un
         // chat_id elegido por el modelo, para no poder usarse como exfiltración).
+        // El aviso es deliberadamente sin título ni contenido: ambos pueden contener
+        // datos de usuarios/empresa y Telegram no es el almacén gobernado.
         if (input.tipo === 'error' && importancia >= 4 && env.TELEGRAM_BOT_TOKEN) {
           const empresaTxt = empresa_id && empresa_id !== 'system' ? ` (empresa ${empresa_id})` : '';
-          await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, `🔴 <b>Alejandra encontró un problema</b>${empresaTxt}\n${titulo}\n${contenido.slice(0, 300)}`).catch(() => {});
+          await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, `🔴 <b>Alejandra registró un problema relevante</b>${empresaTxt}\nRevisar el buzón gobernado de incidencias.`).catch(() => {});
         }
         return `Guardado en memoria: [${input.tipo}] "${input.titulo}"`;
       } catch (err) {
@@ -6790,13 +6807,14 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
     case 'leer_estado': {
       try {
-        const config   = await env.DB.prepare('SELECT modo,auto_fix,max_iterations FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(()=>null);
-        const memCount = await env.DB.prepare('SELECT COUNT(*) as n FROM alejandra_memoria').first().catch(()=>({n:0}));
-        const decCount = await env.DB.prepare("SELECT COUNT(*) as n FROM alejandra_memoria WHERE tipo='decision'").first().catch(()=>({n:0}));
-        const logCount = await env.DB.prepare('SELECT COUNT(*) as n FROM alejandra_logs').first().catch(()=>({n:0}));
-        const ultDec   = await env.DB.prepare("SELECT titulo,created_at FROM alejandra_memoria WHERE tipo='decision' ORDER BY created_at DESC LIMIT 5").all().catch(()=>({results:[]}));
+        const eid = String(empresa_id || '');
+        const config   = esDevVerificado ? await env.DB.prepare('SELECT modo,auto_fix,max_iterations FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(()=>null) : null;
+        const memCount = await env.DB.prepare('SELECT COUNT(*) as n FROM alejandra_memoria WHERE empresa_id=?').bind(eid).first().catch(()=>({n:0}));
+        const decCount = await env.DB.prepare("SELECT COUNT(*) as n FROM alejandra_memoria WHERE empresa_id=? AND tipo='decision'").bind(eid).first().catch(()=>({n:0}));
+        const logCount = await env.DB.prepare('SELECT COUNT(*) as n FROM alejandra_logs WHERE usuario_id=?').bind(String(usuario_id || '')).first().catch(()=>({n:0}));
+        const ultDec   = await env.DB.prepare("SELECT titulo,created_at FROM alejandra_memoria WHERE empresa_id=? AND tipo='decision' ORDER BY created_at DESC LIMIT 5").bind(eid).all().catch(()=>({results:[]}));
         return JSON.stringify({
-          config: config || { modo: 'autonomo', auto_fix: 1, max_iterations: 15 },
+          config: config || { restringida: true },
           memoria_total: memCount?.n || 0,
           decisiones_total: decCount?.n || 0,
           logs_total: logCount?.n || 0,
@@ -7358,7 +7376,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
           // 2. Subir directamente a Cloudflare Workers API (ES modules format)
           const boundary = 'AlejandraDeployBoundary' + Date.now();
-          const metadata = JSON.stringify({ main_module: 'worker.js', compatibility_date: '2024-01-01' });
+          const metadata = JSON.stringify({ main_module: 'worker.js', compatibility_date: '2026-08-11' });
           const multipartBody = [
             `--${boundary}`,
             `Content-Disposition: form-data; name="metadata"; filename="metadata.json"`,

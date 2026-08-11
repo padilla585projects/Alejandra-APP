@@ -45,6 +45,65 @@ describe('aislamiento del contexto del chat', () => {
   });
 });
 
+describe('auditoría de aislamiento y trazabilidad del cerebro', () => {
+  it('recuperar_conversacion limita los resúmenes al usuario autenticado', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("case 'recuperar_conversacion':");
+    const fin = src.indexOf("case 'buscar_web':", inicio);
+    const cuerpo = src.slice(inicio, fin);
+
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(cuerpo).toMatch(/WHERE usuario_id=\? AND \(tema LIKE \? OR resumen LIKE \?\)/);
+    expect(cuerpo).toMatch(/\.bind\(String\(usuario_id \|\| ''\), like, like\)/);
+  });
+
+  it('leer_estado acota memoria y decisiones por empresa, y logs por usuario', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("case 'leer_estado':");
+    const fin = src.indexOf("case 'tomar_decision':", inicio);
+    const cuerpo = src.slice(inicio, fin);
+
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(cuerpo).toMatch(/alejandra_memoria WHERE empresa_id=\?/);
+    expect(cuerpo).toMatch(/alejandra_logs WHERE usuario_id=\?/);
+    expect(cuerpo).toMatch(/esDevVerificado \? await env\.DB\.prepare\('SELECT modo/);
+  });
+
+  it('los avisos de Telegram de memory_save no contienen título ni contenido de usuario', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("case 'memory_save':");
+    const fin = src.indexOf("case 'memory_read':", inicio);
+    const cuerpo = src.slice(inicio, fin);
+
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(cuerpo).toMatch(/Revisar el buzón gobernado de incidencias/);
+    expect(cuerpo).not.toMatch(/\$\{titulo\}/);
+    expect(cuerpo).not.toMatch(/contenido\.slice\(0, 300\)/);
+  });
+
+  it('una traza de decisión que no se puede persistir rechaza la tool', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf('async function evaluarInvocacionCognitiva');
+    const fin = src.indexOf('// consultarMemoria', inicio);
+    const cuerpo = src.slice(inicio, fin);
+
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(cuerpo).toMatch(/const trazaRegistrada = await registrarTraza/);
+    expect(cuerpo).toMatch(/if \(!trazaRegistrada\)/);
+    expect(cuerpo).toMatch(/permitida:\s*false/);
+    expect(cuerpo).toMatch(/criterio_salida:\s*'traza_no_persistida'/);
+  });
+
+  it('mantiene la compatibility date actualizada tanto en Wrangler como en el deploy directo', () => {
+    const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const wrangler = readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
+
+    expect(wrangler).toMatch(/compatibility_date = "2026-08-11"/);
+    expect(worker).toMatch(/compatibility_date: '2026-08-11'/);
+    expect(worker).not.toMatch(/compatibility_date: '2024-01-01'/);
+  });
+});
+
 // ── calcularCosteYProveedor (fix continuación 9) ────────────────────────────
 describe('calcularCosteYProveedor', () => {
   it('deriva proveedor "anthropic" y precio correcto para un modelo Claude', () => {
