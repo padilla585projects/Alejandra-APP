@@ -10819,11 +10819,29 @@ async function construirDirectorioDepartamentos() {
     if (activos && !activos.includes(deptKey)) return;
     const cfg = _MENU_ROL_DEPT_CONFIG.encargado[deptKey];
     const paginas = [...(cfg.material || []), ...(cfg.seccionExtra?.paginas || [])];
-    // PREVIEW-ADMIN-08: el stock de material de Seguridad (data-page="seguridad",
-    // nav-inventario-seguridad) no está en config.material de seguridad porque su reveal
-    // vive aparte (mostrarInventarioSeguridadSiAplica) — en el directorio se mete
-    // explícitamente en su bloque, que es donde le corresponde.
-    if (deptKey === 'seguridad') paginas.push('seguridad');
+    // SIDEBAR-DUP-SEGURIDAD-01 (11/08/2026): Seguridad no es una sección "plana" genérica
+    // como Inventarios/Construcción/Pedidos (que este directorio reemplaza por completo) --
+    // ya tiene su propia sección real con contenido propio (data-sid="seguridad": Carnets,
+    // Reconocimientos, Permisos de Trabajo, ATS, Accidentes, Registro). Crear aquí un
+    // segundo bloque "🔺 Seguridad" (antes solo con el stock de material clonado) dejaba
+    // dos cabeceras idénticas visibles a la vez para "Todos los departamentos" -- Adrián:
+    // "me he fijado que tengo dos desplegables de Seguridad". El stock de material se
+    // inserta directamente dentro de la sección real en vez de crear un bloque aparte.
+    if (deptKey === 'seguridad') {
+      const headerReal = document.querySelector('.sidebar-section[data-sid="seguridad"]');
+      if (headerReal) {
+        const original = document.querySelector(`.nav-item[data-page="seguridad"]`);
+        if (original && !document.querySelector('.nav-item-directorio-clone[data-page="seguridad"]')) {
+          const clone = original.cloneNode(true);
+          clone.style.display = 'none';
+          clone.removeAttribute('data-hidden-by-perms');
+          clone.classList.add('nav-item-directorio-clone');
+          clone.setAttribute('onclick', `navTo('seguridad','seguridad')`);
+          headerReal.parentNode.insertBefore(clone, headerReal.nextElementSibling);
+        }
+      }
+      return;
+    }
     if (!paginas.length) return;
     const catalogo = _DEPTS_CATALOG[deptKey];
 
