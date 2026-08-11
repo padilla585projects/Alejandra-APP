@@ -127,7 +127,14 @@ function kioscoLogout() {
   document.getElementById('loginScreen').style.display = 'flex';
 }
 
+// KIOSCO-FOCUS-01 (11/08/2026): el reenfoque agresivo se disparaba también en la pantalla
+// de login (setInterval corre desde que carga el script, sin esperar a que haya sesión) --
+// cada 800ms, o en cualquier click, le robaba el foco al campo de código justo mientras el
+// usuario intentaba escribir, dejándolo vacío en cuanto tocaba "Entrar" sin ningún error
+// visible. Reportado por Adrián: "no puedo meter el codigo,no funciona". Solo debe
+// reenfocar el lector una vez hay sesión real (pantalla de quiosco visible).
 function focusScanInput() {
+  if (!SESSION) return;
   const el = document.getElementById('scanInput');
   if (document.activeElement !== el) el.focus();
 }
