@@ -2122,11 +2122,16 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <div id="pedResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchPedidos" placeholder="🔍 Buscar artículo o proveedor...">
+          <!-- PEDIDOS-ESTADO-01 (11/08/2026): pendiente/aprobado/entregado no existía en
+               ningún otro sitio -- worker.js e index.html usan pendiente/solicitado/
+               recibido/cancelado (ver icono Telegram en worker.js, estadoInfo en
+               index.html). Un pedido marcado 'aprobado'/'entregado' desde aquí quedaba
+               huérfano en la app móvil (sin icono, sin botones de gestión). -->
           <select class="tbl-search" id="filterPedidos" style="min-width:140px" onchange="filtrarPedidos()">
             <option value="">Todos los estados</option>
             <option value="pendiente">Pendiente</option>
-            <option value="aprobado">Aprobado</option>
-            <option value="entregado">Entregado</option>
+            <option value="solicitado">Solicitado</option>
+            <option value="recibido">Recibido</option>
             <option value="cancelado">Cancelado</option>
           </select>
           <select class="tbl-search" id="filtroDepPedidos" style="min-width:150px" onchange="tblPedidos=null;cargarPedidos()">
@@ -16659,12 +16664,12 @@ async function cargarPedidos() {
   _pedData = toArr(r, 'pedidos');
 
   const pendientes = _pedData.filter(p => p.estado === 'pendiente').length;
-  const aprobados  = _pedData.filter(p => p.estado === 'aprobado').length;
-  const entregados = _pedData.filter(p => p.estado === 'entregado').length;
+  const solicitados = _pedData.filter(p => p.estado === 'solicitado').length;
+  const recibidos   = _pedData.filter(p => p.estado === 'recibido').length;
   document.getElementById('pedResumen').innerHTML = [
     { icon:'⏳', value: pendientes, label:'Pendientes', cls: pendientes > 0 ? 'warn' : '' },
-    { icon:'✅', value: aprobados,  label:'Aprobados',  cls: '' },
-    { icon:'📬', value: entregados, label:'Entregados', cls: '' },
+    { icon:'📤', value: solicitados, label:'Solicitados', cls: '' },
+    { icon:'✅', value: recibidos,   label:'Recibidos',   cls: '' },
     { icon:'📋', value: _pedData.length, label:'Total', cls: '' },
   ].map(k => `<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div><div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div><div class="kpi-label">${k.label}</div></div>`).join('');
 
@@ -16683,10 +16688,10 @@ async function cargarPedidos() {
         formatter: c => `${c.getValue() || 1} ${c.getRow().getData().unidad || 'ud'}` },
       { title: 'Estado', field: 'estado', width: 130,
         editor: canEdit ? 'list' : false,
-        editorParams: { values: { pendiente:'Pendiente', aprobado:'Aprobado', entregado:'Entregado', cancelado:'Cancelado' } },
+        editorParams: { values: { pendiente:'Pendiente', solicitado:'Solicitado', recibido:'Recibido', cancelado:'Cancelado' } },
         formatter: c => {
           const v = c.getValue();
-          const cls = { pendiente:'warn', aprobado:'info', entregado:'ok', cancelado:'danger' }[v] || 'muted';
+          const cls = { pendiente:'warn', solicitado:'info', recibido:'ok', cancelado:'danger' }[v] || 'muted';
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
         },
         cellEdited: c => guardarEstadoPedido(c.getRow().getData().id, c.getValue())
@@ -16720,7 +16725,7 @@ function filtrarPedidos() {
 }
 
 function verDetallePedido(p) {
-  const estadoCls = { pendiente:'badge-warn', aprobado:'badge-info', entregado:'badge-ok', cancelado:'badge-danger' }[p.estado] || 'badge-muted';
+  const estadoCls = { pendiente:'badge-warn', solicitado:'badge-info', recibido:'badge-ok', cancelado:'badge-danger' }[p.estado] || 'badge-muted';
   abrirModal(`📦 Pedido #${p.id}`, `
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <span class="badge ${estadoCls}">${p.estado || '—'}</span>
@@ -16741,8 +16746,8 @@ function verDetallePedido(p) {
       <div class="form-label">Cambiar estado</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
         <button class="btn btn-secondary btn-sm" onclick="guardarEstadoPedido(${p.id},'pendiente');cerrarModal()">⏳ Pendiente</button>
-        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoPedido(${p.id},'aprobado');cerrarModal()">✅ Aprobado</button>
-        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoPedido(${p.id},'entregado');cerrarModal()">📬 Entregado</button>
+        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoPedido(${p.id},'solicitado');cerrarModal()">📤 Solicitado</button>
+        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoPedido(${p.id},'recibido');cerrarModal()">✅ Recibido</button>
         <button class="btn btn-danger btn-sm"   onclick="guardarEstadoPedido(${p.id},'cancelado');cerrarModal()">✕ Cancelado</button>
       </div>
     </div>

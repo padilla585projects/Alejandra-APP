@@ -9431,12 +9431,20 @@ async function adminBorrarLoginAttempts(request, env) {
 
 async function getPedidos(request, env) {
   const auth = await getAuth(request, env);
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isJefeObra, isDesarrollador, departamento } = auth;
+  const { empresa_id, isJefeObra, departamento } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const estadoFilter = url.searchParams.get('estado');
   const obraFilter   = url.searchParams.get('obra_id');
-  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador; // todos ven todos los depts con ?todos=1
+  // PEDIDOS-ALMACEN-01 (11/08/2026): faltaba departamento==='almacen' (y isDeptPrivileged,
+  // que ya incluye isSeguridad) en este isAdminRole -- todos los demás módulos de
+  // inventario (bobinas/pemp/carretillas/herramientas) sí lo incluyen. panel.html ya manda
+  // ?todos=1 siempre para el rol Almacén (ALMACEN-FILTRO-01, "Almacén ve TODO el material
+  // de todos los departamentos"), pero el backend lo ignoraba y filtraba por
+  // departamento='almacen' -- departamento donde NUNCA se crea ningún pedido (crearPedido
+  // asigna siempre el departamento real del solicitante), así que la pestaña de Pedidos de
+  // Almacén estaba siempre vacía pese a ser justo su propósito documentado.
+  const isAdminRole = isDeptPrivileged(auth) || isJefeObra || departamento === 'almacen'; // todos ven todos los depts con ?todos=1
   const todos       = url.searchParams.get('todos') === '1' && isAdminRole;
   const deptParam   = url.searchParams.get('departamento');
 
@@ -9457,16 +9465,21 @@ async function getPedidos(request, env) {
 }
 
 async function crearPedido(request, env, ctx) {
-  const { empresa_id, departamento } = await getAuth(request, env);
+  const { empresa_id, departamento, nombre } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   // Todos los roles (incluido operario) pueden crear pedidos
   const body = await request.json().catch(() => ({}));
-  const { descripcion, referencia, cantidad, unidad, proveedor, obra_id, solicitado_por, notas } = body;
+  const { descripcion, referencia, cantidad, unidad, proveedor, obra_id, notas } = body;
   if (!safeStr(descripcion).trim()) return err('La descripción es obligatoria');
   const dept = departamento || 'electrico';
+  // PEDIDOS-SOLICITANTE-01 (11/08/2026): index.html nunca mandaba solicitado_por (el modal
+  // no tiene ese campo) y quedaba NULL para siempre (no editable después) -- rompía la
+  // columna "Solicitado por" del panel, el aviso de Telegram y el email al proveedor.
+  // Fallback al usuario autenticado, mismo criterio que ordenes_cambio (worker.js:17392).
+  const solicitado_por = body.solicitado_por || nombre || null;
   const r = await env.DB.prepare(
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, obra_id||null, dept, referencia||null, safeStr(descripcion).trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
+  ).bind(empresa_id, obra_id||null, dept, referencia||null, safeStr(descripcion).trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por, notas||null).run();
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept), empresa_id));
   await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${safeStr(descripcion).trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
@@ -12516,8 +12529,11 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
     const nIncAb = incAb?.[0]?.total || 0;
 
     // 5. Pedidos pendientes
+    // PEDIDOS-ESTADO-01 (11/08/2026): esta consulta solo contaba estado='pendiente', pero
+    // 'solicitado' es un estado igual de sin-completar (ver worker.js:7516/9811, que ya
+    // cuentan ambos) -- el informe semanal subestimaba pedidos pendientes reales.
     const { results: pedPend } = await env.DB.prepare(
-      `SELECT COUNT(*) as total FROM pedidos WHERE empresa_id = ? AND estado = 'pendiente'`
+      `SELECT COUNT(*) as total FROM pedidos WHERE empresa_id = ? AND estado IN ('pendiente','solicitado')`
     ).bind(empresa_id).all();
     const nPedPend = pedPend?.[0]?.total || 0;
 

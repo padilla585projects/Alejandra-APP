@@ -6,6 +6,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Fixed
 
+- **Auditoría del módulo de Pedidos de material (2026-08-11):** `getPedidos` no dejaba a Almacén/Seguridad ver pedidos de otros departamentos pese a ser su función documentada (`isAdminRole` sin `departamento==='almacen'`/`isDeptPrivileged`, a diferencia del resto de inventario); vocabulario de `estado` distinto entre `panel.html` (`pendiente/aprobado/entregado`) y `worker.js`/`index.html` (`pendiente/solicitado/recibido`) — un pedido gestionado desde un lado quedaba huérfano en el otro; `solicitado_por` siempre `NULL` para pedidos creados desde la app móvil (sin fallback al usuario autenticado, a diferencia de `ordenes_cambio`); informe semanal por email subestimaba pedidos pendientes (solo contaba `'pendiente'`, no `'solicitado'`). Detalle en `HANDOFF.md`.
+
 - **Sidebar de panel.html con dos secciones "🔺 Seguridad" duplicadas (2026-08-11):** `construirDirectorioDepartamentos()` (vista "Todos los departamentos") trataba Seguridad como sección plana genérica a reemplazar, cuando ya tiene su propia sección real (Carnets/Reconocimientos/Permisos/ATS/Accidentes/Registro). El stock de material se inserta ahora dentro de esa sección real en vez de crear un bloque duplicado.
 
 - **jsQR-01 (2026-08-11):** la URL de cdnjs de `jsQR` (`jsQR/1.4.0/jsQR.min.js`) devolvía 404 — la librería ya no está en cdnjs. Rompía en silencio (sin error visible al usuario) el escaneo de QR de bobinas, EPIs y herramientas en `index.html`. Corregida a jsdelivr (`cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js`), verificado que carga y decodifica.

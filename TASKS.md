@@ -2,6 +2,27 @@
 
 Estado (actualizado 2026-08-10, tarde): **No hay ninguna tarea activa, en curso ni bloqueada.** **Fix de contaminación de contexto en el chat + auditoría amplia de bugs de esquema (2026-08-10):** un mensaje de contexto viejo (foto de hace días) contaminando turnos nuevos del chat llevó a corregir `construirMessages()` (solo re-adjunta imágenes de la sesión activa, <2h) y, al investigar el error que lo destapó, a una auditoría de 18 bugs más del mismo tipo (`.catch()` silencioso sobre columnas/tablas nunca verificadas contra D1 real) en los dos Workers — dashboard ejecutivo, alertas de cumplimiento, cron de inteligencia de negocio, exportación de datos, generación de informes, vigilancia automática. Todos verificados contra D1 real, corregidos, testeados y desplegados. Detalle completo en `HANDOFF.md`/`PROJECT_STATE.md`/`CHANGELOG.md`. Todas las entradas de este documento están `completada`/`cerrado`/`desplegada y verificada`, incluidas las 14 verticales de ARC-011 fase 3, F-0.2-CFG (secretos por entorno + ensayo + política de rama, 2026-08-04), F-1.1/F-1.2/F-1.3 (Época 1 completa) y F-2.1-MEMORIA-ESCRITURA (Época 2). ARC-014 sigue como riesgo aceptado sin acción de ingeniería (revisada 2026-08-03, sin cambios); **ARC-021** (bypass de despliegue de `alejandra-agente` vía `wrangler deploy` directo) se acepta como práctica habitual, mismo criterio. Trabajo más reciente: SEC-CHAT-CONTEXTO-LEGACY + ADR-0020 rebanada 1 (2026-08-06), F-1.3 núcleo cognitivo v2 en subcarpetas locales, F-2.2 Nexo v1 (ADR-0021), y **ADR-0020 rebanadas 2-7 (2026-08-07):** piloto N0 ampliado a las 36 tools, contexto seguro cerrado, política determinista real, refuerzo N2/N3 (traza sin ampliar permisos) y N1 completo (26 tools, lectura y escritura) bajo el Motor — ver detalle abajo, sección "ADR-0020". Las 7 rebanadas desplegadas y verificadas en producción. **F-4.4 (2026-08-07):** bug real de clasificación de telemetría (100% de tools sin contrato JSON marcadas como error) encontrado al investigar la vertical de F-3.1, corregido y desplegado (`clasificarResultadoTool()`); **F-3.1 en espera de telemetría real de uso** antes de decidir vertical piloto (decisión del Director). **Auditoría y cierre de aislamiento por departamento en Alejandra Office (2026-08-09/10):** tres rondas sucesivas de auditoría (solo lectura) encontraron y cerraron fugas cross-departamento reales — selectores de trabajador (`getTrabajadores`/`getCarnets`), 19 tablas de obra sin columna `departamento` (6 migraciones D1 + `deptGuard` en ~40 endpoints), y finalmente `getReconocimientos`/`getAccidentes` (datos de salud y registro legal de seguridad, restringidos a Seguridad+admins). **No quedan módulos conocidos sin aislar.** Detalle completo en `HANDOFF.md`/`CHANGELOG.md`. **Pendiente sin decisión tomada:** diseñar la revisión humana asíncrona real para N2 (ADR propio, cablear Telegram); N3 sigue fuera del alcance autónomo por mandato de ADR-0006. Dos fixes fuera del roadmap ya cerrados (panel.html PR #76, 2026-08-03; 4 bugs de `index.html` vía sugerencias con foto, 2026-08-04) — detalle en `PROJECT_STATE.md`/`CHANGELOG.md`. No contiene tareas ficticias; `MASTER_ROADMAP.md` mantiene el plan global y `ARCHITECT_BACKLOG.md` mantiene deuda/propuestas.
 
+## Auditoría del módulo de Pedidos de material (2026-08-11)
+
+- Estado: **completada, desplegada y verificada**
+- Prioridad: Alta (Almacén no podía ver pedidos de otros departamentos, su función
+  documentada; vocabulario de estados roto entre panel/app en cuanto hubiera datos reales)
+- 4 bugs reales confirmados y corregidos: `getPedidos` sin `departamento==='almacen'`/
+  `isDeptPrivileged` en su chequeo de admin (Almacén/Seguridad nunca veían pedidos ajenos);
+  vocabulario de `estado` distinto entre `panel.html` y `worker.js`+`index.html` (alineado
+  `panel.html` al correcto); `solicitado_por` siempre `NULL` desde la app móvil (fallback
+  añadido); informe semanal subestimaba pedidos pendientes (`'pendiente'` sin
+  `'solicitado'`).
+- No arreglado, anotado como asimetría de paridad menor (no bug real): falta botón de
+  borrar pedidos en `panel.html`; `tabForDept` sin casos especiales para
+  almacen/telecom/personal (irrelevante en la práctica).
+- Verificación: sintaxis/encoding limpios; tabla `pedidos` vacía en producción en el
+  momento de la auditoría (bugs reproducibles, sin manifestarse aún con datos reales).
+- Desplegado: `worker.js` (`wrangler deploy`, versión `eda09542-356f-4e97-983e-56482ce0191f`,
+  `/health` en verde) + Pages (`panel.html`).
+- Detalle completo en `HANDOFF.md`/`CHANGELOG.md`/`PROJECT_STATE.md`.
+- Siguiente acción exacta: ninguna urgente.
+
 ## Auditoría del módulo Personal en panel.html (2026-08-10)
 
 - Estado: **completada, desplegada y verificada — sin tareas derivadas pendientes**

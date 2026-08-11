@@ -1,5 +1,83 @@
 # Handoff — Alejandra 2.0
 
+## Auditoría del módulo de Pedidos de material (2026-08-11)
+
+- Contexto: Adrián pidió el mismo tipo de auditoría que a Personal/Fichajes, esta vez sobre
+  Pedidos de material ("de material" — aclarado tras preguntar). Agente Explore de solo
+  lectura, 4 bugs reales confirmados + 2 asimetrías de paridad menores (no arregladas, ver
+  abajo). Todos los fixes verificados contra el esquema real de D1 antes de tocar código.
+
+- **[Alto impacto] `getPedidos` — Almacén (y Seguridad) nunca veían pedidos de otros
+  departamentos, pese a ser justo su propósito documentado.** `worker.js:9432` (`getPedidos`):
+  `isAdminRole` solo incluía `isSuperadmin/isEmpresaAdmin/isJefeObra/isDesarrollador` — le
+  faltaba `departamento==='almacen'` e `isDeptPrivileged(auth)` (que ya cubre `isSeguridad`),
+  a diferencia de TODOS los demás módulos de inventario (bobinas, pemp, carretillas,
+  herramientas), que sí lo incluyen. `panel.html` ya manda `todos=1` siempre
+  (`_invParams()`, comentario ALMACEN-FILTRO-01: "Almacén ve TODO el material de todos los
+  departamentos"), pero el backend lo ignoraba para ese rol y filtraba por
+  `departamento='almacen'` — departamento donde NUNCA se crea ningún pedido real
+  (`crearPedido` asigna siempre el departamento del solicitante). Resultado: la pestaña
+  Pedidos de Almacén estaba siempre vacía. Fix: `isAdminRole = isDeptPrivileged(auth) ||
+  isJefeObra || departamento === 'almacen'`, mismo patrón que el resto de inventario.
+
+- **[Alto impacto] Vocabulario de `estado` distinto entre `panel.html`
+  (`pendiente/aprobado/entregado/cancelado`) y `worker.js`+`index.html`
+  (`pendiente/solicitado/recibido/cancelado`).** Sin `CHECK` en la tabla D1 (verificado:
+  `estado TEXT DEFAULT 'pendiente'`, sin restricción) y `actualizarPedido` no valida el
+  valor — guarda lo que le llegue. Un pedido marcado `'aprobado'`/`'entregado'` desde el
+  panel: pierde su icono en `index.html` (`estadoInfo[p.estado]` no encuentra la clave, cae
+  al genérico 📦), pierde los botones de gestión en la app móvil (solo aparecen para
+  `pendiente`/`solicitado`), y los contadores de "pendientes" de ambos lados dejan de
+  coincidir. `panel.html` había inventado un tercer vocabulario que no existía en ningún
+  otro sitio del proyecto. Fix: alineado `panel.html` al vocabulario ya usado por
+  `worker.js`/`index.html` (4 sitios: filtro del toolbar, editor Tabulator, KPIs del
+  resumen, botones del modal de detalle) — no se tocó `index.html` ni `worker.js`, ya eran
+  correctos.
+
+- **[Medio] `solicitado_por` siempre `NULL` para pedidos creados desde `index.html`.** El
+  modal "Nuevo pedido" de la app móvil no tiene campo para ese dato, y `crearPedido()`
+  (`worker.js:9467`) no tenía fallback al usuario autenticado (a diferencia de
+  `ordenes_cambio`, que sí lo hace: `worker.js:17392`). Rompía la columna "Solicitado por"
+  del panel, el aviso de Telegram (`👤 —`) y el email al proveedor. `panel.html` sí lo
+  mandaba explícitamente (`solicitado_por: SESSION.nombre`), así que solo afectaba a
+  pedidos creados desde el móvil. Fix: `solicitado_por = body.solicitado_por || nombre ||
+  null` en `crearPedido`.
+
+- **[Bajo-medio] Informe semanal por email subestimaba "pedidos pendientes".** La consulta
+  de `informeSemanal` (`worker.js:12531`) solo contaba `estado='pendiente'`, mientras que
+  las otras dos consultas del mismo archivo que cuentan "pedidos pendientes"
+  (`worker.js:7516`, `9811`) ya incluían `estado IN ('pendiente','solicitado')` — dos
+  definiciones distintas de "pendiente" conviviendo en el mismo archivo. Fix: alineado a
+  `IN ('pendiente','solicitado')`.
+
+- **Verificado como correcto, sin bug** (agente Explore, contra esquema D1 real): columnas
+  de `pedidos` coinciden con INSERT/UPDATE; modales de ambos frontends usan clases CSS
+  reales con estilo definido (a diferencia de la auditoría de Personal, aquí no había
+  clases inventadas); todas las rutas `/pedidos*` del router se usan desde algún frontend y
+  viceversa; permisos de `enviarPedidoPorEmail` coinciden exactamente con lo que muestra el
+  panel.
+
+- **No arreglado, anotado como asimetría de paridad menor (no bug):** `panel.html` no tiene
+  botón para borrar pedidos (`DELETE /pedidos/:id` existe y lo usa `index.html`, pero
+  ningún sitio del panel lo llama) — no es un bug, es una función que falta en un lado;
+  `tabForDept('pedido', dept)` no contempla `almacen`/`telecom`/`personal` como casos
+  especiales para la sincronización con Google Sheets, pero es irrelevante en la práctica
+  porque ningún pedido se crea nunca con esos departamentos (consecuencia menor del primer
+  hallazgo, no un bug aparte).
+
+- Verificación: `node --check worker.js` limpio; `<script>` de `panel.html` extraídos y
+  verificados con `node --check` (sin errores de sintaxis); sin patrones de encoding
+  corrupto en el diff. Tabla `pedidos` vacía en producción en el momento de la auditoría
+  (confirmado con `SELECT estado, COUNT(*) FROM pedidos GROUP BY estado --remote`), así que
+  los bugs de vocabulario/`solicitado_por` no se habían manifestado aún con datos reales,
+  pero eran 100% reproducibles.
+- Despliegue: `worker.js` → `wrangler deploy` (un reintento por un fallo de red transitorio
+  del propio `wrangler`, sin relación con el código), versión `eda09542-356f-4e97-983e-56482ce0191f`,
+  `/health` en verde. `panel.html` → Pages (ver publish del lote más abajo).
+- Pendiente/recomendado, sin decidir: las dos asimetrías de paridad menores (botón de
+  borrar en panel.html, casos especiales de `tabForDept`) — no se arreglaron por no ser
+  bugs reales, quedan como mejoras opcionales si Adrián las quiere.
+
 ## Fix — dos secciones "Seguridad" duplicadas en el sidebar de panel.html (2026-08-11)
 
 - Adrián: "me he fijado que tengo dos desplegables de Seguridad" — reportado justo después

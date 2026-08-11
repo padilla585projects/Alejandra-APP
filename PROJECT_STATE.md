@@ -3,6 +3,23 @@
 - Actualizado: 2026-08-11
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
+## Auditoría del módulo de Pedidos de material (2026-08-11)
+
+A petición de Adrián, mismo criterio que Personal/Fichajes. 4 bugs reales confirmados y
+corregidos: **Almacén (y Seguridad) nunca veían pedidos de otros departamentos** pese a ser
+su función documentada (`getPedidos` no incluía `departamento==='almacen'`/
+`isDeptPrivileged` en su chequeo de admin, a diferencia de todos los demás módulos de
+inventario); **vocabulario de estados distinto entre panel.html
+(`pendiente/aprobado/entregado`) y worker.js+index.html (`pendiente/solicitado/recibido`)**
+— un pedido gestionado desde un lado quedaba huérfano en el otro (sin icono, sin botones de
+gestión); **`solicitado_por` siempre `NULL`** para pedidos creados desde la app móvil (sin
+fallback al usuario autenticado); **informe semanal por email subestimaba pedidos
+pendientes** (solo contaba `'pendiente'`, no `'solicitado'`). Alineado `panel.html` al
+vocabulario ya correcto de `worker.js`/`index.html` (no al revés). Verificado por
+sintaxis/encoding; tabla `pedidos` vacía en producción en el momento de la auditoría, así
+que los bugs eran reproducibles pero no se habían manifestado aún con datos reales.
+Desplegado (Worker + Pages). Detalle completo en `HANDOFF.md`.
+
 ## ARC-022, cierre de la sesión — foto por móvil + fix de sidebar duplicado (2026-08-11)
 
 Última vuelta: "hacer foto con el móvil" para la ficha de un trabajador, reutilizando al
