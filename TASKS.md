@@ -9,7 +9,7 @@ Estado (actualizado 2026-08-10, tarde): **No hay ninguna tarea activa, en curso 
 - Rama: `codex/fix-agent-audit-isolation`
 - Alcance: `recuperar_conversacion` se limita al usuario autenticado; `leer_estado` limita métricas/memoria por empresa y logs por usuario; una traza de decisión no persistida rechaza la tool; Telegram no recibe título ni contenido de incidencias; `compatibility_date` actualizada.
 - Exclusiones: no hay migración D1, backfill ni modificación de datos guardados; N2/N3 conservan sus gates existentes.
-- Pruebas: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` (193/193); `npm --prefix nucleo-cognitivo test` (57/57); `node scripts/check-encoding.js origin/main`; `git diff --check`.
+- Pruebas: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` (194/194); `npm --prefix nucleo-cognitivo test` (57/57); `node scripts/check-encoding.js origin/main`; `git diff --check`.
 - Siguiente acción exacta: integrar mediante PR y ejecutar el despliegue del Worker con verificación posterior registrada.
 
 ## Auditoría del módulo de Pedidos de material (2026-08-11)
