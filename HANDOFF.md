@@ -1,5 +1,60 @@
 # Handoff — Alejandra 2.0
 
+## Trabajadores: plantilla vs subcontratas + categoría + empresa + recorte de foto (2026-08-11)
+
+Sesión larga a raíz de la pregunta de Adrián sobre cómo organizar "Trabajadores" en
+panel.html cuando en realidad hay dos audiencias distintas: `usuarios` (empleados de
+Levitec, con cuenta) y `personal_externo` (subcontratas de obra, sin cuenta, identificadas
+por DNI — el público real de fichaje por tarjeta/QR).
+
+**Entregado y desplegado** (worker + Pages, verificado en vivo con Chrome real en cada
+paso):
+
+- **TRABAJADORES-TIPO-01**: alta separada en dos caminos (empleado vs subcontrata) en la
+  tabla "Trabajadores" de panel.html, con foto+tarjeta para los dos tipos. Encontrados y
+  corregidos en la propia verificación en vivo: `crearPersonalExterno()` no aceptaba
+  `departamento`; `getTrabajadores()` sin `codigo`/`obra_nombre` para personal_externo;
+  `guardarCampoPersonal()` mandaba siempre a `/usuarios/:id` (bug de datos real); el modal
+  de alta se quedaba sin botón Guardar; el editor de DNI se abría vacío
+  (`mutateEditorValue` no es una opción válida de Tabulator 6.3).
+- **TABULATOR-RACE-02**: `tblPersonal` entraba en el mismo `RangeError` que
+  TABULATOR-RACE-01 pero en CASI cualquier navegación limpia, no solo con doble carga.
+  Causa real: única tabla del panel que combina `responsiveLayout:'collapse'` con
+  `pagination:'local'`. Ver detalle en CHANGELOG.md.
+- **CATEGORIA-PROFESIONAL-01** y **EMPRESA-SUBCONTRATA-01**: dos migraciones D1
+  autorizadas explícitamente por Adrián (`ALTER TABLE ... ADD COLUMN categoria/empresa
+  TEXT`, aditivas). Categoría profesional (Oficial 1ª, Peón...) es distinta del rol de
+  acceso a la app; empresa es el nombre de la subcontrata, no Levitec. Las tres tarjetas
+  imprimibles ya no muestran el rol de la app (Adrián: "eso es interno de la app") y sí
+  categoría + DNI + empresa propia (para externos).
+- **Bug de seguridad real encontrado y corregido de paso**: las tarjetas imprimibles
+  mostraban el código/PIN de fichar en texto plano junto al QR — cualquiera que la viera o
+  fotografiara podía leerlo y saltarse el QR. Retirado de las 3 tarjetas.
+- **RECORTE-FOTO-01**: recortador circular con zoom (sin dependencias) antes de subir
+  cualquier foto de perfil, en los dos frontends. De paso, cache de foto de perfil
+  corregida (`&v=<r2Key>` en las URLs — antes no se refrescaba el avatar tras resubir hasta
+  24h después) y `subirFotoPerfilPanel()` refrescaba solo `tblUsuarios` aunque se usa
+  también desde `tblPersonal`.
+- **PEDIDO-OBRA-01**: autorrelleno de obra con la de la sesión al CREAR (no editar) un
+  Pedido/Kit/trabajador de plantilla — antes solo pasaba al editar uno existente. Auditados
+  todos los selectores de obra de index.html.
+- **EPIS-ORDEN-01**: "Dotación EPIs" movida debajo de "Pedidos" en el menú de cada
+  departamento (Adrián: "no se va a usar mucho").
+
+**Pendiente, sin decidir todavía** (preguntas abiertas de Adrián en esta misma sesión, sin
+cerrar):
+
+1. **Visibilidad de módulos por departamento en index.html**: Adrián notó que en el
+   departamento Eléctrico aparecen Hormigonado/Formación/RdP Prevención/Actas de Reunión.
+   Confirmado en el código (`setupHomeModules()`, index.html ~6421-6459): es una decisión
+   deliberada ("todos los depts activos"), no un bug — Telecom es el único departamento con
+   lista blanca propia (`_HOME_DEPT_ALLOWED_CARDS`) y por eso no los ve. Adrián no ha dicho
+   todavía qué regla quiere para el resto de departamentos — **no tocar sin su respuesta**.
+2. **Fichajes imprimibles con horas por día/semana/mes, filtrables por empresa antes de
+   imprimir**: pedido explícito de Adrián al final de la sesión, sin investigar todavía qué
+   existe hoy en el módulo de Fichajes/Hojas de Tiempo ni si hay algo parcial que
+   reutilizar. Empezar por ahí en la próxima sesión.
+
 ## SEC-AGENT-AUDIT-ISOLATION — integrada (2026-08-11)
 
 - Rama: `codex/fix-agent-audit-isolation`, fusionada a `main` vía PR #105.

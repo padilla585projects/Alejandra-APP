@@ -6,6 +6,32 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Fixed
 
+- **Tarjeta imprimible con el código/PIN de fichar en texto plano (2026-08-11):** las tres tarjetas imprimibles (index.html × 2, panel.html × 2) mostraban el código bajo el QR — cualquiera que viera o fotografiara la tarjeta podía leerlo y saltarse el QR. Retirado; el QR es ahora el único medio de leerlo desde la tarjeta.
+
+- **TABULATOR-RACE-02 (2026-08-11):** `tblPersonal` (tabla "Trabajadores" de panel.html, nueva esta sesión) entraba en `RangeError: Maximum call stack size exceeded` en casi cualquier navegación limpia a la pantalla, con datos reales presentes (no relacionado con carga vacía). Causa raíz real: era la única tabla del panel que combina `responsiveLayout:'collapse'` con `pagination:'local'` a la vez — el recálculo de columnas ocultas y el pie de página se realimentan entre sí. Un primer intento con `requestAnimationFrame` no lo arregló (no era un problema de timing); quitar `responsiveLayout` sí. De paso, `tblPersonal = null` tras crear una subcontrata forzaba una reconstrucción innecesaria del Tabulator justo durante el cierre del modal, mismo síntoma — ya no hace falta, `cargarPersonal()` usa `replaceData()`.
+
+- **Modal de alta de trabajador sin botón Guardar (2026-08-11):** `abrirModalPersonal()` (selector de tipo empleado/subcontrata) sustituía el footer del modal genérico por solo "Cancelar", y `abrirModal()` nunca lo restauraba — el formulario real que se abre después se quedaba sin botón para guardar. `abrirModal()` reconstruye ahora el footer estándar en cada apertura.
+
+- **Editor de DNI de subcontratas siempre vacío (2026-08-11):** `mutateEditorValue` no es una opción válida de columna en Tabulator 6.3 (warning real en consola) — nunca precargaba el DNI actual al editar. El guardado funcionaba igualmente (lee el valor nuevo, no el viejo). Sustituido por un editor custom real.
+
+- **`guardarCampoPersonal()` (panel.html, tabla Trabajadores) mandaba siempre el PUT a `/usuarios/:id`, incluso para filas de personal_externo** — editar una fila de subcontrata podía tocar a un usuario real con el mismo id numérico. Enruta ahora según `row.tipo`.
+
+- **Cache de foto de perfil (2026-08-11):** `Cache-Control:max-age=86400` cachea por URL exacta; como la URL nunca incluía el `r2_key`, volver a subir una foto no refrescaba el avatar en pantalla hasta pasadas 24h. Añadido `&v=<r2Key>` a las 7 URLs de foto de perfil de los dos frontends.
+
+- **`abrirFormPedido()`/`abrirModalPersonalExt()` (index.html) no autorellenaban la obra al crear un registro nuevo**, solo al editar uno existente — Adrián: "al crear un pedido, debe de autorellenarse la obra sola puesto que ya entraste con obra seleccionada". Auditados todos los selectores de obra de index.html; `pedObra`, `kitObra` y `personalExtObra` no seguían el mismo criterio que el resto (`herrObra`, `fichajeObra`, `feqObra`).
+
+### Added
+
+- **CATEGORIA-PROFESIONAL-01 (2026-08-11):** nueva columna `categoria` (texto libre: Oficial 1ª, Peón, Encargado…) en `usuarios` y `personal_externo` — Adrián: "categoria profesional es diferente de rol, eso si tiene que estar". Distinta del rol de acceso a la app; editable desde la tabla Trabajadores y los formularios de alta. Las tarjetas imprimibles muestran ahora categoría en vez de rol (el rol de acceso a la app no tiene sentido en una tarjeta física).
+
+- **EMPRESA-SUBCONTRATA-01 (2026-08-11):** nueva columna `empresa` en `personal_externo` — Adrián: "cuando sea una subcontrata también tiene que salir en la tarjeta", refiriéndose al nombre de la subcontrata (no Levitec), que solo se podía apuntar antes en el campo libre "notas". La tarjeta de un trabajador externo muestra ahora su propia empresa.
+
+- **TRABAJADORES-TIPO-01 (2026-08-11):** Adrián — "una cosa son los usuarios de la app, que son empleados de la empresa (Levitec) y luego los trabajadores de la obra que son subcontratas... que son los que queremos fichar. ¿Cómo lo organizamos?". La pantalla "Trabajadores" de panel.html separa ahora el alta en dos caminos (empleado con cuenta vs subcontrata con DNI, sin cuenta), con foto+tarjeta para los dos tipos. Dos bugs de backend reales corregidos de paso: `crearPersonalExterno()` no aceptaba `departamento` (se perdía siempre); `getTrabajadores()` no traía `codigo`/`obra_nombre` para personal_externo.
+
+- **RECORTE-FOTO-01 (2026-08-11):** recortador circular con zoom (sin dependencias nuevas) antes de subir una foto de perfil, en index.html y panel.html — Adrián: "podemos añadir una opción de recortar la imagen de la foto del perfil cuando la añadimos".
+
+- **PEDIDO-OBRA-01 (2026-08-11):** tarjeta "Dotación EPIs" movida debajo de "Pedidos" en el menú de cada departamento — Adrián: "no se va a usar mucho".
+
 - **TABULATOR-RACE-01 (2026-08-11):** `RangeError: Maximum call stack size exceeded` en Tabulator, reproducido una vez en producción real al navegar por primera vez a Pedidos. Un listener de `visibilitychange` podía relanzar `cargarDashboard()` mientras la carga inicial seguía en curso, saturando el hilo principal justo cuando se creaba `tblPedidos` con `layout:'fitColumns'`. Guard de reentrancia en `cargarDashboard()`. No relacionado con ningún otro cambio de esta sesión.
 
 - **Auditoría del módulo de Pedidos de material (2026-08-11):** `getPedidos` no dejaba a Almacén/Seguridad ver pedidos de otros departamentos pese a ser su función documentada (`isAdminRole` sin `departamento==='almacen'`/`isDeptPrivileged`, a diferencia del resto de inventario); vocabulario de `estado` distinto entre `panel.html` (`pendiente/aprobado/entregado`) y `worker.js`/`index.html` (`pendiente/solicitado/recibido`) — un pedido gestionado desde un lado quedaba huérfano en el otro; `solicitado_por` siempre `NULL` para pedidos creados desde la app móvil (sin fallback al usuario autenticado, a diferencia de `ordenes_cambio`); informe semanal por email subestimaba pedidos pendientes (solo contaba `'pendiente'`, no `'solicitado'`). Detalle en `HANDOFF.md`.
