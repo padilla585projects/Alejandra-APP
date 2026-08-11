@@ -13274,7 +13274,20 @@ async function checkConexion() {
 
 // ── DASHBOARD ──────────────────────────────────────────────────
 let _dashLoadCount = 0;
+// TABULATOR-RACE-01 (11/08/2026): _initSync() (listener de visibilitychange, más abajo)
+// puede relanzar cargarDashboard() mientras la carga inicial (disparada por iniciarApp())
+// todavía está en curso, si el documento pasa a "visible" justo tras cargar -- dos rondas
+// concurrentes del innerHTML pesado de este dashboard saturaban el hilo principal justo
+// cuando cargarPedidos() creaba tblPedidos por primera vez (layout:'fitColumns'), y el
+// recálculo interno de columnas de Tabulator se reentraba a sí mismo -> "Uncaught
+// RangeError: Maximum call stack size exceeded" en tabulator.min.js. Guard simple: si ya
+// hay una carga en curso, no lanzar una segunda -- la que ya está en marcha completará el
+// render igualmente.
+let _dashLoading = false;
 async function cargarDashboard() {
+  if (_dashLoading) return;
+  _dashLoading = true;
+  try {
   _dashLoadCount++;
   console.log(`📊 cargarDashboard() llamada #${_dashLoadCount}`);
   document.getElementById('dashSub').textContent = 'Actualizando...';
@@ -13538,6 +13551,9 @@ async function cargarDashboard() {
         </div>`;
       }).join('');
     }
+  }
+  } finally {
+    _dashLoading = false;
   }
 }
 
