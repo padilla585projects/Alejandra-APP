@@ -64,7 +64,7 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html panel.html admin.html _site/
-          for asset in alejandra-panel.html sw.js .nojekyll manifest.json icon-192.png icon-512.png icon.svg favicon.ico; do
+          for asset in alejandra-panel.html kiosco.html sw.js .nojekyll manifest.json icon-192.png icon-512.png icon.svg favicon.ico; do
             if [ -f "$asset" ]; then cp "$asset" _site/; fi
           done
           for directory in icons fonts img packages; do
