@@ -4,13 +4,25 @@ Estado (actualizado 2026-08-10, tarde): **No hay ninguna tarea activa, en curso 
 
 ## SEC-AGENT-AUDIT-ISOLATION — aislamiento de resúmenes, estado y trazas (2026-08-11)
 
-- Estado: **implementada — pendiente de integración y despliegue**
+- Estado: **integrada en `main` (PR #105) — pendiente el despliegue del Worker**
 - Prioridad: Crítica
-- Rama: `codex/fix-agent-audit-isolation`
+- Rama: `codex/fix-agent-audit-isolation`, fusionada
 - Alcance: `recuperar_conversacion` se limita al usuario autenticado; `leer_estado` limita métricas/memoria por empresa y logs por usuario; una traza de decisión no persistida rechaza la tool; Telegram no recibe título ni contenido de incidencias; `compatibility_date` actualizada.
 - Exclusiones: no hay migración D1, backfill ni modificación de datos guardados; N2/N3 conservan sus gates existentes.
 - Pruebas: `node --check alejandra-agente/worker.js`; `npm --prefix alejandra-agente test` (194/194); `npm --prefix nucleo-cognitivo test` (57/57); `node scripts/check-encoding.js origin/main`; `git diff --check`.
-- Siguiente acción exacta: integrar mediante PR y ejecutar el despliegue del Worker con verificación posterior registrada.
+- Siguiente acción exacta: `wrangler deploy` de `alejandra-agente` + comprobación de `/health`, aún no ejecutado en esta sesión — el código está en `main` pero no en producción todavía.
+
+## Fix — TABULATOR-RACE-01 (2026-08-11)
+
+- Estado: **completado, desplegado y verificado en vivo**
+- `RangeError: Maximum call stack size exceeded` en Tabulator, encontrado al verificar en
+  producción real los fixes de Pedidos (reproducido una vez, no determinista). Causa raíz:
+  `visibilitychange` podía relanzar `cargarDashboard()` en paralelo con la carga inicial,
+  saturando el hilo justo cuando se creaba `tblPedidos` (`layout:'fitColumns'`).
+- Fix: guard de reentrancia en `cargarDashboard()`. Sin relación con otros cambios de hoy.
+- Desplegado: Pages (`panel.html`), commit `69d441c`. Probado en Chrome real tras publicar.
+- Detalle en `HANDOFF.md`/`CHANGELOG.md`/`PROJECT_STATE.md`.
+- Siguiente acción exacta: ninguna.
 
 ## Auditoría del módulo de Pedidos de material (2026-08-11)
 

@@ -1,13 +1,46 @@
 # Handoff — Alejandra 2.0
 
-## SEC-AGENT-AUDIT-ISOLATION — pendiente de integración (2026-08-11)
+## SEC-AGENT-AUDIT-ISOLATION — integrada (2026-08-11)
 
-- Rama: `codex/fix-agent-audit-isolation`.
+- Rama: `codex/fix-agent-audit-isolation`, fusionada a `main` vía PR #105.
 - Hallazgos corregidos: `recuperar_conversacion` filtraba por coincidencia de texto sin limitar `usuario_id`; `leer_estado` exponía conteos globales y títulos de decisiones; `registrarTraza()` ocultaba errores y el Motor continuaba; `memory_save` reenviaba contenido de incidencias a Telegram.
 - Cambio: los resúmenes se limitan a `usuario_id`; estado/memoria se limitan a `empresa_id`, logs a `usuario_id` y la configuración solo se ve desde desarrollo verificado; las decisiones se rechazan si la traza no se persiste; Telegram solo recibe una alerta sin contenido. `compatibility_date` pasa a `2026-08-11`.
 - Riesgo/rollback: no cambia datos ni esquema. Revertir restaura las exposiciones y el fail-open de trazas, por lo que solo procede ante una regresión funcional demostrada.
 - Pruebas: `node --check alejandra-agente/worker.js`; agente 194/194; núcleo 57/57; encoding y diff sin errores.
-- Siguiente acción exacta: PR, CI, despliegue manual de `alejandra-agente` y comprobación manual de `/health`.
+- Siguiente acción exacta: despliegue manual de `alejandra-agente` (`wrangler deploy`) y comprobación de `/health`, aún no ejecutado en esta sesión.
+
+## Fix — TABULATOR-RACE-01, RangeError de Tabulator por doble carga del dashboard (2026-08-11)
+
+- Contexto: al verificar en vivo (Chrome real, sesión autenticada) los fixes de Pedidos de
+  esta misma sesión, apareció un error real en consola al navegar por primera vez de
+  Dashboard a Pedidos: `Uncaught RangeError: Maximum call stack size exceeded` en
+  `tabulator.min.js` (3 excepciones). Solo ocurrió una vez; recargar y repetir el mismo
+  camino 3 veces más no lo reprodujo — condición de carrera de timing, no determinista.
+- Investigación (agente Explore, solo lectura): `_initSync()` registra un listener de
+  `visibilitychange` (`panel.html:13258-13263`) que relanza `cargarDashboard()` si el
+  documento pasa a "visible" mientras `currentPage` sigue siendo `dashboard` — puede
+  dispararse justo tras la carga inicial (`iniciarApp() → navTo('dashboard')`) si el
+  navegador marca el documento como visible con un pequeño retraso. Confirmado en consola:
+  `📊 cargarDashboard() llamada #1` seguido de `#2` en la misma carga de página.
+  `cargarDashboard()` hace `Promise.all` de 10 `fetch` seguido de construcción masiva de
+  HTML vía `innerHTML` (KPIs, incidencias, pedidos, tareas, RFIs, etc.) — trabajo síncrono
+  pesado en el hilo principal. Dos ejecuciones concurrentes de esto satura el hilo justo
+  cuando `cargarPedidos()` crea `tblPedidos` por primera vez con `layout:'fitColumns'`
+  (única vez que se llama `new Tabulator(...)`, gracias al guard `if (tblPedidos) {
+  replaceData; return; }` — en cargas posteriores solo se llama `replaceData()`, que no
+  repite el cálculo de layout, consistente con que el bug no se repitiera en los reintentos
+  con `tblPedidos` ya vivo). El recálculo interno de columnas de Tabulator
+  (`ResizeObserver`/rAF) se reentra a sí mismo en esa ventana de saturación → RangeError.
+- No relacionado con ningún cambio de esta sesión (vocabulario de `estado` en Pedidos,
+  columna de avatar en `tblUsuarios`) — confirmado que ninguno toca la ruta de código
+  implicada.
+- Fix: guard de reentrancia simple en `cargarDashboard()` — si ya hay una carga en curso, no
+  lanza una segunda. No cambia ningún comportamiento visible cuando no hay condición de
+  carrera.
+- Verificación: `node --check` limpio; `<script>` extraídos y verificados con `node --check`;
+  sin encoding corrupto. Probado en vivo en Chrome real tras desplegar: recarga limpia sin
+  duplicar `cargarDashboard()`, navegación a Pedidos sin errores en consola.
+- Despliegue: solo Pages (`panel.html`, no requiere tocar ningún Worker), commit `69d441c`.
 
 ## Auditoría del módulo de Pedidos de material (2026-08-11)
 

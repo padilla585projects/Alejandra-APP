@@ -6,6 +6,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Fixed
 
+- **TABULATOR-RACE-01 (2026-08-11):** `RangeError: Maximum call stack size exceeded` en Tabulator, reproducido una vez en producción real al navegar por primera vez a Pedidos. Un listener de `visibilitychange` podía relanzar `cargarDashboard()` mientras la carga inicial seguía en curso, saturando el hilo principal justo cuando se creaba `tblPedidos` con `layout:'fitColumns'`. Guard de reentrancia en `cargarDashboard()`. No relacionado con ningún otro cambio de esta sesión.
+
 - **Auditoría del módulo de Pedidos de material (2026-08-11):** `getPedidos` no dejaba a Almacén/Seguridad ver pedidos de otros departamentos pese a ser su función documentada (`isAdminRole` sin `departamento==='almacen'`/`isDeptPrivileged`, a diferencia del resto de inventario); vocabulario de `estado` distinto entre `panel.html` (`pendiente/aprobado/entregado`) y `worker.js`/`index.html` (`pendiente/solicitado/recibido`) — un pedido gestionado desde un lado quedaba huérfano en el otro; `solicitado_por` siempre `NULL` para pedidos creados desde la app móvil (sin fallback al usuario autenticado, a diferencia de `ordenes_cambio`); informe semanal por email subestimaba pedidos pendientes (solo contaba `'pendiente'`, no `'solicitado'`). Detalle en `HANDOFF.md`.
 
 - **Sidebar de panel.html con dos secciones "🔺 Seguridad" duplicadas (2026-08-11):** `construirDirectorioDepartamentos()` (vista "Todos los departamentos") trataba Seguridad como sección plana genérica a reemplazar, cuando ya tiene su propia sección real (Carnets/Reconocimientos/Permisos/ATS/Accidentes/Registro). El stock de material se inserta ahora dentro de esa sección real en vez de crear un bloque duplicado.

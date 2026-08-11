@@ -3,6 +3,16 @@
 - Actualizado: 2026-08-11
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
+## Fix — TABULATOR-RACE-01 (2026-08-11)
+
+Encontrado al verificar en vivo los fixes de Pedidos: `RangeError: Maximum call stack size
+exceeded` en Tabulator, reproducido una vez en Chrome real. Causa raíz: un listener de
+`visibilitychange` podía relanzar `cargarDashboard()` mientras la carga inicial seguía en
+curso, saturando el hilo principal justo cuando se creaba `tblPedidos` por primera vez
+(`layout:'fitColumns'`), lo que hacía que Tabulator se reentrara a sí mismo. Guard de
+reentrancia añadido; no relacionado con ningún cambio de esta sesión. Verificado en vivo
+tras desplegar (Pages, commit `69d441c`). Detalle en `HANDOFF.md`.
+
 ## Auditoría del módulo de Pedidos de material (2026-08-11)
 
 ## Auditoría del cerebro de Alejandra — correcciones de aislamiento (2026-08-11)
