@@ -4800,6 +4800,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
         <div id="fqrResultado" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;gap:6px;background:rgba(0,0,0,.72);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;text-align:center;padding:16px"></div>
       </div>
+      <!-- ARC-022 (lector físico USB/Bluetooth): estos lectores emulan un teclado --
+           escanean y "teclean" el código + Enter en el campo con foco. No hace falta
+           ninguna integración especial, solo un input enfocado escuchando Enter. -->
+      <div class="form-group" style="margin-top:12px;margin-bottom:0">
+        <label class="form-label">O con lector físico (USB/Bluetooth)</label>
+        <input class="form-input" id="fqrInputManual" placeholder="Escanea aquí o escribe el código..." autocomplete="off"
+          onkeydown="if(event.key==='Enter'){const v=this.value.trim();this.value='';if(v)ficharPorQR(v);}">
+      </div>
       <div class="modal-actions" style="margin-top:12px">
         <button class="btn-primary btn-secondary" style="flex:1;margin-top:0" onclick="cerrarFicharQR()">Cerrar</button>
       </div>
@@ -7152,24 +7160,21 @@ window.borrarFotoPerfilWorker = borrarFotoPerfilWorker;
 // abre el diálogo de impresión -- mismo patrón que el resto de "ventanas de impresión" de
 // la app (documento nuevo, tema claro fijo, w.print()).
 let _usuariosAdminCache = [];
-async function generarTarjetaTrabajador(id) {
-  const u = _usuariosAdminCache.find(x => x.id === id);
-  if (!u) return;
-  if (!u.codigo) { toast('❌ Este usuario no tiene código asignado', 'err'); return; }
-
+// Helper compartido: genera el QR y abre la ventana de impresión, usado tanto para
+// usuarios (generarTarjetaTrabajador) como para personal_externo (generarTarjetaExterno).
+function _imprimirTarjeta(nombre, codigo, fotoUrl) {
   const tmp = document.createElement('div');
   tmp.style.display = 'none';
   document.body.appendChild(tmp);
-  new QRCode(tmp, { text: u.codigo, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  new QRCode(tmp, { text: codigo, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
   const canvas = tmp.querySelector('canvas');
   const qrDataUrl = canvas ? canvas.toDataURL('image/png') : '';
   document.body.removeChild(tmp);
   if (!qrDataUrl) { toast('❌ No se pudo generar el QR', 'err'); return; }
 
-  const fotoUrl = u.foto_r2_key ? `${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}` : '';
   const w = window.open('', '_blank');
   if (!w) { toast('❌ El navegador bloqueó la ventana de impresión', 'err'); return; }
-  w.document.write(`<!DOCTYPE html><html><head><title>Tarjeta — ${u.nombre}</title>
+  w.document.write(`<!DOCTYPE html><html><head><title>Tarjeta — ${nombre}</title>
 <style>
 @page { size: 85.6mm 54mm; margin: 0; }
 body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;align-items:center;background:#eee;min-height:100vh}
@@ -7183,15 +7188,43 @@ body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;a
 @media print{body{background:#fff}.card{border:none}}
 </style></head><body>
 <div class="card">
-${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(u.nombre || '?').charAt(0).toUpperCase()}</div>`}
-<div class="info"><div class="nombre">${u.nombre}</div><div class="codigo">${u.codigo}</div></div>
+${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(nombre || '?').charAt(0).toUpperCase()}</div>`}
+<div class="info"><div class="nombre">${nombre}</div><div class="codigo">${codigo}</div></div>
 <img class="qr" src="${qrDataUrl}">
 </div>
 </body></html>`);
   w.document.close();
   w.print();
 }
+
+async function generarTarjetaTrabajador(id) {
+  const u = _usuariosAdminCache.find(x => x.id === id);
+  if (!u) return;
+  if (!u.codigo) { toast('❌ Este usuario no tiene código asignado', 'err'); return; }
+  const fotoUrl = u.foto_r2_key ? `${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}` : '';
+  _imprimirTarjeta(u.nombre, u.codigo, fotoUrl);
+}
 window.generarTarjetaTrabajador = generarTarjetaTrabajador;
+
+// ARC-022: personal_externo no tiene código hasta que se pide una tarjeta por primera vez
+// (backfill bajo demanda, POST /personal-externo/:id/codigo, idempotente).
+async function generarTarjetaExterno(id) {
+  const p = (window._plantillaCache || []).find(x => x.id === id);
+  if (!p) return;
+  let codigo = p.codigo;
+  if (!codigo) {
+    try {
+      const res = await apiCall(`/personal-externo/${id}/codigo`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.codigo) { toast('❌ No se pudo generar el código', 'err'); return; }
+      codigo = data.codigo;
+      p.codigo = codigo;
+    } catch { toast('❌ Error de red', 'err'); return; }
+  }
+  const fotoUrl = p.foto_r2_key ? `${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}` : '';
+  _imprimirTarjeta(p.nombre, codigo, fotoUrl);
+}
+window.generarTarjetaExterno = generarTarjetaExterno;
 
 // ── NEW-28: comparativa entre obras ─────────────────────────────────────────
 async function cargarComparativaObras() {
@@ -19498,6 +19531,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const lista = Array.isArray(data) ? data : [];
       const obraId = document.getElementById('plantillaFiltroObra')?.value || '';
       const filtrada = obraId ? lista.filter(p => String(p.obra_id) === obraId) : lista;
+      window._plantillaCache = filtrada;
       renderPlantilla(cont, filtrada);
     } catch { cont.innerHTML = '<div class="empty-state">Error de red</div>'; }
   }
@@ -19515,6 +19549,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const obraNombre = p.obra_nombre ? `<span style="font-size:11px;color:var(--muted)">${p.obra_nombre}</span>` : '<span style="font-size:11px;color:var(--muted)">Sin obra</span>';
       const dni = p.dni ? `<span style="font-size:11px;color:var(--muted);margin-left:8px">DNI: ${p.dni}</span>` : '';
       const btns = esAdmin ? `
+        <button onclick="generarTarjetaExterno(${p.id})" title="Tarjeta con QR para control de accesos" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">🪪</button>
         <button onclick="abrirModalPersonalExt(${p.id})" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">✏️</button>
         <button onclick="eliminarPersonalExt(${p.id},'${p.nombre.replace(/'/g,"\\'")}') " style="padding:4px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:var(--red);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">🗑️</button>` : '';
       const avatarHtml = p.foto_r2_key

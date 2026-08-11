@@ -3,22 +3,29 @@
 - Actualizado: 2026-08-11
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
-## ARC-022 — Foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-11)
+## ARC-022 — control de accesos completo con quiosco de autofichaje (2026-08-11)
 
-Implementado a petición de Adrián: subida de foto para usuarios con cuenta (el backend ya lo
-soportaba, solo faltaba la UI — antes solo funcionaba para `personal_externo`), generación
-de tarjeta imprimible (foto+nombre+QR con el código de fichar, tamaño CR80) y un nuevo
-endpoint `POST /fichajes/scan` para fichar escaneando esa tarjeta con la cámara del móvil de
-un encargado. Nuevo FAB 🪪 en Fichajes de `index.html`, con cámara/escáner propios y
-aislados (no se reutilizó el escáner de materiales por estar demasiado acoplado a
-bobinas/PEMP/carretillas). De paso se encontró y corrigió un bug lateral real: la URL de
-`jsQR` en cdnjs devolvía 404 desde hacía tiempo, rompiendo en silencio el escaneo de QR de
-bobinas/EPIs/herramientas — corregida a jsdelivr. `panel.html` recibió la foto de perfil y
-la tarjeta imprimible, pero no el botón de escanear con cámara (decisión de alcance: tiene
-más sentido desde el móvil). Verificado por sintaxis, encoding y pruebas de DOM/navegador
-sobre `index.html`; `panel.html` no pudo verificarse igual de a fondo en el navegador de
-pruebas de esta sesión (archivo demasiado grande para la herramienta disponible). Desplegado
-(Worker + Pages). Detalle completo en `HANDOFF.md`.
+Evolucionó de "tarjeta con QR para fichar" a un control de accesos real tras aclarar Adrián
+el caso de uso: una pantalla fija donde cada trabajador pasa su propio QR al entrar, no un
+encargado escaneando una a una. Estado final: foto de perfil para usuarios (backend ya
+listo, solo faltaba UI) en `index.html`/`panel.html`; tarjeta imprimible con QR (foto+nombre,
+tamaño CR80) para usuarios (ambos frontends) y para personal externo (`index.html`, único
+sitio con pantalla de gestión de personal externo); **migración D1 real aplicada con
+autorización explícita del Director** (`ALTER TABLE personal_externo ADD COLUMN codigo`,
+verificada contra el esquema tras aplicarla); `POST /fichajes/scan` generalizado para
+resolver el código contra usuarios O personal externo, devolviendo una ficha completa (foto,
+rol/departamento, DNI si es externo, empresa, y aviso si hay reconocimiento médico o carnet
+caducado); **`kiosco.html`, archivo nuevo** — pantalla de autofichaje a pantalla completa,
+login una vez con sesión larga, campo siempre reenfocado para lector USB/Bluetooth (ambos
+funcionan igual, emulan teclado), pensada para dejar en un monitor de entrada; `index.html`
+también recibió el mismo campo de lector físico dentro del modal de cámara ya existente.
+`panel.html` se dejó fuera de esta vuelta (no tiene pantalla de gestión de personal externo
+donde encajase). De paso se corrigió un bug lateral real: la URL de `jsQR` en cdnjs devolvía
+404 desde hacía tiempo, rompiendo en silencio el escaneo de QR de bobinas/EPIs/herramientas
+— corregida a jsdelivr. Verificado por sintaxis/encoding en todo el lote y por DOM/navegador
+en `index.html`; `kiosco.html`/`panel.html` no se pudieron verificar visualmente en el
+navegador de pruebas de esta sesión (limitación de la herramienta, no del código).
+Desplegado (Worker + Pages, incluida la migración D1). Detalle completo en `HANDOFF.md`.
 
 ## BUZON-TELEGRAM-01 — aviso en tiempo real + buzón de incidencias (2026-08-10)
 

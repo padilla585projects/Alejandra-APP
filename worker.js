@@ -6544,6 +6544,9 @@ export default {
       if (path === '/personal/trabajadores' && method === 'GET') return await getTrabajadores(request, env);
       if (path === '/personal-externo' && method === 'GET')  return await getPersonalExterno(request, env);
       if (path === '/personal-externo' && method === 'POST') return await crearPersonalExterno(request, env);
+      if (path.endsWith('/codigo') && path.startsWith('/personal-externo/') && method === 'POST') {
+        return await generarCodigoPersonalExterno(parseInt(path.split('/personal-externo/')[1]), request, env);
+      }
       if (path.startsWith('/personal-externo/')) {
         const peid = parseInt(path.split('/personal-externo/')[1]);
         if (method === 'PUT')    return await actualizarPersonalExterno(peid, request, env);
@@ -10465,14 +10468,35 @@ async function getPersonalExterno(request, env) {
   return json(results);
 }
 
+// ARC-022: código de tarjeta para personal_externo. No sirve para login (no tiene
+// contraseña ni sesión propia), solo para identificarlo en /fichajes/scan -- se busca
+// siempre acotado por empresa_id, así que basta con que sea improbable colisionar dentro
+// de una misma empresa, no globalmente único como usuarios.codigo (que sí hace de login).
+function generarCodigoExterno() {
+  return 'EXT' + crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+}
+
 async function crearPersonalExterno(request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const { nombre, dni, obra_id, notas } = await request.json().catch(() => ({}));
   if (!safeStr(nombre).trim()) return err('Falta el nombre');
-  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas) VALUES (?,?,?,?,?)')
-    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null).run();
+  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas,codigo) VALUES (?,?,?,?,?,?)')
+    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null, generarCodigoExterno()).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+// ARC-022: backfill bajo demanda para personal_externo dado de alta antes de que existiera
+// la columna codigo -- idempotente, no regenera si ya tiene uno.
+async function generarCodigoPersonalExterno(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const row = await env.DB.prepare('SELECT codigo FROM personal_externo WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!row) return err('No encontrado', 404);
+  if (row.codigo) return json({ ok: true, codigo: row.codigo });
+  const codigo = generarCodigoExterno();
+  await env.DB.prepare('UPDATE personal_externo SET codigo=? WHERE id=? AND empresa_id=?').bind(codigo, id, empresa_id).run();
+  return json({ ok: true, codigo });
 }
 
 async function actualizarPersonalExterno(id, request, env) {
@@ -11153,20 +11177,32 @@ async function ficharPorCodigo(request, env, ctx) {
   const codigo = safeStr(body.codigo).trim();
   if (!codigo) return err('Falta el código escaneado');
 
-  const usuario = await env.DB.prepare(
-    'SELECT id, nombre, departamento, obra_id FROM usuarios WHERE codigo=? AND empresa_id=? AND activo=1'
+  // ARC-022 (11/08/2026): control de accesos real cubre usuarios (login por código) Y
+  // personal_externo (código propio solo para tarjeta, sin login) -- se prueba primero
+  // usuarios y si no hay match se cae a personal_externo, siempre acotado a la MISMA
+  // empresa del que escanea.
+  let persona = await env.DB.prepare(
+    'SELECT id, nombre, departamento, obra_id, rol, foto_r2_key, NULL as dni FROM usuarios WHERE codigo=? AND empresa_id=? AND activo=1'
   ).bind(codigo, empresa_id).first();
-  if (!usuario) return err('Código no reconocido', 404);
+  let esExterno = false;
+  if (!persona) {
+    persona = await env.DB.prepare(
+      'SELECT id, nombre, departamento, obra_id, NULL as rol, foto_r2_key, dni FROM personal_externo WHERE codigo=? AND empresa_id=? AND activo=1'
+    ).bind(codigo, empresa_id).first();
+    esExterno = true;
+  }
+  if (!persona) return err('Código no reconocido', 404);
 
   const ahora = new Date();
   const fecha = body.fecha || ahora.toISOString().slice(0, 10);
   const hora_entrada = body.hora || new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hour12: false }).format(ahora);
-  const obra_id = usuario.obra_id || obraAuth || null;
+  const obra_id = persona.obra_id || obraAuth || null;
+  const campoId = esExterno ? 'personal_externo_id' : 'usuario_id';
 
   const dup = await env.DB.prepare(
-    'SELECT id FROM fichajes WHERE empresa_id=? AND fecha=? AND usuario_id=?'
-  ).bind(empresa_id, fecha, usuario.id).first();
-  if (dup) return err(`${usuario.nombre} ya tiene un fichaje hoy`, 409);
+    `SELECT id FROM fichajes WHERE empresa_id=? AND fecha=? AND ${campoId}=?`
+  ).bind(empresa_id, fecha, persona.id).first();
+  if (dup) return err(`${persona.nombre} ya tiene un fichaje hoy`, 409);
 
   let estadoFinal = body.estado || 'presente';
   let horas_extra = 0, minutos_retraso = 0;
@@ -11180,11 +11216,34 @@ async function ficharPorCodigo(request, env, ctx) {
   }
 
   const r = await env.DB.prepare(
-    `INSERT INTO fichajes (empresa_id,usuario_id,obra_id,fecha,hora_entrada,horas_trabajadas,horas_extra,minutos_retraso,estado,registrado_por,departamento)
+    `INSERT INTO fichajes (empresa_id,${campoId},obra_id,fecha,hora_entrada,horas_trabajadas,horas_extra,minutos_retraso,estado,registrado_por,departamento)
      VALUES (?,?,?,?,?,0,?,?,?,?,?)`
-  ).bind(empresa_id, usuario.id, obra_id, fecha, hora_entrada, horas_extra, minutos_retraso, estadoFinal, encargadoNombre || rol, usuario.departamento || 'electrico').run();
+  ).bind(empresa_id, persona.id, obra_id, fecha, hora_entrada, horas_extra, minutos_retraso, estadoFinal, encargadoNombre || rol, persona.departamento || 'electrico').run();
   ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
-  return json({ ok: true, id: r.meta.last_row_id, nombre: usuario.nombre, hora_entrada, estado: estadoFinal }, 201);
+
+  // ARC-022: ficha de acceso para la pantalla de quiosco -- foto, empresa, y SOLO un aviso
+  // si el reconocimiento médico o algún carnet está REALMENTE caducado (no un listado
+  // completo, decisión explícita del Director).
+  const idCol = esExterno ? 'externo_id' : 'usuario_id';
+  const [empRow, recRow, carnetRow] = await Promise.all([
+    env.DB.prepare('SELECT nombre FROM empresas WHERE id=?').bind(empresa_id).first().catch(() => null),
+    env.DB.prepare(
+      `SELECT tipo, fecha_caducidad FROM reconocimientos_medicos WHERE empresa_id=? AND ${idCol}=? AND fecha_caducidad IS NOT NULL AND fecha_caducidad < date('now') ORDER BY fecha_caducidad DESC LIMIT 1`
+    ).bind(empresa_id, persona.id).first().catch(() => null),
+    env.DB.prepare(
+      `SELECT tipo, fecha_caducidad FROM carnets WHERE empresa_id=? AND ${idCol}=? AND fecha_caducidad IS NOT NULL AND fecha_caducidad < date('now') ORDER BY fecha_caducidad DESC LIMIT 1`
+    ).bind(empresa_id, persona.id).first().catch(() => null),
+  ]);
+  const alertas = [];
+  if (recRow) alertas.push(`⚕️ Reconocimiento médico caducado (${recRow.fecha_caducidad})`);
+  if (carnetRow) alertas.push(`🪪 Carnet ${carnetRow.tipo || ''} caducado (${carnetRow.fecha_caducidad})`.replace('  ', ' '));
+
+  return json({
+    ok: true, id: r.meta.last_row_id, nombre: persona.nombre, hora_entrada, estado: estadoFinal,
+    externo: esExterno, rol: persona.rol || null, departamento: persona.departamento, dni: persona.dni || null,
+    foto_url: persona.foto_r2_key ? `/foto-perfil/${esExterno ? 'externo' : 'usuario'}/${persona.id}` : null,
+    empresa_nombre: empRow?.nombre || '', alertas,
+  }, 201);
 }
 
 async function actualizarFichaje(id, request, env, ctx) {
@@ -15052,6 +15111,11 @@ async function runMigrations(request, env) {
   // Foto de perfil en usuarios y personal_externo
   await ddlPaso(env, 'ALTER TABLE usuarios ADD COLUMN foto_r2_key TEXT', 'usuarios.foto_r2_key', results);
   await ddlPaso(env, 'ALTER TABLE personal_externo ADD COLUMN foto_r2_key TEXT', 'personal_externo.foto_r2_key', results);
+  // ARC-022 (11/08/2026): personal_externo no tenía código propio -- solo usuarios podía
+  // generar tarjeta con QR para fichar/control de accesos. Columna nullable, se rellena en
+  // crearPersonalExterno() para altas nuevas y bajo demanda (generarCodigoExterno) para las
+  // ya existentes.
+  await ddlPaso(env, 'ALTER TABLE personal_externo ADD COLUMN codigo TEXT', 'personal_externo.codigo', results);
   // Carnets y certificaciones (NEW-19)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS carnets (

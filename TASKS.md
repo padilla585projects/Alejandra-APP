@@ -42,33 +42,42 @@ Estado (actualizado 2026-08-10, tarde): **No hay ninguna tarea activa, en curso 
 - Siguiente acción exacta: ninguna. Pendiente de que el uso real confirme si hace falta
   `memory_delete` también en `alejandra-agente` (hoy solo existe en `worker.js` raíz).
 
-## ARC-022 — Foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-10/11)
+## ARC-022 — Control de accesos con quiosco de autofichaje (2026-08-10/11)
 
-- Estado: **implementado y desplegado — pendiente lector físico (aparte) y botón de escaneo
-  en panel.html (decisión de alcance, no bloqueante)**
-- Decisiones tomadas con el Director antes de implementar: el QR codifica el `codigo` de
-  fichar ya existente; tarjeta imprimible (no solo QR digital); escaneo con cámara del móvil
-  de un encargado (lector físico queda aparte, no en su lugar).
-- Implementado: foto de perfil para `usuarios` (backend ya listo, solo faltaba UI) en
-  `index.html`/`panel.html`; tarjeta imprimible con QR (librería `qrcodejs` nueva) en ambos;
-  endpoint `POST /fichajes/scan` (`ficharPorCodigo`, `worker.js`); escáner de cámara nuevo y
-  aislado en `index.html` (FAB 🪪 en Fichajes). `panel.html` sin botón de escaneo (decisión
-  de alcance: más sentido desde el móvil).
+- Estado: **implementado y desplegado, incluida migración D1 autorizada — pendiente
+  verificación en vivo con login real antes de confiar en él sin supervisión**
+- Evolucionó de "tarjeta con QR para fichar" a control de accesos real tras aclarar el
+  Director el caso de uso ("que la gente pase su QR cuando entre, no que tú les des y luego
+  pases la tarjeta" / "es como un control de accesos"). Decisiones tomadas con él: lector
+  USB o Bluetooth indistintamente (ambos emulan teclado); cubre también personal externo
+  (no solo usuarios); ficha con foto/nombre/rol/empresa/DNI y aviso solo si algo está
+  REALMENTE caducado (reconocimiento médico o carnet).
+- Implementado: foto de perfil para usuarios (`index.html`/`panel.html`); tarjeta imprimible
+  con QR para usuarios (ambos) y personal externo (`index.html`, único con pantalla de
+  gestión); **migración D1 real aplicada** (`ALTER TABLE personal_externo ADD COLUMN
+  codigo`, autorización explícita del Director, verificada tras aplicarla); `POST
+  /fichajes/scan` generalizado a usuarios+externo con ficha completa en la respuesta;
+  **`kiosco.html` nuevo** — pantalla de autofichaje a pantalla completa, login una vez con
+  sesión larga, campo siempre reenfocado para lector físico; `index.html` recibió también
+  el campo de lector físico dentro del modal de cámara existente. `panel.html` sin tocar en
+  esta vuelta (no tiene pantalla de personal externo donde encajase).
 - Hallazgo lateral corregido de paso: URL de `jsQR` en cdnjs devolvía 404 desde hacía tiempo
   (biblioteca retirada de cdnjs), rompiendo en silencio el escaneo de QR de bobinas/EPIs/
   herramientas — corregida a jsdelivr.
-- Verificación: sintaxis + encoding limpios en los 3 archivos; pruebas de DOM/navegador
-  completas sobre `index.html` (QR real generado y verificado); `panel.html` sin la misma
-  verificación visual (archivo demasiado grande para la herramienta de pruebas disponible
-  en esta sesión) — verificado por sintaxis y revisión manual del diff.
-- Desplegado: `worker.js` (`wrangler deploy`) + Pages (`index.html`/`panel.html`, un único
-  publish para todo el lote).
+- Verificación: sintaxis + encoding limpios en todo el lote (`worker.js`, `index.html`,
+  `kiosco.html`); migración D1 verificada leyendo el esquema real tras aplicarla; pruebas de
+  DOM/navegador completas sobre `index.html` en el primer lote. **`kiosco.html` y
+  `panel.html` sin verificación visual en el navegador de pruebas de esta sesión**
+  (limitación de la herramienta al navegar a archivos fuera del proyecto en pestañas
+  nuevas, no del código) — verificado por sintaxis y revisión manual del diff.
+- Desplegado: `worker.js` (`wrangler deploy`) + Pages (`index.html`/`kiosco.html`, un único
+  publish para todo el lote) + migración D1 (`wrangler d1 execute --remote`).
 - Detalle completo en `HANDOFF.md`/`CHANGELOG.md`/`PROJECT_STATE.md`/`ARCHITECT_BACKLOG.md`
   (ARC-022).
-- Siguiente acción exacta: ninguna urgente. Pendiente sin decidir: lector físico de QR;
-  verificación visual real en Chrome con login del flujo completo de fichar-por-QR antes de
-  confiar en él con datos de producción (la prueba de esta sesión fue solo sintáctica/DOM,
-  sin backend real); si conviene añadir el botón de escaneo también a `panel.html`.
+- Siguiente acción exacta: ninguna urgente. Pendiente sin decidir: probar el flujo completo
+  con login real en Chrome antes de dejar el quiosco funcionando sin supervisión con datos
+  de producción; si el botón "Salir" del quiosco necesita alguna protección extra; si
+  conviene añadir tarjeta/gestión de personal externo también a `panel.html`.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 

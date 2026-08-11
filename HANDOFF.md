@@ -1,6 +1,75 @@
 # Handoff — Alejandra 2.0
 
-## ARC-022 — Foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-11)
+## ARC-022, segunda vuelta — control de accesos con quiosco de autofichaje (2026-08-11)
+
+- Contexto: tras el primer lote (ver sección siguiente, más abajo), Adrián aclaró el caso de
+  uso real: *"se trata de dejarlo habilitado y que la gente pase su QR por ahí cuando entre,
+  no que tú le des y luego pases la tarjeta"* — y luego lo resumió en una frase: *"es como un
+  control de accesos"*. Esto cambió el diseño de raíz: de "un encargado abre un modal y
+  escanea tarjetas una a una" a "una pantalla fija, desatendida, donde cada trabajador pasa su
+  propia tarjeta". Decisiones tomadas con él antes de implementar (vía AskUserQuestion):
+  - El lector físico va por USB **o** Bluetooth indistintamente — ambos emulan un teclado
+    (HID), así que el mismo campo de texto + Enter sirve para los dos, sin código distinto.
+  - Cubre también **personal externo** (subcontratas sin cuenta de usuario), no solo
+    `usuarios` — es donde de hecho vive el campo DNI que pidió mostrar.
+  - La ficha que aparece al fichar muestra foto, nombre, rol/departamento (o "Externo · DNI"),
+    empresa, y un aviso **solo si** el reconocimiento médico o un carnet están REALMENTE
+    caducados — no un listado completo de todo, que sería ruido en una pantalla de 4 segundos.
+- **Migración D1 real, autorizada explícitamente por Adrián en el chat** (regla del proyecto:
+  cualquier cambio de esquema exige decisión humana, no se ejecuta sin más): `ALTER TABLE
+  personal_externo ADD COLUMN codigo TEXT`. Aplicada con `wrangler d1 execute alejandra-db
+  --command "..." --remote` y verificada leyendo `sqlite_master` después — la columna está
+  presente, nullable, no tocó ninguna fila existente.
+- **`ficharPorCodigo` (`worker.js`) generalizado** para resolver el código escaneado contra
+  `usuarios` O `personal_externo` de la misma empresa (antes solo `usuarios`). Devuelve ahora
+  una ficha completa en la respuesta: `foto_url`, `rol`/`departamento`, `dni` (si es externo),
+  `empresa_nombre`, y `alertas[]` — dos consultas nuevas (`reconocimientos_medicos`/`carnets`,
+  ambas ya tenían `usuario_id`/`externo_id` como columnas duales, diseñadas de antes para
+  cubrir los dos tipos de personal) filtrando `fecha_caducidad < date('now')`, solo se avisa
+  si hay algo realmente vencido.
+- **`crearPersonalExterno`/nuevo endpoint `POST /personal-externo/:id/codigo`**: las altas
+  nuevas de personal externo reciben código automáticamente; las que ya existían en
+  producción lo reciben bajo demanda (idempotente, no regenera si ya tiene uno) la primera
+  vez que alguien les pide una tarjeta. El código no sirve para login (personal externo no
+  tiene sesión propia) — es solo el identificador de la tarjeta, generado con
+  `crypto.randomUUID()`, acotado por `empresa_id` en la búsqueda (no hace falta ser único a
+  nivel global como sí lo es `usuarios.codigo`, que además hace de login).
+- **`kiosco.html`, archivo nuevo y autónomo** — pantalla de autofichaje pensada para dejar
+  abierta a pantalla completa en un monitor de entrada con un lector USB/Bluetooth conectado
+  (o simplemente para que alguien la mire de vez en cuando). Reutiliza el mismo backend/login
+  que el resto de la app (`/verificar` con código, sesión larga — un encargado hace login una
+  vez y se queda así), sin sidebar/topbar ni ninguna otra pantalla, mismo patrón que
+  `alejandra-panel.html` (frontend standalone aparte, ya precedente en este proyecto). Un
+  `<input>` invisible se mantiene SIEMPRE enfocado (reenfoque cada 800ms + en cualquier click
+  o toque de pantalla) para que nunca haga falta tocar nada antes de escanear — el lector,
+  sea USB o Bluetooth, "teclea" el código ahí y pulsa Enter por sí solo. Al fichar, muestra la
+  ficha (foto/nombre/rol o DNI/empresa/alertas) durante 4 segundos y vuelve sola al estado de
+  espera.
+- **`index.html` también recibió el campo de lector físico** dentro del modal "Fichar por QR"
+  ya existente (`#fqrInputManual`), para poder usar un lector USB/Bluetooth desde el móvil o
+  una tablet además de la cámara — mismo mecanismo (input enfocado + Enter → `ficharPorQR()`),
+  sin código nuevo de verdad, reutiliza la función que ya llamaba la cámara.
+- **`panel.html` deliberadamente sin tocar en esta vuelta**: no tiene ninguna pantalla de
+  gestión de personal externo (solo un alta rápida inline dentro de asignación de turnos/
+  tareas) donde tuviera sentido añadir un botón de tarjeta para ellos — se dejó fuera a
+  propósito en vez de forzarlo en un sitio que no encaja.
+- Verificación: `node --check` limpio en `worker.js`; `<script>` de `index.html`/`kiosco.html`
+  extraídos y verificados con `node --check` (sin errores de sintaxis); sin patrones de
+  encoding corrupto en el diff. Migración D1 verificada leyendo el esquema real tras
+  aplicarla. **`kiosco.html` y `panel.html` no se pudieron verificar visualmente en el
+  navegador de pruebas de esta sesión** — la herramienta se quedó colgada al navegar a
+  `file://` para archivos fuera del proyecto en pestañas nuevas (funcionó una vez para
+  `index.html` al principio de la sesión, no de forma repetible después); se confirmó por
+  sintaxis y revisión manual del diff en su lugar.
+- Despliegue: `worker.js` → `wrangler deploy` directo. `index.html`/`kiosco.html` → Pages
+  (un único publish para todo el lote, incluyendo el archivo nuevo).
+- Pendiente/recomendado, sin decidir: **probar el flujo completo con login real en Chrome**
+  antes de dejar el quiosco funcionando sin supervisión con datos de producción — esta sesión
+  no llegó a esa verificación en vivo, solo sintáctica/de código. También queda sin decidir si
+  el "Salir" del quiosco necesita alguna protección extra (hoy es un simple link de texto,
+  cualquiera con acceso físico a la pantalla podría tocarlo).
+
+## ARC-022, primer lote — Foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-11)
 
 - Contexto: Adrián pidió poder meter una foto en el perfil de un usuario, para generar
   tarjetas con QR y fichar con ellas. Decisiones tomadas con él antes de implementar (vía

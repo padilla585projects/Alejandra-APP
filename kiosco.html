@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Alejandra — Control de Accesos</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
+  --accent:#f97316; --accent2:#fb923c;
+  --blue:#2563eb; --green:#22c55e; --red:#ef4444;
+  --text:#e5e7eb; --muted:#64748b; --border:#334155;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;display:flex;flex-direction:column}
+
+/* ── Login ── */
+#loginScreen{display:flex;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:18px}
+#loginScreen h1{font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;display:flex;align-items:center;gap:10px}
+#loginBox{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:min(360px,90vw);display:flex;flex-direction:column;gap:14px}
+#loginBox input{background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:16px;padding:12px 14px;text-align:center;letter-spacing:2px}
+#loginBox button{background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;padding:12px;cursor:pointer}
+#loginErr{color:var(--red);font-size:13px;text-align:center;min-height:16px}
+
+/* ── Quiosco ── */
+#kioscoScreen{display:none;flex:1;flex-direction:column}
+#kioscoTop{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--border)}
+#kioscoTop .titulo{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;display:flex;align-items:center;gap:8px}
+#kioscoReloj{font-family:'Montserrat',sans-serif;font-weight:700;font-size:15px;color:var(--muted)}
+#kioscoSalir{color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline}
+
+#kioscoBody{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;position:relative}
+
+#idleView{display:flex;flex-direction:column;align-items:center;gap:18px;color:var(--muted)}
+#idleView .icono{font-size:96px;opacity:.5}
+#idleView .txt{font-family:'Montserrat',sans-serif;font-weight:700;font-size:20px}
+
+#resultView{display:none;flex-direction:column;align-items:center;gap:14px;width:min(520px,92vw);text-align:center}
+#resultFoto{width:140px;height:140px;border-radius:50%;object-fit:cover;border:4px solid var(--border)}
+#resultInicial{width:140px;height:140px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:56px;color:#000}
+#resultNombre{font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px}
+#resultSub{color:var(--muted);font-size:15px}
+#resultEstado{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;padding:6px 16px;border-radius:20px}
+#resultEstado.ok{background:var(--green)22;color:var(--green);border:1px solid var(--green)44}
+#resultEstado.warn{background:var(--red)22;color:var(--red);border:1px solid var(--red)44}
+#resultAlertas{display:flex;flex-direction:column;gap:6px;width:100%}
+#resultAlertas div{background:var(--red)22;border:1px solid var(--red)44;color:var(--red);border-radius:10px;padding:10px 14px;font-weight:600;font-size:14px}
+
+#scanInput{position:fixed;top:-100px;left:-100px;width:1px;height:1px;opacity:0}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <h1>🪪 Alejandra — Control de Accesos</h1>
+  <div id="loginBox">
+    <input id="loginCodigo" type="password" placeholder="Código de acceso" autocomplete="off">
+    <button onclick="kioscoLogin()">Entrar</button>
+    <div id="loginErr"></div>
+  </div>
+</div>
+
+<div id="kioscoScreen">
+  <div id="kioscoTop">
+    <div class="titulo">🪪 <span id="kioscoObraNombre">Control de Accesos</span></div>
+    <div id="kioscoReloj"></div>
+    <div id="kioscoSalir" onclick="kioscoLogout()">Salir</div>
+  </div>
+  <div id="kioscoBody">
+    <div id="idleView">
+      <div class="icono">📇</div>
+      <div class="txt">Escanea tu tarjeta o código</div>
+    </div>
+    <div id="resultView">
+      <div id="resultFotoWrap"></div>
+      <div id="resultNombre"></div>
+      <div id="resultSub"></div>
+      <div id="resultEstado"></div>
+      <div id="resultAlertas"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Lector físico USB/Bluetooth: emulan un teclado, escriben aquí y pulsan Enter --
+     el input se mantiene siempre enfocado para no requerir ningún toque previo. -->
+<input id="scanInput" autocomplete="off">
+
+<script>
+const API_DEFAULT = 'https://alejandra-app-api.alejandra-app.workers.dev';
+const API = API_DEFAULT;
+let SESSION = null;
+
+function kioscoLoadSession() {
+  try { SESSION = JSON.parse(localStorage.getItem('kiosco_session') || 'null'); } catch { SESSION = null; }
+  if (SESSION && SESSION.token) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('kioscoScreen').style.display = 'flex';
+    document.getElementById('kioscoObraNombre').textContent = SESSION.obra_nombre || SESSION.nombre || 'Control de Accesos';
+    focusScanInput();
+  }
+}
+
+async function kioscoLogin() {
+  const codigo = document.getElementById('loginCodigo').value.trim();
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  if (!codigo) return;
+  try {
+    const res = await fetch(`${API}/verificar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) { errEl.textContent = data.error || 'Código incorrecto'; return; }
+    if (data.rol === 'operario') { errEl.textContent = 'Este código no tiene permisos para fichar a otros'; return; }
+    SESSION = { token: data.token, nombre: data.nombre, rol: data.rol, obra_nombre: data.obra_nombre, empresa_nombre: data.empresa_nombre };
+    localStorage.setItem('kiosco_session', JSON.stringify(SESSION));
+    document.getElementById('loginCodigo').value = '';
+    kioscoLoadSession();
+  } catch { errEl.textContent = 'Error de conexión'; }
+}
+document.getElementById('loginCodigo').addEventListener('keydown', e => { if (e.key === 'Enter') kioscoLogin(); });
+
+function kioscoLogout() {
+  localStorage.removeItem('kiosco_session');
+  SESSION = null;
+  document.getElementById('kioscoScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function focusScanInput() {
+  const el = document.getElementById('scanInput');
+  if (document.activeElement !== el) el.focus();
+}
+// Reenfoque agresivo: el foco se puede perder al tocar la pantalla (táctil) o si el
+// navegador lo quita por cualquier motivo -- este es un quiosco desatendido, nunca debe
+// hacer falta tocar nada para poder escanear.
+setInterval(focusScanInput, 800);
+document.addEventListener('click', focusScanInput);
+document.addEventListener('touchend', focusScanInput);
+
+document.getElementById('scanInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const v = e.target.value.trim();
+    e.target.value = '';
+    if (v) ficharKiosco(v);
+  }
+});
+
+let _kioscoBusy = false;
+async function ficharKiosco(codigo) {
+  if (_kioscoBusy || !SESSION) return;
+  _kioscoBusy = true;
+  try {
+    const res = await fetch(`${API}/fichajes/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Token': SESSION.token },
+      body: JSON.stringify({ codigo }),
+    });
+    const data = await res.json().catch(() => ({}));
+    mostrarResultado(res.ok, data);
+  } catch {
+    mostrarResultado(false, { error: 'Error de conexión' });
+  }
+}
+
+function mostrarResultado(ok, data) {
+  document.getElementById('idleView').style.display = 'none';
+  const rv = document.getElementById('resultView');
+  rv.style.display = 'flex';
+
+  const fotoWrap = document.getElementById('resultFotoWrap');
+  if (ok && data.foto_url) {
+    fotoWrap.innerHTML = `<img id="resultFoto" src="${API}${data.foto_url}?token=${SESSION.token}">`;
+  } else if (ok) {
+    fotoWrap.innerHTML = `<div id="resultInicial">${(data.nombre || '?').charAt(0).toUpperCase()}</div>`;
+  } else {
+    fotoWrap.innerHTML = `<div id="resultInicial" style="background:var(--red)">⚠️</div>`;
+  }
+
+  document.getElementById('resultNombre').textContent = ok ? data.nombre : (data.error || 'No reconocido');
+  const sub = [];
+  if (ok) {
+    if (data.externo) sub.push('Personal externo' + (data.dni ? ` · DNI ${data.dni}` : ''));
+    else if (data.rol) sub.push(data.rol);
+    if (data.departamento) sub.push(data.departamento);
+    if (data.empresa_nombre) sub.push(data.empresa_nombre);
+  }
+  document.getElementById('resultSub').textContent = sub.join(' · ');
+
+  const estadoEl = document.getElementById('resultEstado');
+  if (ok) {
+    estadoEl.className = data.alertas && data.alertas.length ? 'warn' : 'ok';
+    estadoEl.textContent = `✅ Acceso registrado — ${data.hora_entrada || ''}`;
+  } else {
+    estadoEl.className = 'warn';
+    estadoEl.textContent = '❌ No registrado';
+  }
+
+  const alertasEl = document.getElementById('resultAlertas');
+  alertasEl.innerHTML = (ok && data.alertas || []).map(a => `<div>${a}</div>`).join('');
+
+  clearTimeout(window._kioscoResetTimer);
+  window._kioscoResetTimer = setTimeout(() => {
+    rv.style.display = 'none';
+    document.getElementById('idleView').style.display = 'flex';
+    _kioscoBusy = false;
+    focusScanInput();
+  }, 4000);
+}
+
+function kioscoReloj() {
+  document.getElementById('kioscoReloj').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });
+}
+setInterval(kioscoReloj, 1000);
+kioscoReloj();
+kioscoLoadSession();
+</script>
+</body>
+</html>
