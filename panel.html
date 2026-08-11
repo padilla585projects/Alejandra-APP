@@ -13603,7 +13603,10 @@ function _construirTablaPersonal(data) {
       { title: '', field: 'foto_r2_key', width: 46, hozAlign: 'center', headerSort: false,
         formatter: c => {
           const row = c.getRow().getData();
-          const src = row.foto_r2_key ? `${API}/foto-perfil/${row.tipo === 'externo' ? 'externo' : 'usuario'}/${row.id}?token=${TOKEN}` : '';
+          // RECORTE-FOTO-01: Cache-Control:max-age=86400 (worker.js, getFotoPerfil) cachea
+          // por URL exacta -- sin el r2Key como parte de la query, re-subir una foto no
+          // refrescaba el avatar en pantalla hasta 24h despues (misma URL, contenido nuevo).
+          const src = row.foto_r2_key ? `${API}/foto-perfil/${row.tipo === 'externo' ? 'externo' : 'usuario'}/${row.id}?token=${TOKEN}&v=${encodeURIComponent(row.foto_r2_key)}` : '';
           const inicial = (row.nombre || '?').charAt(0).toUpperCase();
           const avatar = src
             ? `<img src="${src}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="document.getElementById('fotoInputPers_${row.id}').click()">`
@@ -13718,7 +13721,7 @@ async function generarTarjetaPersonalPanel(id, tipo) {
   document.body.removeChild(tmp);
   if (!qrDataUrl) { toast('No se pudo generar el QR', 'err'); return; }
 
-  const fotoUrl = row.foto_r2_key ? `${API}/foto-perfil/${tipo}/${id}?token=${TOKEN}` : '';
+  const fotoUrl = row.foto_r2_key ? `${API}/foto-perfil/${tipo}/${id}?token=${TOKEN}&v=${encodeURIComponent(row.foto_r2_key)}` : '';
   const deptInfo = _DEPTS_CATALOG[row.departamento];
   const departamento = deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (row.departamento || '');
   const rolTexto = tipo === 'externo' ? ('Personal externo' + (row.dni ? ` · DNI ${row.dni}` : '')) : (row.rol || '');
@@ -17191,7 +17194,7 @@ async function cargarUsuarios() {
       { title: '', field: 'foto_r2_key', width: 68, hozAlign: 'center', headerSort: false,
         formatter: c => {
           const row = c.getRow().getData();
-          const src = row.foto_r2_key ? `${API}/foto-perfil/usuario/${row.id}?token=${TOKEN}` : '';
+          const src = row.foto_r2_key ? `${API}/foto-perfil/usuario/${row.id}?token=${TOKEN}&v=${encodeURIComponent(row.foto_r2_key)}` : '';
           const inicial = (row.nombre || '?').charAt(0).toUpperCase();
           const avatar = src
             ? `<img src="${src}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="document.getElementById('fotoInputPanelUsr_${row.id}').click()">`
@@ -17266,17 +17269,108 @@ async function cargarUsuarios() {
   };
 }
 
+// RECORTE-FOTO-01 (11/08/2026): Adrián -- "podemos añadir una opcion de recortar la
+// imagen de la foto del perfil cuando la añadimos". Mismo recortador que index.html
+// (sin dependencias: círculo fijo, arrastrar para encuadrar, slider de zoom). Devuelve
+// un Blob cuadrado ya recortado, o null si el usuario cancela.
+function recortarImagenPerfil(file) {
+  return new Promise((resolve) => {
+    const V = 260, OUT = 480;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    let baseScale = 1, zoom = 1, offX = 0, offY = 0;
+    let dragging = false, startX = 0, startY = 0, startOffX = 0, startOffY = 0;
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px';
+    overlay.innerHTML = `
+      <div style="color:#fff;font-weight:700;font-size:15px">Encuadra la foto</div>
+      <div id="cropViewport" style="width:${V}px;height:${V}px;border-radius:50%;overflow:hidden;position:relative;background:#000;cursor:grab;box-shadow:0 0 0 3000px rgba(0,0,0,.55)"></div>
+      <input id="cropZoom" type="range" min="1" max="3" step="0.01" value="1" style="width:${V}px">
+      <div style="display:flex;gap:10px">
+        <button id="cropCancelBtn" type="button" class="btn btn-secondary">Cancelar</button>
+        <button id="cropOkBtn" type="button" class="btn btn-primary">✓ Usar foto</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const viewport = overlay.querySelector('#cropViewport');
+    viewport.appendChild(img);
+    img.style.cssText = 'position:absolute;top:0;left:0;user-select:none;-webkit-user-drag:none';
+
+    function clampOffsets() {
+      const w = img.naturalWidth * baseScale * zoom, h = img.naturalHeight * baseScale * zoom;
+      offX = Math.min(0, Math.max(V - w, offX));
+      offY = Math.min(0, Math.max(V - h, offY));
+    }
+    function render() {
+      const s = baseScale * zoom;
+      img.style.width = (img.naturalWidth * s) + 'px';
+      img.style.height = (img.naturalHeight * s) + 'px';
+      img.style.left = offX + 'px';
+      img.style.top = offY + 'px';
+    }
+    function cleanup() { URL.revokeObjectURL(url); overlay.remove(); }
+
+    img.onload = () => {
+      baseScale = Math.max(V / img.naturalWidth, V / img.naturalHeight);
+      offX = (V - img.naturalWidth * baseScale) / 2;
+      offY = (V - img.naturalHeight * baseScale) / 2;
+      render();
+    };
+    img.src = url;
+
+    viewport.addEventListener('pointerdown', (e) => {
+      dragging = true; viewport.style.cursor = 'grabbing';
+      startX = e.clientX; startY = e.clientY; startOffX = offX; startOffY = offY;
+      viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      offX = startOffX + (e.clientX - startX);
+      offY = startOffY + (e.clientY - startY);
+      clampOffsets(); render();
+    });
+    const stopDrag = () => { dragging = false; viewport.style.cursor = 'grab'; };
+    viewport.addEventListener('pointerup', stopDrag);
+    viewport.addEventListener('pointercancel', stopDrag);
+
+    overlay.querySelector('#cropZoom').addEventListener('input', (e) => {
+      zoom = parseFloat(e.target.value);
+      clampOffsets(); render();
+    });
+
+    overlay.querySelector('#cropCancelBtn').onclick = () => { cleanup(); resolve(null); };
+    overlay.querySelector('#cropOkBtn').onclick = () => {
+      const s = baseScale * zoom;
+      const canvas = document.createElement('canvas');
+      canvas.width = OUT; canvas.height = OUT;
+      const ctx = canvas.getContext('2d');
+      const sx = -offX / s, sy = -offY / s, sSize = V / s;
+      ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, OUT, OUT);
+      canvas.toBlob((blob) => { cleanup(); resolve(blob); }, 'image/jpeg', 0.9);
+    };
+  });
+}
+
 // ARC-022 (11/08/2026): foto de perfil de usuarios + tarjeta imprimible con QR (el QR
 // codifica el mismo `codigo` que ya usan para fichar/entrar con código de obra).
 async function subirFotoPerfilPanel(tipo, id, file) {
   if (!file) return;
+  // RECORTE-FOTO-01: recorte circular antes de subir, mismo recortador que index.html.
+  const recortada = await recortarImagenPerfil(file);
+  if (!recortada) return;
   const form = new FormData();
-  form.append('file', file);
+  form.append('file', recortada, 'foto.jpg');
   try {
     const res = await fetch(`${API}/foto-perfil/${tipo}/${id}`, { method: 'POST', headers: TOKEN ? { 'X-Token': TOKEN } : {}, body: form });
     if (!res.ok) { toast('Error al subir foto', 'err'); return; }
     toast('Foto actualizada ✓', 'ok');
-    tblUsuarios = null; cargarUsuarios();
+    // TRABAJADORES-TIPO-01d: este mismo botón de subir foto se usa tanto en la tabla
+    // "Usuarios" (tblUsuarios) como en "Trabajadores" (tblPersonal, que además incluye
+    // personal_externo) -- antes solo refrescaba tblUsuarios, así que subir una foto desde
+    // "Trabajadores" nunca actualizaba el avatar que se acababa de cambiar en esa pantalla.
+    if (tblUsuarios) cargarUsuarios();
+    if (tblPersonal) cargarPersonal();
   } catch { toast('Error de red', 'err'); }
 }
 
@@ -17294,7 +17388,7 @@ async function generarTarjetaTrabajadorPanel(id) {
   document.body.removeChild(tmp);
   if (!qrDataUrl) { toast('No se pudo generar el QR', 'err'); return; }
 
-  const fotoUrl = u.foto_r2_key ? `${API}/foto-perfil/usuario/${u.id}?token=${TOKEN}` : '';
+  const fotoUrl = u.foto_r2_key ? `${API}/foto-perfil/usuario/${u.id}?token=${TOKEN}&v=${encodeURIComponent(u.foto_r2_key)}` : '';
   const w = window.open('', '_blank');
   if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>Tarjeta — ${u.nombre}</title>
@@ -18981,7 +19075,7 @@ async function cargarChat() {
 
     // Avatar: foto si existe, si no inicial con color de rol
     const fotoUrl = m.foto_r2_key
-      ? `${API}/foto-perfil/usuario/${m.usuario_id}?token=${TOKEN}`
+      ? `${API}/foto-perfil/usuario/${m.usuario_id}?token=${TOKEN}&v=${encodeURIComponent(m.foto_r2_key)}`
       : null;
     const avatarHtml = fotoUrl
       ? `<img src="${fotoUrl}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid ${color};flex-shrink:0" onerror="this.outerHTML='<div style=\\'width:30px;height:30px;border-radius:50%;background:${color}22;border:2px solid ${color};display:flex;align-items:center;justify-content:center;font-family:Montserrat,sans-serif;font-weight:900;font-size:12px;color:${color};flex-shrink:0\\'>${inicial}</div>'">`

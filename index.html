@@ -7129,13 +7129,104 @@ window.notificarTurnosTelegram = notificarTurnosTelegram;
 // ════════════════════════════════════════════════════════════════════════════
 // FOTO DE PERFIL DE TRABAJADORES
 // ════════════════════════════════════════════════════════════════════════════
+// RECORTE-FOTO-01 (11/08/2026): Adrián -- "podemos añadir una opcion de recortar la
+// imagen de la foto del perfil cuando la añadimos". Antes se subía el archivo tal cual
+// salía de la cámara/galería (cualquier proporción), y el avatar se mostraba recortado a
+// círculo sin que el usuario controlara qué parte de la foto quedaba dentro. Recortador
+// mínimo sin dependencias: círculo fijo, arrastrar para encuadrar, slider para zoom.
+// Devuelve un Blob cuadrado ya recortado, o null si el usuario cancela.
+function recortarImagenPerfil(file) {
+  return new Promise((resolve) => {
+    const V = 260; // diámetro del círculo de encuadre, en px de pantalla
+    const OUT = 480; // resolución del recorte final
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    let baseScale = 1, zoom = 1, offX = 0, offY = 0;
+    let dragging = false, startX = 0, startY = 0, startOffX = 0, startOffY = 0;
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px';
+    overlay.innerHTML = `
+      <div style="color:#fff;font-weight:700;font-size:15px">Encuadra la foto</div>
+      <div id="cropViewport" style="width:${V}px;height:${V}px;border-radius:50%;overflow:hidden;position:relative;background:#000;cursor:grab;box-shadow:0 0 0 3000px rgba(0,0,0,.55)"></div>
+      <input id="cropZoom" type="range" min="1" max="3" step="0.01" value="1" style="width:${V}px">
+      <div style="display:flex;gap:10px">
+        <button id="cropCancelBtn" type="button" style="padding:10px 20px;border-radius:10px;border:none;background:#333;color:#fff;font-weight:700">Cancelar</button>
+        <button id="cropOkBtn" type="button" style="padding:10px 20px;border-radius:10px;border:none;background:var(--primary,#6c5ce7);color:#fff;font-weight:700">✓ Usar foto</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const viewport = overlay.querySelector('#cropViewport');
+    viewport.appendChild(img);
+    img.style.cssText = 'position:absolute;top:0;left:0;user-select:none;-webkit-user-drag:none';
+
+    function clampOffsets() {
+      const w = img.naturalWidth * baseScale * zoom, h = img.naturalHeight * baseScale * zoom;
+      offX = Math.min(0, Math.max(V - w, offX));
+      offY = Math.min(0, Math.max(V - h, offY));
+    }
+    function render() {
+      const s = baseScale * zoom;
+      img.style.width = (img.naturalWidth * s) + 'px';
+      img.style.height = (img.naturalHeight * s) + 'px';
+      img.style.left = offX + 'px';
+      img.style.top = offY + 'px';
+    }
+    function cleanup() {
+      URL.revokeObjectURL(url);
+      overlay.remove();
+    }
+
+    img.onload = () => {
+      baseScale = Math.max(V / img.naturalWidth, V / img.naturalHeight);
+      offX = (V - img.naturalWidth * baseScale) / 2;
+      offY = (V - img.naturalHeight * baseScale) / 2;
+      render();
+    };
+    img.src = url;
+
+    viewport.addEventListener('pointerdown', (e) => {
+      dragging = true; viewport.style.cursor = 'grabbing';
+      startX = e.clientX; startY = e.clientY; startOffX = offX; startOffY = offY;
+      viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      offX = startOffX + (e.clientX - startX);
+      offY = startOffY + (e.clientY - startY);
+      clampOffsets(); render();
+    });
+    const stopDrag = () => { dragging = false; viewport.style.cursor = 'grab'; };
+    viewport.addEventListener('pointerup', stopDrag);
+    viewport.addEventListener('pointercancel', stopDrag);
+
+    overlay.querySelector('#cropZoom').addEventListener('input', (e) => {
+      zoom = parseFloat(e.target.value);
+      clampOffsets(); render();
+    });
+
+    overlay.querySelector('#cropCancelBtn').onclick = () => { cleanup(); resolve(null); };
+    overlay.querySelector('#cropOkBtn').onclick = () => {
+      const s = baseScale * zoom;
+      const canvas = document.createElement('canvas');
+      canvas.width = OUT; canvas.height = OUT;
+      const ctx = canvas.getContext('2d');
+      const sx = -offX / s, sy = -offY / s, sSize = V / s;
+      ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, OUT, OUT);
+      canvas.toBlob((blob) => { cleanup(); resolve(blob); }, 'image/jpeg', 0.9);
+    };
+  });
+}
+
 // ARC-022 (11/08/2026): el backend ya soportaba tipo='usuario' desde siempre
 // (/foto-perfil/:tipo/:id), pero ningún frontend lo invocaba con ese tipo -- solo
 // 'externo' (personal_externo). Se generaliza el refresco tras subir/borrar según tipo.
 async function subirFotoPerfilWorker(tipo, id, file) {
   if (!file) return;
+  const recortada = await recortarImagenPerfil(file);
+  if (!recortada) return;
   const form = new FormData();
-  form.append('file', file);
+  form.append('file', recortada, 'foto.jpg');
   try {
     const res = await subirArchivoRaw(`/foto-perfil/${tipo}/${id}`, form);
     if (!res.ok) { toast('❌ Error al subir foto', 'err'); return; }
@@ -7214,7 +7305,7 @@ async function generarTarjetaTrabajador(id) {
   const u = _usuariosAdminCache.find(x => x.id === id);
   if (!u) return;
   if (!u.codigo) { toast('❌ Este usuario no tiene código asignado', 'err'); return; }
-  const fotoUrl = u.foto_r2_key ? `${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}` : '';
+  const fotoUrl = u.foto_r2_key ? `${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(u.foto_r2_key)}` : '';
   const deptInfo = DEPT_INFO[u.departamento];
   _imprimirTarjeta({
     nombre: u.nombre, codigo: u.codigo, fotoUrl,
@@ -7241,7 +7332,7 @@ async function generarTarjetaExterno(id) {
       p.codigo = codigo;
     } catch { toast('❌ Error de red', 'err'); return; }
   }
-  const fotoUrl = p.foto_r2_key ? `${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}` : '';
+  const fotoUrl = p.foto_r2_key ? `${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(p.foto_r2_key)}` : '';
   const deptInfo = DEPT_INFO[p.departamento];
   _imprimirTarjeta({
     nombre: p.nombre, codigo, fotoUrl,
@@ -11898,7 +11989,7 @@ async function cargarUsuariosAdmin() {
       const dept = u.departamento || 'electrico';
       const deptInfo = DEPT_INFO[dept];
       const avatarHtml = u.foto_r2_key
-        ? `<img src="${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer" onclick="document.getElementById('fotoInputUsr_${u.id}').click()">`
+        ? `<img src="${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(u.foto_r2_key)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer" onclick="document.getElementById('fotoInputUsr_${u.id}').click()">`
         : `<div style="width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0;cursor:pointer" onclick="document.getElementById('fotoInputUsr_${u.id}').click()">${u.nombre.charAt(0).toUpperCase()}</div>`;
       return `
       <div class="admin-list-item" id="urow-${u.id}">
@@ -19580,7 +19671,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         <button onclick="abrirModalPersonalExt(${p.id})" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">✏️</button>
         <button onclick="eliminarPersonalExt(${p.id},'${p.nombre.replace(/'/g,"\\'")}') " style="padding:4px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:var(--red);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">🗑️</button>` : '';
       const avatarHtml = p.foto_r2_key
-        ? `<img src="${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:${esAdmin ? 'pointer' : 'default'}" ${esAdmin ? `onclick="document.getElementById('fotoInputExt_${p.id}').click()"` : ''}>`
+        ? `<img src="${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(p.foto_r2_key)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:${esAdmin ? 'pointer' : 'default'}" ${esAdmin ? `onclick="document.getElementById('fotoInputExt_${p.id}').click()"` : ''}>`
         : `<div style="width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0;cursor:${esAdmin ? 'pointer' : 'default'}" ${esAdmin ? `onclick="document.getElementById('fotoInputExt_${p.id}').click()"` : ''}>${p.nombre.charAt(0).toUpperCase()}</div>`;
       const fotoInput = esAdmin ? `<input type="file" id="fotoInputExt_${p.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilWorker('externo',${p.id},this.files[0])">` : '';
       return `<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
