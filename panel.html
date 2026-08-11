@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" rel="stylesheet">
 <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -16941,6 +16942,19 @@ async function cargarUsuarios() {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
     placeholder: '<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">Sin usuarios</div></div>',
     columns: [
+      // ARC-022 (11/08/2026): backend /foto-perfil/:tipo/:id ya soportaba tipo='usuario'
+      // desde siempre, pero ningún frontend lo usaba -- solo personal_externo.
+      { title: '', field: 'foto_r2_key', width: 46, hozAlign: 'center', headerSort: false,
+        formatter: c => {
+          const row = c.getRow().getData();
+          const src = row.foto_r2_key ? `${API}/foto-perfil/usuario/${row.id}?token=${TOKEN}` : '';
+          const inicial = (row.nombre || '?').charAt(0).toUpperCase();
+          const avatar = src
+            ? `<img src="${src}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="document.getElementById('fotoInputPanelUsr_${row.id}').click()">`
+            : `<div style="width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#000;cursor:pointer" onclick="document.getElementById('fotoInputPanelUsr_${row.id}').click()">${inicial}</div>`;
+          return canEdit ? `${avatar}<input type="file" id="fotoInputPanelUsr_${row.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilPanel('usuario',${row.id},this.files[0])">` : avatar;
+        }
+      },
       { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180,
         editor: canEdit ? 'input' : false,
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'nombre', c.getValue()) },
@@ -16984,11 +16998,12 @@ async function cargarUsuarios() {
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'obra_id', c.getValue() || null).then(() => { tblUsuarios = null; cargarUsuarios(); }) },
       { title: 'Activo', field: 'activo', width: 80, hozAlign: 'center',
         formatter: c => c.getValue() ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-danger">✕</span>' },
-      { title: '', field: 'id', width: 130, hozAlign: 'center', headerSort: false,
+      { title: '', field: 'id', width: 165, hozAlign: 'center', headerSort: false,
         formatter: c => {
           const row = c.getRow().getData();
           const toggleLabel = row.activo ? '🔒 Desactivar' : '🔓 Activar';
           return canEdit ? `<div style="display:flex;gap:4px">
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();generarTarjetaTrabajadorPanel(${row.id})" title="Tarjeta con QR para fichar">🪪</button>
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();cambiarPassUsuario(${row.id},'${row.nombre}')" title="Cambiar contraseña">🔑</button>
             <button class="btn btn-sm ${row.activo ? 'btn-danger' : 'btn-secondary'}" onclick="event.stopPropagation();toggleUsuario(${row.id},${row.activo})" title="${toggleLabel}">${row.activo ? '🔒' : '🔓'}</button>
           </div>` : '';
@@ -16999,6 +17014,60 @@ async function cargarUsuarios() {
   document.getElementById('searchUsuarios').oninput = function() {
     tblUsuarios.setFilter([{field:'nombre',type:'like',value:this.value},{field:'email',type:'like',value:this.value}],'or');
   };
+}
+
+// ARC-022 (11/08/2026): foto de perfil de usuarios + tarjeta imprimible con QR (el QR
+// codifica el mismo `codigo` que ya usan para fichar/entrar con código de obra).
+async function subirFotoPerfilPanel(tipo, id, file) {
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch(`${API}/foto-perfil/${tipo}/${id}`, { method: 'POST', headers: TOKEN ? { 'X-Token': TOKEN } : {}, body: form });
+    if (!res.ok) { toast('Error al subir foto', 'err'); return; }
+    toast('Foto actualizada ✓', 'ok');
+    tblUsuarios = null; cargarUsuarios();
+  } catch { toast('Error de red', 'err'); }
+}
+
+async function generarTarjetaTrabajadorPanel(id) {
+  const u = tblUsuarios?.getRow(id)?.getData();
+  if (!u) return;
+  if (!u.codigo) { toast('Este usuario no tiene código asignado', 'err'); return; }
+
+  const tmp = document.createElement('div');
+  tmp.style.display = 'none';
+  document.body.appendChild(tmp);
+  new QRCode(tmp, { text: u.codigo, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  const canvas = tmp.querySelector('canvas');
+  const qrDataUrl = canvas ? canvas.toDataURL('image/png') : '';
+  document.body.removeChild(tmp);
+  if (!qrDataUrl) { toast('No se pudo generar el QR', 'err'); return; }
+
+  const fotoUrl = u.foto_r2_key ? `${API}/foto-perfil/usuario/${u.id}?token=${TOKEN}` : '';
+  const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>Tarjeta — ${u.nombre}</title>
+<style>
+@page { size: 85.6mm 54mm; margin: 0; }
+body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;align-items:center;background:#eee;min-height:100vh}
+.card{width:85.6mm;height:54mm;background:#fff;border:1px solid #ccc;border-radius:4mm;box-sizing:border-box;padding:4mm;display:flex;gap:4mm;align-items:center}
+.foto{width:22mm;height:22mm;border-radius:50%;object-fit:cover;flex-shrink:0}
+.foto-placeholder{width:22mm;height:22mm;border-radius:50%;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:900;flex-shrink:0}
+.info{flex:1;min-width:0;overflow:hidden}
+.nombre{font-size:4mm;font-weight:900;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.codigo{font-size:2.8mm;color:#555;font-family:monospace}
+.qr{width:18mm;height:18mm;flex-shrink:0}
+@media print{body{background:#fff}.card{border:none}}
+</style></head><body>
+<div class="card">
+${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(u.nombre || '?').charAt(0).toUpperCase()}</div>`}
+<div class="info"><div class="nombre">${u.nombre}</div><div class="codigo">${u.codigo}</div></div>
+<img class="qr" src="${qrDataUrl}">
+</div>
+</body></html>`);
+  w.document.close();
+  w.print();
 }
 
 async function editarObrasAsignadas(id) {

@@ -1,5 +1,76 @@
 # Handoff — Alejandra 2.0
 
+## ARC-022 — Foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-11)
+
+- Contexto: Adrián pidió poder meter una foto en el perfil de un usuario, para generar
+  tarjetas con QR y fichar con ellas. Decisiones tomadas con él antes de implementar (vía
+  AskUserQuestion): el QR codifica el `codigo` de fichar que ya existe (no un token nuevo);
+  se genera una tarjeta imprimible con foto+nombre+QR; se escanea con la cámara del móvil de
+  un encargado, dejando el lector físico como pendiente aparte (ligado a la idea ya anotada
+  del lector externo, "no en su lugar, además de la cámara").
+- **Foto de perfil de usuarios.** El backend (`worker.js`, `/foto-perfil/:tipo/:id` línea
+  ~5522) ya soportaba `tipo='usuario'` desde siempre — solo se había conectado la UI para
+  `tipo='externo'` (`personal_externo`), nunca para usuarios con cuenta. Se generalizó
+  `subirFotoPerfilWorker`/`borrarFotoPerfilWorker` (`index.html`) para refrescar la lista
+  correcta según `tipo`, y se añadió avatar clicable + input oculto en `cargarUsuariosAdmin()`
+  (Ajustes/Usuarios). En `panel.html` se añadió una columna de avatar nueva en `tblUsuarios`
+  con el mismo patrón (`subirFotoPerfilPanel`, usando `fetch` directo con header `X-Token` —
+  no `Authorization: Bearer`, que es lo que de verdad lee `getAuth()` en este proyecto).
+- **Generación de tarjeta imprimible con QR.** No había ninguna librería de generación de QR
+  en el proyecto (`jsQR`, ya vendorizada por CDN, solo decodifica). Se añadió `qrcodejs`
+  (davidshimjs, MIT) por el mismo CDN (cdnjs) que ya usa `jsQR`, para no romper con la
+  convención existente del proyecto. `generarTarjetaTrabajador()` (`index.html`) /
+  `generarTarjetaTrabajadorPanel()` (`panel.html`): genera el QR en un `<canvas>` oculto,
+  extrae el `dataURL`, y abre una ventana de impresión con el mismo patrón ya usado en la app
+  (`imprimirPunchList()` como plantilla — `document.write` en pestaña nueva, tema claro fijo,
+  `w.print()`), con CSS a tamaño de tarjeta CR80 (85.6×54mm) vía `@page`.
+- **Fichar escaneando el QR.** Nuevo endpoint `POST /fichajes/scan` (`worker.js`, función
+  `ficharPorCodigo`, justo después de `crearFichaje`): resuelve el `codigo` escaneado contra
+  `usuarios` de la MISMA empresa del que llama (nunca cross-empresa), activo=1; aplica las
+  mismas reglas de horario/retraso que `crearFichaje` (`getHorarioParaDia`/
+  `calcMinutosRetraso`); mismo dedupe por `(empresa_id, fecha, usuario_id)` → 409 si ya
+  fichó hoy; misma restricción de rol que `crearFichaje` (nunca operario). No aplica a
+  `personal_externo` (no tiene `codigo`, no hace login por código tampoco).
+- **Escaneo con cámara, solo en `index.html`.** Se investigó primero el escáner de QR ya
+  existente (`openCamera`/`startQRLoop`/`onCodeRead`, usado para bobinas/PEMP/carretillas,
+  EPIs y herramientas) para no duplicar — pero está fuertemente acoplado a la pantalla
+  `screenModule` (tabs, campos de bobinas, OCR, etc.), así que habría sido más arriesgado
+  reutilizarlo que construir uno aislado. Se creó un modal nuevo (`modalFicharQR`) con su
+  propia cámara/canvas/loop `jsQR` (`abrirFicharCamara`/`_fqrTick`/`ficharPorQR`), un 4º FAB
+  (🪪) en Fichajes junto a los otros tres, y su propio ciclo de vida (para/cierra al navegar,
+  igual que los FABs existentes). Diseñado para escanear varias tarjetas seguidas sin cerrar
+  el modal (encargado ficha a todo el equipo de una vez), con una confirmación visual de
+  ~1.6s entre cada escaneo. **`panel.html` no tiene este botón** — solo genera la tarjeta;
+  escanear con cámara desde un panel de oficina (sin cámara trasera típica) tiene menos
+  sentido que desde el móvil que ya lleva un encargado a pie de obra.
+- **Hallazgo lateral corregido de paso (jsQR-01):** la URL de cdnjs de `jsQR`
+  (`https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js`) devuelve 404 — verificado
+  con `curl` directo, no es un problema de este entorno de pruebas. La librería ya no está
+  en cdnjs (`api.cdnjs.com/libraries/jsQR` → "Library not found"). Esto rompía en silencio
+  (sin ningún error visible para el usuario, solo un 404 en consola) el escaneo de QR de
+  bobinas, EPIs y herramientas — los tres escáneres de materiales de `index.html`, no el
+  nuevo de Fichajes. Corregido apuntando a jsdelivr
+  (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js`), verificado en el navegador que
+  `typeof jsQR === 'function'` tras el cambio (antes daba `undefined`).
+- Verificación: `node --check` limpio en `worker.js`; los `<script>` de `index.html` y
+  `panel.html` extraídos y verificados con `node --check` (sin errores de sintaxis); sin
+  patrones de encoding corrupto en el diff. Probado en el navegador contra el archivo local
+  (`file://`, sin backend real): `QRCode`/`jsQR` cargan como función, un QR de prueba se
+  genera correctamente (`canvas.toDataURL()` produce una imagen PNG válida), y los elementos
+  del DOM nuevos (FAB, modal, funciones) existen y no lanzan errores. **`panel.html` no se
+  pudo verificar igual de a fondo en el navegador de pruebas de esta sesión** (el archivo es
+  demasiado grande y la herramienta se quedó colgada al cargarlo vía `file://`, incluida en
+  una pestaña nueva) — se confirmó por sintaxis y revisión manual del diff en su lugar, sin
+  la misma prueba visual en vivo que `index.html`.
+- Despliegue: `worker.js` → `wrangler deploy` directo. `index.html`/`panel.html` → Pages,
+  un único `gh workflow run pages.yml` para todo el lote (foto+QR+jsQR+fichar-por-código).
+- Pendiente/recomendado, sin decidir: lector físico de QR aparte de la cámara (idea ya
+  anotada por Adrián, sin investigar todavía); botón de "fichar por QR" en `panel.html`
+  (decisión pendiente de si tiene sentido real de uso); decidir si conviene una verificación
+  visual real en Chrome (con login) del flujo completo antes de confiar en él para uso real
+  con datos de producción, dado que la prueba de esta sesión fue solo sintáctica/DOM-level
+  sin backend real.
+
 ## BUZON-TELEGRAM-01 — aviso casi en tiempo real + buzón de incidencias (2026-08-10)
 
 - Contexto: Adrián propuso dos ideas de producto en la misma sesión — que Alejandra avise

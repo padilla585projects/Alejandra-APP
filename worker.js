@@ -6533,6 +6533,7 @@ export default {
       }
       if (path === '/fichajes' && method === 'GET')  return await getFichajes(request, env);
       if (path === '/fichajes' && method === 'POST') return await crearFichaje(request, env, ctx);
+      if (path === '/fichajes/scan' && method === 'POST') return await ficharPorCodigo(request, env, ctx);
       if (path.startsWith('/fichajes/')) {
         const fid = parseInt(path.split('/fichajes/')[1]);
         if (method === 'PUT')    return await actualizarFichaje(fid, request, env, ctx);
@@ -11138,6 +11139,52 @@ async function crearFichaje(request, env, ctx) {
   ).run();
   ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+// FICHAJE-QR-01 (11/08/2026): fichar escaneando la tarjeta de un trabajador (el QR
+// codifica el mismo `usuarios.codigo` que ya se usa para entrar con código de obra —
+// ARC-022, decisión del Director). El encargado que escanea necesita sesión propia
+// (misma restricción que crearFichaje: nunca operario); el código solo resuelve contra
+// usuarios de SU MISMA empresa, activos. No aplica a personal_externo (no tiene código).
+async function ficharPorCodigo(request, env, ctx) {
+  const { empresa_id, rol, nombre: encargadoNombre, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const codigo = safeStr(body.codigo).trim();
+  if (!codigo) return err('Falta el código escaneado');
+
+  const usuario = await env.DB.prepare(
+    'SELECT id, nombre, departamento, obra_id FROM usuarios WHERE codigo=? AND empresa_id=? AND activo=1'
+  ).bind(codigo, empresa_id).first();
+  if (!usuario) return err('Código no reconocido', 404);
+
+  const ahora = new Date();
+  const fecha = body.fecha || ahora.toISOString().slice(0, 10);
+  const hora_entrada = body.hora || new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hour12: false }).format(ahora);
+  const obra_id = usuario.obra_id || obraAuth || null;
+
+  const dup = await env.DB.prepare(
+    'SELECT id FROM fichajes WHERE empresa_id=? AND fecha=? AND usuario_id=?'
+  ).bind(empresa_id, fecha, usuario.id).first();
+  if (dup) return err(`${usuario.nombre} ya tiene un fichaje hoy`, 409);
+
+  let estadoFinal = body.estado || 'presente';
+  let horas_extra = 0, minutos_retraso = 0;
+  if (obra_id) {
+    const horarioRow = await env.DB.prepare('SELECT * FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, obra_id).first();
+    if (horarioRow && ['presencia', 'presente'].includes(estadoFinal)) {
+      const hd = getHorarioParaDia(horarioRow, fecha);
+      const mins = calcMinutosRetraso(hora_entrada, hd.hora_entrada);
+      if (mins > 5) { minutos_retraso = mins; estadoFinal = 'retraso'; }
+    }
+  }
+
+  const r = await env.DB.prepare(
+    `INSERT INTO fichajes (empresa_id,usuario_id,obra_id,fecha,hora_entrada,horas_trabajadas,horas_extra,minutos_retraso,estado,registrado_por,departamento)
+     VALUES (?,?,?,?,?,0,?,?,?,?,?)`
+  ).bind(empresa_id, usuario.id, obra_id, fecha, hora_entrada, horas_extra, minutos_retraso, estadoFinal, encargadoNombre || rol, usuario.departamento || 'electrico').run();
+  ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
+  return json({ ok: true, id: r.meta.last_row_id, nombre: usuario.nombre, hora_entrada, estado: estadoFinal }, 201);
 }
 
 async function actualizarFichaje(id, request, env, ctx) {

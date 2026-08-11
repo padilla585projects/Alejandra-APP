@@ -42,13 +42,33 @@ Estado (actualizado 2026-08-10, tarde): **No hay ninguna tarea activa, en curso 
 - Siguiente acción exacta: ninguna. Pendiente de que el uso real confirme si hace falta
   `memory_delete` también en `alejandra-agente` (hoy solo existe en `worker.js` raíz).
 
-## ARC-022 — Foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-10)
+## ARC-022 — Foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-10/11)
 
-- Estado: **propuesta, sin decidir ni implementar** — anotada explícitamente a petición del
-  Director para no perderla ("apúntalas, no hace falta que las hagas ya").
-- Detalle completo, incluido lo que ya existe en el código y lo que falta decidir, en
-  `ARCHITECT_BACKLOG.md` (ARC-022).
-- Siguiente acción exacta: ninguna hasta que el Director decida abordarla.
+- Estado: **implementado y desplegado — pendiente lector físico (aparte) y botón de escaneo
+  en panel.html (decisión de alcance, no bloqueante)**
+- Decisiones tomadas con el Director antes de implementar: el QR codifica el `codigo` de
+  fichar ya existente; tarjeta imprimible (no solo QR digital); escaneo con cámara del móvil
+  de un encargado (lector físico queda aparte, no en su lugar).
+- Implementado: foto de perfil para `usuarios` (backend ya listo, solo faltaba UI) en
+  `index.html`/`panel.html`; tarjeta imprimible con QR (librería `qrcodejs` nueva) en ambos;
+  endpoint `POST /fichajes/scan` (`ficharPorCodigo`, `worker.js`); escáner de cámara nuevo y
+  aislado en `index.html` (FAB 🪪 en Fichajes). `panel.html` sin botón de escaneo (decisión
+  de alcance: más sentido desde el móvil).
+- Hallazgo lateral corregido de paso: URL de `jsQR` en cdnjs devolvía 404 desde hacía tiempo
+  (biblioteca retirada de cdnjs), rompiendo en silencio el escaneo de QR de bobinas/EPIs/
+  herramientas — corregida a jsdelivr.
+- Verificación: sintaxis + encoding limpios en los 3 archivos; pruebas de DOM/navegador
+  completas sobre `index.html` (QR real generado y verificado); `panel.html` sin la misma
+  verificación visual (archivo demasiado grande para la herramienta de pruebas disponible
+  en esta sesión) — verificado por sintaxis y revisión manual del diff.
+- Desplegado: `worker.js` (`wrangler deploy`) + Pages (`index.html`/`panel.html`, un único
+  publish para todo el lote).
+- Detalle completo en `HANDOFF.md`/`CHANGELOG.md`/`PROJECT_STATE.md`/`ARCHITECT_BACKLOG.md`
+  (ARC-022).
+- Siguiente acción exacta: ninguna urgente. Pendiente sin decidir: lector físico de QR;
+  verificación visual real en Chrome con login del flujo completo de fichar-por-QR antes de
+  confiar en él con datos de producción (la prueba de esta sesión fue solo sintáctica/DOM,
+  sin backend real); si conviene añadir el botón de escaneo también a `panel.html`.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 

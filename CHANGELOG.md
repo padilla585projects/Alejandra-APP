@@ -6,6 +6,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Fixed
 
+- **jsQR-01 (2026-08-11):** la URL de cdnjs de `jsQR` (`jsQR/1.4.0/jsQR.min.js`) devolvía 404 — la librería ya no está en cdnjs. Rompía en silencio (sin error visible al usuario) el escaneo de QR de bobinas, EPIs y herramientas en `index.html`. Corregida a jsdelivr (`cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js`), verificado que carga y decodifica.
+
 - **Auditoría del módulo Personal en panel.html + 23 modales sin estilo (2026-08-10):** alta de trabajadores/usuarios completamente rota (`crearUsuario()` exige `codigo`, los modales mandaban `email`/`password` y nunca lo mandaban — fallaba SIEMPRE); `getTrabajadores()` sin `obra_nombre`/`email` en el SELECT; Hojas de Tiempo llamando a un endpoint (`/personal`) que no existe en el router; y un bug de estilo más amplio de lo esperado — las clases `modal-box`/`modal-head`/`modal-foot`/`modal-content` no tenían CSS definido en ningún sitio (las reales son `modal`/`modal-header`/`modal-footer`), afectando a 14 modales incluido Formación de Obra. Commit `31fcc91`, desplegado (Worker + Pages).
   - **Tarea derivada (mismo día):** otros 9 modales (Reconocimiento, Documentación de obra, Permiso de Trabajo, Inspecciones, Subir Foto, Transmittal, Entrega, Puntos de Acción, Riesgos) tenían un bug de estructura distinto — div exterior con `class="modal"` en vez de `class="modal-overlay"`, sin fondo oscuro ni centrado al abrirse. Corregido (+ 5 llamadas rotas a `cerrarModal('id')` que no cerraban nada), verificado en el DOM real antes de publicar. Commit `4cc6463`, desplegado (Pages).
   - Detalle completo de ambos lotes en `HANDOFF.md`.
@@ -18,6 +20,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   - Verificación: `node --check` limpio en ambos workers; `npm --prefix alejandra-agente test` 183/183. Desplegado y verificado (`/health` en verde) en `alejandra-app-api` y `alejandra-agente`. Detalle completo, commits y versiones en `HANDOFF.md`.
 
 ### Added
+
+- **ARC-022 — foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-11):** subida de foto de perfil conectada para `usuarios` (el backend `/foto-perfil/:tipo/:id` ya lo soportaba, solo faltaba la UI) en `index.html` y `panel.html`. Nueva generación de tarjeta imprimible (foto+nombre+QR, tamaño CR80) vía `qrcodejs` (nueva librería vendorizada). Nuevo endpoint `POST /fichajes/scan` (`ficharPorCodigo`, `worker.js`) que resuelve el código escaneado y ficha al trabajador con las mismas reglas de horario/retraso/dedupe que el alta manual. Nuevo escáner de cámara aislado en `index.html` (FAB 🪪 en Fichajes) para fichar escaneando la tarjeta. `panel.html` recibió foto+tarjeta pero no el escaneo con cámara (decisión de alcance). Detalle en `HANDOFF.md`.
 
 - **BUZON-TELEGRAM-01 — aviso en tiempo real + buzón de incidencias (2026-08-10):** `memory_save` (`alejandra-agente/worker.js`) manda ahora un Telegram inmediato a Adrián (canal fijo ya usado para otros avisos internos) cuando `tipo='error'` e `importancia>=4` — un problema real que bloquea a un usuario ahora mismo — además de guardarlo como siempre en `alejandra_memoria` (el "buzón" que ya se puede repasar más tarde con `memory_read`/preguntándole a Alejandra). Nueva "REGLA DE INCIDENCIAS" en el prompt del módulo `app` para que sepa cuándo usarlo. Sin tabla ni tool nueva — reutiliza infraestructura existente. Alcance: solo `alejandra-agente` (donde habla con usuarios reales), no `worker.js`. Detalle en `HANDOFF.md`.
 

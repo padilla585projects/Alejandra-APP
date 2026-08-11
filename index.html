@@ -21,7 +21,12 @@
 <meta name="apple-mobile-web-app-title" content="Alejandra">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<!-- jsQR-01 (11/08/2026): la ruta de cdnjs (jsQR/1.4.0/jsQR.min.js) devolvía 404 -- la
+     librería ya no está en cdnjs. Esto rompía en silencio el escaneo de QR/código de
+     barras de bobinas, EPIs y herramientas (jsQR undefined, sin error visible para el
+     usuario, solo un 404 en consola) -- posiblemente desde hace tiempo en producción. -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -4456,6 +4461,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
     <!-- FAB: Escanear parte semanal -->
     <button id="btnScanParte" onclick="abrirScanParte()" title="Escanear parte semanal"
       style="position:fixed;bottom:72px;right:132px;width:44px;height:44px;border-radius:50%;background:#8b5cf6;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,.45);z-index:200;display:none;align-items:center;justify-content:center">📋</button>
+    <!-- FAB: Fichar por QR (ARC-022) -->
+    <button id="btnFicharQR" onclick="document.getElementById('modalFicharQR').classList.add('show')" title="Fichar por QR"
+      style="position:fixed;bottom:72px;right:186px;width:44px;height:44px;border-radius:50%;background:#f59e0b;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,.45);z-index:200;display:none;align-items:center;justify-content:center">🪪</button>
   </div>
 
   <!-- FAB: Escanear albarán bobinas (entrada o devolución, se elige al abrir) -->
@@ -4770,6 +4778,30 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       <div class="modal-actions">
         <button class="btn-primary" style="flex:1;background:#10b981" onclick="guardarFichajeEquipo()">⚡ Fichar seleccionados</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFichajeEquipo()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Fichar por QR (ARC-022) — cámara propia y aislada, no reutiliza el escáner
+       de materiales (screenModule) por estar demasiado acoplado a bobinas/PEMP/carretillas -->
+  <div class="modal-overlay" id="modalFicharQR" onclick="if(event.target===this)cerrarFicharQR()">
+    <div class="modal" style="max-height:92vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div class="modal-title" style="margin-bottom:0;flex:1">🪪 Fichar por QR</div>
+        <button onclick="cerrarFicharQR()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div class="section-sub" style="margin-bottom:10px">Apunta a la tarjeta del trabajador. Puedes escanear varias seguidas.</div>
+      <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3">
+        <video id="fqrVideo" playsinline autoplay muted style="width:100%;height:100%;object-fit:cover;display:none"></video>
+        <canvas id="fqrCanvas" style="display:none"></canvas>
+        <div id="fqrIdle" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:8px">
+          <div style="font-size:32px">📷</div>
+          <button class="btn-primary" onclick="abrirFicharCamara()">Abrir cámara</button>
+        </div>
+        <div id="fqrResultado" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;gap:6px;background:rgba(0,0,0,.72);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;text-align:center;padding:16px"></div>
+      </div>
+      <div class="modal-actions" style="margin-top:12px">
+        <button class="btn-primary btn-secondary" style="flex:1;margin-top:0" onclick="cerrarFicharQR()">Cerrar</button>
       </div>
     </div>
   </div>
@@ -7089,6 +7121,9 @@ window.notificarTurnosTelegram = notificarTurnosTelegram;
 // ════════════════════════════════════════════════════════════════════════════
 // FOTO DE PERFIL DE TRABAJADORES
 // ════════════════════════════════════════════════════════════════════════════
+// ARC-022 (11/08/2026): el backend ya soportaba tipo='usuario' desde siempre
+// (/foto-perfil/:tipo/:id), pero ningún frontend lo invocaba con ese tipo -- solo
+// 'externo' (personal_externo). Se generaliza el refresco tras subir/borrar según tipo.
 async function subirFotoPerfilWorker(tipo, id, file) {
   if (!file) return;
   const form = new FormData();
@@ -7097,7 +7132,7 @@ async function subirFotoPerfilWorker(tipo, id, file) {
     const res = await subirArchivoRaw(`/foto-perfil/${tipo}/${id}`, form);
     if (!res.ok) { toast('❌ Error al subir foto', 'err'); return; }
     toast('✅ Foto actualizada');
-    cargarPlantilla();
+    if (tipo === 'usuario') cargarUsuariosAdmin(); else cargarPlantilla();
   } catch { toast('❌ Error de red', 'err'); }
 }
 window.subirFotoPerfilWorker = subirFotoPerfilWorker;
@@ -7108,10 +7143,55 @@ async function borrarFotoPerfilWorker(tipo, id) {
     const res = await apiCall(`/foto-perfil/${tipo}/${id}`, { method: 'DELETE' });
     if (!res.ok) return toast('❌ Error', 'err');
     toast('✅ Foto eliminada');
-    cargarPlantilla();
+    if (tipo === 'usuario') cargarUsuariosAdmin(); else cargarPlantilla();
   } catch { toast('❌ Error de red', 'err'); }
 }
 window.borrarFotoPerfilWorker = borrarFotoPerfilWorker;
+
+// ARC-022: genera una tarjeta imprimible (foto + nombre + QR con el código de fichar) y
+// abre el diálogo de impresión -- mismo patrón que el resto de "ventanas de impresión" de
+// la app (documento nuevo, tema claro fijo, w.print()).
+let _usuariosAdminCache = [];
+async function generarTarjetaTrabajador(id) {
+  const u = _usuariosAdminCache.find(x => x.id === id);
+  if (!u) return;
+  if (!u.codigo) { toast('❌ Este usuario no tiene código asignado', 'err'); return; }
+
+  const tmp = document.createElement('div');
+  tmp.style.display = 'none';
+  document.body.appendChild(tmp);
+  new QRCode(tmp, { text: u.codigo, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  const canvas = tmp.querySelector('canvas');
+  const qrDataUrl = canvas ? canvas.toDataURL('image/png') : '';
+  document.body.removeChild(tmp);
+  if (!qrDataUrl) { toast('❌ No se pudo generar el QR', 'err'); return; }
+
+  const fotoUrl = u.foto_r2_key ? `${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}` : '';
+  const w = window.open('', '_blank');
+  if (!w) { toast('❌ El navegador bloqueó la ventana de impresión', 'err'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>Tarjeta — ${u.nombre}</title>
+<style>
+@page { size: 85.6mm 54mm; margin: 0; }
+body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;align-items:center;background:#eee;min-height:100vh}
+.card{width:85.6mm;height:54mm;background:#fff;border:1px solid #ccc;border-radius:4mm;box-sizing:border-box;padding:4mm;display:flex;gap:4mm;align-items:center}
+.foto{width:22mm;height:22mm;border-radius:50%;object-fit:cover;flex-shrink:0}
+.foto-placeholder{width:22mm;height:22mm;border-radius:50%;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:900;flex-shrink:0}
+.info{flex:1;min-width:0;overflow:hidden}
+.nombre{font-size:4mm;font-weight:900;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.codigo{font-size:2.8mm;color:#555;font-family:monospace}
+.qr{width:18mm;height:18mm;flex-shrink:0}
+@media print{body{background:#fff}.card{border:none}}
+</style></head><body>
+<div class="card">
+${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(u.nombre || '?').charAt(0).toUpperCase()}</div>`}
+<div class="info"><div class="nombre">${u.nombre}</div><div class="codigo">${u.codigo}</div></div>
+<img class="qr" src="${qrDataUrl}">
+</div>
+</body></html>`);
+  w.document.close();
+  w.print();
+}
+window.generarTarjetaTrabajador = generarTarjetaTrabajador;
 
 // ── NEW-28: comparativa entre obras ─────────────────────────────────────────
 async function cargarComparativaObras() {
@@ -7563,6 +7643,8 @@ function irAtras() {
   if (fabScanP) fabScanP.style.display = 'none';
   const fabScanBob = document.getElementById('btnScanBobinas');
   if (fabScanBob) fabScanBob.style.display = 'none';
+  const fabFicharQR = document.getElementById('btnFicharQR');
+  if (fabFicharQR) fabFicharQR.style.display = 'none';
   // Si estamos dentro de una carpeta en Docs, navegar dentro de Docs (no salir)
   if (document.getElementById('screenDocs')?.classList.contains('active')) {
     const docsVolverBtn = document.getElementById('docsVolverBtn');
@@ -7591,6 +7673,8 @@ function navTo(target) {
   if (fabScanBtn && target !== 'personal') fabScanBtn.style.display = 'none';
   const fabScanBob = document.getElementById('btnScanBobinas');
   if (fabScanBob && !['scan','stock','historial'].includes(target)) fabScanBob.style.display = 'none';
+  const fabFicharQR = document.getElementById('btnFicharQR');
+  if (fabFicharQR && target !== 'personal') fabFicharQR.style.display = 'none';
   // Pantallas secundarias — conservar historial para que Atrás funcione
   if (target === 'sugerencias') { showScreen('sugerencias'); return; }
   if (target === 'docs')        { showScreen('docs'); return; }
@@ -11749,17 +11833,23 @@ async function cargarUsuariosAdmin() {
     // DEPT_INFO (derivado de _DEPTS_CATALOG, la misma fuente que usa el resto de la app).
     // Email tampoco se mostraba ni se podía editar en ningún sitio — mismo gap que en
     // panel.html (GESTION-ROLES-01), ya corregido ahí; se porta aquí para tener paridad.
+    _usuariosAdminCache = usuarios;
     c.innerHTML = usuarios.map(u => {
       const dept = u.departamento || 'electrico';
       const deptInfo = DEPT_INFO[dept];
+      const avatarHtml = u.foto_r2_key
+        ? `<img src="${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer" onclick="document.getElementById('fotoInputUsr_${u.id}').click()">`
+        : `<div style="width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0;cursor:pointer" onclick="document.getElementById('fotoInputUsr_${u.id}').click()">${u.nombre.charAt(0).toUpperCase()}</div>`;
       return `
       <div class="admin-list-item" id="urow-${u.id}">
+        ${avatarHtml}<input type="file" id="fotoInputUsr_${u.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilWorker('usuario',${u.id},this.files[0])">
         <div class="admin-item-info" style="flex:1;min-width:0">
           <div class="admin-item-name">${u.nombre}</div>
           <div class="admin-item-sub">${u.email || 'sin email'}</div>
           <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptInfo ? deptInfo.icon + ' ' + deptInfo.name : dept}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0" id="uact-${u.id}">
+          <button class="btn-sm" onclick="generarTarjetaTrabajador(${u.id})" title="Tarjeta con QR para fichar" style="font-size:13px">🪪</button>
           <button class="btn-sm" onclick="editarEmailUsuario(${u.id},'${(u.email||'').replace(/'/g,"\\'")}')" title="Cambiar email" style="font-size:13px">✉️</button>
           <button class="btn-sm" onclick="editarRolUsuario(${u.id},'${u.rol}')" title="Cambiar rol / permisos" style="font-size:13px">🎖️</button>
           <button class="btn-sm" onclick="editarObraUsuario(${u.id},${u.obra_id||'null'})" title="Asignar obra" style="font-size:13px">📍</button>
@@ -18672,6 +18762,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const fab       = document.getElementById('btnNuevoFichaje');
     const fabEq     = document.getElementById('btnFichajeEquipo');
     const fabScan   = document.getElementById('btnScanParte');
+    const fabQR     = document.getElementById('btnFicharQR');
     const s       = getSession();
     const esAdmin = s?.rol !== 'operario';
 
@@ -18681,6 +18772,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (fab)     fab.style.display     = 'none';
       if (fabEq)   fabEq.style.display   = 'none';
       if (fabScan) fabScan.style.display = 'none';
+      if (fabQR)   fabQR.style.display   = 'none';
       applyModulosConfig();
       return;
     }
@@ -18696,6 +18788,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (fab)     fab.style.display     = (esAdmin && n < 3) ? 'flex' : 'none';
     if (fabEq)   fabEq.style.display   = (esAdmin && n < 3) ? 'flex' : 'none';
     if (fabScan) fabScan.style.display = (esAdmin && n < 3) ? 'flex' : 'none';
+    if (fabQR)   fabQR.style.display   = (esAdmin && n < 3) ? 'flex' : 'none';
     // Botones de acción solo para admin
     const btnEpi    = document.getElementById('btnNuevoEpi');
     const btnCarnet = document.getElementById('btnNuevoCarnet');
@@ -19292,6 +19385,87 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     toast(msg, ok > 0 ? 'ok' : 'err');
     cargarHoy();
   }
+
+  // ── Fichar por QR (ARC-022) — cámara aislada, no reutiliza el escáner de materiales ──
+  let _fqrStream = null, _fqrLoop = null, _fqrBusy = false;
+
+  async function abrirFicharCamara() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      _fqrStream = stream;
+      const video = document.getElementById('fqrVideo');
+      video.srcObject = stream;
+      video.style.display = 'block';
+      document.getElementById('fqrIdle').style.display = 'none';
+      document.getElementById('fqrResultado').style.display = 'none';
+      _fqrTick();
+    } catch {
+      toast('❌ No se pudo acceder a la cámara', 'err');
+    }
+  }
+
+  function _fqrTick() {
+    const video = document.getElementById('fqrVideo');
+    const canvas = document.getElementById('fqrCanvas');
+    if (!video || !canvas) return;
+    const ctx2d = canvas.getContext('2d');
+    function tick() {
+      if (!_fqrStream) return;
+      if (!_fqrBusy && video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx2d.drawImage(video, 0, 0);
+        const imageData = ctx2d.getImageData(0, 0, canvas.width, canvas.height);
+        const qr = typeof jsQR !== 'undefined'
+          ? jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' })
+          : null;
+        if (qr && qr.data) { ficharPorQR(qr.data.trim()); return; }
+      }
+      _fqrLoop = requestAnimationFrame(tick);
+    }
+    _fqrLoop = requestAnimationFrame(tick);
+  }
+
+  async function ficharPorQR(codigo) {
+    _fqrBusy = true;
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    const res = document.getElementById('fqrResultado');
+    try {
+      const r = await apiCall('/fichajes/scan', { method: 'POST', body: JSON.stringify({ codigo }) });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) {
+        res.style.color = '#10b981';
+        res.innerHTML = `✅<br>${data.nombre || 'Fichado'}<br><span style="font-weight:400;font-size:12px">${data.hora_entrada || ''}</span>`;
+        cargarHoy();
+      } else {
+        res.style.color = '#ef4444';
+        res.innerHTML = `⚠️<br>${data.error || 'No se pudo fichar'}`;
+      }
+    } catch {
+      res.style.color = '#ef4444';
+      res.innerHTML = '⚠️<br>Error de red';
+    }
+    res.style.display = 'flex';
+    setTimeout(() => {
+      res.style.display = 'none';
+      _fqrBusy = false;
+      if (_fqrStream) _fqrTick();
+    }, 1600);
+  }
+
+  function cerrarFicharQR() {
+    document.getElementById('modalFicharQR').classList.remove('show');
+    if (_fqrStream) { _fqrStream.getTracks().forEach(t => t.stop()); _fqrStream = null; }
+    if (_fqrLoop) { cancelAnimationFrame(_fqrLoop); _fqrLoop = null; }
+    _fqrBusy = false;
+    const video = document.getElementById('fqrVideo');
+    if (video) { video.style.display = 'none'; video.srcObject = null; }
+    document.getElementById('fqrIdle').style.display = 'flex';
+    document.getElementById('fqrResultado').style.display = 'none';
+  }
+  window.abrirFicharCamara = abrirFicharCamara;
+  window.cerrarFicharQR = cerrarFicharQR;
 
   // ── Plantilla (personal externo por obra) ──────────────────────────────────
   async function cargarPlantilla() {
