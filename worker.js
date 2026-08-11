@@ -11100,7 +11100,10 @@ async function getFichajes(request, env) {
   const uid        = url.searchParams.get('usuario_id');
   const peid       = url.searchParams.get('personal_externo_id');
 
-  let sql = `SELECT f.*, u.nombre as nombre_usuario, pe.nombre as nombre_externo, o.nombre as obra_nombre
+  // KIOSCO-01 (11/08/2026): foto añadida al SELECT para la lista de "últimos fichados" del
+  // quiosco de control de accesos (ARC-022) -- cambio aditivo, no afecta a otros llamantes.
+  let sql = `SELECT f.*, u.nombre as nombre_usuario, pe.nombre as nombre_externo, o.nombre as obra_nombre,
+             COALESCE(u.foto_r2_key, pe.foto_r2_key) as foto_r2_key
              FROM fichajes f
              LEFT JOIN usuarios u ON f.usuario_id = u.id
              LEFT JOIN personal_externo pe ON f.personal_externo_id = pe.id

@@ -25,28 +25,48 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;dis
 #loginErr{color:var(--red);font-size:13px;text-align:center;min-height:16px}
 
 /* ── Quiosco ── */
-#kioscoScreen{display:none;flex:1;flex-direction:column}
-#kioscoTop{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--border)}
-#kioscoTop .titulo{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;display:flex;align-items:center;gap:8px}
-#kioscoReloj{font-family:'Montserrat',sans-serif;font-weight:700;font-size:15px;color:var(--muted)}
+#kioscoScreen{display:none;flex:1;flex-direction:column;position:relative;overflow:hidden}
+
+/* Marca de agua de fondo -- Adrián: "logo de la empresa en el fondo, si no hay logo pues el
+   nombre" -- no hay columna de logo en la tabla empresas, se usa el nombre. */
+#kioscoWatermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;overflow:hidden;z-index:0}
+#kioscoWatermark span{font-family:'Montserrat',sans-serif;font-weight:900;font-size:min(18vw,220px);color:var(--text);opacity:.04;white-space:nowrap;text-transform:uppercase;letter-spacing:4px}
+
+#kioscoTop{display:flex;align-items:center;justify-content:space-between;padding:18px 26px;border-bottom:1px solid var(--border);position:relative;z-index:1}
+#kioscoEmpresa{font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;display:flex;align-items:center;gap:10px}
+#kioscoObraNombre{color:var(--muted);font-size:13px;font-weight:600;margin-top:2px}
+#kioscoReloj{font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px;text-align:center}
+#kioscoFecha{color:var(--muted);font-size:12px;text-align:center;text-transform:capitalize}
 #kioscoSalir{color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline}
 
-#kioscoBody{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;position:relative}
+#kioscoBody{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;position:relative;z-index:1;gap:48px}
 
-#idleView{display:flex;flex-direction:column;align-items:center;gap:18px;color:var(--muted)}
-#idleView .icono{font-size:96px;opacity:.5}
-#idleView .txt{font-family:'Montserrat',sans-serif;font-weight:700;font-size:20px}
+#idleView{display:flex;align-items:center;gap:56px}
+#idleView .idleLeft{display:flex;flex-direction:column;align-items:center;gap:14px;color:var(--muted)}
+#idleView .icono{font-size:80px;opacity:.5}
+#idleView .txt{font-family:'Montserrat',sans-serif;font-weight:700;font-size:18px}
+#idleContador{font-family:'Montserrat',sans-serif;font-weight:900;font-size:44px;color:var(--accent)}
+#idleContadorLabel{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
 
-#resultView{display:none;flex-direction:column;align-items:center;gap:14px;width:min(520px,92vw);text-align:center}
-#resultFoto{width:140px;height:140px;border-radius:50%;object-fit:cover;border:4px solid var(--border)}
-#resultInicial{width:140px;height:140px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:56px;color:#000}
-#resultNombre{font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px}
-#resultSub{color:var(--muted);font-size:15px}
+#idleLista{width:min(360px,80vw);max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+#idleLista h3{font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.idleListaItem{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 12px}
+.idleListaItem img,.idleListaItem .ini{width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.idleListaItem .ini{background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:#000}
+.idleListaItem .nombre{flex:1;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.idleListaItem .hora{font-size:12px;color:var(--muted);font-family:'Montserrat',sans-serif}
+
+#resultView{display:none;flex-direction:column;align-items:center;gap:14px;width:min(520px,92vw);text-align:center;position:relative}
+#resultFotoWrap{position:relative}
+#resultFoto{width:160px;height:160px;border-radius:50%;object-fit:cover;border:4px solid var(--border)}
+#resultInicial{width:160px;height:160px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:64px;color:#000}
+#resultAlertaBadge{display:none;position:absolute;top:-4px;right:-4px;width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;align-items:center;justify-content:center;font-size:18px;border:3px solid var(--bg);cursor:default}
+#resultNombre{font-family:'Montserrat',sans-serif;font-weight:900;font-size:34px}
+#resultSub{color:var(--muted);font-size:16px}
 #resultEstado{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;padding:6px 16px;border-radius:20px}
 #resultEstado.ok{background:var(--green)22;color:var(--green);border:1px solid var(--green)44}
 #resultEstado.warn{background:var(--red)22;color:var(--red);border:1px solid var(--red)44}
-#resultAlertas{display:flex;flex-direction:column;gap:6px;width:100%}
-#resultAlertas div{background:var(--red)22;border:1px solid var(--red)44;color:var(--red);border-radius:10px;padding:10px 14px;font-weight:600;font-size:14px}
+#resultAlertaTexto{display:none;background:var(--red)22;border:1px solid var(--red)44;color:var(--red);border-radius:10px;padding:10px 14px;font-weight:600;font-size:13px;width:100%}
 
 #scanInput{position:fixed;top:-100px;left:-100px;width:1px;height:1px;opacity:0}
 </style>
@@ -63,22 +83,39 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;dis
 </div>
 
 <div id="kioscoScreen">
+  <div id="kioscoWatermark"><span id="kioscoWatermarkTxt"></span></div>
   <div id="kioscoTop">
-    <div class="titulo">🪪 <span id="kioscoObraNombre">Control de Accesos</span></div>
-    <div id="kioscoReloj"></div>
+    <div>
+      <div id="kioscoEmpresa">🪪 <span id="kioscoEmpresaNombre">Alejandra</span></div>
+      <div id="kioscoObraNombre">Control de Accesos</div>
+    </div>
+    <div>
+      <div id="kioscoReloj"></div>
+      <div id="kioscoFecha"></div>
+    </div>
     <div id="kioscoSalir" onclick="kioscoLogout()">Salir</div>
   </div>
   <div id="kioscoBody">
     <div id="idleView">
-      <div class="icono">📇</div>
-      <div class="txt">Escanea tu tarjeta o código</div>
+      <div class="idleLeft">
+        <div class="icono">📇</div>
+        <div id="idleContador">—</div>
+        <div id="idleContadorLabel">Fichados hoy</div>
+        <div class="txt">Escanea tu tarjeta o código</div>
+      </div>
+      <div id="idleLista">
+        <h3>Últimos fichados</h3>
+        <div id="idleListaItems"></div>
+      </div>
     </div>
     <div id="resultView">
-      <div id="resultFotoWrap"></div>
+      <div id="resultFotoWrap">
+        <div id="resultAlertaBadge" title="Tiene un aviso pendiente">⚠️</div>
+      </div>
       <div id="resultNombre"></div>
       <div id="resultSub"></div>
       <div id="resultEstado"></div>
-      <div id="resultAlertas"></div>
+      <div id="resultAlertaTexto"></div>
     </div>
   </div>
 </div>
@@ -97,8 +134,14 @@ function kioscoLoadSession() {
   if (SESSION && SESSION.token) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('kioscoScreen').style.display = 'flex';
-    document.getElementById('kioscoObraNombre').textContent = SESSION.obra_nombre || SESSION.nombre || 'Control de Accesos';
+    document.getElementById('kioscoObraNombre').textContent = SESSION.obra_nombre || '';
+    const empresa = SESSION.empresa_nombre || 'Alejandra';
+    document.getElementById('kioscoEmpresaNombre').textContent = empresa;
+    document.getElementById('kioscoWatermarkTxt').textContent = empresa;
     focusScanInput();
+    cargarFichajesHoy();
+    clearInterval(window._kioscoFichajesInterval);
+    window._kioscoFichajesInterval = setInterval(cargarFichajesHoy, 60000);
   }
 }
 
@@ -112,11 +155,34 @@ async function kioscoLogin() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) { errEl.textContent = data.error || 'Código incorrecto'; return; }
     if (data.rol === 'operario') { errEl.textContent = 'Este código no tiene permisos para fichar a otros'; return; }
-    SESSION = { token: data.token, nombre: data.nombre, rol: data.rol, obra_nombre: data.obra_nombre, empresa_nombre: data.empresa_nombre };
+    SESSION = { token: data.token, nombre: data.nombre, rol: data.rol, obra_id: data.obra_id, obra_nombre: data.obra_nombre, empresa_nombre: data.empresa_nombre };
     localStorage.setItem('kiosco_session', JSON.stringify(SESSION));
     document.getElementById('loginCodigo').value = '';
     kioscoLoadSession();
   } catch { errEl.textContent = 'Error de conexión'; }
+}
+
+// KIOSCO-02 (11/08/2026): "lista de los últimos fichados hoy" + "contador de personas
+// dentro hoy" -- pedido por Adrián para no dejar la pantalla de espera vacía. Reutiliza
+// GET /fichajes (ya existente, sin endpoint nuevo), filtrado por la obra de la sesión.
+async function cargarFichajesHoy() {
+  if (!SESSION) return;
+  const hoy = new Date().toISOString().slice(0, 10);
+  try {
+    const params = new URLSearchParams({ fecha_ini: hoy, fecha_fin: hoy, limit: '500' });
+    if (SESSION.obra_id) params.set('obra_id', SESSION.obra_id);
+    const res = await fetch(`${API}/fichajes?${params}`, { headers: { 'X-Token': SESSION.token } });
+    const data = await res.json().catch(() => []);
+    const lista = Array.isArray(data) ? data : [];
+    document.getElementById('idleContador').textContent = lista.length;
+    const items = [...lista].reverse().slice(0, 8).map(f => {
+      const nombre = f.nombre_usuario || f.nombre_externo || '—';
+      const fotoUrl = f.foto_r2_key ? `${API}/foto-perfil/${f.usuario_id ? 'usuario' : 'externo'}/${f.usuario_id || f.personal_externo_id}?token=${SESSION.token}` : '';
+      const avatar = fotoUrl ? `<img src="${fotoUrl}">` : `<div class="ini">${nombre.charAt(0).toUpperCase()}</div>`;
+      return `<div class="idleListaItem">${avatar}<div class="nombre">${nombre}</div><div class="hora">${(f.hora_entrada || '').slice(0, 5)}</div></div>`;
+    }).join('');
+    document.getElementById('idleListaItems').innerHTML = items || '<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px">Nadie ha fichado todavía</div>';
+  } catch {}
 }
 document.getElementById('loginCodigo').addEventListener('keydown', e => { if (e.key === 'Enter') kioscoLogin(); });
 
@@ -187,10 +253,10 @@ function mostrarResultado(ok, data) {
   document.getElementById('resultNombre').textContent = ok ? data.nombre : (data.error || 'No reconocido');
   const sub = [];
   if (ok) {
+    if (data.empresa_nombre) sub.push(data.empresa_nombre);
     if (data.externo) sub.push('Personal externo' + (data.dni ? ` · DNI ${data.dni}` : ''));
     else if (data.rol) sub.push(data.rol);
     if (data.departamento) sub.push(data.departamento);
-    if (data.empresa_nombre) sub.push(data.empresa_nombre);
   }
   document.getElementById('resultSub').textContent = sub.join(' · ');
 
@@ -203,8 +269,23 @@ function mostrarResultado(ok, data) {
     estadoEl.textContent = '❌ No registrado';
   }
 
-  const alertasEl = document.getElementById('resultAlertas');
-  alertasEl.innerHTML = (ok && data.alertas || []).map(a => `<div>${a}</div>`).join('');
+  // KIOSCO-02: "en una esquinita si tiene algo pendiente" -- Adrián pidió que el aviso de
+  // reconocimiento/carnet caducado sea un badge discreto en la esquina de la foto, no un
+  // banner a todo lo ancho como antes.
+  const badge = document.getElementById('resultAlertaBadge');
+  const alertaTexto = document.getElementById('resultAlertaTexto');
+  const alertas = (ok && data.alertas) || [];
+  if (alertas.length) {
+    badge.style.display = 'flex';
+    alertaTexto.style.display = 'block';
+    alertaTexto.textContent = alertas.join(' · ');
+  } else {
+    badge.style.display = 'none';
+    alertaTexto.style.display = 'none';
+    alertaTexto.textContent = '';
+  }
+
+  if (ok) cargarFichajesHoy();
 
   clearTimeout(window._kioscoResetTimer);
   window._kioscoResetTimer = setTimeout(() => {
@@ -216,7 +297,9 @@ function mostrarResultado(ok, data) {
 }
 
 function kioscoReloj() {
-  document.getElementById('kioscoReloj').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });
+  const ahora = new Date();
+  document.getElementById('kioscoReloj').textContent = ahora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });
+  document.getElementById('kioscoFecha').textContent = ahora.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Madrid' });
 }
 setInterval(kioscoReloj, 1000);
 kioscoReloj();
