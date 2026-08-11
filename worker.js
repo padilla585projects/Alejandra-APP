@@ -8743,10 +8743,11 @@ async function crearUsuario(request, env) {
     if (!permitidos.includes(rolFinal)) return err('No autorizado para asignar ese rol', 403);
   }
 
+  const categoriaFinal = typeof body.categoria === 'string' ? safeStr(body.categoria).trim() || null : null;
   try {
     const r = await env.DB.prepare(
-      'INSERT INTO usuarios (nombre, codigo, rol, obra_id, departamento, activo, empresa_id) VALUES (?, ?, ?, ?, ?, 1, ?)'
-    ).bind(safeStr(nombre).trim(), safeStr(codigo).trim(), rolFinal, obraFinal || null, deptFinal, empresa_id).run();
+      'INSERT INTO usuarios (nombre, codigo, rol, obra_id, departamento, categoria, activo, empresa_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?)'
+    ).bind(safeStr(nombre).trim(), safeStr(codigo).trim(), rolFinal, obraFinal || null, deptFinal, categoriaFinal, empresa_id).run();
     return json({ ok: true, id: r.meta.last_row_id, nombre: safeStr(nombre).trim(), rol: rolFinal, departamento: deptFinal, codigo: safeStr(codigo).trim() }, 201);
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
@@ -8813,8 +8814,8 @@ async function editarUsuario(id, request, env) {
   const esPlataformaAdminEd = isSuperadmin || isAdmin;
   const esAdminRealEd = esPlataformaAdminEd || isEmpresaAdmin;
   const campos = esPlataformaAdminEd
-    ? ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra', 'email']
-    : ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'email'];
+    ? ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra', 'email', 'categoria']
+    : ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'email', 'categoria'];
   // GESTION-USUARIOS-01 (10/08/2026): "email" no era editable en absoluto (ni en el
   // frontend ni aceptado por este endpoint) — el único campo del panel de Usuarios que no
   // se podía tocar. Es la identidad de login (password y Google la buscan por email), así
@@ -10495,10 +10496,10 @@ async function crearPersonalExterno(request, env) {
   // TRABAJADORES-TIPO-01 (11/08/2026): el INSERT no aceptaba departamento -- el formulario
   // de alta de subcontratas de panel.html lo pedía pero se perdía siempre, quedando la fila
   // con el DEFAULT de la columna ('personal') sin importar lo que se eligiera.
-  const { nombre, dni, obra_id, notas, departamento } = await request.json().catch(() => ({}));
+  const { nombre, dni, obra_id, notas, departamento, categoria } = await request.json().catch(() => ({}));
   if (!safeStr(nombre).trim()) return err('Falta el nombre');
-  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas,codigo,departamento) VALUES (?,?,?,?,?,?,?)')
-    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null, generarCodigoExterno(), departamento||'personal').run();
+  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas,codigo,departamento,categoria) VALUES (?,?,?,?,?,?,?,?)')
+    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null, generarCodigoExterno(), departamento||'personal', safeStr(categoria).trim()||null).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -10525,6 +10526,7 @@ async function actualizarPersonalExterno(id, request, env) {
   if (body.obra_id  !== undefined) { campos.push('obra_id=?');  vals.push(body.obra_id||null); }
   if (body.activo   !== undefined) { campos.push('activo=?');   vals.push(body.activo); }
   if (body.notas    !== undefined) { campos.push('notas=?');    vals.push(safeStr(body.notas).trim()||null); }
+  if (body.categoria !== undefined) { campos.push('categoria=?'); vals.push(safeStr(body.categoria).trim()||null); }
   if (!campos.length) return json({ ok: true });
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE personal_externo SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
@@ -10557,13 +10559,16 @@ async function getTrabajadores(request, env) {
   // panel (tblPersonal) tiene columnas 'obra_nombre' y 'email' que quedaban siempre vacías.
   // TRABAJADORES-COLS-02 (11/08/2026): añadido codigo (tarjeta con QR, ARC-022) y
   // obra_nombre también para personal_externo -- solo lo tenía la rama de usuarios.
-  let sqlU = 'SELECT u.id, u.nombre, u.rol, u.departamento, u.obra_id, o.nombre as obra_nombre, u.email, u.activo, u.codigo, NULL as dni, "app" as tipo, u.foto_r2_key, CASE WHEN u.telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios u LEFT JOIN obras o ON o.id = u.obra_id WHERE u.empresa_id=? AND u.activo=1';
+  // CATEGORIA-PROFESIONAL-01 (11/08/2026): Adrián -- "1categoria profesionale es diferete
+  // de rol,eso si tiene que estar" -- nueva columna `categoria` (texto libre: Oficial 1ª,
+  // Peón, Encargado...), distinta del rol de acceso a la app.
+  let sqlU = 'SELECT u.id, u.nombre, u.rol, u.categoria, u.departamento, u.obra_id, o.nombre as obra_nombre, u.email, u.activo, u.codigo, NULL as dni, "app" as tipo, u.foto_r2_key, CASE WHEN u.telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios u LEFT JOIN obras o ON o.id = u.obra_id WHERE u.empresa_id=? AND u.activo=1';
   const paramsU = [empresa_id];
   if (obra_id) { sqlU += ' AND u.obra_id=?'; paramsU.push(parseInt(obra_id)); }
   if (deptFilter) { sqlU += ' AND u.departamento=?'; paramsU.push(deptFilter); }
   sqlU += ' ORDER BY u.nombre';
 
-  let sqlP = 'SELECT p.id, p.nombre, NULL as rol, p.departamento, p.obra_id, o.nombre as obra_nombre, p.dni, p.codigo, "externo" as tipo, p.foto_r2_key, 0 as tiene_telegram FROM personal_externo p LEFT JOIN obras o ON o.id = p.obra_id WHERE p.empresa_id=? AND p.activo=1';
+  let sqlP = 'SELECT p.id, p.nombre, NULL as rol, p.categoria, p.departamento, p.obra_id, o.nombre as obra_nombre, p.dni, p.codigo, "externo" as tipo, p.foto_r2_key, 0 as tiene_telegram FROM personal_externo p LEFT JOIN obras o ON o.id = p.obra_id WHERE p.empresa_id=? AND p.activo=1';
   const paramsP = [empresa_id];
   if (obra_id) { sqlP += ' AND p.obra_id=?'; paramsP.push(parseInt(obra_id)); }
   if (deptFilter) { sqlP += ' AND p.departamento=?'; paramsP.push(deptFilter); }

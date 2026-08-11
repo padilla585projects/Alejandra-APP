@@ -4839,6 +4839,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </select>
       </div>
       <div class="form-group">
+        <label class="form-label">Categoría profesional (opcional)</label>
+        <input class="form-input" id="personalExtCategoria" placeholder="Oficial 1ª, Peón...">
+      </div>
+      <div class="form-group">
         <label class="form-label">Notas (opcional)</label>
         <input class="form-input" id="personalExtNotas" placeholder="Empresa subcontrata, especialidad…">
       </div>
@@ -7283,7 +7287,6 @@ body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;a
 .nombre{font-size:3.6mm;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#101823}
 .empresa{font-size:2.6mm;font-weight:700;color:#1e3a5f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .linea{font-size:2.3mm;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.codigo{font-size:2.4mm;color:#888;font-family:monospace;margin-top:.4mm}
 .qr{width:16mm;height:16mm;flex-shrink:0}
 @media print{body{background:#fff}.card{border:none}}
 </style></head><body>
@@ -7294,7 +7297,6 @@ ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholde
   ${empresa ? `<div class="empresa">${empresa}</div>` : ''}
   ${departamento || rolTexto ? `<div class="linea">${[departamento, rolTexto].filter(Boolean).join(' · ')}</div>` : ''}
   ${obra ? `<div class="linea">🏗 ${obra}</div>` : ''}
-  <div class="codigo">${codigo}</div>
 </div>
 <img class="qr" src="${qrDataUrl}">
 </div>
@@ -7313,7 +7315,9 @@ async function generarTarjetaTrabajador(id) {
     nombre: u.nombre, codigo: u.codigo, fotoUrl,
     empresa: getSession()?.empresa_nombre || '',
     departamento: deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (u.departamento || ''),
-    rolTexto: u.rol || '',
+    // CATEGORIA-PROFESIONAL-01: Adrián -- "el rol no hace falta en la tarjeta, eso es
+    // interno de la app" -- categoría profesional (Oficial 1ª, Encargado...), no el rol.
+    rolTexto: u.categoria || '',
     obra: u.obra_nombre || '',
   });
 }
@@ -7340,7 +7344,7 @@ async function generarTarjetaExterno(id) {
     nombre: p.nombre, codigo, fotoUrl,
     empresa: getSession()?.empresa_nombre || '',
     departamento: deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (p.departamento || ''),
-    rolTexto: 'Personal externo' + (p.dni ? ` · DNI ${p.dni}` : ''),
+    rolTexto: [p.categoria || null, p.dni ? `DNI ${p.dni}` : null].filter(Boolean).join(' · '),
     obra: p.obra_nombre || '',
   });
 }
@@ -19699,6 +19703,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('personalExtId').value    = id || '';
     document.getElementById('personalExtNombre').value = '';
     document.getElementById('personalExtDni').value    = '';
+    document.getElementById('personalExtCategoria').value = '';
     document.getElementById('personalExtNotas').value  = '';
     document.getElementById('modalPersonalExtTitulo').textContent = id ? 'Editar trabajador' : 'Añadir trabajador';
 
@@ -19721,6 +19726,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           if (p) {
             document.getElementById('personalExtNombre').value = p.nombre || '';
             document.getElementById('personalExtDni').value    = p.dni    || '';
+            document.getElementById('personalExtCategoria').value = p.categoria || '';
             document.getElementById('personalExtNotas').value  = p.notas  || '';
             if (p.obra_id) obraSel.value = p.obra_id;
           }
@@ -19745,11 +19751,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const nombre = document.getElementById('personalExtNombre').value.trim();
     const dni    = document.getElementById('personalExtDni').value.trim()    || null;
     const obraId = document.getElementById('personalExtObra').value           || null;
+    const categoria = document.getElementById('personalExtCategoria').value.trim() || null;
     const notas  = document.getElementById('personalExtNotas').value.trim()  || null;
 
     if (!nombre) return toast('⚠️ El nombre es obligatorio', 'err');
 
-    const body = { nombre, dni, obra_id: obraId ? parseInt(obraId) : null, notas };
+    const body = { nombre, dni, obra_id: obraId ? parseInt(obraId) : null, categoria, notas };
     try {
       const r = id
         ? await apiCall(`/personal-externo/${id}`, { method:'PUT',  body: JSON.stringify(body) })

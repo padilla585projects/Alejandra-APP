@@ -13661,6 +13661,10 @@ function _construirTablaPersonal(data) {
         }
       },
       { title: 'Departamento', field: 'departamento', sorter: 'string', width: 140 },
+      // CATEGORIA-PROFESIONAL-01: distinta del rol de acceso a la app (Oficial 1ª, Peón...).
+      { title: 'Categoría', field: 'categoria', sorter: 'string', width: 130,
+        editor: canEdit ? 'input' : false,
+        cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'categoria', cell.getValue()) },
       { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140 },
       { title: 'Email', field: 'email', sorter: 'string', minWidth: 180,
         // personal_externo no tiene columna email en el backend -- sin editor para esas filas.
@@ -13724,7 +13728,10 @@ async function generarTarjetaPersonalPanel(id, tipo) {
   const fotoUrl = row.foto_r2_key ? `${API}/foto-perfil/${tipo}/${id}?token=${TOKEN}&v=${encodeURIComponent(row.foto_r2_key)}` : '';
   const deptInfo = _DEPTS_CATALOG[row.departamento];
   const departamento = deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (row.departamento || '');
-  const rolTexto = tipo === 'externo' ? ('Personal externo' + (row.dni ? ` · DNI ${row.dni}` : '')) : (row.rol || '');
+  // CATEGORIA-PROFESIONAL-01 (11/08/2026): Adrián -- "el rol no hace falta en la tarjeta,
+  // eso es interno de la app" + "falta el DNI y la categoria". Categoría profesional (no
+  // el rol de acceso) + DNI para externos.
+  const rolTexto = [row.categoria || null, tipo === 'externo' && row.dni ? `DNI ${row.dni}` : null].filter(Boolean).join(' · ');
 
   const w = window.open('', '_blank');
   if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
@@ -13739,7 +13746,6 @@ body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;a
 .nombre{font-size:3.6mm;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#101823}
 .empresa{font-size:2.6mm;font-weight:700;color:#1e3a5f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .linea{font-size:2.3mm;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.codigo{font-size:2.4mm;color:#888;font-family:monospace;margin-top:.4mm}
 .qr{width:16mm;height:16mm;flex-shrink:0}
 @media print{body{background:#fff}.card{border:none}}
 </style></head><body>
@@ -13750,7 +13756,6 @@ ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholde
   <div class="empresa">${SESSION.empresa_nombre || ''}</div>
   ${departamento || rolTexto ? `<div class="linea">${[departamento, rolTexto].filter(Boolean).join(' · ')}</div>` : ''}
   ${row.obra_nombre ? `<div class="linea">🏗 ${row.obra_nombre}</div>` : ''}
-  <div class="codigo">${codigo}</div>
 </div>
 <img class="qr" src="${qrDataUrl}">
 </div>
@@ -13811,12 +13816,14 @@ function _abrirModalPersonalTipo(tipo) {
           <select class="form-select" id="mDept">${_ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('')}</select>
         </div>
       </div>
+      <div class="form-group"><div class="form-label">Categoría profesional (opcional)</div><input class="form-input" id="mCategoria" placeholder="Oficial 1ª, Encargado..."></div>
     `, async () => {
       const body = {
         nombre: document.getElementById('mNombre').value.trim(),
         codigo: document.getElementById('mCodigo').value.trim(),
         rol: document.getElementById('mRol').value,
         departamento: document.getElementById('mDept').value,
+        categoria: document.getElementById('mCategoria').value.trim() || null,
       };
       if (!body.nombre || !body.codigo) { toast('Nombre y código son obligatorios', 'err'); return; }
       const r = await api('/usuarios', { method: 'POST', body: JSON.stringify(body) });
@@ -13838,6 +13845,7 @@ function _abrirModalPersonalTipo(tipo) {
           <select class="form-select" id="mObraExt"><option value="">— Sin asignar —</option>${obraOpts}</select>
         </div>
       </div>
+      <div class="form-group"><div class="form-label">Categoría profesional (opcional)</div><input class="form-input" id="mCategoriaExt" placeholder="Oficial 1ª, Peón..."></div>
       <div class="form-group"><div class="form-label">Notas (opcional)</div><textarea class="form-input" id="mNotasExt" rows="2"></textarea></div>
     `, async () => {
       const body = {
@@ -13845,6 +13853,7 @@ function _abrirModalPersonalTipo(tipo) {
         dni: document.getElementById('mDniExt').value.trim() || null,
         departamento: document.getElementById('mDeptExt').value,
         obra_id: document.getElementById('mObraExt').value || null,
+        categoria: document.getElementById('mCategoriaExt').value.trim() || null,
         notas: document.getElementById('mNotasExt').value.trim() || null,
       };
       if (!body.nombre) { toast('El nombre es obligatorio', 'err'); return; }
@@ -17400,13 +17409,13 @@ body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;a
 .foto-placeholder{width:22mm;height:22mm;border-radius:50%;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:900;flex-shrink:0}
 .info{flex:1;min-width:0;overflow:hidden}
 .nombre{font-size:4mm;font-weight:900;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.codigo{font-size:2.8mm;color:#555;font-family:monospace}
+.categoria{font-size:2.8mm;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qr{width:18mm;height:18mm;flex-shrink:0}
 @media print{body{background:#fff}.card{border:none}}
 </style></head><body>
 <div class="card">
 ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(u.nombre || '?').charAt(0).toUpperCase()}</div>`}
-<div class="info"><div class="nombre">${u.nombre}</div><div class="codigo">${u.codigo}</div></div>
+<div class="info"><div class="nombre">${u.nombre}</div>${u.categoria ? `<div class="categoria">${u.categoria}</div>` : ''}</div>
 <img class="qr" src="${qrDataUrl}">
 </div>
 </body></html>`);
