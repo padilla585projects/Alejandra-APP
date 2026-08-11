@@ -1082,18 +1082,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <!-- DEPT-CPD-01 (09/08/2026): "Dotación EPIs" visible para todos los departamentos
-           de oficio, cada uno viendo solo los EPIs de su propio equipo (getEpisAsignados,
-           worker.js, ya filtra por departamento salvo roles privilegiados). Reutiliza la
-           misma pantalla/lógica de la pestaña de Personal (personalSelTab(4)). -->
-      <div class="module-card" id="cardEpisDotacion" onclick="navTo('episDotacion')">
-        <div class="module-emoji">🦺</div>
-        <div class="module-info">
-          <div class="module-name">Dotación EPIs</div>
-          <div class="module-desc">EPIs asignados a cada trabajador</div>
-        </div>
-        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
-      </div>
       <div class="module-card" id="cardPemp" onclick="selectModule('pemp')">
         <div class="module-emoji">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
@@ -1149,6 +1137,20 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div class="module-desc">Solicitudes de material</div>
         </div>
         <div class="module-count" id="cntPedidos" style="background:#8b5cf6">–</div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <!-- DEPT-CPD-01 (09/08/2026): "Dotación EPIs" visible para todos los departamentos
+           de oficio, cada uno viendo solo los EPIs de su propio equipo (getEpisAsignados,
+           worker.js, ya filtra por departamento salvo roles privilegiados). Reutiliza la
+           misma pantalla/lógica de la pestaña de Personal (personalSelTab(4)).
+           EPIS-ORDEN-01 (11/08/2026): movida debajo de Pedidos -- Adrián: "no se va a usar
+           mucho" -- antes aparecía arriba del todo, entre Sondas CPD y PEMP. -->
+      <div class="module-card" id="cardEpisDotacion" onclick="navTo('episDotacion')">
+        <div class="module-emoji">🦺</div>
+        <div class="module-info">
+          <div class="module-name">Dotación EPIs</div>
+          <div class="module-desc">EPIs asignados a cada trabajador</div>
+        </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardCalendario" onclick="navTo('calendario')" style="display:none;border-left:3px solid #6366f1">
@@ -14592,7 +14594,9 @@ if ('serviceWorker' in navigator) {
         document.getElementById('kitNumero').value = '';
         document.getElementById('kitNombre').value = '';
         document.getElementById('kitComponentes').value = 0;
-        document.getElementById('kitObra').value = '';
+        // PEDIDO-OBRA-01: mismo patrón que herrObra -- autorellenar con la obra de la
+        // sesión en vez de dejarlo en blanco, igual que ya hacía "Nueva herramienta".
+        document.getElementById('kitObra').value = getSession()?.obra_id || '';
         document.getElementById('kitAsignado').value = '';
         document.getElementById('kitNotas').value = '';
         document.getElementById('modalKitTitulo').textContent = '📋 Nuevo Kit';
@@ -14726,7 +14730,12 @@ if ('serviceWorker' in navigator) {
     document.getElementById('pedUnidad').value      = pedido?.unidad      || 'ud';
     document.getElementById('pedNotas').value       = pedido?.notas       || '';
     cargarObrasSelectPedido().then(() => {
-      if (pedido?.obra_id) document.getElementById('pedObra').value = pedido.obra_id;
+      // PEDIDO-OBRA-01 (11/08/2026): Adrián -- "al crear un pedido, debe de autorellenarse
+      // la obra sola puesto que ya entraste con obra seleccionada". Antes solo se rellenaba
+      // al EDITAR un pedido ya existente (pedido.obra_id); uno nuevo siempre arrancaba en
+      // "— Sin obra —" pese a que la sesión ya tiene una obra elegida.
+      const obraId = pedido?.obra_id || getSession()?.obra_id;
+      if (obraId) document.getElementById('pedObra').value = obraId;
     });
     document.getElementById('modalPedido').classList.add('show');
   }
@@ -19718,9 +19727,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         }
       } catch {}
     } else {
-      // Pre-seleccionar la obra del filtro activo si hay una
+      // PEDIDO-OBRA-01: si no hay filtro de obra activo, usar la obra de la sesión antes
+      // que dejarlo en blanco -- mismo criterio que el resto de formularios de alta.
       const filtroObra = document.getElementById('plantillaFiltroObra')?.value;
-      if (filtroObra) obraSel.value = filtroObra;
+      obraSel.value = filtroObra || getSession()?.obra_id || '';
     }
 
     document.getElementById('modalPersonalExt').classList.add('show');
