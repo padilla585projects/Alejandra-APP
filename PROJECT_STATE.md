@@ -5,6 +5,10 @@
 
 ## Auditoría del módulo de Pedidos de material (2026-08-11)
 
+## Auditoría del cerebro de Alejandra — correcciones de aislamiento (2026-08-11)
+
+La nueva auditoría confirmó mejoras reales en el Motor de Decisión (N0/N1 con decisión previa y trazas), pero detectó cuatro defectos: `recuperar_conversacion` podía devolver resúmenes de otros usuarios; `leer_estado` exponía métricas globales a cualquier sesión; una traza de decisión que fallara al persistir no bloqueaba la tool; y `memory_save` remitía título/contenido de incidencias a Telegram. El fix `SEC-AGENT-AUDIT-ISOLATION` limita los resúmenes al `usuario_id` autenticado, acota estado/memoria por tenant y logs por usuario, hace fail-closed la traza de decisión y reduce Telegram a una notificación sin contenido. No requiere migración D1 ni modifica datos existentes. También actualiza la `compatibility_date` del Worker a `2026-08-11`.
+
 A petición de Adrián, mismo criterio que Personal/Fichajes. 4 bugs reales confirmados y
 corregidos: **Almacén (y Seguridad) nunca veían pedidos de otros departamentos** pese a ser
 su función documentada (`getPedidos` no incluía `departamento==='almacen'`/

@@ -1,5 +1,14 @@
 # Handoff — Alejandra 2.0
 
+## SEC-AGENT-AUDIT-ISOLATION — pendiente de integración (2026-08-11)
+
+- Rama: `codex/fix-agent-audit-isolation`.
+- Hallazgos corregidos: `recuperar_conversacion` filtraba por coincidencia de texto sin limitar `usuario_id`; `leer_estado` exponía conteos globales y títulos de decisiones; `registrarTraza()` ocultaba errores y el Motor continuaba; `memory_save` reenviaba contenido de incidencias a Telegram.
+- Cambio: los resúmenes se limitan a `usuario_id`; estado/memoria se limitan a `empresa_id`, logs a `usuario_id` y la configuración solo se ve desde desarrollo verificado; las decisiones se rechazan si la traza no se persiste; Telegram solo recibe una alerta sin contenido. `compatibility_date` pasa a `2026-08-11`.
+- Riesgo/rollback: no cambia datos ni esquema. Revertir restaura las exposiciones y el fail-open de trazas, por lo que solo procede ante una regresión funcional demostrada.
+- Pruebas: `node --check alejandra-agente/worker.js`; agente 193/193; núcleo 57/57; encoding y diff sin errores.
+- Siguiente acción exacta: PR, CI, despliegue manual de `alejandra-agente` y comprobación manual de `/health`.
+
 ## Auditoría del módulo de Pedidos de material (2026-08-11)
 
 - Contexto: Adrián pidió el mismo tipo de auditoría que a Personal/Fichajes, esta vez sobre
