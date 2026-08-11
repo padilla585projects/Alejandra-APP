@@ -20802,6 +20802,12 @@ async function aplicarRetencionAhora() {
 // ── MODAL ──────────────────────────────────────────────────────
 let _modalCallback = null;
 function abrirModal(titulo, html, onOk) {
+  // TRABAJADORES-TIPO-01: abrirModalPersonal() sustituye modalFooter por solo "Cancelar"
+  // (el paso de elegir tipo no tiene botón Guardar propio) y nunca lo restauraba -- el
+  // siguiente abrirModal() (el formulario real) se quedaba sin #modalOkBtn y no había forma
+  // de guardar. Restaurar el footer por defecto aquí cubre este y cualquier otro caso futuro
+  // en que un consumidor de abrirModal() deje el footer en un estado no estándar.
+  document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button><button class="btn btn-primary" id="modalOkBtn">Guardar</button>';
   document.getElementById('modalTitle').textContent = titulo;
   document.getElementById('modalBody').innerHTML = html;
   _modalCallback = onOk;
