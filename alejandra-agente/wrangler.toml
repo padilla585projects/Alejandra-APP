@@ -1,6 +1,6 @@
 name = "alejandra-agente"
 main = "worker.js"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-08-11"
 preview_urls = false
 account_id = "d65ead2b2967bf68ff3848a36cd7b1b4"
 
