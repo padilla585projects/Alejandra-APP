@@ -74,10 +74,22 @@ Estado (actualizado 2026-08-10, tarde): **No hay ninguna tarea activa, en curso 
   publish para todo el lote) + migración D1 (`wrangler d1 execute --remote`).
 - Detalle completo en `HANDOFF.md`/`CHANGELOG.md`/`PROJECT_STATE.md`/`ARCHITECT_BACKLOG.md`
   (ARC-022).
+- **Vuelta final (mismo día):** foto de trabajador desde el móvil emparejado — reutiliza el
+  mecanismo de escaneo remoto ya existente (`sync_dispositivos`/`sync_eventos`), nuevo
+  subtipo `foto_perfil`. `worker.js` (`_procesarScanResultado`) enruta a `usuarios`/
+  `personal_externo`; `panel.html` (`rsPedirFotoTrabajador`, botón 📱 junto al avatar);
+  `index.html` reenvía `destino_tipo`/`destino_id` sin decidir nada. Sin tabla ni endpoint
+  de emparejamiento nuevo. De paso, fix de bug real reportado por Adrián: dos secciones
+  "🔺 Seguridad" duplicadas en el sidebar del panel (vista "Todos los departamentos") —
+  `construirDirectorioDepartamentos()` creaba un bloque nuevo en vez de usar el ya
+  existente. Verificado por sintaxis/encoding; sin dos dispositivos reales emparejados en
+  esta sesión de pruebas. Desplegado (Worker + Pages).
 - Siguiente acción exacta: ninguna urgente. Pendiente sin decidir: probar el flujo completo
   con login real en Chrome antes de dejar el quiosco funcionando sin supervisión con datos
-  de producción; si el botón "Salir" del quiosco necesita alguna protección extra; si
-  conviene añadir tarjeta/gestión de personal externo también a `panel.html`.
+  de producción; probar la foto por móvil con Adrián citando a un trabajador real; si el
+  botón "Salir" del quiosco necesita alguna protección extra; si conviene añadir tarjeta/
+  gestión de personal externo y el botón 📱 de foto también a `panel.html`/`index.html`
+  Plantilla respectivamente.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 

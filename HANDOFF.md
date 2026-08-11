@@ -1,5 +1,70 @@
 # Handoff — Alejandra 2.0
 
+## Fix — dos secciones "Seguridad" duplicadas en el sidebar de panel.html (2026-08-11)
+
+- Adrián: "me he fijado que tengo dos desplegables de Seguridad" — reportado justo después
+  de añadir el acceso rápido al Kiosco en el selector de departamentos del topbar.
+- Causa: `construirDirectorioDepartamentos()` (se ejecuta cuando un admin ve "Todos los
+  departamentos") trata Seguridad como si fuera una sección "plana" genérica que hay que
+  reemplazar por un bloque propio — igual que hace con Inventarios/Construcción/Pedidos —
+  pero Seguridad **ya tiene** su propia sección real y completa (`data-sid="seguridad"`:
+  Carnets, Reconocimientos, Permisos de Trabajo, ATS, Accidentes, Registro), así que se
+  quedaban las dos cabeceras "🔺 Seguridad" visibles a la vez: la real, y una segunda solo
+  con el botón de stock de material clonado.
+- Fix: en vez de crear un segundo bloque `dept-seguridad`, el stock de material se inserta
+  ahora directamente como un ítem más dentro de la sección real ya existente.
+- Verificación: `node --check` limpio; sin encoding corrupto. Sin verificación visual en
+  navegador (la herramienta de pruebas no pudo cargar `panel.html` de forma fiable esta
+  sesión) — confirmado por lectura del código y del flujo de ejecución.
+- Desplegado en el mismo publish de Pages que el resto del lote de esta sesión.
+
+## ARC-022, tercera vuelta — foto de trabajador desde el móvil emparejado (2026-08-11)
+
+- Contexto: tras montar el quiosco, Adrián preguntó por el flujo real de alta ("los citamos
+  en oficina") y pidió que se pudiera hacer la foto con el móvil (el mismo encargado tiene
+  la app instalada ahí) en vez de tener que subir un archivo ya existente desde el panel —
+  "un estilo a cuando lo usamos como scaner", refiriéndose explícitamente al mecanismo ya
+  existente de "Escanear con el móvil".
+- **Reutiliza al 100% la infraestructura ya existente**, sin tabla ni endpoint nuevo de
+  emparejamiento: el mecanismo `sync_dispositivos`/`sync_eventos` (`/sync/ping`,
+  `/sync/evento`, `/sync/eventos`) ya soportaba mandar una foto del móvil a Office para 6
+  subtipos (documento/factura/albarán/foto_obra/bobina/plano) vía polling HTTP simple (sin
+  QR, sin WebSocket — el emparejamiento es implícito por `usuario_id`, mismo login en panel
+  y app). Se añadió un 7º subtipo: `foto_perfil`.
+- **`worker.js`, `_procesarScanResultado()`** (línea ~16146): nueva rama `else if (subtipo
+  === 'foto_perfil')` — lee `datos.destino_tipo`/`datos.destino_id` (puestos por quien pidió
+  la foto desde el panel), actualiza `usuarios.foto_r2_key`/`personal_externo.foto_r2_key`
+  reutilizando el `r2Key` que la función ya sube arriba para TODOS los subtipos (sin doble
+  subida), y borra la foto anterior si había una — mismo criterio que `subirFotoPerfil()`.
+- **`panel.html`**: nueva función `rsPedirFotoTrabajador(destTipo, destId, nombre)` — versión
+  simplificada de `rsEnviarScan()` sin el selector de tipo genérico (aquí el subtipo y el
+  destino ya se conocen), reutilizando el mismo `_rsScanPendiente`/polling/temporizador de
+  2 min que el resto del mecanismo. Nuevo botón 📱 junto al avatar en `tblUsuarios`
+  (columna de foto). Al recibir el resultado, `_rsProcesarEvento()` detecta
+  `subtipo==='foto_perfil'` y refresca `cargarUsuarios()` automáticamente — no hace falta
+  recargar la página para ver la foto nueva.
+- **`index.html` (lado móvil)**: `_rmPendiente` ahora guarda también `destino_tipo`/
+  `destino_id` del `scan_request` recibido, y `_rmProcesarFoto()` los reenvía tal cual en el
+  `scan_resultado` — el móvil nunca decide a quién va la foto, solo la toma y la reenvía con
+  el destino que ya traía la solicitud. Añadida entrada `foto_perfil` a `RM_TIPOS`/
+  `_RM_DESTINO_MSG` para que la pantalla de "Escaneo solicitado" en el móvil muestre "🪪 Foto
+  de perfil" en vez de caer al genérico "📄 Documento".
+- **Límite de tamaño ya cubierto por el mecanismo existente, sin tocar nada**: `/sync/evento`
+  es JSON (límite global de 2MB por `Content-Length`, `SEC-AUDIT-07`), y `_rmCompressImage()`
+  ya redimensiona a máx. 1600px/calidad 0.8 antes de codificar a base64 — suficiente para una
+  foto de carné, no hizo falta ningún ajuste de compresión.
+- Verificación: `node --check` limpio en los tres archivos (`worker.js`/`index.html`/
+  `panel.html`); sin patrones de encoding corrupto. Sin verificación visual en navegador con
+  dos dispositivos reales emparejados (necesitaría una sesión real de panel+móvil a la vez,
+  fuera del alcance de esta sesión de pruebas) — queda pendiente probarlo con Adrián citando
+  a un trabajador real.
+- Despliegue: `worker.js` → `wrangler deploy`. `index.html`/`panel.html` → Pages (mismo
+  publish que el resto de fixes de esta sesión, ver más abajo).
+- Pendiente/recomendado, sin decidir: el mismo botón 📱 no se añadió a la Plantilla de
+  `personal_externo` en `index.html` (solo a `tblUsuarios` en `panel.html`) — decisión de
+  alcance, no se pidió explícitamente para ese caso; valorar si tiene sentido añadirlo ahí
+  también más adelante.
+
 ## ARC-022, segunda vuelta — control de accesos con quiosco de autofichaje (2026-08-11)
 
 - Contexto: tras el primer lote (ver sección siguiente, más abajo), Adrián aclaró el caso de

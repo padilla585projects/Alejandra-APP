@@ -20560,7 +20560,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   const RM_TIPOS = {
     documento: '📄 Documento', factura: '🧾 Factura', albaran: '📋 Albarán',
-    foto_obra: '🏗️ Foto de obra', bobina: '🔌 Bobina / Material', plano: '📐 Plano'
+    foto_obra: '🏗️ Foto de obra', bobina: '🔌 Bobina / Material', plano: '📐 Plano',
+    foto_perfil: '🪪 Foto de perfil',
   };
 
   function _rmHeaders() {
@@ -20631,7 +20632,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function _rmProcesarEvento(ev) {
     const datos = typeof ev.datos === 'string' ? JSON.parse(ev.datos || '{}') : (ev.datos || {});
     if (ev.tipo === 'scan_request' && !_rmPendiente) {
-      _rmPendiente = { id: ev.id, subtipo: datos.subtipo || 'documento', contexto: datos.contexto || '' };
+      // ARC-022: destino_tipo/destino_id (foto_perfil) se guardan aquí y se reenvían tal
+      // cual en el scan_resultado -- el móvil no decide a quién va la foto, solo la toma.
+      _rmPendiente = {
+        id: ev.id, subtipo: datos.subtipo || 'documento', contexto: datos.contexto || '',
+        destino_tipo: datos.destino_tipo || null, destino_id: datos.destino_id || null,
+      };
       _rmMostrarSolicitud(_rmPendiente);
     } else if (ev.tipo === 'scan_cancel') {
       if (_rmPendiente) {
@@ -20709,6 +20715,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     foto_obra:  '🏗️ Añadida a la Galería de la obra.',
     plano:      '📐 Guardado en Planos como borrador, pendiente de revisar.',
     bobina:     '🔌 Enviado — Alejandra está leyendo los datos, revísalo en Office antes de guardar.',
+    foto_perfil: '🪪 Foto de perfil actualizada.',
   };
 
   async function _rmProcesarFoto(file) {
@@ -20731,6 +20738,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           datos: {
             subtipo: _rmPendiente.subtipo,
             contexto: _rmPendiente.contexto,
+            destino_tipo: _rmPendiente.destino_tipo,
+            destino_id: _rmPendiente.destino_id,
             imagen_base64: base64,
             descripcion: (RM_TIPOS[_rmPendiente.subtipo] || 'Documento') + ' escaneado desde el móvil',
             timestamp: new Date().toISOString()

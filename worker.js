@@ -16241,6 +16241,22 @@ async function _procesarScanResultado(env, s, datos) {
           if (jm) await guardarExtraccion(jm[0]);
         }
       } catch {} // sin extracción IA, queda igualmente pendiente para revisar a mano
+
+    } else if (subtipo === 'foto_perfil') {
+      // ARC-022 (11/08/2026): foto de perfil tomada con el móvil emparejado (mismo
+      // mecanismo de escaneo remoto ya usado para documentos/albaranes/fotos de obra).
+      // destino_tipo ('usuario'|'externo') y destino_id los pone quien pidió la foto desde
+      // el panel (rsPedirFotoTrabajador) -- reutiliza el r2Key ya subido arriba, sin
+      // doble subida; borra la foto anterior si había una, igual que subirFotoPerfil().
+      const destTipo = datos.destino_tipo === 'externo' ? 'externo' : 'usuario';
+      const destId = parseInt(datos.destino_id, 10);
+      if (destId) {
+        const tabla = destTipo === 'usuario' ? 'usuarios' : 'personal_externo';
+        const row = await env.DB.prepare(`SELECT foto_r2_key FROM ${tabla} WHERE id=? AND empresa_id=?`).bind(destId, empresa_id).first();
+        await env.DB.prepare(`UPDATE ${tabla} SET foto_r2_key=? WHERE id=? AND empresa_id=?`).bind(r2Key, destId, empresa_id).run();
+        if (row?.foto_r2_key && row.foto_r2_key !== r2Key) { try { await env.FILES.delete(row.foto_r2_key); } catch {} }
+        await marcarConfirmado(tabla, destId);
+      }
     }
     // subtipo desconocido: queda 'pendiente' sin destino automático, revisable en /escaneos-remotos
   } catch (e) {

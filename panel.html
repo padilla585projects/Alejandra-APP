@@ -16972,7 +16972,7 @@ async function cargarUsuarios() {
     columns: [
       // ARC-022 (11/08/2026): backend /foto-perfil/:tipo/:id ya soportaba tipo='usuario'
       // desde siempre, pero ningún frontend lo usaba -- solo personal_externo.
-      { title: '', field: 'foto_r2_key', width: 46, hozAlign: 'center', headerSort: false,
+      { title: '', field: 'foto_r2_key', width: 68, hozAlign: 'center', headerSort: false,
         formatter: c => {
           const row = c.getRow().getData();
           const src = row.foto_r2_key ? `${API}/foto-perfil/usuario/${row.id}?token=${TOKEN}` : '';
@@ -16980,7 +16980,13 @@ async function cargarUsuarios() {
           const avatar = src
             ? `<img src="${src}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;cursor:pointer" onclick="document.getElementById('fotoInputPanelUsr_${row.id}').click()">`
             : `<div style="width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#000;cursor:pointer" onclick="document.getElementById('fotoInputPanelUsr_${row.id}').click()">${inicial}</div>`;
-          return canEdit ? `${avatar}<input type="file" id="fotoInputPanelUsr_${row.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilPanel('usuario',${row.id},this.files[0])">` : avatar;
+          // ARC-022: "hacer foto con el móvil" (escaneo remoto, subtipo foto_perfil) junto
+          // al avatar -- alternativa a subir un archivo local cuando se cita al trabajador
+          // en oficina y el encargado tiene la app en su propio móvil emparejada.
+          const btnMovil = canEdit
+            ? `<button class="btn btn-sm btn-secondary" style="padding:2px 5px;font-size:11px" title="Hacer foto con el móvil" onclick="event.stopPropagation();rsPedirFotoTrabajador('usuario',${row.id},'${(row.nombre||'').replace(/'/g,"\\'")}')">📱</button>`
+            : '';
+          return canEdit ? `<div style="display:flex;align-items:center;gap:3px">${avatar}${btnMovil}<input type="file" id="fotoInputPanelUsr_${row.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilPanel('usuario',${row.id},this.files[0])"></div>` : avatar;
         }
       },
       { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180,
@@ -21039,6 +21045,7 @@ async function _registrarPushDeveloper() {
     foto_obra:  '🏗️ Añadida a la Galería de la obra.',
     plano:      '📐 Guardado en Planos como borrador, pendiente de revisar.',
     bobina:     '🔌 Pendiente de revisar y confirmar en "📥 Escaneos pendientes" antes de crear la bobina.',
+    foto_perfil: '🪪 Foto de perfil actualizada.',
   };
 
   function _rsProcesarEvento(ev) {
@@ -21053,6 +21060,11 @@ async function _registrarPushDeveloper() {
       _rsToast('📸 Escaneo recibido', msg);
       // Refrescar el contador de "Escaneos pendientes" (sobre todo relevante para bobina)
       if (typeof rsActualizarBadgePendientes === 'function') setTimeout(rsActualizarBadgePendientes, 1500);
+      // ARC-022: foto de perfil pedida por rsPedirFotoTrabajador -- refrescar la tabla de
+      // usuarios para que el avatar nuevo aparezca sin tener que recargar la página entera.
+      if (datos.subtipo === 'foto_perfil' && typeof cargarUsuarios === 'function') {
+        tblUsuarios = null; setTimeout(cargarUsuarios, 800);
+      }
     } else if (ev.tipo === 'scan_cancelado') {
       if (_rsScanPendiente) {
         _rsScanPendiente = null;
@@ -21184,6 +21196,68 @@ async function _registrarPushDeveloper() {
       headers: _rsApiHeaders(),
       body: JSON.stringify({ tipo: 'scan_cancel', origen: 'office', datos: {} })
     }).catch(() => {});
+  };
+
+  // ARC-022 (11/08/2026): "hacer foto con el móvil" para la ficha de un trabajador --
+  // mismo mecanismo de escaneo remoto (subtipo nuevo 'foto_perfil'), sin el selector de
+  // tipo genérico porque aquí el subtipo y el destino ya se conocen de antemano. Llamado
+  // desde el botón 📱 junto al avatar en tblUsuarios.
+  window.rsPedirFotoTrabajador = async function(destTipo, destId, nombre) {
+    if (_rsScanPendiente) { toast('Ya hay un escaneo en curso', 'err'); return; }
+    const dispositivos = await _rsHacerPing();
+    if (!dispositivos.some(d => d.tipo === 'app')) {
+      toast('No hay móvil conectado. Abre Alejandra en el teléfono y vuelve a intentarlo.', 'err');
+      return;
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'rs-scan-overlay';
+    overlay.id = 'rsScanOverlay';
+    overlay.innerHTML = `
+      <div class="rs-scan-modal">
+        <div class="rs-waiting">
+          <div class="rs-spinner"></div>
+          <div class="msg">Esperando al móvil...</div>
+          <div class="sub">La cámara se abrirá sola para hacer la foto de ${nombre}</div>
+          <button onclick="rsCancelarScan()" class="btn btn-secondary" style="margin-top:20px;font-size:12px">Cancelar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.onclick = (e) => { if (e.target === overlay) rsCancelarScan(); };
+    try {
+      const r = await fetch(API + '/sync/evento', {
+        method: 'POST',
+        headers: _rsApiHeaders(),
+        body: JSON.stringify({
+          tipo: 'scan_request',
+          origen: 'office',
+          datos: {
+            subtipo: 'foto_perfil',
+            destino_tipo: destTipo,
+            destino_id: destId,
+            contexto: nombre,
+            solicitado_por: 'office',
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        _rsScanPendiente = { id: d.evento_id, tipo: 'foto_perfil', ts: Date.now() };
+        setTimeout(() => {
+          if (_rsScanPendiente) {
+            _rsScanPendiente = null;
+            rsCerrarScanModal();
+            _rsToast('⏰ Tiempo agotado', 'El móvil no respondió al escaneo');
+          }
+        }, 120000);
+      } else {
+        rsCerrarScanModal();
+        toast('Error al enviar solicitud: ' + (d.error || ''), 'err');
+      }
+    } catch (e) {
+      rsCerrarScanModal();
+      toast('Error de red: ' + e.message, 'err');
+    }
   };
 
   // ═══ ESCANEOS PENDIENTES (23/07/2026) ═══════════════════════════════════════

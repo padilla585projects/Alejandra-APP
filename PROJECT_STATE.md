@@ -3,6 +3,20 @@
 - Actualizado: 2026-08-11
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
+## ARC-022, cierre de la sesión — foto por móvil + fix de sidebar duplicado (2026-08-11)
+
+Última vuelta: "hacer foto con el móvil" para la ficha de un trabajador, reutilizando al
+100% el mecanismo de escaneo remoto ya existente (`sync_dispositivos`/`sync_eventos`, sin
+QR ni WebSocket, emparejamiento implícito por `usuario_id`) — nuevo subtipo `foto_perfil`
+tanto en `worker.js` (`_procesarScanResultado`) como en `panel.html`
+(`rsPedirFotoTrabajador`, botón 📱 junto al avatar) e `index.html` (reenvío de
+`destino_tipo`/`destino_id` en el resultado). Además, fix de un bug real reportado por
+Adrián: dos secciones "🔺 Seguridad" duplicadas en el sidebar del panel cuando un admin ve
+"Todos los departamentos" (el directorio de departamentos creaba un bloque nuevo en vez de
+usar el ya existente). Verificado por sintaxis/encoding; sin verificación visual en
+navegador con dos dispositivos reales (queda pendiente probarlo con Adrián). Desplegado
+(Worker + Pages). Detalle completo en `HANDOFF.md`.
+
 ## ARC-022 — control de accesos completo con quiosco de autofichaje (2026-08-11)
 
 Evolucionó de "tarjeta con QR para fichar" a un control de accesos real tras aclarar Adrián
