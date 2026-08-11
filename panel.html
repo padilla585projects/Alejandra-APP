@@ -13572,7 +13572,7 @@ async function cargarPersonal() {
   // reproducible en CASI cualquier navegación limpia a esta pantalla, no solo con doble
   // carga. Diferir la construcción a un frame de animación garantiza que el contenedor ya
   // tenga sus dimensiones finales cuando Tabulator las mida por primera vez.
-  requestAnimationFrame(() => _construirTablaPersonal(data));
+  _construirTablaPersonal(data);
 }
 function _construirTablaPersonal(data) {
   const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
@@ -13586,7 +13586,14 @@ function _construirTablaPersonal(data) {
   const ROLES_ASIGNABLES_TABLA = ['operario', 'encargado', 'oficina', 'jefe_de_obra', 'project_manager', 'almacenero', 'ingeniero', 'empresa_admin', 'superadmin', 'desarrollador'];
 
   tblPersonal = new Tabulator('#tblPersonal', {
-    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    // TABULATOR-RACE-02: responsiveLayout:'collapse' + pagination:'local' juntos en la
+    // misma tabla no se usa en ningún otro sitio del panel (28 tablas usan fitColumns+
+    // responsiveLayout, ninguna combinándolo con pagination) -- el recálculo de columnas
+    // ocultas de responsiveLayout y el pie de paginación se realimentan entre sí y entran
+    // en un bucle infinito de redraw (RangeError: Maximum call stack size exceeded),
+    // reproducible en casi cualquier carga de esta pantalla. Quitar responsiveLayout aquí
+    // iguala esta tabla al patrón que ya usa el resto de tablas paginadas del panel.
+    data, layout: 'fitColumns',
     pagination: 'local', paginationSize: 20,
     placeholder: '<div class="empty-state"><div class="empty-icon">👷</div><div class="empty-text">Sin trabajadores</div></div>',
     columns: [
