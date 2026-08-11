@@ -10496,10 +10496,13 @@ async function crearPersonalExterno(request, env) {
   // TRABAJADORES-TIPO-01 (11/08/2026): el INSERT no aceptaba departamento -- el formulario
   // de alta de subcontratas de panel.html lo pedía pero se perdía siempre, quedando la fila
   // con el DEFAULT de la columna ('personal') sin importar lo que se eligiera.
-  const { nombre, dni, obra_id, notas, departamento, categoria } = await request.json().catch(() => ({}));
+  // EMPRESA-SUBCONTRATA-01 (11/08/2026): Adrián -- "cuando sea una subcontrata también
+  // tiene que salir en la tarjeta" -- nombre de LA SUBCONTRATA (no Levitec), distinto de
+  // `empresa_id` (que sigue siendo la empresa dueña de los datos, Levitec).
+  const { nombre, dni, obra_id, notas, departamento, categoria, empresa } = await request.json().catch(() => ({}));
   if (!safeStr(nombre).trim()) return err('Falta el nombre');
-  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas,codigo,departamento,categoria) VALUES (?,?,?,?,?,?,?,?)')
-    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null, generarCodigoExterno(), departamento||'personal', safeStr(categoria).trim()||null).run();
+  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas,codigo,departamento,categoria,empresa) VALUES (?,?,?,?,?,?,?,?,?)')
+    .bind(empresa_id, safeStr(nombre).trim(), safeStr(dni).trim()||null, obra_id||null, safeStr(notas).trim()||null, generarCodigoExterno(), departamento||'personal', safeStr(categoria).trim()||null, safeStr(empresa).trim()||null).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -10527,6 +10530,7 @@ async function actualizarPersonalExterno(id, request, env) {
   if (body.activo   !== undefined) { campos.push('activo=?');   vals.push(body.activo); }
   if (body.notas    !== undefined) { campos.push('notas=?');    vals.push(safeStr(body.notas).trim()||null); }
   if (body.categoria !== undefined) { campos.push('categoria=?'); vals.push(safeStr(body.categoria).trim()||null); }
+  if (body.empresa  !== undefined) { campos.push('empresa=?');   vals.push(safeStr(body.empresa).trim()||null); }
   if (!campos.length) return json({ ok: true });
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE personal_externo SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
@@ -10568,7 +10572,7 @@ async function getTrabajadores(request, env) {
   if (deptFilter) { sqlU += ' AND u.departamento=?'; paramsU.push(deptFilter); }
   sqlU += ' ORDER BY u.nombre';
 
-  let sqlP = 'SELECT p.id, p.nombre, NULL as rol, p.categoria, p.departamento, p.obra_id, o.nombre as obra_nombre, p.dni, p.codigo, "externo" as tipo, p.foto_r2_key, 0 as tiene_telegram FROM personal_externo p LEFT JOIN obras o ON o.id = p.obra_id WHERE p.empresa_id=? AND p.activo=1';
+  let sqlP = 'SELECT p.id, p.nombre, NULL as rol, p.categoria, p.empresa, p.departamento, p.obra_id, o.nombre as obra_nombre, p.dni, p.codigo, "externo" as tipo, p.foto_r2_key, 0 as tiene_telegram FROM personal_externo p LEFT JOIN obras o ON o.id = p.obra_id WHERE p.empresa_id=? AND p.activo=1';
   const paramsP = [empresa_id];
   if (obra_id) { sqlP += ' AND p.obra_id=?'; paramsP.push(parseInt(obra_id)); }
   if (deptFilter) { sqlP += ' AND p.departamento=?'; paramsP.push(deptFilter); }

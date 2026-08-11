@@ -13665,6 +13665,12 @@ function _construirTablaPersonal(data) {
       { title: 'Categoría', field: 'categoria', sorter: 'string', width: 130,
         editor: canEdit ? 'input' : false,
         cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'categoria', cell.getValue()) },
+      // EMPRESA-SUBCONTRATA-01: solo tiene sentido para personal_externo -- los usuarios
+      // (empleados con cuenta) son todos de Levitec por definición.
+      { title: 'Empresa subcontrata', field: 'empresa', sorter: 'string', width: 160,
+        editor: (cell) => cell.getRow().getData().tipo === 'externo' ? (canEdit ? 'input' : false) : false,
+        cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'empresa', cell.getValue()),
+        formatter: c => c.getRow().getData().tipo === 'externo' ? (c.getValue() || '') : '<span style="color:var(--muted)">—</span>' },
       { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140 },
       { title: 'Email', field: 'email', sorter: 'string', minWidth: 180,
         // personal_externo no tiene columna email en el backend -- sin editor para esas filas.
@@ -13732,6 +13738,10 @@ async function generarTarjetaPersonalPanel(id, tipo) {
   // eso es interno de la app" + "falta el DNI y la categoria". Categoría profesional (no
   // el rol de acceso) + DNI para externos.
   const rolTexto = [row.categoria || null, tipo === 'externo' && row.dni ? `DNI ${row.dni}` : null].filter(Boolean).join(' · ');
+  // EMPRESA-SUBCONTRATA-01 (11/08/2026): Adrián -- "cuando sea una subcontrata también
+  // tiene que salir en la tarjeta" -- la tarjeta de un externo muestra SU empresa (la
+  // subcontrata), no Levitec, si se ha rellenado.
+  const empresaTexto = tipo === 'externo' ? (row.empresa || 'Personal externo') : (SESSION.empresa_nombre || '');
 
   const w = window.open('', '_blank');
   if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
@@ -13753,7 +13763,7 @@ body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;a
 ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(row.nombre || '?').charAt(0).toUpperCase()}</div>`}
 <div class="info">
   <div class="nombre">${row.nombre}</div>
-  <div class="empresa">${SESSION.empresa_nombre || ''}</div>
+  <div class="empresa">${empresaTexto}</div>
   ${departamento || rolTexto ? `<div class="linea">${[departamento, rolTexto].filter(Boolean).join(' · ')}</div>` : ''}
   ${row.obra_nombre ? `<div class="linea">🏗 ${row.obra_nombre}</div>` : ''}
 </div>
@@ -13836,7 +13846,10 @@ function _abrirModalPersonalTipo(tipo) {
     const obraOpts = (window._obrasPanel || []).map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
     abrirModal('Nueva subcontrata de obra', `
       <div class="form-group"><div class="form-label">Nombre completo</div><input class="form-input" id="mNombreExt" placeholder="Juan García"></div>
-      <div class="form-group"><div class="form-label">DNI (opcional)</div><input class="form-input" id="mDniExt" placeholder="12345678A"></div>
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">DNI (opcional)</div><input class="form-input" id="mDniExt" placeholder="12345678A"></div>
+        <div class="form-group"><div class="form-label">Empresa subcontrata (opcional)</div><input class="form-input" id="mEmpresaExt" placeholder="Nombre de la subcontrata"></div>
+      </div>
       <div class="form-row">
         <div class="form-group"><div class="form-label">Departamento</div>
           <select class="form-select" id="mDeptExt">${_ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('')}</select>
@@ -13851,6 +13864,7 @@ function _abrirModalPersonalTipo(tipo) {
       const body = {
         nombre: document.getElementById('mNombreExt').value.trim(),
         dni: document.getElementById('mDniExt').value.trim() || null,
+        empresa: document.getElementById('mEmpresaExt').value.trim() || null,
         departamento: document.getElementById('mDeptExt').value,
         obra_id: document.getElementById('mObraExt').value || null,
         categoria: document.getElementById('mCategoriaExt').value.trim() || null,

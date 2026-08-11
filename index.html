@@ -4833,6 +4833,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <input class="form-input" id="personalExtDni" placeholder="12345678A">
       </div>
       <div class="form-group">
+        <label class="form-label">Empresa subcontrata (opcional)</label>
+        <input class="form-input" id="personalExtEmpresa" placeholder="Nombre de la subcontrata">
+      </div>
+      <div class="form-group">
         <label class="form-label">Obra asignada</label>
         <select class="form-input" id="personalExtObra">
           <option value="">— Sin obra —</option>
@@ -7340,9 +7344,11 @@ async function generarTarjetaExterno(id) {
   }
   const fotoUrl = p.foto_r2_key ? `${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(p.foto_r2_key)}` : '';
   const deptInfo = DEPT_INFO[p.departamento];
+  // EMPRESA-SUBCONTRATA-01 (11/08/2026): Adrián -- "cuando sea una subcontrata también
+  // tiene que salir en la tarjeta" -- muestra la empresa de la subcontrata, no la nuestra.
   _imprimirTarjeta({
     nombre: p.nombre, codigo, fotoUrl,
-    empresa: getSession()?.empresa_nombre || '',
+    empresa: p.empresa || 'Personal externo',
     departamento: deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (p.departamento || ''),
     rolTexto: [p.categoria || null, p.dni ? `DNI ${p.dni}` : null].filter(Boolean).join(' · '),
     obra: p.obra_nombre || '',
@@ -19703,6 +19709,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('personalExtId').value    = id || '';
     document.getElementById('personalExtNombre').value = '';
     document.getElementById('personalExtDni').value    = '';
+    document.getElementById('personalExtEmpresa').value = '';
     document.getElementById('personalExtCategoria').value = '';
     document.getElementById('personalExtNotas').value  = '';
     document.getElementById('modalPersonalExtTitulo').textContent = id ? 'Editar trabajador' : 'Añadir trabajador';
@@ -19726,6 +19733,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           if (p) {
             document.getElementById('personalExtNombre').value = p.nombre || '';
             document.getElementById('personalExtDni').value    = p.dni    || '';
+            document.getElementById('personalExtEmpresa').value = p.empresa || '';
             document.getElementById('personalExtCategoria').value = p.categoria || '';
             document.getElementById('personalExtNotas').value  = p.notas  || '';
             if (p.obra_id) obraSel.value = p.obra_id;
@@ -19750,13 +19758,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const id     = document.getElementById('personalExtId').value;
     const nombre = document.getElementById('personalExtNombre').value.trim();
     const dni    = document.getElementById('personalExtDni').value.trim()    || null;
+    const empresa = document.getElementById('personalExtEmpresa').value.trim() || null;
     const obraId = document.getElementById('personalExtObra').value           || null;
     const categoria = document.getElementById('personalExtCategoria').value.trim() || null;
     const notas  = document.getElementById('personalExtNotas').value.trim()  || null;
 
     if (!nombre) return toast('⚠️ El nombre es obligatorio', 'err');
 
-    const body = { nombre, dni, obra_id: obraId ? parseInt(obraId) : null, categoria, notas };
+    const body = { nombre, dni, empresa, obra_id: obraId ? parseInt(obraId) : null, categoria, notas };
     try {
       const r = id
         ? await apiCall(`/personal-externo/${id}`, { method:'PUT',  body: JSON.stringify(body) })
