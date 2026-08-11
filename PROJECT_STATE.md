@@ -3,6 +3,21 @@
 - Actualizado: 2026-08-10
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
+## BUZON-TELEGRAM-01 — aviso en tiempo real + buzón de incidencias (2026-08-10)
+
+Implementadas las dos ideas de producto que Adrián planteó esta sesión: aviso a él por
+Telegram casi en tiempo real cuando Alejandra tope con un problema real ayudando a un
+usuario, y un buzón donde vaya anotando incidencias/sugerencias para repasar más tarde.
+Reutiliza infraestructura ya existente en `alejandra-agente/worker.js` (sin tabla ni tool
+nueva): la tool `memory_save` ya guardaba `tipo='error'` en `alejandra_memoria`; ahora,
+si además `importancia>=4` (algo que bloquea a un usuario real ahora mismo), manda también
+un Telegram por el canal fijo que este Worker ya usa para sus propios avisos internos.
+Nueva "REGLA DE INCIDENCIAS" en el prompt para que Alejandra sepa cuándo usarlo. Alcance
+deliberado: solo `alejandra-agente` (donde ella habla con usuarios reales); `worker.js` no
+se tocó (su chat lo usa Adrián directamente, no necesita avisarse a sí mismo). Verificado
+(`node --check`, 189/189 tests) y desplegado (`wrangler deploy`, `/health` en verde).
+Detalle completo en `HANDOFF.md`.
+
 ## Auditoría del módulo Personal en panel.html (2026-08-10)
 
 A petición de Adrián ("revisa todo lo referente a Personal, todos sus subdepartamentos, que

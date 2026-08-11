@@ -1,5 +1,53 @@
 # Handoff — Alejandra 2.0
 
+## BUZON-TELEGRAM-01 — aviso casi en tiempo real + buzón de incidencias (2026-08-10)
+
+- Contexto: Adrián propuso dos ideas de producto en la misma sesión — que Alejandra avise
+  por Telegram casi en tiempo real cuando tope con un problema real, y un "buzón" de
+  incidencias/sugerencias donde vaya anotando cosas para repasar más tarde. Decisiones
+  tomadas con él antes de implementar: el aviso urgente va **solo a Adrián** (no a otros
+  admins), y **Alejandra decide caso a caso** si algo es lo bastante urgente (no un cron
+  periódico).
+- Investigación previa (agente Explore) confirmó que ya existía casi toda la infraestructura
+  necesaria — no hizo falta tabla nueva ni tool nueva:
+  - `memory_save` (tool ya existente en `alejandra-agente/worker.js`, disponible en los
+    experts `app`/`tecnico`/`web`/`completo`/`ingenieria`/`reflexion` — todos salvo
+    `simple`) ya escribe en `alejandra_memoria` con `tipo='error'` como una de sus opciones
+    — exactamente el "buzón" que pedía Adrián, solo que sin aviso en tiempo real.
+  - `enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, mensaje)` ya es el canal fijo que este mismo
+    Worker usa para el resto de avisos internos a Adrián (errores internos, fuerza bruta en
+    token admin, sin créditos Anthropic) — mismo canal reutilizado aquí, nunca un `chat_id`
+    elegido por el modelo (evita poder usarlo como vía de exfiltración).
+- Fix: el handler de `memory_save` ahora manda un Telegram inmediato cuando `tipo==='error'`
+  y `importancia>=4` (además de guardar en `alejandra_memoria`, como siempre). Se actualizó
+  la `description` de la tool para que el modelo entienda la consecuencia de poner
+  importancia 4-5. Se añadió una "REGLA DE INCIDENCIAS" al módulo de prompt `app` (se carga
+  en todos los experts salvo `simple`, incluidos todos los que hablan con usuarios reales
+  como Katherine) explicando cuándo usar `tipo='error'` + importancia alta (bloquea a un
+  usuario real ahora mismo) frente a importancia baja (queda solo archivado).
+- **Deliberadamente fuera de alcance:** no se tocó `worker.js` (raíz) — su propio
+  `memory_save` (usado por Adrián directamente en el chat dev) no necesita avisarle a sí
+  mismo; no es un hueco de seguridad/paridad, es una decisión de alcance documentada.
+- **Deliberadamente NO se construyó una tabla ni un panel nuevo** para el "buzón": la
+  tabla `alejandra_memoria` y las tools `memory_read`/`memoria_consultar` ya existentes
+  cubren el "luego me lo cuentas" — Adrián puede preguntarle a Alejandra qué tiene
+  pendiente en cualquier canal (app, panel, chat dev) y ella responde de la memoria
+  compartida, sin necesidad de una pantalla dedicada.
+- Verificación: `node --check alejandra-agente/worker.js` limpio; `npm --prefix
+  alejandra-agente test` 189/189 (sin tests nuevos — `memory_save` es un `case` de
+  `ejecutarTool()`, sin cobertura unitaria propia, mismo patrón que el resto de casos de
+  ese switch); sin patrones de encoding corrupto en el diff.
+- Despliegue: `wrangler deploy` directo sobre `alejandra-agente` (ARC-021, práctica
+  aceptada). `/health` → `healthy` (`d1:true`, `r2:true`), versión `d361ecfd-4cf3-4bd7-b8f3-2331635ac7e0`
+  coincide de inmediato.
+- Pendiente/recomendado, sin decidir: `alejandra-agente/worker.js` no tiene tool
+  `memory_delete` (esa sí existe, pero solo en `worker.js` raíz) — de momento no hay forma
+  de archivar/borrar una entrada del buzón desde el chat de la app/panel. Como comparten la
+  misma tabla `alejandra_memoria`, Adrián puede limpiarla hablando con el otro cerebro (chat
+  dev/Telegram, `worker.js`) si hace falta. Revisar si con el uso real compensa añadir
+  `memory_delete` también a `alejandra-agente` (mismo criterio: no inventar necesidad, solo
+  si se demuestra falta).
+
 ## Auditoría del módulo Personal en panel.html + estilo de modales (2026-08-10)
 
 - Contexto: tras cerrar la auditoría de Fichajes ("no puede fallar", ver sección más abajo),

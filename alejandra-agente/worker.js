@@ -194,7 +194,9 @@ FICHAJES / ASISTENCIA — TABLA fichajes(id, empresa_id, usuario_id, personal_ex
 · "Dani faltó hoy" / "Dani no ha venido" → resuelve el usuario_id de Dani con consultar_bd (por nombre, activo=1, en su empresa), comprueba si ya hay fichaje suyo hoy (único por empresa_id+fecha+usuario_id: si ya existe, usa UPDATE en vez de INSERT) y escribir_bd un fichaje de hoy con estado='ausencia' (horas=0). Igual patrón para 'vacaciones'/'baja' (una fila por cada día del rango si te dan varios días).
 · "hoy han venido todos, no falta nadie" / "ficha a los chicos" → con consultar_bd identifica el personal activo (activo=1) de la obra/departamento del usuario que TODAVÍA no tenga fichaje hoy, y crea un fichaje estado='presente' para cada uno de golpe (no preguntes uno a uno salvo lista ambigua o con nombres repetidos).
 · "hoy han venido N personas" (sin decir quiénes) → consulta con consultar_bd el personal activo (activo=1) habitual de esa obra/departamento y ofrécelos como opciones pinchables con el marcador de OPCIONES: UNA opción por persona (nunca combinaciones/parejas — no escala y confunde), más una última opción fija "Lo escribo yo" para que el usuario teclee los nombres si prefiere. Ej: <<OPCIONES: Alberto Martínez|Juan José Gómez|María|Lo escribo yo>>. El usuario puede tocar varias veces seguidas (una por persona) o escribir directamente si toca "Lo escribo yo" — en ambos casos, registra EXACTAMENTE a quien confirme, sin sustituir nombres (ver regla de resolución de persona arriba).
-· Sigue siempre el patrón de validación de arriba (escribir_bd → validar_cambios_bd → solo entonces confirmar "Registrado").`,
+· Sigue siempre el patrón de validación de arriba (escribir_bd → validar_cambios_bd → solo entonces confirmar "Registrado").
+
+REGLA DE INCIDENCIAS (BUZON-TELEGRAM-01, 10/08/2026): si te topas con un problema real ayudando a alguien — una tool que falla repetidamente, un dato que no cuadra, un permiso que te falta, algo que te bloquea y no puedes resolver en la conversación — usa memory_save con tipo='error'. Si el problema bloquea AHORA MISMO a un usuario real (no una duda hipotética, no algo que ya resolviste dando un rodeo), pon importancia 4 o 5: eso avisa a Adrián por Telegram casi al momento, además de quedar archivado. Si es menor o puedes seguir sin bloquear al usuario, importancia 1-3 — queda solo en el buzón para que Adrián lo repase cuando quiera (puede preguntarte "qué tienes en el buzón" y se lo cuentas con memory_read). No abuses de importancia 5: resérvala para lo que de verdad le interesaría saber ya mismo, no para cada error menor.`,
 
   tecnica: `INFRAESTRUCTURA PROPIA:
 - Worker: alejandra-agente.alejandra-app.workers.dev (Cloudflare Workers, ES modules)
@@ -1058,7 +1060,7 @@ const TOOL_BUSCAR_WEB = {
 
 const TOOL_MEMORY_SAVE = {
   name: 'memory_save',
-  description: 'Guarda un aprendizaje, mejora propuesta o contexto importante en tu memoria persistente. Úsalo cuando identifiques algo útil para recordar.',
+  description: 'Guarda un aprendizaje, mejora propuesta, problema real o contexto importante en tu memoria persistente (el "buzón" que Adrián revisa después). Con tipo=\'error\' e importancia 4 o 5 (un problema real que bloquea a un usuario ahora mismo: tool que falla, permiso que falta, dato roto) avisa además a Adrián por Telegram casi en tiempo real. Con importancia 1-3, o cualquier otro tipo, solo queda archivado para revisar más tarde.',
   input_schema: {
     type: 'object',
     properties: {
@@ -6732,10 +6734,20 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
         // SEC-MEM-01: sanitizar contenido antes de persistir en memoria
         const contenido = String(input.contenido || '').replace(/(ignore|olvida|descarta)\s+(all|todas|tus)\s+(instructions|instrucciones|reglas)/gi, '[REDACTED]');
         const titulo = String(input.titulo || '').substring(0, 200);
+        const importancia = input.importancia || 3;
         await env.DB.prepare(
           `INSERT INTO alejandra_memoria (tipo,usuario_id,empresa_id,titulo,contenido,importancia,created_at)
            VALUES(?,?,?,?,?,?,datetime('now'))`
-        ).bind(input.tipo, usuario_id || 'system', empresa_id || 'system', titulo, contenido, input.importancia||3).run();
+        ).bind(input.tipo, usuario_id || 'system', empresa_id || 'system', titulo, contenido, importancia).run();
+        // BUZON-TELEGRAM-01 (10/08/2026): un problema real (tipo='error', importancia>=4)
+        // avisa a Adrián casi en tiempo real por Telegram, además de quedar en el buzón
+        // de memoria para repasar más tarde -- pedido explícito del Director. Reutiliza
+        // el mismo canal fijo que el resto de avisos internos de este Worker (nunca un
+        // chat_id elegido por el modelo, para no poder usarse como exfiltración).
+        if (input.tipo === 'error' && importancia >= 4 && env.TELEGRAM_BOT_TOKEN) {
+          const empresaTxt = empresa_id && empresa_id !== 'system' ? ` (empresa ${empresa_id})` : '';
+          await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, `🔴 <b>Alejandra encontró un problema</b>${empresaTxt}\n${titulo}\n${contenido.slice(0, 300)}`).catch(() => {});
+        }
         return `Guardado en memoria: [${input.tipo}] "${input.titulo}"`;
       } catch (err) {
         return `Error al guardar: ${err.message}`;

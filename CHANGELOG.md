@@ -19,6 +19,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Added
 
+- **BUZON-TELEGRAM-01 — aviso en tiempo real + buzón de incidencias (2026-08-10):** `memory_save` (`alejandra-agente/worker.js`) manda ahora un Telegram inmediato a Adrián (canal fijo ya usado para otros avisos internos) cuando `tipo='error'` e `importancia>=4` — un problema real que bloquea a un usuario ahora mismo — además de guardarlo como siempre en `alejandra_memoria` (el "buzón" que ya se puede repasar más tarde con `memory_read`/preguntándole a Alejandra). Nueva "REGLA DE INCIDENCIAS" en el prompt del módulo `app` para que sepa cuándo usarlo. Sin tabla ni tool nueva — reutiliza infraestructura existente. Alcance: solo `alejandra-agente` (donde habla con usuarios reales), no `worker.js`. Detalle en `HANDOFF.md`.
+
 - **Cierre del aislamiento por departamento en Alejandra Office (2026-08-10):** tercera y última ronda de auditoría (a petición del Director: "revisa que no queden más módulos sin aislar") encontró dos fugas más, ambas restringidas a Seguridad+admins (`isDeptPrivileged`) por no tener columna `departamento` ni FK útil para un filtro por fila:
   - `getReconocimientos`/`crearReconocimiento`/`actualizarReconocimiento`/`eliminarReconocimiento` (`reconocimientos_medicos`): solo bloqueaba `rol==='oficina'`; datos de salud (LPRL art. 22) visibles para cualquier encargado/oficina de la empresa.
   - `getAccidentes`/`crearAccidente`/`actualizarAccidente`/`eliminarAccidente` (`accidentes_incidentes`): sin ningún control de departamento; registro legal de seguridad visible para toda la empresa.

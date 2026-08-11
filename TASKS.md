@@ -21,10 +21,34 @@ Estado (actualizado 2026-08-10, tarde): **No hay ninguna tarea activa, en curso 
   comentario `CANARY-TEST-9f3k2` que se había colado en la primera línea del archivo, sin
   relación con el fix, antes de comitear.
 - Detalle completo en `HANDOFF.md`/`CHANGELOG.md`/`PROJECT_STATE.md`.
-- Siguiente acción exacta: ninguna para este trabajo. Sin decisión tomada sobre las dos ideas
-  de producto que planteó Adrián en la misma sesión (aviso por Telegram casi en tiempo real
-  cuando Alejandra tope con un problema real / buzón de incidencias y sugerencias) — no hay
-  tarea abierta para ninguna de las dos todavía, pendiente de que el Director decida alcance.
+- Siguiente acción exacta: ninguna para este trabajo.
+
+## BUZON-TELEGRAM-01 — aviso en tiempo real + buzón de incidencias (2026-08-10)
+
+- Estado: **completada, desplegada y verificada**
+- Prioridad: Media (idea de producto del Director, sin bloquear nada existente)
+- Decisiones tomadas con el Director antes de implementar: aviso urgente solo a él (no a
+  otros admins); es Alejandra quien decide caso a caso si algo es urgente (no un cron).
+- Implementado reutilizando infraestructura existente en `alejandra-agente/worker.js`, sin
+  tabla ni tool nueva: `memory_save` (`tipo='error'`, `importancia>=4`) manda ahora Telegram
+  inmediato por el canal fijo que el Worker ya usa para sus propios avisos internos, además
+  de guardar como siempre en `alejandra_memoria` (el buzón). Nueva regla de prompt en el
+  módulo `app` explicando cuándo usarlo.
+- Alcance deliberado: solo `alejandra-agente` (habla con usuarios reales); `worker.js` no se
+  tocó (su chat lo usa el Director directamente).
+- Verificación: `node --check` limpio; `npm --prefix alejandra-agente test` 189/189;
+  desplegado (`wrangler deploy`), `/health` en verde, versión coincide de inmediato.
+- Detalle completo en `HANDOFF.md`/`CHANGELOG.md`/`PROJECT_STATE.md`.
+- Siguiente acción exacta: ninguna. Pendiente de que el uso real confirme si hace falta
+  `memory_delete` también en `alejandra-agente` (hoy solo existe en `worker.js` raíz).
+
+## ARC-022 — Foto de perfil de usuarios + tarjetas con QR para fichar (2026-08-10)
+
+- Estado: **propuesta, sin decidir ni implementar** — anotada explícitamente a petición del
+  Director para no perderla ("apúntalas, no hace falta que las hagas ya").
+- Detalle completo, incluido lo que ya existe en el código y lo que falta decidir, en
+  `ARCHITECT_BACKLOG.md` (ARC-022).
+- Siguiente acción exacta: ninguna hasta que el Director decida abordarla.
 
 ## Decisiones del Director — 2026-08-02 (ronda de desbloqueo del roadmap)
 
