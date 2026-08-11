@@ -13809,7 +13809,12 @@ function _abrirModalPersonalTipo(tipo) {
       if (!body.nombre) { toast('El nombre es obligatorio', 'err'); return; }
       const r = await api('/personal-externo', { method: 'POST', body: JSON.stringify(body) });
       if (!r.ok) { toast(r.error || 'Error al crear', 'err'); return; }
-      cerrarModal(); toast('Subcontrata creada ✓', 'ok'); tblPersonal = null; cargarPersonal();
+      // TRABAJADORES-TIPO-01c: reconstruir el Tabulator entero (tblPersonal = null) justo
+      // cuando el modal se está cerrando (transición CSS en curso) disparaba el mismo
+      // RangeError de Tabulator ya visto en TABULATOR-RACE-01 -- cargarPersonal() ya hace
+      // replaceData() si tblPersonal existe, que basta para pintar la fila nueva sin
+      // recrear la tabla ni sus columnas (que no han cambiado).
+      cerrarModal(); toast('Subcontrata creada ✓', 'ok'); cargarPersonal();
     });
   }
 }
