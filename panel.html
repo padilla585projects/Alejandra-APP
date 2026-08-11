@@ -13564,6 +13564,17 @@ async function cargarPersonal() {
   const data = toArr(r, 'trabajadores');
   if (tblPersonal) { tblPersonal.replaceData(data); return; }
 
+  // TABULATOR-RACE-02 (11/08/2026): construir el Tabulator en el mismo tick en que la
+  // sección "Trabajadores" se hace visible (el contenedor #tblPersonal aún puede tener
+  // layout inestable, p.ej. justo tras el cambio de display del panel) hace que
+  // layout:'fitColumns' mida un ancho incorrecto y entre en recursión infinita
+  // (tableEmpty -> adjustTableSize -> redraw -> tableResized -> tableEmpty -> ...),
+  // reproducible en CASI cualquier navegación limpia a esta pantalla, no solo con doble
+  // carga. Diferir la construcción a un frame de animación garantiza que el contenedor ya
+  // tenga sus dimensiones finales cuando Tabulator las mida por primera vez.
+  requestAnimationFrame(() => _construirTablaPersonal(data));
+}
+function _construirTablaPersonal(data) {
   const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
   // GESTION-ROLES-01 (10/08/2026): la columna "Rol" solo pintaba un badge de solo lectura --
   // no había ninguna forma de cambiar el rol de un usuario desde el panel (el backend, PUT
