@@ -1064,6 +1064,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <option value="pintura">🎨 Pintura</option>
         <option value="carpinteria">🪟 Carpintería</option>
         <option value="almacen">📦 Almacén</option>
+        <option value="kiosco">🪪 Kiosco (control de accesos)</option>
       </select>
       <div class="topbar-user" id="topbarUser" onclick="abrirMiCuenta()" style="cursor:pointer" title="Mi cuenta">
         <span>👤</span>
@@ -10402,6 +10403,15 @@ function doLogout() {
 // siempre de un sidebar limpio (evita estados intermedios de pruebas anteriores).
 function cambiarDeptoAdmin(depto) {
   if (!SESSION) return;
+  // "Kiosco" no es un departamento real -- es un atajo de navegación al control de accesos
+  // (ARC-022). Se abre en pestaña aparte y el selector vuelve a su valor anterior, sin
+  // tocar SESSION.departamento ni recargar (no debe quedar "guardado" como previsualización).
+  if (depto === 'kiosco') {
+    window.open('kiosco.html', '_blank');
+    const sel = document.getElementById('topbarDeptoSelect');
+    if (sel) sel.value = SESSION.departamento || '';
+    return;
+  }
   SESSION.departamento = depto || null;
   localStorage.setItem('panel_session', JSON.stringify(SESSION));
   location.reload();
