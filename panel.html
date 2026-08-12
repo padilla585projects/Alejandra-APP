@@ -16947,7 +16947,14 @@ const _DOCS_DEPTS = Object.entries(_DEPTS_CATALOG).filter(([key]) => key !== 'pe
 function _construirDocsTabs() {
   const bar = document.getElementById('docsTabBar');
   if (!bar || bar.querySelector('[data-generated]')) return;
-  _DOCS_DEPTS.forEach(d => {
+  // FIX-DOCS-TABS-DEPT-01 (12/08/2026): _DOCS_DEPTS listaba TODOS los departamentos sin
+  // filtrar -- cualquier usuario veía las pestañas de departamentos ajenos (Adrián lo vio
+  // estando en Control). El backend (subirDocDept/listarDocsDept) ya fuerza deptFinal al
+  // propio departamento salvo superadmin/empresa_admin/jefe_de_obra -- se replica aquí el
+  // mismo criterio para que la pestaña no prometa algo que el servidor no va a servir.
+  const _esAdminDocs = hasSessionRole('superadmin', 'empresa_admin', 'jefe_de_obra');
+  const _deptsVisibles = _esAdminDocs ? _DOCS_DEPTS : _DOCS_DEPTS.filter(d => d.key === SESSION.departamento);
+  _deptsVisibles.forEach(d => {
     const btn = document.createElement('button');
     btn.className = 'docs-tab';
     btn.dataset.tab = d.key;
