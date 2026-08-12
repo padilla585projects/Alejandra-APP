@@ -283,8 +283,27 @@ Siguiente acción exacta:
   `alejandra-agente/lib.js`/`lib.test.js`, `panel.html` (UI de "Mi cuenta").
 - Pruebas: ver criterio de aceptación 8; `/health` verde en los dos Workers tras desplegar.
   Verificación en vivo (criterio 11) pendiente.
-- Última actualización: 2026-08-12
-- Siguiente acción exacta: probar en vivo con la cuenta del Director (criterio 11).
+- Última actualización: 2026-08-12, noche
+- **Prueba real en vivo (2026-08-12, noche), con hallazgos reales encontrados y corregidos:**
+  1. **CORREO-AYUDANTE-ROUTING-01**: el primer intento ("resume mis últimos correos") se
+     clasificó correctamente como experto `app` (con `delegar_tarea` disponible) pero el
+     modelo no lo usó — respondió que Gmail no estaba integrado, inventando que haría falta
+     OAuth2 (ya estaba construido). Un segundo intento con otra frase ("revisa mi correo...")
+     se clasificó como experto `web` (sin `delegar_tarea` en absoluto) — imposible alcanzar
+     el ayudante desde ahí. Dos fixes: regla explícita en `REGEX_ROUTES` (correo/Gmail/
+     bandeja de entrada → `app`, determinista) + regla explícita "REGLA DE AYUDANTES" en el
+     módulo de prompt `app` instruyendo usar `delegar_tarea` para correo/pedidos en vez de
+     inventar que la función no existe. 207/207 tests, desplegado y verificado.
+  2. **Tras los fixes, la delegación funcionó de verdad** (confirmado en `alejandra_trazas`):
+     `leer_gmail` se invocó y devolvió un error REAL de Google (`Gmail API has not been used
+     in project 516059806212 before or it is disabled`) — la Gmail API no está habilitada en
+     el proyecto de Google Cloud correcto, un paso distinto de aceptar el consentimiento
+     OAuth. Alejandra reportó el error real y los pasos correctos sin inventar nada ni
+     pretender poder arreglarlo ella misma. **Pendiente que Adrián habilite la Gmail API en
+     Google Cloud Console** (paso manual, en curso con Alejandra guiándolo en el chat).
+- Siguiente acción exacta: Adrián habilita la Gmail API en el proyecto de Google Cloud
+  correcto (guiado por Alejandra en el chat); tras eso, repetir la prueba de lectura y luego
+  la de envío con `CONFIRMO ENVIO`.
 
 ### F6.1-AYUDANTES-PEDIDOS — Mecanismo de delegación + ayudante piloto "Pedidos"
 

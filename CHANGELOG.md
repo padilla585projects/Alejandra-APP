@@ -4,6 +4,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-12, noche)
+
+- **CORREO-AYUDANTE-ROUTING-01:** Alejandra negaba tener acceso a Gmail pese a que el ayudante de Correos (F6.1-AYUDANTES-CORREOS) ya estaba desplegado y conectado. Dos causas reales: (1) algunas frases sobre correo se clasificaban como experto `web`, que no tiene `delegar_tarea` en su catálogo de tools — imposible alcanzar el ayudante desde ahí; (2) incluso clasificado correctamente como `app` (con `delegar_tarea` disponible), el modelo no lo usaba y respondía inventando que faltaba implementar OAuth2. Fix: regla determinista en `REGEX_ROUTES` para correo/Gmail/bandeja de entrada → experto `app`, más una regla explícita en el prompt instruyendo usar `delegar_tarea` para correo/pedidos en vez de negar la función.
+- **CHAT-SCROLL-INICIAL-01:** el chat ✨ de `panel.html` no bajaba nunca al último mensaje al abrirlo — parecía que "no guardaba el historial" cuando en realidad sí lo cargaba, solo que se quedaba scrolleado arriba del todo. Causa: el auto-scroll comprobaba si el usuario ya estaba cerca del final ANTES de pintar los mensajes, pero al abrir el chat el scroll siempre arranca en 0. Fix: la primera carga tras abrir el chat siempre baja al final; las cargas siguientes (sondeo cada 5s) siguen respetando si el usuario subió a leer mensajes antiguos.
+
 ### Added
 
 - **CATALOGO-PROVEEDORES-01 (2026-08-12):** Adrián pidió cargar los catálogos de Hilti/Pemsa/Würth (proveedores habituales). En vez de una tabla estática con referencias inventadas, el ayudante de Pedidos de Alejandra recibe la tool `buscar_web` (ya existente) para consultar la referencia real cuando se le pide un material que no conoce, priorizando las webs oficiales de esos tres proveedores; si no encuentra nada fiable, crea el pedido igualmente con la descripción que le dé el humano. Hilti, Pemsa y Würth dados de alta en `proveedores_gestion` (Levitec).
