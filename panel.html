@@ -174,6 +174,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .tbl-search{padding:10px 13px;background:#151a2e;border:1px solid rgba(199,188,255,.2);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;outline:none;transition:border-color .2s,box-shadow .2s;min-width:220px}
 .tbl-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(169,149,255,.16)}
 .btn{padding:9px 16px;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;letter-spacing:.5px;cursor:pointer;border:none;transition:transform .15s,box-shadow .15s,background .15s}
+.btn:disabled{opacity:.6;cursor:not-allowed}
 .btn:hover{transform:translateY(-1px)}
 .btn-primary{background:linear-gradient(135deg,#c3b4ff,#9380ec);color:#17152b;box-shadow:0 7px 16px rgba(124,101,226,.26)}
 .btn-primary:hover{opacity:1;box-shadow:0 10px 22px rgba(124,101,226,.36)}
@@ -21588,7 +21589,27 @@ function abrirModal(titulo, html, onOk) {
   document.getElementById('modalTitle').textContent = titulo;
   document.getElementById('modalBody').innerHTML = html;
   _modalCallback = onOk;
-  document.getElementById('modalOkBtn').onclick = () => _modalCallback && _modalCallback();
+  // FIX-MODAL-LOADING-01 (12/08/2026): el botón no daba ningún indicio de que la acción
+  // estaba en curso -- en subidas de archivo (unos segundos con archivos grandes) parecía
+  // colgado y el usuario pulsaba varias veces, duplicando la subida (Adrián: 5 copias del
+  // mismo PDF). Se deshabilita el botón y se muestra "Guardando..." mientras el callback
+  // está en vuelo; se restaura solo si el modal sigue abierto (el callback no lo cerró,
+  // p.ej. por un error de validación), para poder reintentar.
+  document.getElementById('modalOkBtn').onclick = async () => {
+    if (!_modalCallback) return;
+    const btn = document.getElementById('modalOkBtn');
+    const textoOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    try {
+      await _modalCallback();
+    } finally {
+      if (document.getElementById('modalOverlay').classList.contains('open')) {
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+      }
+    }
+  };
   document.getElementById('modalOverlay').classList.add('open');
 }
 function cerrarModal() {
