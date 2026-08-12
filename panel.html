@@ -18774,12 +18774,22 @@ let alejandrPolling = null;
 // de antes actualizándose"). Se mantiene entre aperturas/cierres del chat porque el DOM no se
 // destruye al cerrar (solo se oculta), así que debe seguir reflejando lo que hay pintado.
 let alejandraMensajesRenderizados = [];
+// CHAT-SCROLL-INICIAL-01 (12/08/2026): Adrián — "no va nunca al último mensaje" al abrir el
+// chat. `cargarAlejandraChat()` solo baja el scroll si `cercaDelFinal` (calculado ANTES de
+// pintar) ya era cierto -- pero al abrir el panel el scroll siempre empieza en 0, así que con
+// cualquier conversación más larga que el hueco visible esa comprobación sale falsa de
+// entrada (parecía que "no guardaba el historial": en realidad sí lo carga, pero se queda
+// arriba del todo, en los mensajes más viejos). Esta bandera fuerza el scroll al final SOLO
+// en la primera carga tras abrir -- las cargas siguientes (sondeo cada 5s con el chat ya
+// abierto) siguen respetando si el usuario subió a leer mensajes antiguos.
+let _alejandraForzarScrollInicial = false;
 
 function alejandraFabAbrir() {
   const panel = document.getElementById('alejandraChatPanel');
   panel.style.display = 'flex';
   if (typeof window._alejandraAplicarGeometriaGuardada === 'function') window._alejandraAplicarGeometriaGuardada();
   alejandraChatAbierto = true;
+  _alejandraForzarScrollInicial = true;
   cargarAlejandraChat();
   if (!alejandrPolling) alejandrPolling = setInterval(cargarAlejandraChat, 5000);
   document.getElementById('fabAlejandra').style.display = 'none';
@@ -18917,8 +18927,12 @@ async function cargarAlejandraChat() {
     const esAmpliacionSimple = firmas.length > alejandraMensajesRenderizados.length &&
       alejandraMensajesRenderizados.every((f, i) => f === firmas[i]);
     // Auto-scroll solo si ya estabas viendo el final -- si subiste a leer mensajes antiguos,
-    // un mensaje nuevo no debe arrastrarte de vuelta abajo de golpe.
-    const cercaDelFinal = cont.scrollHeight - cont.scrollTop - cont.clientHeight < 80;
+    // un mensaje nuevo no debe arrastrarte de vuelta abajo de golpe. CHAT-SCROLL-INICIAL-01:
+    // salvo en la primera carga tras abrir el chat, que siempre baja al final (ver bandera
+    // _alejandraForzarScrollInicial arriba).
+    const forzarScroll = _alejandraForzarScrollInicial;
+    _alejandraForzarScrollInicial = false;
+    const cercaDelFinal = forzarScroll || (cont.scrollHeight - cont.scrollTop - cont.clientHeight < 80);
     if (esAmpliacionSimple) {
       cont.querySelector('.empty-state')?.remove();
       const nuevos = msgs.slice(alejandraMensajesRenderizados.length);
