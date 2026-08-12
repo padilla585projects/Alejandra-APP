@@ -1,10 +1,11 @@
 # TASKS — Cola operativa inmediata
 
 Estado (actualizado 2026-08-12): **`F6.1-AYUDANTES-PEDIDOS` (Fase 1) desplegada y verificada en
-producción.** **`F6.1-AYUDANTES-CORREOS` (Fase 2, piloto Gmail personal) con código completo,
-tests en verde, sin desplegar** — bloqueada hasta que el Director complete los pasos de Google
-Cloud Console (habilitar Gmail API + scopes + redirect URI) y cree el secreto
-`TOKEN_ENCRYPTION_KEY`. Ver fichas abajo.
+producción.** **`F6.1-AYUDANTES-CORREOS` (Fase 2, piloto Gmail personal) desplegada** — Director
+completó Google Cloud Console y creó `TOKEN_ENCRYPTION_KEY`; los dos Workers desplegados
+(`alejandra-app-api` run 31594892173, `alejandra-agente` run 31594913990), `/health` → `healthy`
+en ambos. **Pendiente solo la prueba real de extremo a extremo** (conectar Gmail desde Ajustes,
+delegar lectura/envío en el ayudante de Correos). Ver ficha abajo.
 
 Estado (actualizado 2026-08-11, noche): **No hay ninguna tarea activa, en curso ni
 bloqueada.** Última sesión: reorganización de "Trabajadores" en panel.html (plantilla
@@ -222,9 +223,10 @@ Siguiente acción exacta:
 - Título: Fase 2 de `F-6.1` (ADR-0022) — ayudante de Correos sobre Gmail personal del
   Director, vía OAuth 2.0 real (no delegación de dominio, esa es exclusiva de Workspace)
 - Fase: F-6.1 — Delegación y agentes especializados
-- Estado: **código completo, tests en verde, sin desplegar** — bloqueada por pasos externos
+- Estado: **desplegada en producción (2026-08-12)** — pendiente solo la prueba real de
+  extremo a extremo
 - Prioridad: Media
-- Rama: (pendiente de crear)
+- Rama: `feat/f6.1-ayudante-correos-gmail` (fusionada y borrada)
 - Responsable actual: —
 - Objetivo: que el ayudante "correos" pueda leer/resumir la bandeja de Gmail del usuario y
   enviar correos desde su cuenta real (no desde un remitente fijo de empresa), con la misma
@@ -250,23 +252,23 @@ Siguiente acción exacta:
   8. ✅ Tests: gating, exclusión de cron, no-oferta directa a Alejandra, extracción de
      `CONFIRMO ENVIO` sin cruzarse con `CONFIRMO BORRADO`, código atado al contenido exacto del
      correo. 207/207 en verde (12 tests nuevos sobre la base de Fase 1).
-  9. **Pendiente, bloqueado en el Director**: completar los pasos de Google Cloud Console
-     (Gmail API habilitada, scopes `gmail.readonly`/`gmail.send` añadidos al consent screen,
-     test user, redirect URI `https://alejandra-app-api.alejandra-app.workers.dev/auth/gmail/callback`
-     añadido al cliente OAuth existente) y crear el secreto `TOKEN_ENCRYPTION_KEY` (32 bytes
-     aleatorios, base64url) en el entorno `production`.
-  10. **Pendiente**: desplegar los dos Workers y verificar de extremo a extremo con la cuenta
-      real del Director (conectar Gmail, pedirle a Alejandra que delegue "resume mis últimos
-      correos", pedirle que envíe uno de prueba y confirmar que exige `CONFIRMO ENVIO`).
-- Dependencias: ninguna de código; sí de configuración externa (punto 9).
-- Bloqueos: pasos 9-10 dependen del Director.
+  9. ✅ Google Cloud Console completado por el Director (Gmail API habilitada, scopes
+     `gmail.readonly`/`gmail.send`, test user, redirect URI añadido al cliente OAuth existente)
+     y secreto `TOKEN_ENCRYPTION_KEY` creado en el entorno `production`.
+  10. ✅ Desplegados los dos Workers: `alejandra-app-api` (run 31594892173) y `alejandra-agente`
+      (run 31594913990), `/health` → `healthy` en ambos (`d1:true`, `r2:true`).
+  11. **Pendiente**: prueba real de extremo a extremo con la cuenta del Director — conectar
+      Gmail desde "Mi cuenta" en `panel.html`, pedirle a Alejandra que delegue "resume mis
+      últimos correos" (N0, sin confirmación), pedirle que envíe uno de prueba y confirmar que
+      exige `CONFIRMO ENVIO` antes de mandarlo.
+- Dependencias: ninguna. Bloqueos: ninguno.
 - Archivos principales: `worker.js` (tabla, cifrado, rutas OAuth, endpoints internos),
   `alejandra-agente/worker.js` (tools, ayudante, barrera de confirmación),
   `alejandra-agente/lib.js`/`lib.test.js`, `panel.html` (UI de "Mi cuenta").
-- Pruebas: ver criterio de aceptación 8; sin verificación en vivo todavía (bloqueada).
+- Pruebas: ver criterio de aceptación 8; `/health` verde en los dos Workers tras desplegar.
+  Verificación en vivo (criterio 11) pendiente.
 - Última actualización: 2026-08-12
-- Siguiente acción exacta: el Director completa Google Cloud Console + crea
-  `TOKEN_ENCRYPTION_KEY`; entonces desplegar y verificar en vivo.
+- Siguiente acción exacta: probar en vivo con la cuenta del Director (criterio 11).
 
 ### F6.1-AYUDANTES-PEDIDOS — Mecanismo de delegación + ayudante piloto "Pedidos"
 
