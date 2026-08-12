@@ -192,14 +192,16 @@ El plan histórico queda preservado en `docs/archive/PLAN-EVOLUCION-ALEJANDRA-CO
 
 **F-6.1 — Delegación y agentes especializados**
 
-- Estado/prioridad/tamaño: Pendiente / Media / XL.
+- Estado/prioridad/tamaño: **En curso** (abierta 2026-08-12, ADR-0022) / Media / XL.
 - Objetivo y valor: delegar trabajo con bandeja, límites y supervisión.
 - Alcance/fuera: arquitectura multiagente, delegación y cola; no autonomía abierta.
-- Dependencias/bloqueantes/paralelo: F-1.3, F-2.2, F-4.1, F-5.1; ARC-003/004 resueltos.
-- Referencias/ADR/módulos: Motor de Decisión, Nexo; `PENDIENTE` ADR.
-- Áreas/migraciones: `PENDIENTE`.
-- Riesgos/compliance/pruebas: bucles, costes y permisos; límites, simulación, trazas y kill switch.
-- Aceptación/recuperación/entregables: un agente delegado en tarea acotada y cancelable; habilita Agentes v1.
+- Dependencias/bloqueantes/paralelo: F-1.3, F-2.2, F-4.1 cerradas/adelantadas; **F-5.1
+  exceptuada por ADR-0022** (gobierna capacidades externas nuevas, no delegación sobre el
+  catálogo propio ya existente); ARC-003/004 resueltos.
+- Referencias/ADR/módulos: Motor de Decisión, Nexo; `ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md`.
+- Áreas/migraciones: sin migración D1 en el piloto (Fase 1, tabla `pedidos` ya existente).
+- Riesgos/compliance/pruebas: bucles, costes y permisos; límites, simulación, trazas y kill switch. Ver `ADR-0022` para el contrato de barreras (Motor de Decisión + confirmación humana sin atajos).
+- Aceptación/recuperación/entregables: un agente delegado en tarea acotada y cancelable; habilita Agentes v1. **Piloto Fase 1 ("Pedidos") en curso**, ver `TASKS.md`.
 
 **F-6.2 — Integraciones empresariales**
 

@@ -173,6 +173,12 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   // sesión, y confirmar/rechazar exige además rol encargado+ (comprobado en
   // worker.js, esEncargadoOSuperior()).
   'memoria_listar_pendientes', 'memoria_confirmar_candidata', 'memoria_rechazar_candidata',
+
+  // F-6.1 / ADR-0022 (2026-08-12): ayudantes -- delegar_tarea invoca un sub-agente
+  // acotado; gestionar_pedido crea/modifica pedidos de material de la empresa.
+  // empresa_id sale de la sesión (resolverEid), nunca del input -- mismo criterio
+  // que el resto de esta lista.
+  'delegar_tarea', 'gestionar_pedido',
 ]);
 
 // ADR-0020, rebanada 3 (2026-08-07, enmienda 2). Desde la rebanada 7
@@ -271,6 +277,10 @@ const TOOLS_PROHIBIDAS_CRON = new Set([
   // memoria vigente -- que el cron las apruebe sin nadie delante contradice el
   // propósito de la propia barrera, no solo su nivel de riesgo.
   'memoria_confirmar_candidata', 'memoria_rechazar_candidata',
+  // F-6.1 / ADR-0022 (2026-08-12): delegar en un ayudante o crear/modificar un
+  // pedido no es una decisión que el cron deba tomar por su cuenta sin nadie
+  // delante -- mismo criterio que escribir_bd/configurar_alerta.
+  'delegar_tarea', 'gestionar_pedido',
 ]);
 
 // Se detecta por identidad, no por un flag que haya que acordarse de pasar: el cron
