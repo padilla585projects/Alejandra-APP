@@ -14654,8 +14654,14 @@ async function listarDocsDept(request, env) {
   }
   const deptFinal = !isAdminRole ? departamento : (deptParam || departamento);
   if (obra_id_p && deptFinal) {
+    // FIX-DOCS-DEPT-CARPETA-01 (12/08/2026): docs_dept.carpeta_id es NOT NULL en
+    // producción (su esquema no vive en el repo -- ARC-011 -- y relajar el
+    // constraint sería una migración D1 real, que exige confirmación humana
+    // explícita). El resto del código (subir, editar) siempre asumió que
+    // carpeta_id podía ser NULL para "sin carpeta" -- se usa 0 como sentinela en
+    // su lugar (los ids reales de `carpetas` empiezan en 1).
     const { results } = await env.DB.prepare(
-      'SELECT * FROM docs_dept WHERE obra_id = ? AND departamento = ? AND carpeta_id IS NULL AND empresa_id = ? ORDER BY created_at DESC'
+      'SELECT * FROM docs_dept WHERE obra_id = ? AND departamento = ? AND carpeta_id = 0 AND empresa_id = ? ORDER BY created_at DESC'
     ).bind(parseInt(obra_id_p), deptFinal, empresa_id).all();
     return json(results);
   }
@@ -14693,7 +14699,7 @@ async function subirDocDept(request, env) {
   await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
   const r = await env.DB.prepare(
     'INSERT INTO docs_dept (empresa_id, obra_id, departamento, carpeta_id, r2_key, nombre, mime, tamano, descripcion, subido_por) VALUES (?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, obraId, deptName, carpeta_id ? parseInt(carpeta_id) : null, r2Key, file.name,
+  ).bind(empresa_id, obraId, deptName, carpeta_id ? parseInt(carpeta_id) : 0, r2Key, file.name,
     file.type || null, file.size || null, descripcion, userNombre || rol).run();
   return json({ ok: true, id: r.meta.last_row_id, nombre: file.name }, 201);
 }
@@ -14754,7 +14760,9 @@ async function editarDocDept(id, request, env) {
   }
 
   if (body.carpeta_id !== undefined) {
-    const nuevaId = body.carpeta_id ? parseInt(body.carpeta_id) : null;
+    // FIX-DOCS-DEPT-CARPETA-01 (12/08/2026): ver nota en listarDocsDept -- 0 en vez
+    // de NULL para "sin carpeta", docs_dept.carpeta_id es NOT NULL en producción.
+    const nuevaId = body.carpeta_id ? parseInt(body.carpeta_id) : 0;
     if (nuevaId) {
       const dest = await env.DB.prepare('SELECT id, departamento FROM carpetas WHERE id = ? AND empresa_id = ?').bind(nuevaId, empresa_id).first();
       if (!dest) return err('Carpeta destino no encontrada', 404);
