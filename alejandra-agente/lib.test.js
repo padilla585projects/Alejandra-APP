@@ -1753,7 +1753,7 @@ describe('gestionar_pedido / delegar_tarea (ADR-0022)', () => {
     expect(inicio).toBeGreaterThanOrEqual(0);
     expect(fin).toBeGreaterThan(inicio);
     expect(cuerpo).toMatch(/evaluarInvocacionCognitiva\(env, tb\.name, tb\.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante\)/);
-    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio\)/);
+    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio\)/);
     // No debe declarar ni pasar un Set de confirmación propio -- solo los que
     // llegan como parámetro de ejecutarTool(), extraídos del mensaje real del humano.
     expect(cuerpo).not.toMatch(/new Set\(\)/);

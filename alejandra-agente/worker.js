@@ -9193,6 +9193,16 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const eid = resolverEid(empresa_id);
         const ayudanteTools = ayudante.tools;
         const modoAyudante = `ayudante:${ayudanteId}`;
+        // DELEGACION-SSE-01 (12/08/2026): este bucle no emitía ningún evento SSE -- el
+        // chat se quedaba en "Pensando" en silencio mientras el ayudante hacía varias
+        // llamadas a Claude y ejecutaba sus tools (leer_gmail/enviar_gmail...), sin
+        // ninguna señal intermedia como sí tienen el resto de tools (ver sendSSE en
+        // generar_plano/editar_plano). Se replica aquí el mismo patrón tool_start/
+        // tool_end del bucle principal, y se propaga sendSSE a las tools del ayudante
+        // (antes se les pasaba `undefined`) para que también puedan avisar si son largas.
+        if (typeof sendSSE === 'function') {
+          try { await sendSSE({ type: 'progreso', mensaje: `🤝 Delegando en el ayudante "${ayudanteId}"...` }); } catch (_) {}
+        }
         let ayMessages = [{ role: 'user', content: instruccion }];
         let ayResp = await llamarAnthropic(env, ayMessages, ayudanteTools, MODEL_EXPERTO, 1024, ayudante.systemPrompt);
         let ayIter = 0;
@@ -9204,10 +9214,18 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           ayMessages.push({ role: 'assistant', content: ayResp.content });
           const toolResults = [];
           for (const tb of toolBlocks) {
+            const t0 = Date.now();
+            if (typeof sendSSE === 'function') {
+              try { await sendSSE({ type: 'tool_start', nombre: tb.name, input: tb.input }); } catch (_) {}
+            }
             const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante);
             const resultado = control.permitida
-              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
+              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
               : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
+            if (typeof sendSSE === 'function') {
+              const previewText = typeof resultado === 'string' ? resultado.substring(0, 200) : JSON.stringify(resultado).substring(0, 200);
+              try { await sendSSE({ type: 'tool_end', nombre: tb.name, preview: previewText, duracion_ms: Date.now() - t0 }); } catch (_) {}
+            }
             const content = parseToolResultContent(resultado);
             toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content });
           }
