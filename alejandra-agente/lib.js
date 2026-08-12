@@ -179,6 +179,9 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   // empresa_id sale de la sesión (resolverEid), nunca del input -- mismo criterio
   // que el resto de esta lista.
   'delegar_tarea', 'gestionar_pedido',
+  // F-6.1 Fase 2 (2026-08-12): ayudante de Correos -- leer/enviar Gmail exige
+  // sesión (el usuario_id determina de qué buzón conectado se lee/envía).
+  'leer_gmail', 'enviar_gmail',
 ]);
 
 // ADR-0020, rebanada 3 (2026-08-07, enmienda 2). Desde la rebanada 7
@@ -281,6 +284,9 @@ const TOOLS_PROHIBIDAS_CRON = new Set([
   // pedido no es una decisión que el cron deba tomar por su cuenta sin nadie
   // delante -- mismo criterio que escribir_bd/configurar_alerta.
   'delegar_tarea', 'gestionar_pedido',
+  // F-6.1 Fase 2 (2026-08-12): leer/enviar Gmail en nombre de un usuario concreto
+  // no es algo que el cron deba iniciar sin nadie delante.
+  'leer_gmail', 'enviar_gmail',
 ]);
 
 // Se detecta por identidad, no por un flag que haya que acordarse de pasar: el cron
@@ -555,6 +561,19 @@ function extraerCodigosConfirmacion(mensajeHumano) {
   return codigos;
 }
 
+// F-6.1 Fase 2 (ADR-0022): misma idea que extraerCodigosConfirmacion() pero para
+// enviar_gmail, con frase propia -- deliberadamente un Set separado (no el mismo
+// que CONFIRMO BORRADO) para que un código de una frase nunca autorice la
+// operación de la otra, mismo criterio que CONFIRMO MIGRACION en worker.js raíz.
+function extraerCodigosConfirmacionEnvio(mensajeHumano) {
+  const codigos = new Set();
+  if (typeof mensajeHumano !== 'string') return codigos;
+  const re = /CONFIRMO\s+ENVIO\s+([0-9A-Fa-f]{6})\b/g;
+  let m;
+  while ((m = re.exec(mensajeHumano)) !== null) codigos.add(m[1].toUpperCase());
+  return codigos;
+}
+
 // Código ligado a una operación concreta: SHA-256 del SQL normalizado (espacios
 // colapsados + mayúsculas), primeros 6 hex. Así la confirmación del humano solo
 // autoriza ESA operación exacta. Mismo algoritmo que el worker web para que la
@@ -767,6 +786,7 @@ export {
   calcularEsperaReintentoMs,
   FRASE_CONFIRMACION_DESTRUCTIVA,
   extraerCodigosConfirmacion,
+  extraerCodigosConfirmacionEnvio,
   codigoConfirmacionOp,
   whereEsTrivialmenteCierto,
   detectarEscrituraDestructivaBalanceada,

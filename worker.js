@@ -610,6 +610,54 @@ async function getObrasAsignadasUsuario(env, usuarioId, empresaId, obraPrincipal
   return [...new Set([...base, ...(results || []).map(r => r.obra_id)])];
 }
 
+// F-6.1 Fase 2 (ADR-0022): ayudante de Correos, piloto Gmail personal vía OAuth.
+// gmail_oauth_state: nonce de un solo uso que amarra el callback de Google al
+// usuario_id/empresa_id de la sesión que inició el flujo (mismo patrón que
+// auth_nonces del login móvil, ver googleMobileRedirect/googleCheckNonce).
+// gmail_oauth_tokens: un refresh_token por usuario, cifrado en reposo (ver
+// cifrarToken/descifrarToken más abajo) -- nunca en claro en D1.
+async function ensureGmailOAuthStateTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gmail_oauth_state (
+    nonce TEXT PRIMARY KEY,
+    usuario_id INTEGER NOT NULL,
+    empresa_id INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+}
+async function ensureGmailTokensTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gmail_oauth_tokens (
+    usuario_id INTEGER PRIMARY KEY,
+    empresa_id INTEGER NOT NULL,
+    email_conectado TEXT,
+    refresh_token_cifrado TEXT NOT NULL,
+    iv TEXT NOT NULL,
+    scope TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+}
+
+// Cifrado en reposo del refresh_token: no había ningún patrón reversible previo
+// en el repo (hashPassword es de un solo sentido; el AES-GCM de VAPID cifra
+// payloads de push efímeros, no secretos propios que haya que releer después).
+// Clave maestra en env.TOKEN_ENCRYPTION_KEY (32 bytes, base64url) -- secreto de
+// Cloudflare, creado y gestionado solo por el Director, igual que RESEND_API_KEY.
+async function _importClaveCifradoTokens(env) {
+  if (!env.TOKEN_ENCRYPTION_KEY) throw new Error('TOKEN_ENCRYPTION_KEY no configurada');
+  return crypto.subtle.importKey('raw', _fromb64u(env.TOKEN_ENCRYPTION_KEY), 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+async function cifrarToken(env, textoPlano) {
+  const key = await _importClaveCifradoTokens(env);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(textoPlano)));
+  return { cifrado: _b64u(ct), iv: _b64u(iv) };
+}
+async function descifrarToken(env, cifradoB64u, ivB64u) {
+  const key = await _importClaveCifradoTokens(env);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: _fromb64u(ivB64u) }, key, _fromb64u(cifradoB64u));
+  return new TextDecoder().decode(pt);
+}
+
 // MODULOS-91 (24/07/2026): getAuthContext() nunca estuvo definida en este archivo, pero la
 // llaman 36 handlers de 9 módulos completos (evaluaciones de proveedores NEW-85, órdenes de
 // cambio NEW-86, ensayos de materiales NEW-87, residuos NEW-88, partes de maquinaria NEW-89,
@@ -5437,6 +5485,13 @@ export default {
       if (path === '/auth/google/callback' && method === 'POST') return await googleAuthCallback(request, env);
       if (path === '/auth/google/mobile-redirect' && method === 'GET') return await googleMobileRedirect(request, env);
       if (path === '/auth/google/check-nonce' && method === 'GET') return await googleCheckNonce(request, env);
+      // F-6.1 Fase 2 (ADR-0022): ayudante de Correos, piloto Gmail personal.
+      if (path === '/auth/gmail/url'        && method === 'GET')    return await gmailAuthUrl(request, env);
+      if (path === '/auth/gmail/callback'   && method === 'GET')    return await gmailAuthCallback(request, env);
+      if (path === '/auth/gmail/status'     && method === 'GET')    return await gmailAuthStatus(request, env);
+      if (path === '/auth/gmail'            && method === 'DELETE') return await gmailAuthDesconectar(request, env);
+      if (path === '/internal/gmail/listar' && method === 'POST')   return await internalGmailListar(request, env);
+      if (path === '/internal/gmail/enviar' && method === 'POST')   return await internalGmailEnviar(request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -13623,6 +13678,209 @@ async function googleCheckNonce(request, env) {
   // Borrar nonce usado (one-time)
   await env.DB.prepare('DELETE FROM auth_nonces WHERE nonce = ?').bind(nonce).run().catch(() => {});
   try { return json(JSON.parse(row.result)); } catch { return json({ error: 'Resultado inválido' }, 500); }
+}
+
+// F-6.1 Fase 2 (ADR-0022): flujo OAuth de Gmail (leer/enviar), separado a
+// propósito del login por Google de arriba -- ese pide access_type='online' y
+// nunca obtiene refresh_token, así que no sirve para acceso persistente a la
+// Gmail API. access_type='offline'+prompt='consent' fuerza a Google a devolver
+// uno siempre, para poder actuar en nombre del usuario sin que esté conectado.
+const GMAIL_OAUTH_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
+const GMAIL_OAUTH_REDIRECT_URI = 'https://alejandra-app-api.alejandra-app.workers.dev/auth/gmail/callback';
+
+async function gmailAuthUrl(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  if (!env.GOOGLE_OAUTH_CLIENT_ID) return err('Google OAuth no configurado', 503);
+  await ensureGmailOAuthStateTable(env);
+  const nonce = randomHex(24);
+  await env.DB.prepare(
+    'INSERT INTO gmail_oauth_state (nonce, usuario_id, empresa_id) VALUES (?,?,?)'
+  ).bind(nonce, auth.usuario_id, auth.empresa_id || null).run();
+  const params = new URLSearchParams({
+    client_id: env.GOOGLE_OAUTH_CLIENT_ID,
+    redirect_uri: GMAIL_OAUTH_REDIRECT_URI,
+    response_type: 'code',
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: GMAIL_OAUTH_SCOPES,
+    state: nonce,
+  });
+  return json({ ok: true, url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
+}
+
+async function gmailAuthCallback(request, env) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+  const nonce = url.searchParams.get('state');
+  const errorParam = url.searchParams.get('error');
+  const paginaError = (msg) => new Response(
+    `<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>⚠️ No se pudo conectar Gmail</h2><p>${msg}</p></body>`,
+    { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
+  if (errorParam) return paginaError(`Google denegó el acceso: ${errorParam}`);
+  if (!code || !nonce) return paginaError('Falta code o state.');
+  if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return paginaError('Google OAuth no configurado.');
+
+  await ensureGmailOAuthStateTable(env);
+  const estado = await env.DB.prepare('SELECT usuario_id, empresa_id FROM gmail_oauth_state WHERE nonce = ?').bind(nonce).first();
+  if (!estado) return paginaError('Enlace de autorización caducado o ya usado. Volvé a intentarlo desde Ajustes.');
+  await env.DB.prepare('DELETE FROM gmail_oauth_state WHERE nonce = ?').bind(nonce).run(); // un solo uso
+
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: env.GOOGLE_OAUTH_CLIENT_ID,
+      client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+      redirect_uri: GMAIL_OAUTH_REDIRECT_URI,
+      grant_type: 'authorization_code',
+    }).toString(),
+  });
+  const tokenData = await tokenRes.json();
+  if (!tokenData.refresh_token) {
+    const msg = tokenData.error_description || tokenData.error
+      || 'Google no devolvió refresh_token. Si ya habías conectado esta cuenta antes, revocá el acceso en myaccount.google.com/permissions y reintentá.';
+    return paginaError(msg);
+  }
+
+  const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: 'Bearer ' + tokenData.access_token },
+  });
+  const gUser = await userRes.json();
+
+  await ensureGmailTokensTable(env);
+  const { cifrado, iv } = await cifrarToken(env, tokenData.refresh_token);
+  await env.DB.prepare(`
+    INSERT INTO gmail_oauth_tokens (usuario_id, empresa_id, email_conectado, refresh_token_cifrado, iv, scope, updated_at)
+    VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(usuario_id) DO UPDATE SET
+      empresa_id=excluded.empresa_id, email_conectado=excluded.email_conectado,
+      refresh_token_cifrado=excluded.refresh_token_cifrado, iv=excluded.iv,
+      scope=excluded.scope, updated_at=CURRENT_TIMESTAMP
+  `).bind(estado.usuario_id, estado.empresa_id, gUser.email || null, cifrado, iv, tokenData.scope || GMAIL_OAUTH_SCOPES).run();
+
+  return new Response(
+    `<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>✅ Gmail conectado</h2><p>${gUser.email || ''}</p><p>Ya podés cerrar esta pestaña y volver a Alejandra.</p></body>`,
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
+}
+
+async function gmailAuthStatus(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  await ensureGmailTokensTable(env);
+  const row = await env.DB.prepare('SELECT email_conectado, updated_at FROM gmail_oauth_tokens WHERE usuario_id = ?').bind(auth.usuario_id).first();
+  return json({ ok: true, conectado: !!row, email: row?.email_conectado || null, actualizado: row?.updated_at || null });
+}
+
+async function gmailAuthDesconectar(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  await ensureGmailTokensTable(env);
+  await env.DB.prepare('DELETE FROM gmail_oauth_tokens WHERE usuario_id = ?').bind(auth.usuario_id).run();
+  return json({ ok: true });
+}
+
+// Refresca un access_token de corta duración a partir del refresh_token cifrado
+// guardado del usuario. Usado solo por los endpoints internos de abajo -- nunca
+// expuesto a sesión de usuario ni al modelo.
+async function _obtenerAccessTokenGmail(env, usuarioId) {
+  await ensureGmailTokensTable(env);
+  const row = await env.DB.prepare('SELECT refresh_token_cifrado, iv, email_conectado FROM gmail_oauth_tokens WHERE usuario_id = ?').bind(usuarioId).first();
+  if (!row) return { error: 'Este usuario no tiene Gmail conectado. Conectalo desde Ajustes → Gmail.' };
+  if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return { error: 'Google OAuth no configurado' };
+  const refreshToken = await descifrarToken(env, row.refresh_token_cifrado, row.iv);
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id: env.GOOGLE_OAUTH_CLIENT_ID,
+      client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+      grant_type: 'refresh_token',
+    }).toString(),
+  });
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) return { error: tokenData.error_description || tokenData.error || 'No se pudo refrescar el token de Gmail.' };
+  return { accessToken: tokenData.access_token, email: row.email_conectado };
+}
+
+// Codifica bytes UTF-8 a base64 estándar (con padding) -- para el header MIME
+// "Subject" (encoded-word), distinto del base64url sin padding que exige
+// messages.send (ver _b64u, ya usado para VAPID). Bucle en vez de spread para no
+// depender de un límite de argumentos de String.fromCharCode con textos largos.
+function _b64std(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+// Endpoints internos servidor-a-servidor: los llama alejandra-agente (nunca un
+// navegador) vía Service Binding API_WEB, autenticados con AGENT_INTERNAL_SECRET
+// -- mismo patrón que _getAuthPlano()/generar_plano. usuario_id llega en el body,
+// resuelto por alejandra-agente a partir de SU sesión ya verificada, nunca del
+// modelo (ver TOOL_LEER_GMAIL/TOOL_ENVIAR_GMAIL).
+async function internalGmailListar(request, env) {
+  const secreto = request.headers.get('X-Internal-Secret');
+  if (!secreto || !env.AGENT_INTERNAL_SECRET || secreto !== env.AGENT_INTERNAL_SECRET) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const usuarioId = body.usuario_id;
+  if (!usuarioId) return err('Falta usuario_id', 400);
+  const { accessToken, email, error } = await _obtenerAccessTokenGmail(env, usuarioId);
+  if (error) return json({ ok: false, error });
+
+  const limit = Math.min(Math.max(parseInt(body.limit) || 10, 1), 25);
+  const q = body.query ? `&q=${encodeURIComponent(body.query)}` : '';
+  const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limit}${q}`, {
+    headers: { Authorization: 'Bearer ' + accessToken },
+  });
+  const listData = await listRes.json();
+  if (!listRes.ok) return json({ ok: false, error: listData.error?.message || 'Error listando Gmail.' });
+  const mensajes = [];
+  for (const m of (listData.messages || [])) {
+    const mRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    const mData = await mRes.json();
+    if (!mRes.ok) continue;
+    const headers = Object.fromEntries((mData.payload?.headers || []).map(h => [h.name, h.value]));
+    mensajes.push({ id: m.id, de: headers.From || '', asunto: headers.Subject || '(sin asunto)', fecha: headers.Date || '', resumen: mData.snippet || '' });
+  }
+  return json({ ok: true, email, mensajes });
+}
+
+async function internalGmailEnviar(request, env) {
+  const secreto = request.headers.get('X-Internal-Secret');
+  if (!secreto || !env.AGENT_INTERNAL_SECRET || secreto !== env.AGENT_INTERNAL_SECRET) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const usuarioId = body.usuario_id;
+  const { para, asunto, cuerpo } = body;
+  if (!usuarioId) return err('Falta usuario_id', 400);
+  if (!para || !asunto) return err('Falta destinatario o asunto', 400);
+  const { accessToken, email, error } = await _obtenerAccessTokenGmail(env, usuarioId);
+  if (error) return json({ ok: false, error });
+
+  const raw = [
+    `From: ${email}`,
+    `To: ${para}`,
+    `Subject: =?UTF-8?B?${_b64std(new TextEncoder().encode(asunto))}?=`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    '',
+    cuerpo || '',
+  ].join('\r\n');
+  const rawB64u = _b64u(new TextEncoder().encode(raw));
+
+  const sendRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw: rawB64u }),
+  });
+  const sendData = await sendRes.json();
+  if (!sendRes.ok) return json({ ok: false, error: sendData.error?.message || 'Error enviando correo.' });
+  return json({ ok: true, id: sendData.id, desde: email });
 }
 
 async function crearInvitacion(request, env) {

@@ -44,6 +44,7 @@ import {
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
   extraerCodigosConfirmacion,
+  extraerCodigosConfirmacionEnvio,
   codigoConfirmacionOp,
   detectarEscrituraDestructivaBalanceada,
   redactarTexto,
@@ -1453,10 +1454,10 @@ async function registrarUsoTool(env, { tool, empresaId = null, usuarioId = null,
 // Envuelve executarTool() para capturar success/error sin tocar cada case
 // del switch. Fail-open: si registrarUsoTool falla, el resultado de la tool
 // se devuelve igual (la telemetría nunca debe romper el chat).
-async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados) {
+async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio) {
   let resultado, err;
   try {
-    resultado = await ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados);
+    resultado = await ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio);
   } catch (e) {
     err = e && e.message ? e.message : String(e);
     resultado = JSON.stringify({ ok: false, error: `Error ejecutando "${nombre}": ${err}`, tool: nombre });
@@ -2004,6 +2005,45 @@ const TOOL_GESTIONAR_PEDIDO = {
   nivel_riesgo: 'N1',
 };
 
+// F-6.1 Fase 2 (ADR-0022): ayudante de Correos, piloto Gmail personal vía OAuth.
+// Las llamadas reales viven en worker.js raíz (que ya tiene el cliente OAuth de
+// Google y sirve panel.html) -- este Worker solo hace de cliente HTTP contra
+// esos endpoints internos vía Service Binding API_WEB, mismo patrón exacto que
+// generar_plano/editar_plano (ver esos case para la plantilla). Deliberadamente
+// NO se añaden a ningún TOOLS_POR_EXPERTO[...]: solo las ofrece el ayudante
+// "correos", invocado vía delegar_tarea.
+const TOOL_LEER_GMAIL = {
+  name: 'leer_gmail',
+  description: 'Lista/resume los últimos correos de la bandeja de Gmail conectada por el usuario (solo lectura). Requiere que el usuario haya conectado su Gmail desde Ajustes -- si no, la tool lo indica.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      limit: { type: 'number', description: 'Cuántos correos traer (por defecto 10, máximo 25)' },
+      query: { type: 'string', description: 'Filtro opcional en sintaxis de búsqueda de Gmail (ej. "is:unread", "from:proveedor@x.com")' }
+    }
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N0',
+};
+
+const TOOL_ENVIAR_GMAIL = {
+  name: 'enviar_gmail',
+  description: 'Envía un correo desde la cuenta de Gmail real del usuario (no desde un remitente genérico de la empresa -- distinto de enviar_email). Exige que el usuario haya conectado su Gmail y que un humano confirme el envío exacto con "CONFIRMO ENVIO <código>" en su mensaje: nunca se envía en el mismo turno en que se pide.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      para:    { type: 'string', description: 'Email destinatario' },
+      asunto:  { type: 'string', description: 'Asunto del correo' },
+      cuerpo:  { type: 'string', description: 'Cuerpo del correo en texto plano' }
+    },
+    required: ['para', 'asunto', 'cuerpo']
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
+};
+
 // F-6.1 / ADR-0022 (2026-08-12): registro de "ayudantes" -- sub-agentes con un
 // system prompt propio y un subconjunto FIJO de tools ya existentes del catálogo,
 // invocados explícitamente por Alejandra vía delegar_tarea (ver su `case`). Un
@@ -2015,11 +2055,15 @@ const AYUDANTES = {
     tools: [TOOL_GESTIONAR_PEDIDO],
     systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.',
   },
+  correos: {
+    tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL],
+    systemPrompt: 'Eres el ayudante de Correos de Alejandra. Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella.',
+  },
 };
 
 const TOOL_DELEGAR_TAREA = {
   name: 'delegar_tarea',
-  description: `Delega una tarea concreta en un ayudante especializado (un sub-agente con su propio system prompt y un subconjunto acotado de tools). Úsalo cuando lo que pide el usuario encaja mejor en un flujo de trabajo dedicado que resolverlo tú directamente. Ayudantes disponibles: ${Object.keys(AYUDANTES).join(', ')} (pedidos: gestiona pedidos de material de obra). El ayudante nunca salta las barreras de confirmación humana ni el Motor de Decisión.`,
+  description: `Delega una tarea concreta en un ayudante especializado (un sub-agente con su propio system prompt y un subconjunto acotado de tools). Úsalo cuando lo que pide el usuario encaja mejor en un flujo de trabajo dedicado que resolverlo tú directamente. Ayudantes disponibles: ${Object.keys(AYUDANTES).join(', ')} (pedidos: gestiona pedidos de material de obra; correos: lee/resume y envía correo desde el Gmail conectado del usuario). El ayudante nunca salta las barreras de confirmación humana ni el Motor de Decisión.`,
   input_schema: {
     type: 'object',
     properties: {
@@ -5228,6 +5272,9 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // Códigos de confirmación tecleados por el HUMANO en su mensaje real (barrera
     // anti-borrado de escribir_bd). Se extraen del mensaje, nunca del tool_input.
     const codigosConfirmados = extraerCodigosConfirmacion(mensaje);
+    // F-6.1 Fase 2 (ADR-0022): frase separada para enviar_gmail, mismo criterio
+    // que arriba -- ver extraerCodigosConfirmacionEnvio (lib.js).
+    const codigosConfirmadosEnvio = extraerCodigosConfirmacionEnvio(mensaje);
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
       const toolBlocks = respAPI.content.filter(b => b.type === 'tool_use');
@@ -5240,7 +5287,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
-          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados)
+          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // ver_archivo con imágenes devuelve JSON con content blocks para visión
@@ -5391,6 +5438,9 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // Códigos de confirmación tecleados por el HUMANO en su mensaje real (barrera
     // anti-borrado de escribir_bd). Se extraen del mensaje, nunca del tool_input.
     const codigosConfirmados = extraerCodigosConfirmacion(mensaje);
+    // F-6.1 Fase 2 (ADR-0022): frase separada para enviar_gmail, mismo criterio
+    // que arriba -- ver extraerCodigosConfirmacionEnvio (lib.js).
+    const codigosConfirmadosEnvio = extraerCodigosConfirmacionEnvio(mensaje);
     // Watchdog para detectar que nos acercamos al límite de tiempo (~25s)
     const inicioProc = Date.now();
     const LIMITE_PROC_MS = 22000; // 22s deja margen para guardar BD + FCM
@@ -5415,7 +5465,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
         const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
-          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
+          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // Para SSE preview, extraer solo texto (no base64 de imágenes)
@@ -6708,7 +6758,7 @@ async function esEncargadoOSuperior(env, usuario_id) {
 // indirecta vía el historial de chat que se le pasa como contexto al modelo.
 // Ahora el default es fail-closed (false); ejecutarReflexion() además pasa
 // los valores explícitos para dejar la intención clara en el código.
-async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false, codigosConfirmados = new Set()) {
+async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false, codigosConfirmados = new Set(), codigosConfirmadosEnvio = new Set()) {
   // Normaliza un posible empresa_id a entero positivo o null. Necesario porque
   // el 'empresa_id' de contexto puede llegar como el string literal 'default'
   // (sentinela de sesion sin empresa asignada, usado en varias partes de este
@@ -9140,7 +9190,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           for (const tb of toolBlocks) {
             const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante);
             const resultado = control.permitida
-              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, undefined, authOk, esDevVerificado, codigosConfirmados)
+              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
               : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
             const content = parseToolResultContent(resultado);
             toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content });
@@ -9163,6 +9213,59 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return `🤝 [Ayudante: ${ayudanteId}]\n${textoAyudante}`;
       } catch (err) {
         return `Error delegando en el ayudante: ${err.message}`;
+      }
+    }
+
+    // F-6.1 Fase 2 (ADR-0022): lectura de Gmail -- N0, sin confirmación. Solo la
+    // ofrece el ayudante "correos" (ver AYUDANTES). La llamada real vive en
+    // worker.js raíz (POST /internal/gmail/listar); este Worker es cliente vía
+    // Service Binding API_WEB, mismo patrón que generar_plano/editar_plano.
+    case 'leer_gmail': {
+      try {
+        if (!env.API_WEB) return JSON.stringify({ ok: false, error: 'Service binding API_WEB no disponible.' });
+        const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/gmail/listar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+          body: JSON.stringify({ usuario_id, limit: input.limit, query: input.query }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.ok === false) return JSON.stringify({ ok: false, error: data.error || `Error leyendo Gmail (HTTP ${resp.status})` });
+        if (!data.mensajes || !data.mensajes.length) return JSON.stringify({ ok: true, mensaje: 'No hay correos.' });
+        const lista = data.mensajes.map(m => `• [${m.fecha}] ${m.de} — ${m.asunto}\n  ${m.resumen}`).join('\n');
+        return `📧 Gmail (${data.email}), últimos ${data.mensajes.length}:\n${lista}`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error leyendo Gmail: ' + e.message });
+      }
+    }
+
+    // F-6.1 Fase 2 (ADR-0022): envío desde Gmail -- N2, exige confirmación humana
+    // real "CONFIRMO ENVIO <código>" (frase propia, Set separado de CONFIRMO
+    // BORRADO -- ver extraerCodigosConfirmacionEnvio en lib.js). El código va
+    // atado al destinatario+asunto+cuerpo exactos; el ayudante nunca puede
+    // autoconfirmarse. Solo la ofrece el ayudante "correos".
+    case 'enviar_gmail': {
+      try {
+        const para = String(input.para || '').trim();
+        const asunto = String(input.asunto || '').trim();
+        const cuerpo = String(input.cuerpo || '');
+        if (!para || !asunto) return '❌ Faltan "para" o "asunto".';
+
+        const codigo = await codigoConfirmacionOp(`ENVIO_GMAIL::${para}::${asunto}::${cuerpo}`);
+        if (!(codigosConfirmadosEnvio instanceof Set) || !codigosConfirmadosEnvio.has(codigo)) {
+          return `⚠️ ENVÍO PENDIENTE DE CONFIRMACIÓN — para: ${para} · asunto: "${asunto}". Para autorizar SOLO este correo exacto, el usuario humano debe escribir literalmente "CONFIRMO ENVIO ${codigo}" en su próximo mensaje. NO puedes autoconfirmar ni teclear el código en su nombre: debe escribirlo el humano. Muéstrale el código (${codigo}) y un resumen del correo, y esperá. No reintentes hasta que el humano lo haya escrito.`;
+        }
+
+        if (!env.API_WEB) return JSON.stringify({ ok: false, error: 'Service binding API_WEB no disponible.' });
+        const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/gmail/enviar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+          body: JSON.stringify({ usuario_id, para, asunto, cuerpo }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.ok === false) return JSON.stringify({ ok: false, error: data.error || `Error enviando correo (HTTP ${resp.status})` });
+        return `✅ Correo enviado desde ${data.desde} a ${para}.`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error enviando correo: ' + e.message });
       }
     }
 

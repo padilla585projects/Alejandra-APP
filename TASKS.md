@@ -1,9 +1,10 @@
 # TASKS — Cola operativa inmediata
 
-Estado (actualizado 2026-08-12): **`F6.1-AYUDANTES-PEDIDOS` fusionada a `main`** (PR #109,
-commit `e65d8c4`, mecanismo de delegación + ayudante piloto "Pedidos", ADR-0022). Workflow de
-despliegue de `alejandra-agente` iniciado (run 31579447927), **en espera de aprobación del
-entorno `production`** — pendiente exclusivamente del Director. Ver ficha abajo.
+Estado (actualizado 2026-08-12): **`F6.1-AYUDANTES-PEDIDOS` (Fase 1) desplegada y verificada en
+producción.** **`F6.1-AYUDANTES-CORREOS` (Fase 2, piloto Gmail personal) con código completo,
+tests en verde, sin desplegar** — bloqueada hasta que el Director complete los pasos de Google
+Cloud Console (habilitar Gmail API + scopes + redirect URI) y cree el secreto
+`TOKEN_ENCRYPTION_KEY`. Ver fichas abajo.
 
 Estado (actualizado 2026-08-11, noche): **No hay ninguna tarea activa, en curso ni
 bloqueada.** Última sesión: reorganización de "Trabajadores" en panel.html (plantilla
@@ -214,6 +215,58 @@ Siguiente acción exacta:
 ```
 
 ## TAREAS ACTIVAS
+
+### F6.1-AYUDANTES-CORREOS — Ayudante "Correos", piloto Gmail personal vía OAuth
+
+- ID: F6.1-AYUDANTES-CORREOS
+- Título: Fase 2 de `F-6.1` (ADR-0022) — ayudante de Correos sobre Gmail personal del
+  Director, vía OAuth 2.0 real (no delegación de dominio, esa es exclusiva de Workspace)
+- Fase: F-6.1 — Delegación y agentes especializados
+- Estado: **código completo, tests en verde, sin desplegar** — bloqueada por pasos externos
+- Prioridad: Media
+- Rama: (pendiente de crear)
+- Responsable actual: —
+- Objetivo: que el ayudante "correos" pueda leer/resumir la bandeja de Gmail del usuario y
+  enviar correos desde su cuenta real (no desde un remitente fijo de empresa), con la misma
+  barrera de confirmación humana que cualquier acción N2.
+- Criterios de aceptación:
+  1. ✅ Tabla `gmail_oauth_state` (nonce de un solo uso) y `gmail_oauth_tokens` (refresh_token
+     cifrado por usuario) en `worker.js` raíz, patrón `ensureXxxTable()`.
+  2. ✅ Cifrado en reposo AES-GCM (`cifrarToken`/`descifrarToken`, clave `TOKEN_ENCRYPTION_KEY`)
+     — no había ningún patrón reversible previo en el repo, se construyó de cero.
+  3. ✅ Rutas `GET /auth/gmail/url`, `GET /auth/gmail/callback`, `GET /auth/gmail/status`,
+     `DELETE /auth/gmail` (worker.js raíz) reutilizando `GOOGLE_OAUTH_CLIENT_ID/SECRET` ya
+     existentes, con `access_type=offline`+`prompt=consent` (el login normal no los pide).
+  4. ✅ Endpoints internos `POST /internal/gmail/listar`/`enviar` protegidos con
+     `AGENT_INTERNAL_SECRET`, llamados desde `alejandra-agente` vía Service Binding `API_WEB`
+     (mismo patrón que `generar_plano`/`editar_plano`).
+  5. ✅ Tools `leer_gmail` (N0) y `enviar_gmail` (N2) + `AYUDANTES.correos`, deliberadamente
+     fuera de `TOOLS_POR_EXPERTO` (solo accesibles vía `delegar_tarea`).
+  6. ✅ Barrera humana real `CONFIRMO ENVIO <código>` para `enviar_gmail` — frase y `Set`
+     separados de `CONFIRMO BORRADO` (`extraerCodigosConfirmacionEnvio`, hilada por
+     `ejecutarToolConTelemetria`/`ejecutarTool` y por el loop interno de `delegar_tarea`).
+  7. ✅ UI mínima en `panel.html` (modal "Mi cuenta"): conectar/ver estado/desconectar Gmail,
+     mismo patrón que el bloque ya existente de vincular Telegram personal.
+  8. ✅ Tests: gating, exclusión de cron, no-oferta directa a Alejandra, extracción de
+     `CONFIRMO ENVIO` sin cruzarse con `CONFIRMO BORRADO`, código atado al contenido exacto del
+     correo. 207/207 en verde (12 tests nuevos sobre la base de Fase 1).
+  9. **Pendiente, bloqueado en el Director**: completar los pasos de Google Cloud Console
+     (Gmail API habilitada, scopes `gmail.readonly`/`gmail.send` añadidos al consent screen,
+     test user, redirect URI `https://alejandra-app-api.alejandra-app.workers.dev/auth/gmail/callback`
+     añadido al cliente OAuth existente) y crear el secreto `TOKEN_ENCRYPTION_KEY` (32 bytes
+     aleatorios, base64url) en el entorno `production`.
+  10. **Pendiente**: desplegar los dos Workers y verificar de extremo a extremo con la cuenta
+      real del Director (conectar Gmail, pedirle a Alejandra que delegue "resume mis últimos
+      correos", pedirle que envíe uno de prueba y confirmar que exige `CONFIRMO ENVIO`).
+- Dependencias: ninguna de código; sí de configuración externa (punto 9).
+- Bloqueos: pasos 9-10 dependen del Director.
+- Archivos principales: `worker.js` (tabla, cifrado, rutas OAuth, endpoints internos),
+  `alejandra-agente/worker.js` (tools, ayudante, barrera de confirmación),
+  `alejandra-agente/lib.js`/`lib.test.js`, `panel.html` (UI de "Mi cuenta").
+- Pruebas: ver criterio de aceptación 8; sin verificación en vivo todavía (bloqueada).
+- Última actualización: 2026-08-12
+- Siguiente acción exacta: el Director completa Google Cloud Console + crea
+  `TOKEN_ENCRYPTION_KEY`; entonces desplegar y verificar en vivo.
 
 ### F6.1-AYUDANTES-PEDIDOS — Mecanismo de delegación + ayudante piloto "Pedidos"
 

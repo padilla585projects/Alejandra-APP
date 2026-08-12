@@ -3,6 +3,24 @@
 - Actualizado: 2026-08-12
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
+## F-6.1 Fase 2 — Ayudante de Correos, piloto Gmail personal (2026-08-12)
+
+Código completo y con tests en verde (207/207), **sin desplegar todavía**: bloqueado hasta que
+el Director complete la configuración externa que solo él puede hacer — habilitar la Gmail API
+y sus scopes en la consola de Google Cloud (sobre el cliente OAuth que ya existe para el login),
+y crear el secreto `TOKEN_ENCRYPTION_KEY` en el entorno `production`.
+
+Piloto sobre la cuenta Gmail personal del Director (decisión explícita: de los tres proveedores
+posibles — Workspace, Microsoft 365, IMAP genérico — se probó primero con la cuenta personal,
+vía OAuth 2.0 real con `access_type=offline`; la delegación a nivel de dominio queda para un
+piloto Workspace futuro). Se construyó de cero un flujo OAuth **separado** del login por Google
+existente (que solo pide `access_type=online` y nunca obtiene `refresh_token`), un cifrado en
+reposo AES-GCM para el `refresh_token` (no había ningún patrón reversible previo en el repo), y
+una barrera de confirmación humana `CONFIRMO ENVIO <código>` para `enviar_gmail` — frase y `Set`
+separados de `CONFIRMO BORRADO`, mismo criterio que `CONFIRMO MIGRACION` en `worker.js` raíz, para
+que un código de una frase nunca autorice la operación de la otra. Detalle completo en
+`TASKS.md` (`F6.1-AYUDANTES-CORREOS`).
+
 ## F-6.1 — Ayudantes: delegación acotada (2026-08-12, ADR-0022)
 
 A petición del Director ("que Alejandra tenga ayudantes para administrar los flujos de trabajo,
