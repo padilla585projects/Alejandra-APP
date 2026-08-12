@@ -23002,6 +23002,18 @@ document.getElementById('wInput').focus();
     input.value = '';
     input.style.height = '';
 
+    // FIX-CHAT-UPLOAD-FEEDBACK-01 (12/08/2026): la subida de adjuntos de abajo podía
+    // tardar varios segundos (archivos grandes, varios a la vez) sin ningún indicio
+    // visual -- ni el botón cambiaba ni aparecía nada en el chat, parecía colgado.
+    // Mismo criterio que FIX-MODAL-LOADING-01 (abrirModal()): avisar ANTES de arrancar
+    // la subida, no solo después de que termine.
+    const aiSendBtnEl = document.getElementById('aiSendBtn');
+    aiSendBtnEl.disabled = true;
+    const totalAdjuntos = _aiAdjuntos.length + (_aiImage ? 1 : 0);
+    const subiendoEl = totalAdjuntos > 0
+      ? appendMsg('bot', `📤 Subiendo ${totalAdjuntos} archivo${totalAdjuntos > 1 ? 's' : ''}...`)
+      : null;
+
     // Subir adjuntos (PDF, hojas de cálculo, etc.) a R2 -- mismo patrón que el FAB
     // (alejandrEnviar). Antes _aiAdjuntos.slice() se mandaba tal cual al backend,
     // como si ya fueran URLs, cuando en realidad son {b64,mime,name,size} sin subir.
@@ -23029,6 +23041,7 @@ document.getElementById('wInput').focus();
         if (upData.ok) adjuntos.push(upData.url);
       } catch(ue) { console.warn('Upload error:', ue); }
     }
+    if (subiendoEl) subiendoEl.remove();
     const _aiAdjuntosCount = _aiAdjuntos.length;
     _aiAdjuntos = [];
     _aiRenderAdjuntos();
@@ -23038,7 +23051,6 @@ document.getElementById('wInput').focus();
       : msgText + (adjuntos.length ? '<br>📎 ' + adjuntos.length + ' archivo(s)' : '');
     appendMsg('user', previewHtml);
     let typing = appendTyping();
-    document.getElementById('aiSendBtn').disabled = true;
     aiClearImage();
 
     // Helper: descripciones amigables (icono + texto por separado, para el chip de tool)
