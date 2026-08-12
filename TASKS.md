@@ -221,8 +221,8 @@ Siguiente acción exacta:
 - Título: Fase 1 de `F-6.1` (ADR-0022) — mecanismo de delegación genérico (`delegar_tarea` +
   registro `AYUDANTES`) y primer ayudante piloto sobre pedidos de material
 - Fase: F-6.1 — Delegación y agentes especializados (Época 6, abierta 2026-08-12)
-- Estado: **código fusionado a `main` (PR #109) — despliegue en espera de aprobación del
-  entorno `production`**
+- Estado: **desplegado y verificado en producción (2026-08-12)** — pendiente solo la prueba
+  real en Alejandra Office
 - Prioridad: Media
 - Rama: `feat/f6.1-ayudantes-pedidos` (fusionada y borrada)
 - Responsable actual: —
@@ -230,10 +230,10 @@ Siguiente acción exacta:
   subconjunto acotado de tools ya existentes, empezando por un ayudante que gestione pedidos de
   material — sin crear ninguna vía nueva que salte el Motor de Decisión o la confirmación humana.
 - Criterios de aceptación:
-  1. `ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md` redactado y aceptado.
-  2. Tool nueva `gestionar_pedido` (crear/listar/actualizar/eliminar sobre `pedidos`, ya
+  1. ✅ `ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md` redactado y aceptado.
+  2. ✅ Tool nueva `gestionar_pedido` (crear/listar/actualizar/eliminar sobre `pedidos`, ya
      existente, sin migración D1), metadato ADR-0010 completo, alta en los `Set` de `lib.js`.
-  3. Tool nueva `delegar_tarea` + registro `AYUDANTES.pedidos`, reutilizando
+  3. ✅ Tool nueva `delegar_tarea` + registro `AYUDANTES.pedidos`, reutilizando
      `llamarAnthropic()`/`evaluarInvocacionCognitiva()` sin atajos de permisos, traza
      `tipo:'delegacion'`.
   4. ✅ Tests en `alejandra-agente/lib.test.js` (gating, exclusión de cron, aislamiento por
@@ -242,16 +242,24 @@ Siguiente acción exacta:
   5. ✅ `node --check` (worker.js/lib.js/lib.test.js), `npm --prefix alejandra-agente test`
      (199/199), `npm --prefix nucleo-cognitivo test` (57/57), `node scripts/check-encoding.js`,
      `git diff --check` — todo limpio.
-  6. **Pendiente**: desplegado y verificado (`/health`, prueba real delegando la creación de un
-     pedido). Workflow `deploy-alejandra-agente.yml` iniciado (run 31579447927, ref `e65d8c4`),
-     en espera de aprobación del entorno `production` — paso humano, no automatizable.
+  6. ✅ Desplegado y verificado: `deploy-alejandra-agente.yml` (run 31582036218), `/health` →
+     `healthy` (`d1:true`, `r2:true`, versión `e82751fa-e55f-447e-9311-2d1afe4a53c3`). Los tres
+     intentos previos (runs 31579447927, 31580414783, 31581694645) fallaron por
+     `CLOUDFLARE_API_TOKEN` inválido/con permisos insuficientes en el entorno `production` —
+     incidente resuelto por el Director regenerando el token; sin relación con el código de
+     esta tarea. Queda como nota operativa: si vuelve a fallar con
+     `Authentication error [code: 10000]` en un despliegue de Workers, revisar primero el
+     token antes que el código.
 - Dependencias: ninguna (tabla `pedidos` ya existe; sin integraciones externas en esta fase).
-- Bloqueos: aprobación del entorno `production` (Director).
+- Bloqueos: ninguno.
 - Archivos principales: `docs/decisions/ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md`,
   `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `alejandra-agente/lib.test.js`,
   `MASTER_ROADMAP.md`, `PROJECT_STATE.md`.
-- Pruebas: ver criterio de aceptación 5.
+- Pruebas: ver criterios de aceptación 5-6.
 - Última actualización: 2026-08-12
+- Siguiente acción exacta: prueba real en Alejandra Office — pedirle a Alejandra que delegue
+  la creación de un pedido en el ayudante de Pedidos y confirmar que aparece en la tabla
+  `pedidos` con `empresa_id` correcto y traza `tipo:'delegacion'` en `alejandra_trazas`.
 - Siguiente acción exacta: el Director aprueba el entorno `production` en el run
   [31579447927](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31579447927);
   tras el despliegue, verificar `/health` y probar en vivo "delega en el ayudante de pedidos:

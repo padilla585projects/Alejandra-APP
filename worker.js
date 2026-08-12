@@ -8233,9 +8233,13 @@ async function actualizarObra(id, request, env) {
 }
 
 async function eliminarObra(id, request, env) {
-  const { isSuperadmin, isAdmin, isEmpresaAdmin } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) return err('No autorizado', 403);
-  await env.DB.prepare('UPDATE obras SET activa = 0 WHERE id = ?').bind(id).run();
+  if (isSuperadmin) {
+    await env.DB.prepare('UPDATE obras SET activa = 0 WHERE id = ?').bind(id).run();
+  } else {
+    await env.DB.prepare('UPDATE obras SET activa = 0 WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  }
   return json({ ok: true });
 }
 
@@ -11369,6 +11373,20 @@ async function crearFichaje(request, env, ctx) {
   if (!fecha) return err('Falta la fecha');
   if (!usuario_id && !personal_externo_id) return err('Falta el trabajador');
 
+  // FIX-AISLAMIENTO-01 (12/08/2026): antes se insertaba el fichaje sin comprobar que el
+  // trabajador perteneciera a la empresa de sesión -- un id de otra empresa (o inexistente)
+  // se colaba igual, con departamento por defecto vía el COALESCE de abajo.
+  let departamentoTrabajador = null;
+  if (usuario_id) {
+    const u = await env.DB.prepare('SELECT departamento FROM usuarios WHERE id=? AND empresa_id=?').bind(usuario_id, empresa_id).first();
+    if (!u) return err('Trabajador no encontrado en esta empresa', 404);
+    departamentoTrabajador = u.departamento;
+  } else if (personal_externo_id) {
+    const p = await env.DB.prepare('SELECT departamento FROM personal_externo WHERE id=? AND empresa_id=?').bind(personal_externo_id, empresa_id).first();
+    if (!p) return err('Trabajador no encontrado en esta empresa', 404);
+    departamentoTrabajador = p.departamento;
+  }
+
   // Verificar duplicado
   const dup = await env.DB.prepare(
     'SELECT id FROM fichajes WHERE empresa_id=? AND fecha=? AND (usuario_id=? OR personal_externo_id=?)'
@@ -11396,11 +11414,11 @@ async function crearFichaje(request, env, ctx) {
 
   const r = await env.DB.prepare(
     `INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,motivo,notas,registrado_por,departamento)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT departamento FROM usuarios WHERE id=?), (SELECT departamento FROM personal_externo WHERE id=?), 'electrico'))`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(empresa_id, usuario_id||null, personal_externo_id||null, obra_id||obraAuth||null, fecha,
     hora_entrada||null, hora_salida||null, horas, horas_extra, minutos_retraso,
     estadoFinal, safeStr(motivo).trim()||null, safeStr(notas).trim()||null, encargadoNombre||rol,
-    usuario_id||null, personal_externo_id||null
+    departamentoTrabajador || 'electrico'
   ).run();
   ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
@@ -15101,8 +15119,16 @@ async function notificarTurnosSemana(request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function subirFotoPerfil(tipo, id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
+  // FIX-AISLAMIENTO-01 (12/08/2026): antes cualquier sesión con empresa_id podía
+  // sobrescribir la foto de CUALQUIER compañero -- borrarFotoPerfil, justo debajo,
+  // ya exigía rol. Se permite además que un usuario suba su propia foto.
+  const esUnoMismo = tipo === 'usuario' && String(auth.usuario_id) === String(id);
+  if (!esUnoMismo && !auth.isAdmin && !auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isEncargado) {
+    return err('Sin permisos', 403);
+  }
   const form = await request.formData().catch(() => null);
   if (!form) return err('Falta formulario', 400);
   const file = form.get('file');

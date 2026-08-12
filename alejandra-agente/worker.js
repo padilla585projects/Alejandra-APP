@@ -2427,7 +2427,7 @@ const TOOL_GREP_CODIGO = {
 // 24h -- no son datos de negocio. N1.
 const TOOL_RAM_SAVE = {
   name: 'ram_save',
-  description: 'Guarda datos temporales en RAM local (D1). Úsalo para almacenar contenido de archivos grandes, resultados intermedios o contexto de tareas largas. Se borra automáticamente en 1 hora o cuando uses ram_clear.',
+  description: 'Guarda datos temporales en RAM local (D1). Úsalo para almacenar contenido de archivos grandes, resultados intermedios o contexto de tareas largas. Se borra automáticamente en 24 horas o cuando uses ram_clear.',
   input_schema: {
     type: 'object',
     properties: {
@@ -7336,12 +7336,22 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       }
     }
 
+    // FIX-AISLAMIENTO-01 (12/08/2026): alejandra_ram no tiene columna empresa_id (su
+    // esquema no vive en el repo -- ARC-011 -- y añadirla sería una migración D1 real,
+    // que exige confirmación humana explícita, ADR-0006/CLAUDE.md). Mientras tanto se
+    // aísla por empresa namespacing `clave`/`tarea` con el prefijo `e{empresa_id}:`,
+    // igual que ya se hace con las claves de R2 (`e${empresa_id}/...`) en subirFotoPerfil.
+    // Antes cualquier sesión de cualquier empresa leía/pisaba las mismas claves.
     case 'ram_save': {
       try {
-        const clave = (input.clave || '').trim();
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar tu empresa.';
+        const claveRaw = (input.clave || '').trim();
         const valor = input.valor || '';
-        const tarea = input.tarea || 'general';
-        if (!clave) return 'Falta la clave.';
+        const tareaRaw = input.tarea || 'general';
+        if (!claveRaw) return 'Falta la clave.';
+        const clave = `e${eid}:${claveRaw}`;
+        const tarea = `e${eid}:${tareaRaw}`;
         // Limpiar entradas expiradas primero
         await env.DB.prepare(`DELETE FROM alejandra_ram WHERE expires_at < datetime('now')`).run().catch(() => {});
         // Upsert por clave
@@ -7356,7 +7366,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
             `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES (?, ?, ?, datetime('now'), datetime('now', '+24 hours'))`
           ).bind(clave, valor, tarea).run();
         });
-        return `RAM guardada: "${clave}" (${(valor.length/1024).toFixed(1)}KB, tarea="${tarea}"). Expira en 1h o llama a ram_clear.`;
+        return `RAM guardada: "${claveRaw}" (${(valor.length/1024).toFixed(1)}KB, tarea="${tareaRaw}"). Expira en 24h o llama a ram_clear.`;
       } catch (err) {
         return `Error ram_save: ${err.message}`;
       }
@@ -7364,14 +7374,17 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
     case 'ram_read': {
       try {
-        const clave = (input.clave || '').trim();
-        if (!clave) return 'Falta la clave.';
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar tu empresa.';
+        const claveRaw = (input.clave || '').trim();
+        if (!claveRaw) return 'Falta la clave.';
+        const clave = `e${eid}:${claveRaw}`;
         await env.DB.prepare(`DELETE FROM alejandra_ram WHERE expires_at < datetime('now')`).run().catch(() => {});
         const row = input.tarea
-          ? await env.DB.prepare(`SELECT valor, tarea, created_at FROM alejandra_ram WHERE clave=? AND tarea=? LIMIT 1`).bind(clave, input.tarea).first()
+          ? await env.DB.prepare(`SELECT valor, tarea, created_at FROM alejandra_ram WHERE clave=? AND tarea=? LIMIT 1`).bind(clave, `e${eid}:${input.tarea}`).first()
           : await env.DB.prepare(`SELECT valor, tarea, created_at FROM alejandra_ram WHERE clave=? LIMIT 1`).bind(clave).first();
-        if (!row) return `No hay datos en RAM con clave "${clave}"${input.tarea ? ` y tarea "${input.tarea}"` : ''}.`;
-        return `RAM["${clave}"] (tarea="${row.tarea}", guardado: ${row.created_at}):\n\n${row.valor}`;
+        if (!row) return `No hay datos en RAM con clave "${claveRaw}"${input.tarea ? ` y tarea "${input.tarea}"` : ''}.`;
+        return `RAM["${claveRaw}"] (tarea="${row.tarea.replace(`e${eid}:`, '')}", guardado: ${row.created_at}):\n\n${row.valor}`;
       } catch (err) {
         return `Error ram_read: ${err.message}`;
       }
@@ -7379,17 +7392,19 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
     case 'ram_clear': {
       try {
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar tu empresa.';
         let changes = 0;
         if (input.tarea) {
-          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE tarea=?`).bind(input.tarea).run();
+          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE tarea=?`).bind(`e${eid}:${input.tarea}`).run();
           changes = r.meta?.changes || 0;
           return `RAM limpiada: ${changes} entrada(s) de tarea "${input.tarea}" eliminadas.`;
         } else if (input.clave) {
-          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave=?`).bind(input.clave).run();
+          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave=?`).bind(`e${eid}:${input.clave}`).run();
           changes = r.meta?.changes || 0;
           return `RAM limpiada: clave "${input.clave}" eliminada (${changes} entrada).`;
         } else {
-          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE expires_at < datetime('now')`).run();
+          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE expires_at < datetime('now') AND clave LIKE ?`).bind(`e${eid}:%`).run();
           changes = r.meta?.changes || 0;
           return `RAM limpiada: ${changes} entrada(s) expiradas eliminadas.`;
         }
