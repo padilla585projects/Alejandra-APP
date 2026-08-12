@@ -4,7 +4,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **CATALOGO-PROVEEDORES-01 (2026-08-12):** Adrián pidió cargar los catálogos de Hilti/Pemsa/Würth (proveedores habituales). En vez de una tabla estática con referencias inventadas, el ayudante de Pedidos de Alejandra recibe la tool `buscar_web` (ya existente) para consultar la referencia real cuando se le pide un material que no conoce, priorizando las webs oficiales de esos tres proveedores; si no encuentra nada fiable, crea el pedido igualmente con la descripción que le dé el humano. Hilti, Pemsa y Würth dados de alta en `proveedores_gestion` (Levitec).
+
 ### Fixed
+
+- **CATALOGO-PROVEEDORES-02 (2026-08-12):** el autorrelleno de email al "Enviar pedido por correo" (`panel.html`) buscaba en `/proveedores`, un catálogo simple sin columna `email` en D1 real — llevaba roto en silencio desde que existe el modal. Corregido para consultar `/proveedores-gestion` (Gestión de Proveedores, con alta manual real de email/contacto).
 
 - **PEDIDOS-AYUDANTE-DEPT-01 (2026-08-12):** encontrado al verificar en vivo `F6.1-AYUDANTES-PEDIDOS` — el ayudante de Pedidos (`gestionar_pedido`) confiaba en que el modelo pusiera el `departamento` correcto al crear un pedido (llegó a escribir el nombre+rol del usuario en ese campo). Un pedido con un departamento inventado queda invisible al filtrar por el departamento real, la misma fuga de aislamiento que `PEDIDOS-ALMACEN-01` cerró el 11/08. Corregido: el departamento se resuelve siempre desde la sesión real (`usuarios.departamento` por `usuario_id`), igual que ya hace `crearPedido` en `worker.js` — el modelo deja de poder elegirlo al crear.
 

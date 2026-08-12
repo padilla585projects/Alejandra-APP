@@ -1,5 +1,17 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-08-12, noche): **CATALOGO-PROVEEDORES-01** completada — Adrián pidió
+cargar los catálogos de Hilti/Pemsa/Würth; en vez de una tabla estática con referencias
+inventadas, el ayudante de Pedidos recibió la tool `buscar_web` ya existente (prioriza las
+webs oficiales de esos tres proveedores) y sigue permitiendo descripción manual si no
+encuentra nada fiable. Probado en vivo: pedida una referencia real de Hilti por delegación,
+buscó de verdad en hilti.es, encontró `HIT-RE 500 V3` y avisó explícitamente de que la web
+muestra la V4 como versión actual en vez de inventar cuál es la correcta. Hilti/Pemsa/Würth
+dados de alta en `proveedores_gestion` (Levitec, empresa_id=1). De paso, bug real corregido:
+el autorrelleno de email al enviar un pedido por correo (`panel.html`) consultaba una tabla
+sin columna email, roto en silencio desde siempre — ahora consulta `proveedores_gestion`.
+Detalle en `CHANGELOG.md`.
+
 Estado (actualizado 2026-08-12): **`F6.1-AYUDANTES-PEDIDOS` (Fase 1) desplegada, verificada en
 producción y confirmada en vivo** — prueba real en Alejandra Office completada (login temporal
 en la empresa de prueba, delegación confirmada en `alejandra_trazas`), y de paso se encontró y
