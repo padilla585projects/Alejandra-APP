@@ -1438,9 +1438,13 @@ describe('F-4.4 ejecutarToolConTelemetria wiring', () => {
     expect(worker).toContain('registrarUsoTool(env, {');
   });
 
-  it('envuelve exactamente los 3 paths con tráfico usuario', () => {
+  it('envuelve exactamente los 4 paths con tráfico usuario', () => {
+    // F-6.1 / ADR-0022 (2026-08-12): delegar_tarea añade un 4º path -- el loop
+    // interno del ayudante también ejecuta tools por encargo de un usuario real,
+    // así que también debe quedar telemetrado (antes eran 3: no-stream, stream
+    // y un tercer path histórico).
     const llamadas = worker.match(/await ejecutarToolConTelemetria\(/g) || [];
-    expect(llamadas.length).toBe(3);
+    expect(llamadas.length).toBe(4);
   });
 
   it('mantiene exactamente 2 llamadas directas a ejecutarTool (wrapper interno + reflexion interno)', () => {
@@ -1688,5 +1692,70 @@ describe('ADR-0020 rebanada 6 — refuerzo N2/N3 (ARC-020, enmienda 5)', () => {
     // run_migration con "CONFIRMO MIGRACION" viven en worker.js raíz, N3 de
     // catálogo dev_verificado — no en alejandra-agente.)
     expect(src).toMatch(/CONFIRMO BORRADO/);
+  });
+});
+
+// ── F-6.1 / ADR-0022 (2026-08-12) — ayudantes: gestionar_pedido / delegar_tarea ──
+describe('gestionar_pedido / delegar_tarea (ADR-0022)', () => {
+  it('las dos exigen sesión, con o sin metadato ADR-0010', () => {
+    const nombres = ['gestionar_pedido', 'delegar_tarea'];
+    for (const name of nombres) {
+      const sinMetadato = { name };
+      const conMetadato = { name, acceso: 'sesion', cron: 'prohibido', nivel_riesgo: 'N1' };
+      for (const [authOk, esDevVerificado] of [[true, true], [true, false], [false, true], [false, false]]) {
+        expect(filtrarToolsPorAuth([conMetadato], authOk, esDevVerificado).map(t => t.name))
+          .toEqual(filtrarToolsPorAuth([sinMetadato], authOk, esDevVerificado).map(t => t.name));
+      }
+      expect(filtrarToolsPorAuth([sinMetadato], false, false)).toEqual([]);
+      expect(filtrarToolsPorAuth([sinMetadato], true, false)).toEqual([sinMetadato]);
+    }
+  });
+
+  it('las dos están excluidas del cron: delegar/crear pedidos no es decisión del cron sin humano delante', () => {
+    expect(filtrarToolsCron([{ name: 'gestionar_pedido' }])).toEqual([]);
+    expect(filtrarToolsCron([{ name: 'delegar_tarea' }])).toEqual([]);
+  });
+
+  it('gestionar_pedido no se ofrece en ningún TOOLS_POR_EXPERTO -- solo la ve el ayudante "pedidos"', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf('const TOOLS_POR_EXPERTO = {');
+    const fin = src.indexOf('\n};', inicio);
+    const bloque = src.slice(inicio, fin);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(bloque).not.toMatch(/TOOL_GESTIONAR_PEDIDO/);
+    expect(bloque).toMatch(/TOOL_DELEGAR_TAREA/);
+  });
+
+  it('gestionar_pedido resuelve empresa_id de la sesión (resolverEid), nunca del input, y filtra siempre por empresa_id', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("case 'gestionar_pedido':");
+    const fin = src.indexOf("case 'delegar_tarea':", inicio);
+    const cuerpo = src.slice(inicio, fin);
+
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    expect(cuerpo).toMatch(/const eid = resolverEid\(empresa_id\)/);
+    expect(cuerpo).not.toMatch(/resolverEid\(input\.empresa_id\)/);
+    // Las cuatro acciones (listar/crear/actualizar/eliminar) filtran/insertan
+    // siempre con empresa_id -- ninguna vía queda sin acotar por tenant.
+    expect(cuerpo).toMatch(/WHERE empresa_id=\?/);
+    expect(cuerpo).toMatch(/INSERT INTO pedidos \(empresa_id/);
+    expect(cuerpo).toMatch(/WHERE id=\? AND empresa_id=\?/g);
+  });
+
+  it('delegar_tarea no crea atajos de permisos: pasa por evaluarInvocacionCognitiva y reutiliza codigosConfirmados del humano, nunca genera los suyos', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("case 'delegar_tarea':");
+    const fin = src.indexOf("case 'gestionar_acta':", inicio);
+    const cuerpo = src.slice(inicio, fin);
+
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    expect(cuerpo).toMatch(/evaluarInvocacionCognitiva\(env, tb\.name, tb\.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante\)/);
+    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, undefined, authOk, esDevVerificado, codigosConfirmados\)/);
+    // No debe declarar ni pasar un Set de confirmación propio -- solo el que
+    // llega como parámetro de ejecutarTool(), extraído del mensaje real del humano.
+    expect(cuerpo).not.toMatch(/new Set\(\)/);
+    expect(cuerpo).toMatch(/registrarTraza\(env, \{\s*tipo: 'delegacion'/);
   });
 });

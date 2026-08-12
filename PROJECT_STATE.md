@@ -1,7 +1,33 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-11
+- Actualizado: 2026-08-12
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
+
+## F-6.1 — Ayudantes: delegación acotada (2026-08-12, ADR-0022)
+
+A petición del Director ("que Alejandra tenga ayudantes para administrar los flujos de trabajo,
+ella como coordinadora que delega") se abre `F-6.1`, hasta ahora `Pendiente`. La sesión revisó dos
+proyectos externos del Director (Nexus Core/Agent, GetawayAgentes) sin adoptar ninguno tal cual:
+se toma la idea de delegación de GetawayAgentes pero no su arquitectura de gateway separado
+(Durable Objects, registro/ciclo de vida de agentes), que duplicaría el Tool Registry y el Motor
+de Decisión ya existentes; de Nexus Core se descartan explícitamente navegador interno, control
+de PC y modo Auto por contradecir `ADR-0007` (reversibilidad).
+
+`ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md` reabre de forma acotada la interpretación C de
+`ADR-0008` (rechazada en 2026-08-02): un "ayudante" es una invocación explícita de Alejandra a un
+sub-agente con tools ya existentes del catálogo, bajo las mismas barreras N0-N3, traza y
+aislamiento por `empresa_id` que cualquier tool directa — nunca autonomía abierta ni instalación
+de capacidades nuevas. Documenta además la excepción de dependencia `F-5.1` (gobierna
+capacidades externas nuevas, no aplica a delegar sobre el catálogo propio) y dos correcciones de
+alcance surgidas en la conversación: WhatsApp es el canal de empresa por usuario (nunca WhatsApp
+personal — se descartó explícitamente por riesgo real de delito, art. 197 CP), y la futura
+asesoría legal/financiera informa y redacta, nunca ejecuta sin confirmación humana.
+
+**Piloto Fase 1 en curso:** mecanismo de delegación genérico (tool `delegar_tarea` + registro
+`AYUDANTES`) y ayudante "Pedidos" sobre la tabla `pedidos` ya existente, sin integraciones
+externas ni migración D1. Fases 2-5 (Correos, WhatsApp Business, asesoría legal/financiera,
+rutinas programadas + reflexión periódica) quedan documentadas en el ADR como roadmap, cada una
+con su propia decisión antes de empezar — mismo patrón que ARC-011 y Nexo v1. Ver `TASKS.md`.
 
 ## Fix — TABULATOR-RACE-01 (2026-08-11)
 

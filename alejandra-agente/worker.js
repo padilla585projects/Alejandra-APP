@@ -1973,6 +1973,66 @@ const TOOL_GESTIONAR_OC = {
   nivel_riesgo: 'N1',
 };
 
+// F-6.1 / ADR-0022 (2026-08-12): pedidos de material (tabla `pedidos`, ya existente
+// -- endpoints REST en worker.js raíz getPedidos/crearPedido/actualizarPedido/
+// eliminarPedido, nunca expuestos por chat hasta ahora). Deliberadamente NO se
+// añade a ningún TOOLS_POR_EXPERTO[...]: solo la ofrece el ayudante "pedidos"
+// (ver AYUDANTES más abajo), invocado explícitamente vía delegar_tarea.
+const TOOL_GESTIONAR_PEDIDO = {
+  name: 'gestionar_pedido',
+  description: 'Gestiona pedidos de material de obra (solicitudes a proveedor: estado pendiente/solicitado/recibido/cancelado). Úsalo para crear un pedido nuevo, listar los existentes, actualizar su estado/datos o eliminar uno.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion:        { type: 'string', enum: ['crear', 'listar', 'actualizar', 'eliminar'], description: 'Acción a realizar' },
+      pedido_id:     { type: 'number', description: 'ID del pedido (obligatorio para actualizar/eliminar)' },
+      obra_id:       { type: 'number', description: 'ID de la obra (opcional)' },
+      departamento:  { type: 'string', description: 'Departamento que solicita (por defecto, el de la sesión)' },
+      descripcion:   { type: 'string', description: 'Descripción del material a pedir (obligatorio para crear)' },
+      referencia:    { type: 'string', description: 'Referencia/código del material' },
+      cantidad:      { type: 'number', description: 'Cantidad' },
+      unidad:        { type: 'string', description: 'Unidad (ud, m, kg...)' },
+      proveedor:     { type: 'string', description: 'Proveedor' },
+      notas:         { type: 'string', description: 'Notas adicionales' },
+      estado:        { type: 'string', enum: ['pendiente', 'solicitado', 'recibido', 'cancelado'], description: 'Nuevo estado (para actualizar)' },
+      filtro_estado: { type: 'string', description: 'Para listar: filtrar por estado' }
+    },
+    required: ['accion']
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
+};
+
+// F-6.1 / ADR-0022 (2026-08-12): registro de "ayudantes" -- sub-agentes con un
+// system prompt propio y un subconjunto FIJO de tools ya existentes del catálogo,
+// invocados explícitamente por Alejandra vía delegar_tarea (ver su `case`). Un
+// ayudante nunca salta el Motor de Decisión ni la confirmación humana: cualquier
+// tool que use pasa por evaluarInvocacionCognitiva() exactamente igual que si
+// Alejandra la llamara directo (ver `case 'delegar_tarea'`).
+const AYUDANTES = {
+  pedidos: {
+    tools: [TOOL_GESTIONAR_PEDIDO],
+    systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.',
+  },
+};
+
+const TOOL_DELEGAR_TAREA = {
+  name: 'delegar_tarea',
+  description: `Delega una tarea concreta en un ayudante especializado (un sub-agente con su propio system prompt y un subconjunto acotado de tools). Úsalo cuando lo que pide el usuario encaja mejor en un flujo de trabajo dedicado que resolverlo tú directamente. Ayudantes disponibles: ${Object.keys(AYUDANTES).join(', ')} (pedidos: gestiona pedidos de material de obra). El ayudante nunca salta las barreras de confirmación humana ni el Motor de Decisión.`,
+  input_schema: {
+    type: 'object',
+    properties: {
+      ayudante:    { type: 'string', enum: Object.keys(AYUDANTES), description: 'Ayudante en el que delegar' },
+      instruccion: { type: 'string', description: 'Instrucción concreta y autocontenida para el ayudante (incluye todo el contexto necesario: el ayudante no ve el resto de la conversación)' }
+    },
+    required: ['ayudante', 'instruccion']
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
+};
+
 const TOOL_GESTIONAR_ACTA = {
   name: 'gestionar_acta',
   description: 'Gestiona Actas de Reunión de obra. Las actas registran reuniones formales con sus asistentes, puntos tratados, acuerdos y acciones a tomar. Úsalo para crear actas de reuniones, ver el historial de reuniones, y especialmente para crear tareas automáticamente desde los acuerdos de una reunión. Es la herramienta más poderosa de Alejandra: puede tomar notas de una reunión y convertirlas en tareas asignadas.',
@@ -2993,11 +3053,11 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_MEMORIA_CONSULTAR, TOOL_MEMORIA_LISTAR_PENDIENTES, TOOL_MEMORIA_CONFIRMAR_CANDIDATA, TOOL_MEMORIA_RECHAZAR_CANDIDATA, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO]
 };
 
@@ -8965,6 +9025,129 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return `❌ Acción "${accion}" no reconocida. Usa: crear, listar, aprobar, rechazar, actualizar, eliminar, resumen.`;
       } catch (err) {
         return `Error gestionando OC: ${err.message}`;
+      }
+    }
+
+    // F-6.1 / ADR-0022 (2026-08-12): gestión de pedidos de material -- solo
+    // ofrecida al ayudante "pedidos" (ver AYUDANTES), nunca directamente a
+    // Alejandra. empresa_id sale de la sesión (resolverEid), nunca del input.
+    case 'gestionar_pedido': {
+      try {
+        if (!env.DB) return 'Base de datos no disponible';
+        const eid = resolverEid(empresa_id);
+        if (!eid) return 'No se pudo determinar empresa_id.';
+        const accion   = input.accion;
+        const pedidoId = input.pedido_id ? parseInt(input.pedido_id) : null;
+
+        if (accion === 'listar') {
+          let q = 'SELECT * FROM pedidos WHERE empresa_id=?';
+          const p = [eid];
+          if (input.obra_id)      { q += ' AND obra_id=?';      p.push(parseInt(input.obra_id)); }
+          if (input.filtro_estado) { q += ' AND estado=?';       p.push(input.filtro_estado); }
+          if (input.departamento) { q += ' AND departamento=?'; p.push(input.departamento); }
+          q += ' ORDER BY created_at DESC LIMIT 20';
+          const { results: pedidos } = await env.DB.prepare(q).bind(...p).all().catch(() => ({ results: [] }));
+          if (!pedidos.length) return '📦 No hay pedidos' + (input.filtro_estado ? ` en estado "${input.filtro_estado}"` : '') + '.';
+          const estIcon = { pendiente: '⏳', solicitado: '📤', recibido: '✅', cancelado: '❌' };
+          let txt = `📦 Pedidos (${pedidos.length}):\n`;
+          pedidos.forEach(p => {
+            txt += `• #${p.id} ${estIcon[p.estado] || '⏳'} ${p.descripcion}`;
+            if (p.cantidad) txt += ` — ${p.cantidad}${p.unidad ? ' ' + p.unidad : ''}`;
+            if (p.proveedor) txt += ` (${p.proveedor})`;
+            txt += '\n';
+          });
+          return txt;
+        }
+
+        if (accion === 'crear') {
+          if (!input.descripcion) return '❌ La descripción es obligatoria para crear un pedido.';
+          const dept = input.departamento || 'electrico';
+          const r = await env.DB.prepare(
+            `INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas)
+             VALUES (?,?,?,?,?,?,?,?,?,?)`
+          ).bind(eid, input.obra_id || null, dept, input.referencia || null, String(input.descripcion).trim(),
+            input.cantidad || 1, input.unidad || 'ud', input.proveedor || null, 'Alejandra IA', input.notas || null
+          ).run();
+          return `✅ Pedido #${r.meta.last_row_id} creado: ${input.descripcion}` + (input.cantidad ? ` (${input.cantidad}${input.unidad ? ' ' + input.unidad : ''})` : '') + '.';
+        }
+
+        if (accion === 'actualizar') {
+          if (!pedidoId) return '❌ Necesito pedido_id para actualizar.';
+          const sets = []; const params = [];
+          const campos = ['estado', 'descripcion', 'referencia', 'cantidad', 'unidad', 'proveedor', 'notas'];
+          for (const c of campos) {
+            if (input[c] !== undefined) { sets.push(`${c}=?`); params.push(input[c]); }
+          }
+          if (!sets.length) return '❌ No se especificaron cambios.';
+          params.push(pedidoId, eid);
+          await env.DB.prepare(`UPDATE pedidos SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+          return `✅ Pedido #${pedidoId} actualizado.`;
+        }
+
+        if (accion === 'eliminar') {
+          if (!pedidoId) return '❌ Necesito pedido_id para eliminar.';
+          await env.DB.prepare('DELETE FROM pedidos WHERE id=? AND empresa_id=?').bind(pedidoId, eid).run();
+          return `🗑️ Pedido #${pedidoId} eliminado.`;
+        }
+
+        return `❌ Acción "${accion}" no reconocida. Usa: crear, listar, actualizar, eliminar.`;
+      } catch (err) {
+        return `Error gestionando pedido: ${err.message}`;
+      }
+    }
+
+    // F-6.1 / ADR-0022 (2026-08-12): delegación en un ayudante. Sin atajos de
+    // permisos -- cualquier tool que el ayudante invoque internamente pasa por
+    // evaluarInvocacionCognitiva()/ejecutarToolConTelemetria() exactamente igual
+    // que si Alejandra la llamara directo, con los mismos codigosConfirmados
+    // extraídos del mensaje real del humano (nunca generados por el ayudante).
+    case 'delegar_tarea': {
+      try {
+        const ayudanteId  = input.ayudante;
+        const instruccion = String(input.instruccion || '').trim();
+        const ayudante     = AYUDANTES[ayudanteId];
+        if (!ayudante) return `❌ Ayudante "${ayudanteId}" no reconocido. Disponibles: ${Object.keys(AYUDANTES).join(', ')}.`;
+        if (!instruccion) return '❌ Falta la instrucción para el ayudante.';
+
+        const eid = resolverEid(empresa_id);
+        const ayudanteTools = ayudante.tools;
+        const modoAyudante = `ayudante:${ayudanteId}`;
+        let ayMessages = [{ role: 'user', content: instruccion }];
+        let ayResp = await llamarAnthropic(env, ayMessages, ayudanteTools, MODEL_EXPERTO, 1024, ayudante.systemPrompt);
+        let ayIter = 0;
+        const AY_MAX_ITER = 4;
+
+        while (ayResp.stop_reason === 'tool_use' && ayIter < AY_MAX_ITER) {
+          const toolBlocks = (ayResp.content || []).filter(b => b.type === 'tool_use');
+          if (!toolBlocks.length) break;
+          ayMessages.push({ role: 'assistant', content: ayResp.content });
+          const toolResults = [];
+          for (const tb of toolBlocks) {
+            const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante);
+            const resultado = control.permitida
+              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, undefined, authOk, esDevVerificado, codigosConfirmados)
+              : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
+            const content = parseToolResultContent(resultado);
+            toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content });
+          }
+          ayMessages.push({ role: 'user', content: toolResults });
+          ayResp = await llamarAnthropic(env, ayMessages, ayudanteTools, MODEL_EXPERTO, 1024, ayudante.systemPrompt);
+          ayIter++;
+        }
+
+        const textoAyudante = (ayResp.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'El ayudante no devolvió respuesta.';
+
+        await registrarTraza(env, {
+          tipo: 'delegacion',
+          empresaId: eid,
+          usuarioId: usuario_id != null ? String(usuario_id) : null,
+          resumen: `Delegación en ayudante "${ayudanteId}": ${instruccion.slice(0, 100)}`,
+          detalle: { ayudante: ayudanteId, instruccion: instruccion.slice(0, 300), iteraciones: ayIter, respuesta: textoAyudante.slice(0, 300) },
+        });
+
+        return `🤝 [Ayudante: ${ayudanteId}]\n${textoAyudante}`;
+      } catch (err) {
+        return `Error delegando en el ayudante: ${err.message}`;
       }
     }
 

@@ -1,5 +1,8 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-08-12): **Una tarea activa en curso: `F6.1-AYUDANTES-PEDIDOS`**
+(mecanismo de delegación + ayudante piloto "Pedidos", ADR-0022). Ver ficha abajo.
+
 Estado (actualizado 2026-08-11, noche): **No hay ninguna tarea activa, en curso ni
 bloqueada.** Última sesión: reorganización de "Trabajadores" en panel.html (plantilla
 Levitec vs subcontratas), campos nuevos `categoria`/`empresa` (dos migraciones D1
@@ -209,6 +212,39 @@ Siguiente acción exacta:
 ```
 
 ## TAREAS ACTIVAS
+
+### F6.1-AYUDANTES-PEDIDOS — Mecanismo de delegación + ayudante piloto "Pedidos"
+
+- ID: F6.1-AYUDANTES-PEDIDOS
+- Título: Fase 1 de `F-6.1` (ADR-0022) — mecanismo de delegación genérico (`delegar_tarea` +
+  registro `AYUDANTES`) y primer ayudante piloto sobre pedidos de material
+- Fase: F-6.1 — Delegación y agentes especializados (Época 6, abierta 2026-08-12)
+- Estado: **en curso**
+- Prioridad: Media
+- Rama: (pendiente de crear)
+- Responsable actual: sesión en curso
+- Objetivo: que Alejandra pueda delegar explícitamente en un sub-agente ("ayudante") con un
+  subconjunto acotado de tools ya existentes, empezando por un ayudante que gestione pedidos de
+  material — sin crear ninguna vía nueva que salte el Motor de Decisión o la confirmación humana.
+- Criterios de aceptación:
+  1. `ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md` redactado y aceptado.
+  2. Tool nueva `gestionar_pedido` (crear/listar/actualizar/eliminar sobre `pedidos`, ya
+     existente, sin migración D1), metadato ADR-0010 completo, alta en los `Set` de `lib.js`.
+  3. Tool nueva `delegar_tarea` + registro `AYUDANTES.pedidos`, reutilizando
+     `llamarAnthropic()`/`evaluarInvocacionCognitiva()` sin atajos de permisos, traza
+     `tipo:'delegacion'`.
+  4. Tests en `alejandra-agente/lib.test.js` (gating, aislamiento por empresa).
+  5. `node --check`, `npm --prefix alejandra-agente test`, verificación de encoding en verde.
+  6. Desplegado y verificado (`/health`, prueba real delegando la creación de un pedido).
+- Dependencias: ninguna (tabla `pedidos` ya existe; sin integraciones externas en esta fase).
+- Bloqueos: ninguno.
+- Archivos principales: `docs/decisions/ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md`,
+  `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `alejandra-agente/lib.test.js`,
+  `MASTER_ROADMAP.md`, `PROJECT_STATE.md`.
+- Pruebas: ver criterios de aceptación 5-6.
+- Última actualización: 2026-08-12
+- Siguiente acción exacta: implementar `gestionar_pedido` y `delegar_tarea` en
+  `alejandra-agente/worker.js`.
 
 ### ARC-019-ADR0015-IMPLEMENTAR — Clasificación de `sql_query` y barrera de DDL no destructivo
 
