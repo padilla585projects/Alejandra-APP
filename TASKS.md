@@ -301,6 +301,16 @@ Siguiente acción exacta:
      OAuth. Alejandra reportó el error real y los pasos correctos sin inventar nada ni
      pretender poder arreglarlo ella misma. **Pendiente que Adrián habilite la Gmail API en
      Google Cloud Console** (paso manual, en curso con Alejandra guiándolo en el chat).
+- **Dos hallazgos más, encontrados justo después de que la delegación empezara a funcionar:**
+  3. **CORREO-CREDENCIALES-01**: al recibir el error real de Gmail, el ayudante improvisó un
+     flujo de OAuth2 manual y le pidió a Adrián su Client ID/Secret/Refresh Token por chat —
+     nunca se pasan a mano (ya configurados/generados automáticamente). Fix: grounding
+     explícito en el prompt prohibiendo pedir credenciales.
+  4. **AYUDANTE-DETALLE-TECNICO-01**: el error técnico se mostraba igual sin importar el rol.
+     Adrián: "Alejandra no puede decir estas cosas a los usuarios, a mí sí". Fix: el prompt
+     del ayudante ahora se construye según `esDevVerificado` — detalle técnico completo solo
+     para Adrián, frase fija sin tecnicismos para cualquier otro usuario.
+  Ambos desplegados (`node --check`/207 tests/encoding limpios en los tres casos).
 - Siguiente acción exacta: Adrián habilita la Gmail API en el proyecto de Google Cloud
   correcto (guiado por Alejandra en el chat); tras eso, repetir la prueba de lectura y luego
   la de envío con `CONFIRMO ENVIO`.
