@@ -44,6 +44,7 @@ package-lock.json
 # Claves y secretos — NUNCA commitear
 CLAVES.txt
 NUEVA_CUENTA.txt
+SECRETOS_LOCALES.txt
 *.env
 .env*
 backups/
