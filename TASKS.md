@@ -1,11 +1,15 @@
 # TASKS — Cola operativa inmediata
 
-Estado (actualizado 2026-08-12): **`F6.1-AYUDANTES-PEDIDOS` (Fase 1) desplegada y verificada en
-producción.** **`F6.1-AYUDANTES-CORREOS` (Fase 2, piloto Gmail personal) desplegada** — Director
-completó Google Cloud Console y creó `TOKEN_ENCRYPTION_KEY`; los dos Workers desplegados
-(`alejandra-app-api` run 31594892173, `alejandra-agente` run 31594913990), `/health` → `healthy`
-en ambos. **Pendiente solo la prueba real de extremo a extremo** (conectar Gmail desde Ajustes,
-delegar lectura/envío en el ayudante de Correos). Ver ficha abajo.
+Estado (actualizado 2026-08-12): **`F6.1-AYUDANTES-PEDIDOS` (Fase 1) desplegada, verificada en
+producción y confirmada en vivo** — prueba real en Alejandra Office completada (login temporal
+en la empresa de prueba, delegación confirmada en `alejandra_trazas`), y de paso se encontró y
+corrigió un bug real (`PEDIDOS-AYUDANTE-DEPT-01`: el ayudante dejaba que el modelo inventara el
+`departamento` del pedido, invisible luego al filtrar por departamento real) — desplegado,
+reverificado, sin pendientes. **`F6.1-AYUDANTES-CORREOS` (Fase 2, piloto Gmail personal)
+desplegada** — Director completó Google Cloud Console y creó `TOKEN_ENCRYPTION_KEY`; los dos
+Workers desplegados (`alejandra-app-api` run 31594892173, `alejandra-agente` run 31594913990),
+`/health` → `healthy` en ambos. **Pendiente solo la prueba real de extremo a extremo** (conectar
+Gmail desde Ajustes, delegar lectura/envío en el ayudante de Correos). Ver fichas abajo.
 
 Estado (actualizado 2026-08-11, noche): **No hay ninguna tarea activa, en curso ni
 bloqueada.** Última sesión: reorganización de "Trabajadores" en panel.html (plantilla
@@ -276,8 +280,32 @@ Siguiente acción exacta:
 - Título: Fase 1 de `F-6.1` (ADR-0022) — mecanismo de delegación genérico (`delegar_tarea` +
   registro `AYUDANTES`) y primer ayudante piloto sobre pedidos de material
 - Fase: F-6.1 — Delegación y agentes especializados (Época 6, abierta 2026-08-12)
-- Estado: **desplegado y verificado en producción (2026-08-12)** — pendiente solo la prueba
-  real en Alejandra Office
+- Estado: **desplegada, verificada en producción y confirmada en vivo (2026-08-12)** — sin
+  tareas derivadas pendientes
+- **Prueba real en Alejandra Office (2026-08-12), completada:** login temporal en la empresa
+  de prueba `Constructora Demo S.L.` (empresa_id=5, obra "Nave Industrial Demo") — se le pidió
+  a Alejandra delegar la creación de un pedido en el ayudante de Pedidos. Confirmado en
+  `alejandra_trazas`: traza `tipo:'decision'` (Motor de Decisión, N1) + traza
+  `tipo:'delegacion'` con `empresa_id` correcto, exactamente el criterio de aceptación
+  pendiente.
+- **Bug real encontrado y corregido en la misma verificación (`PEDIDOS-AYUDANTE-DEPT-01`):**
+  el pedido de prueba se creó con `departamento` = el nombre+rol del usuario (texto libre que
+  el modelo decidió poner), no un departamento real — invisible para cualquiera que filtrase
+  por su departamento real, la misma fuga que `PEDIDOS-ALMACEN-01` cerró el 11/08. Causa: el
+  `case 'gestionar_pedido'` (`alejandra-agente/worker.js`) confiaba en `input.departamento` del
+  modelo en vez de resolver el departamento real de la sesión, a diferencia de `crearPedido`
+  (`worker.js` raíz), que nunca acepta el departamento del cuerpo de la petición. Corregido:
+  se resuelve siempre `usuarios.departamento` por `usuario_id`, el campo del input se ignora al
+  crear (sigue sirviendo como filtro para listar). 207/207 tests, `node --check` y encoding
+  limpios; desplegado (`wrangler deploy`, versión `e2791dc2-1d9a-4734-a47e-c39b0d4f2fb0`),
+  `/health` verde, reverificado en vivo: dos pedidos nuevos de prueba (#9, #10) ya salen con
+  `departamento='electrico'` (el real de la sesión). Detalle en `CHANGELOG.md`.
+- **Login de prueba permanente, a petición explícita de Adrián** ("dejalo usas esto para hacer
+  pruebas" — no se borra): usuario id `357`, nombre "Prueba TEMP F6.1", rol `empresa_admin`,
+  empresa `Constructora Demo S.L.` (empresa_id=5), login por email
+  `temp-f61-test@example.invalid` / contraseña `TempF61Pass_92xQ!` (panel.html usa
+  email+contraseña, no código, para roles de oficina). Quedan también 3 pedidos de prueba en
+  esa empresa (#8, #9, #10) — datos de prueba deliberados, no limpiar sin pedir antes.
 - Prioridad: Media
 - Rama: `feat/f6.1-ayudantes-pedidos` (fusionada y borrada)
 - Responsable actual: —
@@ -310,15 +338,10 @@ Siguiente acción exacta:
 - Archivos principales: `docs/decisions/ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md`,
   `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `alejandra-agente/lib.test.js`,
   `MASTER_ROADMAP.md`, `PROJECT_STATE.md`.
-- Pruebas: ver criterios de aceptación 5-6.
+- Pruebas: ver criterios de aceptación 5-6, más la prueba real en vivo y el fix descritos
+  arriba (`PEDIDOS-AYUDANTE-DEPT-01`).
 - Última actualización: 2026-08-12
-- Siguiente acción exacta: prueba real en Alejandra Office — pedirle a Alejandra que delegue
-  la creación de un pedido en el ayudante de Pedidos y confirmar que aparece en la tabla
-  `pedidos` con `empresa_id` correcto y traza `tipo:'delegacion'` en `alejandra_trazas`.
-- Siguiente acción exacta: el Director aprueba el entorno `production` en el run
-  [31579447927](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31579447927);
-  tras el despliegue, verificar `/health` y probar en vivo "delega en el ayudante de pedidos:
-  crea un pedido de X" desde Alejandra Office.
+- Siguiente acción exacta: ninguna — tarea completa, verificada en vivo, sin pendientes.
 
 ### ARC-019-ADR0015-IMPLEMENTAR — Clasificación de `sql_query` y barrera de DDL no destructivo
 

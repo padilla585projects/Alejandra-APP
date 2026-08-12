@@ -1,5 +1,42 @@
 # Handoff — Alejandra 2.0
 
+## Verificación en vivo de F6.1-AYUDANTES-PEDIDOS + PEDIDOS-AYUDANTE-DEPT-01 (2026-08-12)
+
+- Contexto: pendiente de la sesión anterior era solo la prueba real en Alejandra Office de
+  `F6.1-AYUDANTES-PEDIDOS` (delegación en el ayudante de Pedidos). Adrián autorizó crear un
+  login temporal en la empresa de prueba en vez de usar credenciales reales.
+- **Login de prueba creado y dejado en pie a petición de Adrián** ("dejalo usas esto para
+  hacer pruebas"): usuario id `357` ("Prueba TEMP F6.1"), rol `empresa_admin`, empresa
+  `Constructora Demo S.L.` (empresa_id=5, obra "Nave Industrial Demo", obra_id=14). Login por
+  email+contraseña (`temp-f61-test@example.invalid` / `TempF61Pass_92xQ!`) — panel.html usa
+  email+contraseña para roles de oficina, no código de obra (eso es solo para index.html).
+- **Prueba en vivo con el navegador integrado (Chrome, sesión real)**: se le pidió a Alejandra
+  delegar la creación de un pedido en el ayudante de Pedidos. Confirmado contra D1 real:
+  traza `tipo:'decision'` (Motor de Decisión, N1, `gestionar_pedido` ofrecida) + traza
+  `tipo:'delegacion'` con `empresa_id=5` correcto — exactamente el criterio de aceptación que
+  quedaba pendiente.
+- **Bug real encontrado en la misma verificación, `PEDIDOS-AYUDANTE-DEPT-01`:** el primer
+  pedido de prueba (#8) se creó con `departamento` = `"Prueba TEMP F6.1 (empresa_admin)"` — el
+  modelo había puesto el nombre+rol del usuario en ese campo, no un departamento real. Un
+  pedido así queda invisible para cualquier rol que filtre por su departamento real en
+  `getPedidos` (`worker.js`) — la misma fuga de aislamiento que `PEDIDOS-ALMACEN-01` cerró el
+  11/08. Causa: `case 'gestionar_pedido'` (`alejandra-agente/worker.js`) confiaba en
+  `input.departamento` del modelo al crear, mientras que `crearPedido` (`worker.js` raíz)
+  nunca acepta el departamento del cuerpo de la petición — siempre lo resuelve de la sesión.
+  Fix: se resuelve siempre `usuarios.departamento` por `usuario_id` al crear; el campo del
+  input queda solo como filtro para `listar`. Descripción de la tool corregida para dejar de
+  prometer un comportamiento ("por defecto, el de la sesión") que nunca estaba implementado.
+- Verificación: `node --check` limpio; `npm --prefix alejandra-agente test` 207/207; sin
+  patrones de encoding corrupto en el diff. Desplegado (`wrangler deploy`, versión
+  `e2791dc2-1d9a-4734-a47e-c39b0d4f2fb0`), `/health` → `healthy`. Reverificado en vivo tras
+  desplegar: dos pedidos nuevos (#9, #10) ya salen con `departamento='electrico'` (el real de
+  la sesión del usuario de prueba).
+- Quedan en producción, deliberadamente sin borrar (empresa de prueba, uso previsto para más
+  pruebas): usuario id 357 y pedidos #8/#9/#10 en `empresa_id=5`.
+- Siguiente acción exacta: ninguna para esta tarea. Queda como pendiente de la sesión anterior
+  sin decidir: `F6.1-AYUDANTES-CORREOS` (prueba real de extremo a extremo con Gmail), informe
+  de fichajes imprimible, y la regla de visibilidad de módulos por departamento en index.html.
+
 ## Trabajadores: plantilla vs subcontratas + categoría + empresa + recorte de foto (2026-08-11)
 
 Sesión larga a raíz de la pregunta de Adrián sobre cómo organizar "Trabajadores" en

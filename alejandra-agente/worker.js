@@ -1988,7 +1988,7 @@ const TOOL_GESTIONAR_PEDIDO = {
       accion:        { type: 'string', enum: ['crear', 'listar', 'actualizar', 'eliminar'], description: 'Acción a realizar' },
       pedido_id:     { type: 'number', description: 'ID del pedido (obligatorio para actualizar/eliminar)' },
       obra_id:       { type: 'number', description: 'ID de la obra (opcional)' },
-      departamento:  { type: 'string', description: 'Departamento que solicita (por defecto, el de la sesión)' },
+      departamento:  { type: 'string', description: 'Para listar: filtrar por departamento. Al crear, se ignora -- siempre se usa el departamento real de la sesión.' },
       descripcion:   { type: 'string', description: 'Descripción del material a pedir (obligatorio para crear)' },
       referencia:    { type: 'string', description: 'Referencia/código del material' },
       cantidad:      { type: 'number', description: 'Cantidad' },
@@ -9126,7 +9126,15 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
         if (accion === 'crear') {
           if (!input.descripcion) return '❌ La descripción es obligatoria para crear un pedido.';
-          const dept = input.departamento || 'electrico';
+          // PEDIDOS-AYUDANTE-DEPT-01 (12/08/2026, encontrado en verificación en vivo de
+          // F6.1-AYUDANTES-PEDIDOS): `input.departamento` viene del modelo, no de la sesión
+          // real -- dejarlo mandar cualquier texto libre (llegó a poner el nombre+rol del
+          // usuario) deja el pedido invisible para el departamento real, exactamente el
+          // aislamiento que PEDIDOS-ALMACEN-01 (worker.js, getPedidos) protege por columna.
+          // Mismo criterio que crearPedido (worker.js): el departamento sale siempre de la
+          // sesión, nunca de un campo que el llamante controla.
+          const sesionUsr = await env.DB.prepare('SELECT departamento FROM usuarios WHERE id=?').bind(usuario_id).first().catch(() => null);
+          const dept = (sesionUsr && sesionUsr.departamento) || 'electrico';
           const r = await env.DB.prepare(
             `INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas)
              VALUES (?,?,?,?,?,?,?,?,?,?)`
