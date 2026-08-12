@@ -16953,8 +16953,14 @@ function _construirDocsTabs() {
   // estando en Control). El backend (subirDocDept/listarDocsDept) ya fuerza deptFinal al
   // propio departamento salvo superadmin/empresa_admin/jefe_de_obra -- se replica aquí el
   // mismo criterio para que la pestaña no prometa algo que el servidor no va a servir.
-  const _esAdminDocs = hasSessionRole('superadmin', 'empresa_admin', 'jefe_de_obra');
-  const _deptsVisibles = _esAdminDocs ? _DOCS_DEPTS : _DOCS_DEPTS.filter(d => d.key === SESSION.departamento);
+  // FIX-DOCS-TABS-DEPT-02 (12/08/2026): la excepción de admin mostraba SIEMPRE todas las
+  // pestañas, incluso con un departamento concreto elegido en el selector del topbar
+  // (topbarDeptoSelect) -- Adrián: "no hace falta mostrar todos a no ser que arriba tengas
+  // seleccionado Todos los departamentos". SESSION.departamento ya refleja esa elección
+  // (cambiarDeptoAdmin la guarda y recarga la página), así que el mismo filtro por
+  // SESSION.departamento vale para admin y no-admin: solo se muestran todas cuando no hay
+  // ninguno elegido ("Todos los departamentos" = valor vacío).
+  const _deptsVisibles = SESSION.departamento ? _DOCS_DEPTS.filter(d => d.key === SESSION.departamento) : _DOCS_DEPTS;
   _deptsVisibles.forEach(d => {
     const btn = document.createElement('button');
     btn.className = 'docs-tab';
