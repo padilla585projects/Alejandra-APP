@@ -16552,12 +16552,19 @@ async function getIAChatHistory(request, env) {
     }
   }
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50') || 50, 100);
+  // BUG-HISTORIAL-CANAL-01: sin filtro de canal, un frontend (ej. panel.html) recibía de
+  // golpe los últimos 50 mensajes de TODOS los canales del usuario (app móvil, panel,
+  // telegram...) mezclados, dando la sensación de que "aparecían mensajes viejos de la
+  // nada" al recargar la página. canal es opcional para no romper llamadas existentes que
+  // sí quieran ver todo.
+  const canal = url.searchParams.get('canal');
   try {
     // Buscar por usuario_id numérico O por nombre (la app guarda ambos formatos)
     const nombre = s.nombre || '';
-    const rows = await env.DB.prepare(
-      "SELECT rol, contenido, created_at FROM alejandra_historial WHERE (LOWER(usuario_id) = LOWER(?) OR LOWER(usuario_id) = LOWER(?)) AND rol IN ('user','assistant') ORDER BY created_at DESC LIMIT ?"
-    ).bind(String(uid), nombre, limit).all();
+    const sql = "SELECT rol, contenido, created_at FROM alejandra_historial WHERE (LOWER(usuario_id) = LOWER(?) OR LOWER(usuario_id) = LOWER(?)) AND rol IN ('user','assistant')" +
+      (canal ? " AND canal = ?" : "") + " ORDER BY created_at DESC LIMIT ?";
+    const binds = canal ? [String(uid), nombre, canal, limit] : [String(uid), nombre, limit];
+    const rows = await env.DB.prepare(sql).bind(...binds).all();
     return json({ ok: true, mensajes: (rows.results || []).reverse() });
   } catch (e) {
     return json({ ok: false, error: e.message });

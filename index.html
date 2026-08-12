@@ -13932,7 +13932,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.06';
+const APP_VERSION = '9.07';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -22498,7 +22498,10 @@ window.turnoToggle   = turnoToggle;
     const uid = s?.usuario_id || s?.nombre || null;
     if (uid) {
       try {
-        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
+        // PARIDAD-HISTORIAL-CANAL-01: sin filtro de canal, esta llamada devolvía los
+        // últimos mensajes de TODOS los canales del usuario mezclados (panel, telegram...),
+        // no solo los de esta ventana (app_android) -- ver el mismo fix en panel.html.
+        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=app_android`, {
               headers: { 'X-Token': getSession()?.token || '' }
             });
         // FIX-ALEJANDRA-SYNC-02 (29/07/2026): Adrián reportó que la PWA "no seguía la
@@ -22513,11 +22516,16 @@ window.turnoToggle   = turnoToggle;
         const data = await res.json();
         if (data.ok && data.mensajes && data.mensajes.length > 0) {
           iaHistory = data.mensajes.map(m => ({ role: m.rol === 'assistant' ? 'assistant' : 'user', content: m.contenido }));
+          _setupMarked();
           box.innerHTML = '';
           for (const m of iaHistory) {
             const d = document.createElement('div');
             d.className = 'ia-bubble ' + (m.role === 'assistant' ? 'bot' : 'user');
-            d.innerHTML = m.content.replace(/\n/g, '<br>');
+            // BUG-HISTORIAL-MARKDOWN-01 (paridad con panel.html): esto pintaba las
+            // respuestas de Alejandra como texto plano con <br> -- **negritas**, listas y
+            // títulos salían literales e ilegibles en vez de renderizados.
+            if (m.role === 'assistant') { d.innerHTML = _renderMd(m.content); _addCopyBtns(d); }
+            else { d.innerHTML = _escHtml(m.content).replace(/\n/g, '<br>'); }
             box.appendChild(d);
           }
           box.scrollTop = box.scrollHeight;
@@ -22533,11 +22541,13 @@ window.turnoToggle   = turnoToggle;
       const saved = JSON.parse(localStorage.getItem(IA_HIST_KEY) || '[]');
       if (saved.length > 0) {
         iaHistory = saved;
+        _setupMarked();
         box.innerHTML = '';
         for (const m of iaHistory) {
           const d = document.createElement('div');
           d.className = 'ia-bubble ' + (m.role === 'assistant' ? 'bot' : 'user');
-          d.innerHTML = m.content.replace(/\n/g, '<br>');
+          if (m.role === 'assistant') { d.innerHTML = _renderMd(m.content); _addCopyBtns(d); }
+          else { d.innerHTML = _escHtml(m.content).replace(/\n/g, '<br>'); }
           box.appendChild(d);
         }
         box.scrollTop = box.scrollHeight;
