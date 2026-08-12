@@ -1,7 +1,9 @@
 # TASKS — Cola operativa inmediata
 
-Estado (actualizado 2026-08-12): **Una tarea activa en curso: `F6.1-AYUDANTES-PEDIDOS`**
-(mecanismo de delegación + ayudante piloto "Pedidos", ADR-0022). Ver ficha abajo.
+Estado (actualizado 2026-08-12): **`F6.1-AYUDANTES-PEDIDOS` fusionada a `main`** (PR #109,
+commit `e65d8c4`, mecanismo de delegación + ayudante piloto "Pedidos", ADR-0022). Workflow de
+despliegue de `alejandra-agente` iniciado (run 31579447927), **en espera de aprobación del
+entorno `production`** — pendiente exclusivamente del Director. Ver ficha abajo.
 
 Estado (actualizado 2026-08-11, noche): **No hay ninguna tarea activa, en curso ni
 bloqueada.** Última sesión: reorganización de "Trabajadores" en panel.html (plantilla
@@ -219,10 +221,11 @@ Siguiente acción exacta:
 - Título: Fase 1 de `F-6.1` (ADR-0022) — mecanismo de delegación genérico (`delegar_tarea` +
   registro `AYUDANTES`) y primer ayudante piloto sobre pedidos de material
 - Fase: F-6.1 — Delegación y agentes especializados (Época 6, abierta 2026-08-12)
-- Estado: **en curso**
+- Estado: **código fusionado a `main` (PR #109) — despliegue en espera de aprobación del
+  entorno `production`**
 - Prioridad: Media
-- Rama: (pendiente de crear)
-- Responsable actual: sesión en curso
+- Rama: `feat/f6.1-ayudantes-pedidos` (fusionada y borrada)
+- Responsable actual: —
 - Objetivo: que Alejandra pueda delegar explícitamente en un sub-agente ("ayudante") con un
   subconjunto acotado de tools ya existentes, empezando por un ayudante que gestione pedidos de
   material — sin crear ninguna vía nueva que salte el Motor de Decisión o la confirmación humana.
@@ -233,18 +236,26 @@ Siguiente acción exacta:
   3. Tool nueva `delegar_tarea` + registro `AYUDANTES.pedidos`, reutilizando
      `llamarAnthropic()`/`evaluarInvocacionCognitiva()` sin atajos de permisos, traza
      `tipo:'delegacion'`.
-  4. Tests en `alejandra-agente/lib.test.js` (gating, aislamiento por empresa).
-  5. `node --check`, `npm --prefix alejandra-agente test`, verificación de encoding en verde.
-  6. Desplegado y verificado (`/health`, prueba real delegando la creación de un pedido).
+  4. ✅ Tests en `alejandra-agente/lib.test.js` (gating, exclusión de cron, aislamiento por
+     empresa, ausencia de atajos de permisos en `delegar_tarea`) — 5 tests nuevos + 1 test de
+     wiring de telemetría actualizado (3→4 paths). 199/199 en verde.
+  5. ✅ `node --check` (worker.js/lib.js/lib.test.js), `npm --prefix alejandra-agente test`
+     (199/199), `npm --prefix nucleo-cognitivo test` (57/57), `node scripts/check-encoding.js`,
+     `git diff --check` — todo limpio.
+  6. **Pendiente**: desplegado y verificado (`/health`, prueba real delegando la creación de un
+     pedido). Workflow `deploy-alejandra-agente.yml` iniciado (run 31579447927, ref `e65d8c4`),
+     en espera de aprobación del entorno `production` — paso humano, no automatizable.
 - Dependencias: ninguna (tabla `pedidos` ya existe; sin integraciones externas en esta fase).
-- Bloqueos: ninguno.
+- Bloqueos: aprobación del entorno `production` (Director).
 - Archivos principales: `docs/decisions/ADR-0022-AYUDANTES-DELEGACION-ACOTADA.md`,
   `alejandra-agente/worker.js`, `alejandra-agente/lib.js`, `alejandra-agente/lib.test.js`,
   `MASTER_ROADMAP.md`, `PROJECT_STATE.md`.
-- Pruebas: ver criterios de aceptación 5-6.
+- Pruebas: ver criterio de aceptación 5.
 - Última actualización: 2026-08-12
-- Siguiente acción exacta: implementar `gestionar_pedido` y `delegar_tarea` en
-  `alejandra-agente/worker.js`.
+- Siguiente acción exacta: el Director aprueba el entorno `production` en el run
+  [31579447927](https://github.com/padilla585projects/Alejandra-APP/actions/runs/31579447927);
+  tras el despliegue, verificar `/health` y probar en vivo "delega en el ayudante de pedidos:
+  crea un pedido de X" desde Alejandra Office.
 
 ### ARC-019-ADR0015-IMPLEMENTAR — Clasificación de `sql_query` y barrera de DDL no destructivo
 
