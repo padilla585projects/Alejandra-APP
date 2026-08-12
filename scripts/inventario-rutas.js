@@ -36,6 +36,7 @@ const PUBLICAS = {
   '/auth/google/url': 'OAuth — devuelve la URL de consentimiento',
   '/auth/google/mobile-redirect': 'OAuth móvil',
   '/auth/google/check-nonce': 'OAuth — polling del nonce, el nonce es el secreto',
+  '/auth/gmail/callback': 'OAuth Gmail (F-6.1 Fase 2/ADR-0022) — Google redirige aquí sin sesión; valida por el nonce de un solo uso en gmail_oauth_state, el nonce es el secreto',
   '/version': 'versión servida',
   '/recuperar-pass': 'recuperación de contraseña',
   '/resetear-pass': 'recuperación de contraseña, el token del email es el secreto',

@@ -15,6 +15,7 @@ import {
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
   extraerCodigosConfirmacion,
+  extraerCodigosConfirmacionEnvio,
   codigoConfirmacionOp,
   whereEsTrivialmenteCierto,
   detectarEscrituraDestructivaBalanceada,
@@ -1743,19 +1744,96 @@ describe('gestionar_pedido / delegar_tarea (ADR-0022)', () => {
     expect(cuerpo).toMatch(/WHERE id=\? AND empresa_id=\?/g);
   });
 
-  it('delegar_tarea no crea atajos de permisos: pasa por evaluarInvocacionCognitiva y reutiliza codigosConfirmados del humano, nunca genera los suyos', () => {
+  it('delegar_tarea no crea atajos de permisos: pasa por evaluarInvocacionCognitiva y reutiliza codigosConfirmados/codigosConfirmadosEnvio del humano, nunca genera los suyos', () => {
     const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
     const inicio = src.indexOf("case 'delegar_tarea':");
-    const fin = src.indexOf("case 'gestionar_acta':", inicio);
+    const fin = src.indexOf("case 'leer_gmail':", inicio);
     const cuerpo = src.slice(inicio, fin);
 
     expect(inicio).toBeGreaterThanOrEqual(0);
     expect(fin).toBeGreaterThan(inicio);
     expect(cuerpo).toMatch(/evaluarInvocacionCognitiva\(env, tb\.name, tb\.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante\)/);
-    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, undefined, authOk, esDevVerificado, codigosConfirmados\)/);
-    // No debe declarar ni pasar un Set de confirmación propio -- solo el que
-    // llega como parámetro de ejecutarTool(), extraído del mensaje real del humano.
+    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio\)/);
+    // No debe declarar ni pasar un Set de confirmación propio -- solo los que
+    // llegan como parámetro de ejecutarTool(), extraídos del mensaje real del humano.
     expect(cuerpo).not.toMatch(/new Set\(\)/);
     expect(cuerpo).toMatch(/registrarTraza\(env, \{\s*tipo: 'delegacion'/);
+  });
+});
+
+// ── F-6.1 Fase 2 / ADR-0022 (2026-08-12) — ayudante de Correos (Gmail) ──
+describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
+  it('las dos exigen sesión y quedan excluidas del cron', () => {
+    for (const name of ['leer_gmail', 'enviar_gmail']) {
+      const sinMetadato = { name };
+      expect(filtrarToolsPorAuth([sinMetadato], false, false)).toEqual([]);
+      expect(filtrarToolsPorAuth([sinMetadato], true, false)).toEqual([sinMetadato]);
+      expect(filtrarToolsCron([{ name }])).toEqual([]);
+    }
+  });
+
+  it('ninguna de las dos se ofrece en TOOLS_POR_EXPERTO -- solo las ve el ayudante "correos"', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf('const TOOLS_POR_EXPERTO = {');
+    const fin = src.indexOf('\n};', inicio);
+    const bloque = src.slice(inicio, fin);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(bloque).not.toMatch(/TOOL_LEER_GMAIL|TOOL_ENVIAR_GMAIL/);
+  });
+
+  it('AYUDANTES.correos declara exactamente leer_gmail + enviar_gmail', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf('const AYUDANTES = {');
+    const fin = src.indexOf('\n};', inicio);
+    const bloque = src.slice(inicio, fin);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(bloque).toMatch(/correos:\s*\{\s*tools:\s*\[TOOL_LEER_GMAIL,\s*TOOL_ENVIAR_GMAIL\]/);
+  });
+
+  it('extraerCodigosConfirmacionEnvio extrae solo "CONFIRMO ENVIO <hex6>", en mayúsculas', () => {
+    expect([...extraerCodigosConfirmacionEnvio('CONFIRMO ENVIO ab12cd')]).toEqual(['AB12CD']);
+    expect([...extraerCodigosConfirmacionEnvio('nada por aquí')]).toEqual([]);
+    expect([...extraerCodigosConfirmacionEnvio(undefined)]).toEqual([]);
+  });
+
+  it('extraerCodigosConfirmacionEnvio y extraerCodigosConfirmacion no se cruzan: cada frase solo produce código de su propio Set', () => {
+    const mensaje = 'CONFIRMO BORRADO aa11bb y también CONFIRMO ENVIO cc22dd';
+    const borrado = extraerCodigosConfirmacion(mensaje);
+    const envio = extraerCodigosConfirmacionEnvio(mensaje);
+    expect([...borrado]).toEqual(['AA11BB']);
+    expect([...envio]).toEqual(['CC22DD']);
+    expect(borrado.has('CC22DD')).toBe(false);
+    expect(envio.has('AA11BB')).toBe(false);
+  });
+
+  it('leer_gmail (N0) no exige ninguna confirmación humana', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("case 'leer_gmail':");
+    // Corta antes del comentario de enviar_gmail (que sí menciona CONFIRMO),
+    // no en el `case` en sí -- el comentario queda por encima de su case.
+    const fin = src.indexOf("// F-6.1 Fase 2 (ADR-0022): envío desde Gmail", inicio);
+    const cuerpo = src.slice(inicio, fin);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    expect(cuerpo).not.toMatch(/CONFIRMO/);
+  });
+
+  it('enviar_gmail (N2) bloquea sin CONFIRMO ENVIO, usa un Set separado de CONFIRMO BORRADO, y el código depende del contenido exacto', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("case 'enviar_gmail':");
+    const fin = src.indexOf("case 'gestionar_acta':", inicio);
+    const cuerpo = src.slice(inicio, fin);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    expect(cuerpo).toMatch(/codigosConfirmadosEnvio instanceof Set/);
+    expect(cuerpo).toMatch(/CONFIRMO ENVIO \$\{codigo\}/);
+    expect(cuerpo).not.toMatch(/codigosConfirmados\.has/); // nunca comprueba el Set de BORRADO
+    expect(cuerpo).toMatch(/codigoConfirmacionOp\(`ENVIO_GMAIL::\$\{para\}::\$\{asunto\}::\$\{cuerpo\}`\)/);
+  });
+
+  it('el código de confirmación cambia si cambia destinatario/asunto/cuerpo (atado a la operación exacta, mismo criterio que escribir_bd)', async () => {
+    const a = await codigoConfirmacionOp('ENVIO_GMAIL::x@y.com::Hola::Cuerpo 1');
+    const b = await codigoConfirmacionOp('ENVIO_GMAIL::x@y.com::Hola::Cuerpo 2');
+    expect(a).not.toBe(b);
   });
 });
