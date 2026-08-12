@@ -1,14 +1,47 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-12
+- Actualizado: 2026-08-12, noche
+- Estado (2026-08-12, noche): **F6.1-AYUDANTES-PEDIDOS y F6.1-AYUDANTES-CORREOS verificados
+  en vivo en producción**, con varios bugs reales encontrados y corregidos en la propia
+  verificación (ver sección dedicada más abajo). Único pendiente real: Adrián habilita la
+  Gmail API en el proyecto de Google Cloud correcto (paso manual, en curso).
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
 
-## F-6.1 Fase 2 — Ayudante de Correos, piloto Gmail personal (2026-08-12)
+## Verificación en vivo de F-6.1 (Pedidos + Correos) — hallazgos y fixes (2026-08-12, noche)
 
-Código completo y con tests en verde (207/207), **sin desplegar todavía**: bloqueado hasta que
-el Director complete la configuración externa que solo él puede hacer — habilitar la Gmail API
-y sus scopes en la consola de Google Cloud (sobre el cliente OAuth que ya existe para el login),
-y crear el secreto `TOKEN_ENCRYPTION_KEY` en el entorno `production`.
+Sesión de verificación real en producción (login de prueba en empresa demo para Pedidos; sesión
+real del Director para Correos) que encontró y corrigió una cadena de bugs reales, todos
+desplegados y documentados en `TASKS.md`/`CHANGELOG.md`/`HANDOFF.md`:
+
+1. **PEDIDOS-AYUDANTE-DEPT-01**: el ayudante de Pedidos dejaba que el modelo inventara el
+   `departamento` del pedido en vez de usar el de la sesión real — el pedido quedaba invisible
+   al filtrar por departamento. Corregido: se resuelve siempre desde `usuarios.departamento`.
+2. **CATALOGO-PROVEEDORES-01/02**: a petición del Director, Hilti/Pemsa/Würth dados de alta como
+   proveedores; el ayudante de Pedidos recibió la tool `buscar_web` (en vez de una tabla estática
+   de referencias inventadas) para buscar productos reales cuando no los conoce. De paso, fix de
+   un bug real: el autorrelleno de email al enviar un pedido por correo consultaba una tabla sin
+   columna email, roto en silencio desde siempre.
+3. **CORREO-AYUDANTE-ROUTING-01**: Alejandra negaba tener acceso a Gmail pese a que el ayudante
+   de Correos ya estaba desplegado y conectado — dos causas reales: mensajes sobre correo se
+   clasificaban a veces como experto `web` (sin `delegar_tarea` disponible), y aun clasificados
+   correctamente como `app`, el modelo no usaba la tool y respondía inventando que faltaba
+   implementar OAuth2. Fix: regla determinista de enrutamiento + regla explícita de prompt.
+4. **CHAT-SCROLL-INICIAL-01**: el chat ✨ de `panel.html` no bajaba al último mensaje al abrirlo
+   (parecía "no guardar el historial"). Publicado en Pages.
+5. **CORREO-CREDENCIALES-01 / AYUDANTE-DETALLE-TECNICO-01**: tras empezar a funcionar la
+   delegación, un error real de Gmail (API sin habilitar en el proyecto de Google Cloud) llevó
+   al ayudante a improvisar un flujo de OAuth2 manual pidiendo credenciales por chat — corregido
+   con grounding explícito. Además, ese detalle técnico se mostraba igual a cualquier rol —
+   Director: "Alejandra no puede decir estas cosas a los usuarios, a mí sí" — ahora el prompt del
+   ayudante se construye según `esDevVerificado`: detalle técnico completo solo para el Director,
+   frase fija sin tecnicismos para cualquier otro usuario.
+
+**Pendiente real, único bloqueo:** el Director habilita la Gmail API en el proyecto de Google
+Cloud correcto (`console.developers.google.com/apis/api/gmail.googleapis.com/overview?project=516059806212`)
+— paso manual, en curso. Una vez habilitada, repetir la prueba de lectura y la de envío
+(`CONFIRMO ENVIO`).
+
+### F-6.1 Fase 2 — Ayudante de Correos, piloto Gmail personal — contexto de construcción
 
 Piloto sobre la cuenta Gmail personal del Director (decisión explícita: de los tres proveedores
 posibles — Workspace, Microsoft 365, IMAP genérico — se probó primero con la cuenta personal,

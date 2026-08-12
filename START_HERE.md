@@ -72,9 +72,18 @@ verificado en producción sin él) — plantilla probada para el próximo vertic
 
 ## Siguiente paso
 
+**(2026-08-12, noche)** F-6.1 (ayudantes de Pedidos y Correos) verificado en vivo en
+producción — cadena de bugs reales encontrados y corregidos en la propia verificación
+(enrutamiento del clasificador, prompt del ayudante inventando capacidades/pidiendo
+credenciales, fuga de detalle técnico a usuarios sin privilegio, scroll del chat). Detalle
+completo en `PROJECT_STATE.md`/`TASKS.md`/`CHANGELOG.md`. **Único pendiente real:** el
+Director habilita la Gmail API en el proyecto de Google Cloud correcto — paso manual, en
+curso; tras eso, repetir la prueba de envío con `CONFIRMO ENVIO`.
+
 Con `F-0.2-CFG`, las 14 verticales de ARC-011 fase 3, la escritura de `memoria_gobernada`
-(F-2.1), `P-ARCH-003` y `ADR-0015`/ARC-019 cerrados y desplegados, **no queda ninguna tarea de
-ingeniería activa.** Lo único abierto son decisiones exclusivas del Director:
+(F-2.1), `P-ARCH-003` y `ADR-0015`/ARC-019 cerrados y desplegados, **no queda ninguna otra
+tarea de ingeniería activa fuera de lo anterior.** Lo demás abierto son decisiones exclusivas
+del Director:
 
 - **Definir la siguiente rebanada de presentación** tras P-ARCH-003 (aún sin proponer).
 - **ARC-014** — revisar si cambian sus condiciones de reapertura (más de un mantenedor o
