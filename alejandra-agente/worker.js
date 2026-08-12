@@ -2067,7 +2067,14 @@ const AYUDANTES = {
   },
   correos: {
     tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL],
-    systemPrompt: 'Eres el ayudante de Correos de Alejandra. Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella.',
+    // CORREO-CREDENCIALES-01 (12/08/2026): en una prueba real, un error de leer_gmail
+    // ("Gmail API has not been used...") llevó al modelo a improvisar un flujo de OAuth2
+    // manual y pedirle al humano su Client ID/Secret/Refresh Token por chat -- ninguno de
+    // esos datos se pasa nunca a mano: el Client ID/Secret ya son secretos de Cloudflare
+    // configurados de antemano, y el refresh token se genera y guarda cifrado solo cuando
+    // el usuario pulsa "Conectar mi Gmail" en Mi cuenta (ya lo hizo). Grounding explícito
+    // para que el modelo no rellene esos huecos con conocimiento genérico de OAuth2.
+    systemPrompt: 'Eres el ayudante de Correos de Alejandra. Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales.',
   },
 };
 
@@ -9205,8 +9212,22 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (typeof sendSSE === 'function') {
           try { await sendSSE({ type: 'progreso', mensaje: `🤝 Delegando en el ayudante "${ayudanteId}"...` }); } catch (_) {}
         }
+        // AYUDANTE-DETALLE-TECNICO-01 (12/08/2026): Adrián -- "Alejandra no puede decir
+        // estas cosas a los usuarios, a mí sí" / "no puede decir ni pedir nada respecto al
+        // desarrollo de la app" -- tras ver un error real de Gmail (proyecto de Google
+        // Cloud, mensaje crudo de la API) expuesto igual a cualquier rol. Un usuario normal
+        // no puede hacer nada con ese detalle (no tiene acceso a Google Cloud Console,
+        // secretos, ni al código) y solo genera confusión/ruido o fuga de información
+        // interna; para Adrián sí es información útil. esDevVerificado ya distingue
+        // exactamente eso (ver permisos_efectivos en la traza de decisión,
+        // desarrollador_verificado) -- se reutiliza en vez de una consulta nueva a
+        // `usuarios`. Regla general (no solo errores de tools): nada de desarrollo/
+        // infraestructura interna a nadie que no sea Adrián.
+        const promptAyudante = ayudante.systemPrompt + (esDevVerificado
+          ? ' El usuario que te habla es Adrián (desarrollador/superadmin verificado): puedes hablarle con detalle técnico completo si hace falta, incluidos errores de una tool (mensajes de la API de Google/Gmail, etc.) o detalles de cómo funciona esta integración por dentro.'
+          : ' El usuario que te habla NO es desarrollador/admin: no le digas ni le pidas NADA sobre el desarrollo, la infraestructura o la configuración interna de la app (nada de mensajes técnicos de la API de Google, IDs de proyecto de Google Cloud, credenciales, nombres de tools, arquitectura, secretos...). Si algo falla, responde solo con una frase simple tipo "Póngase en contacto con el desarrollador/administrador para solucionar el problema" -- nada de detalle técnico ni de intentar explicar la causa.');
         let ayMessages = [{ role: 'user', content: instruccion }];
-        let ayResp = await llamarAnthropic(env, ayMessages, ayudanteTools, MODEL_EXPERTO, 1024, ayudante.systemPrompt);
+        let ayResp = await llamarAnthropic(env, ayMessages, ayudanteTools, MODEL_EXPERTO, 1024, promptAyudante);
         let ayIter = 0;
         const AY_MAX_ITER = 4;
 
