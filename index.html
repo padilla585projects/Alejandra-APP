@@ -13985,8 +13985,16 @@ async function checkVersionAndUpdate(useWorkerFallback = false) {
   // significa lo mismo.
   if (remoteVersion && !matches) {
     if (new URLSearchParams(location.search).has('code')) return;
-    _actualizando = true;
     mostrarBannerActualizacion(remoteVersion);
+    // FIX-RELOAD-TRABAJO-01 (12/08/2026): antes se forzaba el reload a los 3s pasara
+    // lo que pasara -- si el operario tenía una incidencia o un plano a medio rellenar,
+    // se perdía sin aviso real. Si hay un modal abierto, se deja el banner (con su botón
+    // "Actualizar ahora" ya disponible) y se reintenta en el siguiente check periódico
+    // en vez de forzar; solo se auto-recarga cuando no hay nada a medio hacer.
+    const hayModalAbierto = [...document.querySelectorAll('.modal-overlay')]
+      .some(m => getComputedStyle(m).display !== 'none');
+    if (hayModalAbierto) return;
+    _actualizando = true;
     setTimeout(forzarActualizacion, 3000);
   }
 }
@@ -15764,6 +15772,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         : await apiCall('/incidencias',         { method: 'POST', body: JSON.stringify(body) });
       if (!res.ok) { const e = await res.json().catch(()=>({error:'Error'})); return toast('❌ ' + (e.error||'Error'), 'err'); }
       // Si es nueva incidencia, obtener el ID y subir fotos pendientes
+      let fotosFallidas = 0;
       if (!id) {
         const data = await res.json().catch(() => null);
         const nuevaId = data?.id || data?.incidencia?.id || null;
@@ -15782,14 +15791,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
                 const form = new FormData();
                 form.append('file', file);
                 await apiCallRaw(`/incidencias/${nuevaId}/fotos`, { method: 'POST', body: form });
-              } catch { /* foto fallida no bloquea */ }
+              } catch { fotosFallidas++; /* foto fallida no bloquea la incidencia */ }
             }
             if (sub) sub.style.display = 'none';
           }
         }
       }
       cerrarFormIncidencia();
-      toast(id ? '✅ Incidencia actualizada' : '✅ Incidencia creada');
+      // FIX-FOTO-SILENCIOSA-01 (12/08/2026): antes decía "Incidencia creada" igual
+      // aunque una foto no se hubiera subido -- el operario creía que había quedado
+      // todo documentado y no era así.
+      if (!id && fotosFallidas > 0) {
+        toast(`⚠️ Incidencia creada, pero ${fotosFallidas} foto(s) no se pudieron subir`, 'err');
+      } else {
+        toast(id ? '✅ Incidencia actualizada' : '✅ Incidencia creada');
+      }
       cargarIncidencias();
     } catch { toast('❌ Error de red', 'err'); }
   }
