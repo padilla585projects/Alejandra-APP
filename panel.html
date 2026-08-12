@@ -17626,13 +17626,18 @@ function verDetallePedido(p) {
 // PEDIDOS-01 (24/07/2026): modal para enviar un pedido por correo — Adrian:
 // "mandar por correo tambien...al proovedor que pueden ser diferentes o a un
 // mail concreto". Se intenta rellenar el email automáticamente buscando el
-// proveedor por nombre en /proveedores; si no hay match, el campo queda vacío
-// y editable para poner cualquier dirección a mano.
+// proveedor por nombre; si no hay match, el campo queda vacío y editable para
+// poner cualquier dirección a mano.
+// CATALOGO-PROVEEDORES-02 (12/08/2026): buscaba en /proveedores, un catálogo simple
+// (solo nombre+empresa_id, sin columna email en D1 real -- verificado contra el
+// esquema) que nunca coincide con `match?.email`. El autorrelleno llevaba roto en
+// silencio desde que existe este modal. La tabla real con email/web/contacto es
+// proveedores_gestion (Gestión de Proveedores, con su propio alta manual).
 async function abrirModalEnviarPedido(p) {
   let emailSugerido = '';
   try {
-    const r = await api('/proveedores');
-    const lista = r.proveedores || r.data || r || [];
+    const r = await api('/proveedores-gestion');
+    const lista = r.data || r.proveedores || r || [];
     if (p.proveedor && Array.isArray(lista)) {
       const match = lista.find(x => (x.nombre || '').trim().toLowerCase() === p.proveedor.trim().toLowerCase());
       if (match?.email) emailSugerido = match.email;

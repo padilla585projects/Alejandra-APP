@@ -2051,9 +2051,17 @@ const TOOL_ENVIAR_GMAIL = {
 // tool que use pasa por evaluarInvocacionCognitiva() exactamente igual que si
 // Alejandra la llamara directo (ver `case 'delegar_tarea'`).
 const AYUDANTES = {
+  // CATALOGO-PROVEEDORES-01 (12/08/2026): Adrián pidió cargar el catálogo de Hilti/Pemsa/
+  // Würth (proveedores habituales) -- en vez de una tabla estática de referencias de
+  // ejemplo (que quedaría obsoleta y con datos inventados: Würth por sí solo tiene +100.000
+  // referencias), se le da al ayudante buscar_web para que consulte la referencia real
+  // cuando se le pida un material que no conoce, priorizando las webs oficiales de los
+  // proveedores habituales. Si no encuentra nada fiable, crea el pedido igualmente con la
+  // descripción que le haya dado el humano -- nunca ha hecho falta que exista en ningún
+  // catálogo para crear un pedido.
   pedidos: {
-    tools: [TOOL_GESTIONAR_PEDIDO],
-    systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.',
+    tools: [TOOL_GESTIONAR_PEDIDO, TOOL_BUSCAR_WEB],
+    systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Los proveedores habituales son Hilti (fijación y anclajes), Pemsa (bandejas portacables) y Würth (tornillería y fijaciones) -- si te piden un material y no conoces la referencia exacta, usa buscar_web (prioriza hilti.es, pemsa-rejiband.com o wurth.es en la búsqueda) para encontrar la referencia y descripción reales antes de crear el pedido. Si la búsqueda no encuentra nada fiable, crea igualmente el pedido con la descripción que te haya dado el humano -- nunca inventes un código de referencia que parezca oficial sin haberlo verificado; en ese caso dilo explícitamente en la descripción/notas. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.',
   },
   correos: {
     tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL],
