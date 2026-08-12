@@ -13818,16 +13818,19 @@ function _b64std(bytes) {
 }
 
 // Endpoints internos servidor-a-servidor: los llama alejandra-agente (nunca un
-// navegador) vía Service Binding API_WEB, autenticados con AGENT_INTERNAL_SECRET
-// -- mismo patrón que _getAuthPlano()/generar_plano. usuario_id llega en el body,
-// resuelto por alejandra-agente a partir de SU sesión ya verificada, nunca del
-// modelo (ver TOOL_LEER_GMAIL/TOOL_ENVIAR_GMAIL).
+// navegador) vía Service Binding API_WEB, autenticados con _getAuthPlano() --
+// mismo helper dual (X-Internal-Secret o sesión real) ya usado por
+// /planos/generar, reutilizado tal cual en vez de duplicar el chequeo. Si llega
+// con X-Internal-Secret, usuario_id sale del body (resuelto por alejandra-agente
+// a partir de SU sesión ya verificada, nunca del modelo -- ver
+// TOOL_LEER_GMAIL/TOOL_ENVIAR_GMAIL); si llega con sesión real, usuario_id es el
+// del propio usuario autenticado -- en ambos casos solo puede actuar sobre su
+// propio Gmail conectado.
 async function internalGmailListar(request, env) {
-  const secreto = request.headers.get('X-Internal-Secret');
-  if (!secreto || !env.AGENT_INTERNAL_SECRET || secreto !== env.AGENT_INTERNAL_SECRET) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  const usuarioId = body.usuario_id;
-  if (!usuarioId) return err('Falta usuario_id', 400);
+  const auth = await _getAuthPlano(request, env, body);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const usuarioId = auth.usuario_id;
   const { accessToken, email, error } = await _obtenerAccessTokenGmail(env, usuarioId);
   if (error) return json({ ok: false, error });
 
@@ -13853,12 +13856,11 @@ async function internalGmailListar(request, env) {
 }
 
 async function internalGmailEnviar(request, env) {
-  const secreto = request.headers.get('X-Internal-Secret');
-  if (!secreto || !env.AGENT_INTERNAL_SECRET || secreto !== env.AGENT_INTERNAL_SECRET) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  const usuarioId = body.usuario_id;
+  const auth = await _getAuthPlano(request, env, body);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const usuarioId = auth.usuario_id;
   const { para, asunto, cuerpo } = body;
-  if (!usuarioId) return err('Falta usuario_id', 400);
   if (!para || !asunto) return err('Falta destinatario o asunto', 400);
   const { accessToken, email, error } = await _obtenerAccessTokenGmail(env, usuarioId);
   if (error) return json({ ok: false, error });
