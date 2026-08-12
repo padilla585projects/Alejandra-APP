@@ -3733,6 +3733,334 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         </div>
       </div>
 
+      <!-- ESCANDALLO DE PRECIOS / PRICE BREAKDOWN (NEW-114) -->
+      <div class="page" id="pageEscandalloPrecios">
+        <div class="page-title">🧮 Escandallo de Precios / Price Breakdown</div>
+        <!-- KPIs -->
+        <div id="epKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;"></div>
+        <!-- Filtros -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="epFiltroCap" onchange="filtrarEscandallo()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos capítulos</option>
+          </select>
+          <select id="epFiltroObra" onchange="filtrarEscandallo()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select id="epFiltroEstado" onchange="filtrarEscandallo()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="obsoleto">Obsoleto</option>
+          </select>
+          <input type="text" id="epBuscar" oninput="filtrarEscandallo()" placeholder="🔍 Buscar código o descripción…" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;min-width:200px;">
+          <button onclick="abrirModalEp()" style="margin-left:auto;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;">
+            ➕ Nueva partida
+          </button>
+        </div>
+        <div id="epTabla"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalEp" style="display:none" onclick="if(event.target===this)cerrarModalEp()">
+          <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
+            <div class="modal-header">
+              <h3 id="modalEpTitle">Nueva partida de escandallo</h3>
+              <button class="modal-close" onclick="cerrarModalEp()">✕</button>
+            </div>
+            <div style="padding:0 24px 24px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Código *</label>
+                <input type="text" id="epCodigo" placeholder="Ej: PU-001" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;text-transform:uppercase;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Unidad</label>
+                <input type="text" id="epUnidad" placeholder="ud" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Descripción *</label>
+                <textarea id="epDesc" rows="2" placeholder="Descripción de la partida…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Capítulo</label>
+                <input type="text" id="epCapitulo" placeholder="Ej: Capítulo 01 — Movimiento de tierras" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Tipo de partida</label>
+                <select id="epTipo" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                  <option value="compuesta">Compuesta</option>
+                  <option value="material">Material</option>
+                  <option value="mano_obra">Mano de obra</option>
+                  <option value="maquinaria">Maquinaria</option>
+                  <option value="mixta">Mixta</option>
+                  <option value="subcontrata">Subcontrata</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Rendimiento</label>
+                <input type="number" id="epRendimiento" step="0.01" value="1" oninput="calcEp()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Estado</label>
+                <select id="epEstado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                  <option value="borrador">Borrador</option>
+                  <option value="aprobado">Aprobado</option>
+                  <option value="obsoleto">Obsoleto</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1"><hr style="margin:4px 0;border-color:#e2e8f0"><strong style="font-size:12px;color:#64748b">COSTES UNITARIOS (€)</strong></div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Material €</label>
+                <input type="number" id="epMaterial" step="0.01" value="0" oninput="calcEp()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Mano de obra €</label>
+                <input type="number" id="epManoObra" step="0.01" value="0" oninput="calcEp()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Maquinaria €</label>
+                <input type="number" id="epMaquinaria" step="0.01" value="0" oninput="calcEp()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Gastos generales %</label>
+                <input type="number" id="epGG" step="0.1" value="13" oninput="calcEp()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Beneficio industrial %</label>
+                <input type="number" id="epBI" step="0.1" value="6" oninput="calcEp()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra</label>
+                <select id="epObra" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                  <option value="">— Sin asignar —</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Notas</label>
+                <textarea id="epNotas" rows="2" placeholder="Notas adicionales…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div id="epCalcResult" style="grid-column:1/-1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:13px;"></div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin:0 24px 20px;">
+              <button type="button" onclick="cerrarModalEp()" style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);cursor:pointer;font-size:13px;">Cancelar</button>
+              <button type="button" onclick="guardarEp()" style="padding:8px 18px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRONOGRAMA DE PAGOS / PAYMENT SCHEDULE (NEW-115) -->
+      <div class="page" id="pageCronogramaPagos">
+        <div class="page-title">💳 Cronograma de Pagos / Payment Schedule</div>
+        <!-- KPIs -->
+        <div id="cpKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;"></div>
+        <!-- Filtros -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="cpFiltroObra" onchange="filtrarCronogramaPagos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select id="cpFiltroTipo" onchange="filtrarCronogramaPagos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los tipos</option>
+            <option value="certificacion">📜 Certificación</option>
+            <option value="anticipo">⬆️ Anticipo</option>
+            <option value="liquidacion">🏁 Liquidación</option>
+            <option value="garantia">🔒 Garantía</option>
+            <option value="otro">📌 Otro</option>
+          </select>
+          <select id="cpFiltroEstado" onchange="filtrarCronogramaPagos()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="cobrado">Cobrado</option>
+            <option value="parcial">Parcial</option>
+            <option value="impagado">Impagado</option>
+          </select>
+          <button onclick="abrirModalCpg()" style="margin-left:auto;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;">
+            ➕ Nuevo hito de pago
+          </button>
+        </div>
+        <div id="cpTabla"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalCpg" style="display:none" onclick="if(event.target===this)cerrarModalCpg()">
+          <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto;">
+            <div class="modal-header">
+              <h3 id="modalCpgTitle">Nuevo hito de pago</h3>
+              <button class="modal-close" onclick="cerrarModalCpg()">✕</button>
+            </div>
+            <div style="padding:0 24px 24px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
+                <select id="cpObra" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                  <option value="">— Seleccionar obra —</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Descripción *</label>
+                <input type="text" id="cpDesc" placeholder="Ej: Certificación nº3" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Tipo</label>
+                <select id="cpTipo" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                  <option value="certificacion">📜 Certificación</option>
+                  <option value="anticipo">⬆️ Anticipo</option>
+                  <option value="liquidacion">🏁 Liquidación</option>
+                  <option value="garantia">🔒 Garantía</option>
+                  <option value="otro">📌 Otro</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Estado</label>
+                <select id="cpEstado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                  <option value="pendiente">Pendiente</option>
+                  <option value="cobrado">Cobrado</option>
+                  <option value="parcial">Parcial</option>
+                  <option value="impagado">Impagado</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha prevista *</label>
+                <input type="date" id="cpFechaPrev" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha de cobro</label>
+                <input type="date" id="cpFechaCobro" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Importe previsto €</label>
+                <input type="number" id="cpImportePrev" step="0.01" value="0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Importe cobrado €</label>
+                <input type="number" id="cpImporteCob" step="0.01" value="0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Forma de pago</label>
+                <input type="text" id="cpFormaPago" placeholder="Ej: Transferencia" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Referencia</label>
+                <input type="text" id="cpRef" placeholder="Nº de factura / referencia" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Cliente</label>
+                <input type="text" id="cpCliente" placeholder="Nombre del cliente" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Notas</label>
+                <textarea id="cpNotas" rows="2" placeholder="Notas adicionales…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin:0 24px 20px;">
+              <button type="button" onclick="cerrarModalCpg()" style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);cursor:pointer;font-size:13px;">Cancelar</button>
+              <button type="button" onclick="guardarCpg()" style="padding:8px 18px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REGISTRO DIARIO DE PREVENCIÓN / RdP (NEW-116) -->
+      <div class="page" id="pageRdpRegistros">
+        <div class="page-title">📋 Registro Diario de Prevención (RdP) — Ley 31/1995</div>
+        <!-- KPIs -->
+        <div id="rdpKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;"></div>
+        <!-- Filtros -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="rdpFiltroObra" onchange="filtrarRdp()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <input type="date" id="rdpDesde" onchange="filtrarRdp()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+          <input type="date" id="rdpHasta" onchange="filtrarRdp()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+          <select id="rdpFiltroEstado" onchange="filtrarRdp()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="firmado">Firmado</option>
+          </select>
+          <button onclick="abrirModalRdp()" style="margin-left:auto;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;">
+            ➕ Nuevo registro
+          </button>
+        </div>
+        <div id="rdpTabla"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalRdp" style="display:none" onclick="if(event.target===this)cerrarModalRdp()">
+          <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
+            <div class="modal-header">
+              <h3 id="modalRdpTitle">Nuevo Registro Diario de Prevención</h3>
+              <button class="modal-close" onclick="cerrarModalRdp()">✕</button>
+            </div>
+            <div style="padding:0 24px 24px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
+                <select id="rdpObra" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                  <option value="">— Seleccionar obra —</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha *</label>
+                <input type="date" id="rdpFecha" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Trabajadores presentes</label>
+                <input type="number" id="rdpTrab" min="0" value="0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Condiciones meteo</label>
+                <select id="rdpMeteo" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                  <option value="buenas">☀️ Buenas</option>
+                  <option value="nublado">☁️ Nublado</option>
+                  <option value="lluvia">🌧️ Lluvia</option>
+                  <option value="viento">💨 Viento</option>
+                  <option value="frio">🥶 Frío</option>
+                  <option value="calor">🌡️ Calor</option>
+                  <option value="nieve">❄️ Nieve</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Actividades del día *</label>
+                <textarea id="rdpActividades" rows="2" placeholder="Describir las actividades realizadas…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Riesgos detectados</label>
+                <textarea id="rdpRiesgos" rows="2" placeholder="Riesgos detectados durante la jornada…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Medidas preventivas</label>
+                <textarea id="rdpMedidas" rows="2" placeholder="Medidas preventivas adoptadas…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Equipos utilizados</label>
+                <textarea id="rdpEquipos" rows="2" placeholder="Equipos y maquinaria utilizados…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Incidencias</label>
+                <textarea id="rdpIncidencias" rows="2" placeholder="Incidencias del día (si las hay)…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Visitas externas</label>
+                <textarea id="rdpVisitas" rows="2" placeholder="Visitas de coordinación, inspección, etc…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Responsable</label>
+                <input type="text" id="rdpResponsable" placeholder="Nombre y apellidos" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Cargo del responsable</label>
+                <input type="text" id="rdpCargo" placeholder="Encargado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Observaciones</label>
+                <textarea id="rdpObs" rows="2" placeholder="Observaciones adicionales…" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                  <input type="checkbox" id="rdpFirmado" style="width:16px;height:16px;">
+                  <span>Firmar y cerrar este registro (no podrá eliminarse después)</span>
+                </label>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin:0 24px 20px;">
+              <button type="button" onclick="cerrarModalRdp()" style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);cursor:pointer;font-size:13px;">Cancelar</button>
+              <button type="button" onclick="guardarRdp()" style="padding:8px 18px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET (NEW-108) -->
       <div class="page" id="pageFlotaVehiculos">
         <div class="page-title">🚗 Flota de Vehículos de Empresa / Vehicle Fleet</div>
