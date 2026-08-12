@@ -10060,7 +10060,7 @@ async function getObraDashboard(request, env) {
     return [...p, ...extras];
   };
 
-  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo, incidenciasCriticas, tareasUrgentes, rfisAbiertas, tareasActivas, deficienciasAbiertas] = await Promise.all([
+  const [fichajesHoy, equiposMant, equiposAveriados, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo, incidenciasCriticas, tareasUrgentes, rfisAbiertas, tareasActivas, deficienciasAbiertas] = await Promise.all([
     // Fichajes hoy
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND fecha=?`
@@ -10070,6 +10070,17 @@ async function getObraDashboard(request, env) {
     env.DB.prepare(
       `SELECT (SELECT COUNT(*) FROM pemp WHERE empresa_id=? AND estado='mantenimiento'${queryObraId?' AND obra_id=?':''})
             + (SELECT COUNT(*) FROM carretillas WHERE empresa_id=? AND estado='mantenimiento'${queryObraId?' AND obra_id=?':''}) as n`
+    ).bind(...[empresa_id, ...(queryObraId?[queryObraId]:[]), empresa_id, ...(queryObraId?[queryObraId]:[])]).first(),
+
+    // DASH-KPI-EQUIPOS-AVERIADOS-01 (12/08/2026): el KPI "Equipos averiados" del panel
+    // (dash.equipos_averiados) no tenía campo equivalente aquí -- salía siempre "—". El
+    // estado de avería se guarda con distinta capitalización según la ruta que lo escribió
+    // ('mantenimiento'/'averiado' en minúscula aquí mismo en /obra-dashboard vs
+    // 'Mantenimiento'/'Averiada' capitalizado en otras rutas, ver ARCHITECT_BACKLOG.md
+    // deuda de esquema) -- LOWER(estado) cubre ambas sin tener que verificar cuál usa D1.
+    env.DB.prepare(
+      `SELECT (SELECT COUNT(*) FROM pemp WHERE empresa_id=? AND LOWER(estado) IN ('averiada','averiado')${queryObraId?' AND obra_id=?':''})
+            + (SELECT COUNT(*) FROM carretillas WHERE empresa_id=? AND LOWER(estado) IN ('averiada','averiado')${queryObraId?' AND obra_id=?':''}) as n`
     ).bind(...[empresa_id, ...(queryObraId?[queryObraId]:[]), empresa_id, ...(queryObraId?[queryObraId]:[])]).first(),
 
     // Herramientas no disponibles (en uso / averiada / baja)
@@ -10156,6 +10167,7 @@ async function getObraDashboard(request, env) {
   return json({
     fichajes_hoy:           fichajesHoy?.n || 0,
     equipos_mantenimiento:  equiposMant?.n || 0,
+    equipos_averiados:      equiposAveriados?.n || 0,
     herramientas_fuera:     herrFuera?.n  || 0,
     pedidos_pendientes:     pedidosPend?.n || 0,
     alertas_stock:          (alertasHerr?.n||0) + (alertasSeg?.n||0) + (alertasBob?.n||0),

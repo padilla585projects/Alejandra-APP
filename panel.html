@@ -13902,7 +13902,7 @@ async function cargarDashboard() {
   _dashLoadCount++;
   console.log(`📊 cargarDashboard() llamada #${_dashLoadCount}`);
   document.getElementById('dashSub').textContent = 'Actualizando...';
-  const [dash, incR, pedR, tareasR, rfisR, defR, obrasOvR, segDR, punchDR, hitosDR] = await Promise.all([
+  const [dash, incR, pedR, tareasR, rfisR, defR, obrasOvR, segDR, punchDR, hitosDR, trabR] = await Promise.all([
     api('/obra-dashboard'),
     api('/incidencias?limit=5'),
     api('/pedidos?limit=5'),
@@ -13913,11 +13913,18 @@ async function cargarDashboard() {
     api('/obs-seguridad?').catch(() => ({})),
     api('/punch-list?').catch(() => ({})),
     api('/hitos-obra?').catch(() => ({})),
+    // DASH-KPI-TRABAJADORES-01 (12/08/2026): /obra-dashboard nunca devolvió
+    // trabajadores_activos ni obras_activas -- los dos KPIs de arriba salían siempre "—"
+    // (Adrián: "el dashboard principal ahí que revisarlo porque no actualiza datos"). Se
+    // reutiliza /personal/trabajadores (ya filtra por obra/departamento con el mismo
+    // criterio que la página Personal) en vez de duplicar esa lógica de aislamiento en una
+    // query nueva del backend.
+    api('/personal/trabajadores').catch(() => []),
   ]);
 
   const kpis = [
-    { icon: '👷', value: dash.trabajadores_activos ?? '—', label: 'Trabajadores activos', cls: '',                                          nav: 'personal' },
-    { icon: '🏗️', value: dash.obras_activas ?? '—',        label: 'Obras activas',        cls: '',                                          nav: 'obras' },
+    { icon: '👷', value: toArr(trabR, 'trabajadores').length,label: 'Trabajadores activos', cls: '',                                          nav: 'personal' },
+    { icon: '🏗️', value: (obrasOvR?.obras||[]).length,      label: 'Obras activas',        cls: '',                                          nav: 'obras' },
     { icon: '⚠️', value: dash.incidencias_abiertas ?? '—', label: 'Incidencias abiertas', cls: dash.incidencias_abiertas > 0 ? 'warn' : '',  nav: 'incidencias' },
     { icon: '📦', value: dash.pedidos_pendientes ?? '—',   label: 'Pedidos pendientes',   cls: dash.pedidos_pendientes > 0 ? 'warn' : '',    nav: 'pedidos' },
     { icon: '✅', value: dash.tareas_activas ?? '—',        label: 'Tareas activas',       cls: '',                                           nav: 'tareas' },
@@ -13926,7 +13933,7 @@ async function cargarDashboard() {
     { icon: '🔴', value: dash.equipos_averiados ?? '—',    label: 'Equipos averiados',    cls: dash.equipos_averiados > 0 ? 'danger' : '',   nav: 'pemp' },
     { icon: '🔧', value: dash.equipos_mantenimiento ?? '—',label: 'En mantenimiento',     cls: '',                                           nav: 'mantenimientos' },
     { icon: '🔺', value: dash.herramientas_fuera ?? '—',   label: 'Herramientas fuera',   cls: '',                                           nav: 'herramientas' },
-    { icon: '📉', value: dash.stock_bajo ?? '—',           label: 'Alertas de stock',     cls: dash.stock_bajo > 0 ? 'danger' : '',          nav: 'seguridad' },
+    { icon: '📉', value: dash.alertas_stock ?? '—',        label: 'Alertas de stock',     cls: dash.alertas_stock > 0 ? 'danger' : '',       nav: 'seguridad' },
     { icon: '🔴', value: (segDR?.observaciones||[]).filter(o=>o.tipo==='peligro_inminente'&&o.estado!=='cerrada').length || 0, label: 'Peligros activos', cls: (segDR?.observaciones||[]).filter(o=>o.tipo==='peligro_inminente'&&o.estado!=='cerrada').length>0?'danger':'', nav: 'seguridadObra' },
     { icon: '📝', value: (punchDR?.items||[]).filter(p=>p.estado!=='cerrado').length || 0, label: 'Punch list abiertos', cls: (punchDR?.items||[]).filter(p=>p.vencido).length>0?'danger':(punchDR?.items||[]).filter(p=>p.estado!=='cerrado').length>0?'warn':'', nav: 'punchList' },
     { icon: '🏁', value: (hitosDR?.hitos||[]).filter(h=>h.retrasado).length || 0, label: 'Hitos retrasados', cls: (hitosDR?.hitos||[]).filter(h=>h.retrasado).length>0?'danger':'', nav: 'hitos' },
