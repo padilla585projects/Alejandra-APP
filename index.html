@@ -3666,7 +3666,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div id="listaPendientes" style="font-size:13px;color:var(--muted)">—</div>
         </div>
         <div class="admin-section">
-          <div class="admin-section-title">👥 Usuarios registrados</div>
+          <div class="admin-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <span>👥 Usuarios registrados</span>
+            <button class="btn-sm" id="btnModoImprimirTarjetas" onclick="toggleModoImprimirTarjetas()" style="font-size:11px">🖨️ Imprimir tarjetas</button>
+          </div>
+          <div id="barraImprimirTarjetas" style="display:none;margin-bottom:10px"></div>
           <div id="adminUsuariosList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
         </div>
         <div class="admin-section">
@@ -7267,8 +7271,7 @@ let _usuariosAdminCache = [];
 // info, hay que añadir más cosas" — empresa, departamento, rol/DNI y obra, manteniendo el
 // tamaño carnet CR80 (85.6×54mm). `datos` = {nombre, codigo, fotoUrl, empresa,
 // departamento, rolTexto, obra}.
-function _imprimirTarjeta(datos) {
-  const { nombre, codigo, fotoUrl, empresa, departamento, rolTexto, obra } = datos;
+function _generarQrDataUrl(codigo) {
   const tmp = document.createElement('div');
   tmp.style.display = 'none';
   document.body.appendChild(tmp);
@@ -7276,25 +7279,24 @@ function _imprimirTarjeta(datos) {
   const canvas = tmp.querySelector('canvas');
   const qrDataUrl = canvas ? canvas.toDataURL('image/png') : '';
   document.body.removeChild(tmp);
-  if (!qrDataUrl) { toast('❌ No se pudo generar el QR', 'err'); return; }
+  return qrDataUrl;
+}
 
-  const w = window.open('', '_blank');
-  if (!w) { toast('❌ El navegador bloqueó la ventana de impresión', 'err'); return; }
-  w.document.write(`<!DOCTYPE html><html><head><title>Tarjeta — ${nombre}</title>
-<style>
-@page { size: 85.6mm 54mm; margin: 0; }
-body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;align-items:center;background:#eee;min-height:100vh}
-.card{width:85.6mm;height:54mm;background:#fff;border:1px solid #ccc;border-radius:3mm;box-sizing:border-box;padding:3.5mm;display:flex;gap:3mm;align-items:center}
+// CSS compartido por la tarjeta CR80 (hoja individual y hoja A4 con varias) — una sola
+// fuente de verdad para no desincronizar el diseño entre las dos ventanas de impresión.
+const _TARJETA_CSS = `
+.card{width:85.6mm;height:54mm;background:#fff;border:1px solid #ccc;border-radius:3mm;box-sizing:border-box;padding:3.5mm;display:flex;gap:3mm;align-items:center;break-inside:avoid;page-break-inside:avoid}
 .foto{width:19mm;height:19mm;border-radius:50%;object-fit:cover;flex-shrink:0}
 .foto-placeholder{width:19mm;height:19mm;border-radius:50%;background:#1e3a5f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:8mm;font-weight:900;flex-shrink:0}
 .info{flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column;gap:.6mm}
 .nombre{font-size:3.6mm;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#101823}
 .empresa{font-size:2.6mm;font-weight:700;color:#1e3a5f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .linea{font-size:2.3mm;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.qr{width:16mm;height:16mm;flex-shrink:0}
-@media print{body{background:#fff}.card{border:none}}
-</style></head><body>
-<div class="card">
+.qr{width:16mm;height:16mm;flex-shrink:0}`;
+
+function _tarjetaCardHtml(datos, qrDataUrl) {
+  const { nombre, fotoUrl, empresa, departamento, rolTexto, obra } = datos;
+  return `<div class="card">
 ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(nombre || '?').charAt(0).toUpperCase()}</div>`}
 <div class="info">
   <div class="nombre">${nombre}</div>
@@ -7303,10 +7305,64 @@ ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholde
   ${obra ? `<div class="linea">🏗 ${obra}</div>` : ''}
 </div>
 <img class="qr" src="${qrDataUrl}">
-</div>
-</body></html>`);
+</div>`;
+}
+
+// Abre la ventana de impresión y espera a que terminen de cargar las imágenes (la foto de
+// perfil es una URL de red; el QR ya es un data URL, carga al instante) antes de llamar a
+// print() -- si se llama justo tras document.write(), el wizard de impresión de Android
+// puede abrirse con alguna foto todavía en blanco. Con varias tarjetas a la vez (varias
+// fotos de red) la carrera es más probable, de ahí el fix. Timeout de seguridad por si
+// alguna foto falla en cargar (URL caducada, sin conexión) para no dejar el diálogo colgado.
+function _abrirVentanaImprimir(html) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('❌ El navegador bloqueó la ventana de impresión', 'err'); return null; }
+  let impreso = false;
+  const imprimir = () => { if (impreso) return; impreso = true; w.print(); };
+  w.addEventListener('load', imprimir);
+  setTimeout(imprimir, 2500);
+  w.document.write(html);
   w.document.close();
-  w.print();
+  return w;
+}
+
+function _imprimirTarjeta(datos) {
+  const qrDataUrl = _generarQrDataUrl(datos.codigo);
+  if (!qrDataUrl) { toast('❌ No se pudo generar el QR', 'err'); return; }
+  _abrirVentanaImprimir(`<!DOCTYPE html><html><head><title>Tarjeta — ${datos.nombre}</title>
+<style>
+@page { size: 85.6mm 54mm; margin: 0; }
+body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;align-items:center;background:#eee;min-height:100vh}
+${_TARJETA_CSS}
+@media print{body{background:#fff}.card{border:none}}
+</style></head><body>
+${_tarjetaCardHtml(datos, qrDataUrl)}
+</body></html>`);
+}
+
+// AJUSTES-USUARIOS-02 (12/08/2026): varias tarjetas en una sola hoja A4, para no gastar un
+// folio por trabajador — reutiliza exactamente el mismo diseño de tarjeta (_TARJETA_CSS/
+// _tarjetaCardHtml) que la hoja individual, solo cambia el tamaño de página y el layout en
+// flex-wrap (2 columnas de CR80 por fila, tantas filas como quepan, salto de página
+// automático del navegador con break-inside:avoid para no cortar ninguna tarjeta a la mitad).
+function _imprimirTarjetasEnHoja(lista) {
+  if (!lista.length) return;
+  const cardsHtml = lista
+    .map(datos => { const qr = _generarQrDataUrl(datos.codigo); return qr ? _tarjetaCardHtml(datos, qr) : null; })
+    .filter(Boolean)
+    .join('\n');
+  if (!cardsHtml) { toast('❌ No se pudo generar ningún QR', 'err'); return; }
+
+  _abrirVentanaImprimir(`<!DOCTYPE html><html><head><title>Tarjetas (${lista.length})</title>
+<style>
+@page { size: A4; margin: 10mm; }
+body{font-family:Arial,sans-serif;margin:0;background:#fff}
+.hoja{display:flex;flex-wrap:wrap;gap:3mm}
+${_TARJETA_CSS}
+@media print{.card{border:1px dashed #ccc}}
+</style></head><body>
+<div class="hoja">${cardsHtml}</div>
+</body></html>`);
 }
 
 async function generarTarjetaTrabajador(id) {
@@ -11401,20 +11457,22 @@ async function buscarParaDevolver(cod) {
   c.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">🔍 Buscando...</div>';
   if (!_stockItems.length) await cargarStock();
   const item = _stockItems.find(i => (i.codigo || i.matricula || '').toUpperCase() === code);
-  if (!item) {
-    c.innerHTML = `<div style="color:var(--red);font-size:13px;padding:8px 0">❌ No encontrado: ${code}</div>`;
-    return;
-  }
-  if (['devuelta','Devuelta'].includes(item.estado)) {
+  if (item && ['devuelta','Devuelta'].includes(item.estado)) {
     c.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:8px 0">ℹ️ Ya está devuelta</div>`;
     return;
   }
-  const id = item.codigo || item.matricula;
+  // Si no está en el stock cargado puede que nunca se registrara su entrada (se olvidó en
+  // su momento). El backend de /devolver ya sabe darla de alta y marcarla devuelta en el
+  // mismo paso (mismo patrón que devolverBobina/devolverPemp) — en vez de cortar aquí con
+  // "no encontrado", se deja confirmar igual y que el backend decida.
+  const id = item ? (item.codigo || item.matricula) : code;
   const s = getSession();
   c.innerHTML = `
     <div style="background:var(--surface);border-radius:12px;padding:14px;border:1px solid var(--accent)">
       <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--accent);margin-bottom:4px">${id}</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">${item.proveedor||''} ${item.tipo_cable||item.tipo||''} · ${item.estado}</div>
+      ${item
+        ? `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">${item.proveedor||''} ${item.tipo_cable||item.tipo||''} · ${item.estado}</div>`
+        : `<div style="font-size:12px;color:var(--accent);margin-bottom:12px">⚠️ No estaba registrada — se dará de alta y se marcará como devuelta</div>`}
       <div class="form-group">
         <label class="form-label">Devuelto por</label>
         <input class="form-input" id="devPorInput" value="${s?.nombre||''}" placeholder="Nombre...">
@@ -11982,6 +12040,62 @@ async function eliminarObra(id) {
   } catch { toast('❌ Error', 'err'); }
 }
 
+// AJUSTES-USUARIOS-02 (12/08/2026): imprimir varias tarjetas a la vez, aprovechando un
+// folio A4 entero, en vez de tener que generarlas una a una (una hoja CR80 por trabajador).
+let _modoImprimirTarjetas = false;
+let _tarjetasSeleccionadas = new Set();
+
+function toggleModoImprimirTarjetas() {
+  _modoImprimirTarjetas = !_modoImprimirTarjetas;
+  _tarjetasSeleccionadas.clear();
+  const btn = document.getElementById('btnModoImprimirTarjetas');
+  if (btn) btn.textContent = _modoImprimirTarjetas ? '✕ Cancelar selección' : '🖨️ Imprimir tarjetas';
+  cargarUsuariosAdmin();
+  renderBarraImprimirTarjetas();
+}
+window.toggleModoImprimirTarjetas = toggleModoImprimirTarjetas;
+
+function toggleSeleccionTarjeta(id) {
+  if (_tarjetasSeleccionadas.has(id)) _tarjetasSeleccionadas.delete(id);
+  else _tarjetasSeleccionadas.add(id);
+  renderBarraImprimirTarjetas();
+}
+window.toggleSeleccionTarjeta = toggleSeleccionTarjeta;
+
+function renderBarraImprimirTarjetas() {
+  const c = document.getElementById('barraImprimirTarjetas');
+  if (!c) return;
+  if (!_modoImprimirTarjetas) { c.style.display = 'none'; c.innerHTML = ''; return; }
+  const n = _tarjetasSeleccionadas.size;
+  c.style.display = 'block';
+  c.innerHTML = `
+    <button class="btn-primary" style="width:100%;padding:10px" ${n ? '' : 'disabled'} onclick="imprimirTarjetasSeleccionadas()">
+      🖨️ Imprimir ${n ? `${n} tarjeta${n === 1 ? '' : 's'}` : 'tarjetas'} (folio A4)
+    </button>`;
+}
+window.renderBarraImprimirTarjetas = renderBarraImprimirTarjetas;
+
+function imprimirTarjetasSeleccionadas() {
+  const seleccionados = _usuariosAdminCache.filter(u => _tarjetasSeleccionadas.has(u.id));
+  const sinCodigo = seleccionados.filter(u => !u.codigo);
+  const conCodigo = seleccionados.filter(u => u.codigo);
+  if (sinCodigo.length) toast(`⚠️ ${sinCodigo.length} sin código, se omiten`, 'err');
+  if (!conCodigo.length) return;
+  const datos = conCodigo.map(u => {
+    const deptInfo = DEPT_INFO[u.departamento];
+    return {
+      nombre: u.nombre, codigo: u.codigo,
+      fotoUrl: u.foto_r2_key ? `${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(u.foto_r2_key)}` : '',
+      empresa: getSession()?.empresa_nombre || '',
+      departamento: deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (u.departamento || ''),
+      rolTexto: u.categoria || '',
+      obra: u.obra_nombre || '',
+    };
+  });
+  _imprimirTarjetasEnHoja(datos);
+}
+window.imprimirTarjetasSeleccionadas = imprimirTarjetasSeleccionadas;
+
 async function cargarUsuariosAdmin() {
   try {
     const res = await apiCall('/usuarios');
@@ -11997,28 +12111,41 @@ async function cargarUsuariosAdmin() {
     // Email tampoco se mostraba ni se podía editar en ningún sitio — mismo gap que en
     // panel.html (GESTION-ROLES-01), ya corregido ahí; se porta aquí para tener paridad.
     _usuariosAdminCache = usuarios;
+    // AJUSTES-USUARIOS-02 (12/08/2026): con 6 botones de acción + 3 líneas de texto en una
+    // sola fila flex, el texto (rol/obra/departamento) se quedaba aplastado en una columna
+    // estrecha y se envolvía en 2-3 líneas mientras los botones flotaban pegados a la
+    // derecha — ilegible en móvil. Se pasa a dos filas (cabecera con avatar+datos, acciones
+    // debajo a ancho completo) usando el mismo truco que ya usa admin-list-item en Obras
+    // (flex-wrap + hijos al 100% de ancho), sin tocar la clase compartida.
     c.innerHTML = usuarios.map(u => {
       const dept = u.departamento || 'electrico';
       const deptInfo = DEPT_INFO[dept];
       const avatarHtml = u.foto_r2_key
         ? `<img src="${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(u.foto_r2_key)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:pointer" onclick="document.getElementById('fotoInputUsr_${u.id}').click()">`
         : `<div style="width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0;cursor:pointer" onclick="document.getElementById('fotoInputUsr_${u.id}').click()">${u.nombre.charAt(0).toUpperCase()}</div>`;
+      const chk = _modoImprimirTarjetas
+        ? `<input type="checkbox" class="usr-print-chk" ${u.codigo ? '' : 'disabled title="Sin código, no se puede imprimir tarjeta"'} ${_tarjetasSeleccionadas.has(u.id) ? 'checked' : ''} onchange="toggleSeleccionTarjeta(${u.id})" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--accent)">`
+        : '';
       return `
-      <div class="admin-list-item" id="urow-${u.id}">
-        ${avatarHtml}<input type="file" id="fotoInputUsr_${u.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilWorker('usuario',${u.id},this.files[0])">
-        <div class="admin-item-info" style="flex:1;min-width:0">
-          <div class="admin-item-name">${u.nombre}</div>
-          <div class="admin-item-sub">${u.email || 'sin email'}</div>
-          <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptInfo ? deptInfo.icon + ' ' + deptInfo.name : dept}</div>
+      <div class="admin-list-item" id="urow-${u.id}" style="flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px;width:100%">
+          ${chk}
+          ${avatarHtml}<input type="file" id="fotoInputUsr_${u.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilWorker('usuario',${u.id},this.files[0])">
+          <div class="admin-item-info" style="flex:1;min-width:0">
+            <div class="admin-item-name">${u.nombre}</div>
+            <div class="admin-item-sub">${u.email || 'sin email'}</div>
+            <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptInfo ? deptInfo.icon + ' ' + deptInfo.name : dept}</div>
+          </div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0" id="uact-${u.id}">
+        ${_modoImprimirTarjetas ? '' : `
+        <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;width:100%;margin-top:4px" id="uact-${u.id}">
           <button class="btn-sm" onclick="generarTarjetaTrabajador(${u.id})" title="Tarjeta con QR para fichar" style="font-size:13px">🪪</button>
           <button class="btn-sm" onclick="editarEmailUsuario(${u.id},'${(u.email||'').replace(/'/g,"\\'")}')" title="Cambiar email" style="font-size:13px">✉️</button>
           <button class="btn-sm" onclick="editarRolUsuario(${u.id},'${u.rol}')" title="Cambiar rol / permisos" style="font-size:13px">🎖️</button>
           <button class="btn-sm" onclick="editarObraUsuario(${u.id},${u.obra_id||'null'})" title="Asignar obra" style="font-size:13px">📍</button>
           <button class="btn-sm" onclick="editarDeptUsuario(${u.id},'${dept}')" title="Cambiar departamento" style="font-size:13px">🏢</button>
           <button class="btn-sm danger" onclick="eliminarUsuario(${u.id})">🗑</button>
-        </div>
+        </div>`}
       </div>`;
     }).join('');
   } catch {}
