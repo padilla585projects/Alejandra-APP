@@ -11115,6 +11115,14 @@ const REGEX_ROUTES = [
   { re: /\b(no funciona|no puedo|error|falla|se cuelga|pantalla en blanco|no carga|no responde|se ha caído|no me deja|problema|avería|roto|bloqueado|urgente)\b/i, expert: 'app', web: false },
   { re: /\b(bobina|equipo|carretilla|PEMP|fichaje|fichar|entrada|salida|operario|encargado|personal|incidencia|pedido|albarán|obra|almacén|stock)\b/i, expert: 'app', web: false },
   { re: /\b(cuánt[oa]s|quién fichó|lista de|muéstrame|dame los datos|informe|resumen del|estado de)\b/i, expert: 'app', web: false },
+  // CORREO-AYUDANTE-ROUTING-01 (12/08/2026): "revisa mi correo"/"resúmeme mis correos" no
+  // matchea ninguna regla de arriba y caía en Haiku (capa 2), que lo clasificó como
+  // "web" (probablemente por asociar "correo" con "necesita internet") -- el experto
+  // "web" (TOOLS_POR_EXPERTO.web) NO tiene delegar_tarea, así que Alejandra no podía
+  // alcanzar el ayudante de Correos en absoluto y respondió que Gmail no estaba
+  // integrado (mintiendo: ya está desplegado, solo inalcanzable desde esa clasificación).
+  // Regla explícita y determinista en vez de confiar en que Haiku lo adivine bien.
+  { re: /\b(mi correo|mis correos|correo electrónico|bandeja de entrada|gmail|revisa(?:me)? el correo|lee(?:me)? el correo)\b/i, expert: 'app', web: false },
   { re: /\b(NEXUS|worker|deploy|wrangler|cloudflare|código|endpoint|API|github|commit|patch|tool|prompt)\b/i, expert: 'tecnico', web: false },
   { re: /\b(mejora|reflexion|autoconocimiento|qué puedes mejorar|piensa en|analízate|evolucionar)\b/i, expert: 'reflexion', web: false },
   { re: /\b(quién eres|qué eres|cómo te llamas|qué sabes hacer|capacidades|tu historia|cuéntame sobre ti)\b/i, expert: 'completo', web: false },
@@ -11139,7 +11147,7 @@ async function clasificarConHaiku(env, mensaje) {
       body: JSON.stringify({
         model: MODEL_ROUTER,
         max_tokens: 30,
-        system: 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app. Si es un HECHO que implica registrar o actualizar datos de la app aunque esté en forma de aviso/declaración, no de orden (alguien ha faltado/llegado/fichado, un pedido ha llegado, se ha usado material, un equipo se ha averiado, etc. — ej: "Dani faltó hoy", "han venido todos", "ya llegó el pedido") → app, NUNCA simple. "simple" es SOLO para saludos, charla casual o preguntas que no requieren tocar la base de datos. Si habla de electricidad, esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos eléctricos, instalaciones, ingeniería electrónica o de control → ingenieria.',
+        system: 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app. Si es un HECHO que implica registrar o actualizar datos de la app aunque esté en forma de aviso/declaración, no de orden (alguien ha faltado/llegado/fichado, un pedido ha llegado, se ha usado material, un equipo se ha averiado, etc. — ej: "Dani faltó hoy", "han venido todos", "ya llegó el pedido") → app, NUNCA simple. "simple" es SOLO para saludos, charla casual o preguntas que no requieren tocar la base de datos. Si habla de electricidad, esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos eléctricos, instalaciones, ingeniería electrónica o de control → ingenieria. Si pide leer, revisar o resumir su correo/email/Gmail/bandeja de entrada → app, NUNCA web (el correo se gestiona con una tool de la app, no es una búsqueda en internet).',
         messages: [{ role: 'user', content: msg.substring(0, 800) }]
       })
     });
