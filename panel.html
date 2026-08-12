@@ -22403,7 +22403,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.06';
+const PANEL_APP_VERSION = '9.07';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -22545,9 +22545,10 @@ document.addEventListener('visibilitychange', () => {
     <span id="aiPreviewName" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
     <button onclick="aiClearImage()" title="Quitar imagen">✕</button>
   </div>
+  <div id="aiAdjuntosList" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid #334155"></div>
   <div id="aiInputRow">
-    <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="aiOnImageSelect(event)">
-    <button id="aiAttachBtn" onclick="document.getElementById('aiFileInput').click()" title="Adjuntar imagen">📎</button>
+    <input type="file" id="aiFileInput" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="aiOnFilesSelect(event)">
+    <button id="aiAttachBtn" onclick="document.getElementById('aiFileInput').click()" title="Adjuntar archivo">📎</button>
     <button id="aiMicBtn" onclick="aiToggleMic()" title="Micrófono" style="background:none;border:1px solid #334155;border-radius:8px;color:#a855f7;padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s">🎙️</button>
     <textarea id="aiInput" placeholder="Escribe tu mensaje..." rows="1" onkeydown="aiKeydown(event)"></textarea>
     <button id="aiSendBtn" onclick="aiSend()">↑</button>
@@ -22563,15 +22564,58 @@ document.addEventListener('visibilitychange', () => {
 
   function getToken(){ return typeof TOKEN !== 'undefined' ? TOKEN : localStorage.getItem('panel_token') || ''; }
 
+  // BUG-HISTORIAL-MARKDOWN-01: estas funciones vivían solo dentro de aiSend(), así que
+  // _aiRenderHistory() (el recarga-desde-servidor de más abajo) no tenía acceso y pintaba
+  // las respuestas de Alejandra como texto plano con <br> -- toda la sintaxis markdown
+  // (**negritas**, listas, títulos ---) salía literal, ilegible. Se sacan aquí fuera para
+  // que las use tanto el historial como aiSend().
+  function _aiEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function _setupMarked() {
+    if (typeof marked === 'undefined' || typeof hljs === 'undefined') return;
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      highlight: (code, lang) => {
+        if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+        return hljs.highlightAuto(code).value;
+      }
+    });
+  }
+  function _aiRenderMd(txt) {
+    if (typeof marked === 'undefined') return '<p>' + _aiEsc(txt) + '</p>';
+    return marked.parse(txt);
+  }
+  function _aiAddCopyBtns(el) {
+    el.querySelectorAll('pre').forEach(pre => {
+      if (pre.querySelector('.code-header')) return;
+      const code = pre.querySelector('code');
+      const lang = (code?.className || '').replace('language-','').replace('hljs ','').split(' ')[0] || '';
+      const header = document.createElement('div');
+      header.className = 'code-header';
+      header.innerHTML = '<span class="code-lang">' + lang + '</span><button class="code-copy" onclick="_aiCopyCode(this)">Copiar</button>';
+      pre.insertBefore(header, pre.firstChild);
+    });
+  }
+  window._aiCopyCode = function(btn) {
+    const code = btn.closest('pre')?.querySelector('code')?.innerText || '';
+    navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copiado!'; setTimeout(() => btn.textContent = 'Copiar', 2000); });
+  };
+
   // Cargar historial: servidor primero (sync entre dispositivos), fallback localStorage
   function _aiRenderHistory() {
     const box = document.getElementById('aiMessages');
     if (!box || aiHistory.length === 0) return;
+    _setupMarked();
     box.innerHTML = '';
     for (const m of aiHistory) {
       const d = document.createElement('div');
       d.className = 'ai-msg ' + (m.role === 'assistant' ? 'bot' : 'user');
-      d.innerHTML = m.content.replace(/\n/g, '<br>');
+      if (m.role === 'assistant') {
+        d.innerHTML = _aiRenderMd(m.content);
+        _aiAddCopyBtns(d);
+      } else {
+        d.innerHTML = _aiEsc(m.content).replace(/\n/g, '<br>');
+      }
       box.appendChild(d);
     }
     box.scrollTop = box.scrollHeight;
@@ -22584,7 +22628,7 @@ document.addEventListener('visibilitychange', () => {
     const tok = typeof TOKEN !== 'undefined' ? TOKEN : localStorage.getItem('panel_token') || '';
     if (uid && tok) {
       try {
-        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
+        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=panel`, {
           headers: { 'X-Token': tok }
         });
         const data = await res.json();
@@ -22845,23 +22889,51 @@ document.getElementById('wInput').focus();
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); }
   };
 
-  let _aiImage = null; // { data: base64, media_type, name }
+  let _aiImage = null; // { data: base64, media_type, name } -- preview de la primera imagen
+  const _aiMaxFiles = 5, _aiMaxSizeMB = 5;
+  const _aiAllowedTypes = [
+    'image/png','image/jpeg','image/webp','image/gif','image/heic',
+    'application/pdf',
+    'text/plain','text/csv','text/html',
+    'application/json',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'model/vnd.dxf','image/vnd.dwg'
+  ];
 
-  window.aiOnImageSelect = function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const dataUrl = ev.target.result;
-      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (!match) return;
-      _aiImage = { data: match[2], media_type: match[1], name: file.name };
-      document.getElementById('aiPreviewImg').src = dataUrl;
-      document.getElementById('aiPreviewName').textContent = file.name;
-      document.getElementById('aiImagePreview').style.display = 'flex';
-      document.getElementById('aiAttachBtn').classList.add('has-image');
-    };
-    reader.readAsDataURL(file);
+  // PARIDAD-ADJUNTOS-DEVTOOLS-01: este chat solo permitía adjuntar 1 imagen
+  // (accept="image/*"). El FAB (alejandrOnFiles) e index.html sí soportan PDF y
+  // varios archivos -- aquí replicamos ese mismo patrón (staging en _aiAdjuntos,
+  // subida a R2 en el momento de enviar, ver más abajo en aiSend).
+  window.aiOnFilesSelect = function(e) {
+    const files = Array.from(e.target.files || []);
+    for (const file of files) {
+      if (!_aiImage && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const dataUrl = ev.target.result;
+          const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (!match) return;
+          _aiImage = { data: match[2], media_type: match[1], name: file.name };
+          document.getElementById('aiPreviewImg').src = dataUrl;
+          document.getElementById('aiPreviewName').textContent = file.name;
+          document.getElementById('aiImagePreview').style.display = 'flex';
+          document.getElementById('aiAttachBtn').classList.add('has-image');
+        };
+        reader.readAsDataURL(file);
+        continue;
+      }
+      if (_aiAdjuntos.length >= _aiMaxFiles) { toast(`Máximo ${_aiMaxFiles} archivos`); break; }
+      if (file.size > _aiMaxSizeMB * 1024 * 1024) { toast(`${file.name} supera ${_aiMaxSizeMB}MB`); continue; }
+      const ok = _aiAllowedTypes.some(t => file.type === t || file.name.toLowerCase().endsWith('.' + t.split('/').pop()));
+      if (!ok) { toast(`Formato no soportado: ${file.name}`); continue; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b64 = reader.result.split(',')[1];
+        _aiAdjuntos.push({ b64, mime: file.type || 'application/octet-stream', name: file.name, size: file.size });
+        _aiRenderAdjuntos();
+      };
+      reader.readAsDataURL(file);
+    }
     e.target.value = '';
   };
 
@@ -22871,6 +22943,23 @@ document.getElementById('wInput').focus();
     document.getElementById('aiPreviewImg').src = '';
     document.getElementById('aiAttachBtn').classList.remove('has-image');
   };
+
+  window.aiQuitarAdjunto = function(i) {
+    _aiAdjuntos.splice(i, 1);
+    _aiRenderAdjuntos();
+  };
+
+  function _aiRenderAdjuntos() {
+    const box = document.getElementById('aiAdjuntosList');
+    if (!box) return;
+    if (!_aiAdjuntos.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'flex';
+    box.innerHTML = _aiAdjuntos.map((a, i) =>
+      `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:#1e293b;font-size:11px;color:#e2e8f0">` +
+      `${a.name.length > 18 ? a.name.substring(0,15)+'…' : a.name}` +
+      `<button onclick="aiQuitarAdjunto(${i})" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:0;font-size:14px;line-height:1">×</button></span>`
+    ).join('');
+  }
 
   const AGENTE_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/chat';
   const AGENTE_STREAM_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream';
@@ -22885,8 +22974,22 @@ document.getElementById('wInput').focus();
     input.value = '';
     input.style.height = '';
 
-    // Si hay imagen adjunta, subirla al agente primero
-    let adjuntos = _aiAdjuntos.slice();
+    // Subir adjuntos (PDF, hojas de cálculo, etc.) a R2 -- mismo patrón que el FAB
+    // (alejandrEnviar). Antes _aiAdjuntos.slice() se mandaba tal cual al backend,
+    // como si ya fueran URLs, cuando en realidad son {b64,mime,name,size} sin subir.
+    let adjuntos = [];
+    for (const a of _aiAdjuntos) {
+      try {
+        const blob = await fetch(`data:${a.mime};base64,${a.b64}`).then(r => r.blob());
+        const fd = new FormData();
+        fd.append('file', blob, a.name);
+        fd.append('usuario_id', SESSION?.usuario_id || '0');
+        const upRes = await fetch(AGENTE_UPLOAD, { method: 'POST', body: fd });
+        const upData = await upRes.json();
+        if (upData.ok) adjuntos.push(upData.url);
+      } catch (ue) { console.warn('Upload error:', ue); }
+    }
+    // Si además hay imagen de preview, subirla también
     if (_aiImage) {
       try {
         const blob = await fetch(`data:${_aiImage.media_type};base64,${_aiImage.data}`).then(r => r.blob());
@@ -22898,10 +23001,12 @@ document.getElementById('wInput').focus();
         if (upData.ok) adjuntos.push(upData.url);
       } catch(ue) { console.warn('Upload error:', ue); }
     }
+    const _aiAdjuntosCount = _aiAdjuntos.length;
     _aiAdjuntos = [];
+    _aiRenderAdjuntos();
 
     const previewHtml = _aiImage
-      ? `<div style="display:flex;align-items:center;gap:8px"><img src="data:${_aiImage.media_type};base64,${_aiImage.data}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #334155"><span>${_aiImage.name}</span></div>`
+      ? `<div style="display:flex;align-items:center;gap:8px"><img src="data:${_aiImage.media_type};base64,${_aiImage.data}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #334155"><span>${_aiImage.name}</span></div>` + (_aiAdjuntosCount ? `<br>📎 ${_aiAdjuntosCount} archivo(s) más` : '')
       : msgText + (adjuntos.length ? '<br>📎 ' + adjuntos.length + ' archivo(s)' : '');
     appendMsg('user', previewHtml);
     let typing = appendTyping();
@@ -22923,39 +23028,6 @@ document.getElementById('wInput').focus();
       const [icon, desc] = m[n] || ['⚡', n.replace(/_/g, ' ')];
       return { icon, desc };
     }
-    function _aiEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-    function _setupMarked() {
-      if (typeof marked === 'undefined' || typeof hljs === 'undefined') return;
-      marked.setOptions({
-        breaks: true,
-        gfm: true,
-        highlight: (code, lang) => {
-          if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
-          return hljs.highlightAuto(code).value;
-        }
-      });
-    }
-    function _aiRenderMd(txt) {
-      if (typeof marked === 'undefined') return '<p>' + _aiEsc(txt) + '</p>';
-      return marked.parse(txt);
-    }
-    function _aiAddCopyBtns(el) {
-      el.querySelectorAll('pre').forEach(pre => {
-        if (pre.querySelector('.code-header')) return;
-        const code = pre.querySelector('code');
-        const lang = (code?.className || '').replace('language-','').replace('hljs ','').split(' ')[0] || '';
-        const header = document.createElement('div');
-        header.className = 'code-header';
-        header.innerHTML = '<span class="code-lang">' + lang + '</span><button class="code-copy" onclick="_aiCopyCode(this)">Copiar</button>';
-        pre.insertBefore(header, pre.firstChild);
-      });
-    }
-    function _aiCopyCode(btn) {
-      const code = btn.closest('pre')?.querySelector('code')?.innerText || '';
-      navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copiado!'; setTimeout(() => btn.textContent = 'Copiar', 2000); });
-    }
-
     // TTS (Text-to-Speech) para DevTools
     let _aiTtsOn = false;
     window.aiToggleTts = function() {
