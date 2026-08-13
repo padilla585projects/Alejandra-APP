@@ -24248,11 +24248,58 @@ function _alejandraPanelLimpiar() {
 }
 
 // ── Contexto de pantalla para Alejandra ──────────────────────────────────────
+// AYUDA-PANTALLA-01 (13/08/2026): Adrián -- "Alejandra tiene que saber en qué sitio
+// estás para poder ayudarte" + "habría que inyectar un prompt dinámico" + "nada de miles
+// de palabras fijas, se comería los tokens". panel.html ya tenía AYUDA_SECCIONES (mismo
+// patrón, ~90 páginas de oficina) y ya manda `pantalla` como texto enriquecido -- aquí se
+// replica igual para las pantallas del móvil, sin tocar el backend: el campo `pantalla`
+// del body de /api/chat/stream siempre fue texto libre (nunca hay comparación exacta
+// contra su valor en alejandra-agente/worker.js), así que enriquecerlo aquí es
+// compatible con lo que ya interpola construirMessages(). Sin entrada -> se manda el id
+// tal cual, como antes (no todas las pantallas están documentadas todavía).
+const _AYUDA_PANTALLAS = {
+  dept: 'Selector de departamento con el que trabajar hoy.',
+  home: 'Menú principal del departamento elegido, con acceso a todos sus módulos.',
+  ajustes: 'Configuración de la app: cuenta, notificaciones, empresa y departamentos.',
+  calendario: 'Eventos, entregas y festivos de la obra.',
+  calidad: 'Control de calidad de los trabajos ejecutados en obra (deficiencias y repasos).',
+  cpdPlanoDetalle: 'Plano de una sala CPD con las sondas de temperatura/humedad/presión ubicadas sobre él.',
+  cpdSondas: 'Sondas de temperatura, humedad y presión de las salas CPD (solo departamento Control).',
+  docs: 'Documentación, fotos y planos de la obra.',
+  empresaSel: 'Selector de empresa, para quienes tienen acceso a más de una.',
+  formacion: 'Formación y certificaciones del equipo en obra.',
+  galeria: 'Fotos de obra organizadas por departamento.',
+  herramientas: 'Inventario de herramientas y kits: quién las tiene y su estado.',
+  hormigonado: 'Registro de hormigonado según la norma EHE-08 (solo Obra Civil).',
+  iA: 'Chat con Alejandra, el asistente de obra con IA.',
+  incidencias: 'Averías, accidentes y alertas reportadas en obra.',
+  module: 'Detalle de un elemento del inventario (bobina, PEMP, carretilla...): datos, estado e historial.',
+  obraDashboard: 'Resumen ejecutivo de la obra: KPIs, presupuesto y estado general.',
+  obraSel: 'Selector de la obra en la que se va a trabajar.',
+  partes: 'Partes de trabajo diarios del equipo.',
+  partesDetalle: 'Detalle de un parte de trabajo concreto.',
+  partesForm: 'Formulario para crear o editar un parte de trabajo.',
+  pedidos: 'Solicitudes de material a proveedores: estado y seguimiento.',
+  personal: 'Fichajes, control de asistencia y datos del equipo.',
+  planoDetalle: 'Plano técnico concreto de la obra.',
+  planos: 'Planos técnicos de la obra.',
+  rdp: 'Registro Diario de Prevención (RdP): condiciones meteorológicas, trabajadores presentes e incidencias del día.',
+  reuniones: 'Actas de las reuniones de seguimiento de obra.',
+  // INFORMES-SEG-HELP-01: no se puede distinguir la sub-pestaña "Informe Semanal" del
+  // resto de Seguridad (screenSeguridad es una sola pantalla con pestañas internas, no
+  // pantallas separadas) -- se explica el flujo aquí, a nivel de todo el módulo.
+  seguridad: 'Módulo de Seguridad: EPIs, herramientas, reconocimientos médicos, permisos de trabajo, inspecciones, Registro de Seguridad, Informe Semanal y RdP. El Informe Semanal se registra aquí día a día (actividad + foto); el documento final se cierra y se genera desde Alejandra Office, no desde el móvil.',
+  subcontratas: 'Empresas subcontratadas: seguros y habilitaciones.',
+  sugerencias: 'Ideas y sugerencias de mejora enviadas por el equipo.',
+  telecomRacks: 'Documentación de la red de Telecom: IDF, racks, patch panels, puertos y cableado.',
+};
 function _alejandraGetPantalla() {
   const active = document.querySelector('.screen.active');
   if (!active) return null;
   const raw = active.id.replace(/^screen/, '');
-  return raw.charAt(0).toLowerCase() + raw.slice(1);
+  const id = raw.charAt(0).toLowerCase() + raw.slice(1);
+  const ayuda = _AYUDA_PANTALLAS[id];
+  return ayuda ? `${id} — ${ayuda}` : id;
 }
 
 function _alejandraGetDOMCompacto() {
