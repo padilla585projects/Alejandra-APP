@@ -28,6 +28,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # INFORMES-SEG-SEMANAL-01 (13/08/2026): worker.js pasó a depender de un paquete
+      # npm real (docx, generación del informe semanal de Seguridad) -- wrangler
+      # necesita node_modules presente para poder empaquetarlo antes de desplegar.
+      - name: Install dependencies
+        run: npm ci
       # Precheck exigido por ADR-0001: no se despliega codigo que no parsea.
       - name: Precheck Worker syntax
         run: node --check worker.js

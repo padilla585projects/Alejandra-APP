@@ -3104,6 +3104,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <div class="module-info"><div class="module-name">Registro de Seguridad</div><div class="module-desc">Fotos de incidencias y comentarios del equipo</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" data-module="seg_informe" onclick="segSelTab('informe')">
+        <div class="module-emoji">📝</div>
+        <div class="module-info"><div class="module-name">Informe Semanal</div><div class="module-desc">Actividad y foto del día para el informe de la semana</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -3562,6 +3567,44 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segRegModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
             <button onclick="segRegGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Informe Semanal de Seguridad (INFORMES-SEG-SEMANAL-01, 13/08/2026): captura
+         rápida en obra de actividad+contratista+foto, día a día -- Adrián: "es un
+         informe a nivel interno para los técnicos... por si de alguna manera podemos
+         facilitar hacerlo al técnico". El informe de la semana se crea/encuentra solo
+         en el backend (encontrarOCrearInformeSeg) según la fecha de la primera
+         actividad -- aquí no hace falta "abrir" nada, solo añadir actividades. El
+         cierre/edición de los bloques de texto y el documento final se hacen en Office. -->
+    <div id="segPanelInforme" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);flex:1">📝 Informe Semanal</div>
+        <button onclick="segInfNuevaActividad()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0">+ Nueva</button>
+      </div>
+      <div id="segInfSemanaLabel" style="padding:8px 14px 0;font-size:11px;color:var(--muted);flex-shrink:0">—</div>
+      <div id="segInfLista" style="flex:1;overflow-y:auto;padding:10px 14px"></div>
+
+      <!-- Nueva actividad -->
+      <div id="segInfModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;margin-bottom:16px">Nueva actividad</div>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Fecha</label>
+          <input id="segInfFecha" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Actividad *</label>
+          <input id="segInfActividad" type="text" placeholder="Ej: Trabajos de izado de material a L3" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Contratista</label>
+          <input id="segInfContratista" type="text" placeholder="Ej: Aguado" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Foto</label>
+          <div id="segInfFotoPreviewWrap" style="display:none;margin-bottom:10px"><img id="segInfFotoPreview" style="max-width:100%;border-radius:8px"></div>
+          <button onclick="document.getElementById('segInfCamInput').click()" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);margin-bottom:14px">📷 Hacer foto o elegir de galería</button>
+          <input type="file" id="segInfCamInput" accept="image/*" style="display:none" onchange="segInfPreviewFoto(this.files)">
+          <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('segInfModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
+            <button onclick="segInfGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
           </div>
         </div>
       </div>
@@ -8967,6 +9010,7 @@ function segSelTab(tab) {
   document.getElementById('segPanelPermisos').style.display        = tab === 'permisos'          ? 'flex' : 'none';
   document.getElementById('segPanelInspecciones').style.display    = tab === 'inspecciones'      ? 'flex' : 'none';
   document.getElementById('segPanelRegistro').style.display        = tab === 'registro'          ? 'flex' : 'none';
+  document.getElementById('segPanelInforme').style.display         = tab === 'informe'           ? 'flex' : 'none';
   if (tab === 'inventario')       segCargarInv();
   if (tab === 'resumen')          segCargarResumen();
   if (tab === 'herramientas')     segHerrCargar();
@@ -8975,6 +9019,7 @@ function segSelTab(tab) {
   if (tab === 'permisos')         segPermCargar();
   if (tab === 'inspecciones')     segInspCargar();
   if (tab === 'registro')         segRegCargar();
+  if (tab === 'informe')          segInfCargar();
   if (tab === 'home')             applyModulosConfig();
 }
 
@@ -9609,6 +9654,142 @@ async function segRegComentar() {
     const d = await r.json();
     if (!d.ok) { toast('Error: ' + (d.error||''), 'err'); return; }
     segRegVer(_segRegVistoId);
+  } catch { toast('Error de red', 'err'); }
+}
+
+// ── Informe Semanal de Seguridad (INFORMES-SEG-SEMANAL-01, 13/08/2026) ────────
+// Captura rápida en obra: fecha + actividad + contratista + foto, un tap. El
+// informe de la semana se resuelve solo en el backend por fecha -- aquí solo se
+// listan/añaden actividades de "esta semana" (lunes actual), nunca se elige ni
+// se crea un informe a mano.
+let _segInfFotoPendiente = null;
+let _segInfInformeIdActual = null;
+
+function segInfMondayOfWeek(d) {
+  const day = (d.getDay() + 6) % 7; // lunes=0 ... domingo=6
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - day);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function segInfFechaLocal(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+async function segInfCargar() {
+  const lista = document.getElementById('segInfLista');
+  const label = document.getElementById('segInfSemanaLabel');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
+  const hoy = new Date();
+  const lunes = segInfMondayOfWeek(hoy);
+  const lunesStr = segInfFechaLocal(lunes);
+  label.textContent = `Semana del ${lunesStr.split('-').reverse().join('/')}`;
+  _segInfInformeIdActual = null;
+  const s = getSession();
+  const q = s?.obra_id ? `?obra_id=${s.obra_id}` : '';
+  try {
+    const r = await apiCall('/informes-seg' + q);
+    if (!r.ok) { lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; return; }
+    const informes = await r.json();
+    const actual = Array.isArray(informes) ? informes.find(i => i.semana_inicio === lunesStr) : null;
+    if (!actual) { lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin actividades esta semana todavía. Pulsa + Nueva para añadir la primera.</div>'; return; }
+    _segInfInformeIdActual = actual.id;
+    const rd = await apiCall(`/informes-seg/${actual.id}`);
+    if (!rd.ok) { lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; return; }
+    const detalle = await rd.json();
+    const fechas = Object.keys(detalle.dias || {}).sort();
+    if (!fechas.length) { lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin actividades esta semana todavía. Pulsa + Nueva para añadir la primera.</div>'; return; }
+    lista.innerHTML = fechas.map(f => `
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;margin-bottom:6px">${f.split('-').reverse().join('/')}</div>
+        ${detalle.dias[f].map(a => `
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;gap:8px">
+              <span style="font-size:13px;font-weight:700">${esc(a.actividad)}</span>
+              <button onclick="segInfEliminar(${a.id})" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;flex-shrink:0">🗑</button>
+            </div>
+            ${a.contratista ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(a.contratista)}</div>` : ''}
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+              ${(a.fotos || []).map(fo => `<img src="${getAPI()}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(getSession()?.token || '')}" onclick="window.open(this.src,'_blank')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">`).join('')}
+              <button onclick="segInfAnadirFoto(${a.id})" style="width:60px;height:60px;border-radius:6px;border:1px dashed var(--border);background:none;color:var(--muted);font-size:20px;cursor:pointer">+</button>
+            </div>
+          </div>`).join('')}
+      </div>`).join('');
+  } catch (e) { console.error(e); lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; }
+}
+
+function segInfNuevaActividad() {
+  document.getElementById('segInfFecha').value = segInfFechaLocal(new Date());
+  document.getElementById('segInfActividad').value = '';
+  document.getElementById('segInfContratista').value = '';
+  document.getElementById('segInfFotoPreviewWrap').style.display = 'none';
+  _segInfFotoPendiente = null;
+  document.getElementById('segInfModal').style.display = 'flex';
+}
+
+function segInfPreviewFoto(files) {
+  const file = files?.[0];
+  if (!file) return;
+  _segInfFotoPendiente = file;
+  const img = document.getElementById('segInfFotoPreview');
+  img.src = URL.createObjectURL(file);
+  document.getElementById('segInfFotoPreviewWrap').style.display = 'block';
+}
+
+async function segInfGuardar() {
+  const actividad = document.getElementById('segInfActividad').value.trim();
+  if (!actividad) return toast('⚠️ La actividad es obligatoria', 'err');
+  const s = getSession();
+  const body = {
+    obra_id: s?.obra_id || null,
+    fecha: document.getElementById('segInfFecha').value || segInfFechaLocal(new Date()),
+    actividad,
+    contratista: document.getElementById('segInfContratista').value.trim() || null,
+  };
+  try {
+    const r = await apiCall('/informes-seg/actividad', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!d.ok) { toast('Error: ' + (d.error || 'desconocido'), 'err'); return; }
+    if (_segInfFotoPendiente) await segInfSubirFoto(d.id, _segInfFotoPendiente);
+    document.getElementById('segInfModal').style.display = 'none';
+    toast('✅ Actividad añadida', 'ok');
+    segInfCargar();
+  } catch (e) { toast('Error de red', 'err'); }
+}
+
+async function segInfSubirFoto(actividadId, file) {
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const r = await apiCallRaw(`/informes-seg/actividad/${actividadId}/foto`, { method: 'POST', body: form });
+    const d = await r.json();
+    if (!d.ok) toast('Error al subir la foto: ' + (d.error || ''), 'err');
+    return d.ok;
+  } catch { toast('Error de red al subir la foto', 'err'); return false; }
+}
+
+function segInfAnadirFoto(actividadId) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const ok = await segInfSubirFoto(actividadId, file);
+    if (ok) segInfCargar();
+  };
+  input.click();
+}
+
+async function segInfEliminar(actividadId) {
+  if (!confirm('¿Eliminar esta actividad y sus fotos?')) return;
+  try {
+    const r = await apiCall(`/informes-seg/actividad/${actividadId}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (!d.ok) { toast('Error: ' + (d.error || ''), 'err'); return; }
+    segInfCargar();
   } catch { toast('Error de red', 'err'); }
 }
 

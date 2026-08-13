@@ -4,6 +4,12 @@
 // Sync: Google Sheets automático en cada cambio
 // Multi-obra + Roles (superadmin / encargado / operario)
 
+// INFORMES-SEG-SEMANAL-01 (13/08/2026): primera dependencia npm real de este Worker
+// (hasta ahora monolítico, sin imports). Packer.toArrayBuffer() -- NO toBuffer(),
+// que usa el `Buffer` de Node y falla en runtime ("nodebuffer is not supported by
+// this platform") -- probado en local con `wrangler dev` antes de usarlo aquí.
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, ImageRun, WidthType, AlignmentType, HeadingLevel } from 'docx';
+
 const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
   // Office usa PATCH en escaneos remotos y otros módulos. Si no se declara aquí,
@@ -6552,6 +6558,29 @@ export default {
         const fid = parseInt(path.split('/seg-registro-fotos/')[1]);
         if (method === 'GET')    return await getFotoSegRegistro(fid, request, env);
         if (method === 'DELETE') return await borrarFotoSegRegistro(fid, request, env);
+      }
+
+      // ── Informe semanal de Seguridad (INFORMES-SEG-SEMANAL-01) ────────────
+      if (path === '/informes-seg' && method === 'GET') return await getInformesSeg(request, env);
+      if (path === '/informes-seg/actividad' && method === 'POST') return await crearActividadInformeSeg(request, env);
+      if (path.startsWith('/informes-seg/actividad/')) {
+        const parts = path.split('/');
+        const aid = parseInt(parts[3]);
+        if (parts[4] === 'foto' && method === 'POST') return await subirFotoActividadInformeSeg(aid, request, env);
+        if (!parts[4] && method === 'DELETE') return await eliminarActividadInformeSeg(aid, request, env);
+      }
+      if (path.match(/^\/informes-seg\/\d+\/docx$/) && method === 'GET') {
+        return await generarInformeSegDocx(parseInt(path.split('/')[2]), request, env);
+      }
+      if (path.startsWith('/informes-seg/')) {
+        const iid = parseInt(path.split('/informes-seg/')[1]);
+        if (method === 'GET') return await getInformeSeg(iid, request, env);
+        if (method === 'PUT') return await actualizarInformeSeg(iid, request, env);
+      }
+      if (path.startsWith('/informes-seg-fotos/')) {
+        const fid = parseInt(path.split('/informes-seg-fotos/')[1]);
+        if (method === 'GET')    return await getFotoActividadInformeSeg(fid, request, env);
+        if (method === 'DELETE') return await borrarFotoActividadInformeSeg(fid, request, env);
       }
 
       // ── Archivos / R2 ────────────────────────────────────────────────────
@@ -14579,6 +14608,306 @@ async function enviarSegRegistroPorEmail(id, request, env) {
   const ok = await enviarEmailResend(env, { to, subject: asunto, html });
   if (!ok) return err('No se pudo enviar el email (revisa RESEND_API_KEY o el dominio remitente)', 500);
   return json({ ok: true });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INFORMES-SEG-SEMANAL-01 (13/08/2026) — informe interno semanal de Seguridad y
+// Salud Laboral por obra, calcado de la plantilla real que usa Levitec (S31
+// Informe semanal): cabecera de control de documento + bloques de texto libre
+// (Aspectos críticos / Observaciones / Otros puntos) + tabla día-a-día de
+// actividad+contratista+foto. Adrián: "es un informe a nivel interno para los
+// técnicos de cada obra... por si de alguna manera podemos facilitar hacerlo al
+// técnico" — el técnico va metiendo actividad+foto día a día desde el móvil
+// (rápido, en el momento), y Seguridad cierra el informe desde oficina rellenando
+// los bloques de texto y generando el documento final (PDF/.docx).
+// Mismos permisos que Registro de Seguridad (puedeVerSegRegistros): admins +
+// departamento Seguridad. Migración real aplicada (migrate_informes_seg.sql,
+// autorizada explícitamente por Adrián) — sin CREATE TABLE en runtime.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Semana ISO (lunes a domingo) a la que pertenece una fecha -- el técnico no
+// elige la semana, se calcula sola a partir de la fecha de la actividad.
+function calcularSemanaISO(fechaStr) {
+  const d = new Date(fechaStr + 'T00:00:00Z');
+  const dayNr = (d.getUTCDay() + 6) % 7; // lunes=0 ... domingo=6
+  const jueves = new Date(d.valueOf());
+  jueves.setUTCDate(jueves.getUTCDate() - dayNr + 3);
+  const primerJueves = new Date(Date.UTC(jueves.getUTCFullYear(), 0, 4));
+  const semana_numero = 1 + Math.round((jueves - primerJueves) / (7 * 86400000));
+  const lunes = new Date(d.valueOf());
+  lunes.setUTCDate(lunes.getUTCDate() - dayNr);
+  return { semana_inicio: lunes.toISOString().slice(0, 10), semana_numero, anio: jueves.getUTCFullYear() };
+}
+
+// Encuentra el informe de la semana+obra correspondiente a `fecha`, o lo crea
+// como borrador si es la primera actividad de esa semana. Así el técnico nunca
+// tiene que "abrir" un informe a mano -- solo añade actividades.
+async function encontrarOCrearInformeSeg(env, empresa_id, obra_id, fecha, nombre) {
+  const { semana_inicio, semana_numero, anio } = calcularSemanaISO(fecha);
+  const existente = await env.DB.prepare(
+    'SELECT id FROM informes_seg_semanal WHERE empresa_id=? AND (obra_id=? OR (obra_id IS NULL AND ? IS NULL)) AND semana_inicio=?'
+  ).bind(empresa_id, obra_id || null, obra_id || null, semana_inicio).first();
+  if (existente) return existente.id;
+  const r = await env.DB.prepare(
+    `INSERT INTO informes_seg_semanal (empresa_id, obra_id, semana_inicio, semana_numero, anio, created_by)
+     VALUES (?,?,?,?,?,?)`
+  ).bind(empresa_id, obra_id || null, semana_inicio, semana_numero, anio, nombre || '').run();
+  return r.meta.last_row_id;
+}
+
+async function crearActividadInformeSeg(request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, nombre } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!safeStr(body.actividad).trim()) return err('La actividad es obligatoria', 400);
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(body.fecha || '') ? body.fecha : new Date().toISOString().slice(0, 10);
+  const obra_id = body.obra_id ? parseInt(body.obra_id) : (obraAuth || null);
+  const informe_id = await encontrarOCrearInformeSeg(env, empresa_id, obra_id, fecha, nombre);
+  const r = await env.DB.prepare(
+    `INSERT INTO informes_seg_actividades (empresa_id, informe_id, fecha, actividad, contratista, created_by)
+     VALUES (?,?,?,?,?,?)`
+  ).bind(empresa_id, informe_id, fecha, safeStr(body.actividad).trim(), body.contratista || null, nombre || '').run();
+  return json({ ok: true, id: r.meta.last_row_id, informe_id }, 201);
+}
+
+async function subirFotoActividadInformeSeg(actividad_id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre: userNombre, rol } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const act = await env.DB.prepare('SELECT id FROM informes_seg_actividades WHERE id=? AND empresa_id=?').bind(actividad_id, empresa_id).first();
+  if (!act) return err('Actividad no encontrada', 404);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta el archivo', 400);
+  if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+  if (!allowed.includes(mime)) return err('Solo se permiten imágenes', 400);
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = `e${empresa_id}/informes-seg/${actividad_id}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
+  const r = await env.DB.prepare(
+    'INSERT INTO informes_seg_fotos (empresa_id, actividad_id, r2_key, nombre_archivo, mime_type, subido_por) VALUES (?,?,?,?,?,?)'
+  ).bind(empresa_id, actividad_id, r2Key, file.name, mime, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function getFotoActividadInformeSeg(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM informes_seg_fotos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': meta.mime_type || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
+async function borrarFotoActividadInformeSeg(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const meta = await env.DB.prepare('SELECT * FROM informes_seg_fotos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  await env.FILES.delete(meta.r2_key);
+  await env.DB.prepare('DELETE FROM informes_seg_fotos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarActividadInformeSeg(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const { results: fotos } = await env.DB.prepare('SELECT r2_key FROM informes_seg_fotos WHERE actividad_id=? AND empresa_id=?').bind(id, empresa_id).all();
+  await Promise.all(fotos.map(f => env.FILES.delete(f.r2_key)));
+  await env.DB.prepare('DELETE FROM informes_seg_fotos WHERE actividad_id=? AND empresa_id=?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM informes_seg_actividades WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function getInformesSeg(request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  let sql = `SELECT s.*, o.nombre as obra_nombre,
+    (SELECT COUNT(*) FROM informes_seg_actividades a WHERE a.informe_id=s.id) as num_actividades
+    FROM informes_seg_semanal s LEFT JOIN obras o ON s.obra_id = o.id WHERE s.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND s.obra_id = ?'; params.push(parseInt(obra_id)); }
+  sql += ' ORDER BY s.semana_inicio DESC LIMIT 100';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function getInformeSeg(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const informe = await env.DB.prepare(
+    'SELECT s.*, o.nombre as obra_nombre FROM informes_seg_semanal s LEFT JOIN obras o ON s.obra_id=o.id WHERE s.id=? AND s.empresa_id=?'
+  ).bind(id, empresa_id).first();
+  if (!informe) return err('No encontrado', 404);
+  const { results: actividades } = await env.DB.prepare(
+    'SELECT * FROM informes_seg_actividades WHERE informe_id=? AND empresa_id=? ORDER BY fecha ASC, orden ASC, id ASC'
+  ).bind(id, empresa_id).all();
+  const { results: fotos } = await env.DB.prepare(
+    `SELECT f.* FROM informes_seg_fotos f JOIN informes_seg_actividades a ON f.actividad_id=a.id
+     WHERE a.informe_id=? AND f.empresa_id=? ORDER BY f.orden ASC, f.id ASC`
+  ).bind(id, empresa_id).all();
+  const fotosPorActividad = {};
+  for (const f of fotos) { (fotosPorActividad[f.actividad_id] ||= []).push(f); }
+  const dias = {};
+  for (const a of actividades) {
+    (dias[a.fecha] ||= []).push({ ...a, fotos: fotosPorActividad[a.id] || [] });
+  }
+  return json({ ...informe, dias });
+}
+
+async function actualizarInformeSeg(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const informe = await env.DB.prepare('SELECT id FROM informes_seg_semanal WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!informe) return err('No encontrado', 404);
+  const body = await request.json().catch(() => ({}));
+  const sets = ['updated_at = datetime(\'now\')']; const params = [];
+  const campos = ['numero_documento', 'revision', 'aspectos_criticos', 'observaciones', 'otros_puntos'];
+  for (const c of campos) {
+    if (body[c] !== undefined) { sets.push(`${c}=?`); params.push(body[c]); }
+  }
+  if (body.cerrar === true) {
+    sets.push('estado=?', 'cerrado_por=?', 'cerrado_at=datetime(\'now\')');
+    params.push('cerrado', nombre || '');
+  } else if (body.cerrar === false) {
+    sets.push('estado=?', 'cerrado_por=NULL', 'cerrado_at=NULL');
+    params.push('borrador');
+  }
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE informes_seg_semanal SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+// Genera el .docx real del informe -- calcado de la cabecera/estructura de la
+// plantilla real de Levitec (S31 Informe semanal): tabla de cabecera, secciones
+// fijas, tabla día-a-día con foto embebida de verdad (bytes reales desde R2, no
+// solo un enlace). Packer.toArrayBuffer(), NO toBuffer() -- ver comentario del
+// import al principio del archivo.
+async function generarInformeSegDocx(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const informe = await env.DB.prepare(
+    'SELECT s.*, o.nombre as obra_nombre FROM informes_seg_semanal s LEFT JOIN obras o ON s.obra_id=o.id WHERE s.id=? AND s.empresa_id=?'
+  ).bind(id, empresa_id).first();
+  if (!informe) return err('No encontrado', 404);
+  const { results: actividades } = await env.DB.prepare(
+    'SELECT * FROM informes_seg_actividades WHERE informe_id=? AND empresa_id=? ORDER BY fecha ASC, orden ASC, id ASC'
+  ).bind(id, empresa_id).all();
+  const { results: fotos } = await env.DB.prepare(
+    `SELECT f.* FROM informes_seg_fotos f JOIN informes_seg_actividades a ON f.actividad_id=a.id
+     WHERE a.informe_id=? AND f.empresa_id=? ORDER BY f.orden ASC, f.id ASC`
+  ).bind(id, empresa_id).all();
+
+  const fotosPorActividad = {};
+  for (const f of fotos) { (fotosPorActividad[f.actividad_id] ||= []).push(f); }
+  const dias = {};
+  for (const a of actividades) { (dias[a.fecha] ||= []).push(a); }
+  const fechas = Object.keys(dias).sort();
+
+  // Descarga real de cada foto desde R2 -- si falta un objeto (borrado a mano en
+  // R2, por ejemplo) se omite esa imagen concreta sin romper todo el documento.
+  const bytesPorFoto = {};
+  for (const f of fotos) {
+    try {
+      const obj = await env.FILES.get(f.r2_key);
+      if (!obj) continue;
+      bytesPorFoto[f.id] = { bytes: new Uint8Array(await obj.arrayBuffer()), tipo: (f.mime_type || '').includes('png') ? 'png' : 'jpg' };
+    } catch (_) { /* foto ilegible -- se omite, no bloquea el resto */ }
+  }
+
+  const h = (texto) => new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 }, children: [new TextRun({ text: texto, bold: true })] });
+  const p = (texto) => new Paragraph({ spacing: { after: 120 }, children: [new TextRun(texto || '—')] });
+  const bullet = (texto) => new Paragraph({ bullet: { level: 0 }, spacing: { after: 60 }, children: [new TextRun(texto)] });
+  const celda = (texto, opts = {}) => new TableCell({ width: { size: opts.size || 4500, type: WidthType.DXA }, children: [new Paragraph({ children: [new TextRun({ text: texto, bold: !!opts.bold })] })] });
+
+  const cabeceraTabla = new Table({
+    width: { size: 9000, type: WidthType.DXA },
+    columnWidths: [3000, 3000, 3000],
+    rows: [
+      new TableRow({ children: [
+        celda(`INFORME INTERNO SEMANAL: SEMANA ${informe.semana_numero || '—'} DE ${informe.anio || ''}`, { size: 6000, bold: true }),
+        celda(`DISCIPLINA: ${informe.disciplina || 'Seguridad y Salud Laboral'}`, { size: 3000 }),
+      ].concat([]) }),
+      new TableRow({ children: [
+        celda(`LUGAR: ${informe.obra_nombre || '—'}`, { size: 3000 }),
+        celda(`Nº DOCUMENTO: ${informe.numero_documento || '—'}`, { size: 3000 }),
+        celda(`Rev. ${informe.revision || 'XX'}`, { size: 3000 }),
+      ] }),
+    ],
+  });
+
+  const filasDias = fechas.map(f => {
+    const acts = dias[f];
+    const descPars = acts.flatMap(a => [
+      new Paragraph({ children: [new TextRun({ text: a.actividad, bold: true })] }),
+      ...(a.contratista ? [new Paragraph({ children: [new TextRun({ text: `(por ${a.contratista})`, italics: true })] })] : []),
+    ]);
+    const imgPars = acts.flatMap(a => (fotosPorActividad[a.id] || [])
+      .map(fo => bytesPorFoto[fo.id])
+      .filter(Boolean)
+      .map(({ bytes, tipo }) => new Paragraph({ children: [new ImageRun({ type: tipo, data: bytes, transformation: { width: 200, height: 150 } })] }))
+    );
+    return new TableRow({ children: [
+      new TableCell({ width: { size: 1200, type: WidthType.DXA }, children: [new Paragraph({ children: [new TextRun({ text: f.split('-').reverse().join('/'), bold: true })] })] }),
+      new TableCell({ width: { size: 7800, type: WidthType.DXA }, children: [...descPars, ...imgPars] }),
+    ] });
+  });
+
+  const otrosPuntos = (informe.otros_puntos || '').split('\n').map(l => l.trim()).filter(Boolean);
+
+  const doc = new Document({
+    sections: [{
+      children: [
+        cabeceraTabla,
+        h('Descripción general'),
+        p('El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.'),
+        h('Aspectos críticos'),
+        p(informe.aspectos_criticos),
+        h('Observaciones'),
+        p(informe.observaciones),
+        h('Actividad diaria'),
+        fechas.length
+          ? new Table({ width: { size: 9000, type: WidthType.DXA }, columnWidths: [1200, 7800], rows: filasDias })
+          : p('Sin actividades registradas.'),
+        h('Otros puntos'),
+        ...(otrosPuntos.length ? otrosPuntos.map(bullet) : [p('—')]),
+      ],
+    }],
+  });
+
+  const buffer = await Packer.toArrayBuffer(doc);
+  const nombreArchivo = `Informe semanal S${informe.semana_numero || ''} ${(informe.obra_nombre || '').replace(/[^a-zA-Z0-9 ]/g, '')}.docx`.trim();
+  return new Response(buffer, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="${nombreArchivo}"`,
+      ...CORS,
+    },
+  });
 }
 
 // ── Albaranes de pedidos (NEW-25) ─────────────────────────────────────────────

@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "tweetsodium": "^0.0.4"
+  },
+  "dependencies": {
+    "docx": "^9.7.1"
   }
 }

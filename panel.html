@@ -625,6 +625,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     <button class="nav-item nav-seguridad-section" data-page="segRegistros" onclick="navTo('segRegistros')" style="display:none">
       <span class="nav-icon">📷</span> Registro de Seguridad
     </button>
+    <button class="nav-item nav-seguridad-section" data-page="informeSegSemanal" onclick="navTo('informeSegSemanal')" style="display:none">
+      <span class="nav-icon">📝</span> Informe Semanal
+    </button>
 
     <!-- DEPT-CPD-01 (09/08/2026): Sondas CPD tenía su propia sección aparte pero Adrian
          señaló que seguía viviendo dentro de "Inventarios" — se le da su propia
@@ -2274,6 +2277,22 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <div id="segRegistrosList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
         <div id="segRegistrosVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
           📷 Sin registros todavía.<br><small>Crea el primero con el botón de arriba.</small>
+        </div>
+      </div>
+
+      <!-- INFORME SEMANAL DE SEGURIDAD (INFORMES-SEG-SEMANAL-01, 13/08/2026) -->
+      <div class="page" id="pageInformeSegSemanal">
+        <div class="page-title">📝 Informe Semanal de Seguridad</div>
+        <div class="page-sub">Aspectos críticos, observaciones y actividad diaria con foto, por obra y semana — el técnico va añadiendo actividades desde la app durante la semana</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:18px">
+          <select class="tbl-search" id="filterInfSegObra" style="min-width:200px" onchange="cargarInformesSeg()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-secondary" onclick="cargarInformesSeg()">🔄 Actualizar</button>
+        </div>
+        <div id="infSegList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
+        <div id="infSegVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
+          📝 Sin informes todavía.<br><small>Aparecen aquí en cuanto un técnico añada la primera actividad desde la app.</small>
         </div>
       </div>
 
@@ -13244,6 +13263,7 @@ const PAGE_TITLES = {
   fases: '📅 Fases de Obra',
   partesPanel: '📋 Partes Diarios',
   segRegistros: '📷 Registro de Seguridad',
+  informeSegSemanal: '📝 Informe Semanal de Seguridad',
   hitos: '🏁 Hitos de Obra',
   diarioObra: '📓 Diario de Obra',
   correspondencia: '✉️ Correspondencia',
@@ -13400,6 +13420,7 @@ const AYUDA_SECCIONES = {
   certificaciones: 'Certificaciones de obra ejecutada para facturación al cliente.',
   partesPanel: 'Partes de trabajo diarios rellenados por los equipos en obra.',
   segRegistros: 'Fotos de incidencias o estados de la obra con hilo de comentarios de todo el departamento de Seguridad.',
+  informeSegSemanal: 'Informe interno semanal de Seguridad y Salud Laboral por obra: aspectos críticos, observaciones y actividad diaria con foto.',
   diarioObra: 'Diario de obra: registro cronológico de lo ocurrido cada día.',
   fieldReports: 'Informes de campo con hallazgos y seguimiento técnico.',
   fotosObra: 'Galería de fotos de la obra organizadas por fecha.',
@@ -13578,6 +13599,7 @@ const PAGE_LOADERS = {
   fases: (...a) => cargarFases(...a),
   partesPanel: (...a) => cargarPartesPanel(...a),
   segRegistros: (...a) => cargarSegRegistros(...a),
+  informeSegSemanal: (...a) => cargarInformesSeg(...a),
   hitos: (...a) => cargarHitos(...a),
   diarioObra: (...a) => cargarDiarioObra(...a),
   correspondencia: (...a) => cargarCorrespondencia(...a),
@@ -13746,6 +13768,7 @@ const SYNC_INTERVALS = {
   fases: 120,
   partesPanel: 60,
   segRegistros: 60,
+  informeSegSemanal: 60,
   hitos: 120,
   diarioObra: 120,
   correspondencia: 120,
@@ -16950,6 +16973,162 @@ function segRegImprimir(id) {
         <h3>Comentarios</h3>
         ${comentariosHtml}
         <script>window.onload = () => setTimeout(() => window.print(), 400);<\/script>
+      </body></html>`);
+    win.document.close();
+  });
+}
+
+// ── INFORME SEMANAL DE SEGURIDAD (INFORMES-SEG-SEMANAL-01, 13/08/2026) ────────
+// Calcado de la plantilla real de Levitec (S31 Informe semanal): cabecera de
+// control de documento, Aspectos críticos/Observaciones/Otros puntos en texto
+// libre, y tabla día-a-día de actividad+contratista+foto que el técnico va
+// rellenando desde la app durante la semana. Aquí en oficina solo se revisa,
+// se completa el texto y se cierra/genera el documento -- no se crean
+// actividades a mano (ver segInf* en index.html), aunque sí se pueden borrar
+// si el técnico se equivocó.
+let _infSegData = [];
+
+function fmtSemanaRango(semanaInicio) {
+  const lunes = new Date(semanaInicio + 'T00:00:00Z');
+  const domingo = new Date(lunes); domingo.setUTCDate(domingo.getUTCDate() + 6);
+  const f = d => `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+  return `${f(lunes)} – ${f(domingo)}`;
+}
+
+async function cargarInformesSeg() {
+  if (document.getElementById('filterInfSegObra')?.options.length <= 1) poblarSelectObras('filterInfSegObra');
+  const obraId = document.getElementById('filterInfSegObra')?.value || '';
+  const r = await api('/informes-seg' + (obraId ? `?obra_id=${obraId}` : ''));
+  _infSegData = Array.isArray(r) ? r : [];
+  const cont = document.getElementById('infSegList');
+  const vacio = document.getElementById('infSegVacio');
+  if (!_infSegData.length) { cont.innerHTML = ''; vacio.style.display = ''; return; }
+  vacio.style.display = 'none';
+  cont.innerHTML = _infSegData.map(inf => `
+    <div onclick="verInformeSeg(${inf.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-weight:700;font-size:14px">Semana ${inf.semana_numero || '—'} · ${fmtSemanaRango(inf.semana_inicio)}</span>
+        <span class="badge ${inf.estado === 'cerrado' ? 'badge-ok' : 'badge-warn'}">${inf.estado === 'cerrado' ? 'Cerrado' : 'Borrador'}</span>
+      </div>
+      ${inf.obra_nombre ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">🏗 ${escHtml(inf.obra_nombre)}</div>` : ''}
+      <div style="font-size:12px;color:var(--muted)">📝 ${inf.num_actividades || 0} actividad${inf.num_actividades === 1 ? '' : 'es'}</div>
+    </div>`).join('');
+}
+
+async function verInformeSeg(id) {
+  const inf = await api(`/informes-seg/${id}`);
+  if (!inf || inf.error) { toast('Error al cargar el informe', 'err'); return; }
+  segInfRenderDetalle(inf);
+}
+
+function segInfRenderDetalle(inf) {
+  const fechas = Object.keys(inf.dias || {}).sort();
+  const diasHtml = fechas.length ? fechas.map(f => `
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;margin-bottom:6px">${f.split('-').reverse().join('/')}</div>
+      ${inf.dias[f].map(a => `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;gap:8px">
+            <span style="font-size:13px;font-weight:700">${escHtml(a.actividad)}${a.contratista ? ` <span style="font-weight:400;color:var(--muted)">— ${escHtml(a.contratista)}</span>` : ''}</span>
+            <button class="btn btn-secondary btn-sm" onclick="borrarActividadInformeSeg(${inf.id},${a.id})" title="Borrar actividad">🗑</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+            ${(a.fotos || []).map(fo => `<img src="${API}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(TOKEN)}" onclick="window.open(this.src,'_blank')" style="width:70px;height:70px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid var(--border)">`).join('') || '<span style="font-size:11px;color:var(--muted)">Sin foto</span>'}
+          </div>
+        </div>`).join('')}
+    </div>`).join('') : '<div style="font-size:13px;color:var(--muted);font-style:italic">Sin actividades todavía — el técnico las añade desde la app.</div>';
+
+  const cerrado = inf.estado === 'cerrado';
+  const html = `
+    ${inf.obra_nombre ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px">🏗 ${escHtml(inf.obra_nombre)} — Semana ${inf.semana_numero || '—'} de ${inf.anio || ''} (${fmtSemanaRango(inf.semana_inicio)})</div>` : ''}
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Nº de documento</div><input class="form-input" id="mInfSegNumDoc" value="${escHtml(inf.numero_documento || '')}" ${cerrado ? 'disabled' : ''}></div>
+      <div class="form-group"><div class="form-label">Revisión</div><input class="form-input" id="mInfSegRevision" value="${escHtml(inf.revision || 'XX')}" ${cerrado ? 'disabled' : ''}></div>
+    </div>
+    <div class="form-group"><div class="form-label">Aspectos críticos</div><textarea class="form-input" id="mInfSegCriticos" rows="3" ${cerrado ? 'disabled' : ''}>${escHtml(inf.aspectos_criticos || '')}</textarea></div>
+    <div class="form-group"><div class="form-label">Observaciones</div><textarea class="form-input" id="mInfSegObs" rows="3" ${cerrado ? 'disabled' : ''}>${escHtml(inf.observaciones || '')}</textarea></div>
+    <div class="form-group"><div class="form-label">Otros puntos (uno por línea)</div><textarea class="form-input" id="mInfSegOtros" rows="4" ${cerrado ? 'disabled' : ''}>${escHtml(inf.otros_puntos || '')}</textarea></div>
+    <div class="form-label" style="margin-top:6px">Actividad diaria</div>
+    <div style="max-height:320px;overflow-y:auto;margin-bottom:16px">${diasHtml}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${cerrado
+        ? `<button class="btn btn-secondary" onclick="reabrirInformeSeg(${inf.id})">🔓 Reabrir</button>`
+        : `<button class="btn btn-primary" onclick="guardarInformeSeg(${inf.id})">💾 Guardar</button>
+           <button class="btn btn-secondary" onclick="guardarInformeSeg(${inf.id}, true)">🔒 Guardar y cerrar</button>`}
+      <button class="btn btn-secondary" onclick="imprimirInformeSeg(${inf.id})">🖨️ PDF</button>
+      <button class="btn btn-secondary" onclick="descargarInformeSegDocx(${inf.id})">📄 Word (.docx)</button>
+    </div>`;
+  abrirModal(`📝 Informe Semanal — Semana ${inf.semana_numero || ''}`, html, null);
+  document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>';
+}
+
+async function guardarInformeSeg(id, cerrar) {
+  const body = {
+    numero_documento: document.getElementById('mInfSegNumDoc').value.trim(),
+    revision: document.getElementById('mInfSegRevision').value.trim() || 'XX',
+    aspectos_criticos: document.getElementById('mInfSegCriticos').value.trim(),
+    observaciones: document.getElementById('mInfSegObs').value.trim(),
+    otros_puntos: document.getElementById('mInfSegOtros').value.trim(),
+  };
+  if (cerrar) body.cerrar = true;
+  const r = await api(`/informes-seg/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+  if (!r.ok) { toast(r.error || 'Error al guardar', 'err'); return; }
+  toast(cerrar ? 'Informe cerrado ✓' : 'Guardado ✓', 'ok');
+  cerrarModal();
+  cargarInformesSeg();
+}
+
+function descargarInformeSegDocx(id) {
+  window.open(`${API}/informes-seg/${id}/docx?token=${encodeURIComponent(TOKEN)}`, '_blank');
+}
+
+async function reabrirInformeSeg(id) {
+  const r = await api(`/informes-seg/${id}`, { method: 'PUT', body: JSON.stringify({ cerrar: false }) });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  toast('Informe reabierto ✓', 'ok');
+  verInformeSeg(id);
+}
+
+async function borrarActividadInformeSeg(informeId, actividadId) {
+  if (!confirm('¿Borrar esta actividad y sus fotos?')) return;
+  const r = await api(`/informes-seg/actividad/${actividadId}`, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || 'Error al borrar', 'err'); return; }
+  verInformeSeg(informeId);
+}
+
+function imprimirInformeSeg(id) {
+  api(`/informes-seg/${id}`).then(inf => {
+    const fechas = Object.keys(inf.dias || {}).sort();
+    const filasDias = fechas.map(f => {
+      const actividades = inf.dias[f];
+      const fotos = actividades.flatMap(a => a.fotos || []);
+      const descHtml = actividades.map(a => `<div style="margin-bottom:4px"><b>${escHtml(a.actividad)}</b>${a.contratista ? ` (por ${escHtml(a.contratista)})` : ''}</div>`).join('');
+      const fotosHtml = fotos.map(fo => `<img src="${API}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(TOKEN)}" style="width:100%;max-width:220px;border-radius:4px;margin:4px">`).join('');
+      return `<tr><td style="border:1px solid #999;padding:8px;font-weight:700;vertical-align:top;white-space:nowrap">${f.split('-').reverse().join('/')}</td>
+        <td style="border:1px solid #999;padding:8px;vertical-align:top">${descHtml}<div style="display:flex;flex-wrap:wrap">${fotosHtml}</div></td></tr>`;
+    }).join('');
+    const otrosHtml = (inf.otros_puntos || '').split('\n').filter(l => l.trim()).map(l => `<li>${escHtml(l)}</li>`).join('') || '<li>—</li>';
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>Informe semanal — Semana ${inf.semana_numero || ''}</title><meta charset="utf-8"></head>
+      <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:800px;margin:20px auto;font-size:13px">
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px">
+          <tr><td style="border:1px solid #999;padding:6px;font-weight:700;width:30%">INFORME INTERNO SEMANAL: SEMANA ${inf.semana_numero || '—'} DE ${inf.anio || ''}</td>
+              <td style="border:1px solid #999;padding:6px" colspan="2">DISCIPLINA: Seguridad y Salud Laboral</td></tr>
+          <tr><td style="border:1px solid #999;padding:6px">LUGAR: ${escHtml(inf.obra_nombre || '—')}</td>
+              <td style="border:1px solid #999;padding:6px">Nº DOCUMENTO: ${escHtml(inf.numero_documento || '—')}</td>
+              <td style="border:1px solid #999;padding:6px">Rev. ${escHtml(inf.revision || 'XX')}</td></tr>
+        </table>
+        <h3>Descripción general</h3>
+        <p>El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.</p>
+        <h3>Aspectos críticos</h3>
+        <p style="white-space:pre-wrap">${escHtml(inf.aspectos_criticos || '—')}</p>
+        <h3>Observaciones</h3>
+        <p style="white-space:pre-wrap">${escHtml(inf.observaciones || '—')}</p>
+        <h3>Actividad diaria</h3>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">${filasDias || '<tr><td style="border:1px solid #999;padding:8px">Sin actividades</td></tr>'}</table>
+        <h3>Otros puntos</h3>
+        <ul>${otrosHtml}</ul>
+        <script>window.onload = () => setTimeout(() => window.print(), 500);<\/script>
       </body></html>`);
     win.document.close();
   });

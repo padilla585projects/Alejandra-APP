@@ -31,6 +31,12 @@ worker_deploy_result.txt
 # Root package files are local-only in this repo
 package.json
 package-lock.json
+# Excepción (13/08/2026, INFORMES-SEG-SEMANAL-01): worker.js raíz pasó a depender de
+# verdad de un paquete npm (docx, generación del informe semanal de Seguridad) --
+# necesita package.json/lockfile trackeados para que el workflow de deploy pueda
+# instalarlo antes de desplegar (ver .github/workflows/deploy-worker.yml).
+!package.json
+!package-lock.json
 # Excepción: alejandra-agente sí necesita package.json/lockfile trackeados
 # (devDependency vitest para lib.test.js, instalado por el workflow de deploy
 # antes de desplegar — ver .github/workflows/deploy-alejandra-agente.yml).
