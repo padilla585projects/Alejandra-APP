@@ -4,6 +4,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-13, noche)
+
+- **SELECTOR-EMPRESA-ROL-01:** el selector de empresa del topbar de `panel.html` (añadido el
+  mismo día, commit `7d83661`) no le aparecía a Adrián. Causa: `getMisEmpresas()`/
+  `cambiarEmpresaSesion()` solo reconocían `isDesarrollador` literal, pero su cuenta real
+  tiene `rol=superadmin` (no `desarrollador`) y una única fila en `usuarios` — caía en la
+  rama de "misma empresa por email" y esa devolvía solo 1 empresa. Verificado antes de tocar
+  el código que ampliar a `isSuperadmin` es seguro: solo hay un `superadmin` en toda la base
+  (Adrián), y SEC-AUDIT-03 ya impide que un `empresa_admin` se autoasigne o asigne a otros ese
+  rol — por diseño ya significa "Todo" (tabla de roles de `CLAUDE.md`), igual que
+  `desarrollador`. De paso, se le añadió el rol `desarrollador` como `roles_extra` (sin tocar
+  su `rol` principal) para dejar su cuenta alineada con la tabla de roles documentada.
+
 ### Fixed (2026-08-13, tarde)
 
 - **BOTONES-FEEDBACK-01:** ~95 botones "Guardar" de toda la suite (`index.html`, `panel.html`,
