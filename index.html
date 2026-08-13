@@ -3614,11 +3614,11 @@ select option{background:var(--surface2);color:var(--text)}
         <button onclick="segInfNuevaActividad()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0">+ Nueva</button>
       </div>
       <!-- INFORMES-SEG-UX-01 (13/08/2026): Katy (técnico real) -- "no veo el botón para
-           generar informe" / "el flujo no está claro". Aviso fijo explicando dónde se
-           cierra/genera el documento final (Office), para que quede claro que aquí solo
-           se registra actividad día a día. -->
+           generar informe" / "el flujo no está claro". Actualizado (INFORMES-SEG-CIERRE-01):
+           ya no hace falta ir a Office, el botón 📄 de arriba cierra y genera el documento
+           aquí mismo -- se mantiene el aviso para que quede claro qué hace cada cosa. -->
       <div style="padding:8px 14px;font-size:11px;color:var(--muted);background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0">
-        ℹ️ Aquí se registra la actividad día a día. El documento final se cierra y se genera desde Alejandra Office.
+        ℹ️ Aquí se registra la actividad día a día. Para cerrar la semana y generar el documento final, usa el botón 📄 de arriba.
       </div>
       <!-- Navegación entre semanas -- antes solo se veía "la semana de hoy", sin forma de
            consultar ni añadir a una semana anterior. -->
@@ -3665,12 +3665,16 @@ select option{background:var(--surface2);color:var(--text)}
             <div style="width:90px"><label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Revisión</label>
               <input id="segInfCierreRevision" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box"></div>
           </div>
+          <!-- INFORMES-SEG-PLACEHOLDER-01 (13/08/2026): Adrián -- "no entiendo bien este
+               informe" / "creo que no queda claro" qué poner en estos 3 campos. Placeholder
+               con ejemplo real de qué va en cada uno (basado en la plantilla S31 de Levitec):
+               lo urgente/peligroso, cómo fue la semana en general, y avisos/pendientes sueltos. -->
           <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Aspectos críticos</label>
-          <textarea id="segInfCierreCriticos" rows="3" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box"></textarea>
+          <textarea id="segInfCierreCriticos" rows="3" placeholder="Algo urgente o peligroso que haya pasado (ej: cable expuesto en planta 3, aislado de inmediato). Si no hay nada grave, déjalo vacío o pon &quot;Ninguno&quot;." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box"></textarea>
           <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Observaciones</label>
-          <textarea id="segInfCierreObs" rows="3" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box"></textarea>
+          <textarea id="segInfCierreObs" rows="3" placeholder="Cómo ha ido la semana en general en seguridad (ej: buen cumplimiento de EPIs salvo en la cuadrilla de fontanería)." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box"></textarea>
           <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Otros puntos (uno por línea)</label>
-          <textarea id="segInfCierreOtros" rows="4" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box"></textarea>
+          <textarea id="segInfCierreOtros" rows="4" placeholder="Avisos o pendientes sueltos (ej: revisión de extintores el 20/08&#10;pendiente entregar cascos nuevos al turno de noche)" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box"></textarea>
           <div id="segInfCierreBotonesEdicion" style="display:flex;gap:8px;margin-bottom:8px">
             <button id="segInfCierreGuardarBtn" onclick="segInfGuardarCierre(false)" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">💾 Guardar</button>
             <button id="segInfCierreGuardarCerrarBtn" onclick="segInfGuardarCierre(true)" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">🔒 Guardar y cerrar</button>
