@@ -17069,11 +17069,25 @@ async function cargarInformesSeg() {
     <div onclick="verInformeSeg(${inf.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <span style="font-weight:700;font-size:14px">Semana ${inf.semana_numero || '—'} · ${fmtSemanaRango(inf.semana_inicio)}</span>
-        <span class="badge ${inf.estado === 'cerrado' ? 'badge-ok' : 'badge-warn'}">${inf.estado === 'cerrado' ? 'Cerrado' : 'Borrador'}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="badge ${inf.estado === 'cerrado' ? 'badge-ok' : 'badge-warn'}">${inf.estado === 'cerrado' ? 'Cerrado' : 'Borrador'}</span>
+          <button onclick="event.stopPropagation();borrarInformeSegCompleto(${inf.id})" title="Borrar este informe entero" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer">🗑</button>
+        </span>
       </div>
       ${inf.obra_nombre ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">🏗 ${escHtml(inf.obra_nombre)}</div>` : ''}
       <div style="font-size:12px;color:var(--muted)">📝 ${inf.num_actividades || 0} actividad${inf.num_actividades === 1 ? '' : 'es'}</div>
     </div>`).join('');
+}
+
+// INFORMES-SEG-BORRAR-01 (13/08/2026): Adrián -- "los informes no se pueden borrar
+// individuales" -- borra el informe semanal ENTERO (todas sus actividades y fotos),
+// no una actividad suelta (eso ya existía, ver borrarActividadInformeSeg).
+async function borrarInformeSegCompleto(id) {
+  if (!confirm('¿Borrar este informe semanal completo? Se borrarán también todas sus actividades y fotos. Esta acción no se puede deshacer.')) return;
+  const r = await api(`/informes-seg/${id}`, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || 'Error al borrar', 'err'); return; }
+  toast('Informe borrado ✓', 'ok');
+  cargarInformesSeg();
 }
 
 async function verInformeSeg(id) {
@@ -17109,7 +17123,27 @@ function segInfRenderDetalle(inf) {
     <div class="form-group"><div class="form-label">Aspectos críticos</div><textarea class="form-input" id="mInfSegCriticos" rows="3" ${cerrado ? 'disabled' : ''}>${escHtml(inf.aspectos_criticos || '')}</textarea></div>
     <div class="form-group"><div class="form-label">Observaciones</div><textarea class="form-input" id="mInfSegObs" rows="3" ${cerrado ? 'disabled' : ''}>${escHtml(inf.observaciones || '')}</textarea></div>
     <div class="form-group"><div class="form-label">Otros puntos (uno por línea)</div><textarea class="form-input" id="mInfSegOtros" rows="4" ${cerrado ? 'disabled' : ''}>${escHtml(inf.otros_puntos || '')}</textarea></div>
-    <div class="form-label" style="margin-top:6px">Actividad diaria</div>
+    <!-- INFORMES-SEG-CREAR-01 (13/08/2026): Adrián -- "se debería poder hacer los
+         informes como en la app" -- antes solo se podía revisar/borrar actividades desde
+         Office, nunca crear una nueva (ver comentario histórico arriba, "no se crean
+         actividades a mano" -- ya no es así). Mismo endpoint que ya usa index.html
+         (POST /informes-seg/actividad), sin backend nuevo. -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+      <div class="form-label" style="margin:0">Actividad diaria</div>
+      ${!cerrado ? `<button class="btn btn-secondary btn-sm" onclick="segInfMostrarFormNueva()">+ Nueva</button>` : ''}
+    </div>
+    <div id="segInfFormNueva" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px">
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">Fecha</div><input class="form-input" type="date" id="segInfNuevaFecha" value="${new Date().toISOString().slice(0, 10)}"></div>
+        <div class="form-group"><div class="form-label">Contratista</div><input class="form-input" id="segInfNuevaContratista" placeholder="Opcional"></div>
+      </div>
+      <div class="form-group"><div class="form-label">Actividad *</div><input class="form-input" id="segInfNuevaActividad" placeholder="Ej: Trabajos de izado de material a L3"></div>
+      <div class="form-group"><div class="form-label">Foto (opcional)</div><input type="file" class="form-input" accept="image/*" id="segInfNuevaFoto"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('segInfFormNueva').style.display='none'">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="conBoton(this, () => segInfGuardarNuevaActividad(${inf.id}, ${inf.obra_id || 'null'}))">💾 Guardar actividad</button>
+      </div>
+    </div>
     <div style="max-height:320px;overflow-y:auto;margin-bottom:16px">${diasHtml}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${cerrado
@@ -17121,6 +17155,37 @@ function segInfRenderDetalle(inf) {
     </div>`;
   abrirModal(`📝 Informe Semanal — Semana ${inf.semana_numero || ''}`, html, null);
   document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>';
+}
+
+function segInfMostrarFormNueva() {
+  const form = document.getElementById('segInfFormNueva');
+  if (!form) return;
+  form.style.display = 'block';
+  document.getElementById('segInfNuevaActividad').value = '';
+  document.getElementById('segInfNuevaContratista').value = '';
+  document.getElementById('segInfNuevaFoto').value = '';
+}
+
+async function segInfGuardarNuevaActividad(informeId, obraId) {
+  const actividad = document.getElementById('segInfNuevaActividad').value.trim();
+  if (!actividad) return toast('⚠️ La actividad es obligatoria', 'err');
+  const body = {
+    obra_id: obraId || null,
+    fecha: document.getElementById('segInfNuevaFecha').value || new Date().toISOString().slice(0, 10),
+    actividad,
+    contratista: document.getElementById('segInfNuevaContratista').value.trim() || null,
+  };
+  const r = await api('/informes-seg/actividad', { method: 'POST', body: JSON.stringify(body) });
+  if (!r.ok) { toast(r.error || 'Error al guardar', 'err'); return; }
+  const file = document.getElementById('segInfNuevaFoto').files?.[0];
+  if (file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const respFoto = await apiRaw(`/informes-seg/actividad/${r.id}/foto`, { method: 'POST', body: fd });
+    if (!respFoto.ok) toast('Actividad guardada, pero falló la foto', 'err');
+  }
+  toast('✅ Actividad añadida', 'ok');
+  verInformeSeg(informeId);
 }
 
 async function guardarInformeSeg(id, cerrar) {

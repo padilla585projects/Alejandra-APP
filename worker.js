@@ -6577,8 +6577,9 @@ export default {
       }
       if (path.startsWith('/informes-seg/')) {
         const iid = parseInt(path.split('/informes-seg/')[1]);
-        if (method === 'GET') return await getInformeSeg(iid, request, env);
-        if (method === 'PUT') return await actualizarInformeSeg(iid, request, env);
+        if (method === 'GET')    return await getInformeSeg(iid, request, env);
+        if (method === 'PUT')    return await actualizarInformeSeg(iid, request, env);
+        if (method === 'DELETE') return await eliminarInformeSeg(iid, request, env);
       }
       if (path.startsWith('/informes-seg-fotos/')) {
         const fid = parseInt(path.split('/informes-seg-fotos/')[1]);
@@ -14831,6 +14832,32 @@ async function eliminarActividadInformeSeg(id, request, env) {
   await Promise.all(fotos.map(f => env.FILES.delete(f.r2_key)));
   await env.DB.prepare('DELETE FROM informes_seg_fotos WHERE actividad_id=? AND empresa_id=?').bind(id, empresa_id).run();
   await env.DB.prepare('DELETE FROM informes_seg_actividades WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// INFORMES-SEG-BORRAR-01 (13/08/2026): Adrián -- "los informes no se pueden borrar
+// individuales" -- no existía forma de borrar el informe semanal entero (solo
+// actividades sueltas). Borra en cascada: fotos de R2 de TODAS sus actividades,
+// filas de informes_seg_fotos, informes_seg_actividades y por último la propia fila de
+// informes_seg_semanal -- en ese orden, para no dejar fotos huérfanas en R2 si algo falla
+// a medias.
+async function eliminarInformeSeg(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const informe = await env.DB.prepare('SELECT id FROM informes_seg_semanal WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!informe) return err('No encontrado', 404);
+  const { results: fotos } = await env.DB.prepare(
+    `SELECT f.r2_key FROM informes_seg_fotos f JOIN informes_seg_actividades a ON f.actividad_id=a.id
+     WHERE a.informe_id=? AND f.empresa_id=?`
+  ).bind(id, empresa_id).all();
+  await Promise.all(fotos.map(f => env.FILES.delete(f.r2_key)));
+  await env.DB.prepare(
+    `DELETE FROM informes_seg_fotos WHERE empresa_id=? AND actividad_id IN (SELECT id FROM informes_seg_actividades WHERE informe_id=?)`
+  ).bind(empresa_id, id).run();
+  await env.DB.prepare('DELETE FROM informes_seg_actividades WHERE informe_id=? AND empresa_id=?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM informes_seg_semanal WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 
