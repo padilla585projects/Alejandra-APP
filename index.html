@@ -3113,6 +3113,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <div class="module-info"><div class="module-name">Informe Semanal</div><div class="module-desc">Actividad y foto del día</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <!-- CARDS-DEPT-RDP-HORM-01 (13/08/2026): Adrián -- "RDP a Seguridad". El
+           equivalente en setupHomeModules() (cardRdp dentro de #screenHome) no lo veían
+           nunca: dept==='seguridad' navega directo a esta pantalla (#screenSeguridad),
+           #screenHome nunca se muestra para este departamento -- la tarjeta real tiene
+           que vivir aquí, reutilizando la pantalla ya existente navTo('rdp'). -->
+      <div class="module-card" data-module="seg_rdp" onclick="navTo('rdp')">
+        <div class="module-emoji">🦺</div>
+        <div class="module-info"><div class="module-name">RdP — Prevención</div><div class="module-desc">Registro Diario de Prevención PRL</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
