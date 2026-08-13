@@ -6570,6 +6570,7 @@ export default {
         const aid = parseInt(parts[3]);
         if (parts[4] === 'foto' && method === 'POST') return await subirFotoActividadInformeSeg(aid, request, env);
         if (!parts[4] && method === 'DELETE') return await eliminarActividadInformeSeg(aid, request, env);
+        if (!parts[4] && method === 'PUT')    return await actualizarActividadInformeSeg(aid, request, env);
       }
       if (path.match(/^\/informes-seg\/\d+\/docx$/) && method === 'GET') {
         return await generarInformeSegDocx(parseInt(path.split('/')[2]), request, env);
@@ -14787,6 +14788,38 @@ async function borrarFotoActividadInformeSeg(id, request, env) {
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM informes_seg_fotos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
+}
+
+// INFORMES-SEG-EDITAR-01 (13/08/2026): Katy (técnico real probando la app) -- "no se
+// pueden editar o agregar más a un informe del día anterior o cuando sea". Antes de esto
+// solo existían crear/borrar, ninguna forma de corregir una actividad ya guardada. Si se
+// cambia la fecha a otra semana, mueve la actividad (y sus fotos) al informe de esa
+// semana -- se crea si hace falta -- para que no se quede huérfana en la semana vieja.
+async function actualizarActividadInformeSeg(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id: obraAuth, nombre } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const actual = await env.DB.prepare('SELECT * FROM informes_seg_actividades WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!actual) return err('Actividad no encontrada', 404);
+  const body = await request.json().catch(() => ({}));
+  if (body.actividad !== undefined && !safeStr(body.actividad).trim()) return err('La actividad es obligatoria', 400);
+
+  const campos = [], vals = [];
+  if (body.actividad !== undefined) { campos.push('actividad=?'); vals.push(safeStr(body.actividad).trim()); }
+  if (body.contratista !== undefined) { campos.push('contratista=?'); vals.push(body.contratista || null); }
+
+  let informe_id = actual.informe_id;
+  if (body.fecha !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(body.fecha) && body.fecha !== actual.fecha) {
+    const obra_id = body.obra_id ? parseInt(body.obra_id) : (obraAuth || null);
+    informe_id = await encontrarOCrearInformeSeg(env, empresa_id, obra_id, body.fecha, nombre);
+    campos.push('fecha=?', 'informe_id=?');
+    vals.push(body.fecha, informe_id);
+  }
+  if (!campos.length) return err('Sin cambios');
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE informes_seg_actividades SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true, informe_id });
 }
 
 async function eliminarActividadInformeSeg(id, request, env) {
