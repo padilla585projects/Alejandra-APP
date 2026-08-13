@@ -1594,7 +1594,7 @@ async function initConfig() {
           </div>
         </div>
 
-        <button class="btn-acc" onclick="saveConfig()">💾 Guardar</button>
+        <button class="btn-acc" onclick="conBoton(this, saveConfig)">💾 Guardar</button>
         <div id="cfgMsg" style="margin-top:10px;font-size:12px;text-align:center;display:none"></div>
       </div>`;
   } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
@@ -1604,6 +1604,26 @@ function selModo(modo, el) {
   _cfgModo = modo;
   document.querySelectorAll('.radio-card').forEach(x => x.classList.remove('sel'));
   el.classList.add('sel');
+}
+
+// FEEDBACK-BOTONES-01 (13/08/2026): mismo helper que index.html/panel.html -- Adrián:
+// "necesitamos feedback en los botones que pulsamos en toda la suite para saber que
+// funcionan". Este archivo es mucho más pequeño (frontend standalone acotado), pero
+// saveConfig/crearUsuario/cambiarPassword/revocarToken tenían el mismo hueco.
+async function conBoton(btn, fn, textoOcupado) {
+  if (!btn || btn.disabled) return;
+  const textoOriginal = btn.textContent;
+  const estiloOriginal = btn.style.opacity;
+  btn.disabled = true;
+  btn.textContent = textoOcupado || 'Guardando…';
+  btn.style.opacity = '0.7';
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    btn.style.opacity = estiloOriginal;
+  }
 }
 
 async function saveConfig() {
@@ -1696,7 +1716,7 @@ async function initSeguridad() {
             <input type="password" id="pwConfirm" class="inp" placeholder="Repite la contraseña" onkeydown="if(event.key==='Enter')cambiarPassword()">
           </div>
           <div id="pwMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
-          <button class="btn-acc" style="margin-top:10px" onclick="cambiarPassword()">Guardar nueva contraseña</button>
+          <button class="btn-acc" style="margin-top:10px" onclick="conBoton(this, cambiarPassword)">Guardar nueva contraseña</button>
         </div>
 
         <div class="sec-title">Usuarios con acceso</div>
@@ -1707,7 +1727,7 @@ async function initSeguridad() {
                 <div style="font-size:13px;font-weight:600">${esc(t.descripcion || 'Sin nombre')}</div>
                 <div style="font-size:10px;color:var(--muted)">${fmtDate(t.created_at)}</div>
               </div>
-              <button onclick="revocarToken(${t.id},'${esc(t.descripcion||'?')}')"
+              <button onclick="conBoton(this, () => revocarToken(${t.id},'${esc(t.descripcion||'?')}'), '…')"
                 style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer">
                 Revocar
               </button>
@@ -1726,7 +1746,7 @@ async function initSeguridad() {
             <input type="password" id="nuevoToken" class="inp" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter')crearUsuario()">
           </div>
           <div id="nuevoMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
-          <button class="btn-acc" style="margin-top:10px" onclick="crearUsuario()">Crear acceso</button>
+          <button class="btn-acc" style="margin-top:10px" onclick="conBoton(this, crearUsuario)">Crear acceso</button>
         </div>
       </div>`;
   } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }

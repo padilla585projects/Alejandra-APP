@@ -1016,7 +1016,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </select>
       </div>
       <div class="modal-actions">
-        <button class="btn-primary" style="flex:1" onclick="guardarEmpresaAdmin()">💾 Guardar</button>
+        <button class="btn-primary" style="flex:1" onclick="conBoton(this, guardarEmpresaAdmin)">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarModalEmpresaAdmin()">Cancelar</button>
       </div>
     </div>
@@ -1363,7 +1363,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
       </div>
       <div class="modal-actions">
-        <button class="btn-primary" style="flex:1" onclick="guardarEvento()">💾 Guardar</button>
+        <button class="btn-primary" style="flex:1" onclick="conBoton(this, guardarEvento)">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="cerrarFormEvento()">Cancelar</button>
       </div>
     </div>
@@ -1383,7 +1383,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);position:sticky;top:0;z-index:10;flex-shrink:0">
       <button onclick="navTo('partes')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0">← Volver</button>
       <div id="partesFormTitulo" style="flex:1;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Nuevo parte</div>
-      <button onclick="parteGuardar()" style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer">💾 Guardar</button>
+      <button onclick="conBoton(this, parteGuardar)" style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer">💾 Guardar</button>
     </div>
     <div style="padding:16px;overflow-y:auto;flex:1;max-width:600px;width:100%">
       <!-- Cabecera -->
@@ -1748,7 +1748,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Notas</label>
           <textarea id="cpdSondaNotas" rows="2" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);resize:vertical"></textarea>
         </div>
-        <button onclick="cpdSondaGuardarDatos()" class="btn-primary" style="margin-top:0">Guardar cambios</button>
+        <button onclick="conBoton(this, cpdSondaGuardarDatos)" class="btn-primary" style="margin-top:0">Guardar cambios</button>
 
         <div id="cpdSondaLecturasWrap">
           <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
@@ -1758,7 +1758,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
               <input id="cpdLecturaHum" type="number" step="0.1" placeholder="Hum %" style="flex:1;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
               <input id="cpdLecturaPresion" type="number" step="0.01" placeholder="ΔP Pa" style="flex:1;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
             </div>
-            <button onclick="cpdLecturaGuardar()" class="btn-primary" style="margin-top:8px">Guardar lectura</button>
+            <button onclick="conBoton(this, cpdLecturaGuardar)" class="btn-primary" style="margin-top:8px">Guardar lectura</button>
           </div>
 
           <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
@@ -1847,7 +1847,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
-        <button class="btn-primary" style="width:100%" onclick="fasesGuardar()">💾 Guardar fase</button>
+        <button class="btn-primary" style="width:100%" onclick="conBoton(this, fasesGuardar)">💾 Guardar fase</button>
       </div>
     </div>
   </div>
@@ -1889,7 +1889,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
-        <button class="btn-primary" style="width:100%" onclick="ncrMobileGuardar()">🚫 Registrar NCR</button>
+        <button class="btn-primary" style="width:100%" onclick="conBoton(this, ncrMobileGuardar)">🚫 Registrar NCR</button>
       </div>
     </div>
   </div>
@@ -1955,7 +1955,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
-        <button class="btn-primary" style="width:100%" onclick="diarioGuardar()">📓 Guardar entrada</button>
+        <button class="btn-primary" style="width:100%" onclick="conBoton(this, diarioGuardar)">📓 Guardar entrada</button>
       </div>
     </div>
   </div>
@@ -2261,7 +2261,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <textarea id="checklistComentario" rows="2" placeholder="Comentario opcional…"
             style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
         </div>
-        <button class="btn-primary" style="width:100%" onclick="checklistGuardar()">✅ Guardar checklist</button>
+        <button class="btn-primary" style="width:100%" onclick="conBoton(this, checklistGuardar)">✅ Guardar checklist</button>
       </div>
     </div>
   </div>
@@ -2318,7 +2318,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <input type="file" id="mantAdjunto" accept="image/*,application/pdf"
               style="margin-top:4px;width:100%;font-size:12px;color:var(--text)">
           </div>
-          <button class="btn-primary" style="width:100%" onclick="mantGuardar()">💾 Guardar</button>
+          <button class="btn-primary" style="width:100%" onclick="conBoton(this, mantGuardar)">💾 Guardar</button>
         </div>
         <!-- Historial -->
         <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:8px">📋 Historial</div>
@@ -2550,7 +2550,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
-        <button onclick="telecomGuardarModal()" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
+        <button onclick="conBoton(this, telecomGuardarModal)" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
       </div>
     </div>
   </div>
@@ -2590,7 +2590,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
         <button onclick="telecomVaciarPuerto()" style="flex:1;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">Vaciar</button>
-        <button onclick="telecomGuardarPuerto()" style="flex:2;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
+        <button onclick="conBoton(this, telecomGuardarPuerto)" style="flex:2;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
       </div>
     </div>
   </div>
@@ -3213,7 +3213,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <input class="form-input" id="segNuevoNotas" type="text" placeholder="Opcional...">
           </div>
           <div style="display:flex;gap:8px;margin-top:14px">
-            <button class="btn-primary" onclick="segGuardarNuevo()" style="flex:1">✅ GUARDAR</button>
+            <button class="btn-primary" onclick="conBoton(this, segGuardarNuevo)" style="flex:1">✅ GUARDAR</button>
             <button onclick="segCerrarFormNuevo()" style="padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">Cancelar</button>
           </div>
         </div>
@@ -3292,7 +3292,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <input class="form-input" id="segHerrNuevoNotas" type="text" placeholder="Opcional...">
           </div>
           <div style="display:flex;gap:8px;margin-top:14px">
-            <button class="btn-primary" onclick="segHerrGuardarNuevo()" style="flex:1">✅ Guardar</button>
+            <button class="btn-primary" onclick="conBoton(this, segHerrGuardarNuevo)" style="flex:1">✅ Guardar</button>
             <button onclick="segHerrCerrarNuevoModal()" style="padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">Cancelar</button>
           </div>
         </div>
@@ -3358,7 +3358,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <input id="segRecNotas" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segRecModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
-            <button onclick="segRecGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
+            <button onclick="conBoton(this, segRecGuardar)" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
           </div>
         </div>
       </div>
@@ -3412,7 +3412,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <input id="segDocNotas" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segDocModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
-            <button onclick="segDocGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
+            <button onclick="conBoton(this, segDocGuardar)" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
           </div>
         </div>
       </div>
@@ -3481,7 +3481,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <input id="segPermAutoriza" type="text" placeholder="Nombre del encargado/CSS" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segPermModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
-            <button onclick="segPermGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Emitir permiso</button>
+            <button onclick="conBoton(this, segPermGuardar)" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Emitir permiso</button>
           </div>
         </div>
       </div>
@@ -3521,7 +3521,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <input id="segInspNotas" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segInspModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
-            <button onclick="segInspGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar inspección</button>
+            <button onclick="conBoton(this, segInspGuardar)" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar inspección</button>
           </div>
         </div>
       </div>
@@ -3648,7 +3648,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
               <span style="font-size:20px">✅</span>
               <span style="font-size:13px;font-weight:700;color:#22c55e">Telegram vinculado</span>
             </div>
-            <button onclick="desvincularTelegram()" style="width:100%;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted)">🔗 Desvincular Telegram</button>
+            <button onclick="conBoton(this, desvincularTelegram)" style="width:100%;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted)">🔗 Desvincular Telegram</button>
           </div>
         </div>
         <div class="settings-section" id="seccionGestionSesiones" style="margin-top:16px;display:none">
@@ -3674,13 +3674,13 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div class="tag-row" id="tagsProveedores"></div>
           <div class="tag-add-row" style="margin-bottom:14px">
             <input type="text" id="newProveedor" placeholder="Nuevo proveedor...">
-            <button onclick="addProveedor()">+</button>
+            <button onclick="conBoton(this, addProveedor, '…')">+</button>
           </div>
           <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔌 Tipos de Cable</div>
           <div class="tag-row" id="tagsTipos"></div>
           <div class="tag-add-row">
             <input type="text" id="newTipo" placeholder="Nuevo tipo...">
-            <button onclick="addTipo()">+</button>
+            <button onclick="conBoton(this, addTipo, '…')">+</button>
           </div>
         </div>
         <div class="admin-section" id="cfgPempSection">
@@ -3688,7 +3688,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div class="tag-row" id="tagsTiposPemp"></div>
           <div class="tag-add-row">
             <input type="text" id="newTipoPemp" placeholder="Nuevo tipo...">
-            <button onclick="addTipoPemp()">+</button>
+            <button onclick="conBoton(this, addTipoPemp, '…')">+</button>
           </div>
         </div>
         <div class="admin-section" id="cfgCarrSection">
@@ -3697,13 +3697,13 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div class="tag-row" id="tagsTiposCarr"></div>
           <div class="tag-add-row" style="margin-bottom:14px">
             <input type="text" id="newTipoCarr" placeholder="Nuevo tipo...">
-            <button onclick="addTipoCarr()">+</button>
+            <button onclick="conBoton(this, addTipoCarr, '…')">+</button>
           </div>
           <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">⚡ Energía</div>
           <div class="tag-row" id="tagsEnergiasCarr"></div>
           <div class="tag-add-row">
             <input type="text" id="newEnergiaCarr" placeholder="Nueva energía...">
-            <button onclick="addEnergiaCarr()">+</button>
+            <button onclick="conBoton(this, addEnergiaCarr, '…')">+</button>
           </div>
         </div>
         <div class="admin-section" id="cfgHerrSection">
@@ -3711,7 +3711,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div class="tag-row" id="tagsTiposHerr"></div>
           <div class="tag-add-row" style="margin-top:10px">
             <input type="text" id="newTipoHerr" placeholder="Nuevo tipo...">
-            <button onclick="addTipoHerr()">+</button>
+            <button onclick="conBoton(this, addTipoHerr, '…')">+</button>
           </div>
         </div>
         <div class="admin-section" id="cfgChecklistSection">
@@ -3726,7 +3726,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div id="checklistCfgLista" style="margin-bottom:10px"></div>
           <div class="tag-add-row">
             <input type="text" id="newChecklistPregunta" placeholder="Nueva pregunta…">
-            <button onclick="checklistCfgAddPregunta()">+</button>
+            <button onclick="conBoton(this, checklistCfgAddPregunta, '…')">+</button>
           </div>
         </div>
         <div class="admin-section" id="cfgSegSection">
@@ -3739,7 +3739,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
               <option value="individual">Individual (serie)</option>
               <option value="cantidad">Cantidad (stock)</option>
             </select>
-            <button onclick="addTipoMatSeg()">+</button>
+            <button onclick="conBoton(this, addTipoMatSeg, '…')">+</button>
           </div>
         </div>
       </div>
@@ -3780,7 +3780,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
               <option value="mecanicas">🔧 Mecánicas</option>
               <option value="seguridad">🔺 Seguridad</option>
             </select>
-            <button class="btn-primary" onclick="crearUsuario()" style="margin-top:4px">➕ Crear usuario</button>
+            <button class="btn-primary" onclick="conBoton(this, crearUsuario)" style="margin-top:4px">➕ Crear usuario</button>
           </div>
         </div>
         <div class="settings-section" id="seccionInvitaciones" style="margin-top:16px;display:none">
@@ -3804,7 +3804,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
               <option value="120">2 horas</option>
               <option value="240">4 horas</option>
             </select>
-            <button class="btn-primary" style="font-size:13px;padding:10px" onclick="generarInvitacion()">🔗 Generar enlace de invitación</button>
+            <button class="btn-primary" style="font-size:13px;padding:10px" onclick="conBoton(this, generarInvitacion)">🔗 Generar enlace de invitación</button>
           </div>
           <div id="invEnlaceBox" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
             <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Enlace generado — cópialo y envíalo:</div>
@@ -3823,7 +3823,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <div class="tag-add-row" style="margin-top:14px;flex-wrap:wrap;gap:6px">
             <input type="text" id="newObraNombre" placeholder="Nombre de la obra" style="flex:1;min-width:120px">
             <input type="text" id="newObraCodigo" placeholder="CÓDIGO" style="width:100px;text-transform:uppercase">
-            <button onclick="crearObra()">+</button>
+            <button onclick="conBoton(this, crearObra, '…')">+</button>
           </div>
         </div>
       </div>
@@ -3871,7 +3871,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <div class="settings-section" id="sistemaSheetSection" style="display:none">
           <div class="settings-title">📊 Google Sheets</div>
           <div class="settings-row"><span>Sync</span><strong>Automático en cada cambio</strong></div>
-          <button class="btn-primary btn-secondary" style="font-size:13px" onclick="forzarSync()">🔄 Forzar sincronización</button>
+          <button class="btn-primary btn-secondary" style="font-size:13px" onclick="conBoton(this, forzarSync)">🔄 Forzar sincronización</button>
         </div>
         <div class="settings-section" id="sistemaBackupInvSection">
           <div class="settings-title">📦 Backup inventario</div>
@@ -3995,7 +3995,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <input class="form-input" id="efDireccion" type="text" placeholder="Calle, número, ciudad...">
           </div>
           <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="btn-primary" style="flex:1" onclick="guardarEmpresa()">💾 Guardar cambios</button>
+            <button class="btn-primary" style="flex:1" onclick="conBoton(this, guardarEmpresa)">💾 Guardar cambios</button>
             <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarEditEmpresa()">Cancelar</button>
           </div>
         </div>
@@ -4295,7 +4295,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <textarea id="herrNotas" rows="2" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
       </div>
       <div class="modal-actions">
-        <button class="btn-primary" style="flex:1" onclick="guardarHerramienta()">💾 Guardar</button>
+        <button class="btn-primary" style="flex:1" onclick="conBoton(this, guardarHerramienta)">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFormHerramienta()">Cancelar</button>
       </div>
     </div>
@@ -4336,7 +4336,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <textarea id="kitNotas" rows="2" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
       </div>
       <div class="modal-actions">
-        <button class="btn-primary" style="flex:1" onclick="guardarKit()">💾 Guardar</button>
+        <button class="btn-primary" style="flex:1" onclick="conBoton(this, guardarKit)">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFormKit()">Cancelar</button>
       </div>
     </div>
@@ -4807,7 +4807,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <textarea id="fichajeNotas" rows="2" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
       </div>
       <div class="modal-actions">
-        <button class="btn-primary" style="flex:1" onclick="guardarFichaje()">💾 Guardar</button>
+        <button class="btn-primary" style="flex:1" onclick="conBoton(this, guardarFichaje)">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFormFichaje()">Cancelar</button>
       </div>
     </div>
@@ -4940,7 +4940,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <input class="form-input" id="personalExtNotas" placeholder="Empresa subcontrata, especialidad…">
       </div>
       <div class="modal-actions">
-        <button class="btn-primary" style="flex:1" onclick="guardarPersonalExt()">💾 Guardar</button>
+        <button class="btn-primary" style="flex:1" onclick="conBoton(this, guardarPersonalExt)">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarModalPersonalExt()">Cancelar</button>
       </div>
     </div>
@@ -5001,7 +5001,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       </div>
 
       <div class="modal-actions">
-        <button class="btn-primary" style="flex:1" onclick="guardarPedido()">💾 Guardar</button>
+        <button class="btn-primary" style="flex:1" onclick="conBoton(this, guardarPedido)">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="cerrarFormPedido()">Cancelar</button>
       </div>
     </div>
@@ -5188,7 +5188,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
     </div>
     <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
       <button onclick="rdpCerrarModal()" style="flex:1;padding:12px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
-      <button onclick="rdpGuardar()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#1e3a5f;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
+      <button onclick="conBoton(this, rdpGuardar)" style="flex:2;padding:12px;border:none;border-radius:10px;background:#1e3a5f;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
     </div>
   </div>
 </div>
@@ -5241,7 +5241,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
     </div>
     <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
       <button onclick="hormCerrarModal()" style="flex:1;padding:12px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
-      <button onclick="hormGuardar()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#78350f;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
+      <button onclick="conBoton(this, hormGuardar)" style="flex:2;padding:12px;border:none;border-radius:10px;background:#78350f;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
     </div>
   </div>
 </div>
@@ -5411,7 +5411,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
       <input class="form-input" id="modalDevNotas" type="text" placeholder="Observaciones...">
     </div>
     <div class="modal-actions">
-      <button class="btn-primary btn-danger" style="flex:1" onclick="confirmarDevolucion()">Confirmar devolución</button>
+      <button class="btn-primary btn-danger" style="flex:1" onclick="conBoton(this, confirmarDevolucion)">Confirmar devolución</button>
       <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="closeModalDev()">Cancelar</button>
     </div>
   </div>
@@ -5722,6 +5722,30 @@ const apiFetch = apiCall; // alias — RdP/registro-hormigonado/formación-en-ob
 // TOAST
 // ══════════════════════════════════════════════════════
 let toastT;
+// FEEDBACK-BOTONES-01 (13/08/2026): Adrián probando en real -- pulsó "Guardar", no vio
+// ningún indicio de que la petición estaba en marcha, pensó que se había colgado y volvió a
+// pulsar, generando entradas duplicadas ("necesitamos feedback en los botones que pulsamos
+// en toda la suite para saber que funcionan"). Envoltorio genérico en vez de reescribir cada
+// función: `onclick="conBoton(this, fnOriginal)"` deshabilita el botón concreto que se pulsó
+// y le pone "Guardando…" mientras `fnOriginal` (que puede ser async o no, y puede devolver
+// pronto por una validación fallida) está en marcha, restaurando el texto/estado al acabar
+// pase lo que pase. No hace falta tocar el cuerpo de cada función ni darle un id al botón.
+async function conBoton(btn, fn, textoOcupado) {
+  if (!btn || btn.disabled) return;
+  const textoOriginal = btn.textContent;
+  const estiloOriginal = btn.style.opacity;
+  btn.disabled = true;
+  btn.textContent = textoOcupado || 'Guardando…';
+  btn.style.opacity = '0.7';
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    btn.style.opacity = estiloOriginal;
+  }
+}
+
 function toast(msg, tipo = '') {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -9646,7 +9670,7 @@ function segRegRenderDetalle(reg) {
     <div style="margin-bottom:10px">${comentariosHtml}</div>
     <div style="display:flex;gap:8px">
       <input id="segRegComentarioInput" type="text" placeholder="Escribe un comentario..." style="flex:1;padding:9px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px" onkeydown="if(event.key==='Enter')segRegComentar()">
-      <button onclick="segRegComentar()" style="padding:9px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer">Enviar</button>
+      <button onclick="conBoton(this, segRegComentar, 'Enviando…')" style="padding:9px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer">Enviar</button>
     </div>`;
 }
 
@@ -11757,7 +11781,7 @@ async function buscarParaDevolver(cod) {
         <label class="form-label">Notas (opcional)</label>
         <input class="form-input" id="devNotasInput" placeholder="Observaciones...">
       </div>
-      <button class="btn-primary" onclick="ejecutarDevolucion('${currentModule}','${id}')">↩ CONFIRMAR DEVOLUCIÓN</button>
+      <button class="btn-primary" onclick="conBoton(this, () => ejecutarDevolucion('${currentModule}','${id}'))">↩ CONFIRMAR DEVOLUCIÓN</button>
     </div>`;
 }
 
@@ -12209,7 +12233,7 @@ function renderObrasAdmin(obras) {
             <input type="time" id="hSal_${o.id}_${dia}" style="padding:5px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;width:100%">
           </div>`).join('')}
         </div>
-        <button onclick="guardarHorarioObra(${o.id})" style="width:100%;padding:8px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">💾 Guardar horario</button>
+        <button onclick="conBoton(this, () => guardarHorarioObra(${o.id}))" style="width:100%;padding:8px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">💾 Guardar horario</button>
       </div>
     </div>`).join('');
 }
@@ -12438,7 +12462,7 @@ async function editarDeptUsuario(id, deptActual) {
     <select id="deptSel-${id}" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
       ${opts.map(o => `<option value="${o.val}"${o.val === deptActual ? ' selected' : ''}>${o.label}</option>`).join('')}
     </select>
-    <button class="btn-sm ok" onclick="guardarDeptUsuario(${id})">✓</button>
+    <button class="btn-sm ok" onclick="conBoton(this, () => guardarDeptUsuario(${id}), '…')">✓</button>
     <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
 }
 
@@ -12448,7 +12472,7 @@ function editarEmailUsuario(id, emailActual) {
   actDiv.innerHTML = `
     <input id="emailInput-${id}" type="email" value="${(emailActual||'').replace(/"/g,'&quot;')}" placeholder="usuario@empresa.com"
       style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;width:160px">
-    <button class="btn-sm ok" onclick="guardarEmailUsuario(${id})">✓</button>
+    <button class="btn-sm ok" onclick="conBoton(this, () => guardarEmailUsuario(${id}), '…')">✓</button>
     <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
 }
 async function guardarEmailUsuario(id) {
@@ -12500,7 +12524,7 @@ function editarRolUsuario(id, rolActual) {
     <select id="rolSel-${id}" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
       ${ROLES_ASIGNABLES_UI.map(o => `<option value="${o.val}"${o.val === rolActual ? ' selected' : ''}>${o.label}</option>`).join('')}
     </select>
-    <button class="btn-sm ok" onclick="guardarRolUsuario(${id})">✓</button>
+    <button class="btn-sm ok" onclick="conBoton(this, () => guardarRolUsuario(${id}), '…')">✓</button>
     <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
 }
 async function guardarRolUsuario(id) {
@@ -12527,7 +12551,7 @@ async function editarObraUsuario(id, obraActual) {
         <option value="">— Sin obra —</option>
         ${obras.map(o => `<option value="${o.id}"${o.id == obraActual ? ' selected' : ''}>${o.nombre}</option>`).join('')}
       </select>
-      <button class="btn-sm ok" onclick="guardarObraUsuario(${id})">✓</button>
+      <button class="btn-sm ok" onclick="conBoton(this, () => guardarObraUsuario(${id}), '…')">✓</button>
       <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
   } catch { toast('❌ Error cargando obras', 'err'); }
 }
@@ -12957,8 +12981,8 @@ async function cargarSolicitudesPendientes() {
           <select id="pend_dept_${u.id}" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px"><option value="">— Dpto —</option>${optsDeptsAll}</select>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn-primary" style="flex:1;font-size:13px;padding:8px" onclick="aprobarPendiente(${u.id})">✅ Aceptar</button>
-          <button class="btn-primary btn-danger" style="flex:1;font-size:13px;padding:8px" onclick="rechazarPendiente(${u.id})">❌ Rechazar</button>
+          <button class="btn-primary" style="flex:1;font-size:13px;padding:8px" onclick="conBoton(this, () => aprobarPendiente(${u.id}))">✅ Aceptar</button>
+          <button class="btn-primary btn-danger" style="flex:1;font-size:13px;padding:8px" onclick="conBoton(this, () => rechazarPendiente(${u.id}))">❌ Rechazar</button>
         </div>
       </div>`).join('');
   } catch { sec.style.display = 'none'; }
@@ -22261,7 +22285,7 @@ async function abrirModalEpi(id, preset) {
       <textarea id="epiObs" class="form-input" rows="2" style="width:100%;margin-bottom:14px;resize:vertical" placeholder="Opcional">${datos.observaciones||''}</textarea>
       <div style="display:flex;gap:8px">
         ${id ? `<button onclick="borrarEpi(${id})" style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--red);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">🗑 Borrar</button>` : ''}
-        <button onclick="guardarEpi()" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer">💾 Guardar</button>
+        <button onclick="conBoton(this, guardarEpi)" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer">💾 Guardar</button>
       </div>
     </div>
   </div>`);
@@ -22496,7 +22520,7 @@ async function abrirModalCarnet(id) {
       </div>
       <div style="display:flex;gap:8px;margin-top:4px">
         ${id ? `<button onclick="borrarCarnet(${id})" style="padding:10px 14px;background:#ef444422;border:1px solid #ef4444;border-radius:10px;color:#ef4444;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer">🗑</button>` : ''}
-        <button onclick="guardarCarnet()" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:10px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;cursor:pointer">💾 Guardar</button>
+        <button onclick="conBoton(this, guardarCarnet)" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:10px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;cursor:pointer">💾 Guardar</button>
       </div>
     </div>
   </div>`;

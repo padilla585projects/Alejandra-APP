@@ -3126,7 +3126,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarAts)">💾 Guardar ATS</button>
             </div>
           </div>
         </div>
@@ -3162,7 +3162,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <h3 id="modalCuTitulo">Nueva Medición</h3>
               <button class="modal-close" onclick="cerrarModalCu()">✕</button>
             </div>
-            <form id="formCubicacion" onsubmit="guardarCu(event)">
+            <form id="formCubicacion" onsubmit="conBoton(event.submitter, () => guardarCu(event))">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <div style="grid-column:1/-1">
                   <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
@@ -3277,7 +3277,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <h3 id="modalArTitulo">Nueva Acta de Replanteo</h3>
               <button class="modal-close" onclick="cerrarModalAr()">✕</button>
             </div>
-            <form id="formActaReplanteo" onsubmit="guardarAr(event)">
+            <form id="formActaReplanteo" onsubmit="conBoton(event.submitter, () => guardarAr(event))">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <div style="grid-column:1/-1">
                   <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
@@ -3418,7 +3418,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <h3 id="modalFoTitulo">Nueva Formación</h3>
               <button class="modal-close" onclick="cerrarModalFo()">✕</button>
             </div>
-            <form id="formFormacionObra" onsubmit="guardarFo(event)">
+            <form id="formFormacionObra" onsubmit="conBoton(event.submitter, () => guardarFo(event))">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <div style="grid-column:1/-1">
                   <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Título de la formación *</label>
@@ -3532,7 +3532,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <h3 id="modalRhTitulo">Nuevo Parte de Hormigonado</h3>
               <button class="modal-close" onclick="cerrarModalRh()">✕</button>
             </div>
-            <form id="formRegistroHormig" onsubmit="guardarRh(event)">
+            <form id="formRegistroHormig" onsubmit="conBoton(event.submitter, () => guardarRh(event))">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <div style="grid-column:1/-1">
                   <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
@@ -3681,7 +3681,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <h3 id="modalLsTitulo">Nueva Entrada en Libro</h3>
               <button class="modal-close" onclick="cerrarModalLs()">✕</button>
             </div>
-            <form id="formLibroSub" onsubmit="guardarLs(event)">
+            <form id="formLibroSub" onsubmit="conBoton(event.submitter, () => guardarLs(event))">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <div style="grid-column:1/-1">
                   <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
@@ -4248,7 +4248,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn-secondary" onclick="cerrarModalFv()">Cancelar</button>
-              <button class="btn-primary" onclick="guardarFv()">Guardar Vehículo</button>
+              <button class="btn-primary" onclick="conBoton(this, guardarFv)">Guardar Vehículo</button>
             </div>
           </div>
         </div>
@@ -4388,7 +4388,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalGd()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarGd()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarGd)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -4509,7 +4509,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalLicit()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarLicit()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarLicit)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -4653,7 +4653,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalCc()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarCc()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarCc)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -4772,7 +4772,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalFp()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarFp()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarFp)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -4899,7 +4899,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalPg()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarPg()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarPg)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -4966,7 +4966,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalHo()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarHo()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarHo)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5036,7 +5036,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalAus()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarAus()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarAus)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5129,7 +5129,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalOt()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarOt()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarOt)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5214,7 +5214,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalCae()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarCae()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarCae)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5314,7 +5314,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalCof()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarCof()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarCof)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5397,7 +5397,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalLo()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarLo()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarLo)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5447,7 +5447,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalCp()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarCp()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarCp)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5529,7 +5529,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalSo()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarSo()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarSo)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5610,7 +5610,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalSm()">Cancelar</button>
               <span id="smElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarSm()">💾 Guardar Solicitud</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarSm)">💾 Guardar Solicitud</button>
             </div>
           </div>
         </div>
@@ -5695,7 +5695,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalFc()">Cancelar</button>
               <span id="fcElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarFc()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarFc)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5856,7 +5856,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalAcc()">Cancelar</button>
               <span id="accElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarAcc()">💾 Guardar Incidente</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarAcc)">💾 Guardar Incidente</button>
             </div>
           </div>
         </div>
@@ -5966,7 +5966,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalCm()">Cancelar</button>
               <span id="cmElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarCm()">💾 Registrar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarCm)">💾 Registrar</button>
             </div>
           </div>
         </div>
@@ -6110,7 +6110,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalPm()">Cancelar</button>
               <span id="pmElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarPm()">💾 Guardar Parte</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarPm)">💾 Guardar Parte</button>
             </div>
           </div>
         </div>
@@ -6243,7 +6243,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalRes()">Cancelar</button>
               <span id="resElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarRes()">💾 Guardar Residuo</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarRes)">💾 Guardar Residuo</button>
             </div>
           </div>
         </div>
@@ -6387,7 +6387,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalEns()">Cancelar</button>
               <span id="ensElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarEns()">💾 Guardar Ensayo</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarEns)">💾 Guardar Ensayo</button>
             </div>
           </div>
         </div>
@@ -6521,7 +6521,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalCo()">Cancelar</button>
               <span id="coElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarCo()">💾 Guardar Cambio</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarCo)">💾 Guardar Cambio</button>
             </div>
           </div>
         </div>
@@ -6689,7 +6689,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalEvProv()">Cancelar</button>
               <span id="evProvElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarEvProv()">💾 Guardar Evaluación</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarEvProv)">💾 Guardar Evaluación</button>
             </div>
           </div>
         </div>
@@ -6786,7 +6786,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalRd()">Cancelar</button>
               <span id="rdElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarRd()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarRd)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -6901,7 +6901,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalLc()">Cancelar</button>
               <span id="lcElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarLc()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarLc)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7014,7 +7014,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalEtg()">Cancelar</button>
               <span id="etgElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarEtg()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarEtg)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7140,7 +7140,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalAlq()">Cancelar</button>
               <span id="alqElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarAlq()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarAlq)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7261,7 +7261,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalGar()">Cancelar</button>
               <span id="garElimBtn"></span>
-              <button class="btn btn-primary" onclick="guardarGar()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarGar)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7384,7 +7384,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalFr()">Cancelar</button>
-              <button class="btn btn-primary" onclick="guardarFr()">💾 Guardar</button>
+              <button class="btn btn-primary" onclick="conBoton(this, guardarFr)">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -10105,6 +10105,27 @@ function puedeEntrarOffice(rol, rolesExtra = []) {
 }
 
 // ── UTILIDADES ─────────────────────────────────────────────────
+// FEEDBACK-BOTONES-01 (13/08/2026): mismo helper que index.html -- Adrián: "necesitamos
+// feedback en los botones que pulsamos en toda la suite para saber que funcionan". Un
+// bloque grande de módulos (Proveedores, Flota, Licitaciones, Actas, Punch List...) tiene su
+// propio botón "Guardar" fuera del wrapper genérico de abrirModal() (que desde el 12/08 ya
+// protege el caso de 3 argumentos), así que necesitan este envoltorio aparte.
+async function conBoton(btn, fn, textoOcupado) {
+  if (!btn || btn.disabled) return;
+  const textoOriginal = btn.textContent;
+  const estiloOriginal = btn.style.opacity;
+  btn.disabled = true;
+  btn.textContent = textoOcupado || 'Guardando…';
+  btn.style.opacity = '0.7';
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    btn.style.opacity = estiloOriginal;
+  }
+}
+
 function toast(msg, tipo = 'info') {
   const el = document.createElement('div');
   el.className = `toast toast-${tipo}`;
@@ -17093,8 +17114,8 @@ function segInfRenderDetalle(inf) {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${cerrado
         ? `<button class="btn btn-secondary" onclick="reabrirInformeSeg(${inf.id})">🔓 Reabrir</button>`
-        : `<button class="btn btn-primary" onclick="guardarInformeSeg(${inf.id})">💾 Guardar</button>
-           <button class="btn btn-secondary" onclick="guardarInformeSeg(${inf.id}, true)">🔒 Guardar y cerrar</button>`}
+        : `<button class="btn btn-primary" onclick="conBoton(this, () => guardarInformeSeg(${inf.id}))">💾 Guardar</button>
+           <button class="btn btn-secondary" onclick="conBoton(this, () => guardarInformeSeg(${inf.id}, true))">🔒 Guardar y cerrar</button>`}
       <button class="btn btn-secondary" onclick="imprimirInformeSeg(${inf.id})">🖨️ PDF</button>
       <button class="btn btn-secondary" onclick="descargarInformeSegDocx(${inf.id})">📄 Word (.docx)</button>
     </div>`;
@@ -26844,7 +26865,7 @@ async function abrirModalCoste(d={}) {
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
       ${d.id ? `<button class="btn btn-danger" onclick="eliminarCosteObra(${d.id})">🗑 Eliminar</button>` : ''}
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarCosteObra(${d.id||0})">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="conBoton(this, () => guardarCosteObra(${d.id||0}))">💾 Guardar</button>
     </div>
   `);
   // Set fase selection if editing
@@ -26978,7 +26999,7 @@ function abrirModalContacto(d) {
     </div>
     <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarContactoObra(${id})">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="conBoton(this, () => guardarContactoObra(${id}))">💾 Guardar</button>
     </div>
   `);
   poblarSelectObras('ctObraId').then(() => {
@@ -27110,7 +27131,7 @@ function abrirModalContrato(d) {
     </div>
     <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarContratoObra(${id})">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="conBoton(this, () => guardarContratoObra(${id}))">💾 Guardar</button>
     </div>
   `);
   poblarSelectObras('cnObraId').then(() => {
@@ -34192,7 +34213,7 @@ function abrirModalTransmittal(d={}) {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="document.getElementById('modalTransmittal').remove()">Cancelar</button>
-          <button class="btn btn-primary" onclick="guardarTransmittal(${d.id||0})">💾 Guardar</button>
+          <button class="btn btn-primary" onclick="conBoton(this, () => guardarTransmittal(${d.id||0}))">💾 Guardar</button>
         </div>
       </div>
     </div>`;
@@ -35304,7 +35325,7 @@ async function abrirModalEntrega(id = null) {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="document.getElementById('modalEntrega').remove()">Cancelar</button>
-          <button class="btn btn-primary" onclick="guardarEntrega(${id||0})">Guardar</button>
+          <button class="btn btn-primary" onclick="conBoton(this, () => guardarEntrega(${id||0}))">Guardar</button>
         </div>
       </div>
     </div>`;
@@ -35487,7 +35508,7 @@ async function abrirModalAI(id = null) {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="document.getElementById('modalAI').remove()">Cancelar</button>
-          <button class="btn btn-primary" onclick="guardarAccionItem(${id||0})">Guardar</button>
+          <button class="btn btn-primary" onclick="conBoton(this, () => guardarAccionItem(${id||0}))">Guardar</button>
         </div>
       </div>
     </div>`;
@@ -35959,7 +35980,7 @@ async function abrirModalRiesgo(id = null) {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="document.getElementById('modalRiesgo').remove()">Cancelar</button>
-          <button class="btn btn-primary" onclick="guardarRiesgo(${id||0})">Guardar</button>
+          <button class="btn btn-primary" onclick="conBoton(this, () => guardarRiesgo(${id||0}))">Guardar</button>
         </div>
       </div>
     </div>`;
@@ -36148,7 +36169,7 @@ async function abrirModalOC(id = null) {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="cerrarModalOC()">Cancelar</button>
-          <button class="btn btn-primary" onclick="guardarOC(${id||0})">Guardar</button>
+          <button class="btn btn-primary" onclick="conBoton(this, () => guardarOC(${id||0}))">Guardar</button>
         </div>
       </div>
     </div>`;
@@ -36614,7 +36635,7 @@ function abrirModalSubmittal(d) {
     </div>
     <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarSubmittal(${id})">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="conBoton(this, () => guardarSubmittal(${id}))">💾 Guardar</button>
     </div>
   `);
   poblarSelectObras('sbObraId').then(() => {
@@ -36755,7 +36776,7 @@ function abrirModalActa(d) {
     </div>
     <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarActaReunion(${id})">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="conBoton(this, () => guardarActaReunion(${id}))">💾 Guardar</button>
     </div>
   `, 'lg');
   poblarSelectObras('arObraId').then(() => {
@@ -36949,7 +36970,7 @@ function abrirModalPunch(d={}) {
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
       ${d.id ? `<button class="btn btn-danger" onclick="eliminarPunchItem(${d.id})">🗑 Eliminar</button>` : ''}
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarPunchItem(${d.id||0})">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="conBoton(this, () => guardarPunchItem(${d.id||0}))">💾 Guardar</button>
     </div>
   `);
 }
@@ -37409,7 +37430,7 @@ function abrirModalSegObs(d={}) {
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
       ${d.id ? `<button class="btn btn-danger" onclick="eliminarSegObs(${d.id})">🗑 Eliminar</button>` : ''}
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarSegObs(${d.id||0})">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="conBoton(this, () => guardarSegObs(${d.id||0}))">💾 Guardar</button>
     </div>
   `);
 }
@@ -37464,7 +37485,7 @@ function abrirModalToolboxTalk(d={}) {
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
       ${d.id ? `<button class="btn btn-danger" onclick="eliminarToolboxTalk(${d.id})">🗑 Eliminar</button>` : ''}
       <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarToolboxTalk(${d.id||0})">💾 Guardar</button>
+      <button class="btn btn-primary" onclick="conBoton(this, () => guardarToolboxTalk(${d.id||0}))">💾 Guardar</button>
     </div>
   `);
 }
