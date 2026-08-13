@@ -3566,7 +3566,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <input type="file" id="segRegCamInput" accept="image/*" style="display:none" onchange="segRegPreviewFoto(this.files)">
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segRegModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
-            <button onclick="segRegGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
+            <button id="segRegGuardarBtn" onclick="segRegGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
           </div>
         </div>
       </div>
@@ -3604,7 +3604,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
           <input type="file" id="segInfCamInput" accept="image/*" style="display:none" onchange="segInfPreviewFoto(this.files)">
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('segInfModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
-            <button onclick="segInfGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
+            <button id="segInfGuardarBtn" onclick="segInfGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
           </div>
         </div>
       </div>
@@ -9569,11 +9569,19 @@ function segRegPreviewFoto(files) {
   document.getElementById('segRegFotoPreviewWrap').style.display = 'block';
 }
 
+// GUARDAR-DOBLE-CLIC-01 (13/08/2026): mismo bug que segInfGuardar -- crea un registro + sube
+// una foto (dos peticiones seguidas) sin ningún indicio visual de que está en marcha.
+let _segRegGuardando = false;
+
 async function segRegGuardar() {
+  if (_segRegGuardando) return;
   const titulo = document.getElementById('segRegTitulo').value.trim();
   if (!titulo) return toast('⚠️ El título es obligatorio', 'err');
   const s = getSession();
   const body = { titulo, descripcion: document.getElementById('segRegDescripcion').value.trim() || null, obra_id: s?.obra_id || null };
+  const btn = document.getElementById('segRegGuardarBtn');
+  _segRegGuardando = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; btn.style.opacity = '0.7'; }
   try {
     const r = await apiCall('/seg-registros', { method: 'POST', body: JSON.stringify(body) });
     const d = await r.json();
@@ -9583,6 +9591,10 @@ async function segRegGuardar() {
     toast('✅ Registro creado', 'ok');
     segRegCargar();
   } catch(e) { toast('Error de red', 'err'); }
+  finally {
+    _segRegGuardando = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; btn.style.opacity = '1'; }
+  }
 }
 
 async function segRegSubirFoto(id, file) {
@@ -9739,7 +9751,18 @@ function segInfPreviewFoto(files) {
   document.getElementById('segInfFotoPreviewWrap').style.display = 'block';
 }
 
+// GUARDAR-DOBLE-CLIC-01 (13/08/2026): Adrián probando en real -- "cuando le he dado al botón
+// de guardar, ha tardado tanto que parecía que se había quedado pillado. Entonces le di más
+// veces. Me ha generado 3 entradas más." El guardado hace un POST + subida de foto (dos
+// peticiones seguidas, la segunda puede tardar en redes de obra) sin ningún indicio visual de
+// que está en marcha -- cada clic de más mandaba otro POST completo, duplicando la actividad.
+// _segInfGuardando es una bandera de re-entrancia (además de deshabilitar el botón, por si
+// algo lo reactiva antes de tiempo) y el texto del botón cambia a "Guardando…" para que quede
+// claro que ya está funcionando, no colgado.
+let _segInfGuardando = false;
+
 async function segInfGuardar() {
+  if (_segInfGuardando) return;
   const actividad = document.getElementById('segInfActividad').value.trim();
   if (!actividad) return toast('⚠️ La actividad es obligatoria', 'err');
   const s = getSession();
@@ -9749,6 +9772,9 @@ async function segInfGuardar() {
     actividad,
     contratista: document.getElementById('segInfContratista').value.trim() || null,
   };
+  const btn = document.getElementById('segInfGuardarBtn');
+  _segInfGuardando = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; btn.style.opacity = '0.7'; }
   try {
     const r = await apiCall('/informes-seg/actividad', { method: 'POST', body: JSON.stringify(body) });
     const d = await r.json();
@@ -9758,6 +9784,10 @@ async function segInfGuardar() {
     toast('✅ Actividad añadida', 'ok');
     segInfCargar();
   } catch (e) { toast('Error de red', 'err'); }
+  finally {
+    _segInfGuardando = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; btn.style.opacity = '1'; }
+  }
 }
 
 async function segInfSubirFoto(actividadId, file) {
