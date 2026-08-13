@@ -3603,6 +3603,14 @@ select option{background:var(--surface2);color:var(--text)}
       <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
         <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
         <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);flex:1">📝 Informe Semanal</div>
+        <!-- INFORMES-SEG-CIERRE-01 (13/08/2026): Adrián -- "el informe semanal me gustaría
+             también poder hacerlo desde la app" (cerrar informe, editar aspectos
+             críticos/observaciones/otros puntos, generar el documento final). Paridad con
+             panel.html (verInformeSeg/guardarInformeSeg/imprimirInformeSeg/
+             descargarInformeSegDocx) -- mismos endpoints, sin tocar el backend. Deshabilitado
+             mientras no exista informe de la semana (_segInfInformeIdActual null): no se
+             puede cerrar un informe que todavía no tiene ninguna actividad. -->
+        <button id="segInfBtnCierre" onclick="segInfAbrirCierre()" disabled style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:6px 10px;font-size:15px;cursor:not-allowed;flex-shrink:0" title="Cerrar / generar informe">📄</button>
         <button onclick="segInfNuevaActividad()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0">+ Nueva</button>
       </div>
       <!-- INFORMES-SEG-UX-01 (13/08/2026): Katy (técnico real) -- "no veo el botón para
@@ -3640,6 +3648,39 @@ select option{background:var(--surface2);color:var(--text)}
             <button onclick="document.getElementById('segInfModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
             <button id="segInfGuardarBtn" onclick="segInfGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Cerrar / generar informe (INFORMES-SEG-CIERRE-01) -->
+      <div id="segInfCierreModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:460px;max-height:92vh;overflow-y:auto">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+            <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;flex:1">📄 Cerrar informe</div>
+            <span id="segInfCierreEstado" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;text-transform:uppercase"></span>
+          </div>
+          <input type="hidden" id="segInfCierreId">
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <div style="flex:1"><label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Nº documento</label>
+              <input id="segInfCierreNumDoc" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box"></div>
+            <div style="width:90px"><label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Revisión</label>
+              <input id="segInfCierreRevision" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box"></div>
+          </div>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Aspectos críticos</label>
+          <textarea id="segInfCierreCriticos" rows="3" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box"></textarea>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Observaciones</label>
+          <textarea id="segInfCierreObs" rows="3" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box"></textarea>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Otros puntos (uno por línea)</label>
+          <textarea id="segInfCierreOtros" rows="4" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:14px;box-sizing:border-box"></textarea>
+          <div id="segInfCierreBotonesEdicion" style="display:flex;gap:8px;margin-bottom:8px">
+            <button id="segInfCierreGuardarBtn" onclick="segInfGuardarCierre(false)" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">💾 Guardar</button>
+            <button id="segInfCierreGuardarCerrarBtn" onclick="segInfGuardarCierre(true)" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">🔒 Guardar y cerrar</button>
+          </div>
+          <button id="segInfReabrirBtn" onclick="segInfReabrir()" style="display:none;width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);margin-bottom:8px">🔓 Reabrir</button>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <button onclick="segInfImprimir()" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">🖨️ PDF</button>
+            <button onclick="segInfDescargarDocx()" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">📄 Word</button>
+          </div>
+          <button onclick="document.getElementById('segInfCierreModal').style.display='none'" style="width:100%;padding:8px;background:none;border:none;font-size:12px;color:var(--muted);cursor:pointer">Cerrar</button>
         </div>
       </div>
     </div>
@@ -9810,6 +9851,16 @@ function segInfFechaLocal(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+function _segInfActualizarBtnCierre() {
+  const btn = document.getElementById('segInfBtnCierre');
+  if (!btn) return;
+  const activo = !!_segInfInformeIdActual;
+  btn.disabled = !activo;
+  btn.style.cursor = activo ? 'pointer' : 'not-allowed';
+  btn.style.color = activo ? 'var(--text)' : 'var(--muted)';
+  btn.style.borderColor = activo ? 'var(--accent)' : 'var(--border)';
+}
+
 // INFORMES-SEG-EDITAR-01: navegación por semanas -- offset en semanas respecto a la
 // semana de hoy (0=actual, -1=anterior...). No se deja ir al futuro (offset>0): las
 // actividades de una semana que aún no ha llegado no tienen sentido.
@@ -9833,6 +9884,7 @@ async function segInfCargar() {
   if (btnSig) { btnSig.disabled = _segInfSemanaOffset >= 0; btnSig.style.opacity = _segInfSemanaOffset >= 0 ? '.4' : '1'; }
   _segInfInformeIdActual = null;
   _segInfActividadesCache = {};
+  _segInfActualizarBtnCierre();
   const s = getSession();
   const q = s?.obra_id ? `?obra_id=${s.obra_id}` : '';
   try {
@@ -9842,6 +9894,7 @@ async function segInfCargar() {
     const actual = Array.isArray(informes) ? informes.find(i => i.semana_inicio === lunesStr) : null;
     if (!actual) { lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin actividades esta semana todavía. Pulsa + Nueva para añadir la primera.</div>'; return; }
     _segInfInformeIdActual = actual.id;
+    _segInfActualizarBtnCierre();
     const rd = await apiCall(`/informes-seg/${actual.id}`);
     if (!rd.ok) { lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; return; }
     const detalle = await rd.json();
@@ -9986,6 +10039,115 @@ async function segInfEliminar(actividadId) {
     if (!d.ok) { toast('Error: ' + (d.error || ''), 'err'); return; }
     segInfCargar();
   } catch { toast('Error de red', 'err'); }
+}
+
+// ── INFORMES-SEG-CIERRE-01 (13/08/2026): cerrar/generar el informe desde el móvil ──
+// Paridad con panel.html (verInformeSeg/guardarInformeSeg/imprimirInformeSeg/
+// descargarInformeSegDocx) -- mismos endpoints (PUT /informes-seg/:id, GET .../docx),
+// sin backend nuevo. "PDF" reutiliza el mismo patrón de ventana-de-impresión que ya usa
+// toda la app (window.print(), el usuario elige "Guardar como PDF") -- no hace falta
+// generar PDF en el servidor.
+async function segInfAbrirCierre() {
+  if (!_segInfInformeIdActual) return;
+  const r = await apiCall(`/informes-seg/${_segInfInformeIdActual}`);
+  const inf = await r.json().catch(() => null);
+  if (!r.ok || !inf) { toast('Error al cargar el informe', 'err'); return; }
+  const cerrado = inf.estado === 'cerrado';
+  document.getElementById('segInfCierreId').value = inf.id;
+  document.getElementById('segInfCierreNumDoc').value = inf.numero_documento || '';
+  document.getElementById('segInfCierreRevision').value = inf.revision || 'XX';
+  document.getElementById('segInfCierreCriticos').value = inf.aspectos_criticos || '';
+  document.getElementById('segInfCierreObs').value = inf.observaciones || '';
+  document.getElementById('segInfCierreOtros').value = inf.otros_puntos || '';
+  const estadoEl = document.getElementById('segInfCierreEstado');
+  estadoEl.textContent = cerrado ? 'Cerrado' : 'Borrador';
+  estadoEl.style.background = cerrado ? '#16a34a33' : '#f59e0b33';
+  estadoEl.style.color = cerrado ? '#16a34a' : '#f59e0b';
+  ['segInfCierreNumDoc', 'segInfCierreRevision', 'segInfCierreCriticos', 'segInfCierreObs', 'segInfCierreOtros'].forEach(id => {
+    document.getElementById(id).disabled = cerrado;
+  });
+  document.getElementById('segInfCierreBotonesEdicion').style.display = cerrado ? 'none' : 'flex';
+  document.getElementById('segInfReabrirBtn').style.display = cerrado ? 'block' : 'none';
+  document.getElementById('segInfCierreModal').style.display = 'flex';
+}
+
+async function segInfGuardarCierre(cerrar) {
+  const id = document.getElementById('segInfCierreId').value;
+  const body = {
+    numero_documento: document.getElementById('segInfCierreNumDoc').value.trim(),
+    revision: document.getElementById('segInfCierreRevision').value.trim() || 'XX',
+    aspectos_criticos: document.getElementById('segInfCierreCriticos').value.trim(),
+    observaciones: document.getElementById('segInfCierreObs').value.trim(),
+    otros_puntos: document.getElementById('segInfCierreOtros').value.trim(),
+  };
+  if (cerrar) body.cerrar = true;
+  try {
+    const r = await apiCall(`/informes-seg/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!d.ok) { toast('Error: ' + (d.error || 'desconocido'), 'err'); return; }
+    toast(cerrar ? '✅ Informe cerrado' : '✅ Guardado', 'ok');
+    document.getElementById('segInfCierreModal').style.display = 'none';
+  } catch { toast('Error de red', 'err'); }
+}
+
+async function segInfReabrir() {
+  const id = document.getElementById('segInfCierreId').value;
+  try {
+    const r = await apiCall(`/informes-seg/${id}`, { method: 'PUT', body: JSON.stringify({ cerrar: false }) });
+    const d = await r.json();
+    if (!d.ok) { toast('Error: ' + (d.error || ''), 'err'); return; }
+    toast('🔓 Informe reabierto', 'ok');
+    segInfAbrirCierre();
+  } catch { toast('Error de red', 'err'); }
+}
+
+function segInfDescargarDocx() {
+  const id = document.getElementById('segInfCierreId').value;
+  const s = getSession();
+  window.open(`${getAPI()}/informes-seg/${id}/docx?token=${encodeURIComponent(s?.token || '')}`, '_blank');
+}
+
+// Ventana de impresión (Guardar como PDF) -- mismo patrón que el resto de la app.
+async function segInfImprimir() {
+  const id = document.getElementById('segInfCierreId').value;
+  const r = await apiCall(`/informes-seg/${id}`);
+  const inf = await r.json().catch(() => null);
+  if (!r.ok || !inf) { toast('Error al cargar el informe', 'err'); return; }
+  const s = getSession();
+  const fechas = Object.keys(inf.dias || {}).sort();
+  const filasDias = fechas.map(f => {
+    const actividades = inf.dias[f];
+    const fotos = actividades.flatMap(a => a.fotos || []);
+    const descHtml = actividades.map(a => `<div style="margin-bottom:4px"><b>${_escHtml(a.actividad)}</b>${a.contratista ? ` (por ${_escHtml(a.contratista)})` : ''}</div>`).join('');
+    const fotosHtml = fotos.map(fo => `<img src="${getAPI()}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(s?.token || '')}" style="width:100%;max-width:220px;border-radius:4px;margin:4px">`).join('');
+    return `<tr><td style="border:1px solid #999;padding:8px;font-weight:700;vertical-align:top;white-space:nowrap">${f.split('-').reverse().join('/')}</td>
+      <td style="border:1px solid #999;padding:8px;vertical-align:top">${descHtml}<div style="display:flex;flex-wrap:wrap">${fotosHtml}</div></td></tr>`;
+  }).join('');
+  const otrosHtml = (inf.otros_puntos || '').split('\n').filter(l => l.trim()).map(l => `<li>${_escHtml(l)}</li>`).join('') || '<li>—</li>';
+  const win = window.open('', '_blank');
+  if (!win) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
+  win.document.write(`<html><head><title>Informe semanal — Semana ${inf.semana_numero || ''}</title><meta charset="utf-8"></head>
+    <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:800px;margin:20px auto;font-size:13px">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px">
+        <tr><td style="border:1px solid #999;padding:6px;font-weight:700;width:30%">INFORME INTERNO SEMANAL: SEMANA ${inf.semana_numero || '—'} DE ${inf.anio || ''}</td>
+            <td style="border:1px solid #999;padding:6px" colspan="2">DISCIPLINA: Seguridad y Salud Laboral</td></tr>
+        <tr><td style="border:1px solid #999;padding:6px">LUGAR: ${_escHtml(inf.obra_nombre || '—')}</td>
+            <td style="border:1px solid #999;padding:6px">Nº DOCUMENTO: ${_escHtml(inf.numero_documento || '—')}</td>
+            <td style="border:1px solid #999;padding:6px">Rev. ${_escHtml(inf.revision || 'XX')}</td></tr>
+      </table>
+      <h3>Descripción general</h3>
+      <p>El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.</p>
+      <h3>Aspectos críticos</h3>
+      <p style="white-space:pre-wrap">${_escHtml(inf.aspectos_criticos || '—')}</p>
+      <h3>Observaciones</h3>
+      <p style="white-space:pre-wrap">${_escHtml(inf.observaciones || '—')}</p>
+      <h3>Actividad diaria</h3>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">${filasDias || '<tr><td style="border:1px solid #999;padding:8px">Sin actividades</td></tr>'}</table>
+      <h3>Otros puntos</h3>
+      <ul>${otrosHtml}</ul>
+      <script>window.onload = () => setTimeout(() => window.print(), 500);<\/script>
+    </body></html>`);
+  win.document.close();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
