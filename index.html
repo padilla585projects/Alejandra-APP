@@ -347,8 +347,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
 .dept-card:active{transform:scale(0.97);opacity:.9}
 .dept-card:hover{border-color:var(--accent)}
 .dept-icon-wrap{width:56px;height:56px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.dept-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)}
-.dept-desc{font-size:12px;color:var(--muted);margin-top:4px}
+/* CARDS-DEPT-AJUSTE-01 (13/08/2026): Adrián -- "arreglar las tarjetas que no están
+   ajustadas". Sin min-width:0, un div flex:1 con texto no se encoge nunca por debajo
+   del ancho natural de su contenido (comportamiento por defecto de flexbox) -- con un
+   nombre largo como "Telecomunicaciones" en una sola línea, empujaba el chevron fuera
+   de la tarjeta en vez de dejar que el texto envolviera. */
+.dept-info{flex:1;min-width:0}
+.dept-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text);overflow-wrap:break-word}
+.dept-desc{font-size:12px;color:var(--muted);margin-top:4px;overflow-wrap:break-word}
+.dept-chevron{flex-shrink:0}
 /* Dept pill superadmin */
 .dept-pill{display:flex;align-items:center;background:var(--surface2);border:1px solid var(--accent);border-radius:20px;padding:clamp(1px,0.8vw,3px) clamp(4px,2vw,8px);color:var(--accent);cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
 .dept-pill:active{opacity:.7}
@@ -863,11 +870,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <polygon points="58,8 25,52 46,52 40,92 75,48 54,48" fill="#f97316"/>
           </svg>
         </div>
-        <div style="flex:1">
+        <div class="dept-info">
           <div class="dept-name">Eléctrico</div>
           <div class="dept-desc">Tendido de cable · Plataformas · Carretillas</div>
         </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+        <svg class="dept-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <!-- NEW-188: Control y Telecom fijos justo después de Eléctrico, a petición de Adrián (10/08/2026) -->
       <div id="priorityDeptCards" style="display:flex;flex-direction:column;gap:14px"></div>
@@ -883,11 +890,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <path d="M20 90 L20 60 Q20 52 28 52 L38 52 Q44 44 46 36 L54 40 Q52 52 44 58 L40 60 L40 90 Z" fill="#f97316"/>
           </svg>
         </div>
-        <div style="flex:1">
+        <div class="dept-info">
           <div class="dept-name">Mecánicas</div>
           <div class="dept-desc">Climatización, fontanería y mantenimiento</div>
         </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+        <svg class="dept-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div id="deptCard_seguridad" class="dept-card" onclick="seleccionarDepto('seguridad')">
         <div class="dept-icon-wrap">
@@ -898,11 +905,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <rect x="12" y="82" width="76" height="10" rx="5" fill="#334155"/>
           </svg>
         </div>
-        <div style="flex:1">
+        <div class="dept-info">
           <div class="dept-name">Seguridad</div>
           <div class="dept-desc">Control de EPIs y material de seguridad</div>
         </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+        <svg class="dept-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div id="deptCard_personal" class="dept-card" onclick="seleccionarDepto('personal')">
         <div class="dept-icon-wrap">
@@ -913,11 +920,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
             <path d="M55 80 Q55 63 66 63 Q84 63 84 80Z" fill="#818cf8" opacity=".85"/>
           </svg>
         </div>
-        <div style="flex:1">
+        <div class="dept-info">
           <div class="dept-name">Personal</div>
           <div class="dept-desc">Fichajes y control de asistencia</div>
         </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+        <svg class="dept-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <!-- NEW-187: contenedor para departamentos extra del catálogo -->
       <div id="extraDeptCards" style="display:flex;flex-direction:column;gap:14px"></div>
@@ -1272,14 +1279,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" id="cardAlejandraIA" onclick="navTo('ia')" style="display:none;border-left:3px solid #a855f7">
-        <div class="module-emoji">🤖</div>
-        <div class="module-info">
-          <div class="module-name">Alejandra IA</div>
-          <div class="module-desc">Identifica equipos, resuelve dudas</div>
-        </div>
-        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
-      </div>
+      <!-- CARDS-ALEJANDRA-IA-01 (13/08/2026): Adrián -- tarjeta quitada por redundante.
+           navIABtn (botón central de la barra inferior) ya lleva a Alejandra desde
+           cualquier pantalla para todos los usuarios logados (checkIABtn() lo fuerza
+           siempre visible, sin depender de rol/departamento) -- esta tarjeta era un
+           segundo camino al mismo sitio. -->
       <div class="module-card" id="cardObraDashboard" onclick="showScreen('obraDashboard')" style="display:none;border-left:3px solid #6366f1">
         <div class="module-emoji">📊</div>
         <div class="module-info">
@@ -6384,7 +6388,7 @@ const _DEPTS_CATALOG = {
   telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
   almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
   ingenieria:  { icon: '📐',  name: 'Ingeniería',          desc: 'Planificación, mediciones y documentación técnica', template: 'trade'  },
-  control:     { icon: '🌡️',  name: 'Control',            desc: 'Monitorización de salas CPD (sondas de temperatura y humedad)', template: 'trade' },
+  control:     { icon: '🌡️',  name: 'Control',            desc: 'Sondas de temperatura y humedad en salas CPD',  template: 'trade'     },
 };
 const DEPT_INFO = Object.fromEntries(Object.entries(_DEPTS_CATALOG).map(([k, v]) => [k, { icon: v.icon, name: v.name }]));
 
@@ -6481,7 +6485,6 @@ const _HOME_DEPT_ALLOWED_CARDS = {
     'cardHerramientas',
     'cardDocs',
     'cardPlanos',
-    'cardAlejandraIA',
     'cardObraDashboard',
     'cardEpisDotacion',
   ]),
@@ -6542,13 +6545,19 @@ function setupHomeModules() {
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
   const mostrarBobinas = dept === 'electrico';
   const esOficinaTecnica = dept === 'ingenieria';
+  // CARDS-DEPT-CONTROL-01 (13/08/2026): Adrián, revisando departamento por departamento --
+  // Control (monitorización de salas CPD) no usa plataformas elevadoras ni carretillas.
+  // Confirmado que SÍ conserva Herramientas/Pedidos/Calendario/Incidencias/Galería/
+  // Documentación/Planos/Partes (a diferencia de Ingeniería, que también pierde esas por
+  // tener su propia sección técnica en panel.html) -- solo se tocan PEMP y Carretillas.
+  const sinMaquinaria = esOficinaTecnica || dept === 'control';
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
   // Racks/Cableado: solo telecomunicaciones
   if (cardTelecomRacks) cardTelecomRacks.style.display = (dept === 'telecom') ? 'flex' : 'none';
   // Sondas CPD: solo departamento Control
   if (cardCpdSondas) cardCpdSondas.style.display = (dept === 'control') ? 'flex' : 'none';
-  if (cardP) cardP.style.display = esOficinaTecnica ? 'none' : 'flex';
-  if (cardC) cardC.style.display = esOficinaTecnica ? 'none' : 'flex';
+  if (cardP) cardP.style.display = sinMaquinaria ? 'none' : 'flex';
+  if (cardC) cardC.style.display = sinMaquinaria ? 'none' : 'flex';
   // Pedidos: visible para todos excepto seguridad
   if (cardPed) cardPed.style.display = 'flex';
   if (btnNuevo) btnNuevo.style.display = 'flex';
@@ -6575,9 +6584,6 @@ function setupHomeModules() {
   if (cardRdp2)   cardRdp2.style.display   = esEncargadoPlus ? 'flex' : 'none';
   if (cardHorm)   cardHorm.style.display   = esEncargadoPlus ? 'flex' : 'none';
   if (cardFormac) cardFormac.style.display = 'flex'; // formacion: todos pueden ver
-  // Card Alejandra IA: visible para todos los usuarios logados
-  const cardAlejIA = document.getElementById('cardAlejandraIA');
-  if (cardAlejIA) cardAlejIA.style.display = 'flex';
   // Telecom no hereda módulos de construcción por pertenecer a la plantilla trade.
   aplicarMenuHomeEspecifico(dept);
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
@@ -6843,22 +6849,55 @@ function _renderDeptCardsInto(contId, keys) {
     .map((k) => [k, _DEPTS_CATALOG[k]])
     .filter(([, v]) => v)
     .map(([k, v]) => `
-      <div id="deptCard_${k}" class="dept-card" onclick="seleccionarDepto('${k}')">
+      <div id="deptCard_${k}" class="dept-card" onclick="${k === 'obra_civil' ? 'abrirSubDeptosObraCivil()' : `seleccionarDepto('${k}')`}">
         <div class="dept-icon-wrap" style="display:flex;align-items:center;justify-content:center;font-size:36px">${v.icon}</div>
-        <div style="flex:1">
+        <div class="dept-info">
           <div class="dept-name">${v.name}</div>
           <div class="dept-desc">${v.desc}</div>
         </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+        <svg class="dept-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>`).join('');
   cont.innerHTML = html;
 }
 function _renderPriorityDeptCards() {
   _renderDeptCardsInto('priorityDeptCards', _PRIORITY_DEPTS);
 }
+// DEPT-OBRACIVIL-SUB-01 (13/08/2026): Adrián -- "Obra civil es el departamento y
+// carpintería, pintura y demás como subdepartamentos" / "me vale la forma fácil": se
+// agrupan visualmente bajo la tarjeta de Obra Civil, sin crear una jerarquía real en el
+// dato -- cada uno sigue siendo su propio `departamento` plano (mismo campo que ya usan
+// decenas de tablas y todo el aislamiento por departamento en worker.js; convertirlo en
+// jerarquía real habría sido un cambio de esquema, no de UI).
+const _SUBDEPTS_OBRA_CIVIL = ['albanileria', 'pintura', 'carpinteria'];
 function _renderExtraDeptCards() {
-  const resto = Object.keys(_DEPTS_CATALOG).filter((k) => !_CORE_DEPTS.includes(k) && !_PRIORITY_DEPTS.includes(k));
+  const resto = Object.keys(_DEPTS_CATALOG).filter((k) => !_CORE_DEPTS.includes(k) && !_PRIORITY_DEPTS.includes(k) && !_SUBDEPTS_OBRA_CIVIL.includes(k));
   _renderDeptCardsInto('extraDeptCards', resto);
+}
+function abrirSubDeptosObraCivil() {
+  let activos = _ALL_DEPTS;
+  try {
+    const cached = localStorage.getItem('alejandra_deptos_activos');
+    if (cached) activos = JSON.parse(cached);
+  } catch {}
+  const opciones = ['obra_civil', ..._SUBDEPTS_OBRA_CIVIL].filter(k => activos.includes(k));
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = 'display:flex';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">🏗️ Obra Civil</div>
+      <div style="color:var(--muted);font-size:13px;margin-top:-10px;margin-bottom:14px">¿Con qué trabajas hoy?</div>
+      ${opciones.map(k => {
+        const v = _DEPTS_CATALOG[k];
+        return `<div class="dept-card" style="margin-bottom:10px" onclick="this.closest('.modal-overlay').remove();seleccionarDepto('${k}')">
+          <div class="dept-icon-wrap" style="display:flex;align-items:center;justify-content:center;font-size:30px">${v.icon}</div>
+          <div class="dept-info"><div class="dept-name" style="font-size:16px">${v.name}</div><div class="dept-desc">${v.desc}</div></div>
+        </div>`;
+      }).join('')}
+      <button onclick="this.closest('.modal-overlay').remove()" style="width:100%;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-weight:700;cursor:pointer">Cancelar</button>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 async function aplicarDeptosActivos() {
@@ -6940,11 +6979,13 @@ const _HOME_TRADE_MODS = [
   { card: 'cardTelecomRacks',     label: '🗄️ Racks / Cableado', soloTelecom: true },
   { card: 'cardCpdSondas',        label: '🌡️ Sondas CPD',       soloControl: true },
   { card: 'cardEpisDotacion',     label: '🦺 Dotación EPIs' },
-  { card: 'cardPemp',             label: '🛠 PEMP' },
-  { card: 'cardCarretillas',      label: '🚜 Carretillas' },
+  // CARDS-DEPT-CONTROL-01: excluidas de Control (setupHomeModules ya las oculta ahí sin
+  // depender de esta config) -- sin esto, "Departamentos y submódulos" (panel.html) ofrecía
+  // un interruptor para Control que nunca podía volver a mostrar la tarjeta.
+  { card: 'cardPemp',             label: '🛠 PEMP',              excluirControl: true },
+  { card: 'cardCarretillas',      label: '🚜 Carretillas',       excluirControl: true },
   { card: 'cardPedidos',          label: '📥 Pedidos' },
   { card: 'cardHerramientas',     label: '🔧 Herramientas' },
-  { card: 'cardAlejandraIA',      label: '🤖 Alejandra IA' },
   { card: 'cardObraDashboard',    label: '📊 Resumen de obra' },
   { card: 'cardCalendario',       label: '📅 Calendario' },
   { card: 'cardIncidencias',      label: '🚨 Incidencias' },
@@ -6974,7 +7015,7 @@ function _modsParaDept(dept) {
   if (tpl === 'personal')  return _PER_MODS;
   // trade
   return _HOME_TRADE_MODS
-    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloTelecom || dept === 'telecom') && (!m.soloControl || dept === 'control'))
+    .filter(m => (!m.soloElectrico || dept === 'electrico') && (!m.soloTelecom || dept === 'telecom') && (!m.soloControl || dept === 'control') && (!m.excluirControl || dept !== 'control'))
     .map(m => ({ key: `home_${dept}_${m.card}`, label: m.label, _card: m.card }));
 }
 
@@ -7000,6 +7041,7 @@ function applyModulosConfig() {
       if (m.soloElectrico && dept !== 'electrico') return;
       if (m.soloTelecom && dept !== 'telecom') return;
       if (m.soloControl && dept !== 'control') return;
+      if (m.excluirControl && dept === 'control') return;
       const el = document.getElementById(m.card);
       if (!el) return;
       const k = `home_${dept}_${m.card}`;
@@ -7684,7 +7726,7 @@ async function cargarEmpresasAdmin() {
     grid.innerHTML = lista.map(e => `
       <div class="dept-card" data-eid="${e.id}" data-enombre="${(e.nombre||'').replace(/"/g,'&quot;')}" onclick="seleccionarEmpresaAdmin(this.dataset.eid, this.dataset.enombre)" style="${e.activa ? '' : 'opacity:.55'}">
         <div class="dept-icon-wrap" style="font-size:28px">🏢</div>
-        <div style="flex:1">
+        <div class="dept-info">
           <div class="dept-name">${e.nombre}${e.activa ? '' : ' <span style="color:var(--red);font-size:11px">(desactivada)</span>'}</div>
           <div class="dept-desc">${e.email || e.slug || '—'}</div>
         </div>
@@ -7696,7 +7738,7 @@ async function cargarEmpresasAdmin() {
             : `<button title="Reactivar" style="background:none;border:none;font-size:16px;cursor:pointer" onclick="reactivarEmpresaAdminMovil(${e.id})">↺</button>
                <button title="Borrar DEFINITIVAMENTE" style="background:none;border:none;font-size:16px;cursor:pointer" onclick="abrirModalBorrarEmpresaDef(${e.id})">⚠️</button>`}
         </div>` : ''}
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+        <svg class="dept-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>`).join('');
   } catch {
     grid.innerHTML = '<div class="empty-state">Error de conexión<br><button class="btn-sm" style="margin-top:10px" onclick="cargarEmpresasAdmin()">↻ Reintentar</button></div>';
