@@ -1,5 +1,68 @@
 # Handoff — Alejandra 2.0
 
+## INFORMES-SEG-SEMANAL-01 — informe interno semanal de Seguridad (2026-08-13)
+
+- Contexto: Adrián — "sabes que ellos tienen que hacer informes, creo que semanales... es un
+  informe a nivel interno para los técnicos de cada obra, tengo una plantilla... por si de
+  alguna manera podemos facilitar hacerlo al técnico". Pasó la plantilla Word real
+  (`S31 Informe semanal.docx`, con fotos ya rellenas de una semana real) — se leyó
+  desempaquetando el `.docx` (sin `pandoc`/LibreOffice disponibles en esta máquina, se
+  extrajo `word/document.xml` a mano con Python) para calcar su estructura exacta: tabla de
+  control de documento (revisión/disciplina/lugar/número), tres bloques de texto libre
+  (Aspectos críticos, Observaciones, Otros puntos) y una tabla día-a-día de
+  actividad+contratista+foto. Decidido por AskUserQuestion: generación real del documento
+  final (PDF y `.docx`, a elegir el usuario en el momento), no solo agilizar la captura.
+- **Migración D1 autorizada explícitamente** (3 tablas aditivas): `informes_seg_semanal`
+  (cabecera), `informes_seg_actividades` (día/actividad/contratista), `informes_seg_fotos`
+  (fotos por actividad, mismo patrón `r2Key` que `seg_registro_fotos`/`incidencia_fotos`).
+  El informe de la semana+obra se resuelve solo en el backend por la fecha de la actividad
+  (`encontrarOCrearInformeSeg`, semana ISO lunes-domingo) — el técnico nunca "abre" un
+  informe a mano, solo añade actividades.
+- **`index.html`**: pantalla nueva dentro de Seguridad (`segPanelInforme`) — fecha (hoy por
+  defecto), actividad, contratista, foto (cámara o galería), un botón "+ Nueva". Mismo patrón
+  exacto que Registro de Seguridad (`segReg*`), sección ya existente.
+- **`panel.html`**: pantalla nueva (`pageInformeSegSemanal`) — lista de semanas por obra,
+  detalle en modal con la actividad diaria agrupada por fecha (fotos incluidas), los tres
+  campos de texto libre editables, número de documento/revisión, botones Guardar/Guardar y
+  cerrar/Reabrir, y generación de PDF o `.docx`.
+- **`worker.js` — primera dependencia npm real de este Worker** (hasta ahora monolítico, sin
+  ningún `import`). Se probó la viabilidad ANTES de tocar el Worker real: un proyecto aislado
+  en el scratchpad con `npm install docx` + `wrangler dev --local` confirmó que
+  `Packer.toBuffer()` falla en el runtime real de Cloudflare Workers
+  (`Error: nodebuffer is not supported by this platform` — usa el `Buffer` de Node, no
+  disponible sin `nodejs_compat`), pero `Packer.toArrayBuffer()` sí funciona, incluida una
+  imagen embebida de verdad con `ImageRun`. Con esa confirmación se implementó
+  `generarInformeSegDocx()` — descarga las fotos reales desde R2 (`env.FILES.get`) y las
+  incrusta como bytes reales en el documento, no como enlaces.
+- **Pipeline de deploy actualizado**: `package.json`/`package-lock.json` de la raíz dejaban
+  de estar trackeados a propósito ("Root package files are local-only in this repo", sin
+  dependencias reales hasta ahora) — se añade una excepción documentada en `.gitignore`
+  (mismo patrón ya usado para `alejandra-agente/package.json`), y `deploy-worker.yml` gana un
+  paso `npm ci` antes de `wrangler deploy`; sin él, el Worker no podría empaquetar `docx` en
+  CI aunque funcione en un despliegue manual local (que sí tiene `node_modules`).
+- Verificación: `node --check worker.js` limpio (incluida la sintaxis `import`, que Node
+  aceptó pese a no haber `"type":"module"` en `package.json` — esbuild/wrangler la maneja
+  igual al empaquetar); `wrangler dev --local` con el Worker completo (28k líneas) arrancó
+  correctamente con la nueva dependencia (`/health` → `d1:true`); sintaxis de `index.html`/
+  `panel.html` verificada por extracción de `<script>`; sin patrones de encoding corrupto.
+  **Probado en vivo de extremo a extremo contra producción** (login de prueba, empresa
+  demo): actividad+foto creadas por API, informe recuperado agrupado por día con la foto
+  correcta, texto libre guardado, `.docx` descargado y verificado byte a byte (`unzip` +
+  lectura de `word/document.xml`: cabecera, tabla día/foto con imagen real incrustada, otros
+  puntos como líneas separadas). Tarjeta del módulo confirmada visible en `index.html`.
+- Desplegado: `worker.js` (`wrangler deploy` manual, versión `a01fa8b7-e620-42fa-bab6-8446d5df2e79`,
+  `/health` verde) + Pages (`index.html`/`panel.html`, run 31677622641, healthcheck en verde).
+  El workflow gobernado `deploy-worker.yml` se lanzó también para validar el `npm ci` nuevo,
+  pero quedó `waiting` en la aprobación humana del entorno `production` (normal) — se
+  canceló por ser redundante con el despliegue manual ya verificado, no por ningún fallo.
+- Pendiente/recomendado, sin decidir: el botón de generar PDF no se pudo verificar con un
+  clic real en esta sesión (el navegador de pruebas bloquea el popup si no viene de un
+  gesto real de usuario, a diferencia de la llamada a la función por JS) — reutiliza el
+  mismo patrón exacto (`window.open`+`document.write`+`print()`) ya en producción en
+  `segRegImprimir`, riesgo bajo, pero queda como única verificación con clic real pendiente.
+  Datos de prueba (informe #1, empresa_id=5, empresa demo) dejados a propósito sin borrar,
+  mismo criterio que el resto de datos de prueba de esa empresa.
+
 ## Verificación en vivo de F6.1-AYUDANTES-PEDIDOS + PEDIDOS-AYUDANTE-DEPT-01 (2026-08-12)
 
 - Contexto: pendiente de la sesión anterior era solo la prueba real en Alejandra Office de

@@ -4,6 +4,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-13)
+
+- **INFORMES-SEG-SEMANAL-01:** informe interno semanal de Seguridad y Salud Laboral por obra, calcado de la plantilla real de Levitec (S31 Informe semanal). El técnico añade actividad+contratista+foto desde `index.html` durante la semana (el informe se resuelve solo por fecha, nunca se "abre" a mano); Seguridad revisa y cierra desde `panel.html`, rellenando Aspectos críticos/Observaciones/Otros puntos, y genera el documento final como PDF imprimible o `.docx` real y descargable. Primera dependencia npm real de `worker.js` (`docx`, generado con `Packer.toArrayBuffer()` — `toBuffer()` no funciona en el runtime de Workers, usa `Buffer` de Node). Migración D1 de 3 tablas autorizada explícitamente. Pipeline de deploy actualizado (`package.json`/lockfile trackeados, `npm ci` en `deploy-worker.yml`). Probado en vivo de extremo a extremo contra producción.
+
 ### Fixed (2026-08-12, noche)
 
 - **CORREO-AYUDANTE-ROUTING-01:** Alejandra negaba tener acceso a Gmail pese a que el ayudante de Correos (F6.1-AYUDANTES-CORREOS) ya estaba desplegado y conectado. Dos causas reales: (1) algunas frases sobre correo se clasificaban como experto `web`, que no tiene `delegar_tarea` en su catálogo de tools — imposible alcanzar el ayudante desde ahí; (2) incluso clasificado correctamente como `app` (con `delegar_tarea` disponible), el modelo no lo usaba y respondía inventando que faltaba implementar OAuth2. Fix: regla determinista en `REGEX_ROUTES` para correo/Gmail/bandeja de entrada → experto `app`, más una regla explícita en el prompt instruyendo usar `delegar_tarea` para correo/pedidos en vez de negar la función.

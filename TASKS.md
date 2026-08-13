@@ -1,5 +1,44 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-08-13): **INFORMES-SEG-SEMANAL-01 completada, desplegada y
+verificada en producción de extremo a extremo.** Adrián: "sabes que ellos tienen que hacer
+informes, creo que semanales... es un informe a nivel interno para los técnicos de cada
+obra, tengo una plantilla... por si de alguna manera podemos facilitar hacerlo al técnico".
+Pasó la plantilla real (Word, `S31 Informe semanal.docx`) y se calcó su estructura: cabecera
+de control de documento, Aspectos críticos/Observaciones/Otros puntos en texto libre, tabla
+día-a-día de actividad+contratista+foto. Alcance elegido: generación real del documento
+final (PDF y `.docx`, a elegir), no solo agilizar la recogida de datos.
+- **Migración D1 autorizada y aplicada** (3 tablas aditivas: `informes_seg_semanal`,
+  `informes_seg_actividades`, `informes_seg_fotos`).
+- **`index.html`**: pantalla nueva en Seguridad — el técnico añade fecha+actividad+
+  contratista+foto en un tap; el informe de la semana se resuelve solo en el backend por
+  fecha, nunca se "abre" a mano.
+- **`panel.html`**: pantalla de revisión/cierre por obra y semana — ver actividad diaria con
+  fotos agrupadas por día, completar los tres bloques de texto libre, cerrar el informe, y
+  botones para generar PDF (imprimible, mismo patrón que el resto de la app) o `.docx`.
+- **`worker.js` — primera dependencia npm real de este Worker** (`docx`, monolítico hasta
+  ahora, sin imports). Probado antes de usarlo: `Packer.toBuffer()` falla en el runtime real
+  de Workers ("nodebuffer is not supported by this platform", usa `Buffer` de Node);
+  `Packer.toArrayBuffer()` sí funciona, verificado con `wrangler dev` local con tabla e
+  imagen embebida antes de tocar el Worker real. Las fotos se embeben de verdad (bytes
+  reales descargados de R2), no como enlaces.
+- **Pipeline de deploy actualizado**: `package.json`/`package-lock.json` dejan de estar
+  ignorados en la raíz (excepción documentada en `.gitignore`, mismo patrón que
+  `alejandra-agente`), y `deploy-worker.yml` instala dependencias (`npm ci`) antes de
+  desplegar — sin este paso, el Worker no habría podido empaquetar `docx` en CI.
+- **Verificado en vivo de extremo a extremo contra producción** (empresa de prueba): creada
+  actividad+foto por API, informe recuperado agrupado por día, texto libre guardado, `.docx`
+  descargado y verificado byte a byte (cabecera, tabla día/foto con imagen real incrustada,
+  otros puntos como líneas separadas — `unzip`+lectura de `word/document.xml`). Tarjeta del
+  módulo confirmada visible en `index.html`. El botón de PDF no se pudo verificar con un clic
+  real en esta sesión (el navegador de pruebas bloquea el popup si no viene de un gesto real
+  de usuario) — reutiliza el mismo patrón exacto (`window.open`+`document.write`+`print()`)
+  ya probado y en producción en `segRegImprimir`, así que el riesgo es bajo, pero queda como
+  única verificación pendiente con un clic real.
+- Siguiente acción exacta: ninguna urgente. Pendiente sin decidir: si conviene borrar los
+  datos de prueba de este informe en la empresa demo (informe #1, empresa_id=5) — se dejaron
+  a propósito, mismo criterio que el resto de datos de prueba de esa empresa.
+
 Estado (actualizado 2026-08-12, noche): **CATALOGO-PROVEEDORES-01** completada — Adrián pidió
 cargar los catálogos de Hilti/Pemsa/Würth; en vez de una tabla estática con referencias
 inventadas, el ayudante de Pedidos recibió la tool `buscar_web` ya existente (prioriza las
