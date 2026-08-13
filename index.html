@@ -4411,6 +4411,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
         <div class="module-info"><div class="module-name">Planificador de turnos</div><div class="module-desc">Asigna mañana / tarde / noche / libre</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <!-- CARDS-DEPT-RDP-HORM-01 (13/08/2026): Adrián -- "formación a Personal". Reutiliza
+           la pantalla ya existente (navTo('formacion') = #screenFormacion, la misma que
+           usaban los departamentos de oficio) en vez de crear una pestaña/panel nuevo. -->
+      <div class="module-card" data-module="per_formacion" onclick="navTo('formacion')">
+        <div class="module-emoji">🎓</div>
+        <div class="module-info"><div class="module-name">Formación</div><div class="module-desc">Formación y certificaciones en obra</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- PANEL 0: HOY -->
@@ -6539,6 +6547,11 @@ function setupHomeModules() {
     if (cardPartes) cardPartes.style.display = 'none';
     const cardHerrSeg = document.getElementById('cardHerramientas');
     if (cardHerrSeg) cardHerrSeg.style.display = 'flex';
+    // CARDS-DEPT-RDP-HORM-01 (13/08/2026): Adrián -- "RDP a Seguridad" -- el registro
+    // diario de prevención (PRL) es cosa de Seguridad, no del resto de departamentos.
+    const s3 = getSession();
+    const cardRdpSeg = document.getElementById('cardRdp');
+    if (cardRdpSeg) cardRdpSeg.style.display = (s3 && s3.rol !== 'operario') ? 'flex' : 'none';
     applyHomeOrder();
     return;
   }
@@ -6581,9 +6594,13 @@ function setupHomeModules() {
   const cardRdp2      = document.getElementById('cardRdp');
   const cardHorm      = document.getElementById('cardHormigonado');
   const cardFormac    = document.getElementById('cardFormacion');
-  if (cardRdp2)   cardRdp2.style.display   = esEncargadoPlus ? 'flex' : 'none';
-  if (cardHorm)   cardHorm.style.display   = esEncargadoPlus ? 'flex' : 'none';
-  if (cardFormac) cardFormac.style.display = 'flex'; // formacion: todos pueden ver
+  // CARDS-DEPT-RDP-HORM-01 (13/08/2026): Adrián, revisando departamento por departamento --
+  // "RDP a Seguridad" (se gestiona en la rama dept==='seguridad' de arriba, aquí solo se
+  // quita del resto) / "hormigonado a Obra Civil" (vierten hormigón, ningún otro oficio) /
+  // "formación a Personal" (tarjeta añadida a perPanelHome, ver navTo('formacion') ahí).
+  if (cardRdp2)   cardRdp2.style.display   = 'none';
+  if (cardHorm)   cardHorm.style.display   = (esEncargadoPlus && dept === 'obra_civil') ? 'flex' : 'none';
+  if (cardFormac) cardFormac.style.display = 'none';
   // Telecom no hereda módulos de construcción por pertenecer a la plantilla trade.
   aplicarMenuHomeEspecifico(dept);
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
@@ -7008,6 +7025,7 @@ const _PER_MODS = [
   { key: 'per_epis',     label: '🦺 Dotación EPIs' },
   { key: 'per_carnets',  label: '📜 Carnets y certificaciones' },
   { key: 'per_turnos',   label: '🗓️ Planificador de turnos' },
+  { key: 'per_formacion', label: '🎓 Formación' },
 ];
 function _modsParaDept(dept) {
   const tpl = _DEPTS_CATALOG[dept]?.template;
