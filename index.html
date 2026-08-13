@@ -17557,7 +17557,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function tareaCompletar(id) {
     try {
-      const res = await apiCall(`/tareas-obra/${id}`, 'PUT', { estado: 'completada' });
+      const res = await apiCall(`/tareas-obra/${id}`, { method: 'PUT', body: JSON.stringify({ estado: 'completada' }) });
       if (res.ok) { toast('Tarea completada ✅','ok'); tareasCargar(); }
     } catch(e) {}
   }
@@ -17567,7 +17567,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   async function incidenciaResolverRapido(id) {
     if (!confirm('¿Marcar esta incidencia como resuelta?')) return;
     try {
-      const res = await apiCall(`/incidencias/${id}`, 'PUT', { estado: 'resuelta', resolucion: 'Resuelta desde dashboard' });
+      const res = await apiCall(`/incidencias/${id}`, { method: 'PUT', body: JSON.stringify({ estado: 'resuelta', resolucion: 'Resuelta desde dashboard' }) });
       if (res.ok) {
         toast('Incidencia resuelta ✅', 'ok');
         cargarObraDashboard(); // Recargar dashboard
@@ -17598,8 +17598,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     };
     try {
       const res = id
-        ? await apiCall(`/tareas-obra/${id}`, 'PUT', body)
-        : await apiCall('/tareas-obra', 'POST', body);
+        ? await apiCall(`/tareas-obra/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+        : await apiCall('/tareas-obra', { method: 'POST', body: JSON.stringify(body) });
       if (res.ok) {
         toast(id ? 'Tarea actualizada' : 'Tarea creada','ok');
         tareaCerrarModal();
@@ -17611,7 +17611,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function tareaEliminar(id) {
     if (!confirm('¿Eliminar esta tarea?')) return;
-    const res = await apiCall(`/tareas-obra/${id}`, 'DELETE');
+    const res = await apiCall(`/tareas-obra/${id}`, { method: 'DELETE' });
     if (res.ok) { toast('Tarea eliminada','ok'); tareasCargar(); }
     else toast('Error al eliminar','err');
   }
@@ -17822,7 +17822,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function ocAprobar(id) {
     if (!confirm('¿Aprobar esta Orden de Cambio?')) return;
-    const res = await apiCall(`/ordenes-cambio/${id}`, 'PUT', { estado: 'aprobada' });
+    const res = await apiCall(`/ordenes-cambio/${id}`, { method: 'PUT', body: JSON.stringify({ estado: 'aprobada' }) });
     if (res.ok) { toast('OC aprobada ✓', 'ok'); ocCargar(); }
     else toast('Error al aprobar', 'err');
   }
@@ -17845,8 +17845,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const obraId = getSession()?.obra_id;
     if (obraId) body.obra_id = obraId;
     const res = id
-      ? await apiCall(`/ordenes-cambio/${id}`, 'PUT', body)
-      : await apiCall('/ordenes-cambio', 'POST', body);
+      ? await apiCall(`/ordenes-cambio/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+      : await apiCall('/ordenes-cambio', { method: 'POST', body: JSON.stringify(body) });
     if (res.ok || res.id) {
       toast(id ? 'OC actualizada ✓' : `OC creada (${res.numero||''}) ✓`, 'ok');
       document.getElementById('modalOrdenCambio').style.display = 'none';
@@ -17859,7 +17859,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function ocEliminar(id) {
     if (!confirm('¿Eliminar esta Orden de Cambio?')) return;
-    const res = await apiCall(`/ordenes-cambio/${id}`, 'DELETE');
+    const res = await apiCall(`/ordenes-cambio/${id}`, { method: 'DELETE' });
     if (res.ok) { toast('OC eliminada', 'ok'); ocCargar(); }
     else toast('Error al eliminar', 'err');
   }
@@ -18837,8 +18837,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const obraId = getSession()?.obra_id;
     if (obraId) body.obra_id = obraId;
     const res = id
-      ? await apiCall(`/actas-reunion/${id}`, 'PUT', body)
-      : await apiCall('/actas-reunion', 'POST', body);
+      ? await apiCall(`/actas-reunion/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+      : await apiCall('/actas-reunion', { method: 'POST', body: JSON.stringify(body) });
     if (res.ok || res.id) {
       toast(id ? 'Acta actualizada ✓' : `Acta ${res.numero||''} guardada ✓`, 'ok');
       document.getElementById('modalActa').style.display = 'none';
@@ -18876,7 +18876,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function actaEliminar(id) {
     if (!confirm('¿Eliminar esta acta?')) return;
-    const res = await apiCall(`/actas-reunion/${id}`, 'DELETE');
+    const res = await apiCall(`/actas-reunion/${id}`, { method: 'DELETE' });
     if (res.ok) { toast('Acta eliminada', 'ok'); reunionesCargar(); }
     else toast('Error al eliminar', 'err');
   }
@@ -19016,7 +19016,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.defEditar = defEditar;
 
   async function defResolver(id) {
-    const res = await apiCall(`/control-calidad/${id}`, 'PUT', { estado: 'resuelto', fecha_resolucion: new Date().toISOString().slice(0,10), resuelto_por: getSession()?.nombre || '' });
+    const res = await apiCall(`/control-calidad/${id}`, { method: 'PUT', body: JSON.stringify({ estado: 'resuelto', fecha_resolucion: new Date().toISOString().slice(0,10), resuelto_por: getSession()?.nombre || '' }) });
     if (res.ok) { toast('Deficiencia resuelta ✅', 'ok'); calidadCargar(); }
     else toast('Error al resolver', 'err');
   }
@@ -19041,8 +19041,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const obraId = getSession()?.obra_id;
     if (obraId) body.obra_id = obraId;
     const res = id
-      ? await apiCall(`/control-calidad/${id}`, 'PUT', body)
-      : await apiCall('/control-calidad', 'POST', body);
+      ? await apiCall(`/control-calidad/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+      : await apiCall('/control-calidad', { method: 'POST', body: JSON.stringify(body) });
     if (res.ok || res.id) {
       toast(id ? 'Actualizado ✓' : `${res.numero||'DEF'} registrada ✓`, 'ok');
       document.getElementById('modalDeficiencia').style.display = 'none';
@@ -19060,7 +19060,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function defEliminar(id) {
     if (!confirm('¿Eliminar esta deficiencia?')) return;
-    const res = await apiCall(`/control-calidad/${id}`, 'DELETE');
+    const res = await apiCall(`/control-calidad/${id}`, { method: 'DELETE' });
     if (res.ok) { toast('Eliminada', 'ok'); calidadCargar(); }
     else toast('Error al eliminar', 'err');
   }
@@ -19181,7 +19181,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (s?.obra_id) body.obra_id = s.obra_id;
     const url = id ? `/subcontratas/${id}` : '/subcontratas';
     const met = id ? 'PUT' : 'POST';
-    const r = await apiCall(url, met, body);
+    const r = await apiCall(url, { method: met, body: JSON.stringify(body) });
     if (r.ok || r.id) { toast(id ? 'Actualizada ✓' : 'Creada ✓', 'ok'); subcCerrarModal(); subcCargar(); }
     else toast('Error al guardar', 'err');
   }
@@ -19195,7 +19195,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   async function subcEliminar() {
     const id = document.getElementById('subcEditId').value;
     if (!id || !confirm('¿Eliminar esta subcontrata?')) return;
-    const r = await apiCall(`/subcontratas/${id}`, 'DELETE');
+    const r = await apiCall(`/subcontratas/${id}`, { method: 'DELETE' });
     if (r.ok || r.deleted) { toast('Eliminada', 'ok'); subcCerrarModal(); subcCargar(); }
     else toast('Error al eliminar', 'err');
   }
@@ -19259,8 +19259,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     };
     try {
       const res = id
-        ? await apiCall(`/presupuesto-obra/${id}`, 'PUT', body)
-        : await apiCall('/presupuesto-obra', 'POST', body);
+        ? await apiCall(`/presupuesto-obra/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+        : await apiCall('/presupuesto-obra', { method: 'POST', body: JSON.stringify(body) });
       if (res.ok) {
         toast(id ? 'Partida actualizada' : 'Partida añadida','ok');
         document.getElementById('modalPartidaPresupuesto').style.display = 'none';
@@ -19272,7 +19272,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function presupuestoEliminar(id) {
     if (!confirm('¿Eliminar esta partida?')) return;
-    const res = await apiCall(`/presupuesto-obra/${id}`, 'DELETE');
+    const res = await apiCall(`/presupuesto-obra/${id}`, { method: 'DELETE' });
     if (res.ok) { toast('Partida eliminada','ok'); presupuestoCargar(); }
     else toast('Error al eliminar','err');
   }
@@ -19490,8 +19490,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       }
     }
     const res = id
-      ? await apiCall(`/rfis/${id}`, 'PUT', body)
-      : await apiCall('/rfis', 'POST', body);
+      ? await apiCall(`/rfis/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+      : await apiCall('/rfis', { method: 'POST', body: JSON.stringify(body) });
     if (res.ok || res.id) {
       toast(id ? 'RFI actualizada ✓' : `RFI creada (${res.numero||''}) ✓`, 'ok');
       rfiCerrarModal();
@@ -19504,7 +19504,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function rfiEliminar(id) {
     if (!confirm('¿Eliminar esta RFI?')) return;
-    const res = await apiCall(`/rfis/${id}`, 'DELETE');
+    const res = await apiCall(`/rfis/${id}`, { method: 'DELETE' });
     if (res.ok) { toast('RFI eliminada', 'ok'); rfisCargar(); }
     else toast('Error al eliminar', 'err');
   }

@@ -1048,6 +1048,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <button class="topbar-btn" id="btnNavBack" onclick="navBack()" title="Volver a la página anterior" style="display:none;font-size:12px;gap:4px;align-items:center;padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);white-space:nowrap">← <span id="navBackLabel">Volver</span></button>
       <div class="topbar-title" id="topbarTitle">Dashboard</div>
       <div class="topbar-empresa" id="topbarEmpresa"></div>
+      <!-- CAMBIAR-EMPRESA-01 (13/08/2026): Adrián -- "no puedo cambiar de empresa en el panel
+           office". Oculto por defecto; cargarSelectorEmpresa() (llamado desde iniciarApp())
+           solo lo muestra si /auth/mis-empresas devuelve más de una empresa (desarrollador, o
+           un dueño con cuenta de admin en varias empresas por el mismo email) -- para
+           cualquier otro usuario no cambia nada, se queda el texto fijo de siempre. -->
+      <select id="topbarEmpresaSelect" class="tbl-search" style="display:none;min-width:170px;padding:6px 10px;font-size:12px" onchange="cambiarEmpresaAdmin(this.value)" title="Cambiar de empresa"></select>
       <div class="topbar-empresa" id="topbarObra" style="color:var(--accent)"></div>
       <!-- PREVIEW-ADMIN-01 (26/07/2026): Adrián: "cómo veo a qué pertenece, cuál es de
            Mecánicas o Electricidad, Telecom, Construcción?" — el sidebar ya se reorganiza
@@ -10794,6 +10800,39 @@ function doLogout() {
 // afecta a permisos reales, un admin sigue viendo/pudiendo todo, esto es puramente una
 // vista previa. Recarga en vez de re-ejecutar la reorganización a mano para partir
 // siempre de un sidebar limpio (evita estados intermedios de pruebas anteriores).
+// CAMBIAR-EMPRESA-01 (13/08/2026): Adrián -- "no puedo cambiar de empresa en el panel
+// office". Se muestra el <select> solo si /auth/mis-empresas devuelve más de una empresa
+// (desarrollador ve todas; cualquier otro usuario solo las que comparten su email con rol
+// empresa_admin/superadmin) -- para el resto de usuarios no cambia nada visualmente.
+async function cargarSelectorEmpresa() {
+  const sel = document.getElementById('topbarEmpresaSelect');
+  if (!sel) return;
+  try {
+    const empresas = await api('/auth/mis-empresas');
+    if (!Array.isArray(empresas) || empresas.length < 2) { sel.style.display = 'none'; return; }
+    sel.innerHTML = empresas.map(e => `<option value="${e.id}" ${e.id === SESSION.empresa_id ? 'selected' : ''}>🏢 ${escHtml(e.nombre)}</option>`).join('');
+    sel.style.display = '';
+    document.getElementById('topbarEmpresa').style.display = 'none';
+  } catch (e) { sel.style.display = 'none'; }
+}
+
+async function cambiarEmpresaAdmin(empresaId) {
+  if (!empresaId || parseInt(empresaId) === SESSION.empresa_id) return;
+  const sel = document.getElementById('topbarEmpresaSelect');
+  if (sel) sel.disabled = true;
+  const r = await api('/auth/cambiar-empresa', { method: 'POST', body: JSON.stringify({ empresa_id: parseInt(empresaId) }) });
+  if (!r.ok) {
+    toast(r.error || 'No se pudo cambiar de empresa', 'err');
+    if (sel) { sel.disabled = false; sel.value = SESSION.empresa_id; }
+    return;
+  }
+  TOKEN = r.token;
+  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: null, departamento: r.departamento, obra_id: r.obra_id || null, obra_nombre: r.obra_nombre || null, obras_asignadas: r.obra_id ? [r.obra_id] : [] };
+  localStorage.setItem('panel_token', TOKEN);
+  localStorage.setItem('panel_session', JSON.stringify(SESSION));
+  location.reload();
+}
+
 function cambiarDeptoAdmin(depto) {
   if (!SESSION) return;
   // "Kiosco" no es un departamento real -- es un atajo de navegación al control de accesos
@@ -11557,6 +11596,7 @@ function iniciarApp() {
   rolEl.textContent = rolLabelPorDepto(SESSION.rol, SESSION.departamento);
   rolEl.className = `rol-badge rol-${SESSION.rol}`;
   if (SESSION.empresa_nombre) document.getElementById('topbarEmpresa').textContent = SESSION.empresa_nombre;
+  cargarSelectorEmpresa();
 
   // mostrar obra en topbar si está disponible
   if (SESSION.obra_nombre) {

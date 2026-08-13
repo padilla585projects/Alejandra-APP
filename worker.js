@@ -5485,6 +5485,8 @@ export default {
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
       if (path === '/verificar'        && method === 'POST') return await verificarAcceso(request, env, ctx);
+      if (path === '/auth/mis-empresas'   && method === 'GET')  return await getMisEmpresas(request, env);
+      if (path === '/auth/cambiar-empresa' && method === 'POST') return await cambiarEmpresaSesion(request, env);
       if (path === '/recuperar-pass'   && method === 'POST') return await recuperarPass(request, env);
       if (path === '/resetear-pass'    && method === 'POST') return await resetearPass(request, env);
       if (path === '/auth/google/url'  && method === 'GET')  return googleAuthUrl(request, env);
@@ -6932,6 +6934,72 @@ async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departament
     "INSERT INTO sesiones (token, usuario_id, nombre, rol, obra_id, obra_nombre, departamento, es_admin, empresa_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+30 days'))"
   ).bind(token, usuario_id || null, nombre, rol, obra_id || null, obra_nombre || null, departamento || 'electrico', es_admin ? 1 : 0, empresa_id || 1).run();
   return token;
+}
+
+// ── Selector de empresa (CAMBIAR-EMPRESA-01, 13/08/2026) ──────────────────────
+// Adrián: "no puedo cambiar de empresa en el panel office" -- topbarEmpresa era
+// solo texto fijo, sin selector. Acotado explícitamente por Adrián a dos casos,
+// nunca a un override arbitrario de empresa_id desde el cliente (mismo criterio
+// que el hardening SEC-14 de departamento, ver getAuth()):
+//  1. `desarrollador` (verificado por rol de sesión real, nunca por header) puede
+//     entrar en CUALQUIER empresa -- es su capacidad de administración ya
+//     existente en otras herramientas (DevTools, chat dev).
+//  2. Cualquier otro usuario solo puede cambiarse a OTRA empresa donde exista una
+//     fila de `usuarios` con su MISMO email y rol empresa_admin/superadmin --
+//     "el dueño con varias empresas", nunca a una empresa ajena. Vínculo
+//     detectado por email compartido (decisión de Adrián), sin tabla nueva.
+// El cambio siempre emite una sesión D1 real y nueva (crearSesion, igual que un
+// login normal) -- nunca se acepta empresa_id por header/parámetro del cliente
+// como si fuera de confianza.
+async function getMisEmpresas(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  if (auth.isDesarrollador) {
+    const { results } = await env.DB.prepare('SELECT id, nombre FROM empresas ORDER BY nombre').all();
+    return json(results);
+  }
+  const yo = await env.DB.prepare('SELECT email FROM usuarios WHERE id=?').bind(auth.usuario_id).first();
+  if (!yo?.email) return json([]);
+  const { results } = await env.DB.prepare(
+    `SELECT DISTINCT e.id, e.nombre FROM usuarios u JOIN empresas e ON u.empresa_id = e.id
+     WHERE LOWER(u.email) = LOWER(?) AND u.activo = 1 AND u.rol IN ('empresa_admin','superadmin')
+     ORDER BY e.nombre`
+  ).bind(yo.email).all();
+  return json(results);
+}
+
+async function cambiarEmpresaSesion(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const targetId = parseInt(body.empresa_id);
+  if (!targetId) return err('Falta empresa_id', 400);
+
+  if (auth.isDesarrollador) {
+    const emp = await env.DB.prepare('SELECT id, nombre FROM empresas WHERE id = ?').bind(targetId).first();
+    if (!emp) return err('Empresa no encontrada', 404);
+    const token = await crearSesion(env, {
+      nombre: auth.nombre, rol: auth.rol, obra_id: null, obra_nombre: null, departamento: null,
+      es_admin: auth.isAdmin, usuario_id: auth.usuario_id, empresa_id: targetId,
+    });
+    return json({ ok: true, token, nombre: auth.nombre, rol: auth.rol, empresa_id: targetId, empresa_nombre: emp.nombre, obra_id: null, obra_nombre: null, departamento: null });
+  }
+
+  const yo = await env.DB.prepare('SELECT email FROM usuarios WHERE id = ?').bind(auth.usuario_id).first();
+  if (!yo?.email) return err('Tu cuenta no tiene email vinculado, no se puede verificar que la otra empresa sea tuya', 403);
+  const destino = await env.DB.prepare(
+    `SELECT u.*, e.nombre as empresa_nombre, o.nombre as obra_nombre FROM usuarios u
+     JOIN empresas e ON u.empresa_id = e.id LEFT JOIN obras o ON u.obra_id = o.id
+     WHERE u.empresa_id = ? AND LOWER(u.email) = LOWER(?) AND u.activo = 1 AND u.rol IN ('empresa_admin','superadmin')
+     LIMIT 1`
+  ).bind(targetId, yo.email).first();
+  if (!destino) return err('No tienes una cuenta de administrador en esa empresa', 403);
+  const dept = ['empresa_admin', 'superadmin', 'desarrollador'].includes(destino.rol) ? null : (destino.departamento || 'electrico');
+  const token = await crearSesion(env, {
+    nombre: destino.nombre, rol: destino.rol, obra_id: destino.obra_id, obra_nombre: destino.obra_nombre,
+    departamento: dept, es_admin: false, usuario_id: destino.id, empresa_id: targetId,
+  });
+  return json({ ok: true, token, nombre: destino.nombre, rol: destino.rol, empresa_id: targetId, empresa_nombre: destino.empresa_nombre, obra_id: destino.obra_id, obra_nombre: destino.obra_nombre, departamento: dept });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
