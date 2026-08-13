@@ -7334,10 +7334,14 @@ const _TARJETA_CSS = `
 .nombre{font-size:3.6mm;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#101823}
 .empresa{font-size:2.6mm;font-weight:700;color:#1e3a5f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .linea{font-size:2.3mm;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pictos{font-size:3.2mm;line-height:1;margin-top:.4mm}
 .qr{width:16mm;height:16mm;flex-shrink:0}`;
 
+// COMPAT-CAE-01 (12/08/2026): `datos.pictos` (string ya formada, p.ej. "🦺 ⚡") es
+// opcional -- si no viene (llamador no la pidió, o no había carnets), la tarjeta se ve
+// exactamente igual que antes.
 function _tarjetaCardHtml(datos, qrDataUrl) {
-  const { nombre, fotoUrl, empresa, departamento, rolTexto, obra } = datos;
+  const { nombre, fotoUrl, empresa, departamento, rolTexto, obra, pictos } = datos;
   return `<div class="card">
 ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholder">${(nombre || '?').charAt(0).toUpperCase()}</div>`}
 <div class="info">
@@ -7345,6 +7349,7 @@ ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholde
   ${empresa ? `<div class="empresa">${empresa}</div>` : ''}
   ${departamento || rolTexto ? `<div class="linea">${[departamento, rolTexto].filter(Boolean).join(' · ')}</div>` : ''}
   ${obra ? `<div class="linea">🏗 ${obra}</div>` : ''}
+  ${pictos ? `<div class="pictos">${pictos}</div>` : ''}
 </div>
 <img class="qr" src="${qrDataUrl}">
 </div>`;
@@ -7407,12 +7412,27 @@ ${_TARJETA_CSS}
 </body></html>`);
 }
 
+// COMPAT-CAE-01 (12/08/2026): pictogramas de oficios/máquinas habilitadas, como la
+// tarjeta real de Nalanda. Se ignora en silencio si falla o si el rol no tiene acceso a
+// Carnets (oficina no-admin -- mismo gate que ya tiene GET /carnets) para que la tarjeta
+// se siga generando igual aunque no se puedan mostrar los pictogramas.
+async function _obtenerPictosCarnets(idParam) {
+  try {
+    const res = await apiCall(`/carnets?${idParam}`);
+    const lista = await res.json().catch(() => []);
+    if (!res.ok || !Array.isArray(lista)) return '';
+    const iconos = [...new Set(lista.map(c => iconoCarnet(c.tipo)))].slice(0, 6);
+    return iconos.join(' ');
+  } catch (_) { return ''; }
+}
+
 async function generarTarjetaTrabajador(id) {
   const u = _usuariosAdminCache.find(x => x.id === id);
   if (!u) return;
   if (!u.codigo) { toast('❌ Este usuario no tiene código asignado', 'err'); return; }
   const fotoUrl = u.foto_r2_key ? `${getAPI()}/foto-perfil/usuario/${u.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(u.foto_r2_key)}` : '';
   const deptInfo = DEPT_INFO[u.departamento];
+  const pictos = await _obtenerPictosCarnets(`usuario_id=${id}`);
   _imprimirTarjeta({
     nombre: u.nombre, codigo: u.codigo, fotoUrl,
     empresa: getSession()?.empresa_nombre || '',
@@ -7421,6 +7441,7 @@ async function generarTarjetaTrabajador(id) {
     // interno de la app" -- categoría profesional (Oficial 1ª, Encargado...), no el rol.
     rolTexto: u.categoria || '',
     obra: u.obra_nombre || '',
+    pictos,
   });
 }
 window.generarTarjetaTrabajador = generarTarjetaTrabajador;
@@ -7442,6 +7463,7 @@ async function generarTarjetaExterno(id) {
   }
   const fotoUrl = p.foto_r2_key ? `${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}&v=${encodeURIComponent(p.foto_r2_key)}` : '';
   const deptInfo = DEPT_INFO[p.departamento];
+  const pictos = await _obtenerPictosCarnets(`externo_id=${id}`);
   // EMPRESA-SUBCONTRATA-01 (11/08/2026): Adrián -- "cuando sea una subcontrata también
   // tiene que salir en la tarjeta" -- muestra la empresa de la subcontrata, no la nuestra.
   _imprimirTarjeta({
@@ -7450,6 +7472,7 @@ async function generarTarjetaExterno(id) {
     departamento: deptInfo ? `${deptInfo.icon} ${deptInfo.name}` : (p.departamento || ''),
     rolTexto: [p.categoria || null, p.dni ? `DNI ${p.dni}` : null].filter(Boolean).join(' · '),
     obra: p.obra_nombre || '',
+    pictos,
   });
 }
 window.generarTarjetaExterno = generarTarjetaExterno;
@@ -22100,6 +22123,26 @@ const TIPOS_CARNET = [
   'Trabajos en altura','Espacios confinados',
   'Soldadura','Electricidad BT','Electricidad MT','Otro'
 ];
+// COMPAT-CAE-01 (12/08/2026): mismo criterio que panel.html (esCarnetMaquina/iconoCarnet)
+// -- ver ese archivo para el porqué. Duplicado aquí porque este proyecto no comparte
+// módulos JS entre index.html/panel.html, mismo patrón que TIPOS_CARNET arriba.
+const _CARNET_MAQUINA_KEYWORDS = ['carretilla', 'grúa', 'grua', 'pemp', 'plataforma', 'soldad', 'conducir', 'vehículo', 'vehiculo'];
+function esCarnetMaquina(tipo) {
+  const t = (tipo || '').toLowerCase();
+  return _CARNET_MAQUINA_KEYWORDS.some(k => t.includes(k));
+}
+const _CARNET_ICONOS = [
+  [['prl'], '🦺'], [['cae', 'coordinaci'], '📋'], [['primeros auxilios'], '⛑️'],
+  [['carretilla'], '🚜'], [['grúa', 'grua'], '🏗️'], [['pemp', 'plataforma', 'altura'], '🧗'],
+  [['espacios confinados'], '🕳️'], [['soldad'], '🔥'], [['electricist', 'electricidad'], '⚡'],
+  [['adr'], '☣️'], [['explosivos'], '💥'], [['conducir'], '🚗'],
+  [['medio ambiente'], '🌱'], [['coordinador de seguridad'], '🦺'],
+];
+function iconoCarnet(tipo) {
+  const t = (tipo || '').toLowerCase();
+  const match = _CARNET_ICONOS.find(([keys]) => keys.some(k => t.includes(k)));
+  return match ? match[1] : '📄';
+}
 
 let _carnetsCache = [];
 

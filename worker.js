@@ -6608,6 +6608,7 @@ export default {
       if (path === '/personal/semana' && method === 'GET') return await getResumenSemana(request, env);
       if (path === '/personal/mes'    && method === 'GET') return await getResumenMes(request, env);
       if (path === '/personal/trabajadores' && method === 'GET') return await getTrabajadores(request, env);
+      if (path === '/trabajador-documentacion' && method === 'GET') return await getTrabajadorDocumentacion(request, env);
       if (path === '/personal-externo' && method === 'GET')  return await getPersonalExterno(request, env);
       if (path === '/personal-externo' && method === 'POST') return await crearPersonalExterno(request, env);
       if (path.endsWith('/codigo') && path.startsWith('/personal-externo/') && method === 'POST') {
@@ -10867,6 +10868,59 @@ async function getTrabajadores(request, env) {
   return json([...ru.results, ...rp.results]);
 }
 
+// ── Ficha de documentación de un trabajador (COMPAT-CAE-01, 12/08/2026) ──────
+// Adrián: "tenemos otra app [Nalanda] que gestiona documentación de trabajadores y
+// genera tarjetas... necesitamos ser compatibles con ellos". Nalanda (y el resto de
+// plataformas CAE del sector) no publican API ni formato de QR abiertos -- la única vía
+// real hoy es exportar la documentación para subirla a mano a esas plataformas. Compila
+// en una sola respuesta lo que YA tiene aislamiento e idCol (carnets, epis_asignados,
+// reconocimientos_medicos) -- formacion_obra queda fuera a propósito: es un registro por
+// EVENTO con una lista de nombres en texto libre (participantes_lista), sin usuario_id/
+// externo_id propio, así que "¿asistió este trabajador exacto?" no se puede responder de
+// forma fiable para un documento de cumplimiento.
+// Mismo nivel de acceso que getReconocimientos (isDeptPrivileged) porque esta ficha
+// incluye el resultado del reconocimiento médico (LPRL art. 22) -- no tiene sentido un
+// gate más permisivo para el conjunto cuando una de sus partes ya exige Seguridad+admins.
+async function getTrabajadorDocumentacion(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  if (!isDeptPrivileged(auth)) return err('Sin permisos', 403);
+  const { empresa_id } = auth;
+
+  const url = new URL(request.url);
+  const tipo = url.searchParams.get('tipo') === 'externo' ? 'externo' : 'usuario';
+  const id = parseInt(url.searchParams.get('id'));
+  if (!id) return err('Falta id');
+  const idCol = tipo === 'externo' ? 'externo_id' : 'usuario_id';
+
+  const persona = tipo === 'externo'
+    ? await env.DB.prepare(
+        `SELECT p.id, p.nombre, p.dni, p.empresa, p.categoria, p.departamento, o.nombre as obra_nombre
+         FROM personal_externo p LEFT JOIN obras o ON o.id = p.obra_id WHERE p.id=? AND p.empresa_id=?`
+      ).bind(id, empresa_id).first()
+    : await env.DB.prepare(
+        `SELECT u.id, u.nombre, NULL as dni, NULL as empresa, u.categoria, u.departamento, o.nombre as obra_nombre
+         FROM usuarios u LEFT JOIN obras o ON o.id = u.obra_id WHERE u.id=? AND u.empresa_id=?`
+      ).bind(id, empresa_id).first();
+  if (!persona) return err('Trabajador no encontrado', 404);
+
+  const [carnets, epis, reconocimientos] = await Promise.all([
+    env.DB.prepare(`SELECT tipo, numero, fecha_obtencion, fecha_caducidad, estado FROM carnets WHERE empresa_id=? AND ${idCol}=? ORDER BY tipo`).bind(empresa_id, id).all().catch(() => ({ results: [] })),
+    env.DB.prepare(`SELECT tipo_epi, talla, fecha_entrega, fecha_caducidad, proxima_revision, estado FROM epis_asignados WHERE empresa_id=? AND ${idCol}=? ORDER BY tipo_epi`).bind(empresa_id, id).all().catch(() => ({ results: [] })),
+    // Solo el veredicto (apto/no apto/restricciones) y fechas -- nunca centro_medico,
+    // medico_responsable ni notas (detalle clínico, no necesario para un documento CAE).
+    env.DB.prepare(`SELECT tipo, resultado, fecha_realizacion, fecha_caducidad FROM reconocimientos_medicos WHERE empresa_id=? AND ${idCol}=? ORDER BY fecha_realizacion DESC`).bind(empresa_id, id).all().catch(() => ({ results: [] })),
+  ]);
+
+  return json({
+    persona,
+    carnets: carnets.results,
+    epis: epis.results,
+    reconocimientos: reconocimientos.results,
+    generado_en: new Date().toISOString(),
+  });
+}
+
 // ── EPIs asignados (NEW-23) ────────────────────────────────────────────────
 async function getEpisAsignados(request, env) {
   const auth = await getAuth(request, env);
@@ -10973,6 +11027,14 @@ async function getCarnets(request, env) {
     WHERE c.empresa_id=?`;
   const params = [empresa_id];
   if (obra_id) { sql += ' AND c.obra_id=?'; params.push(parseInt(obra_id)); }
+  // COMPAT-CAE-01 (12/08/2026): filtro opcional a un trabajador concreto -- lo usa la
+  // tarjeta imprimible para mostrar sus pictogramas de oficios/máquinas habilitadas, sin
+  // tener que traer los carnets de todo el departamento solo para eso. Mismo gate de
+  // arriba (bloquea oficina no-admin) -- no se relaja nada, solo se acota más la consulta.
+  const usuarioIdF = url.searchParams.get('usuario_id');
+  const externoIdF = url.searchParams.get('externo_id');
+  if (usuarioIdF) { sql += ' AND c.usuario_id=?'; params.push(parseInt(usuarioIdF)); }
+  if (externoIdF) { sql += ' AND c.externo_id=?'; params.push(parseInt(externoIdF)); }
   if (!isDeptPrivileged(auth)) { sql += ' AND COALESCE(u.departamento, pe.departamento) = ?'; params.push(departamento); }
   sql += ' ORDER BY c.nombre_trabajador, c.tipo';
   const rows = await env.DB.prepare(sql).bind(...params).all();

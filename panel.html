@@ -14307,6 +14307,17 @@ function _construirTablaPersonal(data) {
           if (!canEdit) return '';
           return `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();generarTarjetaPersonalPanel(${row.id},'${row.tipo === 'externo' ? 'externo' : 'usuario'}')" title="Tarjeta con QR para fichar">🪪</button>`;
         } },
+      // COMPAT-CAE-01 (12/08/2026): ficha imprimible con carnets/EPIs/reconocimiento
+      // médico para subir a mano a plataformas CAE externas (Nalanda y similares) --
+      // solo Seguridad+admins, mismo gate que /trabajador-documentacion en el backend.
+      { title: '', width: 46, hozAlign: 'center', headerSort: false,
+        formatter: c => {
+          const row = c.getRow().getData();
+          // Mismo criterio que isDeptPrivileged() en el backend: admins, o cualquiera
+          // de departamento Seguridad (no es un rol, es SESSION.departamento).
+          if (!hasSessionRole('superadmin', 'empresa_admin', 'desarrollador') && SESSION.departamento !== 'seguridad') return '';
+          return `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();generarFichaDocumentacionPanel(${row.id},'${row.tipo === 'externo' ? 'externo' : 'usuario'}')" title="Ficha de documentación (para CAE / Nalanda)">📋</button>`;
+        } },
       { title: 'Activo', field: 'activo', width: 80, hozAlign: 'center',
         formatter: (cell) => cell.getValue() ? '✅' : '❌' },
     ]
@@ -14361,6 +14372,20 @@ async function generarTarjetaPersonalPanel(id, tipo) {
   // subcontrata), no Levitec, si se ha rellenado.
   const empresaTexto = tipo === 'externo' ? (row.empresa || 'Personal externo') : (SESSION.empresa_nombre || '');
 
+  // COMPAT-CAE-01 (12/08/2026): fila de pictogramas (oficios/máquinas habilitadas), como
+  // en la tarjeta real de Nalanda que enseñó Adrián. Se pide aparte (no viene en `row`) y
+  // se ignora en silencio si falla o si el rol no tiene acceso a Carnets (oficina no-admin
+  // -- mismo gate que ya tiene GET /carnets, no se relaja aquí) -- la tarjeta debe seguir
+  // funcionando igual aunque no se puedan mostrar los pictogramas.
+  let pictosHtml = '';
+  try {
+    const idParam = tipo === 'externo' ? `externo_id=${id}` : `usuario_id=${id}`;
+    const cr = await api(`/carnets?${idParam}`);
+    const lista = Array.isArray(cr) ? cr : [];
+    const iconos = [...new Set(lista.map(c => iconoCarnet(c.tipo)))].slice(0, 6);
+    if (iconos.length) pictosHtml = `<div class="pictos">${iconos.join(' ')}</div>`;
+  } catch (_) { /* sin pictogramas, tarjeta sigue igual */ }
+
   const w = window.open('', '_blank');
   if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>Tarjeta — ${row.nombre}</title>
@@ -14374,6 +14399,7 @@ body{font-family:Arial,sans-serif;margin:0;display:flex;justify-content:center;a
 .nombre{font-size:3.6mm;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#101823}
 .empresa{font-size:2.6mm;font-weight:700;color:#1e3a5f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .linea{font-size:2.3mm;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pictos{font-size:3.2mm;line-height:1;margin-top:.4mm}
 .qr{width:16mm;height:16mm;flex-shrink:0}
 @media print{body{background:#fff}.card{border:none}}
 </style></head><body>
@@ -14384,6 +14410,7 @@ ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholde
   <div class="empresa">${empresaTexto}</div>
   ${departamento || rolTexto ? `<div class="linea">${[departamento, rolTexto].filter(Boolean).join(' · ')}</div>` : ''}
   ${row.obra_nombre ? `<div class="linea">🏗 ${row.obra_nombre}</div>` : ''}
+  ${pictosHtml}
 </div>
 <img class="qr" src="${qrDataUrl}">
 </div>
@@ -14391,6 +14418,84 @@ ${fotoUrl ? `<img class="foto" src="${fotoUrl}">` : `<div class="foto-placeholde
   w.document.close();
   w.print();
 }
+
+// COMPAT-CAE-01 (12/08/2026): ficha imprimible con la documentación de un trabajador
+// (carnets, EPIs, reconocimiento médico) para subirla a mano a plataformas CAE externas
+// como Nalanda -- Adrián: "necesitamos ser compatibles con ellos". Nalanda no publica API
+// ni formato de QR abiertos (investigado 12/08/2026), así que de momento esto es un
+// puente manual, no una integración automática. No incluye formación (ver comentario en
+// getTrabajadorDocumentacion, worker.js: sin usuario_id/externo_id propio en esa tabla).
+function _fmtFechaCorta(f) { return f ? new Date(f + 'T00:00:00').toLocaleDateString('es-ES') : '—'; }
+function _estadoVigencia(fechaCaducidad) {
+  if (!fechaCaducidad) return { texto: 'Sin caducidad', color: '#64748b' };
+  const hoy = new Date().toISOString().slice(0, 10);
+  if (fechaCaducidad < hoy) return { texto: '❌ CADUCADO', color: '#ef4444' };
+  const en30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  if (fechaCaducidad < en30) return { texto: '⚠️ Caduca pronto', color: '#f59e0b' };
+  return { texto: '✅ Vigente', color: '#22c55e' };
+}
+async function generarFichaDocumentacionPanel(id, tipo) {
+  const r = await api(`/trabajador-documentacion?tipo=${tipo}&id=${id}`);
+  if (!r || r.ok === false) { toast(r?.error || 'No se pudo cargar la documentación', 'err'); return; }
+  const { persona, carnets, epis, reconocimientos } = r;
+
+  const filaDoc = (titulo, subtitulo, fechaCad) => {
+    const est = _estadoVigencia(fechaCad);
+    return `<tr>
+      <td style="padding:8px;border-bottom:1px solid #e2e8f0">${titulo}</td>
+      <td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">${subtitulo || '—'}</td>
+      <td style="padding:8px;border-bottom:1px solid #e2e8f0">${_fmtFechaCorta(fechaCad)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-weight:700;color:${est.color}">${est.texto}</td>
+    </tr>`;
+  };
+
+  // COMPAT-CAE-01: mismas dos categorías que la tarjeta de Nalanda (Oficios/Máquinas) en
+  // vez de una tabla genérica de "Carnets" -- ver esCarnetMaquina().
+  const carnetsOficio  = carnets.filter(c => !esCarnetMaquina(c.tipo));
+  const carnetsMaquina = carnets.filter(c => esCarnetMaquina(c.tipo));
+  const seccionOficios = carnetsOficio.length
+    ? carnetsOficio.map(c => filaDoc(c.tipo || 'Carnet', c.numero, c.fecha_caducidad)).join('')
+    : `<tr><td colspan="4" style="padding:8px;color:#94a3b8">Sin oficios/formación registrados</td></tr>`;
+  const seccionMaquinas = carnetsMaquina.length
+    ? carnetsMaquina.map(c => filaDoc(c.tipo || 'Carnet', c.numero, c.fecha_caducidad)).join('')
+    : `<tr><td colspan="4" style="padding:8px;color:#94a3b8">Sin máquinas habilitadas registradas</td></tr>`;
+  const seccionEpis = epis.length
+    ? epis.map(e => filaDoc(e.tipo_epi || 'EPI', e.talla, e.fecha_caducidad)).join('')
+    : `<tr><td colspan="4" style="padding:8px;color:#94a3b8">Sin EPIs registrados</td></tr>`;
+  const seccionReco = reconocimientos.length
+    ? reconocimientos.map(m => filaDoc(m.tipo || 'Reconocimiento médico', m.resultado, m.fecha_caducidad)).join('')
+    : `<tr><td colspan="4" style="padding:8px;color:#94a3b8">Sin reconocimientos registrados</td></tr>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>Documentación — ${persona.nombre}</title>
+<style>
+@page { size: A4; margin: 15mm; }
+body{font-family:Arial,sans-serif;margin:0;color:#101823}
+h1{font-size:18px;margin:0 0 4px}
+h2{font-size:13px;margin:18px 0 6px;color:#1e3a5f}
+.sub{color:#64748b;font-size:12px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:8px;background:#f1f5f9;border-bottom:2px solid #cbd5e1}
+.aviso{margin-top:20px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px}
+@media print{.no-print{display:none}}
+</style></head><body>
+<button class="no-print" onclick="window.print()" style="float:right;padding:8px 16px;background:#f97316;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨 Imprimir / Guardar PDF</button>
+<h1>${persona.nombre}</h1>
+<div class="sub">${[persona.dni ? `DNI ${persona.dni}` : null, persona.empresa, persona.categoria, persona.departamento, persona.obra_nombre].filter(Boolean).join(' · ')}</div>
+<h2>🛠️ Oficios / formación habilitada</h2>
+<table><tr><th>Tipo</th><th>Número</th><th>Caducidad</th><th>Estado</th></tr>${seccionOficios}</table>
+<h2>🚜 Máquinas habilitadas</h2>
+<table><tr><th>Tipo</th><th>Número</th><th>Caducidad</th><th>Estado</th></tr>${seccionMaquinas}</table>
+<h2>🦺 EPIs entregados</h2>
+<table><tr><th>Tipo</th><th>Talla</th><th>Caducidad</th><th>Estado</th></tr>${seccionEpis}</table>
+<h2>⚕️ Reconocimiento médico</h2>
+<table><tr><th>Tipo</th><th>Resultado</th><th>Caducidad</th><th>Estado</th></tr>${seccionReco}</table>
+<div class="aviso">Ficha generada por Alejandra APP el ${new Date().toLocaleDateString('es-ES')} para gestión documental (p.ej. plataformas CAE como Nalanda) — subida manual, sin integración automática. No incluye pictogramas de riesgos: no hay un dato equivalente registrado en la app.</div>
+</body></html>`);
+  w.document.close();
+}
+window.generarFichaDocumentacionPanel = generarFichaDocumentacionPanel;
 
 // TRABAJADORES-ALTA-01 (10/08/2026): este modal mandaba {nombre,email,password,rol,
 // departamento} a POST /usuarios, pero crearUsuario() (worker.js) exige `codigo` (nunca lee
@@ -15209,6 +15314,32 @@ const TIPOS_CARNET = [
   'Operador de grúa', 'Soldador homologado', 'Electricista BT', 'Electricista AT',
   'Manejo de explosivos', 'Responsable medio ambiente', 'Coordinador de seguridad', 'Otro',
 ];
+// COMPAT-CAE-01 (12/08/2026): Nalanda (y CAE similares) separan la documentación de un
+// trabajador en "Oficios" (formación/habilitación) y "Máquinas" (equipos concretos que
+// puede operar) -- Adrián, viendo su tarjeta real de Nalanda: "lo suyo es que tenga lo
+// mismo". carnets.tipo es texto libre (sin columna de categoría propia); heurística por
+// palabra clave sobre TIPOS_CARNET, no una lista cerrada -- clasifica igual aunque el
+// texto real en D1 no sea EXACTAMENTE una de las opciones del desplegable. Es agrupación
+// visual para estos dos documentos, no una fuente de permisos.
+const _CARNET_MAQUINA_KEYWORDS = ['carretilla', 'grúa', 'grua', 'pemp', 'plataforma', 'soldad', 'conducir', 'vehículo', 'vehiculo'];
+function esCarnetMaquina(tipo) {
+  const t = (tipo || '').toLowerCase();
+  return _CARNET_MAQUINA_KEYWORDS.some(k => t.includes(k));
+}
+// Un icono por carnet para la fila de pictogramas de la tarjeta -- mismo espíritu que los
+// cuadros de colores de Nalanda, en emoji para no depender de un set de iconos nuevo.
+const _CARNET_ICONOS = [
+  [['prl'], '🦺'], [['cae', 'coordinaci'], '📋'], [['primeros auxilios'], '⛑️'],
+  [['carretilla'], '🚜'], [['grúa', 'grua'], '🏗️'], [['pemp', 'plataforma', 'altura'], '🧗'],
+  [['espacios confinados'], '🕳️'], [['soldad'], '🔥'], [['electricist', 'electricidad'], '⚡'],
+  [['adr'], '☣️'], [['explosivos'], '💥'], [['conducir'], '🚗'],
+  [['medio ambiente'], '🌱'], [['coordinador de seguridad'], '🦺'],
+];
+function iconoCarnet(tipo) {
+  const t = (tipo || '').toLowerCase();
+  const match = _CARNET_ICONOS.find(([keys]) => keys.some(k => t.includes(k)));
+  return match ? match[1] : '📄';
+}
 function abrirModalCarnet() {
   abrirModal('Nuevo carnet / certificación', `
     <div class="form-group"><div class="form-label">Tipo de carnet</div>
