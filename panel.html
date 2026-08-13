@@ -22375,8 +22375,13 @@ async function _registrarPushDeveloper() {
   function _rsActualizarFab() {
     const badge = document.getElementById('rsFabBadge');
     const label = document.getElementById('rsFabLabel');
+    const btn = document.getElementById('rsScanBtn');
     if (!badge || !label) return;
     const moviles = _rsDispositivos.filter(d => d.tipo === 'app');
+    // FAB-SCAN-OCULTO-01: solo tiene sentido ofrecer "Escanear con el móvil" cuando hay
+    // un móvil de verdad emparejado -- sin uno, es un botón que solo produce un error.
+    if (btn) btn.style.display = moviles.length > 0 ? '' : 'none';
+    label.style.display = moviles.length > 0 ? '' : 'none';
     if (moviles.length > 0) {
       badge.textContent = moviles.length;
       badge.className = 'rs-fab-badge';
@@ -25085,8 +25090,16 @@ document.getElementById('wInput').focus();
     📥
     <span class="rs-fab-badge" id="rsPendientesBadge">0</span>
   </button>
-  <div class="rs-fab-label" id="rsFabLabel">📱 Sin móvil conectado</div>
-  <button class="rs-fab-main" onclick="rsAbrirScanModal()" title="Escanear con el móvil">
+  <!-- FAB-SCAN-OCULTO-01 (13/08/2026): Adrián -- "para qué queremos el icono de scan
+       remoto en el panel Office cuando no hay remoto conectado?" -- rsAbrirScanModal()
+       solo sirve para lanzar un escaneo EN el móvil emparejado; sin ninguno conectado,
+       pulsarlo solo mostraba un toast de error. _rsActualizarFab() (más abajo) oculta
+       ahora este botón+etiqueta mientras no haya un móvil real, igual que ya hacía
+       rsPendientesBtn (arriba) con el escaneo pendiente de revisar -- mismo criterio:
+       no mostrar una acción que no se puede completar en ese momento.
+       -->
+  <div class="rs-fab-label" id="rsFabLabel" style="display:none">📱 Sin móvil conectado</div>
+  <button class="rs-fab-main" id="rsScanBtn" onclick="rsAbrirScanModal()" title="Escanear con el móvil" style="display:none">
     📷
     <span class="rs-fab-badge offline" id="rsFabBadge">0</span>
   </button>
