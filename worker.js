@@ -6954,7 +6954,7 @@ async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departament
 async function getMisEmpresas(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('No autorizado', 403);
-  if (auth.isDesarrollador) {
+  if (auth.isDesarrollador || auth.isSuperadmin) {
     const { results } = await env.DB.prepare('SELECT id, nombre FROM empresas ORDER BY nombre').all();
     return json(results);
   }
@@ -6975,7 +6975,7 @@ async function cambiarEmpresaSesion(request, env) {
   const targetId = parseInt(body.empresa_id);
   if (!targetId) return err('Falta empresa_id', 400);
 
-  if (auth.isDesarrollador) {
+  if (auth.isDesarrollador || auth.isSuperadmin) {
     const emp = await env.DB.prepare('SELECT id, nombre FROM empresas WHERE id = ?').bind(targetId).first();
     if (!emp) return err('Empresa no encontrada', 404);
     const token = await crearSesion(env, {
