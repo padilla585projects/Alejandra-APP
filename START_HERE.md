@@ -4,6 +4,12 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**BOTONES-FEEDBACK-01 completada, desplegada y verificada (2026-08-13, tarde):** ~95 botones
+"Guardar" sin feedback visual en los tres frontends, corregidos con un helper `conBoton()`
+por archivo; de paso, corregido por separado un bug crítico de pérdida silenciosa de datos en
+`apiCall()` (24 llamadas, 7 módulos, ~7 semanas en producción). Sin pendientes. Detalle en
+`PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
+
 Foundation v0.1 aprobada. **F-0.1 activa en producción desde el 2026-08-02** (PR #9): workflows
 antiguos retirados, `main` protegida, entorno `production` con revisor requerido. **F-0.2-CFG
 completada (2026-08-04):** secretos ya movidos al entorno `production`, ensayo de confirmación

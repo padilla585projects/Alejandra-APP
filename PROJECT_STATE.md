@@ -1,6 +1,13 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-13
+- Actualizado: 2026-08-13, tarde
+- Estado (2026-08-13, tarde): **BOTONES-FEEDBACK-01 completada, desplegada y verificada** —
+  ~95 botones "Guardar" sin feedback visual en `index.html`/`panel.html`/`alejandra-panel.html`
+  (helper `conBoton()`), a raíz de que Adrián generó 3 entradas duplicadas al pulsar varias
+  veces el guardado del informe semanal de Seguridad. Encontrado durante la auditoría un bug
+  crítico independiente ya corregido por separado: `apiCall()` perdía el body en 24 llamadas
+  de 7 módulos por pasarle 3 argumentos en vez de 2 — casi 7 semanas de pérdida silenciosa de
+  datos en producción desde el 24/06/2026. Ver sección dedicada más abajo.
 - Estado (2026-08-13): **INFORMES-SEG-SEMANAL-01 completada, desplegada y verificada en
   producción** — informe interno semanal de Seguridad y Salud Laboral por obra, calcado de
   la plantilla real de Levitec, con generación real de documento final (PDF y `.docx`).
@@ -11,6 +18,19 @@
   verificación (ver sección dedicada más abajo). Único pendiente real: Adrián habilita la
   Gmail API en el proyecto de Google Cloud correcto (paso manual, en curso).
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
+
+## BOTONES-FEEDBACK-01 — feedback en ~95 botones + bug crítico de datos (2026-08-13, tarde)
+
+Adrián probó el informe semanal de Seguridad, el guardado tardó y pulsó varias veces —
+generó 3 entradas duplicadas. Escalado a "necesitamos feedback en los botones... en toda la
+suite" y "lanza varios agentes para ver lo de los botones en toda la app". Tres agentes de
+exploración auditaron los tres frontends en paralelo y encontraron ~95 sitios sin indicio de
+"en curso". Fix: helper `conBoton(btn, fn, textoOcupado)` por archivo, aplicado con un
+cambio de una línea por sitio. Colateral: durante la misma auditoría se encontró y corrigió
+por separado (commit `7d83661`, antes que este backlog) un bug crítico de pérdida silenciosa
+de datos — `apiCall()` con 3 argumentos en vez de 2 en 24 llamadas de 7 módulos, casi 7
+semanas en producción desde el 24/06/2026. Ambos desplegados en Pages y verificados. Detalle
+completo en `TASKS.md`/`HANDOFF.md`/`CHANGELOG.md`.
 
 ## INFORMES-SEG-SEMANAL-01 — informe interno semanal de Seguridad (2026-08-13)
 

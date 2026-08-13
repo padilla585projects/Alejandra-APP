@@ -1,5 +1,38 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-08-13, tarde): **BOTONES-FEEDBACK-01 completada, desplegada y
+verificada.** Adrián probó el informe semanal de Seguridad recién construido, el botón
+Guardar tardó y "le di más veces. Me ha generado 3 entradas más" — un solo bug real de UX
+escaló a petición explícita: "necesitamos feedback en los botones que pulsamos en toda la
+suite para saber que funcionan... lanza varios agentes para ver lo de los botones en toda la
+app". Tres agentes de exploración (uno por frontend) auditaron `index.html`, `panel.html` y
+`alejandra-panel.html` de forma independiente y encontraron **~95 sitios** sin ningún
+indicio de "en curso" en su botón Guardar — muy por encima de la estimación inicial.
+- **Hallazgo colateral crítico durante esa misma auditoría (ya corregido y desplegado por
+  separado, commit `7d83661`):** `apiCall(path, options)` solo acepta DOS argumentos, pero
+  24 llamadas en 7 módulos (Tareas de obra, Órdenes de Cambio, Actas de Reunión, Control de
+  Calidad/Deficiencias, Subcontratas, Presupuesto de obra, RFIs) le pasaban TRES —
+  `apiCall(ruta, 'POST', body)`. El método quedaba sin definir (GET por defecto) y el body se
+  perdía entero, mientras la UI mostraba "guardado ✓" — dato nunca persistido. Introducido en
+  el commit `2639128` (24/06/2026) — casi 7 semanas en producción. Corregido antes que el
+  propio backlog de feedback en botones, por ser mucho más grave (pérdida silenciosa de
+  datos, no solo UX).
+- **Fix aplicado (commit `91cff7e`):** helper `conBoton(btn, fn, textoOcupado)` — deshabilita
+  el botón, cambia su texto y restaura el estado en un `finally` — añadido una vez por
+  archivo (`index.html`, `panel.html`, `alejandra-panel.html`) y aplicado con un cambio de
+  una sola línea en el `onclick`/`onsubmit` de cada sitio, sin tocar el cuerpo de cada
+  función `async`. Cobertura: `index.html` ~55 sitios (Seguridad, Personal/Fichajes,
+  Bobinas/PEMP/Herramientas/Pedidos, Calendario/Diario/Partes/Telecom, Admin/Ajustes/
+  catálogos, prioridad media), `panel.html` ~47 sitios (los tres patrones de modal de gestión
+  de obra + informe semanal de Seguridad), `alejandra-panel.html` 4 sitios (config, password,
+  crear usuario, revocar token).
+- Verificación: sintaxis de los tres archivos comprobada (extracción de `<script>` +
+  `new Function()`); sin patrones de encoding corrupto en el diff. Desplegado en Pages
+  (`gh workflow run pages.yml`, ref `91cff7ecafe6b8ae86a0a0b06cf928913d60fedb`, run
+  `31684170658`, éxito). No requiere cambios de backend ni migración D1.
+- Siguiente acción exacta: ninguna urgente. `worker.js`/`alejandra-agente/worker.js` no se
+  tocaron en este backlog — no requieren nuevo despliegue de Worker.
+
 Estado (actualizado 2026-08-13): **INFORMES-SEG-SEMANAL-01 completada, desplegada y
 verificada en producción de extremo a extremo.** Adrián: "sabes que ellos tienen que hacer
 informes, creo que semanales... es un informe a nivel interno para los técnicos de cada

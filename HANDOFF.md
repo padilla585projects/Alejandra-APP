@@ -1,5 +1,55 @@
 # Handoff — Alejandra 2.0
 
+## BOTONES-FEEDBACK-01 — feedback visual en ~95 botones Guardar + bug crítico de datos (2026-08-13, tarde)
+
+- Contexto: Adrián probó en vivo el informe semanal de Seguridad recién construido — "cuando
+  le he dado al botón de guardar, a tardado tanto que parecía que se había quedado pillado.
+  Entonces le di más veces. Me ha generado 3 entradas más. Ahí que poner un feedback al botón
+  para saber que funciona". Un solo bug de UX se convirtió en petición explícita de auditoría
+  general: "necesitamos feedback en los botones que pulsamos en toda la suite para saber que
+  funcionan" → "lanza varios agentes para ver lo de los botones en toda la app".
+- Tres agentes de exploración de solo lectura (uno por frontend, `isolation:"worktree"`)
+  auditaron `index.html`, `panel.html` y `alejandra-panel.html` en paralelo. Resultado: **~95
+  sitios** sin ningún indicio de "en curso" en su botón de guardar — muy por encima de lo
+  esperado al empezar.
+- **Hallazgo colateral crítico** (no una cuestión de UX): `apiCall(path, options)` solo
+  acepta DOS argumentos, pero 24 llamadas repartidas en 7 módulos de `index.html` (Tareas de
+  obra, Órdenes de Cambio, Actas de Reunión, Control de Calidad/Deficiencias, Subcontratas,
+  Presupuesto de obra, RFIs) le pasaban TRES — `apiCall(ruta, 'POST', body)`. El método
+  quedaba sin definir (GET por defecto, ignora el body) y el dato se perdía por completo,
+  mientras la UI mostraba "guardado ✓" sin ningún error. Localizado con `git log -S` hasta el
+  commit que lo introdujo: `2639128` (24/06/2026, autor "APEX Agent") — casi 7 semanas en
+  producción. Verificado con un barrido programático (parser de paréntesis/comillas, no solo
+  grep) sobre todas las llamadas a `apiCall`/`api` de los tres archivos para no dejar ningún
+  sitio con el mismo patrón. Corregido y desplegado primero, por separado y antes que el
+  propio backlog de feedback en botones (commit `7d83661`), por ser mucho más grave.
+- **Fix del feedback en botones** (commit `91cff7e`): un helper reutilizable
+  `conBoton(btn, fn, textoOcupado)` — deshabilita el botón, cambia su texto por uno de "…
+  ocupado", ejecuta la función y restaura el estado original en un `finally` — añadido una
+  vez en cada uno de los tres archivos, justo antes de su función `toast`/`saveConfig`
+  existente. Aplicado con un cambio de una sola línea en el `onclick`/`onsubmit` de cada
+  sitio (nunca tocando el cuerpo de la función `async` original), para minimizar la
+  superficie de edición sobre ~95 sitios casi duplicados:
+  - `index.html` (~55 sitios): Seguridad, Personal/Fichajes, Bobinas/PEMP/Herramientas/
+    Pedidos, Calendario/Diario/Partes/Telecom, Admin/Ajustes/catálogos, prioridad media
+    (actualizar/borrar).
+  - `panel.html` (~47 sitios): los tres patrones de modal de gestión de obra ya existentes en
+    el archivo (botón embebido en `abrirModal` de 1 argumento, modal propio con
+    `insertAdjacentHTML`, y el patrón mixto con formularios reales vía `onsubmit`), más el
+    propio informe semanal de Seguridad (`guardarInformeSeg`, 2 botones).
+  - `alejandra-panel.html` (4 sitios): `saveConfig`, `cambiarPassword`, `crearUsuario`,
+    `revocarToken`.
+- Verificación: sintaxis de los tres archivos comprobada por extracción de `<script>` +
+  `new Function()` (el único "error" que reporta este método en `panel.html` es un
+  falso positivo preexistente ya presente en el `HEAD` anterior a esta sesión — un
+  `</script>`-como-texto dentro de un comentario HTML que confunde al regex del propio
+  checker, no un error real de sintaxis); `git diff` de los tres archivos sin patrones de
+  encoding corrupto. No requiere cambios de backend ni migración D1 — `worker.js` y
+  `alejandra-agente/worker.js` no se tocaron en este backlog.
+- Desplegado: Pages (`gh workflow run pages.yml`, ref `91cff7ecafe6b8ae86a0a0b06cf928913d60fedb`,
+  run `31684170658`, éxito).
+- Sin pendientes conocidos de este backlog.
+
 ## INFORMES-SEG-SEMANAL-01 — informe interno semanal de Seguridad (2026-08-13)
 
 - Contexto: Adrián — "sabes que ellos tienen que hacer informes, creo que semanales... es un

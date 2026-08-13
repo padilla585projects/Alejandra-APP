@@ -4,6 +4,27 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-13, tarde)
+
+- **BOTONES-FEEDBACK-01:** ~95 botones "Guardar" de toda la suite (`index.html`, `panel.html`,
+  `alejandra-panel.html`) sin ningún indicio visual de "en curso" — Adrián probó el informe
+  semanal de Seguridad, el guardado tardó, pulsó varias veces y generó 3 entradas duplicadas.
+  Escalado explícitamente a auditoría de toda la app con varios agentes en paralelo. Fix: un
+  helper `conBoton(btn, fn, textoOcupado)` por archivo (deshabilita el botón + cambia el
+  texto + restaura en `finally`), aplicado con un cambio de una línea en el
+  `onclick`/`onsubmit` de cada sitio.
+- **APICALL-3ARGS-01 (commit `7d83661`, encontrado durante la misma auditoría):** bug crítico
+  de pérdida silenciosa de datos — `apiCall(path, options)` solo acepta DOS argumentos, pero
+  24 llamadas en 7 módulos (Tareas de obra, Órdenes de Cambio, Actas de Reunión, Control de
+  Calidad/Deficiencias, Subcontratas, Presupuesto de obra, RFIs) le pasaban TRES
+  (`apiCall(ruta, 'POST', body)`). El método quedaba en GET por defecto y el body se perdía
+  entero, mientras la UI mostraba "guardado ✓". Introducido el 24/06/2026 (commit
+  `2639128`) — casi 7 semanas en producción sin detectarse. De paso, en el mismo commit:
+  selector de empresa en el topbar de `panel.html` (Adrián: "no puedo cambiar de empresa en
+  el panel office"), acotado a desarrollador o a un usuario con cuenta propia en otra empresa
+  con el mismo email y rol `empresa_admin`/`superadmin` (nunca un `empresa_id` arbitrario del
+  cliente, mismo criterio que el hardening SEC-14 de departamento).
+
 ### Added (2026-08-13)
 
 - **INFORMES-SEG-SEMANAL-01:** informe interno semanal de Seguridad y Salud Laboral por obra, calcado de la plantilla real de Levitec (S31 Informe semanal). El técnico añade actividad+contratista+foto desde `index.html` durante la semana (el informe se resuelve solo por fecha, nunca se "abre" a mano); Seguridad revisa y cierra desde `panel.html`, rellenando Aspectos críticos/Observaciones/Otros puntos, y genera el documento final como PDF imprimible o `.docx` real y descargable. Primera dependencia npm real de `worker.js` (`docx`, generado con `Packer.toArrayBuffer()` — `toBuffer()` no funciona en el runtime de Workers, usa `Buffer` de Node). Migración D1 de 3 tablas autorizada explícitamente. Pipeline de deploy actualizado (`package.json`/lockfile trackeados, `npm ci` en `deploy-worker.yml`). Probado en vivo de extremo a extremo contra producción.
