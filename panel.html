@@ -17024,6 +17024,7 @@ function segRegImprimir(id) {
       `<p style="margin:6px 0;padding:8px;background:var(--surface2);border-radius:6px"><b>${escHtml(c.usuario_nombre || '—')}</b> <span style="color:var(--muted);font-size:11px">${(c.created_at || '').slice(0, 16)}</span><br>${escHtml(c.mensaje).replace(/\n/g, '<br>')}</p>`
     ).join('') || '<p style="color:#999">Sin comentarios</p>';
     const win = window.open('', '_blank');
+    if (!win) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
     win.document.write(`<html><head><title>${escHtml(full.titulo)}</title><meta charset="utf-8"></head>
       <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:700px;margin:20px auto">
         <h1 style="color:#ef4444">🔺 ${escHtml(full.titulo)}</h1>
@@ -17235,6 +17236,7 @@ function imprimirInformeSeg(id) {
     }).join('');
     const otrosHtml = (inf.otros_puntos || '').split('\n').filter(l => l.trim()).map(l => `<li>${escHtml(l)}</li>`).join('') || '<li>—</li>';
     const win = window.open('', '_blank');
+    if (!win) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
     win.document.write(`<html><head><title>Informe semanal — Semana ${inf.semana_numero || ''}</title><meta charset="utf-8"></head>
       <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:800px;margin:20px auto;font-size:13px">
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px">
@@ -26138,6 +26140,7 @@ async function generarInformeObra(obraId, obraNombre) {
   </body></html>`;
 
   const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
   w.document.write(html);
   w.document.close();
 }
@@ -36897,6 +36900,7 @@ async function verActaReunion(id) {
   <div class="footer">Alejandra APP · Generado: ${hoy}</div>
   </body></html>`;
   const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
   w.document.write(html);
   w.document.close();
 }
@@ -37076,6 +37080,7 @@ async function eliminarPunchItem(id) {
 
 function imprimirPunchList() {
   const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
   const rows = (_punchData || []).map(p => `
     <tr style="background:${p.vencido?'#fff3f3':p.estado==='cerrado'?'#f0fff4':''}">
       <td><code>${p.numero||'—'}</code></td>
@@ -37759,6 +37764,7 @@ function exportarDiario() {
   <table><thead><tr><th>Fecha</th><th>Clima</th><th>Personal</th><th>Trabajos</th><th>Equipos</th><th>Incidencias</th><th>Visitantes</th><th>Observaciones</th></tr></thead>
   <tbody>${rows}</tbody></table></body></html>`;
   const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
   w.document.write(html);
   w.document.close();
 }
