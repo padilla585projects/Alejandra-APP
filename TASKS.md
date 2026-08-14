@@ -1,5 +1,51 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-08-14, mediodía): **No hay ninguna tarea activa, en curso ni
+bloqueada.** Sesión larga de repaso manual de la app junto a Adrián ("vamos a revisar la
+app, tiene cosillas que arreglar" → "vamos departamento por departamento"), más varios
+bugs encontrados de paso y una ronda de peticiones nuevas sobre el Informe Semanal de
+Seguridad. Todo completado, desplegado (Pages + los dos Workers) y verificado en vivo
+contra producción (navegador real, con sesión de Adrián) salvo donde se indica lo
+contrario. Resumen (detalle completo en `HANDOFF.md`/`CHANGELOG.md`):
+
+- **DOCS-TABS-DEPT-02 + DASHBOARD-KPIS-VACIOS-01 + DELEGACION-SSE-01:** tres bugs
+  encontrados en cadena revisando `panel.html` con Adrián en vivo — pestañas de Documentos
+  ignorando el departamento elegido por un admin, dashboard principal con 4 KPIs que nunca
+  se actualizaban (campos que el backend no mandaba o mandaba con otro nombre), y
+  `delegar_tarea` sin ningún aviso en el chat mientras el ayudante trabajaba ("Pensando"
+  en silencio). Los tres corregidos y desplegados.
+- **COMPAT-CAE-01:** Adrián enseñó su tarjeta real de Nalanda (plataforma CAE que exige un
+  cliente suyo) y pidió compatibilidad. Investigado que Nalanda no tiene API pública —
+  puente manual (ficha imprimible + pictogramas en la tarjeta con QR), no integración
+  automática.
+- **APP-REPASO-DEPARTAMENTOS-01:** repaso completo, departamento por departamento, del
+  menú de `index.html` contra la curación que ya existía en `panel.html`
+  (`_MENU_ROL_DEPT_CONFIG`) — Control, Ingeniería, Obra Civil/Albañilería/Pintura/
+  Carpintería y Almacén, cada uno confirmado con Adrián antes de tocar código. De paso:
+  bug de flexbox en las tarjetas del selector de departamento (chevron empujado fuera de
+  la tarjeta con nombres largos), tarjeta "Alejandra IA" redundante eliminada de todos los
+  departamentos, y RdP/Hormigonado/Formación — que no tenían ningún criterio de pertenencia
+  por departamento (pendiente ya anotado sin decidir) — reasignados a Seguridad/Obra
+  Civil/Personal respectivamente.
+- **AYUDA-PANTALLA-01:** `index.html` mandaba a Alejandra el id crudo de la pantalla
+  actual, sin descripción — a diferencia de `panel.html`, que ya tenía ~90 páginas
+  documentadas. Mismo patrón replicado (31 pantallas), sin tocar el backend.
+- **INFORMES-SEG-CIERRE-01:** a raíz de que Katy (técnico real) no entendía el flujo del
+  Informe Semanal ("no veo el botón para generar informe" / "el flujo no está claro"),
+  ronda larga de mejoras: navegar a semanas anteriores y editar actividades ya guardadas
+  (antes solo crear/borrar), cerrar y generar el documento final (Word y PDF) también
+  desde `index.html` (antes solo desde Office), crear y borrar informes semanales enteros
+  desde `panel.html` (antes solo desde el móvil, y sin poder borrar ninguno), y
+  placeholders de ejemplo en los 3 campos de texto libre del cierre.
+- **FAB-SCAN-OCULTO-01:** botón flotante de escaneo remoto en Office oculto mientras no
+  haya ningún móvil conectado (antes visible siempre, pulsarlo sin móvil solo daba error).
+- **Pendiente sin decidir, anotado durante la sesión:** que Almacén pueda ver el material
+  de TODOS los departamentos (no solo el suyo) desde el móvil, como ya hace en
+  `panel.html` (`filtroDeptModal`); plantilla del Informe Semanal (documento final)
+  editable por el usuario en vez de fija en el código; agrupación de Albañilería/Pintura/
+  Carpintería bajo Obra Civil, quedó descartada la jerarquía real de datos, aplicada solo
+  la agrupación visual.
+
 Estado (actualizado 2026-08-13, tarde): **BOTONES-FEEDBACK-01 completada, desplegada y
 verificada.** Adrián probó el informe semanal de Seguridad recién construido, el botón
 Guardar tardó y "le di más veces. Me ha generado 3 entradas más" — un solo bug real de UX

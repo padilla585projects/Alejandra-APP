@@ -4,6 +4,18 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
+junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
+Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda
+(`COMPAT-CAE-01`, puente manual — no tienen API pública), repaso departamento por departamento
+del menú de `index.html` contra la curación ya existente en `panel.html`
+(`APP-REPASO-DEPARTAMENTOS-01`), y una ronda de mejoras al Informe Semanal de Seguridad a raíz
+de que una técnica real no entendía el flujo (`INFORMES-SEG-CIERRE-01`: navegar semanas,
+editar actividades, cerrar/generar el documento también desde el móvil, crear/borrar informes
+enteros desde Office). Pendientes explícitos: Almacén viendo material de otros departamentos
+desde el móvil; plantilla del documento final del Informe Semanal editable por el usuario.
+Detalle en `PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
+
 **BOTONES-FEEDBACK-01 completada, desplegada y verificada (2026-08-13, tarde):** ~95 botones
 "Guardar" sin feedback visual en los tres frontends, corregidos con un helper `conBoton()`
 por archivo; de paso, corregido por separado un bug crítico de pérdida silenciosa de datos en

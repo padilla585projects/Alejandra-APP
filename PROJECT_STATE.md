@@ -1,6 +1,26 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-13, tarde
+- Actualizado: 2026-08-14, mediodía
+- Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
+  completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
+  cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos
+  ignorando el departamento del topbar, dashboard con 4 KPIs sin actualizar,
+  `delegar_tarea` sin feedback en el chat, botón de scan remoto visible sin móvil
+  conectado) → compatibilidad con la plataforma CAE externa Nalanda (ficha + pictogramas
+  de oficios/máquinas, investigado que no tiene API pública) → repaso departamento por
+  departamento del menú de `index.html` contra la curación ya existente en `panel.html`
+  (Control, Ingeniería, Obra Civil y sus 3 subtrades, Almacén; tarjeta "Alejandra IA"
+  redundante eliminada; RdP/Hormigonado/Formación reasignados a Seguridad/Obra Civil/
+  Personal) → ronda de mejoras al Informe Semanal de Seguridad a raíz de que una técnica
+  real (Katy) no entendía el flujo (navegación por semanas, editar actividades, cerrar y
+  generar el documento final también desde el móvil, crear/borrar informes enteros desde
+  Office). Todo verificado por sintaxis/encoding; la mayoría además en vivo en el
+  navegador contra producción. Ver secciones dedicadas más abajo y detalle completo en
+  `TASKS.md`/`HANDOFF.md`/`CHANGELOG.md`. **Pendiente sin decidir, explícito:** que
+  Almacén vea material de otros departamentos desde el móvil (como ya hace en
+  `panel.html`); plantilla del documento final del Informe Semanal editable por el
+  usuario; agrupación Obra Civil sin verificar en vivo (Levitec no tiene esos
+  departamentos activos).
 - Estado (2026-08-13, tarde): **BOTONES-FEEDBACK-01 completada, desplegada y verificada** —
   ~95 botones "Guardar" sin feedback visual en `index.html`/`panel.html`/`alejandra-panel.html`
   (helper `conBoton()`), a raíz de que Adrián generó 3 entradas duplicadas al pulsar varias
@@ -18,6 +38,61 @@
   verificación (ver sección dedicada más abajo). Único pendiente real: Adrián habilita la
   Gmail API en el proyecto de Google Cloud correcto (paso manual, en curso).
 - Estado: F-0.1 **integrada y activa en remoto**. ARC-011 fases 1 y 2 completadas; ARC-012 resuelto con tres migraciones aplicadas y verificadas. **ARC-011 fase 3 completa: las 14 verticales tienen el ciclo de 5 pasos de ADR-0011 cerrado** (los ocho de los dos primeros lotes más los seis del tercer lote, desplegados y verificados el 2026-08-03, run 30839201968). No queda ninguna tarea de ingeniería activa de ARC-011. Se corrigió un bug real del chat de Alejandra en `panel.html` (PR #76, paridad verificada: no afecta a `index.html`/`alejandra-panel.html`). **`F-0.2-CFG` (secretos al entorno `production`) ejecutada por el Director el 2026-08-04**, con verificación previa de un despliegue exitoso; ver sección dedicada más abajo. **Época 2 (F-2.1) con lectura y escritura de `memoria_gobernada` desplegadas y verificadas (2026-08-04, PR #81).** **`ADR-0015`/ARC-019 aceptado, implementado, desplegado y verificado (2026-08-04, PR #85):** `sql_query` sube a N3; `CREATE TABLE`/`CREATE INDEX` exige confirmación humana (`CONFIRMO MIGRACION`) en `sql_query`/`run_migration`. **`P-ARCH-003` (consulta de versión remota) fusionada y publicada en Pages (2026-08-04, PR #82).** No queda ninguna tarea de ingeniería activa sin decisión del Director pendiente.
+
+## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
+
+Cuatro fixes independientes encontrados navegando `panel.html` en producción junto a
+Adrián, sin agenda previa: pestañas de Documentos ignorando el departamento elegido por
+un admin en el topbar (`DOCS-TABS-DEPT-02`); dashboard principal con Trabajadores
+activos/Obras activas/Equipos averiados/Alertas de stock sin actualizar nunca, por campos
+que el backend no mandaba o mandaba con otro nombre (`DASHBOARD-KPIS-VACIOS-01`);
+`delegar_tarea` (ayudante de Correos, entre otros) sin ningún evento SSE mientras
+trabajaba — el chat se quedaba en "Pensando" en silencio (`DELEGACION-SSE-01`); botón de
+scan remoto en Office visible siempre aunque no hubiera móvil conectado, pulsarlo solo
+producía un error (`FAB-SCAN-OCULTO-01`). Los cuatro desplegados y verificados. Detalle
+completo en `TASKS.md`/`HANDOFF.md`/`CHANGELOG.md`.
+
+## COMPAT-CAE-01 — compatibilidad con plataformas CAE externas (Nalanda) (2026-08-13)
+
+Adrián: "tenemos otra app que gestiona documentación de trabajadores y genera tarjetas...
+necesitamos ser compatibles con ellos" — investigado antes de tocar código que Nalanda
+(la plataforma en cuestión, confirmada por una foto de la tarjeta real de Adrián) no
+publica API ni spec abierta; es un puente manual, no integración automática. Ficha
+imprimible con Oficios/Máquinas habilitadas (mismas categorías que la tarjeta real de
+Nalanda) y pictogramas en la tarjeta con QR existente. Nuevo endpoint
+`/trabajador-documentacion` (carnets+EPIs+reconocimiento médico sin detalle clínico,
+mismo nivel de acceso que Reconocimientos). Detalle completo en `TASKS.md`/`HANDOFF.md`/
+`CHANGELOG.md`.
+
+## APP-REPASO-DEPARTAMENTOS-01 — repaso departamento por departamento del menú móvil (2026-08-13/14)
+
+Adrián: "vamos departamento por departamento" — cruzado el menú genérico de `index.html`
+contra la curación real ya existente en `panel.html`, confirmando cada cambio antes de
+aplicarlo. Control pierde PEMP/Carretillas (departamento de monitorización de salas CPD,
+sin maquinaria); Ingeniería se deja como está (paridad completa con su sección técnica de
+Office queda fuera de alcance); Obra Civil/Albañilería/Pintura/Carpintería confirmadas
+sin cambios (ya tenían el menú completo) y agrupadas visualmente bajo una tarjeta "Obra
+Civil" (sin jerarquía real en el dato — se evaluó y se descartó por riesgo sobre el
+aislamiento por departamento); Almacén reducido a solo material+pedidos. De paso: bug de
+flexbox en las tarjetas del selector (chevron empujado fuera con nombres largos), tarjeta
+"Alejandra IA" redundante eliminada de todos los departamentos (el botón central de la
+barra inferior ya lleva al chat desde cualquier pantalla), y RdP/Hormigonado/Formación —
+sin ningún criterio de pertenencia por departamento, pendiente ya anotado sin decidir —
+reasignados a Seguridad/Obra Civil/Personal. Detalle completo en `TASKS.md`/`HANDOFF.md`/
+`CHANGELOG.md`.
+
+## INFORMES-SEG-CIERRE-01 — gestión completa del Informe Semanal en los dos frontends (2026-08-13)
+
+Katy (técnico real) probó el Informe Semanal recién construido y no entendía el flujo
+("no veo el botón para generar informe" / "tampoco se pueden editar o agregar más a un
+informe del día anterior"). Adrián: "arréglalo tú todo". Añadida navegación por semanas
+anteriores y edición de actividades ya guardadas (antes solo crear/borrar); cerrar el
+informe y generar el documento final (Word/PDF) también desde `index.html` (antes solo
+desde Office); crear y borrar informes semanales enteros desde `panel.html` (antes solo
+existía la creación desde el móvil, y no se podía borrar ningún informe en ningún sitio);
+placeholders de ejemplo en los 3 campos de texto libre del cierre, que ni Adrián tenía
+del todo claros. Pendiente explícito y aparte: plantilla del documento final editable por
+el usuario. Detalle completo en `TASKS.md`/`HANDOFF.md`/`CHANGELOG.md`.
 
 ## BOTONES-FEEDBACK-01 — feedback en ~95 botones + bug crítico de datos (2026-08-13, tarde)
 

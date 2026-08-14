@@ -1,5 +1,230 @@
 # Handoff — Alejandra 2.0
 
+## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
+
+Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +
+navegación en vivo), sin agenda previa — "vamos a revisar la app que tiene cosillas que
+arreglar". Cuatro fixes independientes, cada uno encontrado navegando la pantalla real:
+
+- **DOCS-TABS-DEPT-02**: las pestañas de departamento en Documentos mostraban TODAS las
+  pestañas aunque el admin tuviera un departamento concreto elegido en el selector del
+  topbar (`topbarDeptoSelect`) — un fix anterior del mismo día (`FIX-DOCS-TABS-DEPT-01`)
+  ya filtraba por departamento para no-admins, pero la excepción de admin seguía
+  mostrando todo sin mirar la elección del topbar. Corregido: mismo filtro por
+  `SESSION.departamento` para todos, admin o no — solo se muestran todas cuando no hay
+  ninguno elegido ("Todos los departamentos" = valor vacío).
+- **DASHBOARD-KPIS-VACIOS-01**: Adrián enseñó una captura del Dashboard con "Trabajadores
+  activos" y "Obras activas" en "—" pese a haber datos reales. Causa: `/obra-dashboard`
+  nunca devolvía esos dos campos (ni `equipos_averiados`, encontrado revisando el resto
+  de tarjetas de la misma pantalla) y el frontend leía `dash.stock_bajo` cuando el
+  backend manda `alertas_stock`. Trabajadores/Obras se calculan en el frontend desde
+  `/personal/trabajadores` y `/obras-overview` (ya se pedían en la misma carga, evita
+  duplicar en el backend la lógica de aislamiento por departamento); Equipos averiados
+  con una query nueva en `getObraDashboard` (PEMP+carretillas, `LOWER(estado)` porque D1
+  mezcla mayúsculas/minúsculas reales según qué ruta escribió el dato); Alertas de stock
+  leyendo el campo real.
+- **DELEGACION-SSE-01**: encontrado revisando por qué el ayudante de Correos se quedaba
+  "Pensando" en silencio varios segundos. `delegar_tarea` ejecuta su propio bucle interno
+  (llamadas a Claude + tools del ayudante) sin emitir ningún evento SSE al stream
+  principal — el resto de tools sí avisan (`tool_start`/`tool_end`/`progreso`, ver
+  `generar_plano`). Se replica el mismo patrón dentro de `delegar_tarea` y se propaga
+  `sendSSE` a las tools que ejecuta el ayudante (antes se les pasaba `undefined`). Test
+  actualizado (firma de la llamada cambiada), 207/207 en verde.
+- **FAB-SCAN-OCULTO-01**: Adrián — "para qué queremos el icono de scan remoto en el panel
+  Office cuando no hay remoto conectado?". El botón 📷 solo lanza un escaneo EN un móvil
+  ya emparejado; sin uno, pulsarlo solo mostraba un toast de error — dead UI. Oculto junto
+  con su etiqueta mientras no haya un móvil real conectado, mismo criterio que ya usaba el
+  botón de escaneos pendientes (📥, que también solo aparece cuando hay algo real que
+  hacer).
+- Verificación: sintaxis + encoding en cada commit; los tres fixes de `panel.html`/
+  `alejandra-agente` verificados en vivo en el navegador contra producción tras
+  desplegar (excepto el propio fix de dashboard, confirmado por los KPIs mostrando
+  valores reales tras recargar).
+- Desplegado: Pages + los dos Workers (commits `a43937b`, `b2e5e17`, `b4e5479`, `1e939d5`).
+
+## APP-REPASO-DEPARTAMENTOS-01 — repaso departamento por departamento del menú móvil (2026-08-13/14)
+
+- Contexto: Adrián — "vamos a revisar la app que tiene cosillas que arreglar" →
+  "tenemos que entrar en cada departamento y subdepartamento a verificar que no haya
+  tarjetas que no tengan que estar ahí, o al revés, que falten" → "vamos departamento por
+  departamento". Cada cambio se confirmó con él antes de tocar código, no se aplicó nada
+  a ciegas.
+- **Hallazgo de partida**: `index.html` (móvil) usa un menú genérico (`_HOME_TRADE_MODS`)
+  casi idéntico para todos los departamentos "trade", mientras `panel.html` ya tenía años
+  de curación real por departamento (`_MENU_ROL_DEPT_CONFIG.encargado`). Cruzando los dos
+  se encontró que el móvil nunca se actualizó para respetar esa curación en varios sitios.
+- **Tarjetas del selector de departamento** (bug de flexbox, no de curación): sin
+  `min-width:0` en el contenedor de texto, un nombre largo como "Telecomunicaciones" en
+  una sola línea no se dejaba encoger por debajo de su ancho natural — empujaba el
+  chevron fuera de la tarjeta en vez de dejar que el texto envolviera. Añadida clase
+  `.dept-info` (antes `style="flex:1"` suelto, repetido 6 veces) + `.dept-chevron`
+  (`flex-shrink:0` defensivo) + `overflow-wrap:break-word`. Descripción de Control
+  acortada (ocupaba 3 líneas frente a 1-2 del resto).
+- **Control** (monitorización de salas CPD, sin cuenta real todavía): panel.html no le da
+  ningún `material` — "departamento de un solo módulo" (Sondas CPD). Confirmado con
+  Adrián: quita PEMP y Carretillas (no usa plataformas elevadoras ni carretillas); SÍ
+  conserva Herramientas, Pedidos, Calendario, Incidencias, Galería, Documentación, Planos
+  y Partes (a diferencia de Ingeniería, más abajo). `sinMaquinaria` en `setupHomeModules()`
+  ahora cubre `dept==='ingenieria' || dept==='control'`; `excluirControl` nuevo en
+  `_HOME_TRADE_MODS` para que "Departamentos y submódulos" (config por empresa en
+  `panel.html`) no ofrezca un interruptor de PEMP/Carretillas para Control que nunca
+  podría volver a mostrar la tarjeta.
+- **Ingeniería**: `panel.html` le quita el material Y sustituye Calendario/Incidencias/
+  Documentación genéricos por una sección técnica propia entera (RFIs, Fases, Hitos,
+  Contratos, Submittals, Transmittals, NCRs, ITP...). Esas pantallas no existen en el
+  móvil — Adrián: "ingeniería es mejor en el panel donde se trabaja más cómodo, pero sí
+  tiene que estar sincronizado con lo que haya en el móvil". Se deja como está (ya sin
+  PEMP/Carretillas desde antes de esta sesión); la paridad completa queda fuera de
+  alcance, es construir pantallas nuevas, no ocultar/mostrar tarjetas.
+- **Obra Civil / Albañilería / Pintura / Carpintería**: `panel.html` tampoco les da
+  material (comentario propio: "ninguno tiene cuentas reales todavía — asunción
+  razonable, a revisar"). Adrián, al preguntarle: "son oficios así que deberían tratarse
+  como electricidad, menos bobinas que no pinta nada, deberían tener todo" — confirmado
+  sin cambios de código (ya tenían el menú completo salvo Bobinas, exclusiva de Eléctrico).
+  Propuesta suya aparte: "Obra Civil es el departamento y Carpintería/Pintura/Albañilería
+  como subdepartamentos" — evaluado el coste de una jerarquía real (`departamento` es un
+  campo plano usado en decenas de tablas y en todo el aislamiento por departamento de
+  `worker.js`, tocar el esquema es alto riesgo) frente a una agrupación solo visual;
+  Adrián: "me vale así" (la fácil). Implementado `abrirSubDeptosObraCivil()`: la tarjeta
+  "Obra Civil" del selector abre un overlay con las 4 opciones (Obra Civil general +
+  las 3 subtrades), filtradas por los departamentos activos de la empresa
+  (`alejandra_deptos_activos`, mismo caché que ya usaba `aplicarDeptosActivos()`); cada
+  una sigue siendo su propio `departamento` real, sin jerarquía en el dato.
+- **Almacén**: `panel.html` — Adrián (sesión anterior): "el almacén es solo para
+  material", ve el material de TODOS los departamentos (incluidas bobinas y el stock de
+  Seguridad) con un modal de filtro, Pedidos en sección propia, Hoy en obra/Personal/
+  Documentación ocultos enteros. Confirmado con Adrián: mismo criterio en el móvil.
+  Reducido a Bobinas/PEMP/Carretillas/Herramientas/Pedidos reutilizando
+  `_HOME_DEPT_ALLOWED_CARDS` (la lista blanca que ya existía solo para Telecom, en vez de
+  añadir más condiciones dispersas a `setupHomeModules()`); Bobinas añadida a
+  `mostrarBobinas` (antes solo `dept==='electrico'`). **Pendiente, más grande y explícito
+  como fuera de esta sesión**: que Almacén vea también el material de otros
+  departamentos (el modal de filtro no tiene equivalente en el móvil todavía).
+- **Tarjeta "Alejandra IA" eliminada** de la lista de módulos en TODOS los departamentos
+  — Adrián estaba pensando en quitarla pensando que era exclusiva suya en una APK
+  Android, pero al preguntarle "¿qué sale cuando pulsas el botón central de la app?"
+  confirmó en vivo (verificado en el navegador) que ese botón (`navIABtn`) ya lleva a
+  Alejandra desde cualquier pantalla, para todos los usuarios logados
+  (`checkIABtn()` lo fuerza siempre, sin depender de rol/departamento) — la tarjeta del
+  listado era 100% redundante, no una función exclusiva de nadie.
+- **RdP / Hormigonado / Formación**: las tres estaban gateadas solo por rol
+  (`esEncargadoPlus`), visibles en todos los departamentos "trade" por igual, sin ningún
+  criterio de pertenencia — pendiente que ya estaba anotado sin decidir en `TASKS.md`
+  ("qué departamento debería ver cada uno"). Encontrado por el propio Adrián navegando la
+  app en vivo ("en el departamento de control hay muchas tarjetas que no hacen falta" →
+  Hormigonado, un registro de vertido de hormigón, no tiene nada que ver con monitorizar
+  salas CPD). Decidido con él: **RdP → Seguridad**, **Hormigonado → Obra Civil**
+  (ningún otro oficio vierte hormigón), **Formación → Personal** (tarjeta nueva en
+  `perPanelHome`, reutilizando la pantalla ya existente `navTo('formacion')` en vez de
+  duplicarla). Bug propio encontrado al verificar: el primer intento de mostrar RdP en
+  Seguridad se añadió dentro de la rama `dept==='seguridad'` de `setupHomeModules()`
+  (`#screenHome`), pero ese departamento navega directo a `showScreen('seguridad')`
+  (`#screenSeguridad`) y `#screenHome` nunca llega a mostrarse — cambio sin ningún efecto
+  real. Corregido moviendo la tarjeta real a `segPanelHome`, verificado en el navegador
+  que sí aparece y abre el registro. Nombre completo "Registro Diario de Prevención
+  (RdP)" en vez de solo "RdP" en tarjetas/modal — Adrián: "RDP no se sabe lo que es".
+- Verificación: sintaxis (`node --check` sobre el `<script>` extraído) y encoding en cada
+  commit; verificado en vivo en el navegador (Claude in Chrome, sesión real de Adrián en
+  Levitec/CPD Getafe) tras cada despliegue — Control sin PEMP/Carretillas/RdP/Hormigonado/
+  Formación/Alejandra IA confirmado, Seguridad con RdP funcionando, Personal con
+  Formación funcionando, chevron de Telecomunicaciones visible. La agrupación de Obra
+  Civil **no se pudo verificar en vivo** — Levitec no tiene esos departamentos activos;
+  pendiente probarla con una empresa que sí los tenga (p.ej. la demo).
+- Desplegado: Pages, varios ciclos durante la sesión (últimos commits `0ba8124`, `5a48c75`,
+  `93bd746`, `694a741`).
+
+## COMPAT-CAE-01 — compatibilidad con plataformas CAE externas (Nalanda) (2026-08-13)
+
+- Contexto: Adrián — "tenemos otra app que gestiona también documentación de los
+  trabajadores y genera tarjetas. Son plataformas que utilizan las empresas. Necesitamos
+  ser compatibles con ellos" → confirmó que se refería a Nalanda, y compartió una foto de
+  su propia tarjeta real de esa plataforma.
+- Investigado antes de tocar código: Nalanda es una plataforma CAE (Coordinación de
+  Actividades Empresariales) — gestión documental de PRL/formación de subcontratas con
+  QR "infalsificables" propios para control de accesos. **No publican API ni
+  documentación técnica abierta** — la integración con terceros se gestiona caso a caso
+  directamente con ellos. Conclusión: no es un problema que se resuelva solo con código
+  nuestro; mientras no haya acceso/spec real de Nalanda, la vía es un puente manual
+  (exportar documentación para subir a mano), no una integración automática.
+- La foto de la tarjeta real de Adrián mostró que el formato de Nalanda va más allá de
+  carnets con fecha de caducidad: clasifica por **oficios habilitados** y **máquinas
+  habilitadas** con pictogramas, además de empresa/obra/cargo/categoría — confirmado con
+  él que "lo suyo es que tenga lo mismo" en ambos documentos.
+- **Backend**: `GET /trabajador-documentacion?tipo=usuario|externo&id=X` — carnets + EPIs
+  + reconocimiento médico (solo apto/no apto y fechas, nunca `centro_medico`/
+  `medico_responsable`/`notas` clínicos) de un trabajador. Mismo nivel de acceso que
+  Reconocimientos (Seguridad+admins), porque incluye ese dato sensible. `GET /carnets`
+  acepta ahora `usuario_id`/`externo_id` opcionales (mismo gate que ya tenía, solo más
+  filtrado) — lo usa la tarjeta para los pictogramas sin depender del endpoint de salud.
+- **`panel.html`**: ficha imprimible A4 (botón 📋 en Trabajadores) con dos secciones
+  "🛠️ Oficios / formación" y "🚜 Máquinas habilitadas" (heurística por palabra clave sobre
+  `TIPOS_CARNET`, agrupación visual, no una fuente de permisos) en vez de una tabla
+  genérica de Carnets, más EPIs y reconocimiento médico. No incluye pictograma de
+  Riesgos — sin dato equivalente registrado en la app, se deja explícito en el pie en vez
+  de inventarlo. No incluye Formación — `formacion_obra` es un registro por EVENTO con
+  lista de nombres en texto libre, sin `usuario_id`/`externo_id` propio, no se puede
+  responder de forma fiable "¿asistió este trabajador exacto?".
+- **`index.html` y `panel.html`**: la tarjeta con QR (🪪) añade una fila de pictogramas
+  (oficios/máquinas habilitadas), pidiendo los carnets del trabajador al vuelo. Si falla o
+  el rol no tiene acceso a Carnets (oficina no-admin), la tarjeta se sigue generando
+  igual, solo sin esa fila — nunca bloquea el flujo principal (fichar).
+- Desplegado: Pages + Worker API (commit `8b1cf3b`).
+- Siguiente acción exacta: ninguna urgente — es un puente manual a propósito, sin más
+  pendientes hasta que Adrián consiga acceso/spec real de Nalanda.
+
+## INFORMES-SEG-CIERRE-01 — gestión completa del Informe Semanal en los dos frontends (2026-08-13)
+
+- Contexto: continuación de `INFORMES-SEG-SEMANAL-01` (mañana del 13/08) — Katy (técnico
+  real) probó la app y reportó a Adrián que "no veo el botón para generar informe" / "el
+  flujo no está claro" / "tampoco hay historial por si quieres ver en otra fecha los
+  informes" / "tampoco se pueden editar o agregar más a un informe del día anterior o
+  cuando sea". Adrián: "arréglalo tú todo".
+- **Navegación por semanas + edición de actividades** (`index.html`): flechas ‹ › junto a
+  la etiqueta de semana (`_segInfSemanaOffset`, sin dejar ir al futuro); cada actividad ya
+  guardada tiene ahora un ✏️ además del 🗑 existente. Nuevo `PUT
+  /informes-seg/actividad/:id` en el backend (no existía — antes solo crear/borrar): si la
+  fecha cambia a otra semana, mueve la actividad (y su `informe_id`) al informe de esa
+  semana, creándolo si hace falta, para no dejarla huérfana.
+- **Cerrar y generar el documento final desde el móvil** (`index.html`): antes esa parte
+  (editar Aspectos críticos/Observaciones/Otros puntos, cerrar el informe, generar
+  Word/PDF) solo existía en `panel.html` — el aviso fijo de la pantalla incluso decía
+  explícitamente "se genera desde Alejandra Office". Botón 📄 en la cabecera (deshabilitado
+  mientras no exista informe esa semana) abre un modal — paridad de campos con el ya
+  existente en `panel.html` (`verInformeSeg`/`guardarInformeSeg`), mismos endpoints (`PUT
+  /informes-seg/:id`, `GET .../docx`), **sin backend nuevo para esta parte**. "PDF"
+  reutiliza el mismo patrón de ventana-de-impresión (`window.print()`, "Guardar como PDF")
+  que ya usa toda la app — no se generó PDF en el servidor.
+- **Explicación de los 3 campos de texto libre**: Adrián, viendo el resultado, tampoco
+  tenía claro para qué eran ("no entiendo bien este informe" / "para qué son") —
+  explicados y añadidos como placeholder de ejemplo (basados en la plantilla S31 real de
+  Levitec): Aspectos críticos = algo urgente/peligroso de la semana; Observaciones = cómo
+  fue la semana en general en seguridad; Otros puntos = avisos/pendientes sueltos. Aviso
+  de cabecera actualizado para ya no remitir a Office.
+- **Crear y borrar informes enteros desde `panel.html`**: Adrián — "ahora en el panel, los
+  informes no se pueden borrar y tampoco crear" / "se debería poder hacer los informes
+  como en la app". Confirmado con él (multi-select): tanto actividades sueltas (ya
+  funcionaban, con el 🗑 existente) como el **informe semanal completo** (no existía en
+  ningún sitio, ni móvil ni panel). Nuevo `DELETE /informes-seg/:id` — borra en cascada
+  fotos de R2 de TODAS sus actividades, `informes_seg_fotos`, `informes_seg_actividades` y
+  por último la fila de `informes_seg_semanal`, en ese orden para no dejar fotos huérfanas
+  en R2 si algo falla a medias. Botón 🗑 en el listado (Office). Formulario "+ Nueva
+  actividad" añadido dentro del detalle del informe en `panel.html` (antes el comentario
+  del propio código decía explícitamente "no se crean actividades a mano" desde ahí) —
+  reutiliza el mismo `POST /informes-seg/actividad` que ya usa `index.html`, sin backend
+  nuevo para esta parte.
+- Verificación: sintaxis + encoding en cada commit; probado en vivo en el navegador
+  (Claude in Chrome) contra producción — modal de cierre abierto, botón PDF verificado
+  (abre ventana nueva con el contenido real del informe, semana/lugar/actividades
+  correctos). Creación/borrado desde `panel.html` verificados por código y por sintaxis,
+  no probados en vivo en esta sesión.
+- Desplegado: Pages + Worker API, varios ciclos (commits `5aeaf40`, `f143289`, `ab2e627`).
+- Pendiente sin decidir, explícitamente aparte: plantilla del documento final (Word/PDF)
+  editable por el usuario en vez de fija en el código — Adrián: "esa plantilla estaría
+  bien poder modificarla, en vez de dejarla oculta". Requiere decidir dónde se guarda
+  (¿por empresa? ¿global?), qué partes son editables, y que Word y PDF lean de un mismo
+  sitio en vez de tener cada uno su plantilla hardcodeada por separado — se dejó
+  pendiente de perfilar, no se empezó.
+
 ## BOTONES-FEEDBACK-01 — feedback visual en ~95 botones Guardar + bug crítico de datos (2026-08-13, tarde)
 
 - Contexto: Adrián probó en vivo el informe semanal de Seguridad recién construido — "cuando

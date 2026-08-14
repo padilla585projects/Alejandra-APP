@@ -4,6 +4,100 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-13/14)
+
+- **COMPAT-CAE-01:** Adrián — "tenemos otra app [Nalanda] que gestiona documentación de
+  trabajadores y genera tarjetas... necesitamos ser compatibles con ellos". Investigado:
+  Nalanda no publica API ni formato de QR abiertos, así que es un puente manual, no una
+  integración automática. `GET /trabajador-documentacion` nuevo (carnets + EPIs +
+  reconocimiento médico, solo apto/no apto sin detalle clínico); `GET /carnets` acepta
+  `usuario_id`/`externo_id`. Ficha imprimible A4 en `panel.html` con las mismas dos
+  categorías que la tarjeta real de Nalanda (Oficios/Máquinas habilitadas, viendo la
+  tarjeta física de Adrián). Tarjeta con QR (`index.html`/`panel.html`) con fila de
+  pictogramas de oficios/máquinas.
+- **AYUDA-PANTALLA-01:** `panel.html` ya mandaba `pantalla` como texto enriquecido
+  (`AYUDA_SECCIONES`, ~90 páginas); `index.html` solo mandaba el id crudo de la pantalla.
+  Mismo patrón replicado (`_AYUDA_PANTALLAS`, 31 pantallas) sin tocar el backend — el campo
+  `pantalla` siempre fue texto libre en `construirMessages()`, nunca hay comparación exacta
+  contra su valor.
+- **INFORMES-SEG-CIERRE-01:** paridad completa de gestión del Informe Semanal en los dos
+  frontends, más allá de la captura diaria que ya existía (`INFORMES-SEG-SEMANAL-01`,
+  2026-08-13 mañana):
+  - Navegación por semanas anteriores y edición de actividades ya guardadas (antes solo
+    "añadir nueva" o "borrar"; nuevo `PUT /informes-seg/actividad/:id`).
+  - `index.html`: botón 📄 en Informe Semanal abre un modal para editar Aspectos
+    críticos/Observaciones/Otros puntos, cerrar/reabrir el informe y generar el documento
+    final (Word descargando el `.docx` ya generado en el servidor; PDF con la misma
+    ventana de impresión que usa el resto de la app) — antes esa parte solo existía en
+    Office.
+  - `panel.html`: formulario "+ Nueva actividad" dentro del detalle del informe (antes
+    solo se podía revisar/cerrar/borrar actividades sueltas, nunca crear una) y botón 🗑
+    para borrar un informe semanal entero — nuevo `DELETE /informes-seg/:id` (cascada:
+    fotos de R2, `informes_seg_fotos`, `informes_seg_actividades`, la fila del informe).
+  - Placeholders de ejemplo en los 3 campos de texto libre del cierre — Adrián: "no
+    entiendo bien este informe" / "creo que no queda claro" qué poner ahí.
+- **APP-REPASO-DEPARTAMENTOS-01:** repaso departamento por departamento del menú de
+  `index.html`, confirmando cada cambio con Adrián antes de aplicarlo:
+  - Tarjetas del selector de departamento: `min-width:0` en el contenedor de texto (bug de
+    flexbox — sin él, un nombre largo como "Telecomunicaciones" empujaba el chevron fuera
+    de la tarjeta en vez de envolver).
+  - **Control** (monitorización de salas CPD): quitadas PEMP y Carretillas (no usa
+    plataformas elevadoras ni carretillas); confirmado que conserva Herramientas/Pedidos/
+    Calendario/Incidencias/Galería/Documentación/Planos/Partes.
+  - **Ingeniería**: se deja como está en el móvil (ya sin PEMP/Carretillas) — la paridad
+    completa con la sección técnica de `panel.html` (RFIs, Contratos, Submittals...) queda
+    fuera de alcance, esas pantallas no existen en el móvil.
+  - **Obra Civil/Albañilería/Pintura/Carpintería**: confirmado que se tratan como
+    Eléctrico (menú completo, sin Bobinas) — sin cambio de código. Agrupadas visualmente
+    bajo una sola tarjeta "Obra Civil" que abre un selector con las 4 opciones (respeta
+    los departamentos activos de cada empresa), sin crear jerarquía real en el dato — cada
+    una sigue siendo su propio `departamento` plano.
+  - **Almacén**: reducido a Bobinas/PEMP/Carretillas/Herramientas/Pedidos ("el almacén es
+    solo para material", mismo criterio que `panel.html`), reutilizando
+    `_HOME_DEPT_ALLOWED_CARDS` (la lista blanca que ya usaba Telecom). Pendiente aparte,
+    más grande: `panel.html` además deja a Almacén ver el material de TODOS los
+    departamentos (`filtroDeptModal`) — en el móvil de momento solo ve el suyo.
+  - Tarjeta "Alejandra IA" eliminada del listado de módulos en todos los departamentos —
+    era 100% redundante con el botón central de la barra inferior (`navIABtn`), que ya
+    lleva al chat desde cualquier pantalla para todos los usuarios logados.
+  - RdP (Registro Diario de Prevención) reasignado a Seguridad; Hormigonado (registro
+    EHE-08) reasignado a Obra Civil; Formación reasignada a Personal (tarjeta nueva en
+    `perPanelHome`, reutilizando la pantalla ya existente `navTo('formacion')`). Estaban
+    gateadas solo por rol, visibles en todos los departamentos por igual, sin ningún
+    criterio de pertenencia — pendiente que ya estaba anotado sin decidir en `TASKS.md`.
+    Corrección de bug propio: el primer intento de mostrar RdP en Seguridad vivía en
+    `#screenHome`, pero ese departamento navega directo a `#screenSeguridad` y nunca llega
+    a mostrar esa pantalla — la tarjeta real se movió a `segPanelHome`.
+  - Nombre completo "Registro Diario de Prevención (RdP)" en vez de solo "RdP" en tarjetas
+    y modal — Adrián: "RDP no se sabe lo que es".
+
+### Fixed (2026-08-12/13)
+
+- **DOCS-TABS-DEPT-02:** las pestañas de departamento en Documentos (`panel.html`)
+  mostraban todos los departamentos aunque un admin tuviera uno concreto elegido en el
+  selector del topbar — la excepción de admin ignoraba esa elección. Ahora se filtra por
+  `SESSION.departamento` igual para admins y no-admins; solo se muestran todas cuando no
+  hay ninguno elegido ("Todos los departamentos").
+- **DASHBOARD-KPIS-VACIOS-01:** el dashboard principal de `panel.html` no actualizaba
+  Trabajadores activos, Obras activas, Equipos averiados ni Alertas de stock —
+  `/obra-dashboard` nunca devolvía `trabajadores_activos` ni `equipos_averiados`, y el
+  frontend leía `dash.stock_bajo` cuando el backend manda `alertas_stock`. Trabajadores y
+  Obras se calculan ahora en el frontend a partir de `/personal/trabajadores` y
+  `/obras-overview` (ya se pedían en la misma carga); Equipos averiados con una query
+  nueva en `getObraDashboard` (`LOWER(estado)` para cubrir la mezcla de mayúsculas/
+  minúsculas real de D1); Alertas de stock leyendo el campo que el backend sí manda.
+- **DELEGACION-SSE-01:** `delegar_tarea` (usado por el ayudante de Correos, entre otros)
+  ejecutaba todo su bucle interno (varias llamadas a Claude + tools del ayudante) sin
+  emitir ningún evento SSE — el chat se quedaba en "Pensando" en silencio mientras el
+  ayudante trabajaba, sin el `tool_start`/`tool_end`/`progreso` que sí tiene el resto de
+  tools. Se replica el mismo patrón y se propaga `sendSSE` a las tools del ayudante (antes
+  se les pasaba `undefined`).
+- **FAB-SCAN-OCULTO-01:** el botón flotante de escaneo remoto en `panel.html` (Office) se
+  mostraba siempre, aunque no hubiera ningún móvil emparejado — `rsAbrirScanModal()` solo
+  sirve para lanzar un escaneo EN un móvil ya conectado; sin uno, el botón solo producía un
+  toast de error. Se oculta ahora junto con su etiqueta mientras no haya un móvil real
+  conectado, mismo criterio que ya usa el botón de escaneos pendientes.
+
 ### Fixed (2026-08-13, noche)
 
 - **SELECTOR-EMPRESA-ROL-01:** el selector de empresa del topbar de `panel.html` (añadido el
