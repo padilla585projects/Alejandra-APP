@@ -6571,6 +6571,19 @@ const _HOME_DEPT_ALLOWED_CARDS = {
     'cardObraDashboard',
     'cardEpisDotacion',
   ]),
+  // CARDS-DEPT-ALMACEN-01 (13/08/2026): Adrián, revisando departamento por departamento --
+  // "el almacén es solo para material" (mismo criterio que panel.html: oculta Hoy en
+  // obra/Personal/Documentación por completo, solo deja material + pedidos). Bobinas se
+  // añade también aquí porque panel.html incluye bobinas en el material de Almacén.
+  // Pendiente aparte, más grande: panel.html además deja a Almacén ver el material de
+  // TODOS los departamentos (filtroDeptModal) -- aquí de momento solo ve el suyo.
+  almacen: new Set([
+    'cardBobinas',
+    'cardPemp',
+    'cardCarretillas',
+    'cardHerramientas',
+    'cardPedidos',
+  ]),
 };
 
 function aplicarMenuHomeEspecifico(dept) {
@@ -6630,8 +6643,10 @@ function setupHomeModules() {
     applyHomeOrder();
     return;
   }
-  // El departamento elegido manda — electrico ve bobinas, mecánicas no
-  const mostrarBobinas = dept === 'electrico';
+  // El departamento elegido manda — electrico ve bobinas, mecánicas no. Almacén también
+  // (CARDS-DEPT-ALMACEN-01): gestiona el material físico de todos los departamentos,
+  // incluidas las bobinas, mismo criterio que panel.html.
+  const mostrarBobinas = dept === 'electrico' || dept === 'almacen';
   const esOficinaTecnica = dept === 'ingenieria';
   // CARDS-DEPT-CONTROL-01 (13/08/2026): Adrián, revisando departamento por departamento --
   // Control (monitorización de salas CPD) no usa plataformas elevadoras ni carretillas.
