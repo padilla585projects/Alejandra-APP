@@ -569,11 +569,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <span class="nav-icon">💬</span> Chat del equipo
       <span class="nav-badge" id="chatBadgeSidebar" style="display:none">0</span>
     </button>
-    <!-- CORREOS-PANEL-01 (17/08/2026): dato personal del usuario (su Gmail conectado), no
-         de obra/empresa -- fuera de las secciones por departamento a propósito. -->
-    <button class="nav-item" data-page="correos" onclick="navTo('correos')">
-      <span class="nav-icon">📧</span> Mis Correos
-    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="personal"><span>👷 Personal</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-sensitive-data" data-page="personal" onclick="navTo('personal')">
@@ -1091,6 +1086,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <button class="topbar-btn" onclick="iniciarTourSidebar(true)" title="Ver tour de las secciones del panel">❓</button>
       <button class="topbar-btn" onclick="notifAbrir()" style="position:relative" title="Notificaciones">
         🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:9px;padding:1px 5px;border-radius:10px">0</span>
+      </button>
+      <!-- CORREOS-PANEL-01 (17/08/2026): Adrián -- "mejor en la barra el botón" (más
+           accesible que enterrado en el sidebar). Contador de no leídos, mismo patrón que
+           notifBadge -- oculto si no hay Gmail conectado o no hay correos sin leer. -->
+      <button class="topbar-btn" onclick="navTo('correos')" style="position:relative" title="Mis Correos">
+        📧<span id="correosBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:9px;padding:1px 5px;border-radius:10px">0</span>
       </button>
       <div class="conn-dot" id="connDot" title="Estado conexión"></div>
     </div>
@@ -11888,6 +11889,7 @@ function iniciarApp() {
   checkConexion();
   setInterval(checkConexion, 30000);
   iniciarPollingNotif();
+  iniciarPollingCorreos();
   _initSync();
   cargarObrasPanel();
   navTo('dashboard');
@@ -22316,6 +22318,27 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
 // categoría propia de la app (categoria_app en la caché), nunca toca el Gmail real.
 let _correosData = [];
 
+// CORREOS-PANEL-01 (17/08/2026): Adrián -- "mejor en la barra el botón y ya está" (en vez
+// de un enlace también en el sidebar). Mismo patrón de polling que iniciarPollingNotif().
+// Silencioso si el usuario no tiene Gmail conectado (r.conectado===false) -- no es un error.
+function iniciarPollingCorreos() {
+  actualizarCorreosBadge();
+  setInterval(actualizarCorreosBadge, 120000);
+}
+async function actualizarCorreosBadge() {
+  try {
+    const r = await api('/correos');
+    if (!r || r.conectado === false) { _pintarCorreosBadge(0, false); return; }
+    _pintarCorreosBadge((r.mensajes || []).filter(m => !m.leido_app).length, true);
+  } catch {}
+}
+function _pintarCorreosBadge(noLeidos, conectado) {
+  const badge = document.getElementById('correosBadge');
+  if (!badge) return;
+  badge.textContent = noLeidos > 99 ? '99+' : noLeidos;
+  badge.style.display = (conectado && noLeidos) ? 'block' : 'none';
+}
+
 async function cargarCorreosPanel() {
   const r = await api('/correos');
   if (!r || r.conectado === false) {
@@ -22327,6 +22350,7 @@ async function cargarCorreosPanel() {
   document.getElementById('correosContenido').style.display = 'block';
   document.getElementById('correosEmailConectado').textContent = `📧 ${r.email || ''}`;
   _correosData = r.mensajes || [];
+  _pintarCorreosBadge(_correosData.filter(m => !m.leido_app).length, true);
 
   const filtroSel = document.getElementById('filterCorreoCategoria');
   const filtroActual = filtroSel.value;
