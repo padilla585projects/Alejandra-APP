@@ -13116,7 +13116,7 @@ async function cpdOfficeAbrirPlano(id) {
         </select>
       </div>
       <div id="cpdOfficeToolbarHint" style="font-size:11px;color:var(--muted);margin-bottom:8px">Elige un tipo y haz clic en el plano para colocarlo · doble clic en un icono para editarlo</div>
-      <div id="cpdOfficeCanvas" style="position:relative;width:100%;max-width:900px;background:#0b0f14;border-radius:8px;overflow:hidden">
+      <div id="cpdOfficeCanvas" style="position:relative;width:100%;background:#0b0f14;border-radius:8px;overflow:hidden">
         <img id="cpdOfficeImg" src="${_cpdOfficeImagenUrl(data.plano.id)}" style="width:100%;display:block;user-select:none" draggable="false">
       </div>`;
     cont.querySelector('select').value = cpdOfficeEtiquetaModo();
