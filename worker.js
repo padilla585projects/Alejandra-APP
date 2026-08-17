@@ -7672,7 +7672,11 @@ async function getMiEmpresa(request, env) {
   if (!empresa) return err('Empresa no encontrada', 404);
   const obras    = (await env.DB.prepare('SELECT id, nombre, codigo FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
   const usuarios = (await env.DB.prepare('SELECT id, nombre, rol, departamento, obra_id FROM usuarios WHERE empresa_id = ? AND activo = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
-  return json({ empresa, obras, usuarios });
+  // TELECOM-NAV-01 (17/08/2026, hallazgo aparte): la respuesta nunca traía "ok:true" --
+  // abrirModalPlantillaInformeSeg() en panel.html comprueba "if (!r.ok)" (patrón estándar
+  // de toda la API) y por eso entraba SIEMPRE en la rama de error, aunque la petición
+  // funcionara -- el botón "✏️ Plantilla" del Informe Semanal no abría nunca el modal.
+  return json({ ok: true, empresa, obras, usuarios });
 }
 
 async function updateMiEmpresa(request, env) {
