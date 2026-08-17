@@ -5503,6 +5503,7 @@ export default {
       if (path === '/correos' && method === 'GET')                 return await getCorreosPanel(request, env);
       if (path === '/correos/sincronizar' && method === 'POST')     return await sincronizarCorreos(request, env);
       if (path.startsWith('/correos/') && method === 'PUT')         return await actualizarCorreoCache(path.split('/correos/')[1], request, env);
+      if (path.match(/^\/correos\/[^/]+\/completo$/) && method === 'GET') return await getCorreoCompleto(path.split('/')[2], request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -14110,10 +14111,57 @@ async function getCorreosPanel(request, env) {
   if (!auth.usuario_id) return err('No autorizado', 403);
   const conectado = await env.DB.prepare('SELECT email_conectado FROM gmail_oauth_tokens WHERE usuario_id=?').bind(auth.usuario_id).first();
   if (!conectado) return json({ conectado: false, mensajes: [] });
-  const { results } = await env.DB.prepare(
-    'SELECT gmail_id, de, asunto, fecha, resumen, leido_app, categoria_app FROM gmail_mensajes_cache WHERE usuario_id=? ORDER BY fecha DESC LIMIT 100'
-  ).bind(auth.usuario_id).all();
+  const url = new URL(request.url);
+  const incluirArchivados = url.searchParams.get('archivados') === '1';
+  const sql = incluirArchivados
+    ? 'SELECT gmail_id, de, asunto, fecha, resumen, leido_app, categoria_app, archivado FROM gmail_mensajes_cache WHERE usuario_id=? ORDER BY fecha DESC LIMIT 100'
+    : 'SELECT gmail_id, de, asunto, fecha, resumen, leido_app, categoria_app, archivado FROM gmail_mensajes_cache WHERE usuario_id=? AND archivado=0 ORDER BY fecha DESC LIMIT 100';
+  const { results } = await env.DB.prepare(sql).bind(auth.usuario_id).all();
   return json({ conectado: true, email: conectado.email_conectado, mensajes: results });
+}
+
+// CORREOS-PANEL-01 (17/08/2026): Adrián -- "ver el correo completo, no solo el resumen
+// corto". Solo bajo demanda (1 correo a la vez, al hacer clic), no se prefetch para toda
+// la lista -- N+1 llamadas reales a Gmail por pantalla sería demasiado. Un mensaje puede
+// venir en varias partes MIME anidadas (multipart/alternative, multipart/mixed con
+// adjuntos...); se recorre el árbol buscando primero text/plain y, si no hay, text/html.
+function _extraerCuerpoGmail(payload) {
+  if (!payload) return { cuerpo: '', esHtml: false };
+  const buscar = (parte, tipoBuscado) => {
+    if (parte.mimeType === tipoBuscado && parte.body?.data) return parte.body.data;
+    for (const sub of (parte.parts || [])) {
+      const r = buscar(sub, tipoBuscado);
+      if (r) return r;
+    }
+    return null;
+  };
+  const plano = buscar(payload, 'text/plain');
+  if (plano) return { cuerpo: _b64uDecode(plano), esHtml: false };
+  const html = buscar(payload, 'text/html');
+  if (html) return { cuerpo: _b64uDecode(html), esHtml: true };
+  return { cuerpo: '', esHtml: false };
+}
+function _b64uDecode(b64u) {
+  try {
+    const b64 = b64u.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch { return ''; }
+}
+async function getCorreoCompleto(gmailId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const { accessToken, error } = await _obtenerAccessTokenGmail(env, auth.usuario_id);
+  if (error) return json({ ok: false, error });
+  const mRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(gmailId)}?format=full`, {
+    headers: { Authorization: 'Bearer ' + accessToken },
+  });
+  const mData = await mRes.json();
+  if (!mRes.ok) return json({ ok: false, error: mData.error?.message || 'Error leyendo el correo.' });
+  const { cuerpo, esHtml } = _extraerCuerpoGmail(mData.payload);
+  return json({ ok: true, cuerpo, esHtml });
 }
 
 async function sincronizarCorreos(request, env) {
@@ -14149,6 +14197,7 @@ async function actualizarCorreoCache(gmailId, request, env) {
   const campos = [], vals = [];
   if (body.leido_app !== undefined) { campos.push('leido_app=?'); vals.push(body.leido_app ? 1 : 0); }
   if (body.categoria_app !== undefined) { campos.push('categoria_app=?'); vals.push(body.categoria_app || null); }
+  if (body.archivado !== undefined) { campos.push('archivado=?'); vals.push(body.archivado ? 1 : 0); }
   if (!campos.length) return err('Sin cambios');
   campos.push("updated_at=datetime('now')");
   vals.push(auth.usuario_id, gmailId);

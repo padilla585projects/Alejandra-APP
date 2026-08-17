@@ -22361,24 +22361,38 @@ async function cargarCorreosPanel() {
   _correosRenderLista();
 }
 
+// CORREOS-PANEL-01-v2 (17/08/2026): Adrián probó la v1 y pidió más -- "un administrador de
+// correos completo, para que no haya que salir de Alejandra para nada": responder directo,
+// ver el correo completo (no solo el resumen), archivar de la vista, y fechas en español
+// (fmtFechaHora ya existe y parsea bien el formato de fecha crudo de Gmail).
+function _correosExtraerEmail(de) {
+  const m = /<([^>]+)>/.exec(de || '');
+  return (m ? m[1] : de || '').trim();
+}
+
 function _correosRenderLista() {
   const filtro = document.getElementById('filterCorreoCategoria').value;
   const lista = filtro ? _correosData.filter(m => m.categoria_app === filtro) : _correosData;
   const cont = document.getElementById('correosList');
   document.getElementById('correosVacio').style.display = lista.length ? 'none' : 'block';
   cont.innerHTML = lista.map(m => `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;${m.leido_app ? 'opacity:.65' : ''}">
-      <span onclick="alternarLeidoCorreo('${escHtml(m.gmail_id)}', ${m.leido_app ? 'false' : 'true'})" title="${m.leido_app ? 'Marcar no leído' : 'Marcar leído'}" style="cursor:pointer;font-size:10px;color:${m.leido_app ? 'var(--muted)' : 'var(--accent)'};margin-top:4px">●</span>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-          <span style="font-weight:${m.leido_app ? '400' : '700'};font-size:13px">${escHtml(m.de || '—')}</span>
-          <span style="font-size:11px;color:var(--muted)">${escHtml((m.fecha || '').slice(0, 25))}</span>
-        </div>
-        <div style="font-size:13px;margin:2px 0">${escHtml(m.asunto || '(sin asunto)')}</div>
-        <div style="font-size:12px;color:var(--muted)">${escHtml((m.resumen || '').slice(0, 140))}</div>
-        <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
-          ${m.categoria_app ? `<span class="badge badge-ok" style="font-size:10px">${escHtml(m.categoria_app)}</span>` : ''}
-          <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="cambiarCategoriaCorreo('${escHtml(m.gmail_id)}')">🏷️ ${m.categoria_app ? 'Cambiar' : 'Categorizar'}</button>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;${m.leido_app ? 'opacity:.65' : ''}">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <span onclick="alternarLeidoCorreo('${escHtml(m.gmail_id)}', ${m.leido_app ? 'false' : 'true'})" title="${m.leido_app ? 'Marcar no leído' : 'Marcar leído'}" style="cursor:pointer;font-size:10px;color:${m.leido_app ? 'var(--muted)' : 'var(--accent)'};margin-top:4px">●</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <span style="font-weight:${m.leido_app ? '400' : '700'};font-size:13px">${escHtml(m.de || '—')}</span>
+            <span style="font-size:11px;color:var(--muted)">${fmtFechaHora(m.fecha)}</span>
+          </div>
+          <div style="font-size:13px;margin:2px 0;cursor:pointer" onclick="verCorreoCompleto('${escHtml(m.gmail_id)}')">${escHtml(m.asunto || '(sin asunto)')}</div>
+          <div id="correoResumen-${escHtml(m.gmail_id)}" style="font-size:12px;color:var(--muted)">${escHtml((m.resumen || '').slice(0, 140))}</div>
+          <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${m.categoria_app ? `<span class="badge badge-ok" style="font-size:10px">${escHtml(m.categoria_app)}</span>` : ''}
+            <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="cambiarCategoriaCorreo('${escHtml(m.gmail_id)}')">🏷️ ${m.categoria_app ? 'Cambiar' : 'Categorizar'}</button>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="verCorreoCompleto('${escHtml(m.gmail_id)}')">📄 Ver completo</button>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="responderCorreo('${escHtml(m.gmail_id)}')">↩️ Responder</button>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="archivarCorreo('${escHtml(m.gmail_id)}')">🗄️ Archivar</button>
+          </div>
         </div>
       </div>
     </div>`).join('');
@@ -22409,24 +22423,54 @@ async function cambiarCategoriaCorreo(gmailId) {
   cargarCorreosPanel();
 }
 
-// "Organizar con Alejandra" delega en el chat (mismo ayudante "correos" del resto de
-// F6.1-AYUDANTES-CORREOS) -- no hay lógica de categorización nueva aquí, solo se pide.
-// alejandraFabAbrir()/alejandrInput/alejandrEnviar() son las funciones reales del chat
-// flotante de Alejandra (ver más abajo en este mismo archivo).
+// Adrián: "no podemos hacer nada ahí" -- quitaba de la vista de la app, no del Gmail real
+// (seguimos sin el permiso gmail.modify para archivar de verdad). Sincronizar ya conserva
+// el estado de archivado (el UPDATE de sincronizarCorreos no toca esa columna).
+async function archivarCorreo(gmailId) {
+  if (!confirm('¿Archivar este correo? Solo se quita de esta vista, no se toca tu Gmail real -- volverá a aparecer si lo buscas con "archivados".')) return;
+  const r = await api(`/correos/${encodeURIComponent(gmailId)}`, { method: 'PUT', body: JSON.stringify({ archivado: true }) });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  toast('🗄️ Correo archivado', 'ok');
+  cargarCorreosPanel();
+}
+
+// "Ver completo": carga el cuerpo real bajo demanda (1 llamada a Gmail por clic, no se
+// precarga toda la lista) y sustituye el resumen corto por el texto completo in situ.
+async function verCorreoCompleto(gmailId) {
+  const cont = document.getElementById(`correoResumen-${gmailId}`);
+  if (!cont || cont.dataset.completo === '1') return;
+  cont.textContent = 'Cargando…';
+  const r = await api(`/correos/${encodeURIComponent(gmailId)}/completo`);
+  if (!r.ok) { toast(r.error || 'Error al cargar el correo', 'err'); cont.textContent = ''; return; }
+  cont.dataset.completo = '1';
+  cont.style.whiteSpace = 'pre-wrap';
+  cont.textContent = r.cuerpo || '(sin contenido de texto)';
+}
+
+// Adrián: "la idea es pedírselo por el chat normal y que lo haga" -- sin texto
+// predefinido, solo abre el chat real para que pida lo que sea (organizar, "contéstame al
+// mail de mi jefe", lo que sea) usando las tools que ya tiene el ayudante "correos".
+// alejandraFabAbrir() es la función real del chat flotante de Alejandra (ver más abajo).
 function organizarCorreosConAlejandra() {
   alejandraFabAbrir();
   const input = document.getElementById('alejandrInput');
-  if (input) input.value = 'Organiza mis correos: léelos si hace falta y asígnales una categoría breve (categorizar_correos). No los archives ni los marques leídos en Gmail, solo dentro de la app.';
-  alejandrEnviar();
-  toast('Pedido a Alejandra en el chat — vuelve a esta pantalla y pulsa Sincronizar cuando termine', 'info');
+  if (input) input.focus();
 }
 
-function abrirComposeCorreo() {
+function abrirComposeCorreo(prefill) {
+  const p = prefill || {};
   const html = `
-    <div class="form-group"><div class="form-label">Para</div><input class="form-input" id="mCorreoPara" type="email" placeholder="destinatario@ejemplo.com"></div>
-    <div class="form-group"><div class="form-label">Asunto</div><input class="form-input" id="mCorreoAsunto"></div>
+    <div class="form-group"><div class="form-label">Para</div><input class="form-input" id="mCorreoPara" type="email" placeholder="destinatario@ejemplo.com" value="${escHtml(p.para || '')}"></div>
+    <div class="form-group"><div class="form-label">Asunto</div><input class="form-input" id="mCorreoAsunto" value="${escHtml(p.asunto || '')}"></div>
     <div class="form-group"><div class="form-label">Mensaje</div><textarea class="form-input" id="mCorreoCuerpo" rows="8"></textarea></div>`;
   abrirModal('✏️ Redactar correo', html, enviarCorreoCompose);
+}
+
+function responderCorreo(gmailId) {
+  const m = _correosData.find(x => x.gmail_id === gmailId);
+  if (!m) return;
+  const asunto = /^re:/i.test(m.asunto || '') ? m.asunto : `Re: ${m.asunto || ''}`;
+  abrirComposeCorreo({ para: _correosExtraerEmail(m.de), asunto });
 }
 
 async function enviarCorreoCompose() {
