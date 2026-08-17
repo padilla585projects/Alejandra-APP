@@ -13093,8 +13093,33 @@ async function cpdOfficeGuardarNuevo() {
   }
 }
 
+// CPD-ZOOM-01 (17/08/2026): Adrián -- "podemos hacer que se pueda ampliar el plano para
+// colocar las sondas". El % de zoom se conserva mientras se sigue en el MISMO plano
+// (incluido el refresco automático de CPD-NAV-01, que reabre este mismo plano), pero se
+// resetea a 100% al entrar a un plano distinto -- no tiene sentido heredar el zoom de la
+// sala anterior. El cálculo de posición de sondas (% relativo a getBoundingClientRect())
+// sigue funcionando igual con el zoom aplicado: el rect ya refleja el tamaño visual tras
+// el transform:scale(), tanto para colocar como para arrastrar.
+window._cpdOfficeZoomFactor = window._cpdOfficeZoomFactor || 1;
+function cpdOfficeZoom(delta) {
+  window._cpdOfficeZoomFactor = Math.max(0.5, Math.min(3, Math.round((window._cpdOfficeZoomFactor + delta) * 100) / 100));
+  _cpdOfficeAplicarZoom();
+}
+function cpdOfficeZoomReset() {
+  window._cpdOfficeZoomFactor = 1;
+  _cpdOfficeAplicarZoom();
+}
+function _cpdOfficeAplicarZoom() {
+  const canvas = document.getElementById('cpdOfficeCanvas');
+  if (canvas) canvas.style.transform = `scale(${window._cpdOfficeZoomFactor})`;
+  const label = document.getElementById('cpdOfficeZoomLabel');
+  if (label) label.textContent = Math.round(window._cpdOfficeZoomFactor * 100) + '%';
+}
+
 async function cpdOfficeAbrirPlano(id) {
   const cont = document.getElementById('cpdOfficeContent');
+  const mismoPlano = window._cpdOfficePlano?.plano?.id === id;
+  if (!mismoPlano) window._cpdOfficeZoomFactor = 1;
   cont.innerHTML = '<div class="empty-state">Cargando plano…</div>';
   try {
     const data = await api(`/cpd/planos/${id}`);
@@ -13108,19 +13133,28 @@ async function cpdOfficeAbrirPlano(id) {
     cont.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
         <div id="cpdOfficeToolbar" style="display:flex;gap:6px"></div>
-        <select onchange="cpdOfficeCambiarEtiquetaModo(this.value)" style="margin-left:auto;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text)">
+        <div style="display:flex;gap:4px;align-items:center;margin-left:auto">
+          <button class="btn btn-secondary btn-sm" onclick="cpdOfficeZoom(-0.25)" title="Alejar">－</button>
+          <span id="cpdOfficeZoomLabel" style="font-size:11px;color:var(--muted);min-width:38px;text-align:center">${Math.round(window._cpdOfficeZoomFactor * 100)}%</span>
+          <button class="btn btn-secondary btn-sm" onclick="cpdOfficeZoom(0.25)" title="Ampliar">＋</button>
+          <button class="btn btn-secondary btn-sm" onclick="cpdOfficeZoomReset()" title="Volver al 100%">↺</button>
+        </div>
+        <select onchange="cpdOfficeCambiarEtiquetaModo(this.value)" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text)">
           <option value="nombre">Ver: nombre</option>
           <option value="serie">Ver: nº serie</option>
           <option value="ambos">Ver: nombre + serie</option>
           <option value="ninguno">Ver: nada</option>
         </select>
       </div>
-      <div id="cpdOfficeToolbarHint" style="font-size:11px;color:var(--muted);margin-bottom:8px">Elige un tipo y haz clic en el plano para colocarlo · doble clic en un icono para editarlo</div>
-      <div id="cpdOfficeCanvas" style="position:relative;width:100%;background:#0b0f14;border-radius:8px;overflow:hidden">
-        <img id="cpdOfficeImg" src="${_cpdOfficeImagenUrl(data.plano.id)}" style="width:100%;display:block;user-select:none" draggable="false">
+      <div id="cpdOfficeToolbarHint" style="font-size:11px;color:var(--muted);margin-bottom:8px">Elige un tipo y haz clic en el plano para colocarlo · doble clic en un icono para editarlo · ＋/－ para ampliar</div>
+      <div id="cpdOfficeCanvasWrap" style="width:100%;max-height:75vh;overflow:auto;border-radius:8px">
+        <div id="cpdOfficeCanvas" style="position:relative;width:100%;background:#0b0f14;transform-origin:0 0">
+          <img id="cpdOfficeImg" src="${_cpdOfficeImagenUrl(data.plano.id)}" style="width:100%;display:block;user-select:none" draggable="false">
+        </div>
       </div>`;
     cont.querySelector('select').value = cpdOfficeEtiquetaModo();
     cpdOfficeRenderToolbar();
+    _cpdOfficeAplicarZoom();
     const canvas = document.getElementById('cpdOfficeCanvas');
     window._cpdOfficePlano.sondas.forEach(s => _cpdOfficeAddMarker(canvas, s));
     canvas.addEventListener('click', e => {
