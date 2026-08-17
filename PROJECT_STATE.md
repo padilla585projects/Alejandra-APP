@@ -66,6 +66,11 @@
   de "ocultar si no puede elegir de verdad" a la función genérica compartida. Verificado
   en producción con un usuario de prueba `encargado` (selector oculto) y con la cuenta
   admin (selector poblado normalmente). Sin pendientes.
+- Estado (2026-08-17, noche — Correos): "porque no ahí la opción de marcar como leídos" /
+  "entonces nunca se quita las notificaciones" — solo existía leído/no-leído correo a
+  correo; nuevo botón "✅ Marcar leídos" en la barra de selección múltiple de "Mis
+  Correos". Verificado en producción (badge de 1→0 tras seleccionar y marcar, datos de
+  prueba sembrados directamente en D1 y borrados al terminar). Sin pendientes.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos

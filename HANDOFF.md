@@ -363,6 +363,35 @@
   `CLAUDE.md` — coherente con la UX pretendida, aunque técnicamente podría ver el listado
   si se quisiera cambiar ese criterio en el futuro.
 
+## Correos: marcar leídos en bloque (2026-08-17, noche)
+
+- Contexto: Adrián, tras cerrar OBRA-AUTO-01: "ahora seguimos con el correo" →
+  "porque no ahí la opción de marcar como leídos" → "entonces nunca se quita las
+  notificaciones".
+- Diagnóstico rápido por lectura de código: `alternarLeidoCorreo()` ya existía
+  (correo a correo, el punto ● de color junto al remitente), pero la barra de selección
+  múltiple (`CORREOS-PANEL-01-v3`) solo tenía Categorizar/Archivar/Borrar. El badge de
+  "correo nuevo" en la topbar se calcula sobre `leido_app` (`cargarCorreosPanel()`:
+  `_pintarCorreosBadge(_correosData.filter(m => !m.leido_app).length, true)`), así que sin
+  una acción en bloque, marcar todo como leído significaba abrir cada correo uno a uno —
+  el badge nunca bajaba de forma práctica.
+- Fix: nuevo botón "✅ Marcar leídos" en `#correosBarraSeleccion`, y
+  `marcarLeidosSeleccionados()` (mismo patrón exacto que `categorizarSeleccionados`/
+  `archivarSeleccionados`/`borrarSeleccionados`: `PUT /correos/:gmailId` con
+  `{leido_app:true}` por cada seleccionado, luego `cargarCorreosPanel()` para refrescar
+  lista y badge).
+- Verificación en producción con datos reales, no solo lectura de código: como la cuenta
+  de prueba no tiene Gmail conectado, se sembró directamente en D1 una cuenta ficticia
+  (`gmail_cuentas`, sin token real — solo para que `GET /correos` resuelva
+  `_cuentaActivaGmail`) y un mensaje de prueba no leído (`gmail_mensajes_cache`). Antes:
+  badge `"1"`. Se seleccionó el mensaje y se pulsó "Marcar leídos": badge `"0"`,
+  `leido_app` pasó a `1` en la fila. Cuenta y mensaje de prueba borrados de D1 al terminar.
+- Desplegado: `panel.html` vía `pages.yml` (SHA
+  `deb3532b5e55452f1e250a41a4322142fbbe9cce`, run verificado en verde). Sin cambios de
+  backend — el endpoint `PUT /correos/:gmailId` con `leido_app` ya existía.
+- Sin pendientes. `index.html` no tiene panel de Correos (es una página solo de
+  `panel.html`/Office), así que no aplica paridad aquí.
+
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 
 Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +

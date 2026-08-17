@@ -72,6 +72,11 @@ usuario con Gmail conectado, no solo Adrián.
   especiales, roto por el mismo motivo). Arreglado el manejo del error y extendido el
   criterio de "ocultar si no puede elegir de verdad" a la función genérica. Verificado con
   un usuario de prueba real por rol. Sin pendientes.
+- **Correos — marcar leídos en bloque (2026-08-17, noche):** "porque no ahí la opción de
+  marcar como leídos" / "entonces nunca se quita las notificaciones" — solo existía
+  leído/no-leído correo a correo; nuevo botón "✅ Marcar leídos" en la barra de selección
+  múltiple. Verificado en producción (badge de 1→0 tras seleccionar y marcar). Sin
+  pendientes.
 - Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
   Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
   "Organizar con Alejandra", y enviar un correo de prueba real.

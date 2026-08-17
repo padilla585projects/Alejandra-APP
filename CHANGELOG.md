@@ -4,6 +4,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-17, noche — Correos)
+
+- **Marcar leídos en bloque:** Adrián: "porque no ahí la opción de marcar como leídos" /
+  "entonces nunca se quita las notificaciones". Solo existía leído/no-leído correo a
+  correo (el punto de color); sin una acción en bloque, el badge de correo nuevo se
+  quedaba inflado salvo que se abriera cada correo uno a uno. Nuevo botón "✅ Marcar
+  leídos" en la barra de selección múltiple, mismo patrón que Categorizar/Archivar/Borrar.
+  Verificado en producción: badge de "1" a "0" tras seleccionar y marcar.
+
 ### Fixed (2026-08-17, noche — OBRA-AUTO-01)
 
 - **Selector de obra sin poblar en 130+ pantallas del panel, para encargado/operario:**

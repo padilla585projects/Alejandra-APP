@@ -52,6 +52,10 @@ obra del panel vacíos para estos roles (y rompía un mecanismo que ya ocultaba 
 especiales). Arreglado y extendido a la función genérica compartida. Verificado con un
 usuario de prueba por rol, sin pendientes.
 
+**Correos — marcar leídos en bloque (2026-08-17, noche):** "porque no ahí la opción de
+marcar como leídos" / "entonces nunca se quita las notificaciones" — nuevo botón en la
+barra de selección múltiple de "Mis Correos". Verificado en producción, sin pendientes.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda
