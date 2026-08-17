@@ -2355,6 +2355,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </select>
           <button class="btn btn-secondary" onclick="cargarInformesSeg()">🔄 Actualizar</button>
           <button class="btn btn-secondary" onclick="abrirModalPlantillaInformeSeg()">✏️ Plantilla</button>
+          <button class="btn btn-primary" onclick="abrirModalNuevoInformeSeg()">+ Nuevo informe</button>
         </div>
         <div id="infSegList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
         <div id="infSegVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
@@ -17302,6 +17303,53 @@ async function cargarInformesSeg() {
     </div>`).join('');
 }
 
+// INFORMES-SEG-CREAR-01 en Office, semana desde cero (17/08/2026): Adrián -- "ahí que
+// hacer que en la app y en el panel se pueda hacer lo mismo, que ahora no se puede". La
+// lista solo mostraba semanas que YA tenían al menos una actividad (creada desde la app,
+// que auto-crea el informe con la primera actividad) -- si el técnico no había usado el
+// móvil esa semana, en Office no había forma de arrancarlo. Mismo endpoint que ya usa
+// segInfGuardarActividadForm (POST /informes-seg/actividad, que auto-crea el informe si
+// no existe); tras guardar, abre directamente el detalle del informe recién creado.
+function abrirModalNuevoInformeSeg() {
+  const obraId = document.getElementById('filterInfSegObra')?.value || '';
+  if (!obraId) { toast('Selecciona primero una obra en el filtro de arriba', 'err'); return; }
+  const obraNombre = document.getElementById('filterInfSegObra').selectedOptions[0]?.textContent || '';
+  const html = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">${escHtml(obraNombre)} — se crea el informe de la semana a la que pertenezca esta fecha.</div>
+    <div class="form-group"><div class="form-label">Fecha</div><input class="form-input" type="date" id="mNuevoInfSegFecha" value="${new Date().toISOString().slice(0, 10)}"></div>
+    <div class="form-group"><div class="form-label">Contratista</div><input class="form-input" id="mNuevoInfSegContratista" placeholder="Opcional"></div>
+    <div class="form-group"><div class="form-label">Actividad *</div><input class="form-input" id="mNuevoInfSegActividad" placeholder="Ej: Trabajos de izado de material a L3"></div>
+    <div class="form-group"><div class="form-label">Foto (opcional)</div><input type="file" class="form-input" accept="image/*" id="mNuevoInfSegFoto"><input class="form-input" id="mNuevoInfSegFotoTitulo" placeholder="Título de la foto (sale a pie de foto en el informe)" style="margin-top:6px"></div>`;
+  abrirModal('+ Nuevo informe semanal', html, () => guardarNuevoInformeSeg(obraId));
+  document.getElementById('modalOkBtn').textContent = '💾 Crear';
+}
+
+async function guardarNuevoInformeSeg(obraId) {
+  const actividad = document.getElementById('mNuevoInfSegActividad').value.trim();
+  if (!actividad) return toast('⚠️ La actividad es obligatoria', 'err');
+  const body = {
+    obra_id: obraId,
+    fecha: document.getElementById('mNuevoInfSegFecha').value || new Date().toISOString().slice(0, 10),
+    actividad,
+    contratista: document.getElementById('mNuevoInfSegContratista').value.trim() || null,
+  };
+  const r = await api('/informes-seg/actividad', { method: 'POST', body: JSON.stringify(body) });
+  if (!r.ok) { toast(r.error || 'Error al crear', 'err'); return; }
+  const file = document.getElementById('mNuevoInfSegFoto').files?.[0];
+  if (file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const titulo = document.getElementById('mNuevoInfSegFotoTitulo').value.trim();
+    if (titulo) fd.append('titulo', titulo);
+    const respFoto = await apiRaw(`/informes-seg/actividad/${r.id}/foto`, { method: 'POST', body: fd });
+    if (!respFoto.ok) toast('Informe creado, pero falló la foto', 'err');
+  }
+  toast('✅ Informe creado', 'ok');
+  cerrarModal();
+  cargarInformesSeg();
+  verInformeSeg(r.informe_id);
+}
+
 // INFORMES-SEG-BORRAR-01 (13/08/2026): Adrián -- "los informes no se pueden borrar
 // individuales" -- borra el informe semanal ENTERO (todas sus actividades y fotos),
 // no una actividad suelta (eso ya existía, ver borrarActividadInformeSeg).
@@ -17366,22 +17414,35 @@ async function verInformeSeg(id) {
   segInfRenderDetalle(inf);
 }
 
+let _segInfActividadesCacheOffice = {};
 function segInfRenderDetalle(inf) {
+  _segInfActividadesCacheOffice = {};
   const fechas = Object.keys(inf.dias || {}).sort();
+  const cerradoTop = inf.estado === 'cerrado';
   const diasHtml = fechas.length ? fechas.map(f => `
     <div style="margin-bottom:14px">
       <div style="font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;margin-bottom:6px">${f.split('-').reverse().join('/')}</div>
-      ${inf.dias[f].map(a => `
+      ${inf.dias[f].map(a => {
+        _segInfActividadesCacheOffice[a.id] = a;
+        return `
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;gap:8px">
             <span style="font-size:13px;font-weight:700">${escHtml(a.actividad)}${a.contratista ? ` <span style="font-weight:400;color:var(--muted)">— ${escHtml(a.contratista)}</span>` : ''}</span>
-            <button class="btn btn-secondary btn-sm" onclick="borrarActividadInformeSeg(${inf.id},${a.id})" title="Borrar actividad">🗑</button>
+            ${!cerradoTop ? `<span style="display:flex;gap:4px;flex-shrink:0">
+              <button class="btn btn-secondary btn-sm" onclick="segInfMostrarFormEditar(${inf.id},${a.id})" title="Editar actividad">✏️</button>
+              <button class="btn btn-secondary btn-sm" onclick="borrarActividadInformeSeg(${inf.id},${a.id})" title="Borrar actividad">🗑</button>
+            </span>` : ''}
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-            ${(a.fotos || []).map(fo => `<img src="${API}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(TOKEN)}" onclick="window.open(this.src,'_blank')" style="width:70px;height:70px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid var(--border)">`).join('') || '<span style="font-size:11px;color:var(--muted)">Sin foto</span>'}
+            ${(a.fotos || []).map(fo => `<div style="text-align:center">
+              <img src="${API}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(TOKEN)}" onclick="window.open(this.src,'_blank')" style="width:70px;height:70px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid var(--border);display:block">
+              ${fo.titulo ? `<div style="font-size:9px;color:var(--muted);max-width:70px;overflow-wrap:anywhere;margin-top:2px">${escHtml(fo.titulo)}</div>` : ''}
+            </div>`).join('')}
+            ${!cerradoTop ? `<button onclick="segInfAnadirFotoOffice(${a.id},${inf.id})" title="Añadir foto" style="width:70px;height:70px;border-radius:6px;border:1px dashed var(--border);background:none;color:var(--muted);font-size:20px;cursor:pointer">+</button>` : ''}
           </div>
-        </div>`).join('')}
-    </div>`).join('') : '<div style="font-size:13px;color:var(--muted);font-style:italic">Sin actividades todavía — el técnico las añade desde la app.</div>';
+        </div>`;
+      }).join('')}
+    </div>`).join('') : '<div style="font-size:13px;color:var(--muted);font-style:italic">Sin actividades todavía.</div>';
 
   const cerrado = inf.estado === 'cerrado';
   const html = `
@@ -17403,15 +17464,16 @@ function segInfRenderDetalle(inf) {
       ${!cerrado ? `<button class="btn btn-secondary btn-sm" onclick="segInfMostrarFormNueva()">+ Nueva</button>` : ''}
     </div>
     <div id="segInfFormNueva" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px">
+      <input type="hidden" id="segInfEditId">
       <div class="form-row">
         <div class="form-group"><div class="form-label">Fecha</div><input class="form-input" type="date" id="segInfNuevaFecha" value="${new Date().toISOString().slice(0, 10)}"></div>
         <div class="form-group"><div class="form-label">Contratista</div><input class="form-input" id="segInfNuevaContratista" placeholder="Opcional"></div>
       </div>
       <div class="form-group"><div class="form-label">Actividad *</div><input class="form-input" id="segInfNuevaActividad" placeholder="Ej: Trabajos de izado de material a L3"></div>
-      <div class="form-group"><div class="form-label">Foto (opcional)</div><input type="file" class="form-input" accept="image/*" id="segInfNuevaFoto"></div>
+      <div class="form-group" id="segInfNuevaFotoWrap"><div class="form-label">Foto (opcional)</div><input type="file" class="form-input" accept="image/*" id="segInfNuevaFoto"><input class="form-input" id="segInfNuevaFotoTitulo" placeholder="Título de la foto (sale a pie de foto en el informe)" style="margin-top:6px"></div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('segInfFormNueva').style.display='none'">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="conBoton(this, () => segInfGuardarNuevaActividad(${inf.id}, ${inf.obra_id || 'null'}))">💾 Guardar actividad</button>
+        <button class="btn btn-primary btn-sm" id="segInfGuardarActividadBtn" onclick="conBoton(this, () => segInfGuardarActividadForm(${inf.id}, ${inf.obra_id || 'null'}))">💾 Guardar actividad</button>
       </div>
     </div>
     <div style="max-height:320px;overflow-y:auto;margin-bottom:16px">${diasHtml}</div>
@@ -17430,31 +17492,118 @@ function segInfRenderDetalle(inf) {
 function segInfMostrarFormNueva() {
   const form = document.getElementById('segInfFormNueva');
   if (!form) return;
+  document.getElementById('segInfEditId').value = '';
+  document.getElementById('segInfGuardarActividadBtn').textContent = '💾 Guardar actividad';
+  document.getElementById('segInfNuevaFotoWrap').style.display = '';
   form.style.display = 'block';
+  document.getElementById('segInfNuevaFecha').value = new Date().toISOString().slice(0, 10);
   document.getElementById('segInfNuevaActividad').value = '';
   document.getElementById('segInfNuevaContratista').value = '';
   document.getElementById('segInfNuevaFoto').value = '';
+  document.getElementById('segInfNuevaFotoTitulo').value = '';
+  form.scrollIntoView({ block: 'nearest' });
 }
 
-async function segInfGuardarNuevaActividad(informeId, obraId) {
+// INFORMES-SEG-EDITAR-01 en Office (17/08/2026): Adrián -- "ahí que hacer que en la app y
+// en el panel se pueda hacer lo mismo, que ahora no se puede" -- la app ya permitía
+// corregir una actividad ya guardada (segInfEditar en index.html); Office solo dejaba
+// crear o borrar. Mismo formulario que "+ Nueva", con segInfEditId marcando que es un PUT.
+// No se toca la foto ya subida desde aquí -- solo se puede añadir una foto nueva si la
+// actividad todavía no tenía (evita reemplazar en silencio una foto real de campo).
+function segInfMostrarFormEditar(informeId, actividadId) {
+  const a = _segInfActividadesCacheOffice[actividadId];
+  if (!a) return;
+  const form = document.getElementById('segInfFormNueva');
+  if (!form) return;
+  document.getElementById('segInfEditId').value = actividadId;
+  document.getElementById('segInfGuardarActividadBtn').textContent = '💾 Guardar cambios';
+  form.style.display = 'block';
+  document.getElementById('segInfNuevaFecha').value = a.fecha;
+  document.getElementById('segInfNuevaActividad').value = a.actividad || '';
+  document.getElementById('segInfNuevaContratista').value = a.contratista || '';
+  document.getElementById('segInfNuevaFoto').value = '';
+  document.getElementById('segInfNuevaFotoTitulo').value = '';
+  document.getElementById('segInfNuevaFotoWrap').style.display = (a.fotos || []).length ? 'none' : '';
+  form.scrollIntoView({ block: 'nearest' });
+}
+
+async function segInfGuardarActividadForm(informeId, obraId) {
   const actividad = document.getElementById('segInfNuevaActividad').value.trim();
   if (!actividad) return toast('⚠️ La actividad es obligatoria', 'err');
+  const editId = document.getElementById('segInfEditId').value;
   const body = {
     obra_id: obraId || null,
     fecha: document.getElementById('segInfNuevaFecha').value || new Date().toISOString().slice(0, 10),
     actividad,
     contratista: document.getElementById('segInfNuevaContratista').value.trim() || null,
   };
-  const r = await api('/informes-seg/actividad', { method: 'POST', body: JSON.stringify(body) });
+  const r = editId
+    ? await api(`/informes-seg/actividad/${editId}`, { method: 'PUT', body: JSON.stringify(body) })
+    : await api('/informes-seg/actividad', { method: 'POST', body: JSON.stringify(body) });
   if (!r.ok) { toast(r.error || 'Error al guardar', 'err'); return; }
   const file = document.getElementById('segInfNuevaFoto').files?.[0];
   if (file) {
     const fd = new FormData();
     fd.append('file', file);
-    const respFoto = await apiRaw(`/informes-seg/actividad/${r.id}/foto`, { method: 'POST', body: fd });
+    const titulo = document.getElementById('segInfNuevaFotoTitulo').value.trim();
+    if (titulo) fd.append('titulo', titulo);
+    const respFoto = await apiRaw(`/informes-seg/actividad/${editId || r.id}/foto`, { method: 'POST', body: fd });
     if (!respFoto.ok) toast('Actividad guardada, pero falló la foto', 'err');
   }
-  toast('✅ Actividad añadida', 'ok');
+  toast(editId ? '✅ Actividad actualizada' : '✅ Actividad añadida', 'ok');
+  verInformeSeg(informeId);
+}
+
+// INFORMES-SEG-FOTO-TITULO-01 (17/08/2026): añadir una foto extra a una actividad ya
+// guardada (paridad con segInfAnadirFoto de index.html). No puede reutilizar abrirModal()
+// genérico -- este flujo se dispara DESDE DENTRO del modal de detalle del informe, que ya
+// ocupa el único #modalBox de la app; abrir otro ahí encima reemplazaría ese contenido y
+// se perdería el formulario del informe. Modal propio con z-index por encima (1000 → 1100).
+let _segInfFotoExtraFile = null;
+let _segInfFotoExtraCtx = null;
+function segInfAnadirFotoOffice(actividadId, informeId) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    _segInfFotoExtraFile = file;
+    _segInfFotoExtraCtx = { actividadId, informeId };
+    let modal = document.getElementById('segInfFotoExtraModalOffice');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'segInfFotoExtraModalOffice';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(7,9,21,.76);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px';
+      modal.innerHTML = `<div style="background:linear-gradient(145deg,#202641,#161a2e);border:1px solid rgba(199,188,255,.24);border-radius:18px;width:100%;max-width:380px;padding:24px">
+        <div style="font-weight:900;font-size:16px;margin-bottom:14px;color:var(--text)">📷 Añadir foto</div>
+        <div style="text-align:center;margin-bottom:12px"><img id="segInfFotoExtraPreviewOffice" style="max-width:100%;max-height:220px;border-radius:8px"></div>
+        <div class="form-group"><div class="form-label">Título de la foto</div><input class="form-input" id="segInfFotoExtraTituloOffice" placeholder="Opcional, sale a pie de foto en el informe"></div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn btn-secondary" style="flex:1" onclick="document.getElementById('segInfFotoExtraModalOffice').style.display='none'">Cancelar</button>
+          <button class="btn btn-primary" style="flex:1" onclick="segInfFotoExtraConfirmarOffice()">Subir</button>
+        </div>
+      </div>`;
+      document.body.appendChild(modal);
+    }
+    document.getElementById('segInfFotoExtraPreviewOffice').src = URL.createObjectURL(file);
+    document.getElementById('segInfFotoExtraTituloOffice').value = '';
+    modal.style.display = 'flex';
+  };
+  input.click();
+}
+
+async function segInfFotoExtraConfirmarOffice() {
+  if (!_segInfFotoExtraFile || !_segInfFotoExtraCtx) return;
+  const { actividadId, informeId } = _segInfFotoExtraCtx;
+  const fd = new FormData();
+  fd.append('file', _segInfFotoExtraFile);
+  const titulo = document.getElementById('segInfFotoExtraTituloOffice').value.trim();
+  if (titulo) fd.append('titulo', titulo);
+  const respFoto = await apiRaw(`/informes-seg/actividad/${actividadId}/foto`, { method: 'POST', body: fd });
+  _segInfFotoExtraFile = null; _segInfFotoExtraCtx = null;
+  document.getElementById('segInfFotoExtraModalOffice').style.display = 'none';
+  if (!respFoto.ok) { toast('Error al subir la foto', 'err'); return; }
+  toast('✅ Foto añadida', 'ok');
   verInformeSeg(informeId);
 }
 
@@ -17499,7 +17648,10 @@ function imprimirInformeSeg(id) {
       const actividades = inf.dias[f];
       const fotos = actividades.flatMap(a => a.fotos || []);
       const descHtml = actividades.map(a => `<div style="margin-bottom:4px"><b>${escHtml(a.actividad)}</b>${a.contratista ? ` (por ${escHtml(a.contratista)})` : ''}</div>`).join('');
-      const fotosHtml = fotos.map(fo => `<img src="${API}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(TOKEN)}" style="width:100%;max-width:220px;border-radius:4px;margin:4px">`).join('');
+      const fotosHtml = fotos.map(fo => `<div style="display:inline-block;margin:4px;max-width:220px;vertical-align:top">
+        <img src="${API}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(TOKEN)}" style="width:100%;border-radius:4px;display:block">
+        ${fo.titulo ? `<div style="font-size:10px;font-style:italic;color:#555;margin-top:2px">${escHtml(fo.titulo)}</div>` : ''}
+      </div>`).join('');
       return `<tr><td style="border:1px solid #999;padding:8px;font-weight:700;vertical-align:top;white-space:nowrap">${f.split('-').reverse().join('/')}</td>
         <td style="border:1px solid #999;padding:8px;vertical-align:top">${descHtml}<div style="display:flex;flex-wrap:wrap">${fotosHtml}</div></td></tr>`;
     }).join('');
