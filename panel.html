@@ -2303,6 +2303,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         </div>
         <div id="correosContenido" style="display:none">
           <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <!-- CORREOS-PANEL-01-v4 (17/08/2026): Adrián -- "tener dos cuentas a la vez e
+                 ir cambiando una a otra rápido". Oculto salvo que haya 2+ cuentas
+                 conectadas (con solo 1, el email de abajo ya es suficiente info). -->
+            <select class="tbl-search" id="correosSelectorCuenta" style="display:none;min-width:200px" onchange="cambiarCuentaCorreoActiva(this.value)"></select>
             <span id="correosEmailConectado" style="font-size:12px;color:var(--muted)"></span>
             <select class="tbl-search" id="filterCorreoCategoria" style="min-width:160px" onchange="cargarCorreosPanel()">
               <option value="">🏷️ Todas las categorías</option>
@@ -22356,8 +22360,26 @@ function _pintarCorreosBadge(noLeidos, conectado) {
   badge.style.display = (conectado && noLeidos) ? 'block' : 'none';
 }
 
+// CORREOS-PANEL-01-v4 (17/08/2026): "cambiar rápido" en el sitio donde de verdad hace
+// falta -- sin ir a Mi cuenta cada vez. Solo visible con 2+ cuentas conectadas.
+async function _correosCargarSelectorCuentas() {
+  const sel = document.getElementById('correosSelectorCuenta');
+  const r = await api('/auth/gmail/cuentas').catch(() => null);
+  const cuentas = r?.ok ? (r.cuentas || []) : [];
+  if (cuentas.length < 2) { sel.style.display = 'none'; return; }
+  sel.innerHTML = cuentas.map(c => `<option value="${c.id}" ${c.activa ? 'selected' : ''}>${escHtml(c.email_conectado || '(sin email)')}</option>`).join('');
+  sel.style.display = '';
+}
+async function cambiarCuentaCorreoActiva(cuentaId) {
+  const r = await api(`/auth/gmail/cuentas/${cuentaId}/activar`, { method: 'POST' });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  _correosSeleccionados = new Set();
+  cargarCorreosPanel();
+}
+
 async function cargarCorreosPanel() {
   const r = await api('/correos');
+  _correosCargarSelectorCuentas();
   if (!r || r.conectado === false) {
     document.getElementById('correosSinConectar').style.display = 'block';
     document.getElementById('correosContenido').style.display = 'none';
@@ -22645,10 +22667,10 @@ async function abrirMiCuenta() {
     const r = await api('/telegram/estado');
     vinculado = !!r?.vinculado;
   } catch {}
-  let gmailEstado = { conectado: false, email: null };
+  let gmailCuentas = [];
   try {
-    const rg = await api('/auth/gmail/status');
-    if (rg?.ok) gmailEstado = rg;
+    const rg = await api('/auth/gmail/cuentas');
+    if (rg?.ok) gmailCuentas = rg.cuentas || [];
   } catch {}
   const nombre = SESSION?.nombre || '—';
   const rol = SESSION?.rol || '—';
@@ -22666,7 +22688,7 @@ async function abrirMiCuenta() {
   abrirModal('👤 Mi cuenta', cuerpo, null);
   document.getElementById('modalOkBtn').style.display = 'none';
   _renderEstadoTelegramOffice(vinculado);
-  _renderEstadoGmailOffice(gmailEstado.conectado, gmailEstado.email);
+  _renderEstadoGmailOffice(gmailCuentas);
 }
 function _renderEstadoTelegramOffice(vinculado) {
   const cont = document.getElementById('telegramOfficeEstado');
@@ -22710,18 +22732,28 @@ async function desvincularTelegramPanel() {
 // MI CUENTA — conectar Gmail para el ayudante de Correos (F-6.1 Fase 2,
 // ADR-0022, 2026-08-12). Mismo patrón que "Mi Telegram" arriba: la conexión
 // real (OAuth con Google) se abre en una pestaña nueva porque es Google quien
-// pide el consentimiento, no Alejandra; esta pestaña hace polling a
-// /auth/gmail/status hasta detectar que el callback ya guardó el token.
+// pide el consentimiento, no Alejandra; esta pestaña hace polling hasta
+// detectar que el callback ya guardó el token.
+// CORREOS-PANEL-01-v4 (17/08/2026): Adrián -- "tener dos cuentas a la vez e ir
+// cambiando una a otra rápido". Varias cuentas por usuario (gmail_cuentas), una
+// "activa" a la vez -- Alejandra (leer_gmail/enviar_gmail/categorizar_correos) y
+// "Mis Correos" siempre operan sobre la que esté activa, sin más cambios.
 // ════════════════════════════════════════════════════════════════
-function _renderEstadoGmailOffice(conectado, email) {
+function _renderEstadoGmailOffice(cuentas) {
   const cont = document.getElementById('gmailOfficeEstado');
   if (!cont) return;
-  cont.innerHTML = conectado
-    ? `<div style="display:flex;align-items:center;gap:8px;padding:10px;background:#22c55e15;border:1px solid #22c55e30;border-radius:10px;margin-bottom:10px">
-         <span style="font-size:20px">✅</span><span style="font-size:13px;font-weight:700;color:#22c55e">Gmail conectado${email ? ' · ' + escHtml(email) : ''}</span>
-       </div>
-       <button class="btn btn-secondary" style="width:100%" onclick="desconectarGmailPanel()">🔗 Desconectar Gmail</button>`
-    : `<button class="btn btn-primary" id="btnConectarGmailPanel" style="width:100%" onclick="conectarGmailPanel()">📧 Conectar mi Gmail</button>`;
+  const filas = cuentas.map(c => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:${c.activa ? '#22c55e15' : 'var(--surface2)'};border:1px solid ${c.activa ? '#22c55e30' : 'var(--border)'};border-radius:10px;margin-bottom:6px">
+      <span style="font-size:13px;flex:1">${c.activa ? '✅' : '⚪'} ${escHtml(c.email_conectado || '(sin email)')}${c.activa ? ' <b>· activa</b>' : ''}</span>
+      ${!c.activa ? `<button class="btn btn-secondary btn-sm" onclick="activarGmailCuentaPanel(${c.id})">Usar esta</button>` : ''}
+      <button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="desconectarGmailCuentaPanel(${c.id})">Desconectar</button>
+    </div>`).join('');
+  cont.innerHTML = (cuentas.length ? filas : '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Ninguna cuenta conectada todavía.</div>')
+    + `<button class="btn btn-primary" id="btnConectarGmailPanel" style="width:100%;margin-top:6px" onclick="conectarGmailPanel()">📧 Conectar otra cuenta</button>`;
+}
+async function _recargarEstadoGmailOffice() {
+  const r = await api('/auth/gmail/cuentas').catch(() => null);
+  _renderEstadoGmailOffice(r?.ok ? (r.cuentas || []) : []);
 }
 async function conectarGmailPanel() {
   const btn = document.getElementById('btnConectarGmailPanel');
@@ -22729,26 +22761,35 @@ async function conectarGmailPanel() {
   try {
     const r = await api('/auth/gmail/url');
     if (r?.ok === false || !r?.url) { toast('Error al generar el enlace', 'err'); return; }
+    const numCuentasAntes = document.querySelectorAll('#gmailOfficeEstado > div').length;
     window.open(r.url, '_blank');
     toast('👆 Autorizá el acceso en la pestaña de Google', 'ok');
     let intentos = 0;
     const check = setInterval(async () => {
       intentos++;
-      const est = await api('/auth/gmail/status').catch(() => null);
-      if (est?.conectado) { clearInterval(check); _renderEstadoGmailOffice(true, est.email); toast('✅ ¡Gmail conectado!', 'ok'); }
+      const est = await api('/auth/gmail/cuentas').catch(() => null);
+      if (est?.ok && (est.cuentas || []).length > numCuentasAntes) {
+        clearInterval(check); _renderEstadoGmailOffice(est.cuentas); toast('✅ ¡Gmail conectado!', 'ok');
+      }
       if (intentos >= 12) clearInterval(check); // ~1 min de polling, mismo margen que Telegram
     }, 5000);
   } catch { toast('Error de conexión', 'err'); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = '📧 Conectar mi Gmail'; } }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '📧 Conectar otra cuenta'; } }
 }
-async function desconectarGmailPanel() {
-  if (!confirm('¿Desconectar tu Gmail? Alejandra dejará de poder leer o enviar correo en tu nombre, y se borra la lista de correos ya sincronizados de "Mis Correos" (para no mezclarla si luego conectas otra cuenta).')) return;
-  try {
-    const r = await api('/auth/gmail', { method: 'DELETE' });
-    if (r?.ok === false) return toast('Error', 'err');
-    toast('✅ Gmail desconectado', 'ok');
-    _renderEstadoGmailOffice(false, null);
-  } catch { toast('Error de conexión', 'err'); }
+async function activarGmailCuentaPanel(id) {
+  const r = await api(`/auth/gmail/cuentas/${id}/activar`, { method: 'POST' });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  toast('✅ Cuenta activa cambiada', 'ok');
+  _recargarEstadoGmailOffice();
+  actualizarCorreosBadge();
+}
+async function desconectarGmailCuentaPanel(id) {
+  if (!confirm('¿Desconectar esta cuenta de Gmail? Se borra también su lista de correos ya sincronizados en "Mis Correos" (tu Gmail real no se toca).')) return;
+  const r = await api(`/auth/gmail/cuentas/${id}`, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  toast('✅ Cuenta desconectada', 'ok');
+  _recargarEstadoGmailOffice();
+  actualizarCorreosBadge();
 }
 
 // ════════════════════════════════════════════════════════════════

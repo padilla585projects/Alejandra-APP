@@ -642,6 +642,27 @@ async function ensureGmailTokensTable(env) {
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`).run();
 }
+// CORREOS-PANEL-01-v4 (17/08/2026): Adrián -- "tener dos cuentas a la vez e ir cambiando
+// una a otra rápido". gmail_oauth_tokens tiene usuario_id como PRIMARY KEY -- no admite dos
+// filas del mismo usuario. gmail_cuentas la sustituye para todo lo nuevo (varias filas por
+// usuario_id, con un flag "activa" -- como mucho una activa por usuario, invariante de
+// aplicación); gmail_oauth_tokens se queda sin usar, sin borrar (dato real ya migrado, ver
+// migrate_gmail_cuentas.sql).
+async function ensureGmailCuentasTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gmail_cuentas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER NOT NULL,
+    empresa_id INTEGER,
+    email_conectado TEXT,
+    refresh_token_cifrado TEXT,
+    iv TEXT,
+    scope TEXT,
+    activa INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(usuario_id, email_conectado)
+  )`).run();
+}
 
 // Cifrado en reposo del refresh_token: no había ningún patrón reversible previo
 // en el repo (hashPassword es de un solo sentido; el AES-GCM de VAPID cifra
@@ -5498,6 +5519,9 @@ export default {
       if (path === '/auth/gmail/callback'   && method === 'GET')    return await gmailAuthCallback(request, env);
       if (path === '/auth/gmail/status'     && method === 'GET')    return await gmailAuthStatus(request, env);
       if (path === '/auth/gmail'            && method === 'DELETE') return await gmailAuthDesconectar(request, env);
+      if (path === '/auth/gmail/cuentas'    && method === 'GET')    return await getGmailCuentas(request, env);
+      if (path.match(/^\/auth\/gmail\/cuentas\/\d+\/activar$/) && method === 'POST')   return await activarGmailCuenta(parseInt(path.split('/')[4]), request, env);
+      if (path.match(/^\/auth\/gmail\/cuentas\/\d+$/)          && method === 'DELETE') return await desconectarGmailCuenta(parseInt(path.split('/')[4]), request, env);
       if (path === '/internal/gmail/listar' && method === 'POST')   return await internalGmailListar(request, env);
       if (path === '/internal/gmail/enviar' && method === 'POST')   return await internalGmailEnviar(request, env);
       if (path === '/correos' && method === 'GET')                 return await getCorreosPanel(request, env);
@@ -13989,15 +14013,17 @@ async function gmailAuthCallback(request, env) {
   });
   const gUser = await userRes.json();
 
-  await ensureGmailTokensTable(env);
+  await ensureGmailCuentasTable(env);
   const { cifrado, iv } = await cifrarToken(env, tokenData.refresh_token);
+  // Conectar una cuenta (nueva o ya conocida por email) la deja como la ACTIVA -- "acabo de
+  // conectarla, quiero usarla ahora". Primero desactiva las demás del mismo usuario_id.
+  await env.DB.prepare('UPDATE gmail_cuentas SET activa=0 WHERE usuario_id=?').bind(estado.usuario_id).run();
   await env.DB.prepare(`
-    INSERT INTO gmail_oauth_tokens (usuario_id, empresa_id, email_conectado, refresh_token_cifrado, iv, scope, updated_at)
-    VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(usuario_id) DO UPDATE SET
-      empresa_id=excluded.empresa_id, email_conectado=excluded.email_conectado,
-      refresh_token_cifrado=excluded.refresh_token_cifrado, iv=excluded.iv,
-      scope=excluded.scope, updated_at=CURRENT_TIMESTAMP
+    INSERT INTO gmail_cuentas (usuario_id, empresa_id, email_conectado, refresh_token_cifrado, iv, scope, activa, updated_at)
+    VALUES (?,?,?,?,?,?,1,CURRENT_TIMESTAMP)
+    ON CONFLICT(usuario_id, email_conectado) DO UPDATE SET
+      empresa_id=excluded.empresa_id, refresh_token_cifrado=excluded.refresh_token_cifrado,
+      iv=excluded.iv, scope=excluded.scope, activa=1, updated_at=CURRENT_TIMESTAMP
   `).bind(estado.usuario_id, estado.empresa_id, gUser.email || null, cifrado, iv, tokenData.scope || GMAIL_OAUTH_SCOPES).run();
 
   return new Response(
@@ -14009,32 +14035,73 @@ async function gmailAuthCallback(request, env) {
 async function gmailAuthStatus(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('No autorizado', 403);
-  await ensureGmailTokensTable(env);
-  const row = await env.DB.prepare('SELECT email_conectado, updated_at FROM gmail_oauth_tokens WHERE usuario_id = ?').bind(auth.usuario_id).first();
+  await ensureGmailCuentasTable(env);
+  const row = await env.DB.prepare('SELECT email_conectado, updated_at FROM gmail_cuentas WHERE usuario_id = ? AND activa = 1').bind(auth.usuario_id).first();
   return json({ ok: true, conectado: !!row, email: row?.email_conectado || null, actualizado: row?.updated_at || null });
+}
+
+// CORREOS-PANEL-01-v4 (17/08/2026): lista de cuentas conectadas (para el selector rápido
+// de "Mis Correos" y la gestión ampliada de "Mi cuenta").
+async function getGmailCuentas(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  await ensureGmailCuentasTable(env);
+  const { results } = await env.DB.prepare(
+    'SELECT id, email_conectado, activa FROM gmail_cuentas WHERE usuario_id = ? ORDER BY created_at ASC'
+  ).bind(auth.usuario_id).all();
+  return json({ ok: true, cuentas: results });
+}
+
+// Cambio rápido entre cuentas ya conectadas -- pone esa activa=1, las demás del mismo
+// usuario a 0. Todo lo que resuelve "la cuenta activa" (leer_gmail, enviar_gmail,
+// categorizar_correos, el panel de correos) usa automáticamente la nueva sin más cambios.
+async function activarGmailCuenta(cuentaId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const cuenta = await env.DB.prepare('SELECT id FROM gmail_cuentas WHERE id=? AND usuario_id=?').bind(cuentaId, auth.usuario_id).first();
+  if (!cuenta) return err('Cuenta no encontrada', 404);
+  await env.DB.prepare('UPDATE gmail_cuentas SET activa=0 WHERE usuario_id=?').bind(auth.usuario_id).run();
+  await env.DB.prepare('UPDATE gmail_cuentas SET activa=1 WHERE id=?').bind(cuentaId).run();
+  return json({ ok: true });
+}
+
+// Desconecta UNA cuenta concreta (no todas) + borra solo su porción de la caché de
+// correos. Si era la activa y queda alguna otra, activa la más reciente automáticamente
+// para no dejar al usuario "sin cuenta activa" sin que lo haya elegido.
+async function desconectarGmailCuenta(cuentaId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const cuenta = await env.DB.prepare('SELECT id, activa FROM gmail_cuentas WHERE id=? AND usuario_id=?').bind(cuentaId, auth.usuario_id).first();
+  if (!cuenta) return err('Cuenta no encontrada', 404);
+  await env.DB.prepare('DELETE FROM gmail_mensajes_cache WHERE cuenta_id=?').bind(cuentaId).run().catch(() => {});
+  await env.DB.prepare('DELETE FROM gmail_cuentas WHERE id=?').bind(cuentaId).run();
+  if (cuenta.activa) {
+    const otra = await env.DB.prepare('SELECT id FROM gmail_cuentas WHERE usuario_id=? ORDER BY created_at DESC LIMIT 1').bind(auth.usuario_id).first();
+    if (otra) await env.DB.prepare('UPDATE gmail_cuentas SET activa=1 WHERE id=?').bind(otra.id).run();
+  }
+  return json({ ok: true });
 }
 
 // CORREOS-PANEL-01-v2 (17/08/2026): Adrián preguntó cómo cambiar de cuenta de Gmail --
 // hasta ahora desconectar solo borraba el token, dejando la caché de correos (Mis Correos,
 // gmail_mensajes_cache) de la cuenta VIEJA mezclada con la de la cuenta nueva tras
-// reconectar. gmail_mensajes_cache está indexada por usuario_id, no por cuenta de Gmail --
-// no hay forma de distinguir "de qué cuenta era" un correo ya cacheado, así que la única
-// forma limpia de garantizar que no se mezclen es vaciar la caché al desconectar.
+// reconectar. Se mantiene como alias de "desconectar la cuenta activa" (v4: ahora vía
+// gmail_cuentas) para no romper nada que siga llamando a esta ruta.
 async function gmailAuthDesconectar(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('No autorizado', 403);
-  await ensureGmailTokensTable(env);
-  await env.DB.prepare('DELETE FROM gmail_oauth_tokens WHERE usuario_id = ?').bind(auth.usuario_id).run();
-  await env.DB.prepare('DELETE FROM gmail_mensajes_cache WHERE usuario_id = ?').bind(auth.usuario_id).run().catch(() => {});
-  return json({ ok: true });
+  await ensureGmailCuentasTable(env);
+  const activa = await env.DB.prepare('SELECT id FROM gmail_cuentas WHERE usuario_id=? AND activa=1').bind(auth.usuario_id).first();
+  if (!activa) return json({ ok: true }); // nada que desconectar
+  return await desconectarGmailCuenta(activa.id, request, env);
 }
 
 // Refresca un access_token de corta duración a partir del refresh_token cifrado
 // guardado del usuario. Usado solo por los endpoints internos de abajo -- nunca
 // expuesto a sesión de usuario ni al modelo.
 async function _obtenerAccessTokenGmail(env, usuarioId) {
-  await ensureGmailTokensTable(env);
-  const row = await env.DB.prepare('SELECT refresh_token_cifrado, iv, email_conectado FROM gmail_oauth_tokens WHERE usuario_id = ?').bind(usuarioId).first();
+  await ensureGmailCuentasTable(env);
+  const row = await env.DB.prepare('SELECT id, refresh_token_cifrado, iv, email_conectado FROM gmail_cuentas WHERE usuario_id = ? AND activa = 1').bind(usuarioId).first();
   if (!row) return { error: 'Este usuario no tiene Gmail conectado. Conectalo desde Ajustes → Gmail.' };
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return { error: 'Google OAuth no configurado' };
   const refreshToken = await descifrarToken(env, row.refresh_token_cifrado, row.iv);
@@ -14050,7 +14117,7 @@ async function _obtenerAccessTokenGmail(env, usuarioId) {
   });
   const tokenData = await tokenRes.json();
   if (!tokenData.access_token) return { error: tokenData.error_description || tokenData.error || 'No se pudo refrescar el token de Gmail.' };
-  return { accessToken: tokenData.access_token, email: row.email_conectado };
+  return { accessToken: tokenData.access_token, email: row.email_conectado, cuentaId: row.id };
 }
 
 // Codifica bytes UTF-8 a base64 estándar (con padding) -- para el header MIME
@@ -14076,7 +14143,7 @@ function _b64std(bytes) {
 // helper compartido -- la reutiliza también sincronizarCorreos() (panel de correos) para
 // no duplicar las llamadas reales a la API de Gmail.
 async function _listarGmailMensajes(env, usuarioId, { limit = 10, query = '' } = {}) {
-  const { accessToken, email, error } = await _obtenerAccessTokenGmail(env, usuarioId);
+  const { accessToken, email, cuentaId, error } = await _obtenerAccessTokenGmail(env, usuarioId);
   if (error) return { error };
   const limitFinal = Math.min(Math.max(parseInt(limit) || 10, 1), 25);
   const q = query ? `&q=${encodeURIComponent(query)}` : '';
@@ -14096,7 +14163,7 @@ async function _listarGmailMensajes(env, usuarioId, { limit = 10, query = '' } =
     const headers = Object.fromEntries((mData.payload?.headers || []).map(h => [h.name, h.value]));
     mensajes.push({ id: m.id, de: headers.From || '', asunto: headers.Subject || '(sin asunto)', fecha: headers.Date || '', resumen: mData.snippet || '' });
   }
-  return { email, mensajes };
+  return { email, mensajes, cuentaId };
 }
 
 async function internalGmailListar(request, env) {
@@ -14114,18 +14181,26 @@ async function internalGmailListar(request, env) {
 // concedidos) -- "organizar" es dentro de la app (leido_app/categoria_app en la caché),
 // nunca sobre el Gmail real. Envío reutiliza /internal/gmail/enviar tal cual (ya acepta
 // sesión real vía _getAuthPlano, no hace falta endpoint nuevo).
+// CORREOS-PANEL-01-v4 (17/08/2026): resuelve la cuenta ACTIVA de Gmail de un usuario --
+// usada por todos los endpoints de /correos para acotar gmail_mensajes_cache por
+// cuenta_id (no solo por usuario_id, que ahora puede tener varias cuentas).
+async function _cuentaActivaGmail(env, usuarioId) {
+  await ensureGmailCuentasTable(env);
+  return await env.DB.prepare('SELECT id, email_conectado FROM gmail_cuentas WHERE usuario_id=? AND activa=1').bind(usuarioId).first();
+}
+
 async function getCorreosPanel(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('No autorizado', 403);
-  const conectado = await env.DB.prepare('SELECT email_conectado FROM gmail_oauth_tokens WHERE usuario_id=?').bind(auth.usuario_id).first();
-  if (!conectado) return json({ conectado: false, mensajes: [] });
+  const cuenta = await _cuentaActivaGmail(env, auth.usuario_id);
+  if (!cuenta) return json({ conectado: false, mensajes: [] });
   const url = new URL(request.url);
   const incluirArchivados = url.searchParams.get('archivados') === '1';
   const sql = incluirArchivados
-    ? 'SELECT gmail_id, de, asunto, fecha, resumen, leido_app, categoria_app, archivado FROM gmail_mensajes_cache WHERE usuario_id=? ORDER BY fecha DESC LIMIT 100'
-    : 'SELECT gmail_id, de, asunto, fecha, resumen, leido_app, categoria_app, archivado FROM gmail_mensajes_cache WHERE usuario_id=? AND archivado=0 ORDER BY fecha DESC LIMIT 100';
-  const { results } = await env.DB.prepare(sql).bind(auth.usuario_id).all();
-  return json({ conectado: true, email: conectado.email_conectado, mensajes: results });
+    ? 'SELECT gmail_id, de, asunto, fecha, resumen, leido_app, categoria_app, archivado FROM gmail_mensajes_cache WHERE cuenta_id=? ORDER BY fecha DESC LIMIT 100'
+    : 'SELECT gmail_id, de, asunto, fecha, resumen, leido_app, categoria_app, archivado FROM gmail_mensajes_cache WHERE cuenta_id=? AND archivado=0 ORDER BY fecha DESC LIMIT 100';
+  const { results } = await env.DB.prepare(sql).bind(cuenta.id).all();
+  return json({ conectado: true, email: cuenta.email_conectado, mensajes: results });
 }
 
 // CORREOS-PANEL-01 (17/08/2026): Adrián -- "ver el correo completo, no solo el resumen
@@ -14176,19 +14251,19 @@ async function sincronizarCorreos(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  const { email, mensajes, error } = await _listarGmailMensajes(env, auth.usuario_id, { limit: body.limit || 25, query: body.query });
+  const { email, mensajes, cuentaId, error } = await _listarGmailMensajes(env, auth.usuario_id, { limit: body.limit || 25, query: body.query });
   if (error) return json({ ok: false, error });
   let nuevos = 0;
   for (const m of mensajes) {
-    const existia = await env.DB.prepare('SELECT id FROM gmail_mensajes_cache WHERE usuario_id=? AND gmail_id=?').bind(auth.usuario_id, m.id).first();
+    const existia = await env.DB.prepare('SELECT id FROM gmail_mensajes_cache WHERE cuenta_id=? AND gmail_id=?').bind(cuentaId, m.id).first();
     if (existia) {
       await env.DB.prepare(
-        `UPDATE gmail_mensajes_cache SET de=?, asunto=?, fecha=?, resumen=?, updated_at=datetime('now') WHERE usuario_id=? AND gmail_id=?`
-      ).bind(m.de, m.asunto, m.fecha, m.resumen, auth.usuario_id, m.id).run();
+        `UPDATE gmail_mensajes_cache SET de=?, asunto=?, fecha=?, resumen=?, updated_at=datetime('now') WHERE cuenta_id=? AND gmail_id=?`
+      ).bind(m.de, m.asunto, m.fecha, m.resumen, cuentaId, m.id).run();
     } else {
       await env.DB.prepare(
-        `INSERT INTO gmail_mensajes_cache (usuario_id, gmail_id, de, asunto, fecha, resumen) VALUES (?,?,?,?,?,?)`
-      ).bind(auth.usuario_id, m.id, m.de, m.asunto, m.fecha, m.resumen).run();
+        `INSERT INTO gmail_mensajes_cache (usuario_id, cuenta_id, gmail_id, de, asunto, fecha, resumen) VALUES (?,?,?,?,?,?,?)`
+      ).bind(auth.usuario_id, cuentaId, m.id, m.de, m.asunto, m.fecha, m.resumen).run();
       nuevos++;
     }
   }
@@ -14202,14 +14277,16 @@ async function actualizarCorreoCache(gmailId, request, env) {
   const body = await request.json().catch(() => ({}));
   const auth = await _getAuthPlano(request, env, body);
   if (!auth.usuario_id) return err('No autorizado', 403);
+  const cuenta = await _cuentaActivaGmail(env, auth.usuario_id);
+  if (!cuenta) return err('Este usuario no tiene Gmail conectado.', 404);
   const campos = [], vals = [];
   if (body.leido_app !== undefined) { campos.push('leido_app=?'); vals.push(body.leido_app ? 1 : 0); }
   if (body.categoria_app !== undefined) { campos.push('categoria_app=?'); vals.push(body.categoria_app || null); }
   if (body.archivado !== undefined) { campos.push('archivado=?'); vals.push(body.archivado ? 1 : 0); }
   if (!campos.length) return err('Sin cambios');
   campos.push("updated_at=datetime('now')");
-  vals.push(auth.usuario_id, gmailId);
-  const r = await env.DB.prepare(`UPDATE gmail_mensajes_cache SET ${campos.join(',')} WHERE usuario_id=? AND gmail_id=?`).bind(...vals).run();
+  vals.push(cuenta.id, gmailId);
+  const r = await env.DB.prepare(`UPDATE gmail_mensajes_cache SET ${campos.join(',')} WHERE cuenta_id=? AND gmail_id=?`).bind(...vals).run();
   if (!r.meta.changes) return err('Correo no encontrado en la caché', 404);
   return json({ ok: true });
 }
@@ -14222,7 +14299,9 @@ async function actualizarCorreoCache(gmailId, request, env) {
 async function borrarCorreoCache(gmailId, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('No autorizado', 403);
-  const r = await env.DB.prepare('DELETE FROM gmail_mensajes_cache WHERE usuario_id=? AND gmail_id=?').bind(auth.usuario_id, gmailId).run();
+  const cuenta = await _cuentaActivaGmail(env, auth.usuario_id);
+  if (!cuenta) return err('Este usuario no tiene Gmail conectado.', 404);
+  const r = await env.DB.prepare('DELETE FROM gmail_mensajes_cache WHERE cuenta_id=? AND gmail_id=?').bind(cuenta.id, gmailId).run();
   if (!r.meta.changes) return err('Correo no encontrado en la caché', 404);
   return json({ ok: true });
 }
