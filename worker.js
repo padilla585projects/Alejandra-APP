@@ -7624,7 +7624,7 @@ async function superadminSeleccionarEmpresa(request, env) {
 async function getMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('Sin empresa asignada', 403);
-  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at, departamentos, informe_semanal, informe_dia, modulos_config FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
+  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at, departamentos, informe_semanal, informe_dia, modulos_config, informe_seg_plantilla FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
   if (!empresa) return err('Empresa no encontrada', 404);
   const obras    = (await env.DB.prepare('SELECT id, nombre, codigo FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
   const usuarios = (await env.DB.prepare('SELECT id, nombre, rol, departamento, obra_id FROM usuarios WHERE empresa_id = ? AND activo = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
@@ -7635,7 +7635,7 @@ async function updateMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id || (!hasRole(auth, 'empresa_admin') && !auth.isSuperadmin)) return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
-  const { nombre, email, telefono, direccion, cif, departamentos, informe_semanal, informe_dia, modulos_config } = body;
+  const { nombre, email, telefono, direccion, cif, departamentos, informe_semanal, informe_dia, modulos_config, informe_seg_plantilla } = body;
   if (!safeStr(nombre).trim()) return err('Falta el nombre de la empresa');
   const campos = ['nombre = ?'];
   const vals   = [safeStr(nombre).trim()];
@@ -7650,6 +7650,9 @@ async function updateMiEmpresa(request, env) {
   if (informe_semanal   !== undefined) { campos.push('informe_semanal = ?');   vals.push(informe_semanal ? 1 : 0); }
   if (informe_dia       !== undefined) { campos.push('informe_dia = ?');       vals.push(informe_dia || 'lunes'); }
   if (modulos_config    !== undefined) { campos.push('modulos_config = ?');    vals.push(modulos_config ? JSON.stringify(modulos_config) : null); }
+  // INFORMES-SEG-PLANTILLA-01 (17/08/2026): mismo patrón que modulos_config -- JSON libre,
+  // resolverPlantillaInformeSeg() aplica los defaults sobre lo que falte.
+  if (informe_seg_plantilla !== undefined) { campos.push('informe_seg_plantilla = ?'); vals.push(informe_seg_plantilla ? JSON.stringify(informe_seg_plantilla) : null); }
   vals.push(auth.empresa_id);
   await env.DB.prepare(`UPDATE empresas SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
   return json({ ok: true });
@@ -14878,6 +14881,26 @@ async function getInformesSeg(request, env) {
   return json(results);
 }
 
+// INFORMES-SEG-PLANTILLA-01 (17/08/2026): Adrián -- la plantilla del documento final
+// (disciplina, descripción general, títulos de sección) estaba fija en el código; pasa a
+// ser editable por empresa (formulario "✏️ Plantilla" en panel.html), guardada en
+// empresas.informe_seg_plantilla (JSON, columna aditiva). La estructura (tabla día a día,
+// los 3 bloques de texto libre) se queda fija -- solo esto es lo que Adrián pidió editable.
+const DEFAULTS_PLANTILLA_INFORME_SEG = {
+  disciplina: 'Seguridad y Salud Laboral',
+  descripcion_general: 'El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.',
+  titulo_aspectos_criticos: 'Aspectos críticos',
+  titulo_observaciones: 'Observaciones',
+  titulo_actividad_diaria: 'Actividad diaria',
+  titulo_otros_puntos: 'Otros puntos',
+};
+async function resolverPlantillaInformeSeg(env, empresa_id) {
+  const emp = await env.DB.prepare('SELECT informe_seg_plantilla FROM empresas WHERE id=?').bind(empresa_id).first();
+  let guardada = {};
+  try { guardada = emp?.informe_seg_plantilla ? JSON.parse(emp.informe_seg_plantilla) : {}; } catch { guardada = {}; }
+  return { ...DEFAULTS_PLANTILLA_INFORME_SEG, ...guardada };
+}
+
 async function getInformeSeg(id, request, env) {
   const auth = await getAuth(request, env);
   const { empresa_id } = auth;
@@ -14900,7 +14923,8 @@ async function getInformeSeg(id, request, env) {
   for (const a of actividades) {
     (dias[a.fecha] ||= []).push({ ...a, fotos: fotosPorActividad[a.id] || [] });
   }
-  return json({ ...informe, dias });
+  const plantilla = await resolverPlantillaInformeSeg(env, empresa_id);
+  return json({ ...informe, dias, plantilla });
 }
 
 async function actualizarInformeSeg(id, request, env) {
@@ -14949,6 +14973,7 @@ async function generarInformeSegDocx(id, request, env) {
     `SELECT f.* FROM informes_seg_fotos f JOIN informes_seg_actividades a ON f.actividad_id=a.id
      WHERE a.informe_id=? AND f.empresa_id=? ORDER BY f.orden ASC, f.id ASC`
   ).bind(id, empresa_id).all();
+  const plantilla = await resolverPlantillaInformeSeg(env, empresa_id);
 
   const fotosPorActividad = {};
   for (const f of fotos) { (fotosPorActividad[f.actividad_id] ||= []).push(f); }
@@ -14978,7 +15003,7 @@ async function generarInformeSegDocx(id, request, env) {
     rows: [
       new TableRow({ children: [
         celda(`INFORME INTERNO SEMANAL: SEMANA ${informe.semana_numero || '—'} DE ${informe.anio || ''}`, { size: 6000, bold: true }),
-        celda(`DISCIPLINA: ${informe.disciplina || 'Seguridad y Salud Laboral'}`, { size: 3000 }),
+        celda(`DISCIPLINA: ${plantilla.disciplina}`, { size: 3000 }),
       ].concat([]) }),
       new TableRow({ children: [
         celda(`LUGAR: ${informe.obra_nombre || '—'}`, { size: 3000 }),
@@ -15012,16 +15037,16 @@ async function generarInformeSegDocx(id, request, env) {
       children: [
         cabeceraTabla,
         h('Descripción general'),
-        p('El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.'),
-        h('Aspectos críticos'),
+        p(plantilla.descripcion_general),
+        h(plantilla.titulo_aspectos_criticos),
         p(informe.aspectos_criticos),
-        h('Observaciones'),
+        h(plantilla.titulo_observaciones),
         p(informe.observaciones),
-        h('Actividad diaria'),
+        h(plantilla.titulo_actividad_diaria),
         fechas.length
           ? new Table({ width: { size: 9000, type: WidthType.DXA }, columnWidths: [1200, 7800], rows: filasDias })
           : p('Sin actividades registradas.'),
-        h('Otros puntos'),
+        h(plantilla.titulo_otros_puntos),
         ...(otrosPuntos.length ? otrosPuntos.map(bullet) : [p('—')]),
       ],
     }],

@@ -2295,6 +2295,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <option value="">🏗 Todas las obras</option>
           </select>
           <button class="btn btn-secondary" onclick="cargarInformesSeg()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="abrirModalPlantillaInformeSeg()">✏️ Plantilla</button>
         </div>
         <div id="infSegList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
         <div id="infSegVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
@@ -17083,6 +17084,53 @@ async function cargarInformesSeg() {
 // INFORMES-SEG-BORRAR-01 (13/08/2026): Adrián -- "los informes no se pueden borrar
 // individuales" -- borra el informe semanal ENTERO (todas sus actividades y fotos),
 // no una actividad suelta (eso ya existía, ver borrarActividadInformeSeg).
+// INFORMES-SEG-PLANTILLA-01 (17/08/2026): Adrián -- los textos fijos del documento final
+// (disciplina, descripción general, títulos de sección) pasan de fijos en el código a
+// editables por empresa. La estructura (tabla día a día, los 3 bloques de texto libre)
+// se queda fija a propósito. Mismo endpoint /mi-empresa que ya usa la config de módulos.
+async function abrirModalPlantillaInformeSeg() {
+  const r = await api('/mi-empresa');
+  if (!r.ok) { toast('Error al cargar la configuración', 'err'); return; }
+  let pl = {};
+  try { pl = r.empresa?.informe_seg_plantilla ? JSON.parse(r.empresa.informe_seg_plantilla) : {}; } catch {}
+  const d = {
+    disciplina: pl.disciplina || 'Seguridad y Salud Laboral',
+    descripcion_general: pl.descripcion_general || 'El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.',
+    titulo_aspectos_criticos: pl.titulo_aspectos_criticos || 'Aspectos críticos',
+    titulo_observaciones: pl.titulo_observaciones || 'Observaciones',
+    titulo_actividad_diaria: pl.titulo_actividad_diaria || 'Actividad diaria',
+    titulo_otros_puntos: pl.titulo_otros_puntos || 'Otros puntos',
+  };
+  const html = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Textos fijos del documento final (PDF/.docx) del Informe Semanal. Se aplican a todas las obras de tu empresa.</div>
+    <div class="form-group"><div class="form-label">Disciplina</div><input class="form-input" id="mPlantillaDisciplina" value="${escHtml(d.disciplina)}"></div>
+    <div class="form-group"><div class="form-label">Descripción general</div><textarea class="form-input" id="mPlantillaDescripcion" rows="3">${escHtml(d.descripcion_general)}</textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Título — Aspectos críticos</div><input class="form-input" id="mPlantillaTitAspectos" value="${escHtml(d.titulo_aspectos_criticos)}"></div>
+      <div class="form-group"><div class="form-label">Título — Observaciones</div><input class="form-input" id="mPlantillaTitObs" value="${escHtml(d.titulo_observaciones)}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Título — Actividad diaria</div><input class="form-input" id="mPlantillaTitActividad" value="${escHtml(d.titulo_actividad_diaria)}"></div>
+      <div class="form-group"><div class="form-label">Título — Otros puntos</div><input class="form-input" id="mPlantillaTitOtros" value="${escHtml(d.titulo_otros_puntos)}"></div>
+    </div>`;
+  abrirModal('✏️ Plantilla del Informe Semanal', html, () => guardarPlantillaInformeSeg(r.empresa.nombre));
+}
+
+async function guardarPlantillaInformeSeg(nombreEmpresa) {
+  const informe_seg_plantilla = {
+    disciplina: document.getElementById('mPlantillaDisciplina').value.trim() || 'Seguridad y Salud Laboral',
+    descripcion_general: document.getElementById('mPlantillaDescripcion').value.trim(),
+    titulo_aspectos_criticos: document.getElementById('mPlantillaTitAspectos').value.trim() || 'Aspectos críticos',
+    titulo_observaciones: document.getElementById('mPlantillaTitObs').value.trim() || 'Observaciones',
+    titulo_actividad_diaria: document.getElementById('mPlantillaTitActividad').value.trim() || 'Actividad diaria',
+    titulo_otros_puntos: document.getElementById('mPlantillaTitOtros').value.trim() || 'Otros puntos',
+  };
+  const r = await api('/mi-empresa', { method: 'PUT', body: JSON.stringify({ nombre: nombreEmpresa, informe_seg_plantilla }) });
+  if (!r.ok) { toast(r.error || 'Error al guardar', 'err'); return; }
+  toast('Plantilla guardada ✓', 'ok');
+  cerrarModal();
+}
+
 async function borrarInformeSegCompleto(id) {
   if (!confirm('¿Borrar este informe semanal completo? Se borrarán también todas sus actividades y fotos. Esta acción no se puede deshacer.')) return;
   const r = await api(`/informes-seg/${id}`, { method: 'DELETE' });
@@ -17235,26 +17283,29 @@ function imprimirInformeSeg(id) {
         <td style="border:1px solid #999;padding:8px;vertical-align:top">${descHtml}<div style="display:flex;flex-wrap:wrap">${fotosHtml}</div></td></tr>`;
     }).join('');
     const otrosHtml = (inf.otros_puntos || '').split('\n').filter(l => l.trim()).map(l => `<li>${escHtml(l)}</li>`).join('') || '<li>—</li>';
+    // INFORMES-SEG-PLANTILLA-01 (17/08/2026): inf.plantilla lo manda ya resuelto el
+    // backend (defaults + lo guardado en empresas.informe_seg_plantilla, ver "✏️ Plantilla").
+    const pl = inf.plantilla || {};
     const win = window.open('', '_blank');
     if (!win) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
     win.document.write(`<html><head><title>Informe semanal — Semana ${inf.semana_numero || ''}</title><meta charset="utf-8"></head>
       <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:800px;margin:20px auto;font-size:13px">
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px">
           <tr><td style="border:1px solid #999;padding:6px;font-weight:700;width:30%">INFORME INTERNO SEMANAL: SEMANA ${inf.semana_numero || '—'} DE ${inf.anio || ''}</td>
-              <td style="border:1px solid #999;padding:6px" colspan="2">DISCIPLINA: Seguridad y Salud Laboral</td></tr>
+              <td style="border:1px solid #999;padding:6px" colspan="2">DISCIPLINA: ${escHtml(pl.disciplina || 'Seguridad y Salud Laboral')}</td></tr>
           <tr><td style="border:1px solid #999;padding:6px">LUGAR: ${escHtml(inf.obra_nombre || '—')}</td>
               <td style="border:1px solid #999;padding:6px">Nº DOCUMENTO: ${escHtml(inf.numero_documento || '—')}</td>
               <td style="border:1px solid #999;padding:6px">Rev. ${escHtml(inf.revision || 'XX')}</td></tr>
         </table>
         <h3>Descripción general</h3>
-        <p>El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.</p>
-        <h3>Aspectos críticos</h3>
+        <p>${escHtml(pl.descripcion_general || 'El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.')}</p>
+        <h3>${escHtml(pl.titulo_aspectos_criticos || 'Aspectos críticos')}</h3>
         <p style="white-space:pre-wrap">${escHtml(inf.aspectos_criticos || '—')}</p>
-        <h3>Observaciones</h3>
+        <h3>${escHtml(pl.titulo_observaciones || 'Observaciones')}</h3>
         <p style="white-space:pre-wrap">${escHtml(inf.observaciones || '—')}</p>
-        <h3>Actividad diaria</h3>
+        <h3>${escHtml(pl.titulo_actividad_diaria || 'Actividad diaria')}</h3>
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px">${filasDias || '<tr><td style="border:1px solid #999;padding:8px">Sin actividades</td></tr>'}</table>
-        <h3>Otros puntos</h3>
+        <h3>${escHtml(pl.titulo_otros_puntos || 'Otros puntos')}</h3>
         <ul>${otrosHtml}</ul>
         <script>window.onload = () => setTimeout(() => window.print(), 500);<\/script>
       </body></html>`);

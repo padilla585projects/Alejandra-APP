@@ -10209,26 +10209,29 @@ async function segInfImprimir() {
       <td style="border:1px solid #999;padding:8px;vertical-align:top">${descHtml}<div style="display:flex;flex-wrap:wrap">${fotosHtml}</div></td></tr>`;
   }).join('');
   const otrosHtml = (inf.otros_puntos || '').split('\n').filter(l => l.trim()).map(l => `<li>${_escHtml(l)}</li>`).join('') || '<li>—</li>';
+  // INFORMES-SEG-PLANTILLA-01 (17/08/2026): inf.plantilla lo manda ya resuelto el backend
+  // (defaults + lo que la empresa haya guardado en "✏️ Plantilla" desde Office).
+  const pl = inf.plantilla || {};
   const win = window.open('', '_blank');
   if (!win) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
   win.document.write(`<html><head><title>Informe semanal — Semana ${inf.semana_numero || ''}</title><meta charset="utf-8"></head>
     <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:800px;margin:20px auto;font-size:13px">
       <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px">
         <tr><td style="border:1px solid #999;padding:6px;font-weight:700;width:30%">INFORME INTERNO SEMANAL: SEMANA ${inf.semana_numero || '—'} DE ${inf.anio || ''}</td>
-            <td style="border:1px solid #999;padding:6px" colspan="2">DISCIPLINA: Seguridad y Salud Laboral</td></tr>
+            <td style="border:1px solid #999;padding:6px" colspan="2">DISCIPLINA: ${_escHtml(pl.disciplina || 'Seguridad y Salud Laboral')}</td></tr>
         <tr><td style="border:1px solid #999;padding:6px">LUGAR: ${_escHtml(inf.obra_nombre || '—')}</td>
             <td style="border:1px solid #999;padding:6px">Nº DOCUMENTO: ${_escHtml(inf.numero_documento || '—')}</td>
             <td style="border:1px solid #999;padding:6px">Rev. ${_escHtml(inf.revision || 'XX')}</td></tr>
       </table>
       <h3>Descripción general</h3>
-      <p>El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.</p>
-      <h3>Aspectos críticos</h3>
+      <p>${_escHtml(pl.descripcion_general || 'El presente documento recoge las labores en materia de seguridad y salud que semanalmente se realizan dentro de la obra.')}</p>
+      <h3>${_escHtml(pl.titulo_aspectos_criticos || 'Aspectos críticos')}</h3>
       <p style="white-space:pre-wrap">${_escHtml(inf.aspectos_criticos || '—')}</p>
-      <h3>Observaciones</h3>
+      <h3>${_escHtml(pl.titulo_observaciones || 'Observaciones')}</h3>
       <p style="white-space:pre-wrap">${_escHtml(inf.observaciones || '—')}</p>
-      <h3>Actividad diaria</h3>
+      <h3>${_escHtml(pl.titulo_actividad_diaria || 'Actividad diaria')}</h3>
       <table style="width:100%;border-collapse:collapse;margin-bottom:16px">${filasDias || '<tr><td style="border:1px solid #999;padding:8px">Sin actividades</td></tr>'}</table>
-      <h3>Otros puntos</h3>
+      <h3>${_escHtml(pl.titulo_otros_puntos || 'Otros puntos')}</h3>
       <ul>${otrosHtml}</ul>
       <script>window.onload = () => setTimeout(() => window.print(), 500);<\/script>
     </body></html>`);
