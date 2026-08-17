@@ -9257,7 +9257,16 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content });
           }
           ayMessages.push({ role: 'user', content: toolResults });
-          ayResp = await llamarAnthropic(env, ayMessages, ayudanteTools, MODEL_EXPERTO, 1024, ayudante.systemPrompt);
+          // BUGFIX-CACHE-PROMPT-01 (17/08/2026): esta vuelta del bucle usaba
+          // ayudante.systemPrompt a secas, sin la regla de esDevVerificado que sí lleva
+          // promptAyudante (la primera llamada, arriba) -- dos problemas: (1) rompía el
+          // caché de prompts de Anthropic al cambiar el contenido del bloque de sistema
+          // entre llamadas de la MISMA delegación (Adrián pidió investigar un aviso real
+          // de Anthropic de baja tasa de acierto de caché -- esta era la causa real, no lo
+          // que Alejandra le dijo sin comprobar su propio código); (2) reabría la fuga que
+          // cerró AYUDANTE-DETALLE-TECNICO-01: a partir de la 2ª vuelta el modelo perdía la
+          // instrucción de no revelar detalle técnico a quien no sea Adrián.
+          ayResp = await llamarAnthropic(env, ayMessages, ayudanteTools, MODEL_EXPERTO, 1024, promptAyudante);
           ayIter++;
         }
 
