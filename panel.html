@@ -22607,6 +22607,11 @@ function abrirComposeCorreo(prefill) {
     </div>`;
   abrirModal('✏️ Redactar correo', html, enviarCorreoCompose);
   document.getElementById('modalBox').style.maxWidth = '700px';
+  // BUGFIX (17/08/2026): Adrián -- "el botón de enviar pone guardar". abrirModal() pone
+  // "Guardar" por defecto en el botón genérico (#modalOkBtn) para todos sus usos en la
+  // app -- aquí hace falta pisarlo explícitamente, cerrarModal() ya lo restaura solo al
+  // cerrar (ver FIX-EMPRESAS-05) así que no hace falta tocar nada más.
+  document.getElementById('modalOkBtn').textContent = '✉️ Enviar';
 }
 
 function responderCorreo(gmailId) {
