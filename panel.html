@@ -38755,6 +38755,17 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
+  // OBRA-AUTO-01 (17/08/2026): Adrián -- "las obras se deben de detectar solas en el
+  // panel no? los usuarios ya tienen obras asignadas". Encargado/operario/jefe_de_obra
+  // tienen una única obra fija en sesión (SESSION.obra_id) -- no tiene sentido que la
+  // elijan a mano en cada una de las 130+ pantallas que usan este selector. Superadmin/
+  // empresa_admin/desarrollador/oficina gestionan varias obras a la vez, se quedan en
+  // "Todas las obras" por defecto como hasta ahora.
+  const tieneObraFija = hasSessionRole('encargado', 'operario', 'jefe_de_obra') &&
+    !hasSessionRole('superadmin', 'empresa_admin', 'desarrollador', 'oficina');
+  if (tieneObraFija && SESSION?.obra_id && obras.some(o => String(o.id) === String(SESSION.obra_id))) {
+    sel.value = String(SESSION.obra_id);
+  }
 }
 
 // ── CERTIFICACIONES DE OBRA (NEW-67) ───────────────────────────────
