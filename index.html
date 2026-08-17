@@ -1069,6 +1069,19 @@ select option{background:var(--surface2);color:var(--text)}
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
+    <!-- ALMACEN-FILTRO-MOVIL-01 (14/08/2026): Adrián -- Almacén ve el material de TODOS
+         los departamentos por defecto (igual que panel.html); esta barra deja acotarlo a
+         uno solo. Oculta salvo dept==='almacen' (ver setupHomeModules). -->
+    <div id="almacenFiltroDeptBar" style="display:none;padding:8px 14px;background:var(--surface2);border-bottom:1px solid var(--border);align-items:center;justify-content:space-between;gap:8px">
+      <span style="font-size:12px;color:var(--muted)">📦 Material de: <b id="almacenFiltroDeptLabel" style="color:var(--text)">Todos los departamentos</b></span>
+      <button onclick="abrirFiltroDeptAlmacenMovil()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;flex-shrink:0">Filtrar ▾</button>
+    </div>
+    <div id="almacenFiltroDeptModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.style.display='none'">
+      <div style="background:var(--surface);border-radius:16px;padding:16px;width:100%;max-width:340px;max-height:80vh;overflow-y:auto">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;margin-bottom:10px">Filtrar material por departamento</div>
+        <div id="almacenFiltroDeptOpciones"></div>
+      </div>
+    </div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -5743,11 +5756,53 @@ function cerrarSesion() {
 // y aquí nunca se pedía. Mismo criterio ya usado en panel.html (_deptoPreviewParam):
 // "el backend ya soporta este parámetro... si una ruta no lo usa, el parámetro de más se
 // ignora sin más".
+// ALMACEN-FILTRO-MOVIL-01 (14/08/2026): mismas 7 opciones que el modal equivalente de
+// panel.html (abrirModalFiltroDeptAlmacen) -- solo departamentos con material propio.
+const _ALMACEN_FILTRO_DEPT_OPCIONES = [
+  ['', '📁 Todos los departamentos'],
+  ['electrico', '⚡ Eléctrico'],
+  ['mecanicas', '🔧 Mecánicas'],
+  ['seguridad', '🔺 Seguridad'],
+  ['obra_civil', '🏗️ Obra Civil'],
+  ['telecom', '🌐 Telecom'],
+  ['almacen', '📦 Almacén'],
+];
+function abrirFiltroDeptAlmacenMovil() {
+  const cont = document.getElementById('almacenFiltroDeptOpciones');
+  cont.innerHTML = _ALMACEN_FILTRO_DEPT_OPCIONES.map(([val, txt]) =>
+    `<div onclick="aplicarFiltroDeptAlmacenMovil('${val}')" style="padding:12px 10px;border-radius:8px;cursor:pointer;font-size:14px">${txt}</div>`
+  ).join('');
+  document.getElementById('almacenFiltroDeptModal').style.display = 'flex';
+}
+function aplicarFiltroDeptAlmacenMovil(dep) {
+  window._filtroDeptAlmacen = dep || null;
+  const opcion = _ALMACEN_FILTRO_DEPT_OPCIONES.find(([val]) => val === dep);
+  document.getElementById('almacenFiltroDeptLabel').textContent = dep ? (opcion?.[1] || dep) : 'Todos los departamentos';
+  document.getElementById('almacenFiltroDeptModal').style.display = 'none';
+  cargarStatsHome();
+}
+
+// ALMACEN-FILTRO-MOVIL-01 (14/08/2026): Adrián -- Almacén debe ver el material de TODOS
+// los departamentos desde el móvil, mismo criterio que ya tenía panel.html
+// (_deptoPreviewParam/filtroDeptModal). El backend ya trata departamento==='almacen' como
+// isAdminRole en bobinas/herramientas/PEMP/carretillas/pedidos (ve todo por defecto); esto
+// solo añade el filtro OPCIONAL para acotar a un departamento, igual que Office
+// (window._filtroDeptAlmacen, fijado por abrirFiltroDeptAlmacenMovil/aplicarFiltroDeptAlmacenMovil).
 function _conDeptoFiltro(path, method) {
   if (method && method !== 'GET') return path;
   const s = getSession();
-  if (!s || !['superadmin', 'empresa_admin', 'desarrollador'].includes(s.rol)) return path;
-  if (!s.departamento || s.departamento === 'almacen') return path;
+  if (!s) return path;
+  if (s.departamento === 'almacen') {
+    const filtro = window._filtroDeptAlmacen || null;
+    if (!filtro) return path;
+    const [base, query = ''] = path.split('?');
+    const params = new URLSearchParams(query);
+    params.set('departamento', filtro);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }
+  if (!['superadmin', 'empresa_admin', 'desarrollador'].includes(s.rol)) return path;
+  if (!s.departamento) return path;
   const [base, query = ''] = path.split('?');
   const params = new URLSearchParams(query);
   if (!params.has('departamento')) params.set('departamento', s.departamento);
@@ -6693,6 +6748,17 @@ function setupHomeModules() {
   if (cardFormac) cardFormac.style.display = 'none';
   // Telecom no hereda módulos de construcción por pertenecer a la plantilla trade.
   aplicarMenuHomeEspecifico(dept);
+  // ALMACEN-FILTRO-MOVIL-01 (14/08/2026): barra de filtro por departamento, solo Almacén
+  // (mismo criterio que panel.html) -- se resetea el filtro al volver a Home de otro depto.
+  const barraFiltroAlmacen = document.getElementById('almacenFiltroDeptBar');
+  if (barraFiltroAlmacen) {
+    if (dept === 'almacen') {
+      barraFiltroAlmacen.style.display = 'flex';
+    } else {
+      barraFiltroAlmacen.style.display = 'none';
+      window._filtroDeptAlmacen = null;
+    }
+  }
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
   applyModulosConfig();
   applyHomeOrder();
