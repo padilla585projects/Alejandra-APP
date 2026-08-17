@@ -6632,6 +6632,7 @@ export default {
       }
       if (path === '/fichajes' && method === 'GET')  return await getFichajes(request, env);
       if (path === '/fichajes' && method === 'POST') return await crearFichaje(request, env, ctx);
+      if (path === '/informes/fichajes' && method === 'GET') return await getInformeFichajes(request, env);
       if (path === '/fichajes/scan' && method === 'POST') return await ficharPorCodigo(request, env, ctx);
       if (path.startsWith('/fichajes/')) {
         const fid = parseInt(path.split('/fichajes/')[1]);
@@ -11594,6 +11595,63 @@ async function getFichajes(request, env) {
   sql += ' ORDER BY f.fecha DESC, f.hora_entrada ASC LIMIT 500';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
+}
+
+// INFORMES-FICHAJES-01 (17/08/2026): pedido explícito de Adrián -- informe de fichajes
+// imprimible, horas por día/semana/mes. horas_trabajadas/horas_extra ya se calculan y
+// guardan al crear cada fichaje (crearFichaje/calcHoras) -- aquí solo se agrupan, sin
+// recalcular nada. Agrupación en JS (no SQL) para no depender de funciones de fecha
+// específicas de SQLite y poder reutilizar la misma clave de semana ISO que ya usa
+// calcularSemanaISO() en el resto de la app.
+function claveAgrupacionFichaje(fecha, agrupacion) {
+  if (agrupacion === 'mes') return fecha.slice(0, 7); // YYYY-MM
+  if (agrupacion === 'semana') {
+    const d = new Date(fecha + 'T00:00:00Z');
+    const diaISO = (d.getUTCDay() + 6) % 7; // lunes=0 ... domingo=6
+    d.setUTCDate(d.getUTCDate() - diaISO);
+    return d.toISOString().slice(0, 10); // lunes de esa semana
+  }
+  return fecha; // día
+}
+async function getInformeFichajes(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, isDesarrollador, obra_id: obraAuth, rol, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const url = new URL(request.url);
+  const fecha_ini = url.searchParams.get('fecha_ini');
+  const fecha_fin = url.searchParams.get('fecha_fin');
+  const obra_id = url.searchParams.get('obra_id');
+  const dept = url.searchParams.get('departamento');
+  const agrupacion = ['dia', 'semana', 'mes'].includes(url.searchParams.get('agrupacion')) ? url.searchParams.get('agrupacion') : 'dia';
+  if (!fecha_ini || !fecha_fin) return err('Falta el rango de fechas');
+
+  let sql = `SELECT f.fecha, f.horas_trabajadas, f.horas_extra, f.usuario_id, f.personal_externo_id,
+             COALESCE(u.nombre, pe.nombre) as trabajador, o.nombre as obra_nombre
+             FROM fichajes f
+             LEFT JOIN usuarios u ON f.usuario_id = u.id
+             LEFT JOIN personal_externo pe ON f.personal_externo_id = pe.id
+             LEFT JOIN obras o ON f.obra_id = o.id
+             WHERE f.empresa_id = ? AND f.fecha >= ? AND f.fecha <= ?`;
+  const params = [empresa_id, fecha_ini, fecha_fin];
+  if (!isSuperadmin && !isEmpresaAdmin && !isAdmin && obraAuth) { sql += ' AND f.obra_id = ?'; params.push(obraAuth); }
+  else if (obra_id) { sql += ' AND f.obra_id = ?'; params.push(parseInt(obra_id)); }
+  if (!isSuperadmin && !isEmpresaAdmin && !isDesarrollador && (rol === 'oficina' || rol === 'encargado')) { sql += ' AND f.departamento = ?'; params.push(departamento); }
+  else if (dept) { sql += ' AND f.departamento = ?'; params.push(dept); }
+  sql += ' ORDER BY f.fecha ASC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+
+  const grupos = {};
+  for (const f of results) {
+    const trabajadorKey = f.usuario_id ? `u${f.usuario_id}` : `p${f.personal_externo_id}`;
+    const periodo = claveAgrupacionFichaje(f.fecha, agrupacion);
+    const key = `${trabajadorKey}|${periodo}`;
+    if (!grupos[key]) grupos[key] = { trabajador: f.trabajador || '—', obra_nombre: f.obra_nombre || null, periodo, horas: 0, horas_extra: 0, dias: 0 };
+    grupos[key].horas       += f.horas_trabajadas || 0;
+    grupos[key].horas_extra += f.horas_extra || 0;
+    grupos[key].dias        += 1;
+  }
+  const filas = Object.values(grupos).sort((a, b) => a.trabajador.localeCompare(b.trabajador) || a.periodo.localeCompare(b.periodo));
+  return json({ agrupacion, filas });
 }
 
 async function crearFichaje(request, env, ctx) {

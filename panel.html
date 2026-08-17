@@ -1185,6 +1185,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           <button class="btn btn-secondary" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6" onclick="abrirScanPartePanel()">📋 Escanear parte</button>
           <button class="btn btn-secondary" onclick="cargarFichajes()">🔄 Actualizar</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblFichajes,'fichajes')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="abrirInformeFichajes()">📊 Informe</button>
         </div>
         <div id="fichajesResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblFichajes"></div></div>
@@ -14736,6 +14737,134 @@ function abrirModalFichaje() {
     else toast(r.error || 'Error al guardar', 'err');
   });
 }
+// INFORMES-FICHAJES-01 (17/08/2026): pedido explícito de Adrián -- informe de fichajes
+// imprimible, horas por día/semana/mes. Reutiliza el modal genérico (modalOverlay) igual
+// que verInformeSeg/segInfRenderDetalle: footer propio (Imprimir/Cerrar) en vez del
+// Guardar/Cancelar por defecto de abrirModal(), porque aquí no hay nada que guardar.
+async function abrirInformeFichajes() {
+  document.getElementById('modalTitle').textContent = '📊 Informe de Fichajes';
+  const hoy = new Date();
+  const inicioMes = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`;
+  const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().slice(0, 10);
+  document.getElementById('modalBody').innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <select class="tbl-search" id="infFichObra" style="min-width:180px">
+        <option value="">🏗 Todas las obras</option>
+      </select>
+      <input class="tbl-search" type="date" id="infFichDesde" value="${inicioMes}" style="min-width:140px">
+      <input class="tbl-search" type="date" id="infFichHasta" value="${finMes}" style="min-width:140px">
+      <select class="tbl-search" id="infFichAgrupacion" style="min-width:120px">
+        <option value="dia">Por día</option>
+        <option value="semana" selected>Por semana</option>
+        <option value="mes">Por mes</option>
+      </select>
+      <button class="btn btn-primary" onclick="_infFichajesGenerar()">Generar</button>
+    </div>
+    <div id="infFichResultado" style="min-height:80px"></div>`;
+  document.getElementById('modalFooter').innerHTML = `
+    <button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>
+    <button class="btn btn-primary" onclick="imprimirInformeFichajes()">🖨️ Imprimir</button>`;
+  document.getElementById('modalOverlay').classList.add('open');
+  await poblarSelectObras('infFichObra');
+  _infFichajesGenerar();
+}
+
+function _infFichajesEtiquetaPeriodo(periodo, agrupacion) {
+  if (agrupacion === 'mes') {
+    const [anio, mes] = periodo.split('-');
+    return `${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][parseInt(mes) - 1]} ${anio}`;
+  }
+  if (agrupacion === 'semana') {
+    const ini = new Date(periodo + 'T00:00:00');
+    const fin = new Date(ini); fin.setDate(ini.getDate() + 6);
+    const fmt = d => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return `${fmt(ini)}–${fmt(fin)}`;
+  }
+  return periodo.split('-').reverse().join('/');
+}
+
+let _infFichajesUltimoResultado = null;
+async function _infFichajesGenerar() {
+  const obra_id = document.getElementById('infFichObra').value;
+  const fecha_ini = document.getElementById('infFichDesde').value;
+  const fecha_fin = document.getElementById('infFichHasta').value;
+  const agrupacion = document.getElementById('infFichAgrupacion').value;
+  const cont = document.getElementById('infFichResultado');
+  if (!fecha_ini || !fecha_fin) { toast('Indica el rango de fechas', 'err'); return; }
+  cont.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Cargando…</div>';
+  let qs = `fecha_ini=${fecha_ini}&fecha_fin=${fecha_fin}&agrupacion=${agrupacion}`;
+  if (obra_id) qs += `&obra_id=${obra_id}`;
+  const r = await api(`/informes/fichajes?${qs}`);
+  if (!r.ok) { cont.innerHTML = `<div style="color:var(--red);padding:12px">${escHtml(r.error || 'Error al cargar')}</div>`; return; }
+  _infFichajesUltimoResultado = { ...r, fecha_ini, fecha_fin, obra_nombre: document.getElementById('infFichObra').selectedOptions[0]?.textContent || '' };
+  if (!r.filas.length) { cont.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Sin fichajes en ese rango.</div>'; return; }
+  const filas = r.filas.map(f => `
+    <tr>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border)">${escHtml(f.trabajador)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border)">${escHtml(f.obra_nombre || '—')}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border)">${_infFichajesEtiquetaPeriodo(f.periodo, agrupacion)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right">${f.dias}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right">${f.horas.toFixed(1)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:right">${f.horas_extra.toFixed(1)}</td>
+    </tr>`).join('');
+  cont.innerHTML = `
+    <div style="max-height:360px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="text-align:left">
+          <th style="padding:6px 10px;border-bottom:2px solid var(--border)">Trabajador</th>
+          <th style="padding:6px 10px;border-bottom:2px solid var(--border)">Obra</th>
+          <th style="padding:6px 10px;border-bottom:2px solid var(--border)">Período</th>
+          <th style="padding:6px 10px;border-bottom:2px solid var(--border);text-align:right">Días</th>
+          <th style="padding:6px 10px;border-bottom:2px solid var(--border);text-align:right">Horas</th>
+          <th style="padding:6px 10px;border-bottom:2px solid var(--border);text-align:right">Extra</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>`;
+}
+
+function imprimirInformeFichajes() {
+  const res = _infFichajesUltimoResultado;
+  if (!res || !res.filas?.length) { toast('Genera el informe antes de imprimir', 'err'); return; }
+  const agrupLabel = { dia: 'Por día', semana: 'Por semana', mes: 'Por mes' }[res.agrupacion] || '';
+  const filas = res.filas.map(f => `
+    <tr>
+      <td style="border:1px solid #999;padding:6px">${escHtml(f.trabajador)}</td>
+      <td style="border:1px solid #999;padding:6px">${escHtml(f.obra_nombre || '—')}</td>
+      <td style="border:1px solid #999;padding:6px">${_infFichajesEtiquetaPeriodo(f.periodo, res.agrupacion)}</td>
+      <td style="border:1px solid #999;padding:6px;text-align:right">${f.dias}</td>
+      <td style="border:1px solid #999;padding:6px;text-align:right">${f.horas.toFixed(1)}</td>
+      <td style="border:1px solid #999;padding:6px;text-align:right">${f.horas_extra.toFixed(1)}</td>
+    </tr>`).join('');
+  const totalHoras = res.filas.reduce((s, f) => s + f.horas, 0).toFixed(1);
+  const totalExtra = res.filas.reduce((s, f) => s + f.horas_extra, 0).toFixed(1);
+  const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
+  w.document.write(`<html><head><title>Informe de Fichajes</title><meta charset="utf-8"></head>
+    <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:900px;margin:20px auto;font-size:13px">
+      <h2>📊 Informe de Fichajes</h2>
+      <p style="color:#555">${escHtml(res.obra_nombre || 'Todas las obras')} — del ${res.fecha_ini.split('-').reverse().join('/')} al ${res.fecha_fin.split('-').reverse().join('/')} — ${agrupLabel}</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+        <thead><tr style="background:#f3f4f6">
+          <th style="border:1px solid #999;padding:6px;text-align:left">Trabajador</th>
+          <th style="border:1px solid #999;padding:6px;text-align:left">Obra</th>
+          <th style="border:1px solid #999;padding:6px;text-align:left">Período</th>
+          <th style="border:1px solid #999;padding:6px">Días</th>
+          <th style="border:1px solid #999;padding:6px">Horas</th>
+          <th style="border:1px solid #999;padding:6px">Extra</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+        <tfoot><tr style="font-weight:700;background:#f8fafc">
+          <td style="border:1px solid #999;padding:6px" colspan="4">TOTAL</td>
+          <td style="border:1px solid #999;padding:6px;text-align:right">${totalHoras}</td>
+          <td style="border:1px solid #999;padding:6px;text-align:right">${totalExtra}</td>
+        </tr></tfoot>
+      </table>
+      <script>window.onload = () => setTimeout(() => window.print(), 500);<\/script>
+    </body></html>`);
+  w.document.close();
+}
+
 async function cargarFichajes() {
   const desde = document.getElementById('fichajesFechaDesde').value;
   const hasta = document.getElementById('fichajesFechaHasta').value;
