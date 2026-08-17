@@ -2500,11 +2500,11 @@ select option{background:var(--surface2);color:var(--text)}
       <div style="padding:14px 16px;overflow-y:auto;flex:1">
         <div style="margin-bottom:11px">
           <label id="telecomModalLabel1" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Nombre *</label>
-          <input id="telecomModalInput1" type="text" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          <input id="telecomModalInput1" type="text" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
         </div>
         <div style="margin-bottom:11px" id="telecomModalField2Wrap">
           <label id="telecomModalLabel2" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Ubicación</label>
-          <input id="telecomModalInput2" type="text" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          <input id="telecomModalInput2" type="text" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
         </div>
         <div id="telecomModalPatchFields" style="display:none">
           <div style="margin-bottom:11px">
@@ -2588,11 +2588,11 @@ select option{background:var(--surface2);color:var(--text)}
       <div style="padding:14px 16px;overflow-y:auto;flex:1">
         <div style="margin-bottom:11px">
           <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Destino (sala/puesto)</label>
-          <input id="telecomPuertoDestino" type="text" placeholder="Ej: Oficina 101 - Puesto 3" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          <input id="telecomPuertoDestino" type="text" maxlength="160" placeholder="Ej: Oficina 101 - Puesto 3" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
         </div>
         <div style="margin-bottom:11px">
           <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Etiqueta del cable</label>
-          <input id="telecomPuertoCable" type="text" placeholder="Ej: P1-C101" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          <input id="telecomPuertoCable" type="text" maxlength="160" placeholder="Ej: P1-C101" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
         </div>
         <div style="margin-bottom:11px">
           <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Categoría</label>
@@ -2608,7 +2608,7 @@ select option{background:var(--surface2);color:var(--text)}
         </div>
         <div style="margin-bottom:11px">
           <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Notas</label>
-          <textarea id="telecomPuertoNotas" rows="2" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+          <textarea id="telecomPuertoNotas" rows="2" maxlength="1000" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
         </div>
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
@@ -18600,7 +18600,18 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       pp:     { path:'/telecom/patch-panels/', label:'patch panel', pregunta:'¿Borrar este patch panel? Se perderán los datos de sus puertos.' },
       cuadro: { path:'/telecom/cuadros-campo/', label:'cuadro', pregunta:'¿Borrar este cuadro de campo? Se perderán los datos de sus puertos.' },
     }[tipo];
-    if (!cfg || !confirm(cfg.pregunta)) return;
+    if (!cfg) return;
+    // TELECOM-NAV-01 (17/08/2026): con datos reales, borrar un módulo/cuadro entero de un
+    // solo confirm() genérico es fácil de pulsar sin pensar. Si tiene puertos con datos
+    // (destino/etiqueta ya rellenos), avisar del número exacto antes de confirmar.
+    if (tipo === 'pp' || tipo === 'cuadro') {
+      const item = (_telecomCache[tipo] || []).find(x => Number(x.id) === Number(id));
+      const ocupados = Number(item?.ocupados) || 0;
+      if (ocupados > 0) {
+        cfg.pregunta = `⚠️ Este ${cfg.label} tiene ${ocupados} puerto${ocupados === 1 ? '' : 's'} con datos (destino/etiqueta ya rellenos).\n\n¿Borrarlo de todas formas? Se perderán esos datos para siempre.`;
+      }
+    }
+    if (!confirm(cfg.pregunta)) return;
     try {
       const res = await apiCall(cfg.path + id, { method: 'DELETE' });
       await _telecomLeerRespuesta(res);

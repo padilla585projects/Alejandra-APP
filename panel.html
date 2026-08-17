@@ -1962,11 +1962,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           <div class="modal-body">
           <div class="form-group">
             <label id="telecomOfficeLabelNombre">Nombre *</label>
-            <input class="form-input" id="telecomOfficeNombre" type="text" placeholder="Ej: IDF Planta 1">
+            <input class="form-input" id="telecomOfficeNombre" type="text" maxlength="160" placeholder="Ej: IDF Planta 1">
           </div>
           <div class="form-group" id="telecomOfficeCampoExtra">
             <label id="telecomOfficeLabelExtra">Ubicación</label>
-            <input class="form-input" id="telecomOfficeExtra" type="text" placeholder="Ej: Planta 1 · Sala técnica">
+            <input class="form-input" id="telecomOfficeExtra" type="text" maxlength="160" placeholder="Ej: Planta 1 · Sala técnica">
           </div>
           <div id="telecomOfficePatchFields" style="display:none">
             <div class="form-group">
@@ -2049,11 +2049,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           <div class="form-grid">
             <div class="form-group">
               <label>Destino (sala/puesto)</label>
-              <input class="form-input" id="telecomOfficePuertoDestino" type="text" placeholder="Oficina 101 · Puesto 3">
+              <input class="form-input" id="telecomOfficePuertoDestino" type="text" maxlength="160" placeholder="Oficina 101 · Puesto 3">
             </div>
             <div class="form-group">
               <label>Etiqueta del cable</label>
-              <input class="form-input" id="telecomOfficePuertoCable" type="text" placeholder="P1-C101">
+              <input class="form-input" id="telecomOfficePuertoCable" type="text" maxlength="160" placeholder="P1-C101">
             </div>
             <div class="form-group">
               <label>Categoría</label>
@@ -2069,7 +2069,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             </div>
             <div class="form-group">
               <label>Notas</label>
-              <textarea class="form-input" id="telecomOfficePuertoNotas" rows="3"></textarea>
+              <textarea class="form-input" id="telecomOfficePuertoNotas" rows="3" maxlength="1000"></textarea>
             </div>
           </div>
           </div>
@@ -12565,7 +12565,18 @@ async function telecomOfficeEliminar(tipo, id) {
     pp:{path:'/telecom/patch-panels/', pregunta:'¿Eliminar este patch panel y todos sus puertos?'},
     cuadro:{path:'/telecom/cuadros-campo/', pregunta:'¿Eliminar este cuadro de campo y todos sus puertos?'}
   }[tipo];
-  if (!cfg || !confirm(cfg.pregunta)) return;
+  if (!cfg) return;
+  // TELECOM-NAV-01 (17/08/2026): con datos reales, borrar un módulo/cuadro entero de un solo
+  // confirm() genérico es fácil de pulsar sin pensar. Si tiene puertos con datos (destino/
+  // etiqueta ya rellenos), avisar del número exacto antes de confirmar.
+  if (tipo === 'pp' || tipo === 'cuadro') {
+    const item = (_telecomOfficeCache[tipo] || []).find(x => Number(x.id) === Number(id));
+    const ocupados = Number(item?.ocupados) || 0;
+    if (ocupados > 0) {
+      cfg.pregunta = `⚠️ Este ${tipo === 'pp' ? 'patch panel' : 'cuadro'} tiene ${ocupados} puerto${ocupados === 1 ? '' : 's'} con datos (destino/etiqueta ya rellenos).\n\n¿Eliminarlo de todas formas? Se perderán esos datos para siempre.`;
+    }
+  }
+  if (!confirm(cfg.pregunta)) return;
   try {
     await _telecomOfficeApi(cfg.path + id, { method:'DELETE' });
     toast('Elemento eliminado ✓', 'ok');

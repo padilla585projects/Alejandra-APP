@@ -7794,8 +7794,17 @@ function puedeEditarTelecom(auth) {
   return puedeVerTelecom(auth);
 }
 
+// TELECOM-NAV-01 (17/08/2026): el comentario de arriba ya decía la intención ("se reservan
+// a responsables"), pero el código anterior era idéntico a puedeEditarTelecom -- cualquier
+// usuario del departamento telecom podía borrar por API directa, aunque los dos frontends
+// ya ocultaban el botón de borrar a todos menos a estos roles. Se alinea el backend con esa
+// intención y con la lista que ya usan _telecomOfficePuedeEliminar()/_telecomPuedeEliminar()
+// en panel.html/index.html -- antes de meter datos reales, el borrado no puede depender solo
+// de que la UI oculte el botón.
 function puedeEliminarTelecom(auth) {
-  return puedeVerTelecom(auth);
+  if (!puedeVerTelecom(auth)) return false;
+  return !!(auth.isOficina || auth.isEmpresaAdmin || auth.isSuperadmin || auth.isDesarrollador ||
+    auth.isEncargado || auth.isJefeObra || auth.isProjectManager);
 }
 
 // DEPT-CPD-01 (09/08/2026): Sondas CPD no tenia NINGUN filtro de departamento server-side
@@ -7918,9 +7927,11 @@ async function crearTelecomIdf(request, env) {
   const nombre = safeStr(body.nombre).trim();
   const obraId = body.obra_id ? parseInt(body.obra_id) : null;
   if (!nombre || !obraId) return err('Faltan campos: nombre, obra_id');
-  if (!(await telecomValidarObra(auth, env, obraId))) return err('Obra no encontrada', 404);
   const ubicacion = safeStr(body.ubicacion).trim();
   const notas = safeStr(body.notas).trim();
+  if (nombre.length > 160 || ubicacion.length > 160) return err('Nombre/ubicación demasiado largos');
+  if (notas.length > 1000) return err('Las notas son demasiado largas');
+  if (!(await telecomValidarObra(auth, env, obraId))) return err('Obra no encontrada', 404);
   try {
     const r = await env.DB.prepare(
       'INSERT INTO telecom_idf (obra_id, empresa_id, nombre, ubicacion, notas, creado_por) VALUES (?, ?, ?, ?, ?, ?)'
@@ -7939,9 +7950,11 @@ async function editarTelecomIdf(idRaw, request, env) {
   if (!actual) return err('IDF no encontrado', 404);
   const body = await request.json().catch(() => ({}));
   const nombre = body.nombre === undefined ? actual.nombre : safeStr(body.nombre).trim();
-  const ubicacion = body.ubicacion === undefined ? actual.ubicacion : safeStr(body.ubicacion).trim();
-  const notas = body.notas === undefined ? actual.notas : safeStr(body.notas).trim();
+  const ubicacion = body.ubicacion === undefined ? safeStr(actual.ubicacion).trim() : safeStr(body.ubicacion).trim();
+  const notas = body.notas === undefined ? safeStr(actual.notas).trim() : safeStr(body.notas).trim();
   if (!nombre) return err('El nombre es obligatorio');
+  if (nombre.length > 160 || ubicacion.length > 160) return err('Nombre/ubicación demasiado largos');
+  if (notas.length > 1000) return err('Las notas son demasiado largas');
   try {
     await env.DB.prepare(
       'UPDATE telecom_idf SET nombre = ?, ubicacion = ?, notas = ? WHERE id = ? AND empresa_id = ?'
@@ -7985,8 +7998,10 @@ async function crearTelecomRack(request, env) {
   const nombre = safeStr(body.nombre).trim();
   const idfId = body.idf_id ? parseInt(body.idf_id) : null;
   if (!nombre || !idfId) return err('Faltan campos: nombre, idf_id');
-  if (!(await telecomGetIdf(auth, env, idfId))) return err('IDF no encontrado', 404);
   const notas = safeStr(body.notas).trim();
+  if (nombre.length > 160) return err('El nombre es demasiado largo');
+  if (notas.length > 1000) return err('Las notas son demasiado largas');
+  if (!(await telecomGetIdf(auth, env, idfId))) return err('IDF no encontrado', 404);
   try {
     const r = await env.DB.prepare(
       'INSERT INTO telecom_racks (idf_id, empresa_id, nombre, notas) VALUES (?, ?, ?, ?)'
@@ -8005,8 +8020,10 @@ async function editarTelecomRack(idRaw, request, env) {
   if (!actual) return err('Rack no encontrado', 404);
   const body = await request.json().catch(() => ({}));
   const nombre = body.nombre === undefined ? actual.nombre : safeStr(body.nombre).trim();
-  const notas = body.notas === undefined ? actual.notas : safeStr(body.notas).trim();
+  const notas = body.notas === undefined ? safeStr(actual.notas).trim() : safeStr(body.notas).trim();
   if (!nombre) return err('El nombre es obligatorio');
+  if (nombre.length > 160) return err('El nombre es demasiado largo');
+  if (notas.length > 1000) return err('Las notas son demasiado largas');
   try {
     await env.DB.prepare(
       'UPDATE telecom_racks SET nombre = ?, notas = ? WHERE id = ? AND empresa_id = ?'
@@ -8071,7 +8088,7 @@ async function crearTelecomPatchPanel(request, env) {
   const marca = safeStr(body.marca).trim();
   if (!nombre || !rackId) return err('Faltan campos: nombre, rack_id');
   if (!(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
-  if ([redVlan, switchAsociado, subred, posicionU, marca].some(v => v.length > 160) || notasConfig.length > 1000) {
+  if ([nombre, redVlan, switchAsociado, subred, posicionU, marca].some(v => v.length > 160) || notasConfig.length > 1000) {
     return err('Los datos técnicos del patch panel son demasiado largos');
   }
   if (!(await telecomGetRack(auth, env, rackId))) return err('Rack no encontrado', 404);
@@ -8125,7 +8142,7 @@ async function editarTelecomPatchPanel(idRaw, request, env) {
   const tipo = body.tipo === undefined ? (actual.tipo || 'cobre') : (['cobre', 'fibra', 'switch'].includes(body.tipo) ? body.tipo : 'cobre');
   const marca = body.marca === undefined ? safeStr(actual.marca).trim() : safeStr(body.marca).trim();
   if (!nombre) return err('El nombre es obligatorio');
-  if ([redVlan, switchAsociado, subred, posicionU, marca].some(v => v.length > 160) || notasConfig.length > 1000) {
+  if ([nombre, redVlan, switchAsociado, subred, posicionU, marca].some(v => v.length > 160) || notasConfig.length > 1000) {
     return err('Los datos técnicos del patch panel son demasiado largos');
   }
   try {
@@ -8180,6 +8197,9 @@ async function editarTelecomPuerto(idRaw, request, env) {
   const cableLabel = safeStr(body.cable_label).trim();
   const categoria = safeStr(body.categoria).trim();
   const notas = safeStr(body.notas).trim();
+  if ([destino, cableLabel, categoria].some(v => v.length > 160) || notas.length > 1000) {
+    return err('Los datos del puerto son demasiado largos');
+  }
   // Vaciar el puerto explícitamente si mandan destino='' — si no, se infiere ocupado/libre
   // según si queda algún dato relevante relleno.
   const estado = (destino || cableLabel) ? 'ocupado' : 'libre';
@@ -8255,7 +8275,7 @@ async function crearTelecomCuadroCampo(request, env) {
   const idfDestinoId = body.idf_destino_id ? parseInt(body.idf_destino_id) : null;
   if (!nombre || !obraId) return err('Faltan campos: nombre, obra_id');
   if (!(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
-  if ([ubicacion, marca, modelo].some(v => v.length > 160) || notas.length > 1000) {
+  if ([nombre, ubicacion, marca, modelo].some(v => v.length > 160) || notas.length > 1000) {
     return err('Los datos del cuadro son demasiado largos');
   }
   if (!(await telecomValidarObra(auth, env, obraId))) return err('Obra no encontrada', 404);
@@ -8304,7 +8324,7 @@ async function editarTelecomCuadroCampo(idRaw, request, env) {
     ? actual.idf_destino_id
     : (body.idf_destino_id ? parseInt(body.idf_destino_id) : null);
   if (!nombre) return err('El nombre es obligatorio');
-  if ([ubicacion, marca, modelo].some(v => v.length > 160) || notas.length > 1000) {
+  if ([nombre, ubicacion, marca, modelo].some(v => v.length > 160) || notas.length > 1000) {
     return err('Los datos del cuadro son demasiado largos');
   }
   if (idfDestinoId && !(await telecomGetIdf(auth, env, idfDestinoId))) return err('IDF destino no encontrado', 404);
@@ -8352,6 +8372,9 @@ async function editarTelecomCuadroPuerto(idRaw, request, env) {
   const cableLabel = safeStr(body.cable_label).trim();
   const categoria = safeStr(body.categoria).trim();
   const notas = safeStr(body.notas).trim();
+  if ([destino, cableLabel, categoria].some(v => v.length > 160) || notas.length > 1000) {
+    return err('Los datos del puerto son demasiado largos');
+  }
   const estado = (destino || cableLabel) ? 'ocupado' : 'libre';
   const r = await env.DB.prepare(
     `UPDATE telecom_cuadros_campo_puertos SET destino=?, cable_label=?, categoria=?, notas=?, estado=?, actualizado_por=?, updated_at=datetime('now')
