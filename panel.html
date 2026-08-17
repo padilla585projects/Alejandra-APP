@@ -22392,6 +22392,7 @@ function _correosRenderLista() {
             <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="verCorreoCompleto('${escHtml(m.gmail_id)}')">📄 Ver completo</button>
             <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="responderCorreo('${escHtml(m.gmail_id)}')">↩️ Responder</button>
             <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="archivarCorreo('${escHtml(m.gmail_id)}')">🗄️ Archivar</button>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="borrarCorreo('${escHtml(m.gmail_id)}')">🗑️ Borrar</button>
           </div>
         </div>
       </div>
@@ -22431,6 +22432,18 @@ async function archivarCorreo(gmailId) {
   const r = await api(`/correos/${encodeURIComponent(gmailId)}`, { method: 'PUT', body: JSON.stringify({ archivado: true }) });
   if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
   toast('🗄️ Correo archivado', 'ok');
+  cargarCorreosPanel();
+}
+
+// Adrián: "y borrar también, pero con confirmación claro". Distinto de archivar: esto
+// borra la fila de verdad de la caché de la app (no reversible desde el panel) -- pero el
+// correo real sigue en su Gmail (seguimos sin gmail.modify), así que se lo advertimos
+// explícitamente: si vuelve a pulsar Sincronizar, puede reaparecer.
+async function borrarCorreo(gmailId) {
+  if (!confirm('¿Borrar este correo de la lista? Se quita de la app -- tu correo real en Gmail NO se toca (seguimos sin permiso para borrarlo ahí), así que si vuelves a pulsar "Sincronizar" puede volver a aparecer. Esta acción no se puede deshacer desde aquí.')) return;
+  const r = await api(`/correos/${encodeURIComponent(gmailId)}`, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  toast('🗑️ Correo borrado', 'ok');
   cargarCorreosPanel();
 }
 

@@ -5504,6 +5504,7 @@ export default {
       if (path === '/correos/sincronizar' && method === 'POST')     return await sincronizarCorreos(request, env);
       if (path.startsWith('/correos/') && method === 'PUT')         return await actualizarCorreoCache(path.split('/correos/')[1], request, env);
       if (path.match(/^\/correos\/[^/]+\/completo$/) && method === 'GET') return await getCorreoCompleto(path.split('/')[2], request, env);
+      if (path.startsWith('/correos/') && method === 'DELETE' && !path.includes('/completo')) return await borrarCorreoCache(path.split('/correos/')[1], request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -14202,6 +14203,19 @@ async function actualizarCorreoCache(gmailId, request, env) {
   campos.push("updated_at=datetime('now')");
   vals.push(auth.usuario_id, gmailId);
   const r = await env.DB.prepare(`UPDATE gmail_mensajes_cache SET ${campos.join(',')} WHERE usuario_id=? AND gmail_id=?`).bind(...vals).run();
+  if (!r.meta.changes) return err('Correo no encontrado en la caché', 404);
+  return json({ ok: true });
+}
+
+// CORREOS-PANEL-01-v2 (17/08/2026): Adrián -- "borrar también, pero con confirmación
+// claro". Distinto de archivar (archivado=1, la fila se queda y sincronizar la respeta):
+// esto borra la fila de verdad de la caché de la app -- pero el correo real sigue en su
+// Gmail (seguimos sin gmail.modify), así que si vuelve a pulsar "Sincronizar" puede
+// reaparecer. El aviso exacto de esto va en la confirmación del lado del cliente.
+async function borrarCorreoCache(gmailId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const r = await env.DB.prepare('DELETE FROM gmail_mensajes_cache WHERE usuario_id=? AND gmail_id=?').bind(auth.usuario_id, gmailId).run();
   if (!r.meta.changes) return err('Correo no encontrado en la caché', 404);
   return json({ ok: true });
 }
