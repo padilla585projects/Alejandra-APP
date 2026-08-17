@@ -16137,7 +16137,13 @@ let _panelObras = [];
 async function cargarObrasPanel() {
   try {
     const r = await api('/obras');
-    _panelObras = Array.isArray(r) ? r : (r.obras || r.data || r || []);
+    // OBRA-AUTO-01 (17/08/2026): /obras da 403 para encargado/operario a propósito (ver
+    // getObras() en worker.js -- no ven el listado completo de la empresa). Antes, ese
+    // 403 dejaba _panelObras como el objeto de error {ok:false,...} en vez de un array,
+    // así que _panelObras.map() de abajo lanzaba y el catch(_) abortaba TODA la función
+    // -- incluido el bucle que oculta los selectores de obra para estos roles. Se trata
+    // como "sin obras" en vez de dejar que reviente.
+    _panelObras = Array.isArray(r) ? r : (Array.isArray(r?.obras) ? r.obras : (Array.isArray(r?.data) ? r.data : []));
     window._obrasPanel = _panelObras;
     const opt = _panelObras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
     // FILTRO-OBRA-01 (25/07/2026): Adrián: "el modal de filtrado por obra... ese no hace
@@ -38747,6 +38753,19 @@ async function eliminarHito(id) {
 async function poblarSelectObras(selectId) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
+  // OBRA-AUTO-01 (17/08/2026): Adrián -- "las obras se deben de detectar solas en el
+  // panel no? los usuarios ya tienen obras asignadas". GET /obras (getObras() en
+  // worker.js) da 403 a cualquiera que no sea superadmin/empresa_admin/desarrollador/
+  // jefe_de_obra -- y el backend de cada endpoint concreto (bobinas, informes-seg...) ya
+  // fuerza siempre la obraId de la sesión para el resto de roles, elija lo que elija este
+  // selector. Mismo criterio ya aprobado y usado en los 4 selectores especiales
+  // (filtroObraBobinas/Pemp/Carretillas/Pedidos, FILTRO-OBRA-01 25/07/2026): si no puede
+  // elegir de verdad, el selector no aporta nada -- se oculta, sin llamar a /obras.
+  const puedeElegirObra = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
+  if (!puedeElegirObra) {
+    sel.style.display = 'none';
+    return;
+  }
   if (!window._obrasPanel?.length) await cargarObrasPanel();
   const obras = window._obrasPanel || _panelObras || [];
   obras.forEach(o => {
@@ -38755,17 +38774,6 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
-  // OBRA-AUTO-01 (17/08/2026): Adrián -- "las obras se deben de detectar solas en el
-  // panel no? los usuarios ya tienen obras asignadas". Encargado/operario/jefe_de_obra
-  // tienen una única obra fija en sesión (SESSION.obra_id) -- no tiene sentido que la
-  // elijan a mano en cada una de las 130+ pantallas que usan este selector. Superadmin/
-  // empresa_admin/desarrollador/oficina gestionan varias obras a la vez, se quedan en
-  // "Todas las obras" por defecto como hasta ahora.
-  const tieneObraFija = hasSessionRole('encargado', 'operario', 'jefe_de_obra') &&
-    !hasSessionRole('superadmin', 'empresa_admin', 'desarrollador', 'oficina');
-  if (tieneObraFija && SESSION?.obra_id && obras.some(o => String(o.id) === String(SESSION.obra_id))) {
-    sel.value = String(SESSION.obra_id);
-  }
 }
 
 // ── CERTIFICACIONES DE OBRA (NEW-67) ───────────────────────────────
