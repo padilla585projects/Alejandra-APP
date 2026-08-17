@@ -5500,6 +5500,9 @@ export default {
       if (path === '/auth/gmail'            && method === 'DELETE') return await gmailAuthDesconectar(request, env);
       if (path === '/internal/gmail/listar' && method === 'POST')   return await internalGmailListar(request, env);
       if (path === '/internal/gmail/enviar' && method === 'POST')   return await internalGmailEnviar(request, env);
+      if (path === '/correos' && method === 'GET')                 return await getCorreosPanel(request, env);
+      if (path === '/correos/sincronizar' && method === 'POST')     return await sincronizarCorreos(request, env);
+      if (path.startsWith('/correos/') && method === 'PUT')         return await actualizarCorreoCache(path.split('/correos/')[1], request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -14060,21 +14063,19 @@ function _b64std(bytes) {
 // TOOL_LEER_GMAIL/TOOL_ENVIAR_GMAIL); si llega con sesión real, usuario_id es el
 // del propio usuario autenticado -- en ambos casos solo puede actuar sobre su
 // propio Gmail conectado.
-async function internalGmailListar(request, env) {
-  const body = await request.json().catch(() => ({}));
-  const auth = await _getAuthPlano(request, env, body);
-  if (!auth.usuario_id) return err('No autorizado', 403);
-  const usuarioId = auth.usuario_id;
+// CORREOS-PANEL-01 (17/08/2026): lógica de listado extraída de internalGmailListar a un
+// helper compartido -- la reutiliza también sincronizarCorreos() (panel de correos) para
+// no duplicar las llamadas reales a la API de Gmail.
+async function _listarGmailMensajes(env, usuarioId, { limit = 10, query = '' } = {}) {
   const { accessToken, email, error } = await _obtenerAccessTokenGmail(env, usuarioId);
-  if (error) return json({ ok: false, error });
-
-  const limit = Math.min(Math.max(parseInt(body.limit) || 10, 1), 25);
-  const q = body.query ? `&q=${encodeURIComponent(body.query)}` : '';
-  const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limit}${q}`, {
+  if (error) return { error };
+  const limitFinal = Math.min(Math.max(parseInt(limit) || 10, 1), 25);
+  const q = query ? `&q=${encodeURIComponent(query)}` : '';
+  const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limitFinal}${q}`, {
     headers: { Authorization: 'Bearer ' + accessToken },
   });
   const listData = await listRes.json();
-  if (!listRes.ok) return json({ ok: false, error: listData.error?.message || 'Error listando Gmail.' });
+  if (!listRes.ok) return { error: listData.error?.message || 'Error listando Gmail.' };
   const mensajes = [];
   for (const m of (listData.messages || [])) {
     const mRes = await fetch(
@@ -14086,7 +14087,74 @@ async function internalGmailListar(request, env) {
     const headers = Object.fromEntries((mData.payload?.headers || []).map(h => [h.name, h.value]));
     mensajes.push({ id: m.id, de: headers.From || '', asunto: headers.Subject || '(sin asunto)', fecha: headers.Date || '', resumen: mData.snippet || '' });
   }
+  return { email, mensajes };
+}
+
+async function internalGmailListar(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const auth = await _getAuthPlano(request, env, body);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const { email, mensajes, error } = await _listarGmailMensajes(env, auth.usuario_id, { limit: body.limit, query: body.query });
+  if (error) return json({ ok: false, error });
   return json({ ok: true, email, mensajes });
+}
+
+// ── Panel de Correos por usuario (CORREOS-PANEL-01, 17/08/2026) ──────────────────────
+// Adrián: "necesitamos un panel para correos por usuario, donde alejandra pueda
+// organizarlos y escribir". Sin permisos nuevos de Google (gmail.readonly/gmail.send ya
+// concedidos) -- "organizar" es dentro de la app (leido_app/categoria_app en la caché),
+// nunca sobre el Gmail real. Envío reutiliza /internal/gmail/enviar tal cual (ya acepta
+// sesión real vía _getAuthPlano, no hace falta endpoint nuevo).
+async function getCorreosPanel(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const conectado = await env.DB.prepare('SELECT email_conectado FROM gmail_oauth_tokens WHERE usuario_id=?').bind(auth.usuario_id).first();
+  if (!conectado) return json({ conectado: false, mensajes: [] });
+  const { results } = await env.DB.prepare(
+    'SELECT gmail_id, de, asunto, fecha, resumen, leido_app, categoria_app FROM gmail_mensajes_cache WHERE usuario_id=? ORDER BY fecha DESC LIMIT 100'
+  ).bind(auth.usuario_id).all();
+  return json({ conectado: true, email: conectado.email_conectado, mensajes: results });
+}
+
+async function sincronizarCorreos(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const { email, mensajes, error } = await _listarGmailMensajes(env, auth.usuario_id, { limit: body.limit || 25, query: body.query });
+  if (error) return json({ ok: false, error });
+  let nuevos = 0;
+  for (const m of mensajes) {
+    const existia = await env.DB.prepare('SELECT id FROM gmail_mensajes_cache WHERE usuario_id=? AND gmail_id=?').bind(auth.usuario_id, m.id).first();
+    if (existia) {
+      await env.DB.prepare(
+        `UPDATE gmail_mensajes_cache SET de=?, asunto=?, fecha=?, resumen=?, updated_at=datetime('now') WHERE usuario_id=? AND gmail_id=?`
+      ).bind(m.de, m.asunto, m.fecha, m.resumen, auth.usuario_id, m.id).run();
+    } else {
+      await env.DB.prepare(
+        `INSERT INTO gmail_mensajes_cache (usuario_id, gmail_id, de, asunto, fecha, resumen) VALUES (?,?,?,?,?,?)`
+      ).bind(auth.usuario_id, m.id, m.de, m.asunto, m.fecha, m.resumen).run();
+      nuevos++;
+    }
+  }
+  return json({ ok: true, email, nuevos, total: mensajes.length });
+}
+
+// _getAuthPlano (no getAuth): esta ruta la llama también categorizar_correos (tool del
+// ayudante "correos") vía Service Binding con X-Internal-Secret, igual que
+// internalGmailListar/internalGmailEnviar -- ver comentario en _getAuthPlano.
+async function actualizarCorreoCache(gmailId, request, env) {
+  const body = await request.json().catch(() => ({}));
+  const auth = await _getAuthPlano(request, env, body);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const campos = [], vals = [];
+  if (body.leido_app !== undefined) { campos.push('leido_app=?'); vals.push(body.leido_app ? 1 : 0); }
+  if (body.categoria_app !== undefined) { campos.push('categoria_app=?'); vals.push(body.categoria_app || null); }
+  if (!campos.length) return err('Sin cambios');
+  campos.push("updated_at=datetime('now')");
+  vals.push(auth.usuario_id, gmailId);
+  const r = await env.DB.prepare(`UPDATE gmail_mensajes_cache SET ${campos.join(',')} WHERE usuario_id=? AND gmail_id=?`).bind(...vals).run();
+  if (!r.meta.changes) return err('Correo no encontrado en la caché', 404);
+  return json({ ok: true });
 }
 
 async function internalGmailEnviar(request, env) {

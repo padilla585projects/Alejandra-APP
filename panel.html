@@ -569,6 +569,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <span class="nav-icon">💬</span> Chat del equipo
       <span class="nav-badge" id="chatBadgeSidebar" style="display:none">0</span>
     </button>
+    <!-- CORREOS-PANEL-01 (17/08/2026): dato personal del usuario (su Gmail conectado), no
+         de obra/empresa -- fuera de las secciones por departamento a propósito. -->
+    <button class="nav-item" data-page="correos" onclick="navTo('correos')">
+      <span class="nav-icon">📧</span> Mis Correos
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="personal"><span>👷 Personal</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-sensitive-data" data-page="personal" onclick="navTo('personal')">
@@ -2284,6 +2289,31 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <div id="segRegistrosList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
         <div id="segRegistrosVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
           📷 Sin registros todavía.<br><small>Crea el primero con el botón de arriba.</small>
+        </div>
+      </div>
+
+      <!-- MIS CORREOS (CORREOS-PANEL-01, 17/08/2026) -->
+      <div class="page" id="pageCorreos">
+        <div class="page-title">📧 Mis Correos</div>
+        <div class="page-sub">Tu Gmail conectado — Alejandra puede resumirlos y organizarlos en categorías dentro de la app (no toca tu Gmail real)</div>
+        <div id="correosSinConectar" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
+          📧 No tienes Gmail conectado.<br>
+          <button class="btn btn-primary" style="margin-top:12px" onclick="abrirMiCuenta()">Conectar mi Gmail</button>
+        </div>
+        <div id="correosContenido" style="display:none">
+          <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <span id="correosEmailConectado" style="font-size:12px;color:var(--muted)"></span>
+            <select class="tbl-search" id="filterCorreoCategoria" style="min-width:160px" onchange="cargarCorreosPanel()">
+              <option value="">🏷️ Todas las categorías</option>
+            </select>
+            <button class="btn btn-secondary" onclick="sincronizarCorreosPanel(this)">🔄 Sincronizar</button>
+            <button class="btn btn-secondary" onclick="organizarCorreosConAlejandra()">🏷️ Organizar con Alejandra</button>
+            <button class="btn btn-primary" onclick="abrirComposeCorreo()">✏️ Redactar</button>
+          </div>
+          <div id="correosList" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div id="correosVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
+            📧 Sin correos todavía.<br><small>Pulsa "🔄 Sincronizar" para traer los últimos de tu Gmail.</small>
+          </div>
         </div>
       </div>
 
@@ -13327,6 +13357,7 @@ const PAGE_TITLES = {
   partesPanel: '📋 Partes Diarios',
   segRegistros: '📷 Registro de Seguridad',
   informeSegSemanal: '📝 Informe Semanal de Seguridad',
+  correos: '📧 Mis Correos',
   hitos: '🏁 Hitos de Obra',
   diarioObra: '📓 Diario de Obra',
   correspondencia: '✉️ Correspondencia',
@@ -13484,6 +13515,7 @@ const AYUDA_SECCIONES = {
   partesPanel: 'Partes de trabajo diarios rellenados por los equipos en obra.',
   segRegistros: 'Fotos de incidencias o estados de la obra con hilo de comentarios de todo el departamento de Seguridad.',
   informeSegSemanal: 'Informe interno semanal de Seguridad y Salud Laboral por obra: aspectos críticos, observaciones y actividad diaria con foto.',
+  correos: 'Panel personal de tu correo (Gmail conectado): sincroniza, categoriza dentro de la app y redacta. Alejandra puede resumirlos y organizarlos por categoría a petición tuya.',
   diarioObra: 'Diario de obra: registro cronológico de lo ocurrido cada día.',
   fieldReports: 'Informes de campo con hallazgos y seguimiento técnico.',
   fotosObra: 'Galería de fotos de la obra organizadas por fecha.',
@@ -13663,6 +13695,7 @@ const PAGE_LOADERS = {
   partesPanel: (...a) => cargarPartesPanel(...a),
   segRegistros: (...a) => cargarSegRegistros(...a),
   informeSegSemanal: (...a) => cargarInformesSeg(...a),
+  correos: (...a) => cargarCorreosPanel(...a),
   hitos: (...a) => cargarHitos(...a),
   diarioObra: (...a) => cargarDiarioObra(...a),
   correspondencia: (...a) => cargarCorrespondencia(...a),
@@ -22274,6 +22307,115 @@ function cerrarModal() {
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modalOverlay')) cerrarModal();
 });
+
+// ════════════════════════════════════════════════════════════════
+// MIS CORREOS (CORREOS-PANEL-01, 17/08/2026)
+// ════════════════════════════════════════════════════════════════
+// Adrián: "necesitamos un panel para correos por usuario, donde alejandra pueda
+// organizarlos y escribir". Sin permisos nuevos de Google -- "organizar" es una
+// categoría propia de la app (categoria_app en la caché), nunca toca el Gmail real.
+let _correosData = [];
+
+async function cargarCorreosPanel() {
+  const r = await api('/correos');
+  if (!r || r.conectado === false) {
+    document.getElementById('correosSinConectar').style.display = 'block';
+    document.getElementById('correosContenido').style.display = 'none';
+    return;
+  }
+  document.getElementById('correosSinConectar').style.display = 'none';
+  document.getElementById('correosContenido').style.display = 'block';
+  document.getElementById('correosEmailConectado').textContent = `📧 ${r.email || ''}`;
+  _correosData = r.mensajes || [];
+
+  const filtroSel = document.getElementById('filterCorreoCategoria');
+  const filtroActual = filtroSel.value;
+  const categorias = [...new Set(_correosData.map(m => m.categoria_app).filter(Boolean))].sort();
+  filtroSel.innerHTML = '<option value="">🏷️ Todas las categorías</option>' + categorias.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+  filtroSel.value = categorias.includes(filtroActual) ? filtroActual : '';
+
+  _correosRenderLista();
+}
+
+function _correosRenderLista() {
+  const filtro = document.getElementById('filterCorreoCategoria').value;
+  const lista = filtro ? _correosData.filter(m => m.categoria_app === filtro) : _correosData;
+  const cont = document.getElementById('correosList');
+  document.getElementById('correosVacio').style.display = lista.length ? 'none' : 'block';
+  cont.innerHTML = lista.map(m => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;${m.leido_app ? 'opacity:.65' : ''}">
+      <span onclick="alternarLeidoCorreo('${escHtml(m.gmail_id)}', ${m.leido_app ? 'false' : 'true'})" title="${m.leido_app ? 'Marcar no leído' : 'Marcar leído'}" style="cursor:pointer;font-size:10px;color:${m.leido_app ? 'var(--muted)' : 'var(--accent)'};margin-top:4px">●</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span style="font-weight:${m.leido_app ? '400' : '700'};font-size:13px">${escHtml(m.de || '—')}</span>
+          <span style="font-size:11px;color:var(--muted)">${escHtml((m.fecha || '').slice(0, 25))}</span>
+        </div>
+        <div style="font-size:13px;margin:2px 0">${escHtml(m.asunto || '(sin asunto)')}</div>
+        <div style="font-size:12px;color:var(--muted)">${escHtml((m.resumen || '').slice(0, 140))}</div>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+          ${m.categoria_app ? `<span class="badge badge-ok" style="font-size:10px">${escHtml(m.categoria_app)}</span>` : ''}
+          <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="cambiarCategoriaCorreo('${escHtml(m.gmail_id)}')">🏷️ ${m.categoria_app ? 'Cambiar' : 'Categorizar'}</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function sincronizarCorreosPanel(btn) {
+  await conBoton(btn, async () => {
+    const r = await api('/correos/sincronizar', { method: 'POST' });
+    if (!r.ok) { toast(r.error || 'Error al sincronizar', 'err'); return; }
+    toast(`✅ ${r.nuevos} correo(s) nuevo(s) de ${r.total}`, 'ok');
+    cargarCorreosPanel();
+  }, 'Sincronizando…');
+}
+
+async function alternarLeidoCorreo(gmailId, leido) {
+  const r = await api(`/correos/${encodeURIComponent(gmailId)}`, { method: 'PUT', body: JSON.stringify({ leido_app: leido }) });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  cargarCorreosPanel();
+}
+
+async function cambiarCategoriaCorreo(gmailId) {
+  const actual = _correosData.find(m => m.gmail_id === gmailId)?.categoria_app || '';
+  const nueva = prompt('Categoría (déjalo vacío para quitarla):', actual);
+  if (nueva === null) return;
+  const r = await api(`/correos/${encodeURIComponent(gmailId)}`, { method: 'PUT', body: JSON.stringify({ categoria_app: nueva.trim() || null }) });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  toast('✅ Categoría actualizada', 'ok');
+  cargarCorreosPanel();
+}
+
+// "Organizar con Alejandra" delega en el chat (mismo ayudante "correos" del resto de
+// F6.1-AYUDANTES-CORREOS) -- no hay lógica de categorización nueva aquí, solo se pide.
+// alejandraFabAbrir()/alejandrInput/alejandrEnviar() son las funciones reales del chat
+// flotante de Alejandra (ver más abajo en este mismo archivo).
+function organizarCorreosConAlejandra() {
+  alejandraFabAbrir();
+  const input = document.getElementById('alejandrInput');
+  if (input) input.value = 'Organiza mis correos: léelos si hace falta y asígnales una categoría breve (categorizar_correos). No los archives ni los marques leídos en Gmail, solo dentro de la app.';
+  alejandrEnviar();
+  toast('Pedido a Alejandra en el chat — vuelve a esta pantalla y pulsa Sincronizar cuando termine', 'info');
+}
+
+function abrirComposeCorreo() {
+  const html = `
+    <div class="form-group"><div class="form-label">Para</div><input class="form-input" id="mCorreoPara" type="email" placeholder="destinatario@ejemplo.com"></div>
+    <div class="form-group"><div class="form-label">Asunto</div><input class="form-input" id="mCorreoAsunto"></div>
+    <div class="form-group"><div class="form-label">Mensaje</div><textarea class="form-input" id="mCorreoCuerpo" rows="8"></textarea></div>`;
+  abrirModal('✏️ Redactar correo', html, enviarCorreoCompose);
+}
+
+async function enviarCorreoCompose() {
+  const para = document.getElementById('mCorreoPara').value.trim();
+  const asunto = document.getElementById('mCorreoAsunto').value.trim();
+  const cuerpo = document.getElementById('mCorreoCuerpo').value;
+  if (!para || !asunto) { toast('Faltan destinatario o asunto', 'err'); return; }
+  if (!confirm(`¿Enviar este correo a ${para}?`)) return;
+  const r = await api('/internal/gmail/enviar', { method: 'POST', body: JSON.stringify({ para, asunto, cuerpo }) });
+  if (!r.ok) { toast(r.error || 'Error al enviar', 'err'); return; }
+  toast(`✅ Correo enviado desde ${r.desde}`, 'ok');
+  cerrarModal();
+}
 
 // ════════════════════════════════════════════════════════════════
 // MI CUENTA — vincular Telegram personal (TELEGRAM-OFFICE-01, 10/08/2026)

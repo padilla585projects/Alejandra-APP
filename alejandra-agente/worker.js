@@ -2050,6 +2050,36 @@ const TOOL_ENVIAR_GMAIL = {
   nivel_riesgo: 'N2',
 };
 
+// CORREOS-PANEL-01 (17/08/2026): "organizar" correos SOLO dentro de la app -- el scope de
+// Google concedido (gmail.readonly + gmail.send) no permite tocar el Gmail real
+// (archivar/etiquetas necesitaría gmail.modify, fuera de alcance). Esta tool escribe
+// categoria_app en la caché del panel de correos (PUT /correos/:gmailId), nunca en Gmail.
+const TOOL_CATEGORIZAR_CORREOS = {
+  name: 'categorizar_correos',
+  description: 'Asigna una categoría (dentro de la app, NUNCA en el Gmail real) a uno o varios correos ya vistos con leer_gmail. Úsalo cuando el usuario pida organizar/categorizar/clasificar sus correos.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      correos: {
+        type: 'array',
+        description: 'Lista de correos a categorizar',
+        items: {
+          type: 'object',
+          properties: {
+            gmail_id: { type: 'string', description: 'id del correo (el mismo que devolvió leer_gmail)' },
+            categoria: { type: 'string', description: 'Categoría breve, p.ej. "urgente", "proveedores", "spam"' },
+          },
+          required: ['gmail_id', 'categoria'],
+        },
+      },
+    },
+    required: ['correos'],
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N0',
+};
+
 // F-6.1 / ADR-0022 (2026-08-12): registro de "ayudantes" -- sub-agentes con un
 // system prompt propio y un subconjunto FIJO de tools ya existentes del catálogo,
 // invocados explícitamente por Alejandra vía delegar_tarea (ver su `case`). Un
@@ -2070,7 +2100,7 @@ const AYUDANTES = {
     systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Los proveedores habituales son Hilti (fijación y anclajes), Pemsa (bandejas portacables) y Würth (tornillería y fijaciones) -- si te piden un material y no conoces la referencia exacta, usa buscar_web (prioriza hilti.es, pemsa-rejiband.com o wurth.es en la búsqueda) para encontrar la referencia y descripción reales antes de crear el pedido. Si la búsqueda no encuentra nada fiable, crea igualmente el pedido con la descripción que te haya dado el humano -- nunca inventes un código de referencia que parezca oficial sin haberlo verificado; en ese caso dilo explícitamente en la descripción/notas. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.',
   },
   correos: {
-    tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL],
+    tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL, TOOL_CATEGORIZAR_CORREOS],
     // CORREO-CREDENCIALES-01 (12/08/2026): en una prueba real, un error de leer_gmail
     // ("Gmail API has not been used...") llevó al modelo a improvisar un flujo de OAuth2
     // manual y pedirle al humano su Client ID/Secret/Refresh Token por chat -- ninguno de
@@ -2078,7 +2108,7 @@ const AYUDANTES = {
     // configurados de antemano, y el refresh token se genera y guarda cifrado solo cuando
     // el usuario pulsa "Conectar mi Gmail" en Mi cuenta (ya lo hizo). Grounding explícito
     // para que el modelo no rellene esos huecos con conocimiento genérico de OAuth2.
-    systemPrompt: 'Eres el ayudante de Correos de Alejandra. Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales.',
+    systemPrompt: 'Eres el ayudante de Correos de Alejandra. Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales. Si el usuario pide organizar/categorizar/clasificar sus correos: primero léelos con leer_gmail si no los tienes ya, decide categorías breves y razonables (p.ej. "urgente", "proveedores", "spam", "sin urgencia") y llama a categorizar_correos con la lista completa de {gmail_id, categoria}. Esto SOLO guarda la categoría dentro de la app (panel de correos) -- nunca archiva, etiqueta ni modifica nada en el Gmail real del usuario (no tienes permiso de Google para eso); si el usuario pide archivar/marcar leído/etiquetar de verdad en Gmail, dile que esa función no está disponible todavía.',
   },
 };
 
@@ -9336,6 +9366,30 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return `✅ Correo enviado desde ${data.desde} a ${para}.`;
       } catch (e) {
         return JSON.stringify({ ok: false, error: 'Error enviando correo: ' + e.message });
+      }
+    }
+
+    // CORREOS-PANEL-01 (17/08/2026): escribe categoria_app en la caché del panel de
+    // correos (PUT /correos/:gmailId), NUNCA toca el Gmail real -- N0, no hace falta
+    // confirmación humana porque no es una acción destructiva ni irreversible.
+    case 'categorizar_correos': {
+      try {
+        const correos = Array.isArray(input.correos) ? input.correos : [];
+        if (!correos.length) return '❌ Falta la lista de correos a categorizar.';
+        if (!env.API_WEB) return JSON.stringify({ ok: false, error: 'Service binding API_WEB no disponible.' });
+        let ok = 0, fallos = 0;
+        for (const c of correos) {
+          if (!c.gmail_id || !c.categoria) { fallos++; continue; }
+          const resp = await env.API_WEB.fetch(`https://alejandra-app-api.alejandra-app.workers.dev/correos/${encodeURIComponent(c.gmail_id)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+            body: JSON.stringify({ usuario_id, categoria_app: c.categoria }),
+          });
+          if (resp.ok) ok++; else fallos++;
+        }
+        return `✅ ${ok} correo(s) categorizados${fallos ? `, ${fallos} con error` : ''}.`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error categorizando correos: ' + e.message });
       }
     }
 
