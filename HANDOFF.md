@@ -311,6 +311,58 @@
   `abfc46936a00be315defa150f90d6535250bce9a`, run verificado en verde).
 - Sin pendientes.
 
+## OBRA-AUTO-01: 130+ selectores de obra vacíos para encargado/operario (2026-08-17, noche)
+
+- Contexto: Adrián, tras la ronda del Informe Semanal: "la obras se deben de detectar
+  solas en el panel no? los usuarios ya tienen obras asignadas".
+- **Diagnóstico inicial (parcialmente incorrecto, corregido investigando):** mi primera
+  hipótesis fue que `poblarSelectObras()` (la función genérica usada en 130+ pantallas de
+  `panel.html`: Fichajes, Tareas, RFIs, Calidad, Presupuestos, Certificaciones...) simplemente
+  nunca preseleccionaba la `obra_id` de la sesión. Implementé y desplegué esa versión, pero
+  al verificarla en vivo con un usuario de prueba real (rol `encargado`, `obra_id` fija en
+  su sesión) descubrí que el select se quedaba con **una sola opción** ("Todas las obras")
+  — nunca llegaba a poblarse nada que preseleccionar.
+- **Causa raíz real:** `GET /obras` (`getObras()` en `worker.js`) exige
+  `isSuperadmin || isAdmin || isEmpresaAdmin || isJefeObra` — decisión ya tomada en una
+  sesión anterior (`FILTRO-OBRA-01`, 25/07/2026: Adrián, "el modal de filtrado por obra...
+  ese no hace falta no? en el rol de encargado o oficial"), porque el backend de cada
+  endpoint concreto (bobinas, informes-seg, etc.) ya fuerza siempre la `obraId` de sesión
+  para cualquiera que no sea superadmin/empresa_admin, sin mirar qué mande el frontend. Esa
+  sesión anterior YA implementó el fix correcto (ocultar, no poblar) para 4 selectores
+  especiales (`filtroObraBobinas`/`Pemp`/`Carretillas`/`Pedidos`, dentro de
+  `cargarObrasPanel()`), pero **ese mecanismo llevaba roto desde entonces**: cuando
+  `/obras` devuelve `403 {ok:false,error:"No autorizado"}`, `cargarObrasPanel()` hacía
+  `_panelObras = Array.isArray(r) ? r : (r.obras || r.data || r || [])` — como `r` no tiene
+  ni `.obras` ni `.data`, caía al propio `r` (el objeto de error, NO un array). La línea
+  siguiente, `_panelObras.map(...)`, lanzaba `.map is not a function`, y el `catch(_) {}`
+  que envuelve toda la función abortaba TODO — incluido el bucle que ocultaba esos 4
+  selectores. Es decir: el bug de fondo no era mío ni nuevo, ya afectaba a esos 4
+  selectores desde julio; simplemente nadie lo había notado porque para admins (que sí
+  pueden llamar `/obras`) nunca se manifestaba.
+- **Fix real, en dos partes:**
+  1. `cargarObrasPanel()`: `_panelObras` cae a `[]` si la respuesta no es un array válido
+     (`r`, `r.obras` o `r.data`), en vez de quedarse con el objeto de error. Restaura el
+     mecanismo de ocultar los 4 selectores especiales que llevaba roto desde julio.
+  2. `poblarSelectObras()`: mismo criterio de "ocultar si no puede elegir de verdad"
+     (`hasSessionRole('superadmin','empresa_admin','desarrollador')`) aplicado a la
+     función genérica — y, a diferencia de mi primer intento, **retorna antes de llamar a
+     `/obras` en absoluto** si el rol no puede elegir, evitando la petición 403
+     innecesaria en las 130+ pantallas.
+- Verificado en producción con dos usuarios de prueba reales: `encargado` (`obra_id`
+  fija) → selector con `display:none`, `window._obrasPanel` cae a `[]` sin excepción;
+  `empresa_admin` → selector visible, poblado con las obras reales de la empresa
+  (`["Todas las obras", "Nave Industrial Demo"]`). Usuario de prueba borrado al terminar.
+- Desplegado: `panel.html` vía `pages.yml` (SHA
+  `de9dbd8c7fa09453331efcb8bee49c7e303fa447`, run verificado en verde). Sin cambios de
+  backend en esta ronda (el criterio de `getObras()` ya era correcto, el bug estaba en
+  cómo `panel.html` reaccionaba a su 403).
+- Sin pendientes. Nota para más adelante, no pedida por Adrián: `jefe_de_obra` sí puede
+  llamar `/obras` según el backend (`isJefeObra` está en la lista permitida), pero
+  `poblarSelectObras()`/`cargarObrasPanel()` lo tratan igual que encargado/operario
+  (selector oculto) porque también tiene "obra fija asignada" según la tabla de roles de
+  `CLAUDE.md` — coherente con la UX pretendida, aunque técnicamente podría ver el listado
+  si se quisiera cambiar ese criterio en el futuro.
+
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 
 Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +

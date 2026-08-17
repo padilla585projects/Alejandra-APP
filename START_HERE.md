@@ -45,6 +45,13 @@ cerrados en Office (iniciar informe de semana nueva, editar actividad, añadir f
 pie de foto con título en `.docx`/impresión (migración D1: `informes_seg_fotos.titulo`).
 Verificado en producción con un informe completo de prueba, sin pendientes.
 
+**OBRA-AUTO-01 (2026-08-17, noche):** "las obras se deben de detectar solas en el panel
+no? los usuarios ya tienen obras asignadas" — `GET /obras` da 403 a encargado/operario a
+propósito, pero `cargarObrasPanel()` no lo manejaba con gracia y dejaba 130+ selectores de
+obra del panel vacíos para estos roles (y rompía un mecanismo que ya ocultaba 4 selectores
+especiales). Arreglado y extendido a la función genérica compartida. Verificado con un
+usuario de prueba por rol, sin pendientes.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda

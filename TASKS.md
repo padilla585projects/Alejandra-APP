@@ -64,6 +64,14 @@ usuario con Gmail conectado, no solo Adrián.
   autorizada: `informes_seg_fotos.titulo`). Todo verificado en producción con datos de
   prueba reales (informe completo creado/editado/con fotos/borrado en los dos frontends).
   Sin pendientes.
+- **OBRA-AUTO-01 (2026-08-17, noche):** "las obras se deben de detectar solas en el panel
+  no? los usuarios ya tienen obras asignadas" — causa raíz encontrada: `GET /obras` da 403
+  a encargado/operario a propósito (decisión ya tomada antes), pero `cargarObrasPanel()`
+  no manejaba ese error con gracia y abortaba silenciosamente, dejando 130+ selectores de
+  obra del panel vacíos para estos roles (más el mecanismo que YA ocultaba 4 selectores
+  especiales, roto por el mismo motivo). Arreglado el manejo del error y extendido el
+  criterio de "ocultar si no puede elegir de verdad" a la función genérica. Verificado con
+  un usuario de prueba real por rol. Sin pendientes.
 - Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
   Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
   "Organizar con Alejandra", y enviar un correo de prueba real.

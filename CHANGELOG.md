@@ -4,6 +4,22 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-17, noche — OBRA-AUTO-01)
+
+- **Selector de obra sin poblar en 130+ pantallas del panel, para encargado/operario:**
+  Adrián: "la obras se deben de detectar solas en el panel no? los usuarios ya tienen
+  obras asignadas". Causa raíz: `GET /obras` exige superadmin/empresa_admin/desarrollador/
+  jefe_de_obra (decisión ya tomada en `FILTRO-OBRA-01`, 25/07/2026 — el backend de cada
+  endpoint concreto ya fuerza la obra de sesión para el resto de roles), pero
+  `cargarObrasPanel()` no manejaba ese 403 con gracia: `_panelObras` se quedaba con el
+  objeto de error en vez de un array, su `.map()` lanzaba, y el `catch` vacío abortaba
+  TODA la función — incluido el mecanismo que ya ocultaba 4 selectores especiales para
+  estos roles. Arreglado el manejo del 403, y extendido el mismo criterio de "ocultar si
+  no puede elegir de verdad" a `poblarSelectObras()`, la función genérica usada en más de
+  130 pantallas (Fichajes, Tareas, RFIs, Calidad, Presupuestos, Certificaciones...).
+  Verificado en producción con un usuario de prueba real (`encargado`): selector oculto;
+  con `empresa_admin`: selector poblado normalmente.
+
 ### Added (2026-08-17, noche — Informe Semanal de Seguridad)
 
 - **Pie de foto:** columna nueva `informes_seg_fotos.titulo` (migración D1 autorizada).

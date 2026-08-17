@@ -56,6 +56,16 @@
   existente); pie de foto con título, visible en el `.docx` y en la impresión (migración
   D1 autorizada: `informes_seg_fotos.titulo`). Verificado en producción con un informe
   completo de prueba en los dos frontends. Sin pendientes.
+- Estado (2026-08-17, noche — OBRA-AUTO-01): "las obras se deben de detectar solas en el
+  panel no? los usuarios ya tienen obras asignadas". Causa raíz: `GET /obras` da 403 a
+  encargado/operario a propósito (decisión ya tomada antes, el backend de cada endpoint
+  ya fuerza su obra de sesión), pero `cargarObrasPanel()` no manejaba ese error con
+  gracia y abortaba silenciosamente — dejando 130+ selectores de obra del panel vacíos
+  para estos roles, y rompiendo también un mecanismo que ya ocultaba 4 selectores
+  especiales por el mismo motivo. Arreglado el manejo del error y extendido el criterio
+  de "ocultar si no puede elegir de verdad" a la función genérica compartida. Verificado
+  en producción con un usuario de prueba `encargado` (selector oculto) y con la cuenta
+  admin (selector poblado normalmente). Sin pendientes.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos
