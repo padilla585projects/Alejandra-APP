@@ -2329,6 +2329,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
                en bloque. Oculta salvo que haya al menos un correo marcado. -->
           <div id="correosBarraSeleccion" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:13px">
             <span id="correosNumSeleccionados"></span>
+            <button class="btn btn-secondary btn-sm" onclick="marcarLeidosSeleccionados()">✅ Marcar leídos</button>
             <button class="btn btn-secondary btn-sm" onclick="categorizarSeleccionados()">🏷️ Categorizar</button>
             <button class="btn btn-secondary btn-sm" onclick="archivarSeleccionados()">🗄️ Archivar</button>
             <button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="borrarSeleccionados()">🗑️ Borrar</button>
@@ -22644,6 +22645,21 @@ function _correosDeseleccionarTodos() {
   _correosSeleccionados = new Set();
   document.getElementById('correosCheckTodos').checked = false;
   _correosRenderLista();
+}
+
+// CORREOS-LEIDOS-01 (17/08/2026): Adrián -- "porque no ahi la opcion de marcar como
+// leidos" / "entonces nunca se quita las notificaciones". Marcar leído/no-leído solo
+// existía correo a correo (el punto ●); sin una acción en bloque, el badge de "correo
+// nuevo" (calculado sobre leido_app, ver cargarCorreosPanel) se quedaba inflado para
+// siempre salvo que se abriera cada correo uno a uno.
+async function marcarLeidosSeleccionados() {
+  const n = _correosSeleccionados.size;
+  for (const id of _correosSeleccionados) {
+    await api(`/correos/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ leido_app: true }) });
+  }
+  toast(`✅ ${n} correo(s) marcados como leídos`, 'ok');
+  _correosSeleccionados = new Set();
+  cargarCorreosPanel();
 }
 
 async function categorizarSeleccionados() {
