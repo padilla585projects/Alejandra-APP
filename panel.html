@@ -1841,7 +1841,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
       <div class="modal-overlay" id="modalCpdOfficeNuevo" style="display:none" onclick="if(event.target===this)cpdOfficeCerrarNuevo()">
         <div class="modal" style="max-width:480px">
-          <div class="modal-title">Nuevo plano de sala</div>
+          <div class="modal-header">
+            <div class="modal-title">Nuevo plano de sala</div>
+            <button class="modal-close" onclick="cpdOfficeCerrarNuevo()">✕</button>
+          </div>
+          <div class="modal-body">
           <div class="form-group">
             <label>Título *</label>
             <input class="form-input" id="cpdOfficeNuevoTitulo" type="text" placeholder='Ej: "CPD Getafe - Sala DH304"'>
@@ -1867,7 +1871,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               </div>
             </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:16px">
+          </div>
+          <div class="modal-footer">
             <button class="btn btn-secondary" style="flex:1" onclick="cpdOfficeCerrarNuevo()">Cancelar</button>
             <button class="btn btn-primary" style="flex:1" id="cpdOfficeNuevoBtn" onclick="cpdOfficeGuardarNuevo()">Crear</button>
           </div>
@@ -1876,7 +1881,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
       <div class="modal-overlay" id="modalCpdOfficeSonda" style="display:none" onclick="if(event.target===this)cpdOfficeCerrarSonda()">
         <div class="modal" style="max-width:520px">
-          <div class="modal-title">Sonda</div>
+          <div class="modal-header">
+            <div class="modal-title">Sonda</div>
+            <button class="modal-close" onclick="cpdOfficeCerrarSonda()">✕</button>
+          </div>
+          <div class="modal-body">
           <div class="form-grid">
             <div class="form-group">
               <label>Nombre</label>
@@ -1927,8 +1936,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <div id="cpdOfficeSondaLeyenda" style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted)"></div>
             </div>
           </div>
-
-          <div style="margin-top:16px">
+          </div>
+          <div class="modal-footer">
             <button class="btn btn-secondary" style="width:100%" onclick="cpdOfficeCerrarSonda()">Cerrar</button>
           </div>
         </div>
@@ -12929,6 +12938,15 @@ async function cpdOfficeCargar() {
   const sel = document.getElementById('cpdOfficeObra');
   const selNuevo = document.getElementById('cpdOfficeNuevoObra');
   if (!sel) return;
+  // TELECOM-NAV-01 (17/08/2026, mismo patrón detectado en Sondas CPD): el auto-refresh de
+  // 60s de esta página (SYNC_INTERVALS.cpdSondas) llamaba siempre a esta función, que
+  // resetea la lista de planos sin mirar si el usuario está dentro de un plano (arrastrando
+  // sondas, con el modal de edición abierto). No hacer nada mientras haya un modal de
+  // edición abierto (mismo criterio que SYNC-INV-01 en index.html); si el usuario ya está
+  // dentro de un plano, refrescar ese mismo plano en vez de forzar la lista.
+  const modalSondaAbierto = document.getElementById('modalCpdOfficeSonda')?.style.display === 'flex';
+  const modalNuevoAbierto = document.getElementById('modalCpdOfficeNuevo')?.style.display === 'flex';
+  if (modalSondaAbierto || modalNuevoAbierto) return;
   let obras = Array.isArray(window._obrasPanel) ? window._obrasPanel : [];
   if (!obras.length) {
     try { const data = await api('/obras'); obras = Array.isArray(data) ? data : (data.obras || []); window._obrasPanel = obras; } catch {}
@@ -12938,6 +12956,7 @@ async function cpdOfficeCargar() {
   sel.innerHTML = '<option value="">🏗 Todas las obras</option>' + obras.map(o => `<option value="${Number(o.id)}">${escHtml(o.nombre)}</option>`).join('');
   if (actual && obras.some(o => String(o.id) === String(actual))) sel.value = actual;
   if (selNuevo) selNuevo.innerHTML = '<option value="">Selecciona obra…</option>' + obras.map(o => `<option value="${Number(o.id)}">${escHtml(o.nombre)}</option>`).join('');
+  if (window._cpdOfficePlano?.plano?.id) return cpdOfficeAbrirPlano(window._cpdOfficePlano.plano.id);
   await cpdOfficeCargarPlanos();
 }
 
