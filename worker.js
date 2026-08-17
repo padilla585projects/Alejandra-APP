@@ -6628,6 +6628,7 @@ export default {
         const fid = parseInt(path.split('/informes-seg-fotos/')[1]);
         if (method === 'GET')    return await getFotoActividadInformeSeg(fid, request, env);
         if (method === 'DELETE') return await borrarFotoActividadInformeSeg(fid, request, env);
+        if (method === 'PUT')    return await editarTituloFotoInformeSeg(fid, request, env);
       }
 
       // ── Archivos / R2 ────────────────────────────────────────────────────
@@ -15183,14 +15184,31 @@ async function subirFotoActividadInformeSeg(actividad_id, request, env) {
   const mime = file.type || 'image/jpeg';
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
   if (!allowed.includes(mime)) return err('Solo se permiten imágenes', 400);
+  // INFORMES-SEG-FOTO-TITULO-01 (17/08/2026): Adrián -- pie de foto en el documento final.
+  const titulo = safeStr(form.get('titulo') || '').trim().slice(0, 200) || null;
   const ts = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const r2Key = `e${empresa_id}/informes-seg/${actividad_id}/${ts}_${safeName}`;
   await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
   const r = await env.DB.prepare(
-    'INSERT INTO informes_seg_fotos (empresa_id, actividad_id, r2_key, nombre_archivo, mime_type, subido_por) VALUES (?,?,?,?,?,?)'
-  ).bind(empresa_id, actividad_id, r2Key, file.name, mime, userNombre || rol).run();
+    'INSERT INTO informes_seg_fotos (empresa_id, actividad_id, r2_key, nombre_archivo, mime_type, subido_por, titulo) VALUES (?,?,?,?,?,?,?)'
+  ).bind(empresa_id, actividad_id, r2Key, file.name, mime, userNombre || rol, titulo).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+// INFORMES-SEG-FOTO-TITULO-01: corregir el pie de foto después de subida, sin tener que
+// borrar y volver a subir la imagen.
+async function editarTituloFotoInformeSeg(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!puedeVerSegRegistros(auth)) return err('Sin permisos', 403);
+  const meta = await env.DB.prepare('SELECT id FROM informes_seg_fotos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  const body = await request.json().catch(() => ({}));
+  const titulo = safeStr(body.titulo || '').trim().slice(0, 200) || null;
+  await env.DB.prepare('UPDATE informes_seg_fotos SET titulo=? WHERE id=? AND empresa_id=?').bind(titulo, id, empresa_id).run();
+  return json({ ok: true });
 }
 
 async function getFotoActividadInformeSeg(id, request, env) {
@@ -15442,10 +15460,16 @@ async function generarInformeSegDocx(id, request, env) {
       new Paragraph({ children: [new TextRun({ text: a.actividad, bold: true })] }),
       ...(a.contratista ? [new Paragraph({ children: [new TextRun({ text: `(por ${a.contratista})`, italics: true })] })] : []),
     ]);
+    // INFORMES-SEG-FOTO-TITULO-01 (17/08/2026): Adrián -- el título de la foto sale
+    // como pie de foto (párrafo pequeño en cursiva) justo debajo de la imagen.
     const imgPars = acts.flatMap(a => (fotosPorActividad[a.id] || [])
-      .map(fo => bytesPorFoto[fo.id])
-      .filter(Boolean)
-      .map(({ bytes, tipo }) => new Paragraph({ children: [new ImageRun({ type: tipo, data: bytes, transformation: { width: 200, height: 150 } })] }))
+      .filter(fo => bytesPorFoto[fo.id])
+      .flatMap(fo => {
+        const { bytes, tipo } = bytesPorFoto[fo.id];
+        const pars = [new Paragraph({ spacing: { after: fo.titulo ? 20 : 80 }, children: [new ImageRun({ type: tipo, data: bytes, transformation: { width: 200, height: 150 } })] })];
+        if (fo.titulo) pars.push(new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: fo.titulo, italics: true, size: 18 })] }));
+        return pars;
+      })
     );
     return new TableRow({ children: [
       new TableCell({ width: { size: 1200, type: WidthType.DXA }, children: [new Paragraph({ children: [new TextRun({ text: f.split('-').reverse().join('/'), bold: true })] })] }),
