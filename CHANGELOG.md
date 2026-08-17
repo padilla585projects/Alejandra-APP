@@ -4,6 +4,25 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed / Added (2026-08-17, noche — Sondas CPD)
+
+- **Mismo patrón de bug ya visto en Telecom (TELECOM-NAV-01), confirmado también aquí:**
+  los modales "Nuevo plano de sala" y "Sonda" tenían el contenido pegado al borde (0px de
+  padding, misma causa: sin la estructura `modal-header`/`modal-body`/`modal-footer`); y el
+  auto-refresh de 60s de la página (`SYNC_INTERVALS.cpdSondas`) sacaba al usuario del plano
+  en el que estaba trabajando (colocando/arrastrando sondas) de vuelta a la lista de
+  planos. Mismo fix: estructura de modal correcta, y el refresco ahora no hace nada con un
+  modal de edición abierto, o refresca el mismo plano si el usuario ya está dentro de uno.
+- **Plano demasiado pequeño:** Adrián: "el plano es demasiado pequeño y al colocar las
+  sondas no caben". El canvas tenía `max-width:900px` fijo en JS mientras su contenedor no
+  tenía límite propio — en monitores de oficina anchos sobraba espacio sin usar. Quitado el
+  límite.
+- **Zoom para ampliar el plano:** Adrián: "podemos hacer que se pueda ampliar el plano para
+  colocar las sondas". Controles ＋/－/↺ junto al selector de etiquetas — el cálculo de
+  posición de las sondas sigue siendo correcto con cualquier nivel de zoom. Verificado en
+  producción: ancho 900px→1350px con zoom al 150%, sonda colocada en la posición exacta
+  esperada (30%, 30%).
+
 ### Added (2026-08-17, noche — Correos)
 
 - **Marcar leídos en bloque:** Adrián: "porque no ahí la opción de marcar como leídos" /

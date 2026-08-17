@@ -77,6 +77,12 @@ usuario con Gmail conectado, no solo Adrián.
   leído/no-leído correo a correo; nuevo botón "✅ Marcar leídos" en la barra de selección
   múltiple. Verificado en producción (badge de 1→0 tras seleccionar y marcar). Sin
   pendientes.
+- **Sondas CPD (2026-08-17, noche):** mismo patrón de bug que Telecom (padding-cero en
+  los modales de plano/sonda + auto-refresh de 60s que sacaba al usuario del plano) —
+  mismo fix aplicado. Además, a petición de Adrián: el plano ya no tiene un ancho máximo
+  artificial (900px fijo, mientras su contenedor no lo tenía), y controles de zoom
+  ＋/－/↺ para ampliar al colocar sondas. Verificado en producción (zoom 900px→1350px al
+  150%, posición de sonda calculada correctamente). Sin pendientes.
 - Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
   Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
   "Organizar con Alejandra", y enviar un correo de prueba real.

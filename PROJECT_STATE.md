@@ -71,6 +71,15 @@
   correo; nuevo botón "✅ Marcar leídos" en la barra de selección múltiple de "Mis
   Correos". Verificado en producción (badge de 1→0 tras seleccionar y marcar, datos de
   prueba sembrados directamente en D1 y borrados al terminar). Sin pendientes.
+- Estado (2026-08-17, noche — Sondas CPD): "vamos a arreglar la función de sondas salas" —
+  mismo patrón de bug ya visto en Telecom (padding-cero en los modales de plano/sonda +
+  auto-refresh de 60s que sacaba al usuario del plano en el que trabajaba) confirmado
+  también aquí, mismo fix. Además, a petición de Adrián: quitado el ancho máximo
+  artificial del plano (900px fijo, mientras su contenedor no lo tenía — "el plano es
+  demasiado pequeño y al colocar las sondas no caben") y añadidos controles de zoom
+  ＋/－/↺ ("podemos hacer que se pueda ampliar el plano"). Verificado en producción con
+  datos de prueba reales (zoom 900px→1350px al 150%, posición de sonda calculada
+  correctamente con el zoom aplicado). Sin pendientes.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos

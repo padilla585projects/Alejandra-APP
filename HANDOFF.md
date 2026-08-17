@@ -392,6 +392,57 @@
 - Sin pendientes. `index.html` no tiene panel de Correos (es una página solo de
   `panel.html`/Office), así que no aplica paridad aquí.
 
+## Sondas CPD: mismo bug de Telecom + plano pequeño + zoom (2026-08-17, noche)
+
+- Contexto: Adrián, "ahora vamos a arreglar la función de sondas salas" → "quiero
+  revisarlo". Dado el patrón ya confirmado en Racks/Cableado (TELECOM-NAV-01), audité
+  directamente `cpdOffice*` (`panel.html`) buscando lo mismo antes de esperar a que
+  Adrián describiera un síntoma.
+- **Confirmado: mismo patrón exacto, en los dos frentes.**
+  - Modales `modalCpdOfficeNuevo` (Nuevo plano de sala) y `modalCpdOfficeSonda` (editar
+    sonda + registrar lectura) metían el contenido directo dentro de `.modal`, sin
+    `modal-header`/`modal-body`/`modal-footer` — mismo 0px de padding que Telecom. Mismo
+    fix: envolver en esa estructura (el modal de Sonda tenía además un botón "Cerrar" al
+    final que pasó a ser el `modal-footer`).
+  - `SYNC_INTERVALS.cpdSondas = 60` → `PAGE_LOADERS.cpdSondas = cpdOfficeCargar` →
+    `cpdOfficeCargar()` llamaba siempre a `cpdOfficeCargarPlanos()`, que pone
+    `window._cpdOfficePlano = null` incondicionalmente y reconstruye la lista de planos —
+    sin mirar si el usuario estaba DENTRO de un plano (colocando o arrastrando sondas, con
+    el modal de edición abierto). A diferencia de Telecom (niveles IDF→Rack→Panel→Puertos),
+    aquí solo hay dos estados (lista de planos / dentro de un plano), así que el fix es más
+    simple: `cpdOfficeCargar()` no hace nada si `modalCpdOfficeSonda` o `modalCpdOfficeNuevo`
+    están abiertos, y si `window._cpdOfficePlano` ya apunta a un plano, lo vuelve a abrir
+    (`cpdOfficeAbrirPlano(mismo_id)`) en vez de forzar la lista.
+- **Plano demasiado pequeño** (reportado tras preguntar qué revisar, con opciones
+  concretas — Adrián: "el plano es demasiado pequeño y al colocar las sondas no caben"):
+  `#cpdOfficeCanvas` tenía `max-width:900px` fijo en JS. Medido con `getBoundingClientRect()`
+  en producción: el contenedor `.card` no tiene ningún `max-width` propio y ya medía 948px
+  en un viewport de 1280px (sin contar monitores de oficina más anchos) — el límite del
+  canvas era artificial y sobraba espacio real sin usar. Quitado. `index.html` (móvil) ya
+  usaba `width:100%` sin límite, no tenía este problema.
+- **Zoom** (sugerencia del propio Adrián en la misma conversación: "podemos hacer que se
+  pueda ampliar el plano para colocar las sondas alomejor"): controles ＋/－/↺ junto al
+  selector de etiquetas, `transform:scale()` sobre `#cpdOfficeCanvas` dentro de un wrap con
+  `overflow:auto;max-height:75vh` para poder desplazarse por el plano ampliado. El cálculo
+  de posición de las sondas (% relativo a `getBoundingClientRect()`, tanto al colocar como
+  al arrastrar) no necesitó ningún cambio — el rect ya refleja el tamaño visual real tras el
+  `transform:scale()`, verificado explícitamente en producción (ver abajo). El zoom se
+  conserva mientras se sigue en el mismo plano (incluida la reapertura automática del fix
+  de arriba), y se resetea a 100% al entrar a un plano distinto.
+- Verificación en producción con datos de prueba reales, no solo lectura de código: plano
+  de prueba creado desde la plantilla `dh304`; padding de ambos modales confirmado en
+  `24px` (antes `0px`); simulado el auto-refresh con el modal de sonda abierto (no hizo
+  nada, modal seguía abierto, mismo plano) y sin modal pero dentro del plano (refrescó el
+  mismo plano, `id` idéntico antes/después, nunca volvió a la lista); zoom aplicado al
+  150% — ancho del canvas `900px → 1350px` exacto; sonda colocada con el zoom activo en la
+  posición esperada (`pos_x:30, pos_y:30`, calculada a mano contra el clic simulado).
+  Plano y sonda de prueba borrados al terminar.
+- Desplegado: `panel.html` vía `pages.yml`, tres despliegues sucesivos (padding+refresco:
+  SHA `512056ff600bdf896dce99a10150e3e69b6839de`; ancho: SHA
+  `fd07a6653e2c4c60887f755b4485d2574a26fdd5`; zoom: SHA
+  `b44a004d06494737ab4f12282d6c7258d4fe245d`), los tres runs verificados en verde.
+- Sin pendientes.
+
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 
 Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +

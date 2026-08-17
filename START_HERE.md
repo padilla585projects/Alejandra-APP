@@ -56,6 +56,11 @@ usuario de prueba por rol, sin pendientes.
 marcar como leídos" / "entonces nunca se quita las notificaciones" — nuevo botón en la
 barra de selección múltiple de "Mis Correos". Verificado en producción, sin pendientes.
 
+**Sondas CPD (2026-08-17, noche):** mismo patrón de bug que Telecom (padding-cero en
+modales + auto-refresh que sacaba al usuario del plano en el que trabajaba). Además,
+plano sin ancho máximo artificial y controles de zoom para colocar sondas con precisión.
+Verificado en producción, sin pendientes.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda
