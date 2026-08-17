@@ -10,7 +10,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   real del usuario (caché nueva en D1, `gmail_mensajes_cache`), filtra por categoría, marca
   leído/categoriza por correo (dentro de la app, sin permisos nuevos de Google — nunca toca
   el Gmail real), redacta y envía, y "Organizar con Alejandra" delega en el chat real. Nueva
-  tool `categorizar_correos` del ayudante "correos".
+  tool `categorizar_correos` del ayudante "correos". Expandido en la misma sesión, a partir
+  de pruebas en vivo de Adrián: borrar correo (con confirmación, distinto de archivar),
+  selección múltiple por checkbox para archivar/borrar/categorizar en lote, redactar con
+  adjuntos (hasta 20MB) en un modal más grande, y **varias cuentas de Gmail a la vez** con
+  cambio rápido entre ellas (tabla nueva `gmail_cuentas`, migración `migrate_gmail_cuentas.sql`
+  — sustituye a `gmail_oauth_tokens`, que se queda sin usar) con aviso de correo nuevo para
+  las dos cuentas conectadas, mismo patrón que el resto de notificaciones del panel.
 - **INFORMES-FICHAJES-01:** informe de fichajes imprimible (horas por día/semana/mes,
   agregado en JS sobre `horas_trabajadas`/`horas_extra`, ya calculadas al crear cada
   fichaje). Botón "📊 Informe" en Fichajes de `panel.html`.
@@ -26,6 +32,27 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   `AYUDANTE-DETALLE-TECNICO-01`. Encontrado investigando una afirmación de Alejandra al
   usuario que resultó ser falsa (dijo que faltaba `cache_control`, cuando ya estaba bien
   aplicado en los dos Workers). Fix de una línea, 207/207 tests.
+- **Compose de correo:** el botón del modal de redactar/responder decía "Guardar" en vez de
+  "Enviar" (usaba el modal genérico sin sobreescribir el texto por defecto).
+- **Envío de correo con adjuntos — "Maximum call stack size exceeded":** `_b64u()`
+  construía el base64 con `String.fromCharCode(...bytes)` vía spread, que revienta el
+  límite de argumentos del motor JS para buffers de más de un par de cientos de KB. Solo se
+  detectó al adjuntar un archivo real porque antes `_b64u` solo se usaba con buffers
+  pequeños (IVs, JWT, claves VAPID). Fix: trocear en bloques de 8KB antes de
+  `fromCharCode`. Verificado byte a byte contra `Buffer.toString('base64')`.
+- **`getCorreosNuevasTodasCuentas`:** una sola cuenta de Gmail con el token cifrado
+  corrupto tumbaba la comprobación de correo nuevo de TODAS las cuentas del usuario
+  (`descifrarToken()` lanzaba en vez de fallar solo esa cuenta). Ahora esa cuenta se salta
+  con un error legible, el resto sigue funcionando.
+- **TELECOM-NAV-01:** en la sección Racks/Cableado de `panel.html`, los modales de
+  IDF/Rack/Módulo/Puerto tenían el contenido pegado al borde del modal (0px de padding —
+  no usaban la estructura `modal-header`/`modal-body`/`modal-footer` del resto de la app).
+  Además, el auto-refresh de 60s de la página (`SYNC_INTERVALS.telecomRacks`) reseteaba
+  siempre nivel y contexto de navegación a la lista de IDFs sin mirar en qué nivel estaba
+  el usuario — si el refresco caía mientras alguien editaba un puerto, guardar lo devolvía
+  a la lista de IDFs en vez de a la vista de Puertos de la que venía. Ahora el refresco
+  respeta el nivel actual (o se omite si hay un modal de edición abierto), mismo criterio
+  que `SYNC-INV-01` en `index.html`.
 
 ### Added (2026-08-13/14)
 

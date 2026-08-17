@@ -31,6 +31,15 @@ usuario con Gmail conectado, no solo Adrián.
   "Organizar con Alejandra" delega en el chat real. Nueva tool `categorizar_correos` del
   ayudante "correos" (`alejandra-agente/worker.js`). Detalle técnico completo en
   `HANDOFF.md`.
+- **CORREOS-PANEL-01 (expansión, 2026-08-17):** a raíz de que Adrián probó el panel en vivo
+  — borrar correo (con confirmación), selección múltiple, adjuntos al redactar, varias
+  cuentas de Gmail con cambio rápido (`gmail_cuentas`), avisos de correo nuevo para las dos
+  cuentas. Dos bugs reales de producción corregidos: botón "Guardar"→"Enviar" en el
+  compose, y un crash ("Maximum call stack size exceeded") al adjuntar archivos por un
+  `_b64u()` mal implementado para buffers grandes.
+- **TELECOM-NAV-01 (2026-08-17):** en Racks/Cableado (`panel.html`), modales sin padding
+  interior + auto-refresh de 60s que reseteaba la navegación al guardar un puerto (volvía a
+  la lista de IDFs en vez de a Puertos). Corregido, desplegado y verificado en vivo.
 - Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
   Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
   "Organizar con Alejandra", y enviar un correo de prueba real.

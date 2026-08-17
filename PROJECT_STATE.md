@@ -13,6 +13,22 @@
   informe de fichajes imprimible (`INFORMES-FICHAJES-01`) y Almacén viendo material de
   todos los departamentos desde el móvil (`ALMACEN-FILTRO-MOVIL-01`). Detalle completo en
   `HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
+- Estado (2026-08-17, continuación): **CORREOS-PANEL-01 expandido con pruebas en vivo de
+  Adrián** — borrar correo (confirmación, distinto de archivar), selección múltiple por
+  checkbox, adjuntos al redactar (hasta 20MB), y **varias cuentas de Gmail con cambio
+  rápido entre ellas** ("yo me refería a tener dos cuentas a la vez e ir cambiando una a
+  otra rápido" — tabla nueva `gmail_cuentas`, migración aditiva autorizada) con aviso de
+  correo nuevo para las dos cuentas. Dos bugs reales encontrados por Adrián probando el
+  envío en producción, corregidos y verificados: el botón de redactar decía "Guardar" en
+  vez de "Enviar", y adjuntar un archivo real rompía el envío ("Maximum call stack size
+  exceeded" — `_b64u()` con spread sobre buffers grandes). Después, a raíz de un
+  "arregla esto" sobre un modal de Racks/Cableado, **`TELECOM-NAV-01`**: los modales de
+  IDF/Rack/Módulo/Puerto de esa sección no tenían padding interior (contenido pegado al
+  borde) y el auto-refresh de 60s de la página reseteaba la navegación a la lista de IDFs
+  sin mirar en qué nivel estaba el usuario — guardar un puerto podía devolver a la lista de
+  IDFs en vez de a la vista de Puertos. Los dos corregidos, desplegados y verificados en
+  vivo contra producción con datos de prueba (creados y borrados en la misma sesión).
+  Detalle completo en `HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos

@@ -14,6 +14,16 @@ departamentos en el móvil). **Pendiente: que Adrián pruebe en vivo la sincroni
 de su Gmail** — no lo pude probar yo con datos reales. Detalle en
 `PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
 
+**Expansión de Correos + TELECOM-NAV-01, desplegadas y verificadas (2026-08-17, misma
+sesión):** a raíz de pruebas en vivo de Adrián sobre el panel de Correos — borrar, selección
+múltiple, adjuntos, varias cuentas de Gmail con cambio rápido, avisos para las dos cuentas,
+y dos bugs reales de producción corregidos (botón "Enviar" mal etiquetado, crash al adjuntar
+archivos grandes). Después, a raíz de "arregla esto" sobre un modal de Racks/Cableado:
+`TELECOM-NAV-01` — modales sin padding interior y un auto-refresh de 60s que devolvía al
+usuario a la lista de IDFs al guardar un puerto en vez de a la vista de Puertos de la que
+venía. Sin pendientes de esta ronda. Detalle en
+`PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda

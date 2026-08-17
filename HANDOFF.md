@@ -63,6 +63,88 @@
   `prompt_caching:true`) y Pages (`panel.html`, confirmado en producción que la página
   "Mis Correos" carga y muestra el estado sin conectar correctamente).
 
+## Correos: expansión en vivo + varias cuentas de Gmail + TELECOM-NAV-01 (2026-08-17, continuación)
+
+- Contexto: misma sesión que `CORREOS-PANEL-01`, Adrián probando el panel recién
+  desplegado y reportando huecos uno a uno ("no me gusta el panel de administracion...
+  ademas alejandra deberia poder organizartelo como la pidas tu", "y borrar tambien,pero
+  con confirmacion claro", "yo me referia a tener dos cuentas a la vez e ir cambiando una a
+  otra rapido").
+- **Borrar correo**: `DELETE /correos/:gmailId` — borrado duro de la fila de caché
+  (distinto de archivar, que es `archivado=1`, columna añadida a `gmail_mensajes_cache`).
+  Confirmación en cliente antes de llamar.
+- **Selección múltiple**: checkboxes por fila + barra de acciones en lote (archivar/borrar/
+  categorizar), `Set` de IDs seleccionados en `panel.html`.
+- **Adjuntos al redactar**: `_construirRawMimeCorreo()` construye el MIME
+  `multipart/mixed` con boundary y adjuntos en base64 (76 columnas, RFC 2045); tope de
+  20MB en servidor. Modal de compose ampliado a 700px.
+- **Varias cuentas de Gmail con cambio rápido** (rediseño de esquema, planificado con
+  `EnterPlanMode` de nuevo — Adrián aclaró que no quería solo reconectar, sino tener dos
+  cuentas activas e ir cambiando): `gmail_oauth_tokens` tenía `usuario_id` como PRIMARY
+  KEY, no admite dos cuentas por usuario. Tabla nueva `gmail_cuentas` (migración
+  `migrate_gmail_cuentas.sql`, autorizada y aplicada: crea la tabla, migra la cuenta ya
+  conectada, añade `cuenta_id` a `gmail_mensajes_cache` con backfill) — `gmail_oauth_tokens`
+  se queda sin usar, no se borra. Invariante de aplicación: como máximo una fila
+  `activa=1` por `usuario_id`. Endpoints nuevos `GET /auth/gmail/cuentas`,
+  `POST /auth/gmail/cuentas/:id/activar`, `DELETE /auth/gmail/cuentas/:id`. Todas las
+  funciones que ya usaban la cuenta activa (`leer_gmail`/`enviar_gmail`/
+  `categorizar_correos` del chat incluidos) siguen funcionando sin tocarlas — resuelven la
+  cuenta activa automáticamente. Selector rápido en la toolbar de "Mis Correos"; sección
+  "Mi cuenta" rediseñada para listar varias cuentas conectadas con activar/desconectar cada
+  una.
+- **Notificaciones**: `GET /correos/nuevas-todas-cuentas` revisa las 5 más recientes de
+  CADA cuenta conectada del usuario (no solo la activa) y las integra en
+  `cargarNotificaciones()` con el mismo patrón de polling cada 2 min que ya usaban el resto
+  de avisos del panel — sin cron nuevo en el servidor.
+- **Dos bugs reales encontrados por Adrián probando el envío en producción** (pidió
+  explícitamente "prueba tú a mandar un correo de verdad"; no puedo operar con su sesión
+  real, así que probó él): el botón del compose decía "Guardar" (el modal genérico no
+  sobreescribía el texto por defecto) → `modalOkBtn.textContent='✉️ Enviar'`; y adjuntar un
+  archivo real rompía el envío con "Maximum call stack size exceeded" — `_b64u()` usaba
+  `String.fromCharCode(...bytes)` con spread, que revienta el límite de argumentos del
+  motor JS en buffers de más de un par de cientos de KB (antes solo se llamaba con buffers
+  pequeños: IVs, JWT, VAPID). Fix: trocear en bloques de 8KB. Verificado en un script Node
+  aislado que la nueva implementación produce el mismo base64 que `Buffer.toString
+  ('base64')`, byte a byte, para un string pequeño y un buffer de 2MB simulado.
+- De paso, revisando `descifrarToken()` para el checkeo multi-cuenta: una sola cuenta con
+  el token cifrado corrupto tumbaba la comprobación de TODAS las cuentas del usuario (la
+  función lanzaba en vez de fallar solo esa cuenta) — envuelto en try/catch dentro de
+  `_refrescarTokenGmail()`.
+- **`TELECOM-NAV-01`**: Adrián mandó una captura de un modal "Nuevo rack" con "arregla
+  esto"; al pedir aclaración, precisó que era un problema de tamaño/ajuste en TODOS los
+  modales de la sección Racks/Cableado, y sumó un segundo bug: guardar un puerto devolvía a
+  la lista de Racks en vez de a la vista de Puertos de la que venía, y pidió revisar el
+  flujo completo IDF→Rack→Patch Panel→Puertos. Reproducido en vivo con datos de prueba
+  sembrados (IDF/Rack/Panel/Puertos reales en D1, borrados al terminar):
+  - Los modales `#modalTelecomOfficeEntidad` (IDF/Rack/Módulo/Cuadro) y
+    `#modalTelecomOfficePuerto` metían el contenido directo dentro de `.modal`, sin la
+    estructura `.modal-header`/`.modal-body`/`.modal-footer` que usa el resto de la app
+    (`#modalBox` genérico, incluido el de Correos) — `.modal` no tiene padding propio, así
+    que el título y los campos quedaban pegados al borde (confirmado con
+    `getComputedStyle`: `padding:0px`, título a 0.8px del borde). Fix: envolver en esa
+    misma estructura de tres bloques.
+  - El auto-refresh de 60s de la página (`SYNC_INTERVALS.telecomRacks` → `PAGE_LOADERS.
+    telecomRacks` → `telecomOfficeCargar()`) llamaba siempre a `telecomOfficeCargarIdfs()`,
+    que resetea `_telecomOfficeNivel` a `'idf'` y vacía `_telecomOfficeCtx` sin mirar en
+    qué nivel estaba el usuario. Si el refresco caía mientras alguien tenía abierto el
+    modal de un puerto (o de Nuevo/Editar), el contexto (`pp_id`, `rack_id`...) se perdía
+    en segundo plano; al guardar, `telecomOfficeAbrirPP(_telecomOfficeCtx.pp_id)` recibía
+    `undefined` y no encontraba nada que abrir, dejando la vista ya reseteada a IDFs.
+    Fix: `telecomOfficeCargar()` ahora (a) no hace nada mientras haya un modal de
+    edición abierto (mismo criterio que `SYNC-INV-01` en `index.html`: no interrumpir un
+    formulario a medio rellenar) y (b) tras refrescar la lista de obras, vuelve a abrir el
+    nivel en el que ya estaba el usuario (`telecomOfficeAbrirIdf`/`AbrirRack`/`AbrirPP`/
+    `AbrirCuadro`) en vez de forzar siempre la lista de IDFs. `index.html` (app móvil) no
+    tiene auto-refresh periódico para Telecom, así que no le afecta este bug.
+  - Verificado en producción con la cuenta de prueba: padding del modal `24px` tras el fix
+    (antes `0px`); llamar a `telecomOfficeCargar()` con el modal de puerto abierto ya no
+    toca `_telecomOfficeNivel`/`_telecomOfficeCtx`; guardar un puerto deja
+    `_telecomOfficeNivel==='puertos'` con el `pp_id` correcto y el modal cerrado, mostrando
+    el dato guardado en la lista.
+- Desplegado: `panel.html` vía `pages.yml` (SHA `11086e78844753630702052b74b4928990b0f7e6`),
+  run verificado en verde.
+- Sin pendientes de esta ronda.
+
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 
 Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +
