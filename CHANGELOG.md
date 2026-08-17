@@ -4,7 +4,25 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-17, noche — toque profesional)
+
+- **TELECOM-NAV-01, mejoras visuales:** cada IDF muestra ahora cuántos racks tiene y cada
+  rack cuántos módulos, sin entrar (mismo criterio que ya usaba el nivel de módulos con
+  ocupados/libres); icono según el tipo real de módulo (🔌 cobre / 🧵 fibra / 🖧 switch) en
+  vez del mismo icono siempre; breadcrumb con la ruta completa (IDF › Rack › Módulo) en la
+  vista de Puertos, que antes solo mostraba el nombre del módulo actual. Verificado en
+  producción tanto en `panel.html` como en `index.html` con datos de prueba reales
+  (creados y borrados en la misma verificación).
+
 ### Fixed (2026-08-17, noche)
+
+- **Informe de Telecom — puertos demasiado grandes:** Adrián: "los puertos en los paneles
+  cuando se hace el informe salen más grandes... son demasiado grandes". La cuadrícula de
+  puertos usaba columnas por fracción de ancho (`repeat(12,1fr)`), así que en una página
+  ancha cada celda se hacía enorme, sin importar cuántos puertos tuviera el módulo.
+  Cambiado a celdas de tamaño fijo (26×26px), tantas por fila como quepan. Verificado
+  midiendo la celda renderizada: antes ~75×75px en un contenedor de 900px, ahora 26×26px
+  fijos.
 
 - **TELECOM-NAV-01 (hardening pre-datos-reales):** Adrián, antes de empezar a meter datos
   reales en Racks/Cableado: "no puede fallar". Auditoría completa del módulo (backend +

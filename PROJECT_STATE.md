@@ -40,6 +40,13 @@
   tienen datos reales antes de confirmar. Verificado en producción con un usuario de
   prueba operario/telecom real (DELETE bloqueado con 403; con rol autorizado, 200; nombre
   de 200 caracteres rechazado con 400). Sin pendientes.
+- Estado (2026-08-17, noche — toque profesional): a petición de Adrián, verificado en vivo
+  el flujo completo (crear IDF→Rack→Módulo→Puerto en los dos frontends, navegación
+  correcta en cada guardado) y aplicadas mejoras visuales: conteos por nivel (racks por
+  IDF, módulos por rack), icono según tipo real de módulo (cobre/fibra/switch), breadcrumb
+  con ruta completa en Puertos, y celdas de puerto de tamaño fijo en el informe (antes se
+  hacían enormes en páginas anchas — "son demasiado grandes"). Verificado en producción
+  con datos de prueba, borrados al terminar. Sin pendientes.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos

@@ -47,6 +47,14 @@ usuario con Gmail conectado, no solo Adrián.
   puerto sin límite de longitud (alineado a 160/1000, backend+frontend); confirmación de
   borrado de patch panel/cuadro ahora avisa cuántos puertos tienen datos. Verificado en
   producción con un usuario de prueba real.
+- **TELECOM-NAV-01, toque profesional (2026-08-17, noche):** verificado en vivo el flujo
+  completo de crear IDF→Rack→Módulo→Puerto en los dos frontends (clics reales no
+  funcionaban en el navegador interno de esta sesión — se reprodujo llamando las mismas
+  funciones que disparan los botones, ver `HANDOFF.md`), navegación correcta en cada
+  guardado. A petición de Adrián, mejoras visuales: conteos por nivel (racks/módulos),
+  iconos por tipo de módulo, breadcrumb con ruta completa, y celdas de puerto de tamaño
+  fijo en el informe (antes se hacían enormes en páginas anchas). Verificado en
+  producción con datos de prueba, borrados al terminar. Sin pendientes.
 - Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
   Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
   "Organizar con Alejandra", y enviar un correo de prueba real.

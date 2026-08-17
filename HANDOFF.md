@@ -191,10 +191,52 @@
   `panel.html`/`index.html` vía `pages.yml` (SHA `1f5572ac1cfb3c22edf2b3fbd44e8942e1041931`,
   run verificado en verde), y reconfirmado en producción tras el deploy que el modal de
   Nueva entidad ya aplica `maxlength=160` en Nombre/Ubicación.
-- Sin pendientes de esta ronda. Nota para más adelante, no pedida por Adrián: el
-  breadcrumb solo muestra un nivel "← Volver", no la ruta completa (IDF › Rack › Módulo) —
-  quedó fuera de alcance de esta ronda de integridad/permisos, es una mejora de UX
-  cosmética si se quiere retomar "más profesional" más allá de lo ya hecho.
+- Sin pendientes de esta ronda.
+
+## TELECOM-NAV-01: verificación del flujo real + toque profesional (2026-08-17, noche)
+
+- Contexto: Adrián pidió probar en vivo el flujo real de crear un IDF y ver si guardar
+  navega a la pantalla correcta, y de paso "revisa si podemos mejorar la parte visual
+  para darle un toque más profesional".
+- **Verificación del flujo completo, no solo casos sueltos:** crear IDF (te deja en la
+  lista de IDFs viendo el nuevo) → entrar y crear Rack (te deja en la lista de racks del
+  IDF) → entrar y crear Módulo de 4 puertos (te deja en la lista de módulos del rack, con
+  "4 puertos · 0 ocupados · 4 libres") → entrar al módulo y guardar un puerto (breadcrumb
+  idéntico antes y después, te quedas en la vista de Puertos con el dato guardado — el
+  caso exacto que se reportó roto). Repetido en `index.html` con el mismo resultado.
+  **Nota de entorno:** los clics de ratón reales (`computer` tool) no tenían ningún efecto
+  en este navegador interno durante la sesión (ni abrían modales ni cerraban el banner de
+  tour) — se reprodujo el flujo llamando exactamente las mismas funciones que disparan
+  esos botones (`onclick="telecomOfficeAbrirNuevo()"`, `telecomOfficeGuardarEntidad()`,
+  etc.), no atajos alternativos.
+- **Mejoras visuales** (Adrián pidió las tres, más un cuarto punto que salió aparte):
+  - Conteos por nivel: `getTelecomIdf` y `getTelecomRacks` (`worker.js`) ahora incluyen
+    `num_racks`/`num_modulos` vía subquery `COUNT` correlacionado — mismo patrón que ya
+    usaban `getTelecomPatchPanels`/`getTelecomCuadrosCampo` con `ocupados`/`libres`. Cada
+    IDF muestra "N racks", cada rack "N módulos", sin entrar.
+  - Icono por tipo de módulo real (`pp.tipo`, ya se guardaba pero no se usaba al pintar la
+    lista): 🔌 cobre, 🧵 fibra, 🖧 switch, en vez del mismo 🔌 siempre.
+  - Breadcrumb con ruta completa en la vista de Puertos: antes solo mostraba el nombre del
+    módulo actual (`🔌 Módulo A`), ahora `🗄️ IDF › Rack › 🔌 Módulo` completo y navegable
+    (el botón "← Volver" ya existía; lo que faltaba era el contexto superior en el texto).
+  - **Informe (puertos "demasiado grandes"):** `.port-grid` usaba
+    `grid-template-columns:repeat(12,1fr)` — 12 columnas por FRACCIÓN de ancho, así que en
+    un documento ancho cada celda (con `aspect-ratio:1`) crecía proporcionalmente, sin
+    relación con cuántos puertos tuviera el módulo. Cambiado a `repeat(auto-fill,26px)`
+    con celdas de tamaño fijo 26×26px — mismo aspecto en cualquier ancho de página.
+    Verificado midiendo la celda renderizada en un contenedor simulado de 900px: antes
+    ~75×75px, ahora 26×26px fijos.
+- Verificación en producción, no solo lectura de código: IDF/racks/módulos de prueba
+  sembrados vía API, confirmado que `GET /telecom/idf` devuelve `num_racks` correcto y
+  `GET /telecom/racks` devuelve `num_modulos` correcto; render en `panel.html` confirmado
+  con `_telecomOfficeCache` real tras navegar los 4 niveles (textContent de cada pantalla
+  inspeccionado); tamaño de `.pg-cell` medido con `getComputedStyle` en un nodo temporal
+  con el CSS real del informe (`_TELECOM_OFFICE_INFORME_CSS`). Todo el dato de prueba
+  borrado al terminar.
+- Desplegado: `worker.js` vía `wrangler deploy` (verificado `/health`) y
+  `panel.html`/`index.html` vía `pages.yml` (SHA `f216f8ffcc52e8a25c49e1838e42a622324cbd2c`,
+  run verificado en verde).
+- Sin pendientes.
 
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 

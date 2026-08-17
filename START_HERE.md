@@ -32,6 +32,12 @@ responsables. Nombre y campos de puerto sin límite de longitud, alineados. Conf
 borrado con conteo de puertos ocupados. Verificado en producción con un usuario de prueba
 real. Sin pendientes.
 
+**TELECOM-NAV-01, toque profesional (2026-08-17, noche):** flujo completo crear
+IDF→Rack→Módulo→Puerto verificado en vivo en los dos frontends (navegación correcta en
+cada guardado). Mejoras visuales pedidas por Adrián: conteos por nivel, iconos por tipo de
+módulo, breadcrumb con ruta completa, celdas de puerto de tamaño fijo en el informe (antes
+enormes en páginas anchas). Verificado en producción, sin pendientes.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda
