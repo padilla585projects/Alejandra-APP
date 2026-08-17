@@ -20493,7 +20493,7 @@ document.addEventListener('click', e => {
 });
 
 async function cargarNotificaciones() {
-  const [alertasR, pedidosR, carnetR, rfisR, subcR, hitosR, punchNR, segObsNR, escaneosR] = await Promise.all([
+  const [alertasR, pedidosR, carnetR, rfisR, subcR, hitosR, punchNR, segObsNR, escaneosR, correosR] = await Promise.all([
     api('/alertas-stock'),
     api('/pedidos?limit=50'),
     api('/carnets?limit=200'),
@@ -20503,6 +20503,11 @@ async function cargarNotificaciones() {
     api('/punch-list?estado=abierto').catch(() => ({})),
     api('/obs-seguridad?estado=abierta').catch(() => ({})),
     api('/escaneos-remotos?estado=pendiente').catch(() => ({})),
+    // CORREOS-PANEL-01-v5 (17/08/2026): Adrián -- "que aparezca un aviso cuando llegue
+    // correo nuevo pero las dos cuentas". Mismo patrón que el resto de esta función: solo
+    // revisa mientras el panel está abierto (cada 2 min, ver iniciarPollingNotif), sin
+    // cron en el servidor -- decisión explícita para no complicar esto más de lo que pidió.
+    api('/correos/nuevas-todas-cuentas').catch(() => ({})),
   ]);
   notificaciones = [];
 
@@ -20600,6 +20605,13 @@ async function cargarNotificaciones() {
     tipo: 'warn', icono: '📥', titulo: `${escaneosPend.length} escaneo${escaneosPend.length > 1 ? 's' : ''} remoto${escaneosPend.length > 1 ? 's' : ''} pendiente${escaneosPend.length > 1 ? 's' : ''}`,
     texto: 'Fotos escaneadas desde el móvil que necesitan revisión', accion: "rsAbrirPendientes()"
   });
+
+  // Correo nuevo (CORREOS-PANEL-01-v5) — una notificación por cuenta con novedades; el
+  // clic cambia a esa cuenta (si no era ya la activa) y abre "Mis Correos".
+  (correosR?.cuentas || []).forEach(c => notificaciones.push({
+    tipo: 'info', icono: '📧', titulo: `${c.nuevos} correo${c.nuevos > 1 ? 's' : ''} nuevo${c.nuevos > 1 ? 's' : ''}`,
+    texto: c.email || '', accion: `cambiarCuentaCorreoActiva(${c.cuenta_id}).then(()=>navTo('correos'))`
+  }));
 
   // Actualizar badge
   const badge = document.getElementById('notifBadge');

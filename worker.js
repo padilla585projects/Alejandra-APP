@@ -5526,6 +5526,7 @@ export default {
       if (path === '/internal/gmail/enviar' && method === 'POST')   return await internalGmailEnviar(request, env);
       if (path === '/correos' && method === 'GET')                 return await getCorreosPanel(request, env);
       if (path === '/correos/sincronizar' && method === 'POST')     return await sincronizarCorreos(request, env);
+      if (path === '/correos/nuevas-todas-cuentas' && method === 'GET') return await getCorreosNuevosTodasCuentas(request, env);
       if (path.startsWith('/correos/') && method === 'PUT')         return await actualizarCorreoCache(path.split('/correos/')[1], request, env);
       if (path.match(/^\/correos\/[^/]+\/completo$/) && method === 'GET') return await getCorreoCompleto(path.split('/')[2], request, env);
       if (path.startsWith('/correos/') && method === 'DELETE' && !path.includes('/completo')) return await borrarCorreoCache(path.split('/correos/')[1], request, env);
@@ -14099,12 +14100,26 @@ async function gmailAuthDesconectar(request, env) {
 // Refresca un access_token de corta duración a partir del refresh_token cifrado
 // guardado del usuario. Usado solo por los endpoints internos de abajo -- nunca
 // expuesto a sesión de usuario ni al modelo.
-async function _obtenerAccessTokenGmail(env, usuarioId) {
-  await ensureGmailCuentasTable(env);
-  const row = await env.DB.prepare('SELECT id, refresh_token_cifrado, iv, email_conectado FROM gmail_cuentas WHERE usuario_id = ? AND activa = 1').bind(usuarioId).first();
+// CORREOS-PANEL-01-v5 (17/08/2026): "aviso cuando llegue correo nuevo" -- Adrián pidió que
+// avise de las DOS cuentas conectadas, no solo la activa. El intercambio real del refresh
+// token por un access token es el mismo lo pidas por usuario_id (cuenta activa) o por una
+// cuenta_id concreta -- se comparte en _refrescarTokenGmail().
+async function _refrescarTokenGmail(env, row) {
   if (!row) return { error: 'Este usuario no tiene Gmail conectado. Conectalo desde Ajustes → Gmail.' };
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return { error: 'Google OAuth no configurado' };
-  const refreshToken = await descifrarToken(env, row.refresh_token_cifrado, row.iv);
+  // CORREOS-PANEL-01-v5 (17/08/2026): descifrarToken puede LANZAR (no solo devolver un
+  // error) si el ciphertext está corrupto/es inválido -- encontrado probando con un token
+  // de prueba manipulado a mano. Antes se propagaba como excepción sin capturar y tumbaba
+  // getCorreosNuevosTodasCuentas entero (una sola cuenta rota rompía el chequeo de TODAS
+  // las cuentas del usuario, no solo la suya). Se captura aquí para que sea SIEMPRE un
+  // {error} normal, nunca una excepción -- todo lo que llama a esta función ya sabe
+  // manejar {error}.
+  let refreshToken;
+  try {
+    refreshToken = await descifrarToken(env, row.refresh_token_cifrado, row.iv);
+  } catch (e) {
+    return { error: 'No se pudo leer el token guardado de esta cuenta -- probá a desconectarla y conectarla de nuevo.' };
+  }
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -14118,6 +14133,16 @@ async function _obtenerAccessTokenGmail(env, usuarioId) {
   const tokenData = await tokenRes.json();
   if (!tokenData.access_token) return { error: tokenData.error_description || tokenData.error || 'No se pudo refrescar el token de Gmail.' };
   return { accessToken: tokenData.access_token, email: row.email_conectado, cuentaId: row.id };
+}
+async function _obtenerAccessTokenGmail(env, usuarioId) {
+  await ensureGmailCuentasTable(env);
+  const row = await env.DB.prepare('SELECT id, refresh_token_cifrado, iv, email_conectado FROM gmail_cuentas WHERE usuario_id = ? AND activa = 1').bind(usuarioId).first();
+  return await _refrescarTokenGmail(env, row);
+}
+async function _obtenerAccessTokenGmailPorCuenta(env, cuentaId) {
+  await ensureGmailCuentasTable(env);
+  const row = await env.DB.prepare('SELECT id, refresh_token_cifrado, iv, email_conectado FROM gmail_cuentas WHERE id = ?').bind(cuentaId).first();
+  return await _refrescarTokenGmail(env, row);
 }
 
 // Codifica bytes UTF-8 a base64 estándar (con padding) -- para el header MIME
@@ -14142,9 +14167,7 @@ function _b64std(bytes) {
 // CORREOS-PANEL-01 (17/08/2026): lógica de listado extraída de internalGmailListar a un
 // helper compartido -- la reutiliza también sincronizarCorreos() (panel de correos) para
 // no duplicar las llamadas reales a la API de Gmail.
-async function _listarGmailMensajes(env, usuarioId, { limit = 10, query = '' } = {}) {
-  const { accessToken, email, cuentaId, error } = await _obtenerAccessTokenGmail(env, usuarioId);
-  if (error) return { error };
+async function _listarGmailMensajesConToken(accessToken, { limit = 10, query = '' } = {}) {
   const limitFinal = Math.min(Math.max(parseInt(limit) || 10, 1), 25);
   const q = query ? `&q=${encodeURIComponent(query)}` : '';
   const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${limitFinal}${q}`, {
@@ -14163,7 +14186,24 @@ async function _listarGmailMensajes(env, usuarioId, { limit = 10, query = '' } =
     const headers = Object.fromEntries((mData.payload?.headers || []).map(h => [h.name, h.value]));
     mensajes.push({ id: m.id, de: headers.From || '', asunto: headers.Subject || '(sin asunto)', fecha: headers.Date || '', resumen: mData.snippet || '' });
   }
+  return { mensajes };
+}
+async function _listarGmailMensajes(env, usuarioId, { limit = 10, query = '' } = {}) {
+  const { accessToken, email, cuentaId, error } = await _obtenerAccessTokenGmail(env, usuarioId);
+  if (error) return { error };
+  const { mensajes, error: error2 } = await _listarGmailMensajesConToken(accessToken, { limit, query });
+  if (error2) return { error: error2 };
   return { email, mensajes, cuentaId };
+}
+// CORREOS-PANEL-01-v5 (17/08/2026): variante para revisar UNA cuenta concreta sin
+// depender de cuál esté activa -- usada por el chequeo de "correo nuevo" de las dos
+// cuentas conectadas (ver getCorreosNuevosTodasCuentas).
+async function _listarGmailMensajesPorCuenta(env, cuentaId, { limit = 10, query = '' } = {}) {
+  const { accessToken, email, error } = await _obtenerAccessTokenGmailPorCuenta(env, cuentaId);
+  if (error) return { error };
+  const { mensajes, error: error2 } = await _listarGmailMensajesConToken(accessToken, { limit, query });
+  if (error2) return { error: error2 };
+  return { email, mensajes };
 }
 
 async function internalGmailListar(request, env) {
@@ -14247,12 +14287,11 @@ async function getCorreoCompleto(gmailId, request, env) {
   return json({ ok: true, cuerpo, esHtml });
 }
 
-async function sincronizarCorreos(request, env) {
-  const auth = await getAuth(request, env);
-  if (!auth.usuario_id) return err('No autorizado', 403);
-  const body = await request.json().catch(() => ({}));
-  const { email, mensajes, cuentaId, error } = await _listarGmailMensajes(env, auth.usuario_id, { limit: body.limit || 25, query: body.query });
-  if (error) return json({ ok: false, error });
+// Upsert compartido en la caché -- conserva leido_app/categoria_app/archivado de los
+// correos ya vistos (solo actualiza de/asunto/fecha/resumen), inserta los nuevos como no
+// leídos. Usado tanto por el botón manual "Sincronizar" (sincronizarCorreos) como por el
+// chequeo automático de correo nuevo de las dos cuentas (getCorreosNuevosTodasCuentas).
+async function _sincronizarCacheCuenta(env, usuarioId, cuentaId, mensajes) {
   let nuevos = 0;
   for (const m of mensajes) {
     const existia = await env.DB.prepare('SELECT id FROM gmail_mensajes_cache WHERE cuenta_id=? AND gmail_id=?').bind(cuentaId, m.id).first();
@@ -14263,11 +14302,43 @@ async function sincronizarCorreos(request, env) {
     } else {
       await env.DB.prepare(
         `INSERT INTO gmail_mensajes_cache (usuario_id, cuenta_id, gmail_id, de, asunto, fecha, resumen) VALUES (?,?,?,?,?,?,?)`
-      ).bind(auth.usuario_id, cuentaId, m.id, m.de, m.asunto, m.fecha, m.resumen).run();
+      ).bind(usuarioId, cuentaId, m.id, m.de, m.asunto, m.fecha, m.resumen).run();
       nuevos++;
     }
   }
+  return nuevos;
+}
+
+async function sincronizarCorreos(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const { email, mensajes, cuentaId, error } = await _listarGmailMensajes(env, auth.usuario_id, { limit: body.limit || 25, query: body.query });
+  if (error) return json({ ok: false, error });
+  const nuevos = await _sincronizarCacheCuenta(env, auth.usuario_id, cuentaId, mensajes);
   return json({ ok: true, email, nuevos, total: mensajes.length });
+}
+
+// CORREOS-PANEL-01-v5 (17/08/2026): Adrián -- "que aparezca un aviso cuando llegue correo
+// nuevo pero las dos cuentas". Lo llama cargarNotificaciones() (panel.html) cada 2 min,
+// igual que el resto de avisos de la campanita -- solo mientras el panel está abierto, sin
+// cron en el servidor (decisión explícita, mismo patrón que ya usan stock bajo/carnets/
+// etc.). Revisa TODAS las cuentas conectadas del usuario, no solo la activa -- por eso usa
+// _listarGmailMensajesPorCuenta (cuenta_id concreta) en vez de la variante "activa".
+// límite bajo (5) porque es un chequeo frecuente, no una sincronización completa.
+async function getCorreosNuevosTodasCuentas(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  await ensureGmailCuentasTable(env);
+  const { results: cuentas } = await env.DB.prepare('SELECT id, email_conectado FROM gmail_cuentas WHERE usuario_id=?').bind(auth.usuario_id).all();
+  const resultado = [];
+  for (const c of cuentas) {
+    const { mensajes, error } = await _listarGmailMensajesPorCuenta(env, c.id, { limit: 5 });
+    if (error || !mensajes) continue;
+    const nuevos = await _sincronizarCacheCuenta(env, auth.usuario_id, c.id, mensajes);
+    if (nuevos > 0) resultado.push({ cuenta_id: c.id, email: c.email_conectado, nuevos });
+  }
+  return json({ ok: true, cuentas: resultado });
 }
 
 // _getAuthPlano (no getAuth): esta ruta la llama también categorizar_correos (tool del
