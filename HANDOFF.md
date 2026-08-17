@@ -238,6 +238,79 @@
   run verificado en verde).
 - Sin pendientes.
 
+## Informe Semanal de Seguridad: 4 fixes/features en una ronda (2026-08-17, noche)
+
+- Contexto: Adrián mandó una captura del panel ("ahí que arreglar esto" — el título del
+  topbar partido en 3 líneas encima del contenido) mientras yo seguía en Racks/Cableado, y
+  encadenó sin esperar respuesta: "y vamos a ver y arreglar el informe de seguridad" →
+  "cuando se añadan fotos al informe diario se tiene que poder añadir un título... para que
+  luego en el informe salga a pie de foto" → "ahí que hacer que en la app y en el panel se
+  pueda hacer lo mismo, que ahora no se puede. en el panel el botón de plantilla no
+  funciona". Cuatro piezas independientes, resueltas en orden.
+- **Título del topbar roto en 3 líneas:** `.topbar-title{flex:1}` sin
+  `white-space:nowrap`/`overflow:hidden`/`text-overflow:ellipsis`/`min-width:0`. Con
+  varios elementos ocupando la topbar (selector empresa, obra, departamento, usuario) el
+  título se quedaba sin ancho suficiente para una línea y se envolvía en 3 — y como
+  `#topbar` tiene `height:68px` fija sin overflow controlado, el texto desbordado se
+  solapaba visualmente con el contenido de la página. Fix de una regla CSS, afecta a
+  cualquier página con título largo, no solo esta.
+- **Botón "✏️ Plantilla" no abría nunca el modal:** reproducido llamando
+  `abrirModalPlantillaInformeSeg()` directamente — no lanzaba excepción, pero el modal se
+  quedaba cerrado. Causa: `GET /mi-empresa` (`worker.js`) responde `{empresa, obras,
+  usuarios}` SIN campo `ok`, y la función comprueba `if (!r.ok)` (patrón estándar de toda
+  la API) — como `r.ok` es `undefined`, siempre entraba en la rama de error. Fix en el
+  backend (`return json({ ok: true, empresa, obras, usuarios })`), no en el frontend —
+  alinea el endpoint con el resto de la API. Comprobado que los otros dos usos de
+  `/mi-empresa` en `panel.html` no dependen de `r.ok` (leen `r.empresa` directo), así que
+  el fix no los afecta.
+- **Paridad app/panel:** comparé función por función `segInf*` de `index.html` contra
+  `panel.html` y encontré 3 huecos reales, todos del lado de Office (la app ya los tenía
+  todos):
+  - Iniciar el informe de una semana sin actividades previas — la lista de Office
+    (`cargarInformesSeg`) solo mostraba semanas que YA tenían al menos una actividad
+    (`encontrarOCrearInformeSeg` en el backend auto-crea el informe con la primera
+    actividad, sea cual sea el frontend que la mande). Nuevo botón "+ Nuevo informe" en la
+    cabecera; pide obra (toma la del filtro activo) + primera actividad, mismo endpoint
+    `POST /informes-seg/actividad`, y al terminar abre directamente el detalle del informe
+    recién creado (`r.informe_id`, que el backend ya devolvía).
+  - Editar una actividad ya guardada — backend ya tenía `PUT /informes-seg/actividad/:id`
+    (`actualizarActividadInformeSeg`, de una sesión anterior) sin exponerlo en Office. El
+    formulario "+ Nueva" ahora sirve para ambos casos (campo oculto `segInfEditId`, mismo
+    patrón que ya usaba `index.html`).
+  - Añadir una foto extra a una actividad ya existente — mismo endpoint de subida que ya
+    usaba "nueva actividad". Problema de UI: este flujo se dispara DESDE DENTRO del modal
+    de detalle del informe, que ya ocupa el único `#modalBox` genérico de Office —
+    reutilizar `abrirModal()` ahí encima habría reemplazado el formulario del informe. Modal
+    propio (`#segInfFotoExtraModalOffice`, creado una vez y reutilizado) con `z-index:1100`
+    por encima del genérico (`1000`).
+- **Pie de foto** (petición original que arrancó esta ronda): migración D1 autorizada
+  (`ALTER TABLE informes_seg_fotos ADD COLUMN titulo TEXT`, aditiva). Aceptado como campo
+  `titulo` en el multipart de `subirFotoActividadInformeSeg`; nuevo `PUT
+  /informes-seg-fotos/:id` para corregirlo sin rehacer la foto. En `generarInformeSegDocx`
+  sale como un `Paragraph` en cursiva (9pt) justo debajo del `ImageRun`; en la vista de
+  impresión HTML (los dos frontends) como un `<div>` en cursiva bajo la miniatura. Añadido
+  también en `index.html`: campo de texto en el modal de actividad (junto al selector de
+  foto) para el caso "foto al crear/editar actividad", y en el nuevo mini-modal para "foto
+  extra" (antes un simple `<input type=file>` sin más, ahora con preview + título). Título
+  visible también en las miniaturas dentro de la propia app/panel, no solo en el documento
+  final.
+- **Verificación end-to-end en producción, los 4 puntos, en los dos frontends:** creado un
+  informe nuevo desde cero en Office con "+ Nuevo informe" (semana 34, sin informe previo),
+  editada su actividad, subida una foto real (PNG generado con `canvas.toBlob`, no un
+  placeholder) con título vía el modal dedicado — confirmado el título guardado en la
+  respuesta de la API, visible en el DOM del modal de detalle, presente en el `.docx`
+  descargado y verificado con `unzip -p ... word/document.xml | grep` (herramienta
+  `pandoc` no disponible en este entorno, se usó `unzip` directo), y presente en la
+  construcción del HTML de impresión. Repetido en `index.html`: actividad de prueba creada
+  vía API, editada con `segInfEditar` real, foto extra añadida con el nuevo mini-modal
+  (simulando el `<input type=file>.onchange` con un `File` real construido en memoria, ya
+  que `.click()` en un input de archivo no es automatizable en este entorno). Todo el dato
+  de prueba borrado al terminar (`DELETE /informes-seg/:id` en ambos informes de prueba).
+- Desplegado: `worker.js` vía `wrangler deploy` (verificado `/health`) y
+  `panel.html`/`index.html` vía `pages.yml` (SHA
+  `abfc46936a00be315defa150f90d6535250bce9a`, run verificado en verde).
+- Sin pendientes.
+
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 
 Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +

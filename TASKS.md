@@ -55,6 +55,15 @@ usuario con Gmail conectado, no solo Adrián.
   iconos por tipo de módulo, breadcrumb con ruta completa, y celdas de puerto de tamaño
   fijo en el informe (antes se hacían enormes en páginas anchas). Verificado en
   producción con datos de prueba, borrados al terminar. Sin pendientes.
+- **Informe Semanal de Seguridad, ronda completa (2026-08-17, noche):** título del topbar
+  que se rompía en 3 líneas y se solapaba con el contenido (`.topbar-title` sin
+  `white-space:nowrap`, fix global); botón "✏️ Plantilla" que nunca abría el modal
+  (`GET /mi-empresa` sin `ok:true`, patrón estándar de la API roto ahí); tres huecos de
+  paridad app/panel cerrados en Office (iniciar informe de semana nueva, editar actividad,
+  añadir foto extra); pie de foto con título en el `.docx`/impresión (migración D1
+  autorizada: `informes_seg_fotos.titulo`). Todo verificado en producción con datos de
+  prueba reales (informe completo creado/editado/con fotos/borrado en los dos frontends).
+  Sin pendientes.
 - Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
   Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
   "Organizar con Alejandra", y enviar un correo de prueba real.

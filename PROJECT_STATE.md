@@ -47,6 +47,15 @@
   con ruta completa en Puertos, y celdas de puerto de tamaño fijo en el informe (antes se
   hacían enormes en páginas anchas — "son demasiado grandes"). Verificado en producción
   con datos de prueba, borrados al terminar. Sin pendientes.
+- Estado (2026-08-17, noche — Informe Semanal de Seguridad): ronda completa a raíz de una
+  captura de Adrián (título del topbar roto en 3 líneas, solapado con el contenido —
+  `.topbar-title` sin `white-space:nowrap`, fix global) y de pedir revisar el informe de
+  Seguridad: botón "✏️ Plantilla" que nunca abría el modal (`GET /mi-empresa` sin
+  `ok:true`); tres huecos de paridad app/panel cerrados en Office (iniciar informe de
+  semana nueva, editar actividad ya guardada, añadir foto extra a una actividad
+  existente); pie de foto con título, visible en el `.docx` y en la impresión (migración
+  D1 autorizada: `informes_seg_fotos.titulo`). Verificado en producción con un informe
+  completo de prueba en los dos frontends. Sin pendientes.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos

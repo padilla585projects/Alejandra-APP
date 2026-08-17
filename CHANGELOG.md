@@ -4,6 +4,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-17, noche — Informe Semanal de Seguridad)
+
+- **Pie de foto:** columna nueva `informes_seg_fotos.titulo` (migración D1 autorizada).
+  Al subir una foto en cualquiera de los tres puntos donde se hace (nueva actividad,
+  editar actividad, añadir foto extra) se puede poner un título opcional; sale como pie
+  de foto (cursiva, debajo de la imagen) en el `.docx` y en la vista de impresión, y ya se
+  ve en la propia app/panel bajo cada miniatura. Nuevo `PUT /informes-seg-fotos/:id` para
+  corregirlo después sin rehacer la foto.
+- **Paridad app/panel:** tres huecos reales cerrados en `panel.html` (la app ya los
+  tenía) — botón "+ Nuevo informe" para arrancar la semana de una obra que aún no tiene
+  ninguna actividad (antes solo se listaban semanas ya empezadas desde el móvil); editar
+  una actividad ya guardada (antes solo crear/borrar); añadir una foto extra a una
+  actividad existente (antes solo al crearla).
+
 ### Added (2026-08-17, noche — toque profesional)
 
 - **TELECOM-NAV-01, mejoras visuales:** cada IDF muestra ahora cuántos racks tiene y cada
@@ -16,6 +30,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Fixed (2026-08-17, noche)
 
+- **Título del topbar se rompía en 3 líneas y se solapaba con el contenido:** Adrián
+  (captura, sección Informe Semanal de Seguridad). `.topbar-title` no tenía
+  `white-space:nowrap`/`overflow`; con muchos elementos a la derecha (selector empresa,
+  obra, departamento, usuario) el título se quedaba sin ancho y se envolvía en vez de
+  truncarse con "…" — y como `#topbar` tiene altura fija (68px), el texto desbordado
+  quedaba encima del contenido de la página. Fix global (afecta a cualquier título largo
+  en cualquier página, no solo esta).
+- **Botón "✏️ Plantilla" del Informe Semanal no hacía nada:** `GET /mi-empresa` nunca
+  devolvía `ok:true` en su respuesta (solo `{empresa,obras,usuarios}`), pero
+  `abrirModalPlantillaInformeSeg()` comprueba `if (!r.ok)` — patrón estándar del resto de
+  la API — así que entraba siempre en la rama de error sin abrir el modal, aunque la
+  petición funcionara bien.
 - **Informe de Telecom — puertos demasiado grandes:** Adrián: "los puertos en los paneles
   cuando se hace el informe salen más grandes... son demasiado grandes". La cuadrícula de
   puertos usaba columnas por fracción de ancho (`repeat(12,1fr)`), así que en una página

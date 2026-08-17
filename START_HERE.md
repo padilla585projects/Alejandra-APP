@@ -38,6 +38,13 @@ cada guardado). Mejoras visuales pedidas por Adrián: conteos por nivel, iconos 
 módulo, breadcrumb con ruta completa, celdas de puerto de tamaño fijo en el informe (antes
 enormes en páginas anchas). Verificado en producción, sin pendientes.
 
+**Informe Semanal de Seguridad, ronda completa (2026-08-17, noche):** título del topbar
+roto en 3 líneas y solapado con el contenido (fix global); botón "✏️ Plantilla" que nunca
+abría el modal (`GET /mi-empresa` sin `ok:true`); tres huecos de paridad app/panel
+cerrados en Office (iniciar informe de semana nueva, editar actividad, añadir foto extra);
+pie de foto con título en `.docx`/impresión (migración D1: `informes_seg_fotos.titulo`).
+Verificado en producción con un informe completo de prueba, sin pendientes.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda
