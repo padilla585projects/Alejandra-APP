@@ -22273,6 +22273,10 @@ function abrirModal(titulo, html, onOk) {
   document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button><button class="btn btn-primary" id="modalOkBtn">Guardar</button>';
   document.getElementById('modalTitle').textContent = titulo;
   document.getElementById('modalBody').innerHTML = html;
+  // CORREOS-PANEL-01-v2 (17/08/2026): resetea el ancho por defecto (520px, ver .modal en
+  // CSS) -- abrirComposeCorreo() lo amplía para redactar; sin este reset, el siguiente
+  // abrirModal() de CUALQUIER otro sitio heredaría el ancho ampliado.
+  document.getElementById('modalBox').style.maxWidth = '';
   _modalCallback = onOk;
   // FIX-MODAL-LOADING-01 (12/08/2026): el botón no daba ningún indicio de que la acción
   // estaba en curso -- en subidas de archivo (unos segundos con archivos grandes) parecía
@@ -22470,13 +22474,28 @@ function organizarCorreosConAlejandra() {
   if (input) input.focus();
 }
 
+// CORREOS-PANEL-01-v2 (17/08/2026): Adrián -- "el wizar de redactar es un poco pequeño" +
+// "no está la opción de adjuntar archivos". Modal ampliado a 700px (abrirModal() resetea
+// el ancho por defecto en cada llamada, así que esto no afecta a ningún otro modal de la
+// app). _correosAdjuntos guarda {nombre, mime, contenido_b64} -- se lee con FileReader al
+// elegir el archivo, no al enviar, para poder listarlos/quitarlos antes de mandar.
+let _correosAdjuntos = [];
+const CORREOS_ADJUNTOS_LIMITE_MB = 20;
+
 function abrirComposeCorreo(prefill) {
   const p = prefill || {};
+  _correosAdjuntos = [];
   const html = `
     <div class="form-group"><div class="form-label">Para</div><input class="form-input" id="mCorreoPara" type="email" placeholder="destinatario@ejemplo.com" value="${escHtml(p.para || '')}"></div>
     <div class="form-group"><div class="form-label">Asunto</div><input class="form-input" id="mCorreoAsunto" value="${escHtml(p.asunto || '')}"></div>
-    <div class="form-group"><div class="form-label">Mensaje</div><textarea class="form-input" id="mCorreoCuerpo" rows="8"></textarea></div>`;
+    <div class="form-group"><div class="form-label">Mensaje</div><textarea class="form-input" id="mCorreoCuerpo" rows="14"></textarea></div>
+    <div class="form-group">
+      <div class="form-label">Adjuntos (máx. ${CORREOS_ADJUNTOS_LIMITE_MB}MB en total)</div>
+      <input type="file" id="mCorreoAdjuntosInput" multiple onchange="_correosAnadirAdjuntos(this.files)">
+      <div id="mCorreoAdjuntosList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+    </div>`;
   abrirModal('✏️ Redactar correo', html, enviarCorreoCompose);
+  document.getElementById('modalBox').style.maxWidth = '700px';
 }
 
 function responderCorreo(gmailId) {
@@ -22486,13 +22505,50 @@ function responderCorreo(gmailId) {
   abrirComposeCorreo({ para: _correosExtraerEmail(m.de), asunto });
 }
 
+function _correosRenderAdjuntos() {
+  const cont = document.getElementById('mCorreoAdjuntosList');
+  if (!cont) return;
+  cont.innerHTML = _correosAdjuntos.map((a, i) => `
+    <span style="display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px">
+      📎 ${escHtml(a.nombre)} <span style="color:var(--muted)">(${(a.tamano / 1024).toFixed(0)} KB)</span>
+      <button type="button" onclick="_correosQuitarAdjunto(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 2px" title="Quitar">✕</button>
+    </span>`).join('');
+}
+
+function _correosQuitarAdjunto(i) {
+  _correosAdjuntos.splice(i, 1);
+  _correosRenderAdjuntos();
+}
+
+async function _correosAnadirAdjuntos(files) {
+  const limiteBytes = CORREOS_ADJUNTOS_LIMITE_MB * 1024 * 1024;
+  for (const file of files) {
+    const totalActual = _correosAdjuntos.reduce((s, a) => s + a.tamano, 0);
+    if (totalActual + file.size > limiteBytes) {
+      toast(`⚠️ "${file.name}" no cabe -- el total de adjuntos supera ${CORREOS_ADJUNTOS_LIMITE_MB}MB`, 'err');
+      continue;
+    }
+    const b64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1] || '');
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    _correosAdjuntos.push({ nombre: file.name, mime: file.type || 'application/octet-stream', contenido_b64: b64, tamano: file.size });
+  }
+  document.getElementById('mCorreoAdjuntosInput').value = '';
+  _correosRenderAdjuntos();
+}
+
 async function enviarCorreoCompose() {
   const para = document.getElementById('mCorreoPara').value.trim();
   const asunto = document.getElementById('mCorreoAsunto').value.trim();
   const cuerpo = document.getElementById('mCorreoCuerpo').value;
   if (!para || !asunto) { toast('Faltan destinatario o asunto', 'err'); return; }
-  if (!confirm(`¿Enviar este correo a ${para}?`)) return;
-  const r = await api('/internal/gmail/enviar', { method: 'POST', body: JSON.stringify({ para, asunto, cuerpo }) });
+  const adjuntosMsg = _correosAdjuntos.length ? ` con ${_correosAdjuntos.length} adjunto(s)` : '';
+  if (!confirm(`¿Enviar este correo a ${para}${adjuntosMsg}?`)) return;
+  const adjuntos = _correosAdjuntos.map(({ nombre, mime, contenido_b64 }) => ({ nombre, mime, contenido_b64 }));
+  const r = await api('/internal/gmail/enviar', { method: 'POST', body: JSON.stringify({ para, asunto, cuerpo, adjuntos }) });
   if (!r.ok) { toast(r.error || 'Error al enviar', 'err'); return; }
   toast(`✅ Correo enviado desde ${r.desde}`, 'ok');
   cerrarModal();

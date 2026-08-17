@@ -14227,24 +14227,55 @@ async function borrarCorreoCache(gmailId, request, env) {
   return json({ ok: true });
 }
 
+// CORREOS-PANEL-01-v2 (17/08/2026): Adrián -- "al redactar un correo no está la opción de
+// adjuntar archivos". adjuntos: [{nombre, mime, contenido_b64}] (contenido_b64 en base64
+// estándar, tal como lo da FileReader.readAsDataURL en el cliente). Límite de tamaño total
+// aplicado en el cliente (ver enviarCorreoCompose) -- aquí solo se construye el MIME.
+function _construirRawMimeCorreo({ from, para, asunto, cuerpo, adjuntos }) {
+  const asuntoB64 = `=?UTF-8?B?${_b64std(new TextEncoder().encode(asunto))}?=`;
+  if (!adjuntos || !adjuntos.length) {
+    return [
+      `From: ${from}`, `To: ${para}`, `Subject: ${asuntoB64}`,
+      'Content-Type: text/plain; charset="UTF-8"', '', cuerpo || '',
+    ].join('\r\n');
+  }
+  const boundary = `----AlejandraCorreo${crypto.randomUUID().replace(/-/g, '')}`;
+  const partes = [
+    `From: ${from}`, `To: ${para}`, `Subject: ${asuntoB64}`,
+    'MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${boundary}"`, '',
+    `--${boundary}`, 'Content-Type: text/plain; charset="UTF-8"', '', cuerpo || '', '',
+  ];
+  for (const a of adjuntos) {
+    // Base64 envuelto a 76 columnas -- estándar MIME (RFC 2045); Gmail probablemente lo
+    // acepta también sin envolver, pero no hay motivo para depender de eso.
+    const b64Envuelto = (a.contenido_b64 || '').match(/.{1,76}/g)?.join('\r\n') || '';
+    partes.push(
+      `--${boundary}`,
+      `Content-Type: ${a.mime || 'application/octet-stream'}; name="${a.nombre}"`,
+      `Content-Disposition: attachment; filename="${a.nombre}"`,
+      'Content-Transfer-Encoding: base64', '',
+      b64Envuelto, ''
+    );
+  }
+  partes.push(`--${boundary}--`);
+  return partes.join('\r\n');
+}
 async function internalGmailEnviar(request, env) {
   const body = await request.json().catch(() => ({}));
   const auth = await _getAuthPlano(request, env, body);
   if (!auth.usuario_id) return err('No autorizado', 403);
   const usuarioId = auth.usuario_id;
-  const { para, asunto, cuerpo } = body;
+  const { para, asunto, cuerpo, adjuntos } = body;
   if (!para || !asunto) return err('Falta destinatario o asunto', 400);
+  // Límite defensivo del lado del servidor (además del que ya aplica el cliente) -- Gmail
+  // mismo corta en 25MB por mensaje; nos quedamos bastante por debajo para dejar margen a
+  // las cabeceras/base64 (~33% de overhead sobre el tamaño real del archivo).
+  const tamanoTotal = (adjuntos || []).reduce((s, a) => s + (a.contenido_b64?.length || 0), 0);
+  if (tamanoTotal > 20 * 1024 * 1024) return err('Los adjuntos superan el límite de tamaño (20MB)', 400);
   const { accessToken, email, error } = await _obtenerAccessTokenGmail(env, usuarioId);
   if (error) return json({ ok: false, error });
 
-  const raw = [
-    `From: ${email}`,
-    `To: ${para}`,
-    `Subject: =?UTF-8?B?${_b64std(new TextEncoder().encode(asunto))}?=`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    '',
-    cuerpo || '',
-  ].join('\r\n');
+  const raw = _construirRawMimeCorreo({ from: email, para, asunto, cuerpo, adjuntos });
   const rawB64u = _b64u(new TextEncoder().encode(raw));
 
   const sendRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
