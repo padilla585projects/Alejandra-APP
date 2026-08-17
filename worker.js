@@ -14014,11 +14014,18 @@ async function gmailAuthStatus(request, env) {
   return json({ ok: true, conectado: !!row, email: row?.email_conectado || null, actualizado: row?.updated_at || null });
 }
 
+// CORREOS-PANEL-01-v2 (17/08/2026): Adrián preguntó cómo cambiar de cuenta de Gmail --
+// hasta ahora desconectar solo borraba el token, dejando la caché de correos (Mis Correos,
+// gmail_mensajes_cache) de la cuenta VIEJA mezclada con la de la cuenta nueva tras
+// reconectar. gmail_mensajes_cache está indexada por usuario_id, no por cuenta de Gmail --
+// no hay forma de distinguir "de qué cuenta era" un correo ya cacheado, así que la única
+// forma limpia de garantizar que no se mezclen es vaciar la caché al desconectar.
 async function gmailAuthDesconectar(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('No autorizado', 403);
   await ensureGmailTokensTable(env);
   await env.DB.prepare('DELETE FROM gmail_oauth_tokens WHERE usuario_id = ?').bind(auth.usuario_id).run();
+  await env.DB.prepare('DELETE FROM gmail_mensajes_cache WHERE usuario_id = ?').bind(auth.usuario_id).run().catch(() => {});
   return json({ ok: true });
 }
 

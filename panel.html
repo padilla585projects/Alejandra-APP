@@ -22609,7 +22609,7 @@ async function conectarGmailPanel() {
   finally { if (btn) { btn.disabled = false; btn.textContent = '📧 Conectar mi Gmail'; } }
 }
 async function desconectarGmailPanel() {
-  if (!confirm('¿Desconectar tu Gmail? Alejandra dejará de poder leer o enviar correo en tu nombre.')) return;
+  if (!confirm('¿Desconectar tu Gmail? Alejandra dejará de poder leer o enviar correo en tu nombre, y se borra la lista de correos ya sincronizados de "Mis Correos" (para no mezclarla si luego conectas otra cuenta).')) return;
   try {
     const r = await api('/auth/gmail', { method: 'DELETE' });
     if (r?.ok === false) return toast('Error', 'err');
