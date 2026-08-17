@@ -2311,6 +2311,19 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <button class="btn btn-secondary" onclick="organizarCorreosConAlejandra()">🏷️ Organizar con Alejandra</button>
             <button class="btn btn-primary" onclick="abrirComposeCorreo()">✏️ Redactar</button>
           </div>
+          <!-- CORREOS-PANEL-01-v3 (17/08/2026): Adrián -- selección múltiple con acciones
+               en bloque. Oculta salvo que haya al menos un correo marcado. -->
+          <div id="correosBarraSeleccion" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:13px">
+            <span id="correosNumSeleccionados"></span>
+            <button class="btn btn-secondary btn-sm" onclick="categorizarSeleccionados()">🏷️ Categorizar</button>
+            <button class="btn btn-secondary btn-sm" onclick="archivarSeleccionados()">🗄️ Archivar</button>
+            <button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="borrarSeleccionados()">🗑️ Borrar</button>
+            <button class="btn btn-secondary btn-sm" onclick="_correosDeseleccionarTodos()">✕ Deseleccionar</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px" id="correosSelectorTodos">
+            <input type="checkbox" id="correosCheckTodos" onchange="_correosSeleccionarTodos(this.checked)">
+            <label for="correosCheckTodos" style="font-size:12px;color:var(--muted);cursor:pointer">Seleccionar todos</label>
+          </div>
           <div id="correosList" style="display:flex;flex-direction:column;gap:8px"></div>
           <div id="correosVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
             📧 Sin correos todavía.<br><small>Pulsa "🔄 Sincronizar" para traer los últimos de tu Gmail.</small>
@@ -22374,14 +22387,78 @@ function _correosExtraerEmail(de) {
   return (m ? m[1] : de || '').trim();
 }
 
+let _correosSeleccionados = new Set();
+
+function _correosActualizarBarraSeleccion() {
+  const n = _correosSeleccionados.size;
+  const barra = document.getElementById('correosBarraSeleccion');
+  barra.style.display = n ? 'flex' : 'none';
+  document.getElementById('correosNumSeleccionados').textContent = `${n} correo${n === 1 ? '' : 's'} seleccionado${n === 1 ? '' : 's'}`;
+}
+
+function _correosToggleSeleccion(gmailId, marcado) {
+  if (marcado) _correosSeleccionados.add(gmailId); else _correosSeleccionados.delete(gmailId);
+  _correosActualizarBarraSeleccion();
+}
+
+function _correosSeleccionarTodos(marcado) {
+  const filtro = document.getElementById('filterCorreoCategoria').value;
+  const lista = filtro ? _correosData.filter(m => m.categoria_app === filtro) : _correosData;
+  _correosSeleccionados = marcado ? new Set(lista.map(m => m.gmail_id)) : new Set();
+  _correosRenderLista();
+}
+
+function _correosDeseleccionarTodos() {
+  _correosSeleccionados = new Set();
+  document.getElementById('correosCheckTodos').checked = false;
+  _correosRenderLista();
+}
+
+async function categorizarSeleccionados() {
+  const categoria = prompt(`Categoría para ${_correosSeleccionados.size} correo(s) (déjalo vacío para quitarla):`, '');
+  if (categoria === null) return;
+  for (const id of _correosSeleccionados) {
+    await api(`/correos/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ categoria_app: categoria.trim() || null }) });
+  }
+  toast(`✅ ${_correosSeleccionados.size} correo(s) categorizados`, 'ok');
+  _correosSeleccionados = new Set();
+  cargarCorreosPanel();
+}
+
+async function archivarSeleccionados() {
+  const n = _correosSeleccionados.size;
+  if (!confirm(`¿Archivar ${n} correo(s)? Solo se quitan de esta vista, no se toca tu Gmail real.`)) return;
+  for (const id of _correosSeleccionados) {
+    await api(`/correos/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ archivado: true }) });
+  }
+  toast(`🗄️ ${n} correo(s) archivados`, 'ok');
+  _correosSeleccionados = new Set();
+  cargarCorreosPanel();
+}
+
+async function borrarSeleccionados() {
+  const n = _correosSeleccionados.size;
+  if (!confirm(`¿Borrar ${n} correo(s) de la lista? Tu correo real en Gmail NO se toca -- si vuelves a pulsar "Sincronizar" pueden volver a aparecer. Esta acción no se puede deshacer desde aquí.`)) return;
+  for (const id of _correosSeleccionados) {
+    await api(`/correos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  toast(`🗑️ ${n} correo(s) borrados`, 'ok');
+  _correosSeleccionados = new Set();
+  cargarCorreosPanel();
+}
+
 function _correosRenderLista() {
   const filtro = document.getElementById('filterCorreoCategoria').value;
   const lista = filtro ? _correosData.filter(m => m.categoria_app === filtro) : _correosData;
   const cont = document.getElementById('correosList');
   document.getElementById('correosVacio').style.display = lista.length ? 'none' : 'block';
+  document.getElementById('correosSelectorTodos').style.display = lista.length ? 'flex' : 'none';
+  document.getElementById('correosCheckTodos').checked = lista.length > 0 && lista.every(m => _correosSeleccionados.has(m.gmail_id));
+  _correosActualizarBarraSeleccion();
   cont.innerHTML = lista.map(m => `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;${m.leido_app ? 'opacity:.65' : ''}">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;${m.leido_app ? 'opacity:.65' : ''}${_correosSeleccionados.has(m.gmail_id) ? ';outline:2px solid var(--accent)' : ''}">
       <div style="display:flex;align-items:flex-start;gap:10px">
+        <input type="checkbox" ${_correosSeleccionados.has(m.gmail_id) ? 'checked' : ''} onchange="_correosToggleSeleccion('${escHtml(m.gmail_id)}', this.checked)" style="margin-top:4px;cursor:pointer">
         <span onclick="alternarLeidoCorreo('${escHtml(m.gmail_id)}', ${m.leido_app ? 'false' : 'true'})" title="${m.leido_app ? 'Marcar no leído' : 'Marcar leído'}" style="cursor:pointer;font-size:10px;color:${m.leido_app ? 'var(--muted)' : 'var(--accent)'};margin-top:4px">●</span>
         <div style="flex:1;min-width:0">
           <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
