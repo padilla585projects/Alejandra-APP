@@ -4,6 +4,22 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-17, noche)
+
+- **TELECOM-NAV-01 (hardening pre-datos-reales):** Adrián, antes de empezar a meter datos
+  reales en Racks/Cableado: "no puede fallar". Auditoría completa del módulo (backend +
+  los dos frontends): `puedeEliminarTelecom()` era idéntico a `puedeEditarTelecom()` —
+  cualquier usuario del departamento telecom podía borrar IDF/rack/patch panel/cuadro por
+  API directa, aunque los dos frontends ya ocultaban el botón a todos menos a los roles
+  responsables (el propio comentario del código decía esa intención, sin implementarla).
+  Alineado con la lista de roles que ya exigían `_telecomOfficePuedeEliminar()`/
+  `_telecomPuedeEliminar()`. Además, ni el nombre de IDF/rack/patch panel/cuadro ni los
+  campos de un puerto tenían límite de longitud (a diferencia del resto de campos del
+  módulo) — alineado a 160/1000 caracteres, backend y frontend. Confirmación de borrado de
+  patch panel/cuadro ahora avisa cuántos puertos tienen datos reales antes de confirmar.
+  Verificado en producción con un usuario de prueba operario/telecom real (DELETE → 403;
+  con empresa_admin → 200; nombre/destino de 200 caracteres → 400).
+
 ### Added (2026-08-17)
 
 - **CORREOS-PANEL-01:** página nueva "📧 Mis Correos" en `panel.html` — sincroniza el Gmail

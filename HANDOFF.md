@@ -145,6 +145,57 @@
   run verificado en verde.
 - Sin pendientes de esta ronda.
 
+## TELECOM-NAV-01: hardening completo antes de datos reales (2026-08-17, noche)
+
+- Contexto: al pedirle repasar la sección de "Racks en Control" (lapsus por Telecom, ya
+  arreglado en la ronda anterior), Adrián escaló el alcance: "necesito que esté al 100%
+  porque vamos a empezar a meter datos de verdad y no puede fallar. además tiene que ser
+  fácil el poder manejarla y hacer todo el flujo. a ver si lo podemos hacer más
+  profesional". Auditoría completa del módulo `/telecom/*` en `worker.js` (los 22 handlers,
+  leídos enteros) y los dos frontends, buscando huecos de integridad de datos y de permisos
+  antes de que entren datos de producción reales.
+- **Brecha de permisos real (backend):** `puedeEliminarTelecom(auth)` era literalmente
+  `return puedeVerTelecom(auth)` — idéntico a `puedeEditarTelecom`. El propio comentario del
+  código decía "los borrados completos se reservan a responsables para evitar pérdidas",
+  pero esa restricción NUNCA estaba implementada en el servidor — solo en la UI
+  (`_telecomOfficePuedeEliminar()` en `panel.html` / `_telecomPuedeEliminar()` en
+  `index.html`, idéntica lista de roles en ambos: oficina, empresa_admin, superadmin,
+  desarrollador, encargado, jefe_de_obra, project_manager). Cualquier usuario del
+  departamento telecom con rol `operario` podía borrar cualquier IDF/rack/patch
+  panel/cuadro llamando directamente a la API, sin pasar por la UI. Corregido: el backend
+  ahora exige uno de esos mismos roles (usando los flags `is*` que ya expone `getAuth()`),
+  además de pertenecer a telecom.
+- **Sin límite de longitud en varios campos:** el patch panel ya validaba longitud de
+  `red_vlan`/`switch_asociado`/`subred`/`posicion_u`/`marca`/`notas_config`, pero no de su
+  propio `nombre`. IDF/rack/cuadro no validaban `nombre`/`ubicación`/`notas` en absoluto.
+  Los campos de un puerto (`destino`/`cable_label`/`categoria`/`notas`, en
+  `editarTelecomPuerto` y `editarTelecomCuadroPuerto`) no tenían ningún límite. Alineado
+  todo a 160 caracteres (campos cortos) / 1000 (notas), mismo criterio que ya usaba el
+  patch panel — backend (validación real) y frontend (`maxlength` en los inputs, para que
+  el usuario vea el límite antes de que el backend lo rechace).
+- **Confirmación de borrado reforzada:** borrar un patch panel o un cuadro de campo con un
+  solo `confirm()` genérico ("¿Eliminar este patch panel y todos sus puertos?") es fácil de
+  pulsar sin pensar con datos reales delante. Ahora, si el elemento tiene puertos con datos
+  (`ocupados > 0`, ya calculado por SQL en el listado), el mensaje avisa del número exacto
+  antes de confirmar — en los dos frontends.
+- **Verificación end-to-end en producción**, no solo lectura de código: usuario de prueba
+  real creado (`POST /usuarios`, rol `operario`, departamento `telecom`, obra 14, empresa
+  demo) — creó un IDF sin problema (`puedeEditarTelecom` sigue abierto a todo telecom,
+  correcto), intentó borrarlo y recibió `403 {"error":"No autorizado"}`; el mismo `DELETE`
+  con la cuenta `empresa_admin` de prueba devolvió `200 {"ok":true}`. Validación de
+  longitud probada con un nombre de IDF de 200 caracteres (`400`) y con datos normales
+  (`200`), tanto para IDF como para un puerto real (IDF→rack→patch panel→puerto creados y
+  borrados en la misma prueba). Usuario y datos de prueba borrados al terminar; sin rastro
+  en producción.
+- Desplegado: `worker.js` vía `wrangler deploy` (verificado `/health`) y
+  `panel.html`/`index.html` vía `pages.yml` (SHA `1f5572ac1cfb3c22edf2b3fbd44e8942e1041931`,
+  run verificado en verde), y reconfirmado en producción tras el deploy que el modal de
+  Nueva entidad ya aplica `maxlength=160` en Nombre/Ubicación.
+- Sin pendientes de esta ronda. Nota para más adelante, no pedida por Adrián: el
+  breadcrumb solo muestra un nivel "← Volver", no la ruta completa (IDF › Rack › Módulo) —
+  quedó fuera de alcance de esta ronda de integridad/permisos, es una mejora de UX
+  cosmética si se quiere retomar "más profesional" más allá de lo ya hecho.
+
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 
 Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +

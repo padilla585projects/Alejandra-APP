@@ -24,6 +24,14 @@ usuario a la lista de IDFs al guardar un puerto en vez de a la vista de Puertos 
 venía. Sin pendientes de esta ronda. Detalle en
 `PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
 
+**TELECOM-NAV-01, hardening antes de datos reales (2026-08-17, noche):** Adrián: "vamos a
+empezar a meter datos de verdad y no puede fallar" — auditoría completa del módulo (backend
++ los dos frontends). Cerrada una brecha real: el backend permitía borrar por API a
+cualquier usuario de telecom aunque ambos frontends ya restringían el botón a roles
+responsables. Nombre y campos de puerto sin límite de longitud, alineados. Confirmación de
+borrado con conteo de puertos ocupados. Verificado en producción con un usuario de prueba
+real. Sin pendientes.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda

@@ -40,6 +40,13 @@ usuario con Gmail conectado, no solo Adrián.
 - **TELECOM-NAV-01 (2026-08-17):** en Racks/Cableado (`panel.html`), modales sin padding
   interior + auto-refresh de 60s que reseteaba la navegación al guardar un puerto (volvía a
   la lista de IDFs en vez de a Puertos). Corregido, desplegado y verificado en vivo.
+- **TELECOM-NAV-01, hardening (2026-08-17, noche):** Adrián, antes de meter datos reales:
+  "no puede fallar". Auditoría del módulo completo — el backend permitía borrar por API a
+  cualquier usuario de telecom aunque la UI restringiera el botón a roles responsables
+  (cerrado, alineado a la misma lista de roles en los dos frontends); nombre y campos de
+  puerto sin límite de longitud (alineado a 160/1000, backend+frontend); confirmación de
+  borrado de patch panel/cuadro ahora avisa cuántos puertos tienen datos. Verificado en
+  producción con un usuario de prueba real.
 - Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
   Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
   "Organizar con Alejandra", y enviar un correo de prueba real.

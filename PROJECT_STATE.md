@@ -29,6 +29,17 @@
   IDFs en vez de a la vista de Puertos. Los dos corregidos, desplegados y verificados en
   vivo contra producción con datos de prueba (creados y borrados en la misma sesión).
   Detalle completo en `HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
+- Estado (2026-08-17, noche): **TELECOM-NAV-01, ronda de hardening antes de datos reales.**
+  Adrián: "vamos a empezar a meter datos de verdad y no puede fallar". Auditoría del módulo
+  Racks/Cableado completo (backend + los dos frontends): el backend permitía borrar
+  IDF/rack/patch panel/cuadro por API a cualquier usuario del departamento telecom, aunque
+  ambos frontends ya restringían el botón a roles responsables — cerrado, alineando el
+  backend con esa misma lista de roles. Nombre y campos de puerto sin límite de longitud
+  (a diferencia del resto de campos del módulo) — alineados a 160/1000 caracteres, backend
+  y frontend. Confirmación de borrado de patch panel/cuadro ahora avisa cuántos puertos
+  tienen datos reales antes de confirmar. Verificado en producción con un usuario de
+  prueba operario/telecom real (DELETE bloqueado con 403; con rol autorizado, 200; nombre
+  de 200 caracteres rechazado con 400). Sin pendientes.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos
