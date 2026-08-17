@@ -833,9 +833,22 @@ function _concat(...arrays) {
   for (const a of arrays) { out.set(a, off); off += a.length; }
   return out;
 }
+// BUGFIX (17/08/2026): Adrián probando en vivo "Redactar correo" -- "Error interno:
+// Maximum call stack size exceeded" al enviar. Causa real: String.fromCharCode(...array)
+// con spread revienta el límite de argumentos del motor JS (~65k-100k) para arrays
+// grandes -- hasta ahora _b64u() solo se usaba con datos pequeños (IVs, cabeceras/payload
+// de un JWT, claves VAPID), nunca se había topado con esto. internalGmailEnviar() sí le
+// pasa el mensaje MIME completo (cuerpo + adjuntos en base64) -- cualquier adjunto de más
+// de un par de cientos de KB ya lo dispara. Se trocea en bloques de 8KB para no volver a
+// tropezar con el límite, sin cambiar el resultado para los usos pequeños que ya existían.
 function _b64u(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer || buf)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  const bytes = new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer || buf);
+  let bin = '';
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 function _fromb64u(s) {
   const b = s.replace(/-/g, '+').replace(/_/g, '/');
