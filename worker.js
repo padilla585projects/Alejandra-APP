@@ -7898,7 +7898,11 @@ async function getTelecomIdf(request, env) {
   if (!puedeVerTelecom(auth)) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : null;
-  let sql = `SELECT i.*, o.nombre AS obra_nombre
+  // TELECOM-NAV-01 (17/08/2026): Adrián pidió "más profesional" -- se ve de un vistazo
+  // cuántos racks tiene cada IDF sin entrar, mismo criterio que ya usaba el nivel de
+  // módulos con sus puertos (ocupados/libres).
+  let sql = `SELECT i.*, o.nombre AS obra_nombre,
+             (SELECT COUNT(*) FROM telecom_racks r WHERE r.idf_id = i.id AND r.empresa_id = i.empresa_id) AS num_racks
              FROM telecom_idf i
              INNER JOIN obras o ON o.id = i.obra_id AND o.empresa_id = i.empresa_id
              WHERE i.empresa_id = ?`;
@@ -7986,7 +7990,9 @@ async function getTelecomRacks(request, env) {
   if (!idfId) return err('Falta idf_id');
   if (!(await telecomGetIdf(auth, env, idfId))) return err('IDF no encontrado', 404);
   const { results } = await env.DB.prepare(
-    'SELECT * FROM telecom_racks WHERE idf_id = ? AND empresa_id = ? ORDER BY nombre'
+    `SELECT r.*,
+     (SELECT COUNT(*) FROM telecom_patch_panels pp WHERE pp.rack_id = r.id AND pp.empresa_id = r.empresa_id) AS num_modulos
+     FROM telecom_racks r WHERE r.idf_id = ? AND r.empresa_id = ? ORDER BY r.nombre`
   ).bind(idfId, auth.empresa_id).all();
   return json(results);
 }

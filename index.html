@@ -18364,11 +18364,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         : 'Selecciona una obra en la cabecera para crear su primer IDF.'}</div>`;
       return;
     }
-    el.innerHTML = list.map(i => _telecomItemHTML(
-      i.id, '📍 ' + _escHtml(i.nombre),
-      _escHtml([i.obra_nombre, i.ubicacion].filter(Boolean).join(' · ')),
-      `telecomAbrirIdf(${Number(i.id)})`, 'idf'
-    )).join('');
+    el.innerHTML = list.map(i => {
+      const nRacks = Number(i.num_racks) || 0;
+      const sub = [i.obra_nombre, i.ubicacion, `${nRacks} rack${nRacks === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+      return _telecomItemHTML(i.id, '📍 ' + _escHtml(i.nombre), _escHtml(sub), `telecomAbrirIdf(${Number(i.id)})`, 'idf');
+    }).join('');
   }
 
   // ORG-INFORME-04 (31/07/2026): botón fijo de la cabecera (telecomInformeTopBtn) — con un
@@ -18409,7 +18409,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     telecomCargarNivel('/telecom/racks?idf_id=' + id, (list) => {
       _telecomCache.rack = list;
       el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()') + (list.length
-        ? list.map(r => _telecomItemHTML(r.id, '🗄️ ' + _escHtml(r.nombre), _escHtml(r.notas || ''), `telecomAbrirRack(${Number(r.id)})`, 'rack')).join('')
+        ? list.map(r => {
+            const nMod = Number(r.num_modulos) || 0;
+            const sub = [`${nMod} módulo${nMod === 1 ? '' : 's'}`, r.notas].filter(Boolean).join(' · ');
+            return _telecomItemHTML(r.id, '🗄️ ' + _escHtml(r.nombre), _escHtml(sub), `telecomAbrirRack(${Number(r.id)})`, 'rack');
+          }).join('')
         : '<div class="empty-state">Sin racks en este IDF. Pulsa "+ Nuevo Rack".</div>');
     });
   }
@@ -18440,7 +18444,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
               ].filter(Boolean).join(' · ');
               const resumen = `<span style="color:#22c55e;font-weight:800">${ocupados} ocupados</span> · <span style="color:#60a5fa;font-weight:800">${libres} libres</span>`;
               const subtitulo = `${Number(p.num_puertos)} puertos · ${resumen}${tecnico ? `<div style="margin-top:4px;color:var(--text);font-weight:600">${tecnico}</div>` : ''}`;
-              return _telecomItemHTML(p.id, '🔌 ' + _escHtml(p.nombre), subtitulo, `telecomAbrirPP(${Number(p.id)})`, 'pp');
+              const iconoTipo = { cobre:'🔌', fibra:'🧵', switch:'🖧' }[p.tipo] || '🔌';
+              return _telecomItemHTML(p.id, iconoTipo + ' ' + _escHtml(p.nombre), subtitulo, `telecomAbrirPP(${Number(p.id)})`, 'pp');
             }).join('')
           : '<div class="empty-state">Sin patch panels en este rack. Pulsa "+ Nuevo Patch Panel".</div>');
     });
@@ -18452,7 +18457,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!item) return;
     _telecomNivel = 'puertos';
     _telecomCtx.pp_id = id; _telecomCtx.pp_nombre = item.nombre;
-    document.getElementById('telecomBreadcrumb').textContent = '🔌 ' + item.nombre;
+    const iconoTipoPuerto = { cobre:'🔌', fibra:'🧵', switch:'🖧' }[item.tipo] || '🔌';
+    document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + _telecomCtx.idf_nombre + ' › ' + _telecomCtx.rack_nombre + ' › ' + iconoTipoPuerto + ' ' + item.nombre;
     document.getElementById('telecomAddBtn').style.display = 'none';
     const el = document.getElementById('telecomContent');
     el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${Number(_telecomCtx.rack_id)})`);
@@ -18881,8 +18887,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     .tick{flex:1;border-radius:1px;background:var(--line)}
     .tick.on{background:var(--accent)}
     .rack-slot-count{font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:10.5px;color:var(--ink-mute);font-variant-numeric:tabular-nums;flex:0 0 auto;width:38px;text-align:right}
-    .port-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin:0 0 16px}
-    .pg-cell{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:9.5px;font-variant-numeric:tabular-nums}
+    .port-grid{display:grid;grid-template-columns:repeat(auto-fill,26px);gap:3px;margin:0 0 16px}
+    .pg-cell{width:26px;height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:8.5px;font-variant-numeric:tabular-nums}
     .pg-cell.on{background:var(--accent);color:#fff;font-weight:700}
     .pg-cell.off{background:#fff;border:1px solid var(--line);color:var(--ink-mute)}
     .rack-section{margin-bottom:44px}

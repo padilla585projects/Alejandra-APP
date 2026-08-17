@@ -12187,11 +12187,11 @@ async function telecomOfficeCargarIdfs() {
       cont.innerHTML = `<div class="empty-state">${obraId ? 'Sin IDFs en esta obra.' : 'No hay IDFs registrados en las obras disponibles.'}</div>`;
       return;
     }
-    cont.innerHTML = _telecomOfficeCache.idf.map(i => _telecomOfficeFila(
-      'idf', i, '📍 ' + escHtml(i.nombre),
-      escHtml([i.obra_nombre, i.ubicacion].filter(Boolean).join(' · ')),
-      `telecomOfficeAbrirIdf(${Number(i.id)})`
-    )).join('');
+    cont.innerHTML = _telecomOfficeCache.idf.map(i => {
+      const nRacks = Number(i.num_racks) || 0;
+      const sub = [i.obra_nombre, i.ubicacion, `${nRacks} rack${nRacks === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+      return _telecomOfficeFila('idf', i, '📍 ' + escHtml(i.nombre), escHtml(sub), `telecomOfficeAbrirIdf(${Number(i.id)})`);
+    }).join('');
   } catch (e) {
     cont.innerHTML = `<div class="empty-state">❌ ${escHtml(e.message)}</div>`;
   }
@@ -12237,7 +12237,11 @@ async function telecomOfficeAbrirIdf(id) {
     const list = await _telecomOfficeApi('/telecom/racks?idf_id=' + Number(id));
     _telecomOfficeCache.rack = Array.isArray(list) ? list : [];
     cont.innerHTML = _telecomOfficeCache.rack.length
-      ? _telecomOfficeCache.rack.map(r => _telecomOfficeFila('rack', r, '🗄️ ' + escHtml(r.nombre), escHtml(r.notas || ''), `telecomOfficeAbrirRack(${Number(r.id)})`)).join('')
+      ? _telecomOfficeCache.rack.map(r => {
+          const nMod = Number(r.num_modulos) || 0;
+          const sub = [`${nMod} módulo${nMod === 1 ? '' : 's'}`, r.notas].filter(Boolean).join(' · ');
+          return _telecomOfficeFila('rack', r, '🗄️ ' + escHtml(r.nombre), escHtml(sub), `telecomOfficeAbrirRack(${Number(r.id)})`);
+        }).join('')
       : '<div class="empty-state">Sin racks en este IDF.</div>';
   } catch (e) { cont.innerHTML = `<div class="empty-state">❌ ${escHtml(e.message)}</div>`; }
 }
@@ -12265,7 +12269,8 @@ async function telecomOfficeAbrirRack(id) {
           const tecnico = [p.red_vlan, p.switch_asociado, p.subred, p.posicion_u].filter(Boolean).map(escHtml).join(' · ');
           const resumen = `${Number(p.num_puertos)} puertos · <span style="color:#22c55e;font-weight:800">${ocupados} ocupados</span> · <span style="color:#60a5fa;font-weight:800">${libres} libres</span>`;
           const subtitulo = `${resumen}${tecnico ? `<div style="margin-top:4px;color:var(--text);font-weight:600">${tecnico}</div>` : ''}`;
-          return _telecomOfficeFila('pp', p, '🔌 ' + escHtml(p.nombre), subtitulo, `telecomOfficeAbrirPP(${Number(p.id)})`);
+          const iconoTipo = { cobre:'🔌', fibra:'🧵', switch:'🖧' }[p.tipo] || '🔌';
+          return _telecomOfficeFila('pp', p, iconoTipo + ' ' + escHtml(p.nombre), subtitulo, `telecomOfficeAbrirPP(${Number(p.id)})`);
         }).join('')
       : '<div class="empty-state">Sin patch panels en este rack.</div>');
   } catch (e) { cont.innerHTML = `<div class="empty-state">❌ ${escHtml(e.message)}</div>`; }
@@ -12278,9 +12283,10 @@ async function telecomOfficeAbrirPP(id) {
   _telecomOfficeCtx.pp_id = Number(id);
   _telecomOfficeCtx.pp_nombre = item.nombre;
   document.getElementById('telecomOfficeNuevoBtn').disabled = true;
+  const iconoTipoPuerto = { cobre:'🔌', fibra:'🧵', switch:'🖧' }[item.tipo] || '🔌';
   document.getElementById('telecomOfficeBreadcrumb').innerHTML =
     _telecomOfficeBtnVolver(`telecomOfficeAbrirRack(${Number(_telecomOfficeCtx.rack_id)})`,'Patch panels') +
-    `<span>🔌 ${escHtml(item.nombre)}</span>`;
+    `<span>🗄️ ${escHtml(_telecomOfficeCtx.idf_nombre)} › ${escHtml(_telecomOfficeCtx.rack_nombre)} › ${iconoTipoPuerto} ${escHtml(item.nombre)}</span>`;
   const cont = document.getElementById('telecomOfficeContent');
   cont.innerHTML = '<div class="empty-state">Cargando…</div>';
   try {
@@ -12655,8 +12661,8 @@ const _TELECOM_OFFICE_INFORME_CSS = `
   .tick{flex:1;border-radius:1px;background:var(--line)}
   .tick.on{background:var(--accent)}
   .rack-slot-count{font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:10.5px;color:var(--ink-mute);font-variant-numeric:tabular-nums;flex:0 0 auto;width:38px;text-align:right}
-  .port-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin:0 0 16px}
-  .pg-cell{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:9.5px;font-variant-numeric:tabular-nums}
+  .port-grid{display:grid;grid-template-columns:repeat(auto-fill,26px);gap:3px;margin:0 0 16px}
+  .pg-cell{width:26px;height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,"SFMono-Regular","JetBrains Mono",Consolas,"Roboto Mono",monospace;font-size:8.5px;font-variant-numeric:tabular-nums}
   .pg-cell.on{background:var(--accent);color:#fff;font-weight:700}
   .pg-cell.off{background:#fff;border:1px solid var(--line);color:var(--ink-mute)}
   .rack-section{margin-bottom:44px}
