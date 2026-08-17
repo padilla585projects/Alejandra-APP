@@ -1955,7 +1955,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
       <div class="modal-overlay" id="modalTelecomOfficeEntidad" style="display:none" onclick="if(event.target===this)telecomOfficeCerrarModal()">
         <div class="modal" style="max-width:520px">
-          <div class="modal-title" id="telecomOfficeModalTitulo">Nuevo IDF</div>
+          <div class="modal-header">
+            <div class="modal-title" id="telecomOfficeModalTitulo">Nuevo IDF</div>
+            <button class="modal-close" onclick="telecomOfficeCerrarModal()">✕</button>
+          </div>
+          <div class="modal-body">
           <div class="form-group">
             <label id="telecomOfficeLabelNombre">Nombre *</label>
             <input class="form-input" id="telecomOfficeNombre" type="text" placeholder="Ej: IDF Planta 1">
@@ -2027,7 +2031,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <textarea class="form-input" id="telecomOfficeCuadroNotas" rows="3" maxlength="1000"></textarea>
             </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:16px">
+          </div>
+          <div class="modal-footer">
             <button class="btn btn-secondary" style="flex:1" onclick="telecomOfficeCerrarModal()">Cancelar</button>
             <button class="btn btn-primary" style="flex:1" id="telecomOfficeGuardarBtn" onclick="telecomOfficeGuardarEntidad()">Guardar</button>
           </div>
@@ -2036,7 +2041,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
       <div class="modal-overlay" id="modalTelecomOfficePuerto" style="display:none" onclick="if(event.target===this)telecomOfficeCerrarPuerto()">
         <div class="modal" style="max-width:560px">
-          <div class="modal-title" id="telecomOfficePuertoTitulo">Puerto</div>
+          <div class="modal-header">
+            <div class="modal-title" id="telecomOfficePuertoTitulo">Puerto</div>
+            <button class="modal-close" onclick="telecomOfficeCerrarPuerto()">✕</button>
+          </div>
+          <div class="modal-body">
           <div class="form-grid">
             <div class="form-group">
               <label>Destino (sala/puesto)</label>
@@ -2063,7 +2072,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <textarea class="form-input" id="telecomOfficePuertoNotas" rows="3"></textarea>
             </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:16px">
+          </div>
+          <div class="modal-footer">
             <button class="btn btn-secondary" onclick="telecomOfficeVaciarPuerto()">Vaciar</button>
             <button class="btn btn-secondary" style="flex:1" onclick="telecomOfficeCerrarPuerto()">Cancelar</button>
             <button class="btn btn-primary" style="flex:1" onclick="telecomOfficeGuardarPuerto()">Guardar</button>
@@ -12124,6 +12134,14 @@ function _telecomOfficeFila(tipo, item, titulo, subtitulo, abrir, extraBtn) {
 async function telecomOfficeCargar() {
   const sel = document.getElementById('telecomOfficeObra');
   if (!sel) return;
+  // TELECOM-NAV-01 (17/08/2026): Adrián -- "al darle a guardar me devuelve a la pagina de
+  // Racks en vez de volver a la pagina de puertos que es donde estaba antes". El auto-refresh
+  // de 60s de esta página (SYNC_INTERVALS.telecomRacks) llamaba siempre a esta función, que
+  // reseteaba nivel/contexto a la lista de IDFs sin mirar dónde estaba el usuario. Mismo
+  // criterio que SYNC-INV-01 en index.html: no interrumpir un formulario a medio rellenar.
+  const modalEntidadAbierto = document.getElementById('modalTelecomOfficeEntidad')?.style.display === 'flex';
+  const modalPuertoAbierto = document.getElementById('modalTelecomOfficePuerto')?.style.display === 'flex';
+  if (modalEntidadAbierto || modalPuertoAbierto) return;
   let obras = Array.isArray(window._obrasPanel) ? window._obrasPanel : [];
   if (!obras.length && _telecomOfficeRoles().some(r => ['superadmin','empresa_admin','desarrollador','jefe_de_obra'].includes(r))) {
     try {
@@ -12137,6 +12155,11 @@ async function telecomOfficeCargar() {
   sel.innerHTML = '<option value="">🏗 Todas las obras</option>' +
     obras.map(o => `<option value="${Number(o.id)}">${escHtml(o.nombre)}</option>`).join('');
   if (actual && obras.some(o => String(o.id) === String(actual))) sel.value = actual;
+  if (_telecomOfficeNivel === 'rack' && _telecomOfficeCtx.idf_id) return telecomOfficeAbrirIdf(_telecomOfficeCtx.idf_id);
+  if (_telecomOfficeNivel === 'pp' && _telecomOfficeCtx.rack_id) return telecomOfficeAbrirRack(_telecomOfficeCtx.rack_id);
+  if (_telecomOfficeNivel === 'puertos' && _telecomOfficeCtx.pp_id) return telecomOfficeAbrirPP(_telecomOfficeCtx.pp_id);
+  if (_telecomOfficeNivel === 'cuadros') return telecomOfficeCargarCuadros();
+  if (_telecomOfficeNivel === 'cuadro-puertos' && _telecomOfficeCtx.cuadro_id) return telecomOfficeAbrirCuadro(_telecomOfficeCtx.cuadro_id);
   await telecomOfficeCargarIdfs();
 }
 
