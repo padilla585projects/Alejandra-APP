@@ -4,6 +4,16 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**CORREOS-PANEL-01 completada, desplegada y verificada (2026-08-17):** panel de correos por
+usuario en `panel.html` (sincroniza Gmail real, categoriza dentro de la app, redacta/envía),
+planificado con `EnterPlanMode` antes de tocar código. De paso, `BUGFIX-CACHE-PROMPT-01`
+(bug real de caché de prompts + fuga parcial de detalle técnico en `delegar_tarea`,
+encontrado corrigiendo un diagnóstico erróneo de la propia Alejandra) y dos pendientes
+antiguos cerrados (informe de fichajes imprimible, Almacén viendo material de todos los
+departamentos en el móvil). **Pendiente: que Adrián pruebe en vivo la sincronización real
+de su Gmail** — no lo pude probar yo con datos reales. Detalle en
+`PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda

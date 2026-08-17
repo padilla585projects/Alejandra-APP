@@ -1,6 +1,18 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-14, mediodía
+- Actualizado: 2026-08-17
+- Estado (2026-08-17): **CORREOS-PANEL-01 completada, desplegada y verificada — pendiente
+  solo que Adrián pruebe en vivo la sincronización real con su Gmail** (planificada con
+  `EnterPlanMode`/`AskUserQuestion` antes de tocar código: sin permisos nuevos de Google,
+  "organizar" es una categoría propia de la app; pensada para cualquier usuario con Gmail
+  conectado). De paso, **`BUGFIX-CACHE-PROMPT-01`**: bug real encontrado investigando un
+  aviso de Anthropic sobre baja tasa de acierto de caché de prompts que Alejandra había
+  diagnosticado mal — dentro del bucle de `delegar_tarea`, la 2ª+ llamada a Anthropic
+  perdía la regla de `esDevVerificado` (rompía el caché Y reabría parcialmente una fuga de
+  detalle técnico cerrada esta misma sesión). Cerrados también dos pendientes antiguos:
+  informe de fichajes imprimible (`INFORMES-FICHAJES-01`) y Almacén viendo material de
+  todos los departamentos desde el móvil (`ALMACEN-FILTRO-MOVIL-01`). Detalle completo en
+  `HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos

@@ -4,6 +4,29 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-17)
+
+- **CORREOS-PANEL-01:** página nueva "📧 Mis Correos" en `panel.html` — sincroniza el Gmail
+  real del usuario (caché nueva en D1, `gmail_mensajes_cache`), filtra por categoría, marca
+  leído/categoriza por correo (dentro de la app, sin permisos nuevos de Google — nunca toca
+  el Gmail real), redacta y envía, y "Organizar con Alejandra" delega en el chat real. Nueva
+  tool `categorizar_correos` del ayudante "correos".
+- **INFORMES-FICHAJES-01:** informe de fichajes imprimible (horas por día/semana/mes,
+  agregado en JS sobre `horas_trabajadas`/`horas_extra`, ya calculadas al crear cada
+  fichaje). Botón "📊 Informe" en Fichajes de `panel.html`.
+- **ALMACEN-FILTRO-MOVIL-01:** Almacén ve el material de todos los departamentos desde el
+  móvil, mismo criterio que ya tenía `panel.html` — filtro opcional por departamento.
+
+### Fixed (2026-08-17)
+
+- **BUGFIX-CACHE-PROMPT-01:** dentro del bucle de `tool_use` de `delegar_tarea`, la 2ª+
+  llamada a `llamarAnthropic()` usaba `ayudante.systemPrompt` en vez de `promptAyudante`
+  (con la regla `esDevVerificado`) — rompía el caché de prompts de Anthropic entre llamadas
+  de la misma delegación y reabría parcialmente la fuga de detalle técnico que cerró
+  `AYUDANTE-DETALLE-TECNICO-01`. Encontrado investigando una afirmación de Alejandra al
+  usuario que resultó ser falsa (dijo que faltaba `cache_control`, cuando ya estaba bien
+  aplicado en los dos Workers). Fix de una línea, 207/207 tests.
+
 ### Added (2026-08-13/14)
 
 - **COMPAT-CAE-01:** Adrián — "tenemos otra app [Nalanda] que gestiona documentación de

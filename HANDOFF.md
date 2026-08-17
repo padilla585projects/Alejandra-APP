@@ -1,5 +1,68 @@
 # Handoff — Alejandra 2.0
 
+## CORREOS-PANEL-01 — Panel de Correos por usuario + bug de caché de prompts (2026-08-17)
+
+- Contexto: sesión que arrancó confirmando en vivo que Gmail ya funciona (F6.1-AYUDANTES-
+  CORREOS cerrado), cerró dos pendientes antiguos (informe de fichajes imprimible,
+  Almacén viendo material de todos los departamentos en el móvil), y Adrián pegó una
+  conversación real donde pedía "un panel para correos por usuario, donde alejandra pueda
+  organizarlos y escribir y lo que sea" — planificado con `EnterPlanMode` antes de tocar
+  código (plan guardado en `C:\Users\Adrian\.claude\plans\radiant-moseying-diffie.md`).
+- **Decisiones explícitas de Adrián (`AskUserQuestion`):** sin permisos nuevos de Google —
+  "organizar" es una categoría propia de la app (`categoria_app`), nunca toca el Gmail real
+  (archivar/etiquetas reales necesitaría `gmail.modify`, no concedido); pensado desde ya
+  para cualquier usuario con Gmail conectado, no solo Adrián (`gmail_oauth_tokens` ya es
+  por `usuario_id`).
+- **Bug real encontrado al investigar** (la conversación pegada incluía a Alejandra
+  diagnosticando mal un aviso real de Anthropic sobre baja tasa de acierto de caché de
+  prompts — dijo que probablemente faltaba `cache_control`, verificado como falso leyendo
+  el código: está bien aplicado en los dos Workers, incluido el sistema de capas L0-L4 de
+  `alejandra-agente` diseñado para esto). La causa real: dentro del bucle de iteraciones de
+  `tool_use` de `delegar_tarea` (`alejandra-agente/worker.js`), la primera llamada a
+  `llamarAnthropic()` usaba `promptAyudante` (con la regla `esDevVerificado` de
+  `AYUDANTE-DETALLE-TECNICO-01`, esta misma sesión) pero las siguientes del MISMO bucle
+  usaban `ayudante.systemPrompt` a secas — rompía el caché (contenido de sistema distinto
+  entre llamadas de una sola delegación) y reabría parcialmente la fuga de detalle técnico
+  a partir de la 2ª vuelta. Fix de una línea, 207/207 tests, desplegado y verificado
+  (`/health` → `prompt_caching:true`).
+- **Migración D1 autorizada y aplicada** (aditiva): `gmail_mensajes_cache` (`usuario_id`,
+  `gmail_id`, metadatos del correo, `leido_app`, `categoria_app` — estos dos últimos NO
+  existen en Gmail real, son propios de la app).
+- **`worker.js`**: lógica de listado de `internalGmailListar` extraída a un helper
+  compartido `_listarGmailMensajes()`. Nuevos `GET /correos` (lee solo de caché, rápido),
+  `POST /correos/sincronizar` (llama a Gmail en vivo, hace upsert conservando
+  `leido_app`/`categoria_app` de correos ya vistos), `PUT /correos/:gmailId` (actualiza
+  leído/categoría — usa `_getAuthPlano`, no `getAuth`, porque también la llama la tool
+  nueva del ayudante vía Service Binding con `X-Internal-Secret`). El envío reutiliza
+  `POST /internal/gmail/enviar` tal cual — ya soportaba sesión real directamente
+  (`_getAuthPlano` acepta tanto `X-Internal-Secret` como una sesión normal, mismo mecanismo
+  dual que ya usaba `/planos/generar`), así que no hizo falta ningún endpoint nuevo de
+  envío.
+- **`alejandra-agente/worker.js`**: nueva tool `categorizar_correos` en
+  `AYUDANTES.correos.tools` — el ayudante decide categorías razonables y las guarda vía
+  `PUT /correos/:gmailId`, nunca en el Gmail real. `systemPrompt` del ayudante ampliado con
+  esta regla. Test de `lib.test.js` que comprobaba las tools exactas del ayudante
+  actualizado (207/207 en verde).
+- **`panel.html`**: página nueva "📧 Mis Correos" (nav item en "🏠 Principal", fuera de las
+  secciones por departamento — es dato personal, no de obra/empresa). Estado sin Gmail
+  conectado con enlace a "Mi cuenta"; con Gmail: header con email + Sincronizar + Organizar
+  con Alejandra + Redactar, filtro por categoría, lista con punto leído/no-leído
+  (clic para alternar) y badge de categoría editable, modal de compose con `confirm()` +
+  `conBoton()`. "Organizar con Alejandra" reutiliza las funciones reales del chat flotante
+  (`alejandraFabAbrir()`/`alejandrInput`/`alejandrEnviar()`), no lógica nueva.
+- Verificación: contra producción real con la cuenta de prueba (sin Gmail conectado) —
+  `GET /correos` → `{conectado:false}`, 403 sin sesión, 404 en `PUT` sobre correo
+  inexistente (confirmado sin regresión tras cambiar `actualizarCorreoCache` de `getAuth` a
+  `_getAuthPlano`). Panel completo probado en local con `api()`/`fetch` interceptados:
+  estado sin conectar, lista + filtro con datos simulados, sincronizar/alternar
+  leído/categorizar mandan el payload correcto, compose llama a
+  `/internal/gmail/enviar`, "Organizar con Alejandra" abre el chat real y manda el prompt.
+  **Pendiente: que Adrián pruebe en vivo la sincronización real con su Gmail ya conectado**
+  — no tengo su sesión, no lo puedo probar yo mismo con datos reales.
+- Desplegado: los dos Workers (`worker.js` healthy, `alejandra-agente` healthy con
+  `prompt_caching:true`) y Pages (`panel.html`, confirmado en producción que la página
+  "Mis Correos" carga y muestra el estado sin conectar correctamente).
+
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 
 Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +

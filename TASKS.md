@@ -1,7 +1,41 @@
 # TASKS — Cola operativa inmediata
 
-Estado (actualizado 2026-08-14, mediodía): **No hay ninguna tarea activa, en curso ni
-bloqueada.** Sesión larga de repaso manual de la app junto a Adrián ("vamos a revisar la
+Estado (actualizado 2026-08-17): **CORREOS-PANEL-01 completada, desplegada y verificada —
+pendiente solo que Adrián pruebe en vivo la sincronización real con su Gmail** (yo no tengo
+su sesión, solo pude probar con la cuenta de prueba sin Gmail conectado). Sesión que empezó
+confirmando que la Gmail API ya funciona (F6.1-AYUDANTES-CORREOS cerrado del todo), pidió
+un informe de fichajes imprimible y que Almacén viera material de todos los departamentos
+desde el móvil (dos pendientes antiguos, ambos cerrados), y terminó con Adrián pegando una
+conversación real donde pidió "un panel para correos por usuario, donde alejandra pueda
+organizarlos y escribir" — planificado con `EnterPlanMode`/`AskUserQuestion` antes de tocar
+código, con dos decisiones explícitas: sin permisos nuevos de Google ("organizar" es una
+categoría propia de la app, nunca toca el Gmail real) y pensado desde ya para cualquier
+usuario con Gmail conectado, no solo Adrián.
+
+- **BUGFIX-CACHE-PROMPT-01**: al pedirle a Adrián que revisara un correo real de Anthropic
+  sobre baja tasa de acierto de caché de prompts, Alejandra le dijo que probablemente
+  faltaba `cache_control` en las llamadas — **falso, verificado leyendo el código**: está
+  bien aplicado en los dos Workers. La causa real, encontrada al investigar: dentro del
+  bucle de iteraciones de `tool_use` de `delegar_tarea`, la primera llamada a
+  `llamarAnthropic()` usaba `promptAyudante` (con la regla de `esDevVerificado` añadida en
+  `AYUDANTE-DETALLE-TECNICO-01` esta misma sesión) pero las llamadas siguientes del MISMO
+  bucle usaban `ayudante.systemPrompt` a secas — contenido de sistema distinto entre la 1ª y
+  la 2ª+ llamada de una sola delegación (cache miss garantizado) y, más grave, reabría
+  parcialmente la fuga de detalle técnico que cerró esa tarea (a partir de la 2ª vuelta el
+  modelo perdía la instrucción de qué puede/no puede revelar). Fix de una línea, 207/207
+  tests, desplegado.
+- **CORREOS-PANEL-01**: página nueva "📧 Mis Correos" en `panel.html` — sincroniza el Gmail
+  real (con caché en D1, `gmail_mensajes_cache`, migración aditiva autorizada), filtra por
+  categoría, marca leído/categoriza por correo (dentro de la app, nunca en Gmail real),
+  redacta y envía (reutiliza `/internal/gmail/enviar`, ya soportaba sesión real), y
+  "Organizar con Alejandra" delega en el chat real. Nueva tool `categorizar_correos` del
+  ayudante "correos" (`alejandra-agente/worker.js`). Detalle técnico completo en
+  `HANDOFF.md`.
+- Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
+  Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
+  "Organizar con Alejandra", y enviar un correo de prueba real.
+
+Estado (actualizado 2026-08-14, mediodía): Sesión larga de repaso manual de la app junto a Adrián ("vamos a revisar la
 app, tiene cosillas que arreglar" → "vamos departamento por departamento"), más varios
 bugs encontrados de paso y una ronda de peticiones nuevas sobre el Informe Semanal de
 Seguridad. Todo completado, desplegado (Pages + los dos Workers) y verificado en vivo
