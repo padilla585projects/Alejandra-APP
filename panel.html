@@ -12209,44 +12209,89 @@ function _telecomOfficeColorModulo(tipo) {
 // rack: fila de telecom_racks (id, altura_u, tipo…). modulos: patch panels de ese rack.
 // opts.compacto=true → vista de resumen en el IDF (filas finas, sin texto, sin arrastre).
 // opts.compacto=false → editor del rack (filas más altas, con nombre, arrastrable, zoom).
+// Divide el rack en tramos: huecos vacíos (comprimidos a una franja fina con su nº de U) y
+// módulos montados (con altura propia, generosa, no ligada a rowH) -- ver
+// _telecomOfficeSegmentosRack más abajo.
+function _telecomOfficeSegmentosRack(alturaU, colocados) {
+  const ordenados = [...colocados].sort((a, b) => a.pos_u_inicio - b.pos_u_inicio);
+  const segmentos = [];
+  let cursor = 1;
+  for (const m of ordenados) {
+    if (m.pos_u_inicio > cursor) segmentos.push({ tipo:'vacio', uInicio:cursor, uFin:m.pos_u_inicio - 1 });
+    const uFinModulo = m.pos_u_inicio + (Number(m.pos_u_altura) || 1) - 1;
+    segmentos.push({ tipo:'modulo', uInicio:m.pos_u_inicio, uFin:uFinModulo, modulo:m });
+    cursor = uFinModulo + 1;
+  }
+  if (cursor <= alturaU) segmentos.push({ tipo:'vacio', uInicio:cursor, uFin:alturaU });
+  return segmentos;
+}
+
 function telecomOfficeRenderElevacion(rack, modulos, opts) {
   opts = opts || {};
   const compacto = !!opts.compacto;
-  // TELECOM-ELEVACION-01, ajuste tras ver el rack real montado (18/08/2026): Adrián --
-  // "los paneles se ven muy finos deberian de verse mucho mas anchos. el rack es
-  // demasiado alto... tienes que hacer scroll para verlo entero eso no mola". Antes la
-  // vista interactiva usaba filas de 15px (42U = 630px, obligaba a hacer scroll) y un
-  // chasis de 220px (paneles estrechos). Ahora más ancho y más bajo: cabe entero sin
-  // scroll y los módulos leen como paneles de rack de verdad. El nombre se ve siempre
-  // (no hace falta hacer zoom para identificar qué es cada módulo) — el zoom sigue para
-  // quien quiera verlo aún más grande.
-  const rowH = compacto ? 5 : 10;
   const alturaU = Math.max(1, Number(rack.altura_u) || 42);
   const colocados = (modulos || []).filter(m => m.pos_u_inicio != null);
-  const bloques = colocados.map(m => {
-    const c = _telecomOfficeColorModulo(m.tipo);
-    const bottom = (Number(m.pos_u_inicio) - 1) * rowH;
-    const height = Math.max(rowH - 1, Number(m.pos_u_altura || 1) * rowH - 1);
-    const interactivo = !compacto;
-    const label = !interactivo ? '' :
-      `<span style="font-size:8px;flex-shrink:0">${_telecomOfficeIconoModulo(m.tipo)}</span><span style="font-size:8.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.nombre)}</span>`;
-    return `<div class="telecomOfficeModulo" data-id="${Number(m.id)}"
-      ${interactivo ? `onclick="_telecomOfficeClickModulo(event,${Number(m.id)})" onpointerdown="_telecomOfficeIniciarArrastreExistente(event,${Number(m.id)})"` : ''}
-      style="position:absolute;left:2px;right:2px;bottom:${bottom}px;height:${height}px;border-radius:2px;
-      background:${c.bg};border:1px solid ${c.border};display:flex;align-items:center;gap:3px;padding:0 4px;
-      cursor:${interactivo ? 'grab' : 'default'};touch-action:none;overflow:hidden;z-index:2">${label}</div>`;
-  }).join('');
-  const filasFondo = compacto
-    ? `background:repeating-linear-gradient(180deg,#12162a 0,#12162a ${rowH-1}px,#0c0f1e ${rowH-1}px,#0c0f1e ${rowH}px)`
-    : `background:repeating-linear-gradient(180deg,#0f1224 0,#0f1224 ${rowH-1}px,#05060c ${rowH-1}px,#05060c ${rowH}px)`;
-  const filas = `<div id="telecomOfficeFilas_${rack.id}" class="telecomOfficeRackFilas" data-rack-id="${Number(rack.id)}" data-altura-u="${alturaU}"
-    style="position:relative;width:100%;height:${alturaU * rowH}px;${filasFondo};border-radius:3px;box-shadow:inset 0 2px 10px rgba(0,0,0,.6)">
-    ${bloques}
-    <div id="telecomOfficeDropHi_${rack.id}" style="display:none;position:absolute;left:1px;right:1px;border-radius:2px;pointer-events:none;z-index:3;border:1.5px dashed #6ee7a2;background:rgba(110,231,162,.15)"></div>
-  </div>`;
-  const anchoChasis = compacto ? 96 : 320;
-  const chasisInterior = `<div style="width:${anchoChasis}px;background:linear-gradient(180deg,#171b30,#12162a);
-    border-left:1px solid #3d4570;border-right:1px solid #3d4570;padding:0 ${compacto ? 4 : 6}px;box-sizing:border-box">${filas}</div>`;
+
+  if (compacto) {
+    // Vista miniatura del IDF: filas finas uniformes, sin interacción -- aquí sí importa la
+    // proporción física real (42U se ve claramente más alto que 12U), no la legibilidad.
+    const rowH = 5;
+    const bloques = colocados.map(m => {
+      const c = _telecomOfficeColorModulo(m.tipo);
+      const bottom = (Number(m.pos_u_inicio) - 1) * rowH;
+      const height = Math.max(rowH - 1, Number(m.pos_u_altura || 1) * rowH - 1);
+      return `<div style="position:absolute;left:2px;right:2px;bottom:${bottom}px;height:${height}px;border-radius:2px;
+        background:${c.bg};border:1px solid ${c.border};z-index:2"></div>`;
+    }).join('');
+    const filas = `<div style="position:relative;width:100%;height:${alturaU * rowH}px;
+      background:repeating-linear-gradient(180deg,#12162a 0,#12162a ${rowH - 1}px,#0c0f1e ${rowH - 1}px,#0c0f1e ${rowH}px);
+      border-radius:3px;box-shadow:inset 0 2px 10px rgba(0,0,0,.6)">${bloques}</div>`;
+    const anchoChasis = 96;
+    var chasisInterior = `<div style="width:${anchoChasis}px;background:linear-gradient(180deg,#171b30,#12162a);
+      border-left:1px solid #3d4570;border-right:1px solid #3d4570;padding:0 4px;box-sizing:border-box">${filas}</div>`;
+  } else {
+    // TELECOM-ELEVACION-01, 2º ajuste (18/08/2026): Adrián -- primero "el rack es demasiado
+    // alto... hacer scroll no mola" (se acortaron las filas), luego "esta muy feo la vista
+    // asi de los paneles, dijimos de hacerlo mas grandes los paneles no mas ancho el rack"
+    // (acortar las filas dejaba los módulos como láminas finas). Las dos cosas a la vez solo
+    // son compatibles si los huecos VACÍOS no ocupan tanto espacio como los módulos
+    // MONTADOS: los tramos sin nada se comprimen en una franja fina con su nº de U ("8U
+    // libres"); los módulos montados tienen una altura grande y fija (no depende de cuántas
+    // U tenga el rack), así que siempre se leen bien sin hacer zoom. El caso real (pocos
+    // módulos, mucho hueco) es justo el que más se beneficia.
+    const ALTO_MODULO = 34, ALTO_VACIO = 18;
+    const segmentos = _telecomOfficeSegmentosRack(alturaU, colocados);
+    const bloques = segmentos.map(seg => {
+      const uLen = seg.uFin - seg.uInicio + 1;
+      if (seg.tipo === 'vacio') {
+        return `<div class="telecomOfficeSegmentoVacio" data-u-inicio="${seg.uInicio}" data-u-fin="${seg.uFin}"
+          style="flex-shrink:0;height:${ALTO_VACIO}px;border:1px dashed #2a3050;border-radius:3px;
+          display:flex;align-items:center;justify-content:center;font-size:8px;color:#4b5578;font-weight:700;letter-spacing:.3px">
+          ${uLen}U libre${uLen === 1 ? '' : 's'}
+        </div>`;
+      }
+      const m = seg.modulo;
+      const c = _telecomOfficeColorModulo(m.tipo);
+      const altoModulo = Math.min(70, ALTO_MODULO + (uLen - 1) * 14);
+      return `<div class="telecomOfficeModulo" data-id="${Number(m.id)}" data-u-inicio="${seg.uInicio}" data-u-fin="${seg.uFin}"
+        onclick="_telecomOfficeClickModulo(event,${Number(m.id)})" onpointerdown="_telecomOfficeIniciarArrastreExistente(event,${Number(m.id)})"
+        style="flex-shrink:0;height:${altoModulo}px;border-radius:4px;background:${c.bg};border:1px solid ${c.border};
+        display:flex;align-items:center;gap:6px;padding:0 8px;cursor:grab;touch-action:none;overflow:hidden">
+        <span style="font-size:15px;flex-shrink:0">${_telecomOfficeIconoModulo(m.tipo)}</span>
+        <span style="font-size:11px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.nombre)}</span>
+      </div>`;
+    }).join('');
+    var filas = `<div id="telecomOfficeFilas_${rack.id}" class="telecomOfficeRackFilas" data-rack-id="${Number(rack.id)}" data-altura-u="${alturaU}"
+      style="position:relative;width:100%;display:flex;flex-direction:column-reverse;gap:3px">
+      ${bloques}
+      <div id="telecomOfficeDropHi_${rack.id}" style="display:none;position:absolute;left:1px;right:1px;border-radius:2px;pointer-events:none;z-index:3;border:1.5px dashed #6ee7a2;background:rgba(110,231,162,.15)"></div>
+    </div>`;
+    var anchoChasis = 320;
+    var chasisInterior = `<div style="width:${anchoChasis}px;background:linear-gradient(180deg,#171b30,#12162a);
+      border-left:1px solid #3d4570;border-right:1px solid #3d4570;padding:6px;box-sizing:border-box">
+      <div style="background:linear-gradient(180deg,#0f1224,#0c0f1e);border-radius:3px;box-shadow:inset 0 2px 10px rgba(0,0,0,.6);padding:4px">${filas}</div>
+    </div>`;
+  }
 
   if (rack.tipo === 'pared') {
     return `<div style="position:relative;display:inline-block;padding:0 12px">
@@ -12562,19 +12607,36 @@ function _telecomOfficeArrastrar(e, payload) {
       return uInicio <= pFin && p.pos_u_inicio <= uFin;
     });
   };
+  // TELECOM-ELEVACION-01, 2º ajuste: los tramos ya no pesan lo mismo en píxeles (un hueco
+  // vacío es una franja fina, un módulo montado es grande), así que en vez de una fórmula
+  // uniforme (posición / rowH) se busca en qué tramo real cae el puntero y se calcula la U
+  // proporcionalmente dentro de ESE tramo (mismo rango U que representa, aunque ocupe menos
+  // píxeles) -- ver _telecomOfficeSegmentosRack.
   const mover = ev => {
     posicionar(ev.clientX, ev.clientY);
     if (!filas || !hi) return;
     const rect = filas.getBoundingClientRect();
     const dentro = ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom;
     if (!dentro) { limpiar(); return; }
+    const segmentos = [...filas.querySelectorAll('.telecomOfficeSegmentoVacio, .telecomOfficeModulo')];
+    let segEl = null;
+    for (const s of segmentos) {
+      const r = s.getBoundingClientRect();
+      if (ev.clientY >= r.top && ev.clientY <= r.bottom) { segEl = s; break; }
+    }
+    if (!segEl) { limpiar(); return; }
+    const segRect = segEl.getBoundingClientRect();
+    const uInicioSeg = Number(segEl.dataset.uInicio);
+    const uFinSeg = Number(segEl.dataset.uFin);
+    const uLenSeg = uFinSeg - uInicioSeg + 1;
+    const frac = (segRect.bottom - ev.clientY) / segRect.height;
+    let u = uInicioSeg + Math.floor(frac * uLenSeg);
+    u = Math.max(uInicioSeg, Math.min(uFinSeg, u));
     const alturaU = Number(filas.dataset.alturaU);
-    const rowH = rect.height / alturaU;
-    const u = Math.floor((rect.bottom - ev.clientY) / rowH) + 1;
     const ok = validar(u, alturaU);
     hi.style.display = 'block';
-    hi.style.bottom = ((u - 1) * rowH) + 'px';
-    hi.style.height = Math.max(rowH - 1, alturaModulo * rowH - 1) + 'px';
+    hi.style.top = (segRect.top - rect.top) + 'px';
+    hi.style.height = segRect.height + 'px';
     hi.style.borderColor = ok ? '#6ee7a2' : '#ff9c9c';
     hi.style.background = ok ? 'rgba(110,231,162,.15)' : 'rgba(255,156,156,.15)';
     hi.dataset.u = u; hi.dataset.ok = ok ? '1' : '0';
