@@ -5686,6 +5686,18 @@ export default {
 
       if (path.startsWith('/telecom/informe-cuadro/')) return await getTelecomInformeCuadro(path.split('/telecom/informe-cuadro/')[1], request, env);
 
+      // TELECOM-CUADRO-02 (18/08/2026): componentes sueltos dentro del cuadro (switch DIN,
+      // fuente, POE, hub de fibra…) y el vínculo real por fibra a un puerto de un panel del IDF.
+      if (path === '/telecom/paneles-fibra' && method === 'GET') return await getTelecomPanelesFibraIdf(request, env);
+
+      if (path === '/telecom/cuadro-componentes'          && method === 'GET')    return await getTelecomCuadroComponentes(request, env);
+      if (path === '/telecom/cuadro-componentes'          && method === 'POST')   return await crearTelecomCuadroComponente(request, env);
+      if (path.startsWith('/telecom/cuadro-componentes/') && method === 'PATCH')  return await editarTelecomCuadroComponente(path.split('/telecom/cuadro-componentes/')[1], request, env);
+      if (path.startsWith('/telecom/cuadro-componentes/') && method === 'DELETE') return await eliminarTelecomCuadroComponente(path.split('/telecom/cuadro-componentes/')[1], request, env);
+
+      if (path === '/telecom/cuadro-componente-puertos'          && method === 'GET') return await getTelecomCuadroComponentePuertos(request, env);
+      if (path.startsWith('/telecom/cuadro-componente-puertos/') && method === 'PUT') return await editarTelecomCuadroComponentePuerto(path.split('/telecom/cuadro-componente-puertos/')[1], request, env);
+
       // ── PEMP ──────────────────────────────────────────────────────────────
       if (path === '/pemp'        && method === 'GET')    return await getPemp(request, env);
       if (path === '/pemp'        && method === 'POST')   return await crearPemp(request, env, ctx);
@@ -8268,9 +8280,19 @@ async function editarTelecomPuerto(idRaw, request, env) {
 // ── Telecom: cuadros de campo ────────────────────────────────────────────────
 // TELECOM-CUADRO-01 (12/08/2026): switches de carril DIN montados en cuadros electricos de
 // exterior (foto real: cuadro "SINDUS_2"), que recogen camaras/equipos por cobre y suben por
-// fibra a un IDF. No son un rack ni viven dentro de uno — Adrian: "el switch esta dentro del
-// cuadro", asi que cuadro y switch son la MISMA fila, sin sub-entidad. Ligados a una obra y,
-// opcionalmente, al IDF al que sube su fibra (idf_destino_id, para trazabilidad en el informe).
+// fibra a un IDF.
+//
+// TELECOM-CUADRO-02 (18/08/2026): Adrian -- "al igual que los IDF podriamos tener un cuadro
+// de plastico exterior dibujado donde meteriamos cosas, por ejemplo el switch, fuente
+// alimentacion, fuente POE para camara si necesitara, un hub de fibra tambien etc". El
+// cuadro deja de ser "un switch" y pasa a ser una caja con componentes sueltos
+// (telecom_cuadro_componentes), igual que un rack pero con un carril DIN horizontal en vez
+// de U verticales. Ligado a una obra y, ahora de forma real, a un PUERTO concreto de un
+// panel de fibra dentro de un IDF ("ese switch va a un IDF pero con fibra claro" / "que
+// tambien tendriamos que seleccionar las bocas para decir que ahi conectado") --
+// puerto_conexion_id -- en vez de solo "el IDF" en abstracto. idf_destino_id se sigue
+// guardando (se deriva del puerto cuando hay uno) para no romper el informe existente.
+// marca/modelo/num_puertos del cuadro quedan sin usar (el switch ahora es un componente).
 async function telecomGetCuadroCampo(auth, env, idRaw) {
   const id = parseInt(idRaw);
   if (!Number.isInteger(id) || id <= 0) return null;
@@ -8294,24 +8316,75 @@ async function telecomGetCuadroPuerto(auth, env, idRaw) {
   return row;
 }
 
+// Resuelve y valida un puerto de conexión (debe estar en un panel de tipo 'fibra'); usado
+// por crear/editar cuadro para enlazar el switch del cuadro a un puerto real del IDF.
+async function telecomResolverPuertoConexion(env, auth, puertoConexionId) {
+  const row = await env.DB.prepare(
+    `SELECT tp.id, tp.estado, pp.tipo AS panel_tipo, r.idf_id
+     FROM telecom_puertos tp
+     INNER JOIN telecom_patch_panels pp ON pp.id = tp.patch_panel_id AND pp.empresa_id = tp.empresa_id
+     INNER JOIN telecom_racks r ON r.id = pp.rack_id AND r.empresa_id = pp.empresa_id
+     WHERE tp.id = ? AND tp.empresa_id = ?`
+  ).bind(puertoConexionId, auth.empresa_id).first();
+  if (!row) return { error: 'Puerto de conexión no encontrado' };
+  if (row.panel_tipo !== 'fibra') return { error: 'El puerto de conexión debe estar en un panel de fibra' };
+  if (row.estado === 'ocupado') return { error: 'Ese puerto ya está ocupado' };
+  return { puerto: row, idfId: row.idf_id };
+}
+
+// Paneles de fibra de un IDF (en cualquiera de sus racks) con sus puertos libres, para el
+// selector en cascada IDF → panel de fibra → puerto del modal "Nuevo/editar cuadro".
+// excluir_puerto_id: al editar, incluye también el puerto ya conectado a ESTE cuadro aunque
+// figure como ocupado (es su propia conexión, no una ajena).
+async function getTelecomPanelesFibraIdf(request, env) {
+  const auth = await getAuth(request, env);
+  if (!puedeVerTelecom(auth)) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const idfId = url.searchParams.get('idf_id') ? parseInt(url.searchParams.get('idf_id')) : null;
+  if (!idfId) return err('Falta idf_id');
+  if (!(await telecomGetIdf(auth, env, idfId))) return err('IDF no encontrado', 404);
+  const excluirPuertoId = url.searchParams.get('excluir_puerto_id') ? parseInt(url.searchParams.get('excluir_puerto_id')) : 0;
+  const { results: paneles } = await env.DB.prepare(
+    `SELECT pp.id, pp.nombre, pp.rack_id, r.nombre AS rack_nombre
+     FROM telecom_patch_panels pp
+     INNER JOIN telecom_racks r ON r.id = pp.rack_id AND r.empresa_id = pp.empresa_id
+     WHERE r.idf_id = ? AND pp.empresa_id = ? AND pp.tipo = 'fibra'
+     ORDER BY r.nombre, pp.nombre`
+  ).bind(idfId, auth.empresa_id).all();
+  if (!paneles.length) return json([]);
+  const ids = paneles.map(p => p.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const { results: puertos } = await env.DB.prepare(
+    `SELECT id, patch_panel_id, numero FROM telecom_puertos
+     WHERE patch_panel_id IN (${placeholders}) AND empresa_id = ? AND (estado != 'ocupado' OR id = ?)
+     ORDER BY numero`
+  ).bind(...ids, auth.empresa_id, excluirPuertoId).all();
+  const porPanel = {};
+  puertos.forEach(p => { (porPanel[p.patch_panel_id] ||= []).push(p); });
+  return json(paneles.map(p => ({ ...p, puertos_libres: porPanel[p.id] || [] })));
+}
+
 async function getTelecomCuadrosCampo(request, env) {
   const auth = await getAuth(request, env);
   if (!puedeVerTelecom(auth)) return err('No autorizado', 403);
   const url = new URL(request.url);
   const obraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : null;
-  if (!obraId) return err('Falta obra_id');
-  if (!(await telecomValidarObra(auth, env, obraId))) return err('Obra no encontrada', 404);
+  const idfId = url.searchParams.get('idf_id') ? parseInt(url.searchParams.get('idf_id')) : null;
+  if (!obraId && !idfId) return err('Falta obra_id o idf_id');
+  if (obraId && !(await telecomValidarObra(auth, env, obraId))) return err('Obra no encontrada', 404);
+  if (idfId && !(await telecomGetIdf(auth, env, idfId))) return err('IDF no encontrado', 404);
+  const condiciones = ['c.empresa_id = ?'];
+  const params = [auth.empresa_id];
+  if (obraId) { condiciones.push('c.obra_id = ?'); params.push(obraId); }
+  if (idfId) { condiciones.push('c.idf_destino_id = ?'); params.push(idfId); }
   const { results } = await env.DB.prepare(
     `SELECT c.*, i.nombre AS idf_destino_nombre,
-            COALESCE(SUM(CASE WHEN p.estado = 'ocupado' THEN 1 ELSE 0 END), 0) AS ocupados,
-            COALESCE(SUM(CASE WHEN p.estado = 'libre' THEN 1 ELSE 0 END), 0) AS libres
+            (SELECT COUNT(*) FROM telecom_cuadro_componentes cc WHERE cc.cuadro_id = c.id AND cc.empresa_id = c.empresa_id) AS num_componentes
      FROM telecom_cuadros_campo c
      LEFT JOIN telecom_idf i ON i.id = c.idf_destino_id AND i.empresa_id = c.empresa_id
-     LEFT JOIN telecom_cuadros_campo_puertos p ON p.cuadro_id = c.id AND p.empresa_id = c.empresa_id
-     WHERE c.obra_id = ? AND c.empresa_id = ?
-     GROUP BY c.id
+     WHERE ${condiciones.join(' AND ')}
      ORDER BY c.nombre`
-  ).bind(obraId, auth.empresa_id).all();
+  ).bind(...params).all();
   return json(results);
 }
 
@@ -8321,46 +8394,33 @@ async function crearTelecomCuadroCampo(request, env) {
   const body = await request.json();
   const nombre = safeStr(body.nombre).trim();
   const obraId = body.obra_id ? parseInt(body.obra_id) : null;
-  const numPuertos = body.num_puertos ? parseInt(body.num_puertos) : 8;
   const ubicacion = safeStr(body.ubicacion).trim();
-  const marca = safeStr(body.marca).trim();
-  const modelo = safeStr(body.modelo).trim();
   const notas = safeStr(body.notas).trim();
-  const idfDestinoId = body.idf_destino_id ? parseInt(body.idf_destino_id) : null;
   if (!nombre || !obraId) return err('Faltan campos: nombre, obra_id');
-  if (!(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
-  if ([nombre, ubicacion, marca, modelo].some(v => v.length > 160) || notas.length > 1000) {
+  if ([nombre, ubicacion].some(v => v.length > 160) || notas.length > 1000) {
     return err('Los datos del cuadro son demasiado largos');
   }
   if (!(await telecomValidarObra(auth, env, obraId))) return err('Obra no encontrada', 404);
-  if (idfDestinoId && !(await telecomGetIdf(auth, env, idfDestinoId))) return err('IDF destino no encontrado', 404);
-  let cuadroId = null;
-  try {
-    const r = await env.DB.prepare(
-      `INSERT INTO telecom_cuadros_campo
-       (empresa_id, obra_id, nombre, ubicacion, marca, modelo, num_puertos, idf_destino_id, notas, creado_por)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      auth.empresa_id, obraId, nombre, ubicacion || null, marca || null, modelo || null,
-      numPuertos, idfDestinoId || null, notas || null, safeStr(auth.usuario) || null
-    ).run();
-    cuadroId = r.meta.last_row_id;
-    // Crear automáticamente los N puertos vacíos, mismo patrón que crearTelecomPatchPanel.
-    const stmts = [];
-    for (let n = 1; n <= numPuertos; n++) {
-      stmts.push(env.DB.prepare(
-        'INSERT INTO telecom_cuadros_campo_puertos (cuadro_id, empresa_id, numero, estado) VALUES (?, ?, ?, ?)'
-      ).bind(cuadroId, auth.empresa_id, n, 'libre'));
-    }
-    await env.DB.batch(stmts);
-    return json({ ok: true, id: cuadroId, nombre, obra_id: obraId, num_puertos: numPuertos }, 201);
-  } catch (e) {
-    if (cuadroId) {
-      await env.DB.prepare('DELETE FROM telecom_cuadros_campo WHERE id = ? AND empresa_id = ?')
-        .bind(cuadroId, auth.empresa_id).run().catch(() => {});
-    }
-    throw e;
+  const puertoConexionId = body.puerto_conexion_id ? parseInt(body.puerto_conexion_id) : null;
+  let idfDestinoId = body.idf_destino_id ? parseInt(body.idf_destino_id) : null;
+  if (puertoConexionId) {
+    const resuelto = await telecomResolverPuertoConexion(env, auth, puertoConexionId);
+    if (resuelto.error) return err(resuelto.error, 409);
+    idfDestinoId = resuelto.idfId;
+  } else if (idfDestinoId && !(await telecomGetIdf(auth, env, idfDestinoId))) {
+    return err('IDF destino no encontrado', 404);
   }
+  const r = await env.DB.prepare(
+    `INSERT INTO telecom_cuadros_campo (empresa_id, obra_id, nombre, ubicacion, idf_destino_id, puerto_conexion_id, notas, creado_por)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(auth.empresa_id, obraId, nombre, ubicacion || null, idfDestinoId || null, puertoConexionId || null, notas || null, safeStr(auth.usuario) || null).run();
+  const cuadroId = r.meta.last_row_id;
+  if (puertoConexionId) {
+    await env.DB.prepare(
+      `UPDATE telecom_puertos SET estado='ocupado', destino=?, actualizado_por=?, updated_at=datetime('now') WHERE id=? AND empresa_id=?`
+    ).bind(nombre, safeStr(auth.usuario) || null, puertoConexionId, auth.empresa_id).run();
+  }
+  return json({ ok: true, id: cuadroId, nombre, obra_id: obraId, idf_destino_id: idfDestinoId, puerto_conexion_id: puertoConexionId }, 201);
 }
 
 async function editarTelecomCuadroCampo(idRaw, request, env) {
@@ -8371,23 +8431,43 @@ async function editarTelecomCuadroCampo(idRaw, request, env) {
   const body = await request.json().catch(() => ({}));
   const nombre = body.nombre === undefined ? actual.nombre : safeStr(body.nombre).trim();
   const ubicacion = body.ubicacion === undefined ? safeStr(actual.ubicacion).trim() : safeStr(body.ubicacion).trim();
-  const marca = body.marca === undefined ? safeStr(actual.marca).trim() : safeStr(body.marca).trim();
-  const modelo = body.modelo === undefined ? safeStr(actual.modelo).trim() : safeStr(body.modelo).trim();
   const notas = body.notas === undefined ? safeStr(actual.notas).trim() : safeStr(body.notas).trim();
-  const idfDestinoId = body.idf_destino_id === undefined
-    ? actual.idf_destino_id
-    : (body.idf_destino_id ? parseInt(body.idf_destino_id) : null);
   if (!nombre) return err('El nombre es obligatorio');
-  if ([nombre, ubicacion, marca, modelo].some(v => v.length > 160) || notas.length > 1000) {
+  if ([nombre, ubicacion].some(v => v.length > 160) || notas.length > 1000) {
     return err('Los datos del cuadro son demasiado largos');
   }
-  if (idfDestinoId && !(await telecomGetIdf(auth, env, idfDestinoId))) return err('IDF destino no encontrado', 404);
+  let idfDestinoId = actual.idf_destino_id;
+  let puertoConexionId = actual.puerto_conexion_id;
+  const puertoEnviado = body.puerto_conexion_id !== undefined ? (body.puerto_conexion_id ? parseInt(body.puerto_conexion_id) : null) : undefined;
+  const puertoCambia = puertoEnviado !== undefined && puertoEnviado !== (actual.puerto_conexion_id || null);
+  if (puertoCambia) {
+    if (puertoEnviado) {
+      const resuelto = await telecomResolverPuertoConexion(env, auth, puertoEnviado);
+      if (resuelto.error) return err(resuelto.error, 409);
+      idfDestinoId = resuelto.idfId;
+    } else {
+      idfDestinoId = body.idf_destino_id !== undefined ? (body.idf_destino_id ? parseInt(body.idf_destino_id) : null) : idfDestinoId;
+    }
+    puertoConexionId = puertoEnviado;
+  } else if (body.idf_destino_id !== undefined && !puertoConexionId) {
+    idfDestinoId = body.idf_destino_id ? parseInt(body.idf_destino_id) : null;
+    if (idfDestinoId && !(await telecomGetIdf(auth, env, idfDestinoId))) return err('IDF destino no encontrado', 404);
+  }
   await env.DB.prepare(
-    `UPDATE telecom_cuadros_campo
-     SET nombre = ?, ubicacion = ?, marca = ?, modelo = ?, idf_destino_id = ?, notas = ?, actualizado_en = datetime('now')
-     WHERE id = ? AND empresa_id = ?`
-  ).bind(nombre, ubicacion || null, marca || null, modelo || null, idfDestinoId || null, notas || null, actual.id, auth.empresa_id).run();
-  return json({ ok: true });
+    `UPDATE telecom_cuadros_campo SET nombre=?, ubicacion=?, idf_destino_id=?, puerto_conexion_id=?, notas=?, actualizado_en=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(nombre, ubicacion || null, idfDestinoId || null, puertoConexionId || null, notas || null, actual.id, auth.empresa_id).run();
+  if (puertoCambia) {
+    if (actual.puerto_conexion_id) {
+      await env.DB.prepare(`UPDATE telecom_puertos SET estado='libre', destino=NULL, updated_at=datetime('now') WHERE id=? AND empresa_id=?`)
+        .bind(actual.puerto_conexion_id, auth.empresa_id).run();
+    }
+    if (puertoConexionId) {
+      await env.DB.prepare(`UPDATE telecom_puertos SET estado='ocupado', destino=?, actualizado_por=?, updated_at=datetime('now') WHERE id=? AND empresa_id=?`)
+        .bind(nombre, safeStr(auth.usuario) || null, puertoConexionId, auth.empresa_id).run();
+    }
+  }
+  return json({ ok: true, idf_destino_id: idfDestinoId, puerto_conexion_id: puertoConexionId });
 }
 
 async function eliminarTelecomCuadroCampo(idRaw, request, env) {
@@ -8395,12 +8475,167 @@ async function eliminarTelecomCuadroCampo(idRaw, request, env) {
   if (!puedeEliminarTelecom(auth)) return err('No autorizado', 403);
   const actual = await telecomGetCuadroCampo(auth, env, idRaw);
   if (!actual) return err('Cuadro no encontrado', 404);
-  const results = await env.DB.batch([
-    env.DB.prepare('DELETE FROM telecom_cuadros_campo_puertos WHERE cuadro_id = ? AND empresa_id = ?').bind(actual.id, auth.empresa_id),
-    env.DB.prepare('DELETE FROM telecom_cuadros_campo WHERE id = ? AND empresa_id = ?').bind(actual.id, auth.empresa_id),
-  ]);
-  if (!results[1]?.meta?.changes) return err('Cuadro no encontrado', 404);
+  const { results: componentes } = await env.DB.prepare(
+    'SELECT id FROM telecom_cuadro_componentes WHERE cuadro_id = ? AND empresa_id = ?'
+  ).bind(actual.id, auth.empresa_id).all();
+  const stmts = componentes.map(c =>
+    env.DB.prepare('DELETE FROM telecom_cuadro_componente_puertos WHERE componente_id = ? AND empresa_id = ?').bind(c.id, auth.empresa_id)
+  );
+  stmts.push(env.DB.prepare('DELETE FROM telecom_cuadro_componentes WHERE cuadro_id = ? AND empresa_id = ?').bind(actual.id, auth.empresa_id));
+  stmts.push(env.DB.prepare('DELETE FROM telecom_cuadros_campo_puertos WHERE cuadro_id = ? AND empresa_id = ?').bind(actual.id, auth.empresa_id));
+  stmts.push(env.DB.prepare('DELETE FROM telecom_cuadros_campo WHERE id = ? AND empresa_id = ?').bind(actual.id, auth.empresa_id));
+  if (actual.puerto_conexion_id) {
+    stmts.push(env.DB.prepare(`UPDATE telecom_puertos SET estado='libre', destino=NULL, updated_at=datetime('now') WHERE id=? AND empresa_id=?`)
+      .bind(actual.puerto_conexion_id, auth.empresa_id));
+  }
+  await env.DB.batch(stmts);
   return json({ ok: true });
+}
+
+// ── Telecom: componentes del cuadro (switch DIN, fuente, POE, hub de fibra…) ────────────
+const TELECOM_TIPOS_COMPONENTE_CUADRO = ['switch', 'fuente', 'poe', 'fibra', 'otro'];
+
+async function telecomGetCuadroComponente(auth, env, idRaw) {
+  const id = parseInt(idRaw);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const row = await env.DB.prepare(
+    `SELECT cc.*, c.obra_id FROM telecom_cuadro_componentes cc
+     INNER JOIN telecom_cuadros_campo c ON c.id = cc.cuadro_id AND c.empresa_id = cc.empresa_id
+     WHERE cc.id = ? AND cc.empresa_id = ?`
+  ).bind(id, auth.empresa_id).first();
+  if (!row || !(await telecomValidarObra(auth, env, row.obra_id))) return null;
+  return row;
+}
+
+async function getTelecomCuadroComponentes(request, env) {
+  const auth = await getAuth(request, env);
+  if (!puedeVerTelecom(auth)) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const cuadroId = url.searchParams.get('cuadro_id') ? parseInt(url.searchParams.get('cuadro_id')) : null;
+  if (!cuadroId) return err('Falta cuadro_id');
+  if (!(await telecomGetCuadroCampo(auth, env, cuadroId))) return err('Cuadro no encontrado', 404);
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM telecom_cuadro_componentes WHERE cuadro_id = ? AND empresa_id = ? ORDER BY pos_orden'
+  ).bind(cuadroId, auth.empresa_id).all();
+  return json(results);
+}
+
+async function crearTelecomCuadroComponente(request, env) {
+  const auth = await getAuth(request, env);
+  if (!puedeEditarTelecom(auth)) return err('No autorizado', 403);
+  const body = await request.json();
+  const nombre = safeStr(body.nombre).trim();
+  const cuadroId = body.cuadro_id ? parseInt(body.cuadro_id) : null;
+  const tipo = TELECOM_TIPOS_COMPONENTE_CUADRO.includes(body.tipo) ? body.tipo : 'switch';
+  const marca = safeStr(body.marca).trim();
+  const notas = safeStr(body.notas).trim();
+  const numPuertos = (tipo === 'switch' || tipo === 'fibra')
+    ? (body.num_puertos ? parseInt(body.num_puertos) : 8)
+    : null;
+  if (!nombre || !cuadroId) return err('Faltan campos: nombre, cuadro_id');
+  if ([nombre, marca].some(v => v.length > 160) || notas.length > 1000) return err('Los datos del componente son demasiado largos');
+  if (numPuertos !== null && !(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
+  if (!(await telecomGetCuadroCampo(auth, env, cuadroId))) return err('Cuadro no encontrado', 404);
+  let posOrden = body.pos_orden !== undefined ? Number(body.pos_orden) : null;
+  if (posOrden === null || Number.isNaN(posOrden)) {
+    const max = await env.DB.prepare('SELECT MAX(pos_orden) as m FROM telecom_cuadro_componentes WHERE cuadro_id = ? AND empresa_id = ?').bind(cuadroId, auth.empresa_id).first();
+    posOrden = (max?.m ?? -1) + 1;
+  }
+  const r = await env.DB.prepare(
+    `INSERT INTO telecom_cuadro_componentes (cuadro_id, empresa_id, nombre, tipo, marca, num_puertos, pos_orden, notas)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(cuadroId, auth.empresa_id, nombre, tipo, marca || null, numPuertos, posOrden, notas || null).run();
+  const componenteId = r.meta.last_row_id;
+  if (numPuertos) {
+    const stmts = [];
+    for (let n = 1; n <= numPuertos; n++) {
+      stmts.push(env.DB.prepare(
+        'INSERT INTO telecom_cuadro_componente_puertos (componente_id, empresa_id, numero, estado) VALUES (?, ?, ?, ?)'
+      ).bind(componenteId, auth.empresa_id, n, 'libre'));
+    }
+    await env.DB.batch(stmts);
+  }
+  return json({ ok: true, id: componenteId, nombre, cuadro_id: cuadroId, tipo, marca, num_puertos: numPuertos, pos_orden: posOrden }, 201);
+}
+
+async function editarTelecomCuadroComponente(idRaw, request, env) {
+  const auth = await getAuth(request, env);
+  if (!puedeEditarTelecom(auth)) return err('No autorizado', 403);
+  const actual = await telecomGetCuadroComponente(auth, env, idRaw);
+  if (!actual) return err('Componente no encontrado', 404);
+  const body = await request.json().catch(() => ({}));
+  const nombre = body.nombre === undefined ? actual.nombre : safeStr(body.nombre).trim();
+  const tipo = body.tipo === undefined ? actual.tipo : (TELECOM_TIPOS_COMPONENTE_CUADRO.includes(body.tipo) ? body.tipo : actual.tipo);
+  const marca = body.marca === undefined ? safeStr(actual.marca).trim() : safeStr(body.marca).trim();
+  const notas = body.notas === undefined ? safeStr(actual.notas).trim() : safeStr(body.notas).trim();
+  const posOrden = body.pos_orden !== undefined ? Number(body.pos_orden) : actual.pos_orden;
+  if (!nombre) return err('El nombre es obligatorio');
+  if ([nombre, marca].some(v => v.length > 160) || notas.length > 1000) return err('Los datos del componente son demasiado largos');
+  await env.DB.prepare(
+    `UPDATE telecom_cuadro_componentes SET nombre=?, tipo=?, marca=?, pos_orden=?, notas=? WHERE id=? AND empresa_id=?`
+  ).bind(nombre, tipo, marca || null, posOrden, notas || null, actual.id, auth.empresa_id).run();
+  return json({ ok: true, pos_orden: posOrden });
+}
+
+async function eliminarTelecomCuadroComponente(idRaw, request, env) {
+  const auth = await getAuth(request, env);
+  if (!puedeEliminarTelecom(auth)) return err('No autorizado', 403);
+  const actual = await telecomGetCuadroComponente(auth, env, idRaw);
+  if (!actual) return err('Componente no encontrado', 404);
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM telecom_cuadro_componente_puertos WHERE componente_id = ? AND empresa_id = ?').bind(actual.id, auth.empresa_id),
+    env.DB.prepare('DELETE FROM telecom_cuadro_componentes WHERE id = ? AND empresa_id = ?').bind(actual.id, auth.empresa_id),
+  ]);
+  return json({ ok: true });
+}
+
+async function getTelecomCuadroComponentePuertos(request, env) {
+  const auth = await getAuth(request, env);
+  if (!puedeVerTelecom(auth)) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const componenteId = url.searchParams.get('componente_id') ? parseInt(url.searchParams.get('componente_id')) : null;
+  if (!componenteId) return err('Falta componente_id');
+  if (!(await telecomGetCuadroComponente(auth, env, componenteId))) return err('Componente no encontrado', 404);
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM telecom_cuadro_componente_puertos WHERE componente_id = ? AND empresa_id = ? ORDER BY numero'
+  ).bind(componenteId, auth.empresa_id).all();
+  return json(results);
+}
+
+async function telecomGetCuadroComponentePuerto(auth, env, idRaw) {
+  const id = parseInt(idRaw);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const row = await env.DB.prepare(
+    `SELECT p.*, c.obra_id
+     FROM telecom_cuadro_componente_puertos p
+     INNER JOIN telecom_cuadro_componentes cc ON cc.id = p.componente_id AND cc.empresa_id = p.empresa_id
+     INNER JOIN telecom_cuadros_campo c ON c.id = cc.cuadro_id AND c.empresa_id = cc.empresa_id
+     WHERE p.id = ? AND p.empresa_id = ?`
+  ).bind(id, auth.empresa_id).first();
+  if (!row || !(await telecomValidarObra(auth, env, row.obra_id))) return null;
+  return row;
+}
+
+async function editarTelecomCuadroComponentePuerto(idRaw, request, env) {
+  const auth = await getAuth(request, env);
+  if (!puedeEditarTelecom(auth)) return err('No autorizado', 403);
+  const actual = await telecomGetCuadroComponentePuerto(auth, env, idRaw);
+  if (!actual) return err('Puerto no encontrado', 404);
+  const body = await request.json();
+  const destino = safeStr(body.destino).trim();
+  const cableLabel = safeStr(body.cable_label).trim();
+  const categoria = safeStr(body.categoria).trim();
+  const notas = safeStr(body.notas).trim();
+  if ([destino, cableLabel, categoria].some(v => v.length > 160) || notas.length > 1000) {
+    return err('Los datos del puerto son demasiado largos');
+  }
+  const estado = (destino || cableLabel) ? 'ocupado' : 'libre';
+  const r = await env.DB.prepare(
+    `UPDATE telecom_cuadro_componente_puertos SET destino=?, cable_label=?, categoria=?, notas=?, estado=?, actualizado_por=?, updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(destino || null, cableLabel || null, categoria || null, notas || null, estado, safeStr(auth.usuario) || null, actual.id, auth.empresa_id).run();
+  if (!r.meta.changes) return err('Puerto no encontrado', 404);
+  return json({ ok: true, estado });
 }
 
 async function getTelecomCuadroPuertos(request, env) {
@@ -8451,10 +8686,18 @@ async function getTelecomInformeCuadro(idRaw, request, env) {
   const idfDestino = cuadro.idf_destino_id
     ? await env.DB.prepare('SELECT id, nombre FROM telecom_idf WHERE id = ? AND empresa_id = ?').bind(cuadro.idf_destino_id, auth.empresa_id).first()
     : null;
-  const { results: puertos } = await env.DB.prepare(
-    'SELECT * FROM telecom_cuadros_campo_puertos WHERE cuadro_id = ? AND empresa_id = ? ORDER BY numero'
+  // TELECOM-CUADRO-02 (18/08/2026): los puertos ya no cuelgan directo del cuadro -- cada
+  // componente (switch/hub de fibra) tiene los suyos.
+  const { results: componentes } = await env.DB.prepare(
+    'SELECT * FROM telecom_cuadro_componentes WHERE cuadro_id = ? AND empresa_id = ? ORDER BY pos_orden'
   ).bind(cuadro.id, auth.empresa_id).all();
-  cuadro.puertos = puertos;
+  for (const comp of componentes) {
+    const { results: puertos } = await env.DB.prepare(
+      'SELECT * FROM telecom_cuadro_componente_puertos WHERE componente_id = ? AND empresa_id = ? ORDER BY numero'
+    ).bind(comp.id, auth.empresa_id).all();
+    comp.puertos = puertos;
+  }
+  cuadro.componentes = componentes;
   return json({ cuadro, obra, empresa, idf_destino: idfDestino });
 }
 
