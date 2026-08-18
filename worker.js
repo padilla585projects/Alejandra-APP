@@ -8012,16 +8012,18 @@ async function crearTelecomRack(request, env) {
   const notas = safeStr(body.notas).trim();
   if (nombre.length > 160) return err('El nombre es demasiado largo');
   if (notas.length > 1000) return err('Las notas son demasiado largas');
-  // TELECOM-ELEVACION-01 (18/08/2026): altura real del armario en U, para el diagrama de
-  // elevación -- 42U (estándar de suelo) por defecto, ajustable (armarios de pared 6-12U).
-  const alturaU = body.altura_u !== undefined ? parseInt(body.altura_u) : 42;
+  // TELECOM-ELEVACION-01 (18/08/2026): tipo de armario (pared/pie) y altura real en U,
+  // para el diagrama de elevación -- por defecto 42U de pie (estándar de suelo, lo que
+  // usa Adrián) o 12U de pared (IDF pequeño en nicho/registro) si no se manda altura_u.
+  const tipo = body.tipo === 'pared' ? 'pared' : 'pie';
+  const alturaU = body.altura_u !== undefined ? parseInt(body.altura_u) : (tipo === 'pared' ? 12 : 42);
   if (!Number.isInteger(alturaU) || alturaU < 1 || alturaU > 60) return err('La altura del rack debe ser un número entre 1 y 60 U');
   if (!(await telecomGetIdf(auth, env, idfId))) return err('IDF no encontrado', 404);
   try {
     const r = await env.DB.prepare(
-      'INSERT INTO telecom_racks (idf_id, empresa_id, nombre, notas, altura_u) VALUES (?, ?, ?, ?, ?)'
-    ).bind(idfId, auth.empresa_id, nombre, notas || null, alturaU).run();
-    return json({ ok: true, id: r.meta.last_row_id, nombre, idf_id: idfId, altura_u: alturaU }, 201);
+      'INSERT INTO telecom_racks (idf_id, empresa_id, nombre, notas, altura_u, tipo) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(idfId, auth.empresa_id, nombre, notas || null, alturaU, tipo).run();
+    return json({ ok: true, id: r.meta.last_row_id, nombre, idf_id: idfId, altura_u: alturaU, tipo }, 201);
   } catch (e) {
     if (safeStr(e?.message).includes('UNIQUE')) return err('Ya existe un rack con ese nombre en el IDF', 409);
     throw e;
@@ -8041,10 +8043,11 @@ async function editarTelecomRack(idRaw, request, env) {
   if (notas.length > 1000) return err('Las notas son demasiado largas');
   const alturaU = body.altura_u === undefined ? actual.altura_u : parseInt(body.altura_u);
   if (!Number.isInteger(alturaU) || alturaU < 1 || alturaU > 60) return err('La altura del rack debe ser un número entre 1 y 60 U');
+  const tipo = body.tipo === undefined ? actual.tipo : (body.tipo === 'pared' ? 'pared' : 'pie');
   try {
     await env.DB.prepare(
-      'UPDATE telecom_racks SET nombre = ?, notas = ?, altura_u = ? WHERE id = ? AND empresa_id = ?'
-    ).bind(nombre, notas || null, alturaU, actual.id, auth.empresa_id).run();
+      'UPDATE telecom_racks SET nombre = ?, notas = ?, altura_u = ?, tipo = ? WHERE id = ? AND empresa_id = ?'
+    ).bind(nombre, notas || null, alturaU, tipo, actual.id, auth.empresa_id).run();
     return json({ ok: true });
   } catch (e) {
     if (safeStr(e?.message).includes('UNIQUE')) return err('Ya existe un rack con ese nombre en el IDF', 409);

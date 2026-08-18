@@ -1977,6 +1977,21 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <label id="telecomOfficeLabelExtra">Ubicación</label>
             <input class="form-input" id="telecomOfficeExtra" type="text" maxlength="160" placeholder="Ej: Planta 1 · Sala técnica">
           </div>
+          <div id="telecomOfficeRackFields" style="display:none">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Tipo de armario</label>
+                <select class="form-input" id="telecomOfficeRackTipo" style="background:#fff;color:#111827;color-scheme:light" onchange="_telecomOfficeTipoRackCambiado()">
+                  <option value="pie" style="background:#fff;color:#111827">🗄️ De pie (suelo)</option>
+                  <option value="pared" style="background:#fff;color:#111827">🧱 De pared</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Altura (U)</label>
+                <input class="form-input" id="telecomOfficeRackAltura" type="number" min="1" max="60" value="42">
+              </div>
+            </div>
+          </div>
           <div id="telecomOfficePatchFields" style="display:none">
             <div class="form-group">
               <label>Tipo de módulo</label>
@@ -12142,6 +12157,88 @@ function _telecomOfficeFila(tipo, item, titulo, subtitulo, abrir, extraBtn) {
   </div>`;
 }
 
+// TELECOM-ELEVACION-01 (18/08/2026): Adrián -- "lo quiero hacer mas visual todo". Diagrama
+// de rack con arrastrar-y-soltar, mismo patrón que _cpdOfficeWireDrag/cpdOfficeZoom en
+// Sondas CPD (pointerdown/pointermove/pointerup -- funciona igual con ratón y touch).
+const TELECOM_OFFICE_PLANTILLAS_MODULO = [
+  { id:'panel_cobre', icono:'🔌', label:'Patch panel cobre', tipo:'cobre', marca:'', num_puertos:24 },
+  { id:'panel_fibra', icono:'🧵', label:'Patch panel fibra', tipo:'fibra', marca:'', num_puertos:24 },
+  { id:'switch_cisco', icono:'🖧', label:'Switch Cisco Catalyst', tipo:'switch', marca:'Cisco', num_puertos:24 },
+  { id:'switch_ubiquiti', icono:'🖧', label:'Switch Ubiquiti UniFi', tipo:'switch', marca:'Ubiquiti', num_puertos:24 },
+  { id:'personalizado', icono:'➕', label:'Personalizado', tipo:'cobre', marca:'', num_puertos:24, personalizado:true }
+];
+function _telecomOfficeIconoModulo(tipo) {
+  return { cobre:'🔌', fibra:'🧵', switch:'🖧' }[tipo] || '🔌';
+}
+function _telecomOfficeColorModulo(tipo) {
+  return {
+    cobre:  { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' },
+    fibra:  { bg:'linear-gradient(145deg,#2a2a2a,#141414)', border:'#4a4a4a' },
+    switch: { bg:'linear-gradient(145deg,#1e2440,#12162a)', border:'#3a4270' }
+  }[tipo] || { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' };
+}
+
+// rack: fila de telecom_racks (id, altura_u, tipo…). modulos: patch panels de ese rack.
+// opts.compacto=true → vista de resumen en el IDF (filas finas, sin texto, sin arrastre).
+// opts.compacto=false → editor del rack (filas más altas, con nombre, arrastrable, zoom).
+function telecomOfficeRenderElevacion(rack, modulos, opts) {
+  opts = opts || {};
+  const compacto = !!opts.compacto;
+  const rowH = compacto ? 5 : 15;
+  const alturaU = Math.max(1, Number(rack.altura_u) || 42);
+  const colocados = (modulos || []).filter(m => m.pos_u_inicio != null);
+  const bloques = colocados.map(m => {
+    const c = _telecomOfficeColorModulo(m.tipo);
+    const bottom = (Number(m.pos_u_inicio) - 1) * rowH;
+    const height = Math.max(rowH - 1, Number(m.pos_u_altura || 1) * rowH - 1);
+    const interactivo = !compacto;
+    const label = (!interactivo || rowH < 12) ? '' :
+      `<span style="font-size:8px;flex-shrink:0">${_telecomOfficeIconoModulo(m.tipo)}</span><span style="font-size:9px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.nombre)}</span>`;
+    return `<div class="telecomOfficeModulo" data-id="${Number(m.id)}"
+      ${interactivo ? `onclick="_telecomOfficeClickModulo(event,${Number(m.id)})" onpointerdown="_telecomOfficeIniciarArrastreExistente(event,${Number(m.id)})"` : ''}
+      style="position:absolute;left:2px;right:2px;bottom:${bottom}px;height:${height}px;border-radius:2px;
+      background:${c.bg};border:1px solid ${c.border};display:flex;align-items:center;gap:3px;padding:0 4px;
+      cursor:${interactivo ? 'grab' : 'default'};touch-action:none;overflow:hidden;z-index:2">${label}</div>`;
+  }).join('');
+  const filasFondo = compacto
+    ? `background:repeating-linear-gradient(180deg,#12162a 0,#12162a ${rowH-1}px,#0c0f1e ${rowH-1}px,#0c0f1e ${rowH}px)`
+    : `background:repeating-linear-gradient(180deg,#0f1224 0,#0f1224 ${rowH-1}px,#05060c ${rowH-1}px,#05060c ${rowH}px)`;
+  const filas = `<div id="telecomOfficeFilas_${rack.id}" class="telecomOfficeRackFilas" data-rack-id="${Number(rack.id)}" data-altura-u="${alturaU}"
+    style="position:relative;width:100%;height:${alturaU * rowH}px;${filasFondo};border-radius:3px;box-shadow:inset 0 2px 10px rgba(0,0,0,.6)">
+    ${bloques}
+    <div id="telecomOfficeDropHi_${rack.id}" style="display:none;position:absolute;left:1px;right:1px;border-radius:2px;pointer-events:none;z-index:3;border:1.5px dashed #6ee7a2;background:rgba(110,231,162,.15)"></div>
+  </div>`;
+  const anchoChasis = compacto ? 96 : 220;
+  const chasisInterior = `<div style="width:${anchoChasis}px;background:linear-gradient(180deg,#171b30,#12162a);
+    border-left:1px solid #3d4570;border-right:1px solid #3d4570;padding:0 ${compacto ? 4 : 6}px;box-sizing:border-box">${filas}</div>`;
+
+  if (rack.tipo === 'pared') {
+    return `<div style="position:relative;display:inline-block;padding:0 12px">
+      <div style="position:absolute;left:2px;top:4px;width:8px;height:3px;background:#343b59;border-radius:1px"></div>
+      <div style="position:absolute;left:2px;bottom:4px;width:8px;height:3px;background:#343b59;border-radius:1px"></div>
+      <div style="position:absolute;right:2px;top:4px;width:8px;height:3px;background:#343b59;border-radius:1px"></div>
+      <div style="position:absolute;right:2px;bottom:4px;width:8px;height:3px;background:#343b59;border-radius:1px"></div>
+      <div style="width:${anchoChasis}px">
+        <svg width="${anchoChasis}" height="8" viewBox="0 0 ${anchoChasis} 8"><polygon points="3,8 ${anchoChasis - 3},8 ${anchoChasis - 8},1 8,1" fill="#28304e" stroke="#3d4570" stroke-width="1"/></svg>
+        ${chasisInterior}
+        <div style="width:${anchoChasis}px;height:6px;background:#12162a;border-left:1px solid #3d4570;border-right:1px solid #3d4570;border-bottom:1px solid #3d4570;border-radius:0 0 3px 3px"></div>
+      </div>
+    </div>`;
+  }
+  return `<div style="display:flex;flex-direction:column;align-items:center">
+    <div style="width:${anchoChasis}px">
+      <svg width="${anchoChasis}" height="9" viewBox="0 0 ${anchoChasis} 9"><polygon points="4,9 ${anchoChasis - 4},9 ${anchoChasis - 10},1 10,1" fill="#2a3050" stroke="#3d4570" stroke-width="1"/></svg>
+      <div style="height:4px;background:#1e2340;border-left:1px solid #3d4570;border-right:1px solid #3d4570;margin:0 4px"></div>
+    </div>
+    ${chasisInterior}
+    <div style="width:${anchoChasis + 8}px;height:8px;background:#12162a;border-left:1px solid #3d4570;border-right:1px solid #3d4570;border-bottom:1px solid #3d4570;border-radius:0 0 3px 3px;position:relative">
+      <div style="position:absolute;left:5px;bottom:-3px;width:6px;height:4px;background:#05060c;border-radius:1px;border:1px solid #2a3050"></div>
+      <div style="position:absolute;right:5px;bottom:-3px;width:6px;height:4px;background:#05060c;border-radius:1px;border:1px solid #2a3050"></div>
+    </div>
+    <div style="width:${anchoChasis + 60}px;height:10px;background:radial-gradient(ellipse at center, rgba(0,0,0,.4) 0%, rgba(0,0,0,0) 78%);margin-top:1px"></div>
+  </div>`;
+}
+
 async function telecomOfficeCargar() {
   const sel = document.getElementById('telecomOfficeObra');
   if (!sel) return;
@@ -12247,14 +12344,44 @@ async function telecomOfficeAbrirIdf(id) {
   try {
     const list = await _telecomOfficeApi('/telecom/racks?idf_id=' + Number(id));
     _telecomOfficeCache.rack = Array.isArray(list) ? list : [];
-    cont.innerHTML = _telecomOfficeCache.rack.length
-      ? _telecomOfficeCache.rack.map(r => {
-          const nMod = Number(r.num_modulos) || 0;
-          const sub = [`${nMod} módulo${nMod === 1 ? '' : 's'}`, r.notas].filter(Boolean).join(' · ');
-          return _telecomOfficeFila('rack', r, '🗄️ ' + escHtml(r.nombre), escHtml(sub), `telecomOfficeAbrirRack(${Number(r.id)})`);
-        }).join('')
-      : '<div class="empty-state">Sin racks en este IDF.</div>';
+    if (!_telecomOfficeCache.rack.length) {
+      cont.innerHTML = '<div class="empty-state">Sin racks en este IDF.</div>';
+      return;
+    }
+    // TELECOM-ELEVACION-01 (18/08/2026): Adrián -- "porque cuando haya dos quiero verlos
+    // juntos" -- los racks del IDF van lado a lado, no apilados uno debajo del otro, para
+    // que se vean como el cuarto técnico real (comparten el mismo "suelo").
+    const modulosPorRack = await Promise.all(_telecomOfficeCache.rack.map(r =>
+      _telecomOfficeApi('/telecom/patch-panels?rack_id=' + Number(r.id)).catch(() => [])
+    ));
+    cont.innerHTML = `<div style="display:flex;gap:26px;align-items:flex-end;overflow-x:auto;padding:6px 4px 16px">
+      ${_telecomOfficeCache.rack.map((r, i) => {
+        const nMod = Number(r.num_modulos) || 0;
+        return `<div style="text-align:center;flex-shrink:0">
+          <div style="font-weight:800;font-size:12px;margin-bottom:2px;cursor:pointer" onclick="telecomOfficeAbrirRack(${Number(r.id)})">🗄️ ${escHtml(r.nombre)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:6px">${r.tipo === 'pared' ? 'De pared' : 'De pie'} · ${Number(r.altura_u) || 42}U · ${nMod} módulo${nMod === 1 ? '' : 's'}</div>
+          <div style="cursor:pointer" onclick="telecomOfficeAbrirRack(${Number(r.id)})">${telecomOfficeRenderElevacion(r, modulosPorRack[i], { compacto:true })}</div>
+          <div style="display:flex;gap:5px;justify-content:center;margin-top:6px">${_telecomOfficeAcciones('rack', r.id)}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
   } catch (e) { cont.innerHTML = `<div class="empty-state">❌ ${escHtml(e.message)}</div>`; }
+}
+
+window._telecomOfficeZoomFactor = window._telecomOfficeZoomFactor || 1;
+function telecomOfficeZoom(delta) {
+  window._telecomOfficeZoomFactor = Math.max(0.5, Math.min(3, Math.round((window._telecomOfficeZoomFactor + delta) * 100) / 100));
+  _telecomOfficeAplicarZoomRack();
+}
+function telecomOfficeZoomReset() {
+  window._telecomOfficeZoomFactor = 1;
+  _telecomOfficeAplicarZoomRack();
+}
+function _telecomOfficeAplicarZoomRack() {
+  const zoom = document.getElementById('telecomOfficeRackZoom');
+  if (zoom) zoom.style.transform = `scale(${window._telecomOfficeZoomFactor})`;
+  const label = document.getElementById('telecomOfficeZoomLabel');
+  if (label) label.textContent = Math.round(window._telecomOfficeZoomFactor * 100) + '%';
 }
 
 async function telecomOfficeAbrirRack(id) {
@@ -12263,6 +12390,11 @@ async function telecomOfficeAbrirRack(id) {
   _telecomOfficeNivel = 'pp';
   _telecomOfficeCtx.rack_id = Number(id);
   _telecomOfficeCtx.rack_nombre = item.nombre;
+  // CPD-ZOOM-01, mismo criterio aquí: el zoom se conserva mientras se sigue en el MISMO
+  // rack (incluido el refresco automático), pero se resetea al entrar a un rack distinto.
+  const mismoRack = window._telecomOfficeRackZoomId === Number(id);
+  if (!mismoRack) window._telecomOfficeZoomFactor = 1;
+  window._telecomOfficeRackZoomId = Number(id);
   const nuevo = document.getElementById('telecomOfficeNuevoBtn');
   nuevo.disabled = false; nuevo.textContent = '+ Nuevo Patch Panel';
   document.getElementById('telecomOfficeBreadcrumb').innerHTML =
@@ -12273,18 +12405,156 @@ async function telecomOfficeAbrirRack(id) {
   try {
     const list = await _telecomOfficeApi('/telecom/patch-panels?rack_id=' + Number(id));
     _telecomOfficeCache.pp = Array.isArray(list) ? list : [];
-    cont.innerHTML = (_telecomOfficeCache.pp.length
-      ? _telecomOfficeCache.pp.map(p => {
-          const ocupados = Number(p.ocupados) || 0;
-          const libres = Number(p.libres) || 0;
-          const tecnico = [p.red_vlan, p.switch_asociado, p.subred, p.posicion_u].filter(Boolean).map(escHtml).join(' · ');
-          const resumen = `${Number(p.num_puertos)} puertos · <span style="color:#22c55e;font-weight:800">${ocupados} ocupados</span> · <span style="color:#60a5fa;font-weight:800">${libres} libres</span>`;
-          const subtitulo = `${resumen}${tecnico ? `<div style="margin-top:4px;color:var(--text);font-weight:600">${tecnico}</div>` : ''}`;
-          const iconoTipo = { cobre:'🔌', fibra:'🧵', switch:'🖧' }[p.tipo] || '🔌';
-          return _telecomOfficeFila('pp', p, iconoTipo + ' ' + escHtml(p.nombre), subtitulo, `telecomOfficeAbrirPP(${Number(p.id)})`);
-        }).join('')
-      : '<div class="empty-state">Sin patch panels en este rack.</div>');
+    const sinColocar = _telecomOfficeCache.pp.filter(p => p.pos_u_inicio == null);
+    cont.innerHTML = `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        ${TELECOM_OFFICE_PLANTILLAS_MODULO.map(pl => `
+          <div class="telecomOfficeChip" onpointerdown="_telecomOfficeIniciarArrastreNueva(event,'${pl.id}')"
+            style="display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);cursor:grab;touch-action:none;font-size:12px;font-weight:700;user-select:none">
+            <span>${pl.icono}</span><span>${escHtml(pl.label)}</span>
+          </div>`).join('')}
+        <div style="display:flex;gap:4px;align-items:center;margin-left:auto">
+          <button class="btn btn-secondary btn-sm" onclick="telecomOfficeZoom(-0.25)" title="Alejar">－</button>
+          <span id="telecomOfficeZoomLabel" style="font-size:11px;color:var(--muted);min-width:38px;text-align:center">${Math.round(window._telecomOfficeZoomFactor * 100)}%</span>
+          <button class="btn btn-secondary btn-sm" onclick="telecomOfficeZoom(0.25)" title="Ampliar">＋</button>
+          <button class="btn btn-secondary btn-sm" onclick="telecomOfficeZoomReset()" title="Volver al 100%">↺</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Arrastra un módulo de la barra hasta el armario para montarlo · haz clic en uno ya montado para ver/editar sus puertos</div>
+      <div id="telecomOfficeRackWrap" style="width:100%;overflow:auto;padding:10px 4px 20px;display:flex;justify-content:center">
+        <div id="telecomOfficeRackZoom" style="transform-origin:top center">
+          ${telecomOfficeRenderElevacion(item, _telecomOfficeCache.pp, { compacto:false })}
+        </div>
+      </div>
+      ${sinColocar.length ? `
+      <div style="margin-top:4px">
+        <div style="font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px">Sin colocar en el diagrama — arrástralos a su sitio</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${sinColocar.map(p => {
+            const icono = _telecomOfficeIconoModulo(p.tipo);
+            const c = _telecomOfficeColorModulo(p.tipo);
+            return `<div class="telecomOfficeChip" data-id="${Number(p.id)}"
+              onpointerdown="_telecomOfficeIniciarArrastreExistente(event,${Number(p.id)})" onclick="_telecomOfficeClickModulo(event,${Number(p.id)})"
+              style="display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:8px;background:${c.bg};border:1px solid ${c.border};cursor:grab;touch-action:none;font-size:12px;font-weight:700;color:#fff">
+              <span>${icono}</span><span>${escHtml(p.nombre)}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}`;
+    _telecomOfficeAplicarZoomRack();
   } catch (e) { cont.innerHTML = `<div class="empty-state">❌ ${escHtml(e.message)}</div>`; }
+}
+
+function _telecomOfficeClickModulo(event, id) {
+  event.stopPropagation();
+  if (window._telecomOfficeJustDragged) return;
+  telecomOfficeAbrirPP(id);
+}
+
+// Arrastre de un módulo de la paleta (crea uno nuevo al soltar).
+function _telecomOfficeIniciarArrastreNueva(e, plantillaId) {
+  e.preventDefault();
+  const plantilla = TELECOM_OFFICE_PLANTILLAS_MODULO.find(p => p.id === plantillaId);
+  if (plantilla) _telecomOfficeArrastrar(e, { modo:'nueva', plantilla });
+}
+
+// Arrastre de un módulo ya existente (montado o en "sin colocar") para (re)posicionarlo.
+// Mismo criterio de retardo que _cpdOfficeWireDrag: hay que distinguir de un clic normal
+// que abre los puertos del módulo, así que el arrastre solo arranca tras mantener pulsado.
+function _telecomOfficeIniciarArrastreExistente(e, moduloId) {
+  const startX = e.clientX, startY = e.clientY;
+  const mover = ev => { if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 8) cancelar(); };
+  const soltar = () => cancelar();
+  function cancelar() {
+    clearTimeout(timer);
+    document.removeEventListener('pointermove', mover);
+    document.removeEventListener('pointerup', soltar);
+  }
+  const timer = setTimeout(() => {
+    cancelar();
+    const modulo = _telecomOfficeCache.pp.find(p => Number(p.id) === Number(moduloId));
+    if (modulo) _telecomOfficeArrastrar(e, { modo:'mover', modulo });
+  }, 260);
+  document.addEventListener('pointermove', mover);
+  document.addEventListener('pointerup', soltar, { once:true });
+}
+
+function _telecomOfficeArrastrar(e, payload) {
+  const rackId = Number(_telecomOfficeCtx.rack_id);
+  const alturaModulo = payload.modo === 'mover' ? Number(payload.modulo.pos_u_altura || 1) : 1;
+  const nombre = payload.modo === 'mover' ? payload.modulo.nombre : payload.plantilla.label;
+  const icono = payload.modo === 'mover' ? _telecomOfficeIconoModulo(payload.modulo.tipo) : payload.plantilla.icono;
+  const ghost = document.createElement('div');
+  ghost.style.cssText = 'position:fixed;pointer-events:none;z-index:99999;padding:4px 9px;border-radius:6px;font-size:12px;font-weight:800;background:#233152;border:1px solid #3d5486;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.5);display:flex;gap:5px;align-items:center';
+  ghost.innerHTML = `<span>${icono}</span><span>${escHtml(nombre)}</span>`;
+  document.body.appendChild(ghost);
+  const posicionar = (x, y) => { ghost.style.left = (x + 14) + 'px'; ghost.style.top = (y + 14) + 'px'; };
+  posicionar(e.clientX, e.clientY);
+  const hi = document.getElementById(`telecomOfficeDropHi_${rackId}`);
+  const filas = document.getElementById(`telecomOfficeFilas_${rackId}`);
+  const limpiar = () => { if (hi) hi.style.display = 'none'; };
+  const validar = (uInicio, alturaU) => {
+    const uFin = uInicio + alturaModulo - 1;
+    if (uInicio < 1 || uFin > alturaU) return false;
+    const excluirId = payload.modo === 'mover' ? Number(payload.modulo.id) : null;
+    return !_telecomOfficeCache.pp.some(p => {
+      if (p.pos_u_inicio == null || (excluirId && Number(p.id) === excluirId)) return false;
+      const pFin = p.pos_u_inicio + (p.pos_u_altura || 1) - 1;
+      return uInicio <= pFin && p.pos_u_inicio <= uFin;
+    });
+  };
+  const mover = ev => {
+    posicionar(ev.clientX, ev.clientY);
+    if (!filas || !hi) return;
+    const rect = filas.getBoundingClientRect();
+    const dentro = ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom;
+    if (!dentro) { limpiar(); return; }
+    const alturaU = Number(filas.dataset.alturaU);
+    const rowH = rect.height / alturaU;
+    const u = Math.floor((rect.bottom - ev.clientY) / rowH) + 1;
+    const ok = validar(u, alturaU);
+    hi.style.display = 'block';
+    hi.style.bottom = ((u - 1) * rowH) + 'px';
+    hi.style.height = Math.max(rowH - 1, alturaModulo * rowH - 1) + 'px';
+    hi.style.borderColor = ok ? '#6ee7a2' : '#ff9c9c';
+    hi.style.background = ok ? 'rgba(110,231,162,.15)' : 'rgba(255,156,156,.15)';
+    hi.dataset.u = u; hi.dataset.ok = ok ? '1' : '0';
+  };
+  const soltar = async ev => {
+    document.removeEventListener('pointermove', mover);
+    document.removeEventListener('pointerup', soltar);
+    ghost.remove();
+    const uObjetivo = (hi && hi.style.display === 'block' && hi.dataset.ok === '1') ? Number(hi.dataset.u) : null;
+    limpiar();
+    if (uObjetivo) {
+      window._telecomOfficeJustDragged = true;
+      setTimeout(() => { window._telecomOfficeJustDragged = false; }, 150);
+      await _telecomOfficeSoltarModulo(payload, uObjetivo);
+    }
+  };
+  document.addEventListener('pointermove', mover);
+  document.addEventListener('pointerup', soltar, { once:true });
+};
+
+async function _telecomOfficeSoltarModulo(payload, posUInicio) {
+  const rackId = _telecomOfficeCtx.rack_id;
+  try {
+    if (payload.modo === 'mover') {
+      await _telecomOfficeApi('/telecom/patch-panels/' + Number(payload.modulo.id), { method:'PATCH', body:JSON.stringify({ pos_u_inicio:posUInicio }) });
+      toast('Módulo reposicionado ✓', 'ok');
+      await telecomOfficeAbrirRack(rackId);
+    } else {
+      const pl = payload.plantilla;
+      const nombre = `${pl.label} ${Date.now().toString().slice(-4)}`;
+      const data = await _telecomOfficeApi('/telecom/patch-panels', { method:'POST', body:JSON.stringify({
+        rack_id: rackId, nombre, tipo: pl.tipo, marca: pl.marca, num_puertos: pl.num_puertos,
+        pos_u_inicio: posUInicio, pos_u_altura: 1
+      }) });
+      toast('Módulo montado ✓ — completa sus datos', 'ok');
+      await telecomOfficeAbrirRack(rackId);
+      telecomOfficeEditar('pp', data.id);
+    }
+  } catch (e) { toast(e.message || 'No se pudo colocar el módulo', 'err'); }
 }
 
 async function telecomOfficeAbrirPP(id) {
@@ -12400,6 +12670,14 @@ function _telecomOfficePoblarMarcas() {
   const marcas = [...new Set([..._TELECOM_OFFICE_MARCAS_SEMILLA, ...usadas])];
   document.getElementById('telecomOfficeMarcasList').innerHTML = marcas.map(m => `<option value="${escHtml(m)}">`).join('');
 }
+// TELECOM-ELEVACION-01 (18/08/2026): al elegir el tipo en "Nuevo rack" se sugiere la
+// altura típica de ese tipo (confirmado con Adrián: 12U pared / 42U pie) -- si el usuario
+// ya había escrito una altura distinta a mano, se respeta y no se pisa.
+function _telecomOfficeTipoRackCambiado() {
+  const tipo = document.getElementById('telecomOfficeRackTipo').value;
+  const alturaInput = document.getElementById('telecomOfficeRackAltura');
+  if (!_telecomOfficeEdit) alturaInput.value = tipo === 'pared' ? '12' : '42';
+}
 function _telecomOfficeToggleMarcaModulo() {
   const esSwitch = document.getElementById('telecomOfficeTipo').value === 'switch';
   document.getElementById('telecomOfficeMarcaWrap').style.display = esSwitch ? '' : 'none';
@@ -12422,6 +12700,7 @@ function telecomOfficeAbrirNuevo() {
   const extra = document.getElementById('telecomOfficeCampoExtra');
   const patchFields = document.getElementById('telecomOfficePatchFields');
   const cuadroFields = document.getElementById('telecomOfficeCuadroFields');
+  const rackFields = document.getElementById('telecomOfficeRackFields');
   document.getElementById('telecomOfficeNombre').value = '';
   document.getElementById('telecomOfficeExtra').value = '';
   ['telecomOfficeRedVlan','telecomOfficeSwitch','telecomOfficeSubred','telecomOfficePosicionU','telecomOfficeNotasConfig','telecomOfficeMarca']
@@ -12430,6 +12709,7 @@ function telecomOfficeAbrirNuevo() {
   _telecomOfficeToggleMarcaModulo();
   patchFields.style.display = 'none';
   cuadroFields.style.display = 'none';
+  rackFields.style.display = 'none';
   if (_telecomOfficeNivel === 'idf') {
     document.getElementById('telecomOfficeModalTitulo').textContent = 'Nuevo IDF';
     document.getElementById('telecomOfficeLabelExtra').textContent = 'Ubicación';
@@ -12437,6 +12717,9 @@ function telecomOfficeAbrirNuevo() {
   } else if (_telecomOfficeNivel === 'rack') {
     document.getElementById('telecomOfficeModalTitulo').textContent = 'Nuevo rack';
     extra.style.display = 'none';
+    rackFields.style.display = '';
+    document.getElementById('telecomOfficeRackTipo').value = 'pie';
+    document.getElementById('telecomOfficeRackAltura').value = '42';
   } else if (_telecomOfficeNivel === 'cuadros') {
     document.getElementById('telecomOfficeModalTitulo').textContent = 'Nuevo cuadro de campo';
     document.getElementById('telecomOfficeLabelExtra').textContent = 'Ubicación';
@@ -12466,8 +12749,10 @@ function telecomOfficeEditar(tipo, id) {
   const extra = document.getElementById('telecomOfficeCampoExtra');
   const patchFields = document.getElementById('telecomOfficePatchFields');
   const cuadroFields = document.getElementById('telecomOfficeCuadroFields');
+  const rackFields = document.getElementById('telecomOfficeRackFields');
   patchFields.style.display = 'none';
   cuadroFields.style.display = 'none';
+  rackFields.style.display = 'none';
   if (tipo === 'idf') {
     document.getElementById('telecomOfficeModalTitulo').textContent = 'Editar IDF';
     document.getElementById('telecomOfficeLabelExtra').textContent = 'Ubicación';
@@ -12489,6 +12774,11 @@ function telecomOfficeEditar(tipo, id) {
     document.getElementById('telecomOfficeModalTitulo').textContent = tipo === 'rack' ? 'Editar rack' : 'Editar módulo';
     document.getElementById('telecomOfficeExtra').value = '';
     extra.style.display = 'none';
+    if (tipo === 'rack') {
+      rackFields.style.display = '';
+      document.getElementById('telecomOfficeRackTipo').value = item.tipo === 'pared' ? 'pared' : 'pie';
+      document.getElementById('telecomOfficeRackAltura').value = item.altura_u || 42;
+    }
     if (tipo === 'pp') {
       patchFields.style.display = '';
       document.getElementById('telecomOfficeTipo').value = item.tipo || 'cobre';
@@ -12508,6 +12798,13 @@ function telecomOfficeEditar(tipo, id) {
 function telecomOfficeCerrarModal() {
   document.getElementById('modalTelecomOfficeEntidad').style.display = 'none';
   _telecomOfficeEdit = null;
+}
+
+function _telecomOfficeDatosRack() {
+  return {
+    tipo: document.getElementById('telecomOfficeRackTipo').value,
+    altura_u: parseInt(document.getElementById('telecomOfficeRackAltura').value) || 42
+  };
 }
 
 function _telecomOfficeDatosPatchPanel() {
@@ -12542,6 +12839,7 @@ async function telecomOfficeGuardarEntidad() {
       const path = tipo === 'idf' ? '/telecom/idf/' : tipo === 'rack' ? '/telecom/racks/' : tipo === 'cuadro' ? '/telecom/cuadros-campo/' : '/telecom/patch-panels/';
       const body = { nombre };
       if (tipo === 'idf') body.ubicacion = document.getElementById('telecomOfficeExtra').value.trim();
+      if (tipo === 'rack') Object.assign(body, _telecomOfficeDatosRack());
       if (tipo === 'pp') Object.assign(body, _telecomOfficeDatosPatchPanel());
       if (tipo === 'cuadro') { body.ubicacion = document.getElementById('telecomOfficeExtra').value.trim(); Object.assign(body, _telecomOfficeDatosCuadro()); }
       await _telecomOfficeApi(path + id, { method:'PATCH', body:JSON.stringify(body) });
@@ -12555,7 +12853,7 @@ async function telecomOfficeGuardarEntidad() {
       await _telecomOfficeApi('/telecom/idf', { method:'POST', body:JSON.stringify({ obra_id:_telecomOfficeCtx.obra_id, nombre, ubicacion:document.getElementById('telecomOfficeExtra').value.trim() }) });
       telecomOfficeCerrarModal(); toast('IDF creado ✓', 'ok'); await telecomOfficeCargarIdfs();
     } else if (_telecomOfficeNivel === 'rack') {
-      await _telecomOfficeApi('/telecom/racks', { method:'POST', body:JSON.stringify({ idf_id:_telecomOfficeCtx.idf_id, nombre }) });
+      await _telecomOfficeApi('/telecom/racks', { method:'POST', body:JSON.stringify({ idf_id:_telecomOfficeCtx.idf_id, nombre, ..._telecomOfficeDatosRack() }) });
       telecomOfficeCerrarModal(); toast('Rack creado ✓', 'ok'); await telecomOfficeAbrirIdf(_telecomOfficeCtx.idf_id);
     } else if (_telecomOfficeNivel === 'cuadros') {
       const num = parseInt(document.getElementById('telecomOfficeCuadroPuertos').value) || 8;
