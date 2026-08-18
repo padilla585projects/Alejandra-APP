@@ -4,6 +4,82 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-18 — Cuadros de campo v2: caja exterior con componentes, Office)
+
+> ⚠️ **Pendiente antes de usar**: código desplegado (Worker + Pages) pero la migración D1
+> no se ha podido aplicar todavía — el clasificador de seguridad del modo automático la
+> bloqueó (no las reglas del proyecto, que ya la tenían autorizada). Ejecutar los 3
+> comandos de `migrate_telecom_cuadros_v2.sql` contra producción antes de crear/editar
+> cuadros de campo; hasta entonces esa parte dará error 500 (el resto de la app, incluidos
+> los racks, no se ve afectado — la carga de cuadros dentro del IDF falla en silencio y
+> simplemente no muestra la sección).
+
+- **TELECOM-CUADRO-02:** Adrián, retomando el diseño de los racks: "se nos olvido el otro
+  modelo que teniamos... cuadro exterior donde podiamos elegir un switch gestionado" →
+  "que los metemos en un cuadro electrico adaptado para ello y se cuelga en el exterior (en
+  una farola por ejemplo)" → "al igual que los IDF podriamos tener un cuadro de plastico
+  exterior dibujado donde meteriamos cosas, por ejemplo el switch, fuente alimentacion,
+  fuente POE para camara si necesitara, un hub de fibra tambien etc" → "mismo estilo que
+  con los IDF no?". Los cuadros de campo se mueven dentro del IDF (antes vivían en una
+  pantalla aparte a nivel de obra, con botón propio "🧰 Cuadros de campo") y pasan de ser
+  "un switch con marca/modelo/nº puertos" a ser una caja IP65 dibujada (colgada de una
+  farola/pared, con patas/soporte y sombra igual que los racks) que contiene componentes
+  sueltos montados en un carril DIN horizontal: switch DIN gestionado (Cisco/Ubiquiti/
+  genérico), fuente de alimentación, inyector POE (cámaras), hub de fibra, o personalizado
+  en blanco — arrastrables desde una paleta, mismo patrón pointerdown/pointermove/pointerup
+  que los racks, pero sin colisión de posición (el orden en el carril es solo visual, con
+  índice fraccional para reordenar sin reindexar todo al arrastrar).
+- **Vínculo real por fibra:** "ese switch va a un IDF pero con fibra claro" → "asique en el
+  IDF se conectaria al panel de fibra" → "que tambien tendriamos que seleccionar las bocas
+  para decir que ahi conectado". Antes el cuadro solo apuntaba a "el IDF" en abstracto; ahora
+  el modal "Nuevo/editar cuadro" tiene un selector en cascada IDF → panel de fibra de ese
+  IDF → puerto libre concreto — al guardar, ese puerto queda marcado ocupado con el nombre
+  del cuadro (igual que cualquier otro puerto), y se libera automáticamente si se cambia de
+  puerto o se borra el cuadro.
+- **Backend:** tablas nuevas `telecom_cuadro_componentes` / `telecom_cuadro_componente_puertos`
+  + columna `puerto_conexion_id` en `telecom_cuadros_campo` (migración aditiva; verificado
+  antes de migrar que ambas tablas afectadas tenían 0 filas en producción, así que no hace
+  falta migrar datos existentes). Endpoints nuevos para componentes/puertos y para listar
+  paneles de fibra de un IDF con sus puertos libres (`GET /telecom/paneles-fibra`).
+- **Arreglo de paso, encontrado revisando el diagrama de racks del mismo día:** faltaba un
+  botón para eliminar un rack/módulo/IDF/cuadro/componente directamente desde su modal de
+  edición (antes solo existía en las filas de la lista antigua, y el nuevo diagrama de rack
+  no tenía filas) — añadido "🗑 Eliminar" en el pie del modal genérico de Telecom.
+- Pendiente para otra ronda: portar todo esto (racks + cuadros v2) a `index.html` (app
+  móvil), igual que se hizo con Correos.
+
+### Added (2026-08-18 — Racks/Cableado: diagrama visual con arrastrar-y-soltar, Office)
+
+- **TELECOM-ELEVACION-01:** Adrián: "quiero darle una vuelta al tema racks en telecom... lo
+  quiero hacer mas visual todo". La vista de un rack (`panel.html`, Office) deja de ser una
+  lista plana de módulos: ahora es un diagrama de elevación real (armario de pie o de
+  pared, filas U numeradas de abajo a arriba, como se monta un rack en persona). Una barra
+  de herramientas con plantillas de módulo (Cisco, Ubiquiti, Panduit/genérico, más
+  "Personalizado" en blanco) se arrastra al armario para montarlos; los ya montados
+  también se pueden arrastrar para reposicionarlos. Mismo patrón
+  pointerdown/pointermove/pointerup que Sondas CPD (funciona con ratón y touch), con snap a
+  fila U en vez de posición libre, y el mismo mecanismo de zoom para leer nombres con
+  detalle en racks altos. Al hacer clic en un módulo ya montado se entra directamente a
+  gestionar sus puertos (funcionalidad ya existente, sin cambios). El IDF muestra todos sus
+  racks lado a lado compartiendo el mismo "suelo" ("cuando haya dos quiero verlos juntos"),
+  no apilados.
+- **Dos tipos de rack:** "también da la opción de crear rack de pared o de pie" — de pared
+  (12U por defecto, dibujado montado en la pared) y de pie (42U por defecto, ≈1,86m real —
+  "aquí se utilizan rack de 1,80mts de altura", dibujado de pie con base, patas de
+  nivelación y sombra de suelo).
+- **Backend:** `telecom_racks` gana columnas `altura_u` y `tipo` (pared/pie, con altura por
+  defecto según tipo al crear); `telecom_patch_panels` gana `pos_u_inicio`/`pos_u_altura`.
+  El backend valida que la posición de cada módulo quepa en el rack y no se solape con
+  otro (409 con mensaje claro) — el resaltado del frontend durante el arrastre es solo
+  ayuda visual, la barrera real está en el servidor. Migraciones aditivas: los racks y
+  módulos ya existentes quedan con los valores por defecto (`altura_u=42`, `tipo='pie'`,
+  módulos sin colocar aparecen en una lista aparte hasta que se arrastran a su sitio).
+  Verificado en producción: creación de rack de cada tipo con la altura correcta, colisión
+  de módulos rechazada con 409, reposición por arrastre, y clic en módulo montado → vista
+  de puertos.
+- Pendiente para otra ronda: portar el mismo diagrama visual a `index.html` (app móvil),
+  igual que se hizo con Correos.
+
 ### Fixed (2026-08-17, noche — muñeco de EPIs)
 
 - **Colores del muñeco de dotación de EPIs sin relación con la prenda real:** Adrián: "al

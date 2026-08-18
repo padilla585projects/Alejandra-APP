@@ -1,6 +1,46 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-17
+- Actualizado: 2026-08-18
+- Estado (2026-08-18, continuación): **TELECOM-CUADRO-02 — código completo y desplegado
+  (Worker + Pages), migración D1 PENDIENTE de aplicar.** Continuación directa de
+  TELECOM-ELEVACION-01 (abajo): Adrián recordó que faltaba "el otro modelo... cuadro
+  exterior donde podiamos elegir un switch gestionado" y pidió el mismo tratamiento visual
+  ("al igual que los IDF... mismo estilo que con los IDF no?"). Los cuadros de campo (antes
+  pantalla propia a nivel de obra) se mueven dentro del IDF y pasan de "un switch" a una
+  caja IP65 con componentes sueltos en carril DIN (switch/fuente/POE/hub de fibra/
+  personalizado), arrastrables igual que los racks. Vínculo real por fibra: IDF → panel de
+  fibra → puerto libre concreto, que queda ocupado con el nombre del cuadro. Backend
+  completo (2 tablas nuevas + 1 columna, endpoints, validación) y frontend completo
+  (paleta, diagrama, drag, modal en cascada) escritos, verificados con `node --check` y sin
+  corrupción de encoding, comprometidos y desplegados a producción.
+  ⚠️ **La migración D1 no se ha podido aplicar**: el clasificador de seguridad del modo
+  automático bloqueó los `wrangler d1 execute` (no las reglas del proyecto, que ya lo
+  tenían autorizado tras confirmar por lectura que las tablas afectadas estaban vacías).
+  Los 3 comandos exactos están en `migrate_telecom_cuadros_v2.sql` y en el mensaje del
+  commit `c8642b6`. Hasta que se ejecuten, crear/editar un cuadro de campo o sus
+  componentes dará error 500; el resto de la app (incluido el diagrama de racks) no se ve
+  afectado — la carga de cuadros dentro del IDF falla en silencio y esa sección
+  simplemente no aparece. Detalle completo en `HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
+- Estado (2026-08-18): **TELECOM-ELEVACION-01 completada, desplegada y verificada —
+  diagrama visual de rack con arrastrar-y-soltar (Racks/Cableado, Office).** Adrián:
+  "quiero darle una vuelta al tema racks en telecom... lo quiero hacer mas visual todo".
+  La vista de un rack pasa de lista plana a diagrama de elevación real (armario de pie o
+  de pared, filas U de abajo a arriba); paleta de plantillas de módulo (Cisco, Ubiquiti,
+  Panduit/genérico, personalizado) arrastrable al armario para montarlas, reutilizando el
+  mismo patrón pointerdown/pointermove/pointerup y el zoom ya probados en Sondas CPD.
+  Clic en un módulo montado entra directo a su gestión de puertos, ya existente. El IDF
+  muestra sus racks lado a lado compartiendo suelo, no apilados ("cuando haya dos quiero
+  verlos juntos"). Dos tipos de rack (pared 12U / pie 42U por defecto, ≈1,86m real —
+  Adrián: "aquí se utilizan rack de 1,80mts"), cada uno con su propio dibujo. Backend:
+  columnas aditivas `altura_u`/`tipo` en `telecom_racks` y `pos_u_inicio`/`pos_u_altura`
+  en `telecom_patch_panels`, con validación de solape/límites en servidor (409). Diseño
+  visual iterado con Adrián antes de tocar código (mockups vía herramienta de
+  prototipado, 3 rondas de feedback: grounding físico del rack, racks lado a lado, escala
+  real). Verificado en producción con datos de prueba (creados y borrados en la misma
+  sesión): rack de cada tipo con altura correcta, colisión de módulos rechazada con 409,
+  reposición por arrastre, clic en módulo → puertos. Pendiente para otra ronda: portar a
+  `index.html` (app móvil), igual que Correos. Detalle completo en
+  `HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
 - Estado (2026-08-17): **CORREOS-PANEL-01 completada, desplegada y verificada — pendiente
   solo que Adrián pruebe en vivo la sincronización real con su Gmail** (planificada con
   `EnterPlanMode`/`AskUserQuestion` antes de tocar código: sin permisos nuevos de Google,
