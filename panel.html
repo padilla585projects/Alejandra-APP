@@ -12250,16 +12250,19 @@ function telecomOfficeRenderElevacion(rack, modulos, opts) {
     var chasisInterior = `<div style="width:${anchoChasis}px;background:linear-gradient(180deg,#171b30,#12162a);
       border-left:1px solid #3d4570;border-right:1px solid #3d4570;padding:0 4px;box-sizing:border-box">${filas}</div>`;
   } else {
-    // TELECOM-ELEVACION-01, 2º ajuste (18/08/2026): Adrián -- primero "el rack es demasiado
-    // alto... hacer scroll no mola" (se acortaron las filas), luego "esta muy feo la vista
-    // asi de los paneles, dijimos de hacerlo mas grandes los paneles no mas ancho el rack"
-    // (acortar las filas dejaba los módulos como láminas finas). Las dos cosas a la vez solo
-    // son compatibles si los huecos VACÍOS no ocupan tanto espacio como los módulos
-    // MONTADOS: los tramos sin nada se comprimen en una franja fina con su nº de U ("8U
-    // libres"); los módulos montados tienen una altura grande y fija (no depende de cuántas
-    // U tenga el rack), así que siempre se leen bien sin hacer zoom. El caso real (pocos
-    // módulos, mucho hueco) es justo el que más se beneficia.
-    const ALTO_MODULO = 34, ALTO_VACIO = 18;
+    // TELECOM-ELEVACION-01, 2º y 3er ajuste (18/08/2026): Adrián -- primero "el rack es
+    // demasiado alto... hacer scroll no mola" (se acortaron las filas), luego "esta muy feo
+    // la vista asi de los paneles, dijimos de hacerlo mas grandes los paneles no mas ancho
+    // el rack" (acortar las filas dejaba los módulos como láminas finas). Los tramos VACÍOS
+    // se comprimen en una franja fina con su nº de U ("8U libres"); los módulos MONTADOS
+    // tienen altura propia, no ligada a cuántas U tenga el rack. Con pocos módulos se ven
+    // grandes; a partir de ahí, Adrián: "tamaño fijo no, mejor autoajustable" -- según se
+    // van montando más, se van encogiendo un poco (hasta un mínimo legible) en vez de seguir
+    // creciendo el rack sin límite. Solo tras ese mínimo un rack ya muy lleno vuelve a
+    // necesitar scroll -- eso sí es física (no caben 40 cosas legibles en 150px).
+    const numModulos = colocados.length;
+    const ALTO_MODULO = Math.max(22, 40 - Math.max(0, numModulos - 3) * 2);
+    const ALTO_VACIO = Math.max(12, 18 - Math.max(0, numModulos - 3) * 0.4);
     const segmentos = _telecomOfficeSegmentosRack(alturaU, colocados);
     const bloques = segmentos.map(seg => {
       const uLen = seg.uFin - seg.uInicio + 1;
@@ -12273,12 +12276,13 @@ function telecomOfficeRenderElevacion(rack, modulos, opts) {
       const m = seg.modulo;
       const c = _telecomOfficeColorModulo(m.tipo);
       const altoModulo = Math.min(70, ALTO_MODULO + (uLen - 1) * 14);
+      const compacta = altoModulo < 28;
       return `<div class="telecomOfficeModulo" data-id="${Number(m.id)}" data-u-inicio="${seg.uInicio}" data-u-fin="${seg.uFin}"
         onclick="_telecomOfficeClickModulo(event,${Number(m.id)})" onpointerdown="_telecomOfficeIniciarArrastreExistente(event,${Number(m.id)})"
         style="flex-shrink:0;height:${altoModulo}px;border-radius:4px;background:${c.bg};border:1px solid ${c.border};
-        display:flex;align-items:center;gap:6px;padding:0 8px;cursor:grab;touch-action:none;overflow:hidden">
-        <span style="font-size:15px;flex-shrink:0">${_telecomOfficeIconoModulo(m.tipo)}</span>
-        <span style="font-size:11px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.nombre)}</span>
+        display:flex;align-items:center;gap:${compacta ? 4 : 6}px;padding:0 ${compacta ? 6 : 8}px;cursor:grab;touch-action:none;overflow:hidden">
+        <span style="font-size:${compacta ? 11 : 15}px;flex-shrink:0">${_telecomOfficeIconoModulo(m.tipo)}</span>
+        <span style="font-size:${compacta ? 9.5 : 11}px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.nombre)}</span>
       </div>`;
     }).join('');
     var filas = `<div id="telecomOfficeFilas_${rack.id}" class="telecomOfficeRackFilas" data-rack-id="${Number(rack.id)}" data-altura-u="${alturaU}"
@@ -12306,17 +12310,27 @@ function telecomOfficeRenderElevacion(rack, modulos, opts) {
       </div>
     </div>`;
   }
+  // TELECOM-ELEVACION-01, 3er ajuste (18/08/2026): Adrián, mirando el IDF con varios racks
+  // de pie lado a lado -- "la linea no sera mejor abajo como si fuera el suelo?". Las
+  // patas + sombra individuales de cada rack quedaban como marcas sueltas sin relacionarse
+  // entre sí; el "suelo" de verdad ahora es una única línea compartida que pinta
+  // telecomOfficeAbrirIdf debajo de TODA la fila de racks (ver filaRacks). Aquí, en
+  // compacto, solo queda la base sin patas/sombra propias -- en la vista interactiva de un
+  // rack suelto sí se mantienen (no comparte suelo con nadie).
+  const baseInferior = compacto
+    ? `<div style="width:${anchoChasis + 8}px;height:6px;background:#12162a;border-left:1px solid #3d4570;border-right:1px solid #3d4570;border-bottom:1px solid #3d4570;border-radius:0 0 3px 3px"></div>`
+    : `<div style="width:${anchoChasis + 8}px;height:8px;background:#12162a;border-left:1px solid #3d4570;border-right:1px solid #3d4570;border-bottom:1px solid #3d4570;border-radius:0 0 3px 3px;position:relative">
+      <div style="position:absolute;left:5px;bottom:-3px;width:6px;height:4px;background:#05060c;border-radius:1px;border:1px solid #2a3050"></div>
+      <div style="position:absolute;right:5px;bottom:-3px;width:6px;height:4px;background:#05060c;border-radius:1px;border:1px solid #2a3050"></div>
+    </div>
+    <div style="width:${anchoChasis + 60}px;height:10px;background:radial-gradient(ellipse at center, rgba(0,0,0,.4) 0%, rgba(0,0,0,0) 78%);margin-top:1px"></div>`;
   return `<div style="display:flex;flex-direction:column;align-items:center">
     <div style="width:${anchoChasis}px">
       <svg width="${anchoChasis}" height="9" viewBox="0 0 ${anchoChasis} 9"><polygon points="4,9 ${anchoChasis - 4},9 ${anchoChasis - 10},1 10,1" fill="#2a3050" stroke="#3d4570" stroke-width="1"/></svg>
       <div style="height:4px;background:#1e2340;border-left:1px solid #3d4570;border-right:1px solid #3d4570;margin:0 4px"></div>
     </div>
     ${chasisInterior}
-    <div style="width:${anchoChasis + 8}px;height:8px;background:#12162a;border-left:1px solid #3d4570;border-right:1px solid #3d4570;border-bottom:1px solid #3d4570;border-radius:0 0 3px 3px;position:relative">
-      <div style="position:absolute;left:5px;bottom:-3px;width:6px;height:4px;background:#05060c;border-radius:1px;border:1px solid #2a3050"></div>
-      <div style="position:absolute;right:5px;bottom:-3px;width:6px;height:4px;background:#05060c;border-radius:1px;border:1px solid #2a3050"></div>
-    </div>
-    <div style="width:${anchoChasis + 60}px;height:10px;background:radial-gradient(ellipse at center, rgba(0,0,0,.4) 0%, rgba(0,0,0,0) 78%);margin-top:1px"></div>
+    ${baseInferior}
   </div>`;
 }
 
@@ -12442,17 +12456,29 @@ async function telecomOfficeAbrirIdf(id) {
     const componentesPorCuadro = await Promise.all(_telecomOfficeCache.cuadro.map(c =>
       _telecomOfficeApi('/telecom/cuadro-componentes?cuadro_id=' + Number(c.id)).catch(() => [])
     ));
-    const filaRacks = _telecomOfficeCache.rack.length ? `<div style="display:flex;gap:26px;align-items:flex-end;overflow-x:auto;padding:6px 4px 16px">
-      ${_telecomOfficeCache.rack.map((r, i) => {
-        const nMod = Number(r.num_modulos) || 0;
-        return `<div style="text-align:center;flex-shrink:0">
-          <div style="font-weight:800;font-size:12px;margin-bottom:2px;cursor:pointer" onclick="telecomOfficeAbrirRack(${Number(r.id)})">🗄️ ${escHtml(r.nombre)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-bottom:6px">${r.tipo === 'pared' ? 'De pared' : 'De pie'} · ${Number(r.altura_u) || 42}U · ${nMod} módulo${nMod === 1 ? '' : 's'}</div>
-          <div style="cursor:pointer" onclick="telecomOfficeAbrirRack(${Number(r.id)})">${telecomOfficeRenderElevacion(r, modulosPorRack[i], { compacto:true })}</div>
-          <div style="display:flex;gap:5px;justify-content:center;margin-top:6px">${_telecomOfficeAcciones('rack', r.id)}</div>
-        </div>`;
-      }).join('')}
-    </div>` : '<div class="empty-state">Sin racks en este IDF.</div>';
+    // TELECOM-ELEVACION-01, 3er ajuste (18/08/2026): Adrián -- "la linea no sera mejor
+    // abajo como si fuera el suelo?". Antes cada rack tenía sus propias patas+sombra
+    // sueltas (marcas sin relación entre sí); ahora es una única línea de suelo continua
+    // que cruza TODA la fila (la fila de nombres/dibujos se alinea por abajo con
+    // align-items:flex-end, así que los dibujos ya "tocan" la misma altura; solo hacía
+    // falta pintar la línea ahí) y los botones de editar/borrar van en una segunda fila
+    // aparte, "por debajo del suelo", con el mismo ancho de columna para que cada rack
+    // conserve los suyos justo debajo.
+    const filaRacks = _telecomOfficeCache.rack.length ? `
+      <div style="display:flex;gap:26px;align-items:flex-end;overflow-x:auto;padding:6px 4px 0">
+        ${_telecomOfficeCache.rack.map((r, i) => {
+          const nMod = Number(r.num_modulos) || 0;
+          return `<div style="text-align:center;flex-shrink:0;width:104px">
+            <div style="font-weight:800;font-size:12px;margin-bottom:2px;cursor:pointer" onclick="telecomOfficeAbrirRack(${Number(r.id)})">🗄️ ${escHtml(r.nombre)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-bottom:6px">${r.tipo === 'pared' ? 'De pared' : 'De pie'} · ${Number(r.altura_u) || 42}U · ${nMod} módulo${nMod === 1 ? '' : 's'}</div>
+            <div style="cursor:pointer;display:inline-block" onclick="telecomOfficeAbrirRack(${Number(r.id)})">${telecomOfficeRenderElevacion(r, modulosPorRack[i], { compacto:true })}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="height:2px;background:linear-gradient(90deg,transparent,#3d4570 8%,#3d4570 92%,transparent);margin:0 4px"></div>
+      <div style="display:flex;gap:26px;overflow-x:auto;padding:8px 4px 16px">
+        ${_telecomOfficeCache.rack.map(r => `<div style="width:104px;display:flex;gap:5px;justify-content:center;flex-shrink:0">${_telecomOfficeAcciones('rack', r.id)}</div>`).join('')}
+      </div>` : '<div class="empty-state">Sin racks en este IDF.</div>';
     const filaCuadros = _telecomOfficeCache.cuadro.length ? `
       <div style="font-size:12px;font-weight:800;color:var(--muted);margin:8px 0 6px">🧰 Cuadros de campo (exterior)</div>
       <div style="display:flex;gap:22px;align-items:flex-start;overflow-x:auto;padding:6px 4px 16px">
