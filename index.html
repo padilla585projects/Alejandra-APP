@@ -18685,7 +18685,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         }) });
         const data = await _telecomLeerRespuesta(res);
         toast('✅ Módulo montado — completa sus datos', 'ok');
-        telecomAbrirRack(_telecomCtx.rack_id);
+        await telecomAbrirRack(_telecomCtx.rack_id);
         telecomEditarEntidad('pp', data.id);
       }
     } catch (e) { toast('❌ ' + (e.message || 'No se pudo colocar'), 'err'); }
@@ -18727,7 +18727,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('telecomCuadrosBtn').style.display = 'none';
     const el = document.getElementById('telecomContent');
     el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`);
-    telecomCargarNivel('/telecom/patch-panels?rack_id=' + id, (list) => {
+    return telecomCargarNivel('/telecom/patch-panels?rack_id=' + id, (list) => {
       _telecomCache.pp = list;
       const sinColocar = list.filter(p => p.pos_u_inicio == null);
       const sinColocarHTML = sinColocar.length ? `
@@ -18891,7 +18891,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       }) });
       const data = await _telecomLeerRespuesta(res);
       toast('✅ Componente añadido — completa sus datos', 'ok');
-      telecomAbrirCuadro(_telecomCtx.cuadro_id);
+      await telecomAbrirCuadro(_telecomCtx.cuadro_id);
       telecomEditarEntidad('componente', data.id);
     } catch (e) { toast('❌ ' + (e.message || 'No se pudo añadir'), 'err'); }
   }
@@ -18910,7 +18910,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     cuadrosBtn.style.display = ''; cuadrosBtn.textContent = '📄 Informe'; cuadrosBtn.onclick = () => telecomGenerarInformeCuadro(id);
     const el = document.getElementById('telecomContent');
     el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`);
-    telecomCargarNivel('/telecom/cuadro-componentes?cuadro_id=' + id, (list) => {
+    return telecomCargarNivel('/telecom/cuadro-componentes?cuadro_id=' + id, (list) => {
       _telecomCache.componente = list;
       el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`)
         + `<div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:4px">Toca "+ Componente" para montarlo · toca un switch/hub ya montado para ver sus puertos</div>`
