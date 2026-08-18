@@ -2485,6 +2485,9 @@ select option{background:var(--surface2);color:var(--text)}
       <button id="telecomInformeTopBtn" onclick="telecomAbrirInformePicker()" style="display:none;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;flex-shrink:0">📄 Informe</button>
       <button id="telecomAddBtn" onclick="telecomAbrirNuevo()" style="background:var(--accent);color:#fff;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;flex-shrink:0">+ Nuevo</button>
     </div>
+    <div id="telecomColocarHint" onclick="telecomCancelarColocar()" style="display:none;align-items:center;gap:8px;padding:9px 14px;background:rgba(110,231,162,.12);border-bottom:1px solid #6ee7a2;font-size:12px;font-weight:700;color:#6ee7a2;flex-shrink:0">
+      <span style="flex:1">Toca un hueco para colocarlo</span><span style="text-decoration:underline">Cancelar</span>
+    </div>
     <div id="telecomContent" style="padding:12px 14px;overflow-y:auto;flex:1">
       <div class="empty-state">Cargando...</div>
     </div>
@@ -2543,27 +2546,42 @@ select option{background:var(--surface2);color:var(--text)}
             <textarea id="telecomModalNotasConfig" rows="3" maxlength="1000" placeholder="Ej: PoE, trunk, reserva…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
           </div>
         </div>
-        <!-- TELECOM-CUADRO-01 (12/08/2026): campos del cuadro de campo (switch de carril DIN
-             en exterior) — nombre/ubicación se comparten con telecomModalInput1/Field2Wrap. -->
-        <div id="telecomModalCuadroFields" style="display:none">
-          <div style="margin-bottom:11px">
-            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Marca</label>
-            <input id="telecomModalCuadroMarca" type="text" list="telecomMarcasList" placeholder="Ej: Cisco" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
-          </div>
+        <!-- TELECOM-ELEVACION-01 (18/08/2026): tipo de armario (pared/pie) + altura en U. -->
+        <div id="telecomModalRackFields" style="display:none">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div style="margin-bottom:11px">
-              <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Modelo</label>
-              <input id="telecomModalCuadroModelo" type="text" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+              <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Tipo de armario</label>
+              <select id="telecomModalRackTipo" onchange="_telecomTipoRackCambiado()" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#111827;color-scheme:light;font-size:13px">
+                <option value="pie" style="background:#fff;color:#111827">🗄️ De pie (suelo)</option>
+                <option value="pared" style="background:#fff;color:#111827">🧱 De pared</option>
+              </select>
             </div>
             <div style="margin-bottom:11px">
-              <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Nº de puertos</label>
-              <input id="telecomModalCuadroPuertos" type="number" min="1" max="96" value="8" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+              <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Altura (U)</label>
+              <input id="telecomModalRackAltura" type="number" min="1" max="60" value="42" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
             </div>
           </div>
+        </div>
+        <!-- TELECOM-CUADRO-02 (18/08/2026): el cuadro ya no lleva marca/modelo/puertos propios
+             (eso ahora es un componente dentro de él); en su lugar, el vínculo real por fibra
+             -- IDF -> panel de fibra de ese IDF -> puerto libre concreto. -->
+        <div id="telecomModalCuadroFields" style="display:none">
           <div style="margin-bottom:11px">
             <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Sube por fibra a este IDF</label>
-            <select id="telecomModalCuadroIdf" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#111827;color-scheme:light;font-size:13px">
+            <select id="telecomModalCuadroIdf" onchange="_telecomCuadroIdfCambiado()" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#111827;color-scheme:light;font-size:13px">
               <option value="" style="background:#fff;color:#111827">— Sin definir todavía —</option>
+            </select>
+          </div>
+          <div style="margin-bottom:11px;display:none" id="telecomModalCuadroPanelWrap">
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Panel de fibra</label>
+            <select id="telecomModalCuadroPanel" onchange="_telecomCuadroPanelCambiado()" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#111827;color-scheme:light;font-size:13px">
+              <option value="" style="background:#fff;color:#111827">— Elige un panel —</option>
+            </select>
+          </div>
+          <div style="margin-bottom:11px;display:none" id="telecomModalCuadroPuertoWrap">
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Puerto</label>
+            <select id="telecomModalCuadroPuerto" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#111827;color-scheme:light;font-size:13px">
+              <option value="" style="background:#fff;color:#111827">— Elige un puerto libre —</option>
             </select>
           </div>
           <div style="margin-bottom:11px">
@@ -2571,10 +2589,50 @@ select option{background:var(--surface2);color:var(--text)}
             <textarea id="telecomModalCuadroNotas" rows="3" maxlength="1000" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
           </div>
         </div>
+        <!-- TELECOM-CUADRO-02: componente suelto dentro del cuadro (switch DIN, fuente, POE,
+             hub de fibra…) -- nombre se comparte con telecomModalInput1. -->
+        <div id="telecomModalComponenteFields" style="display:none">
+          <div style="margin-bottom:11px">
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Tipo de componente</label>
+            <select id="telecomModalComponenteTipo" onchange="_telecomToggleNumPuertosComponente()" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#111827;color-scheme:light;font-size:13px">
+              <option value="switch" style="background:#fff;color:#111827">🖧 Switch DIN gestionado</option>
+              <option value="fuente" style="background:#fff;color:#111827">🔋 Fuente de alimentación</option>
+              <option value="poe" style="background:#fff;color:#111827">📷 Inyector POE</option>
+              <option value="fibra" style="background:#fff;color:#111827">🧵 Hub de fibra</option>
+              <option value="otro" style="background:#fff;color:#111827">🔧 Otro</option>
+            </select>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="margin-bottom:11px">
+              <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Marca</label>
+              <input id="telecomModalComponenteMarca" type="text" list="telecomMarcasList" placeholder="Ej: Cisco" maxlength="160" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+            </div>
+            <div style="margin-bottom:11px" id="telecomModalComponentePuertosWrap">
+              <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Nº de puertos</label>
+              <input id="telecomModalComponentePuertos" type="number" min="1" max="96" value="8" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+            </div>
+          </div>
+          <div style="margin-bottom:11px">
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Notas</label>
+            <textarea id="telecomModalComponenteNotas" rows="3" maxlength="1000" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+          </div>
+        </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
-        <button onclick="conBoton(this, telecomGuardarModal)" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+        <button id="telecomEliminarDesdeModalBtn" onclick="_telecomEliminarDesdeModal()" style="display:none;background:none;border:1px solid var(--border);color:#ef4444;border-radius:10px;padding:12px 16px;font-weight:800;font-size:14px;cursor:pointer">🗑</button>
+        <button onclick="conBoton(this, telecomGuardarModal)" style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- TELECOM: hoja inferior para elegir plantilla de módulo/componente a colocar (toca-y-toca) -->
+  <div class="modal-overlay" id="modalTelecomPaleta" onclick="if(event.target===this)telecomCerrarPaleta()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);width:100%;max-width:520px;border-radius:18px 18px 0 0;max-height:75vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div id="telecomPaletaTitulo" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Añadir</div>
+        <button onclick="telecomCerrarPaleta()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+      <div id="telecomPaletaLista" style="overflow-y:auto;flex:1"></div>
     </div>
   </div>
 
@@ -18366,9 +18424,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     // dentro de cada fila a la cabecera fija, junto a "+ Nuevo". Solo vive en el nivel IDF
     // (aquí); se oculta al entrar en un rack (telecomAbrirIdf/telecomAbrirRack).
     document.getElementById('telecomInformeTopBtn').style.display = _telecomCtx.obra_id ? '' : 'none';
-    document.getElementById('telecomCuadrosBtn').style.display = _telecomCtx.obra_id ? '' : 'none';
-    document.getElementById('telecomCuadrosBtn').textContent = '🧰 Cuadros';
-    document.getElementById('telecomCuadrosBtn').onclick = telecomCargarCuadros;
+    // TELECOM-CUADRO-02 (18/08/2026): los cuadros de campo se mueven dentro del IDF -- ver
+    // comentario gemelo en panel.html. Este botón ya no vive a nivel de obra.
+    document.getElementById('telecomCuadrosBtn').style.display = 'none';
     telecomCargarNivel('/telecom/idf?obra_id=' + (_telecomCtx.obra_id || ''), telecomRenderIdfs);
   }
   window.telecomCargarIdfs = telecomCargarIdfs;
@@ -18451,55 +18509,269 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + item.nombre;
     document.getElementById('telecomAddBtn').style.display = '';
     document.getElementById('telecomAddBtn').textContent = '+ Nuevo Rack';
+    document.getElementById('telecomAddBtn').onclick = telecomAbrirNuevo;
     document.getElementById('telecomInformeTopBtn').style.display = 'none';
-    document.getElementById('telecomCuadrosBtn').style.display = 'none';
+    // TELECOM-CUADRO-02: "+ Nuevo Cuadro" vive aquí, dentro del IDF.
+    const cuadrosBtn = document.getElementById('telecomCuadrosBtn');
+    cuadrosBtn.style.display = ''; cuadrosBtn.textContent = '🧰 + Cuadro'; cuadrosBtn.onclick = telecomAbrirNuevoCuadro;
     const el = document.getElementById('telecomContent');
     el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()');
-    telecomCargarNivel('/telecom/racks?idf_id=' + id, (list) => {
-      _telecomCache.rack = list;
-      el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()') + (list.length
-        ? list.map(r => {
+    Promise.all([
+      apiCall('/telecom/racks?idf_id=' + id).then(_telecomLeerRespuesta),
+      apiCall('/telecom/cuadros-campo?idf_id=' + id).then(_telecomLeerRespuesta).catch(() => [])
+    ]).then(([racks, cuadros]) => {
+      _telecomCache.rack = Array.isArray(racks) ? racks : [];
+      _telecomCache.cuadro = Array.isArray(cuadros) ? cuadros : [];
+      const filaRacks = _telecomCache.rack.length
+        ? _telecomCache.rack.map(r => {
             const nMod = Number(r.num_modulos) || 0;
-            const sub = [`${nMod} módulo${nMod === 1 ? '' : 's'}`, r.notas].filter(Boolean).join(' · ');
+            const sub = [(r.tipo === 'pared' ? 'De pared' : 'De pie'), `${Number(r.altura_u) || 42}U`, `${nMod} módulo${nMod === 1 ? '' : 's'}`].join(' · ');
             return _telecomItemHTML(r.id, '🗄️ ' + _escHtml(r.nombre), _escHtml(sub), `telecomAbrirRack(${Number(r.id)})`, 'rack');
           }).join('')
-        : '<div class="empty-state">Sin racks en este IDF. Pulsa "+ Nuevo Rack".</div>');
-    });
+        : '<div class="empty-state">Sin racks en este IDF. Pulsa "+ Nuevo Rack".</div>';
+      const filaCuadros = _telecomCache.cuadro.length
+        ? `<div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">🧰 Cuadros de campo</div>` +
+          _telecomCache.cuadro.map(c => {
+            const nComp = Number(c.num_componentes) || 0;
+            const sub = [`${nComp} componente${nComp === 1 ? '' : 's'}`, c.ubicacion].filter(Boolean).join(' · ');
+            return _telecomItemHTML(c.id, '🧰 ' + _escHtml(c.nombre), _escHtml(sub), `telecomAbrirCuadro(${Number(c.id)})`, 'cuadro');
+          }).join('')
+        : '';
+      el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()') + filaRacks + filaCuadros;
+    }).catch(e => { el.innerHTML = _telecomVolverBtn('telecomCargarIdfs()') + `<div class="empty-state">❌ ${_escHtml(e.message || 'Error al cargar')}</div>`; });
   }
   window.telecomAbrirIdf = telecomAbrirIdf;
+
+  // TELECOM-ELEVACION-01 (18/08/2026): ver comentario gemelo en panel.html
+  // (telecomOfficeRenderElevacion) -- mismo diseño de segmentos (huecos vacíos comprimidos,
+  // módulos montados con altura propia y autoajustable), pero en móvil no hay arrastre: se
+  // "toca y toca" (toca una plantilla o un módulo montado -> modo colocar -> toca el hueco
+  // donde va). Adrián: "por el tema de la pantalla pequeña... que sea facil".
+  function _telecomIconoModulo(tipo) { return { cobre:'🔌', fibra:'🧵', switch:'🖧' }[tipo] || '🔌'; }
+  function _telecomColorModulo(tipo) {
+    return {
+      cobre:  { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' },
+      fibra:  { bg:'linear-gradient(145deg,#2a2a2a,#141414)', border:'#4a4a4a' },
+      switch: { bg:'linear-gradient(145deg,#1e2440,#12162a)', border:'#3a4270' }
+    }[tipo] || { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' };
+  }
+  const TELECOM_PLANTILLAS_MODULO = [
+    { id:'panel_cobre', icono:'🔌', label:'Patch panel cobre', tipo:'cobre', marca:'', num_puertos:24 },
+    { id:'panel_fibra', icono:'🧵', label:'Patch panel fibra', tipo:'fibra', marca:'', num_puertos:24 },
+    { id:'switch_cisco', icono:'🖧', label:'Switch Cisco Catalyst', tipo:'switch', marca:'Cisco', num_puertos:24 },
+    { id:'switch_ubiquiti', icono:'🖧', label:'Switch Ubiquiti UniFi', tipo:'switch', marca:'Ubiquiti', num_puertos:24 },
+    { id:'personalizado', icono:'➕', label:'Personalizado', tipo:'cobre', marca:'', num_puertos:24 }
+  ];
+
+  function _telecomSegmentosRack(alturaU, colocados) {
+    const ordenados = [...colocados].sort((a, b) => a.pos_u_inicio - b.pos_u_inicio);
+    const segmentos = []; let cursor = 1;
+    for (const m of ordenados) {
+      if (m.pos_u_inicio > cursor) segmentos.push({ tipo:'vacio', uInicio:cursor, uFin:m.pos_u_inicio - 1 });
+      const uFinModulo = m.pos_u_inicio + (Number(m.pos_u_altura) || 1) - 1;
+      segmentos.push({ tipo:'modulo', uInicio:m.pos_u_inicio, uFin:uFinModulo, modulo:m });
+      cursor = uFinModulo + 1;
+    }
+    if (cursor <= alturaU) segmentos.push({ tipo:'vacio', uInicio:cursor, uFin:alturaU });
+    return segmentos;
+  }
+
+  function telecomRenderElevacion(rack, modulos) {
+    const alturaU = Math.max(1, Number(rack.altura_u) || 42);
+    const colocados = (modulos || []).filter(m => m.pos_u_inicio != null);
+    const numModulos = colocados.length;
+    const ALTO_MODULO = Math.max(24, 42 - Math.max(0, numModulos - 3) * 2);
+    const ALTO_VACIO = Math.max(14, 20 - Math.max(0, numModulos - 3) * 0.4);
+    const segmentos = _telecomSegmentosRack(alturaU, colocados);
+    const bloques = segmentos.map(seg => {
+      const uLen = seg.uFin - seg.uInicio + 1;
+      if (seg.tipo === 'vacio') {
+        return `<div class="telecomSegmentoVacio" data-u-inicio="${seg.uInicio}" data-u-fin="${seg.uFin}"
+          onclick="_telecomTocarSegmento(event,this)"
+          style="height:${ALTO_VACIO}px;border:1px dashed #2a3050;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#4b5578;font-weight:700;margin:2px 0">
+          ${uLen}U libre${uLen === 1 ? '' : 's'}
+        </div>`;
+      }
+      const m = seg.modulo;
+      const c = _telecomColorModulo(m.tipo);
+      const altoModulo = Math.min(80, ALTO_MODULO + (uLen - 1) * 14);
+      return `<div class="telecomModuloBloque" data-id="${Number(m.id)}"
+        style="height:${altoModulo}px;border-radius:5px;background:${c.bg};border:1px solid ${c.border};
+        display:flex;align-items:center;gap:8px;padding:0 8px 0 10px;margin:2px 0">
+        <div onclick="_telecomTocarModulo(event,${Number(m.id)})" style="flex:1;display:flex;align-items:center;gap:8px;min-width:0;height:100%">
+          <span style="font-size:16px;flex-shrink:0">${_telecomIconoModulo(m.tipo)}</span>
+          <span style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(m.nombre)}</span>
+        </div>
+        <button onclick="_telecomIniciarColocarModulo(event,${Number(m.id)})" title="Reposicionar" style="background:rgba(255,255,255,.1);border:none;border-radius:6px;color:#fff;font-size:13px;padding:5px 8px;cursor:pointer;flex-shrink:0">↕</button>
+      </div>`;
+    }).join('');
+    const anchoBase = rack.tipo === 'pared' ? 130 : 150;
+    const chasis = `<div style="width:${anchoBase}px;margin:0 auto;background:linear-gradient(180deg,#171b30,#12162a);border:1px solid #3d4570;border-radius:6px;padding:6px;box-sizing:border-box">
+      <div style="background:linear-gradient(180deg,#0f1224,#0c0f1e);border-radius:4px;box-shadow:inset 0 2px 8px rgba(0,0,0,.6);padding:4px">${bloques}</div>
+    </div>`;
+    if (rack.tipo === 'pared') {
+      return `<div style="text-align:center;padding:6px 0">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">🧱 montado en pared</div>
+        ${chasis}
+      </div>`;
+    }
+    return `<div style="text-align:center;padding:6px 0">
+      ${chasis}
+      <div style="width:${anchoBase + 16}px;height:6px;background:#12162a;border:1px solid #3d4570;border-top:none;border-radius:0 0 4px 4px;margin:0 auto"></div>
+      <div style="width:${anchoBase + 50}px;height:8px;background:radial-gradient(ellipse at center, rgba(0,0,0,.4) 0%, rgba(0,0,0,0) 78%);margin:1px auto 0"></div>
+    </div>`;
+  }
+
+  // ── Modo colocar (toca-y-toca) ──────────────────────────────────────────────
+  let _telecomModoColocar = null; // { modo:'nueva', plantilla } | { modo:'mover', modulo }
+  function telecomActualizarHintColocar() {
+    const hint = document.getElementById('telecomColocarHint');
+    if (!hint) return;
+    hint.style.display = _telecomModoColocar ? 'flex' : 'none';
+  }
+  function telecomCancelarColocar() { _telecomModoColocar = null; telecomActualizarHintColocar(); }
+  window.telecomCancelarColocar = telecomCancelarColocar;
+
+  function _telecomIniciarColocarModulo(event, id) {
+    event.stopPropagation();
+    const modulo = _telecomCache.pp.find(p => Number(p.id) === Number(id));
+    if (!modulo) return;
+    _telecomModoColocar = { modo:'mover', modulo };
+    telecomActualizarHintColocar();
+  }
+  window._telecomIniciarColocarModulo = _telecomIniciarColocarModulo;
+
+  function _telecomTocarModulo(event, id) {
+    event.stopPropagation();
+    if (_telecomModoColocar) {
+      const m = _telecomCache.pp.find(p => Number(p.id) === Number(id));
+      if (m) _telecomConfirmarColocacionModulo(Number(m.pos_u_inicio));
+      return;
+    }
+    telecomAbrirPP(id);
+  }
+  window._telecomTocarModulo = _telecomTocarModulo;
+
+  function _telecomTocarSegmento(event, el) {
+    event.stopPropagation();
+    if (!_telecomModoColocar) return;
+    const rect = el.getBoundingClientRect();
+    const uInicio = Number(el.dataset.uInicio), uFin = Number(el.dataset.uFin);
+    const uLen = uFin - uInicio + 1;
+    const y = (event.changedTouches && event.changedTouches[0]) ? event.changedTouches[0].clientY : event.clientY;
+    const frac = (rect.bottom - y) / rect.height;
+    let u = uInicio + Math.floor(frac * uLen);
+    u = Math.max(uInicio, Math.min(uFin, u));
+    _telecomConfirmarColocacionModulo(u);
+  }
+  window._telecomTocarSegmento = _telecomTocarSegmento;
+
+  async function _telecomConfirmarColocacionModulo(u) {
+    const payload = _telecomModoColocar;
+    if (!payload) return;
+    _telecomModoColocar = null;
+    telecomActualizarHintColocar();
+    try {
+      if (payload.modo === 'mover') {
+        const res = await apiCall('/telecom/patch-panels/' + Number(payload.modulo.id), { method:'PATCH', body:JSON.stringify({ pos_u_inicio:u }) });
+        await _telecomLeerRespuesta(res);
+        toast('✅ Módulo reposicionado', 'ok');
+        telecomAbrirRack(_telecomCtx.rack_id);
+      } else {
+        const pl = payload.plantilla;
+        const nombre = `${pl.label} ${Date.now().toString().slice(-4)}`;
+        const res = await apiCall('/telecom/patch-panels', { method:'POST', body:JSON.stringify({
+          rack_id:_telecomCtx.rack_id, nombre, tipo:pl.tipo, marca:pl.marca, num_puertos:pl.num_puertos, pos_u_inicio:u, pos_u_altura:1
+        }) });
+        const data = await _telecomLeerRespuesta(res);
+        toast('✅ Módulo montado — completa sus datos', 'ok');
+        telecomAbrirRack(_telecomCtx.rack_id);
+        telecomEditarEntidad('pp', data.id);
+      }
+    } catch (e) { toast('❌ ' + (e.message || 'No se pudo colocar'), 'err'); }
+  }
+
+  // ── Paleta en hoja inferior (genérica: módulos de rack o componentes de cuadro) ─────────
+  function telecomAbrirPaleta(plantillas, onElegir, titulo) {
+    document.getElementById('telecomPaletaTitulo').textContent = titulo || 'Añadir';
+    document.getElementById('telecomPaletaLista').innerHTML = plantillas.map((pl, i) =>
+      `<div onclick="(${onElegir})(${i})" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer">
+        <span style="font-size:20px">${pl.icono}</span><span style="font-weight:700;color:var(--text);font-size:14px">${_escHtml(pl.label)}</span>
+      </div>`).join('');
+    document.getElementById('modalTelecomPaleta').style.display = 'flex';
+  }
+  function telecomCerrarPaleta() { document.getElementById('modalTelecomPaleta').style.display = 'none'; }
+  window.telecomCerrarPaleta = telecomCerrarPaleta;
+
+  function telecomAbrirPaletaModulos() {
+    telecomAbrirPaleta(TELECOM_PLANTILLAS_MODULO, 'telecomElegirPlantillaModulo', '🗄️ Añadir módulo');
+  }
+  window.telecomAbrirPaletaModulos = telecomAbrirPaletaModulos;
+  function telecomElegirPlantillaModulo(i) {
+    telecomCerrarPaleta();
+    _telecomModoColocar = { modo:'nueva', plantilla: TELECOM_PLANTILLAS_MODULO[i] };
+    telecomActualizarHintColocar();
+  }
+  window.telecomElegirPlantillaModulo = telecomElegirPlantillaModulo;
 
   function telecomAbrirRack(id) {
     const item = _telecomCache.rack.find(x => Number(x.id) === Number(id));
     if (!item) return;
     _telecomNivel = 'pp';
     _telecomCtx.rack_id = id; _telecomCtx.rack_nombre = item.nombre;
+    _telecomModoColocar = null; telecomActualizarHintColocar();
     document.getElementById('telecomBreadcrumb').textContent = '🗄️ ' + _telecomCtx.idf_nombre + ' › ' + item.nombre;
     document.getElementById('telecomAddBtn').style.display = '';
-    document.getElementById('telecomAddBtn').textContent = '+ Nuevo Patch Panel';
+    document.getElementById('telecomAddBtn').textContent = '+ Módulo';
+    document.getElementById('telecomAddBtn').onclick = telecomAbrirPaletaModulos;
+    document.getElementById('telecomCuadrosBtn').style.display = 'none';
     const el = document.getElementById('telecomContent');
     el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`);
     telecomCargarNivel('/telecom/patch-panels?rack_id=' + id, (list) => {
       _telecomCache.pp = list;
+      const sinColocar = list.filter(p => p.pos_u_inicio == null);
+      const sinColocarHTML = sinColocar.length ? `
+        <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Sin colocar — toca para montar</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          ${sinColocar.map(p => {
+            const c = _telecomColorModulo(p.tipo);
+            return `<div onclick="_telecomIniciarColocarSinMontar(${Number(p.id)})" style="display:flex;align-items:center;gap:5px;padding:7px 10px;border-radius:8px;background:${c.bg};border:1px solid ${c.border};font-size:12px;font-weight:700;color:#fff">
+              <span>${_telecomIconoModulo(p.tipo)}</span><span>${_escHtml(p.nombre)}</span>
+            </div>`;
+          }).join('')}
+        </div>` : '';
       el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`)
-        + (list.length
-          ? list.map(p => {
-              const ocupados = Number(p.ocupados) || 0;
-              const libres = Number(p.libres) || 0;
-              const tecnico = [
-                p.red_vlan ? _escHtml(p.red_vlan) : '',
-                p.switch_asociado ? _escHtml(p.switch_asociado) : '',
-                p.subred ? _escHtml(p.subred) : '',
-                p.posicion_u ? _escHtml(p.posicion_u) : ''
-              ].filter(Boolean).join(' · ');
-              const resumen = `<span style="color:#22c55e;font-weight:800">${ocupados} ocupados</span> · <span style="color:#60a5fa;font-weight:800">${libres} libres</span>`;
-              const subtitulo = `${Number(p.num_puertos)} puertos · ${resumen}${tecnico ? `<div style="margin-top:4px;color:var(--text);font-weight:600">${tecnico}</div>` : ''}`;
-              const iconoTipo = { cobre:'🔌', fibra:'🧵', switch:'🖧' }[p.tipo] || '🔌';
-              return _telecomItemHTML(p.id, iconoTipo + ' ' + _escHtml(p.nombre), subtitulo, `telecomAbrirPP(${Number(p.id)})`, 'pp');
-            }).join('')
-          : '<div class="empty-state">Sin patch panels en este rack. Pulsa "+ Nuevo Patch Panel".</div>');
+        + `<div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:4px">Toca "+ Módulo" para montar uno nuevo · toca ↕ en uno montado para reposicionarlo</div>`
+        + telecomRenderElevacion(item, list) + sinColocarHTML;
     });
   }
   window.telecomAbrirRack = telecomAbrirRack;
+
+  function _telecomIniciarColocarSinMontar(id) {
+    const modulo = _telecomCache.pp.find(p => Number(p.id) === Number(id));
+    if (!modulo) return;
+    _telecomModoColocar = { modo:'mover', modulo };
+    telecomActualizarHintColocar();
+  }
+  window._telecomIniciarColocarSinMontar = _telecomIniciarColocarSinMontar;
+
+  // TELECOM-PUERTO-VISUAL-01 (18/08/2026): ver comentario gemelo en panel.html -- conector
+  // real según tipo de panel/componente: RJ45 (cobre/switch) o LC dúplex (fibra).
+  function _telecomPuertoIcono(tipo) {
+    if (tipo === 'fibra') {
+      return `<svg width="24" height="15" viewBox="0 0 26 16" style="display:block">
+        <rect x="1" y="2" width="10" height="12" rx="2" fill="#0d9488" stroke="#0f766e" stroke-width="1"/>
+        <rect x="15" y="2" width="10" height="12" rx="2" fill="#0d9488" stroke="#0f766e" stroke-width="1"/>
+        <circle cx="6" cy="8" r="1.6" fill="#022c22"/>
+        <circle cx="20" cy="8" r="1.6" fill="#022c22"/>
+      </svg>`;
+    }
+    return `<svg width="20" height="15" viewBox="0 0 22 16" style="display:block">
+      <rect x="7" y="0" width="8" height="4" rx="1" fill="#4b5563"/>
+      <rect x="1" y="3" width="20" height="12" rx="1.5" fill="#374151" stroke="#1f2937" stroke-width="1"/>
+      ${[0,1,2,3,4,5,6,7].map(i => `<rect x="${3 + i * 2}" y="6" width="1.2" height="6" fill="#d4af37"/>`).join('')}
+    </svg>`;
+  }
 
   function telecomAbrirPP(id) {
     const item = _telecomCache.pp.find(x => Number(x.id) === Number(id));
@@ -18513,85 +18785,173 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${Number(_telecomCtx.rack_id)})`);
     telecomCargarNivel('/telecom/puertos?patch_panel_id=' + id, (list) => {
       _telecomCache.puertos = list;
+      const icono = _telecomPuertoIcono(item.tipo);
       const grid = list.map(p => {
         const ocupado = p.estado === 'ocupado';
         const detalleCable = ocupado ? [p.cable_label, p.categoria].filter(Boolean).map(_escHtml).join(' · ') : '';
-        return `<div onclick="telecomAbrirPuerto(${Number(p.id)})" style="cursor:pointer;padding:9px 5px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'};min-height:58px;display:flex;flex-direction:column;justify-content:center">
-          <div style="font-weight:900;font-size:14px;color:${ocupado ? '#22c55e' : 'var(--text)'}">${p.numero}</div>
-          <div style="font-size:11px;font-weight:700;line-height:1.25;color:${ocupado ? 'var(--text)' : 'var(--muted)'};overflow-wrap:anywhere">${ocupado ? _escHtml(p.destino || 'ocupado') : 'libre'}</div>
-          ${detalleCable ? `<div style="font-size:9px;line-height:1.2;color:var(--muted);margin-top:3px;overflow-wrap:anywhere">${detalleCable}</div>` : ''}
+        return `<div onclick="telecomAbrirPuerto(${Number(p.id)})" style="cursor:pointer;padding:9px 5px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'};min-height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+          <div style="display:flex;align-items:center;justify-content:center">${icono}</div>
+          <div style="font-weight:900;font-size:13px;color:${ocupado ? '#22c55e' : 'var(--text)'}">${p.numero}</div>
+          <div style="font-size:10px;font-weight:700;line-height:1.2;color:${ocupado ? 'var(--text)' : 'var(--muted)'};overflow-wrap:anywhere">${ocupado ? _escHtml(p.destino || 'ocupado') : 'libre'}</div>
+          ${detalleCable ? `<div style="font-size:8.5px;line-height:1.15;color:var(--muted);margin-top:1px;overflow-wrap:anywhere">${detalleCable}</div>` : ''}
         </div>`;
       }).join('');
       el.innerHTML = _telecomVolverBtn(`telecomAbrirRack(${Number(_telecomCtx.rack_id)})`)
-        + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px">${grid}</div>`;
+        + `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px">${grid}</div>`;
     });
   }
   window.telecomAbrirPP = telecomAbrirPP;
 
-  // TELECOM-CUADRO-01 (12/08/2026): cuadros de campo — entidad plana ligada a la obra, fuera
-  // de la jerarquía IDF→rack→panel. Se accede desde el botón "🧰 Cuadros" del nivel IDF.
-  function telecomCargarCuadros() {
-    if (!_telecomCtx.obra_id) return;
-    _telecomNivel = 'cuadros';
-    document.getElementById('telecomBreadcrumb').textContent = '🧰 Cuadros de campo';
-    document.getElementById('telecomAddBtn').style.display = '';
-    document.getElementById('telecomAddBtn').textContent = '+ Nuevo cuadro';
-    document.getElementById('telecomInformeTopBtn').style.display = 'none';
-    document.getElementById('telecomCuadrosBtn').style.display = '';
-    document.getElementById('telecomCuadrosBtn').textContent = '🗄️ Racks';
-    document.getElementById('telecomCuadrosBtn').onclick = telecomCargarIdfs;
-    const el = document.getElementById('telecomContent');
-    el.innerHTML = '<div class="empty-state">Cargando...</div>';
-    telecomCargarNivel('/telecom/cuadros-campo?obra_id=' + _telecomCtx.obra_id, (list) => {
-      _telecomCache.cuadro = list;
-      if (!list.length) {
-        el.innerHTML = '<div class="empty-state">Sin cuadros de campo todavía. Pulsa "+ Nuevo cuadro" para crear el primero.</div>';
-        return;
-      }
-      el.innerHTML = list.map(c => {
-        const ocupados = Number(c.ocupados) || 0;
-        const libres = Number(c.libres) || 0;
-        const detalle = [c.marca, c.modelo, c.ubicacion].filter(Boolean).map(_escHtml).join(' · ');
-        const subida = c.idf_destino_nombre ? `Sube a ${_escHtml(c.idf_destino_nombre)} · ` : '';
-        const subtitulo = `${subida}<span style="color:#22c55e;font-weight:800">${ocupados} ocupados</span> · <span style="color:#60a5fa;font-weight:800">${libres} libres</span>${detalle ? `<div style="margin-top:4px;color:var(--text);font-weight:600">${detalle}</div>` : ''}`;
-        const informeBtn = `<button onclick="event.stopPropagation();telecomGenerarInformeCuadro(${Number(c.id)})" title="Generar informe" style="background:none;border:none;color:var(--accent);font-size:16px;cursor:pointer;padding:7px">📄</button>`;
-        return _telecomItemHTML(c.id, '🧰 ' + _escHtml(c.nombre), subtitulo, `telecomAbrirCuadro(${Number(c.id)})`, 'cuadro', informeBtn);
-      }).join('');
-    });
+  // TELECOM-CUADRO-02 (18/08/2026): ver comentario gemelo en panel.html -- el cuadro pasa de
+  // "un switch" a una caja exterior con componentes en carril DIN, movida dentro del IDF.
+  // En móvil, el carril no usa toca-y-toca (el orden no tiene restricción física real como
+  // las U de un rack): tocar una plantilla la añade directamente al final, y cada componente
+  // lleva flechitas ◀▶ para reordenarlo -- más simple con el pulgar que apuntar una posición.
+  function _telecomIconoComponente(tipo) { return { switch:'🖧', fuente:'🔋', poe:'📷', fibra:'🧵', otro:'🔧' }[tipo] || '🔧'; }
+  function _telecomColorComponente(tipo) {
+    return {
+      switch: { bg:'linear-gradient(145deg,#1e2440,#12162a)', border:'#3a4270' },
+      fuente: { bg:'linear-gradient(145deg,#2a2a2a,#141414)', border:'#4a4a4a' },
+      poe:    { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' },
+      fibra:  { bg:'linear-gradient(145deg,#2a2a2a,#141414)', border:'#4a4a4a' },
+      otro:   { bg:'linear-gradient(145deg,#3a2a52,#1c1434)', border:'#6a4a86' }
+    }[tipo] || { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' };
   }
-  window.telecomCargarCuadros = telecomCargarCuadros;
+  const TELECOM_PLANTILLAS_COMPONENTE = [
+    { id:'fuente', icono:'🔋', label:'Fuente de alimentación', tipo:'fuente', marca:'', num_puertos:null },
+    { id:'switch_ubiquiti', icono:'🖧', label:'Switch DIN Ubiquiti', tipo:'switch', marca:'Ubiquiti', num_puertos:8 },
+    { id:'switch_cisco', icono:'🖧', label:'Switch DIN Cisco', tipo:'switch', marca:'Cisco', num_puertos:8 },
+    { id:'poe', icono:'📷', label:'Inyector POE cámara', tipo:'poe', marca:'', num_puertos:null },
+    { id:'fibra', icono:'🧵', label:'Mini hub de fibra', tipo:'fibra', marca:'', num_puertos:4 },
+    { id:'personalizado', icono:'➕', label:'Personalizado', tipo:'otro', marca:'', num_puertos:null }
+  ];
+
+  function telecomRenderCuadro(cuadro, componentes) {
+    const ordenados = [...(componentes || [])].sort((a, b) => a.pos_orden - b.pos_orden);
+    const bloques = ordenados.map((c, i) => {
+      const col = _telecomColorComponente(c.tipo);
+      return `<div style="flex-shrink:0;width:76px;display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div onclick="_telecomTocarComponente(${Number(c.id)})" style="width:76px;height:52px;border-radius:5px;background:${col.bg};border:1px solid ${col.border};
+          display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px;cursor:pointer">
+          <span style="font-size:16px">${_telecomIconoComponente(c.tipo)}</span>
+          <span style="font-size:8.5px;font-weight:800;color:#fff;text-align:center;line-height:1.15;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${_escHtml(c.nombre)}</span>
+        </div>
+        <div style="display:flex;gap:3px">
+          <button onclick="_telecomReordenarComponente(${Number(c.id)},-1)" ${i === 0 ? 'disabled' : ''} style="background:none;border:1px solid var(--border);border-radius:5px;color:${i === 0 ? 'var(--muted)' : 'var(--text)'};font-size:11px;padding:2px 6px;cursor:pointer">◀</button>
+          <button onclick="_telecomReordenarComponente(${Number(c.id)},1)" ${i === ordenados.length - 1 ? 'disabled' : ''} style="background:none;border:1px solid var(--border);border-radius:5px;color:${i === ordenados.length - 1 ? 'var(--muted)' : 'var(--text)'};font-size:11px;padding:2px 6px;cursor:pointer">▶</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="text-align:center;padding:6px 0">
+      <div style="width:24px;height:34px;margin:0 auto;background:linear-gradient(90deg,#4a5178,#2a3050,#4a5178);border-radius:3px 3px 0 0"></div>
+      <div style="width:64px;height:8px;background:#343b59;border-radius:4px;margin:-2px auto 0"></div>
+      <div style="width:100%;max-width:340px;margin:0 auto;background:linear-gradient(160deg,#e9edf3 0%,#c7ceda 55%,#aab2c4 100%);border-radius:10px;border:1px solid #7d859c;box-shadow:0 8px 18px rgba(0,0,0,.4);padding:10px;box-sizing:border-box">
+        <div style="background:linear-gradient(180deg,#20263f,#161a2d);border-radius:5px;padding:8px;box-shadow:inset 0 2px 8px rgba(0,0,0,.6);overflow-x:auto">
+          <div style="height:3px;background:repeating-linear-gradient(90deg,#5b6382 0,#5b6382 4px,#3d4570 4px,#3d4570 6px);border-radius:2px;margin-bottom:6px"></div>
+          <div style="display:flex;gap:6px;min-height:52px">${bloques || '<div style="font-size:11px;color:var(--muted);padding:10px">Sin componentes todavía</div>'}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function _telecomTocarComponente(id) {
+    const c = (_telecomCache.componente || []).find(x => Number(x.id) === Number(id));
+    if (c && c.num_puertos) telecomAbrirComponentePuertos(id);
+    else telecomEditarEntidad('componente', id);
+  }
+  window._telecomTocarComponente = _telecomTocarComponente;
+
+  async function _telecomReordenarComponente(id, direccion) {
+    const lista = [...(_telecomCache.componente || [])].sort((a, b) => a.pos_orden - b.pos_orden);
+    const idx = lista.findIndex(c => Number(c.id) === Number(id));
+    const vecinoIdx = idx + direccion;
+    if (idx < 0 || vecinoIdx < 0 || vecinoIdx >= lista.length) return;
+    const actual = lista[idx], vecino = lista[vecinoIdx];
+    const masAlla = lista[vecinoIdx + direccion];
+    const nuevaPos = masAlla ? (vecino.pos_orden + masAlla.pos_orden) / 2 : vecino.pos_orden + direccion;
+    try {
+      const res = await apiCall('/telecom/cuadro-componentes/' + Number(actual.id), { method:'PATCH', body:JSON.stringify({ pos_orden: nuevaPos }) });
+      await _telecomLeerRespuesta(res);
+      telecomAbrirCuadro(_telecomCtx.cuadro_id);
+    } catch (e) { toast('❌ ' + (e.message || 'No se pudo reordenar'), 'err'); }
+  }
+  window._telecomReordenarComponente = _telecomReordenarComponente;
+
+  function telecomAbrirPaletaComponentes() {
+    telecomAbrirPaleta(TELECOM_PLANTILLAS_COMPONENTE, 'telecomElegirPlantillaComponente', '🧰 Añadir componente');
+  }
+  window.telecomAbrirPaletaComponentes = telecomAbrirPaletaComponentes;
+  async function telecomElegirPlantillaComponente(i) {
+    telecomCerrarPaleta();
+    const pl = TELECOM_PLANTILLAS_COMPONENTE[i];
+    const nombre = `${pl.label} ${Date.now().toString().slice(-4)}`;
+    try {
+      const res = await apiCall('/telecom/cuadro-componentes', { method:'POST', body:JSON.stringify({
+        cuadro_id:_telecomCtx.cuadro_id, nombre, tipo:pl.tipo, marca:pl.marca, num_puertos:pl.num_puertos
+      }) });
+      const data = await _telecomLeerRespuesta(res);
+      toast('✅ Componente añadido — completa sus datos', 'ok');
+      telecomAbrirCuadro(_telecomCtx.cuadro_id);
+      telecomEditarEntidad('componente', data.id);
+    } catch (e) { toast('❌ ' + (e.message || 'No se pudo añadir'), 'err'); }
+  }
+  window.telecomElegirPlantillaComponente = telecomElegirPlantillaComponente;
 
   function telecomAbrirCuadro(id) {
     const item = (_telecomCache.cuadro || []).find(x => Number(x.id) === Number(id));
     if (!item) return;
-    _telecomNivel = 'cuadro-puertos';
+    _telecomNivel = 'cuadro';
     _telecomCtx.cuadro_id = id; _telecomCtx.cuadro_nombre = item.nombre;
     document.getElementById('telecomBreadcrumb').textContent = '🧰 ' + item.nombre;
-    document.getElementById('telecomAddBtn').style.display = 'none';
-    document.getElementById('telecomCuadrosBtn').style.display = 'none';
+    document.getElementById('telecomAddBtn').style.display = '';
+    document.getElementById('telecomAddBtn').textContent = '+ Componente';
+    document.getElementById('telecomAddBtn').onclick = telecomAbrirPaletaComponentes;
+    const cuadrosBtn = document.getElementById('telecomCuadrosBtn');
+    cuadrosBtn.style.display = ''; cuadrosBtn.textContent = '📄 Informe'; cuadrosBtn.onclick = () => telecomGenerarInformeCuadro(id);
     const el = document.getElementById('telecomContent');
-    el.innerHTML = _telecomVolverBtn('telecomCargarCuadros()');
-    telecomCargarNivel('/telecom/cuadros-puertos?cuadro_id=' + id, (list) => {
-      _telecomCache.cuadroPuertos = list;
-      const grid = list.map(p => {
-        const ocupado = p.estado === 'ocupado';
-        const detalleCable = ocupado ? [p.cable_label, p.categoria].filter(Boolean).map(_escHtml).join(' · ') : '';
-        return `<div onclick="telecomAbrirCuadroPuerto(${Number(p.id)})" style="cursor:pointer;padding:9px 5px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'};min-height:58px;display:flex;flex-direction:column;justify-content:center">
-          <div style="font-weight:900;font-size:14px;color:${ocupado ? '#22c55e' : 'var(--text)'}">${p.numero}</div>
-          <div style="font-size:11px;font-weight:700;line-height:1.25;color:${ocupado ? 'var(--text)' : 'var(--muted)'};overflow-wrap:anywhere">${ocupado ? _escHtml(p.destino || 'ocupado') : 'libre'}</div>
-          ${detalleCable ? `<div style="font-size:9px;line-height:1.2;color:var(--muted);margin-top:3px;overflow-wrap:anywhere">${detalleCable}</div>` : ''}
-        </div>`;
-      }).join('');
-      el.innerHTML = _telecomVolverBtn('telecomCargarCuadros()')
-        + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px">${grid}</div>`;
+    el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`);
+    telecomCargarNivel('/telecom/cuadro-componentes?cuadro_id=' + id, (list) => {
+      _telecomCache.componente = list;
+      el.innerHTML = _telecomVolverBtn(`telecomAbrirIdf(${Number(_telecomCtx.idf_id)})`)
+        + `<div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:4px">Toca "+ Componente" para montarlo · toca un switch/hub ya montado para ver sus puertos</div>`
+        + telecomRenderCuadro(item, list);
     });
   }
   window.telecomAbrirCuadro = telecomAbrirCuadro;
 
-  function telecomAbrirCuadroPuerto(id) {
-    const puerto = (_telecomCache.cuadroPuertos || []).find(x => Number(x.id) === Number(id));
+  function telecomAbrirComponentePuertos(id) {
+    const item = (_telecomCache.componente || []).find(x => Number(x.id) === Number(id));
+    if (!item) return;
+    _telecomNivel = 'cuadro-puertos';
+    _telecomCtx.componente_id = id; _telecomCtx.componente_nombre = item.nombre;
+    document.getElementById('telecomBreadcrumb').textContent = '🧰 ' + _telecomCtx.cuadro_nombre + ' › ' + _telecomIconoComponente(item.tipo) + ' ' + item.nombre;
+    document.getElementById('telecomAddBtn').style.display = 'none';
+    document.getElementById('telecomCuadrosBtn').style.display = 'none';
+    const el = document.getElementById('telecomContent');
+    el.innerHTML = _telecomVolverBtn(`telecomAbrirCuadro(${Number(_telecomCtx.cuadro_id)})`);
+    telecomCargarNivel('/telecom/cuadro-componente-puertos?componente_id=' + id, (list) => {
+      _telecomCache.componentePuertos = list;
+      const icono = _telecomPuertoIcono(item.tipo);
+      const grid = list.map(p => {
+        const ocupado = p.estado === 'ocupado';
+        const detalleCable = ocupado ? [p.cable_label, p.categoria].filter(Boolean).map(_escHtml).join(' · ') : '';
+        return `<div onclick="telecomAbrirComponentePuerto(${Number(p.id)})" style="cursor:pointer;padding:9px 5px;border-radius:9px;text-align:center;background:${ocupado ? 'rgba(34,197,94,.15)' : 'var(--card)'};border:1px solid ${ocupado ? '#22c55e' : 'var(--border)'};min-height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+          <div style="display:flex;align-items:center;justify-content:center">${icono}</div>
+          <div style="font-weight:900;font-size:13px;color:${ocupado ? '#22c55e' : 'var(--text)'}">${p.numero}</div>
+          <div style="font-size:10px;font-weight:700;line-height:1.2;color:${ocupado ? 'var(--text)' : 'var(--muted)'};overflow-wrap:anywhere">${ocupado ? _escHtml(p.destino || 'ocupado') : 'libre'}</div>
+          ${detalleCable ? `<div style="font-size:8.5px;line-height:1.15;color:var(--muted);margin-top:1px;overflow-wrap:anywhere">${detalleCable}</div>` : ''}
+        </div>`;
+      }).join('');
+      el.innerHTML = _telecomVolverBtn(`telecomAbrirCuadro(${Number(_telecomCtx.cuadro_id)})`)
+        + `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px">${grid}</div>`;
+    });
+  }
+  window.telecomAbrirComponentePuertos = telecomAbrirComponentePuertos;
+
+  function telecomAbrirComponentePuerto(id) {
+    const puerto = (_telecomCache.componentePuertos || []).find(x => Number(x.id) === Number(id));
     if (!puerto) return;
-    _telecomPuertoActual = { ...puerto, __tipo: 'cuadro' };
+    _telecomPuertoActual = { ...puerto, __tipo: 'componente' };
     document.getElementById('telecomPuertoModalTitle').textContent = 'Puerto ' + puerto.numero;
     document.getElementById('telecomPuertoDestino').value = puerto.destino || '';
     document.getElementById('telecomPuertoCable').value = puerto.cable_label || '';
@@ -18599,7 +18959,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('telecomPuertoNotas').value = puerto.notas || '';
     document.getElementById('modalTelecomPuerto').style.display = 'flex';
   }
-  window.telecomAbrirCuadroPuerto = telecomAbrirCuadroPuerto;
+  window.telecomAbrirComponentePuerto = telecomAbrirComponentePuerto;
 
   function telecomAbrirPuerto(id) {
     const puerto = _telecomCache.puertos.find(x => Number(x.id) === Number(id));
@@ -18622,14 +18982,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function _telecomGuardarPuertoDatos(datos) {
     if (!_telecomPuertoActual) return;
-    const esCuadro = _telecomPuertoActual.__tipo === 'cuadro';
-    const path = (esCuadro ? '/telecom/cuadros-puertos/' : '/telecom/puertos/') + _telecomPuertoActual.id;
+    const tipoPuerto = _telecomPuertoActual.__tipo;
+    const path = (tipoPuerto === 'cuadro' ? '/telecom/cuadros-puertos/' : tipoPuerto === 'componente' ? '/telecom/cuadro-componente-puertos/' : '/telecom/puertos/') + _telecomPuertoActual.id;
     try {
       const res = await apiCall(path, { method: 'PUT', body: JSON.stringify(datos) });
       await _telecomLeerRespuesta(res);
       telecomCerrarModalPuerto();
       toast('✅ Puerto actualizado', 'ok');
-      if (esCuadro) telecomAbrirCuadro(_telecomCtx.cuadro_id);
+      if (tipoPuerto === 'cuadro') telecomAbrirCuadro(_telecomCtx.cuadro_id);
+      else if (tipoPuerto === 'componente') telecomAbrirComponentePuertos(_telecomCtx.componente_id);
       else telecomAbrirPP(_telecomCtx.pp_id);
     } catch (e) { toast('❌ ' + (e.message || 'Error al guardar el puerto'), 'err'); }
   }
@@ -18650,16 +19011,17 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function telecomEliminarEntidad(tipo, id) {
     const cfg = {
-      idf:    { path:'/telecom/idf/', label:'IDF', pregunta:'¿Borrar este IDF? Debe estar vacío (sin racks).' },
-      rack:   { path:'/telecom/racks/', label:'rack', pregunta:'¿Borrar este rack? Debe estar vacío (sin patch panels).' },
-      pp:     { path:'/telecom/patch-panels/', label:'patch panel', pregunta:'¿Borrar este patch panel? Se perderán los datos de sus puertos.' },
-      cuadro: { path:'/telecom/cuadros-campo/', label:'cuadro', pregunta:'¿Borrar este cuadro de campo? Se perderán los datos de sus puertos.' },
+      idf:        { path:'/telecom/idf/', label:'IDF', pregunta:'¿Borrar este IDF? Debe estar vacío (sin racks).' },
+      rack:       { path:'/telecom/racks/', label:'rack', pregunta:'¿Borrar este rack? Debe estar vacío (sin patch panels).' },
+      pp:         { path:'/telecom/patch-panels/', label:'patch panel', pregunta:'¿Borrar este patch panel? Se perderán los datos de sus puertos.' },
+      cuadro:     { path:'/telecom/cuadros-campo/', label:'cuadro', pregunta:'¿Borrar este cuadro de campo (y sus componentes)? Libera también el puerto de fibra al que estuviera conectado.' },
+      componente: { path:'/telecom/cuadro-componentes/', label:'componente', pregunta:'¿Borrar este componente y todos sus puertos?' },
     }[tipo];
     if (!cfg) return;
     // TELECOM-NAV-01 (17/08/2026): con datos reales, borrar un módulo/cuadro entero de un
     // solo confirm() genérico es fácil de pulsar sin pensar. Si tiene puertos con datos
     // (destino/etiqueta ya rellenos), avisar del número exacto antes de confirmar.
-    if (tipo === 'pp' || tipo === 'cuadro') {
+    if (tipo === 'pp') {
       const item = (_telecomCache[tipo] || []).find(x => Number(x.id) === Number(id));
       const ocupados = Number(item?.ocupados) || 0;
       if (ocupados > 0) {
@@ -18673,21 +19035,28 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       toast(`✅ ${cfg.label} eliminado`, 'ok');
       if (tipo === 'idf') telecomCargarIdfs();
       else if (tipo === 'rack') telecomAbrirIdf(_telecomCtx.idf_id);
-      else if (tipo === 'cuadro') telecomCargarCuadros();
+      else if (tipo === 'cuadro') telecomAbrirIdf(_telecomCtx.idf_id);
+      else if (tipo === 'componente') telecomAbrirCuadro(_telecomCtx.cuadro_id);
       else telecomAbrirRack(_telecomCtx.rack_id);
     } catch (e) { toast('❌ ' + (e.message || 'Error al borrar'), 'err'); }
   }
   window.telecomEliminarEntidad = telecomEliminarEntidad;
 
+  function _telecomEliminarDesdeModal() {
+    if (!_telecomEditActual) return;
+    telecomCerrarModal();
+    telecomEliminarEntidad(_telecomEditActual.tipo, _telecomEditActual.id);
+  }
+  window._telecomEliminarDesdeModal = _telecomEliminarDesdeModal;
+
   // TELECOM-TIPO-01 / TELECOM-CUADRO-01 (12/08/2026): sugerencias de marca — semilla fija +
-  // lo que ya se haya escrito antes en módulos de rack tipo 'switch' o en cuadros de campo
-  // de esta empresa (sin tabla de catálogo nueva, "se queda guardado para otras veces" con
-  // lo que ya está cargado en memoria).
+  // lo que ya se haya escrito antes en módulos de rack tipo 'switch' o en componentes de
+  // cuadros de campo de esta empresa (sin tabla de catálogo nueva).
   const _TELECOM_MARCAS_SEMILLA = ['Cisco', 'Ubiquiti', 'Mikrotik', 'Aruba', 'HPE', 'TP-Link', 'D-Link', 'Huawei'];
   function _telecomPoblarMarcas() {
     const usadas = [
       ...(_telecomCache.pp || []).map(p => p.marca),
-      ...(_telecomCache.cuadro || []).map(c => c.marca)
+      ...(_telecomCache.componente || []).map(c => c.marca)
     ].filter(Boolean);
     const marcas = [...new Set([..._TELECOM_MARCAS_SEMILLA, ...usadas])];
     document.getElementById('telecomMarcasList').innerHTML = marcas.map(m => `<option value="${_escHtml(m)}">`).join('');
@@ -18699,6 +19068,24 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   window._telecomToggleMarcaModulo = _telecomToggleMarcaModulo;
 
+  // TELECOM-ELEVACION-01 (18/08/2026): al elegir el tipo en "Nuevo rack" se sugiere la
+  // altura típica de ese tipo (12U pared / 42U pie) -- si el usuario ya había escrito una
+  // altura distinta a mano, se respeta.
+  function _telecomTipoRackCambiado() {
+    if (_telecomEditActual) return;
+    const tipo = document.getElementById('telecomModalRackTipo').value;
+    document.getElementById('telecomModalRackAltura').value = tipo === 'pared' ? '12' : '42';
+  }
+  window._telecomTipoRackCambiado = _telecomTipoRackCambiado;
+
+  function _telecomToggleNumPuertosComponente() {
+    const tipo = document.getElementById('telecomModalComponenteTipo').value;
+    document.getElementById('telecomModalComponentePuertosWrap').style.display = (tipo === 'switch' || tipo === 'fibra') ? '' : 'none';
+  }
+  window._telecomToggleNumPuertosComponente = _telecomToggleNumPuertosComponente;
+
+  // TELECOM-CUADRO-02: selector en cascada IDF → panel de fibra → puerto libre.
+  let _telecomPanelesFibra = [];
   async function _telecomPoblarSelectIdfCuadro(selectedId) {
     const sel = document.getElementById('telecomModalCuadroIdf');
     sel.innerHTML = '<option value="">— Sin definir todavía —</option>';
@@ -18710,20 +19097,85 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (selectedId) sel.value = String(selectedId);
     } catch { /* deja solo la opción "sin definir" si falla la carga */ }
   }
+  async function _telecomCuadroIdfCambiado() {
+    const idfId = document.getElementById('telecomModalCuadroIdf').value;
+    const panelWrap = document.getElementById('telecomModalCuadroPanelWrap');
+    const puertoWrap = document.getElementById('telecomModalCuadroPuertoWrap');
+    const panelSel = document.getElementById('telecomModalCuadroPanel');
+    const puertoSel = document.getElementById('telecomModalCuadroPuerto');
+    puertoWrap.style.display = 'none';
+    puertoSel.innerHTML = '<option value="">— Elige un puerto libre —</option>';
+    _telecomPanelesFibra = [];
+    if (!idfId) { panelWrap.style.display = 'none'; panelSel.innerHTML = ''; return; }
+    panelWrap.style.display = '';
+    panelSel.innerHTML = '<option value="">Cargando…</option>';
+    try {
+      const excluir = _telecomEditActual?._puertoActual || '';
+      const res = await apiCall('/telecom/paneles-fibra?idf_id=' + Number(idfId) + (excluir ? '&excluir_puerto_id=' + excluir : ''));
+      const paneles = await _telecomLeerRespuesta(res);
+      _telecomPanelesFibra = Array.isArray(paneles) ? paneles : [];
+      panelSel.innerHTML = '<option value="">— Elige un panel —</option>' +
+        _telecomPanelesFibra.map(p => `<option value="${Number(p.id)}">${_escHtml(p.rack_nombre)} · ${_escHtml(p.nombre)} (${p.puertos_libres.length} libres)</option>`).join('');
+    } catch { panelSel.innerHTML = '<option value="">Sin paneles de fibra en este IDF</option>'; }
+  }
+  window._telecomCuadroIdfCambiado = _telecomCuadroIdfCambiado;
+  function _telecomCuadroPanelCambiado() {
+    const panelId = Number(document.getElementById('telecomModalCuadroPanel').value);
+    const puertoWrap = document.getElementById('telecomModalCuadroPuertoWrap');
+    const puertoSel = document.getElementById('telecomModalCuadroPuerto');
+    const panel = _telecomPanelesFibra.find(p => Number(p.id) === panelId);
+    if (!panel) { puertoWrap.style.display = 'none'; return; }
+    puertoWrap.style.display = '';
+    puertoSel.innerHTML = '<option value="">— Elige un puerto libre —</option>' +
+      panel.puertos_libres.map(p => `<option value="${Number(p.id)}">Puerto ${Number(p.numero)}</option>`).join('');
+  }
+  window._telecomCuadroPanelCambiado = _telecomCuadroPanelCambiado;
 
-  function telecomAbrirNuevo() {
+  function telecomAbrirNuevoCuadro() {
+    if (!_telecomCtx.idf_id) return;
     _telecomEditActual = null;
+    document.getElementById('telecomEliminarDesdeModalBtn').style.display = 'none';
     document.getElementById('telecomModalInput1').value = '';
     document.getElementById('telecomModalInput2').value = '';
-    ['telecomModalRedVlan','telecomModalSwitch','telecomModalSubred','telecomModalPosicionU','telecomModalNotasConfig','telecomModalMarca']
+    document.getElementById('telecomModalCuadroNotas').value = '';
+    document.getElementById('telecomModalTitle').textContent = 'Nuevo cuadro de campo';
+    document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: Cuadro Farola C-04)';
+    document.getElementById('telecomModalLabel2').textContent = 'Ubicación (ej: Farola C-04, calle X)';
+    document.getElementById('telecomModalField2Wrap').style.display = '';
+    document.getElementById('telecomModalPatchFields').style.display = 'none';
+    document.getElementById('telecomModalRackFields').style.display = 'none';
+    document.getElementById('telecomModalComponenteFields').style.display = 'none';
+    document.getElementById('telecomModalCuadroFields').style.display = '';
+    _telecomNivelCrearComoCuadro = true;
+    _telecomPoblarSelectIdfCuadro(_telecomCtx.idf_id).then(() => _telecomCuadroIdfCambiado());
+    document.getElementById('modalTelecom').style.display = 'flex';
+  }
+  window.telecomAbrirNuevoCuadro = telecomAbrirNuevoCuadro;
+  let _telecomNivelCrearComoCuadro = false;
+
+  function _telecomResetCamposModal() {
+    document.getElementById('telecomModalInput1').value = '';
+    document.getElementById('telecomModalInput2').value = '';
+    ['telecomModalRedVlan','telecomModalSwitch','telecomModalSubred','telecomModalPosicionU','telecomModalNotasConfig','telecomModalMarca',
+     'telecomModalCuadroNotas','telecomModalComponenteMarca','telecomModalComponenteNotas']
       .forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('telecomModalTipo').value = 'cobre';
     _telecomToggleMarcaModulo();
+    document.getElementById('telecomModalField2Wrap').style.display = 'none';
+    document.getElementById('telecomModalPatchFields').style.display = 'none';
+    document.getElementById('telecomModalRackFields').style.display = 'none';
+    document.getElementById('telecomModalCuadroFields').style.display = 'none';
+    document.getElementById('telecomModalComponenteFields').style.display = 'none';
+    document.getElementById('telecomModalCuadroPanelWrap').style.display = 'none';
+    document.getElementById('telecomModalCuadroPuertoWrap').style.display = 'none';
+    document.getElementById('telecomEliminarDesdeModalBtn').style.display = 'none';
+    _telecomNivelCrearComoCuadro = false;
+  }
+
+  function telecomAbrirNuevo() {
+    _telecomEditActual = null;
+    _telecomResetCamposModal();
     const field2Wrap = document.getElementById('telecomModalField2Wrap');
-    const patchFields = document.getElementById('telecomModalPatchFields');
-    const cuadroFields = document.getElementById('telecomModalCuadroFields');
-    patchFields.style.display = 'none';
-    cuadroFields.style.display = 'none';
     if (_telecomNivel === 'idf') {
       document.getElementById('telecomModalTitle').textContent = 'Nuevo IDF';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: IDF Planta 1)';
@@ -18732,42 +19184,45 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     } else if (_telecomNivel === 'rack') {
       document.getElementById('telecomModalTitle').textContent = 'Nuevo Rack';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: Rack A)';
-      field2Wrap.style.display = 'none';
+      document.getElementById('telecomModalRackFields').style.display = '';
+      document.getElementById('telecomModalRackTipo').value = 'pie';
+      document.getElementById('telecomModalRackAltura').value = '42';
     } else if (_telecomNivel === 'pp') {
       document.getElementById('telecomModalTitle').textContent = 'Nuevo módulo';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: Módulo 1)';
       field2Wrap.style.display = '';
       document.getElementById('telecomModalLabel2').textContent = 'Número de puertos/bocas (por defecto 24)';
       document.getElementById('telecomModalInput2').value = '24';
-      patchFields.style.display = '';
+      document.getElementById('telecomModalPatchFields').style.display = '';
       _telecomPoblarMarcas();
-    } else if (_telecomNivel === 'cuadros') {
-      document.getElementById('telecomModalTitle').textContent = 'Nuevo cuadro de campo';
-      document.getElementById('telecomModalLabel1').textContent = 'Nombre * (ej: SINDUS_2)';
-      field2Wrap.style.display = '';
-      document.getElementById('telecomModalLabel2').textContent = 'Ubicación';
-      cuadroFields.style.display = '';
-      document.getElementById('telecomModalCuadroModelo').value = '';
-      document.getElementById('telecomModalCuadroPuertos').value = '8';
-      document.getElementById('telecomModalCuadroNotas').value = '';
-      _telecomPoblarMarcas();
-      _telecomPoblarSelectIdfCuadro(null);
     }
     document.getElementById('modalTelecom').style.display = 'flex';
   }
   window.telecomAbrirNuevo = telecomAbrirNuevo;
 
+  function telecomAbrirNuevoComponente() {
+    if (!_telecomCtx.cuadro_id) return;
+    _telecomEditActual = null;
+    _telecomResetCamposModal();
+    document.getElementById('telecomModalTitle').textContent = 'Nuevo componente';
+    document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
+    document.getElementById('telecomModalComponenteFields').style.display = '';
+    document.getElementById('telecomModalComponenteTipo').value = 'switch';
+    document.getElementById('telecomModalComponentePuertos').value = '8';
+    _telecomToggleNumPuertosComponente();
+    _telecomPoblarMarcas();
+    document.getElementById('modalTelecom').style.display = 'flex';
+  }
+  window.telecomAbrirNuevoComponente = telecomAbrirNuevoComponente;
+
   function telecomEditarEntidad(tipo, id) {
-    const item = (_telecomCache[tipo] || []).find(x => Number(x.id) === Number(id));
+    const item = (_telecomCache[tipo === 'componente' ? 'componente' : tipo] || []).find(x => Number(x.id) === Number(id));
     if (!item) return;
     _telecomEditActual = { tipo, id: Number(id) };
+    _telecomResetCamposModal();
+    document.getElementById('telecomEliminarDesdeModalBtn').style.display = '';
     const field2Wrap = document.getElementById('telecomModalField2Wrap');
-    const patchFields = document.getElementById('telecomModalPatchFields');
-    const cuadroFields = document.getElementById('telecomModalCuadroFields');
-    patchFields.style.display = 'none';
-    cuadroFields.style.display = 'none';
     document.getElementById('telecomModalInput1').value = item.nombre || '';
-    document.getElementById('telecomModalInput2').value = '';
     if (tipo === 'idf') {
       document.getElementById('telecomModalTitle').textContent = 'Editar IDF';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
@@ -18777,25 +19232,45 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     } else if (tipo === 'rack') {
       document.getElementById('telecomModalTitle').textContent = 'Editar rack';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
-      field2Wrap.style.display = 'none';
+      document.getElementById('telecomModalRackFields').style.display = '';
+      document.getElementById('telecomModalRackTipo').value = item.tipo === 'pared' ? 'pared' : 'pie';
+      document.getElementById('telecomModalRackAltura').value = item.altura_u || 42;
     } else if (tipo === 'cuadro') {
       document.getElementById('telecomModalTitle').textContent = 'Editar cuadro de campo';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
       document.getElementById('telecomModalLabel2').textContent = 'Ubicación';
       document.getElementById('telecomModalInput2').value = item.ubicacion || '';
       field2Wrap.style.display = '';
-      cuadroFields.style.display = '';
-      document.getElementById('telecomModalCuadroMarca').value = item.marca || '';
-      document.getElementById('telecomModalCuadroModelo').value = item.modelo || '';
-      document.getElementById('telecomModalCuadroPuertos').value = item.num_puertos || 8;
+      document.getElementById('telecomModalCuadroFields').style.display = '';
       document.getElementById('telecomModalCuadroNotas').value = item.notas || '';
+      _telecomEditActual._puertoActual = item.puerto_conexion_id || null;
+      _telecomPoblarSelectIdfCuadro(item.idf_destino_id).then(async () => {
+        if (item.idf_destino_id) {
+          await _telecomCuadroIdfCambiado();
+          if (item.puerto_conexion_id) {
+            const panelConPuerto = _telecomPanelesFibra.find(p => p.puertos_libres.some(pu => Number(pu.id) === Number(item.puerto_conexion_id)));
+            if (panelConPuerto) {
+              document.getElementById('telecomModalCuadroPanel').value = String(panelConPuerto.id);
+              _telecomCuadroPanelCambiado();
+              document.getElementById('telecomModalCuadroPuerto').value = String(item.puerto_conexion_id);
+            }
+          }
+        }
+      });
+    } else if (tipo === 'componente') {
+      document.getElementById('telecomModalTitle').textContent = 'Editar componente';
+      document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
+      document.getElementById('telecomModalComponenteFields').style.display = '';
+      document.getElementById('telecomModalComponenteTipo').value = item.tipo || 'switch';
+      document.getElementById('telecomModalComponenteMarca').value = item.marca || '';
+      document.getElementById('telecomModalComponentePuertos').value = item.num_puertos || 8;
+      document.getElementById('telecomModalComponenteNotas').value = item.notas || '';
+      _telecomToggleNumPuertosComponente();
       _telecomPoblarMarcas();
-      _telecomPoblarSelectIdfCuadro(item.idf_destino_id);
     } else {
       document.getElementById('telecomModalTitle').textContent = 'Editar módulo';
       document.getElementById('telecomModalLabel1').textContent = 'Nombre *';
-      field2Wrap.style.display = 'none';
-      patchFields.style.display = '';
+      document.getElementById('telecomModalPatchFields').style.display = '';
       document.getElementById('telecomModalTipo').value = item.tipo || 'cobre';
       document.getElementById('telecomModalMarca').value = item.marca || '';
       document.getElementById('telecomModalRedVlan').value = item.red_vlan || '';
@@ -18813,6 +19288,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function telecomCerrarModal() {
     document.getElementById('modalTelecom').style.display = 'none';
     _telecomEditActual = null;
+    _telecomNivelCrearComoCuadro = false;
   }
   window.telecomCerrarModal = telecomCerrarModal;
 
@@ -18828,12 +19304,28 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     };
   }
 
+  function _telecomDatosRackFormulario() {
+    return {
+      tipo: document.getElementById('telecomModalRackTipo').value,
+      altura_u: parseInt(document.getElementById('telecomModalRackAltura').value) || 42
+    };
+  }
+
   function _telecomDatosCuadroFormulario() {
     return {
-      marca: document.getElementById('telecomModalCuadroMarca').value.trim(),
-      modelo: document.getElementById('telecomModalCuadroModelo').value.trim(),
+      ubicacion: document.getElementById('telecomModalInput2').value.trim(),
       idf_destino_id: document.getElementById('telecomModalCuadroIdf').value || null,
+      puerto_conexion_id: document.getElementById('telecomModalCuadroPuerto').value || null,
       notas: document.getElementById('telecomModalCuadroNotas').value.trim()
+    };
+  }
+
+  function _telecomDatosComponenteFormulario() {
+    return {
+      tipo: document.getElementById('telecomModalComponenteTipo').value,
+      marca: document.getElementById('telecomModalComponenteMarca').value.trim(),
+      num_puertos: parseInt(document.getElementById('telecomModalComponentePuertos').value) || null,
+      notas: document.getElementById('telecomModalComponenteNotas').value.trim()
     };
   }
 
@@ -18843,22 +19335,30 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     try {
       if (_telecomEditActual) {
         const { tipo, id } = _telecomEditActual;
-        const path = tipo === 'idf' ? '/telecom/idf/' : tipo === 'rack' ? '/telecom/racks/' : tipo === 'cuadro' ? '/telecom/cuadros-campo/' : '/telecom/patch-panels/';
+        const path = { idf:'/telecom/idf/', rack:'/telecom/racks/', cuadro:'/telecom/cuadros-campo/', componente:'/telecom/cuadro-componentes/', pp:'/telecom/patch-panels/' }[tipo];
         const body = { nombre };
         if (tipo === 'idf') body.ubicacion = document.getElementById('telecomModalInput2').value.trim();
+        if (tipo === 'rack') Object.assign(body, _telecomDatosRackFormulario());
         if (tipo === 'pp') Object.assign(body, _telecomDatosPatchPanelFormulario());
-        if (tipo === 'cuadro') {
-          body.ubicacion = document.getElementById('telecomModalInput2').value.trim();
-          Object.assign(body, _telecomDatosCuadroFormulario());
-        }
+        if (tipo === 'cuadro') Object.assign(body, _telecomDatosCuadroFormulario());
+        if (tipo === 'componente') Object.assign(body, _telecomDatosComponenteFormulario());
         const res = await apiCall(path + id, { method: 'PATCH', body: JSON.stringify(body) });
         await _telecomLeerRespuesta(res);
         telecomCerrarModal();
         toast('✅ Cambios guardados', 'ok');
         if (tipo === 'idf') telecomCargarIdfs();
         else if (tipo === 'rack') telecomAbrirIdf(_telecomCtx.idf_id);
-        else if (tipo === 'cuadro') telecomCargarCuadros();
+        else if (tipo === 'cuadro') telecomAbrirIdf(_telecomCtx.idf_id);
+        else if (tipo === 'componente') telecomAbrirCuadro(_telecomCtx.cuadro_id);
         else telecomAbrirRack(_telecomCtx.rack_id);
+      } else if (_telecomNivelCrearComoCuadro) {
+        const res = await apiCall('/telecom/cuadros-campo', { method: 'POST', body: JSON.stringify({
+          obra_id: _telecomCtx.obra_id, nombre, ..._telecomDatosCuadroFormulario()
+        }) });
+        await _telecomLeerRespuesta(res);
+        telecomCerrarModal();
+        toast('✅ Cuadro creado', 'ok');
+        telecomAbrirIdf(_telecomCtx.idf_id);
       } else if (_telecomNivel === 'idf') {
         const res = await apiCall('/telecom/idf', { method: 'POST', body: JSON.stringify({ obra_id: _telecomCtx.obra_id, nombre, ubicacion: document.getElementById('telecomModalInput2').value.trim() }) });
         await _telecomLeerRespuesta(res);
@@ -18866,7 +19366,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         toast('✅ IDF creado', 'ok');
         telecomCargarIdfs();
       } else if (_telecomNivel === 'rack') {
-        const res = await apiCall('/telecom/racks', { method: 'POST', body: JSON.stringify({ idf_id: _telecomCtx.idf_id, nombre }) });
+        const res = await apiCall('/telecom/racks', { method: 'POST', body: JSON.stringify({ idf_id: _telecomCtx.idf_id, nombre, ..._telecomDatosRackFormulario() }) });
         await _telecomLeerRespuesta(res);
         telecomCerrarModal();
         toast('✅ Rack creado', 'ok');
@@ -18880,16 +19380,6 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         telecomCerrarModal();
         toast('✅ Módulo creado', 'ok');
         telecomAbrirRack(_telecomCtx.rack_id);
-      } else if (_telecomNivel === 'cuadros') {
-        const numPuertos = parseInt(document.getElementById('telecomModalCuadroPuertos').value) || 8;
-        const res = await apiCall('/telecom/cuadros-campo', { method: 'POST', body: JSON.stringify({
-          obra_id: _telecomCtx.obra_id, nombre, ubicacion: document.getElementById('telecomModalInput2').value.trim(),
-          num_puertos: numPuertos, ..._telecomDatosCuadroFormulario()
-        }) });
-        await _telecomLeerRespuesta(res);
-        telecomCerrarModal();
-        toast('✅ Cuadro creado', 'ok');
-        telecomCargarCuadros();
       }
     } catch (e) { toast('❌ ' + (e.message || 'Error al guardar'), 'err'); }
   }
@@ -19109,17 +19599,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // tags/port-grid/tabla, mismo CSS de _TELECOM_INFORME_CSS) pero con las etiquetas propias
   // de un cuadro de campo (marca/modelo/ubicación/IDF destino) en vez de red-VLAN/switch/
   // subred/posición — no se reutiliza tal cual porque esas etiquetas no encajan aquí.
-  function _telecomInformeCuadroPanel(cuadro, idfNombre) {
-    const puertos = cuadro.puertos || [];
-    const total = Number(cuadro.num_puertos) || puertos.length;
+  // TELECOM-CUADRO-02 (18/08/2026): el cuadro ya no es un único switch -- es una caja con
+  // componentes sueltos, cada uno con sus propios puertos si los tiene. Mismo fix gemelo
+  // en panel.html (_telecomOfficeInformeComponentePanel/_telecomOfficeInformeCuadroPanel).
+  function _telecomInformeComponentePanel(comp) {
+    const puertos = comp.puertos || [];
+    if (!puertos.length) {
+      return `<div class="panel"><div class="panel-head"><h2>${_telecomIconoComponente(comp.tipo)} ${_escHtml(comp.nombre)}</h2></div>
+        ${comp.marca ? `<div class="tags"><span class="tag"><b>Marca</b> ${_escHtml(comp.marca)}</span></div>` : ''}
+      </div>`;
+    }
+    const total = Number(comp.num_puertos) || puertos.length;
     const ocupados = puertos.filter(p => p.estado === 'ocupado').length;
     const pct = total ? Math.round((ocupados / total) * 100) : 0;
-    const tags = [
-      cuadro.marca && `<span class="tag"><b>Marca</b> ${_escHtml(cuadro.marca)}</span>`,
-      cuadro.modelo && `<span class="tag"><b>Modelo</b> ${_escHtml(cuadro.modelo)}</span>`,
-      cuadro.ubicacion && `<span class="tag"><b>Ubicación</b> ${_escHtml(cuadro.ubicacion)}</span>`,
-      idfNombre && `<span class="tag"><b>Sube a IDF</b> ${_escHtml(idfNombre)}</span>`
-    ].filter(Boolean).join('');
     const grid = puertos.map(p => {
       const ocupado = p.estado === 'ocupado';
       return `<div class="pg-cell ${ocupado ? 'on' : 'off'}" title="${_escHtml(p.destino || (ocupado ? 'Ocupado' : 'Libre'))}">${Number(p.numero)}</div>`;
@@ -19136,16 +19628,29 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }).join('');
     return `<div class="panel">
       <div class="panel-head">
-        <h2>🧰 ${_escHtml(cuadro.nombre)}</h2>
+        <h2>${_telecomIconoComponente(comp.tipo)} ${_escHtml(comp.nombre)}</h2>
         <div class="occ-meter"><div class="occ-bar"><div class="occ-fill" style="width:${pct}%"></div></div><span class="occ-count">${ocupados}/${total} puertos</span></div>
       </div>
-      ${tags ? `<div class="tags">${tags}</div>` : ''}
-      ${cuadro.notas ? `<p class="config-note"><b>Notas:</b> ${_escHtml(cuadro.notas)}</p>` : ''}
+      ${comp.marca ? `<div class="tags"><span class="tag"><b>Marca</b> ${_escHtml(comp.marca)}</span></div>` : ''}
       <div class="port-grid">${grid}</div>
       <table>
         <thead><tr><th>Puerto</th><th>Destino</th><th>Cable</th><th>Categoría</th><th>Notas</th></tr></thead>
         <tbody>${filas}</tbody>
       </table>
+    </div>`;
+  }
+
+  function _telecomInformeCuadroPanel(cuadro, idfNombre) {
+    const componentes = cuadro.componentes || [];
+    const tags = [
+      cuadro.ubicacion && `<span class="tag"><b>Ubicación</b> ${_escHtml(cuadro.ubicacion)}</span>`,
+      idfNombre && `<span class="tag"><b>Sube por fibra a</b> ${_escHtml(idfNombre)}</span>`
+    ].filter(Boolean).join('');
+    return `<div class="rack-section">
+      <h2 class="rack-section-title">🧰 ${_escHtml(cuadro.nombre)}</h2>
+      ${tags ? `<div class="tags">${tags}</div>` : ''}
+      ${cuadro.notas ? `<p class="config-note"><b>Notas:</b> ${_escHtml(cuadro.notas)}</p>` : ''}
+      ${componentes.length ? componentes.map(_telecomInformeComponentePanel).join('') : '<p class="config-note">Este cuadro todavía no tiene componentes montados.</p>'}
     </div>`;
   }
 

@@ -13141,6 +13141,8 @@ function telecomOfficeAbrirNuevoCuadro() {
   _telecomOfficeResetCamposEntidad();
   _telecomOfficeCrearComoTipo = 'cuadro';
   document.getElementById('telecomOfficeModalTitulo').textContent = 'Nuevo cuadro de campo';
+  document.getElementById('telecomOfficeLabelExtra').textContent = 'Ubicación';
+  document.getElementById('telecomOfficeCampoExtra').style.display = '';
   document.getElementById('telecomOfficeCuadroFields').style.display = '';
   _telecomOfficePoblarSelectIdfCuadro(_telecomOfficeCtx.idf_id).then(() => _telecomOfficeCuadroIdfCambiado());
   document.getElementById('modalTelecomOfficeEntidad').style.display = 'flex';
@@ -13175,6 +13177,9 @@ function telecomOfficeEditar(tipo, id) {
     extra.style.display = '';
   } else if (tipo === 'cuadro') {
     document.getElementById('telecomOfficeModalTitulo').textContent = 'Editar cuadro de campo';
+    document.getElementById('telecomOfficeLabelExtra').textContent = 'Ubicación';
+    document.getElementById('telecomOfficeExtra').value = item.ubicacion || '';
+    document.getElementById('telecomOfficeCampoExtra').style.display = '';
     document.getElementById('telecomOfficeCuadroFields').style.display = '';
     document.getElementById('telecomOfficeCuadroNotas').value = item.notas || '';
     _telecomOfficeEdit._puertoActual = item.puerto_conexion_id || null;
@@ -13251,6 +13256,7 @@ function _telecomOfficeDatosPatchPanel() {
 
 function _telecomOfficeDatosCuadro() {
   return {
+    ubicacion: document.getElementById('telecomOfficeExtra').value.trim(),
     idf_destino_id: document.getElementById('telecomOfficeCuadroIdf').value || null,
     puerto_conexion_id: document.getElementById('telecomOfficeCuadroPuerto').value || null,
     notas: document.getElementById('telecomOfficeCuadroNotas').value.trim()
