@@ -12184,7 +12184,15 @@ function _telecomOfficeColorModulo(tipo) {
 function telecomOfficeRenderElevacion(rack, modulos, opts) {
   opts = opts || {};
   const compacto = !!opts.compacto;
-  const rowH = compacto ? 5 : 15;
+  // TELECOM-ELEVACION-01, ajuste tras ver el rack real montado (18/08/2026): Adrián --
+  // "los paneles se ven muy finos deberian de verse mucho mas anchos. el rack es
+  // demasiado alto... tienes que hacer scroll para verlo entero eso no mola". Antes la
+  // vista interactiva usaba filas de 15px (42U = 630px, obligaba a hacer scroll) y un
+  // chasis de 220px (paneles estrechos). Ahora más ancho y más bajo: cabe entero sin
+  // scroll y los módulos leen como paneles de rack de verdad. El nombre se ve siempre
+  // (no hace falta hacer zoom para identificar qué es cada módulo) — el zoom sigue para
+  // quien quiera verlo aún más grande.
+  const rowH = compacto ? 5 : 10;
   const alturaU = Math.max(1, Number(rack.altura_u) || 42);
   const colocados = (modulos || []).filter(m => m.pos_u_inicio != null);
   const bloques = colocados.map(m => {
@@ -12192,8 +12200,8 @@ function telecomOfficeRenderElevacion(rack, modulos, opts) {
     const bottom = (Number(m.pos_u_inicio) - 1) * rowH;
     const height = Math.max(rowH - 1, Number(m.pos_u_altura || 1) * rowH - 1);
     const interactivo = !compacto;
-    const label = (!interactivo || rowH < 12) ? '' :
-      `<span style="font-size:8px;flex-shrink:0">${_telecomOfficeIconoModulo(m.tipo)}</span><span style="font-size:9px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.nombre)}</span>`;
+    const label = !interactivo ? '' :
+      `<span style="font-size:8px;flex-shrink:0">${_telecomOfficeIconoModulo(m.tipo)}</span><span style="font-size:8.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.nombre)}</span>`;
     return `<div class="telecomOfficeModulo" data-id="${Number(m.id)}"
       ${interactivo ? `onclick="_telecomOfficeClickModulo(event,${Number(m.id)})" onpointerdown="_telecomOfficeIniciarArrastreExistente(event,${Number(m.id)})"` : ''}
       style="position:absolute;left:2px;right:2px;bottom:${bottom}px;height:${height}px;border-radius:2px;
@@ -12208,7 +12216,7 @@ function telecomOfficeRenderElevacion(rack, modulos, opts) {
     ${bloques}
     <div id="telecomOfficeDropHi_${rack.id}" style="display:none;position:absolute;left:1px;right:1px;border-radius:2px;pointer-events:none;z-index:3;border:1.5px dashed #6ee7a2;background:rgba(110,231,162,.15)"></div>
   </div>`;
-  const anchoChasis = compacto ? 96 : 220;
+  const anchoChasis = compacto ? 96 : 320;
   const chasisInterior = `<div style="width:${anchoChasis}px;background:linear-gradient(180deg,#171b30,#12162a);
     border-left:1px solid #3d4570;border-right:1px solid #3d4570;padding:0 ${compacto ? 4 : 6}px;box-sizing:border-box">${filas}</div>`;
 
