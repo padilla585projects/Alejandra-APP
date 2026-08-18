@@ -1,6 +1,22 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-18
+- Estado (2026-08-18, continuación final): **Racks/Cuadros v2 portados a la app móvil
+  (`index.html`), toca-y-toca — completo, desplegado y verificado.** Cierra la ronda de
+  hoy: el mismo diagrama de rack y los cuadros de campo v2 que se construyeron en Office
+  ahora también funcionan en móvil, con arrastre sustituido por "toca una plantilla/módulo
+  → toca el hueco" (más viable con el dedo en pantalla pequeña — decisión de Adrián tras
+  planteársela). Paleta en hoja inferior en vez de barra horizontal. Cuadros dentro del
+  IDF con componentes en carril DIN (ahí, sin toca-y-toca: se añaden al final y se
+  reordenan con flechas, el orden no tiene restricción física real). De paso: arreglada
+  una regresión real (creación de cuadro en móvil mandaba campos que el backend ya no usa,
+  creaba cuadros sin componentes en silencio), repuesto el campo Ubicación perdido al
+  reestructurar el formulario de cuadro (móvil y Office), e iconos de puerto RJ45/fibra en
+  móvil. Verificando en producción con viewport móvil real se encontró y corrigió un bug
+  de condición de carrera (el modal de edición se abría antes de que el caché tuviera el
+  elemento recién creado). Probado de extremo a extremo con datos de prueba reales,
+  borrados al terminar. La app móvil llega así a paridad completa con Office en Telecom.
+  Sin pendientes de esta ronda. Detalle completo en `CHANGELOG.md`.
 - Estado (2026-08-18, continuación): **TELECOM-CUADRO-02 — código completo y desplegado
   (Worker + Pages), migración D1 PENDIENTE de aplicar.** Continuación directa de
   TELECOM-ELEVACION-01 (abajo): Adrián recordó que faltaba "el otro modelo... cuadro

@@ -4,6 +4,35 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-18 — Racks/Cuadros v2 en la app móvil, toca-y-toca)
+
+- **Port completo a `index.html`** de todo lo construido hoy en Office (diagrama de rack,
+  cuadros de campo v2). Adrián: "vamos a hacerlo en el móvil también... por el tema de la
+  pantalla pequeña... que sea fácil". En vez de arrastrar (impreciso con el dedo en una
+  pantalla pequeña), se usa **toca-y-toca**: tocas una plantilla de la paleta (o un módulo
+  ya montado) → entra en "modo colocar" → tocas el hueco del rack donde va. La paleta se
+  abre en una hoja inferior en vez de una barra horizontal con scroll. Mismo diseño de
+  segmentos que Office (huecos vacíos comprimidos, módulos con altura autoajustable).
+- **Cuadros de campo**: dentro del IDF (no ya en pantalla aparte a nivel de obra), con
+  componentes en carril DIN. Ahí sin toca-y-toca — el orden no tiene restricción física
+  real como las U de un rack — los componentes se añaden al final tocando la paleta y se
+  reordenan con flechas ◀▶, más simple con el pulgar.
+- **Regresión real corregida de paso**: la creación de cuadro en móvil todavía mandaba
+  marca/modelo/num_puertos (que el backend dejó de usar hoy con cuadros v2), creando
+  cuadros sin componentes en silencio desde el despliegue de esa migración. También se
+  había perdido el campo Ubicación al reestructurar el formulario de cuadro (tanto en
+  móvil como en Office) — repuesto en los dos.
+- **Iconos realistas de puerto** (RJ45/LC fibra) también en la vista de puertos móvil.
+- **Bug de condición de carrera encontrado verificando en producción**: al colocar un
+  módulo/componente nuevo, el modal de edición se abría antes de que la lista se hubiera
+  recargado — `telecomEditarEntidad` encontraba el caché todavía vacío y no hacía nada, en
+  silencio. `telecomAbrirRack`/`telecomAbrirCuadro` ahora devuelven la promesa de la carga
+  y se esperan con `await` antes de abrir el modal. Verificado en producción con viewport
+  móvil (375×812): rack con tipo/altura, módulo colocado y editable, cuadro con vínculo de
+  fibra real (puerto queda ocupado con el nombre del cuadro), componentes en carril DIN
+  con reordenación, iconos de puerto — todo probado de extremo a extremo con datos de
+  prueba, creados y borrados en la misma sesión.
+
 ### Added (2026-08-18 — Cuadros de campo v2: caja exterior con componentes, Office)
 
 > ⚠️ **Pendiente antes de usar**: código desplegado (Worker + Pages) pero la migración D1
