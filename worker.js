@@ -8012,12 +8012,16 @@ async function crearTelecomRack(request, env) {
   const notas = safeStr(body.notas).trim();
   if (nombre.length > 160) return err('El nombre es demasiado largo');
   if (notas.length > 1000) return err('Las notas son demasiado largas');
+  // TELECOM-ELEVACION-01 (18/08/2026): altura real del armario en U, para el diagrama de
+  // elevación -- 42U (estándar de suelo) por defecto, ajustable (armarios de pared 6-12U).
+  const alturaU = body.altura_u !== undefined ? parseInt(body.altura_u) : 42;
+  if (!Number.isInteger(alturaU) || alturaU < 1 || alturaU > 60) return err('La altura del rack debe ser un número entre 1 y 60 U');
   if (!(await telecomGetIdf(auth, env, idfId))) return err('IDF no encontrado', 404);
   try {
     const r = await env.DB.prepare(
-      'INSERT INTO telecom_racks (idf_id, empresa_id, nombre, notas) VALUES (?, ?, ?, ?)'
-    ).bind(idfId, auth.empresa_id, nombre, notas || null).run();
-    return json({ ok: true, id: r.meta.last_row_id, nombre, idf_id: idfId }, 201);
+      'INSERT INTO telecom_racks (idf_id, empresa_id, nombre, notas, altura_u) VALUES (?, ?, ?, ?, ?)'
+    ).bind(idfId, auth.empresa_id, nombre, notas || null, alturaU).run();
+    return json({ ok: true, id: r.meta.last_row_id, nombre, idf_id: idfId, altura_u: alturaU }, 201);
   } catch (e) {
     if (safeStr(e?.message).includes('UNIQUE')) return err('Ya existe un rack con ese nombre en el IDF', 409);
     throw e;
@@ -8035,10 +8039,12 @@ async function editarTelecomRack(idRaw, request, env) {
   if (!nombre) return err('El nombre es obligatorio');
   if (nombre.length > 160) return err('El nombre es demasiado largo');
   if (notas.length > 1000) return err('Las notas son demasiado largas');
+  const alturaU = body.altura_u === undefined ? actual.altura_u : parseInt(body.altura_u);
+  if (!Number.isInteger(alturaU) || alturaU < 1 || alturaU > 60) return err('La altura del rack debe ser un número entre 1 y 60 U');
   try {
     await env.DB.prepare(
-      'UPDATE telecom_racks SET nombre = ?, notas = ? WHERE id = ? AND empresa_id = ?'
-    ).bind(nombre, notas || null, actual.id, auth.empresa_id).run();
+      'UPDATE telecom_racks SET nombre = ?, notas = ?, altura_u = ? WHERE id = ? AND empresa_id = ?'
+    ).bind(nombre, notas || null, alturaU, actual.id, auth.empresa_id).run();
     return json({ ok: true });
   } catch (e) {
     if (safeStr(e?.message).includes('UNIQUE')) return err('Ya existe un rack con ese nombre en el IDF', 409);
@@ -8079,6 +8085,30 @@ async function getTelecomPatchPanels(request, env) {
   return json(results);
 }
 
+// TELECOM-ELEVACION-01 (18/08/2026): valida que el rango U de un módulo quepa dentro del
+// rack y no se solape con otro ya colocado. Devuelve un mensaje de error, o null si es
+// válido. posUInicio null significa "sin colocar en el diagrama" -- no valida nada.
+async function telecomValidarPosicionU(env, rackId, empresaId, posUInicio, posUAltura, excluirId) {
+  if (posUInicio == null) return null;
+  if (!Number.isInteger(posUInicio) || posUInicio < 1) return 'La posición U debe ser un número positivo';
+  if (!Number.isInteger(posUAltura) || posUAltura < 1 || posUAltura > 60) return 'La altura del módulo debe ser un número entre 1 y 60 U';
+  const rack = await env.DB.prepare('SELECT altura_u FROM telecom_racks WHERE id = ? AND empresa_id = ?').bind(rackId, empresaId).first();
+  if (!rack) return 'Rack no encontrado';
+  const posUFin = posUInicio + posUAltura - 1;
+  if (posUFin > rack.altura_u) return `El módulo no cabe en el rack (ocuparía hasta U${posUFin}, el rack solo tiene ${rack.altura_u}U)`;
+  const { results } = await env.DB.prepare(
+    `SELECT id, nombre, pos_u_inicio, pos_u_altura FROM telecom_patch_panels
+     WHERE rack_id = ? AND empresa_id = ? AND pos_u_inicio IS NOT NULL AND id != ?`
+  ).bind(rackId, empresaId, excluirId || 0).all();
+  for (const otro of results) {
+    const otroFin = otro.pos_u_inicio + otro.pos_u_altura - 1;
+    if (posUInicio <= otroFin && otro.pos_u_inicio <= posUFin) {
+      return `Esa posición se solapa con "${otro.nombre}" (U${otro.pos_u_inicio}–U${otroFin})`;
+    }
+  }
+  return null;
+}
+
 async function crearTelecomPatchPanel(request, env) {
   const auth = await getAuth(request, env);
   if (!puedeEditarTelecom(auth)) return err('No autorizado', 403);
@@ -8097,22 +8127,28 @@ async function crearTelecomPatchPanel(request, env) {
   // montado en el propio rack), pero se guarda igual si se rellena para cualquier tipo.
   const tipo = ['cobre', 'fibra', 'switch'].includes(body.tipo) ? body.tipo : 'cobre';
   const marca = safeStr(body.marca).trim();
+  // TELECOM-ELEVACION-01 (18/08/2026): posición real dentro del diagrama de elevación --
+  // opcional (null = "sin colocar", aparece en la lista aparte hasta que se arrastre).
+  const posUInicio = (body.pos_u_inicio !== undefined && body.pos_u_inicio !== null) ? parseInt(body.pos_u_inicio) : null;
+  const posUAltura = body.pos_u_altura !== undefined ? parseInt(body.pos_u_altura) : 1;
   if (!nombre || !rackId) return err('Faltan campos: nombre, rack_id');
   if (!(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
   if ([nombre, redVlan, switchAsociado, subred, posicionU, marca].some(v => v.length > 160) || notasConfig.length > 1000) {
     return err('Los datos técnicos del patch panel son demasiado largos');
   }
   if (!(await telecomGetRack(auth, env, rackId))) return err('Rack no encontrado', 404);
+  const errorPos = await telecomValidarPosicionU(env, rackId, auth.empresa_id, posUInicio, posUAltura, null);
+  if (errorPos) return err(errorPos, 409);
   let patchPanelId = null;
   try {
     const r = await env.DB.prepare(
       `INSERT INTO telecom_patch_panels
-       (rack_id, empresa_id, nombre, num_puertos, red_vlan, switch_asociado, subred, posicion_u, notas_config, tipo, marca)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (rack_id, empresa_id, nombre, num_puertos, red_vlan, switch_asociado, subred, posicion_u, notas_config, tipo, marca, pos_u_inicio, pos_u_altura)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       rackId, auth.empresa_id, nombre, numPuertos,
       redVlan || null, switchAsociado || null, subred || null, posicionU || null, notasConfig || null,
-      tipo, marca || null
+      tipo, marca || null, posUInicio, posUAltura
     ).run();
     patchPanelId = r.meta.last_row_id;
     // Crear automáticamente los N puertos vacíos — así el técnico entra directo a rellenar.
@@ -8126,7 +8162,7 @@ async function crearTelecomPatchPanel(request, env) {
     return json({
       ok: true, id: patchPanelId, nombre, rack_id: rackId, num_puertos: numPuertos,
       red_vlan: redVlan, switch_asociado: switchAsociado, subred, posicion_u: posicionU, notas_config: notasConfig,
-      tipo, marca
+      tipo, marca, pos_u_inicio: posUInicio, pos_u_altura: posUAltura
     }, 201);
   } catch (e) {
     if (patchPanelId) {
@@ -8152,20 +8188,24 @@ async function editarTelecomPatchPanel(idRaw, request, env) {
   const notasConfig = body.notas_config === undefined ? safeStr(actual.notas_config).trim() : safeStr(body.notas_config).trim();
   const tipo = body.tipo === undefined ? (actual.tipo || 'cobre') : (['cobre', 'fibra', 'switch'].includes(body.tipo) ? body.tipo : 'cobre');
   const marca = body.marca === undefined ? safeStr(actual.marca).trim() : safeStr(body.marca).trim();
+  const posUInicio = body.pos_u_inicio === undefined ? actual.pos_u_inicio : (body.pos_u_inicio === null ? null : parseInt(body.pos_u_inicio));
+  const posUAltura = body.pos_u_altura === undefined ? (actual.pos_u_altura || 1) : parseInt(body.pos_u_altura);
   if (!nombre) return err('El nombre es obligatorio');
   if ([nombre, redVlan, switchAsociado, subred, posicionU, marca].some(v => v.length > 160) || notasConfig.length > 1000) {
     return err('Los datos técnicos del patch panel son demasiado largos');
   }
+  const errorPos = await telecomValidarPosicionU(env, actual.rack_id, auth.empresa_id, posUInicio, posUAltura, actual.id);
+  if (errorPos) return err(errorPos, 409);
   try {
     await env.DB.prepare(
       `UPDATE telecom_patch_panels
-       SET nombre = ?, red_vlan = ?, switch_asociado = ?, subred = ?, posicion_u = ?, notas_config = ?, tipo = ?, marca = ?
+       SET nombre = ?, red_vlan = ?, switch_asociado = ?, subred = ?, posicion_u = ?, notas_config = ?, tipo = ?, marca = ?, pos_u_inicio = ?, pos_u_altura = ?
        WHERE id = ? AND empresa_id = ?`
     ).bind(
       nombre, redVlan || null, switchAsociado || null, subred || null, posicionU || null, notasConfig || null,
-      tipo, marca || null, actual.id, auth.empresa_id
+      tipo, marca || null, posUInicio, posUAltura, actual.id, auth.empresa_id
     ).run();
-    return json({ ok: true });
+    return json({ ok: true, pos_u_inicio: posUInicio, pos_u_altura: posUAltura });
   } catch (e) {
     if (safeStr(e?.message).includes('UNIQUE')) return err('Ya existe un patch panel con ese nombre en el rack', 409);
     throw e;
