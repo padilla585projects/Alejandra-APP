@@ -15095,6 +15095,33 @@ function _epiZonaColor(status) {
   return status === 'ok' ? 'var(--green)' : status === 'caduca_pronto' ? 'var(--accent)' : status === 'caducado' ? 'var(--red)' : 'var(--surface2)';
 }
 
+// EPI-MUNECO-COLOR-01 (17/08/2026): Adrián -- "ahí colores que no corresponden con los EPIs
+// seleccionados... los chalecos son amarillos o naranjas, pero no verdes. Las botas también,
+// suelen ser negras o grises". Antes el color de ESTADO (ok/caduca/caducado) pintaba
+// directamente el relleno de cada prenda -- un chaleco "ok" salía verde, unas botas "ok"
+// salían verdes, sin relación con el color real de la prenda. Ahora el relleno usa el color
+// real aproximado de cada EPI (o gris neutro si no está asignado) y el estado se indica en el
+// borde -- las chips de debajo ya dicen el estado en texto, así que no se pierde información.
+const EPI_COLOR_REAL = {
+  casco:      '#fbbf24', // amarillo -- casco de obra
+  gafas:      '#475569', // gris oscuro -- montura/lente
+  auditiva:   '#f97316', // naranja -- orejeras
+  mascarilla: '#e2e8f0', // blanco/gris claro
+  chaleco:    '#f97316', // naranja alta visibilidad (franjas amarillas ya dibujadas encima)
+  arnes:      '#ea580c', // naranja quemado -- cincha del arnés
+  ropa:       '#3b82f6', // azul -- ropa de trabajo
+  cinturon:   '#44403c', // marrón oscuro/negro -- cuero
+  guantes:    '#92714a', // marrón -- cuero de trabajo
+  rodilleras: '#27272a', // negro
+  botas:      '#3f3f46', // negro/gris oscuro
+};
+function _epiZonaFill(zona, status) {
+  return status === 'sin_asignar' ? 'var(--surface2)' : (EPI_COLOR_REAL[zona] || 'var(--surface2)');
+}
+function _epiZonaBorde(status) {
+  return status === 'sin_asignar' ? 'var(--border)' : _epiZonaColor(status);
+}
+
 function calcularEstadoZonasEpi(episTrabajador) {
   const hoy = new Date(); const pronto = new Date(hoy); pronto.setDate(pronto.getDate() + 30);
   const zonas = {};
@@ -15125,7 +15152,8 @@ function renderMunecoEpis(trabajadorValue, nombreTrabajador, episTrabajador) {
   window._epiZonaTrabajadorVal = trabajadorValue;
   const z = calcularEstadoZonasEpi(episTrabajador);
   window._epiZonasActuales = z;
-  const c = zona => _epiZonaColor(z[zona].status);
+  const fill = zona => _epiZonaFill(zona, z[zona].status);
+  const borde = zona => _epiZonaBorde(z[zona].status);
   const otros = episTrabajador.filter(e => !EPI_ZONAS[e.tipo_epi] && e.estado === 'activo');
 
   const svg = `
@@ -15136,59 +15164,59 @@ function renderMunecoEpis(trabajadorValue, nombreTrabajador, episTrabajador) {
     <circle cx="150" cy="62" r="40" fill="var(--surface2)"/>
     <rect x="136" y="96" width="28" height="22" rx="4" fill="var(--surface2)"/>
     <g onclick="epiZonaClick('ropa')" style="cursor:pointer">
-      <path d="M85,115 L215,115 L207,180 L202,260 L212,290 L230,555 L172,555 L162,300 Q150,308 138,300 L128,555 L70,555 L88,290 L98,260 L93,180 Z" fill="${c('ropa')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M85,115 L215,115 L207,180 L202,260 L212,290 L230,555 L172,555 L162,300 Q150,308 138,300 L128,555 L70,555 L88,290 L98,260 L93,180 Z" fill="${fill('ropa')}" stroke="${borde('ropa')}" stroke-width="3"/>
       <path d="M93,180 L100,180 L96,260 L101,260 L96,290 L88,290 L98,260 Z" fill="#fff" opacity=".07"/>
     </g>
     <g onclick="epiZonaClick('guantes')" style="cursor:pointer">
-      <ellipse cx="64" cy="340" rx="26" ry="30" fill="${c('guantes')}" stroke="var(--border)" stroke-width="3"/>
-      <ellipse cx="236" cy="340" rx="26" ry="30" fill="${c('guantes')}" stroke="var(--border)" stroke-width="3"/>
-      <ellipse cx="56" cy="330" rx="8" ry="10" fill="${c('guantes')}" stroke="var(--border)" stroke-width="2"/>
-      <ellipse cx="244" cy="330" rx="8" ry="10" fill="${c('guantes')}" stroke="var(--border)" stroke-width="2"/>
+      <ellipse cx="64" cy="340" rx="26" ry="30" fill="${fill('guantes')}" stroke="${borde('guantes')}" stroke-width="3"/>
+      <ellipse cx="236" cy="340" rx="26" ry="30" fill="${fill('guantes')}" stroke="${borde('guantes')}" stroke-width="3"/>
+      <ellipse cx="56" cy="330" rx="8" ry="10" fill="${fill('guantes')}" stroke="${borde('guantes')}" stroke-width="2"/>
+      <ellipse cx="244" cy="330" rx="8" ry="10" fill="${fill('guantes')}" stroke="${borde('guantes')}" stroke-width="2"/>
     </g>
     <g onclick="epiZonaClick('rodilleras')" style="cursor:pointer">
-      <rect x="83" y="435" width="52" height="42" rx="14" fill="${c('rodilleras')}" stroke="var(--border)" stroke-width="3"/>
-      <rect x="165" y="435" width="52" height="42" rx="14" fill="${c('rodilleras')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="83" y="435" width="52" height="42" rx="14" fill="${fill('rodilleras')}" stroke="${borde('rodilleras')}" stroke-width="3"/>
+      <rect x="165" y="435" width="52" height="42" rx="14" fill="${fill('rodilleras')}" stroke="${borde('rodilleras')}" stroke-width="3"/>
       <line x1="90" y1="456" x2="128" y2="456" stroke="var(--border)" stroke-width="2" opacity=".5"/>
       <line x1="172" y1="456" x2="210" y2="456" stroke="var(--border)" stroke-width="2" opacity=".5"/>
     </g>
     <g onclick="epiZonaClick('botas')" style="cursor:pointer">
-      <path d="M62,545 Q62,535 74,533 L104,533 Q116,533 116,545 L116,575 Q116,595 96,595 L82,595 Q62,595 62,575 Z" fill="${c('botas')}" stroke="var(--border)" stroke-width="3"/>
-      <path d="M184,545 Q184,535 196,533 L226,533 Q238,533 238,545 L238,575 Q238,595 218,595 L204,595 Q184,595 184,575 Z" fill="${c('botas')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M62,545 Q62,535 74,533 L104,533 Q116,533 116,545 L116,575 Q116,595 96,595 L82,595 Q62,595 62,575 Z" fill="${fill('botas')}" stroke="${borde('botas')}" stroke-width="3"/>
+      <path d="M184,545 Q184,535 196,533 L226,533 Q238,533 238,545 L238,575 Q238,595 218,595 L204,595 Q184,595 184,575 Z" fill="${fill('botas')}" stroke="${borde('botas')}" stroke-width="3"/>
       <path d="M62,572 Q89,580 116,572 L116,580 Q89,588 62,580 Z" fill="#000" opacity=".18"/>
       <path d="M184,572 Q211,580 238,572 L238,580 Q211,588 184,580 Z" fill="#000" opacity=".18"/>
     </g>
     <g onclick="epiZonaClick('cinturon')" style="cursor:pointer">
-      <rect x="95" y="255" width="110" height="24" rx="6" fill="${c('cinturon')}" stroke="var(--border)" stroke-width="3"/>
-      <rect x="138" y="251" width="24" height="32" rx="4" fill="var(--border)"/>
+      <rect x="95" y="255" width="110" height="24" rx="6" fill="${fill('cinturon')}" stroke="${borde('cinturon')}" stroke-width="3"/>
+      <rect x="138" y="251" width="24" height="32" rx="4" fill="${borde('cinturon')}"/>
       <circle cx="150" cy="267" r="3.5" fill="#94a3b8"/>
     </g>
     <g onclick="epiZonaClick('chaleco')" style="cursor:pointer">
-      <path d="M108,120 L128,120 L150,148 L172,120 L192,120 L200,262 L100,262 Z" fill="${c('chaleco')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M108,120 L128,120 L150,148 L172,120 L192,120 L200,262 L100,262 Z" fill="${fill('chaleco')}" stroke="${borde('chaleco')}" stroke-width="3"/>
       <rect x="108" y="168" width="80" height="10" fill="#facc15" opacity=".9"/>
       <rect x="108" y="218" width="80" height="10" fill="#facc15" opacity=".9"/>
       <path d="M116,120 L128,120 L150,148 L136,156 Z" fill="#fff" opacity=".12"/>
     </g>
     <g onclick="epiZonaClick('arnes')" style="cursor:pointer">
-      <line x1="100" y1="124" x2="176" y2="260" stroke="${c('arnes')}" stroke-width="13" stroke-linecap="round"/>
-      <line x1="200" y1="124" x2="124" y2="260" stroke="${c('arnes')}" stroke-width="13" stroke-linecap="round"/>
-      <circle cx="150" cy="192" r="10" fill="var(--border)"/>
+      <line x1="100" y1="124" x2="176" y2="260" stroke="${fill('arnes')}" stroke-width="13" stroke-linecap="round"/>
+      <line x1="200" y1="124" x2="124" y2="260" stroke="${fill('arnes')}" stroke-width="13" stroke-linecap="round"/>
+      <circle cx="150" cy="192" r="10" fill="${borde('arnes')}"/>
       <circle cx="150" cy="192" r="4" fill="#94a3b8"/>
     </g>
     <g onclick="epiZonaClick('casco')" style="cursor:pointer">
-      <ellipse cx="150" cy="26" rx="52" ry="10" fill="${c('casco')}" stroke="var(--border)" stroke-width="3"/>
-      <path d="M98,26 C98,-22 202,-22 202,26 L98,26 Z" fill="${c('casco')}" stroke="var(--border)" stroke-width="3"/>
+      <ellipse cx="150" cy="26" rx="52" ry="10" fill="${fill('casco')}" stroke="${borde('casco')}" stroke-width="3"/>
+      <path d="M98,26 C98,-22 202,-22 202,26 L98,26 Z" fill="${fill('casco')}" stroke="${borde('casco')}" stroke-width="3"/>
       <path d="M106,22 Q150,-16 194,22 Q150,-4 106,22 Z" fill="#fff" opacity=".15"/>
     </g>
     <g onclick="epiZonaClick('auditiva')" style="cursor:pointer">
-      <circle cx="112" cy="66" r="13" fill="${c('auditiva')}" stroke="var(--border)" stroke-width="3"/>
-      <circle cx="188" cy="66" r="13" fill="${c('auditiva')}" stroke="var(--border)" stroke-width="3"/>
+      <circle cx="112" cy="66" r="13" fill="${fill('auditiva')}" stroke="${borde('auditiva')}" stroke-width="3"/>
+      <circle cx="188" cy="66" r="13" fill="${fill('auditiva')}" stroke="${borde('auditiva')}" stroke-width="3"/>
     </g>
     <g onclick="epiZonaClick('gafas')" style="cursor:pointer">
-      <rect x="128" y="56" width="44" height="14" rx="7" fill="${c('gafas')}" stroke="var(--border)" stroke-width="3"/>
+      <rect x="128" y="56" width="44" height="14" rx="7" fill="${fill('gafas')}" stroke="${borde('gafas')}" stroke-width="3"/>
       <rect x="133" y="59" width="12" height="5" rx="2.5" fill="#fff" opacity=".18"/>
     </g>
     <g onclick="epiZonaClick('mascarilla')" style="cursor:pointer">
-      <path d="M130,78 Q150,74 170,78 L170,96 Q150,103 130,96 Z" fill="${c('mascarilla')}" stroke="var(--border)" stroke-width="3"/>
+      <path d="M130,78 Q150,74 170,78 L170,96 Q150,103 130,96 Z" fill="${fill('mascarilla')}" stroke="${borde('mascarilla')}" stroke-width="3"/>
       <line x1="134" y1="86" x2="166" y2="86" stroke="var(--border)" stroke-width="2" opacity=".5"/>
     </g>
   </svg>`;
