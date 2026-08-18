@@ -443,6 +443,52 @@
   `b44a004d06494737ab4f12282d6c7258d4fe245d`), los tres runs verificados en verde.
 - Sin pendientes.
 
+## Muñeco de EPIs: color de estado en vez de color real de la prenda (2026-08-17, noche)
+
+- Contexto: Adrián, "echemos un vistazo a la sección de dotación de EPIs" → "y al muñeco
+  de selección de EPIs" → "al seleccionar los EPIs en el muñeco ahí colores que no
+  corresponden con los EPIs seleccionados, tenemos que mejorar eso. Por ejemplo el
+  chaleco, los chalecos son amarillos o naranjas, pero no verdes. Las botas también,
+  suelen ser negras o grises."
+- Auditoría previa del módulo (`cargarEpis`/`renderMunecoEpis`/backend `/epis-asignados`)
+  sin encontrar el patrón de bugs ya visto en Telecom/Sondas CPD — este módulo no tiene
+  niveles de navegación que auto-refresh pueda resetear (el filtro de trabajador no se
+  toca al recargar), los modales usan `abrirModal()` genérico (ya con el padding correcto
+  de fábrica), y los permisos del backend están bien acotados por departamento
+  (`DEPT-CPD-01`). El bug real era puramente visual, en el propio color del muñeco.
+- **Causa:** `_epiZonaColor(status)` devuelve el color de ESTADO (verde=ok, morado/accent=
+  caduca pronto, rojo=caducado, gris=sin asignar) y ese mismo valor se usaba como
+  `fill` de cada silueta de prenda en el SVG del muñeco — un chaleco "ok" salía verde
+  (los chalecos reales son amarillos/naranjas de alta visibilidad), unas botas "ok"
+  salían verdes (las botas reales son negras/grises). El estado ya se explica en texto en
+  las chips de debajo del muñeco ("ok"/"caduca pronto"/"CADUCADO"/"sin asignar"), así que
+  usar también el color de la silueta para el estado era redundante y, peor, confuso.
+- **Fix:** separar las dos señales. Nuevo `EPI_COLOR_REAL` (color aproximado real de cada
+  tipo de EPI: casco amarillo `#fbbf24`, chaleco/arnés naranja `#f97316`/`#ea580c`, ropa
+  azul `#3b82f6`, guantes/cinturón marrón-negro `#92714a`/`#44403c`, botas/rodilleras
+  negro-gris `#3f3f46`/`#27272a`, gafas gris `#475569`, mascarilla blanco `#e2e8f0`) usado
+  como `fill`; el color de estado pasa a ser el `stroke` (borde) de cada silueta vía
+  `_epiZonaBorde(status)`. Sin asignar sigue siendo gris neutro tanto en relleno como en
+  borde, igual que antes. Casos especiales: "arnés" se dibuja como líneas gruesas (no una
+  forma rellena), así que el color real va en el propio `stroke` de la cincha y el estado
+  se traslada al conector central (el "mosquetón" del pecho, antes gris fijo, ahora
+  coloreado según estado); "cinturón" similar — la hebilla (antes gris fijo) ahora lleva
+  el color de estado.
+- Mismo fix, código idéntico, en `panel.html` e `index.html` — confirmado que el bloque
+  completo (`_epiZonaColor`, `EPI_ZONAS`, `renderMunecoEpis` con el SVG entero) era
+  byte a byte idéntico entre los dos archivos antes de mi cambio.
+- Verificación en producción con EPIs de prueba reales (no solo lectura de código):
+  creado un "Chaleco reflectante" activo sin caducidad y unas "Botas de seguridad" con
+  `fecha_caducidad` en el pasado, para el usuario de prueba (id 357); renderizado el
+  muñeco real y leído los atributos `fill`/`stroke` del SVG resultante:
+  chaleco → `fill:#f97316` (naranja) + `stroke:var(--green)` (ok); botas →
+  `fill:#3f3f46` (negro/gris) + `stroke:var(--red)` (caducado); casco (sin asignar) →
+  `fill:var(--surface2)` + `stroke:var(--border)` (gris neutro, sin cambios respecto a
+  antes). Los dos EPIs de prueba borrados al terminar.
+- Desplegado: `panel.html`/`index.html` vía `pages.yml` (SHA
+  `081ecee27ab986b0178e9f953bd3a9f29e836b3d`, run verificado en verde).
+- Sin pendientes.
+
 ## Repaso guiado de Alejandra Office — 4 bugs reales encontrados en vivo (2026-08-12/13)
 
 Sesión de revisión conjunta con Adrián sobre `panel.html` en producción (screenshots +

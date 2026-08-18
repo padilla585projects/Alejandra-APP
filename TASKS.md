@@ -83,6 +83,10 @@ usuario con Gmail conectado, no solo Adrián.
   artificial (900px fijo, mientras su contenedor no lo tenía), y controles de zoom
   ＋/－/↺ para ampliar al colocar sondas. Verificado en producción (zoom 900px→1350px al
   150%, posición de sonda calculada correctamente). Sin pendientes.
+- **Muñeco de EPIs (2026-08-17, noche):** "los chalecos son amarillos o naranjas, pero no
+  verdes. Las botas también, suelen ser negras o grises" — el color de estado pintaba el
+  relleno de la prenda; ahora el relleno es el color real del EPI y el estado va en el
+  borde. Mismo fix en los dos frontends. Verificado en producción. Sin pendientes.
 - Siguiente acción exacta: que Adrián entre a "Mis Correos" en Office, pulse "🔄
   Sincronizar" y confirme que aparecen sus correos reales; luego probar categorizar a mano,
   "Organizar con Alejandra", y enviar un correo de prueba real.

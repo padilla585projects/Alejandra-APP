@@ -80,6 +80,13 @@
   ＋/－/↺ ("podemos hacer que se pueda ampliar el plano"). Verificado en producción con
   datos de prueba reales (zoom 900px→1350px al 150%, posición de sonda calculada
   correctamente con el zoom aplicado). Sin pendientes.
+- Estado (2026-08-17, noche — muñeco de EPIs): "los chalecos son amarillos o naranjas,
+  pero no verdes. Las botas también, suelen ser negras o grises" — el color de estado
+  (ok/caduca/caducado) pintaba el relleno de la prenda en el muñeco de dotación; ahora el
+  relleno usa el color real de cada EPI y el estado se indica en el borde. Mismo fix en
+  `panel.html` e `index.html`. Verificado en producción con EPIs de prueba reales
+  (chaleco activo → naranja + borde verde; botas caducadas → negro + borde rojo). Sin
+  pendientes.
 - Estado (2026-08-13/14): **Sesión larga de repaso manual de la app junto a Adrián,
   completada y desplegada.** "Vamos a revisar la app que tiene cosillas que arreglar" →
   cuatro bugs reales encontrados navegando `panel.html` en vivo (pestañas de Documentos

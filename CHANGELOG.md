@@ -4,6 +4,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-17, noche — muñeco de EPIs)
+
+- **Colores del muñeco de dotación de EPIs sin relación con la prenda real:** Adrián: "al
+  seleccionar los EPIs en el muñeco ahí colores que no corresponden con los EPIs
+  seleccionados... los chalecos son amarillos o naranjas, pero no verdes. Las botas
+  también, suelen ser negras o grises". El color de estado (ok/caduca pronto/caducado)
+  pintaba directamente el relleno de cada prenda. Ahora el relleno usa el color real
+  aproximado de cada EPI y el estado se indica en el borde (las chips de la lista ya
+  dicen el estado en texto). Mismo fix en `panel.html` e `index.html` (código idéntico en
+  los dos). Verificado en producción: chaleco activo → relleno naranja + borde verde;
+  botas caducadas → relleno negro/gris + borde rojo; sin asignar → gris neutro.
+
 ### Fixed / Added (2026-08-17, noche — Sondas CPD)
 
 - **Mismo patrón de bug ya visto en Telecom (TELECOM-NAV-01), confirmado también aquí:**

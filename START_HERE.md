@@ -61,6 +61,11 @@ modales + auto-refresh que sacaba al usuario del plano en el que trabajaba). Ade
 plano sin ancho máximo artificial y controles de zoom para colocar sondas con precisión.
 Verificado en producción, sin pendientes.
 
+**Muñeco de EPIs (2026-08-17, noche):** el color de estado pintaba el relleno de cada
+prenda (chaleco "ok" salía verde en vez de naranja/amarillo, botas "ok" salían verdes en
+vez de negras/grises) — ahora el relleno usa el color real del EPI y el estado va en el
+borde. Mismo fix en los dos frontends. Verificado en producción, sin pendientes.
+
 **Repaso guiado de la app completado, desplegado y verificado (2026-08-13/14):** sesión larga
 junto a Adrián — 4 bugs reales en `panel.html` (Documentos, dashboard, feedback del chat de
 Alejandra, botón de scan remoto), compatibilidad con la plataforma CAE externa Nalanda
