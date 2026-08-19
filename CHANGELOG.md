@@ -4,6 +4,28 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-19 — Sondas CPD en el móvil, 2ª ronda: probado con un plano real y denso)
+
+El primer intento (más abajo) se probó solo con 1-2 sondas de prueba. Adrián lo probó
+con un plano real ("Modelo Liquid Cooling 1", decenas de sondas juntas) y reportó de
+golpe: "con esto asi no se puede trabajar en el movil... los iconos muy grandes,el
+plano muy pequeño... y cuando lo amplias no se puede mover", y luego, más concreto:
+"cuando pulso en una sonda para moverla saltan las opciones del navegador".
+
+- **Bug real encontrado**: `-webkit-touch-callout:none` (ronda 1) solo frena el menú de
+  mantener-pulsado de iOS Safari. En Android/Chrome, mantener pulsado dispara su PROPIO
+  menú contextual (evento `contextmenu`) salvo que se cancele explícitamente — ganaba la
+  carrera contra el timer de 350ms del arrastre, así que el gesto nunca llegaba a
+  armarse. Esta es la causa real de "no se pueden reubicar". Añadido
+  `el.addEventListener('contextmenu', e => e.preventDefault())` al marcador.
+- **Zoom cambiado de `transform:scale()` a ancho real** del canvas (% del contenedor).
+  El transform combinado con el `overflow:auto` del contenedor daba problemas reales de
+  arrastre al ampliar; con ancho real no hay transform de por medio, mismo cálculo de
+  posición (`getBoundingClientRect()`) sin casos especiales.
+- **Marcador de sonda bajado de 40px (ronda 1) a 30px**: 40px se veía bien con 2-3 sondas
+  de prueba pero en un plano real y denso se solapaban entre sí. El zoom es la
+  herramienta para separar un grupo denso, no el tamaño del marcador.
+
 ### Fixed (2026-08-19 — Sondas CPD en el móvil: plano pequeño y sondas que no se movían)
 
 Adrián, sobre el departamento de Control en la app: "el plano se ve pequeño y las sondas

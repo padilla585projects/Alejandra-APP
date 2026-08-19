@@ -17079,12 +17079,17 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // CPD-MOVIL-01 (19/08/2026): Adrián probando en el móvil -- "el plano se ve pequeño y
   // las sondas no se puden reubicar". El plano ocupaba solo el ancho de pantalla sin forma
   // de ampliarlo, así que arrastrar una sonda con precisión era casi imposible con el dedo
-  // -- mismo problema de fondo que el rack de Telecom. Se porta el mismo zoom que ya tenía
-  // Office (transform:scale() sobre el canvas -- el cálculo de posición sigue funcionando
-  // porque getBoundingClientRect() ya refleja el tamaño visual tras el zoom).
+  // -- mismo problema de fondo que el rack de Telecom.
+  // CPD-MOVIL-02 (19/08/2026): probado en un plano real y denso -- "con esto asi no se
+  // puede trabajar... y cuando lo amplias no se puede mover". El zoom por
+  // transform:scale() cambiaba el tamaño VISUAL del canvas pero no su caja de layout real,
+  // y combinado con el overflow:auto del contenedor daba problemas reales de arrastre al
+  // ampliar. Cambiado a ampliar el ANCHO real del canvas (% del contenedor) -- sin
+  // transform de por medio, el arrastre (que ya usa getBoundingClientRect(), reflejando
+  // el tamaño real) funciona igual a cualquier zoom, sin casos especiales.
   window._cpdZoomFactor = window._cpdZoomFactor || 1;
   function cpdZoom(delta) {
-    window._cpdZoomFactor = Math.max(0.5, Math.min(3, Math.round((window._cpdZoomFactor + delta) * 100) / 100));
+    window._cpdZoomFactor = Math.max(0.5, Math.min(4, Math.round((window._cpdZoomFactor + delta) * 100) / 100));
     _cpdAplicarZoom();
   }
   window.cpdZoom = cpdZoom;
@@ -17095,7 +17100,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.cpdZoomReset = cpdZoomReset;
   function _cpdAplicarZoom() {
     const canvas = document.getElementById('cpdPlanoCanvas');
-    if (canvas) canvas.style.transform = `scale(${window._cpdZoomFactor})`;
+    if (canvas) canvas.style.width = (window._cpdZoomFactor * 100) + '%';
     const label = document.getElementById('cpdZoomLabel');
     if (label) label.textContent = Math.round(window._cpdZoomFactor * 100) + '%';
   }
@@ -17126,7 +17131,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const st = window._cpdPlanoActual;
     if (!wrap || !st) return;
     wrap.innerHTML = `
-      <div id="cpdPlanoCanvas" style="position:relative;width:100%;transform-origin:0 0">
+      <div id="cpdPlanoCanvas" style="position:relative;width:100%">
         <img id="cpdPlanoImg" src="${cpdImagenUrl(st.plano.id)}" style="width:100%;display:block;user-select:none;-webkit-user-drag:none;-webkit-touch-callout:none" draggable="false">
       </div>`;
     const canvas = document.getElementById('cpdPlanoCanvas');
@@ -17177,19 +17182,27 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const el = document.createElement('div');
     el.className = 'cpd-sonda-marker';
     el.dataset.id = sonda.id;
-    // CPD-MOVIL-01 (19/08/2026): marcador subido de 26px a 40px (toque real, no cursor de
-    // ratón) y -webkit-touch-callout/user-select en none -- en iOS Safari un mantener
-    // pulsado sin esto dispara el menú de "guardar imagen" del navegador ANTES de que
-    // llegue el timer de arrastre de cpdWireSondaDrag, cancelando el gesto.
+    // CPD-MOVIL-02 (19/08/2026): 40px (CPD-MOVIL-01) se veía bien con 2-3 sondas de
+    // prueba, pero en un plano real y denso (decenas de sondas juntas) se solapaban entre
+    // sí y hacían el plano ilegible -- Adrián: "los iconos muy grandes". Bajado a 30px; el
+    // zoom (CPD-MOVIL-02 en _cpdAplicarZoom) es la herramienta para separar un grupo denso,
+    // no el tamaño del marcador en sí.
     el.style.cssText = `position:absolute;left:${sonda.pos_x}%;top:${sonda.pos_y}%;transform:translate(-50%,-50%);
-      width:40px;height:40px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
-      display:flex;align-items:center;justify-content:center;font-size:17px;cursor:grab;touch-action:none;z-index:5;
+      width:30px;height:30px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
+      display:flex;align-items:center;justify-content:center;font-size:13px;cursor:grab;touch-action:none;z-index:5;
       -webkit-touch-callout:none;-webkit-user-select:none;user-select:none`;
     el.textContent = info.icono;
     const label = document.createElement('div');
     label.textContent = cpdTextoEtiqueta(sonda);
     label.style.cssText = 'position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px #000;margin-top:2px;pointer-events:none';
     el.appendChild(label);
+    // CPD-MOVIL-02 (19/08/2026): Adrián -- "cuando pulso en una sonda para moverla saltan
+    // las opciones del navegador". -webkit-touch-callout:none (arriba) solo frena el menú
+    // de mantener-pulsado de iOS Safari; en Android/Chrome el mantener pulsado dispara su
+    // PROPIO menú contextual (contextmenu) salvo que se cancele explícitamente. Sin esto,
+    // el menú nativo ganaba la carrera contra el timer de 350ms de cpdWireSondaDrag y el
+    // arrastre nunca llegaba a armarse -- la causa real de "no se pueden reubicar".
+    el.addEventListener('contextmenu', e => e.preventDefault());
     canvas.appendChild(el);
     cpdWireSondaDrag(el);
   }
@@ -18593,7 +18606,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // donde va). Adrián: "por el tema de la pantalla pequeña... que sea facil".
   // TELECOM-ACCESORIO-01 (19/08/2026): ver comentario gemelo en worker.js -- ventilacion/
   // pasacables/pantalla son módulos de rack sin puertos de red (accesorios físicos).
-  function _telecomIconoModulo(tipo) { return { cobre:'🔌', fibra:'🧵', switch:'🖧', ventilacion:'🌀', pasacables:'➰', pantalla:'🖥️' }[tipo] || '🔌'; }
+  // TELECOM-ICONOS-01 (19/08/2026): Adrián, mirando el rack en un móvil real -- "BMS" y
+  // "Seguridad" (tipo switch) salían con un icono roto (🖧 no tiene glifo en la fuente
+  // emoji de ese Android). Se cambian los iconos de emoji a SVG de línea propio -- no
+  // dependen de qué fuente de emoji tenga el teléfono, y quedan más "chulos" y coherentes
+  // entre sí montados en el rack. width/height:1em para que hereden el tamaño del texto
+  // que ya tenía cada sitio donde se pintaban (span con font-size), igual que un emoji.
+  function _telecomIconoModulo(tipo) {
+    const inner = {
+      cobre: '<rect x="3" y="6" width="12" height="8" rx="1.5"/><rect x="7.5" y="3" width="3" height="3"/><line x1="5.5" y1="10" x2="5.5" y2="12.5"/><line x1="7.5" y1="10" x2="7.5" y2="12.5"/><line x1="9.5" y1="10" x2="9.5" y2="12.5"/><line x1="11.5" y1="10" x2="11.5" y2="12.5"/>',
+      fibra: '<rect x="2.5" y="6" width="5.5" height="6" rx="1"/><rect x="10" y="6" width="5.5" height="6" rx="1"/><circle cx="5.25" cy="9" r="0.9" fill="currentColor" stroke="none"/><circle cx="12.75" cy="9" r="0.9" fill="currentColor" stroke="none"/>',
+      switch: '<rect x="2" y="5" width="14" height="8" rx="1.5"/><line x1="4.5" y1="7.5" x2="4.5" y2="9" stroke-width="1.6"/><line x1="7.5" y1="7.5" x2="7.5" y2="9" stroke-width="1.6"/><line x1="10.5" y1="7.5" x2="10.5" y2="9" stroke-width="1.6"/><line x1="13.5" y1="7.5" x2="13.5" y2="9" stroke-width="1.6"/><circle cx="4.5" cy="11.2" r="0.7" fill="currentColor" stroke="none"/><circle cx="7" cy="11.2" r="0.7" fill="currentColor" stroke="none"/>',
+      ventilacion: '<circle cx="9" cy="9" r="6.5"/><path d="M9 9 Q11 4 14.5 5" stroke-linecap="round"/><path d="M9 9 Q6 13.5 2.5 11.5" stroke-linecap="round"/><path d="M9 9 Q13.5 11 13.5 15.5" stroke-linecap="round"/><circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none"/>',
+      pasacables: '<circle cx="9" cy="9" r="5.8"/><path d="M4 9 Q7 4.5 9 9 Q11 13.5 14 9" stroke-linecap="round"/>',
+      pantalla: '<rect x="3" y="3" width="12" height="8.5" rx="1"/><line x1="9" y1="11.5" x2="9" y2="13.8"/><line x1="6" y1="14.8" x2="12" y2="14.8" stroke-linecap="round"/>'
+    }[tipo] || '<rect x="3" y="6" width="12" height="8" rx="1.5"/><rect x="7.5" y="3" width="3" height="3"/>';
+    return `<svg width="1em" height="1em" viewBox="0 0 18 18" style="display:inline-block;vertical-align:-3px" fill="none" stroke="currentColor" stroke-width="1.3">${inner}</svg>`;
+  }
   function _telecomColorModulo(tipo) {
     return {
       cobre:       { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' },
@@ -18604,15 +18633,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       pantalla:    { bg:'linear-gradient(145deg,#2a1e40,#150f22)', border:'#5a3a86' }
     }[tipo] || { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' };
   }
+  const TELECOM_ICONO_PERSONALIZADO = '<svg width="1em" height="1em" viewBox="0 0 18 18" style="display:inline-block;vertical-align:-3px" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="9" y1="3.5" x2="9" y2="14.5"/><line x1="3.5" y1="9" x2="14.5" y2="9"/></svg>';
   const TELECOM_PLANTILLAS_MODULO = [
-    { id:'ventilacion', icono:'🌀', label:'Ventilación', tipo:'ventilacion', marca:'', num_puertos:0, pos_u_altura:1 },
-    { id:'panel_cobre', icono:'🔌', label:'Patch panel cobre', tipo:'cobre', marca:'', num_puertos:24, pos_u_altura:1 },
-    { id:'panel_fibra', icono:'🧵', label:'Patch panel fibra', tipo:'fibra', marca:'', num_puertos:24, pos_u_altura:1 },
-    { id:'switch_cisco', icono:'🖧', label:'Switch Cisco Catalyst', tipo:'switch', marca:'Cisco', num_puertos:24, pos_u_altura:1 },
-    { id:'switch_ubiquiti', icono:'🖧', label:'Switch Ubiquiti UniFi', tipo:'switch', marca:'Ubiquiti', num_puertos:24, pos_u_altura:1 },
-    { id:'pasacables', icono:'➰', label:'Pasacables', tipo:'pasacables', marca:'', num_puertos:0, pos_u_altura:1 },
-    { id:'pantalla', icono:'🖥️', label:'Módulo de pantalla', tipo:'pantalla', marca:'', num_puertos:0, pos_u_altura:4 },
-    { id:'personalizado', icono:'➕', label:'Personalizado', tipo:'cobre', marca:'', num_puertos:24, pos_u_altura:1 }
+    { id:'ventilacion', icono:_telecomIconoModulo('ventilacion'), label:'Ventilación', tipo:'ventilacion', marca:'', num_puertos:0, pos_u_altura:1 },
+    { id:'panel_cobre', icono:_telecomIconoModulo('cobre'), label:'Patch panel cobre', tipo:'cobre', marca:'', num_puertos:24, pos_u_altura:1 },
+    { id:'panel_fibra', icono:_telecomIconoModulo('fibra'), label:'Patch panel fibra', tipo:'fibra', marca:'', num_puertos:24, pos_u_altura:1 },
+    { id:'switch_cisco', icono:_telecomIconoModulo('switch'), label:'Switch Cisco Catalyst', tipo:'switch', marca:'Cisco', num_puertos:24, pos_u_altura:1 },
+    { id:'switch_ubiquiti', icono:_telecomIconoModulo('switch'), label:'Switch Ubiquiti UniFi', tipo:'switch', marca:'Ubiquiti', num_puertos:24, pos_u_altura:1 },
+    { id:'pasacables', icono:_telecomIconoModulo('pasacables'), label:'Pasacables', tipo:'pasacables', marca:'', num_puertos:0, pos_u_altura:1 },
+    { id:'pantalla', icono:_telecomIconoModulo('pantalla'), label:'Módulo de pantalla', tipo:'pantalla', marca:'', num_puertos:0, pos_u_altura:4 },
+    { id:'personalizado', icono:TELECOM_ICONO_PERSONALIZADO, label:'Personalizado', tipo:'cobre', marca:'', num_puertos:24, pos_u_altura:1 }
   ];
 
   function _telecomSegmentosRack(alturaU, colocados) {
@@ -18668,7 +18698,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         display:flex;align-items:stretch;gap:6px;padding:0 8px 0 3px;margin:2px 0">
         ${_telecomAgujerosRail(uLen)}
         <div onclick="_telecomTocarModulo(event,${Number(m.id)})" style="flex:1;display:flex;align-items:center;gap:8px;min-width:0">
-          <span style="font-size:17px;flex-shrink:0">${_telecomIconoModulo(m.tipo)}</span>
+          <span style="font-size:17px;flex-shrink:0;color:#fff">${_telecomIconoModulo(m.tipo)}</span>
           <span style="font-size:13px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(m.nombre)}</span>
         </div>
         <button onclick="_telecomIniciarColocarModulo(event,${Number(m.id)})" title="Reposicionar" style="background:rgba(255,255,255,.12);border:none;border-radius:6px;color:#fff;font-size:14px;padding:6px 10px;cursor:pointer;flex-shrink:0;align-self:center;min-width:36px;min-height:36px">↕</button>

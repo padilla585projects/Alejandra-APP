@@ -1,16 +1,26 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-19
-- Estado (2026-08-19): **Sondas CPD en el móvil (departamento Control) — mismo tipo de fix
-  de usabilidad que Racks (abajo).** Adrián: "el plano se ve pequeño y las sondas no se
-  puden reubicar". Se porta el zoom que ya tenía Office (＋/－/↺, `transform:scale()`),
-  marcador de sonda subido de 26px a 40px, y `-webkit-touch-callout:none` en el marcador
-  — sin esto, en iOS Safari un mantener-pulsado dispara el menú nativo de "guardar
-  imagen" antes de que llegue el timer de arrastre (350ms), cancelando el gesto; probable
-  causa real de "no se pueden reubicar" en un iPhone. Tolerancia de movimiento durante la
-  pulsación larga subida de 8 a 16px. Verificado en producción con un plano de prueba
-  subido para la ocasión (borrado al terminar): colocar sonda, zoom a 150%, arrastre con
-  eventos de puntero reales (posición final exacta 70%/60%) — todo correcto.
+- Estado (2026-08-19, 2ª ronda): **Sondas CPD en el móvil — el fix de la 1ª ronda (abajo)
+  no era suficiente.** Se verificó con un plano de prueba (1 sonda, sin densidad) y pasó,
+  pero Adrián lo probó con un plano real y denso ("Modelo Liquid Cooling 1") y encontró
+  el bug de verdad: "cuando pulso en una sonda para moverla saltan las opciones del
+  navegador". `-webkit-touch-callout:none` solo frena iOS Safari; en Android/Chrome el
+  mantener-pulsado dispara su propio menú contextual (`contextmenu`) que gana la carrera
+  al timer de arrastre de 350ms si no se cancela explícitamente — causa real de "no se
+  pueden reubicar". Corregido con `preventDefault()` en `contextmenu`. También: zoom
+  cambiado de `transform:scale()` a ancho real (el transform + `overflow:auto` daba
+  problemas de arrastre al ampliar), y marcador bajado de 40px a 30px (a 40px se solapaban
+  en un plano denso). Lección para próximas verificaciones de gestos táctiles: un
+  navegador de pruebas sin chrome nativo de Android/iOS no reproduce el menú contextual
+  ni el solape real de un plano con muchas sondas — hace falta probar en el dispositivo
+  real o con un dataset de prueba realista, no solo 1-2 elementos.
+- Estado (2026-08-19, 1ª ronda): **Sondas CPD en el móvil (departamento Control) — mismo
+  tipo de fix de usabilidad que Racks (abajo).** Adrián: "el plano se ve pequeño y las
+  sondas no se puden reubicar". Se porta el zoom que ya tenía Office (＋/－/↺), marcador
+  de sonda subido de 26px a 40px, y tolerancia de movimiento durante la pulsación larga
+  subida de 8 a 16px. Verificado con un plano de prueba mínimo — insuficiente, ver ronda
+  2 arriba.
 - Estado (2026-08-19): **Racks en el móvil — usabilidad real corregida tras pruebas de
   Adrián con el dedo.** Reportó de golpe: rack pequeño, "los modulos no se pueden mover,
   esta la opcion pero no funciona", llenado por defecto arriba-abajo, agujeros de
