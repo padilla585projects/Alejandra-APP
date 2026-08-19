@@ -1715,17 +1715,18 @@ select option{background:var(--surface2);color:var(--text)}
       <div style="flex:1;min-width:0;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="cpdPlanoDetTitulo">—</div>
       <button onclick="eliminarCpdPlanoActual()" title="Eliminar plano" style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:4px">🗑</button>
     </div>
-    <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:6px">
+    <!-- CPD-MOVIL-03 (19/08/2026): Adrián, tras probar en el móvil real -- "el plano sigue
+    viendose pequeño" (el bug de arrastre en sí ya estaba resuelto). Causa real: los
+    controles de zoom (ronda anterior) ocupaban una fila propia entera en una pantalla ya
+    apretada -- el plano visible se quedaba más pequeño que antes de añadir el zoom, no
+    más grande. Cabecera comprimida a una sola fila compacta (pista+select), y el zoom
+    pasa a flotar ENCIMA del propio plano (posición absoluta, no resta altura) para que
+    el plano ocupe todo el alto disponible de la pantalla. -->
+    <div style="padding:6px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:4px">
       <div id="cpdToolbar" style="display:flex;gap:6px;overflow-x:auto"></div>
-      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);flex-wrap:wrap">
-        <span id="cpdToolbarHint">Elige un tipo arriba y toca el plano para colocarlo · mantén pulsado un icono para moverlo · doble toque para editarlo</span>
-        <div style="display:flex;gap:4px;align-items:center;margin-left:auto">
-          <button onclick="cpdZoom(-0.25)" title="Alejar" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;width:30px;height:30px;cursor:pointer">－</button>
-          <span id="cpdZoomLabel" style="font-size:11px;color:var(--muted);min-width:34px;text-align:center">100%</span>
-          <button onclick="cpdZoom(0.25)" title="Ampliar" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;width:30px;height:30px;cursor:pointer">＋</button>
-          <button onclick="cpdZoomReset()" title="Volver al 100%" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;width:30px;height:30px;cursor:pointer">↺</button>
-        </div>
-        <select id="cpdEtiquetaModo" onchange="cpdCambiarEtiquetaModo(this.value)" style="width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text)">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span id="cpdToolbarHint" style="font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0">Elige un tipo y toca el plano · mantén pulsado para mover · doble toque para editar</span>
+        <select id="cpdEtiquetaModo" onchange="cpdCambiarEtiquetaModo(this.value)" style="flex-shrink:0;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text)">
           <option value="nombre">Ver: nombre</option>
           <option value="serie">Ver: nº serie</option>
           <option value="ambos">Ver: nombre + serie</option>
@@ -1733,8 +1734,16 @@ select option{background:var(--surface2);color:var(--text)}
         </select>
       </div>
     </div>
-    <div id="cpdPlanoWrap" style="flex:1;overflow:auto;background:#0b0f14;position:relative;touch-action:pan-y">
-      <div class="empty-state">Cargando plano…</div>
+    <div style="flex:1;min-height:0;position:relative">
+      <div id="cpdPlanoWrap" style="position:absolute;inset:0;overflow:auto;background:#0b0f14;touch-action:pan-y">
+        <div class="empty-state">Cargando plano…</div>
+      </div>
+      <div style="position:absolute;bottom:12px;right:12px;display:flex;gap:4px;align-items:center;background:rgba(15,18,36,.85);padding:5px 6px;border-radius:10px;border:1px solid var(--border);z-index:20">
+        <button onclick="cpdZoom(-0.25)" title="Alejar" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;width:30px;height:30px;cursor:pointer">－</button>
+        <span id="cpdZoomLabel" style="font-size:11px;color:#fff;min-width:32px;text-align:center">100%</span>
+        <button onclick="cpdZoom(0.25)" title="Ampliar" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;width:30px;height:30px;cursor:pointer">＋</button>
+        <button onclick="cpdZoomReset()" title="Volver al 100%" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;width:30px;height:30px;cursor:pointer">↺</button>
+      </div>
     </div>
   </div>
 
@@ -17004,7 +17013,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const hint = document.getElementById('cpdToolbarHint');
     if (hint) hint.textContent = window._cpdHerramientaActiva
       ? `Toca el plano para colocar: ${info.icono} ${info.label}`
-      : 'Elige un tipo arriba y toca el plano para colocarlo · mantén pulsado un icono para moverlo · doble toque para editarlo';
+      : 'Elige un tipo y toca el plano · mantén pulsado para mover · doble toque para editar';
   }
 
   // Qué mostrar bajo cada icono del plano — persistido por dispositivo.

@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-19 — Sondas CPD móvil: el plano seguía viéndose pequeño)
+
+Adrián probó en su teléfono real la ronda anterior (zoom + fix de arrastre): "las sondas
+siguen igual" / "el plano sigue viendose pequeño". El bug de arrastre en sí estaba
+resuelto — el problema real era que los controles de zoom (＋/－/↺) se habían añadido
+como una fila propia entera en la cabecera, en una pantalla ya apretada: el plano visible
+quedaba MÁS pequeño que antes de tener zoom, no más grande. Cabecera comprimida a una
+sola fila (pista + selector), y el zoom pasa a flotar encima del propio plano (posición
+absoluta, esquina inferior derecha) en vez de restar altura — el plano ahora ocupa todo
+el alto disponible de la pantalla.
+
 ### Changed (2026-08-19 — Icono de Ventilación: aspas en el selector, tapa+termostato montado)
 
 Adrián, tras aprobar una muestra: "el icono de ventilacion puede ser unas aspas, pero el
