@@ -4,6 +4,46 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-19 — Racks en el móvil: usabilidad real tras probarlo a mano)
+
+Adrián probó de verdad crear un rack y montar módulos en el móvil y reportó varios
+problemas de golpe: "el rack es pequeño... si metemos mas modulos que se amplie solo",
+"los modulos no se pueden mover, esta la opcion pero no funciona", y pidió que el
+llenado por defecto vaya de arriba a abajo (los nº de U siguen contándose desde abajo,
+como en un rack real), que un módulo se vea ocupando su 1U real ("3 agujeros de
+tornillo"), y dos módulos nuevos: Ventilación y Pasacables, más un módulo de pantalla
+de 4U.
+
+- **Bug real encontrado investigando "no funciona"**: el contenedor de filas del rack en
+  `index.html` no tenía `flex-direction:column-reverse` (sí lo tiene `panel.html`) —
+  mostraba la U1 arriba en vez de abajo, al revés de un rack real y de Office. Corregido;
+  ahora los dos frontends coinciden.
+- **Segundo bug real encontrado**: tocar el propio módulo mientras estaba en "modo mover"
+  lo confirmaba en su misma posición actual (el backend lo acepta al excluirse a sí mismo
+  del choque) — parecía "no pasa nada" con un toast de éxito de fondo. Ahora tocar el
+  módulo que se está moviendo cancela, y tocar cualquier OTRO módulo montado avisa que hay
+  que tocar un hueco libre en vez de fallar en silencio.
+- **Rack pequeño**: el hueco vacío tenía una banda de altura fija sin importar cuántas U
+  representaba — un rack de 42U vacío se veía tan bajo como un hueco de 1U, justo al
+  revés de lo pedido. Ahora la altura del hueco escala con su nº real de U, así un rack
+  vacío arranca alto de verdad y crece según se monta contenido (un módulo ocupa más
+  altura por U que un hueco vacío). Chasis más ancho (200/240px según pared/pie, antes
+  130/150). Altura mínima de módulo y botón "↕ Reposicionar" subida a 44px — tamaño de
+  toque real, no el de un cursor de ratón.
+- **Colocación de arriba a abajo**: tocar un hueco ya no calcula la fila proporcional al
+  punto exacto del toque (frágil en una banda de pocos px) — monta el módulo pegado al
+  techo del hueco tocado, así el primer módulo de un rack vacío cae arriba del todo y
+  cada toque siguiente sigue llenando hacia abajo. Mismo criterio en Office al soltar
+  sobre un hueco grande (antes usaba 1U fijo para los módulos nuevos sin mirar su propia
+  altura, lo que rompía el módulo de pantalla de 4U al arrastrarlo).
+- **Agujeros de montaje**: cada módulo colocado (móvil y Office) lleva ahora una tira de
+  puntos en el borde izquierdo, agrupados de 3 en 3 por cada U que ocupa.
+- **Tres módulos nuevos** (móvil y Office, con icono y color propios): 🌀 Ventilación y
+  ➰ Pasacables (1U, sin puertos de red), 🖥️ Módulo de pantalla (4U, sin puertos de red).
+  Backend: `worker.js` acepta `tipo` = `ventilacion`/`pasacables`/`pantalla` en
+  patch panels, con `num_puertos = 0` (sin crear puertos). Tocar/hacer clic en un módulo
+  sin puertos abre su edición directa en vez de una rejilla de puertos vacía.
+
 ### Added (2026-08-18 — Racks/Cuadros v2 en la app móvil, toca-y-toca)
 
 - **Port completo a `index.html`** de todo lo construido hoy en Office (diagrama de rack,

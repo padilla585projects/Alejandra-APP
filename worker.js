@@ -8100,6 +8100,9 @@ async function getTelecomPatchPanels(request, env) {
   return json(results);
 }
 
+// TELECOM-ACCESORIO-01 (19/08/2026): tipos de módulo de rack sin puertos de red.
+const TELECOM_TIPOS_ACCESORIO = ['ventilacion', 'pasacables', 'pantalla'];
+
 // TELECOM-ELEVACION-01 (18/08/2026): valida que el rango U de un módulo quepa dentro del
 // rack y no se solape con otro ya colocado. Devuelve un mensaje de error, o null si es
 // válido. posUInicio null significa "sin colocar en el diagrama" -- no valida nada.
@@ -8130,7 +8133,6 @@ async function crearTelecomPatchPanel(request, env) {
   const body = await request.json();
   const nombre = safeStr(body.nombre).trim();
   const rackId = body.rack_id ? parseInt(body.rack_id) : null;
-  const numPuertos = body.num_puertos ? parseInt(body.num_puertos) : 24;
   const redVlan = safeStr(body.red_vlan).trim();
   const switchAsociado = safeStr(body.switch_asociado).trim();
   const subred = safeStr(body.subred).trim();
@@ -8140,14 +8142,19 @@ async function crearTelecomPatchPanel(request, env) {
   // panel de cobre. `tipo` distingue cobre/fibra/switch (Adrian: "Modulo 1 fibra, Modulo 2
   // panel de 24 bocas..."); `marca` solo tiene sentido para tipo='switch' (equipo activo
   // montado en el propio rack), pero se guarda igual si se rellena para cualquier tipo.
-  const tipo = ['cobre', 'fibra', 'switch'].includes(body.tipo) ? body.tipo : 'cobre';
+  // TELECOM-ACCESORIO-01 (19/08/2026): ventilacion/pasacables/pantalla son modulos de
+  // rack SIN puertos de red (accesorios físicos) -- Adrian pidió poder añadirlos igual que
+  // un patch panel, pero no tienen nada que gestionar en la vista de puertos.
+  const tipo = ['cobre', 'fibra', 'switch', ...TELECOM_TIPOS_ACCESORIO].includes(body.tipo) ? body.tipo : 'cobre';
+  const esAccesorio = TELECOM_TIPOS_ACCESORIO.includes(tipo);
+  const numPuertos = esAccesorio ? 0 : (body.num_puertos ? parseInt(body.num_puertos) : 24);
   const marca = safeStr(body.marca).trim();
   // TELECOM-ELEVACION-01 (18/08/2026): posición real dentro del diagrama de elevación --
   // opcional (null = "sin colocar", aparece en la lista aparte hasta que se arrastre).
   const posUInicio = (body.pos_u_inicio !== undefined && body.pos_u_inicio !== null) ? parseInt(body.pos_u_inicio) : null;
   const posUAltura = body.pos_u_altura !== undefined ? parseInt(body.pos_u_altura) : 1;
   if (!nombre || !rackId) return err('Faltan campos: nombre, rack_id');
-  if (!(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
+  if (!esAccesorio && !(numPuertos > 0 && numPuertos <= 96)) return err('num_puertos debe ser entre 1 y 96');
   if ([nombre, redVlan, switchAsociado, subred, posicionU, marca].some(v => v.length > 160) || notasConfig.length > 1000) {
     return err('Los datos técnicos del patch panel son demasiado largos');
   }
@@ -8201,7 +8208,7 @@ async function editarTelecomPatchPanel(idRaw, request, env) {
   const subred = body.subred === undefined ? safeStr(actual.subred).trim() : safeStr(body.subred).trim();
   const posicionU = body.posicion_u === undefined ? safeStr(actual.posicion_u).trim() : safeStr(body.posicion_u).trim();
   const notasConfig = body.notas_config === undefined ? safeStr(actual.notas_config).trim() : safeStr(body.notas_config).trim();
-  const tipo = body.tipo === undefined ? (actual.tipo || 'cobre') : (['cobre', 'fibra', 'switch'].includes(body.tipo) ? body.tipo : 'cobre');
+  const tipo = body.tipo === undefined ? (actual.tipo || 'cobre') : (['cobre', 'fibra', 'switch', ...TELECOM_TIPOS_ACCESORIO].includes(body.tipo) ? body.tipo : 'cobre');
   const marca = body.marca === undefined ? safeStr(actual.marca).trim() : safeStr(body.marca).trim();
   const posUInicio = body.pos_u_inicio === undefined ? actual.pos_u_inicio : (body.pos_u_inicio === null ? null : parseInt(body.pos_u_inicio));
   const posUAltura = body.pos_u_altura === undefined ? (actual.pos_u_altura || 1) : parseInt(body.pos_u_altura);

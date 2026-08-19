@@ -1,6 +1,21 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-18
+- Actualizado: 2026-08-19
+- Estado (2026-08-19): **Racks en el móvil — usabilidad real corregida tras pruebas de
+  Adrián con el dedo.** Reportó de golpe: rack pequeño, "los modulos no se pueden mover,
+  esta la opcion pero no funciona", llenado por defecto arriba-abajo, agujeros de
+  montaje visibles, y 3 módulos nuevos (Ventilación, Pasacables, Pantalla 4U). Se
+  encontraron y corrigieron DOS bugs reales al investigar el reporte de "no funciona":
+  (1) al móvil le faltaba `flex-direction:column-reverse` en el contenedor de filas —
+  mostraba la U1 arriba en vez de abajo, al revés de un rack real (Office ya lo tenía
+  bien); (2) tocar el propio módulo en modo "mover" lo confirmaba en su misma posición
+  (el backend lo acepta al excluirse del choque), pareciendo que no pasaba nada. El hueco
+  vacío ahora escala su altura con su nº real de U en vez de una banda fija (un rack
+  vacío arranca alto de verdad y crece al montar módulos), chasis más ancho, y toque
+  mínimo de 44px. Colocar ya no depende de la precisión del toque: monta el módulo
+  pegado al techo del hueco tocado. Tres módulos nuevos con `tipo` propio en el backend
+  (`ventilacion`/`pasacables`/`pantalla`, sin puertos de red) en los dos frontends.
+  Detalle completo en `CHANGELOG.md`.
 - Estado (2026-08-18, continuación final): **Racks/Cuadros v2 portados a la app móvil
   (`index.html`), toca-y-toca — completo, desplegado y verificado.** Cierra la ronda de
   hoy: el mismo diagrama de rack y los cuadros de campo v2 que se construyeron en Office

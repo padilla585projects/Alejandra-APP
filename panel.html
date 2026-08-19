@@ -1999,6 +1999,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
                 <option value="cobre" style="background:#fff;color:#111827">🔌 Cobre (patch panel RJ45)</option>
                 <option value="fibra" style="background:#fff;color:#111827">🧵 Fibra</option>
                 <option value="switch" style="background:#fff;color:#111827">🖧 Switch (equipo activo)</option>
+                <option value="ventilacion" style="background:#fff;color:#111827">🌀 Ventilación</option>
+                <option value="pasacables" style="background:#fff;color:#111827">➰ Pasacables</option>
+                <option value="pantalla" style="background:#fff;color:#111827">🖥️ Pantalla</option>
               </select>
             </div>
             <div class="form-group" id="telecomOfficeMarcaWrap">
@@ -12188,21 +12191,29 @@ function _telecomOfficeFila(tipo, item, titulo, subtitulo, abrir, extraBtn) {
 // TELECOM-ELEVACION-01 (18/08/2026): Adrián -- "lo quiero hacer mas visual todo". Diagrama
 // de rack con arrastrar-y-soltar, mismo patrón que _cpdOfficeWireDrag/cpdOfficeZoom en
 // Sondas CPD (pointerdown/pointermove/pointerup -- funciona igual con ratón y touch).
+// TELECOM-ACCESORIO-01 (19/08/2026): ver comentario gemelo en worker.js/index.html --
+// ventilacion/pasacables/pantalla son módulos de rack sin puertos de red.
 const TELECOM_OFFICE_PLANTILLAS_MODULO = [
-  { id:'panel_cobre', icono:'🔌', label:'Patch panel cobre', tipo:'cobre', marca:'', num_puertos:24 },
-  { id:'panel_fibra', icono:'🧵', label:'Patch panel fibra', tipo:'fibra', marca:'', num_puertos:24 },
-  { id:'switch_cisco', icono:'🖧', label:'Switch Cisco Catalyst', tipo:'switch', marca:'Cisco', num_puertos:24 },
-  { id:'switch_ubiquiti', icono:'🖧', label:'Switch Ubiquiti UniFi', tipo:'switch', marca:'Ubiquiti', num_puertos:24 },
-  { id:'personalizado', icono:'➕', label:'Personalizado', tipo:'cobre', marca:'', num_puertos:24, personalizado:true }
+  { id:'ventilacion', icono:'🌀', label:'Ventilación', tipo:'ventilacion', marca:'', num_puertos:0, pos_u_altura:1 },
+  { id:'panel_cobre', icono:'🔌', label:'Patch panel cobre', tipo:'cobre', marca:'', num_puertos:24, pos_u_altura:1 },
+  { id:'panel_fibra', icono:'🧵', label:'Patch panel fibra', tipo:'fibra', marca:'', num_puertos:24, pos_u_altura:1 },
+  { id:'switch_cisco', icono:'🖧', label:'Switch Cisco Catalyst', tipo:'switch', marca:'Cisco', num_puertos:24, pos_u_altura:1 },
+  { id:'switch_ubiquiti', icono:'🖧', label:'Switch Ubiquiti UniFi', tipo:'switch', marca:'Ubiquiti', num_puertos:24, pos_u_altura:1 },
+  { id:'pasacables', icono:'➰', label:'Pasacables', tipo:'pasacables', marca:'', num_puertos:0, pos_u_altura:1 },
+  { id:'pantalla', icono:'🖥️', label:'Módulo de pantalla', tipo:'pantalla', marca:'', num_puertos:0, pos_u_altura:4 },
+  { id:'personalizado', icono:'➕', label:'Personalizado', tipo:'cobre', marca:'', num_puertos:24, pos_u_altura:1, personalizado:true }
 ];
 function _telecomOfficeIconoModulo(tipo) {
-  return { cobre:'🔌', fibra:'🧵', switch:'🖧' }[tipo] || '🔌';
+  return { cobre:'🔌', fibra:'🧵', switch:'🖧', ventilacion:'🌀', pasacables:'➰', pantalla:'🖥️' }[tipo] || '🔌';
 }
 function _telecomOfficeColorModulo(tipo) {
   return {
-    cobre:  { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' },
-    fibra:  { bg:'linear-gradient(145deg,#2a2a2a,#141414)', border:'#4a4a4a' },
-    switch: { bg:'linear-gradient(145deg,#1e2440,#12162a)', border:'#3a4270' }
+    cobre:       { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' },
+    fibra:       { bg:'linear-gradient(145deg,#2a2a2a,#141414)', border:'#4a4a4a' },
+    switch:      { bg:'linear-gradient(145deg,#1e2440,#12162a)', border:'#3a4270' },
+    ventilacion: { bg:'linear-gradient(145deg,#1e3a3a,#0f1f1f)', border:'#3a7070' },
+    pasacables:  { bg:'linear-gradient(145deg,#2e2a1c,#17140d)', border:'#7a6a3a' },
+    pantalla:    { bg:'linear-gradient(145deg,#2a1e40,#150f22)', border:'#5a3a86' }
   }[tipo] || { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' };
 }
 
@@ -12212,6 +12223,18 @@ function _telecomOfficeColorModulo(tipo) {
 // Divide el rack en tramos: huecos vacíos (comprimidos a una franja fina con su nº de U) y
 // módulos montados (con altura propia, generosa, no ligada a rowH) -- ver
 // _telecomOfficeSegmentosRack más abajo.
+// TELECOM-MOVIL-02 (19/08/2026): Adrián -- "cuando metes un modulo no ocupa 1U del
+// rack,que serian como 3 agujeros de tornillo". Marca decorativa de agujeros de montaje
+// (3 por U, como un rack real) en el borde izquierdo de cada módulo ya colocado.
+function _telecomOfficeAgujerosRail(uLen) {
+  const grupo = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;min-height:12px">
+    <span style="width:3px;height:3px;border-radius:50%;background:#000;opacity:.55"></span>
+    <span style="width:3px;height:3px;border-radius:50%;background:#000;opacity:.55"></span>
+    <span style="width:3px;height:3px;border-radius:50%;background:#000;opacity:.55"></span>
+  </div>`;
+  return `<div style="width:8px;align-self:stretch;display:flex;flex-direction:column;flex-shrink:0">${grupo.repeat(uLen)}</div>`;
+}
+
 function _telecomOfficeSegmentosRack(alturaU, colocados) {
   const ordenados = [...colocados].sort((a, b) => a.pos_u_inicio - b.pos_u_inicio);
   const segmentos = [];
@@ -12280,9 +12303,10 @@ function telecomOfficeRenderElevacion(rack, modulos, opts) {
       return `<div class="telecomOfficeModulo" data-id="${Number(m.id)}" data-u-inicio="${seg.uInicio}" data-u-fin="${seg.uFin}"
         onclick="_telecomOfficeClickModulo(event,${Number(m.id)})" onpointerdown="_telecomOfficeIniciarArrastreExistente(event,${Number(m.id)})"
         style="flex-shrink:0;height:${altoModulo}px;border-radius:4px;background:${c.bg};border:1px solid ${c.border};
-        display:flex;align-items:center;gap:${compacta ? 4 : 6}px;padding:0 ${compacta ? 6 : 8}px;cursor:grab;touch-action:none;overflow:hidden">
-        <span style="font-size:${compacta ? 11 : 15}px;flex-shrink:0">${_telecomOfficeIconoModulo(m.tipo)}</span>
-        <span style="font-size:${compacta ? 9.5 : 11}px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(m.nombre)}</span>
+        display:flex;align-items:stretch;gap:${compacta ? 4 : 6}px;padding:0 ${compacta ? 6 : 8}px 0 ${compacta ? 3 : 5}px;cursor:grab;touch-action:none;overflow:hidden">
+        ${compacta ? '' : _telecomOfficeAgujerosRail(uLen)}
+        <span style="font-size:${compacta ? 11 : 15}px;flex-shrink:0;align-self:center">${_telecomOfficeIconoModulo(m.tipo)}</span>
+        <span style="font-size:${compacta ? 9.5 : 11}px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;align-self:center">${escHtml(m.nombre)}</span>
       </div>`;
     }).join('');
     var filas = `<div id="telecomOfficeFilas_${rack.id}" class="telecomOfficeRackFilas" data-rack-id="${Number(rack.id)}" data-altura-u="${alturaU}"
@@ -12578,6 +12602,10 @@ async function telecomOfficeAbrirRack(id) {
 function _telecomOfficeClickModulo(event, id) {
   event.stopPropagation();
   if (window._telecomOfficeJustDragged) return;
+  // TELECOM-ACCESORIO-01 (19/08/2026): ventilación/pasacables/pantalla no tienen puertos
+  // de red que gestionar -- abrir directo su edición en vez de una rejilla de puertos vacía.
+  const m = _telecomOfficeCache.pp.find(p => Number(p.id) === Number(id));
+  if (m && !(Number(m.num_puertos) > 0)) { telecomOfficeEditar('pp', id); return; }
   telecomOfficeAbrirPP(id);
 }
 
@@ -12611,7 +12639,7 @@ function _telecomOfficeIniciarArrastreExistente(e, moduloId) {
 
 function _telecomOfficeArrastrar(e, payload) {
   const rackId = Number(_telecomOfficeCtx.rack_id);
-  const alturaModulo = payload.modo === 'mover' ? Number(payload.modulo.pos_u_altura || 1) : 1;
+  const alturaModulo = payload.modo === 'mover' ? Number(payload.modulo.pos_u_altura || 1) : Number(payload.plantilla.pos_u_altura || 1);
   const nombre = payload.modo === 'mover' ? payload.modulo.nombre : payload.plantilla.label;
   const icono = payload.modo === 'mover' ? _telecomOfficeIconoModulo(payload.modulo.tipo) : payload.plantilla.icono;
   const ghost = document.createElement('div');
@@ -12695,7 +12723,7 @@ async function _telecomOfficeSoltarModulo(payload, posUInicio) {
       const nombre = `${pl.label} ${Date.now().toString().slice(-4)}`;
       const data = await _telecomOfficeApi('/telecom/patch-panels', { method:'POST', body:JSON.stringify({
         rack_id: rackId, nombre, tipo: pl.tipo, marca: pl.marca, num_puertos: pl.num_puertos,
-        pos_u_inicio: posUInicio, pos_u_altura: 1
+        pos_u_inicio: posUInicio, pos_u_altura: (pl.pos_u_altura || 1)
       }) });
       toast('Módulo montado ✓ — completa sus datos', 'ok');
       await telecomOfficeAbrirRack(rackId);
