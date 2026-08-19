@@ -18626,6 +18626,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }[tipo] || '<rect x="3" y="6" width="12" height="8" rx="1.5"/><rect x="7.5" y="3" width="3" height="3"/>';
     return `<svg width="1em" height="1em" viewBox="0 0 18 18" style="display:inline-block;vertical-align:-3px" fill="none" stroke="currentColor" stroke-width="1.3">${inner}</svg>`;
   }
+  // TELECOM-ICONOS-02 (19/08/2026): Adrián -- "el icono de ventilacion puede ser unas
+  // aspas, pero el frontal en el rack seria la tapa negra con el termostato en el
+  // centro". El selector usa las aspas (_telecomIconoModulo, más reconocible eligiendo
+  // tipo); montado en el rack se ve de frente -- misma tapa que el pasacables, con la
+  // pantalla del termostato digital en el centro.
+  function _telecomIconoModuloMontado(tipo) {
+    if (tipo !== 'ventilacion') return _telecomIconoModulo(tipo);
+    const inner = '<rect x="1.5" y="6" width="15" height="6" rx="1"/><rect x="6.5" y="7.2" width="5" height="3.6" rx="0.5" stroke-width="0.9"/><circle cx="7.5" cy="9" r="0.45" fill="currentColor" stroke="none"/><line x1="8.4" y1="9" x2="10.6" y2="9" stroke-width="0.9"/>';
+    return `<svg width="1em" height="1em" viewBox="0 0 18 18" style="display:inline-block;vertical-align:-3px" fill="none" stroke="currentColor" stroke-width="1.3">${inner}</svg>`;
+  }
   function _telecomColorModulo(tipo) {
     return {
       cobre:       { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' },
@@ -18701,7 +18711,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         display:flex;align-items:stretch;gap:6px;padding:0 8px 0 3px;margin:2px 0">
         ${_telecomAgujerosRail(uLen)}
         <div onclick="_telecomTocarModulo(event,${Number(m.id)})" style="flex:1;display:flex;align-items:center;gap:8px;min-width:0">
-          <span style="font-size:17px;flex-shrink:0;color:#fff">${_telecomIconoModulo(m.tipo)}</span>
+          <span style="font-size:17px;flex-shrink:0;color:#fff">${_telecomIconoModuloMontado(m.tipo)}</span>
           <span style="font-size:13px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(m.nombre)}</span>
         </div>
         <button onclick="_telecomIniciarColocarModulo(event,${Number(m.id)})" title="Reposicionar" style="background:rgba(255,255,255,.12);border:none;border-radius:6px;color:#fff;font-size:14px;padding:6px 10px;cursor:pointer;flex-shrink:0;align-self:center;min-width:36px;min-height:36px">↕</button>
@@ -18863,7 +18873,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           ${sinColocar.map(p => {
             const c = _telecomColorModulo(p.tipo);
             return `<div onclick="_telecomIniciarColocarSinMontar(${Number(p.id)})" style="display:flex;align-items:center;gap:5px;padding:7px 10px;border-radius:8px;background:${c.bg};border:1px solid ${c.border};font-size:12px;font-weight:700;color:#fff">
-              <span>${_telecomIconoModulo(p.tipo)}</span><span>${_escHtml(p.nombre)}</span>
+              <span>${_telecomIconoModuloMontado(p.tipo)}</span><span>${_escHtml(p.nombre)}</span>
             </div>`;
           }).join('')}
         </div>` : '';

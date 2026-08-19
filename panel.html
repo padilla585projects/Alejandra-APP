@@ -12219,6 +12219,13 @@ function _telecomOfficeIconoModulo(tipo) {
   }[tipo] || '<rect x="3" y="6" width="12" height="8" rx="1.5"/><rect x="7.5" y="3" width="3" height="3"/>';
   return `<svg width="1em" height="1em" viewBox="0 0 18 18" style="display:inline-block;vertical-align:-3px" fill="none" stroke="currentColor" stroke-width="1.3">${inner}</svg>`;
 }
+// TELECOM-ICONOS-02 (19/08/2026): ver comentario gemelo en index.html -- aspas en el
+// selector, tapa+termostato al ver la ventilación montada de frente en el rack.
+function _telecomOfficeIconoModuloMontado(tipo) {
+  if (tipo !== 'ventilacion') return _telecomOfficeIconoModulo(tipo);
+  const inner = '<rect x="1.5" y="6" width="15" height="6" rx="1"/><rect x="6.5" y="7.2" width="5" height="3.6" rx="0.5" stroke-width="0.9"/><circle cx="7.5" cy="9" r="0.45" fill="currentColor" stroke="none"/><line x1="8.4" y1="9" x2="10.6" y2="9" stroke-width="0.9"/>';
+  return `<svg width="1em" height="1em" viewBox="0 0 18 18" style="display:inline-block;vertical-align:-3px" fill="none" stroke="currentColor" stroke-width="1.3">${inner}</svg>`;
+}
 function _telecomOfficeColorModulo(tipo) {
   return {
     cobre:       { bg:'linear-gradient(145deg,#233152,#141c34)', border:'#3d5486' },
@@ -12318,7 +12325,7 @@ function telecomOfficeRenderElevacion(rack, modulos, opts) {
         style="flex-shrink:0;height:${altoModulo}px;border-radius:4px;background:${c.bg};border:1px solid ${c.border};
         display:flex;align-items:stretch;gap:${compacta ? 4 : 6}px;padding:0 ${compacta ? 6 : 8}px 0 ${compacta ? 3 : 5}px;cursor:grab;touch-action:none;overflow:hidden">
         ${compacta ? '' : _telecomOfficeAgujerosRail(uLen)}
-        <span style="font-size:${compacta ? 11 : 15}px;flex-shrink:0;align-self:center">${_telecomOfficeIconoModulo(m.tipo)}</span>
+        <span style="font-size:${compacta ? 11 : 15}px;flex-shrink:0;align-self:center">${_telecomOfficeIconoModuloMontado(m.tipo)}</span>
         <span style="font-size:${compacta ? 9.5 : 11}px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;align-self:center">${escHtml(m.nombre)}</span>
       </div>`;
     }).join('');
@@ -12598,7 +12605,7 @@ async function telecomOfficeAbrirRack(id) {
         <div style="font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px">Sin colocar en el diagrama — arrástralos a su sitio</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${sinColocar.map(p => {
-            const icono = _telecomOfficeIconoModulo(p.tipo);
+            const icono = _telecomOfficeIconoModuloMontado(p.tipo);
             const c = _telecomOfficeColorModulo(p.tipo);
             return `<div class="telecomOfficeChip" data-id="${Number(p.id)}"
               onpointerdown="_telecomOfficeIniciarArrastreExistente(event,${Number(p.id)})" onclick="_telecomOfficeClickModulo(event,${Number(p.id)})"
@@ -12654,7 +12661,7 @@ function _telecomOfficeArrastrar(e, payload) {
   const rackId = Number(_telecomOfficeCtx.rack_id);
   const alturaModulo = payload.modo === 'mover' ? Number(payload.modulo.pos_u_altura || 1) : Number(payload.plantilla.pos_u_altura || 1);
   const nombre = payload.modo === 'mover' ? payload.modulo.nombre : payload.plantilla.label;
-  const icono = payload.modo === 'mover' ? _telecomOfficeIconoModulo(payload.modulo.tipo) : payload.plantilla.icono;
+  const icono = payload.modo === 'mover' ? _telecomOfficeIconoModuloMontado(payload.modulo.tipo) : payload.plantilla.icono;
   const ghost = document.createElement('div');
   ghost.style.cssText = 'position:fixed;pointer-events:none;z-index:99999;padding:4px 9px;border-radius:6px;font-size:12px;font-weight:800;background:#233152;border:1px solid #3d5486;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.5);display:flex;gap:5px;align-items:center';
   ghost.innerHTML = `<span>${icono}</span><span>${escHtml(nombre)}</span>`;

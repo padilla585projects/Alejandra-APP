@@ -4,6 +4,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Changed (2026-08-19 — Icono de Ventilación: aspas en el selector, tapa+termostato montado)
+
+Adrián, tras aprobar una muestra: "el icono de ventilacion puede ser unas aspas, pero el
+frontal en el rack seria la tapa negra con el termostato en el centro". El selector de
+tipo (`_telecomIconoModulo`) mantiene las aspas — más reconocible eligiendo qué montar.
+Nueva función `_telecomIconoModuloMontado`/`_telecomOfficeIconoModuloMontado`, usada solo
+en la vista de elevación del rack y en la lista "sin colocar": misma tapa plana que
+Pasacables, con la pantalla del termostato digital en el centro.
+
 ### Added (2026-08-19 — Iconos de módulo de rack en SVG, accesorios "directos", fuera del informe)
 
 Adrián, viendo el rack en un móvil real: los módulos "BMS"/"Seguridad" (tipo switch)
