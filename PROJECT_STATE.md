@@ -1,6 +1,23 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-19
+- Estado (2026-08-19, confirmado por Adrián en su móvil real): **Sondas CPD en el móvil —
+  cerrado, sin pendientes.** Tras las rondas 1-2 (abajo), Adrián siguió probando de forma
+  activa y encontró tres cosas más, las tres corregidas, desplegadas y verificadas en
+  producción: (1) el layout del editor de plano nunca tuvo un alto real —
+  `screenCpdPlanoDetalle` no tenía las clases `flex-screen`/`height:100%` que sí tiene el
+  resto de pantallas de `index.html`, así que el plano se dimensionaba solo por su
+  contenido en vez de ocupar el espacio disponible (bug estructural desde que se creó la
+  pantalla, no algo introducido en esta ronda); (2) `touch-action:pan-y` solo dejaba
+  desplazar el plano en vertical — con el zoom por ancho real, el plano también se hace
+  más ancho que la pantalla y ese eje estaba bloqueado del todo, cambiado a `pan-x
+  pan-y`, más zoom con gesto de pellizco (dos dedos, anclado al punto medio, ignorado
+  mientras hay una sonda en arrastre); (3) el botón de generar informe nunca se había
+  portado al móvil (existía solo en Office, con `window.open()`) — añadido con vista
+  interna en un modal (mismo patrón que el informe de Telecom Racks), y tras probarlo con
+  un plano real de 41 sondas, marcadores reducidos y tabla simplificada a #/Nombre/Nº
+  serie. Confirmado por Adrián: "vale mucho mejor, ahora si". Detalle completo en
+  `CHANGELOG.md` (varias entradas del 2026-08-19) y `HANDOFF.md`.
 - Estado (2026-08-19, 2ª ronda): **Sondas CPD en el móvil — el fix de la 1ª ronda (abajo)
   no era suficiente.** Se verificó con un plano de prueba (1 sonda, sin densidad) y pasó,
   pero Adrián lo probó con un plano real y denso ("Modelo Liquid Cooling 1") y encontró

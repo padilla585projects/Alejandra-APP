@@ -46,12 +46,33 @@
   `contextmenu`, zoom cambiado de `transform:scale()` a ancho real del canvas (el
   transform + `overflow:auto` daba problemas de arrastre al ampliar), marcador bajado a
   30px (a 40px se solapaban en un plano denso).
-- **Estado**: todo desplegado (Worker + Pages) y verificado en producción con datos de
-  prueba reales (creados y borrados en la misma sesión) — incluyendo zoom real a 200% +
-  arrastre con precisión exacta. Lo único pendiente de confirmar es el fix del menú
-  contextual de Android en un teléfono real (el navegador de pruebas no lo reproduce);
-  Adrián lo está probando y confirmará. Detalle completo en `CHANGELOG.md` (varias
-  entradas del 2026-08-19) y `PROJECT_STATE.md`.
+- **Sondas CPD, rondas 3-6 — hasta la confirmación final**: el fix del menú contextual
+  resolvió "no se pueden reubicar", pero Adrián siguió probando y aparecieron tres cosas
+  más. (3) "el plano sigue viendose pequeño" — causa real, no relacionada con el zoom:
+  `screenCpdPlanoDetalle` nunca tuvo la clase `flex-screen` ni `height:100%` que sí tiene
+  el resto de pantallas `flex-screen` de `index.html` (`screenDept`, `screenHome`,
+  `screenDocs`…) — sin ellas, `.screen.active` aplica `display:block` y esta pantalla
+  nunca tuvo un alto real de 100%; el zoom en posición absoluta solo lo dejó en evidencia
+  (medido a 0px). Bug estructural desde que se creó la pantalla, no introducido en esta
+  sesión. (4) "derecha e izquierda no se mueve" — `touch-action:pan-y` bloqueaba el eje
+  horizontal, que el zoom por ancho real también hace crecer; cambiado a `pan-x pan-y`.
+  Adrián pidió además zoom con gesto de pellizco ("la gente esta acostumbrada a eso") —
+  implementado con dos pointers rastreados en `#cpdPlanoWrap`, anclado al punto medio
+  entre los dedos (recalcula `scrollLeft`/`scrollTop` para que ese punto no salte),
+  ignorado mientras `window._cpdArrastrandoSonda` está activo. (5) "no veo el boton de
+  generar informe" — existía en Office (`cpdOfficeGenerarInforme`, con `window.open()`)
+  pero nunca se había portado a `index.html`; añadido en un modal con `<iframe>` interno
+  (mismo patrón que el informe de Telecom Racks), más fiable en un navegador móvil real
+  que una ventana emergente. (6) Probado con un plano real de 41 sondas: "el plano se ve
+  muy junto todo" (marcadores de 22px solapándose) y "quitar muchas opciones... con el
+  nombre y el numero de serie es suficiente" — marcadores bajados a 15px, plano mostrado
+  más ancho (900px→1300px, 100% en impresión), tabla reducida a `#`/Nombre/Nº serie en
+  los dos frontends (de paso, deja de pedir la última lectura de cada sonda por
+  separado). Confirmado por Adrián: **"vale mucho mejor, ahora si".**
+- **Estado**: cerrado, sin pendientes. Todo desplegado (Worker + Pages) y verificado en
+  producción con datos de prueba reales (creados y borrados en la misma sesión), más
+  confirmación final de Adrián en su teléfono real. Detalle completo en `CHANGELOG.md`
+  (múltiples entradas del 2026-08-19) y `PROJECT_STATE.md`.
 
 ## CORREOS-PANEL-01 — Panel de Correos por usuario + bug de caché de prompts (2026-08-17)
 

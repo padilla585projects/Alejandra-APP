@@ -1,10 +1,14 @@
 # TASKS — Cola operativa inmediata
 
 Estado (actualizado 2026-08-19): **TELECOM-MOVIL-02 / CPD-MOVIL-02 — usabilidad real de
-Racks y Sondas CPD en el móvil, todo desplegado y verificado en producción salvo la
-confirmación final de Adrián en su teléfono real.** Adrián probó con el dedo lo que la
-sesión anterior (2026-08-18) había dado por completo y encontró varios problemas reales;
-el patrón se repitió en Sondas CPD. Detalle completo en `HANDOFF.md`/`CHANGELOG.md`.
+Racks y Sondas CPD en el móvil. Cerrado, confirmado por Adrián en su teléfono real
+("vale mucho mejor, ahora si").** Adrián probó con el dedo lo que la sesión anterior
+(2026-08-18) había dado por completo y encontró varios problemas reales; el patrón se
+repitió en Sondas CPD, con tres rondas más de ida y vuelta antes de quedar bien: layout
+sin alto real (`flex-screen` ausente), `touch-action` bloqueando el desplazamiento
+horizontal, zoom con gesto de pellizco, botón de informe que nunca se había portado al
+móvil, e informe simplificado tras probarlo con un plano real de 41 sondas. Detalle
+completo en `HANDOFF.md`/`CHANGELOG.md`. Sin pendientes de esta ronda.
 
 - **Racks — dos bugs reales** encontrados investigando "los modulos no se pueden mover,
   esta la opcion pero no funciona": faltaba `column-reverse` en el móvil (U1 arriba en
@@ -23,8 +27,21 @@ el patrón se repitió en Sondas CPD. Detalle completo en `HANDOFF.md`/`CHANGELO
   Android/Chrome el mantener-pulsado dispara su propio menú contextual que gana la
   carrera al timer de arrastre si no se cancela explícitamente. Corregido, más zoom
   cambiado a ancho real (no `transform`) y marcador bajado de 40 a 30px.
-- Siguiente acción exacta: Adrián está probando en su teléfono real si el fix del menú
-  contextual de Android resuelve "no se pueden reubicar" — confirmará.
+- **Sondas CPD, rondas 3-6 (móvil, confirmado por Adrián):** el fix del menú contextual
+  sí resolvió "no se pueden reubicar", pero probando más a fondo aparecieron tres cosas
+  más. (3) El plano seguía viéndose pequeño — causa real: `screenCpdPlanoDetalle` nunca
+  tuvo la clase `flex-screen`/`height:100%` que sí tiene el resto de pantallas, así que
+  el layout nunca fue flex de verdad (bug estructural previo a esta sesión, no causado
+  por el zoom). (4) "derecha e izquierda no se mueve" — `touch-action:pan-y` bloqueaba
+  el eje horizontal, que también crece con el zoom por ancho; cambiado a `pan-x pan-y`,
+  más zoom con gesto de pellizco a petición de Adrián ("la gente esta acostumbrada a
+  eso"), anclado al punto medio entre los dedos. (5) "no veo el boton de generar
+  informe" — nunca se había portado desde Office (que usa `window.open()`, poco fiable
+  en móvil real); añadido en un modal interno, mismo patrón que el informe de Telecom.
+  (6) Probado con un plano real de 41 sondas: "el plano se ve muy junto todo" y "con el
+  nombre y el numero de serie es suficiente" — marcadores más pequeños, plano más ancho,
+  tabla reducida a #/Nombre/Nº serie en los dos frontends. Confirmado: "vale mucho
+  mejor, ahora si". Sin pendientes.
 
 Estado (actualizado 2026-08-17): **CORREOS-PANEL-01 completada, desplegada y verificada —
 pendiente solo que Adrián pruebe en vivo la sincronización real con su Gmail** (yo no tengo
