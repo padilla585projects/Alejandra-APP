@@ -1,6 +1,16 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-19
+- Estado (2026-08-19): **Sondas CPD en el móvil (departamento Control) — mismo tipo de fix
+  de usabilidad que Racks (abajo).** Adrián: "el plano se ve pequeño y las sondas no se
+  puden reubicar". Se porta el zoom que ya tenía Office (＋/－/↺, `transform:scale()`),
+  marcador de sonda subido de 26px a 40px, y `-webkit-touch-callout:none` en el marcador
+  — sin esto, en iOS Safari un mantener-pulsado dispara el menú nativo de "guardar
+  imagen" antes de que llegue el timer de arrastre (350ms), cancelando el gesto; probable
+  causa real de "no se pueden reubicar" en un iPhone. Tolerancia de movimiento durante la
+  pulsación larga subida de 8 a 16px. Pendiente de verificación con un plano real (la
+  cuenta demo no tenía ninguno subido); revisado por lectura de código y comparado con el
+  mismo patrón ya verificado en Office.
 - Estado (2026-08-19): **Racks en el móvil — usabilidad real corregida tras pruebas de
   Adrián con el dedo.** Reportó de golpe: rack pequeño, "los modulos no se pueden mover,
   esta la opcion pero no funciona", llenado por defecto arriba-abajo, agujeros de

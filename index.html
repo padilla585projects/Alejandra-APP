@@ -1717,9 +1717,15 @@ select option{background:var(--surface2);color:var(--text)}
     </div>
     <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:6px">
       <div id="cpdToolbar" style="display:flex;gap:6px;overflow-x:auto"></div>
-      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)">
-        <span id="cpdToolbarHint">Elige un tipo arriba y toca el plano para colocarlo · doble toque en un icono para editarlo</span>
-        <select id="cpdEtiquetaModo" onchange="cpdCambiarEtiquetaModo(this.value)" style="margin-left:auto;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text)">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);flex-wrap:wrap">
+        <span id="cpdToolbarHint">Elige un tipo arriba y toca el plano para colocarlo · mantén pulsado un icono para moverlo · doble toque para editarlo</span>
+        <div style="display:flex;gap:4px;align-items:center;margin-left:auto">
+          <button onclick="cpdZoom(-0.25)" title="Alejar" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;width:30px;height:30px;cursor:pointer">－</button>
+          <span id="cpdZoomLabel" style="font-size:11px;color:var(--muted);min-width:34px;text-align:center">100%</span>
+          <button onclick="cpdZoom(0.25)" title="Ampliar" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;width:30px;height:30px;cursor:pointer">＋</button>
+          <button onclick="cpdZoomReset()" title="Volver al 100%" style="background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;width:30px;height:30px;cursor:pointer">↺</button>
+        </div>
+        <select id="cpdEtiquetaModo" onchange="cpdCambiarEtiquetaModo(this.value)" style="width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--surface2);color:var(--text)">
           <option value="nombre">Ver: nombre</option>
           <option value="serie">Ver: nº serie</option>
           <option value="ambos">Ver: nombre + serie</option>
@@ -16998,7 +17004,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const hint = document.getElementById('cpdToolbarHint');
     if (hint) hint.textContent = window._cpdHerramientaActiva
       ? `Toca el plano para colocar: ${info.icono} ${info.label}`
-      : 'Elige un tipo arriba y toca el plano para colocarlo · doble toque en un icono para editarlo';
+      : 'Elige un tipo arriba y toca el plano para colocarlo · mantén pulsado un icono para moverlo · doble toque para editarlo';
   }
 
   // Qué mostrar bajo cada icono del plano — persistido por dispositivo.
@@ -17070,10 +17076,36 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
   }
 
+  // CPD-MOVIL-01 (19/08/2026): Adrián probando en el móvil -- "el plano se ve pequeño y
+  // las sondas no se puden reubicar". El plano ocupaba solo el ancho de pantalla sin forma
+  // de ampliarlo, así que arrastrar una sonda con precisión era casi imposible con el dedo
+  // -- mismo problema de fondo que el rack de Telecom. Se porta el mismo zoom que ya tenía
+  // Office (transform:scale() sobre el canvas -- el cálculo de posición sigue funcionando
+  // porque getBoundingClientRect() ya refleja el tamaño visual tras el zoom).
+  window._cpdZoomFactor = window._cpdZoomFactor || 1;
+  function cpdZoom(delta) {
+    window._cpdZoomFactor = Math.max(0.5, Math.min(3, Math.round((window._cpdZoomFactor + delta) * 100) / 100));
+    _cpdAplicarZoom();
+  }
+  window.cpdZoom = cpdZoom;
+  function cpdZoomReset() {
+    window._cpdZoomFactor = 1;
+    _cpdAplicarZoom();
+  }
+  window.cpdZoomReset = cpdZoomReset;
+  function _cpdAplicarZoom() {
+    const canvas = document.getElementById('cpdPlanoCanvas');
+    if (canvas) canvas.style.transform = `scale(${window._cpdZoomFactor})`;
+    const label = document.getElementById('cpdZoomLabel');
+    if (label) label.textContent = Math.round(window._cpdZoomFactor * 100) + '%';
+  }
+
   async function abrirCpdPlano(id) {
     showScreen('cpdPlanoDetalle');
     const wrap = document.getElementById('cpdPlanoWrap');
     const titEl = document.getElementById('cpdPlanoDetTitulo');
+    const mismoPlano = window._cpdPlanoActual?.plano?.id === id;
+    if (!mismoPlano) window._cpdZoomFactor = 1;
     if (titEl) titEl.textContent = 'Cargando…';
     if (wrap) wrap.innerHTML = '<div class="empty-state">Cargando plano…</div>';
     try {
@@ -17094,12 +17126,13 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const st = window._cpdPlanoActual;
     if (!wrap || !st) return;
     wrap.innerHTML = `
-      <div id="cpdPlanoCanvas" style="position:relative;width:100%">
-        <img id="cpdPlanoImg" src="${cpdImagenUrl(st.plano.id)}" style="width:100%;display:block;user-select:none;-webkit-user-drag:none" draggable="false">
+      <div id="cpdPlanoCanvas" style="position:relative;width:100%;transform-origin:0 0">
+        <img id="cpdPlanoImg" src="${cpdImagenUrl(st.plano.id)}" style="width:100%;display:block;user-select:none;-webkit-user-drag:none;-webkit-touch-callout:none" draggable="false">
       </div>`;
     const canvas = document.getElementById('cpdPlanoCanvas');
     st.sondas.forEach(s => cpdAddSondaMarker(canvas, s));
     canvas.addEventListener('click', cpdOnCanvasClick);
+    _cpdAplicarZoom();
     cpdRenderToolbar();
     const sel = document.getElementById('cpdEtiquetaModo');
     if (sel) sel.value = cpdEtiquetaModo();
@@ -17144,9 +17177,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const el = document.createElement('div');
     el.className = 'cpd-sonda-marker';
     el.dataset.id = sonda.id;
+    // CPD-MOVIL-01 (19/08/2026): marcador subido de 26px a 40px (toque real, no cursor de
+    // ratón) y -webkit-touch-callout/user-select en none -- en iOS Safari un mantener
+    // pulsado sin esto dispara el menú de "guardar imagen" del navegador ANTES de que
+    // llegue el timer de arrastre de cpdWireSondaDrag, cancelando el gesto.
     el.style.cssText = `position:absolute;left:${sonda.pos_x}%;top:${sonda.pos_y}%;transform:translate(-50%,-50%);
-      width:26px;height:26px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
-      display:flex;align-items:center;justify-content:center;font-size:13px;cursor:grab;touch-action:none;z-index:5`;
+      width:40px;height:40px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
+      display:flex;align-items:center;justify-content:center;font-size:17px;cursor:grab;touch-action:none;z-index:5;
+      -webkit-touch-callout:none;-webkit-user-select:none;user-select:none`;
     el.textContent = info.icono;
     const label = document.createElement('div');
     label.textContent = cpdTextoEtiqueta(sonda);
@@ -17172,7 +17210,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     });
     el.addEventListener('pointermove', e => {
       if (!dragging) {
-        if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) clearTimeout(longPressTimer);
+        // CPD-MOVIL-01 (19/08/2026): 8px era una tolerancia pensada para ratón -- un dedo
+        // real tiembla más que eso durante los 350ms de espera y cancelaba el arrastre
+        // antes de armarse.
+        if (Math.hypot(e.clientX - startX, e.clientY - startY) > 16) clearTimeout(longPressTimer);
         return;
       }
       e.preventDefault();

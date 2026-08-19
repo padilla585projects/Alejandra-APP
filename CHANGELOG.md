@@ -4,6 +4,25 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-19 — Sondas CPD en el móvil: plano pequeño y sondas que no se movían)
+
+Adrián, sobre el departamento de Control en la app: "el plano se ve pequeño y las sondas
+no se puden reubicar, ahi que hacerlo mas comodo para la pantalla del movil" — mismo
+patrón que el bug de racks de más arriba: sin forma de ampliar el plano, mover una sonda
+con precisión con el dedo era casi imposible.
+
+- **Zoom** (＋/－/↺, igual que ya tenía Office): antes el plano solo ocupaba el ancho de
+  pantalla sin forma de ampliarlo. El cálculo de posición de las sondas sigue funcionando
+  igual con el zoom aplicado (usa `getBoundingClientRect()`, que ya refleja el tamaño
+  visual tras el `transform:scale()`).
+- **Marcador de sonda subido de 26px a 40px** — toque real, no cursor de ratón.
+- **`-webkit-touch-callout:none` en el marcador**: en iOS Safari, mantener pulsado un
+  punto sin esto dispara el menú nativo de "guardar imagen" ANTES de que llegue el timer
+  de arrastre (350ms) — cancela el gesto en seco. Probablemente la causa real de "no se
+  pueden reubicar" en un iPhone real.
+- **Tolerancia de movimiento durante la pulsación larga subida de 8px a 16px** — un dedo
+  tiembla más que un ratón durante los 350ms de espera.
+
 ### Fixed (2026-08-19 — Racks en el móvil: usabilidad real tras probarlo a mano)
 
 Adrián probó de verdad crear un rack y montar módulos en el móvil y reportó varios
