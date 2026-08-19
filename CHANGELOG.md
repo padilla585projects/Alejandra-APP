@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-19 — Sondas CPD móvil: botón de informe, ausente desde siempre)
+
+Adrián, tras confirmar que ya funcionaba el mover/zoom: "no veo el boton de generar
+informe". Existía en Office (`cpdOfficeGenerarInforme`) pero nunca se portó a
+`index.html` — no era una regresión de esta ronda, simplemente nunca se construyó en
+móvil. Además, la versión de Office usa `window.open()`, poco fiable en un navegador
+móvil real (bloqueadores de pop-up) y saca al usuario de la app. Nuevo botón 📄 en la
+cabecera del plano; el informe se abre en un modal con `<iframe>` interno (mismo patrón
+ya usado en el informe de Telecom Racks), con plano + marcadores numerados + tabla de
+sondas con su última lectura, imprimible desde dentro de la app.
+
 ### Added (2026-08-19 — Sondas CPD móvil: mover el plano a los lados + zoom con pellizco)
 
 Adrián probando en real, dos avisos más: "sigue sin funcionar el poder mover el mapa con
