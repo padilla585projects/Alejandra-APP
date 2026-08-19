@@ -8180,7 +8180,9 @@ async function crearTelecomPatchPanel(request, env) {
         'INSERT INTO telecom_puertos (patch_panel_id, empresa_id, numero, estado) VALUES (?, ?, ?, ?)'
       ).bind(patchPanelId, auth.empresa_id, n, 'libre'));
     }
-    await env.DB.batch(stmts);
+    // TELECOM-ACCESORIO-01: con numPuertos=0 (accesorio) stmts queda vacío -- D1 lanza
+    // "No SQL statements detected" si se le pasa un batch vacío.
+    if (stmts.length) await env.DB.batch(stmts);
     return json({
       ok: true, id: patchPanelId, nombre, rack_id: rackId, num_puertos: numPuertos,
       red_vlan: redVlan, switch_asociado: switchAsociado, subred, posicion_u: posicionU, notas_config: notasConfig,
