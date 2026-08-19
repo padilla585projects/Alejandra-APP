@@ -18618,7 +18618,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       fibra: '<rect x="2.5" y="6" width="5.5" height="6" rx="1"/><rect x="10" y="6" width="5.5" height="6" rx="1"/><circle cx="5.25" cy="9" r="0.9" fill="currentColor" stroke="none"/><circle cx="12.75" cy="9" r="0.9" fill="currentColor" stroke="none"/>',
       switch: '<rect x="2" y="5" width="14" height="8" rx="1.5"/><line x1="4.5" y1="7.5" x2="4.5" y2="9" stroke-width="1.6"/><line x1="7.5" y1="7.5" x2="7.5" y2="9" stroke-width="1.6"/><line x1="10.5" y1="7.5" x2="10.5" y2="9" stroke-width="1.6"/><line x1="13.5" y1="7.5" x2="13.5" y2="9" stroke-width="1.6"/><circle cx="4.5" cy="11.2" r="0.7" fill="currentColor" stroke="none"/><circle cx="7" cy="11.2" r="0.7" fill="currentColor" stroke="none"/>',
       ventilacion: '<circle cx="9" cy="9" r="6.5"/><path d="M9 9 Q11 4 14.5 5" stroke-linecap="round"/><path d="M9 9 Q6 13.5 2.5 11.5" stroke-linecap="round"/><path d="M9 9 Q13.5 11 13.5 15.5" stroke-linecap="round"/><circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none"/>',
-      pasacables: '<circle cx="9" cy="9" r="5.8"/><path d="M4 9 Q7 4.5 9 9 Q11 13.5 14 9" stroke-linecap="round"/>',
+      // Pasacables tipo Panduit visto de frente (Adrián: "habría que sacar el frontal...
+      // básicamente se ve como una tapa negra con el logo" -- los dedos-guía solo se ven
+      // en la foto de ángulo del producto, montado de frente es una tapa plana).
+      pasacables: '<rect x="1.5" y="6" width="15" height="6" rx="1"/><line x1="3" y1="9" x2="15" y2="9" stroke-width="0.8"/>',
       pantalla: '<rect x="3" y="3" width="12" height="8.5" rx="1"/><line x1="9" y1="11.5" x2="9" y2="13.8"/><line x1="6" y1="14.8" x2="12" y2="14.8" stroke-linecap="round"/>'
     }[tipo] || '<rect x="3" y="6" width="12" height="8" rx="1.5"/><rect x="7.5" y="3" width="3" height="3"/>';
     return `<svg width="1em" height="1em" viewBox="0 0 18 18" style="display:inline-block;vertical-align:-3px" fill="none" stroke="currentColor" stroke-width="1.3">${inner}</svg>`;
@@ -18801,9 +18804,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           rack_id:_telecomCtx.rack_id, nombre, tipo:pl.tipo, marca:pl.marca, num_puertos:pl.num_puertos, pos_u_inicio:u, pos_u_altura:(pl.pos_u_altura || 1)
         }) });
         const data = await _telecomLeerRespuesta(res);
-        toast('✅ Módulo montado — completa sus datos', 'ok');
         await telecomAbrirRack(_telecomCtx.rack_id);
-        telecomEditarEntidad('pp', data.id);
+        // TELECOM-ACCESORIO-01 (19/08/2026): Adrián -- "para los pasacables y ventilacion
+        // no hace falta rellenar nada, son directos". Van montados sin abrir el modal de
+        // datos (no tienen puertos ni campos técnicos que completar).
+        if (pl.tipo === 'ventilacion' || pl.tipo === 'pasacables') {
+          toast('✅ Módulo montado', 'ok');
+        } else {
+          toast('✅ Módulo montado — completa sus datos', 'ok');
+          telecomEditarEntidad('pp', data.id);
+        }
       }
     } catch (e) { toast('❌ ' + (e.message || 'No se pudo colocar'), 'err'); }
   }
@@ -19676,8 +19686,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const res = await apiCall('/telecom/informe-idf/' + idfId);
       const data = await _telecomLeerRespuesta(res);
       const racks = data.racks || [];
+      // TELECOM-ACCESORIO-01 (19/08/2026): Adrián -- "cuando se crea el informe no hace
+      // falta añadir los pasacables ni la ventilacion... ese es relleno". Son accesorios
+      // físicos del rack, no equipo de red que documentar en el informe de cableado.
       const secciones = racks.map(rack => {
-        const paneles = _telecomOrdenarPorPosicion(rack.patch_panels || []);
+        const paneles = _telecomOrdenarPorPosicion((rack.patch_panels || []).filter(p => p.tipo !== 'ventilacion' && p.tipo !== 'pasacables'));
         const elevacion = _telecomInformeElevacion(paneles);
         const filas = paneles.map(_telecomInformePanel).join('');
         return `<div class="rack-section">

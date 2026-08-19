@@ -4,6 +4,25 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-19 — Iconos de módulo de rack en SVG, accesorios "directos", fuera del informe)
+
+Adrián, viendo el rack en un móvil real: los módulos "BMS"/"Seguridad" (tipo switch)
+salían con un icono roto (caja vacía) — 🖧 no tiene glifo en la fuente emoji de ese
+Android. Además pidió que Pasacables/Ventilación se monten sin pedir rellenar nada
+("son directos") y no salgan en el informe de cableado ("ese es relleno").
+
+- **Iconos de módulo pasados de emoji a SVG de línea propio** (móvil y Office): no
+  dependen de qué fuente de emoji tenga el dispositivo. `width/height:1em` para heredar
+  el tamaño de texto de cada sitio donde ya se pintaban, igual que un emoji.
+- **Icono de Pasacables ajustado con foto real de referencia** (Panduit) — Adrián: "de
+  frente se ve como una tapa negra con el logo", no un rizo de cable ni los dedos-guía
+  que solo se ven en la foto de ángulo del producto.
+- **Pasacables/Ventilación se montan sin abrir el modal de datos** al colocarlos (no
+  tienen puertos ni campos técnicos que completar), en vez de forzar "completa sus
+  datos" como el resto de módulos.
+- **Excluidos del informe de cableado** (`telecomGenerarInformeIdf`/
+  `telecomOfficeInformeIdf`): son accesorios físicos del rack, no equipo de red.
+
 ### Fixed (2026-08-19 — Sondas CPD en el móvil, 2ª ronda: probado con un plano real y denso)
 
 El primer intento (más abajo) se probó solo con 1-2 sondas de prueba. Adrián lo probó
