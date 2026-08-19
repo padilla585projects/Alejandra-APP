@@ -17512,41 +17512,39 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     frame.srcdoc = '<div style="font-family:sans-serif;padding:40px;color:#333">Generando informe…</div>';
     modal.style.display = 'flex';
     try {
-      const lecturas = await Promise.all(st.sondas.map(s =>
-        apiCall(`/cpd/sondas/${s.id}/lecturas`).then(r => r.json())
-          .then(d => (d.lecturas || []).slice(-1)[0] || null).catch(() => null)
-      ));
+      // CPD-MOVIL-06 (19/08/2026): Adrián, viendo el informe con un plano real (41
+      // sondas) -- "el plano se ve muy junto todo" y "quitar muchas opciones de las
+      // sondas, con el nombre y el numero de serie es suficiente". Marcadores más
+      // pequeños y plano más ancho (menos amontonamiento al ser un plano denso de
+      // verdad), tabla reducida a #/Nombre/Nº serie -- ya no hace falta pedir la última
+      // lectura de cada sonda (antes 41 peticiones en paralelo solo para columnas que se
+      // quitan).
       const imgUrl = cpdImagenUrl(st.plano.id);
       const marcadoresHtml = st.sondas.map((s, i) => `
         <div style="position:absolute;left:${s.pos_x}%;top:${s.pos_y}%;transform:translate(-50%,-50%);
-          width:22px;height:22px;border-radius:50%;background:#22c55e;border:2px solid #fff;
-          display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff">${i + 1}</div>`).join('');
-      const filas = st.sondas.map((s, i) => {
-        const l = lecturas[i];
-        return `<tr>
+          width:15px;height:15px;border-radius:50%;background:#22c55e;border:1.5px solid #fff;
+          display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff">${i + 1}</div>`).join('');
+      const filas = st.sondas.map((s, i) => `<tr>
           <td>${i + 1}</td><td>${_escHtml(s.nombre)}</td><td>${_escHtml(s.numero_serie || '—')}</td>
-          <td>${_escHtml(s.zona || '—')}</td>
-          <td>${l?.temperatura ?? '—'}</td><td>${l?.humedad ?? '—'}</td><td>${l?.presion_diferencial ?? '—'}</td>
-          <td>${l?.fecha ? new Date(l.fecha).toLocaleDateString('es-ES') : '—'}</td>
-        </tr>`;
-      }).join('');
+        </tr>`).join('');
       document.getElementById('cpdInformeTitulo').textContent = 'Informe · ' + st.plano.titulo;
       frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${_escHtml(st.plano.titulo)}</title>
         <style>
           body{font-family:Arial,sans-serif;color:#101823;padding:0 20px 40px;background:#f6f8fa;margin:0}
           h1{font-size:20px;padding-top:16px}
-          .plano-wrap{position:relative;max-width:900px;margin:0 auto 24px;border:1px solid #ddd;border-radius:8px;overflow:hidden}
+          .plano-wrap{position:relative;max-width:1300px;margin:0 auto 24px;border:1px solid #ddd;border-radius:8px;overflow:hidden}
           .plano-wrap img{width:100%;display:block}
-          table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+          table{width:100%;max-width:500px;border-collapse:collapse;font-size:13px;margin-top:8px}
           th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}
           th{background:#e3f1f1}
+          @media print{.plano-wrap{max-width:100%}}
         </style></head><body>
         <h1>${_escHtml(st.plano.titulo)}</h1>
         <p style="color:#5b6472">Sondas CPD · generado ${new Date().toLocaleDateString('es-ES')}</p>
         <div class="plano-wrap"><img src="${imgUrl}">${marcadoresHtml}</div>
         <table>
-          <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Zona</th><th>Temp °C</th><th>Hum %</th><th>ΔP Pa</th><th>Última lectura</th></tr></thead>
-          <tbody>${filas || '<tr><td colspan="8">Sin sondas</td></tr>'}</tbody>
+          <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th></tr></thead>
+          <tbody>${filas || '<tr><td colspan="3">Sin sondas</td></tr>'}</tbody>
         </table>
         </body></html>`;
     } catch (e) {

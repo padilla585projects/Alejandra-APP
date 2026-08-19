@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Changed (2026-08-19 — Informe de Sondas CPD: menos amontonado, tabla más simple)
+
+Adrián, probando el informe con un plano real de 41 sondas: "el plano se ve muy junto
+todo" y "quitar muchas opciones de las sondas, con el nombre y el numero de serie es
+suficiente". En los dos frontends (móvil y Office): marcadores del plano reducidos de
+22px a 15px y el plano se muestra más ancho (900px→1300px, a pantalla completa en
+impresión) para que los círculos se amontonen menos en un plano denso real; tabla
+reducida a `#`/Nombre/Nº serie (antes también Zona/Temp/Hum/ΔP/Última lectura) — de paso
+deja de pedir la última lectura de cada sonda por separado (antes hasta 41 peticiones en
+paralelo solo para columnas que ya no se muestran).
+
 ### Added (2026-08-19 — Sondas CPD móvil: botón de informe, ausente desde siempre)
 
 Adrián, tras confirmar que ya funcionaba el mover/zoom: "no veo el boton de generar
