@@ -1,5 +1,58 @@
 # Handoff — Alejandra 2.0
 
+## TELECOM-MOVIL-02 / CPD-MOVIL-02 — Racks y Sondas CPD: usabilidad real en el móvil (2026-08-19)
+
+- Contexto: sesión previa (2026-08-18) había dado por "completo, desplegado y verificado"
+  el port de Racks/Cuadros v2 a `index.html`. Adrián lo probó de verdad con el dedo y
+  volvió con una lista de problemas reales — la lección repetida de hoy: **una
+  verificación automatizada en un navegador de escritorio no reproduce ni el chrome
+  nativo de Android/iOS (menús contextuales, fuentes de emoji) ni el "se siente mal" de
+  un dedo real sobre un touch target pequeño**. Los dos bugs más serios de hoy solo
+  aparecieron al probar en el dispositivo real.
+- **Racks — reporte inicial de Adrián**: "el rack es pequeño... si metemos mas modulos
+  que se amplie solo", "los modulos no se pueden mover, esta la opcion pero no funciona",
+  llenado por defecto arriba-abajo, agujeros de montaje visibles, y 3 módulos nuevos.
+  Dos bugs reales encontrados investigando el "no funciona": (1) faltaba
+  `flex-direction:column-reverse` en `index.html` — la U1 salía arriba en vez de abajo,
+  al revés que Office; (2) tocar el propio módulo en modo "mover" lo confirmaba en su
+  misma posición sin cambio visible (el backend lo acepta al excluirse del choque).
+  Corregidos junto con: hueco vacío escalado por nº real de U (antes banda fija — un
+  rack vacío se veía tan bajo como un hueco de 1U), chasis más ancho, toque mínimo 44px,
+  colocación por defecto pegada al techo del hueco tocado.
+- **Tres módulos nuevos** (Ventilación, Pasacables, Pantalla 4U): `worker.js` acepta
+  `tipo` = `ventilacion`/`pasacables`/`pantalla` en patch panels con `num_puertos=0` (sin
+  puertos de red). Bug real encontrado en producción al probar: `env.DB.batch([])` con
+  un array vacío lanza `D1_ERROR: No SQL statements detected` cuando `num_puertos=0` —
+  el bucle de creación de puertos no itera ninguna vez. Corregido con
+  `if (stmts.length) await env.DB.batch(stmts)`.
+- **Iconos de módulo**: Adrián, viendo el rack en un Android real — "BMS"/"Seguridad"
+  (tipo switch) con icono roto (🖧 sin glifo en esa fuente emoji). Cambiados todos los
+  iconos de módulo de emoji a SVG de línea propio (móvil y Office). Iteración con
+  Adrián sobre el icono de Pasacables (foto real de Panduit: tapa negra plana de frente,
+  no el rizo/dedos-guía que solo se ven en ángulo) y de Ventilación (aspas en el
+  selector — más reconocible eligiendo tipo — pero tapa+termostato digital montado en
+  el rack, aprobado tras una muestra). Pasacables/Ventilación se montan sin abrir el
+  modal de datos ("son directos") y quedan excluidos del informe de cableado ("es
+  relleno", no equipo de red).
+- **Sondas CPD (departamento Control) — mismo patrón, dos rondas**: Adrián — "el plano
+  se ve pequeño y las sondas no se puden reubicar". Ronda 1 (zoom `transform:scale()`,
+  marcador a 40px, `-webkit-touch-callout:none`) se verificó solo con 1-2 sondas de
+  prueba y pasó, pero era insuficiente: probado con un plano real y denso, "con esto asi
+  no se puede trabajar... cuando pulso en una sonda para moverla saltan las opciones del
+  navegador". Bug real: `-webkit-touch-callout:none` solo frena iOS Safari; en
+  Android/Chrome el mantener-pulsado dispara su propio menú contextual (`contextmenu`)
+  que gana la carrera al timer de arrastre de 350ms si no se cancela explícitamente —
+  causa real de "no se pueden reubicar". Corregido con `preventDefault()` en
+  `contextmenu`, zoom cambiado de `transform:scale()` a ancho real del canvas (el
+  transform + `overflow:auto` daba problemas de arrastre al ampliar), marcador bajado a
+  30px (a 40px se solapaban en un plano denso).
+- **Estado**: todo desplegado (Worker + Pages) y verificado en producción con datos de
+  prueba reales (creados y borrados en la misma sesión) — incluyendo zoom real a 200% +
+  arrastre con precisión exacta. Lo único pendiente de confirmar es el fix del menú
+  contextual de Android en un teléfono real (el navegador de pruebas no lo reproduce);
+  Adrián lo está probando y confirmará. Detalle completo en `CHANGELOG.md` (varias
+  entradas del 2026-08-19) y `PROJECT_STATE.md`.
+
 ## CORREOS-PANEL-01 — Panel de Correos por usuario + bug de caché de prompts (2026-08-17)
 
 - Contexto: sesión que arrancó confirmando en vivo que Gmail ya funciona (F6.1-AYUDANTES-

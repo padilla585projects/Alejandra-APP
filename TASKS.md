@@ -1,5 +1,31 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-08-19): **TELECOM-MOVIL-02 / CPD-MOVIL-02 — usabilidad real de
+Racks y Sondas CPD en el móvil, todo desplegado y verificado en producción salvo la
+confirmación final de Adrián en su teléfono real.** Adrián probó con el dedo lo que la
+sesión anterior (2026-08-18) había dado por completo y encontró varios problemas reales;
+el patrón se repitió en Sondas CPD. Detalle completo en `HANDOFF.md`/`CHANGELOG.md`.
+
+- **Racks — dos bugs reales** encontrados investigando "los modulos no se pueden mover,
+  esta la opcion pero no funciona": faltaba `column-reverse` en el móvil (U1 arriba en
+  vez de abajo) y tocar el propio módulo en modo mover lo confirmaba en su misma
+  posición sin cambio visible. Corregidos junto con tamaño/touch-targets (rack pequeño),
+  colocación arriba-abajo, agujeros de montaje, y tres módulos nuevos (Ventilación,
+  Pasacables, Pantalla 4U) — estos con un `D1_ERROR` real por `batch([])` vacío,
+  encontrado y corregido en producción.
+- **Iconos de módulo:** emoji → SVG de línea propio (switch salía con icono roto en un
+  Android real). Iteración con Adrián sobre Pasacables (foto real de Panduit) y
+  Ventilación (aspas en el selector, tapa+termostato montado), aprobada tras muestra.
+  Pasacables/Ventilación se montan sin modal de datos y fuera del informe de cableado.
+- **Sondas CPD — mismo patrón, dos rondas:** la 1ª ronda se verificó solo con 1-2 sondas
+  y no bastó. Probado con un plano real y denso, Adrián encontró el bug de verdad:
+  "cuando pulso en una sonda para moverla saltan las opciones del navegador" — en
+  Android/Chrome el mantener-pulsado dispara su propio menú contextual que gana la
+  carrera al timer de arrastre si no se cancela explícitamente. Corregido, más zoom
+  cambiado a ancho real (no `transform`) y marcador bajado de 40 a 30px.
+- Siguiente acción exacta: Adrián está probando en su teléfono real si el fix del menú
+  contextual de Android resuelve "no se pueden reubicar" — confirmará.
+
 Estado (actualizado 2026-08-17): **CORREOS-PANEL-01 completada, desplegada y verificada —
 pendiente solo que Adrián pruebe en vivo la sincronización real con su Gmail** (yo no tengo
 su sesión, solo pude probar con la cuenta de prueba sin Gmail conectado). Sesión que empezó
