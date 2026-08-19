@@ -1709,7 +1709,14 @@ select option{background:var(--surface2);color:var(--text)}
   </div>
 
   <!-- SONDAS CPD: editor de plano -->
-  <div id="screenCpdPlanoDetalle" class="screen" style="padding:0;display:none;flex-direction:column">
+  <!-- CPD-MOVIL-03 (19/08/2026): causa real de "el plano sigue pareciendo pequeño" -- a
+  esta pantalla le faltaban la clase `flex-screen` y `height:100%` que sí tienen todas las
+  demás (screenDept, screenHome, screenDocs...). Sin ellas, `.screen.active` aplica
+  display:block (no flex) y esta pantalla nunca tuvo un alto real de 100% -- el
+  contenedor del plano se dimensionaba solo por el contenido, no por el espacio
+  disponible. No es un bug introducido por el zoom de esta ronda; ya existía desde que se
+  creó esta pantalla, el zoom en posición absoluta solo lo dejó en evidencia (0px). -->
+  <div id="screenCpdPlanoDetalle" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);flex-shrink:0">
       <button onclick="navTo('cpdSondas')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0;white-space:nowrap">← Volver</button>
       <div style="flex:1;min-width:0;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="cpdPlanoDetTitulo">—</div>

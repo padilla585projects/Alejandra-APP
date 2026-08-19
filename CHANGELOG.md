@@ -12,8 +12,16 @@ resuelto — el problema real era que los controles de zoom (＋/－/↺) se hab
 como una fila propia entera en la cabecera, en una pantalla ya apretada: el plano visible
 quedaba MÁS pequeño que antes de tener zoom, no más grande. Cabecera comprimida a una
 sola fila (pista + selector), y el zoom pasa a flotar encima del propio plano (posición
-absoluta, esquina inferior derecha) en vez de restar altura — el plano ahora ocupa todo
-el alto disponible de la pantalla.
+absoluta, esquina inferior derecha) en vez de restar altura.
+
+**Causa raíz real, encontrada verificando en producción**: a `screenCpdPlanoDetalle` le
+faltaban la clase `flex-screen` y `height:100%` que sí tienen el resto de pantallas de
+`index.html` (`screenDept`, `screenHome`, `screenDocs`…) — sin ellas, `.screen.active`
+aplica `display:block` (no `flex`), así que esta pantalla nunca tuvo un alto real de
+100%: el contenedor del plano se dimensionaba solo por su contenido. No es un bug
+introducido por el zoom de esta ronda — ya existía desde que se creó la pantalla; el
+zoom en posición absoluta solo lo dejó en evidencia (medido a 0px de alto). Añadidas
+ambas.
 
 ### Changed (2026-08-19 — Icono de Ventilación: aspas en el selector, tapa+termostato montado)
 
