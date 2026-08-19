@@ -4,6 +4,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-19 — Sondas CPD móvil: mover el plano a los lados + zoom con pellizco)
+
+Adrián probando en real, dos avisos más: "sigue sin funcionar el poder mover el mapa con
+el zoom puesto... derecha e izquierda no se mueve", y "deberia de hacer zoom tambien con
+gestos en pantalla, la gente esta acostumbrada a eso".
+
+- `#cpdPlanoWrap` tenía `touch-action:pan-y` (solo desplazamiento vertical) — con el zoom
+  por ancho real (ronda anterior) el plano también se hace más ancho que la pantalla, y
+  ese eje estaba completamente bloqueado. Cambiado a `pan-x pan-y`.
+- Zoom con gesto de pellizco (dos dedos), anclado al punto medio entre ambos como
+  cualquier app de fotos o mapas — se recalcula el scroll del contenedor al cambiar el
+  zoom para que ese punto se quede fijo bajo los dedos en vez de saltar. Se ignora
+  mientras hay una sonda en arrastre (gesto de un solo dedo) para no interferir.
+
 ### Fixed (2026-08-19 — Sondas CPD móvil: el plano seguía viéndose pequeño)
 
 Adrián probó en su teléfono real la ronda anterior (zoom + fix de arrastre): "las sondas

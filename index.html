@@ -1742,7 +1742,11 @@ select option{background:var(--surface2);color:var(--text)}
       </div>
     </div>
     <div style="flex:1;min-height:0;position:relative">
-      <div id="cpdPlanoWrap" style="position:absolute;inset:0;overflow:auto;background:#0b0f14;touch-action:pan-y">
+      <!-- CPD-MOVIL-04 (19/08/2026): Adrián -- "sigue sin funcionar el poder mover el mapa
+      con el zoom puesto... derecha e izquierda no se mueve". `touch-action:pan-y` solo
+      dejaba desplazar en vertical -- con el zoom por ancho (CPD-MOVIL-02) el plano
+      también se hace más ANCHO que la pantalla, y ese eje estaba bloqueado del todo. -->
+      <div id="cpdPlanoWrap" style="position:absolute;inset:0;overflow:auto;background:#0b0f14;touch-action:pan-x pan-y">
         <div class="empty-state">Cargando plano…</div>
       </div>
       <div style="position:absolute;bottom:12px;right:12px;display:flex;gap:4px;align-items:center;background:rgba(15,18,36,.85);padding:5px 6px;border-radius:10px;border:1px solid var(--border);z-index:20">
@@ -17121,6 +17125,58 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (label) label.textContent = Math.round(window._cpdZoomFactor * 100) + '%';
   }
 
+  // CPD-MOVIL-04 (19/08/2026): Adrián -- "deberia de hacer zoom tambien con gestos en
+  // pantalla, la gente esta acostumbrada a eso". Pellizco con dos dedos sobre el plano,
+  // anclado al punto medio entre ambos (igual que cualquier app de fotos/mapas): se
+  // recalcula wrap.scrollLeft/Top al cambiar el zoom para que ese punto se quede fijo
+  // bajo los dedos en vez de saltar. Se ignora mientras hay una sonda en arrastre
+  // (cpdWireSondaDrag) para no interferir con ese gesto de un solo dedo.
+  function _cpdWirePinchZoom() {
+    const wrap = document.getElementById('cpdPlanoWrap');
+    if (!wrap || wrap._cpdPinchWired) return;
+    wrap._cpdPinchWired = true;
+    const pointers = new Map();
+    let pinchStartDist = 0, pinchStartZoom = 1;
+    const dist = () => {
+      const pts = [...pointers.values()];
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    };
+    wrap.addEventListener('pointerdown', e => {
+      if (window._cpdArrastrandoSonda) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        pinchStartDist = dist();
+        pinchStartZoom = window._cpdZoomFactor;
+      }
+    });
+    wrap.addEventListener('pointermove', e => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size !== 2 || pinchStartDist <= 0) return;
+      e.preventDefault();
+      const ratio = dist() / pinchStartDist;
+      const oldZoom = window._cpdZoomFactor;
+      const newZoom = Math.max(0.5, Math.min(4, Math.round(pinchStartZoom * ratio * 100) / 100));
+      if (newZoom === oldZoom) return;
+      const rect = wrap.getBoundingClientRect();
+      const pts = [...pointers.values()];
+      const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+      const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+      const contentX = wrap.scrollLeft + midX, contentY = wrap.scrollTop + midY;
+      window._cpdZoomFactor = newZoom;
+      _cpdAplicarZoom();
+      const f = newZoom / oldZoom;
+      wrap.scrollLeft = contentX * f - midX;
+      wrap.scrollTop = contentY * f - midY;
+    });
+    const liberar = e => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinchStartDist = 0;
+    };
+    wrap.addEventListener('pointerup', liberar);
+    wrap.addEventListener('pointercancel', liberar);
+  }
+
   async function abrirCpdPlano(id) {
     showScreen('cpdPlanoDetalle');
     const wrap = document.getElementById('cpdPlanoWrap');
@@ -17154,6 +17210,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     st.sondas.forEach(s => cpdAddSondaMarker(canvas, s));
     canvas.addEventListener('click', cpdOnCanvasClick);
     _cpdAplicarZoom();
+    _cpdWirePinchZoom();
     cpdRenderToolbar();
     const sel = document.getElementById('cpdEtiquetaModo');
     if (sel) sel.value = cpdEtiquetaModo();
@@ -17232,6 +17289,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       startX = e.clientX; startY = e.clientY; dragging = false;
       longPressTimer = setTimeout(() => {
         dragging = true;
+        window._cpdArrastrandoSonda = true;
         try { el.setPointerCapture(e.pointerId); } catch {}
         el.style.cursor = 'grabbing';
         if (navigator.vibrate) navigator.vibrate(40);
@@ -17260,6 +17318,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       el.style.cursor = 'grab';
       if (!dragging) return;
       dragging = false;
+      window._cpdArrastrandoSonda = false;
       justDragged = true;
       _cpdJustDraggedGlobal = true;
       setTimeout(() => { justDragged = false; _cpdJustDraggedGlobal = false; }, 80);
