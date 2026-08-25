@@ -20824,11 +20824,19 @@ function alejandrQuitarAdjunto(i) {
 
 // FIX-ALEJANDRA-FAB-03: extraído de cargarAlejandraChat() para reutilizarlo también en
 // el eco optimista de alejandrEnviar() — un solo sitio que sabe pintar una burbuja.
+// ALEJANDRA-MD-HIST-01 (25/08/2026): Adrián -- "la pedi un esquema que nunca me hizo".
+// El enlace SÍ se generaba, pero cada recarga/sondeo del chat (esta función) pintaba el
+// mensaje con un escape a secas, nunca con _panelRenderMd -- que ya existía "para
+// paridad con index.html" pero solo se usaba en la respuesta en vivo (línea ~21257), no
+// aquí. Un enlace de un mensaje anterior quedaba como texto plano sin clic en cuanto el
+// sondeo de 5s volvía a pintar la lista.
 function _alejandraBurbujaHTML(m) {
   const esUsuario = m.rol === 'user';
   const bg = esUsuario ? 'var(--accent)' : 'var(--surface2)';
   const color = esUsuario ? '#000' : 'var(--text)';
-  const texto = String(m.contenido || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  const texto = esUsuario
+    ? String(m.contenido || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')
+    : _panelRenderMd(String(m.contenido || ''));
   return `<div style="display:flex;justify-content:${esUsuario ? 'flex-end' : 'flex-start'};margin-bottom:8px">
     <div style="max-width:85%;padding:10px 14px;border-radius:12px;background:${bg};color:${color};font-size:13px;word-break:break-word;line-height:1.45;border:1px solid ${esUsuario ? 'transparent' : 'var(--border)'}">${texto}</div>
   </div>`;
