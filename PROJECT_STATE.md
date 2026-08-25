@@ -1,16 +1,23 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-25
-- Estado (2026-08-25, continuación): **SESION-TRANSPARENTE-01 — encontrado revisando la
-  conversación real de Adrián tras los despliegues de hoy.** Su chat de las 13:54h corrió
-  como `anon:3` en vez de su cuenta real, aunque su sesión en BD seguía válida (sin
-  caducar) — `/api/chat`/`/api/chat/stream` se degradaban a modo anónimo en silencio en
-  vez de avisar, a diferencia del resto de la app (`apiCall()` fuerza relogin ante un
-  401). Arreglado: nuevo evento `sesion_invalida` desde el servidor, consumido en
-  `index.html` (canales `app_android`/`pwa`) y en el chat flotante principal de
-  `panel.html` — deja terminar la respuesta y avisa/relogin al final. Versión de la app
-  → 9.08 (4 marcadores sincronizados). Pendiente de commit/deploy final (Worker agente +
-  Pages). Ver `CHANGELOG.md`.
+- Estado (2026-08-25, continuación): **Memoria enlazada estilo Obsidian — Parte 1 del
+  plan, autorizada y aplicada.** Adrián dio el ok explícito para la migración D1.
+  Corrección de diseño real encontrada al verificar contra el código antes de migrar: el
+  plan asumía `memoria_gobernada` como base, pero esa tabla está vacía y sin ningún
+  `INSERT` en todo el repo — `memory_save`/`memory_read` (las tools que de verdad se
+  usan) siempre han escrito/leído `alejandra_memoria`. Migración aplicada sobre
+  `alejandra_memoria` en su lugar: columna `slug` + tabla `memoria_enlaces` con backlinks
+  en ambos sentidos. `memory_save`/`memory_read` extendidos en los DOS workers (misma D1)
+  con `enlaces_a` y notas relacionadas. Pendiente, no tocado hoy: endpoint de exportación
+  a vault Obsidian real, y la migración de filas `alejandra_memoria`→`memoria_gobernada`
+  (deliberadamente aparte). Pendiente de commit/deploy + verificación funcional contra
+  producción. Ver `CHANGELOG.md`.
+- Estado (2026-08-25, continuación): **SESION-TRANSPARENTE-01 — desplegado.** El chat de
+  Alejandra se degradaba a modo anónimo en silencio cuando el token no validaba, sin
+  avisar (a diferencia de `apiCall()`, que fuerza relogin ante un 401). Arreglado: nuevo
+  evento `sesion_invalida`, consumido en `index.html`/`panel.html` — deja terminar la
+  respuesta y avisa/relogin al final. Versión de la app → 9.08. Ver `CHANGELOG.md`.
 - Estado (2026-08-25): **Auditoría a fondo del cerebro de Alejandra — EN CURSO, Parte 2
   completa.** Adrián, tras revisar una conversación real donde Alejandra repitió
   respuestas, preguntó lo mismo dos veces y afirmó un diagnóstico técnico inventado

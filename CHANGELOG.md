@@ -4,6 +4,45 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-25 — Memoria enlazada estilo Obsidian, Parte 1 del plan, autorizada por Adrián)
+
+Adrián autorizó explícitamente la migración D1. **Corrección de diseño respecto al plan
+original**: el plan asumía que `memory_save`/`memory_read` escriben en `memoria_gobernada`
+— verificado contra el código real de los dos workers antes de tocar D1: siempre han
+usado `alejandra_memoria` (la tabla "legada"). `memoria_gobernada` es una tabla aparte,
+ya migrada el 02/08 pero sin ningún `INSERT` en todo el repo — solo se listan/confirman/
+rechazan candidatas que nunca llegan a crearse, y está vacía en producción (0 filas,
+verificado antes de migrar). Enlazar una tabla vacía sin flujo de escritura no aporta
+nada hoy; se enlaza `alejandra_memoria`, la memoria que Alejandra usa de verdad.
+
+**Migración aplicada** (`migrate_memoria_enlaces.sql`, aditiva, verificada en D1 tras
+aplicar): `alejandra_memoria` gana una columna `slug` (índice único por
+`empresa_id, slug`, NULL permitido sin colisión) y tabla nueva `memoria_enlaces`
+(`origen_id`, `destino_id`, `tipo_enlace`, con índices en ambos sentidos para backlinks).
+
+**Código, en los DOS workers** (misma tabla física, misma D1 — "UNA Alejandra, DOS
+cerebros"): `memory_save` genera un slug estable a partir del título (con sufijo
+numérico si colisiona) y acepta `enlaces_a: string[]` — slugs de notas ya existentes con
+las que relacionar la nueva; un slug que no exista se ignora sin fallar el guardado.
+`memory_read` devuelve, junto a cada resultado, sus notas relacionadas (enlaces
+salientes y backlinks entrantes a un salto), resuelto con 2 queries por lote en vez de
+N+1. Mismo principio que los "linked mentions" de Obsidian: una nota relacionada aparece
+aunque no comparta texto con la búsqueda.
+
+De paso, verificando el archivo tras escribirlo: dos ediciones propias introdujeron
+caracteres Unicode combinantes literales (U+0300/U+036F) dentro de un regex en vez de la
+notación de escape estándar (U+0300 a U+036F) — funcionalmente idéntico pero frágil ante encoding.
+Corregido en ambas antes de hacer commit. De paso se encontró un caso preexistente del
+mismo patrón (`_normalizarTextoPlano` en `worker.js`, no tocado por este cambio) —
+flagueado como tarea aparte, fuera de alcance de esta migración.
+
+**Pendiente, no implementado en esta ronda**: el endpoint `GET /admin/memoria/exportar-vault`
+(exportar a un vault Obsidian real descargable en `.md` con `[[wikilinks]]`) y la
+migración de filas de `alejandra_memoria` hacia `memoria_gobernada` (paso 2 del plan,
+deliberadamente aparte) — ninguno de los dos se ha tocado hoy.
+
+207/207 tests. `node --check` limpio en ambos workers.
+
 ### Fixed (2026-08-25 — El chat de Alejandra perdía la sesión en silencio, sin avisar)
 
 Revisando la conversación real de Adrián con Alejandra tras los despliegues de hoy

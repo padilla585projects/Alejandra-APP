@@ -1494,14 +1494,15 @@ const TOOL_BUSCAR_WEB = {
 
 const TOOL_MEMORY_SAVE = {
   name: 'memory_save',
-  description: 'Guarda un aprendizaje, mejora propuesta, problema real o contexto importante en tu memoria persistente (el "buzón" que Adrián revisa después). Con tipo=\'error\' e importancia 4 o 5 (un problema real que bloquea a un usuario ahora mismo: tool que falla, permiso que falta, dato roto) avisa además a Adrián por Telegram casi en tiempo real. Con importancia 1-3, o cualquier otro tipo, solo queda archivado para revisar más tarde.',
+  description: 'Guarda un aprendizaje, mejora propuesta, problema real o contexto importante en tu memoria persistente (el "buzón" que Adrián revisa después). Con tipo=\'error\' e importancia 4 o 5 (un problema real que bloquea a un usuario ahora mismo: tool que falla, permiso que falta, dato roto) avisa además a Adrián por Telegram casi en tiempo real. Con importancia 1-3, o cualquier otro tipo, solo queda archivado para revisar más tarde. MEMORIA-ENLAZADA-01: usa enlaces_a con los slugs de notas relacionadas que ya conozcas (te los devuelve memory_read) para conectar este recuerdo con otros — así una consulta futura sobre uno encuentra el otro aunque no compartan texto.',
   input_schema: {
     type: 'object',
     properties: {
       tipo:       { type: 'string', enum: ['aprendizaje', 'mejora', 'contexto', 'error', 'patron'] },
       titulo:     { type: 'string', description: 'Título breve del aprendizaje' },
       contenido:  { type: 'string', description: 'Descripción detallada' },
-      importancia:{ type: 'number', description: 'De 1 (trivial) a 5 (crítico)', minimum: 1, maximum: 5 }
+      importancia:{ type: 'number', description: 'De 1 (trivial) a 5 (crítico)', minimum: 1, maximum: 5 },
+      enlaces_a:  { type: 'array', items: { type: 'string' }, description: 'Slugs de notas de memoria ya existentes con las que relacionar esta (opcional). Un slug que no exista se ignora sin fallar el guardado.' }
     },
     required: ['tipo', 'titulo', 'contenido']
   },
@@ -1512,7 +1513,7 @@ const TOOL_MEMORY_SAVE = {
 
 const TOOL_MEMORY_READ = {
   name: 'memory_read',
-  description: 'Lee tu memoria persistente para recuperar aprendizajes y contexto previo.',
+  description: 'Lee tu memoria persistente para recuperar aprendizajes y contexto previo. Cada resultado incluye su slug y, si tiene, sus notas relacionadas (enlaces salientes y backlinks entrantes) — úsalos para seguir el hilo a otra nota relevante aunque no la hayas buscado directamente, o para pasarlos como enlaces_a al guardar una nota nueva relacionada.',
   input_schema: {
     type: 'object',
     properties: {
@@ -7407,10 +7408,15 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
         const contenido = String(input.contenido || '').replace(/(ignore|olvida|descarta)\s+(all|todas|tus)\s+(instructions|instrucciones|reglas)/gi, '[REDACTED]');
         const titulo = String(input.titulo || '').substring(0, 200);
         const importancia = input.importancia || 3;
-        await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (tipo,usuario_id,empresa_id,titulo,contenido,importancia,created_at)
-           VALUES(?,?,?,?,?,?,datetime('now'))`
-        ).bind(input.tipo, usuario_id || 'system', empresa_id || 'system', titulo, contenido, importancia).run();
+        const eidSlug = empresa_id || 'system';
+        // MEMORIA-ENLAZADA-01 (25/08/2026): slug estable para poder enlazar esta nota
+        // desde otras (memoria_enlaces) -- se genera del título, con sufijo numérico si
+        // colisiona con uno ya existente en la misma empresa (UNIQUE INDEX empresa_id+slug).
+        const slug = await generarSlugUnico(env, eidSlug, titulo);
+        const ins = await env.DB.prepare(
+          `INSERT INTO alejandra_memoria (tipo,usuario_id,empresa_id,titulo,contenido,importancia,slug,created_at)
+           VALUES(?,?,?,?,?,?,?,datetime('now'))`
+        ).bind(input.tipo, usuario_id || 'system', eidSlug, titulo, contenido, importancia, slug).run();
         // BUZON-TELEGRAM-01 (10/08/2026): un problema real (tipo='error', importancia>=4)
         // avisa a Adrián casi en tiempo real por Telegram, además de quedar en el buzón
         // de memoria para repasar más tarde -- pedido explícito del Director. Reutiliza
@@ -7422,7 +7428,27 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
           const empresaTxt = empresa_id && empresa_id !== 'system' ? ` (empresa ${empresa_id})` : '';
           await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, `🔴 <b>Alejandra registró un problema relevante</b>${empresaTxt}\nRevisar el buzón gobernado de incidencias.`).catch(() => {});
         }
-        return `Guardado en memoria: [${input.tipo}] "${input.titulo}"`;
+        // MEMORIA-ENLAZADA-01: enlaza con notas ya existentes por slug -- un slug que no
+        // exista (empresa distinta, escrito mal, inventado) se ignora sin fallar el guardado.
+        let enlazadas = 0;
+        const nuevoId = ins.meta?.last_row_id;
+        if (nuevoId && Array.isArray(input.enlaces_a) && input.enlaces_a.length) {
+          const slugs = [...new Set(input.enlaces_a.map(s => String(s || '').trim()).filter(Boolean))].slice(0, 10);
+          if (slugs.length) {
+            const placeholders = slugs.map(() => '?').join(',');
+            const destinos = await env.DB.prepare(
+              `SELECT id FROM alejandra_memoria WHERE empresa_id = ? AND slug IN (${placeholders}) AND id != ?`
+            ).bind(eidSlug, ...slugs, nuevoId).all();
+            for (const d of (destinos.results || [])) {
+              await env.DB.prepare(
+                `INSERT INTO memoria_enlaces (origen_id, destino_id, created_at) VALUES (?, ?, datetime('now'))`
+              ).bind(nuevoId, d.id).run().catch(() => {});
+              enlazadas++;
+            }
+          }
+        }
+        const sufEnlaces = enlazadas > 0 ? ` (enlazada con ${enlazadas} nota${enlazadas > 1 ? 's' : ''} más)` : '';
+        return `Guardado en memoria: [${input.tipo}] "${input.titulo}" (slug: ${slug})${sufEnlaces}`;
       } catch (err) {
         return `Error al guardar: ${err.message}`;
       }
@@ -7437,11 +7463,20 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
         // de ejecutarTool (resuelta del token de sesion), nunca del input del modelo.
         const eid = empresa_id ? String(empresa_id) : null;
         const rows  = tipo
-          ? await env.DB.prepare('SELECT tipo,titulo,contenido,importancia,created_at FROM alejandra_memoria WHERE empresa_id = ? AND tipo=? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, tipo, limit).all()
-          : await env.DB.prepare('SELECT tipo,titulo,contenido,importancia,created_at FROM alejandra_memoria WHERE empresa_id = ? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, limit).all();
+          ? await env.DB.prepare('SELECT id,tipo,titulo,contenido,importancia,slug,created_at FROM alejandra_memoria WHERE empresa_id = ? AND tipo=? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, tipo, limit).all()
+          : await env.DB.prepare('SELECT id,tipo,titulo,contenido,importancia,slug,created_at FROM alejandra_memoria WHERE empresa_id = ? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, limit).all();
         const items = rows.results || [];
         if (!items.length) return 'No hay registros en memoria para ese filtro.';
-        return items.map(r => `[${r.tipo}|imp:${r.importancia}] ${r.titulo}: ${r.contenido}`).join('\n');
+        // MEMORIA-ENLAZADA-01: enlaces salientes y backlinks a un salto, para todos los
+        // resultados de golpe (2 queries, no N+1) -- mismo principio que "linked mentions"
+        // de Obsidian: una nota relacionada aparece aunque no comparta texto con la consulta.
+        const relacionados = await obtenerNotasRelacionadas(env, items.map(r => r.id));
+        return items.map(r => {
+          const rel = relacionados.get(r.id);
+          const relTxt = rel && rel.length ? ` | relacionado: ${rel.map(x => x.slug || `#${x.id}`).join(', ')}` : '';
+          const slugTxt = r.slug ? ` (slug: ${r.slug})` : '';
+          return `[${r.tipo}|imp:${r.importancia}]${slugTxt} ${r.titulo}: ${r.contenido}${relTxt}`;
+        }).join('\n');
       } catch (err) {
         return `Error al leer memoria: ${err.message}`;
       }
@@ -11819,6 +11854,63 @@ function sesionPareceCaducada(authOk, canal, rawUserId) {
   const uid = String(rawUserId || '').trim().toLowerCase();
   if (!uid || uid.startsWith('anon') || ['system', 'getaway', 'cron', 'unknown'].includes(uid)) return false;
   return true;
+}
+
+// MEMORIA-ENLAZADA-01 (25/08/2026, Parte 1 del plan aprobado): memoria enlazada estilo
+// Obsidian sobre `alejandra_memoria` (la que memory_save/memory_read usan de verdad --
+// ver migrate_memoria_enlaces.sql para por qué NO es memoria_gobernada, que está vacía
+// y sin flujo de escritura). slug identifica la nota para poder enlazarla desde otra;
+// memoria_enlaces guarda la relación origen->destino, consultable en ambos sentidos
+// (backlinks) igual que "linked mentions" de Obsidian.
+function normalizarSlugMemoria(texto) {
+  return String(texto || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'nota';
+}
+
+async function generarSlugUnico(env, empresaId, titulo) {
+  const base = normalizarSlugMemoria(titulo);
+  let candidato = base;
+  for (let intento = 2; intento <= 20; intento++) {
+    const existe = await env.DB.prepare(
+      `SELECT 1 FROM alejandra_memoria WHERE empresa_id = ? AND slug = ? LIMIT 1`
+    ).bind(empresaId, candidato).first().catch(() => null);
+    if (!existe) return candidato;
+    candidato = `${base}-${intento}`;
+  }
+  // Fail-safe: 20 colisiones seguidas del mismo título es prácticamente imposible en la
+  // práctica, pero si pasa, un sufijo de tiempo garantiza unicidad sin bloquear el guardado.
+  return `${base}-${Date.now()}`;
+}
+
+async function obtenerNotasRelacionadas(env, ids) {
+  const mapa = new Map();
+  const idsUnicos = [...new Set((ids || []).filter(Boolean))];
+  if (!idsUnicos.length) return mapa;
+  const placeholders = idsUnicos.map(() => '?').join(',');
+  try {
+    const [salientes, entrantes] = await Promise.all([
+      env.DB.prepare(
+        `SELECT e.origen_id as base_id, m.id, m.slug, m.titulo
+         FROM memoria_enlaces e JOIN alejandra_memoria m ON m.id = e.destino_id
+         WHERE e.origen_id IN (${placeholders})`
+      ).bind(...idsUnicos).all(),
+      env.DB.prepare(
+        `SELECT e.destino_id as base_id, m.id, m.slug, m.titulo
+         FROM memoria_enlaces e JOIN alejandra_memoria m ON m.id = e.origen_id
+         WHERE e.destino_id IN (${placeholders})`
+      ).bind(...idsUnicos).all(),
+    ]);
+    for (const row of [...(salientes.results || []), ...(entrantes.results || [])]) {
+      if (!mapa.has(row.base_id)) mapa.set(row.base_id, []);
+      const lista = mapa.get(row.base_id);
+      if (!lista.some(x => x.id === row.id)) lista.push({ id: row.id, slug: row.slug, titulo: row.titulo });
+    }
+  } catch (_) { /* fail-open: sin relacionados, memory_read sigue devolviendo lo demás */ }
+  return mapa;
 }
 
 async function clasificarConHaiku(env, mensaje) {

@@ -302,6 +302,64 @@ async function consultarMemoria(env, {
   }
 }
 
+// MEMORIA-ENLAZADA-01 (25/08/2026): memoria enlazada estilo Obsidian sobre
+// `alejandra_memoria`, compartida con alejandra-agente/worker.js en la misma D1 --
+// ver migrate_memoria_enlaces.sql para el porqué de alejandra_memoria y no
+// memoria_gobernada. Misma lógica duplicada en el otro Worker ("UNA Alejandra, DOS
+// cerebros"): cualquier cambio aquí revisar si aplica también allí.
+// Regex construida con String.fromCharCode (no un literal con marcas combinantes escritas a mano) para no
+// depender de que un editor conserve intacta la secuencia de escape de marcas
+// combinantes -- mismo rango, forma más robusta de escribirlo.
+const _MARCAS_DIACRITICAS_RE = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');
+function normalizarSlugMemoria(texto) {
+  return String(texto || '')
+    .toLowerCase()
+    .normalize('NFD').replace(_MARCAS_DIACRITICAS_RE, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'nota';
+}
+
+async function generarSlugUnico(env, empresaId, titulo) {
+  const base = normalizarSlugMemoria(titulo);
+  let candidato = base;
+  for (let intento = 2; intento <= 20; intento++) {
+    const existe = await env.DB.prepare(
+      `SELECT 1 FROM alejandra_memoria WHERE empresa_id = ? AND slug = ? LIMIT 1`
+    ).bind(empresaId, candidato).first().catch(() => null);
+    if (!existe) return candidato;
+    candidato = `${base}-${intento}`;
+  }
+  return `${base}-${Date.now()}`;
+}
+
+async function obtenerNotasRelacionadas(env, ids) {
+  const mapa = new Map();
+  const idsUnicos = [...new Set((ids || []).filter(Boolean))];
+  if (!idsUnicos.length) return mapa;
+  const placeholders = idsUnicos.map(() => '?').join(',');
+  try {
+    const [salientes, entrantes] = await Promise.all([
+      env.DB.prepare(
+        `SELECT e.origen_id as base_id, m.id, m.slug, m.titulo
+         FROM memoria_enlaces e JOIN alejandra_memoria m ON m.id = e.destino_id
+         WHERE e.origen_id IN (${placeholders})`
+      ).bind(...idsUnicos).all(),
+      env.DB.prepare(
+        `SELECT e.destino_id as base_id, m.id, m.slug, m.titulo
+         FROM memoria_enlaces e JOIN alejandra_memoria m ON m.id = e.origen_id
+         WHERE e.destino_id IN (${placeholders})`
+      ).bind(...idsUnicos).all(),
+    ]);
+    for (const row of [...(salientes.results || []), ...(entrantes.results || [])]) {
+      if (!mapa.has(row.base_id)) mapa.set(row.base_id, []);
+      const lista = mapa.get(row.base_id);
+      if (!lista.some(x => x.id === row.id)) lista.push({ id: row.id, slug: row.slug, titulo: row.titulo });
+    }
+  } catch (_) { /* fail-open */ }
+  return mapa;
+}
+
 // listarCandidatasPendientes — ADR-0013 §2/§3. Solo para flujos de aprobación
 // (encargado+); nunca la usa el Motor de Decisión al responder, que solo lee
 // memoria ya `confirmada` vía consultarMemoria().
@@ -1139,21 +1197,22 @@ const AI_TOOLS = [
   },
   {
     name: 'memory_save',
-    description: 'Guarda en tu memoria persistente. USA ESTO MUCHO — es tu forma de aprender y no repetir errores. Guarda: lo que hiciste, lo que aprendiste sobre la app, errores que cometiste, patrones que funcionan, comportamientos que descubriste.',
+    description: 'Guarda en tu memoria persistente. USA ESTO MUCHO — es tu forma de aprender y no repetir errores. Guarda: lo que hiciste, lo que aprendiste sobre la app, errores que cometiste, patrones que funcionan, comportamientos que descubriste. MEMORIA-ENLAZADA-01: usa enlaces_a con los slugs de notas relacionadas que ya conozcas (te los devuelve memory_read) para conectar este recuerdo con otros.',
     input_schema: {
       type: 'object',
       properties: {
         tipo: { type: 'string', enum: ['hecho', 'pendiente', 'contexto', 'aviso', 'aprendizaje', 'error'], description: 'hecho=acción completada | pendiente=tarea futura | contexto=info sobre la app | aviso=crítico no olvidar | aprendizaje=algo que descubriste sobre cómo funciona la app | error=algo que falló y cómo resolverlo' },
         titulo: { type: 'string', description: 'Título corto descriptivo' },
         contenido: { type: 'string', description: 'Descripción detallada — sé específica para poder usarlo después' },
-        importancia: { type: 'integer', description: '1=baja, 3=media, 5=crítica', minimum: 1, maximum: 5 }
+        importancia: { type: 'integer', description: '1=baja, 3=media, 5=crítica', minimum: 1, maximum: 5 },
+        enlaces_a: { type: 'array', items: { type: 'string' }, description: 'Slugs de notas de memoria ya existentes con las que relacionar esta (opcional). Un slug que no exista se ignora sin fallar el guardado.' }
       },
       required: ['tipo', 'titulo', 'contenido']
     }
   },
   {
     name: 'memory_read',
-    description: 'Lee tu memoria persistente. Úsalo SIEMPRE antes de actuar para recordar qué has hecho, qué errores cometiste antes y qué has aprendido.',
+    description: 'Lee tu memoria persistente. Úsalo SIEMPRE antes de actuar para recordar qué has hecho, qué errores cometiste antes y qué has aprendido. Cada resultado incluye su slug y, si tiene, sus notas relacionadas (enlaces salientes y backlinks entrantes).',
     input_schema: {
       type: 'object',
       properties: {
@@ -2070,22 +2129,50 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       return JSON.stringify({ ok: false, error: 'Parámetros inválidos' });
     }
     case 'memory_save': {
-      const { tipo, titulo, contenido, importancia = 1 } = toolInput;
+      const { tipo, titulo, contenido, importancia = 1, enlaces_a } = toolInput;
       if (!tipo || !titulo || !contenido) return JSON.stringify({ ok: false, error: 'Faltan campos obligatorios: tipo, titulo y contenido' });
+      // MEMORIA-ENLAZADA-01 (25/08/2026): este worker no maneja multiempresa (solo Adrián,
+      // vía panel dev/Telegram) -- 'system' fijo como empresa_id para que el índice único
+      // de slug (empresa_id, slug) funcione igual que en alejandra-agente/worker.js, que
+      // comparte la misma tabla alejandra_memoria en la misma D1.
+      const slug = await generarSlugUnico(env, 'system', titulo);
       const r = await env.DB.prepare(
-        "INSERT INTO alejandra_memoria (tipo, titulo, contenido, importancia) VALUES (?, ?, ?, ?)"
-      ).bind(tipo, titulo, contenido, importancia).run();
-      return JSON.stringify({ ok: true, id: r.meta?.last_row_id, guardado: titulo });
+        "INSERT INTO alejandra_memoria (tipo, titulo, contenido, importancia, empresa_id, slug) VALUES (?, ?, ?, ?, ?, ?)"
+      ).bind(tipo, titulo, contenido, importancia, 'system', slug).run();
+      const nuevoId = r.meta?.last_row_id;
+      let enlazadas = 0;
+      if (nuevoId && Array.isArray(enlaces_a) && enlaces_a.length) {
+        const slugs = [...new Set(enlaces_a.map(s => String(s || '').trim()).filter(Boolean))].slice(0, 10);
+        if (slugs.length) {
+          const placeholders = slugs.map(() => '?').join(',');
+          const destinos = await env.DB.prepare(
+            `SELECT id FROM alejandra_memoria WHERE empresa_id = 'system' AND slug IN (${placeholders}) AND id != ?`
+          ).bind(...slugs, nuevoId).all();
+          for (const d of (destinos.results || [])) {
+            await env.DB.prepare(
+              `INSERT INTO memoria_enlaces (origen_id, destino_id, created_at) VALUES (?, ?, datetime('now'))`
+            ).bind(nuevoId, d.id).run().catch(() => {});
+            enlazadas++;
+          }
+        }
+      }
+      return JSON.stringify({ ok: true, id: nuevoId, guardado: titulo, slug, enlazadas });
     }
     case 'memory_read': {
       const { tipo = 'all', limit = 20 } = toolInput;
       let r;
       if (tipo !== 'all') {
-        r = await env.DB.prepare('SELECT id, tipo, titulo, contenido, importancia, created_at FROM alejandra_memoria WHERE tipo=? ORDER BY importancia DESC, created_at DESC LIMIT ?').bind(tipo, limit).all();
+        r = await env.DB.prepare('SELECT id, tipo, titulo, contenido, importancia, slug, created_at FROM alejandra_memoria WHERE tipo=? ORDER BY importancia DESC, created_at DESC LIMIT ?').bind(tipo, limit).all();
       } else {
-        r = await env.DB.prepare('SELECT id, tipo, titulo, contenido, importancia, created_at FROM alejandra_memoria ORDER BY importancia DESC, created_at DESC LIMIT ?').bind(limit).all();
+        r = await env.DB.prepare('SELECT id, tipo, titulo, contenido, importancia, slug, created_at FROM alejandra_memoria ORDER BY importancia DESC, created_at DESC LIMIT ?').bind(limit).all();
       }
-      return JSON.stringify({ ok: true, memorias: r.results });
+      const memorias = r.results || [];
+      const relacionados = await obtenerNotasRelacionadas(env, memorias.map(m => m.id));
+      for (const m of memorias) {
+        const rel = relacionados.get(m.id);
+        if (rel && rel.length) m.relacionado = rel.map(x => x.slug || `#${x.id}`);
+      }
+      return JSON.stringify({ ok: true, memorias });
     }
     case 'memory_delete': {
       await env.DB.prepare("DELETE FROM alejandra_memoria WHERE id=?").bind(toolInput.id).run();
