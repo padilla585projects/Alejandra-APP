@@ -9652,10 +9652,45 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </select>
           <button class="btn btn-secondary btn-sm" onclick="memCargarVault()">🔄 Actualizar</button>
           <button class="btn btn-primary btn-sm" onclick="memAbrirModalNota()">+ Nueva nota</button>
+          <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+            <button id="memBtnVistaLista" class="btn btn-sm" style="border-radius:0;background:var(--accent);color:#fff" onclick="memCambiarVista('lista')">📋 Lista</button>
+            <button id="memBtnVistaMapa" class="btn btn-secondary btn-sm" style="border-radius:0" onclick="memCambiarVista('mapa')">🕸️ Mapa</button>
+          </div>
         </div>
 
         <div id="memNotasGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">
           <div class="loading"><div class="spinner"></div> Cargando memoria…</div>
+        </div>
+
+        <!-- MEMORIA-ENLAZADA-03 (25/08/2026): "yo quiero ver el mapa neuronal... pinchar en
+             uno y que salga la nota" -- grafo de fuerza simple en canvas, sin librerías
+             externas (proyecto de un solo archivo). Nodo = nota, color por tipo, arista =
+             enlace. Arrastrable; clic en nodo abre el detalle completo. -->
+        <div id="memGraphWrap" style="display:none;border:1px solid var(--border);border-radius:10px;overflow:hidden;position:relative;background:var(--bg)">
+          <canvas id="memGraphCanvas" style="display:block;width:100%;touch-action:none;cursor:grab"></canvas>
+          <div style="position:absolute;top:8px;left:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;max-width:calc(100% - 16px)">
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ef4444;margin-right:3px"></span>error</span>
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#eab308;margin-right:3px"></span>aviso/pendiente</span>
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#3b82f6;margin-right:3px"></span>aprendizaje/mejora</span>
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#8b8ba0;margin-right:3px"></span>otros</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal detalle de nota (abierto desde el mapa o desde el chip "relacionado") -->
+      <div id="memDetalleModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)memCerrarDetalle()">
+        <div class="modal" style="max-width:560px">
+          <div class="modal-header"><h3 id="memDetalleTitulo">Nota</h3><span class="modal-close" onclick="memCerrarDetalle()">✕</span></div>
+          <div class="modal-body">
+            <div style="display:flex;gap:6px;margin-bottom:10px" id="memDetalleBadges"></div>
+            <div style="white-space:pre-wrap;color:var(--text);font-size:13px;line-height:1.5" id="memDetalleContenido"></div>
+            <div style="margin-top:10px;font-size:11px;color:var(--muted);font-family:monospace" id="memDetalleSlug"></div>
+            <div style="margin-top:10px" id="memDetalleRelacionados"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn" onclick="memCerrarDetalle()">Cerrar</button>
+            <button class="btn btn-danger" id="memDetalleBorrarBtn" onclick="memBorrarDesdeDetalle()">🗑️ Borrar</button>
+          </div>
         </div>
       </div>
 
@@ -14851,6 +14886,8 @@ function memRenderNotas() {
       ${rel ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--muted)">relacionado:</span> ${rel}</div>` : ''}
     </div>`;
   }).join('');
+  // MEMORIA-ENLAZADA-03: mismo filtro (búsqueda/tipo) también repinta el mapa si está activo.
+  if (_memVista === 'mapa') memInicializarGrafo();
 }
 
 function memIrANota(slug) {
@@ -14904,10 +14941,245 @@ async function memBorrarNota(id) {
     const res = await fetch(`${MEM_API}/vault?id=${id}`, { method: 'DELETE', headers: _memHeaders() });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (_memDetalleAbiertoId === id) memCerrarDetalle();
     await memCargarVault();
   } catch (e) {
     toast ? toast('Error borrando: ' + e.message, 'err') : alert('Error borrando: ' + e.message);
   }
+}
+
+// ── MEMORIA-ENLAZADA-03 (25/08/2026): "quiero ver el mapa neuronal... pinchar en uno y
+// que salga la nota" — grafo de fuerza simple, sin librerías (proyecto de un solo
+// archivo). Layout tipo Fruchterman-Reingold: repulsión entre todos los nodos + atracción
+// a lo largo de las aristas + gravedad leve al centro, con enfriamiento progresivo.
+let _memVista = 'lista';
+let _memGraphNodos = [];
+let _memGraphAristas = [];
+let _memDetalleAbiertoId = null;
+let _memDrag = null; // {nodo, offsetX, offsetY} mientras se arrastra
+
+const MEM_COLOR_TIPO = {
+  error: '#ef4444',
+  aviso: '#eab308', pendiente: '#eab308',
+  aprendizaje: '#3b82f6', mejora: '#3b82f6',
+};
+function _memColorTipo(tipo) { return MEM_COLOR_TIPO[tipo] || '#8b8ba0'; }
+
+function memCambiarVista(vista) {
+  _memVista = vista;
+  document.getElementById('memNotasGrid').style.display = vista === 'lista' ? 'grid' : 'none';
+  document.getElementById('memGraphWrap').style.display = vista === 'mapa' ? 'block' : 'none';
+  document.getElementById('memBtnVistaLista').className = vista === 'lista' ? 'btn btn-sm' : 'btn btn-secondary btn-sm';
+  document.getElementById('memBtnVistaLista').style.cssText = vista === 'lista' ? 'border-radius:0;background:var(--accent);color:#fff' : 'border-radius:0';
+  document.getElementById('memBtnVistaMapa').className = vista === 'mapa' ? 'btn btn-sm' : 'btn btn-secondary btn-sm';
+  document.getElementById('memBtnVistaMapa').style.cssText = vista === 'mapa' ? 'border-radius:0;background:var(--accent);color:#fff' : 'border-radius:0';
+  if (vista === 'mapa') memInicializarGrafo();
+}
+
+function memInicializarGrafo() {
+  const wrap = document.getElementById('memGraphWrap');
+  const canvas = document.getElementById('memGraphCanvas');
+  const w = wrap.clientWidth || 800;
+  const h = Math.max(420, Math.min(680, w * 0.6));
+  canvas.width = w; canvas.height = h;
+  wrap.style.height = h + 'px';
+
+  // Nodos: uno por nota visible en el filtro actual (mismo criterio que la lista).
+  const q = (document.getElementById('memBuscar')?.value || '').toLowerCase().trim();
+  const tipoF = document.getElementById('memFiltroTipo')?.value || '';
+  const notas = _memNotas.filter(n => {
+    if (tipoF && n.tipo !== tipoF) return false;
+    if (!q) return true;
+    return (n.titulo || '').toLowerCase().includes(q) || (n.contenido || '').toLowerCase().includes(q) || (n.slug || '').toLowerCase().includes(q);
+  });
+  if (!notas.length) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#8b8ba0'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Sin notas que mostrar en el mapa (revisa el filtro)', w / 2, h / 2);
+    return;
+  }
+
+  const idsVisibles = new Set(notas.map(n => n.id));
+  _memGraphNodos = notas.map((n, i) => {
+    const ang = (i / notas.length) * Math.PI * 2;
+    return {
+      id: n.id, slug: n.slug, titulo: n.titulo, tipo: n.tipo, nota: n,
+      x: w / 2 + Math.cos(ang) * Math.min(w, h) * 0.3,
+      y: h / 2 + Math.sin(ang) * Math.min(w, h) * 0.3,
+      vx: 0, vy: 0,
+    };
+  });
+  const porId = new Map(_memGraphNodos.map(n => [n.id, n]));
+  _memGraphAristas = [];
+  const vistos = new Set();
+  for (const n of notas) {
+    for (const r of (n.relacionado || [])) {
+      if (!idsVisibles.has(r.id)) continue; // no dibujar aristas hacia nodos fuera del filtro
+      const key = [n.id, r.id].sort().join('-');
+      if (vistos.has(key)) continue;
+      vistos.add(key);
+      _memGraphAristas.push({ a: porId.get(n.id), b: porId.get(r.id) });
+    }
+  }
+
+  // Simulación de fuerzas — pasos fijos con enfriamiento, se dibuja el resultado final
+  // (no animado en bucle: con listas de memoria de este tamaño no hace falta, y así no
+  // hay que gestionar requestAnimationFrame corriendo de fondo entre navegaciones).
+  const REPULSION = 12000, IDEAL_LEN = 130, GRAVEDAD = 0.02;
+  for (let iter = 0; iter < 220; iter++) {
+    const enfriar = 1 - iter / 220;
+    for (const n of _memGraphNodos) { n.fx = 0; n.fy = 0; }
+    for (let i = 0; i < _memGraphNodos.length; i++) {
+      for (let j = i + 1; j < _memGraphNodos.length; j++) {
+        const a = _memGraphNodos[i], b = _memGraphNodos[j];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        let d2 = dx * dx + dy * dy || 0.01;
+        const f = REPULSION / d2;
+        const d = Math.sqrt(d2);
+        a.fx += (dx / d) * f; a.fy += (dy / d) * f;
+        b.fx -= (dx / d) * f; b.fy -= (dy / d) * f;
+      }
+    }
+    for (const e of _memGraphAristas) {
+      let dx = e.a.x - e.b.x, dy = e.a.y - e.b.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+      const f = (d - IDEAL_LEN) * 0.02;
+      e.a.fx -= (dx / d) * f; e.a.fy -= (dy / d) * f;
+      e.b.fx += (dx / d) * f; e.b.fy += (dy / d) * f;
+    }
+    for (const n of _memGraphNodos) {
+      n.fx += (w / 2 - n.x) * GRAVEDAD;
+      n.fy += (h / 2 - n.y) * GRAVEDAD;
+      n.x += n.fx * 0.02 * enfriar;
+      n.y += n.fy * 0.02 * enfriar;
+      n.x = Math.max(30, Math.min(w - 30, n.x));
+      n.y = Math.max(30, Math.min(h - 30, n.y));
+    }
+  }
+  _memDibujarGrafo();
+  _memGraphBindEventos(canvas);
+}
+
+function _memDibujarGrafo() {
+  const canvas = document.getElementById('memGraphCanvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.strokeStyle = 'rgba(139,139,160,.35)';
+  ctx.lineWidth = 1.2;
+  for (const e of _memGraphAristas) {
+    ctx.beginPath();
+    ctx.moveTo(e.a.x, e.a.y);
+    ctx.lineTo(e.b.x, e.b.y);
+    ctx.stroke();
+  }
+
+  for (const n of _memGraphNodos) {
+    const r = 16;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = _memColorTipo(n.tipo);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = n.id === _memDetalleAbiertoId ? '#fff' : 'rgba(255,255,255,.25)';
+    ctx.stroke();
+
+    ctx.fillStyle = '#e8e8ef';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    const label = (n.titulo || n.slug || ('#' + n.id));
+    const corto = label.length > 18 ? label.slice(0, 17) + '…' : label;
+    ctx.fillText(corto, n.x, n.y + r + 13);
+  }
+}
+
+function _memNodoEn(x, y) {
+  for (let i = _memGraphNodos.length - 1; i >= 0; i--) {
+    const n = _memGraphNodos[i];
+    const dx = x - n.x, dy = y - n.y;
+    if (dx * dx + dy * dy <= 18 * 18) return n;
+  }
+  return null;
+}
+
+let _memEventosGrafoListos = false;
+function _memGraphBindEventos(canvas) {
+  if (_memEventosGrafoListos) return; // el canvas se reutiliza, no duplicar listeners
+  _memEventosGrafoListos = true;
+  let movio = false;
+
+  function pos(ev) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+    const cy = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+    return { x: cx * (canvas.width / rect.width), y: cy * (canvas.height / rect.height) };
+  }
+  canvas.addEventListener('mousedown', (ev) => {
+    const p = pos(ev);
+    const n = _memNodoEn(p.x, p.y);
+    movio = false;
+    if (n) { _memDrag = n; canvas.style.cursor = 'grabbing'; }
+  });
+  // En window (no en canvas): si el cursor sale del canvas mientras se arrastra un
+  // nodo, el arrastre debe seguir funcionando -- mismo motivo por el que mouseup
+  // también escucha en window y no en canvas.
+  window.addEventListener('mousemove', (ev) => {
+    if (!_memDrag) return;
+    movio = true;
+    const p = pos(ev);
+    _memDrag.x = Math.max(20, Math.min(canvas.width - 20, p.x));
+    _memDrag.y = Math.max(20, Math.min(canvas.height - 20, p.y));
+    _memDibujarGrafo();
+  });
+  window.addEventListener('mouseup', (ev) => {
+    if (_memDrag && !movio) {
+      // clic simple sin arrastre real -> abrir el detalle de la nota
+      memAbrirDetalle(_memDrag.nota);
+    }
+    _memDrag = null;
+    canvas.style.cursor = 'grab';
+  });
+}
+
+function memAbrirDetalle(nota) {
+  _memDetalleAbiertoId = nota.id;
+  document.getElementById('memDetalleTitulo').textContent = nota.titulo || '(sin título)';
+  document.getElementById('memDetalleContenido').textContent = nota.contenido || '';
+  document.getElementById('memDetalleSlug').textContent = 'slug: ' + (nota.slug || '—');
+  document.getElementById('memDetalleBadges').innerHTML =
+    `<span class="badge" style="background:${_memColorTipo(nota.tipo)}22;color:${_memColorTipo(nota.tipo)}">${escHtml(nota.tipo)}</span>
+     <span class="badge badge-muted">imp:${nota.importancia}</span>`;
+  const rel = nota.relacionado || [];
+  document.getElementById('memDetalleRelacionados').innerHTML = rel.length
+    ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">Relacionado:</div>
+       <div style="display:flex;gap:4px;flex-wrap:wrap">${rel.map(r =>
+         `<span class="badge badge-info" style="cursor:pointer" onclick="memSaltarANota(${r.id})">🔗 ${escHtml(r.slug || ('#' + r.id))}</span>`
+       ).join('')}</div>`
+    : '<div style="font-size:12px;color:var(--muted)">Sin notas relacionadas.</div>';
+  document.getElementById('memDetalleModal').style.display = 'flex';
+  if (_memVista === 'mapa') _memDibujarGrafo(); // resaltar el nodo abierto
+}
+
+function memSaltarANota(id) {
+  const nota = _memNotas.find(n => n.id === id);
+  if (!nota) { toast ? toast('Esa nota no está cargada (recarga la memoria)', 'warn') : null; return; }
+  memAbrirDetalle(nota);
+  if (_memVista === 'mapa') {
+    const n = _memGraphNodos.find(x => x.id === id);
+    if (n) { n.x = document.getElementById('memGraphCanvas').width / 2; n.y = document.getElementById('memGraphCanvas').height / 2; _memDibujarGrafo(); }
+  }
+}
+
+function memCerrarDetalle() {
+  _memDetalleAbiertoId = null;
+  document.getElementById('memDetalleModal').style.display = 'none';
+  if (_memVista === 'mapa') _memDibujarGrafo();
+}
+
+function memBorrarDesdeDetalle() {
+  if (_memDetalleAbiertoId != null) memBorrarNota(_memDetalleAbiertoId);
 }
 
 let currentPage = '';
@@ -24833,7 +25105,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.10';
+const PANEL_APP_VERSION = '9.11';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

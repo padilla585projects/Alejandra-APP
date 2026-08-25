@@ -4,6 +4,37 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-25 — Mapa neuronal del grafo de memoria en el panel Obsidian)
+
+Adrián, tras ver la lista funcionando: "yo quiero ver el mapa neuronal... pinchar en uno y
+que salga la nota". Toggle 📋 Lista / 🕸️ Mapa en la sección Memoria (Obsidian) de
+`panel.html`.
+
+**Grafo** (canvas, sin librerías externas — proyecto de un solo archivo): un nodo por
+nota, coloreado por tipo (rojo=error, amarillo=aviso/pendiente, azul=aprendizaje/mejora,
+gris=resto), una arista por enlace. Layout de fuerza simple tipo Fruchterman-Reingold
+(repulsión entre todos los nodos + atracción a lo largo de las aristas + gravedad leve al
+centro, con enfriamiento progresivo, 220 iteraciones calculadas una vez al abrir la
+vista — no animado en bucle, no hace falta con este volumen de notas). Nodos
+arrastrables para reordenar manualmente. Respeta el mismo filtro de búsqueda/tipo que la
+vista de lista.
+
+**Clic en un nodo → abre el detalle completo** de esa nota (modal: título, tipo,
+contenido, slug, notas relacionadas como chips clicables que saltan a la nota siguiente
+sin cerrar el mapa), pedido explícito de Adrián.
+
+**Bug real encontrado y corregido verificando el arrastre en el navegador antes de
+comitear**: el listener de `mousemove` escuchaba en el propio `<canvas>`, pero `mouseup`
+en `window` (para poder soltar el nodo aunque el cursor saliera del canvas durante el
+arrastre) — esa asimetría hacía que un arrastre iniciado y terminado dentro del canvas
+funcionara, pero si el cursor salía del canvas a mitad de arrastre, el movimiento dejaba
+de seguirse y, al soltar fuera, el código interpretaba que no había habido arrastre real
+(`movio` seguía en `false`) y abría el modal de detalle en vez de solo reposicionar el
+nodo. Corregido escuchando `mousemove` también en `window`, igual que `mouseup`;
+reproducido el caso exacto con eventos sintéticos y confirmado el fix antes de comitear.
+
+Versión → 9.11 (4 marcadores sincronizados). Sin migración D1.
+
 ### Fixed (2026-08-25 — Panel de memoria: HTTP 401 al cargar, token leído del sitio equivocado)
 
 Adrián probó el panel de memoria recién desplegado en su móvil real y mandó una captura:
