@@ -28894,7 +28894,7 @@ const _PLANO_SIMBOLOS_CORE = {
 const _STOPWORDS_SIMBOLOS = new Set(['de','del','la','el','los','las','con','para','segun','una','uno','unos','unas','sus','esta','este','estos','estas','color','width','height','siempre','cada','cuando','desde','hasta','plano']);
 
 function _normalizarTextoPlano(s) {
-  return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 // Deriva palabras clave de la propia descripcion del simbolo (todo lo que va
