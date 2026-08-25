@@ -4,6 +4,24 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-25 — Panel de memoria: HTTP 401 al cargar, token leído del sitio equivocado)
+
+Adrián probó el panel de memoria recién desplegado en su móvil real y mandó una captura:
+"Error cargando memoria: HTTP 401". La función `_memHeaders()` leía el token de sesión de
+`SESSION?.token` — ese campo no existe en `panel.html`: el token real vive en la variable
+global `TOKEN` (cargada de `localStorage.panel_token`), completamente separada de
+`SESSION` (cargada de `localStorage.panel_session`, solo datos de perfil: rol, nombre,
+empresa_id). Se mandaba `Authorization: Bearer ` vacío en cada petición.
+
+Reproducido y verificado antes de este fix: con el token real inyectado directamente
+(`curl -H "Authorization: Bearer <token real>"` contra `/api/memoria/vault`), la
+respuesta pasó de `401 No autorizado` a `403 Solo el desarrollador puede acceder a esto`
+para un usuario de prueba sin ese rol real — confirma que el fix corrige exactamente la
+causa (lectura de token), no enmascara el síntoma; para Adrián (con rol real de
+desarrollador) cargará bien.
+
+Versión → 9.10 (4 marcadores sincronizados). Sin migración D1.
+
 ### Added (2026-08-25 — Panel de memoria estilo Obsidian en Alejandra Office, solo desarrollador)
 
 Adrián: "quiero montar en alejandra Office un panel para obsidian y ver allí la memoria e

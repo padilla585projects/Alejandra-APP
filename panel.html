@@ -14793,7 +14793,11 @@ const MEM_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/memoria'
 let _memNotas = [];
 
 function _memHeaders() {
-  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SESSION?.token || ''}` };
+  // MEMORIA-ENLAZADA-02: el token real vive en la variable global TOKEN
+  // (localStorage 'panel_token'), no en SESSION -- ese objeto (localStorage
+  // 'panel_session') solo trae datos de perfil (rol, nombre, empresa_id).
+  // Confirmado el bug (HTTP 401) probando en el móvil real de Adrián.
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN || ''}` };
 }
 
 async function cargarMemoriaObsidian() {
@@ -24829,7 +24833,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.09';
+const PANEL_APP_VERSION = '9.10';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
