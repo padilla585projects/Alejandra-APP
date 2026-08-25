@@ -5110,7 +5110,7 @@ REGLAS GENERALES:
         });
         const haikusData = haikusResp.ok ? await haikusResp.json() : null;
         const textoHaiku = haikusData?.content?.[0]?.text?.trim() || 'SIN_ACCION';
-        if (haikusData?.usage) registrarTokenUso(env, MODEL_ROUTER, 'cron_normal', haikusData.usage.input_tokens||0, haikusData.usage.output_tokens||0, 'system');
+        if (haikusData?.usage) await registrarTokenUso(env, MODEL_ROUTER, 'cron_normal', haikusData.usage.input_tokens||0, haikusData.usage.output_tokens||0, 'system');
         respuesta = { texto: textoHaiku };
       }
 
@@ -5348,7 +5348,11 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     const systemPrompt = await buildAnthropicSystemBlocks(modulosFinal, tools, env);
 
     // PASO 4: Historial dinámico
-    const limitHistorial      = clas.experto === 'simple' ? 3 : 6;
+    // ALEJANDRA-CONTEXTO-01 (25/08/2026): estos límites (3/6) no coincidían de verdad
+    // con procesarConNEXUSStream (4/10) pese a que el comentario de abajo decía que
+    // estaban unificados -- mismo usuario podía "recordar más o menos" según qué
+    // endpoint atendiera su mensaje, sin relación con el canal real. Unificados ahora.
+    const limitHistorial      = clas.experto === 'simple' ? 4 : 10;
     // Aprendizajes para todo experto salvo 'simple'. Unificado con el criterio
     // de procesarConNEXUSStream (linea ~5023) para evitar que app/panel vean un
     // comportamiento distinto segun usen streaming o no — 'simple' excluye
@@ -5356,9 +5360,11 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     const incluirAprendizajes = clas.experto !== 'simple';
     const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto, usuario_label, empresa_id);
 
-    // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
+    // PASO 5: Llamar al modelo en loop hasta respuesta final (máx MAX_ITER iteraciones
+    // -- 12 para Adrián, 8 para el resto, ver línea siguiente; comentario corregido en
+    // la auditoría del cerebro de Alejandra, 25/08/2026 -- decía "5" y estaba desfasado)
     let respAPI  = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
-    if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
+    if (respAPI.usage) await registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
 
     // SALVAGUARDA — "plan diferido sin ejecutar" (ver misma logica en
     // procesarConNEXUSStream): el modelo a veces escribe el plan completo en
@@ -5372,7 +5378,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
         messages.push({ role: 'assistant', content: respAPI.content });
         messages.push({ role: 'user', content: [{ type: 'text', text: '[INSTRUCCIÓN: Acabas de describir un plan pero todavía no has ejecutado ninguna herramienta. Ejecuta AHORA MISMO, en esta respuesta, la accion/herramienta que acabas de anunciar. No repitas el plan en texto, invoca la herramienta directamente.]' }] });
         respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
-        if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
+        if (respAPI.usage) await registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
       }
     }
 
@@ -5414,7 +5420,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       // Mantener todas las tools disponibles en todas las iteraciones para máxima proactividad
       const toolsSiguiente = iter < MAX_ITER - 1 ? tools : [];
       respAPI = await llamarExperto(env, messages, toolsSiguiente, expert, systemPrompt, usuario_id);
-      if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+      if (respAPI.usage) await registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
     }
 
@@ -5513,7 +5519,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
     let tokensIn = respAPI.usage?.input_tokens || 0;
     let tokensOut = respAPI.usage?.output_tokens || 0;
-    if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
+    if (respAPI.usage) await registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
 
     // SALVAGUARDA — "plan diferido sin ejecutar": con tareas complejas (varias
     // herramientas/pasos), el modelo a veces sigue el modulo de razonamiento
@@ -5534,7 +5540,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         if (respAPI.usage) {
           tokensIn  += respAPI.usage.input_tokens  || 0;
           tokensOut += respAPI.usage.output_tokens || 0;
-          registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
+          await registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
         }
       }
     }
@@ -5616,7 +5622,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       if (respAPI.usage) {
         tokensIn  += respAPI.usage.input_tokens  || 0;
         tokensOut += respAPI.usage.output_tokens || 0;
-        registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
+        await registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
       }
       iter++;
     }
@@ -11307,7 +11313,7 @@ async function clasificarConHaiku(env, mensaje) {
     });
     if (!resp.ok) throw new Error(`Haiku ${resp.status}`);
     const data = await resp.json();
-    if (data.usage) registrarTokenUso(env, MODEL_ROUTER, 'clasificacion', data.usage.input_tokens||0, data.usage.output_tokens||0, null);
+    if (data.usage) await registrarTokenUso(env, MODEL_ROUTER, 'clasificacion', data.usage.input_tokens||0, data.usage.output_tokens||0, null);
     const texto = (data.content?.[0]?.text || '').trim().toLowerCase();
     const validos = ['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo'];
     const experto = validos.find(v => texto.includes(v)) || 'app';
@@ -11709,7 +11715,7 @@ async function llamarTextoGratisConFallbackHaiku(env, systemPrompt, userText, ma
         }
         const texto = data.choices?.[0]?.message?.content?.trim();
         if (!texto) continue;
-        if (data.usage) registrarTokenUso(env, data.model || model, tipoUso, data.usage.prompt_tokens || 0, data.usage.completion_tokens || 0, usuario_id);
+        if (data.usage) await registrarTokenUso(env, data.model || model, tipoUso, data.usage.prompt_tokens || 0, data.usage.completion_tokens || 0, usuario_id);
         console.log(`[GratisTexto] OK: ${data.model || model} (${tipoUso})`);
         return texto;
       } catch (e) { console.log(`[GratisTexto] EXCEPCION ${model}: ${e.message}`); }
@@ -11730,7 +11736,7 @@ async function llamarTextoGratisConFallbackHaiku(env, systemPrompt, userText, ma
     if (!haikuResp.ok) return '';
     const haikuData = await haikuResp.json();
     const texto = haikuData.content?.[0]?.text?.trim() || '';
-    if (haikuData.usage) registrarTokenUso(env, MODEL_ROUTER, `${tipoUso}_haiku_fallback`, haikuData.usage.input_tokens || 0, haikuData.usage.output_tokens || 0, usuario_id);
+    if (haikuData.usage) await registrarTokenUso(env, MODEL_ROUTER, `${tipoUso}_haiku_fallback`, haikuData.usage.input_tokens || 0, haikuData.usage.output_tokens || 0, usuario_id);
     return texto;
   } catch (e) {
     console.error(`[GratisTexto] Fallback Haiku también falló: ${e.message}`);
@@ -12148,7 +12154,7 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
       // mal etiquetado) — ese gasto real no contaba ni para las estadísticas ni
       // para el tope de gasto diario. modelo_real='gpt-4o' viene del fallback.
       if (fallback.usage) {
-        registrarTokenUso(env, fallback.modelo_real || 'gpt-4o', 'chat_stream_fallback', fallback.usage.input_tokens||0, fallback.usage.output_tokens||0, usuario_id, empresa_id);
+        await registrarTokenUso(env, fallback.modelo_real || 'gpt-4o', 'chat_stream_fallback', fallback.usage.input_tokens||0, fallback.usage.output_tokens||0, usuario_id, empresa_id);
       }
       // SALVAGUARDA — esta fase de "cierre" normalmente no lleva tools (solo
       // pedimos texto final), pero algunos modelos gratuitos de la cascada
@@ -12237,7 +12243,7 @@ async function buscarWebOpenAI(env, query) {
     });
     if (!resp.ok) return `Sin resultados para: "${query}"`;
     const data  = await resp.json();
-    if (data.usage) registrarTokenUso(env, 'gpt-4o-mini', 'web_search', data.usage.input_tokens||0, data.usage.output_tokens||0, null);
+    if (data.usage) await registrarTokenUso(env, 'gpt-4o-mini', 'web_search', data.usage.input_tokens||0, data.usage.output_tokens||0, null);
     const texto = data.output?.filter(b=>b.type==='message')?.flatMap(m=>m.content)?.filter(c=>c.type==='output_text')?.map(c=>c.text)?.join('\n') || 'Sin resultados';
     return texto.substring(0, 2000);
   } catch (err) {
@@ -12400,15 +12406,18 @@ async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
   try {
     await ensureConversacionResumenTable(env);
     const uid = usuario_id || 'unknown';
+    // ALEJANDRA-CONTEXTO-01 (25/08/2026): esta query ignoraba el parametro `limit` real
+    // (por defecto 20, o 4/6/2 en llamadas internas de cron/gateway) y usaba siempre el
+    // literal 10 -- encontrado en la auditoria del cerebro de Alejandra.
     // Historial POR USUARIO (cross-canal: misma conversacion desde app, panel o telegram)
     const historial = await env.DB.prepare(
       `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? AND rol IN ('user','assistant') ORDER BY created_at DESC LIMIT ?`
-    ).bind(uid, 10).all();
+    ).bind(uid, limit).all();
     // SEC-CHAT-CONTEXTO-LEGACY / ARC-016: filtrar aprendizajes por empresa_id
     // (sale de la sesion, nunca del input del modelo). La query legada leia
     // aprendizajes de TODAS las empresas -> fuga cross-tenant. Si empresa_id
     // falta, el builder devuelve 0 filas (fail-closed).
-    const { sql: sqlAp, binds: bindsAp } = construirQueryAprendizajesEmpresa({ empresaId: empresa_id, limit: 10 });
+    const { sql: sqlAp, binds: bindsAp } = construirQueryAprendizajesEmpresa({ empresaId: empresa_id, limit });
     const aprendizajes = await env.DB.prepare(sqlAp).bind(...bindsAp).all();
     const conocimiento = empresa_id
       ? await env.DB.prepare(
@@ -12499,7 +12508,7 @@ async function actualizarResumenSiNecesario(env, usuario_id, canal) {
 {"tema":"frase corta (máx 60 caracteres) que resuma el tema principal — ej 'Cálculo cuadro nave 3 — Empresa Norte'","resumen":"Tema principal: ... Puntos clave: ... Decisiones tomadas: ... Contexto a recordar: ..."}`;
 
     const respAPI = await llamarAnthropic(env, [{ role: 'user', content: `Resume esta conversación previa (${items.length} mensajes):\n\n${transcript}` }], [], MODEL_ROUTER, 600, sistema);
-    if (respAPI.usage) registrarTokenUso(env, MODEL_ROUTER, 'resumen_conversacion', respAPI.usage.input_tokens || 0, respAPI.usage.output_tokens || 0, usuario_id);
+    if (respAPI.usage) await registrarTokenUso(env, MODEL_ROUTER, 'resumen_conversacion', respAPI.usage.input_tokens || 0, respAPI.usage.output_tokens || 0, usuario_id);
     const texto = respAPI.content?.find(b => b.type === 'text')?.text?.trim() || '';
     const match = texto.match(/\{[\s\S]*\}/);
     let tema = null, resumen = texto.substring(0, 2000);
