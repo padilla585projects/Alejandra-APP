@@ -14973,7 +14973,15 @@ function memCambiarVista(vista) {
   document.getElementById('memBtnVistaLista').style.cssText = vista === 'lista' ? 'border-radius:0;background:var(--accent);color:#fff' : 'border-radius:0';
   document.getElementById('memBtnVistaMapa').className = vista === 'mapa' ? 'btn btn-sm' : 'btn btn-secondary btn-sm';
   document.getElementById('memBtnVistaMapa').style.cssText = vista === 'mapa' ? 'border-radius:0;background:var(--accent);color:#fff' : 'border-radius:0';
-  if (vista === 'mapa') memInicializarGrafo();
+  if (vista === 'mapa') {
+    memInicializarGrafo();
+  } else if (_memGraphRAF) {
+    // Salir del mapa detiene la simulación -- el canvas queda oculto (display:none) pero
+    // sigue en el DOM, así que sin esto el requestAnimationFrame seguiría gastando
+    // frames en segundo plano indefinidamente en cualquier otra pantalla del panel.
+    cancelAnimationFrame(_memGraphRAF);
+    _memGraphRAF = null;
+  }
 }
 
 function memInicializarGrafo() {
@@ -15001,7 +15009,13 @@ function memInicializarGrafo() {
   }
 
   const idsVisibles = new Set(notas.map(n => n.id));
+  // Reutilizar posición/velocidad de nodos que ya existían en el grafo anterior (si los
+  // hay) -- si no, arrancar en círculo. Así un simple refresco de filtro no "teletransporta"
+  // los nodos que ya estaban colocados.
+  const previos = new Map(_memGraphNodos.map(n => [n.id, n]));
   _memGraphNodos = notas.map((n, i) => {
+    const prev = previos.get(n.id);
+    if (prev) return { ...prev, slug: n.slug, titulo: n.titulo, tipo: n.tipo, nota: n };
     const ang = (i / notas.length) * Math.PI * 2;
     return {
       id: n.id, slug: n.slug, titulo: n.titulo, tipo: n.tipo, nota: n,
@@ -15023,42 +15037,72 @@ function memInicializarGrafo() {
     }
   }
 
-  // Simulación de fuerzas — pasos fijos con enfriamiento, se dibuja el resultado final
-  // (no animado en bucle: con listas de memoria de este tamaño no hace falta, y así no
-  // hay que gestionar requestAnimationFrame corriendo de fondo entre navegaciones).
-  const REPULSION = 12000, IDEAL_LEN = 130, GRAVEDAD = 0.02;
-  for (let iter = 0; iter < 220; iter++) {
-    const enfriar = 1 - iter / 220;
-    for (const n of _memGraphNodos) { n.fx = 0; n.fy = 0; }
-    for (let i = 0; i < _memGraphNodos.length; i++) {
-      for (let j = i + 1; j < _memGraphNodos.length; j++) {
-        const a = _memGraphNodos[i], b = _memGraphNodos[j];
-        let dx = a.x - b.x, dy = a.y - b.y;
-        let d2 = dx * dx + dy * dy || 0.01;
-        const f = REPULSION / d2;
-        const d = Math.sqrt(d2);
-        a.fx += (dx / d) * f; a.fy += (dy / d) * f;
-        b.fx -= (dx / d) * f; b.fy -= (dy / d) * f;
-      }
-    }
-    for (const e of _memGraphAristas) {
-      let dx = e.a.x - e.b.x, dy = e.a.y - e.b.y;
-      const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
-      const f = (d - IDEAL_LEN) * 0.02;
-      e.a.fx -= (dx / d) * f; e.a.fy -= (dy / d) * f;
-      e.b.fx += (dx / d) * f; e.b.fy += (dy / d) * f;
-    }
-    for (const n of _memGraphNodos) {
-      n.fx += (w / 2 - n.x) * GRAVEDAD;
-      n.fy += (h / 2 - n.y) * GRAVEDAD;
-      n.x += n.fx * 0.02 * enfriar;
-      n.y += n.fy * 0.02 * enfriar;
-      n.x = Math.max(30, Math.min(w - 30, n.x));
-      n.y = Math.max(30, Math.min(h - 30, n.y));
+  _memGraphAlpha = 1; // "calor" de la simulación -- 1 = recién arrancada, se enfría solo
+  _memGraphBindEventos(canvas);
+  _memGraphAnimar();
+}
+
+// MEMORIA-ENLAZADA-04 (25/08/2026): Adrián -- "tampoco se mueven solos... dijimos de
+// hacer el mapa tipo obsidian". El primer intento calculaba el layout una vez (220
+// iteraciones) y pintaba el resultado quieto -- no es lo que pidió. Simulación de
+// fuerzas en vivo con requestAnimationFrame, estilo D3-force: cada frame aplica
+// repulsión entre nodos + atracción por arista + gravedad al centro, con "alpha"
+// (calor) que decae solo hasta casi pararse, y que se recalienta al arrastrar un nodo
+// -- así el grafo entero reacciona en vivo al moverlo, como en Obsidian.
+let _memGraphAlpha = 1;
+let _memGraphRAF = null;
+const MEM_ALPHA_DECAY = 0.985, MEM_ALPHA_MIN = 0.001;
+
+function _memGraphPaso() {
+  const canvas = document.getElementById('memGraphCanvas');
+  if (!canvas) { _memGraphRAF = null; return; } // salimos de la página -- parar el bucle
+  const w = canvas.width, h = canvas.height;
+  const REPULSION = 12000, IDEAL_LEN = 130, GRAVEDAD = 0.015;
+  const alpha = _memGraphAlpha;
+
+  for (const n of _memGraphNodos) { n.fx = 0; n.fy = 0; }
+  for (let i = 0; i < _memGraphNodos.length; i++) {
+    for (let j = i + 1; j < _memGraphNodos.length; j++) {
+      const a = _memGraphNodos[i], b = _memGraphNodos[j];
+      const dx = a.x - b.x, dy = a.y - b.y;
+      const d2 = dx * dx + dy * dy || 0.01;
+      const f = REPULSION / d2;
+      const d = Math.sqrt(d2);
+      a.fx += (dx / d) * f; a.fy += (dy / d) * f;
+      b.fx -= (dx / d) * f; b.fy -= (dy / d) * f;
     }
   }
+  for (const e of _memGraphAristas) {
+    const dx = e.a.x - e.b.x, dy = e.a.y - e.b.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+    const f = (d - IDEAL_LEN) * 0.02;
+    e.a.fx -= (dx / d) * f; e.a.fy -= (dy / d) * f;
+    e.b.fx += (dx / d) * f; e.b.fy += (dy / d) * f;
+  }
+  for (const n of _memGraphNodos) {
+    if (n === _memDrag) continue; // el nodo que se arrastra lo controla el ratón, no la física
+    n.fx += (w / 2 - n.x) * GRAVEDAD;
+    n.fy += (h / 2 - n.y) * GRAVEDAD;
+    n.vx = (n.vx + n.fx * 0.02) * 0.75; // fricción -- sin esto oscila sin parar nunca
+    n.vy = (n.vy + n.fy * 0.02) * 0.75;
+    n.x += n.vx * alpha;
+    n.y += n.vy * alpha;
+    n.x = Math.max(30, Math.min(w - 30, n.x));
+    n.y = Math.max(30, Math.min(h - 30, n.y));
+  }
   _memDibujarGrafo();
-  _memGraphBindEventos(canvas);
+
+  _memGraphAlpha = Math.max(MEM_ALPHA_MIN, _memGraphAlpha * MEM_ALPHA_DECAY);
+  if (_memGraphAlpha > MEM_ALPHA_MIN || _memDrag) {
+    _memGraphRAF = requestAnimationFrame(_memGraphPaso);
+  } else {
+    _memGraphRAF = null; // simulación asentada -- no seguir gastando frames en quieto
+  }
+}
+
+function _memGraphAnimar() {
+  if (_memGraphRAF) cancelAnimationFrame(_memGraphRAF);
+  _memGraphRAF = requestAnimationFrame(_memGraphPaso);
 }
 
 function _memDibujarGrafo() {
@@ -15120,7 +15164,16 @@ function _memGraphBindEventos(canvas) {
     const p = pos(ev);
     const n = _memNodoEn(p.x, p.y);
     movio = false;
-    if (n) { _memDrag = n; canvas.style.cursor = 'grabbing'; }
+    if (n) {
+      _memDrag = n;
+      n.vx = 0; n.vy = 0; // no arrastrar el impulso que traía de la física
+      canvas.style.cursor = 'grabbing';
+      // Recalentar: con el mapa ya asentado (alpha≈0) el bucle de animación se había
+      // parado -- sin esto, el resto de nodos se quedaría quieto mientras arrastras el
+      // agarrado, en vez de reacomodarse en vivo como en Obsidian.
+      _memGraphAlpha = 1;
+      if (!_memGraphRAF) _memGraphAnimar();
+    }
   });
   // En window (no en canvas): si el cursor sale del canvas mientras se arrastra un
   // nodo, el arrastre debe seguir funcionando -- mismo motivo por el que mouseup
@@ -15131,7 +15184,8 @@ function _memGraphBindEventos(canvas) {
     const p = pos(ev);
     _memDrag.x = Math.max(20, Math.min(canvas.width - 20, p.x));
     _memDrag.y = Math.max(20, Math.min(canvas.height - 20, p.y));
-    _memDibujarGrafo();
+    // No hace falta redibujar aquí: mientras _memDrag esté activo, _memGraphPaso (rAF)
+    // sigue corriendo y ya redibuja cada frame con la posición más reciente del nodo.
   });
   window.addEventListener('mouseup', (ev) => {
     if (_memDrag && !movio) {
@@ -15140,6 +15194,8 @@ function _memGraphBindEventos(canvas) {
     }
     _memDrag = null;
     canvas.style.cursor = 'grab';
+    // Al soltar, _memGraphAlpha sigue caliente -- la simulación continúa unos frames
+    // más para que el resto de nodos terminen de acomodarse y luego se enfría sola.
   });
 }
 
@@ -25105,7 +25161,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.11';
+const PANEL_APP_VERSION = '9.12';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

@@ -4,6 +4,45 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-25 — Grafo de memoria: animación en vivo + backfill real de 180 notas + 82 enlaces)
+
+Adrián probó el mapa recién desplegado: "no veo las conexiones entre ellos ni nada" y
+"tampoco se mueven solos... dijimos de hacer el mapa tipo obsidian". Dos causas
+distintas, ambas reales:
+
+**1. Faltaban los datos, no el renderizado.** Verificado en D1 antes de tocar nada: las
+180 notas de `alejandra_memoria` (acumuladas durante meses, de antes de la migración de
+hoy) tenían `slug=NULL` y `memoria_enlaces` estaba vacía — el grafo no tenía nada que
+dibujar. Autorizado por Adrián ("hazlo, pero tendrías que enlazarlas tú"):
+- Backfill de `slug` para las 180 notas (generado del título, mismo algoritmo que usa
+  `memory_save`, con sufijo numérico en colisión) — verificado 180/180 con slug tras
+  aplicar, sin violar el índice único `(empresa_id, slug)`.
+- Las 180 notas completas se agruparon temáticamente (bug del CRON de stock de bobinas,
+  caída de notificaciones push por tokens FCM legacy, esquema real de tablas D1
+  descubierto por ensayo-error, documentación del CPD Getafe, cascada de modelos
+  OpenRouter, etc.) y se crearon 82 enlaces reales entre notas genuinamente relacionadas
+  — conservador a propósito: mucho ruido repetido (~30 notas casi idénticas de una misma
+  cascada fallida, lecturas triviales de archivo) se dejó deliberadamente sin enlazar en
+  vez de forzar relaciones falsas.
+
+**2. El grafo era estático.** El primer intento calculaba el layout de fuerzas una sola
+vez (220 iteraciones) y pintaba el resultado quieto — no lo que Adrián pidió. Reescrito
+a una simulación en vivo con `requestAnimationFrame`, estilo D3-force: cada frame aplica
+repulsión + atracción por arista + gravedad al centro, con un "alpha" (calor) que decae
+solo hasta casi pararse y se recalienta al agarrar un nodo — así el resto del grafo
+reacciona en vivo mientras arrastras uno, como en Obsidian. El bucle se detiene solo
+(deja de gastar frames) cuando el mapa se asienta, y se cancela explícitamente al salir
+de la vista para no seguir corriendo en segundo plano en otras pantallas del panel.
+
+Verificado con el paso de simulación real llamado frame a frame (`requestAnimationFrame`
+no dispara en el navegador headless de pruebas al no estar la pestaña realmente
+compositando — limitación del entorno de test, no del código): alpha decae
+correctamente y los nodos se mueven con suavidad frame a frame.
+
+Versión → 9.12 (4 marcadores sincronizados). Migración de datos aplicada contra D1 con
+autorización explícita — sin nuevo cambio de esquema (reutiliza `slug`/`memoria_enlaces`
+de la migración anterior).
+
 ### Added (2026-08-25 — Mapa neuronal del grafo de memoria en el panel Obsidian)
 
 Adrián, tras ver la lista funcionando: "yo quiero ver el mapa neuronal... pinchar en uno y
