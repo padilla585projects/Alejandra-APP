@@ -1017,6 +1017,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     <button class="nav-item nav-dev" data-page="devtools" onclick="navTo('devtools')" style="display:none">
       <span class="nav-icon">🛠️</span> DevTools
     </button>
+    <!-- MEMORIA-ENLAZADA-02 (25/08/2026): "quiero montar en alejandra Office un panel para
+         obsidian... pero solo visible para el desarrollador (yo)" -- más estricto que el
+         resto de nav-dev (que también se ven con rol superadmin): clase aparte,
+         nav-dev-solo, revelada solo con SESSION.rol==='desarrollador' exacto. -->
+    <button class="nav-item nav-dev-solo" data-page="memoriaObsidian" onclick="navTo('memoriaObsidian')" style="display:none">
+      <span class="nav-icon">🧠</span> Memoria (Obsidian)
+    </button>
 
     <!-- SIDEBAR-FOOTER-01 (26/07/2026): Adrián: "esconde el número de versión en la parte
          de abajo... eso no debe esconderse nunca" — al colapsar "Desarrollador" (la última
@@ -9619,6 +9626,71 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       </div>
 
       <!-- DEVTOOLS (solo desarrollador/superadmin) -->
+      <!-- MEMORIA-ENLAZADA-02 (25/08/2026): panel de memoria estilo Obsidian, solo
+           desarrollador. Lista + relaciones (backlinks), sin grafo visual -- una lista
+           navegable con chips clicables cumple "ver la memoria e interactuar con ella"
+           sin la complejidad de un grafo SVG/canvas real. -->
+      <div class="page" id="pageMemoriaObsidian">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+          <div class="page-title" style="margin-bottom:0">🧠 Memoria (Obsidian)</div>
+          <span style="background:rgba(168,85,247,.2);color:#a855f7;font-family:'Montserrat',sans-serif;font-weight:900;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:20px;border:1px solid rgba(168,85,247,.3)">SOLO DESARROLLADOR</span>
+        </div>
+        <div class="page-sub">Notas de memoria de Alejandra (alejandra_memoria) enlazadas entre sí, estilo Obsidian — cada nota puede relacionarse con otras por slug.</div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+          <input id="memBuscar" type="text" placeholder="Buscar por título o contenido..." style="flex:1;min-width:200px" oninput="memRenderNotas()">
+          <select id="memFiltroTipo" onchange="memRenderNotas()">
+            <option value="">Todos los tipos</option>
+            <option value="hecho">hecho</option>
+            <option value="pendiente">pendiente</option>
+            <option value="contexto">contexto</option>
+            <option value="aviso">aviso</option>
+            <option value="aprendizaje">aprendizaje</option>
+            <option value="error">error</option>
+            <option value="mejora">mejora</option>
+            <option value="patron">patron</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="memCargarVault()">🔄 Actualizar</button>
+          <button class="btn btn-primary btn-sm" onclick="memAbrirModalNota()">+ Nueva nota</button>
+        </div>
+
+        <div id="memNotasGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">
+          <div class="loading"><div class="spinner"></div> Cargando memoria…</div>
+        </div>
+      </div>
+
+      <!-- Modal crear nota -->
+      <div id="memModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)memCerrarModal()">
+        <div class="modal" style="max-width:560px">
+          <div class="modal-header"><h3>Nueva nota de memoria</h3><span class="modal-close" onclick="memCerrarModal()">✕</span></div>
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="form-group"><label>Tipo</label><select id="memTipo">
+                <option value="contexto">contexto</option>
+                <option value="aprendizaje">aprendizaje</option>
+                <option value="hecho">hecho</option>
+                <option value="pendiente">pendiente</option>
+                <option value="aviso">aviso</option>
+                <option value="error">error</option>
+                <option value="mejora">mejora</option>
+                <option value="patron">patron</option>
+              </select></div>
+              <div class="form-group"><label>Importancia (1-5)</label><input id="memImportancia" type="number" min="1" max="5" value="1"></div>
+            </div>
+            <div class="form-group"><label>Título *</label><input id="memTitulo" type="text" placeholder="Título breve"></div>
+            <div class="form-group"><label>Contenido *</label><textarea id="memContenido" rows="5" placeholder="Descripción detallada"></textarea></div>
+            <div class="form-group">
+              <label>Enlazar con (slugs separados por coma, opcional)</label>
+              <input id="memEnlacesA" type="text" placeholder="ej: dorlet-uca-asd-2, cpd-getafe-controladoras">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn" onclick="memCerrarModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="memGuardarNota()">Guardar</button>
+          </div>
+        </div>
+      </div>
+
       <div class="page" id="pageDevtools">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
           <div class="page-title" style="margin-bottom:0">🛠️ DevTools</div>
@@ -11781,6 +11853,10 @@ function iniciarApp() {
   // mostrar sección dev para superadmin y desarrollador
   if (hasSessionRole('superadmin', 'desarrollador')) {
     document.querySelectorAll('.nav-dev, .nav-dev-section').forEach(el => el.style.display = '');
+  }
+  // MEMORIA-ENLAZADA-02: más estricto que el resto de nav-dev -- solo desarrollador exacto.
+  if (SESSION && SESSION.rol === 'desarrollador') {
+    document.querySelectorAll('.nav-dev-solo').forEach(el => el.style.display = '');
   }
 
   // PREVIEW-ADMIN-05 (26/07/2026): Adrián: "solo debe ver cosas relacionadas con el
@@ -14273,6 +14349,7 @@ const PAGE_TITLES = {
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
   pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
   empresa: 'Mi Empresa', logs: 'Logs', devtools: '🛠️ DevTools',
+  memoriaObsidian: '🧠 Memoria (Obsidian)',
   reconocimientos: '🏥 Reconocimientos Médicos',
   documentosObra: '📋 Documentos de Obra',
   permisosTrabajo: '📝 Permisos de Trabajo',
@@ -14586,6 +14663,7 @@ function _tourFinalizar() {
 }
 
 const PAGE_LOADERS = {
+  memoriaObsidian: cargarMemoriaObsidian,
   dashboard: cargarDashboard,
   globalDashboard: (...args) => cargarGlobalDashboard(...args),
   personal: cargarPersonal,
@@ -14707,6 +14785,126 @@ const PAGE_LOADERS = {
     libroSubcontratacion: (...a) => cargarLibroSubcontratacion(...a),
     planos: (...a) => cargarPlanos(...a),
 };
+
+// ── MEMORIA-ENLAZADA-02 (25/08/2026): panel de memoria estilo Obsidian ─────────
+// Solo desarrollador (ver nav-dev-solo). Habla con /api/memoria/* del agente
+// (alejandra-agente/worker.js), protegido ahí con esDeveloperAgente().
+const MEM_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/memoria';
+let _memNotas = [];
+
+function _memHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SESSION?.token || ''}` };
+}
+
+async function cargarMemoriaObsidian() {
+  await memCargarVault();
+}
+
+async function memCargarVault() {
+  const grid = document.getElementById('memNotasGrid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando memoria…</div>';
+  try {
+    const res = await fetch(`${MEM_API}/vault`, { headers: _memHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    _memNotas = data.notas || [];
+    memRenderNotas();
+  } catch (e) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Error cargando memoria: ${escHtml(e.message)}</div></div>`;
+  }
+}
+
+function memRenderNotas() {
+  const grid = document.getElementById('memNotasGrid');
+  const q = (document.getElementById('memBuscar')?.value || '').toLowerCase().trim();
+  const tipoF = document.getElementById('memFiltroTipo')?.value || '';
+  const notas = _memNotas.filter(n => {
+    if (tipoF && n.tipo !== tipoF) return false;
+    if (!q) return true;
+    return (n.titulo || '').toLowerCase().includes(q) || (n.contenido || '').toLowerCase().includes(q) || (n.slug || '').toLowerCase().includes(q);
+  });
+  if (!notas.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🧠</div><div class="empty-text">Sin notas en memoria (o ninguna coincide con el filtro)</div></div>';
+    return;
+  }
+  const badgeTipo = { error: 'badge-danger', aviso: 'badge-warn', pendiente: 'badge-warn', aprendizaje: 'badge-info', mejora: 'badge-info' };
+  grid.innerHTML = notas.map(n => {
+    const cls = badgeTipo[n.tipo] || 'badge-muted';
+    const rel = (n.relacionado || []).map(r =>
+      `<span class="badge badge-info" style="cursor:pointer" onclick="memIrANota('${escHtml(r.slug || '')}')" title="Ir a esta nota">🔗 ${escHtml(r.slug || ('#' + r.id))}</span>`
+    ).join(' ');
+    return `<div class="section-card" id="memNota-${escHtml(n.slug || n.id)}" style="transition:box-shadow .3s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="badge ${cls}">${escHtml(n.tipo)}</span>
+          <span class="badge badge-muted">imp:${n.importancia}</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="memBorrarNota(${n.id})" title="Borrar nota">🗑️</button>
+      </div>
+      <div style="font-weight:700;margin:6px 0 4px;color:var(--text)">${escHtml(n.titulo || '')}</div>
+      <div style="font-size:12px;color:var(--muted);white-space:pre-wrap;max-height:120px;overflow:auto">${escHtml(n.contenido || '')}</div>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:monospace">slug: ${escHtml(n.slug || '—')}</div>
+      ${rel ? `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;color:var(--muted)">relacionado:</span> ${rel}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function memIrANota(slug) {
+  if (!slug) return;
+  const el = document.getElementById('memNota-' + slug);
+  if (!el) { toast ? toast('Esa nota no está en la vista actual (quizás filtrada)', 'warn') : null; return; }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.style.boxShadow = '0 0 0 2px #a855f7';
+  setTimeout(() => { el.style.boxShadow = ''; }, 1500);
+}
+
+function memAbrirModalNota() {
+  document.getElementById('memTipo').value = 'contexto';
+  document.getElementById('memImportancia').value = '1';
+  document.getElementById('memTitulo').value = '';
+  document.getElementById('memContenido').value = '';
+  document.getElementById('memEnlacesA').value = '';
+  document.getElementById('memModal').style.display = 'flex';
+}
+
+function memCerrarModal() {
+  document.getElementById('memModal').style.display = 'none';
+}
+
+async function memGuardarNota() {
+  const titulo = document.getElementById('memTitulo').value.trim();
+  const contenido = document.getElementById('memContenido').value.trim();
+  if (!titulo || !contenido) { toast ? toast('Título y contenido son obligatorios', 'err') : alert('Título y contenido son obligatorios'); return; }
+  const enlaces_a = document.getElementById('memEnlacesA').value.split(',').map(s => s.trim()).filter(Boolean);
+  const body = {
+    tipo: document.getElementById('memTipo').value,
+    titulo, contenido,
+    importancia: parseInt(document.getElementById('memImportancia').value, 10) || 1,
+    enlaces_a,
+  };
+  try {
+    const res = await fetch(`${MEM_API}/vault`, { method: 'POST', headers: _memHeaders(), body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    memCerrarModal();
+    toast ? toast(`Guardado (slug: ${data.slug})`, 'ok') : null;
+    await memCargarVault();
+  } catch (e) {
+    toast ? toast('Error guardando: ' + e.message, 'err') : alert('Error guardando: ' + e.message);
+  }
+}
+
+async function memBorrarNota(id) {
+  if (!confirm('¿Borrar esta nota de memoria? Se borran también sus enlaces.')) return;
+  try {
+    const res = await fetch(`${MEM_API}/vault?id=${id}`, { method: 'DELETE', headers: _memHeaders() });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    await memCargarVault();
+  } catch (e) {
+    toast ? toast('Error borrando: ' + e.message, 'err') : alert('Error borrando: ' + e.message);
+  }
+}
 
 let currentPage = '';
 let _navStack = [];  // historial de navegación para el botón ← Volver
@@ -24631,7 +24829,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.08';
+const PANEL_APP_VERSION = '9.09';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

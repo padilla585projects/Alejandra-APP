@@ -4,6 +4,42 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-25 — Panel de memoria estilo Obsidian en Alejandra Office, solo desarrollador)
+
+Adrián: "quiero montar en alejandra Office un panel para obsidian y ver allí la memoria e
+interactuar con ella. Pero solo visible para el desarrollador (yo)". Nueva sección
+🧠 Memoria (Obsidian) en `panel.html`.
+
+**Visibilidad**: clase nueva `nav-dev-solo`, más estricta que el resto de secciones de
+desarrollador (`nav-dev`, visibles también para superadmin) — se revela solo con
+`SESSION.rol === 'desarrollador'` exacto, comparación idéntica a la que ya usa el
+interruptor de dev-bypass existente.
+
+**Backend** (`alejandra-agente/worker.js`, nuevo bloque `/api/memoria/*`, protegido con
+sesión real + `esDeveloperAgente()` — 401/403 si no cumple, mismo patrón que el resto de
+endpoints sensibles del agente, no el `ADMIN_TOKEN` estático de `/api/admin/*`):
+- `GET /api/memoria/vault` — lista hasta 300 notas de `alejandra_memoria` con sus
+  relaciones (salientes + backlinks) ya resueltas.
+- `POST /api/memoria/vault` — crea una nota (reusa `generarSlugUnico`/enlace por slug,
+  misma lógica que `memory_save`).
+- `DELETE /api/memoria/vault?id=` — borra una nota y sus enlaces.
+- `POST /api/memoria/enlaces` / `DELETE /api/memoria/enlaces?id=` — enlazar o desenlazar
+  dos notas ya existentes por slug, sin tener que recrearlas.
+
+**Frontend**: lista de tarjetas (buscador + filtro por tipo), cada una con su slug y sus
+notas relacionadas como chips clicables — al pulsar uno, hace scroll y resalta la nota
+destino (mismo principio de "linked mentions" que ya tiene el backend, sin la complejidad
+de un grafo visual). Modal para crear nota nueva con campo de `enlaces_a`.
+
+**Bug real encontrado y corregido verificando en el navegador antes de dar esto por
+hecho**: el primer intento usaba `getSession()` (función que sí existe en `index.html`)
+para leer el token — `panel.html` no tiene esa función, solo la variable global
+`SESSION`. Se habría roto en cuanto Adrián lo abriera. Detectado cargando el panel real
+en un navegador headless con una sesión simulada, antes de comitear.
+
+Versión de la app → 9.09 (4 marcadores sincronizados, `panel.html` cambia). 207/207
+tests, `node --check` limpio.
+
 ### Added (2026-08-25 — Memoria enlazada estilo Obsidian, Parte 1 del plan, autorizada por Adrián)
 
 Adrián autorizó explícitamente la migración D1. **Corrección de diseño respecto al plan

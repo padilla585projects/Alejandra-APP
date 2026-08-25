@@ -4303,6 +4303,98 @@ export default {
         }
       }
 
+      // ── Memoria enlazada (panel Obsidian de Office, MEMORIA-ENLAZADA-02) ────
+      // Solo desarrollador (Adrián) -- pedido explícito: "solo visible para el
+      // desarrollador (yo)". Igual que el resto de endpoints sensibles del agente,
+      // se protege con sesión real (getAuth) + esDeveloperAgente, no con el
+      // ADMIN_TOKEN estático de /api/admin/* (ese es para automatización, esto lo
+      // usa Adrián logueado normal desde el navegador).
+      if (path.startsWith('/api/memoria/')) {
+        const sesionMem = await getAuth(req, env);
+        if (!sesionMem) return json({ error: 'No autorizado' }, 401);
+        if (!(await esDeveloperAgente(env, sesionMem.usuario_id))) {
+          return json({ error: 'Solo el desarrollador puede acceder a esto' }, 403);
+        }
+
+        if (path === '/api/memoria/vault' && req.method === 'GET') {
+          const rows = await env.DB.prepare(
+            'SELECT id, tipo, titulo, contenido, importancia, slug, empresa_id, created_at FROM alejandra_memoria ORDER BY created_at DESC LIMIT 300'
+          ).all();
+          const notas = rows.results || [];
+          const relacionados = await obtenerNotasRelacionadas(env, notas.map(n => n.id));
+          for (const n of notas) {
+            const rel = relacionados.get(n.id);
+            n.relacionado = rel ? rel.map(x => ({ id: x.id, slug: x.slug, titulo: x.titulo })) : [];
+          }
+          return json({ ok: true, notas });
+        }
+
+        if (path === '/api/memoria/vault' && req.method === 'POST') {
+          const body = await req.json().catch(() => ({}));
+          const { tipo, titulo, contenido, importancia = 1, enlaces_a } = body;
+          if (!tipo || !titulo || !contenido) return json({ error: 'Faltan campos: tipo, titulo, contenido' }, 400);
+          const eidSlug = sesionMem.empresa_id || 'system';
+          const slug = await generarSlugUnico(env, eidSlug, titulo);
+          const contenidoLimpio = String(contenido).replace(/(ignore|olvida|descarta)\s+(all|todas|tus)\s+(instructions|instrucciones|reglas)/gi, '[REDACTED]');
+          const ins = await env.DB.prepare(
+            `INSERT INTO alejandra_memoria (tipo,usuario_id,empresa_id,titulo,contenido,importancia,slug,created_at)
+             VALUES(?,?,?,?,?,?,?,datetime('now'))`
+          ).bind(tipo, sesionMem.usuario_id, eidSlug, String(titulo).slice(0, 200), contenidoLimpio, importancia, slug).run();
+          const nuevoId = ins.meta?.last_row_id;
+          let enlazadas = 0;
+          if (nuevoId && Array.isArray(enlaces_a) && enlaces_a.length) {
+            const slugs = [...new Set(enlaces_a.map(s => String(s || '').trim()).filter(Boolean))].slice(0, 20);
+            if (slugs.length) {
+              const placeholders = slugs.map(() => '?').join(',');
+              const destinos = await env.DB.prepare(
+                `SELECT id FROM alejandra_memoria WHERE empresa_id = ? AND slug IN (${placeholders}) AND id != ?`
+              ).bind(eidSlug, ...slugs, nuevoId).all();
+              for (const d of (destinos.results || [])) {
+                await env.DB.prepare(
+                  `INSERT INTO memoria_enlaces (origen_id, destino_id, created_at) VALUES (?, ?, datetime('now'))`
+                ).bind(nuevoId, d.id).run().catch(() => {});
+                enlazadas++;
+              }
+            }
+          }
+          return json({ ok: true, id: nuevoId, slug, enlazadas });
+        }
+
+        if (path === '/api/memoria/vault' && req.method === 'DELETE') {
+          const id = parseInt(url.searchParams.get('id'), 10);
+          if (!id) return json({ error: 'id requerido' }, 400);
+          await env.DB.prepare('DELETE FROM memoria_enlaces WHERE origen_id = ? OR destino_id = ?').bind(id, id).run();
+          const del = await env.DB.prepare('DELETE FROM alejandra_memoria WHERE id = ?').bind(id).run();
+          return json({ ok: true, borrado: !!del.meta?.changes });
+        }
+
+        if (path === '/api/memoria/enlaces' && req.method === 'POST') {
+          const body = await req.json().catch(() => ({}));
+          const { origen_slug, destino_slug, tipo_enlace } = body;
+          if (!origen_slug || !destino_slug) return json({ error: 'origen_slug y destino_slug requeridos' }, 400);
+          const eidSlug = sesionMem.empresa_id || 'system';
+          const [origen, destino] = await Promise.all([
+            env.DB.prepare('SELECT id FROM alejandra_memoria WHERE empresa_id = ? AND slug = ?').bind(eidSlug, origen_slug).first(),
+            env.DB.prepare('SELECT id FROM alejandra_memoria WHERE empresa_id = ? AND slug = ?').bind(eidSlug, destino_slug).first(),
+          ]);
+          if (!origen || !destino) return json({ error: 'Slug de origen o destino no encontrado' }, 404);
+          if (origen.id === destino.id) return json({ error: 'Una nota no puede enlazarse consigo misma' }, 400);
+          await env.DB.prepare(
+            `INSERT INTO memoria_enlaces (origen_id, destino_id, tipo_enlace, created_at) VALUES (?, ?, ?, datetime('now'))`
+          ).bind(origen.id, destino.id, tipo_enlace || 'relacionado').run();
+          return json({ ok: true });
+        }
+
+        if (path === '/api/memoria/enlaces' && req.method === 'DELETE') {
+          const id = parseInt(url.searchParams.get('id'), 10);
+          if (!id) return json({ error: 'id requerido' }, 400);
+          const del = await env.DB.prepare('DELETE FROM memoria_enlaces WHERE id = ?').bind(id).run();
+          return json({ ok: true, borrado: !!del.meta?.changes });
+        }
+
+        return json({ error: 'Ruta de /api/memoria/ no encontrada' }, 404);
+      }
+
       // ── Admin API ─────────────────────────────────────────────────────────
       if (path.startsWith('/api/admin/')) {
         const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '');

@@ -1,6 +1,15 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-25
+- Estado (2026-08-25, continuación): **Panel de memoria estilo Obsidian en Alejandra
+  Office — solo desarrollador.** Nueva sección 🧠 Memoria (Obsidian) en `panel.html`
+  (lista + backlinks clicables + crear nota), backend nuevo `/api/memoria/*` en
+  `alejandra-agente/worker.js` protegido con sesión real + `esDeveloperAgente()`.
+  Verificado end-to-end en producción (curl con token real: `memory_save` con
+  `enlaces_a`, backlink confirmado en ambos sentidos, datos de prueba borrados después)
+  y en el navegador antes de comitear (encontrado y corregido un bug real: `getSession()`
+  no existe en `panel.html`, solo la variable `SESSION`). Versión → 9.09. Pendiente de
+  commit/deploy final. Ver `CHANGELOG.md`.
 - Estado (2026-08-25, continuación): **Memoria enlazada estilo Obsidian — Parte 1 del
   plan, autorizada y aplicada.** Adrián dio el ok explícito para la migración D1.
   Corrección de diseño real encontrada al verificar contra el código antes de migrar: el
