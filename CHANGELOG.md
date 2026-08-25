@@ -4,6 +4,95 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-25 — Cerebro de Alejandra: 4 bugs de control de flujo, Parte 2 de la auditoría)
+
+Continuación directa de la auditoría del mismo día (ver entradas de abajo). Los cuatro
+arreglos "de riesgo medio" del informe, los que tocan el propio bucle de llamadas al
+modelo en vez de solo el prompt:
+
+1. **El resguardo a modelos gratuitos perdía el rastro de qué tool se había intentado.**
+   `_agenteMsgsToOpenAI` descartaba en silencio cualquier turno `assistant` que solo
+   tuviera un bloque `tool_use` sin texto — si Anthropic fallaba a mitad del bucle de
+   tools y el sistema caía al fallback (Grok/OpenRouter/GPT-4o), ese modelo de repuesto
+   ni siquiera sabía que se había intentado una herramienta. Ahora se sintetiza una línea
+   descriptiva del intento en vez de descartarlo.
+2. **Si la última tool de un turno fallaba justo cuando ya no quedaban más intentos**
+   (las tools se retiran a propósito en la penúltima iteración para forzar una respuesta
+   de texto), el modelo respondía como si no hubiera pasado nada — el mismo patrón de
+   fondo que motivó la regla de "TRANSPARENCIA SI FALLA" en el prompt, pero sin
+   cobertura a nivel de código para este caso límite. Ahora se inyecta una instrucción
+   dirigida solo a esa llamada final para que reconozca el fallo y avise que va a
+   reintentarlo, antes de responder con lo que sí tenga. Aplicado en los dos bucles
+   (`procesarConNEXUS` y `procesarConNEXUSStream`).
+3. **`gestionar_tarea`/`gestionar_rfi`/`gestionar_oc`/`gestionar_pedido`** no dejaban ver
+   de un vistazo qué campo hace falta para cada acción — la validación en tiempo real ya
+   daba buenos mensajes de error, pero el modelo lo descubría a base de fallar primero.
+   Reforzada la primera línea de la `description` de cada tool con el campo obligatorio
+   por acción (p. ej. `crear` exige `titulo`, `actualizar`/`completar`/`eliminar` exigen
+   el id).
+4. **Cada turno de `procesarConNEXUSStream` llamaba al modelo dos veces** cuando el
+   bucle de tools ya había hecho al menos una llamada real: el bucle en sí no va en
+   streaming, y al terminar se hacía una llamada NUEVA en streaming, desde cero, con el
+   mismo `messages`, solo para la respuesta visible — el texto que ya había devuelto la
+   última llamada del bucle se tiraba. Coste doble y una fuente de inconsistencia real
+   (el modelo no es determinista: la segunda llamada podía "decidir" algo distinto de la
+   primera). Ahora, si el bucle ya usó una tool y la última llamada ya devolvió texto
+   final completo (sin `tool_use` pendiente), ese texto se envía directamente — mismo
+   patrón que ya usaba el caso de cliente desconectado/timeout. Cuando el bucle no llegó
+   a usar ninguna tool se mantiene la llamada de streaming real sin cambios, porque es la
+   que trae la salvaguarda de recuperar un `tool_use` "alucinado" en texto plano por un
+   modelo gratis de repuesto — no es redundante en ese caso.
+
+207/207 tests en verde. Pendiente de esta misma auditoría: Parte 1 (memoria enlazada
+estilo Obsidian, requiere migración D1 con autorización explícita) y Parte 3 (adelgazar
+`base`/`app`/`ingenieria_electrica` con carga condicional por sub-tema) — ver
+`PROJECT_STATE.md`.
+
+### Fixed (2026-08-25 — Auditoría a fondo del cerebro de Alejandra: informe + 4 correcciones mecánicas)
+
+Adrián, tras revisar una conversación real con Alejandra donde repitió texto de un turno
+anterior, preguntó lo mismo dos veces seguidas y afirmó como hecho confirmado un
+diagnóstico técnico que en realidad aún no había comprobado: "audita el cerebro de
+alejandra a fondo... quiero que alejandra sea mas efectiva y capaz de todo, mas
+inteligente". Auditoría con 4 agentes en paralelo (arquitectura de prompts, catálogo de
+tools, enrutado/fallback de modelos, memoria/contexto) sobre `alejandra-agente/worker.js`
+completo, publicada como informe. De los 6 arreglos "listos para aplicar", 4 mecánicos
+reales aplicados hoy: `obtenerContextoChat` ignoraba el `limit` real en dos queries
+(usaba el literal `10` siempre); `limitHistorial` no coincidía entre
+`procesarConNEXUS`(3/6) y `procesarConNEXUSStream`(4/10) pese a un comentario que decía
+que ya estaban unificados; las 13 llamadas a `registrarTokenUso` eran fire-and-forget sin
+`await` (registro de coste/modelo perdible si el Worker cortaba tras responder); y un
+comentario obsoleto sobre el nº de iteraciones del bucle. Dos candidatos descartados tras
+revisión más de cerca por no ser arreglos reales (ver el commit `b0d5c0f`). 207/207 tests.
+
+### Fixed (2026-08-25 — Alejandra deja de inventar diagnósticos técnicos + PEMP-FILTRO-01/PEMP-GUARDAR-01)
+
+Revisando una conversación real de Adrián con Alejandra en la app móvil: repitió texto
+idéntico de un turno anterior en vez de responder a la pregunta actual, preguntó dos
+veces seguidas por lo mismo (entrega por Telegram) como si la respuesta de Adrián no
+hubiera registrado, y — lo más grave — afirmó un error SQL exacto ("no such column:
+modelo") como hecho confirmado en la MISMA frase donde decía que todavía iba a revisar
+la estructura real de la tabla. Verificado por grep en los dos workers: no existe
+ninguna columna `pemp.modelo` en el código — diagnóstico fabricado, probable confusión
+con `herramientas.modelo` (tabla distinta). Añadida "REGLA DE HONESTIDAD TÉCNICA" a los
+dos cerebros (`alejandra-agente/worker.js` y `worker.js`): un diagnóstico técnico
+concreto no se afirma como hecho sin haber ejecutado de verdad la tool de verificación
+correspondiente en esa misma conversación.
+
+De paso, Adrián reportó dos bugs reales de PEMP: **PEMP-FILTRO-01** — los botones de
+filtro de stock (`fTodos`/`fActiva`/`fDevuelta`) están pensados para bobinas
+(`estado IN ('activa','devuelta')`), pero PEMP/carretillas usan
+`Disponible`/`Averiada`/`devuelta` — el filtro "Activas" en PEMP no devolvía nada real.
+Corregido enviando al backend solo `estado=devuelta` (el único valor real compartido) y
+filtrando "activa" en cliente por exclusión. **PEMP-GUARDAR-01** — "la pantalla de
+editar pemp falla, no te deja guardar... hay que salir de la app y volver": el `<select>`
+de obra (solo superadmin) se rellena de forma asíncrona tras abrir el modal; si se
+pulsaba Guardar antes de que resolviera, `value=""` (placeholder "Cargando...") se
+confundía con "— Sin obra —" real y mandaba `obra_id:null`, borrando el valor real en
+silencio. Reproducido y corregido en producción contra un PEMP de prueba: el select
+ahora marca `data-ready`, el botón Guardar queda deshabilitado mientras carga, y
+`obra_id` nunca se envía si la carga de obras falló.
+
 ### Changed (2026-08-19 — Informe de Sondas CPD: menos amontonado, tabla más simple)
 
 Adrián, probando el informe con un plano real de 41 sondas: "el plano se ve muy junto

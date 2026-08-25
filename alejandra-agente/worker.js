@@ -1954,7 +1954,7 @@ const TOOL_ESTADO_OBRA = {
 // patrón de nombre (ver marcar_plano más abajo, que pese al nombre es N0).
 const TOOL_GESTIONAR_TAREA = {
   name: 'gestionar_tarea',
-  description: 'Crea, actualiza o lista tareas de obra (tipo Fieldwire). Cada tarea tiene título, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), responsable, fecha límite y ubicación. Úsalo cuando el usuario quiera crear una tarea, asignar trabajo, ver qué está pendiente, o marcar algo como completado.',
+  description: 'CAMPOS OBLIGATORIOS POR ACCIÓN (ALEJANDRA-CONTROLFLOW-03): accion="crear" exige titulo. accion="actualizar"/"completar"/"eliminar" exige tarea_id. Si no los tienes, pregúntalos antes de llamar. Crea, actualiza o lista tareas de obra (tipo Fieldwire). Cada tarea tiene título, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), responsable, fecha límite y ubicación. Úsalo cuando el usuario quiera crear una tarea, asignar trabajo, ver qué está pendiente, o marcar algo como completado.',
   input_schema: {
     type: 'object',
     properties: {
@@ -1983,7 +1983,7 @@ const TOOL_GESTIONAR_TAREA = {
 
 const TOOL_GESTIONAR_RFI = {
   name: 'gestionar_rfi',
-  description: 'Gestiona Consultas Técnicas (RFIs — Requests for Information) de obra. Las RFIs son preguntas formales sobre diseño, materiales, normativa o proceso que requieren respuesta técnica. Cada RFI tiene número correlativo (RFI-001), categoría, prioridad, responsable y puede marcar impacto en plazo/coste. Úsalo cuando el usuario quiera registrar una duda técnica, ver RFIs abiertas, responder una consulta o ver el estado de las RFIs de una obra.',
+  description: 'CAMPOS OBLIGATORIOS POR ACCIÓN: accion="crear" exige titulo. accion="responder"/"actualizar"/"eliminar" exige rfi_id. Si no los tienes, pregúntalos antes de llamar. Gestiona Consultas Técnicas (RFIs — Requests for Information) de obra. Las RFIs son preguntas formales sobre diseño, materiales, normativa o proceso que requieren respuesta técnica. Cada RFI tiene número correlativo (RFI-001), categoría, prioridad, responsable y puede marcar impacto en plazo/coste. Úsalo cuando el usuario quiera registrar una duda técnica, ver RFIs abiertas, responder una consulta o ver el estado de las RFIs de una obra.',
   input_schema: {
     type: 'object',
     properties: {
@@ -2016,7 +2016,7 @@ const TOOL_GESTIONAR_RFI = {
 
 const TOOL_GESTIONAR_OC = {
   name: 'gestionar_oc',
-  description: 'Gestiona Órdenes de Cambio (Change Orders) de obra. Las OC son modificaciones formales al alcance, coste o plazo del contrato. Cada OC tiene número correlativo (OC-001), categoría, coste adicional, días de extensión y flujo de aprobación. Úsalo cuando el usuario quiera registrar un cambio de alcance, ver órdenes pendientes, aprobar o rechazar una OC, o analizar el impacto económico de los cambios.',
+  description: 'CAMPOS OBLIGATORIOS POR ACCIÓN: accion="crear" exige titulo. accion="aprobar"/"rechazar"/"actualizar"/"eliminar" exige oc_id. Si no los tienes, pregúntalos antes de llamar. Gestiona Órdenes de Cambio (Change Orders) de obra. Las OC son modificaciones formales al alcance, coste o plazo del contrato. Cada OC tiene número correlativo (OC-001), categoría, coste adicional, días de extensión y flujo de aprobación. Úsalo cuando el usuario quiera registrar un cambio de alcance, ver órdenes pendientes, aprobar o rechazar una OC, o analizar el impacto económico de los cambios.',
   input_schema: {
     type: 'object',
     properties: {
@@ -2051,7 +2051,7 @@ const TOOL_GESTIONAR_OC = {
 // (ver AYUDANTES más abajo), invocado explícitamente vía delegar_tarea.
 const TOOL_GESTIONAR_PEDIDO = {
   name: 'gestionar_pedido',
-  description: 'Gestiona pedidos de material de obra (solicitudes a proveedor: estado pendiente/solicitado/recibido/cancelado). Úsalo para crear un pedido nuevo, listar los existentes, actualizar su estado/datos o eliminar uno.',
+  description: 'CAMPOS OBLIGATORIOS POR ACCIÓN: accion="crear" exige descripcion. accion="actualizar"/"eliminar" exige pedido_id. Si no los tienes, pregúntalos antes de llamar. Gestiona pedidos de material de obra (solicitudes a proveedor: estado pendiente/solicitado/recibido/cancelado). Úsalo para crear un pedido nuevo, listar los existentes, actualizar su estado/datos o eliminar uno.',
   input_schema: {
     type: 'object',
     properties: {
@@ -5403,6 +5403,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
       messages.push({ role: 'assistant', content: respAPI.content });
       const toolResults = [];
+      let huboFalloEsteTurno = false;
 
       for (const tb of toolBlocks) {
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
@@ -5410,6 +5411,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
         const resultado = control.permitida
           ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
+        if (!clasificarResultadoTool(resultado)) huboFalloEsteTurno = true;
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // ver_archivo con imágenes devuelve JSON con content blocks para visión
         const content = parseToolResultContent(resultado);
@@ -5419,6 +5421,20 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       messages.push({ role: 'user', content: toolResults });
       // Mantener todas las tools disponibles en todas las iteraciones para máxima proactividad
       const toolsSiguiente = iter < MAX_ITER - 1 ? tools : [];
+      // ALEJANDRA-CONTROLFLOW-02 (25/08/2026): mismo criterio que procesarConNEXUSStream —
+      // si esta era la última iteración con tools y la última falló, que la respuesta
+      // final lo reconozca en vez de improvisar un texto sin relación con lo que pasó.
+      // Se añade como bloque extra al MISMO mensaje user de tool_results (no un mensaje
+      // nuevo aparte) -- Anthropic exige turnos alternos user/assistant estrictos.
+      if (toolsSiguiente.length === 0 && huboFalloEsteTurno) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.role === 'user' && Array.isArray(lastMsg.content)) {
+          lastMsg.content.push({
+            type: 'text',
+            text: '[INSTRUCCIÓN FINAL: La última herramienta que intentaste ha fallado y no te quedan más intentos en este mensaje. Antes de nada, reconoce brevemente que hubo un problema y que vas a reintentarlo en tu siguiente respuesta — no respondas como si no hubiera pasado nada. Luego, con los datos que sí tengas, responde AHORA en español, clara y directa. NO uses más herramientas.]'
+          });
+        }
+      }
       respAPI = await llamarExperto(env, messages, toolsSiguiente, expert, systemPrompt, usuario_id);
       if (respAPI.usage) await registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
@@ -5579,6 +5595,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       if (!toolBlocks.length) break;
       messages.push({ role: 'assistant', content: respAPI.content });
       const toolResults = [];
+      let huboFalloEsteTurno = false;
 
       for (const tb of toolBlocks) {
         const t0 = Date.now();
@@ -5588,6 +5605,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         const resultado = control.permitida
           ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
+        if (!clasificarResultadoTool(resultado)) huboFalloEsteTurno = true;
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // Para SSE preview, extraer solo texto (no base64 de imágenes)
         const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
@@ -5612,10 +5630,14 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       if (queda < 2) {
         const lastMsg = messages[messages.length - 1];
         if (lastMsg && lastMsg.role === 'user' && Array.isArray(lastMsg.content)) {
-          lastMsg.content.push({
-            type: 'text',
-            text: '[INSTRUCCIÓN FINAL: Es tu turno de responder al usuario. Con los datos que ya has obtenido formula la respuesta AHORA en español, clara y directa. NO uses más herramientas.]'
-          });
+          // ALEJANDRA-CONTROLFLOW-02 (25/08/2026): si la última herramienta intentada
+          // en ESTE turno falló y ya no quedan iteraciones para reintentarla de verdad,
+          // que la respuesta final lo reconozca en vez de improvisar un texto sin
+          // relación con lo que pasó por dentro (ver REGLA "TRANSPARENCIA SI FALLA").
+          const textoInstruccion = huboFalloEsteTurno
+            ? '[INSTRUCCIÓN FINAL: La última herramienta que intentaste ha fallado y no te quedan más intentos en este mensaje. Antes de nada, reconoce brevemente que hubo un problema y que vas a reintentarlo en tu siguiente respuesta — no respondas como si no hubiera pasado nada. Luego, con los datos que sí tengas, responde AHORA en español, clara y directa. NO uses más herramientas.]'
+            : '[INSTRUCCIÓN FINAL: Es tu turno de responder al usuario. Con los datos que ya has obtenido formula la respuesta AHORA en español, clara y directa. NO uses más herramientas.]';
+          lastMsg.content.push({ type: 'text', text: textoInstruccion });
         }
       }
       respAPI = await llamarExperto(env, messages, toolsSiguiente, expert, systemPrompt, usuario_id);
@@ -5649,6 +5671,24 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       } else {
         textoFinal = 'No pude generar una respuesta clara. ¿Puedes reformular la pregunta?';
       }
+      await send({ type: 'text', texto: textoFinal });
+    } else if (
+      // ALEJANDRA-CONTROLFLOW-04 (25/08/2026): si el bucle de arriba ya ejecutó al menos
+      // una tool real y la última llamada al modelo ya devolvió texto final completo (sin
+      // tool_use pendiente), ese texto YA ES la respuesta -- repetir la llamada al modelo
+      // en streaming con el mismo `messages` es una segunda llamada de verdad (coste
+      // doble, y el modelo no es determinista: puede "decidir" algo distinto la segunda
+      // vez). Se envía como bloque de texto único, mismo patrón que ya usa el caso de
+      // cliente desconectado/timeout de arriba. Cuando el bucle NO usó ninguna tool
+      // (herramientasUsadas vacío) se mantiene la llamada de streaming real más abajo: es
+      // la que trae la salvaguarda de recuperar un tool_use "alucinado" en texto plano
+      // por un modelo gratis de repuesto (ver comentario SALVAGUARDA) -- no es redundante
+      // en ese caso, así que no se salta.
+      herramientasUsadas.length > 0 &&
+      respAPI.stop_reason !== 'tool_use' &&
+      (respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '')
+    ) {
+      textoFinal = respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
       await send({ type: 'text', texto: textoFinal });
     } else {
       // Streaming real token a token (todas las plataformas)
@@ -11446,9 +11486,19 @@ function _agenteMsgsToOpenAI(messages, systemPrompt, keepImages = false) {
         if (parts.length) out.push({ role, content: parts });
       } else {
         // Solo texto — eliminar imágenes
+        // ALEJANDRA-CONTROLFLOW-01 (25/08/2026): un turno assistant que SOLO tenía un
+        // bloque tool_use (sin texto) se filtraba a cero y desaparecía del historial que
+        // ve el modelo de repuesto (Grok/OpenRouter/GPT-4o) al caer del fallback -- si
+        // Anthropic fallaba a mitad del bucle de tools, el modelo de repuesto ni siquiera
+        // sabía que se había intentado una herramienta. Se sintetiza una línea
+        // descriptiva del intento en vez de descartarlo en silencio.
         const text = m.content
-          .filter(b => b.type === 'text' || b.type === 'tool_result')
-          .map(b => b.type === 'text' ? b.text : (Array.isArray(b.content) ? b.content.filter(x => x.type==='text').map(x=>x.text).join('\n') : String(b.content||'')))
+          .filter(b => b.type === 'text' || b.type === 'tool_result' || b.type === 'tool_use')
+          .map(b => {
+            if (b.type === 'text') return b.text;
+            if (b.type === 'tool_use') return `[Intenté usar la herramienta "${b.name}" con estos datos: ${JSON.stringify(b.input || {}).slice(0, 300)}]`;
+            return Array.isArray(b.content) ? b.content.filter(x => x.type==='text').map(x=>x.text).join('\n') : String(b.content||'');
+          })
           .join('\n').trim();
         if (text) out.push({ role, content: text });
       }

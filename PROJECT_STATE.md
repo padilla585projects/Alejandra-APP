@@ -1,6 +1,43 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-19
+- Actualizado: 2026-08-25
+- Estado (2026-08-25): **Auditoría a fondo del cerebro de Alejandra — EN CURSO, Parte 2
+  completa.** Adrián, tras revisar una conversación real donde Alejandra repitió
+  respuestas, preguntó lo mismo dos veces y afirmó un diagnóstico técnico inventado
+  ("no such column: modelo") como hecho confirmado sin haberlo comprobado, pidió una
+  auditoría completa ("audita el cerebro de alejandra a fondo... quiero que alejandra
+  sea mas efectiva... mas inteligente") y luego un plan concreto para arreglarlo
+  ("prepárame el plan de Obsidian, arreglamos los errores de control de flujo, ahi que
+  adelgazar esos promps"). Plan aprobado con tres partes, en
+  `C:\Users\Adrian\.claude\plans\radiant-moseying-diffie.md`:
+  - **Parte 0 (ya cerrada antes del plan formal):** regla de honestidad técnica en los
+    dos workers (nunca afirmar un diagnóstico exacto sin verificarlo en la misma
+    conversación), fix de renderizado Markdown al reabrir el chat (index.html/panel.html
+    perdían negritas/enlaces al recargar historial — solo la respuesta en vivo los
+    tenía), PEMP-FILTRO-01 (vocabulario de filtro "Activas" no aplicaba a PEMP/
+    carretillas) y PEMP-GUARDAR-01 (carrera async en el select de obra al editar un PEMP
+    ponía `obra_id:null` en silencio), generalización de generación de esquemas más allá
+    de motores eléctricos, y sección "DISCIPLINA DE TRABAJO" en el prompt base de los
+    dos cerebros (verificar antes de afirmar, preparar contenido completo antes de
+    ejecutar una tool, comprobar el resultado real, avisar con transparencia si algo
+    falla — a petición explícita de Adrián: "las mismas practicas que un agente de
+    codigo"). Todo desplegado y verificado.
+  - **Parte 2 (control de flujo) — COMPLETA, pendiente de commit/deploy final:** los 4
+    bugs "de riesgo medio" del informe de auditoría (rastro de tool perdido en el
+    fallback a modelos gratis, falta de transparencia si la última tool de un turno
+    falla sin más reintentos, campos obligatorios poco visibles en
+    `gestionar_tarea`/`rfi`/`oc`/`pedido`, y doble llamada al modelo por turno en
+    `procesarConNEXUSStream`). Detalle completo en `CHANGELOG.md`. 207/207 tests.
+  - **Parte 3 (adelgazar prompts) — NO EMPEZADA.** Sacar el bloque PRL (~7.400
+    caracteres) de `base`/`app` a un módulo `prl_seguridad` cargado solo si el mensaje
+    menciona seguridad/PRL/EPIs (mismo patrón que `seguridad_no_auth`), y dividir
+    `ingenieria_electrica` (~18.800 caracteres) en sus 4 secciones ya delimitadas por
+    `═══` con carga por sub-tema — cargar las 4 si la detección es ambigua.
+  - **Parte 1 (memoria enlazada estilo Obsidian) — NO EMPEZADA.** Requiere migración D1
+    aditiva (`ALTER TABLE memoria_gobernada ADD COLUMN slug` + tabla nueva
+    `memoria_enlaces`) — **necesita autorización explícita de Adrián antes de
+    aplicarla**, no tocar sin pedirla primero. Diseño completo en el plan.
+  - Ver el plan completo para el detalle de cada parte y el criterio de verificación.
 - Estado (2026-08-19, confirmado por Adrián en su móvil real): **Sondas CPD en el móvil —
   cerrado, sin pendientes.** Tras las rondas 1-2 (abajo), Adrián siguió probando de forma
   activa y encontró tres cosas más, las tres corregidas, desplegadas y verificadas en
