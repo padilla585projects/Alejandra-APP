@@ -28,11 +28,19 @@
     falla sin más reintentos, campos obligatorios poco visibles en
     `gestionar_tarea`/`rfi`/`oc`/`pedido`, y doble llamada al modelo por turno en
     `procesarConNEXUSStream`). Detalle completo en `CHANGELOG.md`. 207/207 tests.
-  - **Parte 3 (adelgazar prompts) — NO EMPEZADA.** Sacar el bloque PRL (~7.400
-    caracteres) de `base`/`app` a un módulo `prl_seguridad` cargado solo si el mensaje
-    menciona seguridad/PRL/EPIs (mismo patrón que `seguridad_no_auth`), y dividir
-    `ingenieria_electrica` (~18.800 caracteres) en sus 4 secciones ya delimitadas por
-    `═══` con carga por sub-tema — cargar las 4 si la detección es ambigua.
+  - **Parte 3 (adelgazar prompts) — COMPLETA y ampliada, pendiente de commit/deploy
+    final.** Bloque PRL extraído de `base`/`app` a `prl_seguridad` (carga condicional,
+    mismo patrón que `seguridad_no_auth`); `ingenieria_electrica` dividido en sus 4
+    secciones (`ie_normativa`/`ie_calculos`/`ie_control`/`ie_esquemas`) con carga por
+    sub-tema. Ampliación pedida en la misma sesión: Adrián — "que cada departamento
+    tenga su ingeniería... nivel de Alejandra para que sea experta en todos los
+    departamentos". De los 12 departamentos reales de la app, 7 con oficio técnico
+    propio (mecánicas, telecom, control/CPD, obra civil, albañilería, pintura,
+    carpintería) reciben ahora su propio módulo experto (normativa española real +
+    cálculos + buenas prácticas, mismo nivel que el eléctrico), cargado por el
+    departamento real de sesión del usuario (`sesionAuth.departamento`, ya existía en
+    `getAuth` pero no se usaba en el chat) + detección por palabra clave del oficio de
+    otro departamento. Detalle completo en `CHANGELOG.md`. 207/207 tests.
   - **Parte 1 (memoria enlazada estilo Obsidian) — NO EMPEZADA.** Requiere migración D1
     aditiva (`ALTER TABLE memoria_gobernada ADD COLUMN slug` + tabla nueva
     `memoria_enlaces`) — **necesita autorización explícita de Adrián antes de

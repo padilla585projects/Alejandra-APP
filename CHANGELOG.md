@@ -4,6 +4,59 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-25 — Cerebro de Alejandra: adelgazar prompts + un módulo experto por departamento, Parte 3 de la auditoría)
+
+Parte 3 del plan aprobado ("adelgazar esos prompts") más una ampliación real pedida
+durante la sesión: Adrián, viendo que sólo electricidad tenía conocimiento experto —
+"lo mismo para los demás departamentos, por ejemplo Mecánicas... nivel de Alejandra para
+que sea experta en todos los departamentos". Investigado el catálogo real de la app
+(`_DEPTS_CATALOG`, `panel.html`/`index.html`): 12 departamentos, de los que 7 tienen un
+oficio técnico propio con normativa/cálculos reales (los otros 5 son gestión —
+seguridad ya cubierto por PRL, personal/almacén/ingeniería sin un cuerpo técnico
+distinto). Confirmado el alcance con Adrián antes de escribir el contenido (7
+departamentos con oficio real; carga por departamento de sesión + palabras clave).
+
+**Adelgazado (sin contenido nuevo, solo reorganizado con carga condicional):**
+- Bloque PRL de `base` (~7.400 caracteres, cargado antes en TODOS los mensajes de TODOS
+  los usuarios) y el de tablas PRL de `app` (~2.900) extraídos a un módulo nuevo
+  `prl_seguridad` (10.290 caracteres), cargado solo si el mensaje o la pantalla activa
+  mencionan seguridad/PRL/riesgos/EPIs/incidencias — mismo patrón que `seguridad_no_auth`
+  (único precedente de carga condicional que ya existía). `base` baja de ~12.079 a 5.110
+  caracteres, `app` de ~10.736 a 8.118 — para un mensaje sin relación con seguridad.
+- `ingenieria_electrica` (~18.827 caracteres, un solo bloque) dividido en sus 4 secciones
+  ya delimitadas por separadores `═══`: `ie_normativa`, `ie_calculos`, `ie_control`,
+  `ie_esquemas`. Detección por palabras clave (esquema/dibuja → esquemas; PLC/SCADA/
+  variador → control; sección de cable/cortocircuito → cálculos; ITC-BT/REBT →
+  normativa). Fail-open (cargar las 4) solo para el experto `ingenieria` — donde el
+  router ya decidió que el mensaje es de electricidad, así que "sin coincidencia" es
+  ambigüedad real; fail-closed para `app` — donde la mayoría de mensajes NO son de
+  electricidad y los que sí lo son ya se enrutan a `ingenieria` antes de llegar aquí.
+
+**Nuevo — un módulo experto por departamento** (`dep_mecanicas`, `dep_telecom`,
+`dep_control`, `dep_obra_civil`, `dep_albanileria`, `dep_pintura`, `dep_carpinteria`,
+cada uno 6.800-11.500 caracteres, normativa española real + cálculos + buenas prácticas,
+mismo nivel de detalle y tono que el módulo eléctrico ya existente): mecánicas
+(RITE/CTE-HS4-HS5/legionela, cálculos de carga térmica y bombas), telecom (ISO/IEC
+11801/TIA-568, distancias de cobre y presupuesto óptico — alineado con la terminología
+real de las tablas `telecom_racks`/`telecom_cuadros_campo`), control/CPD (TIA-942/ASHRAE
+TC9.9, PUE y redundancia N+1/2N — alineado con el módulo Sondas CPD), obra civil
+(CTE-DB-SE-C/EHE-08, cálculo de zapatas), albañilería (CTE-DB-HR, sistemas Pladur/Knauf
+por Rw/REI), pintura (ISO 12944, rendimiento m²/l y espesores EPS/EPH), carpintería
+(CTE-DB-HE1/UNE-EN 14351-1, transmitancia térmica Um). Redactados en paralelo por
+agentes especializados, uno por departamento, con la misma consigna de estilo/rigor que
+el módulo eléctrico existente.
+
+**Carga**: `sesionAuth.departamento` (tabla `sesiones`, ya lo devolvía `getAuth` pero no
+se usaba en el chat) se pasa ahora a `procesarConNEXUS`/`Stream` — el módulo del
+departamento real del usuario se carga siempre (para los expertos `app`/`ingenieria`,
+los que ya tenían conocimiento técnico de dominio), y además se detecta por palabra
+clave si el mensaje menciona el oficio de OTRO departamento (ej. un electricista
+preguntando por fontanería) — nunca se cargan los 7 a la vez.
+
+207/207 tests. `node --check` limpio. Sin migración D1 — es contenido de prompt, seguro
+de iterar/revertir. Queda solo la Parte 1 del plan (memoria enlazada estilo Obsidian,
+migración D1 pendiente de autorización explícita).
+
 ### Fixed (2026-08-25 — Cerebro de Alejandra: 4 bugs de control de flujo, Parte 2 de la auditoría)
 
 Continuación directa de la auditoría del mismo día (ver entradas de abajo). Los cuatro
