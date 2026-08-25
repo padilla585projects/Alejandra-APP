@@ -4,6 +4,37 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-25 — El chat de Alejandra perdía la sesión en silencio, sin avisar)
+
+Revisando la conversación real de Adrián con Alejandra tras los despliegues de hoy
+(canal `app_android`), encontré que su chat de las 13:54h se había guardado bajo
+`usuario_id='anon:3'` en vez de su cuenta real `'3'` — es decir, corrió sin sesión
+autenticada. Verificado que NO era una expiración normal: su sesión en `sesiones`
+seguía válida (`expires_at` a más de un mes vista, sin caducar). La causa raíz exacta
+de por qué ese token concreto no validó en esa petición no se pudo determinar a
+posteriori (no hay logs de esa petición ya pasada) — lo que sí es un bug real y
+verificable en el código es que `/api/chat` y `/api/chat/stream`
+(`alejandra-agente/worker.js`) se degradan a modo anónimo en SILENCIO cuando
+`getAuth()` no valida el token, a diferencia del resto de la app: `apiCall()` en
+`index.html`/`panel.html` fuerza relogin explícito ("Tu sesión ha caducado") ante
+cualquier 401. El usuario seguía "hablando" con Alejandra sin enterarse de que había
+perdido su historial, su rol y sus permisos reales.
+
+Añadida `sesionPareceCaducada()`: cuando el canal es uno de los que normalmente lleva
+sesión (`app_android`/`panel`/`pwa`/`app`) y el body trae un `usuario_id` real (no ya
+anónimo/genérico) pero `getAuth()` no valida, el servidor manda un evento
+`sesion_invalida` — vía SSE en el streaming, como campo en el JSON en el no-streaming.
+Los tres frontends que hablan con `alejandra-agente` (chat de `index.html` en sus dos
+canales `app_android`/`pwa`, y el chat flotante principal de `panel.html`) dejan
+terminar la respuesta en curso con normalidad y, solo al final, avisan y fuerzan
+relogin — igual que ya hace `apiCall()` ante un 401, pero sin cortar la respuesta a
+mitad. `alejandra-panel.html` y los dos widgets secundarios de `panel.html`
+(`popup-ai`, chat standalone en `~línea 25369`) quedan sin este aviso por ahora — no
+hablan por el mismo código, pendiente de una ronda aparte si vuelve a detectarse ahí.
+
+Versión de la app subida a 9.08 (los 4 marcadores sincronizados) por tocar
+`index.html`/`panel.html`. 207/207 tests. Sin migración D1.
+
 ### Added (2026-08-25 — Cerebro de Alejandra: adelgazar prompts + un módulo experto por departamento, Parte 3 de la auditoría)
 
 Parte 3 del plan aprobado ("adelgazar esos prompts") más una ampliación real pedida

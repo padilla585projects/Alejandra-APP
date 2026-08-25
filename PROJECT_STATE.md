@@ -1,6 +1,16 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-25
+- Estado (2026-08-25, continuación): **SESION-TRANSPARENTE-01 — encontrado revisando la
+  conversación real de Adrián tras los despliegues de hoy.** Su chat de las 13:54h corrió
+  como `anon:3` en vez de su cuenta real, aunque su sesión en BD seguía válida (sin
+  caducar) — `/api/chat`/`/api/chat/stream` se degradaban a modo anónimo en silencio en
+  vez de avisar, a diferencia del resto de la app (`apiCall()` fuerza relogin ante un
+  401). Arreglado: nuevo evento `sesion_invalida` desde el servidor, consumido en
+  `index.html` (canales `app_android`/`pwa`) y en el chat flotante principal de
+  `panel.html` — deja terminar la respuesta y avisa/relogin al final. Versión de la app
+  → 9.08 (4 marcadores sincronizados). Pendiente de commit/deploy final (Worker agente +
+  Pages). Ver `CHANGELOG.md`.
 - Estado (2026-08-25): **Auditoría a fondo del cerebro de Alejandra — EN CURSO, Parte 2
   completa.** Adrián, tras revisar una conversación real donde Alejandra repitió
   respuestas, preguntó lo mismo dos veces y afirmó un diagnóstico técnico inventado

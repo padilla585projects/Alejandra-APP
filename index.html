@@ -14764,7 +14764,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.07';
+const APP_VERSION = '9.08';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -24473,6 +24473,11 @@ window.turnoToggle   = turnoToggle;
     (async () => {
       let textoAcumulado = '';
       let bubbleEl = null;
+      // SESION-TRANSPARENTE-01 (25/08/2026): el servidor detecta cuando el token dejó
+      // de validar (getAuth devuelve null) para un canal que debería tener sesión y
+      // manda este evento en vez de degradarse en silencio -- se deja terminar la
+      // respuesta en curso y se avisa/relogin al final (case 'done'), no a mitad.
+      let sesionInvalida = false;
 
       // Helper: descripciones amigables de herramientas
       function _iaToolFriendly(nombre) {
@@ -24588,6 +24593,9 @@ window.turnoToggle   = turnoToggle;
                 break;
               case 'cost':
                 break; // No mostrar coste
+              case 'sesion_invalida':
+                sesionInvalida = true;
+                break;
               case 'done':
                 typing.remove();
                 break;
@@ -24601,6 +24609,11 @@ window.turnoToggle   = turnoToggle;
 
         typing.remove();
         if (!textoAcumulado) appendIAMsg('bot', 'Sin respuesta');
+        if (sesionInvalida) {
+          appendIAMsg('bot', '⚠️ Tu sesión ha caducado — esta respuesta se generó sin tu cuenta real (sin historial ni permisos). Vuelve a iniciar sesión.');
+          localStorage.removeItem('alejandra_session');
+          setTimeout(() => location.reload(), 2500);
+        }
 
         // Extraer <plan> y <guia>
         let reply = textoAcumulado;
@@ -25143,6 +25156,9 @@ async function alejandraEnviar() {
     let toolsContainer = null;
     let costData = null;
     let routeData = null;
+    // SESION-TRANSPARENTE-01 (25/08/2026): ver comentario en la función equivalente de
+    // app_android más arriba.
+    let sesionInvalida = false;
 
     // ── Helpers para renderizar feedback ──
     function getToolsContainer() {
@@ -25324,6 +25340,7 @@ async function alejandraEnviar() {
             case 'progreso': setProgreso(ev.mensaje || 'Trabajando…'); break;
             case 'thinking': addAviso('🤔 ' + (ev.siguiente_paso || ev.problema || 'Pensando…')); break;
             case 'plan':     addAviso('📋 ' + (ev.objetivo || 'Planificando…')); break;
+            case 'sesion_invalida': sesionInvalida = true; break;
             case 'done':
               // Finalizar — quitar thinking si aún existe
               thinkingEl.remove();
@@ -25342,6 +25359,12 @@ async function alejandraEnviar() {
       if (!textoAcumulado) {
         thinkingEl.remove();
         appendToken('Sin respuesta');
+      }
+      // SESION-TRANSPARENTE-01: ver comentario en la función equivalente de app_android.
+      if (sesionInvalida) {
+        appendToken('\n\n⚠️ Tu sesión ha caducado — esta respuesta se generó sin tu cuenta real (sin historial ni permisos). Vuelve a iniciar sesión.');
+        localStorage.removeItem('alejandra_session');
+        setTimeout(() => location.reload(), 2500);
       }
 
       // Hora del mensaje

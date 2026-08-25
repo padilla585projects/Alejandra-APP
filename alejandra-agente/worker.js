@@ -4078,6 +4078,8 @@ export default {
         // continuidad de la conversación anónima, que es lo único que aquí hace falta.
         const usuario_id = sesionAuth ? sesionAuth.usuario_id : `anon:${String(rawUserId).trim().slice(0, 40)}`;
         const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
+        // SESION-TRANSPARENTE-01 (25/08/2026): ver sesionPareceCaducada() más abajo.
+        const sesionCaducada = sesionPareceCaducada(authOk, canal, rawUserId);
 
         // Protección anti runaway-cost: rate limit por identidad + tope de gasto diario.
         // Fix continuación 15: si es dev verificado y tiene el bypass propio activado en
@@ -4119,7 +4121,7 @@ export default {
         if (canal === 'telegram' && token_telegram) ctx.waitUntil(enviarPorTelegram(token_telegram, respuesta.texto));
         ctx.waitUntil(actualizarResumenSiNecesario(env, usuario_id, canalChat));
 
-        return json(respuesta);
+        return json(sesionCaducada ? { ...respuesta, sesion_invalida: true } : respuesta);
       }
 
       // ── Chat streaming SSE ────────────────────────────────────────────────
@@ -4141,6 +4143,8 @@ export default {
         // continuidad de la conversación anónima, que es lo único que aquí hace falta.
         const usuario_id = sesionAuth ? sesionAuth.usuario_id : `anon:${String(rawUserId).trim().slice(0, 40)}`;
         const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
+        // SESION-TRANSPARENTE-01 (25/08/2026): ver sesionPareceCaducada() más abajo.
+        const sesionCaducada = sesionPareceCaducada(authOk, canal, rawUserId);
 
         // Protección anti runaway-cost: rate limit por identidad + tope de gasto diario
         // (ver comentario detallado junto a validarRateLimit/validarTopeGastoDiario).
@@ -4203,6 +4207,9 @@ export default {
         ctx.waitUntil((async () => {
           let respFinal = null;
           try {
+            // SESION-TRANSPARENTE-01: avisar cuanto antes, antes de que el resto de la
+            // respuesta empiece a llegar -- ver sesionPareceCaducada() más abajo.
+            if (sesionCaducada) await send({ type: 'sesion_invalida' });
             const canalReal = canal || 'panel';
             const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rolVerificado, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado, () => clienteDesconectado, departamentoUsuario);
             respFinal = resp;
@@ -11791,6 +11798,27 @@ function calcularModulosDinamicos(clas, expert, mensaje, pantalla, departamento)
   }
   if (necesitaModuloPRL(mensaje, pantalla)) extra.push('prl_seguridad');
   return [...new Set(extra)];
+}
+
+// SESION-TRANSPARENTE-01 (25/08/2026): encontrado revisando una conversación real de
+// Adrián -- su sesión (tabla `sesiones`, sin caducar, expires_at a más de un mes vista)
+// dejó en algún punto de no validar en /api/chat(/stream) (getAuth() devolvió null), y
+// el chat siguió respondiendo con normalidad en modo anónimo (`anon:<id>`) sin decir
+// nada -- a diferencia de apiCall() en el resto de la app, que ante un 401 fuerza
+// relogin explícito ("Tu sesión ha caducado"). El usuario seguía "hablando" con
+// Alejandra sin saber que había perdido su historial, su rol y sus permisos reales.
+// Esta función detecta el caso -- canal que normalmente lleva sesión + un usuario_id
+// real en el body (no ya anónimo/genérico) + sesión que no validó -- para que el
+// frontend pueda avisar, igual que ya hace con cualquier otro 401. No se puede saber
+// la causa exacta de por qué el token concreto dejó de validar (no hay lectura previa
+// de logs) -- esto no la diagnostica, solo evita que vuelva a pasar en silencio.
+const CANALES_CON_SESION_ESPERADA = new Set(['app_android', 'panel', 'pwa', 'app']);
+function sesionPareceCaducada(authOk, canal, rawUserId) {
+  if (authOk) return false;
+  if (!CANALES_CON_SESION_ESPERADA.has(canal)) return false;
+  const uid = String(rawUserId || '').trim().toLowerCase();
+  if (!uid || uid.startsWith('anon') || ['system', 'getaway', 'cron', 'unknown'].includes(uid)) return false;
+  return true;
 }
 
 async function clasificarConHaiku(env, mensaje) {

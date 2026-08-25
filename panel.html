@@ -21098,6 +21098,9 @@ async function alejandrEnviar() {
     let buffer = '';
     let textoAcum = '';
     let bubbleEl = null;
+    // SESION-TRANSPARENTE-01 (25/08/2026): paridad con index.html -- el servidor avisa
+    // cuando el token dejó de validar en vez de degradarse a modo anónimo en silencio.
+    let sesionInvalida = false;
     let toolsContainer = null;
     const typingEl = document.getElementById(typingId);
 
@@ -21219,6 +21222,9 @@ async function alejandrEnviar() {
             break;
           case 'cost':
             break;
+          case 'sesion_invalida':
+            sesionInvalida = true;
+            break;
           case 'done':
             if (typingEl) typingEl.remove();
             break;
@@ -21234,6 +21240,11 @@ async function alejandrEnviar() {
     if (!textoAcum) {
       _alejandraMostrarError('Sin respuesta');
       return;
+    }
+    if (sesionInvalida) {
+      _alejandraMostrarError('⚠️ Tu sesión ha caducado — esta respuesta se generó sin tu cuenta real. Vuelve a iniciar sesión.');
+      localStorage.removeItem('alejandra_session');
+      setTimeout(() => location.reload(), 2500);
     }
 
     // FEAT-ALEJANDRA-FAB-PARIDAD (07/08/2026): antes <plan> y <guia> solo se borraban con
@@ -24620,7 +24631,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.07';
+const PANEL_APP_VERSION = '9.08';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
