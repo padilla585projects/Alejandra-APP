@@ -10926,13 +10926,19 @@ async function cargarStock() {
   } else if (mod === 'pemp') {
     const parts = [];
     if (q) parts.push(`q=${encodeURIComponent(q)}`);
-    if (stockFiltro) parts.push(`estado=${stockFiltro}`);
+    // PEMP-FILTRO-01 (25/08/2026): Adrián -- "la PEMP ya está registrada pero no está en
+    // el inventario". Causa real: PEMP/Carretillas nunca usan estado='activa' (usan
+    // 'Disponible'/'Averiada', con mayúscula) -- el filtro "Activas", pensado para
+    // Bobinas, mandaba ese valor al backend y no coincidía con nada, vaciando la lista.
+    // 'devuelta' sí es un valor literal real (lo pone devolverPemp) -- ese filtro se
+    // manda tal cual; "Activas" se resuelve más abajo, excluyendo las devueltas.
+    if (stockFiltro === 'devuelta') parts.push(`estado=${stockFiltro}`);
     if (obraParam) parts.push(obraParam);
     path = '/pemp' + (parts.length ? '?' + parts.join('&') : '');
   } else {
     const parts = [];
     if (q) parts.push(`q=${encodeURIComponent(q)}`);
-    if (stockFiltro) parts.push(`estado=${stockFiltro}`);
+    if (stockFiltro === 'devuelta') parts.push(`estado=${stockFiltro}`);
     if (obraParam) parts.push(obraParam);
     path = '/carretillas' + (parts.length ? '?' + parts.join('&') : '');
   }
@@ -10942,7 +10948,10 @@ async function cargarStock() {
 
   try {
     const res = await apiCall(path);
-    const data = await res.json();
+    let data = await res.json();
+    if ((mod === 'pemp' || mod === 'carretillas') && stockFiltro === 'activa') {
+      data = data.filter(it => it.estado !== 'devuelta');
+    }
     renderStock(data, mod);
   } catch {
     c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar datos</div>';
@@ -12058,7 +12067,7 @@ function abrirEdit(idx, mod) {
     html += `
       <div class="form-group" id="editObraGroup">
         <label class="form-label">Obra</label>
-        <select class="form-select" id="editObra"><option value="">Cargando...</option></select>
+        <select class="form-select" id="editObra" data-ready="0"><option value="">Cargando...</option></select>
       </div>`;
   }
 
@@ -12066,14 +12075,31 @@ function abrirEdit(idx, mod) {
   document.getElementById('modalEdit').classList.add('show');
 
   if (esSuperadmin) {
+    // PEMP-GUARDAR-01 (25/08/2026): Adrián -- "la pantalla de editar pemp falla, no te
+    // deja guardar lo que editas". Causa real: este <select> se rellena async DESPUÉS de
+    // mostrar el modal; si se pulsaba "Guardar" antes de que terminara de cargar, su
+    // value todavía era "" (el propio "Cargando...") — indistinguible de la opción real
+    // "— Sin obra —" — y guardarEdicion() mandaba obra_id:null, borrando la obra real del
+    // equipo. El elemento no desaparecía por un fallo de guardado: se guardaba de más,
+    // pisando la obra, y dejaba de aparecer en el listado filtrado por obra ("no se
+    // guarda" desde fuera se veía igual que "se borra su obra"). Se bloquea Guardar
+    // mientras el desplegable no está listo, para que value="" solo pueda significar la
+    // elección real "Sin obra".
+    const btnGuardarEl = document.getElementById('btnGuardarEdicion');
+    if (btnGuardarEl) { btnGuardarEl.disabled = true; btnGuardarEl.dataset.esperandoObra = '1'; }
     apiCall('/obras').then(r => r.json()).then(obras => {
       const sel = document.getElementById('editObra');
       if (!sel) return;
       sel.innerHTML = '<option value="">— Sin obra —</option>' +
         obras.map(o => `<option value="${o.id}" ${o.id === item.obra_id ? 'selected' : ''}>${o.nombre}</option>`).join('');
+      sel.dataset.ready = '1';
+      if (btnGuardarEl) { btnGuardarEl.disabled = false; delete btnGuardarEl.dataset.esperandoObra; }
     }).catch(() => {
       const sel = document.getElementById('editObra');
       if (sel) sel.innerHTML = '<option value="">Error al cargar</option>';
+      // sel.dataset.ready se queda en "0" a propósito: guardarEdicion() no tocará
+      // obra_id si no se pudo cargar la lista real, en vez de arriesgarse a borrarla.
+      if (btnGuardarEl) { btnGuardarEl.disabled = false; delete btnGuardarEl.dataset.esperandoObra; }
     });
   }
 }
@@ -12091,9 +12117,12 @@ async function guardarEdicion() {
   const notas  = document.getElementById('editNotas')?.value;
   const s = getSession();
 
-  // obra_id: solo si superadmin y el select existe
+  // obra_id: solo si superadmin, el select existe Y ya terminó de cargar la lista real
+  // (data-ready="1" -- ver abrirEdit). Si todavía no cargó (o falló), value="" no
+  // significa "Sin obra", solo que no sabemos su valor real todavía: no se toca.
   const obraSelEl = document.getElementById('editObra');
-  const obraIdEdit = obraSelEl ? (obraSelEl.value ? parseInt(obraSelEl.value) : null) : undefined;
+  const obraSelListo = obraSelEl?.dataset.ready === '1';
+  const obraIdEdit = obraSelListo ? (obraSelEl.value ? parseInt(obraSelEl.value) : null) : undefined;
 
   // departamento: solo si superadmin y el select existe
   const deptEl = document.getElementById('editDept');
@@ -24728,7 +24757,14 @@ async function _alejandraRestaurarChat() {
           const div = document.createElement('div');
           div.className = 'ale-msg ' + m.tipo;
           div.dataset.aleMsg = '1';
-          div.innerHTML = `<div class="ale-bubble">${_escHtml(m.texto)}</div><div class="ale-time">${m.time || ''}</div>`;
+          // ALEJANDRA-MD-HIST-01 (25/08/2026): Adrián -- "la pedi un esquema que nunca me
+          // hizo". El esquema SÍ se generó (enlace real, verificado), pero al reabrir el
+          // chat el historial se repintaba con _escHtml a secas -- el enlace quedaba como
+          // texto plano sin formato ni clic, indistinguible de una frase cualquiera. Solo
+          // la respuesta en vivo (streaming) pasaba por _renderMd(); al recargar el
+          // historial, no.
+          const bubbleHtml = m.tipo === 'bot' ? _renderMd(m.texto) : _escHtml(m.texto);
+          div.innerHTML = `<div class="ale-bubble">${bubbleHtml}</div><div class="ale-time">${m.time || ''}</div>`;
           list.appendChild(div);
         }
         list.scrollTop = list.scrollHeight;
@@ -24747,7 +24783,8 @@ async function _alejandraRestaurarChat() {
         const div = document.createElement('div');
         div.className = 'ale-msg ' + m.tipo;
         div.dataset.aleMsg = '1';
-        div.innerHTML = `<div class="ale-bubble">${_escHtml(m.texto)}</div><div class="ale-time">${m.time || ''}</div>`;
+        const bubbleHtml = m.tipo === 'bot' ? _renderMd(m.texto) : _escHtml(m.texto);
+        div.innerHTML = `<div class="ale-bubble">${bubbleHtml}</div><div class="ale-time">${m.time || ''}</div>`;
         list.appendChild(div);
       }
       list.scrollTop = list.scrollHeight;
@@ -25372,7 +25409,11 @@ function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false, skipS
   const now = new Date();
   const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
 
-  div.innerHTML = `<div class="ale-bubble">${_escHtml(texto)}</div><div class="ale-time">${timeStr}</div>`;
+  // ALEJANDRA-MD-HIST-01: mismo criterio que _alejandraRestaurarChat -- un mensaje del
+  // bot puede traer markdown (enlaces, negrita); solo el propio texto del usuario se
+  // escapa a secas.
+  const bubbleHtml = tipo === 'bot' ? _renderMd(texto) : _escHtml(texto);
+  div.innerHTML = `<div class="ale-bubble">${bubbleHtml}</div><div class="ale-time">${timeStr}</div>`;
 
   if (isLoading) div.dataset.loading = '1';
   list.appendChild(div);
