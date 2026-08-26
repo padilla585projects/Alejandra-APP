@@ -4,6 +4,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Changed (2026-08-25 — Quitar "Obsidian" del nombre visible del panel de memoria)
+
+Adrián: "quita el nombre de 'obsidian'". El botón del sidebar, el título de la página y
+el subtítulo descriptivo pasan de "Memoria (Obsidian)" a solo "Memoria" — sin
+referenciar el nombre de un producto de terceros en la UI propia. Solo se tocó el texto
+visible; los identificadores internos (`data-page="memoriaObsidian"`,
+`id="pageMemoriaObsidian"`, la función `cargarMemoriaObsidian`) y los comentarios de
+código que describen el diseño se dejan igual — no son visibles para nadie y renombrarlos
+no aportaba nada, solo más riesgo de romper alguna referencia.
+
+Versión → 9.13 (4 marcadores sincronizados). Sin cambio de comportamiento ni de datos.
+
 ### Added (2026-08-25 — Grafo de memoria: animación en vivo + backfill real de 180 notas + 82 enlaces)
 
 Adrián probó el mapa recién desplegado: "no veo las conexiones entre ellos ni nada" y

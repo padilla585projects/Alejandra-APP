@@ -1022,7 +1022,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
          resto de nav-dev (que también se ven con rol superadmin): clase aparte,
          nav-dev-solo, revelada solo con SESSION.rol==='desarrollador' exacto. -->
     <button class="nav-item nav-dev-solo" data-page="memoriaObsidian" onclick="navTo('memoriaObsidian')" style="display:none">
-      <span class="nav-icon">🧠</span> Memoria (Obsidian)
+      <span class="nav-icon">🧠</span> Memoria
     </button>
 
     <!-- SIDEBAR-FOOTER-01 (26/07/2026): Adrián: "esconde el número de versión en la parte
@@ -9632,10 +9632,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
            sin la complejidad de un grafo SVG/canvas real. -->
       <div class="page" id="pageMemoriaObsidian">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
-          <div class="page-title" style="margin-bottom:0">🧠 Memoria (Obsidian)</div>
+          <div class="page-title" style="margin-bottom:0">🧠 Memoria</div>
           <span style="background:rgba(168,85,247,.2);color:#a855f7;font-family:'Montserrat',sans-serif;font-weight:900;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:20px;border:1px solid rgba(168,85,247,.3)">SOLO DESARROLLADOR</span>
         </div>
-        <div class="page-sub">Notas de memoria de Alejandra (alejandra_memoria) enlazadas entre sí, estilo Obsidian — cada nota puede relacionarse con otras por slug.</div>
+        <div class="page-sub">Notas de memoria de Alejandra (alejandra_memoria) enlazadas entre sí — cada nota puede relacionarse con otras por slug.</div>
 
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <input id="memBuscar" type="text" placeholder="Buscar por título o contenido..." style="flex:1;min-width:200px" oninput="memRenderNotas()">
@@ -14384,7 +14384,7 @@ const PAGE_TITLES = {
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
   pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
   empresa: 'Mi Empresa', logs: 'Logs', devtools: '🛠️ DevTools',
-  memoriaObsidian: '🧠 Memoria (Obsidian)',
+  memoriaObsidian: '🧠 Memoria',
   reconocimientos: '🏥 Reconocimientos Médicos',
   documentosObra: '📋 Documentos de Obra',
   permisosTrabajo: '📝 Permisos de Trabajo',
@@ -25161,7 +25161,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.12';
+const PANEL_APP_VERSION = '9.13';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
