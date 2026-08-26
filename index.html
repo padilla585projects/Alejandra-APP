@@ -1639,17 +1639,39 @@ select option{background:var(--surface2);color:var(--text)}
     </div>
   </div>
 
+  <!-- MODAL EDITAR CIRCUITOS DE PLANO (movil) -->
+  <div class="modal-overlay" id="modalEditarCircuitosMovil" onclick="if(event.target===this)cerrarModalEditarCircuitos()" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">🔌 Editar circuitos</div>
+        <button onclick="cerrarModalEditarCircuitos()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:14px 16px" id="editCircuitosLista"></div>
+      <div id="editCircuitosStatus" style="display:none;font-size:12px;color:var(--muted);text-align:center;padding:0 16px 10px">⏳ Regenerando plano con los cambios (puede tardar hasta varios minutos)...</div>
+      <div id="editCircuitosMsg" style="display:none;margin:0 16px 10px;font-size:13px;padding:10px 12px;border-radius:8px"></div>
+      <div id="editCircuitosActions" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+        <button onclick="cerrarModalEditarCircuitos()" style="flex:0 0 90px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:700">Cancelar</button>
+        <button id="btnGuardarCircuitosMovil" onclick="guardarCircuitosMovil()" class="btn-primary" style="flex:1;margin-top:0">💾 Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- DETALLE DE PLANO (solo lectura) -->
   <div id="screenPlanoDetalle" class="screen" style="padding:0;display:none;flex-direction:column">
-    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);flex-shrink:0">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--surface);flex-shrink:0">
       <button onclick="navTo('planos')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0;white-space:nowrap">← Volver</button>
       <div style="flex:1;min-width:0;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="planoDetTitulo">—</div>
       <button onclick="planoZoom(0.2)" title="Acercar" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">+</button>
       <button onclick="planoZoom(-0.2)" title="Alejar" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">−</button>
+      <button onclick="eliminarPlanoMovil()" title="Borrar plano" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;color:#ef4444;flex-shrink:0">🗑</button>
     </div>
-    <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <div style="font-size:11px;color:var(--muted)" id="planoDetSub">—</div>
-      <div id="planoDetCircuitos" style="margin-top:4px"></div>
+    <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <span id="planoDetTipoBadge" style="font-size:11px;font-weight:700;color:#0ea5e9;background:rgba(14,165,233,.12);padding:3px 9px;border-radius:6px;white-space:nowrap"></span>
+        <span id="planoDetFecha" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="planoDetDescripcion" style="font-size:13px;line-height:1.5;color:var(--text)"></div>
+      <div id="planoDetCircuitos" style="margin-top:6px"></div>
     </div>
     <div id="planoDetSvgWrap" style="flex:1;overflow:auto;background:#f8fafc;padding:12px;color:#0f172a">
       <div class="empty-state">Cargando plano…</div>
@@ -14764,7 +14786,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.13';
+const APP_VERSION = '9.14';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -16917,15 +16939,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function verPlano(id) {
     _planoZoomVal = 1;
+    window._planoDetActualId = id;
     showScreen('planoDetalle');
-    const titEl  = document.getElementById('planoDetTitulo');
-    const subEl  = document.getElementById('planoDetSub');
-    const circEl = document.getElementById('planoDetCircuitos');
-    const wrap   = document.getElementById('planoDetSvgWrap');
-    if (titEl)  titEl.textContent  = 'Cargando…';
-    if (subEl)  subEl.textContent  = '';
-    if (circEl) circEl.innerHTML   = '';
-    if (wrap)   wrap.innerHTML     = '<div class="empty-state">Cargando plano…</div>';
+    const titEl   = document.getElementById('planoDetTitulo');
+    const tipoEl  = document.getElementById('planoDetTipoBadge');
+    const fechaEl = document.getElementById('planoDetFecha');
+    const descEl  = document.getElementById('planoDetDescripcion');
+    const circEl  = document.getElementById('planoDetCircuitos');
+    const wrap    = document.getElementById('planoDetSvgWrap');
+    if (titEl)   titEl.textContent   = 'Cargando…';
+    if (tipoEl)  tipoEl.textContent  = '';
+    if (fechaEl) fechaEl.textContent = '';
+    if (descEl)  descEl.textContent  = '';
+    if (circEl)  circEl.innerHTML    = '';
+    if (wrap)    wrap.innerHTML      = '<div class="empty-state">Cargando plano…</div>';
     let plano;
     try {
       const res = await apiCall(`/planos/${id}`);
@@ -16942,18 +16969,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       return;
     }
     const label = PLANO_TIPO_LABELS[plano.tipo] || plano.tipo || '';
-    if (titEl) titEl.textContent = plano.titulo || 'Plano';
-    if (subEl) {
-      subEl.innerHTML = `<span style="font-weight:700;color:#0ea5e9">${esc(label)}</span>`
-        + (plano.descripcion ? ' · ' + esc(plano.descripcion) : '')
-        + (plano.creado_en ? ' · ' + esc(String(plano.creado_en).slice(0, 10)) : '');
-    }
-    // Circuitos estructurados (solo lectura, opcional — solo aporta contexto extra)
+    if (titEl)   titEl.textContent   = plano.titulo || 'Plano';
+    if (tipoEl)  tipoEl.textContent  = label;
+    if (fechaEl) fechaEl.textContent = plano.creado_en ? String(plano.creado_en).slice(0, 10) : '';
+    if (descEl)  descEl.textContent  = plano.descripcion || '';
+    // Circuitos estructurados (lectura + edición vía modal, si el plano tiene circuitos)
+    let circuitos = [];
+    try { circuitos = plano.circuitos_json ? JSON.parse(plano.circuitos_json) : []; } catch { circuitos = []; }
+    window._planoDetCircuitosCache = Array.isArray(circuitos) ? circuitos : [];
     if (circEl) {
-      let circuitos = [];
-      try { circuitos = plano.circuitos_json ? JSON.parse(plano.circuitos_json) : []; } catch { circuitos = []; }
       if (Array.isArray(circuitos) && circuitos.length) {
-        circEl.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-top:6px;margin-bottom:2px">Circuitos</div>`
+        circEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;margin-bottom:2px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Circuitos</div>
+            <button onclick="abrirModalEditarCircuitos()" style="background:none;border:none;color:#0ea5e9;font-size:11px;font-weight:700;cursor:pointer;padding:2px 0">✏️ Editar</button>
+          </div>`
           + circuitos.map(c => {
               const partes = [];
               if (c.proteccion) partes.push(esc(c.proteccion));
@@ -16976,7 +17005,13 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (wrap) {
         wrap.innerHTML = svgText;
         const svgEl = wrap.querySelector('svg');
-        if (svgEl) { svgEl.style.transformOrigin = 'top left'; svgEl.style.maxWidth = 'none'; }
+        // ZOOM-PLANO-01 (26/08/2026): transform:scale() no cambia el tamaño de layout del
+        // elemento, así que el contenedor overflow:auto seguía calculando el área de scroll
+        // con el tamaño SIN zoom -- al acercar, el dibujo se salía del área desplazable y
+        // quedaba descentrado/recortado sin forma de verlo entero. La propiedad CSS "zoom"
+        // sí afecta al tamaño de layout (a diferencia de transform), así el scroll crece
+        // junto con el dibujo y se puede desplazar hasta cualquier zona ampliada.
+        if (svgEl) { svgEl.style.maxWidth = 'none'; svgEl.style.display = 'block'; }
       }
     } catch { if (wrap) wrap.innerHTML = '<div class="empty-state">Error de red al cargar el dibujo</div>'; }
   }
@@ -16984,13 +17019,112 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function planoZoom(delta) {
     _planoZoomVal = Math.min(3, Math.max(0.2, +(_planoZoomVal + delta).toFixed(2)));
     const svg = document.querySelector('#planoDetSvgWrap svg');
-    if (svg) svg.style.transform = `scale(${_planoZoomVal})`;
+    if (svg) svg.style.zoom = _planoZoomVal;
+  }
+
+  async function eliminarPlanoMovil() {
+    const id = window._planoDetActualId;
+    if (!id) return;
+    if (!confirm('¿Eliminar este plano? Esta acción no se puede deshacer.')) return;
+    try {
+      const res = await apiCall(`/planos/${id}`, { method: 'DELETE' });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Error');
+      if (typeof toast === 'function') toast('Plano eliminado', 'ok');
+      navTo('planos');
+      cargarPlanos();
+    } catch (e) {
+      if (typeof toast === 'function') toast('Error: ' + e.message, 'error'); else alert('Error: ' + e.message);
+    }
+  }
+
+  // ── Edición de circuitos de un plano (unifilar/eléctrico) desde el móvil ──
+  // Reutiliza el mismo endpoint PUT /planos/:id/circuitos que ya usa panel.html
+  // (regenera el SVG con los valores nuevos). No hay editor de dibujo aquí a
+  // propósito -- eso se queda solo en el panel de oficina.
+  const CIRC_CAMPOS_MOVIL = [
+    ['nombre', 'Nombre / uso'], ['proteccion', 'Protección'], ['in_a', 'In (A)'], ['ireg_a', 'Ireg (A)'],
+    ['seccion_cable', 'Sección cable'], ['tipo_cable', 'Tipo cable'], ['instalacion', 'Instalación'], ['notas', 'Notas'],
+  ];
+
+  function _circuitoCardHtmlMovil(c) {
+    return `<div class="circ-card-movil" data-id="${esc(c.id || '')}" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:8px">${esc(c.id || '—')}</div>
+      ${CIRC_CAMPOS_MOVIL.map(([campo, label]) => `
+        <div style="margin-bottom:6px">
+          <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${label}</label>
+          <input class="circ-campo-movil" data-campo="${campo}" value="${esc(c[campo] || '')}"
+                 style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text);box-sizing:border-box">
+        </div>`).join('')}
+    </div>`;
+  }
+
+  function abrirModalEditarCircuitos() {
+    const circuitos = window._planoDetCircuitosCache || [];
+    const cont = document.getElementById('editCircuitosLista');
+    if (cont) cont.innerHTML = circuitos.length ? circuitos.map(_circuitoCardHtmlMovil).join('') : '<div class="empty-state">Sin circuitos</div>';
+    const msg = document.getElementById('editCircuitosMsg');
+    if (msg) msg.style.display = 'none';
+    const modal = document.getElementById('modalEditarCircuitosMovil');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function cerrarModalEditarCircuitos() {
+    const modal = document.getElementById('modalEditarCircuitosMovil');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function guardarCircuitosMovil() {
+    const id = window._planoDetActualId;
+    if (!id) return;
+    const cambios = [];
+    document.querySelectorAll('#editCircuitosLista .circ-card-movil').forEach(card => {
+      const circuito_id = card.dataset.id;
+      if (!circuito_id) return;
+      card.querySelectorAll('.circ-campo-movil').forEach(inp => {
+        const val = inp.value.trim();
+        if (val) cambios.push({ circuito_id, campo: inp.dataset.campo, valor: val });
+      });
+    });
+    if (!cambios.length) { if (typeof toast === 'function') toast('No hay cambios para guardar', 'error'); return; }
+    const btn    = document.getElementById('btnGuardarCircuitosMovil');
+    const status = document.getElementById('editCircuitosStatus');
+    const msg    = document.getElementById('editCircuitosMsg');
+    if (btn) btn.disabled = true;
+    if (status) status.style.display = 'block';
+    if (msg) msg.style.display = 'none';
+    try {
+      const res = await apiCall(`/planos/${id}/circuitos`, { method: 'PUT', body: JSON.stringify({ cambios }) });
+      const d = await res.json().catch(() => ({}));
+      if (status) status.style.display = 'none';
+      if (btn) btn.disabled = false;
+      if (!res.ok || !d.ok) throw new Error(d.error || 'Error guardando circuitos');
+      if (msg) {
+        msg.style.display = 'block';
+        msg.style.background = '#0f2a17'; msg.style.border = '1px solid #14532d'; msg.style.color = '#4ade80';
+        msg.textContent = '✅ ' + (d.mensaje || 'Circuitos guardados y plano regenerado');
+      }
+      await verPlano(id);
+      setTimeout(cerrarModalEditarCircuitos, 1200);
+    } catch (e) {
+      if (status) status.style.display = 'none';
+      if (btn) btn.disabled = false;
+      if (msg) {
+        msg.style.display = 'block';
+        msg.style.background = '#2a0f0f'; msg.style.border = '1px solid #7f1d1d'; msg.style.color = '#f87171';
+        msg.textContent = '❌ Error: ' + e.message;
+      }
+    }
   }
 
   window.cargarPlanos             = cargarPlanos;
   window.planoSetFiltro           = planoSetFiltro;
   window.verPlano                 = verPlano;
   window.planoZoom                = planoZoom;
+  window.eliminarPlanoMovil       = eliminarPlanoMovil;
+  window.abrirModalEditarCircuitos = abrirModalEditarCircuitos;
+  window.cerrarModalEditarCircuitos = cerrarModalEditarCircuitos;
+  window.guardarCircuitosMovil    = guardarCircuitosMovil;
   window.ejecutarGenerarPlanoMovil = ejecutarGenerarPlanoMovil;
 
   // ══════════════════════════════════════════════════════

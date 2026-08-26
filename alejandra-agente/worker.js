@@ -6284,8 +6284,8 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
   const toolsEscritos = new Set(herramientasUsadas.map(t => t.nombre));
 
   // ALEJANDRA-ESQUEMA-02 (26/08/2026): detección de máxima fiabilidad, específica para
-  // esquemas/planos -- un enlace con este formato exacto SOLO puede ser real si
-  // generar_esquema_electrico/marcar_plano se ejecutó en este turno y lo devolvió.
+  // esquemas -- un enlace con este formato exacto SOLO puede ser real si
+  // generar_esquema_electrico se ejecutó en este turno y lo devolvió.
   // Encontrado probando en producción: Alejandra "imitó" el formato de su propia
   // respuesta exitosa del turno anterior (visible en su propio historial) para un
   // esquema DISTINTO, sin ejecutar la tool de nuevo -- dio dos enlaces con formato
@@ -6293,10 +6293,21 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
   // añade un aviso al final y deja el texto), aquí se sustituye TODA la respuesta:
   // un enlace falso es peor que un texto sin enlace, porque el usuario puede hacer
   // clic y toparse con un 404 sin saber por qué.
-  const mencionaEsquemaOPlano = /\/api\/esquemas\/view\//.test(textoFinal) || /\/api\/planos\//.test(textoFinal);
-  const generoEsquemaReal = toolsEscritos.has('generar_esquema_electrico') || toolsEscritos.has('marcar_plano');
-  if (mencionaEsquemaOPlano && !generoEsquemaReal) {
+  const mencionaEsquema = /\/api\/esquemas\/view\//.test(textoFinal);
+  const generoEsquemaReal = toolsEscritos.has('generar_esquema_electrico');
+  if (mencionaEsquema && !generoEsquemaReal) {
     return 'No llegué a generar ningún esquema en este turno — iba a describírtelo como si lo hubiera hecho, pero no ejecuté la herramienta real y el enlace que iba a darte no existiría de verdad. Pídemelo otra vez y lo genero ahora.';
+  }
+
+  // Mismo principio para planos (tool generar_plano/editar_plano, formato de enlace
+  // real "/planos/{id}/svg", DISTINTO del de esquemas -- revisado el código de
+  // generarPlanoREST/editarPlanoCircuitosREST en worker.js: ese es el único formato
+  // que de verdad devuelven, nunca "/api/planos/"). marcar_plano no cuenta aquí: es de
+  // solo lectura (analiza un plano ya subido) y nunca devuelve un enlace de plano.
+  const mencionaPlano = /\/planos\/\d+\/svg\b/.test(textoFinal);
+  const generoPlanoReal = toolsEscritos.has('generar_plano') || toolsEscritos.has('editar_plano');
+  if (mencionaPlano && !generoPlanoReal) {
+    return 'No llegué a generar ningún plano en este turno — iba a describírtelo como si lo hubiera hecho, pero no ejecuté la herramienta real y el enlace que iba a darte no existiría de verdad. Pídemelo otra vez y lo genero ahora.';
   }
 
   // Patrones de afirmación de acción completada
@@ -6313,7 +6324,7 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
   ];
 
   // Tools de escritura que deberían ejecutarse si afirma acción
-  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix', 'generar_esquema_electrico', 'marcar_plano', 'generar_informe'];
+  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix', 'generar_esquema_electrico', 'marcar_plano', 'generar_plano', 'editar_plano', 'generar_informe'];
   const usóEscritura = toolsEscritura.some(t => toolsEscritos.has(t));
 
   const afirmaAccion = patronesAccion.some(p => p.test(textoFinal));

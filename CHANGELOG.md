@@ -4,6 +4,44 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed / Added (2026-08-26 — Visor de Planos IA en la app móvil: zoom, legibilidad, borrar, editar circuitos) — v9.14
+
+Adrián probó el visor de planos de ingeniería en la app móvil (`index.html`, pantalla
+"Detalle de Plano") y encontró varios problemas reales:
+
+1. **Zoom descentrado.** `planoZoom()` usaba `transform: scale()` sobre el `<svg>`, que no
+   cambia el tamaño de layout del elemento — el contenedor `overflow:auto` seguía
+   calculando el área de scroll con el tamaño SIN zoom, así que al acercar el dibujo se
+   salía del área desplazable y quedaba recortado/inaccesible. Cambiado a la propiedad CSS
+   `zoom` (sí afecta al layout): probado en aislado que el `scrollWidth`/`scrollHeight` del
+   contenedor ahora crece en proporción exacta al zoom aplicado (624×428 → 1104×748 a
+   zoom 1.8×), así que se puede desplazar hasta cualquier zona ampliada.
+2. **Descripción confusa y con letra pequeña.** El tipo, la fecha y la descripción iban
+   concatenados en una sola línea a 11px. Separados en tres bloques (badge de tipo, fecha,
+   descripción a 13px con `line-height:1.5`).
+3. **No se podía borrar.** Añadido botón 🗑 en la cabecera del visor
+   (`eliminarPlanoMovil()`), reutilizando el mismo `DELETE /planos/:id` que ya usa
+   `panel.html`.
+4. **No se podía editar.** Adrián eligió, entre tres niveles posibles, "editar circuitos":
+   nuevo modal (`modalEditarCircuitosMovil`) para planos con circuitos estructurados
+   (unifilar/eléctrico) — cada circuito como tarjeta con sus campos (protección, cable,
+   amperaje...), reutilizando el mismo `PUT /planos/:id/circuitos` que ya usa `panel.html`
+   (regenera el SVG con los valores nuevos). Sin editor de dibujo — eso se queda solo en
+   el panel de oficina, donde ya existe uno completo.
+
+Aparte, al revisar el código de `generar_plano`/`editar_plano` para el fix de esquemas de
+ayer (ALEJANDRA-ESQUEMA-02) se encontró que esas dos tools **no estaban en la lista de
+"tools de escritura"** de `verificarAccionesAfirmadas()` — un plano real generado con
+`generar_plano` habría disparado el aviso de "posible fabricación" sobre una respuesta
+legítima (falso positivo). Corregido: añadidas ambas a `toolsEscritura`, y separada la
+detección de URL en dos comprobaciones independientes — esquemas (`/api/esquemas/view/`,
+atada a `generar_esquema_electrico`) y planos (`/planos/{id}/svg`, atada a
+`generar_plano`/`editar_plano`) — el patrón `/api/planos/` de ayer no correspondía a
+ningún formato de enlace real que devuelva ninguna tool.
+
+Versión → 9.14 (los 4 marcadores sincronizados). 207/207 tests. Pendiente de deploy
+(Pages + `alejandra-agente`).
+
 ### Fixed (2026-08-26 — Alejandra seguía inventando esquemas: enlaces con formato real que daban 404)
 
 Probando en producción con sesión real tras el trabajo de ayer sobre esquemas: pedido 1

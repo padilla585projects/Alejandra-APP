@@ -1,6 +1,19 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-26
+- Estado (2026-08-26, continuación): **Visor de Planos IA en la app móvil — zoom,
+  legibilidad, borrar, editar circuitos.** Adrián probó el apartado de planos de
+  ingeniería en `index.html` y encontró: zoom descentrado (bug real, `transform:scale()`
+  no cambia el tamaño de layout — cambiado a `zoom`, probado en aislado que el scroll
+  crece con el zoom), descripción confusa/pequeña (reorganizada, 13px), y sin borrar ni
+  editar. Añadido borrar (reutiliza `DELETE /planos/:id`) y, tras preguntarle a Adrián
+  el alcance, edición de circuitos vía modal (reutiliza `PUT /planos/:id/circuitos`, ya
+  usado por `panel.html`) — sin editor de dibujo, que se queda solo en el panel. De paso,
+  al revisar `generar_plano`/`editar_plano` para el fix de ayer se encontró que ninguna
+  de las dos estaba en `toolsEscritura` de `verificarAccionesAfirmadas()` (falso positivo
+  real sobre planos legítimos) y que el patrón `/api/planos/` de ayer no correspondía a
+  ningún formato de enlace real — corregido, separada la detección esquema/plano.
+  Versión → 9.14. 207/207 tests. Pendiente de commit/deploy. Ver `CHANGELOG.md`.
 - Estado (2026-08-26): **Alejandra seguía inventando esquemas — corregido a nivel de
   código, no solo de prompt.** Probando en producción con sesión real: un esquema pedido
   justo después de otro que sí se generó de verdad, Alejandra respondió "esquema
