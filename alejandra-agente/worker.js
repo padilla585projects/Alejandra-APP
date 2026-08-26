@@ -6167,7 +6167,13 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       respAPI.stop_reason !== 'tool_use' &&
       (respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '')
     ) {
-      textoFinal = respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+      // ALEJANDRA-ESQUEMA-02: verificar ANTES de enviar -- esta rama manda el texto de
+      // una vez (no token a token), así que aún se puede corregir antes de que el
+      // usuario lo vea, a diferencia del streaming real de la rama de abajo.
+      textoFinal = verificarAccionesAfirmadas(
+        respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(),
+        herramientasUsadas
+      );
       await send({ type: 'text', texto: textoFinal });
     } else {
       // Streaming real token a token (todas las plataformas)
@@ -6209,12 +6215,28 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         textoFinal = (typeof streamResult === 'string') ? streamResult : (respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta');
       } catch (_) {
         // Fallback: usar respuesta ya obtenida si el stream falla
-        textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
+        // ALEJANDRA-ESQUEMA-02: mismo motivo que la rama de arriba -- se envía de una
+        // vez, así que verificar antes de mandarlo sí evita que el usuario lo vea.
+        textoFinal = verificarAccionesAfirmadas(
+          respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta',
+          herramientasUsadas
+        );
         await send({ type: 'text', texto: textoFinal });
       }
     }
 
+    // ALEJANDRA-ESQUEMA-02: para las dos ramas de arriba que envían de una vez, esto ya
+    // se aplicó antes del send() (así el usuario nunca llega a verlo) y aquí es
+    // idempotente. Para el streaming real en vivo (token a token) es la ÚNICA pasada --
+    // el usuario ya vio el texto sin corregir en pantalla, imposible de deshacer sin
+    // renunciar al streaming en tiempo real; si detecta el problema aquí, al menos se
+    // corrige lo que se GUARDA (para no contaminar el historial futuro con el enlace
+    // falso) y se manda un aviso aparte para que quede constancia en el propio chat.
+    const textoAntesDeVerificar = textoFinal;
     textoFinal = verificarAccionesAfirmadas(textoFinal, herramientasUsadas);
+    if (textoFinal !== textoAntesDeVerificar) {
+      await send({ type: 'text', texto: '\n\n⚠️ Corrección: lo que acabo de describir no llegué a generarlo de verdad -- no ejecuté la herramienta real. Pídemelo otra vez y lo hago ahora.' });
+    }
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
 
     // ── Emitir info de modelo + tokens + coste ────────────────────────────
@@ -6261,6 +6283,22 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
 function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
   const toolsEscritos = new Set(herramientasUsadas.map(t => t.nombre));
 
+  // ALEJANDRA-ESQUEMA-02 (26/08/2026): detección de máxima fiabilidad, específica para
+  // esquemas/planos -- un enlace con este formato exacto SOLO puede ser real si
+  // generar_esquema_electrico/marcar_plano se ejecutó en este turno y lo devolvió.
+  // Encontrado probando en producción: Alejandra "imitó" el formato de su propia
+  // respuesta exitosa del turno anterior (visible en su propio historial) para un
+  // esquema DISTINTO, sin ejecutar la tool de nuevo -- dio dos enlaces con formato
+  // plausible que en realidad daban 404. A diferencia del resto de esta función (que
+  // añade un aviso al final y deja el texto), aquí se sustituye TODA la respuesta:
+  // un enlace falso es peor que un texto sin enlace, porque el usuario puede hacer
+  // clic y toparse con un 404 sin saber por qué.
+  const mencionaEsquemaOPlano = /\/api\/esquemas\/view\//.test(textoFinal) || /\/api\/planos\//.test(textoFinal);
+  const generoEsquemaReal = toolsEscritos.has('generar_esquema_electrico') || toolsEscritos.has('marcar_plano');
+  if (mencionaEsquemaOPlano && !generoEsquemaReal) {
+    return 'No llegué a generar ningún esquema en este turno — iba a describírtelo como si lo hubiera hecho, pero no ejecuté la herramienta real y el enlace que iba a darte no existiría de verdad. Pídemelo otra vez y lo genero ahora.';
+  }
+
   // Patrones de afirmación de acción completada
   const patronesAccion = [
     /\b(ya lo hice|ya está hecho|ya lo cambié|ya lo modifiqué|acabo de hacer|acabo de cambiar|acabo de escribir|acabo de modificar|acabo de implementar|acabo de crear|acabo de aplicar|ya lo apliqué|ya lo arreglé|ya está arreglado|ya lo actualicé|ya lo subí|lo he hecho|lo he cambiado|lo he modificado|lo he implementado|he hecho el cambio|he aplicado|he modificado|he actualizado)\b/i,
@@ -6268,10 +6306,14 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
     /patch\s+aplicado/i,
     /commit\s+[`']?[0-9a-f]{7,40}[`']?/i,
     /\b(he desplegado|ya desplegué|desplegado con éxito)\b/i,
+    // ALEJANDRA-ESQUEMA-02: mismo patrón que arriba pero por texto (fraseo, no URL) --
+    // cubre el caso en que afirma haber generado/guardado algo sin llegar a dar un
+    // enlace con el formato reconocible (esquema, informe, documento, plano).
+    /\b(esquema generado|informe generado|documento generado|plano generado|esquema creado|informe creado|documento creado|guardado en R2|guardado correctamente|redactado y guardado)\b/i,
   ];
 
   // Tools de escritura que deberían ejecutarse si afirma acción
-  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix'];
+  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix', 'generar_esquema_electrico', 'marcar_plano', 'generar_informe'];
   const usóEscritura = toolsEscritura.some(t => toolsEscritos.has(t));
 
   const afirmaAccion = patronesAccion.some(p => p.test(textoFinal));

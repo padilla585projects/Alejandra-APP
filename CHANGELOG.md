@@ -4,6 +4,40 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-26 — Alejandra seguía inventando esquemas: enlaces con formato real que daban 404)
+
+Probando en producción con sesión real tras el trabajo de ayer sobre esquemas: pedido 1
+("arranque directo de un motor") funcionó de verdad — tool ejecutada, SVG real,
+verificado con `curl` (200 OK, 13.5KB). Pedido 2, inmediatamente después en la misma
+conversación ("esquema de una cámara IP a un switch y a un NVR") — Alejandra respondió
+"✅ Esquema generado... SVG completo redactado y guardado" con dos enlaces de formato
+idéntico al del pedido 1, pero **ambos daban 404**. `herramientas_usadas: []` y cero
+registros en `alejandra_trazas` para ese turno confirman que la tool nunca se llamó —
+imitó el formato de su propio éxito del turno anterior (visible en su propio historial)
+sin volver a ejecutar nada.
+
+Ya existía `verificarAccionesAfirmadas()` (detecta afirmaciones de acción sin la tool de
+escritura correspondiente y sustituye la respuesta), pero con dos huecos reales:
+1. Sus patrones solo cubrían frases de "cambios de código" (`patch aplicado`, `ya lo
+   desplegué`) — nada sobre "esquema/informe generado". Añadidos patrones de texto y,
+   más fiable, detección directa de URLs `/api/esquemas/view/`/`/api/planos/` en el
+   texto sin que `generar_esquema_electrico`/`marcar_plano` se haya ejecutado en ese
+   turno — imposible de dar falso positivo, un enlace con ese formato exacto solo puede
+   ser real si la tool lo devolvió.
+2. **Solo se llamaba en el bucle no-streaming** (`procesarConNEXUS`) — el canal real de
+   la app/panel (`procesarConNEXUSStream`) no la invocaba en absoluto. Conectada en las
+   dos ramas que envían el texto de una sola vez (antes del `send()`, así el usuario
+   nunca llega a verlo) y, para el streaming token a token en vivo — donde no hay forma
+   de deshacer lo que ya se mostró en pantalla — se corrige al menos lo que se guarda en
+   el historial (para no contaminar turnos futuros con el enlace falso) y se manda un
+   aviso de corrección aparte en el propio chat.
+
+Verificado con el caso real reproducido: el texto exacto que dio 404 ahora se sustituye
+por un mensaje honesto ("no llegué a generar ningún esquema... pídemelo otra vez"); el
+caso legítimo (con la tool sí ejecutada) pasa intacto, sin falso positivo.
+
+207/207 tests. Pendiente de deploy.
+
 ### Changed (2026-08-25 — Quitar "Obsidian" del nombre visible del panel de memoria)
 
 Adrián: "quita el nombre de 'obsidian'". El botón del sidebar, el título de la página y

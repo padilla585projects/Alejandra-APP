@@ -1,6 +1,22 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-25
+- Actualizado: 2026-08-26
+- Estado (2026-08-26): **Alejandra seguía inventando esquemas — corregido a nivel de
+  código, no solo de prompt.** Probando en producción con sesión real: un esquema pedido
+  justo después de otro que sí se generó de verdad, Alejandra respondió "esquema
+  generado y guardado" con dos enlaces `/api/esquemas/view/...` con formato real pero que
+  daban 404 — `herramientas_usadas: []`, cero trazas, imitó el formato de su propio éxito
+  anterior sin ejecutar la tool. La función `verificarAccionesAfirmadas()` ya existía
+  para este tipo de caso pero tenía dos huecos: sus patrones no cubrían "esquema/informe
+  generado" (solo "código desplegado"), y en el canal real (`procesarConNEXUSStream`) no
+  se llamaba en absoluto — solo en el bucle sin streaming. Añadida detección directa de
+  URL de esquema/plano sin la tool correspondiente (máxima fiabilidad, sustituye la
+  respuesta completa) y conectada antes de `send()` en las dos ramas de envío único; en
+  streaming token a token en vivo (no se puede deshacer lo ya mostrado) se corrige al
+  menos el historial guardado y se manda un aviso de corrección en el chat. Verificado
+  con el caso real reproducido (sustituye correctamente) y con el caso legítimo (pasa
+  intacto, sin falso positivo). 207/207 tests. Pendiente de commit/deploy. Ver
+  `CHANGELOG.md`.
 - Estado (2026-08-25, continuación): **Panel de memoria estilo Obsidian en Alejandra
   Office — solo desarrollador.** Nueva sección 🧠 Memoria (Obsidian) en `panel.html`
   (lista + backlinks clicables + crear nota), backend nuevo `/api/memoria/*` en
