@@ -40,7 +40,13 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<!-- PERF-03 (26/08/2026): Adrián -- "tiene un fondo que creo que no haría falta, después
+     carga el splash screen bueno". El defer de PERF-01 solo cubre <script>; este CSS
+     (solo hace falta para colorear bloques de código en el chat, nunca para el arranque)
+     seguía siendo un <link rel="stylesheet"> normal, que SIEMPRE bloquea el primer
+     pintado hasta descargarse -- truco estándar (media="print" + onload) para que no
+     bloquee y se aplique en cuanto llegue. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="print" onload="this.media='all'">
 <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
@@ -14822,7 +14828,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.20';
+const APP_VERSION = '9.21';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

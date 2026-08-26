@@ -4,6 +4,21 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-26 — CSS de highlight.js seguía bloqueando el primer pintado) — v9.21
+
+Adrián, tras probar v9.20: "tiene un fondo que creo que no haría falta, después carga el
+splash screen bueno". El fix de PERF-01/02 (hoy) solo puso `defer` en los `<script>`
+externos -- el CSS de highlight.js (`<link rel="stylesheet">`, solo hace falta para
+colorear bloques de código en el chat, nunca para el arranque) es un tipo de recurso
+distinto y `defer` no se le puede aplicar; seguía bloqueando el primer pintado hasta
+descargarse, en los dos archivos (`index.html` y `panel.html`). Corregido con el truco
+estándar `media="print" onload="this.media='all'"` (no bloquea, se aplica en cuanto
+llega). El CSS de Google Fonts se deja tal cual -- si se difiere, el texto del propio
+splash se vería con la tipografía de sistema durante ese instante, cambio con más
+impacto visual que no se ha hecho sin confirmarlo antes.
+
+Versión → 9.21 (4 marcadores sincronizados).
+
 ### Added (2026-08-26 — Paridad panel.html: defer + barra de progreso) — v9.20
 
 Adrián: "revisa que todo esté igual en panel.html". Auditoría de los fixes de hoy del
