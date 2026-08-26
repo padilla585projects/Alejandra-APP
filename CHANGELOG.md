@@ -4,6 +4,25 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Removed (2026-08-26 — Splash propio quitado: dos logos seguidos al abrir) — v9.22
+
+Adrián mandó capturas: al abrir la app (instalada como PWA) se veían **dos logos
+seguidos** antes de la pantalla principal. El primero es el splash nativo de
+Android/Chrome (icono solo, generado automáticamente del `manifest.json` — no se puede
+quitar, lo controla el sistema antes de que cargue nada nuestro). El segundo era el
+splash propio de `index.html` ("ALEJANDRA / GESTIÓN DE OBRA"), que además forzaba un
+mínimo fijo de 2 segundos aunque la app ya estuviera lista para usarse.
+
+Decisión de Adrián: quitar el splash propio del todo, ya que es redundante con el nativo
+y solo añadía 2s fijos a cada primera apertura de sesión — contribuía directamente al
+"tarda mucho en abrirse" reportado antes en esta misma sesión. Quitados: el `<div
+id="splashScreen">`, su CSS, y el IIFE que lo mostraba/ocultaba. El banner "App
+actualizada a vX.XX" (que esperaba a que el splash desapareciera) ya no necesita ese
+retraso — reducido de hasta 2.8s a 400ms fijos.
+
+Versión → 9.22 (4 marcadores sincronizados). No aplica a `panel.html` (nunca tuvo splash
+propio).
+
 ### Fixed (2026-08-26 — CSS de highlight.js seguía bloqueando el primer pintado) — v9.21
 
 Adrián, tras probar v9.20: "tiene un fondo que creo que no haría falta, después carga el
