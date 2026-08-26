@@ -14801,7 +14801,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.15';
+const APP_VERSION = '9.16';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -17026,7 +17026,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         // quedaba descentrado/recortado sin forma de verlo entero. La propiedad CSS "zoom"
         // sí afecta al tamaño de layout (a diferencia de transform), así el scroll crece
         // junto con el dibujo y se puede desplazar hasta cualquier zona ampliada.
-        if (svgEl) { svgEl.style.maxWidth = 'none'; svgEl.style.display = 'block'; }
+        // ZOOM-PLANO-02 (26/08/2026): probado contra un plano real generado por Alejandra --
+        // los SVG que genera la IA no llevan atributos width/height, solo viewBox, así que
+        // el elemento se autoajusta al ancho del contenedor sin caja de tamaño propio y
+        // "zoom" no tenía nada que ampliar (el scroll seguía sin crecer). Si faltan
+        // width/height, se fijan explícitamente a partir del viewBox para darle un tamaño
+        // intrínseco real sobre el que el zoom sí puede escalar.
+        if (svgEl) {
+          svgEl.style.maxWidth = 'none';
+          svgEl.style.display = 'block';
+          if (!svgEl.getAttribute('width') || !svgEl.getAttribute('height')) {
+            const vb = (svgEl.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+            if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+              svgEl.setAttribute('width', vb[2]);
+              svgEl.setAttribute('height', vb[3]);
+            }
+          }
+        }
       }
     } catch { if (wrap) wrap.innerHTML = '<div class="empty-state">Error de red al cargar el dibujo</div>'; }
   }

@@ -4,6 +4,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-26 — Zoom de planos no ampliaba de verdad contra un SVG real) — v9.16
+
+Con el bug de generación ya arreglado, se pudo por fin generar un plano real y probar el
+visor de verdad (`verPlano`): el zoom cambiaba el valor de `style.zoom` pero el área de
+scroll del contenedor NO crecía — el fix de ayer (ZOOM-PLANO-01) se había verificado solo
+contra un SVG de prueba con `width`/`height` explícitos. Los SVG que genera Alejandra de
+verdad **no llevan esos atributos, solo `viewBox`** — sin tamaño intrínseco propio, la
+propiedad `zoom` no tiene nada que ampliar. Corregido: al cargar el dibujo, si faltan
+`width`/`height`, se fijan a partir del `viewBox`. Verificado contra el plano real
+generado en esta sesión: el área de scroll ahora crece correctamente con el zoom (1224×924
+→ 1944×1464 a zoom 1.6×).
+
+Versión → 9.16 (4 marcadores sincronizados).
+
 ### Fixed (2026-08-26 — Causa real de "Saldo de IA insuficiente" en planos: 2 bugs de config)
 
 Con los `console.error` de diagnóstico ya desplegados, reprobando en producción con
