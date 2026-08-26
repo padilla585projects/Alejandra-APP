@@ -4,6 +4,28 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-26 — Zoom con gesto de pinza + optimización de arranque) — v9.18
+
+Dos pedidos más de Adrián sobre el visor de planos y el arranque de la app:
+
+1. **Zoom con dos dedos.** Además de los botones +/-, ahora se puede hacer pinch-zoom
+   directamente sobre el plano (gestor de `touchstart`/`touchmove`/`touchend` en
+   `planoDetSvgWrap`, solo intercepta con 2 dedos — el arrastre de 1 dedo sigue siendo
+   nativo, intacto desde ZOOM-PLANO-03).
+2. **"La app tarda mucho en abrirse por primera vez".** Auditoría: `index.html` pesa 1,56 MB
+   (~309 KB comprimido) con ~1 MB de JavaScript, y el `<head>` cargaba **9 librerías
+   externas de 5 dominios** (jsQR, qrcodejs, xlsx, exceljs, jspdf, jspdf-autotable,
+   chart.js, marked, highlight.js) de forma **bloqueante** — nada se pintaba hasta
+   descargarlas y ejecutarlas todas, aunque ninguna hace falta para el login/inicio.
+   Marcadas las 9 como `defer` (se descargan en paralelo sin bloquear, se ejecutan justo
+   antes de que arranque el script de la app, mismo orden relativo — mantiene intacta la
+   dependencia jspdf-autotable→jspdf y marked→highlight.js). Verificado antes de aplicar
+   que la única inicialización a nivel superior de estas libs (`_setupMarked()`) ya tenía
+   guardas `typeof === 'undefined'` pensadas para esto. Pendiente de verificar en vivo
+   contra producción tras el deploy (sandbox local bloquea las CDNs externas).
+
+Versión → 9.18 (4 marcadores sincronizados).
+
 ### Fixed (2026-08-26 — No se podía mover el plano con el zoom puesto) — v9.17
 
 Adrián: "no se puede mover el plano cuando está con zoom". Mismo bug ya visto y arreglado
