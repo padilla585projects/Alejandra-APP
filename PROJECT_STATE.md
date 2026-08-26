@@ -1,6 +1,19 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-26
+- Estado (2026-08-26, continuación): **Branding "sin IA" en la app + barra de progreso +
+  rotación de modelos en planos.** Sobre la marcha mientras se probaba el visor de
+  planos: (1) Adrián pidió quitar todas las menciones de "IA" en `index.html` — hecho,
+  "Planos IA"→"Planos" y similares, `panel.html` NO tocado en esta pasada (pedido
+  específico "en la app"); (2) pidió una barra de progreso reutilizable para esperas
+  largas — nuevo componente CSS aplicado a las 5 pantallas de espera de IA en móvil
+  (generar plano, editar circuitos, OCR de partes/bobinas/albaranes); (3) probando
+  "Generar plano" en producción falló de verdad con "Saldo de IA insuficiente" — bug real:
+  la cascada de `_generarPlanoInterno` (`worker.js`) solo probaba un modelo gratis de
+  OpenRouter antes de Anthropic, sin más opciones si Anthropic fallaba. Corregido:
+  rota por 3 modelos gratis antes y después de Anthropic. El chat principal
+  (`alejandra-agente/worker.js`) ya tenía cascada robusta, verificado, no tocado.
+  Versión → 9.15. Pendiente de commit/deploy. Ver `CHANGELOG.md`.
 - Estado (2026-08-26, continuación): **Visor de Planos IA en la app móvil — zoom,
   legibilidad, borrar, editar circuitos.** Adrián probó el apartado de planos de
   ingeniería en `index.html` y encontró: zoom descentrado (bug real, `transform:scale()`

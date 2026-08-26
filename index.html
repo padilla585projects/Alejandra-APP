@@ -324,6 +324,14 @@ select option{background:var(--surface2);color:var(--text)}
 .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ── BARRA DE PROGRESO INDETERMINADA ── */
+/* PROGRESO-01 (26/08/2026): componente reutilizable para cualquier espera de duración
+   desconocida (generar plano, subir archivo, procesar OCR...) -- reemplaza el spinner
+   circular en los sitios donde una barra transmite mejor "esto avanza, no se ha colgado". */
+.progress-bar-track{width:100%;height:6px;background:var(--surface2);border-radius:999px;overflow:hidden;position:relative}
+.progress-bar-fill{position:absolute;top:0;left:-40%;height:100%;width:40%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2));animation:progressSweep 1.4s ease-in-out infinite}
+@keyframes progressSweep{0%{left:-40%}100%{left:100%}}
+
 /* ── DASHBOARD BARS ── */
 .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .dash-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px;text-align:center}
@@ -1585,7 +1593,7 @@ select option{background:var(--surface2);color:var(--text)}
   <!-- PLANOS TECNICOS (lectura + generacion con IA) -->
   <div id="screenPlanos" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
-      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📐 Planos IA</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📐 Planos</div>
       <button onclick="abrirModalGenerarPlanoMovil()" style="background:var(--accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;padding:7px 12px;border-radius:8px;white-space:nowrap">✨ Generar</button>
       <button onclick="cargarPlanos()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px" title="Actualizar">↻</button>
     </div>
@@ -1600,7 +1608,7 @@ select option{background:var(--surface2);color:var(--text)}
   <div class="modal-overlay" id="modalGenerarPlanoMovil" onclick="if(event.target===this)cerrarModalGenerarPlanoMovil()" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
     <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column">
       <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0">
-        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">✨ Generar plano con IA</div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">✨ Generar plano</div>
         <button onclick="cerrarModalGenerarPlanoMovil()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
       </div>
       <div style="overflow-y:auto;flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
@@ -1627,7 +1635,11 @@ select option{background:var(--surface2);color:var(--text)}
           <textarea id="genPlanoMovilDesc" rows="5" placeholder="Describe lo que debe incluir el plano: zonas, componentes, circuitos, potencias, medidas..."
                     style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);resize:vertical"></textarea>
         </div>
-        <div id="genPlanoMovilStatus" style="display:none;font-size:12px;color:var(--muted);text-align:center;padding:10px">⏳ Generando plano con IA (puede tardar 1-4 min)...</div>
+        <div id="genPlanoMovilStatus" style="display:none;text-align:center;padding:10px">
+          <div style="font-size:13px;color:var(--text);font-weight:700">Alejandra está generando el plano...</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Puede tardar 1-4 minutos</div>
+          <div class="progress-bar-track" style="margin-top:12px"><div class="progress-bar-fill"></div></div>
+        </div>
         <div id="genPlanoMovilResult" style="display:none">
           <div style="padding:12px;border-radius:8px;background:#0f2a17;border:1px solid #14532d;color:#4ade80;font-size:13px"></div>
         </div>
@@ -1647,7 +1659,10 @@ select option{background:var(--surface2);color:var(--text)}
         <button onclick="cerrarModalEditarCircuitos()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
       </div>
       <div style="overflow-y:auto;flex:1;padding:14px 16px" id="editCircuitosLista"></div>
-      <div id="editCircuitosStatus" style="display:none;font-size:12px;color:var(--muted);text-align:center;padding:0 16px 10px">⏳ Regenerando plano con los cambios (puede tardar hasta varios minutos)...</div>
+      <div id="editCircuitosStatus" style="display:none;text-align:center;padding:0 16px 10px">
+        <div style="font-size:12px;color:var(--muted)">Regenerando plano con los cambios (puede tardar hasta varios minutos)...</div>
+        <div class="progress-bar-track" style="margin-top:10px"><div class="progress-bar-fill"></div></div>
+      </div>
       <div id="editCircuitosMsg" style="display:none;margin:0 16px 10px;font-size:13px;padding:10px 12px;border-radius:8px"></div>
       <div id="editCircuitosActions" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
         <button onclick="cerrarModalEditarCircuitos()" style="flex:0 0 90px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:700">Cancelar</button>
@@ -4827,7 +4842,7 @@ select option{background:var(--surface2);color:var(--text)}
           <input type="file" id="scanImgInput" accept="image/*" multiple style="display:none" onchange="spAppPreviewFiles(this)">
         </div>
         <div id="spAppPreviews" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"></div>
-        <button id="btnScanEnviar" onclick="scanEnviar()" class="btn-primary" style="width:100%;margin-top:14px;display:none">🔍 Analizar con IA</button>
+        <button id="btnScanEnviar" onclick="scanEnviar()" class="btn-primary" style="width:100%;margin-top:14px;display:none">🔍 Analizar</button>
       </div>
 
       <!-- Paso 2: Procesando -->
@@ -4835,7 +4850,7 @@ select option{background:var(--surface2);color:var(--text)}
         <div style="font-size:40px;margin-bottom:12px">🤖</div>
         <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el parte...</div>
         <div style="font-size:12px;color:var(--muted)" id="spAppProcMsg">Puede tardar 10-20 segundos</div>
-        <div class="spinner" style="margin:16px auto 0"></div>
+        <div class="progress-bar-track" style="margin-top:16px;max-width:260px;margin-left:auto;margin-right:auto"><div class="progress-bar-fill"></div></div>
       </div>
 
       <!-- Paso 2b: Selección de empresas -->
@@ -4921,7 +4936,7 @@ select option{background:var(--surface2);color:var(--text)}
         <div style="font-size:40px;margin-bottom:12px">🤖</div>
         <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está analizando los documentos...</div>
         <div id="sbAppStep2Info" style="font-size:12px;color:var(--muted)">Cotejando datos — puede tardar 15-30 segundos</div>
-        <div class="spinner" style="margin:16px auto 0"></div>
+        <div class="progress-bar-track" style="margin-top:16px;max-width:260px;margin-left:auto;margin-right:auto"><div class="progress-bar-fill"></div></div>
       </div>
 
       <!-- Paso 3 -->
@@ -4969,7 +4984,7 @@ select option{background:var(--surface2);color:var(--text)}
         <div style="font-size:40px;margin-bottom:12px">🤖</div>
         <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el albarán...</div>
         <div style="font-size:12px;color:var(--muted)">Puede tardar 10-20 segundos</div>
-        <div class="spinner" style="margin:16px auto 0"></div>
+        <div class="progress-bar-track" style="margin-top:16px;max-width:260px;margin-left:auto;margin-right:auto"><div class="progress-bar-fill"></div></div>
       </div>
 
       <!-- Paso 3 -->
@@ -5494,8 +5509,8 @@ select option{background:var(--surface2);color:var(--text)}
   <div class="ia-header">
     <button onclick="irAtras()" style="background:none;border:none;color:#a855f7;cursor:pointer;font-size:22px;line-height:1;padding:0 10px 0 0;flex-shrink:0">←</button>
     <div style="flex:1">
-      <div class="ia-header-title">Alejandra IA</div>
-      <div class="ia-header-sub">Tu asistente de obra con IA</div>
+      <div class="ia-header-title">Alejandra</div>
+      <div class="ia-header-sub">Tu asistente de obra</div>
     </div>
     <button id="iaTtsBtn" onclick="iaToggleTts()" title="Voz de Alejandra" class="ia-tts-btn">🔇</button>
     <button onclick="iaLimpiarChat()" title="Borrar historial" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">🗑️</button>
@@ -5535,7 +5550,7 @@ select option{background:var(--surface2);color:var(--text)}
         <line x1="20" y1="20" x2="20" y2="20"/><line x1="14" y1="20" x2="17" y2="20"/>
       </svg>
     </button>
-    <button class="nav-qr-btn" id="navIABtn" onclick="navTo('ia')" title="Alejandra IA" style="display:none;background:linear-gradient(135deg,#a855f7,#f97316);box-shadow:0 -4px 16px rgba(168,85,247,.5)">
+    <button class="nav-qr-btn" id="navIABtn" onclick="navTo('ia')" title="Alejandra" style="display:none;background:linear-gradient(135deg,#a855f7,#f97316);box-shadow:0 -4px 16px rgba(168,85,247,.5)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#fff"><circle cx="12" cy="8" r="4"/><path d="M9 12l-3 8"/><path d="M15 12l3 8"/><path d="M9 20h6"/><circle cx="12" cy="8" r="1.5" fill="currentColor" stroke="none"/></svg>
     </button>
   </div>
@@ -5550,7 +5565,7 @@ select option{background:var(--surface2);color:var(--text)}
   </button>
   <button class="nav-btn" id="navIA" onclick="navTo('ia')" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M9 12l-3 8"/><path d="M15 12l3 8"/><path d="M9 20h6"/><circle cx="12" cy="8" r="1.5" fill="currentColor" stroke="none"/></svg>
-    IA
+    Alejandra
   </button>
 </nav>
 
@@ -11319,7 +11334,7 @@ async function docsCargar(containerId) {
       ${esquemas.length ? `
         <div style="margin-top:18px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
           <div style="flex:1;height:1px;background:var(--border)"></div>
-          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--muted);white-space:nowrap">📐 ESQUEMAS IA</div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--muted);white-space:nowrap">📐 ESQUEMAS</div>
           <div style="flex:1;height:1px;background:var(--border)"></div>
         </div>
         ${esquemas.map(e => {
@@ -11329,7 +11344,7 @@ async function docsCargar(containerId) {
             <span style="font-size:22px;flex-shrink:0;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">📐</span>
             <div style="flex:1;min-width:0;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">
               <div style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.titulo}</div>
-              <div style="font-size:10px;color:var(--muted)">${e.fecha_emision||''} · Alejandra IA</div>
+              <div style="font-size:10px;color:var(--muted)">${e.fecha_emision||''} · Alejandra</div>
             </div>
             ${url ? `<button onclick="window.open('${url}','_blank')" title="Ver esquema"
               style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">🔗</button>` : ''}
@@ -14786,7 +14801,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.14';
+const APP_VERSION = '9.15';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -17811,7 +17826,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         { icon:'📋', label:'RFIs abiertas', value:d.rfis_abiertas??0, color:(d.rfis_abiertas||0)>0?'#f59e0b':'var(--green)', sub:(d.rfis_abiertas||0)>0?`${d.rfis_abiertas} sin respuesta`:'Sin consultas', onclick:"dashSelTab('rfis')" },
         { icon:'🔍', label:'Deficiencias', value:d.deficiencias_abiertas??0, color:(d.deficiencias_abiertas||0)>0?'#f97316':'var(--green)', sub:(d.deficiencias_abiertas||0)>0?`${d.deficiencias_abiertas} sin resolver`:'Sin deficiencias', onclick:"navTo('calidad')" },
         { icon:'📅', label:'Próximo evento', value:d.proximo_evento?(d.proximo_evento.fecha||'—').slice(5).replace('-','/'):'—', color:d.proximo_evento?'#6366f1':'var(--muted)', sub:d.proximo_evento?esc(d.proximo_evento.titulo):'Sin eventos', onclick:"navTo('calendario')" },
-        { icon:'🤖', label:'Preguntar a Alejandra', value:'IA', color:'var(--accent)', sub:'Análisis inteligente de obra', onclick:"alejandraAbrir()" },
+        { icon:'🤖', label:'Preguntar a Alejandra', value:'💬', color:'var(--accent)', sub:'Análisis inteligente de obra', onclick:"alejandraAbrir()" },
       ];
 
       c.innerHTML = `
@@ -25615,7 +25630,7 @@ const _AYUDA_PANTALLAS = {
   galeria: 'Fotos de obra organizadas por departamento.',
   herramientas: 'Inventario de herramientas y kits: quién las tiene y su estado.',
   hormigonado: 'Registro de hormigonado según la norma EHE-08 (solo Obra Civil).',
-  iA: 'Chat con Alejandra, el asistente de obra con IA.',
+  iA: 'Chat con Alejandra, el asistente de obra.',
   incidencias: 'Averías, accidentes y alertas reportadas en obra.',
   module: 'Detalle de un elemento del inventario (bobina, PEMP, carretilla...): datos, estado e historial.',
   obraDashboard: 'Resumen ejecutivo de la obra: KPIs, presupuesto y estado general.',

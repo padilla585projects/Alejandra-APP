@@ -29202,11 +29202,17 @@ INSTRUCCIONES FINALES:
     }
   }
 
-  // 2º Intentar OpenRouter si Gemini falló (con timeout agresivo)
-  if (!data && env.OPENROUTER_API_KEY) {
+  // 2º Intentar OpenRouter si Gemini falló -- ROTAR-MODELOS-01 (26/08/2026): antes solo
+  // probaba UN modelo gratis (llama-3.3-70b) y si no daba un SVG valido pasaba directo a
+  // Anthropic; si Anthropic tambien fallaba (p.ej. sin saldo, como paso en produccion hoy)
+  // la generacion de planos se paraba del todo sin mas opciones. Ahora rota por una lista
+  // de varios modelos gratis (misma lista ya probada en alejandra-agente/worker.js,
+  // _intentarCascadaOpenRouterGratis) antes de caer a Anthropic.
+  const _ORModelosPlano = ['meta-llama/llama-3.3-70b-instruct:free', 'openai/gpt-oss-120b:free', 'nvidia/nemotron-3-ultra-550b-a55b:free'];
+  async function _intentarOpenRouterPlano(modelo, timeoutMs) {
     try {
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        signal: AbortSignal.timeout(10000),  // 10s — OR como segundo intento rápido
+        signal: AbortSignal.timeout(timeoutMs),
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
@@ -29215,7 +29221,7 @@ INSTRUCCIONES FINALES:
           'X-Title': 'Alejandra'
         },
         body: JSON.stringify({
-          model: 'meta-llama/llama-3.3-70b-instruct:free',
+          model: modelo,
           max_tokens: 8000,
           messages: [
             { role: 'system', content: systemPrompt },
@@ -29223,47 +29229,67 @@ INSTRUCCIONES FINALES:
           ]
         })
       });
-      if (r.ok) {
-        const d = await r.json();
-        const rawText = d.choices?.[0]?.message?.content || '';
-        if (!d.error && rawText.includes('<svg')) {
-          data = {
-            content: [{ type: 'text', text: rawText }],
-            usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 }
-          };
-          _planoProveedor = 'openrouter';
-          _planoModelo = d.model || 'meta-llama/llama-3.3-70b-instruct:free';
-        }
-      }
-    } catch (_) { /* timeout u error de red */ }
+      if (!r.ok) return null;
+      const d = await r.json();
+      const rawText = d.choices?.[0]?.message?.content || '';
+      if (d.error || !rawText.includes('<svg')) return null;
+      return {
+        content: [{ type: 'text', text: rawText }],
+        usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 },
+        _modelo: d.model || modelo
+      };
+    } catch (_) { return null; /* timeout u error de red -- probar el siguiente */ }
+  }
+  const _ORModelosProbados = new Set();
+  if (!data && env.OPENROUTER_API_KEY) {
+    for (const modelo of _ORModelosPlano) {
+      _ORModelosProbados.add(modelo);
+      const r = await _intentarOpenRouterPlano(modelo, 10000); // 10s por modelo -- segundo intento rapido
+      if (r) { data = { content: r.content, usage: r.usage }; _planoProveedor = 'openrouter'; _planoModelo = r._modelo; break; }
+    }
   }
 
-  // 2º Fallback: Anthropic (cuando OpenRouter no está disponible o no tiene OPENROUTER_API_KEY)
+  // 2º Fallback: Anthropic (cuando OpenRouter no está disponible o ningún modelo gratis dio un SVG válido)
+  let _errorAnthropicPlano = null;
   if (!data) {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: _maxTokensPlano,
-        system: systemPrompt,
-        messages: _planoMsgs
-      })
-    });
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => resp.statusText);
-      // Dar un mensaje amigable para errores de saldo
-      if (resp.status === 400 && errText.includes('credit')) {
-        throw new Error('Saldo de IA insuficiente. Recarga créditos en console.anthropic.com o usa OpenRouter.');
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: _maxTokensPlano,
+          system: systemPrompt,
+          messages: _planoMsgs
+        })
+      });
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => resp.statusText);
+        _errorAnthropicPlano = (resp.status === 400 && errText.includes('credit'))
+          ? new Error('Saldo de IA insuficiente. Recarga créditos en console.anthropic.com o usa OpenRouter.')
+          : new Error(`Error generando plano (${resp.status}). Inténtalo de nuevo en unos segundos.`);
+      } else {
+        data = await resp.json();
       }
-      throw new Error(`Error generando plano (${resp.status}). Inténtalo de nuevo en unos segundos.`);
-    }
-    data = await resp.json();
+    } catch (e) { _errorAnthropicPlano = e; }
   }
+
+  // 3º Último recurso: si Anthropic también falló (p.ej. sin saldo), rotar por los modelos
+  // gratis de OpenRouter que aún no se hayan probado, con más margen de tiempo -- solo
+  // entonces se lanza el error final, con la lista completa ya agotada de verdad.
+  if (!data && _errorAnthropicPlano && env.OPENROUTER_API_KEY) {
+    for (const modelo of _ORModelosPlano) {
+      if (_ORModelosProbados.has(modelo)) continue;
+      _ORModelosProbados.add(modelo);
+      const r = await _intentarOpenRouterPlano(modelo, 25000); // último intento, más margen
+      if (r) { data = { content: r.content, usage: r.usage }; _planoProveedor = 'openrouter'; _planoModelo = r._modelo; break; }
+    }
+  }
+  if (!data) throw _errorAnthropicPlano || new Error('No se pudo generar el plano: todos los proveedores de IA fallaron.');
 
   let svgRaw = data.content?.[0]?.text || '';
 

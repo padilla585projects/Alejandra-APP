@@ -4,6 +4,40 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added / Fixed (2026-08-26 — Branding "sin IA", barra de progreso, rotación de modelos en planos) — v9.15
+
+Tres cambios más, sobre la marcha mientras Adrián probaba el visor de planos:
+
+1. **"Nada de IA en la app, es Alejandra".** Quitadas todas las menciones visibles de "IA"
+   en `index.html` (títulos de pantalla, botones, cabecera del chat, nav inferior, texto
+   de ayuda): "Planos IA"→"Planos", "Generar plano con IA"→"Generar plano", "Analizar con
+   IA"→"Analizar", "Alejandra IA"→"Alejandra" (cabecera del chat y nav), "ESQUEMAS IA"→
+   "ESQUEMAS", KPI del dashboard que mostraba el texto "IA" en grande→ícono 💬. No se ha
+   tocado `panel.html` (Alejandra Office) en esta pasada — tiene bastantes más menciones
+   de "IA" en pantallas solo-desarrollador (Costes IA, Chat DevTools IA...) y el pedido
+   fue específicamente "en la app".
+2. **Barra de progreso reutilizable.** Adrián: "si pusiéramos una barra de progreso... no
+   solo para esto, para cualquier cosa que haya que esperar". Nuevo componente CSS
+   (`.progress-bar-track`/`.progress-bar-fill`, barrido indeterminado con gradiente
+   `--accent`→`--accent2`) aplicado en `index.html` a las 4 esperas largas de IA que ya
+   usaban un spinner circular: generar plano, editar circuitos, leer parte (OCR),
+   analizar documentos de bobinas, leer albarán de devolución. Queda como patrón
+   reutilizable para nuevas pantallas de espera; no se ha hecho un barrido de todo el
+   archivo (backends/otros spinners de carga rápida de listas se han dejado tal cual).
+3. **Rotación de modelos en generación de planos (`worker.js`, `_generarPlanoInterno`).**
+   Adrián probó "Generar plano" en producción y falló con "Saldo de IA insuficiente" —
+   bug real encontrado en vivo: la cascada Gemini→OpenRouter→Anthropic solo probaba UN
+   modelo gratis de OpenRouter antes de caer a Anthropic; si Anthropic fallaba (como pasó,
+   sin saldo), no quedaban más opciones. Ahora rota por 3 modelos gratis de OpenRouter
+   (misma lista que ya usa `alejandra-agente/worker.js`) antes de Anthropic, y si
+   Anthropic también falla, reintenta con los modelos de la lista que aún no se hubieran
+   probado antes de lanzar el error final. El chat principal de Alejandra
+   (`alejandra-agente/worker.js`) ya tenía cascada robusta (Anthropic→Gemini→Grok→
+   OpenRouter→GPT-4o) — verificado por auditoría de código, no hacía falta tocarlo.
+
+Versión → 9.15 (4 marcadores sincronizados). Pendiente de deploy (Pages + `worker.js`
+raíz vía `deploy-worker.yml`).
+
 ### Fixed / Added (2026-08-26 — Visor de Planos IA en la app móvil: zoom, legibilidad, borrar, editar circuitos) — v9.14
 
 Adrián probó el visor de planos de ingeniería en la app móvil (`index.html`, pantalla
