@@ -4,6 +4,33 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-26 — Paridad panel.html: defer + barra de progreso) — v9.20
+
+Adrián: "revisa que todo esté igual en panel.html". Auditoría de los fixes de hoy del
+visor de planos móvil contra `panel.html`: zoom y el bug de descripción larga **no
+aplican** (panel.html no tiene zoom implementado, y el modal visor nunca inyecta la
+descripción completa — solo un resumen de 120 caracteres en la tarjeta, fuera del
+visor); borrar/editar circuitos ya existían. Sí había dos gaps reales, corregidos:
+
+1. **Mismo bug de arranque bloqueante que PERF-01, en `panel.html`** (archivo de 2,6 MB,
+   separado de `index.html`, con su propia lista de librerías): 9 scripts sin `defer`
+   (tabulator-tables, qrcodejs, chart.js, xlsx, exceljs, jspdf, jspdf-autotable,
+   interactjs, marked, highlight.js). Verificado antes de aplicar que los únicos usos a
+   nivel superior (`_setupMarked()`, `interact()` en el editor de planos) ya tenían
+   guardas `typeof===undefined` — igual que en index.html.
+2. **Spinners → barra de progreso**: los modales de "generar plano" y "editar circuitos"
+   en panel.html seguían con el spinner circular de siempre; ahora usan el mismo
+   componente `.progress-bar-track`/`.progress-bar-fill` que index.html (PROGRESO-01).
+
+De paso: diagnosticado el reporte de Adrián "la app hace cosas raras al arrancar, es
+como si volviera a arrancar otra vez pero más rápido" — es el chequeo automático de
+versión (`checkVersionAndUpdate()`, corre al arrancar y compara `version.json`) haciendo
+su trabajo tal como está diseñado: con 8 versiones desplegadas seguidas hoy mientras se
+probaba en vivo, era muy probable que ya hubiera una versión más nueva justo al abrir la
+app, disparando el auto-reload a los 3s. No es un bug nuevo, no se ha tocado código.
+
+Versión → 9.20 (4 marcadores sincronizados).
+
 ### Fixed (2026-08-26 — Descripción larga tapaba el plano) — v9.19
 
 Adrián, viendo un plano real con descripción técnica muy larga (soportación de bandejas

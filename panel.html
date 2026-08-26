@@ -11,17 +11,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" rel="stylesheet">
-<script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/interactjs@1.10.27/dist/interact.min.js"></script>
+<!-- PERF-02 (26/08/2026): mismo fix que index.html (PERF-01) -- estas 9 librerías
+     bloqueaban el renderizado inicial del panel sin hacer falta para la pantalla de
+     login/selección de empresa. Verificado antes de aplicar: los únicos usos a nivel
+     superior de estas libs (_setupMarked(), interact() en el editor de planos) ya tenían
+     guardas typeof===undefined; el resto (Tabulator, XLSX, jsPDF, Chart...) se llama
+     siempre dentro de funciones disparadas al abrir cada pantalla, nunca en el arranque. -->
+<script defer src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/interactjs@1.10.27/dist/interact.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
 :root {
   --bg:#0d1020; --surface:#171b30; --surface2:#222842;
@@ -243,6 +249,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;gap:10px}
 .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* PROGRESO-02 (26/08/2026): mismo componente ya usado en index.html (PROGRESO-01) --
+   barrido indeterminado, más "profesional" que el spinner circular para esperas largas
+   de IA (generar/editar plano). */
+.progress-bar-track{width:100%;height:6px;background:var(--surface2);border-radius:999px;overflow:hidden;position:relative}
+.progress-bar-fill{position:absolute;top:0;left:-40%;height:100%;width:40%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2));animation:progressSweep 1.4s ease-in-out infinite}
+@keyframes progressSweep{0%{left:-40%}100%{left:100%}}
 .empty-state{text-align:center;padding:60px 20px;color:var(--muted);border:1px dashed rgba(199,188,255,.18);border-radius:14px;background:rgba(28,33,57,.38)}
 .empty-state .empty-icon{font-size:48px;margin-bottom:12px}
 .empty-state .empty-text{font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px}
@@ -10096,7 +10108,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
                 <div style="font-size:28px;margin-bottom:8px">⚙️</div>
                 <div style="font-size:14px;color:var(--text);font-weight:600">Alejandra está generando el plano...</div>
                 <div style="font-size:12px;color:var(--muted);margin-top:6px">Esto puede tardar 20-40 segundos</div>
-                <div class="spinner" style="margin:14px auto;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite"></div>
+                <div class="progress-bar-track" style="max-width:260px;margin:14px auto 0"><div class="progress-bar-fill"></div></div>
               </div>
 
               <div id="genPlanoResult" style="display:none">
@@ -25161,7 +25173,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.19';
+const PANEL_APP_VERSION = '9.20';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -42806,7 +42818,7 @@ async function _cargarCircuitosVisor(id) {
       <div style="font-size:24px;margin-bottom:8px">⚙️</div>
       <div style="font-size:13px;color:var(--text);font-weight:600">Regenerando plano con los circuitos actualizados...</div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">Puede tardar hasta varios minutos, no cierres esta ventana</div>
-      <div class="spinner" style="margin:12px auto;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite"></div>
+      <div class="progress-bar-track" style="max-width:220px;margin:12px auto 0"><div class="progress-bar-fill"></div></div>
     </div>
     <div id="visorCircuitosMsg" style="display:none;font-size:13px;padding:10px 12px;border-radius:6px;margin-top:10px"></div>
     <div style="display:flex;justify-content:flex-end;margin-top:12px">
