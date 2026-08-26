@@ -4,6 +4,23 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-26 — Ocultar el motivo técnico de fallos de IA al usuario + logs de diagnóstico)
+
+Adrián, al ver el mensaje "Saldo de IA insuficiente..." en la app: "cuando de fallos de
+IA no quiero que diga el porqué al usuario, solo a mí" → "nadie tiene que saber porqué".
+`generarPlanoREST` y `editarPlanoCircuitosREST` (`worker.js`) devolvían el mensaje técnico
+real (`e.message`) directo al cliente. Cambiado: el motivo real queda solo en
+`console.error` (visible con `wrangler tail`), la respuesta al cliente es siempre
+genérica ("No se pudo generar/editar el plano en este momento. Inténtalo de nuevo en
+unos minutos."), para todos los usuarios sin excepción.
+
+De paso, reprobando "Generar plano" tras el fix de rotación de ayer: seguía fallando con
+el mismo error, incluso con la cascada Gemini→OpenRouter(3 modelos)→Anthropic→OpenRouter
+ya desplegada — indica que Gemini y los 3 modelos gratis de OpenRouter también están
+fallando ahora mismo, no solo Anthropic. Añadidos `console.error` en cada punto de fallo
+de la cascada (Gemini por modelo/key, OpenRouter por modelo) para diagnosticar la causa
+real la próxima vez que se reproduzca, en vez de tener que adivinar.
+
 ### Added / Fixed (2026-08-26 — Branding "sin IA", barra de progreso, rotación de modelos en planos) — v9.15
 
 Tres cambios más, sobre la marcha mientras Adrián probaba el visor de planos:

@@ -29171,6 +29171,8 @@ INSTRUCCIONES FINALES:
             }
           );
           if (!_gr.ok) {
+            const _gErrTxt = await _gr.text().catch(() => '');
+            console.error(`[_generarPlanoInterno] Gemini ${_gModel} HTTP ${_gr.status}: ${_gErrTxt.slice(0,200)}`);
             if (_gr.status === 429) continue;   // cuota de esta key agotada
             break;                              // error de modelo, pasar al siguiente
           }
@@ -29196,8 +29198,10 @@ INSTRUCCIONES FINALES:
             _planoProveedor = 'gemini';
             _planoModelo = _gModel;
             break gemLoop;
+          } else if (_gText) {
+            console.error(`[_generarPlanoInterno] Gemini ${_gModel} devolvió texto pero no pasó la validación (svg=${_gText.includes('<svg')}, len=${_gText.length}, use=${_tieneUso})`);
           }
-        } catch (_) { /* timeout o error de red — probar siguiente */ }
+        } catch (e) { console.error(`[_generarPlanoInterno] Gemini ${_gModel} excepción: ${e.message}`); }
       }
     }
   }
@@ -29229,16 +29233,23 @@ INSTRUCCIONES FINALES:
           ]
         })
       });
-      if (!r.ok) return null;
+      if (!r.ok) {
+        const errTxt = await r.text().catch(() => '');
+        console.error(`[_generarPlanoInterno] OpenRouter ${modelo} HTTP ${r.status}: ${errTxt.slice(0,200)}`);
+        return null;
+      }
       const d = await r.json();
       const rawText = d.choices?.[0]?.message?.content || '';
-      if (d.error || !rawText.includes('<svg')) return null;
+      if (d.error || !rawText.includes('<svg')) {
+        console.error(`[_generarPlanoInterno] OpenRouter ${modelo} sin SVG válido: error=${JSON.stringify(d.error||null)} len=${rawText.length}`);
+        return null;
+      }
       return {
         content: [{ type: 'text', text: rawText }],
         usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 },
         _modelo: d.model || modelo
       };
-    } catch (_) { return null; /* timeout u error de red -- probar el siguiente */ }
+    } catch (e) { console.error(`[_generarPlanoInterno] OpenRouter ${modelo} excepción: ${e.message}`); return null; }
   }
   const _ORModelosProbados = new Set();
   if (!data && env.OPENROUTER_API_KEY) {
@@ -29396,7 +29407,12 @@ async function generarPlanoREST(request, env) {
     const result = await _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos: circuitos || [] });
     return json(result);
   } catch (e) {
-    return err('Error generando plano: ' + e.message, 500);
+    // ERROR-IA-OCULTO-01 (26/08/2026): Adrian -- "cuando de fallos de IA no quiero que
+    // diga el porque al usuario... nadie tiene que saber porque". El motivo tecnico real
+    // (saldo insuficiente, proveedor caido, etc.) queda solo en los logs del Worker
+    // (wrangler tail), nunca en la respuesta al cliente -- ni siquiera para desarrollador.
+    console.error('[generarPlanoREST] Error generando plano:', e.message);
+    return err('No se pudo generar el plano en este momento. Inténtalo de nuevo en unos minutos.', 500);
   }
 }
 
@@ -29475,7 +29491,9 @@ INSTRUCCIONES FINALES:
   try {
     svgRaw = await _llamarAnthropicPlanoStream(env, userMsg, systemPrompt, _maxTokensEdicion);
   } catch (e) {
-    return err('Error editando plano: ' + e.message, 500);
+    // ERROR-IA-OCULTO-01: mismo criterio que generarPlanoREST -- motivo tecnico solo en logs.
+    console.error('[editarPlanoCircuitosREST] Error editando plano:', e.message);
+    return err('No se pudo editar el plano en este momento. Inténtalo de nuevo en unos minutos.', 500);
   }
   const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
   if (svgMatch) { svgRaw = svgMatch[0]; }
