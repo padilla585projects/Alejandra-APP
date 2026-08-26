@@ -340,6 +340,14 @@ select option{background:var(--surface2);color:var(--text)}
 .progress-bar-fill{position:absolute;top:0;left:-40%;height:100%;width:40%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2));animation:progressSweep 1.4s ease-in-out infinite}
 @keyframes progressSweep{0%{left:-40%}100%{left:100%}}
 
+/* ── DESCRIPCIÓN DE PLANO COLAPSABLE ── */
+/* ZOOM-PLANO-05 (26/08/2026): Adrián, viendo un plano real con descripción técnica muy
+   larga (soportación de bandejas CPD) -- llenaba toda la pantalla y empujaba el dibujo y
+   los botones de zoom fuera de la vista, obligando a desplazar toda la pantalla solo para
+   llegar al plano. Colapsada a 3 líneas por defecto con "Ver más". */
+.plano-desc-collapsed{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.plano-desc-expanded{display:block;max-height:40vh;overflow-y:auto}
+
 /* ── DASHBOARD BARS ── */
 .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .dash-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px;text-align:center}
@@ -1693,7 +1701,8 @@ select option{background:var(--surface2);color:var(--text)}
         <span id="planoDetTipoBadge" style="font-size:11px;font-weight:700;color:#0ea5e9;background:rgba(14,165,233,.12);padding:3px 9px;border-radius:6px;white-space:nowrap"></span>
         <span id="planoDetFecha" style="font-size:11px;color:var(--muted)"></span>
       </div>
-      <div id="planoDetDescripcion" style="font-size:13px;line-height:1.5;color:var(--text)"></div>
+      <div id="planoDetDescripcion" class="plano-desc-collapsed" style="font-size:13px;line-height:1.5;color:var(--text)"></div>
+      <button id="planoDetDescToggle" onclick="planoToggleDescripcion()" style="display:none;background:none;border:none;color:#0ea5e9;font-size:12px;font-weight:700;cursor:pointer;padding:4px 0">Ver más</button>
       <div id="planoDetCircuitos" style="margin-top:6px"></div>
     </div>
     <!-- ZOOM-PLANO-03 (26/08/2026): Adrián -- "no se puede mover el plano cuando está con
@@ -14813,7 +14822,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.18';
+const APP_VERSION = '9.19';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -16999,7 +17008,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (titEl)   titEl.textContent   = plano.titulo || 'Plano';
     if (tipoEl)  tipoEl.textContent  = label;
     if (fechaEl) fechaEl.textContent = plano.creado_en ? String(plano.creado_en).slice(0, 10) : '';
-    if (descEl)  descEl.textContent  = plano.descripcion || '';
+    if (descEl) {
+      descEl.textContent = plano.descripcion || '';
+      descEl.classList.remove('plano-desc-expanded');
+      descEl.classList.add('plano-desc-collapsed');
+      const descToggle = document.getElementById('planoDetDescToggle');
+      if (descToggle) {
+        descToggle.textContent = 'Ver más';
+        // El clamp de 3 líneas solo recorta tras el layout -- comprobar en el siguiente frame
+        // si de verdad hay texto oculto antes de mostrar el botón (si cabe entero, no hace falta).
+        descToggle.style.display = 'none';
+        requestAnimationFrame(() => {
+          if (descEl.scrollHeight > descEl.clientHeight + 2) descToggle.style.display = 'block';
+        });
+      }
+    }
     // Circuitos estructurados (lectura + edición vía modal, si el plano tiene circuitos)
     let circuitos = [];
     try { circuitos = plano.circuitos_json ? JSON.parse(plano.circuitos_json) : []; } catch { circuitos = []; }
@@ -17057,6 +17080,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         }
       }
     } catch { if (wrap) wrap.innerHTML = '<div class="empty-state">Error de red al cargar el dibujo</div>'; }
+  }
+
+  function planoToggleDescripcion() {
+    const el  = document.getElementById('planoDetDescripcion');
+    const btn = document.getElementById('planoDetDescToggle');
+    if (!el || !btn) return;
+    const expandir = el.classList.contains('plano-desc-collapsed');
+    el.classList.toggle('plano-desc-collapsed', !expandir);
+    el.classList.toggle('plano-desc-expanded', expandir);
+    btn.textContent = expandir ? 'Ver menos' : 'Ver más';
   }
 
   function planoZoom(delta) {
@@ -17198,6 +17231,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.verPlano                 = verPlano;
   window.planoZoom                = planoZoom;
   window.eliminarPlanoMovil       = eliminarPlanoMovil;
+  window.planoToggleDescripcion   = planoToggleDescripcion;
   window.abrirModalEditarCircuitos = abrirModalEditarCircuitos;
   window.cerrarModalEditarCircuitos = cerrarModalEditarCircuitos;
   window.guardarCircuitosMovil    = guardarCircuitosMovil;

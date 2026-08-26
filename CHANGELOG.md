@@ -4,6 +4,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-26 — Descripción larga tapaba el plano) — v9.19
+
+Adrián, viendo un plano real con descripción técnica muy larga (soportación de bandejas
+CPD Getafe): "queda una cosa, la descripción" + captura de pantalla mostrando el texto
+llenando toda la pantalla, sin dibujo ni botones de zoom visibles — había que desplazar
+toda la pantalla solo para llegar al plano. Colapsada a 3 líneas por defecto
+(`-webkit-line-clamp`) con botón "Ver más" que expande hasta un máximo del 40% de la
+altura de pantalla (con scroll propio si aún así no cabe). El botón solo aparece si el
+texto realmente se corta (comparando `scrollHeight` contra `clientHeight`). Probado con
+la descripción real: colapsado 58.5px (3 líneas) ↔ expandido 214.5px (texto completo).
+
+Versión → 9.19 (4 marcadores sincronizados).
+
 ### Added (2026-08-26 — Zoom con gesto de pinza + optimización de arranque) — v9.18
 
 Dos pedidos más de Adrián sobre el visor de planos y el arranque de la app:
