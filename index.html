@@ -1688,7 +1688,11 @@ select option{background:var(--surface2);color:var(--text)}
       <div id="planoDetDescripcion" style="font-size:13px;line-height:1.5;color:var(--text)"></div>
       <div id="planoDetCircuitos" style="margin-top:6px"></div>
     </div>
-    <div id="planoDetSvgWrap" style="flex:1;overflow:auto;background:#f8fafc;padding:12px;color:#0f172a">
+    <!-- ZOOM-PLANO-03 (26/08/2026): Adrián -- "no se puede mover el plano cuando está con
+    zoom". Mismo bug ya visto y arreglado en cpdPlanoWrap (CPD-MOVIL-04): sin touch-action
+    explícito, algunos móviles no dejan arrastrar con el dedo dentro de un overflow:auto
+    una vez el contenido crece más que la pantalla en ambos ejes. -->
+    <div id="planoDetSvgWrap" style="flex:1;overflow:auto;background:#f8fafc;padding:12px;color:#0f172a;touch-action:pan-x pan-y">
       <div class="empty-state">Cargando plano…</div>
     </div>
   </div>
@@ -14801,7 +14805,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.16';
+const APP_VERSION = '9.17';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

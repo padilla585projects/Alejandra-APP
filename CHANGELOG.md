@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-26 — No se podía mover el plano con el zoom puesto) — v9.17
+
+Adrián: "no se puede mover el plano cuando está con zoom". Mismo bug ya visto y arreglado
+antes en el visor de Sondas CPD (`cpdPlanoWrap`, CPD-MOVIL-04, 19/08/2026): sin
+`touch-action` explícito, algunos móviles no dejan arrastrar con el dedo dentro de un
+`overflow:auto` una vez el contenido crece más que la pantalla en ambos ejes. Añadido
+`touch-action:pan-x pan-y` a `planoDetSvgWrap`, mismo valor que ya funciona en
+`cpdPlanoWrap`.
+
+Versión → 9.17 (4 marcadores sincronizados).
+
 ### Fixed (2026-08-26 — Zoom de planos no ampliaba de verdad contra un SVG real) — v9.16
 
 Con el bug de generación ya arreglado, se pudo por fin generar un plano real y probar el
