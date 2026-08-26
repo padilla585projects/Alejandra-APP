@@ -4,6 +4,29 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-26 — Causa real de "Saldo de IA insuficiente" en planos: 2 bugs de config)
+
+Con los `console.error` de diagnóstico ya desplegados, reprobando en producción con
+`wrangler tail` conectado en vivo, se vio la causa real por primera vez:
+
+1. **`gemini-2.0-flash-lite` → HTTP 404.** Ese ID de modelo ya no existe en la API de
+   Gemini — Google lo renombró. `alejandra-agente/worker.js` ya usa el ID correcto
+   (`gemini-2.5-flash-lite`) desde hace tiempo; `worker.js` raíz se quedó con el nombre
+   viejo en DOS sitios: `callGemini()` (usado por OCR de partes/bobinas/albaranes) y
+   `_generarPlanoInterno()` (planos). Corregido en ambos + la tabla de precios.
+2. **OpenRouter → HTTP 401 "Missing Authentication header" en los 3 modelos.** La key no
+   se limpiaba de BOM/espacios invisibles al leerla de `env.OPENROUTER_API_KEY` antes de
+   meterla en la cabecera `Authorization` — mismo problema ya conocido y arreglado para
+   `GEMINI_API_KEY` (`callGemini`) y para `OPENROUTER_API_KEY` en
+   `alejandra-agente/worker.js`, pero nunca se aplicó a esta llamada de `worker.js` raíz.
+   Corregido con el mismo patrón de limpieza.
+
+Con `gemini-2.5-flash-lite` corregido y la rotación de ayer, la generación de planos
+debería tener bastantes más números de completar sin llegar nunca a depender de
+Anthropic (que sigue sin saldo, pendiente de recarga manual). El OCR de partes también
+se beneficia del fix de `callGemini` — no se había detectado como roto porque
+`gemini-2.5-flash` (el primero de la lista ahí) sigue funcionando y cubría el fallo.
+
 ### Fixed (2026-08-26 — Ocultar el motivo técnico de fallos de IA al usuario + logs de diagnóstico)
 
 Adrián, al ver el mensaje "Saldo de IA insuficiente..." en la app: "cuando de fallos de

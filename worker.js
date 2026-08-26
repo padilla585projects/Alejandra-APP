@@ -29,7 +29,7 @@ const AI_PRICES = {
   'claude-sonnet-4-6':    { input: 3/1e6,     output: 15/1e6  },
   'claude-opus-4-6':      { input: 5/1e6,     output: 25/1e6  },
   'gemini-2.5-flash':     { input: 0.15/1e6,  output: 0.60/1e6 },
-  'gemini-2.0-flash-lite':{ input: 0.075/1e6, output: 0.30/1e6 },
+  'gemini-2.5-flash-lite':{ input: 0.075/1e6, output: 0.30/1e6 },
 };
 function calcAICost(modelo, inputTok, outputTok) {
   const p = AI_PRICES[modelo] || { input: 0, output: 0 };
@@ -4995,7 +4995,7 @@ async function callGemini(env, geminiBody, endpointLabel) {
   const cleanKey = k => k ? k.replace(/[﻿​\r\n\t ]+/g, '').trim() : k;
   const keys = [cleanKey(env.GEMINI_API_KEY), cleanKey(env.GEMINI_API_KEY_2), cleanKey(env.GEMINI_API_KEY_3)].filter(Boolean);
   if (!keys.length) return { error: 'GEMINI_API_KEY no configurada', status: 500 };
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash-lite'];
+  const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
   for (const key of keys) {
     for (const model of models) {
       const res = await fetch(
@@ -29153,7 +29153,7 @@ INSTRUCCIONES FINALES:
       _cleanGKey(env.GEMINI_API_KEY_2),
       _cleanGKey(env.GEMINI_API_KEY_3)
     ].filter(Boolean);
-    const _gemModels = ['gemini-2.0-flash-lite', 'gemini-2.5-flash'];
+    const _gemModels = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
     gemLoop:
     for (const _gModel of _gemModels) {
       for (const _gKey of _gemKeys) {
@@ -29213,13 +29213,18 @@ INSTRUCCIONES FINALES:
   // de varios modelos gratis (misma lista ya probada en alejandra-agente/worker.js,
   // _intentarCascadaOpenRouterGratis) antes de caer a Anthropic.
   const _ORModelosPlano = ['meta-llama/llama-3.3-70b-instruct:free', 'openai/gpt-oss-120b:free', 'nvidia/nemotron-3-ultra-550b-a55b:free'];
+  // DIAGNOSTICO-PLANOS-01 (26/08/2026): probando en produccion, OpenRouter devolvia 401
+  // "Missing Authentication header" en los 3 modelos -- la key no se limpiaba de
+  // BOM/espacios al leerla (mismo problema ya conocido y arreglado para GEMINI_API_KEY,
+  // ver callGemini arriba, y para OPENROUTER_API_KEY en alejandra-agente/worker.js).
+  const _orKeyPlano = env.OPENROUTER_API_KEY ? String(env.OPENROUTER_API_KEY).replace(/[﻿​\r\n\t ]+/g, '').trim() : '';
   async function _intentarOpenRouterPlano(modelo, timeoutMs) {
     try {
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         signal: AbortSignal.timeout(timeoutMs),
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+          'Authorization': `Bearer ${_orKeyPlano}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://alejandra-app-api.alejandra-app.workers.dev',
           'X-Title': 'Alejandra'
