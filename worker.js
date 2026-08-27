@@ -9,6 +9,10 @@
 // que usa el `Buffer` de Node y falla en runtime ("nodebuffer is not supported by
 // this platform") -- probado en local con `wrangler dev` antes de usarlo aquí.
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, ImageRun, WidthType, AlignmentType, HeadingLevel } from 'docx';
+// CAD-IMPORTAR-01 (26/08/2026): segunda dependencia npm real -- dxf-parser es pura
+// lógica de parseo de texto, sin DOM, corre igual dentro del Worker que en el
+// navegador (ver dxfEntidadesASvg/importarDxfREST más abajo).
+import DxfParser from 'dxf-parser';
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
@@ -7037,6 +7041,7 @@ export default {
       // ── Modulo Planos Tecnicos ─────────────────────────────────────
       if (path === '/planos'                       && method === 'GET')    return await listarPlanosREST(request, env);
       if (path === '/planos/generar'               && method === 'POST')   return await generarPlanoREST(request, env);
+      if (path === '/planos/importar-dxf'          && method === 'POST')   return await importarDxfREST(request, env);
       if (/^\/planos\/\d+$/.test(path)            && method === 'GET')    return await getPlano(request, env, path);
       if (/^\/planos\/\d+\/svg$/.test(path)       && method === 'GET')    return await getPlanoSvg(request, env, path);
       if (/^\/planos\/\d+\/circuitos$/.test(path) && method === 'PUT')    return await editarPlanoCircuitosREST(request, env, path);
@@ -29399,6 +29404,191 @@ async function listarPlanosREST(request, env) {
   return json({ ok: true, planos: rows.results || [] });
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// IMPORTAR DXF REAL (26/08/2026, Parte 2 del plan de compatibilidad CAD)
+// Adrián: "quiero que Alejandra sea la mejor" -- lee un DXF real subido (no
+// generado por Alejandra) y lo muestra en el mismo visor que los planos
+// generados. Parseo server-side con dxf-parser (sin DOM, corre igual en el
+// Worker que en el navegador) -- una sola vez, en la subida, igual que
+// _generarPlanoInterno guarda su SVG ya resuelto en vez de regenerarlo en
+// cada visita. Guarda origen/archivo_original_key dentro de "metadatos"
+// (JSON) en vez de columnas propias -- la migración real (columnas
+// dedicadas + capa de anotaciones aparte) es la Parte 3 del plan, pendiente
+// de autorización explícita para tocar el esquema D1 en producción.
+// ═══════════════════════════════════════════════════════════════════
+
+function _dxfEscXml(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function dxfEntidadesASvg(dxfJson) {
+  const entities = (dxfJson && dxfJson.entities) || [];
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const considerar = (x, y) => {
+    if (typeof x !== 'number' || typeof y !== 'number' || !isFinite(x) || !isFinite(y)) return;
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  };
+  for (const e of entities) {
+    try {
+      if (e.type === 'LINE' && e.vertices) e.vertices.forEach(v => considerar(v.x, v.y));
+      else if (e.type === 'CIRCLE' && e.center) { considerar(e.center.x - e.radius, e.center.y - e.radius); considerar(e.center.x + e.radius, e.center.y + e.radius); }
+      else if ((e.type === 'LWPOLYLINE' || e.type === 'POLYLINE') && e.vertices) e.vertices.forEach(v => considerar(v.x, v.y));
+      else if (e.type === 'ARC' && e.center) { considerar(e.center.x - e.radius, e.center.y - e.radius); considerar(e.center.x + e.radius, e.center.y + e.radius); }
+      else if ((e.type === 'TEXT' || e.type === 'MTEXT') && (e.startPoint || e.position)) { const p = e.startPoint || e.position; considerar(p.x, p.y); }
+    } catch (_) { /* entidad sin geometria util para el bbox -- se ignora aqui, se reintenta al dibujar */ }
+  }
+  if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 100; maxY = 100; }
+  const margen = Math.max(10, (maxX - minX) * 0.03, (maxY - minY) * 0.03);
+  minX -= margen; minY -= margen; maxX += margen; maxY += margen;
+  const W = maxX - minX, H = maxY - minY;
+  const fx = x => (x - minX).toFixed(2);
+  const fy = y => (maxY - y).toFixed(2); // DXF: Y crece hacia arriba. SVG: Y crece hacia abajo.
+
+  const partes = [];
+  let sinSoporte = 0;
+  for (const e of entities) {
+    try {
+      if (e.type === 'LINE' && e.vertices && e.vertices.length >= 2) {
+        const [p1, p2] = e.vertices;
+        partes.push(`<line x1="${fx(p1.x)}" y1="${fy(p1.y)}" x2="${fx(p2.x)}" y2="${fy(p2.y)}" stroke="#111" stroke-width="1"/>`);
+      } else if (e.type === 'CIRCLE' && e.center) {
+        partes.push(`<circle cx="${fx(e.center.x)}" cy="${fy(e.center.y)}" r="${e.radius.toFixed(2)}" fill="none" stroke="#111" stroke-width="1"/>`);
+      } else if ((e.type === 'LWPOLYLINE' || e.type === 'POLYLINE') && e.vertices && e.vertices.length) {
+        const pts = e.vertices.map(v => `${fx(v.x)},${fy(v.y)}`).join(' ');
+        const tag = e.shape ? 'polygon' : 'polyline';
+        partes.push(`<${tag} points="${pts}" fill="none" stroke="#111" stroke-width="1"/>`);
+      } else if (e.type === 'ARC' && e.center) {
+        // Igual que al exportar SVG->DXF (path->LWPOLYLINE muestreada): un arco
+        // muestreado a segmentos evita tener que resolver el sweep-flag de un
+        // <path> SVG "A" a mano tras invertir el eje Y.
+        const n = 32;
+        const largo = (typeof e.angleLength === 'number') ? e.angleLength : (e.endAngle - e.startAngle);
+        const pts = [];
+        for (let i = 0; i <= n; i++) {
+          const ang = e.startAngle + largo * (i / n);
+          pts.push(`${fx(e.center.x + e.radius * Math.cos(ang))},${fy(e.center.y + e.radius * Math.sin(ang))}`);
+        }
+        partes.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="#111" stroke-width="1"/>`);
+      } else if ((e.type === 'TEXT' || e.type === 'MTEXT') && (e.startPoint || e.position)) {
+        const p = e.startPoint || e.position;
+        const fs = e.textHeight || e.height || 10;
+        const txt = _dxfEscXml(e.text || '');
+        if (txt) partes.push(`<text x="${fx(p.x)}" y="${fy(p.y)}" font-size="${fs.toFixed(1)}" fill="#111">${txt}</text>`);
+      } else {
+        sinSoporte++; // INSERT (bloques), SPLINE, ELLIPSE, DIMENSION... no soportados en esta primera versión
+      }
+    } catch (_) { /* una entidad rara no debe tirar abajo la importación entera */ }
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W.toFixed(2)} ${H.toFixed(2)}">
+<rect width="${W.toFixed(2)}" height="${H.toFixed(2)}" fill="#fff"/>
+${partes.join('\n')}
+</svg>`;
+  return { svg, totalEntidades: entities.length, sinSoporte };
+}
+
+// CAD-IMPORTAR-01: resumen textual estructurado (no la geometría cruda) para que
+// Alejandra pueda responder preguntas sobre el DXF importado sin mandarlo a un
+// modelo de visión (que no puede extraer coordenadas/texto de un CAD con precisión,
+// ver el plan) -- se calcula una vez en la subida y se guarda en "metadatos", igual
+// que el propio SVG, en vez de re-parsear el DXF original en cada pregunta.
+function _resumenDxf(dxfJson) {
+  const entities = (dxfJson && dxfJson.entities) || [];
+  const porTipo = {};
+  const capas = new Set();
+  const textos = [];
+  for (const e of entities) {
+    porTipo[e.type] = (porTipo[e.type] || 0) + 1;
+    if (e.layer) capas.add(e.layer);
+    if ((e.type === 'TEXT' || e.type === 'MTEXT') && e.text && textos.length < 200) textos.push(e.text);
+  }
+  const lineas = [
+    `Total de entidades: ${entities.length}`,
+    `Tipos: ${Object.entries(porTipo).map(([t, n]) => `${t}=${n}`).join(', ') || '(ninguno)'}`,
+    `Capas: ${[...capas].join(', ') || '(sin capas nombradas)'}`,
+  ];
+  if (textos.length) lineas.push(`Textos encontrados (${textos.length}${textos.length >= 200 ? '+' : ''}): ${textos.map(t => `"${t}"`).join(' | ')}`);
+  return lineas.join('\n');
+}
+
+// Comprobación de propiedad multi-empresa sobre un archivo de R2, mismo criterio que
+// puedeAccederArchivo()/empresaDeArchivo() en alejandra-agente/worker.js:3747-3762
+// (duplicado aquí porque worker.js raíz no importa ese módulo -- son dos Workers
+// separados, ver "UNA Alejandra, DOS cerebros" en CLAUDE.md).
+async function _empresaDeArchivoPlano(env, customMetadata) {
+  const rawUid = customMetadata && customMetadata.usuario_id;
+  if (!rawUid) return null;
+  const uid = parseInt(rawUid, 10);
+  if (!Number.isInteger(uid)) return null;
+  try {
+    const row = await env.DB.prepare('SELECT empresa_id FROM usuarios WHERE id = ?').bind(uid).first();
+    return row && row.empresa_id != null ? String(row.empresa_id) : null;
+  } catch (_) { return null; }
+}
+
+async function importarDxfREST(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const { empresa_id, usuario_id } = await _getAuthPlano(request, env, body);
+  if (!empresa_id) return err('No autorizado', 401);
+  const key = (body.key || '').trim();
+  if (!key) return err('key (del archivo ya subido a R2) es obligatorio', 400);
+
+  const obj = await env.FILES.get(key);
+  if (!obj) return err('Archivo no encontrado', 404);
+  const dueña = await _empresaDeArchivoPlano(env, obj.customMetadata);
+  if (dueña !== null && dueña !== String(empresa_id)) return err('Archivo no encontrado', 404); // mismo mensaje que "no existe" -- no revelar que es de otra empresa
+
+  const nombreOriginal = (obj.customMetadata && obj.customMetadata.original_name) || key.split('/').pop() || 'plano.dxf';
+  if (!/\.dxf$/i.test(nombreOriginal)) {
+    return err('Solo se admite .dxf. DWG es un formato binario propietario que no podemos leer de forma fiable -- expórtalo/guárdalo como DXF desde tu programa CAD (gratis en cualquier CAD) y súbelo así.', 400);
+  }
+
+  let texto;
+  try { texto = await obj.text(); } catch (e) { return err('No se pudo leer el archivo: ' + e.message, 500); }
+
+  let dxfJson;
+  try {
+    const parser = new DxfParser();
+    dxfJson = parser.parseSync(texto);
+  } catch (e) {
+    return err('No se pudo interpretar el DXF: ' + e.message, 400);
+  }
+  if (!dxfJson || !Array.isArray(dxfJson.entities) || !dxfJson.entities.length) {
+    return err('El DXF no contiene entidades reconocibles (o está vacío)', 400);
+  }
+
+  const { svg, totalEntidades, sinSoporte } = dxfEntidadesASvg(dxfJson);
+  const resumen = _resumenDxf(dxfJson);
+  const titulo = (body.titulo || nombreOriginal.replace(/\.dxf$/i, '')).trim();
+  const metadatos = JSON.stringify({
+    origen: 'importado_dxf',
+    archivo_original_key: key,
+    nombre_original: nombreOriginal,
+    total_entidades: totalEntidades,
+    entidades_sin_soporte: sinSoporte,
+    resumen_dxf: resumen
+  });
+
+  await _ensurePlanosTable(env);
+  const res = await env.DB.prepare(
+    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(empresa_id, usuario_id || null, 'importado_dxf', titulo, `DXF importado (${nombreOriginal})`, svg, metadatos).run();
+
+  const id = res.meta && res.meta.last_row_id;
+  const avisoSinSoporte = sinSoporte > 0
+    ? ` (${sinSoporte} de ${totalEntidades} entidades no se pudieron representar todavía -- bloques/splines/elipses, ver más abajo)`
+    : '';
+  return json({
+    ok: true,
+    id,
+    titulo,
+    total_entidades: totalEntidades,
+    entidades_sin_soporte: sinSoporte,
+    mensaje: `DXF "${titulo}" importado correctamente${avisoSinSoporte}. Accede a él en el panel, sección Planos, o descárgalo desde /planos/${id}/svg`
+  });
+}
+
 async function generarPlanoREST(request, env) {
   const body = await request.json().catch(() => ({}));
   const { empresa_id, usuario_id, rol } = await _getAuthPlano(request, env, body);
@@ -29422,7 +29612,17 @@ async function generarPlanoREST(request, env) {
 }
 
 async function getPlano(request, env, path) {
-  const { empresa_id } = await getAuth(request, env);
+  // CAD-IMPORTAR-01: acepta también el secreto interno servidor-a-servidor (mismo
+  // criterio que _getAuthPlano), para que la tool analizar_plano_dxf del agente pueda
+  // leer un plano sin la sesión real del usuario -- via X-Empresa-Id, no hay body en un GET.
+  const secretoInterno = request.headers.get('X-Internal-Secret');
+  let empresa_id;
+  if (secretoInterno && env.AGENT_INTERNAL_SECRET && secretoInterno === env.AGENT_INTERNAL_SECRET) {
+    const eidNum = parseInt(request.headers.get('X-Empresa-Id'), 10);
+    empresa_id = (Number.isInteger(eidNum) && eidNum > 0) ? eidNum : 1;
+  } else {
+    ({ empresa_id } = await getAuth(request, env));
+  }
   if (!empresa_id) return err('No autorizado', 401);
   const id = parseInt(path.split('/')[2]);
   if (!id) return err('ID invalido', 400);

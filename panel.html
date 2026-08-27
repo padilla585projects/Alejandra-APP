@@ -10028,9 +10028,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
           <div class="page-title" style="margin-bottom:0">📐 Planos Técnicos IA</div>
           <button class="btn btn-primary" onclick="abrirModalGenerarPlano()">✨ Generar plano</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('inputImportarDxf').click()">📥 Importar DXF</button>
+          <input type="file" id="inputImportarDxf" accept=".dxf" style="display:none" onchange="importarDxfDesdeArchivo(this)">
           <button class="btn btn-secondary" onclick="cargarPlanos()">🔄 Actualizar</button>
         </div>
-        <div class="page-sub">Planos técnicos SVG generados por Alejandra IA — editables y descargables</div>
+        <div class="page-sub">Planos técnicos SVG generados por Alejandra IA — editables y descargables. También se pueden importar archivos DXF reales.</div>
 
         <!-- Filtros -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px;align-items:center">
@@ -25175,7 +25177,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.23';
+const PANEL_APP_VERSION = '9.24';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -42586,6 +42588,43 @@ function _leerCircuitosDeContenedor(containerId) {
     if (obj.id) circuitos.push(obj);
   });
   return circuitos;
+}
+
+// CAD-IMPORTAR-01 (26/08/2026): Adrián -- "quiero que Alejandra sea la mejor", tanto
+// generando como leyendo CAD real. Sube el .dxf a R2 (mismo endpoint /upload que ya usa
+// el chat) y lo importa como plano real (parseo de verdad server-side, no IA de visión)
+// vía /planos/importar-dxf (worker.js, importarDxfREST).
+async function importarDxfDesdeArchivo(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  inputEl.value = '';
+  if (!file) return;
+  if (!/\.dxf$/i.test(file.name)) { toast('Solo se admiten archivos .dxf -- si es .dwg, expórtalo/guárdalo como .dxf desde tu programa CAD primero', 'err'); return; }
+  toast('Subiendo e importando "' + file.name + '"...', 'ok');
+  try {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('usuario_id', SESSION?.usuario_id || '0');
+    const upRes = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', {
+      method: 'POST',
+      headers: TOKEN ? { 'X-Token': TOKEN } : {},
+      body: fd
+    });
+    const upData = await upRes.json();
+    if (!upRes.ok || !upData.ok) throw new Error(upData.error || 'Error subiendo el archivo');
+
+    const impRes = await apiRaw('/planos/importar-dxf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: upData.url })
+    });
+    const impData = await impRes.json();
+    if (!impRes.ok || !impData.ok) throw new Error(impData.error || 'Error importando el DXF');
+
+    toast(impData.mensaje || ('DXF "' + impData.titulo + '" importado'), 'ok');
+    cargarPlanos();
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
 }
 
 async function cargarPlanos() {

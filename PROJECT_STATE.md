@@ -1,6 +1,16 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-26
+- Estado (2026-08-26, continuación): **Compatibilidad CAD real — Parte 2 (importar/leer
+  DXF) implementada, pendiente de desplegar.** `dxf-parser` como segunda dependencia npm
+  real del Worker raíz (verificado con `wrangler deploy --dry-run`, empaqueta sin
+  errores). Nuevo endpoint `POST /planos/importar-dxf`, dos tools nuevas
+  (`importar_plano_dxf`/`analizar_plano_dxf`) conectadas también al guardián
+  anti-alucinación de ayer, y botón "Importar DXF" en `panel.html`. Almacenamiento vía
+  `metadatos` JSON en la tabla `planos` existente, sin migración D1 todavía (Parte 3,
+  columnas dedicadas + capa de anotaciones, sigue pendiente de autorización explícita).
+  Verificado con un DXF de prueba real (5 tipos de entidad, sin NaN). Versión → 9.24.
+  Ver `CHANGELOG.md`.
 - Estado (2026-08-26, continuación): **Compatibilidad CAD real — Parte 1 (exportar DXF)
   cerrada, plan completo aprobado.** Adrián: "quiero que Alejandra sea la mejor" — tanto
   generando CAD real como leyendo/anotando DWG/DXF de terceros. Investigado y planificado

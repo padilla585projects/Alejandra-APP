@@ -4,6 +4,44 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-26 — Parte 2 de compatibilidad CAD: importar y leer DXF real) — v9.24
+
+Segunda parte del plan de compatibilidad CAD (Adrián: "quiero que Alejandra sea la
+mejor" — plan completo en `C:\Users\Adrian\.claude\plans\radiant-moseying-diffie.md`).
+
+- **`dxf-parser` (npm, MIT)** como segunda dependencia real de `worker.js` (misma
+  técnica que `docx` para el informe semanal — bundling de Wrangler). Verificado con
+  `wrangler deploy --dry-run` antes de tocar producción: empaqueta sin errores.
+- **`dxfEntidadesASvg(dxfJson)`** (`worker.js`): convierte las entidades reales del DXF
+  (LINE, CIRCLE, LWPOLYLINE/POLYLINE, ARC, TEXT/MTEXT) a un SVG navegable en el mismo
+  visor que los planos generados por IA — bounding box + inversión de eje Y (DXF Y-arriba,
+  SVG Y-abajo), arcos muestreados a segmentos (mismo criterio que las curvas Bézier al
+  exportar, ver el fix de ayer). INSERT/SPLINE/ELLIPSE quedan sin soportar por ahora, sin
+  romper el resto — se cuentan y se avisa cuántas entidades no se representaron.
+- **`_resumenDxf(dxfJson)`**: resumen textual (tipos, capas, todos los textos/cotas) para
+  que Alejandra responda preguntas sobre el DXF con datos reales, sin mandarlo a un
+  modelo de visión (no puede extraer geometría/coordenadas con precisión de un CAD).
+- **`POST /planos/importar-dxf`** (`worker.js`): parsea el DXF ya subido a R2, lo guarda
+  como un plano más (reutiliza la tabla `planos` existente, `tipo='importado_dxf'` +
+  `metadatos` JSON con origen/resumen — sin tocar el esquema D1 todavía, la migración
+  con columnas dedicadas es la Parte 3, pendiente de autorización explícita).
+- **Dos tools nuevas** en `alejandra-agente/worker.js`: `importar_plano_dxf` (dispara la
+  importación desde el chat) y `analizar_plano_dxf` (responde preguntas usando el resumen
+  real). Añadidas también a `toolsEscritura` y a la detección de URL de
+  `verificarAccionesAfirmadas` — mismo guardián anti-alucinación de ayer, ahora también
+  cubre "dije que importé un DXF pero no llamé a la tool".
+- **Botón "📥 Importar DXF"** en `panel.html`, junto a "Generar plano" — sube el archivo
+  (mismo endpoint `/upload` que ya usa el chat) e importa en un solo paso.
+- DWG (binario propietario de Autodesk) rechazado explícitamente con mensaje claro:
+  exportar/guardar como DXF desde cualquier programa CAD, gratis, y volver a subirlo.
+
+Verificado con un DXF de prueba real (LINE, CIRCLE, LWPOLYLINE cerrada, TEXT, ARC):
+`dxfEntidadesASvg` produce un SVG correcto sin `NaN`, con los 5 tipos de entidad
+representados, y `_resumenDxf` extrae tipos/capas/texto correctamente.
+
+Versión → 9.24 (4 marcadores sincronizados). Parte 3 (migración D1 con columnas
+dedicadas + capa de anotaciones) sigue pendiente de autorización explícita.
+
 ### Fixed (2026-08-26 — Exportar a DXF perdía en silencio todos los símbolos del esquema) — v9.23
 
 Primera parte de compatibilidad CAD real (Adrián: "quiero que Alejandra sea la mejor",
