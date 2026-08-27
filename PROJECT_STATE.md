@@ -1,6 +1,19 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-26
+- Estado (2026-08-26, continuación): **Retirado `memoria_gobernada` — código sin
+  generador de candidatas, bloqueado por ADR-0002.** Adrián pidió terminar la migración
+  pendiente (mover `alejandra_memoria` → `memoria_gobernada`). Investigando antes de
+  tocar nada se encontró que era la dirección equivocada: `memoria_gobernada` es una cola
+  de candidatas máquina→aprobación humana con lógica ya escrita (incluso 4 tools
+  invocables por el modelo), pero **nada en el repo inserta filas ahí** (0 generador, 0
+  filas reales), y `ADR-0002-NUCLEO-COGNITIVO-V1.md` deja su implementación
+  explícitamente **bloqueada**. Informado de esto, Adrián decidió retirar el código (no
+  migrar, no construir el flujo ahora). Quitadas las 4 funciones + 4 tools + case
+  handlers + helper de rol huérfano en los dos Workers; tabla NO borrada (queda vacía,
+  requiere `CONFIRMO BORRADO` para eso). `alejandra_memoria` (180 notas reales) se queda
+  como único sistema de memoria real. 207/207 tests. Pendiente de commit/deploy. Ver
+  `CHANGELOG.md`.
 - Estado (2026-08-26, continuación): **Compatibilidad CAD real — Parte 3 (migración D1)
   aplicada, plan completo (1-3) cerrado.** Adrián autorizó explícitamente ("dale") la
   migración pendiente de la Parte 2. Aplicada en producción

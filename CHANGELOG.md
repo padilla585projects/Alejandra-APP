@@ -4,6 +4,35 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Removed (2026-08-26 — Retirado memoria_gobernada: sin generador de candidatas, bloqueada por ADR-0002)
+
+Adrián pidió terminar la migración pendiente de memoria (mover las 180 notas reales de
+`alejandra_memoria` a `memoria_gobernada`, "hagámosla bien"). Investigando antes de tocar
+nada, se encontró que esa dirección era la equivocada: `memoria_gobernada` no es una
+tabla "esperando datos" — es una cola de candidatas propuestas por máquina → aprobación
+humana (`estado`, `confianza` baja/media/alta), con su propia lógica ya escrita en los
+dos Workers y expuesta como 4 tools invocables por el modelo en `alejandra-agente`
+(`memoria_consultar`, `memoria_listar_pendientes`, `memoria_confirmar_candidata`,
+`memoria_rechazar_candidata`). Pero **nada en todo el repo inserta filas ahí** — cero
+generador de candidatas, coincide con las 0 filas reales. Además `docs/decisions/
+ADR-0002-NUCLEO-COGNITIVO-V1.md` dice explícitamente que la implementación de esta pieza
+(Memory/Context Engine del "Núcleo Cognitivo") permanece **bloqueada** hasta resolver
+dependencias documentadas — este código no debería haber llegado a producción.
+
+Informado de esto, Adrián decidió retirarlo (no migrar el vault de notas real ahí, no
+construir el flujo de aprobación ahora). Quitado de los dos Workers: `consultarMemoria`,
+`listarCandidatasPendientes`, `confirmarCandidata`, `rechazarCandidata`; en
+`alejandra-agente/worker.js` además las 4 definiciones de tool, sus case handlers, y el
+helper `esEncargadoOSuperior`/`ROLES_ENCARGADO_O_SUPERIOR` (quedaba huérfano tras quitar
+sus únicos 4 callers). `construirConsultaMemoriaGobernada` (función pura en `lib.js`, con
+su propia batería de tests) se deja intacta — sin caller, inofensiva, ya testeada.
+
+**La tabla `memoria_gobernada` NO se ha borrado** (queda vacía, sin código que la use) —
+DROP TABLE requiere la barrera `CONFIRMO BORRADO`, y dejarla dormida conserva la opción
+de reactivarla con un ADR propio si algún día se desbloquea. `alejandra_memoria` (180
+notas reales, con enlaces y panel visual) se queda como único sistema de memoria real,
+sin cambios. 207/207 tests.
+
 ### Added (2026-08-26 — Parte 3 de compatibilidad CAD: migración D1 aplicada) — v9.25
 
 Adrián autorizó explícitamente ("dale") la migración pendiente desde la Parte 2. Aplicada
