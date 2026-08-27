@@ -25177,7 +25177,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.24';
+const PANEL_APP_VERSION = '9.25';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -42675,6 +42675,7 @@ function renderPlanosGrid(lista) {
       <div class="section-card" style="display:flex;flex-direction:column;gap:10px;position:relative;cursor:default">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="background:${m.color};color:#fff;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;white-space:nowrap">${m.emoji} ${m.label}</span>
+          ${p.origen === 'importado' ? '<span title="Importado de un archivo DXF real" style="background:rgba(169,149,255,.15);color:var(--accent);border:1px solid rgba(169,149,255,.3);border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;white-space:nowrap">📥 DXF</span>' : ''}
           <span style="font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap">${fecha}</span>
         </div>
         <div style="font-weight:700;font-size:14px;color:var(--text);line-height:1.3">${escHtml(p.titulo)}</div>

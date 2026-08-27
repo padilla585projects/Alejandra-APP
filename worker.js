@@ -27909,6 +27909,9 @@ async function _ensurePlanosTable(env) {
   // via migrate_008_plano_circuitos.sql (run 30722027660). Se retira el ALTER
   // en runtime -- no hay entorno donde esta columna pudiera faltar ya.
   // await runDDL(env, `ALTER TABLE planos ADD COLUMN circuitos_json TEXT`);
+  // CAD-IMPORTAR-01 (26/08/2026): mismo criterio -- origen/archivo_original_key/
+  // anotaciones_svg aplicadas y verificadas contra D1 real via
+  // migrate_planos_import.sql, autorizado explícitamente por Adrián ("dale").
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -29396,7 +29399,7 @@ async function listarPlanosREST(request, env) {
   await _ensurePlanosTable(env);
   const url = new URL(request.url);
   const tipo = url.searchParams.get('tipo');
-  let q = 'SELECT id, tipo, titulo, descripcion, creado_en, usuario_id, circuitos_json FROM planos WHERE empresa_id=?';
+  let q = 'SELECT id, tipo, titulo, descripcion, creado_en, usuario_id, circuitos_json, origen FROM planos WHERE empresa_id=?';
   const params = [empresa_id];
   if (tipo) { q += ' AND tipo=?'; params.push(tipo); }
   q += ' ORDER BY creado_en DESC LIMIT 100';
@@ -29562,8 +29565,6 @@ async function importarDxfREST(request, env) {
   const resumen = _resumenDxf(dxfJson);
   const titulo = (body.titulo || nombreOriginal.replace(/\.dxf$/i, '')).trim();
   const metadatos = JSON.stringify({
-    origen: 'importado_dxf',
-    archivo_original_key: key,
     nombre_original: nombreOriginal,
     total_entidades: totalEntidades,
     entidades_sin_soporte: sinSoporte,
@@ -29571,15 +29572,15 @@ async function importarDxfREST(request, env) {
   });
 
   await _ensurePlanosTable(env);
-  // CAD-IMPORTAR-01, fix en vivo (26/08/2026): probando en producción, la tabla
-  // "planos" real tiene un CHECK constraint sobre "tipo" (no reflejado en
-  // _ensurePlanosTable -- ver "deuda conocida" del esquema D1 en CLAUDE.md) que solo
-  // admite los 8 tipos de plano generado, no un valor nuevo como "importado_dxf".
-  // En vez de una migración para ampliarlo, se reutiliza "planta" (el tipo genérico
-  // más parecido) -- el origen real distingue por metadatos.origen, no por "tipo".
+  // CAD-IMPORTAR-01, Parte 3 (26/08/2026): columnas dedicadas aplicadas en producción
+  // (migrate_planos_import.sql, autorizado por Adrián) -- "origen"/"archivo_original_key"
+  // en vez de meterlo dentro de "metadatos" como en la Parte 2. El CHECK constraint real
+  // sobre "tipo" (no reflejado en _ensurePlanosTable, ver "deuda conocida" del esquema D1
+  // en CLAUDE.md) solo admite los 8 tipos de plano generado -- se sigue reutilizando
+  // "planta" ahí, "origen" es quien de verdad distingue generado/importado.
   const res = await env.DB.prepare(
-    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(empresa_id, usuario_id || null, 'planta', titulo, `DXF importado (${nombreOriginal})`, svg, metadatos).run();
+    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos, origen, archivo_original_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(empresa_id, usuario_id || null, 'planta', titulo, `DXF importado (${nombreOriginal})`, svg, metadatos, 'importado', key).run();
 
   const id = res.meta && res.meta.last_row_id;
   const avisoSinSoporte = sinSoporte > 0
@@ -29634,7 +29635,7 @@ async function getPlano(request, env, path) {
   if (!id) return err('ID invalido', 400);
   await _ensurePlanosTable(env);
   const row = await env.DB.prepare(
-    'SELECT id, tipo, titulo, descripcion, metadatos, creado_en, usuario_id, circuitos_json FROM planos WHERE id=? AND empresa_id=?'
+    'SELECT id, tipo, titulo, descripcion, metadatos, creado_en, usuario_id, circuitos_json, origen, archivo_original_key, anotaciones_svg FROM planos WHERE id=? AND empresa_id=?'
   ).bind(id, empresa_id).first();
   if (!row) return err('Plano no encontrado', 404);
   return json({ ok: true, plano: row });

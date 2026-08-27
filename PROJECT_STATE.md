@@ -1,6 +1,13 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-26
+- Estado (2026-08-26, continuación): **Compatibilidad CAD real — Parte 3 (migración D1)
+  aplicada, plan completo (1-3) cerrado.** Adrián autorizó explícitamente ("dale") la
+  migración pendiente de la Parte 2. Aplicada en producción
+  (`migrate_planos_import.sql`, verificado con `PRAGMA table_info`): columnas `origen`,
+  `archivo_original_key`, `anotaciones_svg` en `planos`. Código actualizado para usar las
+  columnas reales en vez del `metadatos` JSON provisional de la Parte 2. Badge "📥 DXF"
+  añadido en `panel.html` para planos importados. Versión → 9.25. Ver `CHANGELOG.md`.
 - Estado (2026-08-26, continuación): **Compatibilidad CAD real — Parte 2 (importar/leer
   DXF) implementada, pendiente de desplegar.** `dxf-parser` como segunda dependencia npm
   real del Worker raíz (verificado con `wrangler deploy --dry-run`, empaqueta sin

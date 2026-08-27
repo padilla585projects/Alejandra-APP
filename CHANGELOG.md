@@ -4,6 +4,24 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-26 — Parte 3 de compatibilidad CAD: migración D1 aplicada) — v9.25
+
+Adrián autorizó explícitamente ("dale") la migración pendiente desde la Parte 2. Aplicada
+en producción (`migrate_planos_import.sql`, verificado con `PRAGMA table_info` antes y
+después): tres columnas nuevas en `planos` — `origen` TEXT (`'generado'`/`'importado'`,
+CHECK constraint, default `'generado'`), `archivo_original_key` TEXT (key de R2 del DXF
+real), `anotaciones_svg` TEXT (capa de anotaciones aparte, sin tocar nunca el SVG
+importado — construcción pendiente de que se pida usarla).
+
+Código actualizado para usar las columnas reales en vez del `metadatos` JSON de la
+Parte 2: `importarDxfREST` ahora escribe `origen='importado'` + `archivo_original_key`
+como columnas; la tool `analizar_plano_dxf` comprueba `data.plano.origen` en vez de
+`metadatos.origen`; `getPlano`/`listarPlanosREST` devuelven las columnas nuevas. Añadido
+un badge "📥 DXF" en las tarjetas de `panel.html` cuando `origen==='importado'`.
+
+Versión → 9.25 (4 marcadores sincronizados). Con esto se cierra el plan completo de
+compatibilidad CAD (Partes 1-3).
+
 ### Added (2026-08-26 — Parte 2 de compatibilidad CAD: importar y leer DXF real) — v9.24
 
 Segunda parte del plan de compatibilidad CAD (Adrián: "quiero que Alejandra sea la

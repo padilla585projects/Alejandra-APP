@@ -9471,9 +9471,11 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.plano) return JSON.stringify({ error: data.error || 'Plano no encontrado' });
+        // CAD-IMPORTAR-01, Parte 3: "origen" ya es una columna real (antes vivía dentro
+        // de "metadatos" en la Parte 2, antes de la migración autorizada por Adrián).
+        if (data.plano.origen !== 'importado') return JSON.stringify({ error: 'Ese plano no es un DXF importado (es generado por IA) -- para planos generados, describe lo que se pidió al crearlo.' });
         let metadatos = {};
         try { metadatos = JSON.parse(data.plano.metadatos || '{}'); } catch (_) {}
-        if (metadatos.origen !== 'importado_dxf') return JSON.stringify({ error: 'Ese plano no es un DXF importado (es generado por IA) -- para planos generados, describe lo que se pidió al crearlo.' });
         return JSON.stringify({
           ok: true,
           titulo: data.plano.titulo,
