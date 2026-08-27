@@ -4,6 +4,34 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-26 — Exportar a DXF perdía en silencio todos los símbolos del esquema) — v9.23
+
+Primera parte de compatibilidad CAD real (Adrián: "quiero que Alejandra sea la mejor",
+tanto generando como leyendo CAD real). Investigando antes de diseñar el resto del plan
+se encontró que la exportación a DXF ya existente (`descargarDxfPlano()`, `panel.html`)
+tenía un bug real nunca detectado: su recorrido del SVG solo entendía
+`line,rect,circle,ellipse,text,polygon,polyline,g` — sin rama para `<path>` (curvas
+Bézier) ni `<use>` (símbolos referenciados desde `<defs>`). Los 41 símbolos IEC 60617
+reales (`IEC_SYMBOLS_DEFS` y hermanos en `worker.js`) son exactamente
+`<defs><symbol><path>...` + `<use href="#...">`, así que **todo esquema eléctrico
+exportado a DXF perdía en silencio los símbolos reales** (contactor, guardamotor,
+bimetal...), dejando solo líneas/textos/rects sueltos.
+
+Corregido: `processEl()` ahora resuelve `<use>` (recursivo, hasta 8 niveles de anidación,
+propaga el color ya inyectado por `_normalizarColoresUseSvg`) y `<path>` (muestreo con
+`getTotalLength()`/`getPointAtLength()` nativas del navegador, ~1 punto cada 2px, emitido
+como `LWPOLYLINE` densa). El SVG parseado se adjunta temporalmente y oculto al DOM real
+mientras se procesa — la geometría de `<path>` no es fiable de forma consistente sobre
+un documento "detached" en todos los navegadores.
+
+Verificado con el plano real generado hoy (ID 21, "Cuadro Test Fix Real", 7 `<use>` + 11
+`<path>` en el SVG original): DXF resultante sin `NaN`, 560 coordenadas en rango sano
+(0-920, coherente con el viewBox de 900), incluyendo las `LWPOLYLINE` de los símbolos
+resueltos que antes desaparecían.
+
+Versión → 9.23 (4 marcadores sincronizados). Ver el plan completo (importar/anotar DXF
+real, aún pendiente) en `C:\Users\Adrian\.claude\plans\radiant-moseying-diffie.md`.
+
 ### Added (2026-08-26 — Nuevo sub-tema "Alta Tensión" para el experto de Ingeniería)
 
 Adrián: "creo que debemos añadirle otro experto para Alta Tensión... para que controle

@@ -1,6 +1,17 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-26
+- Estado (2026-08-26, continuación): **Compatibilidad CAD real — Parte 1 (exportar DXF)
+  cerrada, plan completo aprobado.** Adrián: "quiero que Alejandra sea la mejor" — tanto
+  generando CAD real como leyendo/anotando DWG/DXF de terceros. Investigado y planificado
+  con `EnterPlanMode` (plan en `C:\Users\Adrian\.claude\plans\radiant-moseying-diffie.md`):
+  Parte 1 (arreglar `descargarDxfPlano()` en `panel.html`, que perdía en silencio los 41
+  símbolos IEC reales al exportar por no resolver `<use>`/`<path>`) ya implementada y
+  verificada contra un plano real (ID 21, sin NaN, símbolos incluidos). Parte 2 (importar
+  DXF real subido, con `dxf-parser` server-side) y Parte 3 (migración D1 en `planos`, con
+  autorización explícita pendiente) diseñadas pero no implementadas todavía. DWG binario
+  nativo fuera de alcance (formato propietario sin parser libre — se pide exportar a DXF).
+  Versión → 9.23. Ver `CHANGELOG.md`.
 - Estado (2026-08-26, continuación): **Nuevo sub-tema "Alta Tensión" para Ingeniería.**
   Adrián pidió un experto de Alta Tensión (celdas, aparamenta, maniobra) — implementado
   como sub-tema `ie_alta_tension` (mismo patrón de carga condicional que el resto de
