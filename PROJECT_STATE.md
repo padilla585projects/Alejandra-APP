@@ -1,6 +1,13 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-26
+- Estado (2026-08-26, continuación): **Nuevo sub-tema "Alta Tensión" para Ingeniería.**
+  Adrián pidió un experto de Alta Tensión (celdas, aparamenta, maniobra) — implementado
+  como sub-tema `ie_alta_tension` (mismo patrón de carga condicional que el resto de
+  `ie_*`, no un experto nuevo aparte): normativa RD 337/2014+ITC-RAT, tipos de celda,
+  aislamiento, protecciones ANSI, las 5 reglas de oro, mantenimiento. Detección por
+  palabra clave probada en aislado, sin falsos positivos. 207/207 tests. Pendiente de
+  commit/deploy. Ver `CHANGELOG.md`.
 - Estado (2026-08-26, continuación): **Branding "sin IA" en la app + barra de progreso +
   rotación de modelos en planos.** Sobre la marcha mientras se probaba el visor de
   planos: (1) Adrián pidió quitar todas las menciones de "IA" en `index.html` — hecho,

@@ -1076,6 +1076,123 @@ esquema quedaron invisibles para él porque la respuesta visible no tenía relac
 que pasaba por dentro — eso rompe la confianza tanto como inventar un dato (ver REGLA DE
 HONESTIDAD TÉCNICA). Se aplica a cualquier tool, no solo a esquemas.`,
 
+  // INGENIERIA-ALTA-TENSION-01 (26/08/2026): Adrián — "creo que debemos añadirle otro
+  // experto para Alta Tensión... para que controle sobre celdas en alta y cualquier
+  // maquinaria o aparato sobre esto". Mismo patrón que el resto de ie_* -- sub-tema de
+  // "ingenieria_electrica" con carga condicional, no un experto nuevo aparte (ver
+  // IE_SUBTEMA_ROUTES/detectarSubtemasIngenieriaElectrica más abajo).
+  ie_alta_tension: `═══════════════════════════════════════
+ALTA Y MEDIA TENSIÓN — CELDAS, APARAMENTA Y MANIOBRA
+═══════════════════════════════════════
+
+NORMATIVA (RD 337/2014 + ITC-RAT):
+· RD 337/2014 aprueba el Reglamento sobre condiciones técnicas y garantías de seguridad
+  en instalaciones eléctricas de alta tensión (deroga el RD 3275/1982). Aplica a toda
+  instalación >1kV: líneas, centros de transformación, subestaciones, celdas.
+· ITC-RAT-04: documentación — proyecto firmado por técnico competente + dirección de obra
+  para cualquier instalación de AT, sin excepción de potencia (a diferencia de BT).
+· ITC-RAT-05: puesta en servicio — certificado de dirección de obra + acta de puesta en
+  servicio ante el organismo territorial de industria antes de energizar.
+· ITC-RAT-13: instalaciones de puesta a tierra — separación de tierras de protección
+  (masas metálicas) y de servicio (neutro), salvo que el cálculo de tensiones de paso y
+  contacto demuestre que una tierra única es segura (habitual en CT compactos urbanos).
+· ITC-RAT-14: aparamenta — clasificación por función: seccionador (corta SIN carga),
+  interruptor-seccionador (corta CON carga, no cortocircuitos), interruptor automático
+  (corta carga Y cortocircuitos), seccionador de puesta a tierra (SPT, cierra el circuito
+  a tierra para trabajar seguro). Nunca confundir seccionador con interruptor: abrir un
+  seccionador en carga produce un arco que puede ser mortal.
+· ITC-RAT-15: instalaciones de interior — distancias mínimas de seguridad en aire según
+  tensión: 3kV→90mm, 10kV→120mm, 20kV→220mm, 36kV→320mm (fase-tierra, aumentar 1.5-2× en
+  exterior). Grado de protección mínimo de envolventes: IP2X (evita contacto con dedo).
+· ITC-RAT-18: puesta a tierra de las instalaciones — resistencia de tierra según
+  intensidad de defecto, cálculo de tensión de paso/contacto admisible (UNE-EN 50522).
+· ITC-RAT-19: verificaciones e inspecciones — revisión periódica cada 3 años (o 1 año en
+  instalaciones de pública concurrencia/riesgo especial) por OCA.
+
+CELDAS DE MEDIA TENSIÓN — TIPOS Y FUNCIÓN:
+· Celda de línea/entrada (CL): interruptor-seccionador + SPT, conecta al anillo de
+  distribución. Suele ir en pareja (entrada+salida) para configuración en anillo.
+· Celda de protección con fusibles (CF) o con interruptor automático (CMP): protege el
+  transformador — fusibles APR calibrados según potencia (ej. 630kVA→40A, 1000kVA→63A a
+  24kV) o relé de protección + interruptor automático en instalaciones de mayor potencia.
+· Celda de medida (CM): transformadores de tensión (TT) e intensidad (TI) para
+  facturación, sellados por la compañía distribuidora — nunca manipular sus precintos.
+· Celda de remonte/interconexión: sin aparamenta de maniobra, solo paso de cables entre
+  módulos contiguos.
+· Celda de acoplamiento/seccionamiento de barras: interconecta dos secciones de barras
+  (subestaciones con doble embarrado) para maniobras de transferencia sin corte.
+· Fabricantes/series de referencia (aislamiento SF6, envolvente metálica, uso habitual en
+  CT compactos): Ormazabal CGM (CGMcosmos, CGM.CML), Schneider Electric RM6/SM6, ABB
+  SafeRing/SafePlus, Merlin Gerin. Todas comparten el mismo principio funcional aunque
+  cambie el nombre comercial — identifica primero la FUNCIÓN de la celda (línea,
+  protección, medida) antes que la marca.
+
+AISLAMIENTO Y MEDIOS:
+· SF6 (hexafluoruro de azufre): el más extendido en celdas compactas — alta rigidez
+  dieléctrica, extinción de arco eficaz, pero gas de efecto invernadero muy potente (GWP
+  ~23.500) — Reglamento UE 517/2014/2024/573 (F-gas) exige registro de cargas/fugas y
+  recuperación obligatoria al final de vida, nunca purgar a la atmósfera.
+· Aislamiento en aire: celdas abiertas tipo intemperie o interior de gran tamaño,
+  mantenimiento más accesible pero mayores distancias de seguridad.
+· Vacío: usado en interruptores automáticos de MT modernos (menor mantenimiento que el
+  aceite, sin emisión de gases), cámara de vacío sellada, sin partes reponibles en campo.
+· Gas alternativo (g3/AirPlus, sin SF6): sustituto de baja huella de carbono cada vez más
+  exigido en proyectos nuevos por normativa medioambiental — mismo principio funcional.
+
+PROTECCIONES Y RELÉS:
+· Códigos ANSI habituales en relés de protección de MT/AT: 50 (sobreintensidad
+  instantánea de fase), 51 (sobreintensidad temporizada de fase), 50N/51N (homólogos para
+  defecto a tierra/neutro), 67 (direccional de sobreintensidad), 87 (protección
+  diferencial, típica en transformadores de potencia y barras).
+· Curvas de disparo temporizadas (IEC 60255): normal inversa (NI), muy inversa (VI),
+  extremadamente inversa (EI) — la curva se elige según selectividad con las protecciones
+  aguas abajo/arriba, nunca al azar.
+· Relés numéricos modernos (Schneider Sepam, ABB REF6xx, Siemens SIPROTEC) integran varias
+  funciones de protección + comunicación (Modbus/IEC 61850) + registro de eventos y
+  oscilografía para análisis post-falta.
+· Selectividad: el objetivo es que dispare SOLO la protección más cercana a la falta —
+  selectividad cronométrica (por tiempos), amperimétrica (por umbral) o lógica (por
+  señal de bloqueo entre relés adyacentes).
+
+MANIOBRA SEGURA Y ENCLAVAMIENTOS:
+· Las 5 reglas de oro (UNE-EN 50110-1, obligatorias para cualquier trabajo sin tensión):
+  1) Desconectar. 2) Prevenir cualquier posible realimentación (bloqueo/candado del mando
+  — LOTO). 3) Verificar ausencia de tensión con verificador homologado en cada fase.
+  4) Poner a tierra y en cortocircuito mediante el SPT de la celda. 5) Delimitar la zona
+  de trabajo y señalizar.
+· Enclavamientos mecánicos/eléctricos entre aparatos de una misma celda impiden
+  secuencias peligrosas por diseño (ej. no se puede cerrar el SPT si el
+  interruptor-seccionador sigue cerrado, no se puede abrir la tapa de acceso a cables si
+  el SPT no está cerrado). Nunca forzar un enclavamiento — indica que la secuencia de
+  maniobra prevista no se está respetando.
+· Maniobra siempre con los EPI de arco eléctrico correspondientes a la categoría de
+  riesgo de la instalación (pantalla facial, guantes dieléctricos clase acorde a la
+  tensión, ropa ignífuga) — ver módulo PRL para el detalle completo de EPIs por tarea.
+· Orden de maniobra típico para dejar un transformador sin tensión: abrir interruptor de
+  protección → abrir seccionador de línea → verificar ausencia de tensión → cerrar SPT →
+  solo entonces se puede acceder al compartimento de cables/transformador.
+
+MANTENIMIENTO Y ENSAYOS:
+· Termografía infrarroja periódica en conexiones y embarrados — un punto caliente indica
+  mal apriete o degradación de contacto antes de que falle.
+· Análisis de gas SF6 (humedad, pureza, productos de descomposición por arco) en celdas
+  con compartimento de gas revisable.
+· Ensayo de resistencia de contactos (medida de microohmios) en interruptores tras un
+  número de maniobras o intervención en el mecanismo.
+· Verificación de relés de protección: inyección secundaria (simula la falta desde el
+  propio relé) o primaria (más completa, requiere poner el circuito fuera de servicio).
+
+ESQUEMAS DE ALTA/MEDIA TENSIÓN:
+Usa el mismo criterio y la misma tool que el resto de esquemas (ver módulo de generación
+de esquemas más arriba) — para AT, representa cada celda como un bloque con su función
+etiquetada (línea/protección/medida), la aparamenta interior con los símbolos IEC 60617
+de seccionador (línea + cruz diagonal abierta), interruptor automático (línea + cuadrado
+relleno) y SPT (símbolo de tierra en el punto de conexión del seccionador de puesta a
+tierra), y el recorrido de barras/celdas en el orden real de la instalación (entrada →
+protección → transformador). Si no conoces la configuración exacta de las celdas de una
+instalación real, pregunta antes de inventarla — un esquema de AT mal representado puede
+inducir a una maniobra insegura.`,
+
   // DEPARTAMENTO-EXPERTO-01 (25/08/2026): mismo patrón que ie_*/prl_seguridad — se
   // cargan solo para el departamento real del usuario (o si el mensaje menciona
   // explícitamente el oficio), nunca todos a la vez. Ver calcularModulosDinamicos.
@@ -11918,6 +12035,7 @@ const IE_SUBTEMA_ROUTES = [
   { modulo: 'ie_control',   re: /\b(plc|scada|hmi|profibus|profinet|modbus|variador|\bvfd\b|sensor|encoder|aut[oó]mata|softstarter|arrancador|instrumentaci[oó]n|pid\b)\b/i },
   { modulo: 'ie_calculos',  re: /\b(secci[oó]n de cable|qu[eé] secci[oó]n|qu[eé] cable|ca[ií]da de tensi[oó]n|cortocircuito|\bicc\b|factor de potencia|cos.?fi|cos phi|calcula|dimensiona|\bkva\b|kvar)\b/i },
   { modulo: 'ie_normativa', re: /\b(itc-?bt|rebt|reglamento electrot[eé]cnico|normativa el[eé]ctrica|puesta a tierra|media tensi[oó]n|centro de transformaci[oó]n|reb\s*t\b)\b/i },
+  { modulo: 'ie_alta_tension', re: /\b(alta tensi[oó]n|\bceldas?\b|seccionador|interruptor.seccionador|aparamenta|subestaci[oó]n|itc-?rat|\bsf6\b|rel[eé] de protecci[oó]n|reglas de oro|puesta a tierra y en cortocircuito)\b/i },
 ];
 
 // failOpen=true (experto 'ingenieria': el router YA decidió que el mensaje es de

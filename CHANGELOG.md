@@ -4,6 +4,23 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-26 — Nuevo sub-tema "Alta Tensión" para el experto de Ingeniería)
+
+Adrián: "creo que debemos añadirle otro experto para Alta Tensión... para que controle
+sobre celdas en alta y cualquier maquinaria o aparato sobre esto". Mismo patrón que el
+resto de `ie_*` (no un experto nuevo aparte — un sub-tema más de `ingenieria_electrica`,
+con carga condicional por palabra clave): nuevo módulo `ie_alta_tension` — normativa
+(RD 337/2014 + ITC-RAT), tipos de celdas de MT (línea, protección, medida, remonte,
+acoplamiento — Ormazabal CGM, Schneider RM6/SM6, ABB SafeRing/SafePlus), aislamiento
+(SF6, aire, vacío, g3), protecciones (códigos ANSI 50/51/50N/51N/67/87, selectividad),
+maniobra segura (las 5 reglas de oro, enclavamientos, orden de maniobra real), y
+mantenimiento (termografía, análisis de SF6, ensayos de contactos). Conectado a
+`IE_SUBTEMA_ROUTES` con sus propias palabras clave (celda, seccionador, aparamenta,
+subestación, ITC-RAT, SF6, reglas de oro...) — probado en aislado: detecta
+correctamente combinaciones reales ("celda de protección del centro de transformación"
+→ `ie_normativa` + `ie_alta_tension`) sin falsos positivos en mensajes no relacionados.
+207/207 tests.
+
 ### Removed (2026-08-26 — Splash propio quitado: dos logos seguidos al abrir) — v9.22
 
 Adrián mandó capturas: al abrir la app (instalada como PWA) se veían **dos logos
