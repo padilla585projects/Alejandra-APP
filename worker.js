@@ -29571,9 +29571,15 @@ async function importarDxfREST(request, env) {
   });
 
   await _ensurePlanosTable(env);
+  // CAD-IMPORTAR-01, fix en vivo (26/08/2026): probando en producción, la tabla
+  // "planos" real tiene un CHECK constraint sobre "tipo" (no reflejado en
+  // _ensurePlanosTable -- ver "deuda conocida" del esquema D1 en CLAUDE.md) que solo
+  // admite los 8 tipos de plano generado, no un valor nuevo como "importado_dxf".
+  // En vez de una migración para ampliarlo, se reutiliza "planta" (el tipo genérico
+  // más parecido) -- el origen real distingue por metadatos.origen, no por "tipo".
   const res = await env.DB.prepare(
     'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(empresa_id, usuario_id || null, 'importado_dxf', titulo, `DXF importado (${nombreOriginal})`, svg, metadatos).run();
+  ).bind(empresa_id, usuario_id || null, 'planta', titulo, `DXF importado (${nombreOriginal})`, svg, metadatos).run();
 
   const id = res.meta && res.meta.last_row_id;
   const avisoSinSoporte = sinSoporte > 0
