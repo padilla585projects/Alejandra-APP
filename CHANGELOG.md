@@ -4,6 +4,30 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-27 — calcular_cable/calcular_proteccion: tabla real ITC-BT-19 por método de instalación)
+
+Investigando el pedido de "verificación doble" para cálculos críticos, se encontró que
+el cálculo BASE ya era código determinista (no lo hacía la IA "a ojo") pero era una
+aproximación real: una sola tabla de ampacidad sin distinguir método de instalación
+(aunque `instalacion` ya se recibía como input, sin usarse), sin factor de corrección
+por temperatura ambiente ni por agrupamiento de circuitos, y la tabla duplicada
+(distinta) entre `calcularCable` y `calcularProteccion`.
+
+Antes de corregirlo, se verificaron las cifras reales de la ITC-BT-19 contra DOS fuentes
+independientes que coinciden exactamente entre sí (incluida la tabla de agrupamiento,
+cifra a cifra): la GUÍA-BT-19 del Ministerio de Industria (tabla íntegra insertada en el
+propio Reglamento) y Cables RCT. Se validó además contra el ejemplo de cálculo del
+propio documento (RV-K 5G6, método E, 6mm², 30°C → 53,9A) — el resultado de la función
+coincide exacto.
+
+Corregido: nueva tabla `AMPACIDAD_CU_XLPE` por método real (B1 tubo, E bandeja/aire),
+tabla de enterrado bajo tubo, factores de corrección por temperatura (aire y terreno,
+interpolados) y por agrupamiento de circuitos (tabla oficial completa). Nuevos inputs
+`temperatura_ambiente_c`/`circuitos_agrupados` en `calcular_cable`. `calcular_proteccion`
+ya no duplica su propia tabla — reutiliza la misma tabla verificada. Aluminio y PVC
+quedan fuera de esta pasada (aluminio sigue con el factor aproximado de antes, avisado
+explícitamente en el resultado; solo XLPE tiene tabla verificada). 207/207 tests.
+
 ### Removed (2026-08-26 — Retirado memoria_gobernada: sin generador de candidatas, bloqueada por ADR-0002)
 
 Adrián pidió terminar la migración pendiente de memoria (mover las 180 notas reales de

@@ -1,6 +1,18 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-26
+- Actualizado: 2026-08-27
+- Estado (2026-08-27): **`calcular_cable`/`calcular_proteccion` con tabla real ITC-BT-19
+  por método de instalación.** Adrián pidió una "verificación doble" para cálculos
+  críticos — investigando se encontró que el cálculo base ya era código determinista
+  pero aproximado (una sola tabla, sin distinguir método de instalación pese a
+  recibirlo, sin factores de corrección por temperatura/agrupamiento, tabla duplicada y
+  distinta entre las dos tools). Verificadas las cifras reales contra dos fuentes
+  independientes (Guía-BT-19 del Ministerio + Cables RCT, coinciden exactamente),
+  validado contra el ejemplo de cálculo oficial del propio documento (53,9A, coincide
+  exacto). Nueva tabla por método (B1 tubo, E bandeja/aire, enterrado), factores de
+  corrección por temperatura y agrupamiento reales, tabla deduplicada entre las dos
+  tools. Aluminio/PVC quedan fuera de esta pasada (avisado explícitamente). 207/207
+  tests. Pendiente de commit/deploy. Ver `CHANGELOG.md`.
 - Estado (2026-08-26, continuación): **Retirado `memoria_gobernada` — código sin
   generador de candidatas, bloqueado por ADR-0002.** Adrián pidió terminar la migración
   pendiente (mover `alejandra_memoria` → `memoria_gobernada`). Investigando antes de

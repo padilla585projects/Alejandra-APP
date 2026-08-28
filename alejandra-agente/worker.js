@@ -1737,7 +1737,7 @@ const TOOL_CONSULTAR_BD = {
 
 const TOOL_CALCULAR_CABLE = {
   name: 'calcular_cable',
-  description: 'Calcula sección de cable por intensidad admisible y caída de tensión. Norma UNE 20460 / IEC 60364.',
+  description: 'Calcula sección de cable por intensidad admisible y caída de tensión, con tabla oficial ITC-BT-19 por método de instalación (verificada 26/08/2026) y factores de corrección por temperatura ambiente y agrupamiento de circuitos. Cobre + XLPE con tabla verificada; aluminio con factor aproximado (se avisa en el resultado).',
   input_schema: {
     type: 'object',
     properties: {
@@ -1745,9 +1745,11 @@ const TOOL_CALCULAR_CABLE = {
       tension_v:     { type: 'number', description: 'Tensión en voltios (230 monofásico, 400 trifásico)' },
       longitud_m:    { type: 'number', description: 'Longitud del cable en metros' },
       cos_phi:       { type: 'number', description: 'Factor de potencia (default 0.85)' },
-      tipo_cable:    { type: 'string', enum: ['cobre', 'aluminio'], description: 'Material del conductor (default cobre)' },
-      instalacion:   { type: 'string', enum: ['enterrado', 'bandeja', 'tubo', 'aire'], description: 'Tipo de instalación' },
-      max_caida_pct: { type: 'number', description: 'Caída de tensión máxima admisible en % (default 3 alumbrado, 5 fuerza)' }
+      tipo_cable:    { type: 'string', enum: ['cobre', 'aluminio'], description: 'Material del conductor (default cobre; aluminio usa un factor aproximado, no tabla oficial verificada)' },
+      instalacion:   { type: 'string', enum: ['enterrado', 'bandeja', 'tubo', 'aire'], description: 'Tipo de instalación -- bandeja/aire usan el método E (bandeja perforada), tubo usa el método B1 (tubo empotrado), enterrado usa la tabla de enterrado bajo tubo' },
+      max_caida_pct: { type: 'number', description: 'Caída de tensión máxima admisible en % (default 3 alumbrado, 5 fuerza)' },
+      temperatura_ambiente_c: { type: 'number', description: 'Temperatura ambiente real en °C (default 40 para instalaciones al aire, 25 para enterrado -- son las temperaturas de referencia de la tabla oficial; si la real difiere, se aplica el factor de corrección correspondiente)' },
+      circuitos_agrupados: { type: 'number', description: 'Número de circuitos que discurren juntos y paralelos más de 2m (default 1, sin reducción). Aplica el factor de agrupamiento oficial.' }
     },
     required: ['potencia_w', 'tension_v', 'longitud_m']
   },
@@ -1785,7 +1787,8 @@ const TOOL_CALCULAR_PROTECCION = {
       tipo_carga:           { type: 'string', enum: ['motor', 'alumbrado', 'tomas', 'mixta'], description: 'Tipo de carga (default mixta)' },
       seccion_cable_mm2:    { type: 'number', description: 'Sección del cable en mm² (para verificar coordinación)' },
       longitud_m:           { type: 'number', description: 'Longitud del circuito en metros' },
-      tension_v:            { type: 'number', description: 'Tensión nominal en voltios (default 230)' }
+      tension_v:            { type: 'number', description: 'Tensión nominal en voltios (default 230)' },
+      instalacion:          { type: 'string', enum: ['bandeja', 'tubo'], description: 'Método de instalación del cable, para la coordinación con la tabla real de ampacidad (default bandeja)' }
     },
     required: ['intensidad_nominal_a']
   },
@@ -7122,6 +7125,71 @@ async function insertarBobinaIndividual(env, datos, sesion, obra_id, obra_nombre
 }
 
 // ── Cálculos de ingeniería ───────────────────────────────────────────────────
+// CALC-ITC-BT19-01 (26/08/2026): Adrián -- "hagamos primero que el cálculo base sea
+// correcto" antes de añadir una verificación doble encima. El cálculo anterior usaba UNA
+// sola tabla aproximada sin distinguir método de instalación (aunque el input ya lo
+// recibía, sin usarlo), sin factor de corrección por temperatura ni por agrupamiento de
+// circuitos -- huecos reales frente a la ITC-BT-19.
+//
+// Tablas verificadas contra DOS fuentes independientes que coinciden exactamente entre sí:
+// GUÍA-BT-19 del Ministerio de Industria, Turismo y Comercio (feb 2009, tabla íntegra
+// insertada en el propio Reglamento) y Cables RCT "Intensidad admisible de los
+// conductores eléctricos de baja tensión" (may 2019) -- las tablas de agrupamiento
+// coinciden cifra a cifra entre ambas fuentes, y el ejemplo de cálculo del propio
+// documento RCT (RV-K 5G6, método E, 6mm², 3x XLPE = 49A) coincide exacto con la tabla
+// aquí transcrita, lo que confirma la transcripción.
+//
+// Cobre + XLPE (90°C) es el único material/aislamiento con tabla verificada aquí --
+// aluminio sigue con el factor aproximado 0.78 de antes (sin tabla propia verificada,
+// se avisa explícitamente en el resultado). PVC no está soportado en esta pasada.
+const AMPACIDAD_CU_XLPE = {
+  // Método B1 (tubo empotrado en obra) -- [2 conductores cargados, 3 conductores cargados]
+  tubo:    { 1.5:[21,18], 2.5:[29,25], 4:[38,34], 6:[49,44], 10:[68,60], 16:[91,80], 25:[116,106], 35:[144,131], 50:[175,159], 70:[224,202], 95:[271,245], 120:[314,284], 150:[363,338], 185:[415,386], 240:[490,455] },
+  // Método E (bandeja perforada horizontal/vertical, o al aire libre) -- el método real
+  // más habitual en los circuitos de esta app ("Unip.Bandeja Perf.")
+  bandeja: { 1.5:[24,21], 2.5:[33,29], 4:[45,38], 6:[57,49], 10:[76,68], 16:[105,91], 25:[123,116], 35:[154,144], 50:[188,175], 70:[244,224], 95:[296,271], 120:[348,314], 150:[404,363], 185:[464,415], 240:[552,490] },
+};
+AMPACIDAD_CU_XLPE.aire = AMPACIDAD_CU_XLPE.bandeja; // mismo método E, "al aire libre" y "bandeja perforada" comparten tabla
+
+// Enterrado bajo tubo, terna de cables unipolares XLPE, condiciones de referencia
+// (profundidad 0.7m, temperatura terreno 25°C, resistividad térmica 1 K·m/W). Sección
+// mínima real en enterrado: 6mm² (por debajo, la norma no define valor).
+const AMPACIDAD_CU_XLPE_ENTERRADO = {
+  6:72, 10:96, 16:125, 25:160, 35:190, 50:230, 70:280, 95:335, 120:380, 150:425, 185:480, 240:550
+};
+
+// Factores de corrección por temperatura ambiente distinta de la de referencia (40°C
+// aire / 25°C terreno), para XLPE (servicio 90°C) -- interpolación lineal entre puntos.
+const FACTOR_TEMP_AIRE_XLPE    = { 10:1.27, 15:1.22, 20:1.18, 25:1.14, 30:1.10, 35:1.05, 40:1.00, 45:0.95, 50:0.90, 55:0.84, 60:0.77 };
+const FACTOR_TEMP_TERRENO_XLPE = { 10:1.11, 15:1.07, 20:1.04, 25:1.00, 30:0.96, 35:0.92, 40:0.88, 45:0.83, 50:0.78 };
+
+// Factor de reducción por agrupamiento de varios circuitos en la misma bandeja/tubo --
+// fila "capa única en bandeja perforada" de la tabla oficial, la disposición más habitual
+// aquí. Se usa el valor del escalón igual o inferior más próximo (la norma no interpola
+// entre número de circuitos, son valores discretos).
+const FACTOR_AGRUPAMIENTO = { 1:1.00, 2:0.90, 3:0.80, 4:0.75, 6:0.75, 9:0.70, 12:0.70, 16:0.70, 20:0.70 };
+
+function _interpolarFactorTemp(tabla, valor) {
+  const claves = Object.keys(tabla).map(Number).sort((a,b) => a-b);
+  if (valor <= claves[0]) return tabla[claves[0]];
+  if (valor >= claves[claves.length-1]) return tabla[claves[claves.length-1]];
+  for (let i = 0; i < claves.length-1; i++) {
+    if (valor >= claves[i] && valor <= claves[i+1]) {
+      const [x0,x1] = [claves[i], claves[i+1]];
+      const [y0,y1] = [tabla[x0], tabla[x1]];
+      return y0 + (y1-y0) * (valor-x0) / (x1-x0);
+    }
+  }
+  return 1;
+}
+
+function _factorAgrupamiento(n) {
+  const claves = Object.keys(FACTOR_AGRUPAMIENTO).map(Number).sort((a,b) => a-b);
+  let elegido = claves[0];
+  for (const c of claves) { if (n >= c) elegido = c; }
+  return FACTOR_AGRUPAMIENTO[elegido];
+}
+
 function calcularCable(input) {
   const P = input.potencia_w;
   const V = input.tension_v;
@@ -7130,31 +7198,48 @@ function calcularCable(input) {
   const material = input.tipo_cable || 'cobre';
   const instalacion = input.instalacion || 'bandeja';
   const maxCaida = input.max_caida_pct || 5;
+  const enterrado = instalacion === 'enterrado';
+  const tempAmbiente = input.temperatura_ambiente_c != null ? input.temperatura_ambiente_c : (enterrado ? 25 : 40);
+  const numCircuitos = Math.max(1, input.circuitos_agrupados || 1);
 
   const conductividad = material === 'cobre' ? 56 : 35; // m/(Ω·mm²)
   const trifasico = V >= 400;
+  const idxConductores = trifasico ? 1 : 0; // tablas guardadas como [2x, 3x]
 
   // Intensidad
   const I = trifasico
     ? P / (V * Math.sqrt(3) * cosPhi)
     : P / (V * cosPhi);
 
-  // Secciones normalizadas y sus intensidades admisibles (aprox cobre, bandeja/aire, PVC)
-  const secciones = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240];
-  const ampacidadCobre = {
-    1.5: 15, 2.5: 21, 4: 27, 6: 36, 10: 50, 16: 66, 25: 84, 35: 104,
-    50: 125, 70: 160, 95: 194, 120: 225, 150: 260, 185: 297, 240: 346
-  };
-  // Aluminio: ~78% de la capacidad del cobre
-  const factorAl = material === 'aluminio' ? 0.78 : 1.0;
+  const factorAl = material === 'aluminio' ? 0.78 : 1.0; // aproximado -- sin tabla propia verificada para aluminio
+  const factorAgrup = _factorAgrupamiento(numCircuitos);
+
+  let tabla, factorTemp, metodoUsado;
+  if (enterrado) {
+    tabla = AMPACIDAD_CU_XLPE_ENTERRADO;
+    factorTemp = _interpolarFactorTemp(FACTOR_TEMP_TERRENO_XLPE, tempAmbiente);
+    metodoUsado = 'Enterrado bajo tubo (terna unipolar, ref. 0.7m/25°C/1 K·m/W)';
+  } else {
+    const metodoTabla = instalacion === 'tubo' ? 'tubo' : 'bandeja';
+    tabla = AMPACIDAD_CU_XLPE[metodoTabla];
+    factorTemp = _interpolarFactorTemp(FACTOR_TEMP_AIRE_XLPE, tempAmbiente);
+    metodoUsado = metodoTabla === 'tubo' ? 'Método B1 (tubo empotrado en obra)' : 'Método E (bandeja perforada / al aire)';
+  }
+
+  const secciones = enterrado
+    ? [6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240]
+    : [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240];
 
   let seccionElegida = null;
   let caidaReal = null;
   let ampacidad = null;
+  let ampacidadBase = null;
 
   for (const S of secciones) {
-    const Iz = (ampacidadCobre[S] || 0) * factorAl;
-    if (Iz < I) continue; // No soporta la corriente
+    const base = enterrado ? tabla[S] : (tabla[S] ? tabla[S][idxConductores] : null);
+    if (base == null) continue;
+    const Iz = base * factorAl * factorTemp * factorAgrup;
+    if (Iz < I) continue; // No soporta la corriente ya corregida
 
     // Caída de tensión
     let caida;
@@ -7168,29 +7253,41 @@ function calcularCable(input) {
       seccionElegida = S;
       caidaReal = Math.round(caida * 100) / 100;
       ampacidad = Math.round(Iz * 10) / 10;
+      ampacidadBase = base;
       break;
     }
   }
 
   const resultado = {
-    datos_entrada: { potencia_w: P, tension_v: V, longitud_m: L, cos_phi: cosPhi, material, instalacion, max_caida_pct: maxCaida },
+    datos_entrada: { potencia_w: P, tension_v: V, longitud_m: L, cos_phi: cosPhi, material, instalacion, max_caida_pct: maxCaida, temperatura_ambiente_c: tempAmbiente, circuitos_agrupados: numCircuitos },
     tipo_circuito: trifasico ? 'Trifásico (3F+N)' : 'Monofásico (F+N)',
     intensidad_calculada_a: Math.round(I * 100) / 100,
     conductividad_material: conductividad,
+    metodo_instalacion: metodoUsado,
+    aislamiento_asumido: 'XLPE (90°C) -- si el cable real es PVC (70°C) la ampacidad admisible es algo menor',
+    factores_aplicados: {
+      temperatura: Math.round(factorTemp * 1000) / 1000,
+      agrupamiento: factorAgrup,
+      material: factorAl,
+    },
   };
+  if (material === 'aluminio') {
+    resultado.aviso_aluminio = 'Factor 0.78 sobre la tabla de cobre -- aproximado, no hay tabla oficial de aluminio verificada en este cálculo. Para una instalación real en aluminio, contrastar con la tabla oficial antes de dar la sección por buena.';
+  }
 
   if (seccionElegida) {
     resultado.seccion_recomendada_mm2 = seccionElegida;
     resultado.caida_tension_pct = caidaReal;
-    resultado.ampacidad_cable_a = ampacidad;
+    resultado.ampacidad_tabla_a = Math.round(ampacidadBase * 10) / 10;
+    resultado.ampacidad_corregida_a = ampacidad;
     resultado.cumple_norma = true;
-    resultado.norma_referencia = 'UNE 20460 / IEC 60364 / REBT ITC-BT-19';
-    resultado.resumen = `Cable ${material} ${seccionElegida} mm² — Intensidad: ${Math.round(I*100)/100} A (admisible: ${ampacidad} A) — Caída: ${caidaReal}% (máx: ${maxCaida}%)`;
+    resultado.norma_referencia = 'REBT ITC-BT-19 (tabla oficial por método de instalación, verificada 26/08/2026)';
+    resultado.resumen = `Cable ${material} ${seccionElegida} mm² (${metodoUsado}) — Intensidad: ${Math.round(I*100)/100} A (admisible corregida: ${ampacidad} A, tabla base: ${ampacidadBase} A) — Caída: ${caidaReal}% (máx: ${maxCaida}%)`;
   } else {
     resultado.seccion_recomendada_mm2 = null;
     resultado.cumple_norma = false;
-    resultado.error = `No se encontró sección normalizada (hasta 240mm²) que cumpla intensidad (${Math.round(I*100)/100} A) y caída de tensión (máx ${maxCaida}%) para ${L}m.`;
-    resultado.sugerencia = 'Considerar: reducir longitud, subir tensión a trifásico, cable en paralelo, o verificar potencia.';
+    resultado.error = `No se encontró sección normalizada (hasta 240mm²) que cumpla intensidad (${Math.round(I*100)/100} A, tras factores de corrección) y caída de tensión (máx ${maxCaida}%) para ${L}m.`;
+    resultado.sugerencia = 'Considerar: reducir longitud, subir tensión a trifásico, cable en paralelo, reducir circuitos agrupados, o verificar potencia.';
   }
 
   return JSON.stringify(resultado, null, 2);
@@ -7262,6 +7359,14 @@ function calcularProteccion(input) {
   const seccionCable = input.seccion_cable_mm2;
   const longitud = input.longitud_m;
   const tension = input.tension_v || 230;
+  const trifasico = tension >= 400;
+  // CALC-ITC-BT19-01 (26/08/2026): antes tenía su propia tabla de ampacidad hardcodeada,
+  // duplicada de calcularCable con valores DISTINTOS (aproximación genérica, no por
+  // método) -- ahora reutiliza la misma tabla verificada (AMPACIDAD_CU_XLPE), evitando
+  // dos fuentes de verdad para lo mismo. Sin instalación explícita en el input de esta
+  // tool todavía, se asume bandeja/aire (método E, el más habitual) para la coordinación.
+  const instalacion = input.instalacion === 'tubo' ? 'tubo' : 'bandeja';
+  const idxConductores = trifasico ? 1 : 0;
 
   // Calibres normalizados
   const calibres = [6, 10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125];
@@ -7277,14 +7382,8 @@ function calcularProteccion(input) {
   const sensibilidadDif = tipoCarga === 'motor' ? 300 : 30; // mA
   const tipoDif = tipoCarga === 'motor' ? 'Clase A (inmunizado)' : 'Clase AC o A';
 
-  // Verificar coordinación cable-protección
-  const ampacidadCobre = {
-    1.5: 15, 2.5: 21, 4: 27, 6: 36, 10: 50, 16: 66, 25: 84, 35: 104,
-    50: 125, 70: 160, 95: 194, 120: 225, 150: 260, 185: 297, 240: 346
-  };
-
   const resultado = {
-    datos_entrada: { intensidad_nominal_a: In, tipo_carga: tipoCarga, tension_v: tension },
+    datos_entrada: { intensidad_nominal_a: In, tipo_carga: tipoCarga, tension_v: tension, instalacion },
     magnetotermico: {
       calibre_a: calibreElegido,
       curva: curva,
@@ -7299,12 +7398,13 @@ function calcularProteccion(input) {
       calibre_a: calibreElegido,
       uso: sensibilidadDif === 30 ? 'Protección de personas (contacto directo)' : 'Protección contra incendio'
     },
-    norma_referencia: 'REBT ITC-BT-22 / ITC-BT-24 / UNE 20460',
+    norma_referencia: 'REBT ITC-BT-22 / ITC-BT-24 / UNE 20460 -- tabla ampacidad ITC-BT-19 (cobre, XLPE, sin factores de corrección de temperatura/agrupamiento en esta coordinación)',
   };
 
-  // Coordinación cable-protección
+  // Coordinación cable-protección (tabla compartida con calcularCable, método bandeja/tubo, cobre XLPE)
   if (seccionCable) {
-    const Iz = ampacidadCobre[seccionCable] || 0;
+    const tabla = AMPACIDAD_CU_XLPE[instalacion];
+    const Iz = tabla[seccionCable] ? tabla[seccionCable][idxConductores] : 0;
     resultado.coordinacion_cable = {
       seccion_mm2: seccionCable,
       ampacidad_cable_a: Iz,
@@ -7314,7 +7414,7 @@ function calcularProteccion(input) {
     };
     if (Iz < calibreElegido) {
       // Sugerir sección mínima
-      const seccionMinima = Object.entries(ampacidadCobre).find(([s, iz]) => iz >= calibreElegido);
+      const seccionMinima = Object.entries(tabla).find(([s, v]) => v[idxConductores] >= calibreElegido);
       if (seccionMinima) resultado.coordinacion_cable.seccion_minima_mm2 = parseFloat(seccionMinima[0]);
     }
   }
