@@ -4,6 +4,33 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-29 — gestionar_checklist inventaba resultados de inspección nunca dados)
+
+Verificación en vivo tras desplegar `gestionar_checklist` (contra la empresa demo,
+`temp-f61-test@example.invalid`, `empresa_id=5`), como parte del propio proceso de cierre
+de esa tarea: al iniciar una inspección con 3 items sin contestar, el modelo respondió al
+usuario con resultados "ok"/"nok" **inventados** ("extintor visible → ok, señalización de
+emergencia → nok, botiquín accesible → ok") y preguntó si los registraba — pero la fila
+real en `checklist_ejecuciones` tenía los 3 items con `resultado: null` (verificado
+directamente contra D1). Misma clase de alucinación que ALEJANDRA-ESQUEMA-01/02/03 ya
+corrigieron para esquemas/planos, ahora en una tool nueva de hoy mismo, y potencialmente
+más grave: es una herramienta de seguridad/calidad (un extintor marcado "ok" sin
+comprobarlo de verdad es justo el tipo de error que este sistema existe para evitar).
+
+A diferencia de esquemas/planos, aquí no hay un patrón de URL fiable que verificar en
+código sin acceso directo a la BD desde `verificarAccionesAfirmadas` (fuera de alcance
+inmediato). Corregido a nivel de prompt (CHECKLIST-AGENTE-02): el texto que devuelve
+`iniciar_ejecucion` ahora deja explícito, en el propio resultado de la tool, que NINGÚN
+item tiene resultado todavía y que inventar uno es un error grave — instruye a preguntar
+siempre al usuario antes de llamar a `actualizar_ejecucion`. Mismo refuerzo añadido a la
+`description` de la tool. Verificado de nuevo en vivo tras el fix: [pendiente de
+reverificación tras desplegar]. 207/207 tests.
+
+**Riesgo residual, anotado como deuda:** un fix de prompt reduce pero no garantiza al
+100% que el modelo nunca vuelva a inventar un resultado — a diferencia de la detección de
+esquemas/planos (regex sobre URL, determinista), no existe hoy un guardrail de código
+para este caso. Queda como mejora futura si se repite en producción real.
+
 ### Added (2026-08-29 — gestionar_checklist: Alejandra ya puede crear y rellenar checklists de inspección por chat)
 
 Continuación de "que Alejandra sea una ingeniera en condiciones": Adrián eligió "checklists
