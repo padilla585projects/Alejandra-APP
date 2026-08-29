@@ -249,6 +249,19 @@ function clasificarResultadoTool(resultado, err) {
   return !(typeof resultado === 'string' && /^\s*(❌|Error[:\s])/.test(resultado));
 }
 
+// DEPT-AGENTE-01 (29/08/2026): ninguna tool de chat del agente filtraba por
+// departamento (a diferencia de sus endpoints REST equivalentes en worker.js,
+// que usan isDeptPrivileged()) -- un usuario de un departamento podía ver o
+// editar datos de otro vía chat. Mismo criterio que isDeptPrivileged (worker.js):
+// superadmin/empresa_admin/desarrollador ven todos los departamentos, y el
+// departamento "seguridad" tiene visión transversal por decisión de negocio
+// (mismo motivo que isSeguridad en worker.js). `rol` y `departamento` deben
+// venir siempre de la sesión verificada (authOk), nunca de un campo que el
+// modelo o el cliente controle -- igual que el resto de columnas de aislamiento.
+function puedeVerTodosLosDepartamentos(rol, departamento) {
+  return rol === 'superadmin' || rol === 'empresa_admin' || rol === 'desarrollador' || departamento === 'seguridad';
+}
+
 // SEC-CRON-01 / ARC-017 (02/08/2026): el cron llama al modelo con esDevVerificado=true,
 // así que filtrarToolsPorAuth no le filtraba NADA. Seis veces al día, sin nadie delante,
 // el modelo alcanzaba desplegar, hacer rollback, escribir en el repo y escribir en la BD
@@ -769,6 +782,7 @@ export {
   TOOLS_N1_LECTURA_PILOTO,
   esInvocacionN1DeLectura,
   clasificarResultadoTool,
+  puedeVerTodosLosDepartamentos,
   filtrarToolsPorAuth,
   TOOLS_PROHIBIDAS_CRON,
   esInvocacionCron,
