@@ -4,6 +4,32 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-29 — detectar_conflictos_disciplinas: aviso de posibles conflictos entre disciplinas por obra)
+
+Otra idea de "ingeniera en condiciones": detección de conflictos entre disciplinas.
+Investigando antes de diseñar se comprobó contra D1 real que no hay ningún dato
+geométrico/BIM (los planos son SVG 2D generados, sin coordenadas 3D reales) — un clash
+detection real (tipo Navisworks) no es posible con los datos que existen hoy. Sí es
+posible y honesto: de las tablas con dato de disciplina real, solo `documentos_obra`,
+`incidencias` y `ncrs_obra` tienen columna `departamento` (`tareas_obra` y `planos`, no).
+
+Añadida `detectar_conflictos_disciplinas` (acceso directo a `env.DB`, mismo patrón que
+`gestionar_checklist`): dado un `obra_id`, cruza documentos + incidencias abiertas + no
+conformidades abiertas de departamentos DISTINTOS y busca coincidencias de palabras
+clave significativas (≥4 letras, sin acentos, fuera de una lista de términos genéricos
+de obra) entre su título/descripción — p.ej. una incidencia eléctrica y una NCR mecánica
+que mencionan ambas "sala de máquinas" salen como candidato a revisar junto. La
+descripción de la tool y el propio texto de respuesta dejan explícito que es una
+coincidencia de texto, no una confirmación de conflicto real ni un análisis geométrico.
+
+Verificado con 6 casos aislados — encontrados y corregidos dos bugs reales antes de
+desplegar: (1) NFD sin quitar la marca diacrítica fragmentaba palabras acentuadas
+("máquinas" salía como "quinas"), mismo patrón que `normalizarSlugMemoria` ya resolvía
+en este archivo; (2) la lista de palabras genéricas solo tenía formas en singular
+("trabajo","pendiente"), así que "trabajos"/"pendientes" en plural no se filtraban y
+generaban falsos positivos entre disciplinas que solo compartían texto genérico de obra
+("trabajos pendientes de instalación general"). 207/207 tests del agente sin regresión.
+
 ### Fixed (2026-08-29 — gestionar_checklist inventaba resultados de inspección nunca dados)
 
 Verificación en vivo tras desplegar `gestionar_checklist` (contra la empresa demo,

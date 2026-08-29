@@ -2109,6 +2109,28 @@ function tryParse(str, def) {
   try { return JSON.parse(str); } catch { return def; }
 }
 
+// CONFLICTOS-DISCIPLINAS-01: extrae palabras "significativas" (>=4 letras, sin acentos,
+// fuera de una lista de palabras genéricas de obra) de un texto libre, para comparar
+// solapamiento entre items de distinta disciplina. Heurística simple a propósito --
+// no es NLP real, es una lista de palabras compartidas, explicable y verificable a
+// mano por quien lea el resultado.
+const CONFLICTOS_STOPWORDS = new Set(['para','como','pero','desde','hasta','entre','sobre','donde','cuando','este','esta','estos','estas','ese','esa','esos','esas','obra','zona','area','planta','nivel','general','trabajo','trabajos','instalacion','instalaciones','revision','revisar','pendiente','completado','realizado']);
+function _palabrasSignificativas(texto) {
+  // Bug real encontrado al probar en aislado: sin quitar las marcas diacriticas,
+  // NFD separa cada letra acentuada en base + marca ("maquinas" con tilde en la a
+  // se parte en "ma" + marca + "quinas"), y [a-z0-9]{4,} corta justo ahi -- salia
+  // "quinas" en vez de "maquinas". Mismo patron de limpieza que normalizarSlugMemoria
+  // en este mismo archivo (rango unicode de marcas combinantes en formato escapado,
+  // nunca como caracteres literales en el fuente).
+  const normalizado = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const palabras = normalizado.match(/[a-z0-9]{4,}/g) || [];
+  // Segundo bug real encontrado en aislado: CONFLICTOS_STOPWORDS solo tiene formas en
+  // singular ("trabajo","pendiente") -- "trabajos"/"pendientes" (plural) pasaban el
+  // filtro sin querer y generaban falsos positivos entre disciplinas que solo
+  // compart\u00edan texto gen\u00e9rico de obra. Comprueba tambi\u00e9n la forma sin "s" final.
+  return new Set(palabras.filter(p => !CONFLICTOS_STOPWORDS.has(p) && !(p.endsWith('s') && CONFLICTOS_STOPWORDS.has(p.slice(0, -1)))));
+}
+
 // MODULO GRAFICOS / PREGUNTAS (NEW-XXX, 22/07/2026). Logica pura,
 // duplicada tal cual en worker.js (raiz): ambos comparten la misma BD
 // D1 (alejandra-db), no hace falta proxy via Service Binding porque no
@@ -2667,6 +2689,39 @@ const TOOL_GESTIONAR_CHECKLIST = {
   acceso: 'sesion',
   cron: 'permitido',
   nivel_riesgo: 'N1',
+};
+
+// CONFLICTOS-DISCIPLINAS-01 (29/08/2026): "detección de conflictos entre disciplinas",
+// otra de las ideas de "ingeniera en condiciones" aprobadas. A diferencia de
+// verificación normativa (ya cubierta por buscar_normativa) o dossier as-built (ya
+// cubierta por generar_documento), esta no tenía NINGUNA base construida -- es
+// genuinamente nueva.
+//
+// Alcance honesto: Alejandra NO tiene datos geométricos/BIM (los planos son SVG 2D
+// generados, no un modelo 3D con coordenadas reales) -- un clash detection real
+// (tipo Navisworks, dos elementos ocupando el mismo espacio físico) no es posible con
+// los datos que existen hoy. Lo que SÍ es posible y real: cruzar los tres únicos sitios
+// donde el dato de disciplina (`departamento`) está de verdad en el esquema
+// (`documentos_obra`, `incidencias`, `ncrs_obra` -- confirmado contra D1 real, las tres
+// tienen columna `departamento`; `tareas_obra` y `planos` NO la tienen) y detectar
+// coincidencias de palabras clave significativas entre título/descripción de items de
+// DISTINTA disciplina en la MISMA obra -- p.ej. una incidencia eléctrica y un documento
+// mecánico que mencionan ambos "sala de máquinas" son candidatos a revisar juntos,
+// aunque no se pueda asegurar que hay un conflicto real sin que un humano lo mire.
+const TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS = {
+  name: 'detectar_conflictos_disciplinas',
+  description: 'Busca posibles conflictos entre disciplinas (eléctrico, mecánico, PCI, obra civil...) para una obra: cruza documentos, incidencias y no conformidades de DISTINTOS departamentos que mencionan las mismas palabras clave (ubicación, equipo...) y podrían estar relacionados o chocar entre sí. IMPORTANTE: es una coincidencia de texto, no un análisis geométrico/BIM real -- Alejandra no tiene datos 3D de los planos. Cada resultado es un candidato a revisar manualmente, no una confirmación de conflicto real. Úsalo cuando el usuario pregunte por posibles interferencias, choques o conflictos entre disciplinas/departamentos en una obra.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      obra_id: { type: 'number', description: 'Obra a analizar (obligatorio)' },
+      departamento: { type: 'string', description: 'Si se indica, solo muestra conflictos que involucren a este departamento (opcional)' }
+    },
+    required: ['obra_id']
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
 };
 
 const TOOL_PENSAR = {
@@ -3581,11 +3636,11 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO]
 };
 
@@ -10581,6 +10636,64 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return '❌ Acción no reconocida. Usa: listar_plantillas, crear_plantilla, listar_ejecuciones, iniciar_ejecucion, actualizar_ejecucion.';
       } catch (err) {
         return `Error gestionando checklist: ${err.message}`;
+      }
+    }
+
+    case 'detectar_conflictos_disciplinas': {
+      try {
+        if (!env.DB) return 'Base de datos no disponible';
+        const obraId = input.obra_id ? parseInt(input.obra_id) : null;
+        if (!obraId) return '❌ Necesito obra_id para buscar conflictos.';
+        const eid = empresa_id || 1;
+        const filtroDept = input.departamento ? String(input.departamento).toLowerCase() : null;
+
+        // Las únicas 3 tablas con `departamento` real Y `obra_id` (confirmado contra D1
+        // real, 29/08/2026) -- tareas_obra y planos no tienen departamento, quedan fuera.
+        const [docs, incs, ncrs] = await Promise.all([
+          env.DB.prepare(`SELECT id, departamento, tipo, titulo FROM documentos_obra WHERE empresa_id=? AND obra_id=? AND departamento IS NOT NULL ORDER BY created_at DESC LIMIT 30`).bind(eid, obraId).all().catch(() => ({ results: [] })),
+          env.DB.prepare(`SELECT id, departamento, titulo, descripcion FROM incidencias WHERE empresa_id=? AND obra_id=? AND estado NOT IN ('resuelta','cerrada') ORDER BY created_at DESC LIMIT 30`).bind(eid, obraId).all().catch(() => ({ results: [] })),
+          env.DB.prepare(`SELECT id, departamento, descripcion, gravedad FROM ncrs_obra WHERE empresa_id=? AND obra_id=? AND estado != 'cerrada' AND departamento IS NOT NULL ORDER BY created_at DESC LIMIT 30`).bind(eid, obraId).all().catch(() => ({ results: [] })),
+        ]);
+
+        const items = [
+          ...(docs.results || []).map(d => ({ origen: 'documento', id: d.id, departamento: String(d.departamento).toLowerCase(), etiqueta: `📄 [doc#${d.id}] ${d.titulo} (${d.tipo})`, texto: `${d.titulo} ${d.tipo}` })),
+          ...(incs.results || []).map(i => ({ origen: 'incidencia', id: i.id, departamento: String(i.departamento).toLowerCase(), etiqueta: `⚠️ [inc#${i.id}] ${i.titulo}`, texto: `${i.titulo} ${i.descripcion || ''}` })),
+          ...(ncrs.results || []).map(n => ({ origen: 'NCR', id: n.id, departamento: String(n.departamento).toLowerCase(), etiqueta: `🔴 [ncr#${n.id}] ${n.descripcion} (${n.gravedad})`, texto: n.descripcion })),
+        ];
+
+        if (items.length < 2) return `📋 Solo hay ${items.length} elemento(s) con departamento asignado en la obra #${obraId} (documentos + incidencias abiertas + no conformidades abiertas) -- no hay suficiente para cruzar disciplinas.`;
+
+        // Comparación por pares entre disciplinas DISTINTAS -- O(n²) sobre como mucho 90
+        // items (30+30+30), sobra de sobra para el límite de CPU de un Worker.
+        const candidatos = [];
+        for (let i = 0; i < items.length; i++) {
+          const a = items[i];
+          const palabrasA = _palabrasSignificativas(a.texto);
+          if (palabrasA.size === 0) continue;
+          for (let j = i + 1; j < items.length; j++) {
+            const b = items[j];
+            if (a.departamento === b.departamento) continue; // mismo departamento no es "entre disciplinas"
+            if (filtroDept && a.departamento !== filtroDept && b.departamento !== filtroDept) continue;
+            const palabrasB = _palabrasSignificativas(b.texto);
+            const compartidas = [...palabrasA].filter(p => palabrasB.has(p));
+            if (compartidas.length > 0) candidatos.push({ a, b, compartidas });
+          }
+        }
+
+        if (!candidatos.length) {
+          return `✅ No he encontrado coincidencias de palabras clave entre disciplinas distintas en la obra #${obraId} (comparados ${items.length} elementos: documentos, incidencias abiertas y no conformidades abiertas). No garantiza que no haya conflictos reales -- solo que no comparten términos de texto.`;
+        }
+
+        candidatos.sort((x, y) => y.compartidas.length - x.compartidas.length);
+        const top = candidatos.slice(0, 15);
+        let resp = `⚠️ ${candidatos.length} posible(s) conflicto(s) entre disciplinas en la obra #${obraId} (coincidencia de palabras clave, revisar manualmente -- NO es un análisis geométrico real):\n\n`;
+        top.forEach(c => {
+          resp += `• [${c.a.departamento}] ${c.a.etiqueta}\n  [${c.b.departamento}] ${c.b.etiqueta}\n  → coinciden en: ${c.compartidas.join(', ')}\n\n`;
+        });
+        if (candidatos.length > top.length) resp += `(mostrando los ${top.length} con más coincidencias, de ${candidatos.length} en total)\n`;
+        return resp;
+      } catch (err) {
+        return `Error detectando conflictos entre disciplinas: ${err.message}`;
       }
     }
 
