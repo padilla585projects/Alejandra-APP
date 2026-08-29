@@ -1,6 +1,17 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-29
+- Estado (2026-08-29, continuación): **"Ingeniera en condiciones" — detección de
+  conflictos entre disciplinas (`detectar_conflictos_disciplinas`).** Investigado antes
+  de diseñar: sin datos geométricos/BIM (planos son SVG 2D, no 3D), un clash detection
+  real no es posible hoy. Alcance honesto elegido: cruzar `documentos_obra`,
+  `incidencias` e `ncrs_obra` (las únicas 3 tablas con `departamento` real) por
+  coincidencia de palabras clave entre disciplinas distintas, dejando explícito que es
+  heurística de texto, no confirmación de conflicto real. Verificado con 6 casos
+  aislados, encontrados y corregidos 2 bugs reales antes de desplegar (fragmentación de
+  palabras acentuadas por NFD sin limpiar; stopwords solo en singular dejaban pasar
+  plurales como falsos positivos). 207/207 tests. Pendiente de commit/deploy. Ver
+  `CHANGELOG.md`.
 - Estado (2026-08-29, continuación): **"Ingeniera en condiciones" — checklists de
   inspección personalizados por chat (`gestionar_checklist`).** Adrián eligió esta idea
   de la lista de 7 aprobada antes. Investigando se encontró que la infraestructura ya
