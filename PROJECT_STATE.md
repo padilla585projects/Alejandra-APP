@@ -1,6 +1,22 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-29
+- Estado (2026-08-29, continuación): **Segundo hallazgo de la revisión — Alejandra
+  ignoraba un "sí" corto del usuario y repetía su oferta en vez de actuar.**
+  `alejandra_historial` id2759→id2760 (usuario 3, 28/08 07:50): Alejandra había ofrecido
+  generar un esquema pidiendo un dato opcional; el usuario confirmó corto ("Si por
+  favot") sin darlo; en vez de generar igualmente (el dato no era obligatorio para la
+  tool) o preguntar solo por lo que faltaba, repitió casi palabra por palabra su propia
+  explicación anterior terminando con la misma pregunta — ignoró la confirmación por
+  completo, sin ninguna traza para ese turno. La salvaguarda existente ("plan diferido
+  sin ejecutar") no lo cazaba: ese patrón detecta anuncios de acción no ejecutados
+  ("voy a proceder a..."), no preguntas repetidas ignorando una respuesta ya dada.
+  Añadida una detección hermana (ALEJANDRA-CONFIRMACION-01) en los mismos dos puntos del
+  código: confirmación corta del usuario + respuesta sin tool_use que reoferta con otra
+  pregunta → fuerza una continuación pidiendo ejecutar ya o preguntar solo por el dato
+  imprescindible. Verificado con 6 casos aislados (el real + negativos para evitar
+  falsos positivos con mensajes largos/no confirmatorios). 207/207 tests. Pendiente de
+  commit/deploy. Ver `CHANGELOG.md`.
 - Estado (2026-08-29): **Revisión del comportamiento real de Alejandra — falso positivo
   encontrado y corregido en `verificarAccionesAfirmadas()`.** Adrián pidió revisar cómo
   se había comportado Alejandra con sus peticiones reales de un día concreto. Reconstruido
