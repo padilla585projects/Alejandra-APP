@@ -3909,14 +3909,26 @@ export default {
           promesa,
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), PRESUPUESTO_HEALTH_MS)),
         ]);
-        const [d1Ok, r2Ok] = await Promise.all([
+        // SALDO-ANTHROPIC-01 (29/08/2026): antes /health solo miraba D1/R2 -- un fallo
+        // real y activo de Anthropic (créditos agotados, tope de uso alcanzado) era
+        // invisible aquí, "healthy" aunque el chat estuviera devolviendo errores crudos.
+        // No se hace una llamada en vivo a Anthropic (costaría cuota en cada /health,
+        // justo el recurso que puede estar agotado) -- se consulta si `notificarSinCreditos`
+        // dejó un registro reciente en alejandra_logs (tipo='alerta_creditos'), que ya se
+        // escribe ahí desde antes de este fix. "Reciente" = últimos 5 minutos, para que el
+        // estado se recupere solo poco después de que Anthropic vuelva a responder, sin
+        // necesitar un log explícito de "resuelto" que hoy no existe.
+        const [d1Ok, r2Ok, anthropicOk] = await Promise.all([
           conTimeout(env.DB.prepare('SELECT 1').run()).then(() => true).catch(() => false),
           conTimeout(env.FILES.head('_healthcheck/centinela.txt')).then((obj) => !!obj).catch(() => false),
+          conTimeout(env.DB.prepare(
+            `SELECT 1 FROM alejandra_logs WHERE tipo='alerta_creditos' AND created_at >= datetime('now', '-5 minutes') LIMIT 1`
+          ).first()).then((row) => !row).catch(() => true), // si la consulta falla, no bloquear el estado por esto
         ]);
-        const estado = determinarEstadoSalud(d1Ok, r2Ok);
+        const estado = determinarEstadoSalud(d1Ok, r2Ok, anthropicOk);
         const version = (env.CF_VERSION_METADATA && env.CF_VERSION_METADATA.id) || 'desconocida';
         return json({
-          estado, d1: d1Ok, r2: r2Ok, version,
+          estado, d1: d1Ok, r2: r2Ok, anthropic: anthropicOk, version,
           // Campos previos, mantenidos tal cual para no romper a quien ya
           // consume este endpoint (p.ej. index.html usa `.version` como
           // fallback de actualización).
@@ -12514,6 +12526,23 @@ async function mantenerContinuidadExperto(env, usuario_id, clas) {
 // ── Monitor de créditos Anthropic ────────────────────────────────────────────
 let _anthropicSinCreditos = false; // flag en memoria (se resetea con cada deploy)
 
+// SALDO-ANTHROPIC-01 (29/08/2026): probando en producción (revisión de comportamiento
+// real) se encontró que Anthropic devuelve AL MENOS dos textos distintos de error 400
+// cuando la cuenta no puede procesar más peticiones -- "credit balance is too low"
+// (saldo agotado, ya cubierto) y "You have reached your specified API usage limits"
+// (tope de USO configurado en la consola, un caso distinto de sin-saldo pero con el
+// mismo efecto real: la API deja de responder). Antes de este fix, solo se comprobaba
+// el primer texto -- el segundo caía al `throw` genérico de más abajo, así que el
+// usuario veía el error crudo de Anthropic en vez de caer al fallback de GPT-4o (que
+// SÍ existe y funciona) y Adrián no recibía el push/Telegram de aviso. Helper
+// compartido para no duplicar la lista de textos conocidos entre llamarAnthropic() y
+// llamarAnthropicStream().
+function _esErrorSinCreditosAnthropic(status, errText) {
+  if (status !== 400) return false;
+  const texto = String(errText || '').toLowerCase();
+  return texto.includes('credit balance is too low') || texto.includes('usage limit');
+}
+
 async function notificarSinCreditos(env) {
   try {
     // Push a Adrián
@@ -13215,7 +13244,7 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
   if (!resp.ok) {
     const errText = await resp.text();
     // Detectar error de créditos → fallback a GPT-4o
-    if (resp.status === 400 && errText.includes('credit balance is too low')) {
+    if (_esErrorSinCreditosAnthropic(resp.status, errText)) {
       if (!_anthropicSinCreditos) {
         _anthropicSinCreditos = true;
         await notificarSinCreditos(env).catch(() => {});
@@ -13289,7 +13318,7 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
 
   if (!resp.ok) {
     const errText = await resp.text();
-    const sinCreditos = resp.status === 400 && errText.includes('credit balance is too low');
+    const sinCreditos = _esErrorSinCreditosAnthropic(resp.status, errText);
     // Reintentado (ver fetchAnthropicConReintentos) y sigue fallando: rate limit
     // (429), sobrecarga (529/503) o error interno (500, ej. picos con fotos
     // adjuntas) → antes esto no tenía fallback en el streaming y el usuario
