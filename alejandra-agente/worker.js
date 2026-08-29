@@ -2630,7 +2630,7 @@ const TOOL_GESTIONAR_CALIDAD = {
 // generación de SVG/DXF que solo vive allí.
 const TOOL_GESTIONAR_CHECKLIST = {
   name: 'gestionar_checklist',
-  description: 'Gestiona checklists de inspección personalizados: plantillas reutilizables (lista de puntos a comprobar) y ejecuciones (una inspección real, con resultado ok/nok/na por item). Al marcar un item "nok" se genera automáticamente una no conformidad (NCR) vinculada a esa inspección. Úsalo cuando el usuario pida crear un checklist de inspección, iniciar o rellenar una inspección, o consultar el estado de inspecciones. Distinto de gestionar_calidad (punch list de defectos sueltos sin checklist detrás).',
+  description: 'Gestiona checklists de inspección personalizados: plantillas reutilizables (lista de puntos a comprobar) y ejecuciones (una inspección real, con resultado ok/nok/na por item). Al marcar un item "nok" se genera automáticamente una no conformidad (NCR) vinculada a esa inspección. Úsalo cuando el usuario pida crear un checklist de inspección, iniciar o rellenar una inspección, o consultar el estado de inspecciones. Distinto de gestionar_calidad (punch list de defectos sueltos sin checklist detrás). CRÍTICO: al iniciar una inspección (iniciar_ejecucion) NINGÚN item tiene resultado todavía -- nunca inventes ni des por hecho un resultado ok/nok/na. Pregunta siempre al usuario el resultado real de cada punto y solo entonces llama a actualizar_ejecucion con lo que de verdad te haya dicho.',
   input_schema: {
     type: 'object',
     properties: {
@@ -10505,9 +10505,21 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           `).bind(eid, input.obra_id || null, input.plantilla_id || null, plantillaNombre,
                   input.titulo || plantillaNombre || 'Inspección', input.fecha || new Date().toISOString().slice(0, 10),
                   input.inspector || null, itemsInicial).run();
-          let resp = `✅ Inspección #${meta.last_row_id} iniciada` + (plantillaNombre ? ` a partir de "${plantillaNombre}"` : '') + `, ${itemsArr.length} punto(s) a comprobar:\n`;
-          itemsArr.forEach((it, i) => { resp += `${i + 1}. ${it.descripcion}\n`; });
-          resp += '\nDime el resultado de cada punto (ok/nok/na) y lo registro.';
+          // CHECKLIST-AGENTE-02 (29/08/2026): probando en producción (empresa demo) se
+          // encontró que el modelo, al recibir este resultado, respondió al usuario con
+          // resultados "ok"/"nok" INVENTADOS para los items -- exactamente el mismo tipo
+          // de alucinación que ALEJANDRA-ESQUEMA-01/02/03 corrigieron para esquemas/planos
+          // (confirmado contra D1 real: la fila creada tenía los 3 items con resultado
+          // null, pero el texto mostrado al usuario afirmaba resultados concretos que
+          // nunca se registraron). Aquí no hay un patrón de URL fiable que detectar en
+          // código como en esquemas/planos, así que el remedio es dejar explícito en el
+          // propio resultado de la tool -- que es lo único que el modelo tiene delante en
+          // ese momento -- que TODOS los items siguen sin contestar y que inventar un
+          // resultado sin que el usuario lo haya dado es un error grave (esto es
+          // seguridad/calidad real, no un dato cualquiera).
+          let resp = `✅ Inspección #${meta.last_row_id} iniciada` + (plantillaNombre ? ` a partir de "${plantillaNombre}"` : '') + `, ${itemsArr.length} punto(s) a comprobar. NINGUNO tiene resultado todavía:\n`;
+          itemsArr.forEach((it, i) => { resp += `${i + 1}. ${it.descripcion} — (sin contestar)\n`; });
+          resp += '\nIMPORTANTE: no des por hecho ni inventes ningún resultado (ok/nok/na) -- pregúntale al usuario el resultado real de cada punto, uno a uno o todos juntos, y solo cuando te lo diga llama a gestionar_checklist con accion=actualizar_ejecucion para registrarlo.';
           return resp;
         }
 
