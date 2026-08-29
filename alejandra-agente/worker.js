@@ -5796,10 +5796,28 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     if (respAPI.stop_reason !== 'tool_use' && tools.length > 0) {
       const textoPlan = (respAPI.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ');
       const pareceDiferido = /proceder[eé]\w*\s+a|procedo\s+a|voy\s+a\s+(proceder|generar|crear|usar|insertar|registrar|guardar|ejecutar)|un momento,?\s*por favor|en breve\b|te (proporcionar|mostrar)[eé]\w*|una vez (haya sido|este)\s*(creado|generado)|(necesito|tengo que)\s+\w+[^.!?]*\b(espera|un momento|un segundo)\b|dame un (segundo|momento)/i.test(textoPlan);
-      if (pareceDiferido) {
-        console.log('[NEXUS] plan diferido detectado sin tool_use, forzando continuacion');
+      // ALEJANDRA-CONFIRMACION-01 (29/08/2026): patrón hermano del anterior,
+      // encontrado revisando historial real (usuario 3, id2759->id2760, 28/08 07:50):
+      // Alejandra había ofrecido generar un esquema pidiendo un dato opcional ("dime el
+      // modelo de central"); el usuario respondió con una confirmación corta ("Si por
+      // favot") sin dar ese dato, y en vez de generar igualmente (el dato NO es
+      // obligatorio para la tool) o preguntar solo por ese dato en concreto, Alejandra
+      // repitió casi palabra por palabra su propia explicación anterior terminando con
+      // la MISMA pregunta ("¿Quieres que te genere...?") -- ignoró el "sí" del usuario
+      // por completo. `pareceDiferido` no lo cazaba (no hay lenguaje de "voy a hacer X",
+      // es una pregunta, no un anuncio). Mismo mecanismo de la salvaguarda de arriba:
+      // una confirmación corta del usuario + una respuesta sin tool_use que vuelve a
+      // preguntar "¿quieres que...?" es la misma promesa incumplida, con forma distinta.
+      const esConfirmacionCorta = /^\s*(s[ií]|vale|dale|ok(?:ay)?|claro|adelante|hazlo|correcto|perfecto|de acuerdo|efectivamente)\b.{0,25}$/i.test((mensaje || '').trim());
+      const ultimaPregunta = (textoPlan.trim().match(/¿[^?]{0,200}\?\s*$/) || [''])[0];
+      const ignoraConfirmacion = esConfirmacionCorta && /\b(quieres?|quiere|gustar[ií]a|deseas?|confirma[sr]?|procedo|seguimos|te lo)\b/i.test(ultimaPregunta);
+      if (pareceDiferido || ignoraConfirmacion) {
+        console.log(`[NEXUS] ${pareceDiferido ? 'plan diferido' : 'confirmación del usuario ignorada'} detectado sin tool_use, forzando continuacion`);
         messages.push({ role: 'assistant', content: respAPI.content });
-        messages.push({ role: 'user', content: [{ type: 'text', text: '[INSTRUCCIÓN: Acabas de describir un plan pero todavía no has ejecutado ninguna herramienta. Ejecuta AHORA MISMO, en esta respuesta, la accion/herramienta que acabas de anunciar. No repitas el plan en texto, invoca la herramienta directamente.]' }] });
+        const textoInstruccion = pareceDiferido
+          ? '[INSTRUCCIÓN: Acabas de describir un plan pero todavía no has ejecutado ninguna herramienta. Ejecuta AHORA MISMO, en esta respuesta, la accion/herramienta que acabas de anunciar. No repitas el plan en texto, invoca la herramienta directamente.]'
+          : '[INSTRUCCIÓN: El usuario ya confirmó que sí quiere que hagas lo que le ofreciste -- no vuelvas a preguntarlo ni repitas la explicación anterior. Ejecuta la acción/herramienta ahora mismo. Si de verdad te falta un dato imprescindible para hacerlo (no uno meramente opcional), pregunta SOLO por ese dato concreto, en una frase corta, sin repetir el resto.]';
+        messages.push({ role: 'user', content: [{ type: 'text', text: textoInstruccion }] });
         respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
         if (respAPI.usage) await registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id, empresa_id);
       }
@@ -5975,10 +5993,20 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     if (respAPI.stop_reason !== 'tool_use' && tools.length > 0) {
       const textoPlan = (respAPI.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ');
       const pareceDiferido = /proceder[eé]\w*\s+a|procedo\s+a|voy\s+a\s+(proceder|generar|crear|usar|insertar|registrar|guardar|ejecutar)|un momento,?\s*por favor|en breve\b|te (proporcionar|mostrar)[eé]\w*|una vez (haya sido|este)\s*(creado|generado)|(necesito|tengo que)\s+\w+[^.!?]*\b(espera|un momento|un segundo)\b|dame un (segundo|momento)/i.test(textoPlan);
-      if (pareceDiferido) {
-        console.log('[NEXUSStream] plan diferido detectado sin tool_use, forzando continuacion');
+      // ALEJANDRA-CONFIRMACION-01 (29/08/2026): ver comentario completo en
+      // procesarConNEXUS (misma salvaguarda, canal streaming) -- usuario confirma corto
+      // ("sí"/"vale"/"dale") una oferta previa y el modelo, sin invocar ninguna tool,
+      // repite la explicación anterior terminando con la misma pregunta en vez de actuar.
+      const esConfirmacionCorta = /^\s*(s[ií]|vale|dale|ok(?:ay)?|claro|adelante|hazlo|correcto|perfecto|de acuerdo|efectivamente)\b.{0,25}$/i.test((mensaje || '').trim());
+      const ultimaPregunta = (textoPlan.trim().match(/¿[^?]{0,200}\?\s*$/) || [''])[0];
+      const ignoraConfirmacion = esConfirmacionCorta && /\b(quieres?|quiere|gustar[ií]a|deseas?|confirma[sr]?|procedo|seguimos|te lo)\b/i.test(ultimaPregunta);
+      if (pareceDiferido || ignoraConfirmacion) {
+        console.log(`[NEXUSStream] ${pareceDiferido ? 'plan diferido' : 'confirmación del usuario ignorada'} detectado sin tool_use, forzando continuacion`);
         messages.push({ role: 'assistant', content: respAPI.content });
-        messages.push({ role: 'user', content: [{ type: 'text', text: '[INSTRUCCIÓN: Acabas de describir un plan pero todavía no has ejecutado ninguna herramienta. Ejecuta AHORA MISMO, en esta respuesta, la accion/herramienta que acabas de anunciar. No repitas el plan en texto, invoca la herramienta directamente.]' }] });
+        const textoInstruccion = pareceDiferido
+          ? '[INSTRUCCIÓN: Acabas de describir un plan pero todavía no has ejecutado ninguna herramienta. Ejecuta AHORA MISMO, en esta respuesta, la accion/herramienta que acabas de anunciar. No repitas el plan en texto, invoca la herramienta directamente.]'
+          : '[INSTRUCCIÓN: El usuario ya confirmó que sí quiere que hagas lo que le ofreciste -- no vuelvas a preguntarlo ni repitas la explicación anterior. Ejecuta la acción/herramienta ahora mismo. Si de verdad te falta un dato imprescindible para hacerlo (no uno meramente opcional), pregunta SOLO por ese dato concreto, en una frase corta, sin repetir el resto.]';
+        messages.push({ role: 'user', content: [{ type: 'text', text: textoInstruccion }] });
         respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
         if (respAPI.usage) {
           tokensIn  += respAPI.usage.input_tokens  || 0;

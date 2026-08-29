@@ -4,6 +4,33 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-29 — Alejandra ignoraba un "sí" corto del usuario y repetía su oferta en vez de actuar)
+
+Segundo hallazgo de la misma revisión de comportamiento real (usuario 3, 28/08 07:50).
+`alejandra_historial` id2758: Alejandra ofrece generar un esquema y pide un dato opcional
+("Dime el modelo de central o detectores... y lo preparo"). id2759, el usuario responde
+"Si por favot" (confirmación corta, sin dar ese dato). id2760: en vez de generar el
+esquema igualmente (MODO B de `generar_esquema_electrico` no exige ese dato — el schema
+solo requiere `titulo`/`tipo`) o preguntar solo por el dato que faltaba, Alejandra repitió
+casi palabra por palabra su propia explicación anterior, terminando con la MISMA pregunta
+("¿Quieres que te genere...?") — ignoró el "sí" por completo. Sin traza alguna para ese
+turno (ninguna tool se intentó siquiera). Ya existía una salvaguarda hermana
+("plan diferido sin ejecutar", ALEJANDRA-CONTEXTO/SALVAGUARDA previas) para cuando el
+modelo ANUNCIA una acción sin ejecutarla ("voy a proceder a...") pero no cubría este
+patrón: aquí no hay anuncio, hay una pregunta repetida ignorando la respuesta ya dada.
+
+Corregido (ALEJANDRA-CONFIRMACION-01): nueva detección hermana de la existente, en los
+mismos dos puntos (`procesarConNEXUS`/`procesarConNEXUSStream`) — cuando el mensaje del
+usuario es una confirmación corta ("sí"/"vale"/"dale"/...) Y la respuesta del modelo (sin
+tool_use) termina en una pregunta de reoferta ("¿quieres/te gustaría/confirmas/procedo/
+seguimos...?"), se fuerza una continuación pidiendo ejecutar ya la acción confirmada, o
+preguntar solo por el dato imprescindible si de verdad falta uno. Un mensaje largo que
+empieza por "sí" pero aporta contenido real no se trata como mera confirmación (límite de
+25 caracteres tras la palabra de confirmación) para no interferir con respuestas
+sustantivas. Verificado con 6 casos aislados (el escenario real, y los negativos: sin
+pregunta final, mensaje largo con contenido, mensaje no confirmatorio, variantes cortas
+"vale"/"dale") — los 6 pasan. 207/207 tests del agente sin regresión.
+
 ### Fixed (2026-08-29 — verificarAccionesAfirmadas: falso positivo al citar un enlace ya real de un turno anterior)
 
 Revisión pedida por Adrián del comportamiento real de Alejandra ("revisemos otra vez el
