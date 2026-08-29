@@ -1,6 +1,26 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-27
+- Actualizado: 2026-08-29
+- Estado (2026-08-29): **Revisión del comportamiento real de Alejandra — falso positivo
+  encontrado y corregido en `verificarAccionesAfirmadas()`.** Adrián pidió revisar cómo
+  se había comportado Alejandra con sus peticiones reales de un día concreto. Reconstruido
+  `alejandra_historial`+`alejandra_trazas` reales (usuario 3, 2026-08-28 07:46-07:52, solo
+  lectura): un esquema se generó de verdad, dos turnos después falló el envío por Telegram
+  de forma legítima (sin chat_id) — pero la respuesta de ESE turno, que citaba
+  correctamente el enlace YA real del esquema anterior, fue sustituida entera por "No
+  llegué a generar ningún esquema" (falso), porque el propio fix de ayer
+  (ALEJANDRA-ESQUEMA-02) no distinguía "URL nueva/inventada" de "URL ya real de un turno
+  anterior". Provocó una regeneración redundante cuando el usuario respondió "Hazlo de
+  nuevo". Corregido: `verificarAccionesAfirmadas()` recibe ahora `messages` (la
+  conversación ya reconstruida) y solo marca alucinación si la URL es realmente nueva Y la
+  tool no se llamó este turno. Verificado con 5 casos aislados reproduciendo el escenario
+  real exacto, todos correctos. 207/207 tests. Pendiente de commit/deploy. Ver
+  `CHANGELOG.md`. Otros dos hallazgos de la misma revisión, aún sin investigar: (1) en
+  id2759→id2760 el usuario aceptó una oferta ("Si por favot") y Alejandra repitió el mismo
+  texto explicativo en vez de generar el esquema o repreguntar el dato que faltaba —mismo
+  patrón que un problema ya señalado antes en sesiones anteriores; (2) aparece `anon:3`
+  en el historial del 28/08 (12 mensajes) — posible recurrencia de SESION-TRANSPARENTE-01,
+  por confirmar si es distinto del caso ya cubierto.
 - Estado (2026-08-27): **`calcular_cable`/`calcular_proteccion` con tabla real ITC-BT-19
   por método de instalación.** Adrián pidió una "verificación doble" para cálculos
   críticos — investigando se encontró que el cálculo base ya era código determinista

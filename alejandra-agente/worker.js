@@ -5871,7 +5871,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     } else if (!textoRaw) {
       textoRaw = 'No he podido procesar tu mensaje. ¿Puedes reformularlo?';
     }
-    const textoFinal = verificarAccionesAfirmadas(textoRaw, herramientasUsadas);
+    const textoFinal = verificarAccionesAfirmadas(textoRaw, herramientasUsadas, messages);
 
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
 
@@ -6120,7 +6120,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       // usuario lo vea, a diferencia del streaming real de la rama de abajo.
       textoFinal = verificarAccionesAfirmadas(
         respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(),
-        herramientasUsadas
+        herramientasUsadas,
+        messages
       );
       await send({ type: 'text', texto: textoFinal });
     } else {
@@ -6167,7 +6168,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         // vez, así que verificar antes de mandarlo sí evita que el usuario lo vea.
         textoFinal = verificarAccionesAfirmadas(
           respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta',
-          herramientasUsadas
+          herramientasUsadas,
+          messages
         );
         await send({ type: 'text', texto: textoFinal });
       }
@@ -6181,7 +6183,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // corrige lo que se GUARDA (para no contaminar el historial futuro con el enlace
     // falso) y se manda un aviso aparte para que quede constancia en el propio chat.
     const textoAntesDeVerificar = textoFinal;
-    textoFinal = verificarAccionesAfirmadas(textoFinal, herramientasUsadas);
+    textoFinal = verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages);
     if (textoFinal !== textoAntesDeVerificar) {
       await send({ type: 'text', texto: '\n\n⚠️ Corrección: lo que acabo de describir no llegué a generarlo de verdad -- no ejecuté la herramienta real. Pídemelo otra vez y lo hago ahora.' });
     }
@@ -6228,22 +6230,44 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
 
 // ── Verificador anti-confabulación ───────────────────────────────────────────
 // Detecta si la respuesta afirma haber hecho algo sin que exista el tool result correspondiente
-function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
+function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
   const toolsEscritos = new Set(herramientasUsadas.map(t => t.nombre));
+
+  // ALEJANDRA-ESQUEMA-03 (29/08/2026): revisando el historial real de producción
+  // (alejandra_historial + alejandra_trazas, usuario 3, 28/08 07:52) se encontró un
+  // FALSO POSITIVO del fix de ayer (ALEJANDRA-ESQUEMA-02): Alejandra generó un esquema
+  // de verdad (traza real: generar_esquema_electrico ok, 07:51:26), y dos turnos después
+  // el usuario pidió "Telegram" -- Alejandra intentó enviarlo (traza real:
+  // enviar_telegram_informe, falló por falta de chat_id) y su respuesta volvió a
+  // mencionar el MISMO enlace real ya dado antes, para explicar la limitación. Como
+  // generar_esquema_electrico no se llamó EN ESE TURNO (correcto: no hacía falta
+  // regenerar nada), el check de abajo borró la respuesta entera y le dijo al usuario
+  // "no llegué a generar ningún esquema" -- FALSO, ya lo había generado, Alejandra
+  // contradiciendo su propio trabajo real sin motivo. Fix: antes de descartar, comprobar
+  // si la URL mencionada YA aparece tal cual en un turno anterior de esta misma
+  // conversación (mensajes ya construidos en `messages`, incluye el historial real) --
+  // si ya se dio antes, es una referencia legítima a algo real, no una alucinación
+  // nueva. Solo se descarta si la URL es realmente nueva/desconocida Y la tool no se
+  // llamó en este turno -- ese sigue siendo el caso que ALEJANDRA-ESQUEMA-02 detectó
+  // bien (un enlace con formato plausible que nunca se había dado antes ni se generó
+  // ahora).
+  const historialPrevio = Array.isArray(messages)
+    ? messages.map(m => typeof m.content === 'string' ? m.content : '').join('\n')
+    : '';
+  function _urlsNuevas(regexToken) {
+    const tokens = textoFinal.match(regexToken) || [];
+    return tokens.filter(t => !historialPrevio.includes(t));
+  }
 
   // ALEJANDRA-ESQUEMA-02 (26/08/2026): detección de máxima fiabilidad, específica para
   // esquemas -- un enlace con este formato exacto SOLO puede ser real si
-  // generar_esquema_electrico se ejecutó en este turno y lo devolvió.
-  // Encontrado probando en producción: Alejandra "imitó" el formato de su propia
-  // respuesta exitosa del turno anterior (visible en su propio historial) para un
-  // esquema DISTINTO, sin ejecutar la tool de nuevo -- dio dos enlaces con formato
-  // plausible que en realidad daban 404. A diferencia del resto de esta función (que
-  // añade un aviso al final y deja el texto), aquí se sustituye TODA la respuesta:
-  // un enlace falso es peor que un texto sin enlace, porque el usuario puede hacer
-  // clic y toparse con un 404 sin saber por qué.
-  const mencionaEsquema = /\/api\/esquemas\/view\//.test(textoFinal);
+  // generar_esquema_electrico se ejecutó en este turno y lo devolvió, O si el enlace
+  // exacto ya se dio en un turno anterior de esta conversación (ver ALEJANDRA-ESQUEMA-03
+  // arriba). A diferencia del resto de esta función (que añade un aviso al final y deja
+  // el texto), aquí se sustituye TODA la respuesta: un enlace falso es peor que un texto
+  // sin enlace, porque el usuario puede hacer clic y toparse con un 404 sin saber por qué.
   const generoEsquemaReal = toolsEscritos.has('generar_esquema_electrico');
-  if (mencionaEsquema && !generoEsquemaReal) {
+  if (!generoEsquemaReal && _urlsNuevas(/\S*\/api\/esquemas\/view\/\S*/g).length > 0) {
     return 'No llegué a generar ningún esquema en este turno — iba a describírtelo como si lo hubiera hecho, pero no ejecuté la herramienta real y el enlace que iba a darte no existiría de verdad. Pídemelo otra vez y lo genero ahora.';
   }
 
@@ -6252,9 +6276,8 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
   // generarPlanoREST/editarPlanoCircuitosREST en worker.js: ese es el único formato
   // que de verdad devuelven, nunca "/api/planos/"). marcar_plano no cuenta aquí: es de
   // solo lectura (analiza un plano ya subido) y nunca devuelve un enlace de plano.
-  const mencionaPlano = /\/planos\/\d+\/svg\b/.test(textoFinal);
   const generoPlanoReal = toolsEscritos.has('generar_plano') || toolsEscritos.has('editar_plano') || toolsEscritos.has('importar_plano_dxf');
-  if (mencionaPlano && !generoPlanoReal) {
+  if (!generoPlanoReal && _urlsNuevas(/\S*\/planos\/\d+\/svg\S*/g).length > 0) {
     return 'No llegué a generar ningún plano en este turno — iba a describírtelo como si lo hubiera hecho, pero no ejecuté la herramienta real y el enlace que iba a darte no existiría de verdad. Pídemelo otra vez y lo genero ahora.';
   }
 
