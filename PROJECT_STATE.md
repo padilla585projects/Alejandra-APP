@@ -1,6 +1,20 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-29
+- Estado (2026-08-29, continuación): **Tercer hallazgo de la revisión — sesión real de
+  Adrián lleva 24h+ sin validar, `anon:3` en producción, causa raíz sin confirmar.**
+  Investigando `anon:3` en `alejandra_historial` (28/08) apareció una conversación real
+  de ~3 min (11:58-12:01, incidencia real de sondas Vaisala) ocurrida enteramente en modo
+  anónimo. Cruzado con `sesiones`: su sesión real (id 290, NO caducada, `expires_at` a más
+  de un mes) dejó de encontrar fila válida en `getAuth()` desde las 07:53:52 de ese día —
+  `last_used` nunca se actualizó desde entonces, sin sesión nueva creada después. La
+  salvaguarda `sesionPareceCaducada()` ya existente debería haber avisado, pero no había
+  forma de diagnosticar DESPUÉS por qué el token dejó de validar. Añadida traza de
+  diagnóstico (SESION-TRANSPARENTE-02, en los dos Workers, no bloqueante, sin exponer el
+  token) para que la próxima vez sea correlacionable. **Causa raíz sin determinar —
+  pendiente de que Adrián confirme si vio el aviso de sesión caducada ese día y si ha
+  vuelto a iniciar sesión con normalidad.** 207/207 tests. Pendiente de commit/deploy. Ver
+  `CHANGELOG.md`.
 - Estado (2026-08-29, continuación): **Segundo hallazgo de la revisión — Alejandra
   ignoraba un "sí" corto del usuario y repetía su oferta en vez de actuar.**
   `alejandra_historial` id2759→id2760 (usuario 3, 28/08 07:50): Alejandra había ofrecido

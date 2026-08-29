@@ -4714,6 +4714,23 @@ export default {
               es_admin: !!sesion.es_admin,
             };
           }
+          // SESION-TRANSPARENTE-02 (29/08/2026): revisando el historial real se encontró
+          // que la sesión de Adrián (id 290, expires_at a más de un mes vista) dejó de
+          // validar aquí a partir de las 07:53:52 del 28/08 y nunca más se actualizó
+          // last_used -- una conversación real de ~3 minutos sobre una incidencia de CPD
+          // ocurrió por completo bajo `anon:3`, perdiendo su rol/historial/permisos, sin
+          // volver a iniciar sesión después. sesionPareceCaducada() ya avisa al frontend,
+          // pero no había forma de diagnosticar DESPUÉS por qué el token concreto dejó de
+          // encontrar fila -- exactamente el hueco que el comentario de
+          // SESION-TRANSPARENTE-01 ya admitía ("no se puede saber la causa exacta... no
+          // hay lectura previa de logs"). Se registra aquí, sin bloquear ni exponer el
+          // token completo (solo un prefijo para poder correlacionar manualmente contra
+          // `sesiones` si hiciera falta).
+          registrarTraza(environment, {
+            tipo: 'auth_token_no_encontrado',
+            resumen: 'getAuth: token presente pero sin fila en sesiones',
+            detalle: { token_prefijo: token.slice(0, 8), metodo: request.method, path: new URL(request.url).pathname }
+          }).catch(() => {});
         } catch (e) {
           console.error('[getAuth] sesiones error:', e.message);
         }

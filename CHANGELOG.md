@@ -4,6 +4,32 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-29 — traza de diagnóstico cuando un token no encuentra sesión, en los dos Workers)
+
+Tercer hallazgo de la revisión de comportamiento real: buscando `anon:3` en
+`alejandra_historial` del 28/08 apareció una conversación real de ~3 minutos (11:58-12:01,
+incidencia real de sondas Vaisala en un CPD) ocurrida enteramente en modo anónimo — Adrián
+perdió su rol/historial/permisos reales sin saberlo durante ese tramo. Cruzando con la
+tabla `sesiones`: su sesión real (id 290, `expires_at` a más de un mes vista, por tanto NO
+caducada) dejó de encontrar fila válida en `getAuth()` a partir de las 07:53:52 de ese día
+— `last_used` nunca se volvió a actualizar desde entonces — y no hay ninguna sesión nueva
+creada después, es decir Adrián no ha vuelto a iniciar sesión desde ese momento (más de 24h
+al momento de esta revisión). La salvaguarda `sesionPareceCaducada()` (SESION-TRANSPARENTE-01)
+ya debería haber avisado al frontend, pero **no hay forma de diagnosticar después por qué
+el token concreto dejó de validar** — el propio comentario de esa salvaguarda ya admitía
+este hueco ("no se puede saber la causa exacta... no hay lectura previa de logs").
+
+Añadido (SESION-TRANSPARENTE-02, en los dos Workers -- `getAuth()` de
+`alejandra-agente/worker.js` y de `worker.js` raíz): cuando llega un token que NO
+encuentra fila en `sesiones`, se registra una traza (`alejandra_trazas`,
+`tipo='auth_token_no_encontrado'`) con un prefijo corto del token (nunca el token
+completo), método y path — no bloqueante, no cambia ningún comportamiento de
+autenticación, solo cierra el hueco de diagnóstico para que la próxima vez que esto pase
+se pueda correlacionar contra `sesiones` sin depender de inferencia por ausencia de datos
+como en esta revisión. Causa raíz de por qué el token concreto dejó de validar ese día
+sigue sin determinarse — **pendiente de que Adrián confirme si vio el aviso de "sesión
+caducada" y si ha vuelto a iniciar sesión con normalidad**. 207/207 tests.
+
 ### Fixed (2026-08-29 — Alejandra ignoraba un "sí" corto del usuario y repetía su oferta en vez de actuar)
 
 Segundo hallazgo de la misma revisión de comportamiento real (usuario 3, 28/08 07:50).

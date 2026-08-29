@@ -483,6 +483,16 @@ async function getAuth(request, env) {
           empresa_id: sesion.empresa_id || 1,
         };
       }
+      // SESION-TRANSPARENTE-02 (29/08/2026): mismo hallazgo y mismo fix que en
+      // alejandra-agente/worker.js (ver comentario completo ahí) -- la sesión real de
+      // Adrián dejó de encontrar fila en `sesiones` durante horas sin que quedara ningún
+      // rastro consultable después del hecho. Diagnóstico puro, no bloqueante, sin
+      // exponer el token completo.
+      registrarTraza(env, {
+        tipo: 'auth_token_no_encontrado',
+        resumen: 'getAuth: X-Token presente pero sin fila válida en sesiones',
+        detalle: { token_prefijo: xToken.slice(0, 8), metodo: request.method, path: new URL(request.url).pathname }
+      }).catch(() => {});
     } catch (e) { console.error('getAuth token:', e.message); }
   }
   // 2. Fallback legacy headers (compatibilidad)
