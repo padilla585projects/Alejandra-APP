@@ -2105,6 +2105,10 @@ async function runDDL(env, sql) {
   }
 }
 
+function tryParse(str, def) {
+  try { return JSON.parse(str); } catch { return def; }
+}
+
 // MODULO GRAFICOS / PREGUNTAS (NEW-XXX, 22/07/2026). Logica pura,
 // duplicada tal cual en worker.js (raiz): ambos comparten la misma BD
 // D1 (alejandra-db), no hace falta proxy via Service Binding porque no
@@ -2603,6 +2607,60 @@ const TOOL_GESTIONAR_CALIDAD = {
       fecha_limite: { type: 'string' },
       notas_resolucion: { type: 'string' },
       filtro_estado: { type: 'string' }
+    },
+    required: ['accion']
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N1',
+};
+
+// CHECKLIST-AGENTE-01 (29/08/2026): "checklists de inspección personalizados", una de
+// las ideas de "que Alejandra sea una ingeniera en condiciones" que Adrián aprobó.
+// Investigando antes de diseñar nada se encontró que esto YA EXISTE como
+// infraestructura real y madura (worker.js, NEW-55 QA/QC: checklists_plantillas +
+// checklist_ejecuciones, con generación automática de no-conformidades para items
+// marcados "nok") — pero Alejandra nunca tuvo ninguna tool para usarla por chat.
+// Distinta de gestionar_calidad (arriba): esa es el punch list plano de
+// deficiencias sueltas; esto es inspección ESTRUCTURADA con lista de comprobación
+// reutilizable y resultado ok/nok/na por item. Mismo patrón que gestionar_calidad
+// (una sola tool con `accion`, en vez de 5 tools sueltas) y mismo acceso directo a
+// `env.DB` (las dos Workers comparten la misma D1 `alejandra-db`) — sin llamar a
+// worker.js por Service Binding, porque esto es CRUD puro sobre datos, no lógica de
+// generación de SVG/DXF que solo vive allí.
+const TOOL_GESTIONAR_CHECKLIST = {
+  name: 'gestionar_checklist',
+  description: 'Gestiona checklists de inspección personalizados: plantillas reutilizables (lista de puntos a comprobar) y ejecuciones (una inspección real, con resultado ok/nok/na por item). Al marcar un item "nok" se genera automáticamente una no conformidad (NCR) vinculada a esa inspección. Úsalo cuando el usuario pida crear un checklist de inspección, iniciar o rellenar una inspección, o consultar el estado de inspecciones. Distinto de gestionar_calidad (punch list de defectos sueltos sin checklist detrás).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion: { type: 'string', enum: ['listar_plantillas', 'crear_plantilla', 'listar_ejecuciones', 'iniciar_ejecucion', 'actualizar_ejecucion'], description: 'Acción a realizar' },
+      categoria: { type: 'string', description: 'Filtra plantillas por categoría (listar_plantillas), o clasifica una plantilla nueva (crear_plantilla)' },
+      nombre: { type: 'string', description: 'Nombre de la plantilla (crear_plantilla)' },
+      descripcion: { type: 'string', description: 'Descripción de la plantilla (crear_plantilla)' },
+      items: { type: 'array', items: { type: 'string' }, description: 'Puntos a comprobar, uno por texto (crear_plantilla; o iniciar_ejecucion para una inspección ad-hoc sin plantilla guardada)' },
+      plantilla_id: { type: 'number', description: 'ID de la plantilla a usar (iniciar_ejecucion)' },
+      obra_id: { type: 'number', description: 'Obra asociada (iniciar_ejecucion, listar_ejecuciones)' },
+      ejecucion_id: { type: 'number', description: 'ID de la inspección a actualizar (actualizar_ejecucion)' },
+      titulo: { type: 'string', description: 'Título de la inspección (iniciar_ejecucion, actualizar_ejecucion)' },
+      fecha: { type: 'string', description: 'Fecha de la inspección, formato YYYY-MM-DD (iniciar_ejecucion, actualizar_ejecucion)' },
+      inspector: { type: 'string', description: 'Nombre del inspector (iniciar_ejecucion, actualizar_ejecucion)' },
+      estado: { type: 'string', enum: ['en_curso', 'completado', 'con_no_conformidades'], description: 'Filtra por estado (listar_ejecuciones); o fuerza el estado final (actualizar_ejecucion) -- si se omite, se calcula solo según si hay algún item "nok"' },
+      resultados: {
+        type: 'array',
+        description: 'Resultado de cada item de la inspección (actualizar_ejecucion)',
+        items: {
+          type: 'object',
+          properties: {
+            descripcion: { type: 'string' },
+            resultado: { type: 'string', enum: ['ok', 'nok', 'na'] },
+            nota: { type: 'string' },
+            gravedad: { type: 'string', enum: ['leve', 'moderado', 'grave'], description: 'Si resultado=nok, gravedad de la NCR que se genera automáticamente (por defecto "moderado")' }
+          },
+          required: ['descripcion', 'resultado']
+        }
+      },
+      notas_generales: { type: 'string', description: 'Notas generales de la inspección (actualizar_ejecucion)' }
     },
     required: ['accion']
   },
@@ -3523,11 +3581,11 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO]
 };
 
@@ -10350,6 +10408,167 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return '❌ Acción no reconocida. Usa: crear, listar, resumen, resolver, actualizar, eliminar.';
       } catch (err) {
         return `Error gestionando control de calidad: ${err.message}`;
+      }
+    }
+
+    case 'gestionar_checklist': {
+      try {
+        if (!env.DB) return 'Base de datos no disponible';
+        const accion = input.accion;
+        const eid = empresa_id || 1;
+        // Las 4 tablas ya existen en producción (NEW-55, worker.js) -- IF NOT EXISTS
+        // es un no-op ahí; solo cubre el caso de una D1 de prueba sin ellas.
+        await runDDL(env, `CREATE TABLE IF NOT EXISTS checklists_plantillas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER NOT NULL,
+          nombre TEXT NOT NULL, descripcion TEXT, categoria TEXT DEFAULT 'general',
+          items TEXT DEFAULT '[]', activa INTEGER DEFAULT 1, departamento TEXT,
+          created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+        )`);
+        await runDDL(env, `CREATE TABLE IF NOT EXISTS checklist_ejecuciones (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER NOT NULL,
+          obra_id INTEGER, plantilla_id INTEGER, plantilla_nombre TEXT,
+          titulo TEXT NOT NULL, fecha TEXT, inspector TEXT, estado TEXT DEFAULT 'en_curso',
+          resultados TEXT DEFAULT '[]', notas_generales TEXT, departamento TEXT,
+          num_ok INTEGER DEFAULT 0, num_nok INTEGER DEFAULT 0, num_na INTEGER DEFAULT 0,
+          porcentaje_conformidad REAL DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+        )`);
+
+        if (accion === 'listar_plantillas') {
+          let q = `SELECT id, nombre, descripcion, categoria, items FROM checklists_plantillas WHERE empresa_id=? AND activa=1`;
+          const p = [eid];
+          if (input.categoria) { q += ` AND categoria=?`; p.push(input.categoria); }
+          q += ` ORDER BY nombre ASC LIMIT 30`;
+          const { results } = await env.DB.prepare(q).bind(...p).all().catch(() => ({ results: [] }));
+          if (!results.length) return '📋 No hay plantillas de checklist guardadas' + (input.categoria ? ` en la categoría "${input.categoria}"` : '') + '.';
+          let txt = `📋 PLANTILLAS DE CHECKLIST (${results.length}):\n`;
+          results.forEach(p => {
+            const items = tryParse(p.items, []);
+            txt += `• [#${p.id}] ${p.nombre} (${p.categoria}) — ${items.length} item(s)`;
+            if (p.descripcion) txt += ` — ${p.descripcion}`;
+            txt += '\n';
+          });
+          return txt;
+        }
+
+        if (accion === 'crear_plantilla') {
+          if (!input.nombre) return '❌ Necesito el nombre de la plantilla.';
+          if (!Array.isArray(input.items) || input.items.length === 0) return '❌ Necesito al menos un item (lista de puntos a comprobar).';
+          const items = JSON.stringify(input.items.map(it => (typeof it === 'string' ? { descripcion: it } : { descripcion: it.descripcion || String(it) })));
+          const { meta } = await env.DB.prepare(`
+            INSERT INTO checklists_plantillas (empresa_id, nombre, descripcion, categoria, items, activa)
+            VALUES (?,?,?,?,?,1)
+          `).bind(eid, input.nombre, input.descripcion || null, input.categoria || 'general', items).run();
+          return `✅ Plantilla "${input.nombre}" creada (#${meta.last_row_id}) con ${input.items.length} item(s). Puedo iniciar una inspección con ella cuando quieras.`;
+        }
+
+        if (accion === 'listar_ejecuciones') {
+          let q = `SELECT id, titulo, obra_id, fecha, inspector, estado, num_ok, num_nok, num_na, porcentaje_conformidad FROM checklist_ejecuciones WHERE empresa_id=?`;
+          const p = [eid];
+          if (input.obra_id) { q += ` AND obra_id=?`; p.push(input.obra_id); }
+          if (input.estado)  { q += ` AND estado=?`;   p.push(input.estado); }
+          q += ` ORDER BY fecha DESC, id DESC LIMIT 20`;
+          const { results } = await env.DB.prepare(q).bind(...p).all().catch(() => ({ results: [] }));
+          if (!results.length) return '📋 No hay inspecciones registradas' + (input.estado ? ` con estado "${input.estado}"` : '') + '.';
+          const estIcon = { en_curso: '🟡', completado: '🟢', con_no_conformidades: '🔴' };
+          let txt = `📋 INSPECCIONES (${results.length}):\n`;
+          results.forEach(e => {
+            txt += `• [#${e.id}] ${estIcon[e.estado] || '⚪'} ${e.titulo}`;
+            if (e.fecha) txt += ` — 📅${e.fecha}`;
+            if (e.inspector) txt += ` — 👤${e.inspector}`;
+            if (e.estado !== 'en_curso') txt += ` — ✅${e.num_ok||0} ❌${e.num_nok||0} ➖${e.num_na||0} (${e.porcentaje_conformidad||0}% conformidad)`;
+            txt += '\n';
+          });
+          return txt;
+        }
+
+        if (accion === 'iniciar_ejecucion') {
+          let plantillaNombre = null;
+          let itemsInicial = '[]';
+          if (input.plantilla_id) {
+            const pl = await env.DB.prepare(`SELECT nombre, items FROM checklists_plantillas WHERE id=? AND empresa_id=?`)
+              .bind(input.plantilla_id, eid).first();
+            if (!pl) return `❌ No encuentro la plantilla #${input.plantilla_id}.`;
+            plantillaNombre = pl.nombre;
+            const items = tryParse(pl.items, []);
+            itemsInicial = JSON.stringify(items.map(it => ({ ...it, resultado: null, nota: '' })));
+          } else if (Array.isArray(input.items) && input.items.length > 0) {
+            itemsInicial = JSON.stringify(input.items.map(it => (typeof it === 'string' ? { descripcion: it, resultado: null, nota: '' } : { descripcion: it.descripcion || String(it), resultado: null, nota: '' })));
+          } else {
+            return '❌ Necesito plantilla_id o una lista de items para iniciar la inspección.';
+          }
+          const itemsArr = tryParse(itemsInicial, []);
+          const { meta } = await env.DB.prepare(`
+            INSERT INTO checklist_ejecuciones
+              (empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, resultados)
+            VALUES (?,?,?,?,?,?,?,'en_curso',?)
+          `).bind(eid, input.obra_id || null, input.plantilla_id || null, plantillaNombre,
+                  input.titulo || plantillaNombre || 'Inspección', input.fecha || new Date().toISOString().slice(0, 10),
+                  input.inspector || null, itemsInicial).run();
+          let resp = `✅ Inspección #${meta.last_row_id} iniciada` + (plantillaNombre ? ` a partir de "${plantillaNombre}"` : '') + `, ${itemsArr.length} punto(s) a comprobar:\n`;
+          itemsArr.forEach((it, i) => { resp += `${i + 1}. ${it.descripcion}\n`; });
+          resp += '\nDime el resultado de cada punto (ok/nok/na) y lo registro.';
+          return resp;
+        }
+
+        if (accion === 'actualizar_ejecucion') {
+          const ejecId = input.ejecucion_id;
+          if (!ejecId) return '❌ Necesito ejecucion_id para actualizar la inspección.';
+          if (!Array.isArray(input.resultados) || input.resultados.length === 0) return '❌ Necesito al menos un resultado.';
+          const actual = await env.DB.prepare(`SELECT obra_id, titulo, fecha, inspector, resultados FROM checklist_ejecuciones WHERE id=? AND empresa_id=?`)
+            .bind(ejecId, eid).first();
+          if (!actual) return `❌ No encuentro la inspección #${ejecId}.`;
+          // Fusiona los resultados nuevos sobre los items existentes (por descripción) en
+          // vez de reemplazar la lista entera -- así "marca el 2º punto como nok" no borra
+          // el resto de items que aún no se han contestado en este turno.
+          const itemsPrevios = tryParse(actual.resultados, []);
+          const porDescripcion = new Map(itemsPrevios.map(it => [it.descripcion, it]));
+          for (const r of input.resultados) {
+            porDescripcion.set(r.descripcion, { descripcion: r.descripcion, resultado: r.resultado, nota: r.nota || '', gravedad: r.gravedad || undefined });
+          }
+          const resultadosFinal = [...porDescripcion.values()];
+          const numOk  = resultadosFinal.filter(i => i.resultado === 'ok').length;
+          const numNok = resultadosFinal.filter(i => i.resultado === 'nok').length;
+          const numNa  = resultadosFinal.filter(i => i.resultado === 'na').length;
+          const respondidos = numOk + numNok;
+          const pct = respondidos > 0 ? Math.round((numOk / respondidos) * 100) : 0;
+          const estadoFinal = input.estado || (numNok > 0 ? 'con_no_conformidades' : (respondidos + numNa >= resultadosFinal.length ? 'completado' : 'en_curso'));
+          await env.DB.prepare(`
+            UPDATE checklist_ejecuciones SET titulo=?, fecha=?, inspector=?, estado=?,
+              resultados=?, notas_generales=COALESCE(?, notas_generales),
+              num_ok=?, num_nok=?, num_na=?, porcentaje_conformidad=?,
+              updated_at=datetime('now') WHERE id=? AND empresa_id=?
+          `).bind(input.titulo || actual.titulo, input.fecha || actual.fecha, input.inspector || actual.inspector, estadoFinal,
+                  JSON.stringify(resultadosFinal), input.notas_generales || null,
+                  numOk, numNok, numNa, pct, ejecId, eid).run();
+
+          // Misma lógica de generación automática de NCRs que worker.js
+          // (actualizarChecklistEjecucion) para los items recién marcados "nok" -- sin
+          // duplicar en ncrs_obra si ya existe una NCR para ese item en esta ejecución.
+          const ncrItems = input.resultados.filter(r => r.resultado === 'nok');
+          let ncrCreadas = 0;
+          for (const item of ncrItems) {
+            const exists = await env.DB.prepare(
+              `SELECT id FROM ncrs_obra WHERE ejecucion_id=? AND empresa_id=? AND descripcion=?`
+            ).bind(ejecId, eid, item.descripcion).first().catch(() => null);
+            if (!exists) {
+              const yr = String(new Date().getFullYear());
+              const gravedad = item.gravedad || 'moderado';
+              await env.DB.prepare(`
+                INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado)
+                SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,'abierta'
+              `).bind(eid, actual.obra_id || null, ejecId, yr, eid, yr, item.descripcion, gravedad).run().catch(() => {});
+              ncrCreadas++;
+            }
+          }
+          let resp = `✅ Inspección #${ejecId} actualizada: ✅${numOk} ❌${numNok} ➖${numNa} (${pct}% conformidad, estado: ${estadoFinal}).\n`;
+          if (ncrCreadas > 0) resp += `⚠️ ${ncrCreadas} no conformidad(es) nueva(s) generada(s) automáticamente para los items "nok".`;
+          return resp;
+        }
+
+        return '❌ Acción no reconocida. Usa: listar_plantillas, crear_plantilla, listar_ejecuciones, iniciar_ejecucion, actualizar_ejecucion.';
+      } catch (err) {
+        return `Error gestionando checklist: ${err.message}`;
       }
     }
 

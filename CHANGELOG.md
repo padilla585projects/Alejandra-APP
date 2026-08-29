@@ -4,6 +4,39 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-08-29 — gestionar_checklist: Alejandra ya puede crear y rellenar checklists de inspección por chat)
+
+Continuación de "que Alejandra sea una ingeniera en condiciones": Adrián eligió "checklists
+de inspección personalizados" como siguiente idea. Investigando antes de diseñar nada se
+encontró que esto **ya existía** como infraestructura real y madura en `worker.js`
+(NEW-55 QA/QC: `checklists_plantillas` + `checklist_ejecuciones`, con generación automática
+de no-conformidades en `ncrs_obra` para items marcados "nok") — pero Alejandra nunca tuvo
+ninguna tool para usarla por chat, solo el panel/app la usaban directamente.
+
+Añadida `gestionar_checklist` (una sola tool con `accion`, mismo patrón que
+`gestionar_calidad` ya existente) en `alejandra-agente/worker.js`, con acceso directo a
+`env.DB` (misma D1 compartida, sin Service Binding — no hay lógica de generación de por
+medio, a diferencia de planos/esquemas): `listar_plantillas`, `crear_plantilla`,
+`listar_ejecuciones`, `iniciar_ejecucion`, `actualizar_ejecucion`. Al rellenar resultados
+por chat, fusiona los nuevos sobre los items ya contestados (por descripción) en vez de
+reemplazar la lista entera, para que "marca el 2º punto como nok" en un turno no borre lo
+ya contestado en turnos anteriores de la misma inspección. Reutiliza la misma lógica de
+generación automática de NCR que `worker.js` (evita duplicar si ya existe una NCR para ese
+item en esa ejecución). Registrada en los expertos `app` y `completo`, mismo alcance que
+`gestionar_calidad`.
+
+Verificado con 11 casos aislados de la lógica de fusión/cálculo de stats (contestar en
+varios turnos sin perder items, corregir un resultado ya dado sin duplicar, división por
+cero con checklist "todo N/A"). 207/207 tests del agente sin regresión.
+
+**Deuda encontrada, fuera de alcance de esta tarea:** ningún tool de `alejandra-agente`
+(incluida `gestionar_checklist`) filtra por `departamento`, aunque los mismos datos SÍ se
+filtran por departamento en los endpoints REST de `worker.js`/`panel.html` — `departamento`
+nunca se pasa a `ejecutarTool`/`ejecutarToolConTelemetria`. Es una brecha preexistente que
+afecta a todos los tools de datos del agente, no solo a este, y corregirla exige tocar la
+firma de esos dos ejecutores y todos sus call sites — se deja anotada como tarea aparte, no
+se toca aquí para no mezclarla con esta funcionalidad.
+
 ### Added (2026-08-29 — traza de diagnóstico cuando un token no encuentra sesión, en los dos Workers)
 
 Tercer hallazgo de la revisión de comportamiento real: buscando `anon:3` en

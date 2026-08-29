@@ -1,6 +1,20 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-29
+- Estado (2026-08-29, continuación): **"Ingeniera en condiciones" — checklists de
+  inspección personalizados por chat (`gestionar_checklist`).** Adrián eligió esta idea
+  de la lista de 7 aprobada antes. Investigando se encontró que la infraestructura ya
+  existía completa en `worker.js` (NEW-55 QA/QC, plantillas + ejecuciones + NCR
+  automática) sin ninguna tool de chat que la usara. Añadida `gestionar_checklist` en
+  `alejandra-agente/worker.js` (mismo patrón que `gestionar_calidad`, acceso directo a
+  `env.DB` compartida) con 5 acciones: listar/crear plantillas, listar/iniciar/actualizar
+  ejecuciones — la fusión de resultados por descripción evita perder respuestas de turnos
+  anteriores al rellenar una inspección en varios mensajes. Verificado con 11 casos
+  aislados de la lógica de fusión/stats. 207/207 tests. Pendiente de commit/deploy.
+  **Deuda anotada, no corregida aquí:** ningún tool del agente filtra por departamento
+  (solo worker.js/panel.html lo hacen) — afecta a todos los tools de datos, no solo a
+  este; requiere tocar la firma de `ejecutarTool`/`ejecutarToolConTelemetria`. Ver
+  `CHANGELOG.md`.
 - Estado (2026-08-29, continuación): **Tercer hallazgo de la revisión — sesión real de
   Adrián lleva 24h+ sin validar, `anon:3` en producción, causa raíz sin confirmar.**
   Investigando `anon:3` en `alejandra_historial` (28/08) apareció una conversación real
