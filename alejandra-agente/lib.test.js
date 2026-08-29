@@ -1094,6 +1094,22 @@ describe('determinarEstadoSalud (ADR-0014 §4, tres estados)', () => {
   it('unhealthy cuando fallan las dos', () => {
     expect(determinarEstadoSalud(false, false)).toBe('unhealthy');
   });
+
+  it('healthy por defecto sin pasar el tercer parámetro (compatibilidad hacia atrás)', () => {
+    expect(determinarEstadoSalud(true, true)).toBe('healthy');
+  });
+
+  it('degraded cuando Anthropic falló recientemente aunque D1/R2 estén bien', () => {
+    expect(determinarEstadoSalud(true, true, false)).toBe('degraded');
+  });
+
+  it('unhealthy si falla D1 aunque Anthropic esté bien', () => {
+    expect(determinarEstadoSalud(false, true, true)).toBe('unhealthy');
+  });
+
+  it('degraded (no unhealthy) si fallan R2 y Anthropic pero D1 responde', () => {
+    expect(determinarEstadoSalud(true, false, false)).toBe('degraded');
+  });
 });
 
 // ── toolsParaAnthropic (F-1.3/ADR-0010) ─────────────────────────────────────

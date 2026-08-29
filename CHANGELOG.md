@@ -4,6 +4,32 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-29 — el fallback a GPT-4o no cubría el tope de uso de Anthropic, y /health no lo detectaba)
+
+Verificando `detectar_conflictos_disciplinas` en vivo (empresa demo), el chat falló con
+el error crudo de Anthropic mostrado directamente al usuario: `"You have reached your
+specified API usage limits. You will regain access on 2026-09-01..."`. Investigando se
+encontró la causa real: ya existía un mecanismo de fallback a GPT-4o + aviso push/Telegram
+a Adrián para cuando Anthropic se queda sin saldo, pero solo reconocía el texto
+`"credit balance is too low"` — Anthropic devuelve un texto DISTINTO cuando se alcanza un
+tope de uso configurado en la consola (caso real de hoy, ya resuelto por Adrián recargando
+saldo), así que ese caso caía al `throw` genérico en vez de al fallback.
+
+Corregido: nuevo helper compartido `_esErrorSinCreditosAnthropic()` (usado en
+`llamarAnthropic` y `llamarAnthropicStream`, antes duplicaban el mismo `.includes()`)
+que reconoce ambos textos. Verificado con 4 casos aislados (los dos textos reales, un 429
+que no debe activarlo, un 400 no relacionado que tampoco).
+
+Además, `/health` nunca comprobaba el estado de Anthropic en absoluto (solo D1/R2) —
+"healthy" aunque el chat estuviera fallando de verdad. Extendido `determinarEstadoSalud()`
+(lib.js, tercer parámetro `anthropicOk`, compatible hacia atrás) para tratar un fallo
+reciente de Anthropic como `degraded` (igual criterio que R2: el fallback sigue
+respondiendo). `/health` resuelve `anthropicOk` consultando si `alejandra_logs` tiene un
+`alerta_creditos` de los últimos 5 minutos — reutiliza el log que `notificarSinCreditos`
+ya escribía, sin gastar cuota real en cada `/health` con una llamada en vivo a Anthropic.
+Nuevo campo `anthropic` en la respuesta de `/health`. 4 tests nuevos para
+`determinarEstadoSalud` (211/211 en total, sin regresión).
+
 ### Added (2026-08-29 — detectar_conflictos_disciplinas: aviso de posibles conflictos entre disciplinas por obra)
 
 Otra idea de "ingeniera en condiciones": detección de conflictos entre disciplinas.
