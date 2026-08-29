@@ -4,6 +4,32 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-29 — verificarAccionesAfirmadas: falso positivo al citar un enlace ya real de un turno anterior)
+
+Revisión pedida por Adrián del comportamiento real de Alejandra ("revisemos otra vez el
+comportamiento que ha tenido alejandra hoy con lo que le he pedido"). Reconstruyendo
+`alejandra_historial` + `alejandra_trazas` reales (usuario 3, 2026-08-28 07:46-07:52, sin
+tocar nada, solo lectura) se encontró un bug real y ya en producción, causado por el
+propio fix de ayer (ALEJANDRA-ESQUEMA-02): un esquema se generó de verdad
+(`generar_esquema_electrico: ok`, traza 1389, 07:51:26) y dos turnos después el usuario
+pidió "Telegram" — el envío falló de forma legítima (`enviar_telegram_informe: error ::
+No hay chat_id`, traza 1391, 07:52:01), y la respuesta de Alejandra para ese turno, que
+correctamente explicaba el problema de Telegram citando el enlace YA real del esquema
+anterior, fue sustituida ENTERA por "No llegué a generar ningún esquema en este turno" —
+falso, ya lo había generado — porque `generar_esquema_electrico` no se llamó en ESE turno
+concreto (id2764 en `alejandra_historial`). Esto confundió al usuario, que acababa de ver
+el esquema funcionar, y provocó una regeneración redundante cuando respondió "Hazlo de
+nuevo" (traza 1393, 07:52:40 — segunda llamada real e innecesaria a la misma tool).
+
+Corregido: `verificarAccionesAfirmadas` recibe ahora un tercer parámetro `messages` (la
+conversación reconstruida por `construirMessages`, ya disponible en los 4 puntos de
+llamada) y solo marca alucinación cuando la URL mencionada es genuinamente nueva —
+ausente del historial previo de la misma conversación — Y la tool no se llamó en el turno
+actual. Una URL ya real de un turno anterior nunca se marca, aunque la tool no se repita.
+Verificado con 5 casos aislados reproduciendo el escenario real exacto (URL ya real no se
+marca; URL nueva sin tool sigue detectándose; URL nueva con tool no se marca; mismo
+patrón para planos) — los 5 pasan. 207/207 tests del agente sin regresión.
+
 ### Fixed (2026-08-27 — calcular_cable/calcular_proteccion: tabla real ITC-BT-19 por método de instalación)
 
 Investigando el pedido de "verificación doble" para cálculos críticos, se encontró que
