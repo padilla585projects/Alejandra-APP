@@ -1,6 +1,27 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-29
+- Estado (2026-08-29, continuación): **Fallback de Anthropic no cubría el tope de uso
+  (solo "sin saldo"), y `/health` no detectaba ningún fallo real de Anthropic.**
+  Verificando en vivo la nueva tool de conflictos, el chat falló con el error crudo de
+  Anthropic ("reached your specified API usage limits") en vez de caer al fallback de
+  GPT-4o ya existente — ese mecanismo solo reconocía el texto "credit balance is too
+  low". Adrián ya resolvió el saldo real; corregido el código para que ambos casos
+  activen el mismo fallback+aviso. Además, `/health` nunca comprobaba Anthropic en
+  absoluto — extendido `determinarEstadoSalud()` (3er parámetro, compatible) para
+  reflejar un fallo reciente (consulta `alejandra_logs`, sin gastar cuota real). 4 tests
+  nuevos, 211/211 en total. Pendiente de commit/deploy. Ver `CHANGELOG.md`.
+- Estado (2026-08-29, continuación): **"Ingeniera en condiciones" — detección de
+  conflictos entre disciplinas (`detectar_conflictos_disciplinas`).** Investigado antes
+  de diseñar: sin datos geométricos/BIM (planos son SVG 2D, no 3D), un clash detection
+  real no es posible hoy. Alcance honesto elegido: cruzar `documentos_obra`,
+  `incidencias` e `ncrs_obra` (las únicas 3 tablas con `departamento` real) por
+  coincidencia de palabras clave entre disciplinas distintas, dejando explícito que es
+  heurística de texto, no confirmación de conflicto real. Verificado con 6 casos
+  aislados, encontrados y corregidos 2 bugs reales antes de desplegar (fragmentación de
+  palabras acentuadas por NFD sin limpiar; stopwords solo en singular dejaban pasar
+  plurales como falsos positivos). 207/207 tests. Pendiente de commit/deploy. Ver
+  `CHANGELOG.md`.
 - Estado (2026-08-29, continuación): **"Ingeniera en condiciones" — checklists de
   inspección personalizados por chat (`gestionar_checklist`).** Adrián eligió esta idea
   de la lista de 7 aprobada antes. Investigando se encontró que la infraestructura ya

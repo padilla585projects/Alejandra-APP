@@ -740,9 +740,21 @@ function extraerTablaDDL(sql) {
 //   - D1 falla (sola o con R2) -> 'unhealthy' (nada funciona sin BD)
 //   - Solo R2 falla            -> 'degraded'  (fotos/documentos afectados)
 //   - Las dos responden        -> 'healthy'
-function determinarEstadoSalud(d1Ok, r2Ok) {
+//
+// SALDO-ANTHROPIC-01 (29/08/2026): tercer parámetro opcional `anthropicOk`,
+// backward-compatible (default true, así las llamadas/tests existentes con solo
+// dos argumentos no cambian). Encontrado en una revisión de comportamiento real:
+// /health solo comprobaba D1/R2, así que un fallo real y activo de la API de
+// Anthropic (créditos agotados, tope de uso alcanzado) era invisible aquí --
+// "healthy" aunque el chat estuviera devolviendo errores crudos a los usuarios.
+// worker.js resuelve anthropicOk consultando si hubo una traza reciente de
+// 'anthropic_sin_creditos' (ver _esErrorSinCreditosAnthropic) -- no es una
+// llamada en vivo a Anthropic (costaría cuota en cada /health), es el reflejo
+// del último fallo real detectado. Anthropic caído se trata como 'degraded' (el
+// fallback a GPT-4o sigue respondiendo), no 'unhealthy' -- mismo criterio que R2.
+function determinarEstadoSalud(d1Ok, r2Ok, anthropicOk = true) {
   if (!d1Ok) return 'unhealthy';
-  if (!r2Ok) return 'degraded';
+  if (!r2Ok || !anthropicOk) return 'degraded';
   return 'healthy';
 }
 

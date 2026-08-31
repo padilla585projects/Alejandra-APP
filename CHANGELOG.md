@@ -4,6 +4,85 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-08-29 — el fallback a GPT-4o no cubría el tope de uso de Anthropic, y /health no lo detectaba)
+
+Verificando `detectar_conflictos_disciplinas` en vivo (empresa demo), el chat falló con
+el error crudo de Anthropic mostrado directamente al usuario: `"You have reached your
+specified API usage limits. You will regain access on 2026-09-01..."`. Investigando se
+encontró la causa real: ya existía un mecanismo de fallback a GPT-4o + aviso push/Telegram
+a Adrián para cuando Anthropic se queda sin saldo, pero solo reconocía el texto
+`"credit balance is too low"` — Anthropic devuelve un texto DISTINTO cuando se alcanza un
+tope de uso configurado en la consola (caso real de hoy, ya resuelto por Adrián recargando
+saldo), así que ese caso caía al `throw` genérico en vez de al fallback.
+
+Corregido: nuevo helper compartido `_esErrorSinCreditosAnthropic()` (usado en
+`llamarAnthropic` y `llamarAnthropicStream`, antes duplicaban el mismo `.includes()`)
+que reconoce ambos textos. Verificado con 4 casos aislados (los dos textos reales, un 429
+que no debe activarlo, un 400 no relacionado que tampoco).
+
+Además, `/health` nunca comprobaba el estado de Anthropic en absoluto (solo D1/R2) —
+"healthy" aunque el chat estuviera fallando de verdad. Extendido `determinarEstadoSalud()`
+(lib.js, tercer parámetro `anthropicOk`, compatible hacia atrás) para tratar un fallo
+reciente de Anthropic como `degraded` (igual criterio que R2: el fallback sigue
+respondiendo). `/health` resuelve `anthropicOk` consultando si `alejandra_logs` tiene un
+`alerta_creditos` de los últimos 5 minutos — reutiliza el log que `notificarSinCreditos`
+ya escribía, sin gastar cuota real en cada `/health` con una llamada en vivo a Anthropic.
+Nuevo campo `anthropic` en la respuesta de `/health`. 4 tests nuevos para
+`determinarEstadoSalud` (211/211 en total, sin regresión).
+
+### Added (2026-08-29 — detectar_conflictos_disciplinas: aviso de posibles conflictos entre disciplinas por obra)
+
+Otra idea de "ingeniera en condiciones": detección de conflictos entre disciplinas.
+Investigando antes de diseñar se comprobó contra D1 real que no hay ningún dato
+geométrico/BIM (los planos son SVG 2D generados, sin coordenadas 3D reales) — un clash
+detection real (tipo Navisworks) no es posible con los datos que existen hoy. Sí es
+posible y honesto: de las tablas con dato de disciplina real, solo `documentos_obra`,
+`incidencias` y `ncrs_obra` tienen columna `departamento` (`tareas_obra` y `planos`, no).
+
+Añadida `detectar_conflictos_disciplinas` (acceso directo a `env.DB`, mismo patrón que
+`gestionar_checklist`): dado un `obra_id`, cruza documentos + incidencias abiertas + no
+conformidades abiertas de departamentos DISTINTOS y busca coincidencias de palabras
+clave significativas (≥4 letras, sin acentos, fuera de una lista de términos genéricos
+de obra) entre su título/descripción — p.ej. una incidencia eléctrica y una NCR mecánica
+que mencionan ambas "sala de máquinas" salen como candidato a revisar junto. La
+descripción de la tool y el propio texto de respuesta dejan explícito que es una
+coincidencia de texto, no una confirmación de conflicto real ni un análisis geométrico.
+
+Verificado con 6 casos aislados — encontrados y corregidos dos bugs reales antes de
+desplegar: (1) NFD sin quitar la marca diacrítica fragmentaba palabras acentuadas
+("máquinas" salía como "quinas"), mismo patrón que `normalizarSlugMemoria` ya resolvía
+en este archivo; (2) la lista de palabras genéricas solo tenía formas en singular
+("trabajo","pendiente"), así que "trabajos"/"pendientes" en plural no se filtraban y
+generaban falsos positivos entre disciplinas que solo compartían texto genérico de obra
+("trabajos pendientes de instalación general"). 207/207 tests del agente sin regresión.
+
+### Fixed (2026-08-29 — gestionar_checklist inventaba resultados de inspección nunca dados)
+
+Verificación en vivo tras desplegar `gestionar_checklist` (contra la empresa demo,
+`temp-f61-test@example.invalid`, `empresa_id=5`), como parte del propio proceso de cierre
+de esa tarea: al iniciar una inspección con 3 items sin contestar, el modelo respondió al
+usuario con resultados "ok"/"nok" **inventados** ("extintor visible → ok, señalización de
+emergencia → nok, botiquín accesible → ok") y preguntó si los registraba — pero la fila
+real en `checklist_ejecuciones` tenía los 3 items con `resultado: null` (verificado
+directamente contra D1). Misma clase de alucinación que ALEJANDRA-ESQUEMA-01/02/03 ya
+corrigieron para esquemas/planos, ahora en una tool nueva de hoy mismo, y potencialmente
+más grave: es una herramienta de seguridad/calidad (un extintor marcado "ok" sin
+comprobarlo de verdad es justo el tipo de error que este sistema existe para evitar).
+
+A diferencia de esquemas/planos, aquí no hay un patrón de URL fiable que verificar en
+código sin acceso directo a la BD desde `verificarAccionesAfirmadas` (fuera de alcance
+inmediato). Corregido a nivel de prompt (CHECKLIST-AGENTE-02): el texto que devuelve
+`iniciar_ejecucion` ahora deja explícito, en el propio resultado de la tool, que NINGÚN
+item tiene resultado todavía y que inventar uno es un error grave — instruye a preguntar
+siempre al usuario antes de llamar a `actualizar_ejecucion`. Mismo refuerzo añadido a la
+`description` de la tool. Verificado de nuevo en vivo tras el fix: [pendiente de
+reverificación tras desplegar]. 207/207 tests.
+
+**Riesgo residual, anotado como deuda:** un fix de prompt reduce pero no garantiza al
+100% que el modelo nunca vuelva a inventar un resultado — a diferencia de la detección de
+esquemas/planos (regex sobre URL, determinista), no existe hoy un guardrail de código
+para este caso. Queda como mejora futura si se repite en producción real.
+
 ### Security (2026-08-29 — DEPT-AGENTE-01: las tools de chat del agente ya filtran por departamento)
 
 Cierra la deuda anotada más abajo el mismo día ("ningún tool de `alejandra-agente` filtra
