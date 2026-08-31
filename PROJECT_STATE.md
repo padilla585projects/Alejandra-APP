@@ -1,6 +1,6 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-29
+- Actualizado: 2026-08-31
 - Estado (2026-08-29, continuación): **Fallback de Anthropic no cubría el tope de uso
   (solo "sin saldo"), y `/health` no detectaba ningún fallo real de Anthropic.**
   Verificando en vivo la nueva tool de conflictos, el chat falló con el error crudo de
@@ -45,7 +45,15 @@
   análisis inicial (`iniciar_ejecucion`/`actualizar_ejecucion` de `gestionar_checklist`
   aceptaban un id de otro departamento sin comprobarlo). 211/211 tests (207 + 4 nuevos).
   Resto de tools de datos del agente (más allá de estas dos) sin auditar todavía — ver
-  `CHANGELOG.md`. Sin verificación en vivo contra D1 real. Pendiente de commit/deploy.
+  `CHANGELOG.md`.
+- Estado (2026-08-31): **DEPT-AGENTE-01 — fusionada, desplegada y verificada en vivo**
+  (PR #129). Con dos usuarios de prueba reales de departamentos distintos y datos
+  sembrados en D1: un usuario de `mecanico` no ve la deficiencia/plantilla de `electrico`
+  por chat, mientras el de `electrico` sí ve la suya (el filtro no es overly-restrictive);
+  el IDOR de `iniciar_ejecucion`/`actualizar_ejecucion` confirmado cerrado (referenciar por
+  número el id de otro departamento devuelve "No encuentro..." y no modifica el registro).
+  `alejandra-agente` redesplegado (`wrangler deploy`, `/health` → `healthy`). Datos/
+  usuarios de prueba borrados al terminar. Detalle en `CHANGELOG.md`.
 - Estado (2026-08-29, continuación): **Tercer hallazgo de la revisión — sesión real de
   Adrián lleva 24h+ sin validar, `anon:3` en producción, causa raíz sin confirmar.**
   Investigando `anon:3` en `alejandra_historial` (28/08) apareció una conversación real

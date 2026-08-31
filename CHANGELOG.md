@@ -111,9 +111,19 @@ producción — `control_calidad`/`checklists_plantillas`/`checklist_ejecuciones
 columna `departamento` vía migración; el `CREATE TABLE IF NOT EXISTS` local del agente
 (fallback para una D1 de prueba) se actualizó para declararla también en `control_calidad`.
 
-Sin verificación en vivo contra D1 real dentro de esta tarea (fuera del alcance de un test
-unitario) — pendiente confirmar con un caso real que un usuario de un departamento no
-ve/edita datos de otro por chat antes de darlo por cerrado en producción.
+**Verificación en vivo (2026-08-31), tras fusionar y desplegar:** dos usuarios de prueba
+reales (`operario`, empresa demo, departamentos `electrico`/`mecanico`) con sesión real en
+`sesiones`, y datos de prueba sembrados en `control_calidad`/`checklists_plantillas`/
+`checklist_ejecuciones` bajo `electrico`. Contra `/api/chat` real (no solo lectura de
+código): el usuario de `mecanico` no ve la deficiencia ni la plantilla de `electrico`
+(`gestionar_calidad`/`gestionar_checklist listar_plantillas` → vacío), mientras el usuario
+de `electrico` sí ve su propio dato — confirma que el filtro no es overly-restrictive.
+IDOR confirmado cerrado: el usuario de `mecanico` referenciando por número el
+`plantilla_id`/`ejecucion_id` real de `electrico` en `iniciar_ejecucion`/
+`actualizar_ejecucion` recibe "No encuentro..." y la fila de `electrico` queda sin tocar
+(verificado leyendo `resultados` en D1 tras el intento); el mismo `actualizar_ejecucion`
+con el usuario de `electrico` sí actualiza su propia ejecución. Usuarios/sesiones/datos de
+prueba borrados al terminar. Cierra el pendiente anotado arriba.
 
 ### Added (2026-08-29 — gestionar_checklist: Alejandra ya puede crear y rellenar checklists de inspección por chat)
 

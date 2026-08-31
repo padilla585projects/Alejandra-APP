@@ -1,5 +1,19 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-08-31): **DEPT-AGENTE-01 revisada, fusionada (PR #129), desplegada
+y verificada en vivo.** Cierra la deuda de seguridad anotada el 2026-08-29: ningún tool de
+chat del agente (`gestionar_calidad`/`gestionar_checklist`) filtraba por departamento, a
+diferencia de sus endpoints REST equivalentes. Revisión de código confirmó que el criterio
+(`puedeVerTodosLosDepartamentos`) coincide exactamente con `isDeptPrivileged()` de
+`worker.js`, que `departamento`/`rol` siempre vienen de la sesión verificada (nunca del
+body/modelo), y que las tres tablas afectadas ya tienen la columna `departamento` en D1
+real (sin migración pendiente). Verificado en vivo con dos usuarios de prueba de
+departamentos distintos: aislamiento confirmado en ambos sentidos (no ve lo ajeno, sí ve lo
+propio) y el IDOR de `iniciar_ejecucion`/`actualizar_ejecucion` cerrado de verdad (id de
+otro departamento por número → rechazado, sin modificar el registro). `alejandra-agente`
+redesplegado, `/health` en verde. Datos y usuarios de prueba borrados al terminar. Detalle
+completo en `CHANGELOG.md`/`PROJECT_STATE.md`.
+
 Estado (actualizado 2026-08-19): **TELECOM-MOVIL-02 / CPD-MOVIL-02 — usabilidad real de
 Racks y Sondas CPD en el móvil. Cerrado, confirmado por Adrián en su teléfono real
 ("vale mucho mejor, ahora si").** Adrián probó con el dedo lo que la sesión anterior
