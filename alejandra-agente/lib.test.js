@@ -23,6 +23,7 @@ import {
   TOOLS_N1_LECTURA_PILOTO,
   esInvocacionN1DeLectura,
   clasificarResultadoTool,
+  puedeVerTodosLosDepartamentos,
   redactarTexto,
   redactarDetalle,
   extraerTablaDDL,
@@ -1509,6 +1510,35 @@ describe('clasificarResultadoTool — F-4.4 (regresión del bug "todo es error")
   });
 });
 
+// ── puedeVerTodosLosDepartamentos (DEPT-AGENTE-01, 29/08/2026) ────────────────
+// Mismo criterio que isDeptPrivileged (worker.js): gestionar_calidad y
+// gestionar_checklist en el agente lo usan para no restringir a roles que ya
+// ven todos los departamentos vía REST.
+describe('puedeVerTodosLosDepartamentos — DEPT-AGENTE-01', () => {
+  it('superadmin/empresa_admin/desarrollador ven todos los departamentos aunque tengan uno activo', () => {
+    expect(puedeVerTodosLosDepartamentos('superadmin', 'electrico')).toBe(true);
+    expect(puedeVerTodosLosDepartamentos('empresa_admin', 'electrico')).toBe(true);
+    expect(puedeVerTodosLosDepartamentos('desarrollador', 'electrico')).toBe(true);
+  });
+
+  it('el departamento "seguridad" tiene visión transversal aunque el rol no sea privilegiado', () => {
+    expect(puedeVerTodosLosDepartamentos('operario', 'seguridad')).toBe(true);
+    expect(puedeVerTodosLosDepartamentos('encargado', 'seguridad')).toBe(true);
+  });
+
+  it('encargado/operario/oficina en un departamento normal NO ven todos los departamentos', () => {
+    expect(puedeVerTodosLosDepartamentos('encargado', 'electrico')).toBe(false);
+    expect(puedeVerTodosLosDepartamentos('operario', 'mecanico')).toBe(false);
+    expect(puedeVerTodosLosDepartamentos('oficina', 'telecom')).toBe(false);
+  });
+
+  it('rol/departamento null o desconocido no concede visión transversal', () => {
+    expect(puedeVerTodosLosDepartamentos(null, null)).toBe(false);
+    expect(puedeVerTodosLosDepartamentos(undefined, 'electrico')).toBe(false);
+    expect(puedeVerTodosLosDepartamentos('rol_inventado', 'electrico')).toBe(false);
+  });
+});
+
 // ── Nexo v1 (ADR-0021) — registro de fuentes externas ─────────────────────────
 import {
   FUENTES_NEXO,
@@ -1769,7 +1799,7 @@ describe('gestionar_pedido / delegar_tarea (ADR-0022)', () => {
     expect(inicio).toBeGreaterThanOrEqual(0);
     expect(fin).toBeGreaterThan(inicio);
     expect(cuerpo).toMatch(/evaluarInvocacionCognitiva\(env, tb\.name, tb\.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante\)/);
-    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio\)/);
+    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol\)/);
     // No debe declarar ni pasar un Set de confirmación propio -- solo los que
     // llegan como parámetro de ejecutarTool(), extraídos del mensaje real del humano.
     expect(cuerpo).not.toMatch(/new Set\(\)/);

@@ -36,6 +36,16 @@
   (solo worker.js/panel.html lo hacen) — afecta a todos los tools de datos, no solo a
   este; requiere tocar la firma de `ejecutarTool`/`ejecutarToolConTelemetria`. Ver
   `CHANGELOG.md`.
+- Estado (2026-08-29, continuación): **DEPT-AGENTE-01 — cerrada la deuda de arriba:
+  `gestionar_calidad` y `gestionar_checklist` ya filtran por departamento vía chat.**
+  `departamento`/`rol` de la sesión verificada viajan ahora hasta `ejecutarTool`/
+  `ejecutarToolConTelemetria` (incluida la recursión de `delegar_tarea`). Nuevo helper
+  `puedeVerTodosLosDepartamentos(rol, departamento)` en `lib.js`, mismo criterio que
+  `isDeptPrivileged()` de `worker.js`. De paso, cerrado un IDOR no detectado en el
+  análisis inicial (`iniciar_ejecucion`/`actualizar_ejecucion` de `gestionar_checklist`
+  aceptaban un id de otro departamento sin comprobarlo). 211/211 tests (207 + 4 nuevos).
+  Resto de tools de datos del agente (más allá de estas dos) sin auditar todavía — ver
+  `CHANGELOG.md`. Sin verificación en vivo contra D1 real. Pendiente de commit/deploy.
 - Estado (2026-08-29, continuación): **Tercer hallazgo de la revisión — sesión real de
   Adrián lleva 24h+ sin validar, `anon:3` en producción, causa raíz sin confirmar.**
   Investigando `anon:3` en `alejandra_historial` (28/08) apareció una conversación real

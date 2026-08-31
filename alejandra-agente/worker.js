@@ -36,6 +36,7 @@ import {
   TOOLS_N1_LECTURA_PILOTO,
   esInvocacionN1DeLectura,
   clasificarResultadoTool,
+  puedeVerTodosLosDepartamentos,
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
@@ -2007,10 +2008,10 @@ async function registrarUsoTool(env, { tool, empresaId = null, usuarioId = null,
 // Envuelve executarTool() para capturar success/error sin tocar cada case
 // del switch. Fail-open: si registrarUsoTool falla, el resultado de la tool
 // se devuelve igual (la telemetría nunca debe romper el chat).
-async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio) {
+async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento = null, rol = null) {
   let resultado, err;
   try {
-    resultado = await ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio);
+    resultado = await ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol);
   } catch (e) {
     err = e && e.message ? e.message : String(e);
     resultado = JSON.stringify({ ok: false, error: `Error ejecutando "${nombre}": ${err}`, tool: nombre });
@@ -5992,7 +5993,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
-          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
+          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (!clasificarResultadoTool(resultado)) huboFalloEsteTurno = true;
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
@@ -6200,7 +6201,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
         const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
-          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
+          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (!clasificarResultadoTool(resultado)) huboFalloEsteTurno = true;
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
@@ -6317,7 +6318,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
           const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
           const resultado = control.permitida
-            ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados)
+            ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
             : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
           const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
             ? '(imagen analizada)'
@@ -7659,7 +7660,7 @@ async function esDeveloperAgente(env, usuario_id) {
 // indirecta vía el historial de chat que se le pasa como contexto al modelo.
 // Ahora el default es fail-closed (false); ejecutarReflexion() además pasa
 // los valores explícitos para dejar la intención clara en el código.
-async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false, codigosConfirmados = new Set(), codigosConfirmadosEnvio = new Set()) {
+async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false, codigosConfirmados = new Set(), codigosConfirmadosEnvio = new Set(), departamento = null, rol = null) {
   // Normaliza un posible empresa_id a entero positivo o null. Necesario porque
   // el 'empresa_id' de contexto puede llegar como el string literal 'default'
   // (sentinela de sesion sin empresa asignada, usado en varias partes de este
@@ -10106,7 +10107,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             }
             const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante);
             const resultado = control.permitida
-              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio)
+              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
               : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
             if (typeof sendSSE === 'function') {
               const previewText = typeof resultado === 'string' ? resultado.substring(0, 200) : JSON.stringify(resultado).substring(0, 200);
@@ -10355,6 +10356,11 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const obraId = input.obra_id ? parseInt(input.obra_id) : null;
         const defId  = input.deficiencia_id ? parseInt(input.deficiencia_id) : null;
         const eid    = empresa_id || 1;
+        // DEPT-AGENTE-01 (29/08/2026): mismo criterio que getControlCalidad/actualizarDeficiencia/
+        // eliminarDeficiencia (worker.js, isDeptPrivileged) -- fuera de roles con vision
+        // transversal, cada uno ve/edita solo las deficiencias de su propio departamento
+        // (o sin asignar).
+        const deptRestringido = !!departamento && !puedeVerTodosLosDepartamentos(rol, departamento);
 
         // Ensure table
         await runDDL(env, `CREATE TABLE IF NOT EXISTS control_calidad (
@@ -10365,7 +10371,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           categoria TEXT DEFAULT 'otro',
           prioridad TEXT DEFAULT 'normal',
           estado TEXT DEFAULT 'abierto',
-          responsable TEXT,
+          responsable TEXT, departamento TEXT,
           fecha_limite TEXT, fecha_resolucion TEXT,
           resuelto_por TEXT, notas_resolucion TEXT,
           created_at TEXT DEFAULT (datetime('now'))
@@ -10376,6 +10382,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           const p = [eid];
           if (obraId) { q += ' AND obra_id=?'; p.push(obraId); }
           if (input.filtro_estado) { q += ' AND estado=?'; p.push(input.filtro_estado); }
+          if (deptRestringido) { q += ' AND (departamento=? OR departamento IS NULL)'; p.push(departamento); }
           q += ` ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
                           CASE estado WHEN 'abierto' THEN 0 WHEN 'en_reparacion' THEN 1 WHEN 'resuelto' THEN 2 ELSE 3 END,
                           created_at DESC LIMIT 20`;
@@ -10395,14 +10402,17 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         }
 
         if (accion === 'resumen') {
+          const pResumen = [eid];
+          let deptClauseResumen = '';
+          if (deptRestringido) { deptClauseResumen = ' AND (departamento=? OR departamento IS NULL)'; pResumen.push(departamento); }
           const t = await env.DB.prepare(
             `SELECT COUNT(*) as total,
              SUM(CASE WHEN estado='abierto' THEN 1 ELSE 0 END) as abiertos,
              SUM(CASE WHEN estado='en_reparacion' THEN 1 ELSE 0 END) as en_reparacion,
              SUM(CASE WHEN estado IN ('resuelto','verificado') THEN 1 ELSE 0 END) as resueltos,
              SUM(CASE WHEN prioridad='urgente' AND estado='abierto' THEN 1 ELSE 0 END) as urgentes_abiertos
-             FROM control_calidad WHERE empresa_id=?${obraId?' AND obra_id='+obraId:''}`
-          ).bind(eid).first().catch(()=>null);
+             FROM control_calidad WHERE empresa_id=?${obraId?' AND obra_id='+obraId:''}${deptClauseResumen}`
+          ).bind(...pResumen).first().catch(()=>null);
           if (!t) return '🔍 No hay datos de calidad.';
           let txt = `🔍 RESUMEN CONTROL CALIDAD:\n`;
           txt += `• Total deficiencias: ${t.total||0}\n`;
@@ -10426,12 +10436,12 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             }
           } catch {}
           await env.DB.prepare(
-            `INSERT INTO control_calidad (obra_id,empresa_id,numero,titulo,ubicacion,categoria,prioridad,estado,responsable,fecha_limite)
-             VALUES (?,?,?,?,?,?,?,?,?,?)`
+            `INSERT INTO control_calidad (obra_id,empresa_id,numero,titulo,ubicacion,categoria,prioridad,estado,responsable,fecha_limite,departamento)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?)`
           ).bind(obraId, eid, numero, input.titulo,
             input.ubicacion||null, input.categoria||'otro',
             input.prioridad||'normal', 'abierto',
-            input.responsable||null, input.fecha_limite||null
+            input.responsable||null, input.fecha_limite||null, departamento || null
           ).run();
           let resp = `✅ ${numero} registrada: "${input.titulo}"\n`;
           if (input.ubicacion) resp += `📍 Ubicación: ${input.ubicacion}\n`;
@@ -10447,8 +10457,11 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           // escapando comillas simples a mano) en vez de ir por parámetro ?, el único
           // caso de este tipo en todo gestionar_calidad/gestionar_tarea/gestionar_rfi/
           // gestionar_oc/gestionar_acta. Sin cambio de comportamiento observable.
-          const sqlResolver = `UPDATE control_calidad SET estado='resuelto', fecha_resolucion=date('now')${input.notas_resolucion ? ', notas_resolucion=?' : ''} WHERE id=? AND empresa_id=?`;
+          let deptGuardResolver = '';
+          if (deptRestringido) deptGuardResolver = ' AND (departamento=? OR departamento IS NULL)';
+          const sqlResolver = `UPDATE control_calidad SET estado='resuelto', fecha_resolucion=date('now')${input.notas_resolucion ? ', notas_resolucion=?' : ''} WHERE id=? AND empresa_id=?${deptGuardResolver}`;
           const paramsResolver = input.notas_resolucion ? [input.notas_resolucion, defId, eid] : [defId, eid];
+          if (deptRestringido) paramsResolver.push(departamento);
           await env.DB.prepare(sqlResolver).bind(...paramsResolver).run();
           return `✅ Deficiencia #${defId} marcada como resuelta.`;
         }
@@ -10462,13 +10475,18 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           }
           if (!sets.length) return '❌ No se especificaron cambios.';
           params.push(defId, eid);
-          await env.DB.prepare(`UPDATE control_calidad SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+          let deptGuardActualizar = '';
+          if (deptRestringido) { deptGuardActualizar = ' AND (departamento=? OR departamento IS NULL)'; params.push(departamento); }
+          await env.DB.prepare(`UPDATE control_calidad SET ${sets.join(',')} WHERE id=? AND empresa_id=?${deptGuardActualizar}`).bind(...params).run();
           return `✅ Deficiencia #${defId} actualizada.`;
         }
 
         if (accion === 'eliminar') {
           if (!defId) return '❌ Necesito deficiencia_id para eliminar.';
-          await env.DB.prepare('DELETE FROM control_calidad WHERE id=? AND empresa_id=?').bind(defId, eid).run();
+          const paramsEliminar = [defId, eid];
+          let deptGuardEliminar = '';
+          if (deptRestringido) { deptGuardEliminar = ' AND (departamento=? OR departamento IS NULL)'; paramsEliminar.push(departamento); }
+          await env.DB.prepare(`DELETE FROM control_calidad WHERE id=? AND empresa_id=?${deptGuardEliminar}`).bind(...paramsEliminar).run();
           return `🗑️ Deficiencia #${defId} eliminada.`;
         }
 
@@ -10483,6 +10501,9 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!env.DB) return 'Base de datos no disponible';
         const accion = input.accion;
         const eid = empresa_id || 1;
+        // DEPT-AGENTE-01 (29/08/2026): mismo criterio que getChecklistPlantillas/
+        // getChecklistEjecuciones/actualizarChecklistEjecucion (worker.js, isDeptPrivileged).
+        const deptRestringido = !!departamento && !puedeVerTodosLosDepartamentos(rol, departamento);
         // Las 4 tablas ya existen en producción (NEW-55, worker.js) -- IF NOT EXISTS
         // es un no-op ahí; solo cubre el caso de una D1 de prueba sin ellas.
         await runDDL(env, `CREATE TABLE IF NOT EXISTS checklists_plantillas (
@@ -10505,6 +10526,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           let q = `SELECT id, nombre, descripcion, categoria, items FROM checklists_plantillas WHERE empresa_id=? AND activa=1`;
           const p = [eid];
           if (input.categoria) { q += ` AND categoria=?`; p.push(input.categoria); }
+          if (deptRestringido) { q += ` AND (departamento=? OR departamento IS NULL)`; p.push(departamento); }
           q += ` ORDER BY nombre ASC LIMIT 30`;
           const { results } = await env.DB.prepare(q).bind(...p).all().catch(() => ({ results: [] }));
           if (!results.length) return '📋 No hay plantillas de checklist guardadas' + (input.categoria ? ` en la categoría "${input.categoria}"` : '') + '.';
@@ -10523,9 +10545,9 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           if (!Array.isArray(input.items) || input.items.length === 0) return '❌ Necesito al menos un item (lista de puntos a comprobar).';
           const items = JSON.stringify(input.items.map(it => (typeof it === 'string' ? { descripcion: it } : { descripcion: it.descripcion || String(it) })));
           const { meta } = await env.DB.prepare(`
-            INSERT INTO checklists_plantillas (empresa_id, nombre, descripcion, categoria, items, activa)
-            VALUES (?,?,?,?,?,1)
-          `).bind(eid, input.nombre, input.descripcion || null, input.categoria || 'general', items).run();
+            INSERT INTO checklists_plantillas (empresa_id, nombre, descripcion, categoria, items, activa, departamento)
+            VALUES (?,?,?,?,?,1,?)
+          `).bind(eid, input.nombre, input.descripcion || null, input.categoria || 'general', items, departamento || null).run();
           return `✅ Plantilla "${input.nombre}" creada (#${meta.last_row_id}) con ${input.items.length} item(s). Puedo iniciar una inspección con ella cuando quieras.`;
         }
 
@@ -10534,6 +10556,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           const p = [eid];
           if (input.obra_id) { q += ` AND obra_id=?`; p.push(input.obra_id); }
           if (input.estado)  { q += ` AND estado=?`;   p.push(input.estado); }
+          if (deptRestringido) { q += ` AND (departamento=? OR departamento IS NULL)`; p.push(departamento); }
           q += ` ORDER BY fecha DESC, id DESC LIMIT 20`;
           const { results } = await env.DB.prepare(q).bind(...p).all().catch(() => ({ results: [] }));
           if (!results.length) return '📋 No hay inspecciones registradas' + (input.estado ? ` con estado "${input.estado}"` : '') + '.';
@@ -10553,9 +10576,11 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           let plantillaNombre = null;
           let itemsInicial = '[]';
           if (input.plantilla_id) {
-            const pl = await env.DB.prepare(`SELECT nombre, items FROM checklists_plantillas WHERE id=? AND empresa_id=?`)
+            const pl = await env.DB.prepare(`SELECT nombre, items, departamento FROM checklists_plantillas WHERE id=? AND empresa_id=?`)
               .bind(input.plantilla_id, eid).first();
-            if (!pl) return `❌ No encuentro la plantilla #${input.plantilla_id}.`;
+            if (!pl || (deptRestringido && pl.departamento && pl.departamento !== departamento)) {
+              return `❌ No encuentro la plantilla #${input.plantilla_id}.`;
+            }
             plantillaNombre = pl.nombre;
             const items = tryParse(pl.items, []);
             itemsInicial = JSON.stringify(items.map(it => ({ ...it, resultado: null, nota: '' })));
@@ -10567,11 +10592,11 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           const itemsArr = tryParse(itemsInicial, []);
           const { meta } = await env.DB.prepare(`
             INSERT INTO checklist_ejecuciones
-              (empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, resultados)
-            VALUES (?,?,?,?,?,?,?,'en_curso',?)
+              (empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, resultados, departamento)
+            VALUES (?,?,?,?,?,?,?,'en_curso',?,?)
           `).bind(eid, input.obra_id || null, input.plantilla_id || null, plantillaNombre,
                   input.titulo || plantillaNombre || 'Inspección', input.fecha || new Date().toISOString().slice(0, 10),
-                  input.inspector || null, itemsInicial).run();
+                  input.inspector || null, itemsInicial, departamento || null).run();
           // CHECKLIST-AGENTE-02 (29/08/2026): probando en producción (empresa demo) se
           // encontró que el modelo, al recibir este resultado, respondió al usuario con
           // resultados "ok"/"nok" INVENTADOS para los items -- exactamente el mismo tipo
@@ -10594,9 +10619,11 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           const ejecId = input.ejecucion_id;
           if (!ejecId) return '❌ Necesito ejecucion_id para actualizar la inspección.';
           if (!Array.isArray(input.resultados) || input.resultados.length === 0) return '❌ Necesito al menos un resultado.';
-          const actual = await env.DB.prepare(`SELECT obra_id, titulo, fecha, inspector, resultados FROM checklist_ejecuciones WHERE id=? AND empresa_id=?`)
+          const actual = await env.DB.prepare(`SELECT obra_id, titulo, fecha, inspector, resultados, departamento FROM checklist_ejecuciones WHERE id=? AND empresa_id=?`)
             .bind(ejecId, eid).first();
-          if (!actual) return `❌ No encuentro la inspección #${ejecId}.`;
+          if (!actual || (deptRestringido && actual.departamento && actual.departamento !== departamento)) {
+            return `❌ No encuentro la inspección #${ejecId}.`;
+          }
           // Fusiona los resultados nuevos sobre los items existentes (por descripción) en
           // vez de reemplazar la lista entera -- así "marca el 2º punto como nok" no borra
           // el resto de items que aún no se han contestado en este turno.
@@ -10634,9 +10661,9 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
               const yr = String(new Date().getFullYear());
               const gravedad = item.gravedad || 'moderado';
               await env.DB.prepare(`
-                INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado)
-                SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,'abierta'
-              `).bind(eid, actual.obra_id || null, ejecId, yr, eid, yr, item.descripcion, gravedad).run().catch(() => {});
+                INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado, departamento)
+                SELECT ?,?,?, 'NCR-' || ? || '-' || printf('%04d', COALESCE((SELECT COUNT(*) FROM ncrs_obra WHERE empresa_id=? AND numero LIKE 'NCR-'||?||'-%'),0)+1), ?,?,'abierta',?
+              `).bind(eid, actual.obra_id || null, ejecId, yr, eid, yr, item.descripcion, gravedad, actual.departamento || departamento || null).run().catch(() => {});
               ncrCreadas++;
             }
           }

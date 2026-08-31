@@ -83,6 +83,38 @@ reverificación tras desplegar]. 207/207 tests.
 esquemas/planos (regex sobre URL, determinista), no existe hoy un guardrail de código
 para este caso. Queda como mejora futura si se repite en producción real.
 
+### Security (2026-08-29 — DEPT-AGENTE-01: las tools de chat del agente ya filtran por departamento)
+
+Cierra la deuda anotada más abajo el mismo día ("ningún tool de `alejandra-agente` filtra
+por departamento"): `departamento` y `rol` ahora viajan desde la sesión verificada
+(`procesarConNEXUS`/`procesarConNEXUSStream`) hasta `ejecutarToolConTelemetria` y
+`ejecutarTool` — incluida la recursión de `delegar_tarea` cuando un ayudante invoca sus
+propias tools. Nuevo helper puro `puedeVerTodosLosDepartamentos(rol, departamento)` en
+`lib.js` (con tests), mismo criterio que `isDeptPrivileged()` en `worker.js`:
+superadmin/empresa_admin/desarrollador ven todos los departamentos, y "seguridad" tiene
+visión transversal — así una sesión de esos roles con un departamento activo en curso no
+queda restringida por error, algo que no habría pasado si el filtro solo mirara
+`departamento` sin `rol`.
+
+Aplicado en `gestionar_calidad` (listar/resumen/crear/resolver/actualizar/eliminar) y
+`gestionar_checklist` (listar_plantillas/crear_plantilla/listar_ejecuciones/
+iniciar_ejecucion/actualizar_ejecucion), mismo patrón `AND (departamento=? OR departamento
+IS NULL)` que sus endpoints REST equivalentes en `worker.js`
+(getControlCalidad/getChecklistPlantillas/getChecklistEjecuciones). De paso, `iniciar_
+ejecucion`/`actualizar_ejecucion` cerraron un IDOR que no estaba en el análisis inicial:
+referenciar directamente el `plantilla_id`/`ejecucion_id` de otro departamento por número
+no comprobaba el departamento del registro. Las NCR autogeneradas desde un checklist
+también heredan ahora el `departamento` de la ejecución, igual que su equivalente REST.
+
+211/211 tests del agente (207 + 4 nuevos para el helper), sin cambios de esquema en
+producción — `control_calidad`/`checklists_plantillas`/`checklist_ejecuciones` ya tienen la
+columna `departamento` vía migración; el `CREATE TABLE IF NOT EXISTS` local del agente
+(fallback para una D1 de prueba) se actualizó para declararla también en `control_calidad`.
+
+Sin verificación en vivo contra D1 real dentro de esta tarea (fuera del alcance de un test
+unitario) — pendiente confirmar con un caso real que un usuario de un departamento no
+ve/edita datos de otro por chat antes de darlo por cerrado en producción.
+
 ### Added (2026-08-29 — gestionar_checklist: Alejandra ya puede crear y rellenar checklists de inspección por chat)
 
 Continuación de "que Alejandra sea una ingeniera en condiciones": Adrián eligió "checklists
