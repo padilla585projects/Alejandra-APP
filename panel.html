@@ -24284,15 +24284,47 @@ async function borrarCorreo(gmailId) {
 
 // "Ver completo": carga el cuerpo real bajo demanda (1 llamada a Gmail por clic, no se
 // precarga toda la lista) y sustituye el resumen corto por el texto completo in situ.
+// CORREOS-VISOR-01 (01/09/2026): Adrián -- "los correos cuando se abren debe verse como
+// en la web, eso ahi que mejorarlo, ademas una vez abiertos no se pueden volver a cerrar".
+// Dos bugs reales: (1) el backend ya distinguía cuerpo HTML de texto plano (getCorreoCompleto
+// -> {cuerpo, esHtml}) pero el frontend ignoraba esHtml y siempre pintaba texto plano con
+// textContent -- un correo HTML real (con formato, imágenes, botones) se veía como texto
+// crudo; (2) expandía el resumen in-place y el guard `dataset.completo==='1'` bloqueaba
+// cualquier re-apertura sin dar forma de volver a colapsar -- no había ningún cierre.
+// Fix: overlay propio con iframe sandboxed (mismo patrón que verAlbaranBobinas()) en vez de
+// expandir en la lista -- resuelve el cierre gratis (X, botón Cerrar, clic fuera) y permite
+// pintar HTML real de forma segura: sandbox="" bloquea scripts/formularios/popups del propio
+// correo (nunca se ejecuta nada del remitente), srcdoc necesita el HTML tal cual
+// HTML-escapado (escHtml ya escapa &<>" -- exactamente la codificación que un atributo
+// srcdoc espera para decodificarse de vuelta al HTML real dentro del iframe).
 async function verCorreoCompleto(gmailId) {
-  const cont = document.getElementById(`correoResumen-${gmailId}`);
-  if (!cont || cont.dataset.completo === '1') return;
-  cont.textContent = 'Cargando…';
-  const r = await api(`/correos/${encodeURIComponent(gmailId)}/completo`);
-  if (!r.ok) { toast(r.error || 'Error al cargar el correo', 'err'); cont.textContent = ''; return; }
-  cont.dataset.completo = '1';
-  cont.style.whiteSpace = 'pre-wrap';
-  cont.textContent = r.cuerpo || '(sin contenido de texto)';
+  const m = _correosData.find(x => x.gmail_id === gmailId);
+  try {
+    const r = await api(`/correos/${encodeURIComponent(gmailId)}/completo`);
+    if (!r.ok) { toast(r.error || 'Error al cargar el correo', 'err'); return; }
+    document.getElementById('correoPreviewOverlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'correoPreviewOverlay';
+    overlay.className = 'modal-overlay open';
+    const visor = r.esHtml
+      ? `<iframe sandbox="" srcdoc="${escHtml(r.cuerpo || '')}" style="width:100%;height:65vh;border:0;background:#fff;border-radius:8px"></iframe>`
+      : `<div style="white-space:pre-wrap;font-size:13px;line-height:1.5;max-height:65vh;overflow:auto;padding:4px">${escHtml(r.cuerpo || '(sin contenido de texto)')}</div>`;
+    overlay.innerHTML = `<div class="modal" style="max-width:800px;width:96%">
+      <div class="modal-header">
+        <div class="modal-title">${escHtml(m?.asunto || 'Correo')}</div>
+        <button class="modal-close" onclick="cerrarCorreoCompleto()">×</button>
+      </div>
+      <div class="modal-body" style="padding:10px">${visor}</div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="cerrarCorreoCompleto()">Cerrar</button>
+      </div>
+    </div>`;
+    overlay.onclick = e => { if (e.target === overlay) cerrarCorreoCompleto(); };
+    document.body.appendChild(overlay);
+  } catch (e) { toast('❌ ' + e.message, 'err'); }
+}
+function cerrarCorreoCompleto() {
+  document.getElementById('correoPreviewOverlay')?.remove();
 }
 
 // Adrián: "la idea es pedírselo por el chat normal y que lo haga" -- sin texto
@@ -25220,7 +25252,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.26';
+const PANEL_APP_VERSION = '9.27';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
