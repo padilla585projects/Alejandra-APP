@@ -24225,7 +24225,7 @@ async function _correosAutoGestionar(nuevos) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
       body: JSON.stringify({
-        mensaje: `Se han sincronizado ${nuevos} correo(s) nuevo(s) en mi bandeja. Gestiónalos sin preguntarme: asigna una categoría a cada uno, archiva los que ya no necesiten mi atención (promocionales, informativos, avisos ya resueltos) y marca como leídos los puramente informativos. No archives ni marques leído ningún correo que parezca requerir mi atención o respuesta -- esos solo categorízalos. No borres nada ni envíes ni respondas ningún correo real.`,
+        mensaje: `Se han sincronizado ${nuevos} correo(s) nuevo(s) en mi bandeja de entrada. Gestiónalos sin preguntarme: asigna una categoría a cada uno, archiva los que ya no necesiten mi atención (promocionales, informativos, avisos ya resueltos) y marca como leídos los puramente informativos. No archives ni marques leído ningún correo que parezca requerir mi atención o respuesta -- esos solo categorízalos. No borres nada ni envíes ni respondas ningún correo real.`,
         usuario_id: usuarioId,
         empresa_id: SESSION?.empresa_id || null,
         canal: 'panel',
