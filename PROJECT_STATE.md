@@ -1,6 +1,18 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-08-31
+- Actualizado: 2026-09-01
+- Estado (2026-09-01): **GESTION-AUTO-CORREOS-01 — Alejandra administra el correo
+  (categoriza+archiva+marca leído sin preguntar en cada sincronización; enviar sigue
+  exigiendo confirmación humana, sin cambios), verificado end-to-end tras encontrar y
+  arreglar tres bugs reales encadenados:** (1) routing — la regex de "ingeniería" atrapaba
+  la palabra suelta "bandeja" (de "bandeja portacables"), así que un mensaje sobre
+  gestionar el correo con "en mi bandeja" perdía acceso a `delegar_tarea` y el modelo,
+  sin la tool, llegó a **inventarse correos ficticios 3 veces** (se autodetectó al 4º
+  intento); (2) `leer_gmail` no incluía el `gmail_id` real, así que `categorizar_correos`
+  fallaba siempre (404, id inventado); (3) el ayudante se paraba con un texto de
+  transición y nunca llegaba a llamar a la tool. Verificado consultando D1 directamente
+  (no el texto del chat): 5/5 correos gestionados, categorías coherentes. Detalle en
+  `HANDOFF.md`/`TASKS.md`.
 - Estado (2026-08-31, continuación): **CORREOS-PANEL-01 cerrada — Gmail real reconectado y
   verificado de extremo a extremo.** Encontrado y arreglado de paso un bug real:
   `GMAIL_OAUTH_SCOPES` no pedía scope de email, por eso la cuenta se guardaba como

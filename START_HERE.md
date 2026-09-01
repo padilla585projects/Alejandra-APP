@@ -4,14 +4,25 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**GESTION-AUTO-CORREOS-01, cerrada de verdad (2026-09-01):** Adrián pidió que Alejandra
+"administre completamente el correo" — alcance acotado con `AskUserQuestion` (enviar sigue
+exigiendo confirmación humana; categorizar/archivar/marcar leído automático en cada
+sincronización, sin borrar). Verificando en vivo aparecieron y se arreglaron **tres bugs
+reales encadenados**: un enrutamiento erróneo por una regex ambigua ("bandeja" de cableado
+vs. "bandeja" de correo) que dejaba inalcanzable el ayudante de Correos y llevó al modelo a
+**inventarse correos ficticios 3 veces** (detectado por el propio modelo); `leer_gmail` sin
+el id real de cada correo (causaba 404 siempre en `categorizar_correos`); y el ayudante
+parándose a narrar en vez de ejecutar la tool. Verificado de extremo a extremo consultando
+el estado real en D1 (no el texto del chat): 5/5 correos gestionados, categorías
+coherentes. Detalle en `PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
+
 **CORREOS-PANEL-01, cerrada de verdad (2026-08-31):** el Gmail real de Adrián estaba con el
 token OAuth2 revocado; de paso se encontró y arregló un bug real (`GMAIL_OAUTH_SCOPES` sin
 scope de email, causaba el "(sin email)" y rompía la deduplicación de cuentas). Tras el fix
 y que Adrián reconectara, verificado de extremo a extremo con Claude in Chrome leyendo el
 cuerpo real de las respuestas: sincronización real (`nuevos:5`) y "Organizar con Alejandra"
-devolviendo un resumen real con datos concretos de sus correos. Matiz sin decidir: ese
-prompt no guarda la categoría por correo (`categorizar_correos` no se llamó) — pendiente de
-que Adrián diga si lo quiere así. Detalle en `PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
+devolviendo un resumen real con datos concretos de sus correos. Detalle en
+`PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
 
 **CORREOS-PANEL-01 completada, desplegada y verificada (2026-08-17):** panel de correos por
 usuario en `panel.html` (sincroniza Gmail real, categoriza dentro de la app, redacta/envía),

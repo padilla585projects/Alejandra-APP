@@ -1,5 +1,89 @@
 # Handoff — Alejandra 2.0
 
+## GESTION-AUTO-CORREOS-01 — Alejandra administra el correo, tres bugs reales encadenados (2026-09-01)
+
+- Contexto: tras confirmar la sincronización real de Gmail, Adrián pidió "que guarde la
+  categoria tambien,que conteste correos. que administre completamente el correo quiero".
+  Alcance acotado ANTES de tocar código, con `AskUserQuestion` (decisión suya, no mía):
+  (1) enviar/responder correos SIGUE exigiendo confirmación humana explícita
+  (`CONFIRMO ENVIO`, sin cambios respecto a ADR-0022) — nunca autónomo total; (2)
+  categorizar/archivar/marcar leído SÍ sin preguntar, automáticamente en cada
+  sincronización (no solo cuando se pide por chat); (3) alcance de lo automático:
+  categorizar + archivar + marcar leído, explícitamente NO borrar.
+- **Implementación inicial:** `TOOL_CATEGORIZAR_CORREOS` (`alejandra-agente/worker.js`)
+  ampliada con `archivar`/`marcar_leido` opcionales por correo (mismo nombre de tool para
+  no romper el test que comprueba el catálogo exacto del ayudante); `systemPrompt` del
+  ayudante "correos" reescrito con el criterio de cuándo archivar/marcar leído (nunca si
+  el correo parece requerir respuesta/atención); `panel.html` con `_correosAutoGestionar()`
+  — dispara un mensaje en segundo plano al chat (sin pintarlo, Adrián no pidió verlo como
+  conversación) tras `sincronizarCorreosPanel()` y tras el aviso periódico de correo nuevo
+  (`cargarNotificaciones`, cada 2 min). Desplegado (`alejandra-agente` + Pages, versión
+  9.26).
+- **Verificación en vivo — donde se puso interesante.** Probé "Organizar con Alejandra" a
+  petición de Adrián ("prueba a que alejandra los ordene a ver si puede") y la respuesta
+  parecía un éxito real: un resumen priorizado con datos concretos (Anomaly 8,98€ pago
+  fallido, límite de Anthropic, plazo de Google AI Studio 12/oct...). Reporté esto como
+  funcionando. **Era un error de metodología mío**: solo miré el texto renderizado del
+  chat, nunca los eventos SSE crudos ni si `categorizar_correos` se había llamado de
+  verdad (no había ningún `PUT /correos/:id`, lo cual ya anoté como "matiz" en su momento
+  sin investigar la causa).
+- **Bug 1 — routing, la causa real de fondo:** al probar el flujo automático con un
+  mensaje real ("Se han sincronizado N correos... en mi bandeja"), el router clasificó el
+  mensaje como experto `ingenieria`, que NO tiene `delegar_tarea` en su catálogo
+  (`TOOLS_POR_EXPERTO.ingenieria`, a diferencia de `app`/`tecnico`/`completo`). Causa:
+  `REGEX_ROUTES` (capa 1, evaluada en orden, la primera regla de ingeniería) matchea la
+  palabra suelta `bandeja` (pensada para "bandeja portacables", cableado) — "en mi
+  **bandeja**" (de correo) también matchea, y esta regla se evalúa ANTES que la ya
+  existente `CORREO-AYUDANTE-ROUTING-01` (12/08/2026) que router correctamente "mi
+  correo/bandeja de entrada/gmail" → `app`. Consecuencia grave, no solo un fallo silencioso:
+  el modelo, al no tener `delegar_tarea` disponible, **se inventó correos ficticios tres
+  veces seguidas** en turnos anteriores de esta misma sesión de chat (confirmado leyendo su
+  propia herramienta `pensar`: "en los 3 primeros intentos inventé respuestas con correos
+  ficticios... error grave de confabulación") — y esos son probablemente los datos
+  "reales" que reporté como una organización exitosa. Al 4º intento el modelo se dio
+  cuenta solo y lo guardó en su memoria como error, en vez de seguir inventando. Fix:
+  negative lookahead `bandeja(?!\s+de\s+entrada)` en la regla de ingeniería + `
+  TOOL_DELEGAR_TAREA` añadida también al catálogo `ingenieria` (defensa en profundidad,
+  por si otro mensaje real cae ahí por cualquier otro motivo).
+- **Bug 2:** con el routing ya arreglado, `leer_gmail` (`alejandra-agente/worker.js`)
+  nunca incluía `m.id` (el gmail_id real) en el texto formateado que le devuelve al
+  modelo, aunque `categorizar_correos` exige explícitamente "el mismo id que devolvió
+  leer_gmail". El modelo inventaba un id, y `actualizarCorreoCache()` (`worker.js`)
+  devuelve `404 Correo no encontrado en la caché` cuando el id no coincide con ninguna
+  fila real — probado en vivo: **5 de 5 con error**. Fix: `[id:${m.id}]` añadido al
+  formato de cada línea.
+- **Bug 3:** con los ids ya correctos, el ayudante seguía sin categorizar nada — se
+  paraba con un texto de transición ("Perfecto, tengo los N correos. Ahora analizo/aplico
+  la gestión...") justo después de `leer_gmail`, y el bucle de `delegar_tarea`
+  (`while (ayResp.stop_reason === 'tool_use' ...)`) corta la delegación en cuanto la
+  respuesta no es una llamada a tool — así que ese texto era el final de la delegación,
+  sin haber llamado nunca a `categorizar_correos`. Reproducido dos veces seguidas; en la
+  segunda, el propio modelo lo detectó y lo guardó en memoria: "Ayudante correos — se
+  queda en análisis sin ejecutar acciones". Una instrucción explícita en el `systemPrompt`
+  prohibiendo el texto de transición NO bastó por sí sola (se probó y siguió fallando).
+  Fix efectivo: la instrucción se inyecta pegada al propio resultado de `leer_gmail` (solo
+  cuando la instrucción original pedía gestionar/organizar, no en una lectura simple) —
+  mucho más eficaz que la misma instrucción al principio del prompt.
+- **Verificación final, de verdad esta vez:** tras los tres fixes, repetido el mismo
+  mensaje real → `categorizar_correos` devolvió "✅ 5 correo(s) gestionados (4 archivados,
+  4 marcados leídos)", 0 errores. Confirmado consultando **directamente el estado en D1**
+  (`GET /correos?archivados=1` con el token real), no el texto del chat: Shopify/Google
+  Cloud → categoría "Promocional", archivados y marcados leídos; AbuseIPDB (límite de API
+  agotado) → categoría "Técnico", sin archivar ni marcar leído (correcto, podría requerir
+  acción). Decisiones de categorización razonables y consistentes con el contenido real.
+- **Lección para dejar anotada:** no basta con verificar que el texto de la respuesta del
+  chat "suena bien" ni con comprobar solo el código HTTP de un endpoint — hay que verificar
+  el efecto real (aquí, el estado en D1) y, ante cualquier duda, leer los eventos SSE
+  crudos (`tool_start`/`tool_end`) en vez de fiarse del texto final. El propio modelo tiene
+  un historial real de inventar datos cuando le falta una tool, así que una respuesta
+  "convincente" no es evidencia suficiente por sí sola.
+- Desplegado: `alejandra-agente` (4 versiones sucesivas, una por cada fix, todas con
+  `/health` verde) y Pages (`panel.html`, wording del mensaje automático). `worker.js`
+  también recibió el fix de scope de Gmail y el flag `activa` en
+  `getCorreosNuevosTodasCuentas` (ver sección siguiente, misma jornada).
+- Sin pendientes de `GESTION-AUTO-CORREOS-01`. Detalle también en
+  `TASKS.md`/`PROJECT_STATE.md`.
+
 ## CORREOS-PANEL-01 — Gmail real roto: token revocado, no confirmado como se dijo (2026-08-31)
 
 - Contexto: único pendiente que quedaba abierto de `CORREOS-PANEL-01` (2026-08-17) — no se

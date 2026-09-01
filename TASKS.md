@@ -1,23 +1,40 @@
 # TASKS — Cola operativa inmediata
 
-Estado (actualizado 2026-08-31, continuación): **CORREOS-PANEL-01 cerrada de verdad —
-Gmail real reconectado y verificado end-to-end.** Cadena completa de esta sesión: (1) una
-primera verificación dio un falso positivo por comprobar solo el código HTTP de
-`/correos/sincronizar` (devuelve `200` incluso al fallar, por diseño); (2) al probar
-"Organizar con Alejandra" se destapó el fallo real: refresh token de Gmail
-caducado/revocado (`Token has been expired or revoked.`); (3) se encontró un bug de paso —
-`GMAIL_OAUTH_SCOPES` no pedía el scope de email, así que la cuenta se guardaba como
-"(sin email)" y el `ON CONFLICT(usuario_id, email_conectado)` nunca deduplicaba (NULL≠NULL
-en SQL) — añadido `userinfo.email` al scope, desplegado; (4) Adrián reconectó Gmail desde
-"Mi cuenta"; (5) verificado de nuevo con Claude in Chrome, esta vez leyendo el cuerpo real
-de las respuestas: `POST /correos/sincronizar` → `{ok:true,nuevos:5,total:10}`, y
-"Organizar con Alejandra" leyó los correos reales y devolvió un resumen priorizado con
-datos concretos (importes, plazos, remitentes reales). **Matiz encontrado, no arreglado a
-propósito (pendiente de decisión de Adrián):** pedirle "organiza por categoría" hace que
-responda con un resumen en el chat, pero NO llama a `categorizar_correos` (sin `PUT
-/correos/:id` en la red) — no se guarda ninguna etiqueta visible en la lista. Sigue
-también abierta la verificación en vivo del quiosco de fichaje (`kiosco.html`, ARC-022,
-2026-08-11) — ver `ARCHITECT_BACKLOG.md`.
+Estado (actualizado 2026-09-01): **GESTION-AUTO-CORREOS-01 — Alejandra administra el
+correo (categoriza + archiva + marca leído automáticamente al sincronizar), verificado
+end-to-end de verdad tras encontrar y arreglar TRES bugs reales encadenados.** Adrián pidió
+"que administre completamente el correo" tras confirmar la sincronización real de Gmail;
+alcance acotado explícitamente por AskUserQuestion: enviar/responder SIGUE exigiendo
+confirmación humana (sin cambios, ADR-0022); categorizar/archivar/marcar leído se hacen
+SIN preguntar, automáticamente en cada sincronización (manual o el aviso de correo nuevo).
+- **Bug 1 (routing):** la regex de "ingeniería" capturaba la palabra suelta "bandeja"
+  (pensada para "bandeja portacables") — un mensaje sobre gestionar el correo con "en mi
+  bandeja" se clasificaba como ingeniería, que no tiene `delegar_tarea`, dejando
+  inalcanzable el ayudante de Correos. El modelo, sin la tool, llegó a **inventarse
+  correos ficticios 3 veces seguidas** en vez de decir que no podía — lo detectó él mismo
+  al 4º intento y lo guardó como error en su memoria. Arreglado con negative lookahead
+  (`bandeja(?!\s+de\s+entrada)`) + `delegar_tarea` añadida también al catálogo de
+  "ingeniería" como defensa en profundidad.
+- **Bug 2:** `leer_gmail` nunca incluía el `gmail_id` en el texto que le da al modelo, así
+  que `categorizar_correos` (que exige ese mismo id) recibía ids inventados y
+  `actualizarCorreoCache()` devolvía 404 siempre — 5 de 5 correos "con error" en la prueba
+  real. Añadido `[id:XXX]` al listado.
+- **Bug 3:** el ayudante se paraba con un texto de transición ("ahora analizo/aplico...")
+  justo después de leer los correos y terminaba el turno sin llamar a
+  `categorizar_correos` (el bucle de delegación exige una llamada a tool para seguir, un
+  texto lo corta ahí). Una instrucción en el `systemPrompt` no bastó; se reforzó pegada al
+  propio resultado de `leer_gmail`, y ENTONCES sí funcionó: 5/5 gestionados sin error,
+  categorías coherentes (Shopify/Google Cloud → "Promocional", archivados+leídos;
+  AbuseIPDB → "Técnico", sin archivar), confirmado consultando D1 real (`GET /correos`),
+  no solo el texto del chat.
+- **Aviso importante:** un reporte anterior de esta misma sesión daba por buena una
+  "organización" que en realidad estaba parcial/totalmente alucinada por el bug 1 — quedó
+  corregido en `HANDOFF.md`. Lección: verificar el efecto real (estado en D1), no el texto
+  del chat.
+- Desplegado: `alejandra-agente` (4 despliegues sucesivos, uno por fix, todos con
+  `/health` verde) y Pages (`panel.html`, run verificado en verde).
+- Sigue abierta la verificación en vivo del quiosco de fichaje (`kiosco.html`, ARC-022,
+  2026-08-11) — ver `ARCHITECT_BACKLOG.md`.
 
 Estado (actualizado 2026-08-31): **DEPT-AGENTE-01 revisada, fusionada (PR #129), desplegada
 y verificada en vivo.** Cierra la deuda de seguridad anotada el 2026-08-29: ningún tool de
