@@ -2425,7 +2425,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <!-- MIS TAREAS PROGRAMADAS (TAREAS-PROGRAMADAS-01, 01/09/2026) -->
       <div class="page" id="pageTareasProgramadas">
         <div class="page-title">🕐 Mis Tareas Programadas</div>
-        <div class="page-sub">Correos y recordatorios que le has pedido a Alejandra que programe — se crean por chat ("prográmame un correo a...", "avísame a las..."), aquí solo puedes verlos y cancelarlos.</div>
+        <div class="page-sub">Correos y recordatorios para una fecha/hora futura exacta — pídeselos a Alejandra por chat ("prográmame un correo a...", "avísame a las...") o créalos aquí directamente.</div>
+        <div class="tbl-toolbar">
+          <button class="btn btn-primary" onclick="abrirModalNuevaTareaProgramada()">+ Nueva tarea</button>
+        </div>
         <div id="tareasProgList" style="display:flex;flex-direction:column;gap:8px"></div>
         <div id="tareasProgVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
           🕐 No tienes tareas programadas todavía.<br>
@@ -24108,6 +24111,64 @@ async function cancelarTareaProgramada(id) {
   cargarTareasProgramadas();
 }
 
+// TAREAS-PROGRAMADAS-01 (01/09/2026, ampliación): crear directamente desde el panel, sin
+// pasar por el chat -- ver la nota junto a crearTareaProgramada() en worker.js sobre por qué
+// aquí no hace falta el código "CONFIRMO ENVIO" de la vía chat.
+function _tareaProgToggleTipo() {
+  const esCorreo = document.getElementById('mTareaTipo').value === 'email_gmail';
+  document.getElementById('mTareaCamposRecordatorio').style.display = esCorreo ? 'none' : 'block';
+  document.getElementById('mTareaCamposCorreo').style.display = esCorreo ? 'block' : 'none';
+}
+function abrirModalNuevaTareaProgramada() {
+  const enUnaHora = new Date(Date.now() + 60 * 60000);
+  enUnaHora.setMinutes(0, 0, 0);
+  const defaultVal = enUnaHora.toISOString().slice(0, 16);
+  const html = `
+    <div class="form-group"><div class="form-label">Tipo</div>
+      <select class="form-input" id="mTareaTipo" onchange="_tareaProgToggleTipo()">
+        <option value="recordatorio">⏰ Recordatorio (push / Telegram)</option>
+        <option value="email_gmail">✉️ Correo (Gmail)</option>
+      </select>
+    </div>
+    <div class="form-group"><div class="form-label">Fecha y hora *</div><input class="form-input" type="datetime-local" id="mTareaFecha" value="${defaultVal}"></div>
+    <div id="mTareaCamposRecordatorio">
+      <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mTareaTitulo" placeholder="Ej: Revisar acceso panel Office"></div>
+      <div class="form-group"><div class="form-label">Mensaje *</div><input class="form-input" id="mTareaMensaje" placeholder="Qué quieres que te recuerde"></div>
+    </div>
+    <div id="mTareaCamposCorreo" style="display:none">
+      <div class="form-group"><div class="form-label">Para *</div><input class="form-input" type="email" id="mTareaPara" placeholder="destinatario@ejemplo.com"></div>
+      <div class="form-group"><div class="form-label">Asunto *</div><input class="form-input" id="mTareaAsunto"></div>
+      <div class="form-group"><div class="form-label">Cuerpo</div><textarea class="form-input" id="mTareaCuerpo" rows="4" placeholder="Opcional"></textarea></div>
+    </div>`;
+  abrirModal('+ Nueva tarea programada', html, guardarNuevaTareaProgramada);
+  document.getElementById('modalOkBtn').textContent = '🕐 Programar';
+}
+async function guardarNuevaTareaProgramada() {
+  const tipo = document.getElementById('mTareaTipo').value;
+  const dtRaw = document.getElementById('mTareaFecha').value;
+  if (!dtRaw) return toast('⚠️ Falta la fecha y hora', 'err');
+  const d = new Date(dtRaw);
+  if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return toast('⚠️ La fecha y hora debe ser futura', 'err');
+  const fecha_hora = d.toISOString().slice(0, 19).replace('T', ' ');
+  const body = { tipo, fecha_hora };
+  if (tipo === 'email_gmail') {
+    body.para = document.getElementById('mTareaPara').value.trim();
+    body.asunto = document.getElementById('mTareaAsunto').value.trim();
+    body.cuerpo = document.getElementById('mTareaCuerpo').value;
+    if (!body.para || !body.asunto) return toast('⚠️ Faltan "Para" o "Asunto"', 'err');
+    if (!confirm(`¿Programar el envío de este correo a ${body.para} el ${_tareasProgFmtFecha(fecha_hora)}?`)) return;
+  } else {
+    body.titulo = document.getElementById('mTareaTitulo').value.trim();
+    body.mensaje = document.getElementById('mTareaMensaje').value.trim();
+    if (!body.titulo || !body.mensaje) return toast('⚠️ Faltan "Título" o "Mensaje"', 'err');
+  }
+  const r = await api('/tareas-programadas', { method: 'POST', body: JSON.stringify(body) });
+  if (!r.ok) { toast(r.error || 'Error al programar', 'err'); return; }
+  toast('✅ Tarea programada', 'ok');
+  cerrarModal();
+  cargarTareasProgramadas();
+}
+
 // CORREOS-PANEL-01-v4 (17/08/2026): "cambiar rápido" en el sitio donde de verdad hace
 // falta -- sin ir a Mi cuenta cada vez. Solo visible con 2+ cuentas conectadas.
 async function _correosCargarSelectorCuentas() {
@@ -25319,7 +25380,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.28';
+const PANEL_APP_VERSION = '9.29';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

@@ -5559,6 +5559,7 @@ export default {
       // internalGmailEnviar/internalGmailListar, ver comentario en _getAuthPlano.
       if (path === '/internal/telegram/enviar' && method === 'POST') return await internalTelegramEnviar(request, env);
       if (path === '/tareas-programadas' && method === 'GET')       return await getTareasProgramadas(request, env);
+      if (path === '/tareas-programadas' && method === 'POST')      return await crearTareaProgramada(request, env);
       if (path.match(/^\/tareas-programadas\/\d+$/) && method === 'DELETE') return await cancelarTareaProgramadaPanel(parseInt(path.split('/')[2]), request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
@@ -14855,6 +14856,43 @@ async function getTareasProgramadas(request, env) {
     `SELECT id, tipo, fecha_hora_programada, estado, payload, error_msg, creado_at FROM tareas_programadas WHERE usuario_id=? ORDER BY fecha_hora_programada DESC LIMIT 100`
   ).bind(auth.usuario_id).all();
   return json({ ok: true, tareas: results || [] });
+}
+
+// TAREAS-PROGRAMADAS-01 (01/09/2026, ampliación): Adrián pidió poder crear la tarea
+// directamente desde el panel, sin depender del chat -- la verificación en vivo mostró que
+// el flujo de confirmación por chat (delegar_tarea -> ayudante "correos" -> "CONFIRMO ENVIO
+// <código>") es frágil en conversaciones largas (el modelo se lía entre turnos). Aquí la
+// propia acción de rellenar el formulario y pulsar "Programar" ES la confirmación explícita
+// -- no hace falta el código hex de la vía chat (ese existe para que el modelo nunca pueda
+// autoconfirmarse a sí mismo; aquí no hay modelo de por medio, el humano ya está confirmando
+// con el clic, igual que cancelarTareaProgramadaPanel no pide nada más que el clic).
+async function crearTareaProgramada(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const tipo = String(body.tipo || '').trim();
+  const fechaHora = String(body.fecha_hora || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(fechaHora)) return err('fecha_hora inválida (se espera "YYYY-MM-DD HH:MM", UTC)', 400);
+  const fechaUTC = new Date(fechaHora.replace(' ', 'T') + 'Z');
+  if (isNaN(fechaUTC.getTime()) || fechaUTC.getTime() <= Date.now()) return err('La fecha/hora debe ser futura', 400);
+  let payload;
+  if (tipo === 'email_gmail') {
+    const para = String(body.para || '').trim();
+    const asunto = String(body.asunto || '').trim();
+    if (!para || !asunto) return err('Faltan "para" o "asunto"', 400);
+    payload = { para, asunto, cuerpo: String(body.cuerpo || '') };
+  } else if (tipo === 'recordatorio') {
+    const titulo = String(body.titulo || '').trim();
+    const mensaje = String(body.mensaje || '').trim();
+    if (!titulo || !mensaje) return err('Faltan "titulo" o "mensaje"', 400);
+    payload = { titulo, mensaje };
+  } else {
+    return err('tipo debe ser "email_gmail" o "recordatorio"', 400);
+  }
+  await env.DB.prepare(
+    `INSERT INTO tareas_programadas (usuario_id, empresa_id, tipo, fecha_hora_programada, payload) VALUES (?,?,?,?,?)`
+  ).bind(auth.usuario_id, auth.empresa_id || null, tipo, fechaUTC.toISOString().slice(0, 19).replace('T', ' '), JSON.stringify(payload)).run();
+  return json({ ok: true });
 }
 
 async function cancelarTareaProgramadaPanel(id, request, env) {

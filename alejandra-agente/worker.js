@@ -13112,8 +13112,14 @@ async function ejecutarTareasProgramadas(env) {
         const canalesOk = [];
         const canalesFallo = [];
         // Push -- mismo patrón que case 'enviar_push': token en alejandra_memoria.
+        // TAREAS-PROGRAMADAS-01, bug real encontrado en verificación en vivo (01/09/2026):
+        // t.usuario_id viene de una columna INTEGER (tareas_programadas.usuario_id) y D1 lo
+        // devuelve como number; alejandra_memoria.usuario_id es TEXT ("3", "adrian"...) y el
+        // binding de D1 no aplica la conversión de afinidad que sí aplica un literal SQL --
+        // el SELECT nunca encontraba el token aunque existiera. Mismo fix que scan_request
+        // (línea ~14250): forzar String().
         try {
-          const row = await env.DB.prepare(`SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`).bind(t.usuario_id).first();
+          const row = await env.DB.prepare(`SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`).bind(String(t.usuario_id)).first();
           if (row) {
             const r = await enviarFCM(env, row.contenido, payload.titulo, payload.mensaje);
             if (r.ok) canalesOk.push('push'); else canalesFallo.push('push');
