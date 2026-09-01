@@ -1,5 +1,47 @@
 # Handoff — Alejandra 2.0
 
+## TAREAS-PROGRAMADAS-01 — implementada, desplegada y verificada en vivo (2026-09-01)
+
+- Feature completa: `programar_correo`/`programar_recordatorio`/`listar_tareas_programadas`/
+  `cancelar_tarea_programada` en `alejandra-agente/worker.js`, cron de 5 min, tabla
+  `tareas_programadas` (migrada), endpoints en `worker.js` raíz
+  (`/internal/telegram/enviar`, `GET`/`DELETE /tareas-programadas`), pantalla "🕐 Mis Tareas
+  Programadas" en `panel.html`. Desplegado en los dos Workers + Pages (v9.28).
+- **Bloqueo de infraestructura, resuelto con Adrián:** el cron de 5 min chocó con el límite
+  de Workers Free (5 cron triggers por CUENTA, no por Worker — la cuenta tiene 15 Workers,
+  varios de otros proyectos de Adrián: `nexus-prueba`, `argos-control-plane`, `cania`,
+  `recambia-api`, `getaway-web/gateway`, `apex-worker`, `atlas-worker`, `hasio`,
+  `canai-worker`, `numa-worker/api/app`). Revisados los 15 uno a uno vía dashboard (no hay
+  API de wrangler para listar cron triggers de otra cuenta/worker sin código propio) —
+  solo `apex-worker` (cada 30 min) y `canai-worker` (diario 03:00) tenían cron activo.
+  Adrián eligió liberar el de `apex-worker`.
+- **Verificación en vivo — end to end, con hallazgos reales:**
+  1. Recordatorio de prueba (chat) → falló 3 veces con "Sin canal disponible" pese a tener
+     token push válido. Bug real encontrado y corregido (ver `CHANGELOG.md`,
+     `String(t.usuario_id)` en el `bind()` contra `alejandra_memoria`). Confirmado con un
+     4º recordatorio real que sí llegó tras el fix.
+  2. Correo de prueba a `padilla585@gmail.com` (chat, con `CONFIRMO ENVIO`) → **el flujo de
+     confirmación por chat resultó frágil**: en una conversación larga el modelo llegó a
+     pedir el mismo código dos veces sin haberlo procesado, luego generó un código nuevo
+     distinto, y en un punto afirmó (incorrectamente) que "no puede aceptar códigos que no
+     generó en esta conversación" sin siquiera reintentar la tool. Se resolvió con una
+     instrucción muy directa forzando la llamada a la tool, pero **quedó demostrado que el
+     mecanismo no es fiable en turnos largos** — motivó añadir el formulario directo del
+     panel (ver abajo) en vez de depender solo del chat. El correo sí llegó a
+     `padilla585@gmail.com` finalmente (`estado='enviada'`, verificado en D1).
+  3. Cancelar una tarea antes de su hora → el `confirm()` nativo del navegador bloquea la
+     automatización de pruebas (no es un bug de producto: un usuario real haciendo clic no
+     tiene este problema), verificado en su lugar llamando al endpoint `DELETE` directo
+     — funciona correctamente (`estado='cancelada'`).
+- **Feature añadida a raíz de lo anterior:** formulario "+ Nueva tarea" en "Mis Tareas
+  Programadas" (`panel.html`, v9.29) — crea correos/recordatorios sin pasar por el chat,
+  `POST /tareas-programadas` nuevo en `worker.js`. Verificado en vivo (POST 200, fila
+  creada, cancelación posterior también verificada).
+- **Pendiente / no verificado:** el correo de prueba llegó según D1 (`estado='enviada'`,
+  sin `error_msg`), pero no se comprobó la bandeja de entrada real de
+  `padilla585@gmail.com` para confirmar visualmente que llegó — dar por bueno el estado de
+  D1 salvo que Adrián reporte lo contrario.
+
 ## GESTION-AUTO-CORREOS-01 — Alejandra administra el correo, tres bugs reales encadenados (2026-09-01)
 
 - Contexto: tras confirmar la sincronización real de Gmail, Adrián pidió "que guarde la

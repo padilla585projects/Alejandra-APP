@@ -4,6 +4,43 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-01 — verificación en vivo de TAREAS-PROGRAMADAS-01: recordatorios push nunca llegaban pese a tener token válido)
+
+Verificando en producción el cron de tareas programadas (`ejecutarTareasProgramadas()`,
+`alejandra-agente/worker.js`), los tres primeros recordatorios de prueba fallaron con
+`"Sin canal disponible (push/Telegram no vinculados) -- probados: telegram"` pese a que
+Adrián sí tiene un token FCM registrado. Causa real: `alejandra_memoria.usuario_id` es
+`TEXT` (`"3"`, `"adrian"`...) pero `tareas_programadas.usuario_id` es `INTEGER`, y D1
+devuelve ese campo como `number` — el `.bind(t.usuario_id)` contra la columna TEXT nunca
+encontraba el token (a diferencia de un literal SQL vía CLI, D1 no aplica la misma
+conversión de afinidad al hacer bind de un parámetro). Mismo fix ya usado en
+`scan_request` (`String(uid)`): forzar `String(t.usuario_id)` en el `bind()`. Confirmado
+con un cuarto recordatorio real que sí llegó tras el fix.
+
+### Added (2026-09-01 — crear tareas programadas directamente desde el panel, sin pasar por el chat)
+
+La verificación en vivo también mostró lo frágil que resulta el flujo de confirmación de
+`programar_correo` por chat (`delegar_tarea` → ayudante "correos" → `"CONFIRMO ENVIO
+<código>"`) en conversaciones largas: el modelo llegó a perder el hilo entre turnos y
+repetir la petición de confirmación con códigos que ya se habían escrito. Añadido un
+formulario en "Mis Tareas Programadas" (`panel.html`) — `POST /tareas-programadas` nuevo
+en `worker.js` — para crear correos/recordatorios directamente; el propio envío del
+formulario es la confirmación explícita, no hace falta el código hex de la vía chat.
+
+### Added (2026-09-01 — TAREAS-PROGRAMADAS-01: Alejandra programa correos y recordatorios a hora exacta)
+
+Nueva función para pedirle a Alejandra "mándale un correo a X a las 17:00" o "avísame a
+las 17:00 para Y" y que se ejecute sola de verdad, no solo si el usuario sigue delante del
+chat. Tabla `tareas_programadas` (migrada y verificada contra D1) + tools nuevas
+(`programar_correo`, `programar_recordatorio`, `listar_tareas_programadas`,
+`cancelar_tarea_programada`) + cron de 5 min en `alejandra-agente` que las ejecuta. Los
+correos reutilizan el mecanismo de confirmación humana ya existente (`"CONFIRMO ENVIO
+<código>"`); los recordatorios se envían por push y/o Telegram sin confirmación (no
+destructivos). Pantalla nueva "🕐 Mis Tareas Programadas" en `panel.html`. El cron de 5 min
+chocó con el límite de 5 cron triggers por cuenta (Workers Free) — se liberó un hueco
+quitando el cron de `apex-worker` (proyecto ajeno, con autorización explícita de Adrián)
+en vez de subir de plan.
+
 ### Fixed (2026-08-29 — el fallback a GPT-4o no cubría el tope de uso de Anthropic, y /health no lo detectaba)
 
 Verificando `detectar_conflictos_disciplinas` en vivo (empresa demo), el chat falló con
