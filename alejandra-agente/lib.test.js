@@ -1827,13 +1827,13 @@ describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
     expect(bloque).not.toMatch(/TOOL_LEER_GMAIL|TOOL_ENVIAR_GMAIL/);
   });
 
-  it('AYUDANTES.correos declara exactamente leer_gmail + enviar_gmail + categorizar_correos', () => {
+  it('AYUDANTES.correos declara exactamente leer_gmail + enviar_gmail + categorizar_correos + programar_correo', () => {
     const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
     const inicio = src.indexOf('const AYUDANTES = {');
     const fin = src.indexOf('\n};', inicio);
     const bloque = src.slice(inicio, fin);
     expect(inicio).toBeGreaterThanOrEqual(0);
-    expect(bloque).toMatch(/correos:\s*\{\s*tools:\s*\[TOOL_LEER_GMAIL,\s*TOOL_ENVIAR_GMAIL,\s*TOOL_CATEGORIZAR_CORREOS\]/);
+    expect(bloque).toMatch(/correos:\s*\{\s*tools:\s*\[TOOL_LEER_GMAIL,\s*TOOL_ENVIAR_GMAIL,\s*TOOL_CATEGORIZAR_CORREOS,\s*TOOL_PROGRAMAR_CORREO\]/);
   });
 
   it('extraerCodigosConfirmacionEnvio extrae solo "CONFIRMO ENVIO <hex6>", en mayúsculas', () => {

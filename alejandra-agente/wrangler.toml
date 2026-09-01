@@ -39,8 +39,13 @@ id = "4c9ebd2899d74bb7961786b70f25519c"
 
 # Cron: Alejandra despierta 6 veces al día (ahorro ~65% vs cada hora)
 # UTC 5=7h, 8=10h, 11=13h, 14=16h, 17=19h, 19=21h (hora España)
+# TAREAS-PROGRAMADAS-01 (01/09/2026): "*/5 * * * *" ejecuta tareas_programadas vencidas
+# (correos/recordatorios a hora exacta) -- despachado por event.cron en scheduled(),
+# ANTES de la lógica horaria de arriba (que no mira event.cron), ver comentario en
+# scheduled(). Precisión de 5 min decidida con Adrián: suficiente para avisos/correos sin
+# disparar el cron cada minuto.
 [triggers]
-crons = ["0 5,8,11,14,17,19 * * *"]
+crons = ["0 5,8,11,14,17,19 * * *", "*/5 * * * *"]
 
 # Secrets (configurar con: wrangler secret put <NOMBRE>)
 # ANTHROPIC_API_KEY — clave de Anthropic (Claude Sonnet)

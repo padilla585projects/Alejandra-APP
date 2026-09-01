@@ -1577,13 +1577,25 @@ async function buildAnthropicSystemBlocks(modulos, tools, env) {
   // ADR-0020 documenta la futura reintroducción de contexto, exclusivamente con
   // procedencia, alcance y filtros verificables.
 
+  // TAREAS-PROGRAMADAS-01 (01/09/2026): hueco real detectado planificando "prográmame un
+  // correo a las 17:00" -- el modelo no tenía ninguna fuente fiable de "qué hora es
+  // ahora" en todo el prompt (comprobado, no había ni una sola inyección de fecha/hora
+  // real en ningún NEXUS_MODULES ni bloque dinámico). Sin esto, cualquier cálculo de
+  // fecha relativa ("mañana", "en 2 horas") se basaría en su conocimiento de
+  // entrenamiento, no en la fecha real -- necesario para que las tools de programación
+  // calculen bien la fecha/hora absoluta. Va en dynamicPart (sin cache_control, como l4)
+  // porque cambia en cada turno -- meterlo en el bloque cacheado rompería el caché de
+  // prompts (mismo motivo que BUGFIX-CACHE-PROMPT-01, ver comentario en delegar_tarea).
+  const ahora = new Date();
+  const l4Fecha = `FECHA Y HORA ACTUAL (real, del servidor): ${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })} (hora de España). En ISO: ${ahora.toISOString().slice(0, 16).replace('T', ' ')} UTC. Usa esto como "ahora" para cualquier cálculo de fecha relativa ("mañana", "en 2 horas", "a las 17:00", "la semana que viene") -- nunca asumas la fecha por tu conocimiento de entrenamiento.`;
+
   // L4: Catálogo de tools visibles
   let l4 = '';
   if (tools && tools.length > 0) {
     l4 = `HERRAMIENTAS DISPONIBLES (${tools.length}):\n${tools.map(t => `- ${t.name}: ${(t.description || '').split('.')[0]}`).join('\n')}`;
   }
 
-  const dynamicPart = [l4].filter(Boolean).join('\n\n');
+  const dynamicPart = [l4Fecha, l4].filter(Boolean).join('\n\n');
 
   const blocks = [];
   if (staticPart) blocks.push({ type: 'text', text: staticPart, cache_control: { type: 'ephemeral' } });
@@ -2542,6 +2554,83 @@ const TOOL_CATEGORIZAR_CORREOS = {
   nivel_riesgo: 'N0',
 };
 
+// TAREAS-PROGRAMADAS-01 (01/09/2026): Adrián -- "que puedas pedirle que programe
+// cosas... que te mande un correo a tal hora a X persona. que te genere una alarma a tal
+// hora para lo que sea". Alcance decidido con Adrián (AskUserQuestion): enviar/responder
+// SIGUE exigiendo confirmación humana explícita (nunca autónomo total); recordatorios sin
+// confirmación (solo un aviso, reversible). Reutiliza EXACTAMENTE el mecanismo de
+// confirmación ya existente de enviar_gmail (codigoConfirmacionOp/
+// extraerCodigosConfirmacionEnvio/codigosConfirmadosEnvio, "CONFIRMO ENVIO <código>") --
+// decisión explícita para no tener que enhebrar un Set de confirmación nuevo por toda la
+// cadena de firmas (ejecutarTool -> ejecutarToolConTelemetria -> el bucle de
+// delegar_tarea). El código sale de un descriptor DISTINTO (PROGRAMAR_GMAIL::... en vez
+// de ENVIO_GMAIL::...), así que nunca coincide por accidente con el código de un envío
+// inmediato -- confirmar uno no confirma el otro. La ejecución real a su hora vive en
+// ejecutarTareasProgramadas() (ver scheduled() más abajo), no en estas tools -- estas
+// solo validan y guardan la fila en tareas_programadas.
+const TOOL_PROGRAMAR_CORREO = {
+  name: 'programar_correo',
+  description: 'Programa un correo desde el Gmail real del usuario para que se envíe SOLO, de verdad, en una fecha/hora futura exacta -- sin volver a preguntar a esa hora. Como enviar_gmail, exige que el humano confirme con "CONFIRMO ENVIO <código>" ANTES de quedar programado (una sola vez, no en cada envío). Usa la fecha/hora actual real que tienes en el contexto del sistema para calcular fecha_hora a partir de expresiones relativas ("mañana a las 9", "en 2 horas", "el viernes a las 17:00").',
+  input_schema: {
+    type: 'object',
+    properties: {
+      para:       { type: 'string', description: 'Email destinatario' },
+      asunto:     { type: 'string', description: 'Asunto del correo' },
+      cuerpo:     { type: 'string', description: 'Cuerpo del correo en texto plano' },
+      fecha_hora: { type: 'string', description: 'Fecha y hora futura exacta en formato "YYYY-MM-DD HH:MM", calculada a partir de la fecha/hora real actual (hora de España) que tienes en el contexto del sistema' },
+    },
+    required: ['para', 'asunto', 'cuerpo', 'fecha_hora'],
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N2',
+};
+
+// Recordatorio/alarma -- push y/o Telegram, lo que el usuario tenga vinculado EN EL
+// MOMENTO de ejecutarse (no al crearlo: si vincula Telegram después de programarlo pero
+// antes de la hora, igual le llega). Sin confirmación humana -- es solo un aviso,
+// reversible con cancelar_tarea_programada, no una acción destructiva ni irreversible (a
+// diferencia de mandar un correo real a otra persona). General, no específica de Gmail --
+// va en los catálogos generales, no en AYUDANTES.correos.
+const TOOL_PROGRAMAR_RECORDATORIO = {
+  name: 'programar_recordatorio',
+  description: 'Programa un recordatorio/alarma para el propio usuario en una fecha/hora futura exacta -- le llega por notificación push y/o Telegram (los que tenga vinculados en ese momento). Usa la fecha/hora actual real del contexto del sistema para calcular fecha_hora a partir de expresiones relativas.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      titulo:     { type: 'string', description: 'Título corto del recordatorio' },
+      mensaje:    { type: 'string', description: 'Texto del recordatorio' },
+      fecha_hora: { type: 'string', description: 'Fecha y hora futura exacta "YYYY-MM-DD HH:MM", calculada a partir de la fecha/hora real actual (hora de España) del contexto del sistema' },
+    },
+    required: ['titulo', 'mensaje', 'fecha_hora'],
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
+};
+
+const TOOL_LISTAR_TAREAS_PROGRAMADAS = {
+  name: 'listar_tareas_programadas',
+  description: 'Lista las tareas programadas (correos y recordatorios) del propio usuario -- pendientes, enviadas, canceladas o con error.',
+  input_schema: { type: 'object', properties: {} },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N0',
+};
+
+const TOOL_CANCELAR_TAREA_PROGRAMADA = {
+  name: 'cancelar_tarea_programada',
+  description: 'Cancela una tarea programada propia (correo o recordatorio) antes de que se ejecute. Usa listar_tareas_programadas primero si no tienes el id a mano.',
+  input_schema: {
+    type: 'object',
+    properties: { id: { type: 'number', description: 'id de la tarea a cancelar (lo da listar_tareas_programadas)' } },
+    required: ['id'],
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
+};
+
 // F-6.1 / ADR-0022 (2026-08-12): registro de "ayudantes" -- sub-agentes con un
 // system prompt propio y un subconjunto FIJO de tools ya existentes del catálogo,
 // invocados explícitamente por Alejandra vía delegar_tarea (ver su `case`). Un
@@ -2562,7 +2651,7 @@ const AYUDANTES = {
     systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Los proveedores habituales son Hilti (fijación y anclajes), Pemsa (bandejas portacables) y Würth (tornillería y fijaciones) -- si te piden un material y no conoces la referencia exacta, usa buscar_web (prioriza hilti.es, pemsa-rejiband.com o wurth.es en la búsqueda) para encontrar la referencia y descripción reales antes de crear el pedido. Si la búsqueda no encuentra nada fiable, crea igualmente el pedido con la descripción que te haya dado el humano -- nunca inventes un código de referencia que parezca oficial sin haberlo verificado; en ese caso dilo explícitamente en la descripción/notas. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.',
   },
   correos: {
-    tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL, TOOL_CATEGORIZAR_CORREOS],
+    tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL, TOOL_CATEGORIZAR_CORREOS, TOOL_PROGRAMAR_CORREO],
     // CORREO-CREDENCIALES-01 (12/08/2026): en una prueba real, un error de leer_gmail
     // ("Gmail API has not been used...") llevó al modelo a improvisar un flujo de OAuth2
     // manual y pedirle al humano su Client ID/Secret/Refresh Token por chat -- ninguno de
@@ -2570,7 +2659,7 @@ const AYUDANTES = {
     // configurados de antemano, y el refresh token se genera y guarda cifrado solo cuando
     // el usuario pulsa "Conectar mi Gmail" en Mi cuenta (ya lo hizo). Grounding explícito
     // para que el modelo no rellene esos huecos con conocimiento genérico de OAuth2.
-    systemPrompt: 'Eres el ayudante de Correos de Alejandra, y administras la bandeja del usuario DENTRO de la app (nunca tocas su Gmail real salvo para leerlo y, con su confirmación explícita, enviar). Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella; esta barrera NUNCA se salta, ni siquiera en una gestión automática. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales.\n\nGestión (organizar/categorizar/clasificar/administrar sus correos, incluidas las peticiones automáticas tras sincronizar, sin que el usuario tenga que pedirlo cada vez): primero léelos con leer_gmail si no los tienes ya. Para CADA correo decide (a) una categoría breve y razonable (p.ej. "urgente", "proveedores", "facturas", "spam", "sin urgencia"), (b) si archivarlo -- SOLO si es claramente promocional/informativo o un aviso ya resuelto que no necesita ninguna acción del usuario --, y (c) si marcarlo leído -- SOLO si es puramente informativo, sin nada pendiente. Si un correo parece requerir su atención, respuesta o una decisión suya (facturas sin pagar, avisos de seguridad reales, un cliente/jefe escribiendo, algo con plazo), NO lo archives ni lo marques leído -- solo categorízalo, para que él lo vea y decida. Ante la duda, no archives ni marques leído: es preferible dejarlo visible de más que ocultar algo importante. Llama a categorizar_correos con la lista completa de {gmail_id, categoria, archivar, marcar_leido} -- archivar/marcar_leido puedes omitirlos u omitirlos en false cuando no aplique. IMPORTANTE (fallo real detectado: te quedabas diciendo "perfecto, ahora analizo/aplico la gestión" y terminabas el turno sin haber llamado a categorizar_correos, así que nunca se guardaba nada): NUNCA respondas con un texto de transición anunciando que vas a categorizar/archivar/marcar -- decide las categorías y llama a categorizar_correos DIRECTAMENTE, en la misma respuesta donde leer_gmail te dio los correos (o como muy tarde en tu siguiente respuesta inmediata, siempre con la llamada a la tool incluida, nunca solo texto). Si tienes muchos correos (15-25), igual: analiza todos y llama a categorizar_correos UNA vez con la lista completa, no narres el proceso antes. Estas tres acciones (categorizar/archivar/marcar leído) son solo dentro de la app, reversibles y N0 -- no hace falta pedir confirmación humana para ellas, a diferencia de enviar_gmail. NUNCA borres correos (no tienes tool para eso) ni los archives/marques leído en el Gmail real (no tienes permiso de Google para eso, gmail.modify no está concedido) -- si el usuario pide archivar/marcar leído/etiquetar de verdad en Gmail, dile que esa función no está disponible todavía.',
+    systemPrompt: 'Eres el ayudante de Correos de Alejandra, y administras la bandeja del usuario DENTRO de la app (nunca tocas su Gmail real salvo para leerlo y, con su confirmación explícita, enviar). Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella; esta barrera NUNCA se salta, ni siquiera en una gestión automática. Si el usuario pide programar/agendar un correo para una fecha/hora futura ("mándale esto a Juan mañana a las 9"), usa programar_correo -- funciona igual que enviar_gmail (mismo código, misma frase "CONFIRMO ENVIO <código>", una sola vez al programarlo) pero el envío real ocurre solo, a esa hora exacta, sin que el usuario tenga que estar delante ni volver a confirmar. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales.\n\nGestión (organizar/categorizar/clasificar/administrar sus correos, incluidas las peticiones automáticas tras sincronizar, sin que el usuario tenga que pedirlo cada vez): primero léelos con leer_gmail si no los tienes ya. Para CADA correo decide (a) una categoría breve y razonable (p.ej. "urgente", "proveedores", "facturas", "spam", "sin urgencia"), (b) si archivarlo -- SOLO si es claramente promocional/informativo o un aviso ya resuelto que no necesita ninguna acción del usuario --, y (c) si marcarlo leído -- SOLO si es puramente informativo, sin nada pendiente. Si un correo parece requerir su atención, respuesta o una decisión suya (facturas sin pagar, avisos de seguridad reales, un cliente/jefe escribiendo, algo con plazo), NO lo archives ni lo marques leído -- solo categorízalo, para que él lo vea y decida. Ante la duda, no archives ni marques leído: es preferible dejarlo visible de más que ocultar algo importante. Llama a categorizar_correos con la lista completa de {gmail_id, categoria, archivar, marcar_leido} -- archivar/marcar_leido puedes omitirlos u omitirlos en false cuando no aplique. IMPORTANTE (fallo real detectado: te quedabas diciendo "perfecto, ahora analizo/aplico la gestión" y terminabas el turno sin haber llamado a categorizar_correos, así que nunca se guardaba nada): NUNCA respondas con un texto de transición anunciando que vas a categorizar/archivar/marcar -- decide las categorías y llama a categorizar_correos DIRECTAMENTE, en la misma respuesta donde leer_gmail te dio los correos (o como muy tarde en tu siguiente respuesta inmediata, siempre con la llamada a la tool incluida, nunca solo texto). Si tienes muchos correos (15-25), igual: analiza todos y llama a categorizar_correos UNA vez con la lista completa, no narres el proceso antes. Estas tres acciones (categorizar/archivar/marcar leído) son solo dentro de la app, reversibles y N0 -- no hace falta pedir confirmación humana para ellas, a diferencia de enviar_gmail. NUNCA borres correos (no tienes tool para eso) ni los archives/marques leído en el Gmail real (no tienes permiso de Google para eso, gmail.modify no está concedido) -- si el usuario pide archivar/marcar leído/etiquetar de verdad en Gmail, dile que esa función no está disponible todavía.',
   },
 };
 
@@ -3645,18 +3734,18 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   // GESTION-AUTO-CORREOS-01 (31/08/2026): TOOL_DELEGAR_TAREA añadida aquí también -- era el
   // único experto "de trabajo" (app/tecnico/completo sí la tienen) sin acceso a los
   // ayudantes (correos/pedidos). Encontrado en vivo: un mensaje sobre gestionar correos que
   // clasificó (por error, ver fix de "bandeja" en REGEX_ROUTES) como "ingenieria" se quedó
   // sin poder alcanzar el ayudante de Correos -- defensa en profundidad para que un desvío
   // de clasificación futuro no repita el mismo fallo.
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA]
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -5193,6 +5282,15 @@ export default {
   },
   // ── Cron: Alejandra despierta cada hora y decide si actuar ──────────────
   async scheduled(event, env, ctx) {
+    // TAREAS-PROGRAMADAS-01 (01/09/2026): cron nuevo de precisión fina (cada 5 min, ver
+    // wrangler.toml) para ejecutar tareas_programadas a su hora real -- DEBE despacharse
+    // por event.cron explícitamente y salir aquí, antes de la lógica por horas de abajo
+    // (que solo mira getUTCHours(), no event.cron). Si no, este tick de 5 min caería en
+    // esa lógica horaria y la dispararía 12 veces por hora en vez de una.
+    if (event.cron === '*/5 * * * *') {
+      try { await ejecutarTareasProgramadas(env); } catch (e) { console.error('[TareasProgramadas] error en cron:', e.message); }
+      return;
+    }
     try {
       const hora = new Date().getUTCHours();
       const horaLocal = (hora + 2) % 24; // UTC+2 España
@@ -7663,6 +7761,30 @@ async function esDeveloperAgente(env, usuario_id) {
     const extra = (row.roles_extra || '').toLowerCase();
     return extra.includes('desarrollador');
   } catch (_) { return false; }
+}
+
+// TAREAS-PROGRAMADAS-01 (01/09/2026): el modelo calcula fecha_hora en hora de España
+// (misma zona que se le da como "ahora" en l4Fecha, ver buildAnthropicSystemBlocks) --
+// pero D1 compara con datetime('now'), que es UTC. Truco estándar de doble conversión:
+// se interpreta la fecha/hora pedida como si fuera UTC (guessUTC), se formatea ESE
+// instante en hora de Madrid con Intl (que ya conoce las reglas de DST reales, sin tabla
+// de offsets a mano), y la diferencia entre lo pedido y lo que salió da el offset real de
+// Madrid en ese momento concreto del año -- funciona igual en horario de verano/invierno.
+function fechaMadridAUTC(fechaHoraStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/.exec(String(fechaHoraStr || '').trim());
+  if (!m) return null;
+  const [, yStr, moStr, dStr, hStr, miStr] = m;
+  const y = Number(yStr), mo = Number(moStr), d = Number(dStr), h = Number(hStr), mi = Number(miStr);
+  const guessUTC = Date.UTC(y, mo - 1, d, h, mi);
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date(guessUTC)).map(p => [p.type, p.value]));
+  const horaParte = Number(parts.hour) === 24 ? 0 : Number(parts.hour);
+  const madridWallOfGuess = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), horaParte, Number(parts.minute));
+  const offset = madridWallOfGuess - guessUTC;
+  return new Date(guessUTC - offset);
 }
 
 // ── Ejecutar tools ────────────────────────────────────────────────────────────
@@ -10228,6 +10350,91 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return `✅ Correo enviado desde ${data.desde} a ${para}.`;
       } catch (e) {
         return JSON.stringify({ ok: false, error: 'Error enviando correo: ' + e.message });
+      }
+    }
+
+    // TAREAS-PROGRAMADAS-01 (01/09/2026): mismo mecanismo de confirmación que
+    // enviar_gmail (mismo Set codigosConfirmadosEnvio, misma frase "CONFIRMO ENVIO
+    // <código>"), pero el descriptor lleva el prefijo PROGRAMAR_GMAIL + la fecha/hora, así
+    // que el código nunca coincide con uno de envío inmediato -- confirmar uno no confirma
+    // el otro. Al confirmarse, NO se envía aquí: solo se guarda la fila en
+    // tareas_programadas; la ejecución real ocurre en ejecutarTareasProgramadas() cuando
+    // llega su hora (ver scheduled()).
+    case 'programar_correo': {
+      try {
+        const para = String(input.para || '').trim();
+        const asunto = String(input.asunto || '').trim();
+        const cuerpo = String(input.cuerpo || '');
+        const fechaHoraStr = String(input.fecha_hora || '').trim();
+        if (!para || !asunto) return '❌ Faltan "para" o "asunto".';
+        const fechaUTC = fechaMadridAUTC(fechaHoraStr);
+        if (!fechaUTC) return '❌ fecha_hora debe tener el formato "YYYY-MM-DD HH:MM" (hora de España).';
+        if (fechaUTC.getTime() <= Date.now()) return '❌ fecha_hora debe ser una fecha/hora futura.';
+
+        const codigo = await codigoConfirmacionOp(`PROGRAMAR_GMAIL::${para}::${asunto}::${cuerpo}::${fechaHoraStr}`);
+        if (!(codigosConfirmadosEnvio instanceof Set) || !codigosConfirmadosEnvio.has(codigo)) {
+          return `⚠️ PROGRAMACIÓN PENDIENTE DE CONFIRMACIÓN — se enviará el ${fechaHoraStr} (hora de España) a: ${para} · asunto: "${asunto}". Para autorizar SOLO este envío programado exacto, el usuario humano debe escribir literalmente "CONFIRMO ENVIO ${codigo}" en su próximo mensaje -- una sola vez, no hará falta que confirme nada más cuando llegue la hora real. NO puedes autoconfirmar ni teclear el código en su nombre. Muéstrale el código (${codigo}) y un resumen del correo, y esperá. No reintentes hasta que el humano lo haya escrito.`;
+        }
+
+        if (!env.DB) return JSON.stringify({ ok: false, error: 'DB no disponible.' });
+        await env.DB.prepare(
+          `INSERT INTO tareas_programadas (usuario_id, empresa_id, tipo, fecha_hora_programada, payload) VALUES (?,?,?,?,?)`
+        ).bind(usuario_id, empresa_id || null, 'email_gmail', fechaUTC.toISOString().slice(0, 19).replace('T', ' '), JSON.stringify({ para, asunto, cuerpo })).run();
+        return `✅ Correo programado para el ${fechaHoraStr} (hora de España) a ${para}. Se enviará solo, sin más confirmaciones.`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error programando correo: ' + e.message });
+      }
+    }
+
+    case 'programar_recordatorio': {
+      try {
+        const titulo = String(input.titulo || '').trim();
+        const mensaje = String(input.mensaje || '').trim();
+        const fechaHoraStr = String(input.fecha_hora || '').trim();
+        if (!titulo || !mensaje) return '❌ Faltan "titulo" o "mensaje".';
+        const fechaUTC = fechaMadridAUTC(fechaHoraStr);
+        if (!fechaUTC) return '❌ fecha_hora debe tener el formato "YYYY-MM-DD HH:MM" (hora de España).';
+        if (fechaUTC.getTime() <= Date.now()) return '❌ fecha_hora debe ser una fecha/hora futura.';
+        if (!env.DB) return JSON.stringify({ ok: false, error: 'DB no disponible.' });
+        await env.DB.prepare(
+          `INSERT INTO tareas_programadas (usuario_id, empresa_id, tipo, fecha_hora_programada, payload) VALUES (?,?,?,?,?)`
+        ).bind(usuario_id, empresa_id || null, 'recordatorio', fechaUTC.toISOString().slice(0, 19).replace('T', ' '), JSON.stringify({ titulo, mensaje })).run();
+        return `✅ Recordatorio "${titulo}" programado para el ${fechaHoraStr} (hora de España) -- te avisará por push/Telegram si los tienes vinculados en ese momento.`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error programando recordatorio: ' + e.message });
+      }
+    }
+
+    case 'listar_tareas_programadas': {
+      try {
+        if (!env.DB) return JSON.stringify({ ok: false, error: 'DB no disponible.' });
+        const { results } = await env.DB.prepare(
+          `SELECT id, tipo, fecha_hora_programada, estado, payload, error_msg FROM tareas_programadas WHERE usuario_id=? ORDER BY fecha_hora_programada DESC LIMIT 30`
+        ).bind(usuario_id).all();
+        if (!results || !results.length) return '✅ No tienes tareas programadas.';
+        const lista = results.map(t => {
+          const p = JSON.parse(t.payload || '{}');
+          const resumen = t.tipo === 'email_gmail' ? `correo a ${p.para} — "${p.asunto}"` : `recordatorio "${p.titulo}"`;
+          return `• [id:${t.id}] ${t.fecha_hora_programada} UTC — ${resumen} — ${t.estado}${t.error_msg ? ` (${t.error_msg})` : ''}`;
+        }).join('\n');
+        return `📋 Tareas programadas:\n${lista}`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error listando tareas programadas: ' + e.message });
+      }
+    }
+
+    case 'cancelar_tarea_programada': {
+      try {
+        const id = Number(input.id);
+        if (!id) return '❌ Falta "id".';
+        if (!env.DB) return JSON.stringify({ ok: false, error: 'DB no disponible.' });
+        const r = await env.DB.prepare(
+          `UPDATE tareas_programadas SET estado='cancelada' WHERE id=? AND usuario_id=? AND estado='pendiente'`
+        ).bind(id, usuario_id).run();
+        if (!r.meta.changes) return '❌ No se encontró esa tarea pendiente (puede que ya se haya enviado, cancelado, o no sea tuya).';
+        return `✅ Tarea #${id} cancelada.`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error cancelando tarea: ' + e.message });
       }
     }
 
@@ -12873,6 +13080,73 @@ function _ordenarEvitandoCooldown(modelos) {
 // y guarda el resultado en KV. Si la lista cambia respecto a la anterior,
 // avisa a Adrián por Telegram. Nunca lanza: cualquier fallo deja la cascada
 // anterior (o los arrays fijos de respaldo) intacta.
+// TAREAS-PROGRAMADAS-01 (01/09/2026): motor real de "prográmame X a las Y". Se llama
+// desde scheduled() cada 5 min (event.cron === '*/5 * * * *'). Cap LIMIT 20 por tick --
+// si algún día hubiera más de 20 tareas vencidas de golpe, las de más esperan al tick
+// siguiente (5 min después) en vez de arriesgar un tick que tarde demasiado. Nunca deja
+// una fila en 'pendiente' sin marcarla: éxito -> 'enviada', fallo -> 'error' + error_msg
+// (visible en listar_tareas_programadas) -- sin reintento automático en esta primera
+// vuelta, ver TAREAS-PROGRAMADAS-01 en el plan.
+async function ejecutarTareasProgramadas(env) {
+  if (!env.DB) return;
+  const { results } = await env.DB.prepare(
+    `SELECT id, usuario_id, tipo, payload FROM tareas_programadas WHERE estado='pendiente' AND fecha_hora_programada <= datetime('now') LIMIT 20`
+  ).all().catch(() => ({ results: [] }));
+  if (!results || !results.length) return;
+
+  for (const t of results) {
+    let payload;
+    try { payload = JSON.parse(t.payload || '{}'); } catch { payload = {}; }
+    try {
+      if (t.tipo === 'email_gmail') {
+        if (!env.API_WEB) throw new Error('Service binding API_WEB no disponible.');
+        const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/gmail/enviar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+          body: JSON.stringify({ usuario_id: t.usuario_id, para: payload.para, asunto: payload.asunto, cuerpo: payload.cuerpo }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.ok === false) throw new Error(data.error || `HTTP ${resp.status}`);
+        await env.DB.prepare(`UPDATE tareas_programadas SET estado='enviada', ejecutado_at=datetime('now') WHERE id=?`).bind(t.id).run();
+      } else if (t.tipo === 'recordatorio') {
+        const canalesOk = [];
+        const canalesFallo = [];
+        // Push -- mismo patrón que case 'enviar_push': token en alejandra_memoria.
+        try {
+          const row = await env.DB.prepare(`SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`).bind(t.usuario_id).first();
+          if (row) {
+            const r = await enviarFCM(env, row.contenido, payload.titulo, payload.mensaje);
+            if (r.ok) canalesOk.push('push'); else canalesFallo.push('push');
+          }
+        } catch (_) { canalesFallo.push('push'); }
+        // Telegram -- vía el endpoint interno nuevo en worker.js raíz (resuelve
+        // usuarios.telegram_id, la fuente real por usuario -- no alejandra_memoria).
+        try {
+          if (env.API_WEB) {
+            const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/telegram/enviar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+              body: JSON.stringify({ usuario_id: t.usuario_id, mensaje: `⏰ ${payload.titulo}\n${payload.mensaje}` }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (resp.ok && data.ok) canalesOk.push('telegram'); else canalesFallo.push('telegram');
+          }
+        } catch (_) { canalesFallo.push('telegram'); }
+
+        if (canalesOk.length) {
+          await env.DB.prepare(`UPDATE tareas_programadas SET estado='enviada', ejecutado_at=datetime('now') WHERE id=?`).bind(t.id).run();
+        } else {
+          throw new Error(`Sin canal disponible (push/Telegram no vinculados) -- probados: ${canalesFallo.join(', ') || 'ninguno'}`);
+        }
+      } else {
+        throw new Error(`Tipo de tarea desconocido: ${t.tipo}`);
+      }
+    } catch (e) {
+      await env.DB.prepare(`UPDATE tareas_programadas SET estado='error', error_msg=?, ejecutado_at=datetime('now') WHERE id=?`).bind(String(e.message || e).slice(0, 300), t.id).run().catch(() => {});
+    }
+  }
+}
+
 async function refrescarCascadaModelosGratis(env) {
   try {
     const resp = await fetch('https://openrouter.ai/api/v1/models');

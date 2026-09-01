@@ -5554,6 +5554,12 @@ export default {
       if (path.startsWith('/correos/') && method === 'PUT')         return await actualizarCorreoCache(path.split('/correos/')[1], request, env);
       if (path.match(/^\/correos\/[^/]+\/completo$/) && method === 'GET') return await getCorreoCompleto(path.split('/')[2], request, env);
       if (path.startsWith('/correos/') && method === 'DELETE' && !path.includes('/completo')) return await borrarCorreoCache(path.split('/correos/')[1], request, env);
+      // TAREAS-PROGRAMADAS-01 (01/09/2026): _getAuthPlano (no getAuth) -- este endpoint lo
+      // llama alejandra-agente (Service Binding, X-Internal-Secret) igual que
+      // internalGmailEnviar/internalGmailListar, ver comentario en _getAuthPlano.
+      if (path === '/internal/telegram/enviar' && method === 'POST') return await internalTelegramEnviar(request, env);
+      if (path === '/tareas-programadas' && method === 'GET')       return await getTareasProgramadas(request, env);
+      if (path.match(/^\/tareas-programadas\/\d+$/) && method === 'DELETE') return await cancelarTareaProgramadaPanel(parseInt(path.split('/')[2]), request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -14819,6 +14825,46 @@ async function internalGmailEnviar(request, env) {
   const sendData = await sendRes.json();
   if (!sendRes.ok) return json({ ok: false, error: sendData.error?.message || 'Error enviando correo.' });
   return json({ ok: true, id: sendData.id, desde: email });
+}
+
+// TAREAS-PROGRAMADAS-01 (01/09/2026): alejandra-agente lo llama vía Service Binding para
+// mandar el aviso real de un recordatorio programado -- sendTelegramToChat() y
+// usuarios.telegram_id ya existen y son la fuente REAL por usuario (vinculada desde "Mi
+// cuenta" -> Conectar mi Telegram); a propósito NO se usa alejandra_memoria.tipo=
+// 'telegram_chat_id' (esa es la que usa enviar_telegram_informe, inconsistencia ya
+// detectada pero fuera de alcance arreglarla aquí).
+async function internalTelegramEnviar(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const auth = await _getAuthPlano(request, env, body);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const mensaje = String(body.mensaje || '').trim();
+  if (!mensaje) return err('Falta mensaje', 400);
+  const u = await env.DB.prepare('SELECT telegram_id FROM usuarios WHERE id=?').bind(auth.usuario_id).first();
+  if (!u?.telegram_id) return json({ ok: false, error: 'Usuario sin Telegram vinculado.' });
+  await sendTelegramToChat(env, u.telegram_id, mensaje);
+  return json({ ok: true });
+}
+
+// Pantalla "Mis Tareas Programadas" (panel.html) -- solo lectura/cancelación, la
+// creación siempre pasa por el chat (programar_correo/programar_recordatorio,
+// alejandra-agente). getAuth (sesión real de panel.html), no _getAuthPlano.
+async function getTareasProgramadas(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare(
+    `SELECT id, tipo, fecha_hora_programada, estado, payload, error_msg, creado_at FROM tareas_programadas WHERE usuario_id=? ORDER BY fecha_hora_programada DESC LIMIT 100`
+  ).bind(auth.usuario_id).all();
+  return json({ ok: true, tareas: results || [] });
+}
+
+async function cancelarTareaProgramadaPanel(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const r = await env.DB.prepare(
+    `UPDATE tareas_programadas SET estado='cancelada' WHERE id=? AND usuario_id=? AND estado='pendiente'`
+  ).bind(id, auth.usuario_id).run();
+  if (!r.meta.changes) return err('No se encontró esa tarea pendiente', 404);
+  return json({ ok: true });
 }
 
 async function crearInvitacion(request, env) {

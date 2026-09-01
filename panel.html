@@ -583,6 +583,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <span class="nav-icon">💬</span> Chat del equipo
       <span class="nav-badge" id="chatBadgeSidebar" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="tareasProgramadas" onclick="navTo('tareasProgramadas')">
+      <span class="nav-icon">🕐</span> Tareas Programadas
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="personal"><span>👷 Personal</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item nav-sensitive-data" data-page="personal" onclick="navTo('personal')">
@@ -2416,6 +2419,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           <div id="correosVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
             📧 Sin correos todavía.<br><small>Pulsa "🔄 Sincronizar" para traer los últimos de tu Gmail.</small>
           </div>
+        </div>
+      </div>
+
+      <!-- MIS TAREAS PROGRAMADAS (TAREAS-PROGRAMADAS-01, 01/09/2026) -->
+      <div class="page" id="pageTareasProgramadas">
+        <div class="page-title">🕐 Mis Tareas Programadas</div>
+        <div class="page-sub">Correos y recordatorios que le has pedido a Alejandra que programe — se crean por chat ("prográmame un correo a...", "avísame a las..."), aquí solo puedes verlos y cancelarlos.</div>
+        <div id="tareasProgList" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div id="tareasProgVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
+          🕐 No tienes tareas programadas todavía.<br>
+          <small>Pídeselo a Alejandra por chat: "prográmame un correo a Juan mañana a las 9" o "avísame a las 17:00 para revisar X".</small>
         </div>
       </div>
 
@@ -14417,6 +14431,7 @@ const PAGE_TITLES = {
   segRegistros: '📷 Registro de Seguridad',
   informeSegSemanal: '📝 Informe Semanal de Seguridad',
   correos: '📧 Mis Correos',
+  tareasProgramadas: '🕐 Mis Tareas Programadas',
   hitos: '🏁 Hitos de Obra',
   diarioObra: '📓 Diario de Obra',
   correspondencia: '✉️ Correspondencia',
@@ -14575,6 +14590,7 @@ const AYUDA_SECCIONES = {
   segRegistros: 'Fotos de incidencias o estados de la obra con hilo de comentarios de todo el departamento de Seguridad.',
   informeSegSemanal: 'Informe interno semanal de Seguridad y Salud Laboral por obra: aspectos críticos, observaciones y actividad diaria con foto.',
   correos: 'Panel personal de tu correo (Gmail conectado): sincroniza, categoriza dentro de la app y redacta. Alejandra puede resumirlos y organizarlos por categoría a petición tuya.',
+  tareasProgramadas: 'Correos y recordatorios que le has pedido a Alejandra que programe para una fecha/hora futura exacta. Se crean por chat; aquí puedes verlos y cancelarlos.',
   diarioObra: 'Diario de obra: registro cronológico de lo ocurrido cada día.',
   fieldReports: 'Informes de campo con hallazgos y seguimiento técnico.',
   fotosObra: 'Galería de fotos de la obra organizadas por fecha.',
@@ -14756,6 +14772,7 @@ const PAGE_LOADERS = {
   segRegistros: (...a) => cargarSegRegistros(...a),
   informeSegSemanal: (...a) => cargarInformesSeg(...a),
   correos: (...a) => cargarCorreosPanel(...a),
+  tareasProgramadas: (...a) => cargarTareasProgramadas(...a),
   hitos: (...a) => cargarHitos(...a),
   diarioObra: (...a) => cargarDiarioObra(...a),
   correspondencia: (...a) => cargarCorrespondencia(...a),
@@ -24041,6 +24058,56 @@ function _pintarCorreosBadge(noLeidos, conectado) {
   badge.style.display = (conectado && noLeidos) ? 'block' : 'none';
 }
 
+// TAREAS-PROGRAMADAS-01 (01/09/2026): fecha_hora_programada se guarda en UTC ("YYYY-MM-DD
+// HH:MM:SS", sin sufijo). _parseFechaBackend()/fmtFechaHora() (ya usados en el resto de la
+// app) caen a `new Date(v)` para este formato, que en V8 interpreta la cadena como hora
+// LOCAL del navegador, no UTC -- para el resto de fechas de la app (solo día, o donde el
+// desfase de 1-2h no se nota) no es un problema real, pero aquí SÍ lo sería: la hora exacta
+// es el punto entero de esta función. Helper propio, sin ambigüedad: fuerza 'Z' antes de
+// parsear (UTC real) y muestra en hora de Madrid (misma zona que usó el modelo al calcularla).
+function _tareasProgFmtFecha(utcStr) {
+  if (!utcStr) return '—';
+  const d = new Date(utcStr.replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return '—';
+  return d.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function _tareasProgEstadoBadge(estado) {
+  const map = { pendiente: 'badge-warn', enviada: 'badge-ok', cancelada: 'badge-muted', error: 'badge-danger' };
+  return `<span class="badge ${map[estado] || 'badge-muted'}" style="font-size:10px">${escHtml(estado)}</span>`;
+}
+async function cargarTareasProgramadas() {
+  const r = await api('/tareas-programadas');
+  const cont = document.getElementById('tareasProgList');
+  const tareas = (r?.ok ? r.tareas : []) || [];
+  document.getElementById('tareasProgVacio').style.display = tareas.length ? 'none' : 'block';
+  cont.innerHTML = tareas.map(t => {
+    let p = {}; try { p = JSON.parse(t.payload || '{}'); } catch (_) {}
+    const resumen = t.tipo === 'email_gmail'
+      ? `✉️ Correo a <b>${escHtml(p.para || '—')}</b> — "${escHtml(p.asunto || '')}"`
+      : `⏰ Recordatorio — <b>${escHtml(p.titulo || '')}</b>`;
+    return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px">${resumen}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${_tareasProgFmtFecha(t.fecha_hora_programada)}${t.error_msg ? ` — ${escHtml(t.error_msg)}` : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${_tareasProgEstadoBadge(t.estado)}
+          ${t.estado === 'pendiente' ? `<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="cancelarTareaProgramada(${t.id})">✕ Cancelar</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function cancelarTareaProgramada(id) {
+  if (!confirm('¿Cancelar esta tarea programada? No se enviará/avisará.')) return;
+  const r = await api(`/tareas-programadas/${id}`, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  toast('✅ Tarea cancelada', 'ok');
+  cargarTareasProgramadas();
+}
+
 // CORREOS-PANEL-01-v4 (17/08/2026): "cambiar rápido" en el sitio donde de verdad hace
 // falta -- sin ir a Mi cuenta cada vez. Solo visible con 2+ cuentas conectadas.
 async function _correosCargarSelectorCuentas() {
@@ -25252,7 +25319,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.27';
+const PANEL_APP_VERSION = '9.28';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

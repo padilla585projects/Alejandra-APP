@@ -215,6 +215,14 @@
       "declarado": "2026-08-10",
       "verificado": "2026-08-10",
       "nota": "Correccion de un fallo propio: las 12 tablas declaradas como CREATE TABLE IF NOT EXISTS en las 4 migraciones anteriores YA EXISTIAN en produccion (DDL en runtime, nunca antes declaradas en una migracion), asi que el CREATE fue un no-op silencioso. ALTER TABLE ADD COLUMN para las 12, aplicado y verificado (PRAGMA table_info: columna presente en las 12). Con esto, las 19 tablas del plan de aislamiento por departamento tienen la columna departamento en produccion."
+    },
+    {
+      "archivo": "migrate_tareas_programadas.sql",
+      "aplicada": true,
+      "run": "cli-directo (wrangler d1 execute --remote)",
+      "declarado": "2026-09-01",
+      "verificado": "2026-09-01",
+      "nota": "TAREAS-PROGRAMADAS-01: tabla nueva tareas_programadas (correos/recordatorios programados a hora exacta), aditiva. Autorizada explicitamente por Adrian en chat tras un incidente activo de Cloudflare (D1 Management API, HTTP errors, ver cloudflarestatus.com) que bloqueo el primer intento -- reintentado tras la resolucion del incidente. Aplicada (3 queries, CREATE TABLE + 2 CREATE INDEX) y verificada con PRAGMA table_info: 10 columnas presentes segun lo declarado."
     }
   ]
 }
