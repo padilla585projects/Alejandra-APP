@@ -1,6 +1,15 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-08-31
+- Estado (2026-08-31, continuación): **CORREOS-PANEL-01 cerrada — Gmail real reconectado y
+  verificado de extremo a extremo.** Encontrado y arreglado de paso un bug real:
+  `GMAIL_OAUTH_SCOPES` no pedía scope de email, por eso la cuenta se guardaba como
+  "(sin email)" (y el `ON CONFLICT` de `gmail_cuentas` nunca deduplicaba con NULL). Tras el
+  fix y la reconexión de Adrián: `POST /correos/sincronizar` →
+  `{ok:true,nuevos:5,total:10}`, "Organizar con Alejandra" leyó correos reales y devolvió
+  un resumen priorizado con datos concretos. Matiz sin decidir: ese mismo prompt no llamó a
+  `categorizar_correos` (no persiste etiqueta por correo) — pendiente de que Adrián diga si
+  quiere que también lo haga. Detalle en `HANDOFF.md`/`TASKS.md`.
 - Estado (2026-08-29, continuación): **Fallback de Anthropic no cubría el tope de uso
   (solo "sin saldo"), y `/health` no detectaba ningún fallo real de Anthropic.**
   Verificando en vivo la nueva tool de conflictos, el chat falló con el error crudo de

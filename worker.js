@@ -14303,7 +14303,15 @@ async function googleCheckNonce(request, env) {
 // nunca obtiene refresh_token, así que no sirve para acceso persistente a la
 // Gmail API. access_type='offline'+prompt='consent' fuerza a Google a devolver
 // uno siempre, para poder actuar en nombre del usuario sin que esté conectado.
-const GMAIL_OAUTH_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
+// VERIF-CORREOS-GMAIL-01 (31/08/2026): sin scope de email, la llamada a userinfo() de
+// gmailAuthCallback() no puede devolver la dirección conectada -- gUser.email queda
+// undefined, se guarda como NULL, y la cuenta se ve como "(sin email)" en Mi cuenta. Peor
+// aún: el UNIQUE/ON CONFLICT de gmail_cuentas es (usuario_id, email_conectado), y en SQL
+// NULL nunca es igual a NULL -- cada reconexión con email NULL crea una fila nueva en vez
+// de actualizar la existente, en vez de deduplicar. userinfo.email es un scope mínimo (solo
+// lee la dirección, no da acceso nuevo a Gmail) -- no cambia la decisión ya tomada de no
+// pedir gmail.modify.
+const GMAIL_OAUTH_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email';
 const GMAIL_OAUTH_REDIRECT_URI = 'https://alejandra-app-api.alejandra-app.workers.dev/auth/gmail/callback';
 
 async function gmailAuthUrl(request, env) {
@@ -14474,17 +14482,34 @@ async function _refrescarTokenGmail(env, row) {
   } catch (e) {
     return { error: 'No se pudo leer el token guardado de esta cuenta -- probá a desconectarla y conectarla de nuevo.' };
   }
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      refresh_token: refreshToken,
-      client_id: env.GOOGLE_OAUTH_CLIENT_ID,
-      client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
-      grant_type: 'refresh_token',
-    }).toString(),
-  });
-  const tokenData = await tokenRes.json();
+  const pedirAccessToken = async () => {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        refresh_token: refreshToken,
+        client_id: env.GOOGLE_OAUTH_CLIENT_ID,
+        client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+        grant_type: 'refresh_token',
+      }).toString(),
+    });
+    return await tokenRes.json();
+  };
+  let tokenData = await pedirAccessToken();
+  // VERIF-CORREOS-GMAIL-01 (31/08/2026): probando en vivo con la cuenta real de Adrián,
+  // leer_gmail (chat) falló con "Token has been expired or revoked." en el mismo instante
+  // en que el botón "Sincronizar" (mismo refresh_token, misma función) sí funcionaba --
+  // reproducido con wrangler tail: es una colisión real, no una revocación real (el token
+  // seguía sirviendo un segundo después). Encaja con que el panel sondea en paralelo
+  // /correos/nuevas-todas-cuentas cada 2 min (getCorreosNuevosTodasCuentas) sobre la misma
+  // cuenta -- dos peticiones de refresh casi simultáneas al mismo refresh_token pueden
+  // chocar en el lado de Google. Un solo reintento tras una pausa corta basta: si el token
+  // estuviera realmente revocado, el reintento también fallaría y el error real llegaría
+  // igual al usuario.
+  if (!tokenData.access_token) {
+    await new Promise(r => setTimeout(r, 800));
+    tokenData = await pedirAccessToken();
+  }
   if (!tokenData.access_token) return { error: tokenData.error_description || tokenData.error || 'No se pudo refrescar el token de Gmail.' };
   return { accessToken: tokenData.access_token, email: row.email_conectado, cuentaId: row.id };
 }
@@ -14684,13 +14709,17 @@ async function getCorreosNuevosTodasCuentas(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('No autorizado', 403);
   await ensureGmailCuentasTable(env);
-  const { results: cuentas } = await env.DB.prepare('SELECT id, email_conectado FROM gmail_cuentas WHERE usuario_id=?').bind(auth.usuario_id).all();
+  const { results: cuentas } = await env.DB.prepare('SELECT id, email_conectado, activa FROM gmail_cuentas WHERE usuario_id=?').bind(auth.usuario_id).all();
   const resultado = [];
   for (const c of cuentas) {
     const { mensajes, error } = await _listarGmailMensajesPorCuenta(env, c.id, { limit: 5 });
     if (error || !mensajes) continue;
     const nuevos = await _sincronizarCacheCuenta(env, auth.usuario_id, c.id, mensajes);
-    if (nuevos > 0) resultado.push({ cuenta_id: c.id, email: c.email_conectado, nuevos });
+    // GESTION-AUTO-CORREOS-01 (31/08/2026): panel.html usa este flag para decidir si
+    // dispara la gestión automática (categorizar/archivar/marcar leído) -- leer_gmail y
+    // categorizar_correos solo operan sobre la cuenta ACTIVA, así que gestionar por una
+    // cuenta que no lo es no tendría efecto real.
+    if (nuevos > 0) resultado.push({ cuenta_id: c.id, email: c.email_conectado, nuevos, activa: !!c.activa });
   }
   return json({ ok: true, cuentas: resultado });
 }

@@ -1,5 +1,24 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-08-31, continuación): **CORREOS-PANEL-01 cerrada de verdad —
+Gmail real reconectado y verificado end-to-end.** Cadena completa de esta sesión: (1) una
+primera verificación dio un falso positivo por comprobar solo el código HTTP de
+`/correos/sincronizar` (devuelve `200` incluso al fallar, por diseño); (2) al probar
+"Organizar con Alejandra" se destapó el fallo real: refresh token de Gmail
+caducado/revocado (`Token has been expired or revoked.`); (3) se encontró un bug de paso —
+`GMAIL_OAUTH_SCOPES` no pedía el scope de email, así que la cuenta se guardaba como
+"(sin email)" y el `ON CONFLICT(usuario_id, email_conectado)` nunca deduplicaba (NULL≠NULL
+en SQL) — añadido `userinfo.email` al scope, desplegado; (4) Adrián reconectó Gmail desde
+"Mi cuenta"; (5) verificado de nuevo con Claude in Chrome, esta vez leyendo el cuerpo real
+de las respuestas: `POST /correos/sincronizar` → `{ok:true,nuevos:5,total:10}`, y
+"Organizar con Alejandra" leyó los correos reales y devolvió un resumen priorizado con
+datos concretos (importes, plazos, remitentes reales). **Matiz encontrado, no arreglado a
+propósito (pendiente de decisión de Adrián):** pedirle "organiza por categoría" hace que
+responda con un resumen en el chat, pero NO llama a `categorizar_correos` (sin `PUT
+/correos/:id` en la red) — no se guarda ninguna etiqueta visible en la lista. Sigue
+también abierta la verificación en vivo del quiosco de fichaje (`kiosco.html`, ARC-022,
+2026-08-11) — ver `ARCHITECT_BACKLOG.md`.
+
 Estado (actualizado 2026-08-31): **DEPT-AGENTE-01 revisada, fusionada (PR #129), desplegada
 y verificada en vivo.** Cierra la deuda de seguridad anotada el 2026-08-29: ningún tool de
 chat del agente (`gestionar_calidad`/`gestionar_checklist`) filtraba por departamento, a

@@ -22274,6 +22274,13 @@ async function cargarNotificaciones() {
     tipo: 'info', icono: '📧', titulo: `${c.nuevos} correo${c.nuevos > 1 ? 's' : ''} nuevo${c.nuevos > 1 ? 's' : ''}`,
     texto: c.email || '', accion: `cambiarCuentaCorreoActiva(${c.cuenta_id}).then(()=>navTo('correos'))`
   }));
+  // GESTION-AUTO-CORREOS-01 (31/08/2026): gestión automática también desde este aviso
+  // periódico (cada 2 min, sin cron en servidor), no solo al pulsar "Sincronizar" a mano.
+  // Nota: leer_gmail/categorizar_correos siempre operan sobre la cuenta ACTIVA (misma
+  // limitación que ya tiene "Organizar con Alejandra" y el resto de Mis Correos) -- si el
+  // aviso es de una cuenta no activa, esta llamada no gestiona esos correos concretos.
+  const _nuevosCuentaActiva = (correosR?.cuentas || []).find(c => c.activa)?.nuevos || 0;
+  if (_nuevosCuentaActiva > 0) _correosAutoGestionar(_nuevosCuentaActiva);
 
   // Actualizar badge
   const badge = document.getElementById('notifBadge');
@@ -24197,7 +24204,43 @@ async function sincronizarCorreosPanel(btn) {
     if (!r.ok) { toast(r.error || 'Error al sincronizar', 'err'); return; }
     toast(`✅ ${r.nuevos} correo(s) nuevo(s) de ${r.total}`, 'ok');
     cargarCorreosPanel();
+    _correosAutoGestionar(r.nuevos); // GESTION-AUTO-CORREOS-01 -- sin await, en segundo plano
   }, 'Sincronizando…');
+}
+
+// GESTION-AUTO-CORREOS-01 (31/08/2026): Adrián -- "que administre completamente el correo
+// quiero". Alcance decidido explícitamente (AskUserQuestion): categorizar + archivar +
+// marcar leído SIN preguntar cada vez que se sincroniza (manual arriba, o el aviso
+// automático de correo nuevo en cargarNotificaciones); enviar/responder sigue exigiendo
+// SIEMPRE la confirmación humana de enviar_gmail (sin cambios, ADR-0022) -- este mensaje
+// se lo dice explícitamente al modelo también, por si acaso. Llama al mismo endpoint que
+// "Organizar con Alejandra" pero en segundo plano, sin abrir ni pintar nada en el chat
+// visible -- Adrián no pidió verlo como conversación, solo que se gestione solo.
+async function _correosAutoGestionar(nuevos) {
+  if (!nuevos || nuevos <= 0) return;
+  const usuarioId = SESSION?.usuario_id || null;
+  if (!usuarioId || !TOKEN) return;
+  try {
+    const res = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+      body: JSON.stringify({
+        mensaje: `Se han sincronizado ${nuevos} correo(s) nuevo(s) en mi bandeja. Gestiónalos sin preguntarme: asigna una categoría a cada uno, archiva los que ya no necesiten mi atención (promocionales, informativos, avisos ya resueltos) y marca como leídos los puramente informativos. No archives ni marques leído ningún correo que parezca requerir mi atención o respuesta -- esos solo categorízalos. No borres nada ni envíes ni respondas ningún correo real.`,
+        usuario_id: usuarioId,
+        empresa_id: SESSION?.empresa_id || null,
+        canal: 'panel',
+        adjuntos: [],
+        rol: SESSION?.rol || null,
+        pantalla: 'correos-auto',
+        dom_actual: null,
+      }),
+    });
+    if (!res.ok || !res.body) return;
+    // Drenar el stream sin pintarlo -- solo interesa el efecto (las tools que ejecute).
+    const reader = res.body.getReader();
+    while (true) { const { done } = await reader.read(); if (done) break; }
+    if (typeof cargarCorreosPanel === 'function' && document.getElementById('correosList')) cargarCorreosPanel();
+  } catch (_) { /* en segundo plano -- un fallo aquí no debe interrumpir al usuario */ }
 }
 
 async function alternarLeidoCorreo(gmailId, leido) {
@@ -25177,7 +25220,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.25';
+const PANEL_APP_VERSION = '9.26';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

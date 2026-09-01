@@ -1,5 +1,69 @@
 # Handoff — Alejandra 2.0
 
+## CORREOS-PANEL-01 — Gmail real roto: token revocado, no confirmado como se dijo (2026-08-31)
+
+- Contexto: único pendiente que quedaba abierto de `CORREOS-PANEL-01` (2026-08-17) — no se
+  había podido probar con una cuenta de Gmail real conectada, solo con la cuenta de prueba
+  sin Gmail. Adrián conectó Chrome real vía Claude in Chrome (extensión, sesión ya
+  autenticada en Alejandra Office).
+- **Primer intento de verificación, con un fallo propio de metodología:** "Mis Correos"
+  cargaba de entrada la caché con correos reales (remitentes/fechas/asuntos reales, hasta
+  agosto 2026); al pulsar "🔄 Sincronizar", `read_network_requests` mostró `POST
+  /correos/sincronizar` → `200`. Se dio por buena la sincronización SOLO por el código
+  HTTP, sin leer el cuerpo de la respuesta — error real: `sincronizarCorreos()`
+  (`worker.js`) devuelve `json({ok:false,error:...})` con status `200` a propósito (para no
+  romper el frontend con un HTTP de error), así que un `200` no significa éxito en este
+  endpoint. Los correos en pantalla eran los de la caché ya cargada al entrar a la página,
+  de antes de cualquier sincronización de esta sesión.
+- **Se destapó al probar "Organizar con Alejandra"** (a petición de Adrián, "prueba a que
+  alejandra los ordene a ver si puede"): el chat sí expone el error real de una tool al
+  usuario. `leer_gmail` (vía `delegar_tarea` → ayudante "correos") devolvió
+  `{"ok":false,"error":"Token has been expired or revoked."}` — confirmado leyendo el
+  evento SSE `tool_end` real (`preview`) con `javascript_tool`, no solo la respuesta
+  parafraseada del modelo. Repetido llamando `POST /correos/sincronizar` directamente con
+  el header correcto (`X-Token`, no `Authorization: Bearer` — ese es el de
+  `alejandra-agente`, no el de `worker.js`): mismo error, `{ok:false,error:"Token has been
+  expired or revoked."}`, HTTP `200`.
+- **Hipótesis descartada:** se pensó que podía ser una colisión transitoria (el polling de
+  `/correos/nuevas-todas-cuentas` cada 2 min refresca el mismo `refresh_token` en paralelo)
+  y se añadió un reintento con pausa corta en `_refrescarTokenGmail()`
+  (`VERIF-CORREOS-GMAIL-01`, `worker.js`, desplegado) — no resolvió el fallo, que se
+  reprodujo igual después del reintento. El token está genuinamente revocado o caducado del
+  lado de Google, no es un problema de concurrencia del código.
+- **Bug real encontrado de paso, causa raíz del "(sin email)" que se veía en la captura de
+  Adrián:** `GMAIL_OAUTH_SCOPES` (`worker.js`) solo pedía `gmail.readonly`/`gmail.send` —
+  sin scope de email, la llamada a `userinfo()` de `gmailAuthCallback()` no puede devolver
+  la dirección conectada, así que `gUser.email` queda `undefined` → se guarda `NULL`. Peor:
+  el `ON CONFLICT(usuario_id, email_conectado)` de `gmail_cuentas` nunca deduplica con
+  `NULL` (NULL≠NULL en SQL), así que cada reconexión con email vacío crearía una fila
+  nueva en vez de actualizar la existente. Fix: añadido
+  `https://www.googleapis.com/auth/userinfo.email` al scope (scope mínimo, solo lee la
+  dirección — no cambia la decisión ya tomada de no pedir `gmail.modify`). Desplegado
+  (`worker.js`, verificado `/health`) antes de que Adrián reconectara.
+- **Reconexión y verificación final:** Adrián reconectó desde "Mi cuenta" → "Conectar otra
+  cuenta" (mismo botón sirve para reautorizar la cuenta ya existente, pese al nombre).
+  Verificado con Claude in Chrome, esta vez leyendo el CUERPO real de las respuestas (no
+  solo el código HTTP, el error de la vuelta anterior de esta misma sesión):
+  - `panel.html` ya muestra el email real (`padilla585.projects@gmail.com`), no
+    "(sin email)".
+  - `POST /correos/sincronizar` (con el header correcto, `X-Token`) →
+    `{"ok":true,"email":"padilla585.projects@gmail.com","nuevos":5,"total":10}`.
+  - "Organizar con Alejandra" con el mensaje "Organiza mis correos por categoria" completó
+    `delegar_tarea` → `leer_gmail` sin error, y devolvió un resumen real priorizado
+    (Urgente: pago fallido de Anomaly 8,98€, límite de Anthropic API, plazo de migración de
+    billing en Google AI Studio 12/oct; Seguridad/Infraestructura: límite diario de
+    AbuseIPDB agotado), con importes, fechas y remitentes reales — no genérico.
+- **Matiz encontrado, sin arreglar a propósito (pendiente de decisión de Adrián):** ese
+  mismo prompt NO disparó `categorizar_correos` — confirmado sin ningún `PUT
+  /correos/:gmailId` en la red tras la respuesta. La lista de "Mis Correos" sigue mostrando
+  el botón "🏷️ Categorizar" sin etiqueta en ningún correo; "organizar" hoy se resuelve como
+  un resumen conversacional, no como guardar `categoria_app` por correo. Puede ser el
+  comportamiento correcto (el botón se diseñó a propósito "sin texto predefinido, para
+  pedir lo que sea") o un hueco del `systemPrompt` del ayudante "correos" que no deja claro
+  que debe llamar a la tool cuando se le pide "organizar/categorizar" — sin decidir todavía,
+  pendiente de que Adrián diga qué prefiere.
+- Detalle también en `TASKS.md`/`PROJECT_STATE.md`.
+
 ## TELECOM-MOVIL-02 / CPD-MOVIL-02 — Racks y Sondas CPD: usabilidad real en el móvil (2026-08-19)
 
 - Contexto: sesión previa (2026-08-18) había dado por "completo, desplegado y verificado"

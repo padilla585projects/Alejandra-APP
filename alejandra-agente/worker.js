@@ -2508,20 +2508,28 @@ const TOOL_ENVIAR_GMAIL = {
 // Google concedido (gmail.readonly + gmail.send) no permite tocar el Gmail real
 // (archivar/etiquetas necesitaría gmail.modify, fuera de alcance). Esta tool escribe
 // categoria_app en la caché del panel de correos (PUT /correos/:gmailId), nunca en Gmail.
+// GESTION-AUTO-CORREOS-01 (31/08/2026): Adrián -- "que administre completamente el correo
+// quiero", con el alcance decidido explícitamente (AskUserQuestion): categorizar + archivar
+// + marcar leído sin preguntar cada vez (N0, reversible, dentro de la app); enviar/responder
+// SIGUE exigiendo confirmación humana explícita (enviar_gmail, sin cambios) y borrar NO
+// entra en el alcance automático -- ampliados los campos opcionales archivar/marcar_leido,
+// se mantiene el nombre de la tool para no romper el catálogo fijo del ayudante "correos".
 const TOOL_CATEGORIZAR_CORREOS = {
   name: 'categorizar_correos',
-  description: 'Asigna una categoría (dentro de la app, NUNCA en el Gmail real) a uno o varios correos ya vistos con leer_gmail. Úsalo cuando el usuario pida organizar/categorizar/clasificar sus correos.',
+  description: 'Asigna una categoría, y opcionalmente archiva y/o marca como leído (todo DENTRO de la app, NUNCA en el Gmail real) a uno o varios correos ya vistos con leer_gmail. Úsalo cuando el usuario pida organizar/categorizar/clasificar/gestionar sus correos, incluida la gestión automática tras sincronizar.',
   input_schema: {
     type: 'object',
     properties: {
       correos: {
         type: 'array',
-        description: 'Lista de correos a categorizar',
+        description: 'Lista de correos a gestionar',
         items: {
           type: 'object',
           properties: {
             gmail_id: { type: 'string', description: 'id del correo (el mismo que devolvió leer_gmail)' },
             categoria: { type: 'string', description: 'Categoría breve, p.ej. "urgente", "proveedores", "spam"' },
+            archivar: { type: 'boolean', description: 'true para archivar dentro de la app (solo si ya no necesita atención del usuario -- promocional, informativo, o un aviso ya resuelto). Omitir/false si requiere su atención o respuesta.' },
+            marcar_leido: { type: 'boolean', description: 'true para marcar como leído dentro de la app (solo si es puramente informativo, sin acción pendiente). Omitir/false si aún puede necesitar su atención.' },
           },
           required: ['gmail_id', 'categoria'],
         },
@@ -2562,7 +2570,7 @@ const AYUDANTES = {
     // configurados de antemano, y el refresh token se genera y guarda cifrado solo cuando
     // el usuario pulsa "Conectar mi Gmail" en Mi cuenta (ya lo hizo). Grounding explícito
     // para que el modelo no rellene esos huecos con conocimiento genérico de OAuth2.
-    systemPrompt: 'Eres el ayudante de Correos de Alejandra. Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales. Si el usuario pide organizar/categorizar/clasificar sus correos: primero léelos con leer_gmail si no los tienes ya, decide categorías breves y razonables (p.ej. "urgente", "proveedores", "spam", "sin urgencia") y llama a categorizar_correos con la lista completa de {gmail_id, categoria}. Esto SOLO guarda la categoría dentro de la app (panel de correos) -- nunca archiva, etiqueta ni modifica nada en el Gmail real del usuario (no tienes permiso de Google para eso); si el usuario pide archivar/marcar leído/etiquetar de verdad en Gmail, dile que esa función no está disponible todavía.',
+    systemPrompt: 'Eres el ayudante de Correos de Alejandra, y administras la bandeja del usuario DENTRO de la app (nunca tocas su Gmail real salvo para leerlo y, con su confirmación explícita, enviar). Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella; esta barrera NUNCA se salta, ni siquiera en una gestión automática. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales.\n\nGestión (organizar/categorizar/clasificar/administrar sus correos, incluidas las peticiones automáticas tras sincronizar, sin que el usuario tenga que pedirlo cada vez): primero léelos con leer_gmail si no los tienes ya. Para CADA correo decide (a) una categoría breve y razonable (p.ej. "urgente", "proveedores", "facturas", "spam", "sin urgencia"), (b) si archivarlo -- SOLO si es claramente promocional/informativo o un aviso ya resuelto que no necesita ninguna acción del usuario --, y (c) si marcarlo leído -- SOLO si es puramente informativo, sin nada pendiente. Si un correo parece requerir su atención, respuesta o una decisión suya (facturas sin pagar, avisos de seguridad reales, un cliente/jefe escribiendo, algo con plazo), NO lo archives ni lo marques leído -- solo categorízalo, para que él lo vea y decida. Ante la duda, no archives ni marques leído: es preferible dejarlo visible de más que ocultar algo importante. Llama a categorizar_correos con la lista completa de {gmail_id, categoria, archivar, marcar_leido} -- archivar/marcar_leido puedes omitirlos u omitirlos en false cuando no aplique. Estas tres acciones (categorizar/archivar/marcar leído) son solo dentro de la app, reversibles y N0 -- no hace falta pedir confirmación humana para ellas, a diferencia de enviar_gmail. NUNCA borres correos (no tienes tool para eso) ni los archives/marques leído en el Gmail real (no tienes permiso de Google para eso, gmail.modify no está concedido) -- si el usuario pide archivar/marcar leído/etiquetar de verdad en Gmail, dile que esa función no está disponible todavía.',
   },
 };
 
@@ -10207,19 +10215,22 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const correos = Array.isArray(input.correos) ? input.correos : [];
         if (!correos.length) return '❌ Falta la lista de correos a categorizar.';
         if (!env.API_WEB) return JSON.stringify({ ok: false, error: 'Service binding API_WEB no disponible.' });
-        let ok = 0, fallos = 0;
+        let ok = 0, fallos = 0, archivados = 0, leidos = 0;
         for (const c of correos) {
           if (!c.gmail_id || !c.categoria) { fallos++; continue; }
+          const body = { usuario_id, categoria_app: c.categoria };
+          if (c.archivar === true) { body.archivado = true; archivados++; }
+          if (c.marcar_leido === true) { body.leido_app = true; leidos++; }
           const resp = await env.API_WEB.fetch(`https://alejandra-app-api.alejandra-app.workers.dev/correos/${encodeURIComponent(c.gmail_id)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
-            body: JSON.stringify({ usuario_id, categoria_app: c.categoria }),
+            body: JSON.stringify(body),
           });
           if (resp.ok) ok++; else fallos++;
         }
-        return `✅ ${ok} correo(s) categorizados${fallos ? `, ${fallos} con error` : ''}.`;
+        return `✅ ${ok} correo(s) gestionados (${archivados} archivados, ${leidos} marcados leídos)${fallos ? `, ${fallos} con error` : ''}.`;
       } catch (e) {
-        return JSON.stringify({ ok: false, error: 'Error categorizando correos: ' + e.message });
+        return JSON.stringify({ ok: false, error: 'Error gestionando correos: ' + e.message });
       }
     }
 

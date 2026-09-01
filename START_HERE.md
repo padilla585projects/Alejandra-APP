@@ -4,15 +4,22 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**CORREOS-PANEL-01, cerrada de verdad (2026-08-31):** el Gmail real de Adrián estaba con el
+token OAuth2 revocado; de paso se encontró y arregló un bug real (`GMAIL_OAUTH_SCOPES` sin
+scope de email, causaba el "(sin email)" y rompía la deduplicación de cuentas). Tras el fix
+y que Adrián reconectara, verificado de extremo a extremo con Claude in Chrome leyendo el
+cuerpo real de las respuestas: sincronización real (`nuevos:5`) y "Organizar con Alejandra"
+devolviendo un resumen real con datos concretos de sus correos. Matiz sin decidir: ese
+prompt no guarda la categoría por correo (`categorizar_correos` no se llamó) — pendiente de
+que Adrián diga si lo quiere así. Detalle en `PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
+
 **CORREOS-PANEL-01 completada, desplegada y verificada (2026-08-17):** panel de correos por
 usuario en `panel.html` (sincroniza Gmail real, categoriza dentro de la app, redacta/envía),
 planificado con `EnterPlanMode` antes de tocar código. De paso, `BUGFIX-CACHE-PROMPT-01`
 (bug real de caché de prompts + fuga parcial de detalle técnico en `delegar_tarea`,
 encontrado corrigiendo un diagnóstico erróneo de la propia Alejandra) y dos pendientes
 antiguos cerrados (informe de fichajes imprimible, Almacén viendo material de todos los
-departamentos en el móvil). **Pendiente: que Adrián pruebe en vivo la sincronización real
-de su Gmail** — no lo pude probar yo con datos reales. Detalle en
-`PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
+departamentos en el móvil). Detalle en `PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
 
 **Expansión de Correos + TELECOM-NAV-01, desplegadas y verificadas (2026-08-17, misma
 sesión):** a raíz de pruebas en vivo de Adrián sobre el panel de Correos — borrar, selección
