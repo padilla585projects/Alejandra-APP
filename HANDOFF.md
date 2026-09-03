@@ -1,5 +1,25 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0023 ampliación — Web Push real a Chrome/PWA + bug de suscripción corregido (2026-09-03, tarde, continuación 3)
+
+- Adrián probó el push del correo anterior: llegó al móvil (app nativa) pero no a Chrome.
+  Verificado con Claude in Chrome sobre su navegador real: `Notification.permission`
+  `granted` y `pushManager.getSubscription()` con un endpoint real, pero ESE endpoint no
+  estaba en `push_subscriptions` — ninguna fila nueva desde el 30/05/2026. Causa raíz: el
+  fetch de registro nunca mandaba token de sesión contra un endpoint que lo exige (401
+  silencioso). No es un bug de esta sesión, llevaba roto desde que se añadió la exigencia de
+  sesión al endpoint.
+- Fix + Web Push real por usuario (detalle en `CHANGELOG.md`): `sendWebPushToUsuario()` en
+  el raíz, `POST /internal/push/enviar`, `notificarPushUsuario()` del agente ahora manda
+  por FCM y Web Push a la vez, `X-Token` añadido al registro de suscripción en `index.html`.
+- **Verificado en vivo, con la sesión real de Adrián en su Chrome:** tras el fix, se forzó
+  el reregistro (`_registrarPushAlejandra(getSession())`) → la suscripción de ESE Chrome
+  concreto apareció en `push_subscriptions`. Pendiente de una prueba fresca completa
+  (correo → notificación del sistema visible en Chrome) para cerrarlo del todo — la fila de
+  prueba anterior (#7, código `E78D42`) sigue `pendiente` en D1, lista para repetir la
+  verificación.
+- Desplegados los dos Workers. `index.html` pendiente de publicar a Pages tras el commit.
+
 ## ADR-0023 ampliación — push + pantalla en la app móvil, desplegado (2026-09-03, tarde, continuación 2)
 
 - Pregunta de Adrián ("¿y los que no tienen bot?") → hueco real: sin Telegram no había

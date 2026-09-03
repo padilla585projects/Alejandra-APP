@@ -5848,19 +5848,19 @@ async function _registrarPushAlejandra(sessionData) {
     }
     const uid = sessionData?.usuario_id || sessionData?.nombre || 'unknown';
     const subJson = sub.toJSON();
-    // Registrar en agente Y en worker principal (ambos comparten VAPID via D1)
-    await Promise.allSettled([
-      fetch(`${_AGENTE_PUSH_BASE}/push-subscribe`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario_id: uid, subscription: subJson })
-      }),
-      fetch(getAPI() + '/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Token': sessionData?.token || '' },
-        body: JSON.stringify({ subscription: subJson })
-      })
-    ]);
+    // ADR-0023 ampliación (03/09/2026): bug real encontrado verificando el aviso push en
+    // Chrome -- esta llamada nunca mandaba ningún token de sesión (ni Authorization ni
+    // X-Token), y /push-subscribe del agente EXIGE sesión (getAuth) -- devolvía 401
+    // siempre, silenciado por Promise.allSettled. push_subscriptions llevaba desde finales
+    // de mayo sin una fila nueva. La segunda llamada, a worker.js raíz, apuntaba a una ruta
+    // que nunca existió ahí (/push/subscribe) -- se retira: los dos Workers comparten la
+    // misma D1, así que con que el agente guarde la suscripción basta (sendWebPushToUsuario
+    // en worker.js raíz ya lee de la misma tabla).
+    await fetch(`${_AGENTE_PUSH_BASE}/push-subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Token': sessionData?.token || '' },
+      body: JSON.stringify({ usuario_id: uid, subscription: subJson })
+    }).catch(() => {});
     console.log('[Push] Suscripción registrada para', uid);
   } catch (e) {
     console.warn('[Push Alejandra] Error:', e.message);

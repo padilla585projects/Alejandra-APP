@@ -881,6 +881,61 @@ async function sendWebPushToDevs(env, title, body, url = '/panel.html') {
   }
 }
 
+// ADR-0023 ampliación (03/09/2026): Web Push a TODAS las suscripciones de un usuario.
+// Hasta hoy `push_subscriptions` (que rellena alejandra-agente en /push-subscribe desde
+// index.html/panel.html, PWA y Chrome de escritorio) se escribía pero NADIE la leía: el
+// único push por usuario era FCM (app nativa). Las claves VAPID viven solo aquí, así que
+// el agente pide el envío por el endpoint interno de abajo. `usuario_id` en esa tabla es
+// TEXT y a veces guarda el nombre ("Adrian") en vez del id ("3"): se buscan ambos.
+// Devuelve cuántas suscripciones aceptaron el push (201). Las 404/410 se borran.
+async function sendWebPushToUsuario(env, usuarioId, title, body, url = 'index.html') {
+  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY || !usuarioId) return 0;
+  let enviados = 0;
+  try {
+    const u = await env.DB.prepare('SELECT nombre FROM usuarios WHERE id=?').bind(usuarioId).first().catch(() => null);
+    const { results } = await env.DB.prepare(
+      `SELECT rowid AS rid, endpoint, p256dh, auth FROM push_subscriptions WHERE usuario_id=? OR (? IS NOT NULL AND LOWER(usuario_id)=LOWER(?)) LIMIT 10`
+    ).bind(String(usuarioId), u?.nombre || null, u?.nombre || null).all();
+    const payload = JSON.stringify({ title, body, url });
+    const vistos = new Set();
+    for (const s of (results || [])) {
+      if (!s.endpoint || vistos.has(s.endpoint)) continue;
+      vistos.add(s.endpoint);
+      try {
+        const [jwt, encrypted] = await Promise.all([_vapidJWT(env, s.endpoint), _encryptPush(s.p256dh, s.auth, payload)]);
+        const res = await fetch(s.endpoint, {
+          method: 'POST',
+          headers: { 'Authorization': `vapid t=${jwt},k=${env.VAPID_PUBLIC_KEY}`, 'Content-Type': 'application/octet-stream', 'Content-Encoding': 'aes128gcm', 'TTL': '86400', 'Urgency': 'high' },
+          body: encrypted,
+        });
+        if (res.ok) enviados++;
+        else if (res.status === 404 || res.status === 410) {
+          await env.DB.prepare('DELETE FROM push_subscriptions WHERE rowid=?').bind(s.rid).run().catch(() => {});
+        }
+      } catch (_) {}
+    }
+  } catch (e) {
+    autoLearn(env, 'error', 'sendWebPushToUsuario falló', e.message, 3);
+  }
+  return enviados;
+}
+
+// POST /internal/push/enviar {usuario_id, titulo, cuerpo, url?} -- solo con X-Internal-Secret
+// (el agente). Devuelve {ok, enviados}.
+async function internalPushEnviar(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const auth = await _getAuthPlano(request, env, body);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const titulo = String(body.titulo || 'Alejandra').slice(0, 120);
+  const cuerpo = String(body.cuerpo || '').slice(0, 400);
+  if (!cuerpo) return err('Falta cuerpo', 400);
+  // URL RELATIVA (sin barra inicial): sw.js hace clients.openWindow(url) y resuelve contra
+  // su propio scope (/Alejandra-APP/ en Pages); una absoluta "/index.html" caería fuera.
+  const url = /^[a-z0-9_.\-]+\.html(\?.*)?$/i.test(String(body.url || '')) ? String(body.url) : 'index.html';
+  const enviados = await sendWebPushToUsuario(env, auth.usuario_id, titulo, cuerpo, url);
+  return json({ ok: true, enviados });
+}
+
 // --- ASISTENTE IA DEV (Anthropic Claude) ---
 
 async function transcribeAudio(env, audioBuffer) {
@@ -5631,6 +5686,7 @@ export default {
       // llama alejandra-agente (Service Binding, X-Internal-Secret) igual que
       // internalGmailEnviar/internalGmailListar, ver comentario en _getAuthPlano.
       if (path === '/internal/telegram/enviar' && method === 'POST') return await internalTelegramEnviar(request, env);
+      if (path === '/internal/push/enviar' && method === 'POST') return await internalPushEnviar(request, env); // ADR-0023 ampliación: Web Push por usuario
       if (path === '/tareas-programadas' && method === 'GET')       return await getTareasProgramadas(request, env);
       if (path === '/tareas-programadas' && method === 'POST')      return await crearTareaProgramada(request, env);
       if (path.match(/^\/tareas-programadas\/\d+$/) && method === 'DELETE') return await cancelarTareaProgramadaPanel(parseInt(path.split('/')[2]), request, env);

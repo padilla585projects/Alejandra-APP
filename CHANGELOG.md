@@ -4,6 +4,30 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-03 — ADR-0023 ampliación: el aviso "push" ahora llega también a la PWA/Chrome, no solo a la app nativa)
+
+- Adrián: "¿el móvil sería igual?" y probó — el push llegó a la app nativa (Android, FCM)
+  pero no a Chrome de escritorio. Causa: el push por usuario (`notificarPushUsuario()`) solo
+  miraba `alejandra_memoria.tipo='fcm_token'` (app nativa); la tabla `push_subscriptions`
+  (Web Push estándar, la que rellenan la PWA e `index.html` en Chrome) existía pero nadie la
+  leía para avisos de Alejandra.
+- `worker.js` raíz (dueño de las claves VAPID): `sendWebPushToUsuario()` nueva — envía Web
+  Push cifrado (aes128gcm) a TODAS las suscripciones de un usuario, buscando por id o por
+  nombre (`push_subscriptions.usuario_id` es TEXT y a veces guarda uno u otro), limpia
+  suscripciones caducadas (404/410). `POST /internal/push/enviar` nuevo, solo con el
+  secreto interno del agente.
+- `alejandra-agente/worker.js`: `notificarPushUsuario()` ahora manda por los DOS canales a
+  la vez (FCM nativo + Web Push vía el endpoint interno de arriba).
+- **Bug real encontrado y corregido de paso, no introducido por esta ronda:** la función que
+  registra la suscripción push en `index.html` (`_registrarPushAlejandra()`, dispara al
+  iniciar sesión) llamaba a `/push-subscribe` del agente **sin ningún token de sesión**, y
+  ese endpoint exige uno (`getAuth`) — devolvía 401 siempre, silenciado por
+  `Promise.allSettled`. `push_subscriptions` no tenía ninguna fila nueva desde finales de
+  mayo. Fix: añadido `X-Token`. De paso, retirada la segunda llamada a
+  `worker.js` raíz `/push/subscribe` — esa ruta nunca existió ahí (dead code silencioso);
+  con que el agente guarde la suscripción basta, los dos Workers comparten la misma D1.
+- 3 tests nuevos (233/233).
+
 ### Added (2026-09-03 — ADR-0023 ampliación: aviso por push + pantalla "Pendientes de aprobar" en la app móvil, v9.31)
 
 - Adrián: "¿y qué pasaría con los demás usuarios que no tienen bot?" — un usuario sin
