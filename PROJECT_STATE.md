@@ -1,6 +1,12 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-09-03
+- Estado (2026-09-03, noche): **ADR-0023 en producción y verificado en vivo (canales chat y
+  panel, caducidad, idempotencia) contra D1 real; migración autorizada y aplicada; los dos
+  Workers y Pages (9.30) desplegados.** De la verificación salió y se corrigió un bug de
+  prompt del ayudante "correos" (rechazaba la frase de confirmación aunque la tool la
+  valida). **Queda para Adrián:** vincular Telegram y probar el botón + el envío real desde
+  su Gmail (nadie más tiene ambas cosas). Detalle en `HANDOFF.md`/`CHANGELOG.md`.
 - Estado (2026-09-03, tarde): **ADR-0023 ACEPTADO por el Director (seis recomendaciones tal
   cual) e implementado en código; pendiente migración D1 (autorización humana), despliegue
   y verificación en vivo.** Cola `acciones_pendientes`, verifier puro, encolado en
