@@ -1975,7 +1975,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           <select class="tbl-search" id="telecomOfficeObra" style="min-width:210px" onchange="telecomOfficeCargarIdfs()">
             <option value="">🏗 Todas las obras</option>
           </select>
-          <button class="btn btn-secondary" id="telecomOfficeCuadrosBtn" style="display:none" onclick="telecomOfficeCargarCuadros()">🧰 Cuadros de campo</button>
+          <!-- TELECOM-NAV-02: sin onclick inline a propósito. El handler lo asigna
+               telecomOfficeAbrirIdf() (+ Nuevo Cuadro) justo antes de mostrar el botón;
+               el que había aquí llamaba a telecomOfficeCargarCuadros(), que no existe. -->
+          <button class="btn btn-secondary" id="telecomOfficeCuadrosBtn" style="display:none">🧰 Cuadros de campo</button>
           <button class="btn btn-secondary" id="telecomOfficeInformeTopBtn" style="display:none" onclick="telecomOfficeAbrirInformePicker()">📄 Informe</button>
           <button class="btn btn-primary" id="telecomOfficeNuevoBtn" onclick="telecomOfficeAbrirNuevo()">+ Nuevo IDF</button>
           <button class="btn btn-secondary" onclick="telecomOfficeCargarIdfs()">🔄 Actualizar</button>
@@ -12557,8 +12560,16 @@ async function telecomOfficeCargar() {
   if (_telecomOfficeNivel === 'rack' && _telecomOfficeCtx.idf_id) return telecomOfficeAbrirIdf(_telecomOfficeCtx.idf_id);
   if (_telecomOfficeNivel === 'pp' && _telecomOfficeCtx.rack_id) return telecomOfficeAbrirRack(_telecomOfficeCtx.rack_id);
   if (_telecomOfficeNivel === 'puertos' && _telecomOfficeCtx.pp_id) return telecomOfficeAbrirPP(_telecomOfficeCtx.pp_id);
-  if (_telecomOfficeNivel === 'cuadros') return telecomOfficeCargarCuadros();
-  if (_telecomOfficeNivel === 'cuadro-puertos' && _telecomOfficeCtx.cuadro_id) return telecomOfficeAbrirCuadro(_telecomOfficeCtx.cuadro_id);
+  // TELECOM-NAV-02 (03/09/2026): la rama de Cuadros de campo se quedó fuera del fix de
+  // TELECOM-NAV-01 y seguía teniendo el bug original. `telecomOfficeAbrirCuadro()` fija el
+  // nivel 'cuadro' (singular) y `telecomOfficeAbrirComponentePuertos()` fija 'cuadro-puertos',
+  // pero aquí solo se contemplaba 'cuadros' (plural, que NO lo fija nadie: rama muerta que
+  // además llamaba a una función inexistente) y 'cuadro-puertos' se restauraba abriendo el
+  // cuadro, un nivel por encima de donde estaba el usuario. Resultado real: dentro de un
+  // cuadro, el auto-refresh de 60s te devolvía a la lista de IDFs; dentro de los puertos de
+  // un componente, te sacaba al cuadro y al tick siguiente a la lista de IDFs.
+  if (_telecomOfficeNivel === 'cuadro' && _telecomOfficeCtx.cuadro_id) return telecomOfficeAbrirCuadro(_telecomOfficeCtx.cuadro_id);
+  if (_telecomOfficeNivel === 'cuadro-puertos' && _telecomOfficeCtx.componente_id) return telecomOfficeAbrirComponentePuertos(_telecomOfficeCtx.componente_id);
   await telecomOfficeCargarIdfs();
 }
 
@@ -31573,9 +31584,14 @@ async function cargarGastosDietas() {
   // Populate obra filter
   const sel = document.getElementById('gdFiltroObra');
   if (sel) {
+    // SYNC-SELECT-01 (03/09/2026): este <select> se reconstruye entero en cada pasada del
+    // loader, y el auto-refresh de SYNC_INTERVALS vuelve a ejecutar el loader solo. Sin
+    // conservar la opcion elegida, el filtro de obra se reseteaba a "Todas" y la tabla
+    // volvia a mostrarlo todo mientras el usuario la estaba mirando.
+    const cur = sel.value;
     const obras = [...new Map(_gdData.filter(r=>r.obra_id).map(r=>[r.obra_id,r.obra_nombre||'Obra '+r.obra_id])).entries()];
     sel.innerHTML = '<option value="">Todas las obras</option>' +
-      obras.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+      obras.map(([id,nom])=>`<option value="${id}"${String(id)===cur?' selected':''}>${nom}</option>`).join('');
   }
   filtrarGastosDietas();
 }
@@ -32137,9 +32153,14 @@ async function cargarCobrosCliente() {
   // Populate obra filter
   const sel = document.getElementById('ccFiltroObra');
   if (sel) {
+    // SYNC-SELECT-01 (03/09/2026): este <select> se reconstruye entero en cada pasada del
+    // loader, y el auto-refresh de SYNC_INTERVALS vuelve a ejecutar el loader solo. Sin
+    // conservar la opcion elegida, el filtro de obra se reseteaba a "Todas" y la tabla
+    // volvia a mostrarlo todo mientras el usuario la estaba mirando.
+    const cur = sel.value;
     const obras = [...new Map(_ccData.filter(r=>r.obra_id).map(r=>[r.obra_id,r.obra_nombre||'Obra '+r.obra_id])).entries()];
     sel.innerHTML = '<option value="">Todas las obras</option>' +
-      obras.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+      obras.map(([id,nom])=>`<option value="${id}"${String(id)===cur?' selected':''}>${nom}</option>`).join('');
   }
   filtrarCobrosCliente();
 }
@@ -32326,9 +32347,14 @@ async function cargarFacturasProveedor() {
   // Populate obra filter
   const sel = document.getElementById('fpFiltroObra');
   if (sel) {
+    // SYNC-SELECT-01 (03/09/2026): este <select> se reconstruye entero en cada pasada del
+    // loader, y el auto-refresh de SYNC_INTERVALS vuelve a ejecutar el loader solo. Sin
+    // conservar la opcion elegida, el filtro de obra se reseteaba a "Todas" y la tabla
+    // volvia a mostrarlo todo mientras el usuario la estaba mirando.
+    const cur = sel.value;
     const obras = [...new Map(_fpData.filter(r=>r.obra_id).map(r=>[r.obra_id,r.obra_nombre||'Obra '+r.obra_id])).entries()];
     sel.innerHTML = '<option value="">Todas las obras</option>' +
-      obras.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+      obras.map(([id,nom])=>`<option value="${id}"${String(id)===cur?' selected':''}>${nom}</option>`).join('');
   }
   filtrarFacturasProveedor();
 }
@@ -32677,9 +32703,14 @@ async function cargarHorariosObra() {
   // Populate obra filter
   const sel = document.getElementById('hoFiltroObra');
   if (sel) {
+    // SYNC-SELECT-01 (03/09/2026): este <select> se reconstruye entero en cada pasada del
+    // loader, y el auto-refresh de SYNC_INTERVALS vuelve a ejecutar el loader solo. Sin
+    // conservar la opcion elegida, el filtro de obra se reseteaba a "Todas" y la tabla
+    // volvia a mostrarlo todo mientras el usuario la estaba mirando.
+    const cur = sel.value;
     const obras = [...new Map(_hoData.filter(r=>r.obra_id).map(r=>[r.obra_id,r.obra_nombre||'Obra '+r.obra_id])).entries()];
     sel.innerHTML = '<option value="">Todas las obras</option>' +
-      obras.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+      obras.map(([id,nom])=>`<option value="${id}"${String(id)===cur?' selected':''}>${nom}</option>`).join('');
   }
   filtrarHorariosObra();
 }
@@ -40511,12 +40542,24 @@ async function poblarSelectObras(selectId) {
   }
   if (!window._obrasPanel?.length) await cargarObrasPanel();
   const obras = window._obrasPanel || _panelObras || [];
+  // SYNC-SELECT-01 (03/09/2026): esta función SOLO hacía appendChild, sin vaciar nunca lo
+  // que ya había añadido. La mayoría de llamadas se protegen con `options.length <= 1`,
+  // pero 53 selectores de 30 páginas la llaman sin guarda desde su PAGE_LOADER — y esos
+  // loaders los vuelve a ejecutar el auto-refresh de SYNC_INTERVALS cada 60-600s, así que
+  // la lista de obras se duplicaba en cada tick (una hora en Accidentes = 60 copias de
+  // cada obra en el desplegable). Se marcan las opciones que añade esta función y se
+  // retiran antes de repoblar: idempotente, sin tocar la opción placeholder del HTML y
+  // conservando lo que el usuario tuviera elegido.
+  const prev = sel.value;
+  sel.querySelectorAll('option[data-obra-opt]').forEach(o => o.remove());
   obras.forEach(o => {
     const opt = document.createElement('option');
     opt.value = o.id;
     opt.textContent = o.nombre;
+    opt.dataset.obraOpt = '1';
     sel.appendChild(opt);
   });
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
 // ── CERTIFICACIONES DE OBRA (NEW-67) ───────────────────────────────
@@ -42301,10 +42344,15 @@ async function cargarEscandalloPrecios() {
              + '<div class="kpi-label">'+k.label+'</div></div>').join('');
 
     // Populate capitulo filter
+    // SYNC-SELECT-01 (03/09/2026): el auto-refresh de SYNC_INTERVALS reejecuta este loader
+    // solo, y al reconstruir el <select> sin conservar la opción elegida el filtro de
+    // capítulo se reseteaba a "Todos" (y filtrarEscandallo() volvía a mostrar la tabla
+    // entera) mientras el usuario la estaba mirando.
     const caps = [...new Set(data.map(r => r.capitulo).filter(Boolean))].sort();
     const sel = document.getElementById('epFiltroCap');
+    const curCap = sel.value;
     sel.innerHTML = '<option value="">Todos capítulos</option>'
-      + caps.map(c => '<option value="'+c+'">'+c+'</option>').join('');
+      + caps.map(c => '<option value="'+c+'"'+(c===curCap?' selected':'')+'>'+c+'</option>').join('');
 
     // Populate obra filter
     poblarSelectObras('epFiltroObra');

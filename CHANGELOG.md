@@ -4,6 +4,52 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-03 — SYNC-SELECT-01 / TELECOM-NAV-02: auditoría completa del auto-refresh de `SYNC_INTERVALS`)
+
+Adrián pidió auditar el resto de `SYNC_INTERVALS` — el patrón que ya había mordido dos veces
+(TELECOM-NAV-01, 17/08/2026) solo se había revisado en Racks/Cableado y Sondas CPD. Auditadas
+las **108 páginas** con auto-refresh de `panel.html`, cruzando cada entrada de `SYNC_INTERVALS`
+con su `PAGE_LOADERS` y con todo lo que ese loader reescribe. Tres clases de bug reales, las
+tres corregidas.
+
+- **TELECOM-NAV-02 — Cuadros de campo se quedó fuera del fix de TELECOM-NAV-01.**
+  `telecomOfficeCargar()` restauraba los niveles `rack`/`pp`/`puertos` pero no `cuadro`
+  (que fija `telecomOfficeAbrirCuadro()`), y `cuadro-puertos` (que fija
+  `telecomOfficeAbrirComponentePuertos()`) lo restauraba abriendo el **cuadro**, un nivel por
+  encima de donde estaba el usuario. Efecto real en producción: dentro de un cuadro, el
+  auto-refresh de 60 s devolvía a la lista de IDFs; dentro de los puertos de un componente,
+  sacaba al cuadro y al tick siguiente a la lista de IDFs. Exactamente el bug que Adrián
+  reportó en agosto ("al darle a guardar me devuelve a la pagina de Racks"), vivo en esta rama.
+  Corregidos ambos niveles.
+- **TELECOM-NAV-02 (de paso) — `telecomOfficeCargarCuadros()` no existe.** Se referenciaba en
+  dos sitios: la rama `'cuadros'` (plural) de la cadena de restauración —código muerto, nadie
+  fija ese nivel, pero un `ReferenceError` esperando a que alguien lo fijara— y el `onclick`
+  inline del botón "🧰 Cuadros de campo". El botón funciona porque `telecomOfficeAbrirIdf()`
+  le reasigna el handler antes de mostrarlo; retirados ambos.
+- **SYNC-SELECT-01 — `poblarSelectObras()` duplicaba las obras en cada tick.** Solo hacía
+  `appendChild`, sin vaciar nunca lo ya añadido. De sus 155 llamadas, **71 no llevan la guarda
+  `options.length <= 1`, y 37 de ellas están dentro del `PAGE_LOADER` de 19 páginas con
+  auto-refresh** (Accidentes y Solicitudes de material cada 60 s, Control de calidad cada
+  90 s, Cubicaciones/Actas de replanteo/Formación/Hormigonado/Libro de subcontratación cada
+  300 s…). Una hora abierto en Accidentes = 60 copias de cada obra en el desplegable. La
+  función es ahora idempotente: marca sus opciones con `data-obra-opt`, las retira antes de
+  repoblar, respeta la opción placeholder del HTML y conserva el valor elegido. Un solo
+  cambio arregla los 71 sitios, incluidos los 34 de modales (que duplicaban en cada apertura).
+- **SYNC-SELECT-01 — cinco filtros se reseteaban solos.** `cargarHorariosObra`,
+  `cargarFacturasProveedor`, `cargarCobrosCliente`, `cargarGastosDietas` (filtro de obra) y
+  `cargarEscandalloPrecios` (filtro de capítulo) reconstruían su `<select>` sin conservar la
+  opción elegida y llamaban acto seguido a su `filtrarX()`: el auto-refresh devolvía el filtro
+  a "Todas" y la tabla a mostrarlo todo mientras el usuario la miraba. Aplicado el patrón que
+  ya usaban Bobinas y Presupuesto SOV (atributo `selected`).
+
+Comprobado además y **sin hallazgos**: guardas de modal completas (los 4 modales de Telecom y
+Sondas CPD ya estaban cubiertos); ningún loader vacía un input de búsqueda, cierra el modal
+genérico ni recrea la tabla Tabulator en cada tick; y el polling propio de `index.html`
+(`_APP_SECTION_POLL_SECS`, 5 pantallas) está limpio — ya aprendió esta lección en la
+sugerencia #214. `alejandra-panel.html` no tiene auto-refresh.
+
+Sin cambios de backend, de esquema ni de versión.
+
 ### Added (2026-09-03 — ADR-0023 ampliación: el aviso "push" ahora llega también a la PWA/Chrome, no solo a la app nativa)
 
 - Adrián: "¿el móvil sería igual?" y probó — el push llegó a la app nativa (Android, FCM)
