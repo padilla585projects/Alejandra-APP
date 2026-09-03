@@ -1,6 +1,18 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-09-03
+- Estado (2026-09-03, continuación): **ADR-0023 redactado — revisión humana asíncrona real
+  para N2 (Propuesto, pendiente de decisión del Director).** Cierra el "pendiente sin
+  decisión" de ARC-020. Propone una cola `acciones_pendientes` en D1 (migración, con
+  autorización), tres canales de aprobación equivalentes (frase de chat como hoy, botón de
+  Telegram, pestaña nueva en "Mis Tareas Programadas") y un ejecutor único en el cron `*/5`
+  ya existente de `alejandra-agente` (no cabe otro: 5 triggers por cuenta). Piloto acotado a
+  `enviar_gmail`/`programar_correo`, donde la fragilidad del `CONFIRMO ENVIO` por chat
+  quedó demostrada el 2026-09-01. Seis preguntas abiertas con recomendación. **Hallazgo
+  lateral, por verificar con el token del bot:** el webhook de Telegram que registra el
+  código no atiende los botones de `alejandra_fixes` (ver `ARCHITECT_BACKLOG.md`, ARC-020).
+  No se toca código ni D1 hasta que el ADR pase a Aceptado. Ver
+  `docs/decisions/ADR-0023-REVISION-HUMANA-ASINCRONA-N2.md`.
 - Estado (2026-09-03): **TAREAS-PROGRAMADAS-01 cerrada del todo — Alejandra programa
   correos y recordatorios a hora exacta.** Tools `programar_correo`/
   `programar_recordatorio`/`listar_tareas_programadas`/`cancelar_tarea_programada` en

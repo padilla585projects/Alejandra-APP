@@ -1,5 +1,32 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0023 — revisión humana asíncrona real para N2, redactado (2026-09-03)
+
+- Contexto: Adrián preguntó qué era el pendiente "revisión humana asíncrona para N2" de
+  ARC-020 y, tras la explicación, pidió redactar el ADR. Análisis previo sobre código real:
+  cómo se protege N2 hoy (frases síncronas `CONFIRMO *`, botón de Telegram solo para fixes,
+  Motor de Decisión que traza pero no bloquea, stub `solicitarRevisionHumanaAsincrona()`),
+  las 12+8 tools N2 declaradas, la evidencia del 2026-09-01 (fragilidad del `CONFIRMO
+  ENVIO` en turnos largos) y la infraestructura reutilizable (`tareas_programadas` + cron
+  `*/5`, botones inline y callbacks de `worker.js`, `/internal/telegram/enviar`, pantalla
+  "Mis Tareas Programadas").
+- Propuesta: cola `acciones_pendientes` (migración D1 con autorización), tres canales de
+  aprobación equivalentes, ejecutor único en el cron `*/5` existente (no hay hueco para
+  otro cron: 5 por cuenta), piloto acotado a `enviar_gmail`/`programar_correo`, N3 fuera
+  por ADR-0006, requisitos de seguridad explícitos (verificar `from.id` en callbacks,
+  código atado a argumentos exactos, el modelo nunca aprueba, transiciones idempotentes).
+- **Hallazgo lateral, NO verificado (necesita el token del bot para `getWebhookInfo`):**
+  `worker.js` raíz tiene dos manejadores del webhook de Telegram. `setupTelegramWebhook()`
+  registra `/telegram/webhook` → `telegramWebhook()`, que NO procesa `fix_apply`/`fix_reject`;
+  el que sí lo hace (`handleTelegramWebhook()`, `/telegram-webhook`) no tiene función de
+  registro. Si el webhook real está donde el código lo registra, el botón "Aplicar fix" de
+  `alejandra_fixes` — el ejemplo de revisión asíncrona "en producción" que cita ADR-0009 —
+  no funciona desde v5.38 (2026-05-04). Además, ningún callback verifica
+  `callback_query.from.id` contra `DEV_CHAT_ID`. Anotado en el ADR y en ARC-020; decidir
+  con Adrián antes de implementar.
+- Estado: Propuesto. Sin cambios de código ni D1. Siguiente paso: respuestas de Adrián a
+  las seis preguntas del ADR.
+
 ## TAREAS-PROGRAMADAS-01 — implementada, desplegada y verificada en vivo (2026-09-01)
 
 - Feature completa: `programar_correo`/`programar_recordatorio`/`listar_tareas_programadas`/
