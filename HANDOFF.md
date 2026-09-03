@@ -1,5 +1,34 @@
 # Handoff — Alejandra 2.0
 
+## SYNC-SELECT-01 / TELECOM-NAV-02 — auditoría del auto-refresh de `SYNC_INTERVALS` (2026-09-03, continuación 5)
+
+- Adrián: "audita el resto de SYNC_INTERVALS". Pendiente anotado desde TELECOM-NAV-01
+  (17/08/2026): el patrón solo se había revisado en Racks/Cableado y Sondas CPD.
+- **Método (reproducible, sin navegador):** scripts de análisis estático sobre `panel.html`
+  que cruzan las 108 entradas de `SYNC_INTERVALS` con su `PAGE_LOADERS`, resuelven el
+  alcance real de cada loader (distinguiendo llamadas de código de las que viven dentro de
+  un template literal, es decir de un `onclick`) y buscan cuatro cosas: (1) vistas
+  alternativas que escriben en el mismo contenedor que el loader y que el loader no
+  restaura; (2) `<select>` reconstruidos sin conservar el valor; (3) inputs de búsqueda
+  vaciados, modal genérico cerrado o Tabulator recreado en cada tick; (4) llamadas a
+  `poblarSelectObras()` sin la guarda `options.length <= 1`.
+- **Tres clases de bug reales, las tres corregidas** (detalle en `CHANGELOG.md`):
+  TELECOM-NAV-02 (niveles `cuadro` y `cuadro-puertos` sin restaurar → el auto-refresh de
+  60 s te saca de Cuadros de campo), `poblarSelectObras()` duplicando las obras en cada tick
+  (37 llamadas sin guarda dentro del loader de 19 páginas), y cinco filtros que se reseteaban
+  solos a "Todas" arrastrando la tabla con ellos.
+- **Verificación:** análisis de vistas no restauradas vuelve a 0/108; las 7 funciones tocadas
+  parsean y el recuento total de funciones de `panel.html` no cambia (1313); y la
+  idempotencia de `poblarSelectObras()` se probó ejecutando la función real extraída del
+  fichero contra un DOM mínimo — antes: 4→7→10→13→16→19 opciones en 6 ticks; después: 4 fijas
+  y el filtro del usuario intacto.
+- **Cuidado, incidencia de proceso:** una de las ediciones se hizo con un script de Python y
+  convirtió `panel.html` entero de CRLF a LF (el resto del repo es CRLF). Detectado y
+  revertido antes de commitear; `git status` y el chequeo de encoding quedaron limpios. Para
+  la próxima: editar con las herramientas de edición, no con `io.open(...).write()`.
+- **Sin verificar en vivo todavía**: son cambios de `panel.html` (Pages). Requieren
+  despliegue para comprobarse en producción; no se ha desplegado en esta ronda.
+
 ## ADR-0023 ampliación — verificación en vivo del Web Push a Chrome, con matiz honesto (2026-09-03, tarde, continuación 4)
 
 - Tres correos de prueba encolados desde el Chrome real de Adrián (ver ronda anterior) para

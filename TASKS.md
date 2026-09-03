@@ -1,5 +1,18 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-03, continuación 5): **SYNC-SELECT-01 / TELECOM-NAV-02 —
+auditadas las 108 páginas con auto-refresh de `SYNC_INTERVALS`, cierra el pendiente que
+arrastraba TELECOM-NAV-01 desde el 17/08/2026. Tres clases de bug reales encontradas y
+corregidas en `panel.html`; falta desplegar a Pages y verificar en vivo.** Ver
+`HANDOFF.md`/`CHANGELOG.md`.
+- Siguiente acción exacta: fusionar la PR y desplegar Pages (`pages.yml`, SHA de 40
+  caracteres). Luego verificar en producción: (1) Racks/Cableado → entrar en un cuadro de
+  campo y en los puertos de un componente, esperar >60 s y comprobar que no te saca; (2)
+  Accidentes → dejar la página abierta unos minutos y comprobar que el desplegable de obra
+  no acumula copias; (3) Facturas de proveedor → filtrar por una obra y esperar 90 s a que
+  el filtro siga puesto.
+- No requiere migración D1, ni cambios de backend, ni subir de versión.
+
 Estado (actualizado 2026-09-03, noche, continuación 3): **ADR-0023, Web Push a Chrome
 implementado y verificado a nivel de servidor (se ejecuta, limpia suscripciones muertas);
 falta confirmación visual de Adrián con la app completamente cerrada, porque la prueba en
