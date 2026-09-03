@@ -4,6 +4,29 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-03 — "no vincula Telegram": dos bugs reales de producción en `worker.js` raíz, encontrados cerrando la verificación de ADR-0023 con Chrome)
+
+- **La Alejandra dev de Telegram respondía SIEMPRE con error de API** —
+  `❌ Error API: tools.0.custom.acceso: Extra inputs are not permitted` — a cualquier mensaje
+  (visto en vivo en el chat real de Adrián, con tres intentos suyos de esa misma mañana ya
+  fallidos). Causa: desde la migración ADR-0010 del catálogo raíz (2026-08-02) las tools
+  llevan el metadato `acceso`/`cron`/`nivel_riesgo` y `nexusTools()` las pasaba TAL CUAL a
+  la API de Anthropic en los dos puntos de llamada (`toolsConCache` del asistente dev y
+  `webToolsConCache` del chat web); la API ahora rechaza campos desconocidos. Fix:
+  `toolParaAnthropic()` proyecta a `{name, description, input_schema}` antes de enviar
+  (equivalente a `toolsParaAnthropic()` de `alejandra-agente/lib.js`, regla "dos
+  cerebros"). Reverificado: "hola, ¿estás operativa?" → respuesta normal del asistente.
+- **La vinculación de Telegram ("/start <token>") no funcionaba para Adrián ni, según la
+  ruta registrada, para nadie.** Dos causas encadenadas: (1) solo `telegramWebhook()`
+  (`/telegram/webhook`) procesaba `/start`; `handleTelegramWebhook()` (`/telegram-webhook`)
+  ignoraba todo mensaje que no fuera del `DEV_CHAT_ID` — extraído
+  `procesarMensajeTelegramUsuario()` y llamado desde los dos; (2) en AMBOS manejadores la rama
+  del asistente dev iba antes, así que el `/start` del propio Adrián (`DEV_CHAT_ID`) caía en
+  el asistente ("[gestor_app] Procesando…") y nunca llegaba a `vincular_tokens` — ahora
+  `/start` se comprueba antes de la rama dev. 2 tests nuevos (228/228). Reverificado en vivo:
+  `usuarios.telegram_id` de Adrián pasó de NULL a vinculado y `/telegram/estado` →
+  `{vinculado:true}`.
+
 ### Fixed (2026-09-03 — verificación en vivo de ADR-0023: el ayudante "correos" se negaba a usar la frase de confirmación)
 
 - Al verificar el canal chat con un mensaje real que llevaba los datos del correo y

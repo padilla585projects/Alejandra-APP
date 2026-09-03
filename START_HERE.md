@@ -4,6 +4,13 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**ADR-0023 cerrado del todo (2026-09-03, noche, continuación):** canal Telegram y envío real
+verificados con el usuario real de Adrián desde su Chrome (botón Aprobar → cron → correo en
+su bandeja, comprobado con su conector de Gmail). De paso, dos bugs reales de producción en
+`worker.js` raíz corregidos: la Alejandra dev de Telegram respondía siempre con error de API
+(metadato ADR-0010 enviado a Anthropic) y la vinculación de Telegram no funcionaba (ruta del
+webhook + rama dev antes que `/start`). Ver `HANDOFF.md`/`CHANGELOG.md`.
+
 **ADR-0023 en producción y verificado (2026-09-03, noche):** migración autorizada y aplicada,
 los dos Workers y Pages (9.30) desplegados, canales chat y panel + caducidad + idempotencia
 verificados contra D1 real con el usuario de prueba. Fix de paso al prompt del ayudante

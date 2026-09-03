@@ -1933,6 +1933,28 @@ describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
       expect((raiz.match(/async function procesarCallbackTelegram\(/g) || []).length).toBe(1);
     });
 
+    it('worker.js raíz: la vinculación "/start <token>" se procesa en los DOS manejadores y ANTES de la rama del desarrollador', () => {
+      // Visto en vivo (03/09/2026): el /start de Adrián caía en el asistente dev y nunca vinculaba.
+      expect((raiz.match(/async function procesarMensajeTelegramUsuario\(/g) || []).length).toBe(1);
+      for (const fn of ['async function handleTelegramWebhook(', 'async function telegramWebhook(']) {
+        const ini = raiz.indexOf(fn);
+        const bloque = raiz.slice(ini, raiz.indexOf('\nasync function ', ini + 10));
+        const posStart = bloque.indexOf("startsWith('/start')");
+        const posDev = bloque.indexOf('// --- Asistente IA para el desarrollador ---');
+        expect(posStart, fn).toBeGreaterThan(0);
+        expect(posStart, fn + ': /start debe ir antes de la rama dev').toBeLessThan(posDev);
+        expect(bloque).toContain('procesarMensajeTelegramUsuario(env,');
+      }
+    });
+
+    it('worker.js raíz: las tools viajan a Anthropic SIN el metadato ADR-0010 (acceso/cron/nivel_riesgo)', () => {
+      // Visto en vivo (03/09/2026): "tools.0.custom.acceso: Extra inputs are not permitted".
+      expect(raiz).toContain('function toolParaAnthropic(t)');
+      expect(raiz).toMatch(/const toolsConCache = tools\.map\(toolParaAnthropic\)/);
+      expect(raiz).toMatch(/const webToolsConCache = webTools\.map\(toolParaAnthropic\)/);
+      expect((raiz.match(/ConCache = \w+\.map\(\(t, i\)/g) || []).length).toBe(0, 'ningún map directo sobre el catálogo crudo');
+    });
+
     it('worker.js raíz: el endpoint interno de Telegram solo admite botones n2_ok/n2_no', () => {
       const ini = raiz.indexOf('async function internalTelegramEnviar(');
       const bloque = raiz.slice(ini, raiz.indexOf('\nasync function ', ini + 10));

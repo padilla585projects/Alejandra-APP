@@ -1,10 +1,9 @@
 # TASKS — Cola operativa inmediata
 
-Estado (actualizado 2026-09-03, noche): **ADR-0023 en producción y verificado en vivo
-(chat, panel, caducidad, idempotencia, rechazo) contra D1 real. Sin tareas activas.**
-- Pendiente que solo puede hacer Adrián: vincular su Telegram en la app y probar el canal
-  Telegram (botón Aprobar) con un correo real desde su Gmail; comprobar que llega y que la
-  fila queda `ejecutada` con canal `telegram`. Ver `HANDOFF.md`.
+Estado (actualizado 2026-09-03, noche, continuación): **ADR-0023 cerrado del todo: los tres
+canales verificados, Telegram y envío real con el usuario real de Adrián (correo recibido,
+comprobado con su conector de Gmail). Dos bugs de producción del raíz corregidos de paso
+(asistente dev de Telegram roto; vinculación de Telegram inalcanzable). Sin tareas activas.**
 - Sigue abierta la verificación en vivo del quiosco de fichaje (`kiosco.html`, ARC-022).
 
 Estado (actualizado 2026-09-03, tarde): **ADR-0023 aceptado e implementado en código
