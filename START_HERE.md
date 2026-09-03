@@ -4,6 +4,12 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**ADR-0023 en producción y verificado (2026-09-03, noche):** migración autorizada y aplicada,
+los dos Workers y Pages (9.30) desplegados, canales chat y panel + caducidad + idempotencia
+verificados contra D1 real con el usuario de prueba. Fix de paso al prompt del ayudante
+"correos". **Pendiente de Adrián:** vincular Telegram y probar botón + envío real. Ver
+`TASKS.md`/`HANDOFF.md`.
+
 **ADR-0023 aceptado e implementado en código (2026-09-03, tarde):** Adrián aceptó las seis
 recomendaciones tal cual. Cola `acciones_pendientes` + aprobación por chat/Telegram/panel +
 ejecutor único en el cron `*/5`, piloto `enviar_gmail`/`programar_correo`; los dos

@@ -1,5 +1,51 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0023 — migración aplicada, desplegado y verificado en vivo por HTTP (2026-09-03, tarde)
+
+- Adrián autorizó la migración ("autorizo la migración"). Aplicada
+  `migrate_acciones_pendientes.sql` contra D1 remoto; esquema real leído con
+  `pragma_table_info`: 18 columnas, las esperadas. Desplegados `alejandra-agente` (dos
+  veces: feature + fix de prompt) y `alejandra-app-api` con `wrangler deploy` (ARC-021),
+  Pages con `pages.yml` (SHA completo, run en verde, `version.json` → 9.30). `/health`
+  `healthy` en ambos.
+- **Verificación en vivo, sin navegador (curl contra los endpoints reales), con el usuario de
+  prueba 357 de Constructora Demo (login `POST /verificar`, token en cabecera `X-Token`
+  para el raíz y `Authorization: Bearer` para el agente), comprobando SIEMPRE el estado en
+  D1 y los eventos SSE crudos, no el texto del chat:**
+  1. **Encolado desde chat:** "Envía un correo desde mi Gmail a ..." → `delegar_tarea` →
+     `enviar_gmail` devolvió PENDIENTE con código `E8EE06`; en D1 apareció la fila #1
+     `pendiente`, mismo código, `caduca_at` = +24 h, resumen sin cuerpo. Traza
+     `revision_n2` "encolada".
+  2. **Canal panel:** `POST /acciones-pendientes/1/aprobar` → `aprobada` (canal `panel`,
+     `decidido_por` 357). Repetir → **409** ("ya no está pendiente"). Id inexistente →
+     404. El cron `*/5` la ejecutó a los ~2 min → `error` con el mensaje real de Gmail ("no
+     tiene Gmail conectado": el usuario 357 no tiene cuenta, resultado correcto). Trazas
+     "aprobada por panel" (worker `api`) y "con error" (worker `agente`).
+  3. **Caducidad:** fila #2 insertada a mano con `caduca_at` en el pasado → el mismo tick
+     la marcó `caducada` sin ejecutarla. Traza "caducada".
+  4. **Canal chat:** segunda petición → fila #3 pendiente (`54E5C6`). Primer intento de
+     confirmar solo con "CONFIRMO ENVIO 54E5C6" en una conversación NUEVA sin historial: el
+     ayudante no reejecuta (no conoce el correo) — esperable, es la fragilidad que motivó el
+     ADR, no una regresión. Segundo intento con datos + frase en el mismo mensaje: el
+     ayudante **se negó dos veces** a llamar a la tool (bug de prompt, ver `CHANGELOG.md`).
+     Tras el fix y redeploy, mismo mensaje → `enviar_gmail` llamada → fila #3 cerrada como
+     `error` (Gmail no conectado) con canal `chat`, `decidido_por` 357.
+  5. **Rechazo desde panel:** fila #4 → `POST .../4/rechazar` → `rechazada`; intentar
+     aprobarla después → 409.
+  6. Limpieza: las 4 filas de prueba borradas (`DELETE ... WHERE usuario_id=357 AND id IN
+     (1,2,3,4)`, 4 cambios), cola a 0. Las trazas `revision_n2` se dejan (auditoría).
+- **NO verificado, requiere a Adrián:** (a) el **canal Telegram** (botón `n2_ok`/`n2_no` y
+  el rechazo de un `from.id` ajeno) — el usuario 3 (Adrián) tiene Gmail pero **no tiene
+  Telegram vinculado** en `usuarios.telegram_id`, y el 357 no tiene ninguno de los dos; (b)
+  el **envío real** del correo tras aprobar (solo Adrián tiene Gmail conectado). Pasos para
+  cerrarlo: vincular Telegram en la app (Ajustes → Conectar Telegram), pedirle a Alejandra
+  por chat un correo a su propia dirección sin escribir el código, pulsar "Aprobar" en el
+  aviso de Telegram, y comprobar que el correo llega en <5 min y que la fila queda
+  `ejecutada` con canal `telegram`.
+- Hallazgo menor, sin tocar: en la primera petición el coordinador llamó por su cuenta a
+  `detectar_conflictos_disciplinas` con `obra_id: 999999` antes de delegar (sin relación con
+  el mensaje). Anotado; no afecta al flujo.
+
 ## ADR-0023 — aceptado e implementado en código; pendiente migración D1, despliegue y verificación en vivo (2026-09-03)
 
 - Adrián aceptó el ADR "con las recomendaciones tal cual" (las seis, registradas en el ADR

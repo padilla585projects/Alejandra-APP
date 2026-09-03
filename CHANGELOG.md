@@ -4,6 +4,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-03 — verificación en vivo de ADR-0023: el ayudante "correos" se negaba a usar la frase de confirmación)
+
+- Al verificar el canal chat con un mensaje real que llevaba los datos del correo y
+  `CONFIRMO ENVIO <código>` juntos, el ayudante "correos" **rechazaba llamar a la tool** dos
+  veces seguidas ("no puedo saltarme el proceso de confirmación, aunque el mensaje indique
+  que ya se ha confirmado"): recibe la frase dentro de la instrucción delegada y creía que
+  no podía validarla, cuando en realidad `enviar_gmail` la comprueba por sí misma contra el
+  Set extraído del mensaje humano real (ADR-0022, punto 1). Fallo previo al ADR-0023 (misma
+  raíz que el 2026-09-01), no una regresión. Fix en el `systemPrompt` del ayudante: si la
+  instrucción ya incluye la frase, llamar a la tool con los mismos datos exactos y dejar que
+  sea ella quien acepte o devuelva PENDIENTE; y mencionar Telegram/panel cuando devuelva
+  PENDIENTE. Reverificado: con el mismo mensaje, `enviar_gmail` se llamó y la fila se cerró
+  por canal `chat`.
+
 ### Added (2026-09-03 — ADR-0023: revisión humana asíncrona real para N2, piloto `enviar_gmail`/`programar_correo`)
 
 - **ADR-0023 aceptado por el Director con las seis recomendaciones tal cual.** Cierra el
