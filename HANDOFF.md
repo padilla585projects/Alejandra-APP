@@ -1,5 +1,30 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0023 ampliación — verificación en vivo del Web Push a Chrome, con matiz honesto (2026-09-03, tarde, continuación 4)
+
+- Tres correos de prueba encolados desde el Chrome real de Adrián (ver ronda anterior) para
+  confirmar el aviso push tras el fix. Con `wrangler tail` en el worker raíz durante el
+  tercer intento: `POST /internal/push/enviar - Ok` **sí se ejecutó** al crear la acción, y
+  la suscripción muerta de mayo (`usuario_id='3'`) se limpió sola (borrado real en D1) — la
+  función recorre las suscripciones y actúa, no es un fallo silencioso.
+- **Lo que no pude confirmar desde aquí:** ninguna notificación del sistema apareció en la
+  pestaña de prueba (`reg.getNotifications()` vacío tras varios reintentos). La traza de
+  `wrangler tail` mostraba en paralelo tráfico real de Adrián contra `/pemp`,
+  `/alertas-stock`, `/pedidos`, `/sugerencias`, `/sync/ping` — es decir, **tenía otra
+  pestaña/ventana de la app abierta y activa** en ese mismo momento. `sw.js` (`NOTIF-01`,
+  31/07/2026) omite a propósito la notificación del sistema si ya hay un cliente del mismo
+  origen visible o con foco — comportamiento correcto, no un bug, pero significa que esta
+  prueba concreta no puede demostrar por sí sola que el aviso llega cuando la app está
+  cerrada del todo.
+- Limpieza: las 3 acciones de prueba (#7 `E78D42`, #8 `30D661`, #9 `F6A18E`) rechazadas
+  desde el propio endpoint del canal panel/app (con el token real de Adrián, sin enviar
+  correos duplicados a su bandeja).
+- **Pendiente, solo lo puede confirmar Adrián:** cerrar TODAS las pestañas/ventanas con
+  `index.html`/`panel.html` abiertas, pedir un correo de prueba por chat sin el código, y
+  comprobar si aparece la notificación del sistema. El canal Telegram y el push a la app
+  nativa (FCM) ya están confirmados funcionando de extremo a extremo en rondas anteriores;
+  este último matiz es solo sobre el aviso del sistema en Chrome/PWA con la app ya abierta.
+
 ## ADR-0023 ampliación — Web Push real a Chrome/PWA + bug de suscripción corregido (2026-09-03, tarde, continuación 3)
 
 - Adrián probó el push del correo anterior: llegó al móvil (app nativa) pero no a Chrome.

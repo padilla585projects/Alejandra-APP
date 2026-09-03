@@ -27,6 +27,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   `worker.js` raíz `/push/subscribe` — esa ruta nunca existió ahí (dead code silencioso);
   con que el agente guarde la suscripción basta, los dos Workers comparten la misma D1.
 - 3 tests nuevos (233/233).
+- **Verificado en vivo (Chrome real de Adrián):** tras el fix, `/internal/push/enviar` se
+  ejecuta de verdad al crear una acción pendiente (confirmado con `wrangler tail`:`POST
+  ...  - Ok`) y limpia solo las suscripciones muertas (una fila de mayo, borrada). No se
+  pudo confirmar la notificación del sistema en la pestaña de prueba porque Adrián tenía
+  otra pestaña de la app abierta a la vez, y `sw.js` omite el aviso del sistema a propósito
+  cuando ya hay un cliente visible (comportamiento existente, no nuevo). Pendiente que
+  Adrián confirme con la app completamente cerrada.
 
 ### Added (2026-09-03 — ADR-0023 ampliación: aviso por push + pantalla "Pendientes de aprobar" en la app móvil, v9.31)
 
