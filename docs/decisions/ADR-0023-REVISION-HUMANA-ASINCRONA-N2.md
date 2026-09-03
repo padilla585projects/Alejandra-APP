@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0023
 - Fecha: 2026-09-03
-- Estado: **Propuesto**
-- Decisores: `PENDIENTE` (Director del Proyecto)
+- Estado: **Aceptado** (2026-09-03)
+- Decisores: Director del Proyecto
 - Depende de: ADR-0006 (niveles N0-N3), ADR-0009 (tres niveles de verificación),
   ADR-0020 (Motor de Decisión, rebanada 6), ADR-0022 (ayudantes)
 - Resuelve: el pendiente "sin decisión tomada" de ARC-020 (`ARCHITECT_BACKLOG.md`)
@@ -243,8 +243,23 @@ gestione bien el código; el formulario del panel seguirá siendo la vía real y
    corrige antes de implementar. *Recomendación:* verificar primero; si está en
    `/telegram/webhook`, unificar los dos manejadores en uno solo es un fix previo y aparte.
 
-Hasta que este ADR pase a **Aceptado** no se toca código ni D1 (ADR-0007: aceptar un ADR nunca
-es autónomo).
+## Decisión del Director (2026-09-03)
+
+El Director acepta el ADR **con las seis recomendaciones tal cual**:
+
+1. Piloto con `enviar_gmail` y `programar_correo`. Ampliar a otra tool exige enmienda.
+2. Revisor: el **solicitante** revisa las acciones de ámbito personal (su propio Gmail).
+   `DEV_CHAT_ID` sigue siendo el revisor de las tools de ámbito de sistema cuando entren en
+   el piloto — enmienda acotada a la pregunta 2 de ADR-0009, no una contradicción.
+3. La frase `CONFIRMO ENVIO <código>` en el chat se mantiene como tercer canal.
+4. Caducidad: 24 h; para `programar_correo`, el mínimo entre 24 h y la hora programada.
+5. La migración D1 de `acciones_pendientes` se autorizará explícitamente en el momento de
+   aplicarla, no con esta aceptación.
+6. Verificar el webhook de Telegram antes de implementar; si está en `/telegram/webhook`,
+   unificar los dos manejadores como fix previo y aparte.
+
+Con esto se abre la implementación (ADR-0007: código reversible, autónomo; migración y
+secretos, no).
 
 ## Referencias
 

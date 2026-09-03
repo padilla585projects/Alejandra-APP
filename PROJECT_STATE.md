@@ -1,6 +1,14 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-09-03
+- Estado (2026-09-03, tarde): **ADR-0023 ACEPTADO por el Director (seis recomendaciones tal
+  cual) e implementado en código; pendiente migración D1 (autorización humana), despliegue
+  y verificación en vivo.** Cola `acciones_pendientes`, verifier puro, encolado en
+  `enviar_gmail`/`programar_correo`, ejecutor único en el cron `*/5`, callbacks de Telegram
+  con verificación de `from.id`, endpoints y bloque "Pendientes de aprobar" en el panel
+  (v9.30). De paso, los dos manejadores del webhook de Telegram del raíz delegan en un
+  procesador único (el hallazgo lateral deja de depender de qué ruta esté registrada). Tests
+  226/226 + 54/54 + 4/4. Detalle en `CHANGELOG.md`/`HANDOFF.md`.
 - Estado (2026-09-03, continuación): **ADR-0023 redactado — revisión humana asíncrona real
   para N2 (Propuesto, pendiente de decisión del Director).** Cierra el "pendiente sin
   decisión" de ARC-020. Propone una cola `acciones_pendientes` en D1 (migración, con

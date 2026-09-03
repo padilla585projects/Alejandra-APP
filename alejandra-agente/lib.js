@@ -597,6 +597,39 @@ async function codigoConfirmacionOp(descriptor) {
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 6).toUpperCase();
 }
 
+// ADR-0023 (03/09/2026): revisión humana asíncrona para N2. Tools del piloto que, sin
+// código confirmado en el mensaje humano, encolan la acción en acciones_pendientes en vez
+// de limitarse a pedir la frase. Ampliar esta lista es una enmienda al ADR, tool por tool.
+const TOOLS_N2_REVISION_ASINCRONA = Object.freeze(['enviar_gmail', 'programar_correo']);
+
+// Caducidad de una solicitud N2 (ADR-0023, decisión 4 del Director): 24 h desde ahora;
+// si la acción tiene su propia hora (programar_correo), el mínimo entre ambas — aprobar un
+// correo programado DESPUÉS de su hora no tiene sentido. Devuelve UTC 'YYYY-MM-DD
+// HH:MM:SS' (mismo formato que tareas_programadas.fecha_hora_programada). Pura: recibe el
+// "ahora" en ms para poder testearse.
+function calcularCaducidadAccionN2(ahoraMs, fechaProgramadaUTC = null) {
+  const HORAS_24 = 24 * 60 * 60 * 1000;
+  let limiteMs = ahoraMs + HORAS_24;
+  if (fechaProgramadaUTC) {
+    const t = new Date(String(fechaProgramadaUTC).replace(' ', 'T') + 'Z').getTime();
+    if (!isNaN(t) && t < limiteMs) limiteMs = t;
+  }
+  return new Date(limiteMs).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+// Resumen para el humano de una acción N2 del piloto (lo que verá en Telegram/panel antes
+// de aprobar). Sin el cuerpo completo: el humano ya lo vio en el chat, y Telegram limita el
+// texto; lo que se ejecuta es siempre `input` exacto, no este resumen.
+function construirResumenAccionN2(tool, input) {
+  const i = input || {};
+  const para = String(i.para || '').trim();
+  const asunto = String(i.asunto || '').trim();
+  if (tool === 'programar_correo') {
+    return `Correo programado para el ${String(i.fecha_hora || '').trim()} (hora de España) a ${para} — "${asunto}"`;
+  }
+  return `Correo a ${para} — "${asunto}"`;
+}
+
 // ¿El WHERE de la query es trivialmente-cierto (afecta a toda la tabla igual que
 // sin WHERE)? Detecta un conjunto curado de disfraces obvios: 1=1, 5=5, 'a'='a',
 // TRUE, col IS NOT NULL, col>0, col>=0, col LIKE '%'. No pretende ser exhaustivo
@@ -814,6 +847,9 @@ export {
   extraerCodigosConfirmacion,
   extraerCodigosConfirmacionEnvio,
   codigoConfirmacionOp,
+  TOOLS_N2_REVISION_ASINCRONA,
+  calcularCaducidadAccionN2,
+  construirResumenAccionN2,
   whereEsTrivialmenteCierto,
   detectarEscrituraDestructivaBalanceada,
   redactarTexto,

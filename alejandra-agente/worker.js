@@ -47,6 +47,9 @@ import {
   extraerCodigosConfirmacion,
   extraerCodigosConfirmacionEnvio,
   codigoConfirmacionOp,
+  TOOLS_N2_REVISION_ASINCRONA,
+  calcularCaducidadAccionN2,
+  construirResumenAccionN2,
   detectarEscrituraDestructivaBalanceada,
   redactarTexto,
   redactarDetalle,
@@ -58,6 +61,9 @@ import {
 // Cerebro v2 (F-1.3/ADR-0020): nucleo-cognitivo dividido en subcarpetas locales.
 // Wrangler bundlea el import directamente — no requiere npm.
 import { decidirInvocacionPilotoN0, decidirInvocacionN1, decidirInvocacionN2N3, tieneTrazaSuficiente } from '../nucleo-cognitivo/packages/cognitive-core/src/motor-decision.js';
+// ADR-0023: la solicitud de revisión humana asíncrona (N2) se construye y valida en el
+// paquete aislado (pura, sin I/O); la cola, Telegram y el cron viven aquí.
+import { solicitarRevisionHumanaAsincrona } from '../nucleo-cognitivo/packages/cognitive-core/src/verifier.js';
 // Nexo v1 (ADR-0021): registro de fuentes externas para validar y consultar metadato.
 import { obtenerFuente } from './nexo-fuentes.js';
 const EUR_RATE = 0.92;
@@ -5289,6 +5295,9 @@ export default {
     // esa lógica horaria y la dispararía 12 veces por hora en vez de una.
     if (event.cron === '*/5 * * * *') {
       try { await ejecutarTareasProgramadas(env); } catch (e) { console.error('[TareasProgramadas] error en cron:', e.message); }
+      // ADR-0023: ejecutor único de la cola de revisión humana asíncrona (N2). No hay
+      // hueco para otro cron (5 por cuenta en Workers Free): cuelga de este mismo tick.
+      try { await ejecutarAccionesAprobadas(env); } catch (e) { console.error('[ADR-0023] error en cron:', e.message); }
       return;
     }
     try {
@@ -10336,18 +10345,18 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
         const codigo = await codigoConfirmacionOp(`ENVIO_GMAIL::${para}::${asunto}::${cuerpo}`);
         if (!(codigosConfirmadosEnvio instanceof Set) || !codigosConfirmadosEnvio.has(codigo)) {
-          return `⚠️ ENVÍO PENDIENTE DE CONFIRMACIÓN — para: ${para} · asunto: "${asunto}". Para autorizar SOLO este correo exacto, el usuario humano debe escribir literalmente "CONFIRMO ENVIO ${codigo}" en su próximo mensaje. NO puedes autoconfirmar ni teclear el código en su nombre: debe escribirlo el humano. Muéstrale el código (${codigo}) y un resumen del correo, y esperá. No reintentes hasta que el humano lo haya escrito.`;
+          // ADR-0023: además de pedir la frase, la acción EXACTA queda encolada en
+          // acciones_pendientes para que el humano pueda aprobarla desde Telegram o el
+          // panel sin estar en el chat. Si la cola falla (tabla ausente, D1 caído), el
+          // flujo de chat de siempre sigue funcionando tal cual.
+          const cola = await encolarAccionPendiente(env, { usuario_id, empresa_id, tool: 'enviar_gmail', input: { para, asunto, cuerpo }, codigo, caducaAt: calcularCaducidadAccionN2(Date.now()) });
+          return `⚠️ ENVÍO PENDIENTE DE CONFIRMACIÓN — para: ${para} · asunto: "${asunto}". Para autorizar SOLO este correo exacto, el usuario humano debe escribir literalmente "CONFIRMO ENVIO ${codigo}" en su próximo mensaje. NO puedes autoconfirmar ni teclear el código en su nombre: debe escribirlo el humano. Muéstrale el código (${codigo}) y un resumen del correo, y esperá. No reintentes hasta que el humano lo haya escrito.${textoCanalesAlternativosN2(cola)}`;
         }
 
-        if (!env.API_WEB) return JSON.stringify({ ok: false, error: 'Service binding API_WEB no disponible.' });
-        const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/gmail/enviar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
-          body: JSON.stringify({ usuario_id, para, asunto, cuerpo }),
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || data.ok === false) return JSON.stringify({ ok: false, error: data.error || `Error enviando correo (HTTP ${resp.status})` });
-        return `✅ Correo enviado desde ${data.desde} a ${para}.`;
+        const r = await ejecutarEnvioGmail(env, usuario_id, { para, asunto, cuerpo });
+        await marcarAccionPendienteDecididaPorChat(env, usuario_id, codigo, r);
+        if (!r.ok) return JSON.stringify({ ok: false, error: r.error });
+        return `✅ Correo enviado desde ${r.desde} a ${para}.`;
       } catch (e) {
         return JSON.stringify({ ok: false, error: 'Error enviando correo: ' + e.message });
       }
@@ -10373,13 +10382,16 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
         const codigo = await codigoConfirmacionOp(`PROGRAMAR_GMAIL::${para}::${asunto}::${cuerpo}::${fechaHoraStr}`);
         if (!(codigosConfirmadosEnvio instanceof Set) || !codigosConfirmadosEnvio.has(codigo)) {
-          return `⚠️ PROGRAMACIÓN PENDIENTE DE CONFIRMACIÓN — se enviará el ${fechaHoraStr} (hora de España) a: ${para} · asunto: "${asunto}". Para autorizar SOLO este envío programado exacto, el usuario humano debe escribir literalmente "CONFIRMO ENVIO ${codigo}" en su próximo mensaje -- una sola vez, no hará falta que confirme nada más cuando llegue la hora real. NO puedes autoconfirmar ni teclear el código en su nombre. Muéstrale el código (${codigo}) y un resumen del correo, y esperá. No reintentes hasta que el humano lo haya escrito.`;
+          // ADR-0023: encolar la acción exacta (ver enviar_gmail). Caducidad = mínimo entre
+          // 24 h y la propia hora programada (decisión 4 del Director).
+          const fechaProgUTC = fechaUTC.toISOString().slice(0, 19).replace('T', ' ');
+          const cola = await encolarAccionPendiente(env, { usuario_id, empresa_id, tool: 'programar_correo', input: { para, asunto, cuerpo, fecha_hora: fechaHoraStr }, codigo, caducaAt: calcularCaducidadAccionN2(Date.now(), fechaProgUTC) });
+          return `⚠️ PROGRAMACIÓN PENDIENTE DE CONFIRMACIÓN — se enviará el ${fechaHoraStr} (hora de España) a: ${para} · asunto: "${asunto}". Para autorizar SOLO este envío programado exacto, el usuario humano debe escribir literalmente "CONFIRMO ENVIO ${codigo}" en su próximo mensaje -- una sola vez, no hará falta que confirme nada más cuando llegue la hora real. NO puedes autoconfirmar ni teclear el código en su nombre. Muéstrale el código (${codigo}) y un resumen del correo, y esperá. No reintentes hasta que el humano lo haya escrito.${textoCanalesAlternativosN2(cola)}`;
         }
 
-        if (!env.DB) return JSON.stringify({ ok: false, error: 'DB no disponible.' });
-        await env.DB.prepare(
-          `INSERT INTO tareas_programadas (usuario_id, empresa_id, tipo, fecha_hora_programada, payload) VALUES (?,?,?,?,?)`
-        ).bind(usuario_id, empresa_id || null, 'email_gmail', fechaUTC.toISOString().slice(0, 19).replace('T', ' '), JSON.stringify({ para, asunto, cuerpo })).run();
+        const r = await ejecutarProgramarCorreo(env, usuario_id, empresa_id, { para, asunto, cuerpo, fecha_hora: fechaHoraStr });
+        await marcarAccionPendienteDecididaPorChat(env, usuario_id, codigo, r);
+        if (!r.ok) return JSON.stringify({ ok: false, error: r.error });
         return `✅ Correo programado para el ${fechaHoraStr} (hora de España) a ${para}. Se enviará solo, sin más confirmaciones.`;
       } catch (e) {
         return JSON.stringify({ ok: false, error: 'Error programando correo: ' + e.message });
@@ -13087,6 +13099,169 @@ function _ordenarEvitandoCooldown(modelos) {
 // una fila en 'pendiente' sin marcarla: éxito -> 'enviada', fallo -> 'error' + error_msg
 // (visible en listar_tareas_programadas) -- sin reintento automático en esta primera
 // vuelta, ver TAREAS-PROGRAMADAS-01 en el plan.
+// ═══ ADR-0023 (03/09/2026): revisión humana asíncrona real para N2 ═══════════════════
+// Cola acciones_pendientes + tres canales de aprobación equivalentes (frase de chat aquí
+// mismo, botón de Telegram en worker.js raíz, pestaña del panel) + ejecutor ÚNICO en el
+// cron */5 de este Worker (ejecutarAccionesAprobadas). Piloto: enviar_gmail y
+// programar_correo (TOOLS_N2_REVISION_ASINCRONA, lib.js). El modelo nunca aprueba: el
+// estado solo cambia desde un mensaje humano real (chat), un callback de Telegram
+// verificado por from.id (raíz) o una sesión real de panel (raíz).
+
+// Cuerpo real de enviar_gmail, compartido por la vía chat (código confirmado en el mismo
+// turno) y por el cron (fila aprobada por Telegram/panel). Devuelve {ok, desde?, error?}.
+async function ejecutarEnvioGmail(env, usuario_id, { para, asunto, cuerpo }) {
+  if (!env.API_WEB) return { ok: false, error: 'Service binding API_WEB no disponible.' };
+  const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/gmail/enviar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+    body: JSON.stringify({ usuario_id, para, asunto, cuerpo }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.ok === false) return { ok: false, error: data.error || `Error enviando correo (HTTP ${resp.status})` };
+  return { ok: true, desde: data.desde };
+}
+
+// Cuerpo real de programar_correo: solo guarda la fila en tareas_programadas; el envío
+// ocurre a su hora en ejecutarTareasProgramadas(). Re-valida la fecha porque puede
+// ejecutarse desde el cron minutos después de pedirse.
+async function ejecutarProgramarCorreo(env, usuario_id, empresa_id, { para, asunto, cuerpo, fecha_hora }) {
+  if (!env.DB) return { ok: false, error: 'DB no disponible.' };
+  const fechaUTC = fechaMadridAUTC(String(fecha_hora || '').trim());
+  if (!fechaUTC) return { ok: false, error: 'fecha_hora inválida.' };
+  if (fechaUTC.getTime() <= Date.now()) return { ok: false, error: 'La fecha/hora programada ya ha pasado.' };
+  await env.DB.prepare(
+    `INSERT INTO tareas_programadas (usuario_id, empresa_id, tipo, fecha_hora_programada, payload) VALUES (?,?,?,?,?)`
+  ).bind(usuario_id, empresa_id || null, 'email_gmail', fechaUTC.toISOString().slice(0, 19).replace('T', ' '), JSON.stringify({ para, asunto, cuerpo })).run();
+  return { ok: true };
+}
+
+// Telegram al usuario (no al DEV_CHAT_ID): vía el endpoint interno del raíz, que es quien
+// tiene usuarios.telegram_id y el token del bot. `botones` opcional (inline_keyboard).
+async function notificarTelegramUsuario(env, usuario_id, mensaje, botones = null) {
+  if (!env.API_WEB) return false;
+  try {
+    const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/telegram/enviar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+      body: JSON.stringify({ usuario_id, mensaje, botones: botones || undefined }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    return !!(resp.ok && data.ok);
+  } catch (_) { return false; }
+}
+
+// Encola una acción N2 exacta. Idempotente por (usuario, código): si ya hay una fila
+// pendiente con el mismo código (el modelo volvió a llamar a la tool sin confirmación),
+// se reutiliza y NO se vuelve a notificar. Nunca lanza: si D1/la tabla fallan, devuelve
+// null y la vía de chat sigue intacta. Devuelve {id, existente, telegram}.
+async function encolarAccionPendiente(env, { usuario_id, empresa_id, tool, input, codigo, caducaAt }) {
+  if (!env.DB || !usuario_id) return null;
+  if (!TOOLS_N2_REVISION_ASINCRONA.includes(tool)) return null;
+  try {
+    const resumen = construirResumenAccionN2(tool, input);
+    // Contrato del paquete aislado (ADR-0009/0023): valida la solicitud, nunca la aprueba.
+    const { solicitud } = solicitarRevisionHumanaAsincrona({ tool, input, resumen, codigo, caducaAt, solicitanteId: usuario_id, worker: 'agente' });
+    const previa = await env.DB.prepare(
+      `SELECT id FROM acciones_pendientes WHERE usuario_id=? AND codigo=? AND estado='pendiente' LIMIT 1`
+    ).bind(usuario_id, solicitud.codigo).first();
+    if (previa) return { id: previa.id, existente: true, telegram: null };
+
+    const ins = await env.DB.prepare(
+      `INSERT INTO acciones_pendientes (usuario_id, empresa_id, worker, tool, input, resumen, codigo, caduca_at) VALUES (?,?,?,?,?,?,?,?)`
+    ).bind(usuario_id, empresa_id || null, 'agente', solicitud.tool, JSON.stringify(solicitud.input), solicitud.resumen, solicitud.codigo, solicitud.caducaAt).run();
+    const id = ins.meta?.last_row_id;
+    await registrarTraza(env, {
+      tipo: 'revision_n2', empresaId: empresa_id || null, usuarioId: usuario_id,
+      resumen: `Solicitud N2 encolada #${id}: ${solicitud.tool}`,
+      detalle: { accion_id: id, tool: solicitud.tool, codigo: solicitud.codigo, caduca_at: solicitud.caducaAt, estado: 'pendiente' },
+    });
+    const caducaLegible = new Date(solicitud.caducaAt.replace(' ', 'T') + 'Z').toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const telegram = await notificarTelegramUsuario(env, usuario_id,
+      `🔐 <b>Alejandra necesita tu aprobación</b>\n${escaparHtmlTelegram(solicitud.resumen)}\n\nCódigo: <code>${solicitud.codigo}</code> · caduca el ${caducaLegible}\n\nPulsa un botón, o escribe "CONFIRMO ENVIO ${solicitud.codigo}" en el chat, o revísalo en el panel (Mis Tareas Programadas → Pendientes de aprobar).`,
+      [[{ text: '✅ Aprobar', callback_data: `n2_ok:${id}` }, { text: '❌ Rechazar', callback_data: `n2_no:${id}` }]]
+    );
+    return { id, existente: false, telegram };
+  } catch (e) {
+    console.error('[ADR-0023] encolarAccionPendiente:', e.message);
+    return null;
+  }
+}
+
+function escaparHtmlTelegram(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Texto que se añade a la respuesta "PENDIENTE DE CONFIRMACIÓN" cuando la acción quedó
+// encolada, para que el modelo se lo cuente al humano. Nada si la cola no está disponible.
+function textoCanalesAlternativosN2(cola) {
+  if (!cola || !cola.id) return '';
+  const tg = cola.telegram === true ? ' Se le ha enviado también un aviso por Telegram con botones Aprobar/Rechazar.' : '';
+  return ` Además, esta acción ha quedado registrada como pendiente (#${cola.id}) y el humano puede aprobarla o rechazarla sin volver al chat: desde el panel (Mis Tareas Programadas → Pendientes de aprobar)${cola.telegram === true ? ' o desde Telegram' : ''}.${tg} Díselo en una frase.`;
+}
+
+// El humano confirmó por chat en este mismo turno y la tool ya se ejecutó aquí: cerrar la
+// fila pendiente (si existía) para que Telegram/panel no la muestren ni el cron la repita.
+async function marcarAccionPendienteDecididaPorChat(env, usuario_id, codigo, resultado) {
+  if (!env.DB || !usuario_id || !codigo) return;
+  try {
+    const estado = resultado?.ok ? 'ejecutada' : 'error';
+    await env.DB.prepare(
+      `UPDATE acciones_pendientes SET estado=?, canal_decision='chat', decidido_at=datetime('now'), decidido_por=?, ejecutado_at=datetime('now'), resultado=?, error_msg=? WHERE usuario_id=? AND codigo=? AND estado='pendiente'`
+    ).bind(estado, String(usuario_id), resultado?.ok ? 'ok' : null, resultado?.ok ? null : String(resultado?.error || '').slice(0, 300), usuario_id, codigo).run();
+  } catch (_) {}
+}
+
+// Ejecutor único de la cola (cron */5, tras ejecutarTareasProgramadas). Dos pasos:
+// (1) caducar lo pendiente que pasó su hora -- nunca se ejecuta, se avisa al dueño;
+// (2) ejecutar lo aprobado por Telegram/panel (worker='agente'), con el MISMO cuerpo que
+// la vía chat. Cada transición lleva WHERE estado='<origen>' -- si dos ticks o dos
+// canales coincidieran, solo uno gana y la acción se ejecuta una vez. LIMIT 20 por tick,
+// mismo criterio que tareas_programadas.
+async function ejecutarAccionesAprobadas(env) {
+  if (!env.DB) return;
+  // (1) Caducidad
+  try {
+    const { results: vencidas } = await env.DB.prepare(
+      `SELECT id, usuario_id, empresa_id, tool, resumen FROM acciones_pendientes WHERE estado='pendiente' AND caduca_at <= datetime('now') LIMIT 20`
+    ).all();
+    for (const a of (vencidas || [])) {
+      const r = await env.DB.prepare(`UPDATE acciones_pendientes SET estado='caducada', decidido_at=datetime('now') WHERE id=? AND estado='pendiente'`).bind(a.id).run();
+      if (!r.meta?.changes) continue;
+      await registrarTraza(env, { tipo: 'revision_n2', empresaId: a.empresa_id, usuarioId: a.usuario_id, resumen: `Solicitud N2 caducada #${a.id}: ${a.tool}`, detalle: { accion_id: a.id, tool: a.tool, estado: 'caducada' } });
+      await notificarTelegramUsuario(env, a.usuario_id, `⌛ Acción pendiente #${a.id} caducada sin aprobación, no se ha ejecutado:\n${escaparHtmlTelegram(a.resumen)}`);
+    }
+  } catch (e) { console.error('[ADR-0023] caducidad:', e.message); }
+
+  // (2) Ejecución de lo aprobado
+  let aprobadas = [];
+  try {
+    ({ results: aprobadas } = await env.DB.prepare(
+      `SELECT id, usuario_id, empresa_id, tool, input, resumen FROM acciones_pendientes WHERE estado='aprobada' AND worker='agente' ORDER BY decidido_at ASC LIMIT 20`
+    ).all());
+  } catch (e) { console.error('[ADR-0023] lectura aprobadas:', e.message); return; }
+
+  for (const a of (aprobadas || [])) {
+    let input = {};
+    try { input = JSON.parse(a.input || '{}'); } catch { input = {}; }
+    let r;
+    try {
+      if (!TOOLS_N2_REVISION_ASINCRONA.includes(a.tool)) throw new Error(`Tool fuera del piloto ADR-0023: ${a.tool}`);
+      if (a.tool === 'enviar_gmail') r = await ejecutarEnvioGmail(env, a.usuario_id, input);
+      else if (a.tool === 'programar_correo') r = await ejecutarProgramarCorreo(env, a.usuario_id, a.empresa_id, input);
+      else throw new Error(`Tool sin ejecutor: ${a.tool}`);
+      if (!r.ok) throw new Error(r.error || 'error desconocido');
+      await env.DB.prepare(`UPDATE acciones_pendientes SET estado='ejecutada', ejecutado_at=datetime('now'), resultado='ok' WHERE id=? AND estado='aprobada'`).bind(a.id).run();
+      await registrarTraza(env, { tipo: 'revision_n2', empresaId: a.empresa_id, usuarioId: a.usuario_id, resumen: `Acción N2 ejecutada #${a.id}: ${a.tool}`, detalle: { accion_id: a.id, tool: a.tool, estado: 'ejecutada' } });
+      await notificarTelegramUsuario(env, a.usuario_id, `✅ Acción #${a.id} ejecutada:\n${escaparHtmlTelegram(a.resumen)}`);
+    } catch (e) {
+      const msg = String(e.message || e).slice(0, 300);
+      await env.DB.prepare(`UPDATE acciones_pendientes SET estado='error', ejecutado_at=datetime('now'), error_msg=? WHERE id=? AND estado='aprobada'`).bind(msg, a.id).run().catch(() => {});
+      await registrarTraza(env, { tipo: 'revision_n2', empresaId: a.empresa_id, usuarioId: a.usuario_id, resumen: `Acción N2 con error #${a.id}: ${a.tool}`, detalle: { accion_id: a.id, tool: a.tool, estado: 'error', error: msg } });
+      await notificarTelegramUsuario(env, a.usuario_id, `❌ Acción #${a.id} aprobada pero falló al ejecutarse:\n${escaparHtmlTelegram(a.resumen)}\n\n${escaparHtmlTelegram(msg)}`);
+    }
+  }
+}
+
 async function ejecutarTareasProgramadas(env) {
   if (!env.DB) return;
   const { results } = await env.DB.prepare(

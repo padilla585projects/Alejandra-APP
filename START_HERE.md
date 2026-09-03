@@ -4,6 +4,13 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**ADR-0023 aceptado e implementado en código (2026-09-03, tarde):** Adrián aceptó las seis
+recomendaciones tal cual. Cola `acciones_pendientes` + aprobación por chat/Telegram/panel +
+ejecutor único en el cron `*/5`, piloto `enviar_gmail`/`programar_correo`; los dos
+manejadores del webhook de Telegram del raíz ya delegan en uno solo. **Pendiente y
+bloqueado en decisión humana:** aplicar la migración D1 (autorización explícita), después
+desplegar y verificar en vivo. Ver `TASKS.md`/`HANDOFF.md`/`CHANGELOG.md`.
+
 **ADR-0023 redactado, Propuesto (2026-09-03):** revisión humana asíncrona real para N2 —
 cola `acciones_pendientes` en D1, aprobación por chat/Telegram/panel, ejecutor en el cron
 `*/5` existente, piloto `enviar_gmail`/`programar_correo`. Pendiente de decisión del
