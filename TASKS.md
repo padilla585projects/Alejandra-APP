@@ -1,5 +1,18 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-03, continuación): **ADR-0023 — revisión humana asíncrona real
+para N2. Redactado, estado Propuesto. Bloqueado en decisión humana: aceptar un ADR nunca es
+autónomo (ADR-0007).** Adrián pidió primero que se le explicara qué es y después que se
+redactara. Contenido: cola `acciones_pendientes` en D1, tres canales de aprobación
+(chat/Telegram/panel), ejecutor único en el cron `*/5` de `alejandra-agente`, piloto
+`enviar_gmail`/`programar_correo`, seis preguntas con recomendación
+(`docs/decisions/ADR-0023-REVISION-HUMANA-ASINCRONA-N2.md`).
+- Siguiente acción exacta: que Adrián responda las seis preguntas del ADR (o lo acepte con
+  las recomendaciones tal cual). Antes de implementar: verificar el webhook de Telegram con
+  `getWebhookInfo` (necesita el token, solo Adrián) — si el botón "Aplicar fix" está muerto,
+  unificar los dos manejadores es un fix previo y aparte.
+- Sin cambios de código ni de D1 en esta ronda.
+
 Estado (actualizado 2026-09-03): **TAREAS-PROGRAMADAS-01 — Alejandra programa correos y
 recordatorios a hora exacta. Cerrada del todo.** Implementada, desplegada (los dos Workers +
 Pages v9.29) y verificada en vivo el 2026-09-01 (ver `HANDOFF.md`): bug real del token push

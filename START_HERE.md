@@ -4,6 +4,13 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**ADR-0023 redactado, Propuesto (2026-09-03):** revisión humana asíncrona real para N2 —
+cola `acciones_pendientes` en D1, aprobación por chat/Telegram/panel, ejecutor en el cron
+`*/5` existente, piloto `enviar_gmail`/`programar_correo`. Pendiente de decisión del
+Director (seis preguntas con recomendación en el ADR); no se toca código ni D1 hasta que
+sea Aceptado. Hallazgo lateral por verificar: el webhook de Telegram registrado por el
+código no atiende los botones de `alejandra_fixes` (`ARCHITECT_BACKLOG.md`, ARC-020).
+
 **TAREAS-PROGRAMADAS-01, cerrada del todo (2026-09-03):** Alejandra programa correos y
 recordatorios a hora exacta (tools en `alejandra-agente/worker.js`, cron de 5 min, tabla
 `tareas_programadas`, endpoints en `worker.js`, pantalla "🕐 Mis Tareas Programadas" con
