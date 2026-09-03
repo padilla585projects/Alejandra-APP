@@ -84,6 +84,17 @@ Consecuencia directa: F-1.3 puede especificarse con el grano de trabajo que este
 registrar, por tool, a qué nivel de verificación está sujeta —, en coordinación con
 ADR-0010 (catálogo de tools), que es donde ese nivel se declara como metadato.
 
+## Enmienda 1 — ADR-0023 (2026-09-03)
+
+La pregunta 2 («¿quién revisa las asíncronas?») se acota: para acciones N2 de **ámbito
+personal** (hoy, enviar o programar un correo desde el Gmail del propio usuario) el revisor
+es el **solicitante**, no `DEV_CHAT_ID`. `DEV_CHAT_ID` sigue siendo el revisor de las
+acciones de ámbito de sistema (`alejandra_fixes` y las tools de sistema cuando entren en el
+piloto). Además, «revisión humana asíncrona» deja de ser un stub en el paquete aislado:
+`solicitarRevisionHumanaAsincrona()` construye y valida la solicitud (pura, nunca la
+aprueba) y cada Worker la persiste en `acciones_pendientes`. Detalle y decisión completa en
+`docs/decisions/ADR-0023-REVISION-HUMANA-ASINCRONA-N2.md`.
+
 ## Referencias
 
 - `ARCHITECT_BACKLOG.md` — ARC-004, ARC-008

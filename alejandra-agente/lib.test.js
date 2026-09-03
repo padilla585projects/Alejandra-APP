@@ -17,6 +17,9 @@ import {
   extraerCodigosConfirmacion,
   extraerCodigosConfirmacionEnvio,
   codigoConfirmacionOp,
+  TOOLS_N2_REVISION_ASINCRONA,
+  calcularCaducidadAccionN2,
+  construirResumenAccionN2,
   whereEsTrivialmenteCierto,
   detectarEscrituraDestructivaBalanceada,
   TOOLS_SOLO_DEV_VERIFICADO,
@@ -1850,6 +1853,102 @@ describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
     expect([...envio]).toEqual(['CC22DD']);
     expect(borrado.has('CC22DD')).toBe(false);
     expect(envio.has('AA11BB')).toBe(false);
+  });
+
+  // ─── ADR-0023 (03/09/2026): revisión humana asíncrona real para N2 ──────────────────
+  describe('ADR-0023 revisión humana asíncrona N2', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const raiz = readFileSync(new URL('../worker.js', import.meta.url), 'utf8');
+
+    it('el piloto es exactamente enviar_gmail + programar_correo (ampliar = enmienda al ADR)', () => {
+      expect([...TOOLS_N2_REVISION_ASINCRONA]).toEqual(['enviar_gmail', 'programar_correo']);
+      expect(Object.isFrozen(TOOLS_N2_REVISION_ASINCRONA)).toBe(true);
+    });
+
+    it('caducidad: 24 h desde ahora, o la hora programada si es antes (decisión 4)', () => {
+      const ahora = Date.UTC(2026, 8, 3, 10, 0, 0); // 2026-09-03 10:00:00Z
+      expect(calcularCaducidadAccionN2(ahora)).toBe('2026-09-04 10:00:00');
+      expect(calcularCaducidadAccionN2(ahora, '2026-09-03 17:30:00')).toBe('2026-09-03 17:30:00', 'programado antes de 24 h → manda la hora programada');
+      expect(calcularCaducidadAccionN2(ahora, '2026-09-10 08:00:00')).toBe('2026-09-04 10:00:00', 'programado después → mandan las 24 h');
+      expect(calcularCaducidadAccionN2(ahora, 'basura')).toBe('2026-09-04 10:00:00', 'fecha inválida se ignora');
+    });
+
+    it('el resumen para el humano nunca incluye el cuerpo del correo', () => {
+      const r = construirResumenAccionN2('enviar_gmail', { para: 'a@b.c', asunto: 'Hola', cuerpo: 'SECRETO-CUERPO' });
+      expect(r).toContain('a@b.c');
+      expect(r).toContain('Hola');
+      expect(r).not.toContain('SECRETO-CUERPO');
+      expect(construirResumenAccionN2('programar_correo', { para: 'a@b.c', asunto: 'X', fecha_hora: '2026-09-04 09:00' })).toContain('2026-09-04 09:00');
+    });
+
+    it('las dos tools del piloto encolan sin código y comparten ejecutor con el cron', () => {
+      for (const c of ["case 'enviar_gmail':", "case 'programar_correo':"]) {
+        const ini = src.indexOf(c);
+        const bloque = src.slice(ini, src.indexOf('\n    case ', ini + 10));
+        expect(ini).toBeGreaterThanOrEqual(0);
+        expect(bloque).toContain('encolarAccionPendiente(env,');
+        expect(bloque).toContain('marcarAccionPendienteDecididaPorChat(env,');
+      }
+      expect(src).toContain("if (a.tool === 'enviar_gmail') r = await ejecutarEnvioGmail(");
+      expect(src).toContain("else if (a.tool === 'programar_correo') r = await ejecutarProgramarCorreo(");
+      // El cron */5 llama al ejecutor único; no hay cron nuevo (5 por cuenta).
+      expect(src).toMatch(/event\.cron === '\*\/5 \* \* \* \*'[\s\S]{0,600}ejecutarAccionesAprobadas\(env\)/);
+    });
+
+    it('la solicitud pasa por el verifier del paquete aislado y nunca se inserta aprobada', () => {
+      expect(src).toContain("import { solicitarRevisionHumanaAsincrona } from '../nucleo-cognitivo/packages/cognitive-core/src/verifier.js'");
+      const ini = src.indexOf('async function encolarAccionPendiente(');
+      const bloque = src.slice(ini, src.indexOf('\nfunction escaparHtmlTelegram', ini));
+      expect(bloque).toContain('solicitarRevisionHumanaAsincrona({');
+      expect(bloque).toMatch(/INSERT INTO acciones_pendientes \(usuario_id, empresa_id, worker, tool, input, resumen, codigo, caduca_at\)/);
+      expect(bloque).not.toMatch(/estado\s*=\s*'aprobada'/);
+    });
+
+    it('toda transición de estado lleva WHERE estado=<origen> (idempotencia, doble clic/doble canal)', () => {
+      const updates = [...src.matchAll(/UPDATE acciones_pendientes SET[^`]*/g), ...raiz.matchAll(/UPDATE acciones_pendientes SET[^`]*/g)].map(m => m[0]);
+      expect(updates.length).toBeGreaterThanOrEqual(6);
+      for (const u of updates) expect(u).toMatch(/AND estado='(pendiente|aprobada)'/);
+    });
+
+    it('el ejecutor del cron solo ejecuta filas aprobadas del propio worker y nunca crea N2', () => {
+      const ini = src.indexOf('async function ejecutarAccionesAprobadas(');
+      const bloque = src.slice(ini, src.indexOf('\nasync function ejecutarTareasProgramadas', ini));
+      expect(bloque).toContain("WHERE estado='aprobada' AND worker='agente'");
+      expect(bloque).not.toContain('INSERT INTO acciones_pendientes');
+      expect(bloque).toContain("SET estado='caducada'");
+    });
+
+    it('worker.js raíz: el callback n2_ok/n2_no verifica from.id contra el telegram_id del dueño y no ejecuta nada', () => {
+      const ini = raiz.indexOf("accion === 'n2_ok' || accion === 'n2_no'");
+      const bloque = raiz.slice(ini, raiz.indexOf("accion === 'preg_responder'", ini));
+      expect(ini).toBeGreaterThanOrEqual(0);
+      expect(bloque).toContain('cq.from?.id');
+      expect(bloque).toMatch(/String\(duenyo\.telegram_id\) !== fromId/);
+      expect(bloque).not.toMatch(/internal\/gmail\/enviar|ejecutarEnvioGmail|sendGmail/);
+      expect(bloque).toMatch(/canal_decision='telegram'/);
+    });
+
+    it("worker.js raíz: los DOS manejadores de webhook delegan en procesarCallbackTelegram (fix del hallazgo lateral)", () => {
+      expect((raiz.match(/procesarCallbackTelegram\(env, ctx, update\.callback_query\)/g) || []).length).toBe(2);
+      expect((raiz.match(/async function procesarCallbackTelegram\(/g) || []).length).toBe(1);
+    });
+
+    it('worker.js raíz: el endpoint interno de Telegram solo admite botones n2_ok/n2_no', () => {
+      const ini = raiz.indexOf('async function internalTelegramEnviar(');
+      const bloque = raiz.slice(ini, raiz.indexOf('\nasync function ', ini + 10));
+      expect(bloque).toMatch(/\^n2_\(ok\|no\):\\d\{1,12\}\$/);
+    });
+
+    it('worker.js raíz: el canal panel usa getAuth real (nunca _getAuthPlano) y solo toca filas del propio usuario', () => {
+      for (const fn of ['async function getAccionesPendientes(', 'async function decidirAccionPendientePanel(']) {
+        const ini = raiz.indexOf(fn);
+        const bloque = raiz.slice(ini, raiz.indexOf('\nasync function ', ini + 10));
+        expect(ini).toBeGreaterThanOrEqual(0);
+        expect(bloque).toContain('await getAuth(request, env)');
+        expect(bloque).not.toContain('_getAuthPlano');
+        expect(bloque).toMatch(/usuario_id=\?/);
+      }
+    });
   });
 
   it('leer_gmail (N0) no exige ninguna confirmación humana', () => {

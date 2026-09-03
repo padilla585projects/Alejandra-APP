@@ -2428,6 +2428,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <div class="page-sub">Correos y recordatorios para una fecha/hora futura exacta — pídeselos a Alejandra por chat ("prográmame un correo a...", "avísame a las...") o créalos aquí directamente.</div>
         <div class="tbl-toolbar">
           <button class="btn btn-primary" onclick="abrirModalNuevaTareaProgramada()">+ Nueva tarea</button>
+          <button class="btn btn-secondary" onclick="cargarTareasProgramadas()">🔄 Actualizar</button>
+        </div>
+        <!-- ADR-0023 (03/09/2026): canal "panel" de la revisión humana asíncrona N2 -- acciones
+             (envíos de correo) que Alejandra dejó pendientes de tu aprobación. Solo se pinta
+             cuando hay alguna. -->
+        <div id="accionesPendBloque" style="display:none;margin-bottom:18px">
+          <div style="font-weight:600;font-size:14px;margin-bottom:8px">🔐 Pendientes de aprobar</div>
+          <div id="accionesPendList" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
         <div id="tareasProgList" style="display:flex;flex-direction:column;gap:8px"></div>
         <div id="tareasProgVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
@@ -14593,7 +14601,7 @@ const AYUDA_SECCIONES = {
   segRegistros: 'Fotos de incidencias o estados de la obra con hilo de comentarios de todo el departamento de Seguridad.',
   informeSegSemanal: 'Informe interno semanal de Seguridad y Salud Laboral por obra: aspectos críticos, observaciones y actividad diaria con foto.',
   correos: 'Panel personal de tu correo (Gmail conectado): sincroniza, categoriza dentro de la app y redacta. Alejandra puede resumirlos y organizarlos por categoría a petición tuya.',
-  tareasProgramadas: 'Correos y recordatorios que le has pedido a Alejandra que programe para una fecha/hora futura exacta. Se crean por chat; aquí puedes verlos y cancelarlos.',
+  tareasProgramadas: 'Correos y recordatorios que le has pedido a Alejandra que programe para una fecha/hora futura exacta. Se crean por chat o aquí; aquí puedes verlos y cancelarlos. Arriba aparecen también las acciones (envíos de correo) que Alejandra dejó pendientes de tu aprobación: apruébalas o recházalas con un clic, igual que con el botón de Telegram o la frase "CONFIRMO ENVIO".',
   diarioObra: 'Diario de obra: registro cronológico de lo ocurrido cada día.',
   fieldReports: 'Informes de campo con hallazgos y seguimiento técnico.',
   fotosObra: 'Galería de fotos de la obra organizadas por fecha.',
@@ -24079,6 +24087,7 @@ function _tareasProgEstadoBadge(estado) {
   return `<span class="badge ${map[estado] || 'badge-muted'}" style="font-size:10px">${escHtml(estado)}</span>`;
 }
 async function cargarTareasProgramadas() {
+  cargarAccionesPendientes(); // ADR-0023: bloque "Pendientes de aprobar", en paralelo
   const r = await api('/tareas-programadas');
   const cont = document.getElementById('tareasProgList');
   const tareas = (r?.ok ? r.tareas : []) || [];
@@ -24109,6 +24118,58 @@ async function cancelarTareaProgramada(id) {
   if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
   toast('✅ Tarea cancelada', 'ok');
   cargarTareasProgramadas();
+}
+
+// ADR-0023 (03/09/2026): canal "panel" de la revisión humana asíncrona N2. Alejandra deja
+// encolada la acción exacta (hoy: enviar/programar un correo desde tu Gmail) cuando la
+// pides por chat sin escribir el código; aquí la apruebas o rechazas con un clic, igual que
+// con el botón de Telegram o la frase "CONFIRMO ENVIO". Aprobar NO envía desde el
+// navegador: solo cambia el estado; Alejandra la ejecuta en menos de 5 min y queda
+// reflejado abajo, en el historial.
+function _accionPendEstadoBadge(estado) {
+  const map = { pendiente: 'badge-warn', aprobada: 'badge-ok', ejecutada: 'badge-ok', rechazada: 'badge-muted', caducada: 'badge-muted', error: 'badge-danger' };
+  return `<span class="badge ${map[estado] || 'badge-muted'}" style="font-size:10px">${escHtml(estado)}</span>`;
+}
+async function cargarAccionesPendientes() {
+  const bloque = document.getElementById('accionesPendBloque');
+  const cont = document.getElementById('accionesPendList');
+  if (!bloque || !cont) return;
+  const r = await api('/acciones-pendientes');
+  const todas = (r?.ok ? r.acciones : []) || [];
+  // Pendientes arriba; el resto (últimas 24 h) como historial breve para ver qué pasó.
+  const hace24h = Date.now() - 24 * 60 * 60 * 1000;
+  const visibles = todas.filter(a => a.estado === 'pendiente' || (a.decidido_at && new Date(a.decidido_at.replace(' ', 'T') + 'Z').getTime() > hace24h));
+  bloque.style.display = visibles.length ? 'block' : 'none';
+  cont.innerHTML = visibles.map(a => {
+    const pend = a.estado === 'pendiente';
+    const detalle = pend
+      ? `caduca ${_tareasProgFmtFecha(a.caduca_at)} · código <code>${escHtml(a.codigo || '')}</code>`
+      : `${escHtml(a.canal_decision ? 'vía ' + a.canal_decision : '')} ${a.decidido_at ? _tareasProgFmtFecha(a.decidido_at) : ''}${a.error_msg ? ` — ${escHtml(a.error_msg)}` : ''}`;
+    return `
+    <div style="background:var(--surface);border:1px solid ${pend ? 'var(--warn, #d9a400)' : 'var(--border)'};border-radius:10px;padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px">✉️ ${escHtml(a.resumen || a.tool || '')}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${detalle}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${_accionPendEstadoBadge(a.estado)}
+          ${pend ? `<button class="btn btn-primary btn-sm" style="padding:2px 10px;font-size:11px" onclick="decidirAccionPendiente(${a.id},'aprobar')">✅ Aprobar</button>
+                    <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px;color:var(--red)" onclick="decidirAccionPendiente(${a.id},'rechazar')">✕ Rechazar</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function decidirAccionPendiente(id, decision) {
+  const msg = decision === 'aprobar'
+    ? '¿Aprobar esta acción? Alejandra la ejecutará en menos de 5 minutos tal cual está descrita.'
+    : '¿Rechazar esta acción? No se ejecutará.';
+  if (!confirm(msg)) return;
+  const r = await api(`/acciones-pendientes/${id}/${decision}`, { method: 'POST' });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); cargarAccionesPendientes(); return; }
+  toast(decision === 'aprobar' ? '✅ Aprobada — se ejecutará en breve' : '✕ Rechazada', 'ok');
+  cargarAccionesPendientes();
 }
 
 // TAREAS-PROGRAMADAS-01 (01/09/2026, ampliación): crear directamente desde el panel, sin
@@ -25380,7 +25441,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.29';
+const PANEL_APP_VERSION = '9.30';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

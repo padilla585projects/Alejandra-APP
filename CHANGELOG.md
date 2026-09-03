@@ -4,6 +4,62 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-03 — ADR-0023: revisión humana asíncrona real para N2, piloto `enviar_gmail`/`programar_correo`)
+
+- **ADR-0023 aceptado por el Director con las seis recomendaciones tal cual.** Cierra el
+  "pendiente sin decisión" de ARC-020. Enmienda 1 a ADR-0009 (el revisor de una acción de
+  ámbito personal es el solicitante, no `DEV_CHAT_ID`).
+- `migrate_acciones_pendientes.sql` — tabla nueva `acciones_pendientes` (aditiva): la
+  acción N2 **exacta** (tool + input JSON), resumen para el humano, el mismo código hex6 que
+  la frase de chat, caducidad, estado (`pendiente → aprobada|rechazada|caducada`,
+  `aprobada → ejecutada|error`), canal y autor de la decisión, traza.
+  **Pendiente de aplicar: requiere autorización humana explícita (decisión 5).**
+- `nucleo-cognitivo/.../verifier.js`: `solicitarRevisionHumanaAsincrona()` deja de ser un
+  stub que lanza y pasa a ser una función **pura** que construye y valida la solicitud
+  (tool, input exacto, resumen, código hex6, caducidad UTC, solicitante, worker) y devuelve
+  SIEMPRE `aprobado: false` — no hay vía para aprobar desde el paquete. 2 tests de contrato
+  (uno reemplaza al que comprobaba el stub); cognitive-core 54/54.
+- `alejandra-agente/lib.js`: `TOOLS_N2_REVISION_ASINCRONA` (piloto, congelada),
+  `calcularCaducidadAccionN2()` (24 h o la hora programada si es antes) y
+  `construirResumenAccionN2()` (sin el cuerpo del correo). Puras, testeadas.
+- `alejandra-agente/worker.js`: `enviar_gmail` y `programar_correo`, sin código confirmado,
+  **encolan** la acción exacta (`encolarAccionPendiente`: idempotente por usuario+código,
+  valida con el verifier, traza `revision_n2`, aviso por Telegram al dueño con botones
+  Aprobar/Rechazar) y le dicen al modelo que el humano puede aprobar por chat, Telegram o
+  panel. Con código confirmado por chat, se ejecuta en el turno como siempre y la fila
+  pendiente (si existía) se cierra (`marcarAccionPendienteDecididaPorChat`, canal `chat`).
+  Cuerpos de ejecución extraídos y compartidos (`ejecutarEnvioGmail`,
+  `ejecutarProgramarCorreo`). **Ejecutor único** `ejecutarAccionesAprobadas()` colgado del
+  cron `*/5` existente (no cabe otro: 5 por cuenta): caduca lo pendiente vencido (avisa,
+  nunca ejecuta) y ejecuta lo aprobado con `worker='agente'`, `LIMIT 20`, toda transición
+  con `WHERE estado='<origen>'`. Aviso por Telegram del resultado.
+- `worker.js` raíz: callbacks `n2_ok:<id>`/`n2_no:<id>` que **verifican
+  `callback_query.from.id` contra `usuarios.telegram_id` del dueño de la fila** (hoy ningún
+  callback lo hacía) y solo cambian el estado (canal `telegram`), nunca ejecutan;
+  `POST /internal/telegram/enviar` admite `botones` restringidos a `n2_ok|n2_no`;
+  `GET /acciones-pendientes` y `POST /acciones-pendientes/:id/(aprobar|rechazar)` bajo
+  `getAuth` real (canal `panel`), solo filas del propio usuario, caducadas excluidas.
+- `panel.html` (v9.30): bloque "🔐 Pendientes de aprobar" en "Mis Tareas Programadas" con
+  Aprobar/Rechazar y un historial breve (24 h) de lo decidido; botón "Actualizar".
+- 11 tests nuevos en `alejandra-agente/lib.test.js` (226/226): piloto exacto, caducidad,
+  resumen sin cuerpo, encolado en las dos tools, verifier en la ruta, idempotencia de todos
+  los `UPDATE`, ejecutor solo-aprobadas, `from.id` en el callback, dos manejadores
+  delegando, botones restringidos, canal panel con `getAuth`.
+- **Sin cambios en las otras 10 tools N2 del agente ni en las 8 del raíz** (siguen con
+  SEC-08/SEC-09), decisión consciente registrada en el ADR ("dos cerebros").
+
+### Fixed (2026-09-03 — hallazgo lateral de ADR-0023: los botones de Telegram dependían de en qué ruta estuviera registrado el webhook)
+
+- `worker.js` raíz tenía **dos** manejadores del webhook con dos copias del procesado de
+  botones: `handleTelegramWebhook()` (`/telegram-webhook`, la única que atendía
+  `fix_apply`/`fix_reject`/`fix_revert`/`preg_responder`) y `telegramWebhook()`
+  (`/telegram/webhook`, la que registra `setupTelegramWebhook()`, que solo atendía
+  `apr`/`rej`/`idea_*`/`herr_disp`). Si el webhook real estaba en la segunda, "Aplicar
+  fix" y las preguntas de `preguntar_usuario` por Telegram no funcionaban en silencio.
+  Extraído un procesador único `procesarCallbackTelegram()` y ambos manejadores delegan en
+  él: ahora da igual en cuál de las dos rutas esté registrado. No se ha podido verificar con
+  `getWebhookInfo` (requiere el token del bot); el fix lo hace irrelevante.
+
 ### Fixed (2026-09-01 — verificación en vivo de TAREAS-PROGRAMADAS-01: recordatorios push nunca llegaban pese a tener token válido)
 
 Verificando en producción el cron de tareas programadas (`ejecutarTareasProgramadas()`,

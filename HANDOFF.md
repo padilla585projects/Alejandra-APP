@@ -1,5 +1,30 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0023 — aceptado e implementado en código; pendiente migración D1, despliegue y verificación en vivo (2026-09-03)
+
+- Adrián aceptó el ADR "con las recomendaciones tal cual" (las seis, registradas en el ADR
+  como "Decisión del Director"). Implementación completa en código, detalle en
+  `CHANGELOG.md`: migración `migrate_acciones_pendientes.sql` (NO aplicada), verifier puro,
+  helpers en `lib.js`, encolado en `enviar_gmail`/`programar_correo`, ejecutor único en el
+  cron `*/5`, callbacks `n2_ok`/`n2_no` con verificación de `from.id`, endpoints de panel,
+  bloque "Pendientes de aprobar" en `panel.html` (v9.30). Tests: agente 226/226,
+  cognitive-core 54/54, policy 4/4, `node --check` limpio en los dos Workers.
+- **Hallazgo lateral resuelto de raíz en vez de verificarlo:** no se pudo comprobar qué ruta
+  del webhook de Telegram está registrada (necesita el token), así que se unificaron los dos
+  manejadores en `procesarCallbackTelegram()` — ya no importa. Evidencia indirecta previa:
+  `alejandra_fixes` tiene 6 filas, todas de mayo; ninguna aplicada por botón desde el
+  2026-05-15, así que el mecanismo llevaba meses sin uso real.
+- **Bloqueo humano (por diseño):** aplicar `migrate_acciones_pendientes.sql` contra D1 exige
+  autorización explícita de Adrián (ADR-0007, decisión 5 del ADR). Hasta entonces el código
+  en producción no rompe nada: `encolarAccionPendiente` devuelve `null` si la tabla no existe
+  y la vía de chat sigue exactamente como antes; el cron ignora los errores de la cola.
+- Siguiente acción exacta, en orden: (1) Adrián autoriza la migración → aplicarla y verificar
+  el esquema real; (2) desplegar `alejandra-agente` y `worker.js` raíz + Pages (v9.30);
+  (3) verificar en vivo por los TRES canales comprobando el estado en D1 y la recepción real
+  del correo, no el texto del chat: chat con código, Telegram con botón (y un `from.id`
+  ajeno rechazado), panel; (4) caducidad (fila con `caduca_at` pasado → `caducada`, sin
+  ejecutar); (5) registrar resultados aquí y en `PROJECT_STATE.md`/`TASKS.md`.
+
 ## ADR-0023 — revisión humana asíncrona real para N2, redactado (2026-09-03)
 
 - Contexto: Adrián preguntó qué era el pendiente "revisión humana asíncrona para N2" de

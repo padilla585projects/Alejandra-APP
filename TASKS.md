@@ -1,5 +1,16 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-03, tarde): **ADR-0023 aceptado e implementado en código
+(PR abierta/fusionada, ver `CHANGELOG.md`). BLOQUEADO en decisión humana para continuar:
+aplicar `migrate_acciones_pendientes.sql` contra D1 exige autorización explícita de Adrián
+(ADR-0007; decisión 5 del propio ADR).** Sin la tabla, producción no se rompe (la cola
+devuelve `null` y la vía de chat sigue igual), pero la feature no está activa.
+- Siguiente acción exacta: Adrián dice "autorizo la migración" → aplicar
+  `npx wrangler d1 execute alejandra-db --file=migrate_acciones_pendientes.sql --remote`,
+  verificar el esquema real, desplegar los dos Workers + Pages (v9.30) y verificar en vivo
+  por los tres canales (chat/Telegram/panel) + caducidad, comprobando D1 y la recepción
+  real del correo. Registrar en `HANDOFF.md`/`PROJECT_STATE.md`.
+
 Estado (actualizado 2026-09-03, continuación): **ADR-0023 — revisión humana asíncrona real
 para N2. Redactado, estado Propuesto. Bloqueado en decisión humana: aceptar un ADR nunca es
 autónomo (ADR-0007).** Adrián pidió primero que se le explicara qué es y después que se

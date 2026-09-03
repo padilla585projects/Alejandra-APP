@@ -11,10 +11,10 @@
  * I/O: determinista aplica una condición programable ya provista; explicabilidad
  * (ADR-0020 rebanada 3, 2026-08-07) valida que una decisión trae razonamiento
  * real (motivos/evidencia con contenido), no solo campos presentes. Revisión
- * humana asíncrona sigue dependiendo de un canal real (Telegram) que este
- * paquete aislado no tiene — lanza un error explícito citando la dependencia
- * que falta, mismo patrón que `context-engine.js`/`planner.js` en F-1.2, para
- * que no pueda usarse por accidente como si verificara de verdad.
+ * humana asíncrona (ADR-0023, 2026-09-03) construye y valida la *solicitud*
+ * que cada Worker persiste en `acciones_pendientes` y que un humano aprueba
+ * por chat/Telegram/panel — también sin I/O: nunca devuelve `aprobado: true`,
+ * porque una solicitud recién creada no está aprobada por definición.
  */
 
 export const NIVELES_VERIFICACION = Object.freeze([
@@ -37,21 +37,51 @@ export function verificarDeterminista(condicion, valor) {
   return { nivel: 'determinista', aprobado: condicion(valor) === true };
 }
 
+const RE_CODIGO_HEX6 = /^[0-9A-F]{6}$/;
+const RE_FECHA_UTC = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
 /**
- * Nivel revisión humana asíncrona (ADR-0009): para acciones N2, la acción
- * queda pendiente de confirmación antes de tener efecto irreversible — hoy
- * es el botón de Telegram sobre `alejandra_fixes`, con destino fijo a
- * `DEV_CHAT_ID` hasta que exista más de un revisor humano (decisión del
- * Director en ADR-0009). Ese canal vive en cada Worker, no en este paquete
- * aislado.
- * @returns {never}
+ * Nivel revisión humana asíncrona (ADR-0009 → ADR-0023, 2026-09-03): para
+ * acciones N2, la acción NO se ejecuta — se construye una *solicitud* que el
+ * Worker persiste en la cola `acciones_pendientes` y que un humano aprueba
+ * por chat, Telegram o panel. Aquí solo se valida y se normaliza esa
+ * solicitud, sin I/O (mismo criterio que `registrarExplicabilidad`): el
+ * INSERT, la notificación y la ejecución diferida viven en cada Worker.
+ *
+ * Contrato: devuelve SIEMPRE `aprobado: false` — una solicitud recién
+ * construida nunca está aprobada; el modelo no puede aprobar nada desde aquí.
+ * Lanza si la solicitud no es completa: una revisión con datos a medias no
+ * es una revisión.
+ *
+ * @param {{tool: string, input: object, resumen: string, codigo: string,
+ *          caducaAt: string, solicitanteId: number|string, worker?: 'agente'|'api'}} solicitud
+ * @returns {{nivel: 'revision_humana_asincrona', aprobado: false, solicitud: object}}
  */
-export function solicitarRevisionHumanaAsincrona() {
-  throw new Error(
-    'Verifier: revisión humana asíncrona sin implementación real en este paquete aislado. ' +
-    'Requiere el canal ya en producción (Telegram/alejandra_fixes) de cada Worker — fuera ' +
-    'del alcance de nucleo-cognitivo/ (ADR-0009).'
-  );
+export function solicitarRevisionHumanaAsincrona(solicitud) {
+  if (!solicitud || typeof solicitud !== 'object') {
+    throw new Error('Verifier: revisión humana asíncrona requiere una solicitud completa (ADR-0023, ADR-0009).');
+  }
+  const { tool, input, resumen, codigo, caducaAt, solicitanteId, worker = 'agente' } = solicitud;
+  if (typeof tool !== 'string' || !tool.trim()) throw new Error('Verifier: solicitud N2 sin tool (ADR-0023).');
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Verifier: solicitud N2 sin input exacto (ADR-0023).');
+  if (typeof resumen !== 'string' || !resumen.trim()) throw new Error('Verifier: solicitud N2 sin resumen para el humano (ADR-0023).');
+  if (typeof codigo !== 'string' || !RE_CODIGO_HEX6.test(codigo)) throw new Error('Verifier: solicitud N2 con código inválido, se espera hex6 en mayúsculas (ADR-0023).');
+  if (typeof caducaAt !== 'string' || !RE_FECHA_UTC.test(caducaAt)) throw new Error('Verifier: solicitud N2 sin caducidad UTC "YYYY-MM-DD HH:MM:SS" (ADR-0023).');
+  if (solicitanteId === undefined || solicitanteId === null || String(solicitanteId).trim() === '') throw new Error('Verifier: solicitud N2 sin solicitante (ADR-0023).');
+  if (worker !== 'agente' && worker !== 'api') throw new Error('Verifier: solicitud N2 con worker desconocido (ADR-0023).');
+  return {
+    nivel: 'revision_humana_asincrona',
+    aprobado: false,
+    solicitud: Object.freeze({
+      tool: tool.trim(),
+      input: JSON.parse(JSON.stringify(input)),
+      resumen: resumen.trim(),
+      codigo,
+      caducaAt,
+      solicitanteId: String(solicitanteId),
+      worker,
+    }),
+  };
 }
 
 /**

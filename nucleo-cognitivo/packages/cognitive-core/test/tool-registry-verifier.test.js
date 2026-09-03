@@ -100,8 +100,43 @@ test('Verifier: nivel determinista aplica una condición pura ya provista, no in
   assert.throws(() => verificarDeterminista('no es una función', 'x'));
 });
 
-test('Verifier: revisión humana asíncrona sigue sin implementación real (ADR-0009)', () => {
-  assert.throws(() => solicitarRevisionHumanaAsincrona(), /ADR-0009/);
+test('Verifier: revisión humana asíncrona construye una solicitud validada y NUNCA aprobada (ADR-0023)', () => {
+  const base = {
+    tool: 'enviar_gmail',
+    input: { para: 'a@b.c', asunto: 'Hola', cuerpo: 'x' },
+    resumen: 'Enviar correo a a@b.c — "Hola"',
+    codigo: 'AB12CD',
+    caducaAt: '2026-09-04 10:00:00',
+    solicitanteId: 3,
+  };
+  const r = solicitarRevisionHumanaAsincrona(base);
+  assert.equal(r.nivel, 'revision_humana_asincrona');
+  assert.equal(r.aprobado, false, 'una solicitud recién creada nunca está aprobada');
+  assert.equal(r.solicitud.worker, 'agente', 'worker por defecto: agente');
+  assert.equal(r.solicitud.solicitanteId, '3', 'solicitante normalizado a string');
+  assert.deepEqual(r.solicitud.input, base.input, 'input exacto, copiado');
+  assert.notEqual(r.solicitud.input, base.input, 'copia, no la misma referencia');
+  assert.ok(Object.isFrozen(r.solicitud), 'la solicitud es inmutable');
+  // El resultado no ofrece ninguna vía para "aprobar": ni campo ni método.
+  assert.equal(typeof r.aprobar, 'undefined');
+  assert.equal(typeof r.solicitud.aprobar, 'undefined');
+});
+
+test('Verifier: revisión humana asíncrona rechaza solicitudes incompletas o mal formadas (ADR-0023)', () => {
+  const base = {
+    tool: 'enviar_gmail', input: { para: 'a@b.c' }, resumen: 'r', codigo: 'AB12CD',
+    caducaAt: '2026-09-04 10:00:00', solicitanteId: 3,
+  };
+  assert.throws(() => solicitarRevisionHumanaAsincrona(), /ADR-0023/);
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, tool: '' }), /sin tool/);
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, input: null }), /sin input/);
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, input: [1] }), /sin input/);
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, resumen: '  ' }), /sin resumen/);
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, codigo: 'ab12cd' }), /código inválido/, 'minúsculas no valen: el Set de chat normaliza a mayúsculas');
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, codigo: 'AB12C' }), /código inválido/);
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, caducaAt: '2026-09-04T10:00:00Z' }), /caducidad/);
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, solicitanteId: null }), /sin solicitante/);
+  assert.throws(() => solicitarRevisionHumanaAsincrona({ ...base, worker: 'otro' }), /worker desconocido/);
 });
 
 test('Verifier: explicabilidad valida razonamiento real, no solo campos presentes (ADR-0020 rebanada 3)', () => {

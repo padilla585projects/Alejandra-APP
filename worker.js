@@ -4641,7 +4641,16 @@ async function handleTelegramWebhook(request, env, ctx) {
   }
 
   if (!update.callback_query) return new Response('OK');
-  const cq     = update.callback_query;
+  return await procesarCallbackTelegram(env, ctx, update.callback_query);
+}
+
+// ADR-0023 (03/09/2026): ÚNICO punto que procesa los botones inline de Telegram, llamado
+// desde los DOS manejadores de webhook (`handleTelegramWebhook` en /telegram-webhook y
+// `telegramWebhook` en /telegram/webhook). Hasta hoy cada uno tenía su propia copia y solo
+// este procesaba fix_apply/fix_reject/preg_responder -- el otro (el que registra
+// setupTelegramWebhook) los ignoraba en silencio. Ahora da igual en cuál de las dos rutas
+// esté registrado el webhook: todos los botones funcionan.
+async function procesarCallbackTelegram(env, ctx, cq) {
   const data   = cq.data || '';
   const chatId = cq.message?.chat?.id;
   const msgId  = cq.message?.message_id;
@@ -4728,6 +4737,41 @@ async function handleTelegramWebhook(request, env, ctx) {
       if (fix) autoLearn(env, 'contexto', `Fix rechazado #${fixId}: ${fix.descripcion.slice(0,60)}`, `Fix rechazado por Adrián. Mi propuesta: ${fix.razon?.slice(0,200)}. Revisar enfoque.`, 3);
       await _tgAnswerCQ(env, cq.id, '❌ Fix rechazado');
       await _tgEditMsg(env, chatId, msgId, orig + '\n\n❌ <b>RECHAZADO</b> — guardado en memoria para aprender.');
+    }
+    // ── ADR-0023: aprobar/rechazar una acción N2 pendiente (revisión humana asíncrona) ──
+    // El revisor es el DUEÑO de la acción (decisión 2 del Director: ámbito personal). Se
+    // verifica callback_query.from.id contra usuarios.telegram_id de esa fila, no solo el
+    // chat -- requisito de seguridad explícito del ADR. Aquí NO se ejecuta nada: solo
+    // cambia el estado; el ejecutor único es el cron */5 de alejandra-agente.
+    else if (accion === 'n2_ok' || accion === 'n2_no') {
+      const accId = parseInt(partes[0]);
+      const acc = await env.DB.prepare('SELECT id, usuario_id, empresa_id, tool, estado, resumen, caduca_at FROM acciones_pendientes WHERE id=?').bind(accId).first().catch(() => null);
+      if (!acc) { await _tgAnswerCQ(env, cq.id, 'Acción no encontrada'); return new Response('OK'); }
+      const fromId = String(cq.from?.id || '');
+      const duenyo = await env.DB.prepare('SELECT telegram_id FROM usuarios WHERE id=?').bind(acc.usuario_id).first().catch(() => null);
+      if (!fromId || !duenyo?.telegram_id || String(duenyo.telegram_id) !== fromId) {
+        await _tgAnswerCQ(env, cq.id, '⛔ No eres el revisor de esta acción');
+        return new Response('OK');
+      }
+      if (acc.estado !== 'pendiente') {
+        await _tgAnswerCQ(env, cq.id, `Ya estaba decidida: ${acc.estado}`);
+        await _tgEditMsg(env, chatId, msgId, orig + `\n\nℹ️ Ya estaba <b>${acc.estado.toUpperCase()}</b> (por otro canal).`);
+        return new Response('OK');
+      }
+      const aprobar = accion === 'n2_ok';
+      const r = await env.DB.prepare(
+        `UPDATE acciones_pendientes SET estado=?, canal_decision='telegram', decidido_at=datetime('now'), decidido_por=? WHERE id=? AND estado='pendiente' AND caduca_at > datetime('now')`
+      ).bind(aprobar ? 'aprobada' : 'rechazada', fromId, accId).run();
+      if (!r.meta?.changes) {
+        await _tgAnswerCQ(env, cq.id, 'Ya no está pendiente (decidida por otro canal o caducada)');
+        await _tgEditMsg(env, chatId, msgId, orig + '\n\nℹ️ Ya no estaba pendiente (otro canal o caducada).');
+        return new Response('OK');
+      }
+      try { await registrarTraza(env, { tipo: 'revision_n2', empresaId: acc.empresa_id, usuarioId: acc.usuario_id, resumen: `Acción N2 ${aprobar ? 'aprobada' : 'rechazada'} por Telegram #${accId}: ${acc.tool}`, detalle: { accion_id: accId, tool: acc.tool, estado: aprobar ? 'aprobada' : 'rechazada', canal: 'telegram' } }); } catch (_) {}
+      await _tgAnswerCQ(env, cq.id, aprobar ? '✅ Aprobada' : '❌ Rechazada');
+      await _tgEditMsg(env, chatId, msgId, orig + (aprobar
+        ? '\n\n✅ <b>APROBADA</b> — Alejandra la ejecutará en menos de 5 minutos y te avisará aquí.'
+        : '\n\n❌ <b>RECHAZADA</b> — no se ejecutará.'));
     }
     // ── Respuesta a pregunta de aclaracion de Alejandra (preguntar_usuario) ──
     else if (accion === 'preg_responder') {
@@ -5561,6 +5605,9 @@ export default {
       if (path === '/tareas-programadas' && method === 'GET')       return await getTareasProgramadas(request, env);
       if (path === '/tareas-programadas' && method === 'POST')      return await crearTareaProgramada(request, env);
       if (path.match(/^\/tareas-programadas\/\d+$/) && method === 'DELETE') return await cancelarTareaProgramadaPanel(parseInt(path.split('/')[2]), request, env);
+      // ADR-0023: cola de revisión humana asíncrona (N2) -- canal "panel"
+      if (path === '/acciones-pendientes' && method === 'GET') return await getAccionesPendientes(request, env);
+      if (path.match(/^\/acciones-pendientes\/\d+\/(aprobar|rechazar)$/) && method === 'POST') return await decidirAccionPendientePanel(parseInt(path.split('/')[2]), path.split('/')[3], request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -14842,7 +14889,19 @@ async function internalTelegramEnviar(request, env) {
   if (!mensaje) return err('Falta mensaje', 400);
   const u = await env.DB.prepare('SELECT telegram_id FROM usuarios WHERE id=?').bind(auth.usuario_id).first();
   if (!u?.telegram_id) return json({ ok: false, error: 'Usuario sin Telegram vinculado.' });
-  await sendTelegramToChat(env, u.telegram_id, mensaje);
+  // ADR-0023: botones inline opcionales. Solo se admiten callbacks de la cola N2
+  // (n2_ok:<id> / n2_no:<id>) -- defensa en profundidad: aunque el agente es de confianza
+  // (secreto interno), no puede fabricar por aquí un botón que dispare fix_apply, apr, etc.
+  let botones = null;
+  if (Array.isArray(body.botones) && body.botones.length) {
+    const ok = body.botones.every(fila => Array.isArray(fila) && fila.length && fila.every(b =>
+      b && typeof b.text === 'string' && b.text.trim() && typeof b.callback_data === 'string' && /^n2_(ok|no):\d{1,12}$/.test(b.callback_data)
+    ));
+    if (!ok) return err('botones inválidos (solo n2_ok/n2_no)', 400);
+    botones = body.botones.map(fila => fila.map(b => ({ text: b.text.slice(0, 40), callback_data: b.callback_data })));
+  }
+  if (botones) await sendTelegramConBotonesTo(env, u.telegram_id, mensaje, botones);
+  else await sendTelegramToChat(env, u.telegram_id, mensaje);
   return json({ ok: true });
 }
 
@@ -14903,6 +14962,35 @@ async function cancelarTareaProgramadaPanel(id, request, env) {
   ).bind(id, auth.usuario_id).run();
   if (!r.meta.changes) return err('No se encontró esa tarea pendiente', 404);
   return json({ ok: true });
+}
+
+// ADR-0023 (03/09/2026): canal "panel" de la revisión humana asíncrona N2. Solo las
+// acciones del propio usuario (el revisor es el dueño, decisión 2 del Director). Aquí NO
+// se ejecuta nada: solo cambia el estado; el ejecutor único es el cron */5 de
+// alejandra-agente. getAuth real de panel.html, nunca _getAuthPlano (el agente no puede
+// aprobar por esta vía).
+async function getAccionesPendientes(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare(
+    `SELECT id, tool, resumen, codigo, estado, solicitado_at, caduca_at, decidido_at, canal_decision, ejecutado_at, error_msg FROM acciones_pendientes WHERE usuario_id=? ORDER BY id DESC LIMIT 100`
+  ).bind(auth.usuario_id).all();
+  return json({ ok: true, acciones: results || [] });
+}
+
+async function decidirAccionPendientePanel(id, decision, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  if (decision !== 'aprobar' && decision !== 'rechazar') return err('Decisión inválida', 400);
+  const nuevo = decision === 'aprobar' ? 'aprobada' : 'rechazada';
+  const acc = await env.DB.prepare('SELECT id, empresa_id, tool FROM acciones_pendientes WHERE id=? AND usuario_id=?').bind(id, auth.usuario_id).first();
+  if (!acc) return err('No se encontró esa acción', 404);
+  const r = await env.DB.prepare(
+    `UPDATE acciones_pendientes SET estado=?, canal_decision='panel', decidido_at=datetime('now'), decidido_por=? WHERE id=? AND usuario_id=? AND estado='pendiente' AND caduca_at > datetime('now')`
+  ).bind(nuevo, String(auth.usuario_id), id, auth.usuario_id).run();
+  if (!r.meta.changes) return err('Esa acción ya no está pendiente (decidida por otro canal o caducada)', 409);
+  try { await registrarTraza(env, { tipo: 'revision_n2', empresaId: acc.empresa_id, usuarioId: auth.usuario_id, resumen: `Acción N2 ${nuevo} por panel #${id}: ${acc.tool}`, detalle: { accion_id: id, tool: acc.tool, estado: nuevo, canal: 'panel' } }); } catch (_) {}
+  return json({ ok: true, estado: nuevo });
 }
 
 async function crearInvitacion(request, env) {
@@ -16658,43 +16746,11 @@ async function telegramWebhook(request, env, ctx) {
   if (!fromDev && expectedSecret && secret !== expectedSecret) return json({ ok: true });
 
   // --- Callback queries (botones inline) ---
+  // ADR-0023: delegado al procesador ÚNICO (procesarCallbackTelegram). Antes este manejador
+  // -- el que registra setupTelegramWebhook -- tenía su propia copia reducida y NO atendía
+  // fix_apply/fix_reject/preg_responder ni, ahora, n2_ok/n2_no.
   if (update.callback_query) {
-    const cq = update.callback_query;
-    const data = cq.data || '';
-    const chatId = cq.message?.chat?.id;
-    const msgId = cq.message?.message_id;
-    const orig = cq.message?.text || '';
-    const [accion, ...partes] = data.split(':');
-    try {
-      if (accion === 'apr') {
-        const [userId, empresaId, rol, dept] = partes;
-        await env.DB.prepare('UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1').bind(parseInt(empresaId), rol, dept === 'null' ? null : dept, parseInt(userId)).run();
-        await _tgAnswerCQ(env, cq.id, '✅ Usuario aprobado');
-        await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APROBADO</b> — ${rol} · ${dept === 'null' ? '—' : dept}`);
-      } else if (accion === 'rej') {
-        const [userId] = partes;
-        await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(parseInt(userId)).run();
-        await _tgAnswerCQ(env, cq.id, '❌ Solicitud rechazada');
-        await _tgEditMsg(env, chatId, msgId, orig + '\n\n❌ <b>RECHAZADO</b>');
-      } else if (accion === 'idea_prog') {
-        await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('en_progreso', parseInt(partes[0])).run();
-        await _tgAnswerCQ(env, cq.id, '🔄 En progreso');
-        await _tgEditMsg(env, chatId, msgId, orig + '\n\n🔄 <b>EN PROGRESO</b>');
-      } else if (accion === 'idea_done') {
-        await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('resuelto', parseInt(partes[0])).run();
-        await _tgAnswerCQ(env, cq.id, '✅ Resuelta');
-        await _tgEditMsg(env, chatId, msgId, orig + '\n\n✅ <b>RESUELTA</b>');
-      } else if (accion === 'idea_close') {
-        await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('cerrado', parseInt(partes[0])).run();
-        await _tgAnswerCQ(env, cq.id, '🗝 Cerrada');
-        await _tgEditMsg(env, chatId, msgId, orig + '\n\n🗝 <b>CERRADA</b>');
-      } else if (accion === 'herr_disp') {
-        const hid = parseInt(partes[0]);
-        await env.DB.prepare("UPDATE herramientas SET estado='disponible' WHERE id=?").bind(hid).run();
-        await _tgAnswerCQ(env, cq.id, '✅ Marcada como disponible');
-        await _tgEditMsg(env, chatId, msgId, orig + '\n\n✅ <b>DISPONIBLE</b>');
-      }
-    } catch (e) { await _tgAnswerCQ(env, cq.id, '❌ Error: ' + e.message); }
+    await procesarCallbackTelegram(env, ctx, update.callback_query);
     return json({ ok: true });
   }
 
