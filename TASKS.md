@@ -1,5 +1,8 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-03, noche, continuación 2): **ADR-0023 ampliado a usuarios sin
+Telegram (push + pantalla en la app móvil, v9.31), desplegado. **Verificado en vivo (Chrome real de Adrián, app móvil `index.html` 9.31 con su sesión):** la sección aparece en Ajustes → Sesión con el historial; petición por chat desde la app (`usuario_id` = nombre, el agente resuelve el id real por el token) → `enviar_gmail` PENDIENTE (`C84FA9`) → la sección muestra la acción con badge 1 y botones → clic real en Aprobar (con `confirm()` auto-aceptado solo en la prueba) → fila #6 `aprobada` → cron a las 12:45:05 UTC → `ejecutada`, `resultado='ok'` → correo "Prueba ADR-0023 app movil" en la bandeja real (conector de Gmail, fecha 2026-09-03T12:45:05Z). Matiz anotado: la aprobación desde la app queda con `canal_decision='panel'` (endpoint compartido; distinguir `app` sería un cambio menor). El push a Adrián se envió (tiene token FCM en `alejandra_memoria`) pero no se pudo observar desde aquí: pendiente de que Adrián confirme si le llegó al móvil. Sin tareas activas.**
+
 Estado (actualizado 2026-09-03, noche, continuación): **ADR-0023 cerrado del todo: los tres
 canales verificados, Telegram y envío real con el usuario real de Adrián (correo recibido,
 comprobado con su conector de Gmail). Dos bugs de producción del raíz corregidos de paso

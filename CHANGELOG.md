@@ -4,6 +4,26 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-03 — ADR-0023 ampliación: aviso por push + pantalla "Pendientes de aprobar" en la app móvil, v9.31)
+
+- Adrián: "¿y qué pasaría con los demás usuarios que no tienen bot?" — un usuario sin
+  Telegram no recibía ningún aviso (ni de la solicitud ni de la caducidad) y, si además no
+  entra a Office (encargados/operarios), su único canal era la frase en el chat. Hoy no
+  afectaba a nadie (solo Adrián tiene Gmail conectado), pero aparecería en cuanto más gente
+  conecte su Gmail o el piloto crezca.
+- `alejandra-agente/worker.js`: `notificarPushUsuario()` (token FCM en `alejandra_memoria`,
+  mismo patrón que los recordatorios programados) y `notificarUsuarioN2()` (Telegram + push a
+  la vez, devuelve qué llegó) en la solicitud, la caducidad, la ejecución y el error. La
+  respuesta al modelo y el mensaje de Telegram mencionan ya la app móvil como sitio para
+  aprobar; el `systemPrompt` del ayudante "correos" también.
+- `index.html` (v9.31): sección "🔐 Pendientes de aprobar" en Ajustes → Sesión (al lado de
+  "Conectar mi Telegram"), con Aprobar/Rechazar contra los mismos endpoints que el panel,
+  badge con el número de pendientes, historial de 24 h y botón de recarga. Aprobar no envía
+  nada desde el móvil: solo cambia el estado. `NOTIF_NAV` gana el destino `aprobar`.
+- 2 tests nuevos (230/230). Sin cambios en el ADR: mismos tres canales; se añade cómo se
+  avisa y desde dónde se aprueba.
+- **Verificado en vivo (Chrome real de Adrián, app móvil `index.html` 9.31 con su sesión):** la sección aparece en Ajustes → Sesión con el historial; petición por chat desde la app (`usuario_id` = nombre, el agente resuelve el id real por el token) → `enviar_gmail` PENDIENTE (`C84FA9`) → la sección muestra la acción con badge 1 y botones → clic real en Aprobar (con `confirm()` auto-aceptado solo en la prueba) → fila #6 `aprobada` → cron a las 12:45:05 UTC → `ejecutada`, `resultado='ok'` → correo "Prueba ADR-0023 app movil" en la bandeja real (conector de Gmail, fecha 2026-09-03T12:45:05Z). Matiz anotado: la aprobación desde la app queda con `canal_decision='panel'` (endpoint compartido; distinguir `app` sería un cambio menor). El push a Adrián se envió (tiene token FCM en `alejandra_memoria`) pero no se pudo observar desde aquí: pendiente de que Adrián confirme si le llegó al móvil.
+
 ### Fixed (2026-09-03 — "no vincula Telegram": dos bugs reales de producción en `worker.js` raíz, encontrados cerrando la verificación de ADR-0023 con Chrome)
 
 - **La Alejandra dev de Telegram respondía SIEMPRE con error de API** —

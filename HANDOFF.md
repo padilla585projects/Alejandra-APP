@@ -1,5 +1,17 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0023 ampliación — push + pantalla en la app móvil, desplegado (2026-09-03, tarde, continuación 2)
+
+- Pregunta de Adrián ("¿y los que no tienen bot?") → hueco real: sin Telegram no había
+  aviso alguno, y sin acceso a Office (encargados/operarios) no había pantalla desde la que
+  aprobar. Implementado y desplegado (`alejandra-agente` + Pages 9.31): push en
+  solicitud/caducidad/ejecución/error y sección "Pendientes de aprobar" en Ajustes → Sesión
+  de `index.html` (detalle en `CHANGELOG.md`). Respondido también: no hay que crear ningún
+  bot, es uno solo (`@AlejandraAPP_bot`); cada usuario vincula su cuenta desde Ajustes →
+  Sesión → "Conectar mi Telegram" y el bot le escribe en su chat privado; los demás no ven
+  nada de nadie, y el botón Aprobar comprueba `from.id` contra el dueño de la fila.
+- **Verificado en vivo (Chrome real de Adrián, app móvil `index.html` 9.31 con su sesión):** la sección aparece en Ajustes → Sesión con el historial; petición por chat desde la app (`usuario_id` = nombre, el agente resuelve el id real por el token) → `enviar_gmail` PENDIENTE (`C84FA9`) → la sección muestra la acción con badge 1 y botones → clic real en Aprobar (con `confirm()` auto-aceptado solo en la prueba) → fila #6 `aprobada` → cron a las 12:45:05 UTC → `ejecutada`, `resultado='ok'` → correo "Prueba ADR-0023 app movil" en la bandeja real (conector de Gmail, fecha 2026-09-03T12:45:05Z). Matiz anotado: la aprobación desde la app queda con `canal_decision='panel'` (endpoint compartido; distinguir `app` sería un cambio menor). El push a Adrián se envió (tiene token FCM en `alejandra_memoria`) pero no se pudo observar desde aquí: pendiente de que Adrián confirme si le llegó al móvil.
+
 ## ADR-0023 — canal Telegram + envío real verificados END-TO-END con el usuario real de Adrián (2026-09-03, tarde, continuación)
 
 - Adrián: "no funciona creo, no vincula telegram. puedes hacerlo tu por chrome". Con Claude
