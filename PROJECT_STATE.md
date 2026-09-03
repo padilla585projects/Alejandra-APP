@@ -1,6 +1,20 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-09-01
+- Actualizado: 2026-09-03
+- Estado (2026-09-03): **TAREAS-PROGRAMADAS-01 cerrada del todo — Alejandra programa
+  correos y recordatorios a hora exacta.** Tools `programar_correo`/
+  `programar_recordatorio`/`listar_tareas_programadas`/`cancelar_tarea_programada` en
+  `alejandra-agente/worker.js`, cron de 5 min, tabla `tareas_programadas` (migrada),
+  endpoints `GET`/`POST`/`DELETE /tareas-programadas` en `worker.js`, pantalla "🕐 Mis
+  Tareas Programadas" con formulario "+ Nueva tarea" en `panel.html` (v9.29). El cron
+  chocó con el límite de 5 cron triggers por CUENTA de Workers Free (resuelto liberando el
+  de `apex-worker`, decisión de Adrián). En la verificación en vivo apareció y se corrigió
+  un bug real (token push no encontrado por tipo de `usuario_id` en el `bind()`), y el
+  flujo de confirmación `CONFIRMO ENVIO` por chat se mostró frágil en conversaciones
+  largas — por eso existe el formulario directo del panel. El único punto que quedó sin
+  verificar el 2026-09-01 (recepción real del correo programado) lo confirmó Adrián el
+  2026-09-03: llegó a su bandeja de `padilla585@gmail.com`. Sin pendientes. Detalle en
+  `HANDOFF.md`/`CHANGELOG.md`.
 - Estado (2026-09-01): **GESTION-AUTO-CORREOS-01 — Alejandra administra el correo
   (categoriza+archiva+marca leído sin preguntar en cada sincronización; enviar sigue
   exigiendo confirmación humana, sin cambios), verificado end-to-end tras encontrar y

@@ -4,6 +4,16 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**TAREAS-PROGRAMADAS-01, cerrada del todo (2026-09-03):** Alejandra programa correos y
+recordatorios a hora exacta (tools en `alejandra-agente/worker.js`, cron de 5 min, tabla
+`tareas_programadas`, endpoints en `worker.js`, pantalla "🕐 Mis Tareas Programadas" con
+formulario "+ Nueva tarea" en `panel.html`, v9.29). El cron chocó con el límite de 5
+cron triggers por cuenta de Workers Free; Adrián liberó el de `apex-worker`. Verificando
+en vivo se arregló un bug real (token push no encontrado en recordatorios) y quedó
+demostrado que el `CONFIRMO ENVIO` por chat es frágil en turnos largos — de ahí el
+formulario directo. El 2026-09-03 Adrián confirmó que el correo programado de prueba llegó
+a su bandeja real. Sin pendientes. Detalle en `PROJECT_STATE.md`/`HANDOFF.md`/`TASKS.md`.
+
 **GESTION-AUTO-CORREOS-01, cerrada de verdad (2026-09-01):** Adrián pidió que Alejandra
 "administre completamente el correo" — alcance acotado con `AskUserQuestion` (enviar sigue
 exigiendo confirmación humana; categorizar/archivar/marcar leído automático en cada
