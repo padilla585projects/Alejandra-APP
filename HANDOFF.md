@@ -1,5 +1,35 @@
 # Handoff — Alejandra 2.0
 
+## ADR-0023 — canal Telegram + envío real verificados END-TO-END con el usuario real de Adrián (2026-09-03, tarde, continuación)
+
+- Adrián: "no funciona creo, no vincula telegram. puedes hacerlo tu por chrome". Con Claude
+  in Chrome (su Chrome real, sesión de `panel.html` ya iniciada como usuario 3 y Telegram
+  Web abierto) se reprodujo y se encontraron **dos bugs reales de producción** en
+  `worker.js` raíz, ambos corregidos y desplegados (detalle en `CHANGELOG.md`): el asistente
+  dev de Telegram roto por metadato ADR-0010 enviado a la API, y la vinculación `/start`
+  inalcanzable (ruta + rama dev antes que `/start`).
+- **Vinculación real:** `POST /telegram/vincular` desde la sesión del panel → enlace con
+  token → Telegram Web no reenvía el `/start` si el chat con el bot ya existe (lo abre sin
+  más), así que se escribió `/start <token>` a mano → "✅ ¡Cuenta vinculada!" →
+  `/telegram/estado` `{vinculado:true}`.
+- **Flujo completo, con datos reales y comprobado por tres fuentes independientes:**
+  1. Chat (sesión real de Adrián, `fetch` al agente desde la página con su token, sin leerlo):
+     "Envía un correo desde mi Gmail a padilla585.projects@gmail.com…" → `enviar_gmail`
+     PENDIENTE, código `36F77F`; el ayudante ya explica las dos vías de aprobación.
+  2. Telegram: llegó "🔐 Alejandra necesita tu aprobación" con resumen, código, caducidad y
+     botones. Clic en **Aprobar** → mensaje editado "✅ APROBADA — … en menos de 5 minutos",
+     botones retirados. D1: fila #5 `aprobada`, canal `telegram`, `decidido_por` = el
+     `from.id` real (6965043), la verificación contra `usuarios.telegram_id` pasó.
+  3. Cron `*/5`: a las 12:20:05 UTC fila #5 → `ejecutada`, `resultado='ok'`. Telegram: "✅
+     Acción #5 ejecutada: Correo a padilla585.projects@gmail.com…".
+  4. **Recepción real:** con el conector de Gmail de Adrián, `subject:"Prueba ADR-0023
+     Telegram"` → 1 hilo, fecha `2026-09-03T12:20:05Z`, en INBOX (remitente y destinatario
+     son la misma cuenta, la que tiene conectada en la app).
+- Con esto **ADR-0023 queda verificado en los tres canales** (chat y panel el mismo día con
+  el usuario de prueba; Telegram y envío real con el usuario real). La fila #5 se deja en D1
+  a propósito: es una acción real de Adrián, no un dato de prueba.
+- Pestañas de Chrome creadas por la sesión cerradas al terminar. Sin pendientes de esta ronda.
+
 ## ADR-0023 — migración aplicada, desplegado y verificado en vivo por HTTP (2026-09-03, tarde)
 
 - Adrián autorizó la migración ("autorizo la migración"). Aplicada

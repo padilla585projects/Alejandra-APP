@@ -3792,6 +3792,14 @@ function nexusTools(expertName) {
   return AI_TOOLS.filter(t => expert.tool_names.includes(t.name));
 }
 
+// Proyección de una tool del catálogo (con metadato ADR-0010: acceso/cron/nivel_riesgo) a
+// EXACTAMENTE los campos que acepta la API de Anthropic. El metadato es para el Motor de
+// Decisión y los filtros locales, nunca para el modelo. Equivalente a toolsParaAnthropic()
+// de alejandra-agente/lib.js (los dos cerebros, misma regla).
+function toolParaAnthropic(t) {
+  return { name: t.name, description: t.description, input_schema: t.input_schema };
+}
+
 // ── Actualiza health score del experto en D1 (fire-and-forget) ───────────────
 function trackExpertHealth(env, expertName, tokensIn, tokensOut) {
   env.DB.prepare(`
@@ -3831,7 +3839,11 @@ async function handleDevAI(env, chatId, userMessage) {
 
   // Tools filtradas según el experto
   const tools = nexusTools(expertName);
-  const toolsConCache = tools.map((t, i) => i === tools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t);
+  // Solo los campos del contrato de la API: el metadato ADR-0010 (acceso/cron/nivel_riesgo)
+  // NO puede viajar a Anthropic -- desde el 03/09/2026 la API lo rechaza con
+  // "tools.0.custom.acceso: Extra inputs are not permitted" y la Alejandra dev de Telegram
+  // respondía SIEMPRE con ese error (visto en vivo al vincular Telegram).
+  const toolsConCache = tools.map(toolParaAnthropic).map((t, i) => i === tools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t);
 
   // Historial previo (más reciente al final)
   const historialMsgs = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
@@ -4565,6 +4577,14 @@ async function handleTelegramWebhook(request, env, ctx) {
   const update = await request.json().catch(() => null);
   if (!update) return new Response('OK');
 
+  // Vinculación de cuenta ("/start <token>") ANTES de la rama del desarrollador: si el
+  // propio Adrián (DEV_CHAT_ID) intenta vincular su Telegram, el mensaje caía en el
+  // asistente dev y nunca llegaba a vincular_tokens (visto en vivo el 03/09/2026: el bot
+  // respondía "[gestor_app] Procesando..." al /start en vez de "Cuenta vinculada").
+  if (update.message && String(update.message.text || '').trim().startsWith('/start')) {
+    await procesarMensajeTelegramUsuario(env, update.message);
+    return new Response('OK');
+  }
   // --- Asistente IA para el desarrollador ---
   if (update.message && String(update.message.chat?.id) === String(env.DEV_CHAT_ID)) {
     let texto = update.message.text || update.message.caption || '';
@@ -4640,6 +4660,15 @@ async function handleTelegramWebhook(request, env, ctx) {
     return new Response('OK');
   }
 
+  // ADR-0023, verificación en vivo (03/09/2026): "no vincula Telegram". Este manejador
+  // (/telegram-webhook) ignoraba cualquier mensaje que no fuera del DEV_CHAT_ID -- el
+  // "/start <token>" de vinculación solo lo procesaba el OTRO manejador
+  // (/telegram/webhook). Si el webhook real está registrado aquí, nadie podía vincular su
+  // cuenta. Mismo criterio que con los botones: lógica compartida, da igual la ruta.
+  if (update.message) {
+    await procesarMensajeTelegramUsuario(env, update.message);
+    return new Response('OK');
+  }
   if (!update.callback_query) return new Response('OK');
   return await procesarCallbackTelegram(env, ctx, update.callback_query);
 }
@@ -16758,6 +16787,11 @@ async function telegramWebhook(request, env, ctx) {
   if (!msg) return json({ ok: true });
   const chatId = msg.chat?.id;
 
+  // Vinculación ("/start <token>") antes de la rama dev -- ver nota en handleTelegramWebhook.
+  if (String(msg.text || '').trim().startsWith('/start')) {
+    await procesarMensajeTelegramUsuario(env, msg);
+    return json({ ok: true });
+  }
   // --- Asistente IA para el desarrollador ---
   if (String(chatId) === String(env.DEV_CHAT_ID)) {
     // Responder a Telegram inmediatamente y procesar en background para evitar timeout de 30s
@@ -16783,28 +16817,36 @@ async function telegramWebhook(request, env, ctx) {
     return json({ ok: true });
   }
 
+  await procesarMensajeTelegramUsuario(env, msg);
+  return json({ ok: true });
+}
+
+// Mensajes de usuarios NO desarrolladores (vinculación de cuenta por "/start <token>").
+// Compartido por los dos manejadores de webhook (ADR-0023, 03/09/2026) -- antes solo vivía
+// en telegramWebhook(), y si el webhook real estaba en /telegram-webhook nadie vinculaba.
+async function procesarMensajeTelegramUsuario(env, msg) {
+  const chatId = msg?.chat?.id;
+  if (!chatId) return;
   const text = (msg.text || '').trim();
-  if (text.startsWith('/start')) {
-    const token = text.split(' ')[1]?.toUpperCase().trim();
-    if (token) {
-      const record = await env.DB.prepare(
-        "SELECT * FROM vincular_tokens WHERE token=? AND expires_at > datetime('now')"
-      ).bind(token).first();
-      if (record) {
-        await env.DB.prepare('UPDATE usuarios SET telegram_id=? WHERE id=?').bind(String(chatId), record.usuario_id).run();
-        await env.DB.prepare('DELETE FROM vincular_tokens WHERE token=?').bind(token).run();
-        await sendTelegramToChat(env, chatId,
-          '✅ <b>¡Cuenta vinculada!</b>\n\nDesde ahora recibirás notificaciones personales de <b>Alejandra App</b> directamente aquí:\n· Tus turnos de la semana\n· Carnets próximos a caducar\n· Avisos que te afecten directamente.');
-      } else {
-        await sendTelegramToChat(env, chatId,
-          '❌ El código ha caducado o no es válido.\nGenera un nuevo enlace desde la app en <b>Ajustes → Sesión → Conectar Telegram</b>.');
-      }
+  if (!text.startsWith('/start')) return;
+  const token = text.split(' ')[1]?.toUpperCase().trim();
+  if (token) {
+    const record = await env.DB.prepare(
+      "SELECT * FROM vincular_tokens WHERE token=? AND expires_at > datetime('now')"
+    ).bind(token).first();
+    if (record) {
+      await env.DB.prepare('UPDATE usuarios SET telegram_id=? WHERE id=?').bind(String(chatId), record.usuario_id).run();
+      await env.DB.prepare('DELETE FROM vincular_tokens WHERE token=?').bind(token).run();
+      await sendTelegramToChat(env, chatId,
+        '✅ <b>¡Cuenta vinculada!</b>\n\nDesde ahora recibirás notificaciones personales de <b>Alejandra App</b> directamente aquí:\n· Tus turnos de la semana\n· Carnets próximos a caducar\n· Avisos que te afecten directamente\n· Acciones que Alejandra deje pendientes de tu aprobación (botones Aprobar/Rechazar).');
     } else {
       await sendTelegramToChat(env, chatId,
-        '👋 Hola. Soy el bot de <b>Alejandra App</b>.\nPara vincular tu cuenta, pulsa "Conectar Telegram" desde la app y sigue el enlace que aparecerá.');
+        '❌ El código ha caducado o no es válido.\nGenera un nuevo enlace desde la app en <b>Ajustes → Sesión → Conectar Telegram</b>.');
     }
+  } else {
+    await sendTelegramToChat(env, chatId,
+      '👋 Hola. Soy el bot de <b>Alejandra App</b>.\nPara vincular tu cuenta, pulsa "Conectar Telegram" desde la app y sigue el enlace que aparecerá.');
   }
-  return json({ ok: true });
 }
 
 async function setupTelegramWebhook(request, env) {
@@ -17903,7 +17945,7 @@ async function devAIChat(request, env) {
     ...(memoriaCtx ? [{ type: 'text', text: memoriaCtx, cache_control: { type: 'ephemeral' } }] : [])
   ];
   const webTools = nexusTools(expertName);
-  const webToolsConCache = webTools.map((t, i) =>
+  const webToolsConCache = webTools.map(toolParaAnthropic).map((t, i) =>
     i === webTools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
   );
 

@@ -1,6 +1,14 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-09-03
+- Estado (2026-09-03, noche, continuación): **ADR-0023 verificado END-TO-END en los tres
+  canales, incluido Telegram y el envío real desde el Gmail de Adrián** (botón Aprobar en su
+  Telegram real → cron → correo recibido en su bandeja a las 12:20:05 UTC, comprobado con
+  su conector de Gmail). Por el camino, dos bugs reales de producción en `worker.js` raíz
+  encontrados y corregidos: la Alejandra dev de Telegram llevaba rota por el metadato
+  ADR-0010 enviado a la API de Anthropic, y la vinculación de Telegram era inalcanzable
+  (ruta del webhook + rama dev antes que `/start`). Tests 228/228. Sin pendientes de
+  ADR-0023. Detalle en `HANDOFF.md`/`CHANGELOG.md`.
 - Estado (2026-09-03, noche): **ADR-0023 en producción y verificado en vivo (canales chat y
   panel, caducidad, idempotencia) contra D1 real; migración autorizada y aplicada; los dos
   Workers y Pages (9.30) desplegados.** De la verificación salió y se corrigió un bug de
