@@ -3903,6 +3903,15 @@ select option{background:var(--surface2);color:var(--text)}
             <button onclick="conBoton(this, desvincularTelegram)" style="width:100%;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted)">🔗 Desvincular Telegram</button>
           </div>
         </div>
+        <!-- ADR-0023 ampliación (03/09/2026): acciones que Alejandra dejó pendientes de tu aprobación -->
+        <div class="settings-section" id="seccionAccionesPendientes" style="margin-top:16px;display:none">
+          <div class="settings-title" style="display:flex;align-items:center;gap:8px">🔐 Pendientes de aprobar
+            <span id="badgeAccionesPendientes" style="display:none;background:#d9a400;color:#000;border-radius:10px;font-size:11px;padding:1px 7px">0</span>
+            <button onclick="cargarAccionesPendientesApp()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:8px;font-size:11px;padding:3px 8px;cursor:pointer;color:var(--muted)">🔄</button>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Cuando le pides a Alejandra por chat que envíe o programe un correo, lo deja aquí hasta que lo apruebes. También puedes aprobarlo escribiendo el código en el chat o desde Telegram si lo tienes vinculado.</div>
+          <div id="listaAccionesPendientes" style="font-size:13px;color:var(--muted)">—</div>
+        </div>
         <div class="settings-section" id="seccionGestionSesiones" style="margin-top:16px;display:none">
           <div class="settings-title">🔐 Gestión de sesiones</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -7607,6 +7616,71 @@ async function desvincularTelegram() {
   } catch { toast('❌ Error de red', 'err'); }
 }
 window.desvincularTelegram = desvincularTelegram;
+
+// ADR-0023 ampliación (03/09/2026): "Pendientes de aprobar" en la app móvil -- paridad con
+// el bloque del panel (Mis Tareas Programadas). Los encargados/operarios no entran a
+// Office, así que sin esto su único canal era la frase en el chat. Aprobar NO envía nada
+// desde el móvil: solo cambia el estado; Alejandra lo ejecuta en <5 min (cron) y avisa por
+// push/Telegram. Mismos endpoints que el panel (GET /acciones-pendientes, POST .../aprobar|rechazar).
+function _accionPendFmtFecha(utcStr) {
+  if (!utcStr) return '—';
+  const d = new Date(String(utcStr).replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return '—';
+  return d.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+async function cargarAccionesPendientesApp() {
+  const sec = document.getElementById('seccionAccionesPendientes');
+  const cont = document.getElementById('listaAccionesPendientes');
+  if (!sec || !cont) return;
+  const s = getSession();
+  if (!s || !s.token) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  try {
+    const res = await apiCall('/acciones-pendientes');
+    const d = await res.json().catch(() => ({}));
+    const todas = (d?.ok ? d.acciones : []) || [];
+    const hace24h = Date.now() - 24 * 60 * 60 * 1000;
+    const visibles = todas.filter(a => a.estado === 'pendiente' || (a.decidido_at && new Date(String(a.decidido_at).replace(' ', 'T') + 'Z').getTime() > hace24h));
+    const nPend = visibles.filter(a => a.estado === 'pendiente').length;
+    const badge = document.getElementById('badgeAccionesPendientes');
+    if (badge) { badge.textContent = nPend; badge.style.display = nPend ? 'inline-block' : 'none'; }
+    if (!visibles.length) {
+      cont.innerHTML = '<div style="font-size:12px;color:var(--muted)">No tienes acciones pendientes de aprobar.</div>';
+      return;
+    }
+    const colorEstado = { pendiente: '#d9a400', aprobada: '#22c55e', ejecutada: '#22c55e', rechazada: 'var(--muted)', caducada: 'var(--muted)', error: '#ef4444' };
+    cont.innerHTML = visibles.map(a => {
+      const pend = a.estado === 'pendiente';
+      const detalle = pend
+        ? `caduca ${_accionPendFmtFecha(a.caduca_at)} · código ${esc(a.codigo || '')}`
+        : `${esc(a.estado)}${a.canal_decision ? ' vía ' + esc(a.canal_decision) : ''} · ${_accionPendFmtFecha(a.decidido_at)}${a.error_msg ? ' — ' + esc(a.error_msg) : ''}`;
+      return `
+      <div style="border:1px solid ${pend ? '#d9a40060' : 'var(--border)'};border-radius:10px;padding:10px;margin-bottom:8px;background:var(--surface2)">
+        <div style="font-size:13px;font-weight:600">✉️ ${esc(a.resumen || a.tool || '')}</div>
+        <div style="font-size:11px;color:${colorEstado[a.estado] || 'var(--muted)'};margin-top:3px">${detalle}</div>
+        ${pend ? `<div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-primary" style="flex:1;font-size:12px;padding:8px" onclick="decidirAccionPendienteApp(${a.id},'aprobar')">✅ Aprobar</button>
+          <button class="btn-primary btn-secondary" style="flex:1;font-size:12px;padding:8px" onclick="decidirAccionPendienteApp(${a.id},'rechazar')">✕ Rechazar</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+  } catch { cont.innerHTML = '<div style="font-size:12px;color:var(--muted)">No se pudo cargar (sin conexión).</div>'; }
+}
+async function decidirAccionPendienteApp(id, decision) {
+  const msg = decision === 'aprobar'
+    ? '¿Aprobar esta acción? Alejandra la ejecutará en menos de 5 minutos tal cual está descrita.'
+    : '¿Rechazar esta acción? No se ejecutará.';
+  if (!confirm(msg)) return;
+  try {
+    const res = await apiCall(`/acciones-pendientes/${id}/${decision}`, { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d.ok) { toast('❌ ' + (d.error || 'Error'), 'err'); cargarAccionesPendientesApp(); return; }
+    toast(decision === 'aprobar' ? '✅ Aprobada — se ejecutará en breve' : '✕ Rechazada');
+    cargarAccionesPendientesApp();
+  } catch { toast('❌ Error de red', 'err'); }
+}
+window.cargarAccionesPendientesApp = cargarAccionesPendientesApp;
+window.decidirAccionPendienteApp = decidirAccionPendienteApp;
 
 async function notificarTurnosTelegram() {
   const btn = document.getElementById('btnNotificarTurnos');
@@ -13446,7 +13520,7 @@ function selAjTab(tab) {
   }
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 60000); } // 1 min (antes 30s)
-  if (tab === 'sesion')      cargarEstadoTelegram();
+  if (tab === 'sesion')      { cargarEstadoTelegram(); cargarAccionesPendientesApp(); }
   if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); vozPoblarSelector(); }
   if (tab === 'empresa')    cargarPanelEmpresa();
   if (tab === 'comparativa') cargarComparativaObras();
@@ -14802,7 +14876,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.30';
+const APP_VERSION = '9.31';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -22078,6 +22152,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       else if (dest === 'carretillas') { currentModule = 'carretillas'; navTo('stock'); }
       else if (dest === 'seg')    showScreen('seguridad');
       else if (dest === 'herramientas') navTo('herramientas');
+      else if (dest === 'aprobar')  { navTo('ajustes'); setTimeout(() => selAjTab('sesion'), 300); } // ADR-0023
     }
   });
 

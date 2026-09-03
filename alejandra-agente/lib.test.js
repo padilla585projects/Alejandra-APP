@@ -1947,6 +1947,30 @@ describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
       }
     });
 
+    it('ampliación: el aviso, la caducidad y el resultado llegan también por push (usuarios sin Telegram)', () => {
+      expect(src).toContain('async function notificarPushUsuario(');
+      expect(src).toMatch(/tipo='fcm_token' AND usuario_id=\?/);
+      const ini = src.indexOf('async function encolarAccionPendiente(');
+      const bloque = src.slice(ini, src.indexOf('\nfunction escaparHtmlTelegram', ini));
+      expect(bloque).toContain('notificarUsuarioN2(env, usuario_id,');
+      expect(bloque).toContain('return { id, existente: false, telegram, push }');
+      const ej = src.slice(src.indexOf('async function ejecutarAccionesAprobadas('), src.indexOf('\nasync function ejecutarTareasProgramadas'));
+      expect((ej.match(/notificarUsuarioN2\(/g) || []).length).toBe(3, 'caducada, ejecutada y error');
+      expect(ej).not.toMatch(/notificarTelegramUsuario\(/);
+    });
+
+    it('ampliación: la app móvil (index.html) tiene la pantalla "Pendientes de aprobar" contra los mismos endpoints que el panel', () => {
+      const app = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+      expect(app).toContain('id="seccionAccionesPendientes"');
+      expect(app).toContain("apiCall('/acciones-pendientes')");
+      expect(app).toMatch(/apiCall\(`\/acciones-pendientes\/\$\{id\}\/\$\{decision\}`, \{ method: 'POST' \}\)/);
+      expect(app).toMatch(/if \(tab === 'sesion'\)\s*\{ cargarEstadoTelegram\(\); cargarAccionesPendientesApp\(\); \}/);
+      // Aprobar desde el móvil nunca envía nada por sí mismo
+      const ini = app.indexOf('async function decidirAccionPendienteApp(');
+      const bloque = app.slice(ini, app.indexOf('window.cargarAccionesPendientesApp', ini));
+      expect(bloque).not.toMatch(/gmail|enviar_gmail|alejandra-agente/);
+    });
+
     it('worker.js raíz: las tools viajan a Anthropic SIN el metadato ADR-0010 (acceso/cron/nivel_riesgo)', () => {
       // Visto en vivo (03/09/2026): "tools.0.custom.acceso: Extra inputs are not permitted".
       expect(raiz).toContain('function toolParaAnthropic(t)');

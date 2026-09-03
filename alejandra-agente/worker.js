@@ -2665,7 +2665,7 @@ const AYUDANTES = {
     // configurados de antemano, y el refresh token se genera y guarda cifrado solo cuando
     // el usuario pulsa "Conectar mi Gmail" en Mi cuenta (ya lo hizo). Grounding explícito
     // para que el modelo no rellene esos huecos con conocimiento genérico de OAuth2.
-    systemPrompt: 'Eres el ayudante de Correos de Alejandra, y administras la bandeja del usuario DENTRO de la app (nunca tocas su Gmail real salvo para leerlo y, con su confirmación explícita, enviar). Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella; esta barrera NUNCA se salta, ni siquiera en una gestión automática. AHORA BIEN (fallo real detectado, 03/09/2026): si la instrucción que recibes ya incluye "CONFIRMO ENVIO <código>", NO lo cuestiones, NO digas que "debe venir del humano" ni pidas que lo repita -- limítate a llamar a enviar_gmail (o programar_correo) con los MISMOS datos exactos (para/asunto/cuerpo/fecha). Tú no validas el código ni puedes falsificarlo: la propia tool comprueba si ese código lo escribió el humano en su mensaje real; si no fue así, te devolverá otra vez el aviso PENDIENTE y entonces sí se lo muestras. Negarte a llamar a la tool cuando el humano ya ha confirmado es un error, no una precaución. Ten en cuenta además (ADR-0023) que, cuando la tool te devuelva PENDIENTE, la acción queda también registrada para que el humano la apruebe desde Telegram o desde el panel (Mis Tareas Programadas → Pendientes de aprobar) sin volver al chat -- díselo en una frase junto con el código. Si el usuario pide programar/agendar un correo para una fecha/hora futura ("mándale esto a Juan mañana a las 9"), usa programar_correo -- funciona igual que enviar_gmail (mismo código, misma frase "CONFIRMO ENVIO <código>", una sola vez al programarlo) pero el envío real ocurre solo, a esa hora exacta, sin que el usuario tenga que estar delante ni volver a confirmar. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales.\n\nGestión (organizar/categorizar/clasificar/administrar sus correos, incluidas las peticiones automáticas tras sincronizar, sin que el usuario tenga que pedirlo cada vez): primero léelos con leer_gmail si no los tienes ya. Para CADA correo decide (a) una categoría breve y razonable (p.ej. "urgente", "proveedores", "facturas", "spam", "sin urgencia"), (b) si archivarlo -- SOLO si es claramente promocional/informativo o un aviso ya resuelto que no necesita ninguna acción del usuario --, y (c) si marcarlo leído -- SOLO si es puramente informativo, sin nada pendiente. Si un correo parece requerir su atención, respuesta o una decisión suya (facturas sin pagar, avisos de seguridad reales, un cliente/jefe escribiendo, algo con plazo), NO lo archives ni lo marques leído -- solo categorízalo, para que él lo vea y decida. Ante la duda, no archives ni marques leído: es preferible dejarlo visible de más que ocultar algo importante. Llama a categorizar_correos con la lista completa de {gmail_id, categoria, archivar, marcar_leido} -- archivar/marcar_leido puedes omitirlos u omitirlos en false cuando no aplique. IMPORTANTE (fallo real detectado: te quedabas diciendo "perfecto, ahora analizo/aplico la gestión" y terminabas el turno sin haber llamado a categorizar_correos, así que nunca se guardaba nada): NUNCA respondas con un texto de transición anunciando que vas a categorizar/archivar/marcar -- decide las categorías y llama a categorizar_correos DIRECTAMENTE, en la misma respuesta donde leer_gmail te dio los correos (o como muy tarde en tu siguiente respuesta inmediata, siempre con la llamada a la tool incluida, nunca solo texto). Si tienes muchos correos (15-25), igual: analiza todos y llama a categorizar_correos UNA vez con la lista completa, no narres el proceso antes. Estas tres acciones (categorizar/archivar/marcar leído) son solo dentro de la app, reversibles y N0 -- no hace falta pedir confirmación humana para ellas, a diferencia de enviar_gmail. NUNCA borres correos (no tienes tool para eso) ni los archives/marques leído en el Gmail real (no tienes permiso de Google para eso, gmail.modify no está concedido) -- si el usuario pide archivar/marcar leído/etiquetar de verdad en Gmail, dile que esa función no está disponible todavía.',
+    systemPrompt: 'Eres el ayudante de Correos de Alejandra, y administras la bandeja del usuario DENTRO de la app (nunca tocas su Gmail real salvo para leerlo y, con su confirmación explícita, enviar). Usa leer_gmail para resumir/consultar la bandeja del usuario (solo lectura, sin confirmación) y enviar_gmail para mandar un correo desde su Gmail real. enviar_gmail SIEMPRE exige que el humano escriba "CONFIRMO ENVIO <código>" antes de enviarse de verdad -- si la tool te devuelve un código, muéstraselo tal cual al usuario y esperá su confirmación en el siguiente turno, nunca reintentes sin ella; esta barrera NUNCA se salta, ni siquiera en una gestión automática. AHORA BIEN (fallo real detectado, 03/09/2026): si la instrucción que recibes ya incluye "CONFIRMO ENVIO <código>", NO lo cuestiones, NO digas que "debe venir del humano" ni pidas que lo repita -- limítate a llamar a enviar_gmail (o programar_correo) con los MISMOS datos exactos (para/asunto/cuerpo/fecha). Tú no validas el código ni puedes falsificarlo: la propia tool comprueba si ese código lo escribió el humano en su mensaje real; si no fue así, te devolverá otra vez el aviso PENDIENTE y entonces sí se lo muestras. Negarte a llamar a la tool cuando el humano ya ha confirmado es un error, no una precaución. Ten en cuenta además (ADR-0023) que, cuando la tool te devuelva PENDIENTE, la acción queda también registrada para que el humano la apruebe sin volver al chat: desde la app móvil (Ajustes → Sesión → Pendientes de aprobar), desde el panel (Mis Tareas Programadas → Pendientes de aprobar) o desde Telegram si lo tiene vinculado -- díselo en una frase junto con el código. Si el usuario pide programar/agendar un correo para una fecha/hora futura ("mándale esto a Juan mañana a las 9"), usa programar_correo -- funciona igual que enviar_gmail (mismo código, misma frase "CONFIRMO ENVIO <código>", una sola vez al programarlo) pero el envío real ocurre solo, a esa hora exacta, sin que el usuario tenga que estar delante ni volver a confirmar. IMPORTANTE sobre la conexión: el Client ID/Secret de OAuth2 ya están configurados como secretos del servidor, y el refresh token del usuario se genera y guarda cifrado automáticamente cuando pulsa "Conectar mi Gmail" en Mi cuenta -- NUNCA le pidas que te pase el Client ID, Client Secret o un Refresh Token por chat, eso no es como funciona esta integración y sería un riesgo de seguridad real. Si leer_gmail/enviar_gmail devuelve un error, explícaselo tal cual (o resumido) y sugiere revisar la conexión en Mi cuenta o la configuración de Google Cloud (según lo que diga el error) -- nunca inventes un flujo alternativo de credenciales manuales.\n\nGestión (organizar/categorizar/clasificar/administrar sus correos, incluidas las peticiones automáticas tras sincronizar, sin que el usuario tenga que pedirlo cada vez): primero léelos con leer_gmail si no los tienes ya. Para CADA correo decide (a) una categoría breve y razonable (p.ej. "urgente", "proveedores", "facturas", "spam", "sin urgencia"), (b) si archivarlo -- SOLO si es claramente promocional/informativo o un aviso ya resuelto que no necesita ninguna acción del usuario --, y (c) si marcarlo leído -- SOLO si es puramente informativo, sin nada pendiente. Si un correo parece requerir su atención, respuesta o una decisión suya (facturas sin pagar, avisos de seguridad reales, un cliente/jefe escribiendo, algo con plazo), NO lo archives ni lo marques leído -- solo categorízalo, para que él lo vea y decida. Ante la duda, no archives ni marques leído: es preferible dejarlo visible de más que ocultar algo importante. Llama a categorizar_correos con la lista completa de {gmail_id, categoria, archivar, marcar_leido} -- archivar/marcar_leido puedes omitirlos u omitirlos en false cuando no aplique. IMPORTANTE (fallo real detectado: te quedabas diciendo "perfecto, ahora analizo/aplico la gestión" y terminabas el turno sin haber llamado a categorizar_correos, así que nunca se guardaba nada): NUNCA respondas con un texto de transición anunciando que vas a categorizar/archivar/marcar -- decide las categorías y llama a categorizar_correos DIRECTAMENTE, en la misma respuesta donde leer_gmail te dio los correos (o como muy tarde en tu siguiente respuesta inmediata, siempre con la llamada a la tool incluida, nunca solo texto). Si tienes muchos correos (15-25), igual: analiza todos y llama a categorizar_correos UNA vez con la lista completa, no narres el proceso antes. Estas tres acciones (categorizar/archivar/marcar leído) son solo dentro de la app, reversibles y N0 -- no hace falta pedir confirmación humana para ellas, a diferencia de enviar_gmail. NUNCA borres correos (no tienes tool para eso) ni los archives/marques leído en el Gmail real (no tienes permiso de Google para eso, gmail.modify no está concedido) -- si el usuario pide archivar/marcar leído/etiquetar de verdad en Gmail, dile que esa función no está disponible todavía.',
   },
 };
 
@@ -13150,6 +13150,30 @@ async function notificarTelegramUsuario(env, usuario_id, mensaje, botones = null
   } catch (_) { return false; }
 }
 
+// Push al usuario (token FCM en alejandra_memoria, mismo patrón que enviar_push y que los
+// recordatorios programados -- String(usuario_id), ver nota en ejecutarTareasProgramadas).
+// ADR-0023 ampliación (03/09/2026): los usuarios sin Telegram (la mayoría) no se
+// enteraban de nada; el push llega al móvil sin vincular nada.
+async function notificarPushUsuario(env, usuario_id, titulo, cuerpo, extraData = null) {
+  if (!env.DB || !usuario_id) return false;
+  try {
+    const row = await env.DB.prepare(`SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`).bind(String(usuario_id)).first();
+    if (!row?.contenido) return false;
+    const r = await enviarFCM(env, row.contenido, titulo, cuerpo, { tipo: 'accion_pendiente', screen: 'ajustes', ...(extraData || {}) });
+    return !!(r && r.ok);
+  } catch (_) { return false; }
+}
+
+// Aviso por TODOS los canales de notificación disponibles del usuario (Telegram con
+// botones si lo tiene vinculado; push si tiene token). Devuelve qué llegó.
+async function notificarUsuarioN2(env, usuario_id, textoTelegramHtml, botones, tituloPush, cuerpoPush, extraPush = null) {
+  const [telegram, push] = await Promise.all([
+    notificarTelegramUsuario(env, usuario_id, textoTelegramHtml, botones),
+    notificarPushUsuario(env, usuario_id, tituloPush, cuerpoPush, extraPush),
+  ]);
+  return { telegram, push };
+}
+
 // Encola una acción N2 exacta. Idempotente por (usuario, código): si ya hay una fila
 // pendiente con el mismo código (el modelo volvió a llamar a la tool sin confirmación),
 // se reutiliza y NO se vuelve a notificar. Nunca lanza: si D1/la tabla fallan, devuelve
@@ -13176,11 +13200,14 @@ async function encolarAccionPendiente(env, { usuario_id, empresa_id, tool, input
       detalle: { accion_id: id, tool: solicitud.tool, codigo: solicitud.codigo, caduca_at: solicitud.caducaAt, estado: 'pendiente' },
     });
     const caducaLegible = new Date(solicitud.caducaAt.replace(' ', 'T') + 'Z').toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    const telegram = await notificarTelegramUsuario(env, usuario_id,
-      `🔐 <b>Alejandra necesita tu aprobación</b>\n${escaparHtmlTelegram(solicitud.resumen)}\n\nCódigo: <code>${solicitud.codigo}</code> · caduca el ${caducaLegible}\n\nPulsa un botón, o escribe "CONFIRMO ENVIO ${solicitud.codigo}" en el chat, o revísalo en el panel (Mis Tareas Programadas → Pendientes de aprobar).`,
-      [[{ text: '✅ Aprobar', callback_data: `n2_ok:${id}` }, { text: '❌ Rechazar', callback_data: `n2_no:${id}` }]]
+    const { telegram, push } = await notificarUsuarioN2(env, usuario_id,
+      `🔐 <b>Alejandra necesita tu aprobación</b>\n${escaparHtmlTelegram(solicitud.resumen)}\n\nCódigo: <code>${solicitud.codigo}</code> · caduca el ${caducaLegible}\n\nPulsa un botón, o escribe "CONFIRMO ENVIO ${solicitud.codigo}" en el chat, o revísalo en la app (Ajustes → Sesión → Pendientes de aprobar) o en el panel (Mis Tareas Programadas).`,
+      [[{ text: '✅ Aprobar', callback_data: `n2_ok:${id}` }, { text: '❌ Rechazar', callback_data: `n2_no:${id}` }]],
+      '🔐 Alejandra necesita tu aprobación',
+      `${solicitud.resumen} · caduca el ${caducaLegible}. Apruébalo en Ajustes → Sesión → Pendientes de aprobar.`,
+      { accion_id: String(id) }
     );
-    return { id, existente: false, telegram };
+    return { id, existente: false, telegram, push };
   } catch (e) {
     console.error('[ADR-0023] encolarAccionPendiente:', e.message);
     return null;
@@ -13195,8 +13222,11 @@ function escaparHtmlTelegram(s) {
 // encolada, para que el modelo se lo cuente al humano. Nada si la cola no está disponible.
 function textoCanalesAlternativosN2(cola) {
   if (!cola || !cola.id) return '';
-  const tg = cola.telegram === true ? ' Se le ha enviado también un aviso por Telegram con botones Aprobar/Rechazar.' : '';
-  return ` Además, esta acción ha quedado registrada como pendiente (#${cola.id}) y el humano puede aprobarla o rechazarla sin volver al chat: desde el panel (Mis Tareas Programadas → Pendientes de aprobar)${cola.telegram === true ? ' o desde Telegram' : ''}.${tg} Díselo en una frase.`;
+  const avisos = [];
+  if (cola.telegram === true) avisos.push('Telegram (con botones Aprobar/Rechazar)');
+  if (cola.push === true) avisos.push('notificación push en el móvil');
+  const tg = avisos.length ? ` Se le ha enviado también un aviso por ${avisos.join(' y ')}.` : '';
+  return ` Además, esta acción ha quedado registrada como pendiente (#${cola.id}) y el humano puede aprobarla o rechazarla sin volver al chat: desde la app móvil (Ajustes → Sesión → Pendientes de aprobar), desde el panel (Mis Tareas Programadas → Pendientes de aprobar)${cola.telegram === true ? ' o desde Telegram' : ''}.${tg} Díselo en una frase.`;
 }
 
 // El humano confirmó por chat en este mismo turno y la tool ya se ejecutó aquí: cerrar la
@@ -13228,7 +13258,7 @@ async function ejecutarAccionesAprobadas(env) {
       const r = await env.DB.prepare(`UPDATE acciones_pendientes SET estado='caducada', decidido_at=datetime('now') WHERE id=? AND estado='pendiente'`).bind(a.id).run();
       if (!r.meta?.changes) continue;
       await registrarTraza(env, { tipo: 'revision_n2', empresaId: a.empresa_id, usuarioId: a.usuario_id, resumen: `Solicitud N2 caducada #${a.id}: ${a.tool}`, detalle: { accion_id: a.id, tool: a.tool, estado: 'caducada' } });
-      await notificarTelegramUsuario(env, a.usuario_id, `⌛ Acción pendiente #${a.id} caducada sin aprobación, no se ha ejecutado:\n${escaparHtmlTelegram(a.resumen)}`);
+      await notificarUsuarioN2(env, a.usuario_id, `⌛ Acción pendiente #${a.id} caducada sin aprobación, no se ha ejecutado:\n${escaparHtmlTelegram(a.resumen)}`, null, '⌛ Acción caducada sin aprobar', `No se ha ejecutado: ${a.resumen}`, { accion_id: String(a.id) });
     }
   } catch (e) { console.error('[ADR-0023] caducidad:', e.message); }
 
@@ -13252,12 +13282,12 @@ async function ejecutarAccionesAprobadas(env) {
       if (!r.ok) throw new Error(r.error || 'error desconocido');
       await env.DB.prepare(`UPDATE acciones_pendientes SET estado='ejecutada', ejecutado_at=datetime('now'), resultado='ok' WHERE id=? AND estado='aprobada'`).bind(a.id).run();
       await registrarTraza(env, { tipo: 'revision_n2', empresaId: a.empresa_id, usuarioId: a.usuario_id, resumen: `Acción N2 ejecutada #${a.id}: ${a.tool}`, detalle: { accion_id: a.id, tool: a.tool, estado: 'ejecutada' } });
-      await notificarTelegramUsuario(env, a.usuario_id, `✅ Acción #${a.id} ejecutada:\n${escaparHtmlTelegram(a.resumen)}`);
+      await notificarUsuarioN2(env, a.usuario_id, `✅ Acción #${a.id} ejecutada:\n${escaparHtmlTelegram(a.resumen)}`, null, '✅ Acción ejecutada', a.resumen, { accion_id: String(a.id) });
     } catch (e) {
       const msg = String(e.message || e).slice(0, 300);
       await env.DB.prepare(`UPDATE acciones_pendientes SET estado='error', ejecutado_at=datetime('now'), error_msg=? WHERE id=? AND estado='aprobada'`).bind(msg, a.id).run().catch(() => {});
       await registrarTraza(env, { tipo: 'revision_n2', empresaId: a.empresa_id, usuarioId: a.usuario_id, resumen: `Acción N2 con error #${a.id}: ${a.tool}`, detalle: { accion_id: a.id, tool: a.tool, estado: 'error', error: msg } });
-      await notificarTelegramUsuario(env, a.usuario_id, `❌ Acción #${a.id} aprobada pero falló al ejecutarse:\n${escaparHtmlTelegram(a.resumen)}\n\n${escaparHtmlTelegram(msg)}`);
+      await notificarUsuarioN2(env, a.usuario_id, `❌ Acción #${a.id} aprobada pero falló al ejecutarse:\n${escaparHtmlTelegram(a.resumen)}\n\n${escaparHtmlTelegram(msg)}`, null, '❌ Acción aprobada pero con error', `${a.resumen} — ${msg}`, { accion_id: String(a.id) });
     }
   }
 }
