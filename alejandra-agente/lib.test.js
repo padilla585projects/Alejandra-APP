@@ -1950,6 +1950,11 @@ describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
     it('ampliación: el aviso, la caducidad y el resultado llegan también por push (usuarios sin Telegram)', () => {
       expect(src).toContain('async function notificarPushUsuario(');
       expect(src).toMatch(/tipo='fcm_token' AND usuario_id=\?/);
+      // Web Push (PWA/Chrome) además de FCM (app nativa): push_subscriptions por fin se lee.
+      expect(src).toContain('/internal/push/enviar');
+      expect(raiz).toContain('async function sendWebPushToUsuario(');
+      expect(raiz).toMatch(/FROM push_subscriptions WHERE usuario_id=\? OR/);
+      expect(raiz).toMatch(/path === '\/internal\/push\/enviar' && method === 'POST'/);
       const ini = src.indexOf('async function encolarAccionPendiente(');
       const bloque = src.slice(ini, src.indexOf('\nfunction escaparHtmlTelegram', ini));
       expect(bloque).toContain('notificarUsuarioN2(env, usuario_id,');

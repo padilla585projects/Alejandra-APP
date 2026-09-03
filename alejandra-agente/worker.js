@@ -13156,12 +13156,31 @@ async function notificarTelegramUsuario(env, usuario_id, mensaje, botones = null
 // enteraban de nada; el push llega al móvil sin vincular nada.
 async function notificarPushUsuario(env, usuario_id, titulo, cuerpo, extraData = null) {
   if (!env.DB || !usuario_id) return false;
+  // (1) FCM -- app nativa (token en alejandra_memoria).
+  let fcmOk = false;
   try {
     const row = await env.DB.prepare(`SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`).bind(String(usuario_id)).first();
-    if (!row?.contenido) return false;
-    const r = await enviarFCM(env, row.contenido, titulo, cuerpo, { tipo: 'accion_pendiente', screen: 'ajustes', ...(extraData || {}) });
-    return !!(r && r.ok);
-  } catch (_) { return false; }
+    if (row?.contenido) {
+      const r = await enviarFCM(env, row.contenido, titulo, cuerpo, { tipo: 'accion_pendiente', screen: 'ajustes', ...(extraData || {}) });
+      fcmOk = !!(r && r.ok);
+    }
+  } catch (_) {}
+  // (2) Web Push -- PWA / Chrome (push_subscriptions, que hasta hoy nadie leía). Las claves
+  // VAPID viven en el raíz: se pide por el endpoint interno. Ambos canales a la vez: el
+  // usuario puede tener la app nativa Y la PWA/Chrome.
+  let webOk = false;
+  try {
+    if (env.API_WEB) {
+      const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/push/enviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+        body: JSON.stringify({ usuario_id, titulo, cuerpo, url: 'index.html' }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      webOk = !!(resp.ok && data.ok && data.enviados > 0);
+    }
+  } catch (_) {}
+  return fcmOk || webOk;
 }
 
 // Aviso por TODOS los canales de notificación disponibles del usuario (Telegram con
