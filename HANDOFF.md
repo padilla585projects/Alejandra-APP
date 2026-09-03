@@ -37,10 +37,10 @@
   Programadas" (`panel.html`, v9.29) — crea correos/recordatorios sin pasar por el chat,
   `POST /tareas-programadas` nuevo en `worker.js`. Verificado en vivo (POST 200, fila
   creada, cancelación posterior también verificada).
-- **Pendiente / no verificado:** el correo de prueba llegó según D1 (`estado='enviada'`,
-  sin `error_msg`), pero no se comprobó la bandeja de entrada real de
-  `padilla585@gmail.com` para confirmar visualmente que llegó — dar por bueno el estado de
-  D1 salvo que Adrián reporte lo contrario.
+- **Verificación final (2026-09-03):** Adrián confirmó que el correo de prueba llegó a su
+  bandeja real de `padilla585@gmail.com`. Con esto el envío programado queda verificado de
+  extremo a extremo (D1 `estado='enviada'` + recepción real), no solo por el estado en
+  D1. **TAREAS-PROGRAMADAS-01 cerrada, sin pendientes.**
 
 ## GESTION-AUTO-CORREOS-01 — Alejandra administra el correo, tres bugs reales encadenados (2026-09-01)
 

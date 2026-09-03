@@ -1,5 +1,16 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-03): **TAREAS-PROGRAMADAS-01 — Alejandra programa correos y
+recordatorios a hora exacta. Cerrada del todo.** Implementada, desplegada (los dos Workers +
+Pages v9.29) y verificada en vivo el 2026-09-01 (ver `HANDOFF.md`): bug real del token push
+corregido, formulario "+ Nueva tarea" añadido en el panel porque el `CONFIRMO ENVIO` por
+chat resultó frágil en conversaciones largas, cron de 5 min operativo tras liberar un
+trigger de `apex-worker` (límite de 5 por cuenta en Workers Free). El único punto que
+quedó sin comprobar — que el correo programado llegara de verdad a la bandeja real — lo
+confirmó Adrián el 2026-09-03. Sin pendientes de esta tarea.
+- Sigue abierta la verificación en vivo del quiosco de fichaje (`kiosco.html`, ARC-022,
+  2026-08-11) — ver `ARCHITECT_BACKLOG.md`.
+
 Estado (actualizado 2026-09-01): **GESTION-AUTO-CORREOS-01 — Alejandra administra el
 correo (categoriza + archiva + marca leído automáticamente al sincronizar), verificado
 end-to-end de verdad tras encontrar y arreglar TRES bugs reales encadenados.** Adrián pidió
