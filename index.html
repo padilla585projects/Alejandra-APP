@@ -1994,7 +1994,7 @@ select option{background:var(--surface2);color:var(--text)}
   </div>
 
   <!-- MODAL: escala -->
-  <div class="modal-overlay" id="modalReplEscala" onclick="if(event.target===this)replCerrarEscala()" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
+  <div class="modal-overlay" id="modalReplEscala" onclick="_replCerrarSiBackdrop(event,this,replCerrarEscala)" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
     <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;display:flex;flex-direction:column">
       <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center">
         <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">📏 Escala</div>
@@ -2017,7 +2017,7 @@ select option{background:var(--surface2);color:var(--text)}
   </div>
 
   <!-- MODAL: obstáculo -->
-  <div class="modal-overlay" id="modalReplObstaculo" onclick="if(event.target===this)replCerrarObstaculo()" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
+  <div class="modal-overlay" id="modalReplObstaculo" onclick="_replCerrarSiBackdrop(event,this,replCerrarObstaculo)" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
     <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column">
       <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center">
         <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">⚠️ Instalación de por medio</div>
@@ -15113,7 +15113,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.36';
+const APP_VERSION = '9.37';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18534,13 +18534,25 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (!_repl || _replSoloLectura()) return;
       ev.preventDefault();
       const n = _replANatural(ev.clientX, ev.clientY);
-      _replDrag = { x0: ev.clientX, y0: ev.clientY, moved: false, idx: -1, nat: n };
+      _replDrag = { x0: ev.clientX, y0: ev.clientY, moved: false, idx: -1, refKey: null, nat: n };
       if (_repl.modo === 'trazar') {
         // ¿Ha tocado un vértice existente? → arrastrar
         const tol = 18 / n.f.s;
         let best = -1, bd = tol;
         _repl.puntos.forEach((p, i) => { const d = Math.hypot(p.x - n.x, p.y - n.y); if (d < bd) { bd = d; best = i; } });
         _replDrag.idx = best;
+      } else if (_repl.modo === 'escala' && _repl.referencia) {
+        // REPL-ESCALA-DRAG-01: los dos puntos de la referencia se corrigen igual que los
+        // del trazado -- tocar cerca de uno y arrastrar, en vez de tener que borrar y
+        // repetir. Si ya había metros fijados, la escala se recalcula en vivo al soltar.
+        const tol = 18 / n.f.s;
+        let best = null, bd = tol;
+        [['a', _repl.referencia.a], ['b', _repl.referencia.b]].forEach(([k, p]) => {
+          if (!p) return;
+          const d = Math.hypot(p.x - n.x, p.y - n.y);
+          if (d < bd) { bd = d; best = k; }
+        });
+        _replDrag.refKey = best;
       }
       try { cv.setPointerCapture(ev.pointerId); } catch {}
     });
@@ -18551,12 +18563,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         const n = _replANatural(ev.clientX, ev.clientY);
         _repl.puntos[_replDrag.idx] = { x: Math.max(0, Math.min(_repl.imgW, n.x)), y: Math.max(0, Math.min(_repl.imgH, n.y)) };
         replDibujar();
+      } else if (_replDrag.refKey && _replDrag.moved) {
+        const n = _replANatural(ev.clientX, ev.clientY);
+        _repl.referencia[_replDrag.refKey] = { x: Math.max(0, Math.min(_repl.imgW, n.x)), y: Math.max(0, Math.min(_repl.imgH, n.y)) };
+        if (_repl.referencia.metros > 0 && _repl.referencia.a && _repl.referencia.b) {
+          const px = Math.hypot(_repl.referencia.b.x - _repl.referencia.a.x, _repl.referencia.b.y - _repl.referencia.a.y);
+          if (px > 5) _repl.escala_px_m = px / _repl.referencia.metros;
+        }
+        replDibujar();
       }
     });
     const fin = ev => {
       if (!_replDrag || !_repl) return;
       const d = _replDrag; _replDrag = null;
       if (d.idx >= 0 && d.moved) { replMarcarCambio(); replActualizarInfo(); return; }
+      if (d.refKey && d.moved) { replMarcarCambio(); replActualizarInfo(); return; }
       if (d.moved) return;
       const n = d.nat;
       if (n.x < 0 || n.y < 0 || n.x > _repl.imgW || n.y > _repl.imgH) return; // fuera de la foto
@@ -18564,6 +18585,24 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     };
     cv.addEventListener('pointerup', fin);
     cv.addEventListener('pointercancel', () => { _replDrag = null; });
+  }
+  // REPL-MODAL-GHOST-01: en Android, el toque en el canvas que ABRE un modal (Escala tras
+  // el 2º punto, Obstáculo tras tocar el recorrido) genera además un "click" sintético con
+  // las mismas coordenadas justo después del pointerup. Como el modal ya está encima de la
+  // pantalla en ese instante y el backdrop cubre la zona donde se tocó (la hoja inferior no
+  // llega hasta ahí), ese click fantasma caía sobre el fondo y cerraba el modal al instante
+  // -- el usuario nunca llegaba a ver el teclado. Se ignora cualquier click sobre el
+  // backdrop en los primeros ~400ms desde que el modal se abrió.
+  function _replAbrirModal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.dataset.abiertoEn = String(Date.now());
+    el.style.display = 'flex';
+  }
+  function _replCerrarSiBackdrop(ev, el, fn) {
+    if (ev.target !== el) return;
+    if (Date.now() - Number(el.dataset.abiertoEn || 0) < 400) return;
+    fn();
   }
   function _replTap(n) {
     if (_repl.modo === 'trazar') {
@@ -18623,7 +18662,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('replEscalaRefBloque').style.display = (_repl.referencia?.b) ? '' : 'none';
     document.getElementById('replEscalaMetros').value = _repl.referencia?.metros || '';
     document.getElementById('replEscalaManual').value = _repl.longitud_manual_m || '';
-    document.getElementById('modalReplEscala').style.display = 'flex';
+    _replAbrirModal('modalReplEscala');
   }
   function replCerrarEscala() { document.getElementById('modalReplEscala').style.display = 'none'; }
   function replEscalaGuardar() {
@@ -18657,7 +18696,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('replObstDim').value = o?.dimension_m ?? '';
     document.getElementById('replObstNota').value = o?.nota || '';
     document.getElementById('btnReplObstQuitar').style.display = o ? '' : 'none';
-    document.getElementById('modalReplObstaculo').style.display = 'flex';
+    _replAbrirModal('modalReplObstaculo');
   }
   function _replRenderAcciones() {
     const c = document.getElementById('replObstAcciones');
@@ -18895,6 +18934,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replLimpiar            = replLimpiar;
   window.replAbrirEscala        = replAbrirEscala;
   window.replCerrarEscala       = replCerrarEscala;
+  window._replCerrarSiBackdrop  = _replCerrarSiBackdrop;
   window.replEscalaGuardar      = replEscalaGuardar;
   window.replEscalaManualGuardar = replEscalaManualGuardar;
   window.replCerrarObstaculo    = replCerrarObstaculo;
