@@ -30,8 +30,14 @@
   las longitudes por tramo en la planta son proyectadas, pero la longitud total que usa el
   cálculo es la medida en 3D. three.js 0.158 UMD desde cdnjs (mismo CDN que jsPDF), cargado
   bajo demanda para no penalizar a quien no use AR.
-- **Siguiente acción exacta:** ver `TASKS.md` (fusionar, desplegar API + Pages, prueba de
-  deriva en el Android de Adrián con cinta métrica, registrar resultado).
+- **Entrega (2026-09-04, tarde):** PR #149 fusionada (`0fc9413`), CI en verde (run
+  `33894874011`). Pages run `33894946307` **publicado y verificado** (`version.json` →
+  9.35; el `index.html` publicado contiene el módulo AR). API Worker: el run `33859279300`
+  de REPLANTEO-01 se canceló por quedar superado y se inició `33894942811` con `0fc9413`,
+  **a la espera de aprobación humana**; el del agente `33859282942` sigue en espera y
+  válido. Hasta que se apruebe la API, `/replanteos*` responde 404 en producción.
+- **Siguiente acción exacta:** ver `TASKS.md` (aprobar los dos runs, prueba de deriva en el
+  Android de Adrián con cinta métrica, registrar resultado).
 
 ## REPLANTEO-01 — replanteo asistido por cámara sobre foto (ADR-0024, fase 1) (2026-09-04, tarde)
 

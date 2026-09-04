@@ -33,8 +33,14 @@ de Adrián.** Ver `HANDOFF.md`/`CHANGELOG.md`.
   longitud total medida en 3D + `puntos_3d`. Pruebas: sintaxis de Workers, scripts
   inline, versiones 9.35, rutas, 230/230 tests. **Sin probar en dispositivo** (no hay
   Android ni WebXR desde aquí).
-  - Siguiente acción exacta: fusionar → desplegar API (`DEPLOY_API_WORKER`) y Pages con el
-    SHA fusionado → aprobar `production` → **prueba de deriva en el Android de Adrián**:
+  - **Hecho (2026-09-04, tarde):** PR #149 fusionada (`0fc9413`), CI en verde. Pages
+    publicado por el run `33894946307` (verificado: `version.json` 9.35 y el `index.html`
+    publicado contiene `replArIniciar`). API Worker: el run antiguo `33859279300`
+    (SHA `003785b`, aún sin aprobar) se **canceló** por quedar superado, y se inició el
+    run `33894942811` con `0fc9413`, **a la espera de aprobación humana**. El del agente
+    `33859282942` (`003785b`) sigue válido y en espera: `alejandra-agente` no cambió.
+  - Siguiente acción exacta: Adrián aprueba los runs `33894942811` (API) y `33859282942`
+    (agente) → **prueba de deriva en el Android de Adrián**:
     recorrido de ~30 m por un techo real con 4-6 puntos, comparar la longitud medida con
     una cinta, y comprobar el aviso de profundidad con un conducto delante. Resultado a
     `HANDOFF.md`; si la deriva es inaceptable, el AR queda para tramos cortos y medición
