@@ -4,6 +4,26 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-04 — REPLANTEO-02: prototipo AR en Android, ADR-0024 fase 2, v9.35)
+
+Adrián: «seguimos». Segunda fase del ADR-0024, como **prototipo** pendiente de la prueba de
+deriva en un Android real.
+
+- `index.html` (v9.35): en «Nuevo replanteo» aparece «📱 Medir con la cámara en AR» solo si
+  el navegador soporta WebXR `immersive-ar` (Chrome Android + ARCore). Sesión con
+  `hit-test`, `dom-overlay` y `depth-sensing` opcional; three.js 0.158 (UMD, cdnjs) se
+  carga **solo al entrar en AR**. El encargado apunta, pulsa «📍 Punto» y el móvil ancla el
+  punto; entre puntos se dibuja la bandeja/tubo en 3D con su ancho real y la longitud
+  **medida** de cada tramo. «⚠️ Obstáculo» marca una instalación de por medio sobre el
+  tramo más cercano; con sensor de profundidad la app **avisa** («hay algo cruzando a X m
+  por delante del punto») pero no decide qué es. «✅ Terminar» genera una **vista en
+  planta** (proyección XZ, cuadrícula de 1 m) que entra en el editor de fase 1 como si
+  fuera la foto, con la longitud total medida en 3D como longitud conocida y los obstáculos
+  pendientes de tipo/acción/dimensión. Cálculo, informe, pedido y Alejandra no cambian.
+- `worker.js`: `POST /replanteos` acepta `origen` (`foto` | `ar`); `trazado_json` guarda
+  además `puntos_3d` en metros cuando viene de AR.
+- Versión 9.34 → 9.35 en los cuatro marcadores.
+
 ### Added (2026-09-04 — REPLANTEO-01: replanteo asistido por cámara sobre foto, ADR-0024, v9.34)
 
 Adrián: «cojo la cámara, miro al techo y en el móvil vería cómo queda… quiero calcular

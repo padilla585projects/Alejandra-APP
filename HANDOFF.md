@@ -1,5 +1,38 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-02 — prototipo AR en Android (ADR-0024, fase 2) (2026-09-04, tarde, continuación)
+
+- **Agente:** Claude (Fable 5.1). **Rama:** `feat/replanteo-ar-prototipo`. **Tarea:** REPLANTEO-02.
+- **Origen:** Adrián: «seguimos» tras REPLANTEO-01; los dos Workers de la fase 1 seguían
+  esperando su aprobación, así que se tomó la siguiente tarea de la cola.
+- **Qué hace:** en «Nuevo replanteo», botón «📱 Medir con la cámara en AR» solo si
+  `navigator.xr.isSessionSupported('immersive-ar')`. Sesión WebXR con `hit-test`
+  (obligatorio), `dom-overlay` y `depth-sensing` (opcionales). Botones sobre la cámara:
+  Punto / Obstáculo / Deshacer / Cancelar / Terminar. Entre puntos se dibuja un
+  paralelepípedo con el ancho real del elemento (color del catálogo) y una etiqueta con la
+  longitud medida del tramo. Con profundidad, si el punto central está más de 20 cm más
+  cerca que el anclaje apuntado, se muestra un aviso amarillo. «Terminar» proyecta los
+  puntos al plano XZ, dibuja una vista en planta con cuadrícula de 1 m (100 px/m, tope
+  1600 px), la convierte en JPEG y la mete en el editor de fase 1 con
+  `longitud_manual_m` = longitud 3D total, `origen: 'ar'` y `puntos_3d`.
+- **Archivos:** `index.html` (bloque JS «REPLANTEO-02» justo después de
+  `window.replDibujar`, capa `#replArOverlay`, botón `#btnReplNuevoAR` en el modal,
+  `origen`/`puntos_3d` en guardado y reapertura), `worker.js` (`origen` en
+  `crearReplanteo`), cuatro marcadores de versión (9.35), `CHANGELOG.md`, `TASKS.md`.
+- **Pruebas:** `node --check worker.js` OK; los cinco `<script>` inline parsean igual que
+  antes; `check-versiones` 9.35; `inventario-rutas --check` 0 sin auth; 230/230 tests del
+  agente; encoding OK. **Nada probado en dispositivo:** aquí no hay WebXR ni Android.
+  Riesgos concretos a vigilar en la prueba real: que `hit-test` devuelva puntos sobre
+  techos (ARCore detecta mejor suelos y paredes), la deriva acumulada en 30 m, que
+  `depth-sensing` exista en ese móvil, y que `dom-overlay` deje pulsar los botones.
+- **Decisiones:** la «foto» de un replanteo AR es una vista en planta generada (no hay
+  acceso a la imagen de la cámara sin `camera-access`, que se descartó por complejidad);
+  las longitudes por tramo en la planta son proyectadas, pero la longitud total que usa el
+  cálculo es la medida en 3D. three.js 0.158 UMD desde cdnjs (mismo CDN que jsPDF), cargado
+  bajo demanda para no penalizar a quien no use AR.
+- **Siguiente acción exacta:** ver `TASKS.md` (fusionar, desplegar API + Pages, prueba de
+  deriva en el Android de Adrián con cinta métrica, registrar resultado).
+
 ## REPLANTEO-01 — replanteo asistido por cámara sobre foto (ADR-0024, fase 1) (2026-09-04, tarde)
 
 - **Agente:** Claude (Fable 5.1). **Rama:** `feat/replanteo-foto-v1`. **Tarea:** REPLANTEO-01.

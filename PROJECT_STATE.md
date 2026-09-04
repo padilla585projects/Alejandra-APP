@@ -1,6 +1,13 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-09-04
+- Estado (2026-09-04, tarde, continuación): **REPLANTEO-02 — prototipo AR en Android
+  (ADR-0024, fase 2) implementado en `feat/replanteo-ar-prototipo`, v9.35, sin probar en
+  dispositivo.** WebXR `immersive-ar` + hit-test + dom-overlay + depth sensing como aviso;
+  three.js cargado solo al entrar; «Terminar» genera una vista en planta que entra en el
+  editor de fase 1 con la longitud medida en 3D. Pendiente: fusionar, desplegar API + Pages
+  y la **prueba de deriva** en el Android de Adrián. Los dos Workers de REPLANTEO-01 siguen
+  esperando aprobación humana. Detalle en `HANDOFF.md`/`TASKS.md`.
 - Estado (2026-09-04, tarde): **REPLANTEO-01 — replanteo asistido por cámara sobre foto
   (ADR-0024, fase 1), implementado en `feat/replanteo-foto-v1`, v9.34, pendiente de fusionar,
   desplegar y probar en el móvil.** Pestaña «📐 Replanteo» en todos los oficios (solo

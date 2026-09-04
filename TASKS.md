@@ -27,10 +27,18 @@ de Adrián.** Ver `HANDOFF.md`/`CHANGELOG.md`.
     la verificación en `HANDOFF.md`.
   - Migración `migrate_replanteos.sql`: **pendiente de autorización de Adrián** (no bloquea:
     el Worker crea las tablas al primer uso).
-- **REPLANTEO-02** (Pendiente, fase 2 del ADR-0024): prototipo AR en Android (WebXR
-  `immersive-ar` + hit-test) que produzca el mismo trazado; medir deriva en un tramo de
-  ~30 m en un móvil real de la plantilla; depth sensing solo como aviso de obstáculo. Abre
-  su propia rama y, si cambia el modelo, enmienda al ADR.
+- **REPLANTEO-02** (En revisión, rama `feat/replanteo-ar-prototipo`, v9.35): prototipo AR
+  en Android implementado (WebXR `immersive-ar` + hit-test + dom-overlay + depth sensing
+  como aviso; three.js cargado solo al entrar). Produce el mismo trazado: vista en planta +
+  longitud total medida en 3D + `puntos_3d`. Pruebas: sintaxis de Workers, scripts
+  inline, versiones 9.35, rutas, 230/230 tests. **Sin probar en dispositivo** (no hay
+  Android ni WebXR desde aquí).
+  - Siguiente acción exacta: fusionar → desplegar API (`DEPLOY_API_WORKER`) y Pages con el
+    SHA fusionado → aprobar `production` → **prueba de deriva en el Android de Adrián**:
+    recorrido de ~30 m por un techo real con 4-6 puntos, comparar la longitud medida con
+    una cinta, y comprobar el aviso de profundidad con un conducto delante. Resultado a
+    `HANDOFF.md`; si la deriva es inaceptable, el AR queda para tramos cortos y medición
+    (ADR-0024 §4).
 - **REPLANTEO-03** (Pendiente, pequeño): lista de replanteos en `panel.html` y editor del
   catálogo por empresa (`replanteo_catalogo`) para ajustar las reglas de arranque con
   fichas reales de fabricante.
