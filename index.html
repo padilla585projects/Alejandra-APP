@@ -1408,7 +1408,7 @@ select option{background:var(--surface2);color:var(--text)}
   <!-- FORMULARIO NUEVO PARTE -->
   <div id="screenPartesForm" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);position:sticky;top:0;z-index:10;flex-shrink:0">
-      <button onclick="navTo('partes')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0">← Volver</button>
+      <button onclick="navTo('partes')" style="background:none;border:none;color:var(--accent);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0">← Volver</button>
       <div id="partesFormTitulo" style="flex:1;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Nuevo parte</div>
       <button onclick="conBoton(this, parteGuardar)" style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer">💾 Guardar</button>
     </div>
@@ -1490,7 +1490,7 @@ select option{background:var(--surface2);color:var(--text)}
   <!-- DETALLE DE PARTE GUARDADO (PARTES-01) -->
   <div id="screenPartesDetalle" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);position:sticky;top:0;z-index:10;flex-shrink:0">
-      <button onclick="navTo('partes')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0">← Volver</button>
+      <button onclick="navTo('partes')" style="background:none;border:none;color:var(--accent);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0">← Volver</button>
       <div style="flex:1;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)">Parte de trabajo</div>
       <button onclick="parteEditarActual()" style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer">✏️ Editar</button>
     </div>
@@ -1670,7 +1670,7 @@ select option{background:var(--surface2);color:var(--text)}
   <!-- DETALLE DE PLANO (solo lectura) -->
   <div id="screenPlanoDetalle" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--surface);flex-shrink:0">
-      <button onclick="navTo('planos')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0;white-space:nowrap">← Volver</button>
+      <button onclick="navTo('planos')" style="background:none;border:none;color:var(--accent);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0;white-space:nowrap">← Volver</button>
       <div style="flex:1;min-width:0;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="planoDetTitulo">—</div>
       <button onclick="planoZoom(0.2)" title="Acercar" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">+</button>
       <button onclick="planoZoom(-0.2)" title="Alejar" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">−</button>
@@ -1756,7 +1756,7 @@ select option{background:var(--surface2);color:var(--text)}
   creó esta pantalla, el zoom en posición absoluta solo lo dejó en evidencia (0px). -->
   <div id="screenCpdPlanoDetalle" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);flex-shrink:0">
-      <button onclick="navTo('cpdSondas')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0;white-space:nowrap">← Volver</button>
+      <button onclick="navTo('cpdSondas')" style="background:none;border:none;color:var(--accent);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0;white-space:nowrap">← Volver</button>
       <div style="flex:1;min-width:0;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="cpdPlanoDetTitulo">—</div>
       <!-- CPD-MOVIL-05 (19/08/2026): Adrián -- "no veo el boton de generar informe". Ya
       existía en Office (cpdOfficeGenerarInforme, con window.open) pero nunca se portó al
@@ -11418,7 +11418,7 @@ async function docsCargar(containerId) {
           return `<div style="display:flex;align-items:center;gap:8px;padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
             <span style="font-size:22px;flex-shrink:0;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">📐</span>
             <div style="flex:1;min-width:0;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">
-              <div style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.titulo}</div>
+              <div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${e.titulo}</div>
               <div style="font-size:10px;color:var(--muted)">${e.fecha_emision||''} · Alejandra</div>
             </div>
             ${url ? `<button onclick="window.open('${url}','_blank')" title="Ver esquema"
@@ -11483,8 +11483,8 @@ async function docsAbrirCarpeta(carpetaId, nombre, containerId, parentCarpetaId,
     c.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
         <button id="docsVolverBtn" onclick="${volverFn}"
-          style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;flex-shrink:0">← Volver</button>
-        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📁 ${nombre}</div>
+          style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;color:var(--accent);cursor:pointer;flex-shrink:0">← Volver</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">📁 ${nombre}</div>
         <button onclick="docsCompartirCarpeta(${carpetaId},'${nomEsc}')" title="Compartir"
           style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">📤</button>
         ${puedeEditar ? `
@@ -11527,7 +11527,7 @@ function docsRenderArchivo(d, puedeEditar, carpetaId, containerId, carpetaNombre
   <div style="display:flex;align-items:center;gap:8px;padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
     <span style="font-size:22px;flex-shrink:0" onclick="docsVerArchivo(${d.id},'${nomEsc}','${mime}')" style="cursor:pointer">${archivoIcono(d.mime)}</span>
     <div style="flex:1;min-width:0;cursor:pointer" onclick="docsVerArchivo(${d.id},'${nomEsc}','${mime}')">
-      <div style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.nombre}</div>
+      <div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${d.nombre}</div>
       <div style="font-size:10px;color:var(--muted)">${kb}${d.subido_por?' · '+d.subido_por:''}${d.created_at?' · '+d.created_at.slice(0,10):''}</div>
     </div>
     <button onclick="docsCompartirArchivo(${d.id},'${nomEsc}','${mime}')" title="Compartir"
@@ -14876,7 +14876,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.31';
+const APP_VERSION = '9.32';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
