@@ -7091,6 +7091,10 @@ export default {
 
       // ── Replanteo asistido por cámara (ADR-0024) ──────────────────
       if (path === '/replanteos/catalogo'                    && method === 'GET')    return await getReplanteoCatalogo(request, env);
+      // REPLANTEO-03: editor del catálogo por empresa desde panel.html (solo admins)
+      if (path === '/replanteos/catalogo-empresa'            && method === 'GET')    return await getReplanteoCatalogoEmpresa(request, env);
+      if (/^\/replanteos\/catalogo\/[a-z0-9_]+$/.test(path) && method === 'PUT')    return await guardarReplanteoCatalogo(request, env, path);
+      if (/^\/replanteos\/catalogo\/[a-z0-9_]+$/.test(path) && method === 'DELETE') return await borrarReplanteoCatalogo(request, env, path);
       if (path === '/replanteos/calcular'                    && method === 'POST')   return await calcularReplanteo(request, env);
       if (path === '/replanteos'                             && method === 'GET')    return await listarReplanteos(request, env);
       if (path === '/replanteos'                             && method === 'POST')   return await crearReplanteo(request, env);
@@ -30464,22 +30468,143 @@ const _DEPTS_REPLANTEO_VALIDOS = new Set(['electrico', 'mecanicas', 'seguridad',
 async function catalogoReplanteoDe(env, empresa_id, departamento) {
   const base = (REPLANTEO_CATALOGO_BASE[departamento] || REPLANTEO_CATALOGO_BASE._default)
     .map(e => ({ ...e, opciones: { ...(e.opciones || {}) }, reglas: { ...e.reglas }, origen: 'base' }));
-  // Sobreescritura por empresa (fase 2 la edita desde el panel; aquí solo se lee).
+  // Sobreescritura por empresa (REPLANTEO-03: se edita desde panel.html, ver
+  // guardarReplanteoCatalogo). Una fila con activo=0 OCULTA ese elemento a la empresa.
   try {
     const { results } = await env.DB.prepare(
-      'SELECT * FROM replanteo_catalogo WHERE empresa_id=? AND departamento=? AND activo=1'
+      'SELECT * FROM replanteo_catalogo WHERE empresa_id=? AND departamento=?'
     ).bind(empresa_id, departamento).all();
     for (const r of (results || [])) {
+      const idx = base.findIndex(e => e.key === r.elemento_key);
+      if (!r.activo) { if (idx >= 0) base.splice(idx, 1); continue; }
       let opciones = {}, reglas = {};
       try { opciones = r.opciones_json ? JSON.parse(r.opciones_json) : {}; } catch {}
       try { reglas = r.reglas_json ? JSON.parse(r.reglas_json) : {}; } catch {}
-      const idx = base.findIndex(e => e.key === r.elemento_key);
       const item = { key: r.elemento_key, nombre: r.nombre, icono: r.icono || '📐', unidad: r.unidad || 'm',
                      color: (idx >= 0 ? base[idx].color : '#f97316'), opciones, reglas: { ...(idx >= 0 ? base[idx].reglas : {}), ...reglas }, origen: 'empresa' };
       if (idx >= 0) base[idx] = item; else base.push(item);
     }
   } catch (_) { /* tabla aún no creada: solo catálogo base */ }
   return base;
+}
+
+// ── Editor del catálogo por empresa (REPLANTEO-03, 04/09/2026) ──────────────
+// panel.html permite ajustar las reglas de arranque con fichas reales de fabricante: cada
+// fila de replanteo_catalogo sobreescribe (o añade, o con activo=0 oculta) un elemento del
+// catálogo base para esa empresa+departamento. Solo admins de empresa: isDeptPrivileged
+// incluye a Seguridad por su visión transversal, pero cambiar cómo se calcula el material
+// de toda la empresa no es su función.
+function puedeEditarCatalogoReplanteo(auth) {
+  return !!(auth?.empresa_id && (auth.isSuperadmin || auth.isEmpresaAdmin || auth.isDesarrollador));
+}
+const _REPL_REGLAS_NUM = ['tramo_m', 'uniones_por_tramo', 'soporte_cada_m', 'giro_min_grados', 'tornilleria_por_soporte', 'desperdicio_pct', 'ancho_mm'];
+const _REPL_REGLAS_TXT = ['union_nombre', 'soporte_nombre', 'codo_nombre', 'tornilleria_nombre', 'sujecion_existente_nombre'];
+function _replSanearReglas(src) {
+  const out = {};
+  for (const k of _REPL_REGLAS_NUM) {
+    if (src[k] === undefined) continue;
+    if (src[k] === null || src[k] === '') { out[k] = null; continue; }
+    const n = Number(src[k]);
+    if (!Number.isFinite(n) || n < 0) return { error: `La regla "${k}" debe ser un número mayor o igual que 0 (o vacío)` };
+    out[k] = n;
+  }
+  for (const k of _REPL_REGLAS_TXT) {
+    if (src[k] === undefined) continue;
+    out[k] = src[k] === null ? null : (safeStr(String(src[k])).trim().slice(0, 120) || null);
+  }
+  return { reglas: out };
+}
+function _replSanearOpciones(src) {
+  const out = {};
+  for (const k of ['anchos_mm', 'diametros_mm']) {
+    if (!Array.isArray(src[k])) continue;
+    const arr = [...new Set(src[k].map(Number).filter(n => Number.isFinite(n) && n > 0))].sort((a, b) => a - b);
+    if (arr.length) out[k] = arr;
+  }
+  if (Array.isArray(src.variantes)) {
+    const arr = [...new Set(src.variantes.map(v => safeStr(String(v)).trim().slice(0, 60)).filter(Boolean))];
+    if (arr.length) out.variantes = arr;
+  }
+  return out;
+}
+function _parseCatalogoRow(r) {
+  const j = (s, d) => { try { return s ? JSON.parse(s) : d; } catch { return d; } };
+  return { id: r.id, key: r.elemento_key, departamento: r.departamento, nombre: r.nombre, icono: r.icono || '📐', unidad: r.unidad || 'm',
+           opciones: j(r.opciones_json, {}), reglas: j(r.reglas_json, {}), activo: !!r.activo, actualizado_en: r.actualizado_en };
+}
+function _replDeptCatalogo(auth, pedido) {
+  return (pedido && _DEPTS_REPLANTEO_VALIDOS.has(pedido)) ? pedido : (auth.departamento || 'electrico');
+}
+
+async function getReplanteoCatalogoEmpresa(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCatalogoReplanteo(auth)) return err('Solo los administradores de la empresa pueden editar el catálogo', 403);
+  const url = new URL(request.url);
+  const dept = _replDeptCatalogo(auth, url.searchParams.get('departamento'));
+  await _ensureReplanteoTables(env);
+  const base = (REPLANTEO_CATALOGO_BASE[dept] || REPLANTEO_CATALOGO_BASE._default)
+    .map(e => ({ key: e.key, nombre: e.nombre, icono: e.icono, unidad: e.unidad, color: e.color, opciones: { ...(e.opciones || {}) }, reglas: { ...e.reglas } }));
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM replanteo_catalogo WHERE empresa_id=? AND departamento=? ORDER BY nombre'
+  ).bind(auth.empresa_id, dept).all();
+  const efectivo = await catalogoReplanteoDe(env, auth.empresa_id, dept);
+  return json({ ok: true, departamento: dept, base, overrides: (results || []).map(_parseCatalogoRow), efectivo,
+                reglas_numericas: _REPL_REGLAS_NUM, reglas_texto: _REPL_REGLAS_TXT, departamentos: [..._DEPTS_REPLANTEO_VALIDOS] });
+}
+
+async function guardarReplanteoCatalogo(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCatalogoReplanteo(auth)) return err('Solo los administradores de la empresa pueden editar el catálogo', 403);
+  const key = (path.split('/')[3] || '').toLowerCase();
+  if (!/^[a-z0-9_]{2,40}$/.test(key)) return err('Clave de elemento no válida (letras minúsculas, números y _)', 400);
+  const body = await request.json().catch(() => ({}));
+  const dept = body.departamento && _DEPTS_REPLANTEO_VALIDOS.has(body.departamento) ? body.departamento : null;
+  if (!dept) return err('Departamento no válido', 400);
+  await _ensureReplanteoTables(env);
+  const baseEl = (REPLANTEO_CATALOGO_BASE[dept] || REPLANTEO_CATALOGO_BASE._default).find(e => e.key === key) || null;
+  const nombre = safeStr(body.nombre || baseEl?.nombre || '').trim().slice(0, 80);
+  if (!nombre) return err('El nombre es obligatorio', 400);
+  const icono = safeStr(body.icono || baseEl?.icono || '📐').trim().slice(0, 8) || '📐';
+  const unidad = safeStr(body.unidad || baseEl?.unidad || 'm').trim().slice(0, 10) || 'm';
+  const opciones = body.opciones !== undefined ? _replSanearOpciones(body.opciones || {}) : { ...(baseEl?.opciones || {}) };
+  const san = _replSanearReglas(body.reglas || {});
+  if (san.error) return err(san.error, 400);
+  // Se guarda el juego COMPLETO de reglas (base + cambios) para que el snapshot que ve el
+  // encargado (reglas_json del replanteo) sea autoexplicativo.
+  const reglas = { ...(baseEl?.reglas || {}), ...san.reglas };
+  if (!baseEl && !Object.keys(san.reglas).length) return err('Un elemento nuevo necesita al menos una regla de cálculo', 400);
+  const activo = (body.activo === false || body.activo === 0 || body.activo === '0') ? 0 : 1;
+  await env.DB.prepare(`
+    INSERT INTO replanteo_catalogo (empresa_id, departamento, elemento_key, nombre, icono, unidad, opciones_json, reglas_json, activo, actualizado_en)
+    VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))
+    ON CONFLICT(empresa_id, departamento, elemento_key) DO UPDATE SET
+      nombre=excluded.nombre, icono=excluded.icono, unidad=excluded.unidad, opciones_json=excluded.opciones_json,
+      reglas_json=excluded.reglas_json, activo=excluded.activo, actualizado_en=datetime('now')
+  `).bind(auth.empresa_id, dept, key, nombre, icono, unidad, JSON.stringify(opciones), JSON.stringify(reglas), activo).run();
+  const row = await env.DB.prepare('SELECT * FROM replanteo_catalogo WHERE empresa_id=? AND departamento=? AND elemento_key=?')
+    .bind(auth.empresa_id, dept, key).first();
+  const efectivo = await catalogoReplanteoDe(env, auth.empresa_id, dept);
+  return json({ ok: true, elemento: _parseCatalogoRow(row), efectivo });
+}
+
+// Quita la sobreescritura de la empresa: el elemento vuelve al catálogo base (o desaparece,
+// si era propio de la empresa). Borra UNA fila de configuración elegida por el admin.
+async function borrarReplanteoCatalogo(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCatalogoReplanteo(auth)) return err('Solo los administradores de la empresa pueden editar el catálogo', 403);
+  const key = (path.split('/')[3] || '').toLowerCase();
+  if (!/^[a-z0-9_]{2,40}$/.test(key)) return err('Clave de elemento no válida', 400);
+  const url = new URL(request.url);
+  const dept = url.searchParams.get('departamento');
+  if (!dept || !_DEPTS_REPLANTEO_VALIDOS.has(dept)) return err('Departamento no válido', 400);
+  await _ensureReplanteoTables(env);
+  await env.DB.prepare('DELETE FROM replanteo_catalogo WHERE empresa_id=? AND departamento=? AND elemento_key=?')
+    .bind(auth.empresa_id, dept, key).run();
+  const efectivo = await catalogoReplanteoDe(env, auth.empresa_id, dept);
+  return json({ ok: true, efectivo });
 }
 
 // ── Cálculo de material ─────────────────────────────────────────────────────

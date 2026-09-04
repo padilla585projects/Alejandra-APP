@@ -711,6 +711,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     <button class="nav-item" data-page="pedidos" onclick="navTo('pedidos')">
       <span class="nav-icon">📦</span> Pedidos
     </button>
+    <!-- REPLANTEO-03 (04/09/2026): los replanteos que los encargados marcan sobre foto en la
+         app móvil (ADR-0024), con su material, y el editor del catálogo por empresa. Vive
+         junto a Pedidos porque su salida natural es un pedido (REPL-<id>). -->
+    <button class="nav-item" data-page="replanteos" onclick="navTo('replanteos')">
+      <span class="nav-icon">📐</span> Replanteos
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="construccion"><span>🏗 Construcción</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="tareas" onclick="navTo('tareas')">
@@ -1860,6 +1866,82 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <div class="card" style="padding:18px">
           <div id="cpdOfficeBreadcrumb" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:'Montserrat',sans-serif;font-weight:800;font-size:14px;margin-bottom:14px">🌡️ Sondas CPD</div>
           <div id="cpdOfficeContent"><div class="empty-state">Cargando…</div></div>
+        </div>
+      </div>
+
+      <!-- REPLANTEOS (REPLANTEO-03, ADR-0024) -->
+      <div class="page" id="pageReplanteos">
+        <div class="page-title">📐 Replanteos</div>
+        <div class="page-sub">Recorridos marcados sobre foto desde la app móvil, con el material que calcula el servidor</div>
+        <div class="tbl-toolbar">
+          <select class="tbl-search" id="replOfficeObra" style="min-width:210px" onchange="replOfficeListar()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="replOfficeDept" style="min-width:170px;display:none" onchange="replOfficeListar()">
+            <option value="">📁 Todos los depts</option>
+          </select>
+          <select class="tbl-search" id="replOfficeEstado" style="min-width:160px" onchange="replOfficeRender()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="calculado">Calculado</option>
+            <option value="pedido">Enviado a Pedidos</option>
+          </select>
+          <input class="tbl-search" id="replOfficeBuscar" placeholder="🔍 Buscar título o autor…" oninput="replOfficeRender()">
+          <button class="btn btn-secondary" onclick="replOfficeListar()">🔄 Actualizar</button>
+          <button class="btn btn-primary" id="replOfficeBtnCatalogo" style="display:none" onclick="replOfficeAbrirCatalogo()">⚙️ Catálogo de elementos</button>
+        </div>
+        <div class="card" style="padding:18px">
+          <div id="replOfficeResumen" style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+          <div class="tbl-wrap"><div id="replOfficeContent"><div class="empty-state">Cargando…</div></div></div>
+        </div>
+      </div>
+
+      <!-- REPLANTEO-03: detalle de un replanteo (foto con el trazado, material, obstáculos) -->
+      <div class="modal-overlay" id="modalReplOfficeDetalle" style="display:none" onclick="if(event.target===this)replOfficeCerrarDetalle()">
+        <div class="modal" style="max-width:960px;width:96%">
+          <div class="modal-header">
+            <div class="modal-title" id="replOfficeDetTitulo">Replanteo</div>
+            <button class="modal-close" onclick="replOfficeCerrarDetalle()">✕</button>
+          </div>
+          <div class="modal-body" style="max-height:78vh;overflow:auto">
+            <div id="replOfficeDetMeta" style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+            <div style="background:#0b0f14;border-radius:10px;overflow:hidden;display:flex;justify-content:center">
+              <canvas id="replOfficeDetCanvas" style="max-width:100%;max-height:52vh;display:block"></canvas>
+            </div>
+            <div id="replOfficeDetAviso" style="font-size:12px;color:var(--muted);margin:6px 0 0;display:none"></div>
+            <div id="replOfficeDetCuerpo" style="margin-top:14px"></div>
+          </div>
+          <div class="modal-footer" style="flex-wrap:wrap">
+            <button class="btn btn-secondary" onclick="replOfficeInforme()">🖨 Informe</button>
+            <button class="btn btn-secondary" id="replOfficeDetBtnPedido" style="display:none" onclick="replOfficeEnviarPedidos()">📥 A Pedidos</button>
+            <button class="btn btn-secondary" id="replOfficeDetBtnBorrar" style="display:none;color:var(--danger)" onclick="replOfficeBorrar()">🗑 Eliminar</button>
+            <button class="btn btn-primary" style="margin-left:auto" onclick="replOfficeCerrarDetalle()">Cerrar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- REPLANTEO-03: editor del catálogo de elementos por empresa (solo admins) -->
+      <div class="modal-overlay" id="modalReplOfficeCatalogo" style="display:none" onclick="if(event.target===this)replOfficeCerrarCatalogo()">
+        <div class="modal" style="max-width:1040px;width:96%">
+          <div class="modal-header" style="gap:10px;flex-wrap:wrap">
+            <div class="modal-title">⚙️ Catálogo de elementos de replanteo</div>
+            <select class="tbl-search" id="replOfficeCatDept" style="min-width:190px" onchange="replOfficeCatCargar()"></select>
+            <button class="modal-close" onclick="replOfficeCerrarCatalogo()">✕</button>
+          </div>
+          <div class="modal-body" style="max-height:78vh;overflow:auto">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+              Las reglas de cálculo son <b>valores de arranque</b>. Aquí se ajustan con las fichas reales de fabricante
+              para esta empresa: lo que se guarde sustituye al catálogo base solo en esta empresa y departamento;
+              «Restaurar base» vuelve a los valores de fábrica. Un elemento desactivado deja de ofrecerse a los encargados.
+            </div>
+            <div style="display:grid;grid-template-columns:260px 1fr;gap:16px" id="replOfficeCatGrid">
+              <div id="replOfficeCatLista" style="display:flex;flex-direction:column;gap:6px"></div>
+              <div id="replOfficeCatForm"><div class="empty-state">Elige un elemento</div></div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" style="flex:1" onclick="replOfficeCerrarCatalogo()">Cerrar</button>
+          </div>
         </div>
       </div>
 
@@ -14428,12 +14510,576 @@ async function cpdOfficeEliminarPlano() {
 }
 
 // ── NAVEGACIÓN ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// REPLANTEOS EN OFICINA (REPLANTEO-03, ADR-0024) — 04/09/2026
+// ═══════════════════════════════════════════════════════════════════════════
+// Lista de los replanteos que los encargados marcan sobre foto en index.html, con detalle
+// (foto + trazado redibujado igual que en el móvil), informe imprimible, envío a Pedidos y
+// borrado; y el editor del catálogo por empresa (replanteo_catalogo) para admins. NO se
+// edita el trazado desde aquí: eso sigue siendo cosa del encargado en la obra. Todo el
+// cálculo de material lo hace el servidor; aquí solo se pinta lo que devuelve.
+// SYNC-SELECT-01: el auto-refresh (SYNC_INTERVALS.replanteos) no debe pisar los filtros ni
+// cerrar un modal abierto: los <select> se pueblan una sola vez y se respeta su valor.
+window._replOffice = { lista: [], puedeEditar: false, catalogos: {}, det: null, cat: null };
+const REPL_OFFICE_ESTADOS  = { borrador: ['Borrador', 'badge-warn'], calculado: ['Calculado', 'badge-info'], pedido: ['En Pedidos', 'badge-ok'] };
+const REPL_OFFICE_ACCIONES = { debajo: 'Pasar por debajo', esquivar: 'Esquivar', sujetar: 'Sujetar a lo existente' };
+const REPL_OFFICE_TIPOS    = { tuberia: 'Tubería', conducto: 'Conducto de clima', bandeja_existente: 'Bandeja existente', viga: 'Viga / pilar', luminaria: 'Luminaria', otro: 'Otro' };
+
+function _replOfficeAdmin() { return hasSessionRole('superadmin', 'empresa_admin', 'desarrollador'); }
+// Mismo criterio que isDeptPrivileged() en el backend (admins + Seguridad): pueden filtrar por departamento.
+function _replOfficePrivilegiado() { return _replOfficeAdmin() || SESSION?.departamento === 'seguridad'; }
+function _replOfficeFotoUrl(id) { return `${API}/replanteos/${id}/foto?token=${encodeURIComponent(TOKEN)}`; }
+function _replOfficeNum(n, d = 1) { return (Math.round((+n || 0) * Math.pow(10, d)) / Math.pow(10, d)).toLocaleString('es-ES'); }
+function _replOfficeDeptNombre(k) { const d = _DEPTS_CATALOG[k]; return d ? `${d.icon} ${d.name}` : (k || '—'); }
+function _replOfficeObraNombre(id) {
+  const o = (window._obrasPanel || []).find(x => String(x.id) === String(id));
+  return o ? o.nombre : (id ? `Obra ${id}` : '—');
+}
+function _replOfficeNombreElemento(r, catalogo) {
+  const el = (catalogo || []).find(e => e.key === r.elemento_key);
+  const p = r.elemento || {};
+  const partes = [el ? el.nombre : (r.elemento_key || '')];
+  if (p.variante) partes.push(p.variante);
+  if (p.ancho_mm) partes.push(p.ancho_mm + ' mm');
+  if (p.diametro_mm) partes.push('Ø' + p.diametro_mm);
+  return partes.join(' · ');
+}
+async function _replOfficeCatalogoDe(dept) {
+  if (_replOffice.catalogos[dept]) return _replOffice.catalogos[dept];
+  const d = await api('/replanteos/catalogo?departamento=' + encodeURIComponent(dept || ''));
+  const els = d?.elementos || [];
+  _replOffice.catalogos[dept] = els;
+  return els;
+}
+
+async function replOfficeCargar() {
+  const sel = document.getElementById('replOfficeObra');
+  if (!sel) return;
+  const detAbierto = document.getElementById('modalReplOfficeDetalle')?.style.display === 'flex';
+  const catAbierto = document.getElementById('modalReplOfficeCatalogo')?.style.display === 'flex';
+  if (detAbierto || catAbierto) return;
+  // Obras: se pueblan una sola vez (si hay solo la opción "Todas") y se respeta la elegida.
+  if (sel.options.length <= 1) {
+    let obras = Array.isArray(window._obrasPanel) ? window._obrasPanel : [];
+    if (!obras.length) {
+      try { const data = await api('/obras'); obras = Array.isArray(data) ? data : (data.obras || []); window._obrasPanel = obras; } catch {}
+    }
+    if (!obras.length && SESSION?.obra_id) obras = [{ id: SESSION.obra_id, nombre: SESSION.obra_nombre || `Obra ${SESSION.obra_id}` }];
+    sel.innerHTML = '<option value="">🏗 Todas las obras</option>' + obras.map(o => `<option value="${Number(o.id)}">${escHtml(o.nombre)}</option>`).join('');
+    if (SESSION?.obra_id && obras.some(o => String(o.id) === String(SESSION.obra_id))) sel.value = String(SESSION.obra_id);
+  }
+  const selD = document.getElementById('replOfficeDept');
+  if (selD) {
+    if (_replOfficePrivilegiado()) {
+      selD.style.display = '';
+      if (selD.options.length <= 1) {
+        selD.innerHTML = '<option value="">📁 Todos los depts</option>' + _ALL_DEPTS.map(k => `<option value="${k}">${_replOfficeDeptNombre(k)}</option>`).join('');
+      }
+    } else { selD.style.display = 'none'; }
+  }
+  const btnCat = document.getElementById('replOfficeBtnCatalogo');
+  if (btnCat) btnCat.style.display = _replOfficeAdmin() ? '' : 'none';
+  await replOfficeListar();
+}
+
+async function replOfficeListar() {
+  const cont = document.getElementById('replOfficeContent');
+  if (!cont) return;
+  const obraId = document.getElementById('replOfficeObra')?.value || '';
+  const dept   = document.getElementById('replOfficeDept')?.value || '';
+  if (!_replOffice.lista.length) cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const qs = new URLSearchParams();
+  if (obraId) qs.set('obra_id', obraId);
+  if (dept) qs.set('departamento', dept);
+  const data = await api('/replanteos' + (qs.toString() ? '?' + qs.toString() : ''));
+  if (!data || data.ok === false) {
+    cont.innerHTML = `<div class="empty-state">${escHtml(data?.error || 'Error al cargar')}</div>`;
+    return;
+  }
+  _replOffice.lista = data.replanteos || [];
+  _replOffice.puedeEditar = !!data.puede_editar;
+  replOfficeRender();
+}
+
+function replOfficeRender() {
+  const cont = document.getElementById('replOfficeContent');
+  const resumen = document.getElementById('replOfficeResumen');
+  if (!cont) return;
+  const estado = document.getElementById('replOfficeEstado')?.value || '';
+  const q = (document.getElementById('replOfficeBuscar')?.value || '').trim().toLowerCase();
+  const lista = _replOffice.lista.filter(r =>
+    (!estado || r.estado === estado) &&
+    (!q || (r.titulo || '').toLowerCase().includes(q) || (r.creado_por || '').toLowerCase().includes(q)));
+  const total = _replOffice.lista.length;
+  const metros = _replOffice.lista.reduce((a, r) => a + (+r.longitud_m || 0), 0);
+  const porEstado = k => _replOffice.lista.filter(r => r.estado === k).length;
+  if (resumen) resumen.innerHTML = total
+    ? `<span>📐 <b style="color:var(--text)">${total}</b> replanteo(s)</span>
+       <span>➡️ <b style="color:var(--text)">${_replOfficeNum(metros)} m</b> en total</span>
+       <span>✏️ ${porEstado('borrador')} borrador · 🧮 ${porEstado('calculado')} calculado · 📥 ${porEstado('pedido')} en Pedidos</span>`
+    : '';
+  if (!lista.length) {
+    cont.innerHTML = `<div class="empty-state">${total ? 'Ningún replanteo cumple el filtro.' : 'Sin replanteos todavía. Los encargados los crean desde la tarjeta «📐 Replanteo» de la app móvil.'}</div>`;
+    return;
+  }
+  const filas = lista.map(r => {
+    const [etq, cls] = REPL_OFFICE_ESTADOS[r.estado] || [r.estado, 'badge-info'];
+    const nMat = Array.isArray(r.material) ? r.material.length : 0;
+    const puedeEditar = _replOffice.puedeEditar && r.estado !== 'pedido';
+    return `<tr>
+      <td style="width:72px"><div style="width:64px;height:48px;border-radius:6px;overflow:hidden;background:#0b0f14;cursor:pointer" onclick="replOfficeAbrir(${r.id})">
+        <img src="${_replOfficeFotoUrl(r.id)}" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'"></div></td>
+      <td><div style="font-weight:700;cursor:pointer" onclick="replOfficeAbrir(${r.id})">${escHtml(r.titulo || '')}</div>
+          <div style="font-size:11px;color:var(--muted)">REPL-${r.id} · ${escHtml(r.creado_por || '—')} · ${escHtml((r.actualizado_en || r.creado_en || '').slice(0, 16).replace('T', ' '))}</div></td>
+      <td>${escHtml(_replOfficeObraNombre(r.obra_id))}</td>
+      <td>${_replOfficeDeptNombre(r.departamento)}</td>
+      <td>${escHtml(_replOfficeNombreElemento(r, _replOffice.catalogos[r.departamento]))}</td>
+      <td style="text-align:right;font-weight:700;white-space:nowrap">${r.longitud_m ? _replOfficeNum(r.longitud_m) + ' m' : '—'}</td>
+      <td style="text-align:center">${nMat || '—'}</td>
+      <td><span class="badge ${cls}">${etq}</span></td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="btn btn-sm btn-secondary" title="Ver detalle" onclick="replOfficeAbrir(${r.id})">👁</button>
+        <button class="btn btn-sm btn-secondary" title="Informe imprimible" onclick="replOfficeAbrir(${r.id}, true)">🖨</button>
+        ${puedeEditar && nMat ? `<button class="btn btn-sm btn-secondary" title="Enviar a Pedidos" onclick="replOfficeEnviarPedidos(${r.id})">📥</button>` : ''}
+        ${puedeEditar ? `<button class="btn btn-sm btn-secondary" title="Eliminar" style="color:var(--danger)" onclick="replOfficeBorrar(${r.id})">🗑</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+  cont.innerHTML = `<table class="tbl" style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">
+      <th></th><th>Título</th><th>Obra</th><th>Depto</th><th>Elemento</th><th style="text-align:right">Longitud</th><th style="text-align:center">Líneas</th><th>Estado</th><th></th>
+    </tr></thead><tbody>${filas}</tbody></table>`;
+  // Nombres de elemento: si aún no hay catálogo cargado para algún departamento, se pide y se repinta.
+  const deptsSin = [...new Set(_replOffice.lista.map(r => r.departamento).filter(d => d && !_replOffice.catalogos[d]))];
+  if (deptsSin.length) Promise.all(deptsSin.map(_replOfficeCatalogoDe)).then(() => { if (currentPage === 'replanteos') replOfficeRender(); });
+}
+
+// ── Detalle ─────────────────────────────────────────────────────────────────
+function _replOfficeCargarImagen(src) {
+  return new Promise((ok, ko) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous'; // el endpoint /foto devuelve CORS; sin esto el canvas quedaría "tainted" y el informe no podría incrustarlo
+    img.onload = () => ok(img); img.onerror = ko; img.src = src;
+  });
+}
+function _replOfficeEscala(rep) {
+  if (Number(rep.escala_px_m) > 0) return Number(rep.escala_px_m);
+  const pts = rep.trazado?.puntos || [];
+  const L = Number(rep.trazado?.longitud_manual_m);
+  if (L > 0 && pts.length >= 2) {
+    let px = 0; for (let i = 1; i < pts.length; i++) px += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    if (px > 0) return px / L;
+  }
+  return null;
+}
+function _replOfficePosObstaculo(rep, o) {
+  const pts = rep.trazado?.puntos || [];
+  const seg = Math.max(0, Math.min(pts.length - 2, +o.seg || 0));
+  if (pts.length < 2) return null;
+  const a = pts[seg], b = pts[seg + 1]; const t = Math.max(0, Math.min(1, +o.t || 0));
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, dx: b.x - a.x, dy: b.y - a.y };
+}
+// Port fiel de _replDibujarEn de index.html (mismos colores y marcas) para que en la
+// oficina se vea lo mismo que marcó el encargado.
+function _replOfficeDibujar(ctx, rep, img, elemento, f, paraInforme) {
+  const { s, ox, oy } = f;
+  const imgW = img.naturalWidth, imgH = img.naturalHeight;
+  ctx.drawImage(img, ox, oy, imgW * s, imgH * s);
+  const color = elemento?.color || '#f97316';
+  const esc = _replOfficeEscala(rep);
+  const params = rep.elemento || {};
+  const anchoMm = +params.ancho_mm || +params.diametro_mm || elemento?.reglas?.ancho_mm || 100;
+  const anchoPx = esc ? Math.max(4, (anchoMm / 1000) * esc * s) : Math.max(6, 10 * s * (paraInforme ? 3 : 1));
+  const puntos = rep.trazado?.puntos || [];
+  const P = puntos.map(p => ({ x: ox + p.x * s, y: oy + p.y * s }));
+  const k = paraInforme ? Math.max(1, imgW / 700) : Math.max(1, imgW * s / 700);
+  if (P.length >= 2) {
+    ctx.save();
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); P.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+    ctx.strokeStyle = color; ctx.globalAlpha = 0.45; ctx.lineWidth = anchoPx; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.lineWidth = Math.max(1.5, 2 * k); ctx.strokeStyle = color; ctx.stroke();
+    if (esc) {
+      ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (let i = 1; i < P.length; i++) {
+        const m = Math.hypot(puntos[i].x - puntos[i - 1].x, puntos[i].y - puntos[i - 1].y) / esc;
+        const mx = (P[i].x + P[i - 1].x) / 2, my = (P[i].y + P[i - 1].y) / 2;
+        const txt = _replOfficeNum(m, 2) + ' m';
+        const w = ctx.measureText(txt).width + 10 * k;
+        ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(mx - w / 2, my - 9 * k, w, 18 * k);
+        ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+      }
+    }
+    ctx.restore();
+  }
+  P.forEach((p, i) => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, (i === 0 || i === P.length - 1 ? 7 : 5) * k, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 ? '#22c55e' : (i === P.length - 1 ? '#ef4444' : '#fff');
+    ctx.fill(); ctx.lineWidth = 2 * k; ctx.strokeStyle = '#0b0f14'; ctx.stroke();
+  });
+  const ref = rep.trazado?.referencia;
+  if (ref?.a) {
+    const a = { x: ox + ref.a.x * s, y: oy + ref.a.y * s };
+    const b = ref.b ? { x: ox + ref.b.x * s, y: oy + ref.b.y * s } : null;
+    ctx.save(); ctx.strokeStyle = '#22d3ee'; ctx.fillStyle = '#22d3ee'; ctx.lineWidth = 2 * k; ctx.setLineDash([6 * k, 4 * k]);
+    ctx.beginPath(); ctx.arc(a.x, a.y, 5 * k, 0, Math.PI * 2); ctx.fill();
+    if (b) {
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.beginPath(); ctx.arc(b.x, b.y, 5 * k, 0, Math.PI * 2); ctx.fill();
+      if (ref.metros) {
+        ctx.setLineDash([]); ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const txt = '📏 ' + _replOfficeNum(ref.metros, 2) + ' m';
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 14 * k, w = ctx.measureText(txt).width + 10 * k;
+        ctx.fillStyle = 'rgba(8,145,178,.85)'; ctx.fillRect(mx - w / 2, my - 9 * k, w, 18 * k);
+        ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+      }
+    }
+    ctx.restore();
+  }
+  (rep.trazado?.obstaculos || []).forEach((o, i) => {
+    const pos = _replOfficePosObstaculo(rep, o); if (!pos) return;
+    const cx = ox + pos.x * s, cy = oy + pos.y * s;
+    const L = Math.hypot(pos.dx, pos.dy) || 1;
+    const ux = pos.dx / L, uy = pos.dy / L;
+    let nx = -uy, ny = ux;
+    if (o.accion === 'debajo' && ny < 0) { nx = -nx; ny = -ny; }
+    const dimPx = esc ? Math.max(12 * k, (+o.dimension_m || 0.3) * esc * s) : 22 * k;
+    const half = Math.max(10 * k, dimPx / 2);
+    ctx.save();
+    ctx.strokeStyle = o.accion === 'sujetar' ? '#a78bfa' : '#facc15'; ctx.lineWidth = Math.max(2, 3 * k); ctx.setLineDash([5 * k, 4 * k]);
+    ctx.beginPath();
+    if (o.accion === 'sujetar') {
+      ctx.moveTo(cx - ux * half, cy - uy * half); ctx.lineTo(cx + ux * half, cy + uy * half);
+      ctx.moveTo(cx - ux * half - nx * 8 * k, cy - uy * half - ny * 8 * k); ctx.lineTo(cx - ux * half + nx * 8 * k, cy - uy * half + ny * 8 * k);
+      ctx.moveTo(cx + ux * half - nx * 8 * k, cy + uy * half - ny * 8 * k); ctx.lineTo(cx + ux * half + nx * 8 * k, cy + uy * half + ny * 8 * k);
+    } else {
+      ctx.moveTo(cx - ux * half, cy - uy * half);
+      ctx.lineTo(cx - ux * half + nx * dimPx, cy - uy * half + ny * dimPx);
+      ctx.lineTo(cx + ux * half + nx * dimPx, cy + uy * half + ny * dimPx);
+      ctx.lineTo(cx + ux * half, cy + uy * half);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cx, cy, 11 * k, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fill();
+    ctx.lineWidth = 2 * k; ctx.strokeStyle = o.accion === 'sujetar' ? '#a78bfa' : '#facc15'; ctx.stroke();
+    ctx.font = `${12 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+    ctx.fillText(String(i + 1), cx, cy + 0.5);
+    ctx.restore();
+  });
+}
+
+async function replOfficeAbrir(id, yInforme) {
+  const data = await api('/replanteos/' + id);
+  if (!data || data.ok === false) { toast(data?.error || 'No se pudo abrir el replanteo', 'err'); return; }
+  const rep = data.replanteo;
+  const catalogo = await _replOfficeCatalogoDe(rep.departamento);
+  const elemento = catalogo.find(e => e.key === rep.elemento_key) || null;
+  let img = null, aviso = '';
+  try { img = await _replOfficeCargarImagen(_replOfficeFotoUrl(rep.id)); }
+  catch { aviso = 'No se pudo cargar la foto del replanteo.'; }
+  _replOffice.det = { rep, elemento, img, puedeEditar: !!data.puede_editar };
+
+  document.getElementById('replOfficeDetTitulo').textContent = `📐 ${rep.titulo || 'Replanteo'} · REPL-${rep.id}`;
+  const [etq, cls] = REPL_OFFICE_ESTADOS[rep.estado] || [rep.estado, 'badge-info'];
+  document.getElementById('replOfficeDetMeta').innerHTML = `
+    <span class="badge ${cls}">${etq}</span>
+    <span>🏗 ${escHtml(_replOfficeObraNombre(rep.obra_id))}</span>
+    <span>${_replOfficeDeptNombre(rep.departamento)}</span>
+    <span>${escHtml(_replOfficeNombreElemento(rep, catalogo))}</span>
+    <span>➡️ <b style="color:var(--text)">${rep.longitud_m ? _replOfficeNum(rep.longitud_m) + ' m' : 'sin calcular'}</b></span>
+    <span>👤 ${escHtml(rep.creado_por || '—')} · ${escHtml((rep.actualizado_en || rep.creado_en || '').slice(0, 16).replace('T', ' '))}</span>
+    ${rep.pedido_ids?.length ? `<span>📥 pedidos: ${rep.pedido_ids.map(n => '#' + n).join(', ')}</span>` : ''}`;
+  const cv = document.getElementById('replOfficeDetCanvas');
+  const avisoEl = document.getElementById('replOfficeDetAviso');
+  if (img) {
+    const maxW = Math.min(900, Math.max(320, (document.querySelector('#modalReplOfficeDetalle .modal')?.clientWidth || 900) - 48));
+    const s = Math.min(1, maxW / img.naturalWidth);
+    cv.width = Math.round(img.naturalWidth * s); cv.height = Math.round(img.naturalHeight * s);
+    _replOfficeDibujar(cv.getContext('2d'), rep, img, elemento, { s, ox: 0, oy: 0 }, false);
+    avisoEl.style.display = 'none';
+  } else {
+    cv.width = 600; cv.height = 200;
+    const ctx = cv.getContext('2d'); ctx.fillStyle = '#0b0f14'; ctx.fillRect(0, 0, 600, 200);
+    avisoEl.textContent = aviso; avisoEl.style.display = '';
+  }
+  const esc = _replOfficeEscala(rep);
+  const r = rep.reglas || elemento?.reglas || {};
+  const filasMat = (rep.material || []).map(m => `<tr><td>${escHtml(m.nombre)}</td><td style="text-align:right;font-weight:700;white-space:nowrap">${m.cantidad} ${escHtml(m.unidad || 'ud')}</td><td style="color:var(--muted)">${escHtml(m.detalle || '')}</td></tr>`).join('');
+  const obst = rep.trazado?.obstaculos || [];
+  const filasObst = obst.map((o, i) => `<tr><td>${i + 1}</td><td>${escHtml(REPL_OFFICE_TIPOS[o.tipo] || o.tipo || '')}</td><td>${escHtml(REPL_OFFICE_ACCIONES[o.accion] || o.accion || '')}</td><td style="text-align:right">${_replOfficeNum(o.dimension_m, 2)} m</td><td style="color:var(--muted)">${escHtml(o.nota || '')}</td></tr>`).join('');
+  document.getElementById('replOfficeDetCuerpo').innerHTML = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px">
+      <span>📍 ${(rep.trazado?.puntos || []).length} puntos</span>
+      <span>${rep.trazado?.longitud_manual_m ? `📏 longitud fijada a mano: ${_replOfficeNum(rep.trazado.longitud_manual_m)} m` : (esc ? `📏 escala ${_replOfficeNum(esc, 1)} px/m${rep.trazado?.referencia?.metros ? ` (referencia de ${_replOfficeNum(rep.trazado.referencia.metros, 2)} m)` : ''}` : '<span style="color:var(--yellow)">📏 sin escala</span>')}</span>
+      <span>⚠️ ${obst.length} obstáculo(s)</span>
+      ${rep.notas ? `<span>📝 ${escHtml(rep.notas)}</span>` : ''}
+    </div>
+    <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:13px;margin:8px 0 6px">🧮 Material calculado</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--muted);font-size:11px"><th>Concepto</th><th style="text-align:right">Cantidad</th><th>Detalle</th></tr></thead>
+      <tbody>${filasMat || '<tr><td colspan="3" style="color:var(--muted)">Sin material: falta trazado o escala</td></tr>'}</tbody></table>
+    ${filasObst ? `<div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:13px;margin:14px 0 6px">⚠️ Instalaciones de por medio</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--muted);font-size:11px"><th>#</th><th>Qué hay</th><th>Solución</th><th style="text-align:right">Dimensión</th><th>Nota</th></tr></thead>
+      <tbody>${filasObst}</tbody></table>` : ''}
+    <div style="font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5">
+      <b>Reglas aplicadas</b>${elemento?.origen === 'empresa' ? ' (catálogo de la empresa)' : ' (valores de arranque)'}:
+      ${r.tramo_m ? `tramos de ${r.tramo_m} m · ` : 'se pide por metros · '}${r.soporte_cada_m ? `soporte cada ${r.soporte_cada_m} m · ` : ''}codo por giro ≥ ${r.giro_min_grados || 30}° · desperdicio ${r.desperdicio_pct ?? 5}%.
+    </div>`;
+  const puedeEditar = !!data.puede_editar && rep.estado !== 'pedido';
+  document.getElementById('replOfficeDetBtnPedido').style.display = puedeEditar && (rep.material || []).length ? '' : 'none';
+  document.getElementById('replOfficeDetBtnBorrar').style.display = puedeEditar ? '' : 'none';
+  document.getElementById('modalReplOfficeDetalle').style.display = 'flex';
+  if (yInforme) replOfficeInforme();
+}
+function replOfficeCerrarDetalle() {
+  document.getElementById('modalReplOfficeDetalle').style.display = 'none';
+  _replOffice.det = null;
+}
+
+// Informe imprimible, mismo patrón que cpdOfficeGenerarInforme (pestaña nueva + print).
+function replOfficeInforme() {
+  const st = _replOffice.det;
+  if (!st) return;
+  const { rep, elemento, img } = st;
+  const w = window.open('', '_blank');
+  if (!w) { toast('Permite las ventanas emergentes para abrir el informe', 'err'); return; }
+  let foto = _replOfficeFotoUrl(rep.id);
+  if (img) {
+    try {
+      const maxW = 1600, s = Math.min(1, maxW / img.naturalWidth);
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.naturalWidth * s); cv.height = Math.round(img.naturalHeight * s);
+      _replOfficeDibujar(cv.getContext('2d'), rep, img, elemento, { s, ox: 0, oy: 0 }, true);
+      foto = cv.toDataURL('image/jpeg', 0.85);
+    } catch { /* canvas "tainted": se imprime la foto sin trazado */ }
+  }
+  const catalogo = _replOffice.catalogos[rep.departamento] || [];
+  const r = rep.reglas || elemento?.reglas || {};
+  const filas = (rep.material || []).map(m => `<tr><td>${escHtml(m.nombre)}</td><td style="text-align:right;font-weight:700">${m.cantidad} ${escHtml(m.unidad || 'ud')}</td><td style="color:#5b6472">${escHtml(m.detalle || '')}</td></tr>`).join('');
+  const obst = (rep.trazado?.obstaculos || []).map((o, i) => `<tr><td>${i + 1}</td><td>${escHtml(REPL_OFFICE_TIPOS[o.tipo] || o.tipo || '')}</td><td>${escHtml(REPL_OFFICE_ACCIONES[o.accion] || o.accion || '')}</td><td>${_replOfficeNum(o.dimension_m, 2)} m</td><td>${escHtml(o.nota || '')}</td></tr>`).join('');
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Replanteo ${escHtml(rep.titulo || '')}</title>
+    <style>
+      body{font-family:Arial,sans-serif;color:#101823;padding:0 40px 50px;background:#f6f8fa;margin:0}
+      .acciones{position:sticky;top:0;background:#f6f8fa;padding:14px 0;display:flex;gap:8px;justify-content:flex-end}
+      button{padding:8px 14px;border-radius:6px;border:1px solid #ccc;cursor:pointer;font-weight:700}
+      h1{font-size:20px;margin:0 0 4px} h2{font-size:14px;margin:18px 0 6px}
+      .meta{color:#5b6472;font-size:12px;margin-bottom:12px}
+      .foto{max-width:100%;border:1px solid #ddd;border-radius:8px;display:block;margin:0 auto 18px;background:#fff}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}
+      th{background:#fff3e8}
+      .reglas{font-size:11px;color:#5b6472;margin-top:10px;line-height:1.5}
+      @media print{.acciones{display:none}body{padding:0;background:#fff}}
+    </style></head><body>
+    <div class="acciones"><button onclick="window.print()">🖨 Imprimir / guardar PDF</button><button onclick="window.close()">Cerrar</button></div>
+    <h1>📐 ${escHtml(rep.titulo || '')}</h1>
+    <div class="meta">${escHtml(_replOfficeObraNombre(rep.obra_id))} · ${escHtml(_replOfficeDeptNombre(rep.departamento))} · ${escHtml(_replOfficeNombreElemento(rep, catalogo))} · <b>${rep.longitud_m ? _replOfficeNum(rep.longitud_m) + ' m' : 'sin calcular'}</b> · ${new Date().toLocaleDateString('es-ES')}${rep.creado_por ? ' · ' + escHtml(rep.creado_por) : ''} · REPL-${rep.id}</div>
+    <img class="foto" src="${foto}">
+    <h2>Material</h2>
+    <table><thead><tr><th>Concepto</th><th style="text-align:right">Cantidad</th><th>Detalle</th></tr></thead>
+    <tbody>${filas || '<tr><td colspan="3">Sin material calculado (falta trazado o escala)</td></tr>'}</tbody></table>
+    ${obst ? `<h2>Instalaciones de por medio</h2><table><thead><tr><th>#</th><th>Qué hay</th><th>Solución</th><th>Dimensión</th><th>Nota</th></tr></thead><tbody>${obst}</tbody></table>` : ''}
+    ${rep.notas ? `<h2>Notas</h2><p style="font-size:12px">${escHtml(rep.notas)}</p>` : ''}
+    <div class="reglas"><b>Reglas de cálculo aplicadas (${elemento?.origen === 'empresa' ? 'catálogo de la empresa' : 'valores de arranque, revisar con la ficha del fabricante'}):</b>
+      ${r.tramo_m ? `tramos de ${r.tramo_m} m · ` : 'se pide por metros · '}${r.soporte_cada_m ? `un soporte cada ${r.soporte_cada_m} m · ` : ''}un codo por cada giro ≥ ${r.giro_min_grados || 30}° · desperdicio ${r.desperdicio_pct ?? 5}%.
+      Los desvíos por obstáculo suman el doble de su dimensión y dos codos; los tramos sujetos a instalación existente cambian soportes por abrazaderas.</div>
+    </body></html>`);
+  w.document.close();
+}
+
+async function replOfficeEnviarPedidos(id) {
+  id = id || _replOffice.det?.rep?.id;
+  if (!id) return;
+  const rep = _replOffice.det?.rep?.id === id ? _replOffice.det.rep : _replOffice.lista.find(r => r.id === id);
+  const n = (rep?.material || []).length;
+  if (!confirm(`¿Enviar a Pedidos el replanteo "${rep?.titulo || 'REPL-' + id}"?\n\nSe crearán ${n} línea(s) de pedido con referencia REPL-${id} y el replanteo quedará en solo lectura.`)) return;
+  const proveedor = prompt('Proveedor (opcional):', '') ;
+  const d = await api(`/replanteos/${id}/pedido`, { method: 'POST', body: JSON.stringify({ proveedor: proveedor || null }) });
+  if (!d || d.ok === false) { toast(d?.error || 'No se pudo enviar a Pedidos', 'err'); return; }
+  toast(`📥 ${d.pedido_ids?.length || n} línea(s) creadas en Pedidos (REPL-${id})`, 'ok');
+  replOfficeCerrarDetalle();
+  replOfficeListar();
+}
+async function replOfficeBorrar(id) {
+  id = id || _replOffice.det?.rep?.id;
+  if (!id) return;
+  const rep = _replOffice.det?.rep?.id === id ? _replOffice.det.rep : _replOffice.lista.find(r => r.id === id);
+  if (!confirm(`¿Eliminar el replanteo "${rep?.titulo || 'REPL-' + id}"?\n\nSe borran la foto y el trazado. Esta acción no se puede deshacer.`)) return;
+  const d = await api(`/replanteos/${id}`, { method: 'DELETE' });
+  if (!d || d.ok === false) { toast(d?.error || 'No se pudo eliminar', 'err'); return; }
+  toast('🗑 Replanteo eliminado', 'ok');
+  replOfficeCerrarDetalle();
+  replOfficeListar();
+}
+
+// ── Catálogo por empresa ────────────────────────────────────────────────────
+const REPL_OFFICE_REGLAS_DEF = [
+  ['tramo_m', 'Longitud comercial del tramo (m)', 'num', 'Vacío = se pide por metros (cable, corrugado…)'],
+  ['union_nombre', 'Pieza de unión entre tramos', 'txt', ''],
+  ['uniones_por_tramo', 'Uniones por tramo', 'num', ''],
+  ['soporte_cada_m', 'Distancia entre soportes (m)', 'num', 'Vacío = sin soportes'],
+  ['soporte_nombre', 'Nombre del soporte a techo/pared', 'txt', ''],
+  ['codo_nombre', 'Pieza para cambios de dirección', 'txt', 'Vacío = no se cuentan codos'],
+  ['giro_min_grados', 'Giro mínimo que cuenta como codo (°)', 'num', ''],
+  ['tornilleria_por_soporte', 'Fijaciones por soporte', 'num', ''],
+  ['tornilleria_nombre', 'Nombre de la fijación', 'txt', ''],
+  ['sujecion_existente_nombre', 'Soporte cuando va sujeto a instalación existente', 'txt', ''],
+  ['desperdicio_pct', 'Desperdicio (%)', 'num', ''],
+  ['ancho_mm', 'Ancho visual por defecto sobre la foto (mm)', 'num', ''],
+];
+async function replOfficeAbrirCatalogo() {
+  if (!_replOfficeAdmin()) return;
+  const sel = document.getElementById('replOfficeCatDept');
+  if (!sel.options.length) sel.innerHTML = _ALL_DEPTS.map(k => `<option value="${k}">${_replOfficeDeptNombre(k)}</option>`).join('');
+  const pref = document.getElementById('replOfficeDept')?.value || SESSION?.departamento || 'electrico';
+  if ([...sel.options].some(o => o.value === pref)) sel.value = pref;
+  document.getElementById('modalReplOfficeCatalogo').style.display = 'flex';
+  await replOfficeCatCargar();
+}
+function replOfficeCerrarCatalogo() {
+  document.getElementById('modalReplOfficeCatalogo').style.display = 'none';
+  _replOffice.cat = null;
+  _replOffice.catalogos = {}; // el catálogo efectivo puede haber cambiado: se vuelve a pedir
+  if (currentPage === 'replanteos') replOfficeRender();
+}
+async function replOfficeCatCargar(seleccionar) {
+  const dept = document.getElementById('replOfficeCatDept').value;
+  const lista = document.getElementById('replOfficeCatLista');
+  lista.innerHTML = '<div class="empty-state" style="padding:20px">Cargando…</div>';
+  const d = await api('/replanteos/catalogo-empresa?departamento=' + encodeURIComponent(dept));
+  if (!d || d.ok === false) { lista.innerHTML = `<div class="empty-state" style="padding:20px">${escHtml(d?.error || 'Error al cargar')}</div>`; return; }
+  _replOffice.cat = { dept, base: d.base || [], overrides: d.overrides || [], efectivo: d.efectivo || [], sel: null, nuevo: false };
+  replOfficeCatRenderLista();
+  const keys = _replOfficeCatKeys();
+  const objetivo = seleccionar && keys.includes(seleccionar) ? seleccionar : keys[0];
+  if (objetivo) replOfficeCatSeleccionar(objetivo); else document.getElementById('replOfficeCatForm').innerHTML = '<div class="empty-state">Sin elementos</div>';
+}
+function _replOfficeCatKeys() {
+  const c = _replOffice.cat;
+  const keys = c.efectivo.map(e => e.key);
+  c.overrides.forEach(o => { if (!keys.includes(o.key)) keys.push(o.key); }); // desactivados
+  return keys;
+}
+function _replOfficeCatItem(key) {
+  const c = _replOffice.cat;
+  return { ef: c.efectivo.find(e => e.key === key) || null, ov: c.overrides.find(o => o.key === key) || null, base: c.base.find(b => b.key === key) || null };
+}
+function replOfficeCatRenderLista() {
+  const c = _replOffice.cat;
+  const lista = document.getElementById('replOfficeCatLista');
+  lista.innerHTML = _replOfficeCatKeys().map(key => {
+    const { ef, ov, base } = _replOfficeCatItem(key);
+    const nombre = ef?.nombre || ov?.nombre || base?.nombre || key;
+    const icono = ef?.icono || ov?.icono || base?.icono || '📐';
+    const activo = !ov || ov.activo;
+    const etiqueta = !activo ? '<span class="badge badge-danger">Oculto</span>' : (ov ? '<span class="badge badge-info">Empresa</span>' : '<span class="badge badge-ok">Base</span>');
+    const on = c.sel === key && !c.nuevo;
+    return `<button class="btn ${on ? 'btn-primary' : 'btn-secondary'}" style="justify-content:space-between;text-align:left;${!activo ? 'opacity:.6' : ''}" onclick="replOfficeCatSeleccionar('${key}')">
+      <span>${icono} ${escHtml(nombre)}</span>${etiqueta}</button>`;
+  }).join('') + `<button class="btn btn-secondary" style="margin-top:8px;border-style:dashed" onclick="replOfficeCatNuevo()">➕ Nuevo elemento</button>`;
+}
+function _replOfficeCatForm(key, datos, esNuevo, ov, base) {
+  const op = datos.opciones || {};
+  const rg = datos.reglas || {};
+  const lista = a => Array.isArray(a) ? a.join(', ') : '';
+  const campo = (id, label, value, type, ayuda) => `
+    <div class="form-group">
+      <label>${label}${ayuda ? ` <span style="color:var(--muted);font-weight:400">· ${ayuda}</span>` : ''}</label>
+      <input class="form-input" id="replCat_${id}" type="${type === 'num' ? 'number' : 'text'}" ${type === 'num' ? 'step="any" min="0"' : ''} value="${escHtml(value == null ? '' : String(value))}">
+    </div>`;
+  return `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:14px">${esNuevo ? '➕ Nuevo elemento' : `${escHtml(datos.icono || '📐')} ${escHtml(datos.nombre || key)}`}</div>
+      ${!esNuevo ? (ov ? '<span class="badge badge-info">Sobreescrito por la empresa</span>' : '<span class="badge badge-ok">Catálogo base</span>') : ''}
+      <label style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="replCat_activo" ${datos.activo === false ? '' : 'checked'}> Activo (se ofrece a los encargados)
+      </label>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Clave *</label><input class="form-input" id="replCat_key" value="${escHtml(key || '')}" ${esNuevo ? 'placeholder="p.ej. bandeja_escalera"' : 'readonly style="opacity:.7"'}></div>
+      ${campo('nombre', 'Nombre *', datos.nombre, 'txt')}
+    </div>
+    <div class="form-row">
+      ${campo('icono', 'Icono (emoji)', datos.icono, 'txt')}
+      ${campo('unidad', 'Unidad', datos.unidad || 'm', 'txt')}
+    </div>
+    <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;margin:6px 0 8px;color:var(--muted)">OPCIONES QUE ELIGE EL ENCARGADO (separadas por comas)</div>
+    <div class="form-row">
+      ${campo('anchos_mm', 'Anchos (mm)', lista(op.anchos_mm), 'txt', 'bandejas, canales, conductos')}
+      ${campo('diametros_mm', 'Diámetros (mm)', lista(op.diametros_mm), 'txt', 'tubos, tuberías')}
+    </div>
+    ${campo('variantes', 'Variantes', lista(op.variantes), 'txt', 'secciones de cable, materiales…')}
+    <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;margin:6px 0 8px;color:var(--muted)">REGLAS DE CÁLCULO</div>
+    <div class="form-row">
+      ${REPL_OFFICE_REGLAS_DEF.map(([k, label, type, ayuda]) => campo('r_' + k, label, rg[k], type, ayuda)).join('')}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-primary" onclick="replOfficeCatGuardar()">💾 Guardar para esta empresa</button>
+      ${ov ? `<button class="btn btn-secondary" onclick="replOfficeCatRestaurar()">${base ? '↩️ Restaurar catálogo base' : '🗑 Quitar elemento propio'}</button>` : ''}
+    </div>`;
+}
+function replOfficeCatSeleccionar(key) {
+  const c = _replOffice.cat; if (!c) return;
+  c.sel = key; c.nuevo = false;
+  const { ef, ov, base } = _replOfficeCatItem(key);
+  // Lo que se edita es lo EFECTIVO (base + sobreescritura); si está oculto, la sobreescritura.
+  const datos = ef ? { ...ef, activo: true } : (ov ? { ...ov } : { ...base, activo: true });
+  if (ov && !ov.activo) datos.activo = false;
+  replOfficeCatRenderLista();
+  document.getElementById('replOfficeCatForm').innerHTML = _replOfficeCatForm(key, datos, false, ov, base);
+}
+function replOfficeCatNuevo() {
+  const c = _replOffice.cat; if (!c) return;
+  c.sel = null; c.nuevo = true;
+  replOfficeCatRenderLista();
+  document.getElementById('replOfficeCatForm').innerHTML = _replOfficeCatForm('', { nombre: '', icono: '📐', unidad: 'm', opciones: {}, reglas: { giro_min_grados: 30, desperdicio_pct: 5 }, activo: true }, true, null, null);
+}
+async function replOfficeCatGuardar() {
+  const c = _replOffice.cat; if (!c) return;
+  const v = id => document.getElementById('replCat_' + id)?.value ?? '';
+  const key = v('key').trim().toLowerCase();
+  if (!/^[a-z0-9_]{2,40}$/.test(key)) { toast('Clave no válida: letras minúsculas, números y _ (2 a 40)', 'err'); return; }
+  const nombre = v('nombre').trim();
+  if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
+  const nums = s => s.split(',').map(x => Number(x.trim())).filter(n => Number.isFinite(n) && n > 0);
+  const txts = s => s.split(',').map(x => x.trim()).filter(Boolean);
+  const opciones = {};
+  if (v('anchos_mm').trim()) opciones.anchos_mm = nums(v('anchos_mm'));
+  if (v('diametros_mm').trim()) opciones.diametros_mm = nums(v('diametros_mm'));
+  if (v('variantes').trim()) opciones.variantes = txts(v('variantes'));
+  const reglas = {};
+  for (const [k, , type] of REPL_OFFICE_REGLAS_DEF) {
+    const raw = v('r_' + k).trim();
+    reglas[k] = raw === '' ? null : (type === 'num' ? Number(raw) : raw);
+    if (type === 'num' && raw !== '' && (!Number.isFinite(reglas[k]) || reglas[k] < 0)) { toast(`La regla "${k}" debe ser un número ≥ 0`, 'err'); return; }
+  }
+  const activo = !!document.getElementById('replCat_activo')?.checked;
+  const d = await api(`/replanteos/catalogo/${key}`, { method: 'PUT', body: JSON.stringify({
+    departamento: c.dept, nombre, icono: v('icono').trim() || '📐', unidad: v('unidad').trim() || 'm', opciones, reglas, activo }) });
+  if (!d || d.ok === false) { toast(d?.error || 'No se pudo guardar', 'err'); return; }
+  toast(`✅ "${nombre}" guardado para ${_replOfficeDeptNombre(c.dept)}`, 'ok');
+  await replOfficeCatCargar(key);
+}
+async function replOfficeCatRestaurar() {
+  const c = _replOffice.cat; if (!c || !c.sel) return;
+  const { base } = _replOfficeCatItem(c.sel);
+  if (!confirm(base ? `¿Restaurar "${c.sel}" al catálogo base? Se pierde el ajuste de la empresa.` : `¿Quitar el elemento propio "${c.sel}"? Los replanteos ya creados con él conservan su cálculo.`)) return;
+  const d = await api(`/replanteos/catalogo/${c.sel}?departamento=${encodeURIComponent(c.dept)}`, { method: 'DELETE' });
+  if (!d || d.ok === false) { toast(d?.error || 'No se pudo restaurar', 'err'); return; }
+  toast('↩️ Catálogo restaurado', 'ok');
+  await replOfficeCatCargar(c.sel);
+}
+
+
 const PAGE_TITLES = {
   dashboard: 'Dashboard', globalDashboard: '🌐 Dashboard Global Multi-Obra', personal: 'Trabajadores', fichajes: 'Fichajes',
   turnos: 'Turnos', epis: 'EPIs', carnets: 'Carnets', bobinas: 'Bobinas',
   pemp: 'PEMP', carretillas: 'Carretillas', repostajes: 'Repostajes', herramientas: 'Herramientas',
   telecomRacks: '🗄️ Racks / Cableado',
   cpdSondas: '🌡️ Sondas CPD',
+  replanteos: '📐 Replanteos',
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
   pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
   empresa: 'Mi Empresa', logs: 'Logs', devtools: '🛠️ DevTools',
@@ -14768,6 +15414,7 @@ const PAGE_LOADERS = {
   herramientas: cargarHerramientas,
   telecomRacks: (...a) => telecomOfficeCargar(...a),
   cpdSondas: (...a) => cpdOfficeCargar(...a),
+  replanteos: (...a) => replOfficeCargar(...a),
   seguridad: cargarSeguridad,
   obras: cargarObras,
   documentos: cargarDocumentos,
@@ -15364,6 +16011,7 @@ const SYNC_INTERVALS = {
   herramientas:  60,
   telecomRacks:  60,
   cpdSondas:     60,
+  replanteos:    60,
   seguridad:     60,
   epis:         120,
   carnets:      120,
@@ -25453,7 +26101,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.35';
+const PANEL_APP_VERSION = '9.36';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
