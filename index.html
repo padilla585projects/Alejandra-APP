@@ -1112,6 +1112,15 @@ select option{background:var(--surface2);color:var(--text)}
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <!-- ADR-0024: Replanteo asistido por cámara (foto en fase 1, AR en fase 2) -->
+      <div class="module-card" id="cardReplanteo" onclick="navTo('replanteo')" style="display:none;border-left:3px solid #f97316">
+        <div class="module-emoji">📐</div>
+        <div class="module-info">
+          <div class="module-name">Replanteo</div>
+          <div class="module-desc">Bandeja, tubo… sobre foto real + material</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardPemp" onclick="selectModule('pemp')">
         <div class="module-emoji">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
@@ -1873,6 +1882,189 @@ select option{background:var(--surface2);color:var(--text)}
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       REPLANTEO ASISTIDO POR CÁMARA (ADR-0024) — fase 1: sobre foto.
+       Lista de replanteos de la obra + editor (foto, trazado, escala, obstáculos) +
+       material calculado por el servidor + informe imprimible + envío a Pedidos.
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <style>
+    .repl-btn{background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:8px 10px;cursor:pointer;white-space:nowrap;font-family:inherit}
+    .repl-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .repl-btn.danger{color:#ef4444;border-color:rgba(239,68,68,.5)}
+    .repl-btn:disabled{opacity:.45;cursor:not-allowed}
+    .repl-mode{background:var(--card);border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;white-space:nowrap;font-family:inherit}
+    .repl-mode.active{background:var(--accent);border-color:var(--accent);color:#fff}
+    .repl-input{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);font-family:inherit}
+    .repl-label{font-size:11px;color:var(--muted);display:block;margin-bottom:4px}
+    .repl-accion{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid var(--border);border-radius:10px;cursor:pointer;background:var(--surface2)}
+    .repl-accion.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+    .repl-card{border-radius:10px;overflow:hidden;background:var(--surface);border:1px solid var(--border);cursor:pointer}
+    .repl-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;letter-spacing:.3px}
+    .repl-badge.borrador{background:rgba(148,163,184,.2);color:#94a3b8}
+    .repl-badge.calculado{background:rgba(249,115,22,.18);color:#f97316}
+    .repl-badge.pedido{background:rgba(34,197,94,.18);color:#22c55e}
+    .repl-mat-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+    .repl-mat-row small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  </style>
+
+  <!-- LISTA -->
+  <div id="screenReplanteo" class="screen" style="padding:0;display:none">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📐 Replanteo</div>
+      <button id="btnReplNuevo" onclick="replAbrirNuevo()" class="repl-btn primary" style="display:none">+ Nuevo</button>
+      <button onclick="cargarReplanteos()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px" title="Actualizar">↻</button>
+    </div>
+    <div style="padding:8px 14px 0;font-size:11px;color:var(--muted)">Haz una foto del techo o la pared, marca por dónde va la instalación y obtén la lista de material. Solo encargados y superiores pueden crear replanteos.</div>
+    <div id="replList" style="padding:10px 14px 80px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="empty-state" style="grid-column:1/-1">Cargando…</div>
+    </div>
+  </div>
+
+  <!-- EDITOR -->
+  <div id="screenReplanteoEditor" class="screen" style="padding:0;display:none">
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+      <button onclick="navTo('replanteo')" style="background:none;border:none;color:var(--accent);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0;white-space:nowrap">← Volver</button>
+      <input id="replTitulo" type="text" class="repl-input" placeholder="Título (ej: Bandeja pasillo P2)" style="flex:1;padding:7px 9px" oninput="replMarcarCambio()">
+      <span id="replEstadoBadge" class="repl-badge borrador">BORRADOR</span>
+    </div>
+    <div style="padding:8px 12px;display:flex;gap:6px;border-bottom:1px solid var(--border)">
+      <select id="replElemento" class="repl-input" style="flex:1;padding:7px 8px" onchange="replCambiarElemento()"></select>
+      <select id="replOpcion" class="repl-input" style="width:128px;padding:7px 8px" onchange="replCambiarOpcion()"></select>
+    </div>
+    <div id="replCanvasWrap" style="position:relative;background:#0b0f14;height:50vh;min-height:230px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none">
+      <canvas id="replCanvas" style="display:block;width:100%;height:100%"></canvas>
+      <div id="replHint" style="position:absolute;left:8px;right:8px;bottom:8px;font-size:11px;color:#fff;background:rgba(0,0,0,.55);padding:6px 8px;border-radius:8px;pointer-events:none;line-height:1.35"></div>
+    </div>
+    <div style="display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);overflow-x:auto;align-items:center">
+      <button class="repl-mode active" data-modo="trazar" onclick="replModo('trazar')">✏️ Trazar</button>
+      <button class="repl-mode" data-modo="escala" onclick="replModo('escala')">📏 Escala</button>
+      <button class="repl-mode" data-modo="obstaculo" onclick="replModo('obstaculo')">⚠️ Obstáculo</button>
+      <span style="flex:1"></span>
+      <button class="repl-btn" onclick="replDeshacer()" title="Deshacer">↩</button>
+      <button class="repl-btn danger" onclick="replLimpiar()" title="Borrar trazado">🗑</button>
+    </div>
+    <div id="replInfo" style="padding:8px 12px;font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;line-height:1.5"></div>
+    <div id="replAcciones" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px 12px 24px">
+      <button class="repl-btn" onclick="replVerMaterial()">🧮 Material</button>
+      <button id="btnReplGuardar" class="repl-btn primary" onclick="replGuardar()">💾 Guardar</button>
+      <button class="repl-btn" onclick="replInforme()">📄 Informe</button>
+      <button id="btnReplPedido" class="repl-btn" onclick="replEnviarPedidos()">📦 A Pedidos</button>
+      <button id="btnReplBorrar" class="repl-btn danger" onclick="replBorrar()" style="grid-column:1/-1">🗑 Borrar replanteo</button>
+    </div>
+  </div>
+
+  <!-- MODAL: nuevo replanteo (título + elemento + foto) -->
+  <div class="modal-overlay" id="modalReplNuevo" onclick="if(event.target===this)replCerrarNuevo()" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">📐 Nuevo replanteo</div>
+        <button onclick="replCerrarNuevo()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label class="repl-label">Título *</label>
+          <input id="replNuevoTitulo" type="text" class="repl-input" placeholder="Ej: Bandeja rejilla pasillo planta 2">
+        </div>
+        <div>
+          <label class="repl-label">Qué vas a instalar *</label>
+          <select id="replNuevoElemento" class="repl-input"></select>
+        </div>
+        <div>
+          <label class="repl-label">Foto de la zona *</label>
+          <div style="display:flex;gap:8px">
+            <label class="repl-btn primary" style="flex:1;text-align:center">📷 Hacer foto
+              <input type="file" accept="image/*" capture="environment" style="display:none" onchange="replNuevoFotoElegida(this)"></label>
+            <label class="repl-btn" style="flex:1;text-align:center">🖼 Galería
+              <input type="file" accept="image/*" style="display:none" onchange="replNuevoFotoElegida(this)"></label>
+          </div>
+          <div id="replNuevoFotoNombre" style="font-size:11px;color:var(--muted);margin-top:6px">Sin foto todavía</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.4">Consejo: que en la foto salga algo de medida conocida (una placa de techo de 60 cm, una puerta de 2,10 m…) para fijar la escala después.</div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border)">
+        <button id="btnReplNuevoContinuar" class="repl-btn primary" style="width:100%;padding:11px" onclick="replNuevoContinuar()">Continuar →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: escala -->
+  <div class="modal-overlay" id="modalReplEscala" onclick="if(event.target===this)replCerrarEscala()" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">📏 Escala</div>
+        <button onclick="replCerrarEscala()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px">
+        <div id="replEscalaRefBloque">
+          <label class="repl-label">Distancia real entre los dos puntos marcados (metros)</label>
+          <input id="replEscalaMetros" type="number" step="0.01" min="0.01" inputmode="decimal" class="repl-input" placeholder="Ej: 0.60">
+          <button class="repl-btn primary" style="width:100%;margin-top:8px" onclick="replEscalaGuardar()">Fijar escala con la referencia</button>
+        </div>
+        <div style="text-align:center;font-size:11px;color:var(--muted)">— o —</div>
+        <div>
+          <label class="repl-label">Ya sé la longitud total del recorrido (metros)</label>
+          <input id="replEscalaManual" type="number" step="0.1" min="0.1" inputmode="decimal" class="repl-input" placeholder="Ej: 30">
+          <button class="repl-btn" style="width:100%;margin-top:8px" onclick="replEscalaManualGuardar()">Usar longitud conocida</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: obstáculo -->
+  <div class="modal-overlay" id="modalReplObstaculo" onclick="if(event.target===this)replCerrarObstaculo()" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">⚠️ Instalación de por medio</div>
+        <button onclick="replCerrarObstaculo()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label class="repl-label">Qué hay</label>
+          <select id="replObstTipo" class="repl-input"></select>
+        </div>
+        <div>
+          <label class="repl-label">Qué hacemos</label>
+          <div id="replObstAcciones" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+        <div>
+          <label class="repl-label" id="replObstDimLabel">Dimensión a salvar (metros)</label>
+          <input id="replObstDim" type="number" step="0.05" min="0" inputmode="decimal" class="repl-input" placeholder="Ej: 0.40">
+        </div>
+        <div>
+          <label class="repl-label">Nota (opcional)</label>
+          <input id="replObstNota" type="text" class="repl-input" placeholder="Ej: conducto de clima 400x300">
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px">
+        <button id="btnReplObstQuitar" class="repl-btn danger" style="display:none" onclick="replObstaculoQuitar()">Quitar</button>
+        <button class="repl-btn primary" style="flex:1;padding:11px" onclick="replObstaculoGuardar()">Guardar obstáculo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: material -->
+  <div class="modal-overlay" id="modalReplMaterial" onclick="if(event.target===this)replCerrarMaterial()" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">🧮 Material calculado</div>
+        <button onclick="replCerrarMaterial()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div id="replMaterialBody" style="overflow-y:auto;flex:1;padding:6px 16px 16px"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: informe (mismo mecanismo que Sondas CPD: iframe interno + print, sin popups) -->
+  <div class="modal-overlay" id="modalReplInforme" style="display:none;align-items:stretch;justify-content:center;padding:0;background:rgba(3,7,18,.94);z-index:9999">
+    <div style="background:#fff;width:100%;max-width:900px;height:100%;display:flex;flex-direction:column">
+      <div style="padding:10px 12px;display:flex;align-items:center;gap:8px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div id="replInformeTitulo" style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:13px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Informe</div>
+        <button class="repl-btn primary" onclick="replImprimirInforme()">🖨 Imprimir / PDF</button>
+        <button onclick="replCerrarInforme()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <iframe id="replInformeFrame" style="flex:1;border:none;width:100%;background:#fff"></iframe>
     </div>
   </div>
 
@@ -6883,6 +7075,10 @@ function setupHomeModules() {
   if (cardTelecomRacks) cardTelecomRacks.style.display = (dept === 'telecom') ? 'flex' : 'none';
   // Sondas CPD: solo departamento Control
   if (cardCpdSondas) cardCpdSondas.style.display = (dept === 'control') ? 'flex' : 'none';
+  // Replanteo (ADR-0024): todos los oficios, pero solo encargado y superiores (no operario).
+  // El catálogo de elementos lo especializa el backend por departamento.
+  const cardRepl = document.getElementById('cardReplanteo');
+  if (cardRepl) cardRepl.style.display = (s && s.rol !== 'operario') ? 'flex' : 'none';
   if (cardP) cardP.style.display = sinMaquinaria ? 'none' : 'flex';
   if (cardC) cardC.style.display = sinMaquinaria ? 'none' : 'flex';
   // Pedidos: visible para todos excepto seguridad
@@ -7320,6 +7516,7 @@ const _HOME_TRADE_MODS = [
   { card: 'cardBobinas',          label: '⚡ Bobinas',           soloElectrico: true },
   { card: 'cardTelecomRacks',     label: '🗄️ Racks / Cableado', soloTelecom: true },
   { card: 'cardCpdSondas',        label: '🌡️ Sondas CPD',       soloControl: true },
+  { card: 'cardReplanteo',        label: '📐 Replanteo' },
   { card: 'cardEpisDotacion',     label: '🦺 Dotación EPIs' },
   // CARDS-DEPT-CONTROL-01: excluidas de Control (setupHomeModules ya las oculta ahí sin
   // depender de esta config) -- sin esto, "Departamentos y submódulos" (panel.html) ofrecía
@@ -8394,6 +8591,8 @@ function _applyScreen(name) {
   if (name === 'incidencias')    { cargarIncidencias(); }
   if (name === 'planos')         { cargarPlanos(); }
   if (name === 'cpdSondas')      { cargarCpdPlanos(); }
+  if (name === 'replanteo')      { cargarReplanteos(); }
+  if (name === 'replanteoEditor') { if (typeof replDibujar === 'function') requestAnimationFrame(replDibujar); }
   if (name === 'partes')         { partesCargar(); }
   if (name === 'partesForm')     { parteIniciarFirma('parteCanvasCli'); parteIniciarFirma('parteCanvasResp'); }
   if (name === 'calendario')     { calCargar(); }
@@ -8518,6 +8717,11 @@ function navTo(target) {
   if (target === 'cpdSondas') {
     showScreen('cpdSondas');
     cargarCpdPlanos();
+    return;
+  }
+  if (target === 'replanteo') {
+    showScreen('replanteo');
+    cargarReplanteos();
     return;
   }
   if (target === 'telecomRacks') {
@@ -14893,7 +15097,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.33';
+const APP_VERSION = '9.34';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -17911,6 +18115,777 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.cpdSondaGuardarDatos     = cpdSondaGuardarDatos;
   window.cpdSondaEliminar         = cpdSondaEliminar;
   window.cpdLecturaGuardar        = cpdLecturaGuardar;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // REPLANTEO ASISTIDO POR CÁMARA (ADR-0024) — fase 1: sobre foto (2026-09-04)
+  // ───────────────────────────────────────────────────────────────────────────
+  // Adrián: "cojo la cámara, miro al techo y en el móvil vería cómo queda... quiero
+  // calcular material y replantear... una pestaña Replanteo para cualquier departamento,
+  // especializada por departamento... solo encargados... el AR debe ver si hay
+  // instalaciones de por medio para esquivarlas, pasar por debajo o sujetarse a la
+  // instalación existente".
+  //
+  // Aquí NO hay reglas de negocio: el material lo calcula siempre el servidor
+  // (POST /replanteos/calcular y al guardar). El editor solo recoge foto, trazado (puntos
+  // en píxeles NATURALES de la foto), escala (referencia de dos puntos + metros, o
+  // longitud total conocida) y obstáculos (segmento + posición + tipo + acción +
+  // dimensión). La fase AR (Android, WebXR) producirá este mismo trazado.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const REPL_ACCIONES = {
+    debajo:   { label: 'Pasar por debajo',                    icono: '⤵️', desc: 'Baja, pasa bajo el obstáculo y vuelve a subir: suma 2 codos y el doble de la dimensión.' },
+    esquivar: { label: 'Esquivar por un lado',                icono: '↪️', desc: 'Rodea el obstáculo: suma 2 codos y el doble de la dimensión.' },
+    sujetar:  { label: 'Sujetar a la instalación existente',  icono: '🔗', desc: 'Va colgada o apoyada en lo que ya hay: sin tramo extra; en ese tramo los soportes a techo pasan a abrazaderas.' },
+  };
+  const REPL_TIPOS = { tuberia: 'Tubería', conducto: 'Conducto de clima', bandeja_existente: 'Bandeja existente', viga: 'Viga / pilar', luminaria: 'Luminaria', otro: 'Otro' };
+  let _repl = null;             // replanteo abierto en el editor
+  let _replCatalogo = [];       // catálogo del departamento (del servidor)
+  let _replPuedeEditar = false;
+  let _replCalcTimer = null;
+  let _replDrag = null;         // { idx, x0, y0, moved } al arrastrar un vértice
+  let _replObstEdit = null;     // índice del obstáculo que se edita, o null si es nuevo
+  let _replObstNuevo = null;    // { seg, t } del obstáculo pendiente de guardar
+  let _replObstAccionSel = 'debajo';
+  let _replEventosListos = false;
+
+  function _replTok() { return encodeURIComponent(getSession()?.token || ''); }
+  function replFotoUrl(id) { return `${getAPI()}/replanteos/${id}/foto?token=${_replTok()}`; }
+  function _replNum(n, d = 1) { return (Math.round((+n || 0) * Math.pow(10, d)) / Math.pow(10, d)).toLocaleString('es-ES'); }
+
+  async function replCargarCatalogo() {
+    try {
+      const res = await apiCall('/replanteos/catalogo');
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) { _replCatalogo = data.elementos || []; return _replCatalogo; }
+      toast(data.error || 'No se pudo cargar el catálogo', 'error');
+    } catch (e) { toast('Sin conexión para cargar el catálogo', 'error'); }
+    return _replCatalogo;
+  }
+
+  async function cargarReplanteos() {
+    const c = document.getElementById('replList');
+    if (!c) return;
+    c.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Cargando…</div>';
+    try {
+      const s = getSession();
+      const res = await apiCall('/replanteos' + (s?.obra_id ? `?obra_id=${s.obra_id}` : ''));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { c.innerHTML = `<div class="empty-state" style="grid-column:1/-1">${_escHtml(data.error || 'Error al cargar')}</div>`; return; }
+      _replPuedeEditar = !!data.puede_editar;
+      const btn = document.getElementById('btnReplNuevo');
+      if (btn) btn.style.display = _replPuedeEditar ? '' : 'none';
+      const lista = data.replanteos || [];
+      if (!lista.length) {
+        c.innerHTML = `<div class="empty-state" style="grid-column:1/-1">Sin replanteos en esta obra.${_replPuedeEditar ? '<br>Crea uno con "+ Nuevo".' : ''}</div>`;
+        return;
+      }
+      c.innerHTML = lista.map(r => `
+        <div class="repl-card" onclick="abrirReplanteo(${r.id})">
+          <div style="aspect-ratio:4/3;background:#0b0f14;overflow:hidden">
+            <img src="${replFotoUrl(r.id)}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.style.display='none'">
+          </div>
+          <div style="padding:8px 10px">
+            <div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.25;word-break:break-word">${_escHtml(r.titulo)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">${_escHtml(_replNombreElemento(r))}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:6px">
+              <span style="font-size:12px;font-weight:700;color:var(--text)">${r.longitud_m ? _replNum(r.longitud_m) + ' m' : '—'}</span>
+              <span class="repl-badge ${r.estado}">${(r.estado || 'borrador').toUpperCase()}</span>
+            </div>
+          </div>
+        </div>`).join('');
+    } catch (e) {
+      c.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Sin conexión</div>';
+    }
+  }
+  function _replNombreElemento(r) {
+    const el = _replCatalogo.find(e => e.key === r.elemento_key);
+    const p = r.elemento || {};
+    const partes = [el ? el.nombre : (r.elemento_key || '')];
+    if (p.variante) partes.push(p.variante);
+    if (p.ancho_mm) partes.push(p.ancho_mm + ' mm');
+    if (p.diametro_mm) partes.push('Ø' + p.diametro_mm);
+    return partes.join(' · ');
+  }
+
+  // ── Nuevo replanteo ─────────────────────────────────────────────────────
+  async function replAbrirNuevo() {
+    if (!_replPuedeEditar) { toast('Solo los encargados pueden replantear', 'error'); return; }
+    if (!_replCatalogo.length) await replCargarCatalogo();
+    const sel = document.getElementById('replNuevoElemento');
+    sel.innerHTML = _replCatalogo.map(e => `<option value="${e.key}">${e.icono || ''} ${_escHtml(e.nombre)}</option>`).join('');
+    document.getElementById('replNuevoTitulo').value = '';
+    document.getElementById('replNuevoFotoNombre').textContent = 'Sin foto todavía';
+    window._replNuevoFile = null;
+    document.getElementById('modalReplNuevo').style.display = 'flex';
+  }
+  function replCerrarNuevo() { document.getElementById('modalReplNuevo').style.display = 'none'; }
+  function replNuevoFotoElegida(input) {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    window._replNuevoFile = f;
+    document.getElementById('replNuevoFotoNombre').textContent = '📷 ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB)';
+    input.value = '';
+  }
+  function _replCargarImagen(src, crossOrigin) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      if (crossOrigin) img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('No se pudo cargar la foto'));
+      img.src = src;
+    });
+  }
+  async function replNuevoContinuar() {
+    const titulo = document.getElementById('replNuevoTitulo').value.trim();
+    const key = document.getElementById('replNuevoElemento').value;
+    const file = window._replNuevoFile;
+    if (!titulo) { toast('Escribe un título', 'error'); return; }
+    if (!file) { toast('Haz una foto de la zona', 'error'); return; }
+    const btn = document.getElementById('btnReplNuevoContinuar');
+    btn.disabled = true;
+    try {
+      const url = URL.createObjectURL(file);
+      const img = await _replCargarImagen(url, false);
+      const el = _replCatalogo.find(e => e.key === key) || _replCatalogo[0];
+      _repl = {
+        id: null, titulo, elemento_key: el.key, params: _replParamsPorDefecto(el), file, img,
+        imgW: img.naturalWidth, imgH: img.naturalHeight,
+        puntos: [], obstaculos: [], referencia: null, escala_px_m: null, longitud_manual_m: null,
+        calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
+      };
+      replCerrarNuevo();
+      showScreen('replanteoEditor');
+      replInitEditor();
+    } catch (e) {
+      toast('❌ ' + e.message, 'error');
+    } finally { btn.disabled = false; }
+  }
+  function _replParamsPorDefecto(el) {
+    const o = el.opciones || {};
+    const p = {};
+    if (o.variantes?.length) p.variante = o.variantes[0];
+    if (o.anchos_mm?.length) p.ancho_mm = o.anchos_mm.includes(el.reglas?.ancho_mm) ? el.reglas.ancho_mm : o.anchos_mm[0];
+    if (o.diametros_mm?.length) p.diametro_mm = o.diametros_mm.includes(el.reglas?.ancho_mm) ? el.reglas.ancho_mm : o.diametros_mm[0];
+    return p;
+  }
+
+  // ── Abrir uno existente ─────────────────────────────────────────────────
+  async function abrirReplanteo(id) {
+    try {
+      if (!_replCatalogo.length) await replCargarCatalogo();
+      const res = await apiCall(`/replanteos/${id}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'No se pudo abrir', 'error'); return; }
+      const r = data.replanteo;
+      _replPuedeEditar = !!data.puede_editar;
+      let img = null;
+      try { img = await _replCargarImagen(replFotoUrl(id), true); }
+      catch { img = await _replCargarImagen(replFotoUrl(id), false); } // sin CORS: se ve, pero el informe no podrá incrustar el canvas
+      const tr = r.trazado || {};
+      _repl = {
+        id: r.id, titulo: r.titulo, elemento_key: r.elemento_key, params: r.elemento || {}, file: null, img,
+        imgW: r.foto_w || img.naturalWidth, imgH: r.foto_h || img.naturalHeight,
+        puntos: Array.isArray(tr.puntos) ? tr.puntos.map(p => ({ x: +p.x, y: +p.y })) : [],
+        obstaculos: Array.isArray(tr.obstaculos) ? tr.obstaculos : [],
+        referencia: tr.referencia || null,
+        escala_px_m: tr.longitud_manual_m ? null : (r.escala_px_m || null),
+        longitud_manual_m: tr.longitud_manual_m || null,
+        calc: r.material?.length ? { longitud_m: r.longitud_m, material: r.material, reglas: r.reglas, giros: null } : null,
+        estado: r.estado || 'borrador', modo: 'trazar', cambiado: false, notas: r.notas || '',
+        creado_por: r.creado_por, creado_en: r.creado_en,
+      };
+      showScreen('replanteoEditor');
+      replInitEditor();
+    } catch (e) { toast('❌ ' + (e.message || 'Error'), 'error'); }
+  }
+
+  // ── Editor ──────────────────────────────────────────────────────────────
+  function replInitEditor() {
+    if (!_repl) return;
+    document.getElementById('replTitulo').value = _repl.titulo || '';
+    const selE = document.getElementById('replElemento');
+    selE.innerHTML = _replCatalogo.map(e => `<option value="${e.key}" ${e.key === _repl.elemento_key ? 'selected' : ''}>${e.icono || ''} ${_escHtml(e.nombre)}</option>`).join('');
+    _replRenderOpciones();
+    replModo('trazar');
+    _replAplicarPermisos();
+    if (!_replEventosListos) { _replBindCanvas(); _replEventosListos = true; }
+    requestAnimationFrame(() => { replDibujar(); replActualizarInfo(); });
+  }
+  function _replSoloLectura() { return !_replPuedeEditar || _repl?.estado === 'pedido'; }
+  function _replAplicarPermisos() {
+    const ro = _replSoloLectura();
+    document.getElementById('replTitulo').disabled = ro;
+    document.getElementById('replElemento').disabled = ro;
+    document.getElementById('replOpcion').disabled = ro;
+    document.getElementById('btnReplGuardar').disabled = ro;
+    document.getElementById('btnReplPedido').disabled = ro || !_repl?.id || !(_repl?.calc?.material?.length);
+    document.getElementById('btnReplBorrar').style.display = (_replPuedeEditar && _repl?.id) ? '' : 'none';
+    const badge = document.getElementById('replEstadoBadge');
+    badge.className = 'repl-badge ' + (_repl?.estado || 'borrador');
+    badge.textContent = (_repl?.estado || 'borrador').toUpperCase();
+    document.querySelectorAll('.repl-mode').forEach(b => b.disabled = ro);
+  }
+  function _replElemento() { return _replCatalogo.find(e => e.key === _repl?.elemento_key) || null; }
+  function _replRenderOpciones() {
+    const el = _replElemento();
+    const sel = document.getElementById('replOpcion');
+    const o = el?.opciones || {};
+    const opts = [];
+    if (o.variantes?.length) o.variantes.forEach(v => opts.push({ v: 'variante:' + v, t: v, sel: _repl.params.variante === v }));
+    if (o.anchos_mm?.length) o.anchos_mm.forEach(a => opts.push({ v: 'ancho_mm:' + a, t: a + ' mm', sel: +_repl.params.ancho_mm === a }));
+    if (o.diametros_mm?.length) o.diametros_mm.forEach(d => opts.push({ v: 'diametro_mm:' + d, t: 'Ø' + d + ' mm', sel: +_repl.params.diametro_mm === d }));
+    sel.style.display = opts.length ? '' : 'none';
+    sel.innerHTML = opts.map(x => `<option value="${x.v}" ${x.sel ? 'selected' : ''}>${_escHtml(x.t)}</option>`).join('');
+  }
+  function replCambiarElemento() {
+    const key = document.getElementById('replElemento').value;
+    const el = _replCatalogo.find(e => e.key === key);
+    if (!el || !_repl) return;
+    _repl.elemento_key = key;
+    _repl.params = _replParamsPorDefecto(el);
+    _replRenderOpciones();
+    replMarcarCambio();
+    replDibujar();
+  }
+  function replCambiarOpcion() {
+    const v = document.getElementById('replOpcion').value || '';
+    const [k, val] = v.split(':');
+    if (!k || !_repl) return;
+    _repl.params[k] = (k === 'variante') ? val : +val;
+    replMarcarCambio();
+    replDibujar();
+  }
+  function replMarcarCambio() {
+    if (!_repl) return;
+    _repl.cambiado = true;
+    _repl.titulo = document.getElementById('replTitulo').value.trim();
+    _replProgramarCalculo();
+  }
+  function replModo(m) {
+    if (!_repl) return;
+    _repl.modo = m;
+    document.querySelectorAll('.repl-mode').forEach(b => b.classList.toggle('active', b.dataset.modo === m));
+    const hint = document.getElementById('replHint');
+    if (m === 'trazar') hint.textContent = 'Toca la foto punto a punto por donde irá la instalación. Arrastra un punto para corregirlo.';
+    else if (m === 'escala') hint.textContent = 'Toca los dos extremos de algo cuya medida conozcas (placa de techo, puerta, tramo ya instalado). Luego escribe los metros.';
+    else hint.textContent = 'Toca sobre el recorrido justo donde cruza una instalación existente. Toca un obstáculo para editarlo.';
+  }
+
+  // Geometría: la foto se dibuja "contain" en el canvas; los puntos viven en px naturales.
+  function _replFit() {
+    const wrap = document.getElementById('replCanvasWrap');
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    const s = Math.min(W / _repl.imgW, H / _repl.imgH);
+    return { W, H, s, ox: (W - _repl.imgW * s) / 2, oy: (H - _repl.imgH * s) / 2 };
+  }
+  function _replANatural(clientX, clientY) {
+    const cv = document.getElementById('replCanvas');
+    const r = cv.getBoundingClientRect();
+    const f = _replFit();
+    return { x: (clientX - r.left - f.ox) / f.s, y: (clientY - r.top - f.oy) / f.s, f };
+  }
+  function _replEscalaActual() {
+    if (_repl.longitud_manual_m > 0) {
+      const px = _replLongitudPx();
+      return px > 0 ? px / _repl.longitud_manual_m : null;
+    }
+    return _repl.escala_px_m || null;
+  }
+  function _replLongitudPx() {
+    let t = 0;
+    for (let i = 1; i < _repl.puntos.length; i++) t += Math.hypot(_repl.puntos[i].x - _repl.puntos[i - 1].x, _repl.puntos[i].y - _repl.puntos[i - 1].y);
+    return t;
+  }
+  function _replPosObstaculo(o) {
+    const a = _repl.puntos[o.seg], b = _repl.puntos[o.seg + 1];
+    if (!a || !b) return null;
+    return { x: a.x + (b.x - a.x) * o.t, y: a.y + (b.y - a.y) * o.t, dx: b.x - a.x, dy: b.y - a.y };
+  }
+
+  // Dibujo compartido entre el editor (escala de pantalla) y el informe (escala 1:1)
+  function _replDibujarEn(ctx, f, paraInforme) {
+    const { s, ox, oy } = f;
+    ctx.drawImage(_repl.img, ox, oy, _repl.imgW * s, _repl.imgH * s);
+    const el = _replElemento();
+    const color = el?.color || '#f97316';
+    const esc = _replEscalaActual();
+    const anchoMm = +_repl.params.ancho_mm || +_repl.params.diametro_mm || el?.reglas?.ancho_mm || 100;
+    const anchoPx = esc ? Math.max(4, (anchoMm / 1000) * esc * s) : Math.max(6, 10 * s * (paraInforme ? 3 : 1));
+    const P = _repl.puntos.map(p => ({ x: ox + p.x * s, y: oy + p.y * s }));
+    const k = paraInforme ? Math.max(1, _repl.imgW / 700) : 1; // grosor de trazos en el informe
+    // Banda del elemento
+    if (P.length >= 2) {
+      ctx.save();
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath(); P.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.strokeStyle = color; ctx.globalAlpha = 0.45; ctx.lineWidth = anchoPx; ctx.stroke();
+      ctx.globalAlpha = 1; ctx.lineWidth = Math.max(1.5, 2 * k); ctx.strokeStyle = color; ctx.stroke();
+      // Etiquetas de longitud por segmento
+      if (esc) {
+        ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (let i = 1; i < P.length; i++) {
+          const m = Math.hypot(_repl.puntos[i].x - _repl.puntos[i - 1].x, _repl.puntos[i].y - _repl.puntos[i - 1].y) / esc;
+          const mx = (P[i].x + P[i - 1].x) / 2, my = (P[i].y + P[i - 1].y) / 2;
+          const txt = _replNum(m, 2) + ' m';
+          const w = ctx.measureText(txt).width + 10 * k;
+          ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(mx - w / 2, my - 9 * k, w, 18 * k);
+          ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+        }
+      }
+      ctx.restore();
+    }
+    // Vértices
+    P.forEach((p, i) => {
+      ctx.beginPath(); ctx.arc(p.x, p.y, (i === 0 || i === P.length - 1 ? 7 : 5) * k, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? '#22c55e' : (i === P.length - 1 ? '#ef4444' : '#fff');
+      ctx.fill(); ctx.lineWidth = 2 * k; ctx.strokeStyle = '#0b0f14'; ctx.stroke();
+    });
+    // Referencia de escala
+    if (_repl.referencia?.a) {
+      const a = { x: ox + _repl.referencia.a.x * s, y: oy + _repl.referencia.a.y * s };
+      const b = _repl.referencia.b ? { x: ox + _repl.referencia.b.x * s, y: oy + _repl.referencia.b.y * s } : null;
+      ctx.save(); ctx.strokeStyle = '#22d3ee'; ctx.fillStyle = '#22d3ee'; ctx.lineWidth = 2 * k; ctx.setLineDash([6 * k, 4 * k]);
+      ctx.beginPath(); ctx.arc(a.x, a.y, 5 * k, 0, Math.PI * 2); ctx.fill();
+      if (b) {
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.beginPath(); ctx.arc(b.x, b.y, 5 * k, 0, Math.PI * 2); ctx.fill();
+        if (_repl.referencia.metros) {
+          ctx.setLineDash([]); ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          const txt = '📏 ' + _replNum(_repl.referencia.metros, 2) + ' m';
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - 14 * k, w = ctx.measureText(txt).width + 10 * k;
+          ctx.fillStyle = 'rgba(8,145,178,.85)'; ctx.fillRect(mx - w / 2, my - 9 * k, w, 18 * k);
+          ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+        }
+      }
+      ctx.restore();
+    }
+    // Obstáculos: desvío dibujado + marcador
+    _repl.obstaculos.forEach((o, i) => {
+      const pos = _replPosObstaculo(o); if (!pos) return;
+      const cx = ox + pos.x * s, cy = oy + pos.y * s;
+      const L = Math.hypot(pos.dx, pos.dy) || 1;
+      const ux = pos.dx / L, uy = pos.dy / L;              // dirección del tramo
+      let nx = -uy, ny = ux;                               // normal
+      if (o.accion === 'debajo' && ny < 0) { nx = -nx; ny = -ny; } // "abajo" en la foto
+      const dimPx = esc ? Math.max(12 * k, (+o.dimension_m || 0.3) * esc * s) : 22 * k;
+      const half = Math.max(10 * k, dimPx / 2);
+      ctx.save();
+      ctx.strokeStyle = o.accion === 'sujetar' ? '#a78bfa' : '#facc15'; ctx.lineWidth = Math.max(2, 3 * k); ctx.setLineDash([5 * k, 4 * k]);
+      ctx.beginPath();
+      if (o.accion === 'sujetar') {
+        ctx.moveTo(cx - ux * half, cy - uy * half); ctx.lineTo(cx + ux * half, cy + uy * half);
+        ctx.moveTo(cx - ux * half - nx * 8 * k, cy - uy * half - ny * 8 * k); ctx.lineTo(cx - ux * half + nx * 8 * k, cy - uy * half + ny * 8 * k);
+        ctx.moveTo(cx + ux * half - nx * 8 * k, cy + uy * half - ny * 8 * k); ctx.lineTo(cx + ux * half + nx * 8 * k, cy + uy * half + ny * 8 * k);
+      } else {
+        ctx.moveTo(cx - ux * half, cy - uy * half);
+        ctx.lineTo(cx - ux * half + nx * dimPx, cy - uy * half + ny * dimPx);
+        ctx.lineTo(cx + ux * half + nx * dimPx, cy + uy * half + ny * dimPx);
+        ctx.lineTo(cx + ux * half, cy + uy * half);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(cx, cy, 11 * k, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fill();
+      ctx.lineWidth = 2 * k; ctx.strokeStyle = o.accion === 'sujetar' ? '#a78bfa' : '#facc15'; ctx.stroke();
+      ctx.font = `${12 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+      ctx.fillText(String(i + 1), cx, cy + 0.5);
+      ctx.restore();
+    });
+  }
+  function replDibujar() {
+    if (!_repl || !_repl.img) return;
+    const cv = document.getElementById('replCanvas');
+    const wrap = document.getElementById('replCanvasWrap');
+    if (!cv || !wrap || !wrap.clientWidth) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const f = _replFit();
+    if (cv.width !== Math.round(f.W * dpr) || cv.height !== Math.round(f.H * dpr)) { cv.width = Math.round(f.W * dpr); cv.height = Math.round(f.H * dpr); }
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#0b0f14'; ctx.fillRect(0, 0, f.W, f.H);
+    _replDibujarEn(ctx, f, false);
+  }
+  window.addEventListener('resize', () => { if (document.getElementById('screenReplanteoEditor')?.classList.contains('active')) replDibujar(); });
+
+  function _replBindCanvas() {
+    const cv = document.getElementById('replCanvas');
+    cv.addEventListener('pointerdown', ev => {
+      if (!_repl || _replSoloLectura()) return;
+      ev.preventDefault();
+      const n = _replANatural(ev.clientX, ev.clientY);
+      _replDrag = { x0: ev.clientX, y0: ev.clientY, moved: false, idx: -1, nat: n };
+      if (_repl.modo === 'trazar') {
+        // ¿Ha tocado un vértice existente? → arrastrar
+        const tol = 18 / n.f.s;
+        let best = -1, bd = tol;
+        _repl.puntos.forEach((p, i) => { const d = Math.hypot(p.x - n.x, p.y - n.y); if (d < bd) { bd = d; best = i; } });
+        _replDrag.idx = best;
+      }
+      try { cv.setPointerCapture(ev.pointerId); } catch {}
+    });
+    cv.addEventListener('pointermove', ev => {
+      if (!_replDrag || !_repl) return;
+      if (Math.hypot(ev.clientX - _replDrag.x0, ev.clientY - _replDrag.y0) > 6) _replDrag.moved = true;
+      if (_replDrag.idx >= 0 && _replDrag.moved) {
+        const n = _replANatural(ev.clientX, ev.clientY);
+        _repl.puntos[_replDrag.idx] = { x: Math.max(0, Math.min(_repl.imgW, n.x)), y: Math.max(0, Math.min(_repl.imgH, n.y)) };
+        replDibujar();
+      }
+    });
+    const fin = ev => {
+      if (!_replDrag || !_repl) return;
+      const d = _replDrag; _replDrag = null;
+      if (d.idx >= 0 && d.moved) { replMarcarCambio(); replActualizarInfo(); return; }
+      if (d.moved) return;
+      const n = d.nat;
+      if (n.x < 0 || n.y < 0 || n.x > _repl.imgW || n.y > _repl.imgH) return; // fuera de la foto
+      _replTap(n);
+    };
+    cv.addEventListener('pointerup', fin);
+    cv.addEventListener('pointercancel', () => { _replDrag = null; });
+  }
+  function _replTap(n) {
+    if (_repl.modo === 'trazar') {
+      _repl.puntos.push({ x: n.x, y: n.y });
+    } else if (_repl.modo === 'escala') {
+      if (!_repl.referencia || _repl.referencia.b) _repl.referencia = { a: { x: n.x, y: n.y }, b: null, metros: null };
+      else {
+        _repl.referencia.b = { x: n.x, y: n.y };
+        replDibujar();
+        replAbrirEscala();
+        return;
+      }
+    } else if (_repl.modo === 'obstaculo') {
+      // ¿Toca un obstáculo existente? → editar
+      const tol = 16 / n.f.s;
+      const idx = _repl.obstaculos.findIndex(o => { const p = _replPosObstaculo(o); return p && Math.hypot(p.x - n.x, p.y - n.y) < tol; });
+      if (idx >= 0) { replAbrirObstaculo(idx); return; }
+      if (_repl.puntos.length < 2) { toast('Primero traza el recorrido', 'error'); return; }
+      // Segmento más cercano al toque
+      let best = null;
+      for (let i = 1; i < _repl.puntos.length; i++) {
+        const a = _repl.puntos[i - 1], b = _repl.puntos[i];
+        const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1;
+        let t = ((n.x - a.x) * dx + (n.y - a.y) * dy) / L2; t = Math.max(0.02, Math.min(0.98, t));
+        const px = a.x + dx * t, py = a.y + dy * t;
+        const dist = Math.hypot(px - n.x, py - n.y);
+        if (!best || dist < best.dist) best = { seg: i - 1, t, dist };
+      }
+      if (!best || best.dist > 40 / n.f.s) { toast('Toca más cerca del recorrido', 'error'); return; }
+      _replObstNuevo = { seg: best.seg, t: best.t };
+      replAbrirObstaculo(null);
+      return;
+    }
+    replMarcarCambio();
+    replDibujar();
+    replActualizarInfo();
+  }
+  function replDeshacer() {
+    if (!_repl || _replSoloLectura()) return;
+    if (_repl.modo === 'escala') { _repl.referencia = null; _repl.escala_px_m = null; }
+    else if (_repl.modo === 'obstaculo') { _repl.obstaculos.pop(); }
+    else {
+      _repl.puntos.pop();
+      _repl.obstaculos = _repl.obstaculos.filter(o => o.seg < _repl.puntos.length - 1);
+    }
+    replMarcarCambio(); replDibujar(); replActualizarInfo();
+  }
+  function replLimpiar() {
+    if (!_repl || _replSoloLectura()) return;
+    if (!confirm('¿Borrar todo el trazado, la escala y los obstáculos de esta foto?')) return;
+    _repl.puntos = []; _repl.obstaculos = []; _repl.referencia = null; _repl.escala_px_m = null; _repl.longitud_manual_m = null; _repl.calc = null;
+    replMarcarCambio(); replDibujar(); replActualizarInfo();
+  }
+
+  // ── Escala ──────────────────────────────────────────────────────────────
+  function replAbrirEscala() {
+    document.getElementById('replEscalaRefBloque').style.display = (_repl.referencia?.b) ? '' : 'none';
+    document.getElementById('replEscalaMetros').value = _repl.referencia?.metros || '';
+    document.getElementById('replEscalaManual').value = _repl.longitud_manual_m || '';
+    document.getElementById('modalReplEscala').style.display = 'flex';
+  }
+  function replCerrarEscala() { document.getElementById('modalReplEscala').style.display = 'none'; }
+  function replEscalaGuardar() {
+    const m = parseFloat(String(document.getElementById('replEscalaMetros').value).replace(',', '.'));
+    if (!(m > 0) || !_repl.referencia?.b) { toast('Escribe los metros de la referencia', 'error'); return; }
+    const px = Math.hypot(_repl.referencia.b.x - _repl.referencia.a.x, _repl.referencia.b.y - _repl.referencia.a.y);
+    if (px < 5) { toast('Los dos puntos están demasiado juntos', 'error'); return; }
+    _repl.referencia.metros = m;
+    _repl.escala_px_m = px / m;
+    _repl.longitud_manual_m = null;
+    replCerrarEscala(); replModo('trazar'); replMarcarCambio(); replDibujar(); replActualizarInfo();
+    toast('📏 Escala fijada');
+  }
+  function replEscalaManualGuardar() {
+    const m = parseFloat(String(document.getElementById('replEscalaManual').value).replace(',', '.'));
+    if (!(m > 0)) { toast('Escribe la longitud total', 'error'); return; }
+    _repl.longitud_manual_m = m;
+    _repl.escala_px_m = null;
+    replCerrarEscala(); replModo('trazar'); replMarcarCambio(); replDibujar(); replActualizarInfo();
+    toast('📏 Longitud total fijada: ' + _replNum(m) + ' m');
+  }
+
+  // ── Obstáculos ──────────────────────────────────────────────────────────
+  function replAbrirObstaculo(idx) {
+    _replObstEdit = idx;
+    const o = idx !== null ? _repl.obstaculos[idx] : null;
+    const selT = document.getElementById('replObstTipo');
+    selT.innerHTML = Object.entries(REPL_TIPOS).map(([k, v]) => `<option value="${k}" ${o?.tipo === k ? 'selected' : ''}>${v}</option>`).join('');
+    _replObstAccionSel = o?.accion || 'debajo';
+    _replRenderAcciones();
+    document.getElementById('replObstDim').value = o?.dimension_m ?? '';
+    document.getElementById('replObstNota').value = o?.nota || '';
+    document.getElementById('btnReplObstQuitar').style.display = o ? '' : 'none';
+    document.getElementById('modalReplObstaculo').style.display = 'flex';
+  }
+  function _replRenderAcciones() {
+    const c = document.getElementById('replObstAcciones');
+    c.innerHTML = Object.entries(REPL_ACCIONES).map(([k, a]) => `
+      <div class="repl-accion ${k === _replObstAccionSel ? 'sel' : ''}" onclick="replObstAccion('${k}')">
+        <span style="font-size:18px;line-height:1">${a.icono}</span>
+        <div><div style="font-size:13px;font-weight:700;color:var(--text)">${a.label}</div><div style="font-size:11px;color:var(--muted);line-height:1.35">${a.desc}</div></div>
+      </div>`).join('');
+    document.getElementById('replObstDimLabel').textContent = _replObstAccionSel === 'sujetar'
+      ? 'Longitud del tramo que va sujeto a lo existente (metros)'
+      : (_replObstAccionSel === 'debajo' ? 'Cuánto hay que bajar para pasar por debajo (metros)' : 'Cuánto hay que desviarse al lado (metros)');
+  }
+  function replObstAccion(k) { _replObstAccionSel = k; _replRenderAcciones(); }
+  function replCerrarObstaculo() { document.getElementById('modalReplObstaculo').style.display = 'none'; _replObstEdit = null; _replObstNuevo = null; }
+  function replObstaculoGuardar() {
+    const dim = parseFloat(String(document.getElementById('replObstDim').value).replace(',', '.'));
+    if (!(dim >= 0)) { toast('Indica la dimensión en metros', 'error'); return; }
+    const datos = { tipo: document.getElementById('replObstTipo').value, accion: _replObstAccionSel, dimension_m: dim, nota: document.getElementById('replObstNota').value.trim() };
+    if (_replObstEdit !== null) Object.assign(_repl.obstaculos[_replObstEdit], datos);
+    else if (_replObstNuevo) _repl.obstaculos.push({ ..._replObstNuevo, ...datos });
+    replCerrarObstaculo(); replMarcarCambio(); replDibujar(); replActualizarInfo();
+  }
+  function replObstaculoQuitar() {
+    if (_replObstEdit !== null) _repl.obstaculos.splice(_replObstEdit, 1);
+    replCerrarObstaculo(); replMarcarCambio(); replDibujar(); replActualizarInfo();
+  }
+
+  // ── Cálculo (servidor) ──────────────────────────────────────────────────
+  function _replProgramarCalculo() {
+    clearTimeout(_replCalcTimer);
+    _replCalcTimer = setTimeout(replCalcular, 450);
+  }
+  function _replPayloadCalculo() {
+    return {
+      elemento_key: _repl.elemento_key, elemento_params: _repl.params,
+      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia },
+      escala_px_m: _repl.longitud_manual_m ? null : _repl.escala_px_m,
+      longitud_manual_m: _repl.longitud_manual_m || null,
+    };
+  }
+  async function replCalcular() {
+    if (!_repl) return;
+    if (_repl.puntos.length < 2 || (!_repl.escala_px_m && !_repl.longitud_manual_m)) { _repl.calc = null; replActualizarInfo(); return; }
+    try {
+      const res = await apiCall('/replanteos/calcular', { method: 'POST', body: JSON.stringify(_replPayloadCalculo()) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'Error al calcular', 'error'); return; }
+      _repl.calc = data;
+      replActualizarInfo();
+      _replAplicarPermisos();
+    } catch (e) { /* sin red: se calculará al guardar */ }
+  }
+  function replActualizarInfo() {
+    const c = document.getElementById('replInfo');
+    if (!c || !_repl) return;
+    const esc = _replEscalaActual();
+    const partes = [];
+    partes.push(`<span>📍 <b>${_repl.puntos.length}</b> puntos</span>`);
+    if (_repl.longitud_manual_m) partes.push(`<span>📏 longitud fijada: <b>${_replNum(_repl.longitud_manual_m)} m</b></span>`);
+    else if (_repl.escala_px_m) partes.push(`<span>📏 escala ✔ (${_replNum(_repl.referencia?.metros || 0, 2)} m de referencia)</span>`);
+    else partes.push(`<span style="color:#f97316">📏 sin escala: toca "Escala"</span>`);
+    if (esc && _repl.puntos.length >= 2) {
+      const L = _repl.calc?.longitud_m ?? (_replLongitudPx() / esc);
+      partes.push(`<span>➡️ <b>${_replNum(L)} m</b>${_repl.calc ? '' : ' (calculando…)'}</span>`);
+    }
+    if (_repl.obstaculos.length) partes.push(`<span>⚠️ <b>${_repl.obstaculos.length}</b> obstáculo(s)</span>`);
+    if (_repl.calc?.giros != null) partes.push(`<span>↪️ ${_repl.calc.giros} giro(s)</span>`);
+    if (_repl.calc?.material?.length) partes.push(`<span>🧮 <b>${_repl.calc.material.length}</b> líneas de material</span>`);
+    if (_repl.cambiado && _repl.id) partes.push(`<span style="color:#f97316">● sin guardar</span>`);
+    c.innerHTML = partes.join('');
+  }
+
+  // ── Material ────────────────────────────────────────────────────────────
+  function replVerMaterial() {
+    if (!_repl) return;
+    const b = document.getElementById('replMaterialBody');
+    const calc = _repl.calc;
+    if (!calc || !calc.material?.length) {
+      b.innerHTML = `<div class="empty-state">${_repl.puntos.length < 2 ? 'Traza el recorrido primero.' : (!_replEscalaActual() ? 'Falta la escala: usa "Escala" para fijarla.' : 'Calculando…')}</div>`;
+    } else {
+      const el = _replElemento();
+      const r = calc.reglas || {};
+      b.innerHTML = `
+        <div style="font-size:12px;color:var(--muted);padding:10px 0 4px">${_escHtml(_replNombreElemento({ elemento_key: _repl.elemento_key, elemento: _repl.params }))} · <b style="color:var(--text)">${_replNum(calc.longitud_m)} m</b>${calc.longitud_base_m && calc.longitud_base_m !== calc.longitud_m ? ` (${_replNum(calc.longitud_base_m)} m + desvíos)` : ''}</div>
+        ${calc.material.map(m => `<div class="repl-mat-row"><div><div style="font-weight:700;color:var(--text)">${_escHtml(m.nombre)}</div><small>${_escHtml(m.detalle || '')}</small></div><div style="font-weight:800;color:var(--accent);white-space:nowrap">${m.cantidad} ${m.unidad}</div></div>`).join('')}
+        <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">
+          <b>Reglas aplicadas (de arranque, ajustables):</b>
+          ${r.tramo_m ? `tramos de ${r.tramo_m} m · ` : ''}${r.soporte_cada_m ? `soporte cada ${r.soporte_cada_m} m · ` : ''}codo por giro ≥ ${r.giro_min_grados || 30}° · desperdicio ${r.desperdicio_pct ?? 5}%${el?.origen === 'empresa' ? ' · catálogo de la empresa' : ''}
+        </div>`;
+    }
+    document.getElementById('modalReplMaterial').style.display = 'flex';
+  }
+  function replCerrarMaterial() { document.getElementById('modalReplMaterial').style.display = 'none'; }
+
+  // ── Guardar / pedidos / borrar ──────────────────────────────────────────
+  async function replGuardar() {
+    if (!_repl || _replSoloLectura()) return;
+    _repl.titulo = document.getElementById('replTitulo').value.trim();
+    if (!_repl.titulo) { toast('Escribe un título', 'error'); return; }
+    const btn = document.getElementById('btnReplGuardar');
+    btn.disabled = true; btn.textContent = '⏳ Guardando…';
+    try {
+      const s = getSession();
+      let res, data;
+      if (!_repl.id) {
+        const fd = new FormData();
+        fd.append('file', _repl.file);
+        fd.append('titulo', _repl.titulo);
+        if (s?.obra_id) fd.append('obra_id', s.obra_id);
+        fd.append('elemento_key', _repl.elemento_key);
+        fd.append('elemento_json', JSON.stringify(_repl.params));
+        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia }));
+        if (_repl.escala_px_m && !_repl.longitud_manual_m) fd.append('escala_px_m', _repl.escala_px_m);
+        if (_repl.longitud_manual_m) fd.append('longitud_manual_m', _repl.longitud_manual_m);
+        fd.append('foto_w', _repl.imgW); fd.append('foto_h', _repl.imgH);
+        res = await apiCallRaw('/replanteos', { method: 'POST', body: fd });
+      } else {
+        const p = _replPayloadCalculo();
+        res = await apiCall(`/replanteos/${_repl.id}`, { method: 'PATCH', body: JSON.stringify({ titulo: _repl.titulo, ...p }) });
+      }
+      data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Error al guardar');
+      const r = data.replanteo;
+      _repl.id = r.id; _repl.estado = r.estado; _repl.cambiado = false;
+      if (data.calculo) _repl.calc = data.calculo;
+      _replAplicarPermisos(); replActualizarInfo();
+      toast('✅ Replanteo guardado');
+    } catch (e) {
+      toast('❌ ' + e.message, 'error');
+    } finally { btn.disabled = _replSoloLectura(); btn.textContent = '💾 Guardar'; }
+  }
+  async function replEnviarPedidos() {
+    if (!_repl?.id) { toast('Guarda el replanteo primero', 'error'); return; }
+    if (_repl.cambiado) { toast('Guarda los cambios antes de enviar a Pedidos', 'error'); return; }
+    const n = _repl.calc?.material?.length || 0;
+    if (!n) { toast('No hay material calculado', 'error'); return; }
+    if (!confirm(`Se crearán ${n} líneas en Pedidos con referencia REPL-${_repl.id}. Después el replanteo queda cerrado. ¿Continuar?`)) return;
+    try {
+      const res = await apiCall(`/replanteos/${_repl.id}/pedido`, { method: 'POST', body: JSON.stringify({}) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Error al enviar');
+      _repl.estado = 'pedido';
+      _replAplicarPermisos(); replActualizarInfo();
+      toast(`📦 ${data.pedido_ids?.length || n} pedidos creados`);
+    } catch (e) { toast('❌ ' + e.message, 'error'); }
+  }
+  async function replBorrar() {
+    if (!_repl?.id || !_replPuedeEditar) return;
+    if (!confirm(`¿Borrar el replanteo "${_repl.titulo}" y su foto? No se puede deshacer.`)) return;
+    try {
+      const res = await apiCall(`/replanteos/${_repl.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Error al borrar');
+      toast('🗑 Replanteo borrado');
+      _repl = null;
+      navTo('replanteo');
+    } catch (e) { toast('❌ ' + e.message, 'error'); }
+  }
+
+  // ── Informe imprimible (foto con el trazado + material) ─────────────────
+  function _replImagenInforme() {
+    // Render 1:1 (tope 1600 px de ancho) con el trazado encima. Si el canvas queda
+    // "tainted" (foto sin CORS), se devuelve la URL de la foto sin trazado.
+    try {
+      const maxW = 1600;
+      const s = Math.min(1, maxW / _repl.imgW);
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(_repl.imgW * s); cv.height = Math.round(_repl.imgH * s);
+      const ctx = cv.getContext('2d');
+      _replDibujarEn(ctx, { W: cv.width, H: cv.height, s, ox: 0, oy: 0 }, true);
+      return cv.toDataURL('image/jpeg', 0.85);
+    } catch (e) {
+      return _repl.id ? replFotoUrl(_repl.id) : '';
+    }
+  }
+  function replInforme() {
+    if (!_repl) return;
+    const s = getSession();
+    const frame = document.getElementById('replInformeFrame');
+    document.getElementById('replInformeTitulo').textContent = 'Replanteo · ' + (_repl.titulo || '');
+    document.getElementById('modalReplInforme').style.display = 'flex';
+    const calc = _repl.calc;
+    const el = _replElemento();
+    const filas = (calc?.material || []).map(m => `<tr><td>${_escHtml(m.nombre)}</td><td style="text-align:right;font-weight:700">${m.cantidad} ${m.unidad}</td><td style="color:#5b6472">${_escHtml(m.detalle || '')}</td></tr>`).join('');
+    const obst = _repl.obstaculos.map((o, i) => `<tr><td>${i + 1}</td><td>${REPL_TIPOS[o.tipo] || o.tipo}</td><td>${REPL_ACCIONES[o.accion]?.label || o.accion}</td><td>${_replNum(o.dimension_m, 2)} m</td><td>${_escHtml(o.nota || '')}</td></tr>`).join('');
+    const r = calc?.reglas || el?.reglas || {};
+    frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Replanteo ${_escHtml(_repl.titulo)}</title>
+      <style>
+        body{font-family:Arial,sans-serif;color:#101823;padding:0 20px 40px;background:#fff;margin:0}
+        h1{font-size:20px;padding-top:16px;margin:0 0 4px}
+        .meta{color:#5b6472;font-size:12px;margin-bottom:12px}
+        .foto{max-width:100%;border:1px solid #ddd;border-radius:8px;display:block;margin:0 auto 18px}
+        h2{font-size:14px;margin:18px 0 6px}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}
+        th{background:#fff3e8}
+        .reglas{font-size:11px;color:#5b6472;margin-top:10px;line-height:1.5}
+        @media print{body{padding:0}}
+      </style></head><body>
+      <h1>📐 ${_escHtml(_repl.titulo)}</h1>
+      <div class="meta">${_escHtml(s?.obra_nombre || '')}${s?.departamento ? ' · ' + _escHtml(s.departamento) : ''} · ${_escHtml(_replNombreElemento({ elemento_key: _repl.elemento_key, elemento: _repl.params }))} · <b>${calc ? _replNum(calc.longitud_m) + ' m' : 'sin calcular'}</b> · ${new Date().toLocaleDateString('es-ES')}${_repl.creado_por ? ' · ' + _escHtml(_repl.creado_por) : ''}${_repl.id ? ' · REPL-' + _repl.id : ''}</div>
+      <img class="foto" src="${_replImagenInforme()}">
+      <h2>Material</h2>
+      <table><thead><tr><th>Concepto</th><th style="text-align:right">Cantidad</th><th>Detalle</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="3">Sin material calculado (falta trazado o escala)</td></tr>'}</tbody></table>
+      ${obst ? `<h2>Instalaciones de por medio</h2><table><thead><tr><th>#</th><th>Qué hay</th><th>Solución</th><th>Dimensión</th><th>Nota</th></tr></thead><tbody>${obst}</tbody></table>` : ''}
+      <div class="reglas"><b>Reglas de cálculo aplicadas (valores de arranque, revisar con la ficha del fabricante):</b>
+        ${r.tramo_m ? `tramos de ${r.tramo_m} m · ` : 'se pide por metros · '}${r.soporte_cada_m ? `un soporte cada ${r.soporte_cada_m} m · ` : ''}un codo por cada giro ≥ ${r.giro_min_grados || 30}° · desperdicio ${r.desperdicio_pct ?? 5}%.
+        Los desvíos por obstáculo suman el doble de su dimensión y dos codos; los tramos sujetos a instalación existente cambian soportes por abrazaderas.</div>
+      </body></html>`;
+  }
+  function replImprimirInforme() {
+    const frame = document.getElementById('replInformeFrame');
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+  }
+  function replCerrarInforme() {
+    document.getElementById('modalReplInforme').style.display = 'none';
+    document.getElementById('replInformeFrame').srcdoc = '';
+  }
+
+  window.cargarReplanteos       = cargarReplanteos;
+  window.abrirReplanteo         = abrirReplanteo;
+  window.replAbrirNuevo         = replAbrirNuevo;
+  window.replCerrarNuevo        = replCerrarNuevo;
+  window.replNuevoFotoElegida   = replNuevoFotoElegida;
+  window.replNuevoContinuar     = replNuevoContinuar;
+  window.replCambiarElemento    = replCambiarElemento;
+  window.replCambiarOpcion      = replCambiarOpcion;
+  window.replMarcarCambio       = replMarcarCambio;
+  window.replModo               = replModo;
+  window.replDeshacer           = replDeshacer;
+  window.replLimpiar            = replLimpiar;
+  window.replAbrirEscala        = replAbrirEscala;
+  window.replCerrarEscala       = replCerrarEscala;
+  window.replEscalaGuardar      = replEscalaGuardar;
+  window.replEscalaManualGuardar = replEscalaManualGuardar;
+  window.replCerrarObstaculo    = replCerrarObstaculo;
+  window.replObstAccion         = replObstAccion;
+  window.replObstaculoGuardar   = replObstaculoGuardar;
+  window.replObstaculoQuitar    = replObstaculoQuitar;
+  window.replVerMaterial        = replVerMaterial;
+  window.replCerrarMaterial     = replCerrarMaterial;
+  window.replGuardar            = replGuardar;
+  window.replEnviarPedidos      = replEnviarPedidos;
+  window.replBorrar             = replBorrar;
+  window.replInforme            = replInforme;
+  window.replImprimirInforme    = replImprimirInforme;
+  window.replCerrarInforme      = replCerrarInforme;
+
+  window.replDibujar = replDibujar;
 
   // ══════════════════════════════════════════════════════
   // OBRA DASHBOARD (NEW-27)

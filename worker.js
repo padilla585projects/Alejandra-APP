@@ -7089,6 +7089,17 @@ export default {
       if (/^\/cpd\/sondas\/\d+\/lecturas$/.test(path)       && method === 'POST')   return await crearCpdLectura(request, env, path);
       if (/^\/cpd\/sondas\/\d+\/lecturas$/.test(path)       && method === 'GET')    return await listarCpdLecturas(request, env, path);
 
+      // ── Replanteo asistido por cámara (ADR-0024) ──────────────────
+      if (path === '/replanteos/catalogo'                    && method === 'GET')    return await getReplanteoCatalogo(request, env);
+      if (path === '/replanteos/calcular'                    && method === 'POST')   return await calcularReplanteo(request, env);
+      if (path === '/replanteos'                             && method === 'GET')    return await listarReplanteos(request, env);
+      if (path === '/replanteos'                             && method === 'POST')   return await crearReplanteo(request, env);
+      if (/^\/replanteos\/\d+$/.test(path)                   && method === 'GET')    return await getReplanteo(request, env, path);
+      if (/^\/replanteos\/\d+\/foto$/.test(path)             && method === 'GET')    return await getReplanteoFoto(request, env, path);
+      if (/^\/replanteos\/\d+$/.test(path)                   && method === 'PATCH')  return await actualizarReplanteo(request, env, path);
+      if (/^\/replanteos\/\d+$/.test(path)                   && method === 'DELETE') return await eliminarReplanteo(request, env, path);
+      if (/^\/replanteos\/\d+\/pedido$/.test(path)           && method === 'POST')   return await enviarReplanteoAPedidos(request, env, path, ctx);
+
       return err('Ruta no encontrada', 404);
     } catch (e) {
       console.error(e);
@@ -30253,4 +30264,551 @@ async function listarCpdLecturas(request, env, path) {
   q += ' ORDER BY fecha ASC LIMIT 500';
   const rows = await env.DB.prepare(q).bind(...params).all();
   return json({ ok: true, lecturas: rows.results || [] });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// REPLANTEO ASISTIDO POR CÁMARA (ADR-0024, fase 1: sobre foto) — 2026-09-04
+// ────────────────────────────────────────────────────────────────────────────
+// Adrián: "quiero calcular material y replantear las instalaciones de bandeja, tubo, lo
+// que sea... una pestaña solo para esta función llamada Replanteo, así en cualquier
+// departamento tendrían acceso... se debería especializar por departamentos... solo
+// encargados... el AR debe ver si hay instalaciones de por medio para esquivarlas, o en
+// el caso de la bandeja hacerla por debajo, o sujeta a la instalación existente".
+//
+// El encargado hace una foto, marca el recorrido con el dedo, fija la escala y marca los
+// obstáculos con su acción (debajo / esquivar / sujetar). TODO el cálculo de material vive
+// aquí (calcularMaterialReplanteo): index.html solo pide el resultado
+// (POST /replanteos/calcular) y el servidor recalcula al guardar. Así la futura captura
+// AR (fase 2), el PDF, el pedido y Alejandra usan una sola fuente de verdad (AGENTS.md:
+// no duplicar reglas de negocio). Las reglas de arranque son PROVISIONALES (ver
+// REPLANTEO_CATALOGO_BASE): se ajustan con fichas reales de fabricante; por empresa se
+// pueden sobreescribir en replanteo_catalogo (editor desde el panel = fase 2).
+// ════════════════════════════════════════════════════════════════════════════
+
+// Reglas por elemento. Todas las cantidades son de ARRANQUE y se imprimen en la lista para
+// que el encargado vea qué se ha aplicado:
+//   tramo_m: longitud comercial del tramo (null = se pide por metros, p.ej. cable)
+//   union_nombre / uniones_por_tramo: piezas de unión entre tramos
+//   soporte_cada_m / soporte_nombre: distancia entre soportes (null = sin soportes)
+//   codo_nombre / giro_min_grados: un codo por cada cambio de dirección >= giro_min_grados
+//   tornilleria_por_soporte / tornilleria_nombre: fijaciones por soporte a techo/pared
+//   sujecion_existente_nombre: soporte cuando el tramo va sujeto a una instalación existente
+//   desperdicio_pct: margen sobre la longitud total
+//   ancho_mm: ancho visual por defecto para dibujarlo sobre la foto
+const REPLANTEO_CATALOGO_BASE = (() => {
+  const bandejaRejilla = {
+    key: 'bandeja_rejilla', nombre: 'Bandeja de rejilla', icono: '🪜', unidad: 'm', color: '#f97316',
+    opciones: { anchos_mm: [60, 100, 150, 200, 300, 400, 500] },
+    reglas: { tramo_m: 3, union_nombre: 'Unión rápida de rejilla', uniones_por_tramo: 1, soporte_cada_m: 1.5,
+              soporte_nombre: 'Soporte a techo (varilla + perfil)', codo_nombre: 'Codo / cambio de dirección (rejilla cortada)',
+              giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
+              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 200 }
+  };
+  const bandejaChapa = {
+    key: 'bandeja_chapa', nombre: 'Bandeja de chapa perforada', icono: '📏', unidad: 'm', color: '#eab308',
+    opciones: { anchos_mm: [100, 150, 200, 300, 400, 500, 600] },
+    reglas: { tramo_m: 3, union_nombre: 'Placa de unión + tornillería', uniones_por_tramo: 1, soporte_cada_m: 1.5,
+              soporte_nombre: 'Soporte a techo (ménsula / varilla)', codo_nombre: 'Codo 90° / curva de chapa',
+              giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
+              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 200 }
+  };
+  const tuboRigido = {
+    key: 'tubo_rigido', nombre: 'Tubo rígido (PVC / metálico)', icono: '🧪', unidad: 'm', color: '#38bdf8',
+    opciones: { diametros_mm: [16, 20, 25, 32, 40, 50, 63] },
+    reglas: { tramo_m: 3, union_nombre: 'Manguito de unión', uniones_por_tramo: 1, soporte_cada_m: 0.8,
+              soporte_nombre: 'Abrazadera / grapa a techo o pared', codo_nombre: 'Curva / codo',
+              giro_min_grados: 30, tornilleria_por_soporte: 1, tornilleria_nombre: 'Taco + tornillo',
+              sujecion_existente_nombre: 'Abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 25 }
+  };
+  const tuboCorrugado = {
+    key: 'tubo_corrugado', nombre: 'Tubo corrugado', icono: '🌀', unidad: 'm', color: '#a3e635',
+    opciones: { diametros_mm: [16, 20, 25, 32, 40, 50] },
+    reglas: { tramo_m: null, union_nombre: null, uniones_por_tramo: 0, soporte_cada_m: 0.6,
+              soporte_nombre: 'Grapa / brida de fijación', codo_nombre: null, giro_min_grados: 30,
+              tornilleria_por_soporte: 1, tornilleria_nombre: 'Taco + tornillo',
+              sujecion_existente_nombre: 'Brida a instalación existente', desperdicio_pct: 10, ancho_mm: 20 }
+  };
+  const canalPvc = {
+    key: 'canal_pvc', nombre: 'Canal / canaleta PVC', icono: '▭', unidad: 'm', color: '#e2e8f0',
+    opciones: { anchos_mm: [20, 40, 60, 80, 100, 150] },
+    reglas: { tramo_m: 2, union_nombre: 'Pieza de unión', uniones_por_tramo: 1, soporte_cada_m: 0.5,
+              soporte_nombre: 'Punto de fijación (taco + tornillo)', codo_nombre: 'Ángulo / codo de canal',
+              giro_min_grados: 30, tornilleria_por_soporte: 1, tornilleria_nombre: 'Taco + tornillo',
+              sujecion_existente_nombre: 'Fijación a instalación existente', desperdicio_pct: 5, ancho_mm: 60 }
+  };
+  const cable = {
+    key: 'cable', nombre: 'Cable (tendido)', icono: '🔌', unidad: 'm', color: '#f43f5e',
+    opciones: { variantes: ['RZ1-K 3G1,5', 'RZ1-K 3G2,5', 'RZ1-K 5G6', 'RZ1-K 5G10', 'RZ1-K 5G16', 'Otro'] },
+    reglas: { tramo_m: null, union_nombre: null, uniones_por_tramo: 0, soporte_cada_m: null, soporte_nombre: null,
+              codo_nombre: null, giro_min_grados: 30, tornilleria_por_soporte: 0, tornilleria_nombre: null,
+              sujecion_existente_nombre: null, desperdicio_pct: 10, ancho_mm: 15 }
+  };
+  const cableDatos = {
+    key: 'cable_datos', nombre: 'Cable UTP / fibra', icono: '🌐', unidad: 'm', color: '#c084fc',
+    opciones: { variantes: ['UTP Cat6', 'UTP Cat6A', 'FTP Cat6A', 'Fibra OM3', 'Fibra OM4', 'Fibra OS2', 'Otro'] },
+    reglas: { tramo_m: null, union_nombre: null, uniones_por_tramo: 0, soporte_cada_m: null, soporte_nombre: null,
+              codo_nombre: null, giro_min_grados: 30, tornilleria_por_soporte: 0, tornilleria_nombre: null,
+              sujecion_existente_nombre: null, desperdicio_pct: 10, ancho_mm: 12 }
+  };
+  const tuberia = {
+    key: 'tuberia', nombre: 'Tubería', icono: '🚰', unidad: 'm', color: '#2dd4bf',
+    opciones: { variantes: ['Cobre', 'PPR', 'Multicapa', 'Acero', 'PVC evacuación'], diametros_mm: [16, 20, 25, 32, 40, 50, 63, 75, 90, 110] },
+    reglas: { tramo_m: 4, union_nombre: 'Manguito / unión', uniones_por_tramo: 1, soporte_cada_m: 1.2,
+              soporte_nombre: 'Abrazadera isofónica', codo_nombre: 'Codo 90°', giro_min_grados: 30,
+              tornilleria_por_soporte: 1, tornilleria_nombre: 'Varilla roscada + taco',
+              sujecion_existente_nombre: 'Abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 32 }
+  };
+  const conductoClima = {
+    key: 'conducto_clima', nombre: 'Conducto de climatización', icono: '❄️', unidad: 'm', color: '#94a3b8',
+    opciones: { variantes: ['Rectangular chapa', 'Circular chapa', 'Fibra (climaver)', 'Flexible'], anchos_mm: [200, 250, 300, 400, 500, 600, 800] },
+    reglas: { tramo_m: 1.5, union_nombre: 'Unión / marco de conducto', uniones_por_tramo: 1, soporte_cada_m: 2,
+              soporte_nombre: 'Soporte a techo (varilla + perfil)', codo_nombre: 'Codo de conducto',
+              giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + varilla',
+              sujecion_existente_nombre: 'Soporte a instalación existente', desperdicio_pct: 5, ancho_mm: 400 }
+  };
+  const cableadoSondas = {
+    key: 'cableado_sondas', nombre: 'Cableado de sondas / señal', icono: '🌡️', unidad: 'm', color: '#22c55e',
+    opciones: { variantes: ['Par trenzado apantallado', 'Bus RS-485', 'Cable de señal 2x0,5', 'Otro'] },
+    reglas: { tramo_m: null, union_nombre: null, uniones_por_tramo: 0, soporte_cada_m: 0.5, soporte_nombre: 'Brida / grapa',
+              codo_nombre: null, giro_min_grados: 30, tornilleria_por_soporte: 0, tornilleria_nombre: null,
+              sujecion_existente_nombre: 'Brida a instalación existente', desperdicio_pct: 10, ancho_mm: 10 }
+  };
+  const generico = {
+    key: 'generico_lineal', nombre: 'Elemento lineal genérico', icono: '📐', unidad: 'm', color: '#f97316',
+    opciones: { variantes: ['Perfil', 'Guía', 'Rodapié / moldura', 'Otro'] },
+    reglas: { tramo_m: 3, union_nombre: 'Pieza de unión', uniones_por_tramo: 1, soporte_cada_m: 1,
+              soporte_nombre: 'Punto de fijación', codo_nombre: 'Pieza de esquina', giro_min_grados: 30,
+              tornilleria_por_soporte: 1, tornilleria_nombre: 'Taco + tornillo',
+              sujecion_existente_nombre: 'Fijación a elemento existente', desperdicio_pct: 5, ancho_mm: 50 }
+  };
+  return {
+    electrico: [bandejaRejilla, bandejaChapa, tuboRigido, tuboCorrugado, canalPvc, cable],
+    telecom:   [bandejaRejilla, tuboRigido, canalPvc, cableDatos],
+    mecanicas: [tuberia, conductoClima, bandejaRejilla],
+    control:   [cableadoSondas, canalPvc, tuboCorrugado],
+    _default:  [generico, bandejaRejilla, tuboRigido, canalPvc],
+  };
+})();
+
+const REPLANTEO_OBSTACULO_TIPOS = ['tuberia', 'conducto', 'bandeja_existente', 'viga', 'luminaria', 'otro'];
+const REPLANTEO_OBSTACULO_ACCIONES = ['debajo', 'esquivar', 'sujetar'];
+
+async function _ensureReplanteoTables(env) {
+  // Mismo patrón que _ensureCpdTables: la migración versionada (migrate_replanteos.sql) es
+  // la fuente; esto solo evita bloquear el vertical hasta que Adrián la autorice.
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS replanteos (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id      INTEGER NOT NULL,
+      obra_id         INTEGER,
+      departamento    TEXT    NOT NULL,
+      titulo          TEXT    NOT NULL,
+      elemento_key    TEXT    NOT NULL,
+      elemento_json   TEXT,
+      origen          TEXT    NOT NULL DEFAULT 'foto' CHECK(origen IN ('foto','ar')),
+      foto_r2_key     TEXT,
+      foto_w          INTEGER,
+      foto_h          INTEGER,
+      escala_px_m     REAL,
+      trazado_json    TEXT,
+      longitud_m      REAL,
+      material_json   TEXT,
+      reglas_json     TEXT,
+      notas           TEXT,
+      estado          TEXT    NOT NULL DEFAULT 'borrador' CHECK(estado IN ('borrador','calculado','pedido')),
+      pedido_ids      TEXT,
+      creado_por      TEXT,
+      creado_en       TEXT DEFAULT (datetime('now')),
+      actualizado_en  TEXT DEFAULT (datetime('now'))
+    )
+  `).run();
+  await runDDL(env, 'CREATE INDEX IF NOT EXISTS idx_replanteos_empresa_obra ON replanteos(empresa_id, obra_id, departamento)');
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS replanteo_catalogo (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id      INTEGER NOT NULL,
+      departamento    TEXT    NOT NULL,
+      elemento_key    TEXT    NOT NULL,
+      nombre          TEXT    NOT NULL,
+      icono           TEXT,
+      unidad          TEXT    NOT NULL DEFAULT 'm',
+      opciones_json   TEXT,
+      reglas_json     TEXT    NOT NULL,
+      activo          INTEGER NOT NULL DEFAULT 1,
+      actualizado_en  TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, departamento, elemento_key)
+    )
+  `).run();
+}
+
+// Permisos (ADR-0024 §5): ver = cualquiera de la empresa que no sea operario; editar = encargado
+// y superiores. `oficina` solo lectura en esta fase.
+function puedeVerReplanteo(auth) {
+  return !!(auth?.empresa_id && auth.rol !== 'operario');
+}
+function puedeEditarReplanteo(auth) {
+  return !!(auth?.empresa_id && (
+    isDeptPrivileged(auth) || auth.isEncargado || auth.isJefeObra ||
+    auth.rol === 'encargado' || auth.rol === 'jefe_de_obra'
+  ));
+}
+// DEPT-01: el departamento del replanteo lo fija la sesión, nunca el cliente, salvo para los
+// privilegiados (que pueden mirar/crear en otro departamento pasándolo explícitamente).
+function _replanteoDeptDe(auth, pedido) {
+  if (isDeptPrivileged(auth) && pedido && _DEPTS_REPLANTEO_VALIDOS.has(pedido)) return pedido;
+  return auth.departamento || 'electrico';
+}
+const _DEPTS_REPLANTEO_VALIDOS = new Set(['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil',
+  'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'ingenieria', 'control']);
+
+async function catalogoReplanteoDe(env, empresa_id, departamento) {
+  const base = (REPLANTEO_CATALOGO_BASE[departamento] || REPLANTEO_CATALOGO_BASE._default)
+    .map(e => ({ ...e, opciones: { ...(e.opciones || {}) }, reglas: { ...e.reglas }, origen: 'base' }));
+  // Sobreescritura por empresa (fase 2 la edita desde el panel; aquí solo se lee).
+  try {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM replanteo_catalogo WHERE empresa_id=? AND departamento=? AND activo=1'
+    ).bind(empresa_id, departamento).all();
+    for (const r of (results || [])) {
+      let opciones = {}, reglas = {};
+      try { opciones = r.opciones_json ? JSON.parse(r.opciones_json) : {}; } catch {}
+      try { reglas = r.reglas_json ? JSON.parse(r.reglas_json) : {}; } catch {}
+      const idx = base.findIndex(e => e.key === r.elemento_key);
+      const item = { key: r.elemento_key, nombre: r.nombre, icono: r.icono || '📐', unidad: r.unidad || 'm',
+                     color: (idx >= 0 ? base[idx].color : '#f97316'), opciones, reglas: { ...(idx >= 0 ? base[idx].reglas : {}), ...reglas }, origen: 'empresa' };
+      if (idx >= 0) base[idx] = item; else base.push(item);
+    }
+  } catch (_) { /* tabla aún no creada: solo catálogo base */ }
+  return base;
+}
+
+// ── Cálculo de material ─────────────────────────────────────────────────────
+// Entrada: elemento (del catálogo, con reglas), parámetros elegidos, trazado {puntos, obstaculos},
+// escala en px/m o longitud manual. Salida: { longitud_m, escala_px_m, giros, material:[...] }.
+// Es una función pura: no toca D1, y por eso la puede llamar tanto /calcular como el guardado.
+function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {}, escala_px_m = null, longitud_manual_m = null }) {
+  const reglas = { ...(elemento?.reglas || {}) };
+  const puntos = Array.isArray(trazado.puntos) ? trazado.puntos.filter(p => Number.isFinite(+p.x) && Number.isFinite(+p.y)) : [];
+  const obstaculos = Array.isArray(trazado.obstaculos) ? trazado.obstaculos : [];
+  if (puntos.length < 2) {
+    return { longitud_m: 0, escala_px_m: escala_px_m || null, giros: 0, material: [], reglas, aviso: 'Marca al menos dos puntos' };
+  }
+  // Longitud en píxeles de cada segmento
+  const segPx = [];
+  for (let i = 1; i < puntos.length; i++) {
+    const dx = +puntos[i].x - +puntos[i - 1].x, dy = +puntos[i].y - +puntos[i - 1].y;
+    segPx.push(Math.hypot(dx, dy));
+  }
+  const totalPx = segPx.reduce((a, b) => a + b, 0);
+  let escala = Number(escala_px_m) > 0 ? Number(escala_px_m) : null;
+  if (Number(longitud_manual_m) > 0 && totalPx > 0) escala = totalPx / Number(longitud_manual_m);
+  if (!escala) {
+    return { longitud_m: 0, escala_px_m: null, giros: 0, material: [], reglas, aviso: 'Falta la escala: marca una referencia conocida o escribe la longitud total' };
+  }
+  const longitudBase = totalPx / escala;
+  // Giros: un codo por cada cambio de dirección >= giro_min_grados
+  const giroMin = Number(reglas.giro_min_grados) > 0 ? Number(reglas.giro_min_grados) : 30;
+  let giros = 0;
+  for (let i = 1; i < puntos.length - 1; i++) {
+    const a1 = Math.atan2(+puntos[i].y - +puntos[i - 1].y, +puntos[i].x - +puntos[i - 1].x);
+    const a2 = Math.atan2(+puntos[i + 1].y - +puntos[i].y, +puntos[i + 1].x - +puntos[i].x);
+    let d = Math.abs((a2 - a1) * 180 / Math.PI); if (d > 180) d = 360 - d;
+    if (d >= giroMin) giros++;
+  }
+  // Obstáculos: cada acción cambia longitud, codos y tipo de soporte
+  let extraM = 0, codosObst = 0, sujetarM = 0;
+  const obstResumen = [];
+  for (const o of obstaculos) {
+    const dim = Math.max(0, Number(o.dimension_m) || 0);
+    const accion = REPLANTEO_OBSTACULO_ACCIONES.includes(o.accion) ? o.accion : 'debajo';
+    if (accion === 'debajo' || accion === 'esquivar') { extraM += 2 * dim; codosObst += 2; }
+    else if (accion === 'sujetar') { sujetarM += dim; }
+    obstResumen.push({ tipo: o.tipo || 'otro', accion, dimension_m: dim });
+  }
+  const longitud = longitudBase + extraM;
+  const desp = Number(reglas.desperdicio_pct) >= 0 ? Number(reglas.desperdicio_pct) : 5;
+  const longitudConDesp = longitud * (1 + desp / 100);
+  const r1 = n => Math.round(n * 10) / 10;
+
+  // Nombre comercial del elemento con sus parámetros
+  const partes = [elemento?.nombre || 'Elemento'];
+  if (elemento_params.variante) partes.push(String(elemento_params.variante));
+  if (elemento_params.ancho_mm) partes.push(`${elemento_params.ancho_mm} mm`);
+  if (elemento_params.diametro_mm) partes.push(`Ø${elemento_params.diametro_mm} mm`);
+  const nombreElem = partes.join(' ');
+
+  const material = [];
+  const tramoM = Number(reglas.tramo_m) > 0 ? Number(reglas.tramo_m) : null;
+  let tramos = 0;
+  if (tramoM) {
+    tramos = Math.ceil(longitudConDesp / tramoM);
+    material.push({ key: 'principal', nombre: `${nombreElem} (tramo de ${tramoM} m)`, cantidad: tramos, unidad: 'ud',
+                    detalle: `${r1(longitud)} m + ${desp}% desperdicio = ${r1(longitudConDesp)} m` });
+  } else {
+    material.push({ key: 'principal', nombre: nombreElem, cantidad: Math.ceil(longitudConDesp), unidad: 'm',
+                    detalle: `${r1(longitud)} m + ${desp}% desperdicio` });
+  }
+  const codos = giros + codosObst;
+  if (reglas.codo_nombre && codos > 0) {
+    material.push({ key: 'codos', nombre: reglas.codo_nombre, cantidad: codos, unidad: 'ud',
+                    detalle: `${giros} cambio(s) de dirección ≥ ${giroMin}°` + (codosObst ? ` + ${codosObst} por obstáculos` : '') });
+  }
+  if (tramoM && reglas.union_nombre) {
+    const porTramo = Number(reglas.uniones_por_tramo) >= 0 ? Number(reglas.uniones_por_tramo) : 1;
+    const uniones = Math.max(tramos - 1, 0) * porTramo + codos * porTramo;
+    if (uniones > 0) material.push({ key: 'uniones', nombre: reglas.union_nombre, cantidad: uniones, unidad: 'ud',
+                                     detalle: `${Math.max(tramos - 1, 0)} entre tramos` + (codos ? ` + ${codos} en codos` : '') });
+  }
+  const soporteCada = Number(reglas.soporte_cada_m) > 0 ? Number(reglas.soporte_cada_m) : null;
+  if (soporteCada) {
+    const soportesTotal = Math.ceil(longitud / soporteCada) + 1;
+    const soportesExist = Math.min(soportesTotal, Math.ceil(sujetarM / soporteCada));
+    const soportesTecho = soportesTotal - soportesExist;
+    if (soportesTecho > 0 && reglas.soporte_nombre) {
+      material.push({ key: 'soportes', nombre: reglas.soporte_nombre, cantidad: soportesTecho, unidad: 'ud',
+                      detalle: `1 cada ${soporteCada} m sobre ${r1(longitud - sujetarM)} m` });
+    }
+    if (soportesExist > 0 && reglas.sujecion_existente_nombre) {
+      material.push({ key: 'sujecion_existente', nombre: reglas.sujecion_existente_nombre, cantidad: soportesExist, unidad: 'ud',
+                      detalle: `${r1(sujetarM)} m sujetos a instalación existente` });
+    }
+    const tornPorSop = Number(reglas.tornilleria_por_soporte) > 0 ? Number(reglas.tornilleria_por_soporte) : 0;
+    if (tornPorSop && reglas.tornilleria_nombre && soportesTecho > 0) {
+      material.push({ key: 'tornilleria', nombre: reglas.tornilleria_nombre, cantidad: soportesTecho * tornPorSop, unidad: 'ud',
+                      detalle: `${tornPorSop} por soporte a techo/pared` });
+    }
+  }
+  return { longitud_m: r1(longitud), longitud_base_m: r1(longitudBase), escala_px_m: escala, giros, obstaculos: obstResumen, material, reglas };
+}
+
+function _parseReplanteoRow(r) {
+  if (!r) return null;
+  const j = (s, d) => { try { return s ? JSON.parse(s) : d; } catch { return d; } };
+  return { ...r, elemento: j(r.elemento_json, {}), trazado: j(r.trazado_json, { puntos: [], obstaculos: [] }),
+           material: j(r.material_json, []), reglas: j(r.reglas_json, {}), pedido_ids: j(r.pedido_ids, []) };
+}
+
+async function _replanteoCalcularDesde(env, empresa_id, departamento, { elemento_key, elemento_params, trazado, escala_px_m, longitud_manual_m }) {
+  const catalogo = await catalogoReplanteoDe(env, empresa_id, departamento);
+  const elemento = catalogo.find(e => e.key === elemento_key);
+  if (!elemento) return { error: 'Elemento no válido para este departamento' };
+  return { elemento, resultado: calcularMaterialReplanteo({ elemento, elemento_params, trazado, escala_px_m, longitud_manual_m }) };
+}
+
+async function getReplanteoCatalogo(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const dept = _replanteoDeptDe(auth, url.searchParams.get('departamento'));
+  await _ensureReplanteoTables(env);
+  const elementos = await catalogoReplanteoDe(env, auth.empresa_id, dept);
+  return json({ ok: true, departamento: dept, elementos, obstaculo_tipos: REPLANTEO_OBSTACULO_TIPOS, obstaculo_acciones: REPLANTEO_OBSTACULO_ACCIONES });
+}
+
+async function calcularReplanteo(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const dept = _replanteoDeptDe(auth, body.departamento);
+  await _ensureReplanteoTables(env);
+  const r = await _replanteoCalcularDesde(env, auth.empresa_id, dept, {
+    elemento_key: safeStr(body.elemento_key), elemento_params: body.elemento_params || {},
+    trazado: body.trazado || {}, escala_px_m: body.escala_px_m, longitud_manual_m: body.longitud_manual_m
+  });
+  if (r.error) return err(r.error, 400);
+  return json({ ok: true, ...r.resultado });
+}
+
+async function listarReplanteos(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  await _ensureReplanteoTables(env);
+  const url = new URL(request.url);
+  const obraId = parseInt(url.searchParams.get('obra_id') || auth.obra_id || 0) || null;
+  const conds = ['empresa_id = ?']; const params = [auth.empresa_id];
+  // DEPT-01: los no privilegiados solo ven su departamento; los privilegiados pueden filtrar.
+  const deptFiltro = isDeptPrivileged(auth) ? (url.searchParams.get('departamento') || null) : auth.departamento;
+  if (deptFiltro) { conds.push('departamento = ?'); params.push(deptFiltro); }
+  if (obraId) { conds.push('obra_id = ?'); params.push(obraId); }
+  const { results } = await env.DB.prepare(
+    `SELECT id, empresa_id, obra_id, departamento, titulo, elemento_key, elemento_json, origen, foto_w, foto_h,
+            longitud_m, material_json, estado, pedido_ids, creado_por, creado_en, actualizado_en
+       FROM replanteos WHERE ${conds.join(' AND ')} ORDER BY actualizado_en DESC LIMIT 200`
+  ).bind(...params).all();
+  return json({ ok: true, replanteos: (results || []).map(_parseReplanteoRow), puede_editar: puedeEditarReplanteo(auth) });
+}
+
+async function crearReplanteo(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden replantear', 403);
+  await _ensureReplanteoTables(env);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta la foto', 400);
+  if (file.size > 20971520) return err('La foto supera 20 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+  if (!allowed.includes(mime)) return err('Solo se permiten imágenes', 400);
+  const titulo = safeStr(form.get('titulo') || '').trim();
+  if (!titulo) return err('El título es obligatorio', 400);
+  const obra_id = parseInt(form.get('obra_id') || auth.obra_id || 0) || null;
+  const dept = _replanteoDeptDe(auth, form.get('departamento'));
+  const elemento_key = safeStr(form.get('elemento_key') || '').trim();
+  let elemento_params = {}, trazado = { puntos: [], obstaculos: [] };
+  try { elemento_params = JSON.parse(form.get('elemento_json') || '{}') || {}; } catch {}
+  try { trazado = JSON.parse(form.get('trazado_json') || '{}') || {}; } catch {}
+  if (!Array.isArray(trazado.puntos)) trazado.puntos = [];
+  if (!Array.isArray(trazado.obstaculos)) trazado.obstaculos = [];
+  const escala_px_m = Number(form.get('escala_px_m')) > 0 ? Number(form.get('escala_px_m')) : null;
+  const longitud_manual_m = Number(form.get('longitud_manual_m')) > 0 ? Number(form.get('longitud_manual_m')) : null;
+  if (longitud_manual_m) trazado.longitud_manual_m = longitud_manual_m;
+  const foto_w = parseInt(form.get('foto_w') || 0) || null;
+  const foto_h = parseInt(form.get('foto_h') || 0) || null;
+  const notas = safeStr(form.get('notas') || '').trim() || null;
+
+  const calc = await _replanteoCalcularDesde(env, auth.empresa_id, dept, { elemento_key, elemento_params, trazado, escala_px_m, longitud_manual_m });
+  if (calc.error) return err(calc.error, 400);
+  const res = calc.resultado;
+
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = `e${auth.empresa_id}/replanteo/${obra_id || 0}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
+  const estado = res.material.length ? 'calculado' : 'borrador';
+  const r = await env.DB.prepare(`
+    INSERT INTO replanteos (empresa_id, obra_id, departamento, titulo, elemento_key, elemento_json, origen, foto_r2_key, foto_w, foto_h,
+                            escala_px_m, trazado_json, longitud_m, material_json, reglas_json, notas, estado, creado_por)
+    VALUES (?,?,?,?,?,?,'foto',?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(auth.empresa_id, obra_id, dept, titulo, elemento_key, JSON.stringify(elemento_params), r2Key, foto_w, foto_h,
+          res.escala_px_m, JSON.stringify(trazado), res.longitud_m, JSON.stringify(res.material), JSON.stringify(res.reglas),
+          notas, estado, auth.nombre || auth.rol).run();
+  const row = await env.DB.prepare('SELECT * FROM replanteos WHERE id=?').bind(r.meta.last_row_id).first();
+  return json({ ok: true, id: r.meta.last_row_id, replanteo: _parseReplanteoRow(row), calculo: res }, 201);
+}
+
+async function _replanteoDe(env, auth, id) {
+  const row = await env.DB.prepare('SELECT * FROM replanteos WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+  if (!row) return null;
+  if (!isDeptPrivileged(auth) && row.departamento !== auth.departamento) return null; // DEPT-01: como si no existiera
+  return row;
+}
+
+async function getReplanteo(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  if (!row) return err('Replanteo no encontrado', 404);
+  return json({ ok: true, replanteo: _parseReplanteoRow(row), puede_editar: puedeEditarReplanteo(auth) });
+}
+
+async function getReplanteoFoto(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  if (!row || !row.foto_r2_key) return err('Foto no disponible', 404);
+  const obj = await env.FILES.get(row.foto_r2_key);
+  if (!obj) return err('Foto no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
+async function actualizarReplanteo(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden replantear', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  if (!row) return err('Replanteo no encontrado', 404);
+  if (row.estado === 'pedido') return err('Este replanteo ya se envió a Pedidos; crea uno nuevo para cambiarlo', 409);
+  const body = await request.json().catch(() => ({}));
+  const titulo = body.titulo !== undefined ? safeStr(body.titulo).trim() : row.titulo;
+  if (!titulo) return err('El título es obligatorio', 400);
+  const elemento_key = body.elemento_key !== undefined ? safeStr(body.elemento_key).trim() : row.elemento_key;
+  let elemento_params = body.elemento_params !== undefined ? (body.elemento_params || {}) : _parseReplanteoRow(row).elemento;
+  let trazado = body.trazado !== undefined ? (body.trazado || {}) : _parseReplanteoRow(row).trazado;
+  if (!Array.isArray(trazado.puntos)) trazado.puntos = [];
+  if (!Array.isArray(trazado.obstaculos)) trazado.obstaculos = [];
+  const longitud_manual_m = body.longitud_manual_m !== undefined
+    ? (Number(body.longitud_manual_m) > 0 ? Number(body.longitud_manual_m) : null)
+    : (Number(trazado.longitud_manual_m) > 0 ? Number(trazado.longitud_manual_m) : null);
+  if (longitud_manual_m) trazado.longitud_manual_m = longitud_manual_m; else delete trazado.longitud_manual_m;
+  const escala_px_m = body.escala_px_m !== undefined
+    ? (Number(body.escala_px_m) > 0 ? Number(body.escala_px_m) : null)
+    : (longitud_manual_m ? null : row.escala_px_m);
+  const notas = body.notas !== undefined ? (safeStr(body.notas).trim() || null) : row.notas;
+
+  const calc = await _replanteoCalcularDesde(env, auth.empresa_id, row.departamento, { elemento_key, elemento_params, trazado, escala_px_m, longitud_manual_m });
+  if (calc.error) return err(calc.error, 400);
+  const res = calc.resultado;
+  const estado = res.material.length ? 'calculado' : 'borrador';
+  await env.DB.prepare(`
+    UPDATE replanteos SET titulo=?, elemento_key=?, elemento_json=?, escala_px_m=?, trazado_json=?, longitud_m=?, material_json=?,
+           reglas_json=?, notas=?, estado=?, actualizado_en=datetime('now')
+     WHERE id=? AND empresa_id=?
+  `).bind(titulo, elemento_key, JSON.stringify(elemento_params), res.escala_px_m, JSON.stringify(trazado), res.longitud_m,
+          JSON.stringify(res.material), JSON.stringify(res.reglas), notas, estado, id, auth.empresa_id).run();
+  const nuevo = await env.DB.prepare('SELECT * FROM replanteos WHERE id=?').bind(id).first();
+  return json({ ok: true, replanteo: _parseReplanteoRow(nuevo), calculo: res });
+}
+
+async function eliminarReplanteo(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden replantear', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  if (!row) return err('Replanteo no encontrado', 404);
+  await env.DB.prepare('DELETE FROM replanteos WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).run();
+  if (row.foto_r2_key) await env.FILES.delete(row.foto_r2_key).catch(() => {});
+  return json({ ok: true });
+}
+
+// Enviar a Pedidos: una línea de pedido por material, referencia REPL-<id>, mismo INSERT que
+// crearPedido (index.html nunca manda solicitado_por: fallback al usuario autenticado).
+async function enviarReplanteoAPedidos(request, env, path, ctx) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden enviar a Pedidos', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  if (!row) return err('Replanteo no encontrado', 404);
+  if (row.estado === 'pedido') return err('Este replanteo ya se envió a Pedidos', 409);
+  const rep = _parseReplanteoRow(row);
+  if (!rep.material.length) return err('El replanteo no tiene material calculado', 400);
+  const body = await request.json().catch(() => ({}));
+  const proveedor = safeStr(body.proveedor || '').trim() || null;
+  const solicitado_por = auth.nombre || auth.rol || null;
+  const ids = [];
+  for (const m of rep.material) {
+    const r = await env.DB.prepare(
+      'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
+    ).bind(auth.empresa_id, row.obra_id || null, row.departamento, `REPL-${id}`, m.nombre, m.cantidad || 1, m.unidad || 'ud',
+           proveedor, solicitado_por, `Replanteo "${row.titulo}" (${rep.longitud_m || row.longitud_m || 0} m). ${m.detalle || ''}`.trim()).run();
+    ids.push(r.meta.last_row_id);
+  }
+  await env.DB.prepare("UPDATE replanteos SET estado='pedido', pedido_ids=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?")
+    .bind(JSON.stringify(ids), id, auth.empresa_id).run();
+  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', row.departamento), auth.empresa_id));
+  await sendTelegram(env, `📐 <b>Replanteo → Pedidos</b> [${row.departamento}]\n👤 ${solicitado_por || '—'}\n📝 ${row.titulo} · ${rep.material.length} líneas · ${row.longitud_m || 0} m`);
+  return json({ ok: true, pedido_ids: ids });
 }
