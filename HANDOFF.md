@@ -1,5 +1,22 @@
 # Handoff — Alejandra 2.0
 
+## DOCS-UI-02 — tarjetas de Documentación a dos filas (2026-09-04, v9.33)
+
+Adrián, con captura del móvil tras el v9.32 (PR #144): «se sigue sin ver los nombres» y
+«los botones siguen igual». La causa no era el recorte a 2 líneas sino el ancho: cuatro
+botones en la misma fila dejaban al nombre unas dos palabras. Su propuesta, aplicada tal
+cual: iconos debajo del nombre y la fila de arriba solo para el nombre.
+
+- PR #145 → `aca8f81` en `main`. Deploy de Pages: run `33857332617`, verificado
+  `version.json` publicado = 9.33 y el marcador `DOCS-UI-02` presente en el `index.html`
+  servido.
+- Tarjetas de archivo, esquema IA y nota a dos filas (nombre completo sin `line-clamp`);
+  «Nota» y «Subir» de la cabecera con texto naranja. Carpetas sin tocar (dos botones, cabe).
+- **Pendiente de Adrián:** confirmación visual en el móvil. Sin sesión ni Chrome real, aquí
+  solo se verificó el render en Node (etiquetas equilibradas) y lo publicado en Pages.
+- `panel.html` no se ha tocado: su Documentación es de escritorio y no sufre el problema.
+
+
 ## Verificación en producción: SYNC-SELECT-01 y el quiosco de ARC-022 (2026-09-04)
 
 Adrián: "haz los dos" — cerrar las dos verificaciones que quedaban abiertas. **Las dos
