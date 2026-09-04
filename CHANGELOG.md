@@ -4,6 +4,42 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-04 — REPLANTEO-03: Replanteos en la oficina y editor del catálogo por empresa, v9.36)
+
+Adrián: «seguimos». Siguiente tarea aprobada de la cola tras REPLANTEO-01/02: lo que los
+encargados marcan sobre foto en la app móvil tiene que verse desde la oficina, y las reglas
+de cálculo «de arranque» necesitaban un sitio donde ajustarlas con fichas reales de fabricante.
+
+- `panel.html` (v9.36): página **«📐 Replanteos»** en el sidebar junto a Pedidos. Tabla con
+  miniatura de la foto, título, obra, departamento, elemento, longitud, líneas de material y
+  estado; filtros por obra, estado y texto, y por departamento solo para privilegiados (mismo
+  criterio que `isDeptPrivileged`). Detalle en modal con la foto y el **trazado redibujado**
+  igual que en el móvil (port de `_replDibujarEn`: banda del elemento, cotas por tramo,
+  referencia de escala, obstáculos numerados), material, obstáculos y reglas aplicadas;
+  **informe imprimible** en pestaña nueva (mismo patrón que Sondas CPD), **«A Pedidos»** y
+  **eliminar** para quien puede editar. No se edita el trazado desde la oficina: eso sigue
+  siendo del encargado en la obra.
+- `panel.html`: **editor del catálogo** (botón «⚙️ Catálogo de elementos», solo admins de
+  empresa): por departamento, lista de elementos base/empresa/ocultos, formulario con nombre,
+  icono, unidad, opciones (anchos, diámetros, variantes) y las 12 reglas de cálculo con su
+  explicación; «Guardar para esta empresa», «Restaurar catálogo base», desactivar y «Nuevo
+  elemento».
+- `worker.js`: rutas `GET /replanteos/catalogo-empresa`, `PUT /replanteos/catalogo/:key` y
+  `DELETE /replanteos/catalogo/:key` (upsert `ON CONFLICT`, saneado de reglas numéricas ≥ 0 y
+  textos, solo `superadmin`/`empresa_admin`/`desarrollador` — Seguridad ve todo pero no cambia
+  cómo se calcula el material de la empresa). `catalogoReplanteoDe()` ahora lee también las
+  filas con `activo=0` y **oculta** ese elemento base a la empresa; antes las ignoraba.
+- `SYNC_INTERVALS.replanteos = 60` con el patrón de SYNC-SELECT-01: los `<select>` se
+  pueblan una sola vez, se respeta su valor y el refresco no toca nada con un modal abierto.
+- Versión 9.35 → 9.36 en los cuatro marcadores.
+- **Pruebas:** `node --check worker.js`; `check-versiones` 9.36; `inventario-rutas --check` 0
+  rutas sin autorización (604); `inventario-entorno` OK; `check-encoding` OK; 15 pruebas en
+  Node de las funciones nuevas (saneado de reglas y opciones, fusión base+empresa con
+  sobreescritura/oculto/nuevo, catálogo base intacto sin tabla, escala derivada, posición de
+  obstáculo, nombre de elemento). **Sin abrir en navegador** (Adrián pidió no usar el interno):
+  la primera comprobación real de la página es la suya en Office.
+
+
 ### Added (2026-09-04 — REPLANTEO-02: prototipo AR en Android, ADR-0024 fase 2, v9.35)
 
 Adrián: «seguimos». Segunda fase del ADR-0024, como **prototipo** pendiente de la prueba de
