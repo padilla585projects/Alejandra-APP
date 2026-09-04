@@ -47,9 +47,21 @@
   trazado); en la PWA `print()` abre el diálogo del sistema (igual que CPD).
 - **Rollback:** revertir la PR; no hay migración aplicada; las tablas creadas al primer uso
   quedan vacías o con replanteos de prueba (no molestan).
-- **Siguiente acción exacta:** ver `TASKS.md` (fusionar, desplegar los dos Workers + Pages,
-  aprobar `production`, probar en el Android de Adrián). Después: que Adrián decida sobre
-  ADR-0024 y autorice `migrate_replanteos.sql`.
+- **Entrega (2026-09-04, tarde):** PR #147 fusionada en `main` (`003785b`), CI en verde
+  (run `33858717693`). Despliegues iniciados con ese SHA: Pages run `33859286493`
+  **publicado y verificado** (`version.json` → 9.34; el `index.html` publicado contiene la
+  pantalla del editor); API Worker run `33859279300` y agente run `33859282942` **a la
+  espera de la aprobación humana del entorno `production`** (ADR-0007: iniciar es autónomo,
+  aprobar no). Mientras la API no se despliegue, la tarjeta se ve pero `/replanteos*`
+  responde 404.
+- **Incidente de proceso, resuelto:** otro agente cambió de rama en el mismo árbol de
+  trabajo durante la implementación y los dos commits cayeron en `main` local; se movieron a
+  `feat/replanteo-foto-v1` antes de subir nada y `main` local se dejó igual que `origin/main`.
+  Quedó una rama remota vacía `feat/replanteo-v1` que se borró. Nada llegó a `origin/main`
+  fuera de la PR.
+- **Siguiente acción exacta:** ver `TASKS.md` (aprobar los dos runs, probar en el Android
+  de Adrián, registrar la verificación). Después: que Adrián decida sobre ADR-0024 y
+  autorice `migrate_replanteos.sql`.
 - **No tocar:** el formato SSE del chat ni nada de Sondas CPD; esta tarea no los modifica.
 
 ## DOCS-UI-02 — tarjetas de Documentación a dos filas (2026-09-04, v9.33)
