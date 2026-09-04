@@ -13,12 +13,18 @@ de Adrián.** Ver `HANDOFF.md`/`CHANGELOG.md`.
   reales (30 m rectos, giro + obstáculos, longitud manual, sin escala). **No verificado en
   navegador** (Adrián pidió no usar el navegador interno): la primera comprobación real es
   en su Android tras desplegar.
-  - Siguiente acción exacta: fusionar la PR → `deploy-worker.yml` (`DEPLOY_API_WORKER`),
-    `deploy-alejandra-agente.yml` y `pages.yml` (`PUBLISH_GITHUB_PAGES`, SHA de 40
-    caracteres) → aprobar el entorno `production` (humano) → probar en el móvil con la
-    empresa demo: nuevo replanteo con foto, trazar, escala con referencia, un obstáculo
-    «debajo» y otro «sujetar», Material, Guardar, Informe, A Pedidos, y comprobar que un
-    operario no ve la tarjeta y que otro departamento no ve el replanteo.
+  - **Hecho (2026-09-04, tarde):** PR #147 fusionada (`003785b`), CI en verde. Pages
+    publicado por el run `33859286493` (verificado: `version.json` sirve 9.34 y el
+    `index.html` publicado contiene `screenReplanteoEditor`). Los dos Workers están
+    **iniciados y esperando la aprobación humana del entorno `production`**: API
+    `33859279300` (`DEPLOY_API_WORKER`) y agente `33859282942` (`DEPLOY_ALEJANDRA_AGENT`).
+    Hasta que se apruebe el de la API, la tarjeta Replanteo aparece pero las rutas
+    `/replanteos*` devuelven 404.
+  - Siguiente acción exacta: Adrián aprueba los dos runs en GitHub Actions → probar en el
+    móvil con la empresa demo: nuevo replanteo con foto, trazar, escala con referencia, un
+    obstáculo «debajo» y otro «sujetar», Material, Guardar, Informe, A Pedidos, y comprobar
+    que un operario no ve la tarjeta y que otro departamento no ve el replanteo → registrar
+    la verificación en `HANDOFF.md`.
   - Migración `migrate_replanteos.sql`: **pendiente de autorización de Adrián** (no bloquea:
     el Worker crea las tablas al primer uso).
 - **REPLANTEO-02** (Pendiente, fase 2 del ADR-0024): prototipo AR en Android (WebXR
