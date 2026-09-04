@@ -1,5 +1,57 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-01 — replanteo asistido por cámara sobre foto (ADR-0024, fase 1) (2026-09-04, tarde)
+
+- **Agente:** Claude (Fable 5.1). **Rama:** `feat/replanteo-foto-v1`. **Tarea:** REPLANTEO-01.
+- **Origen:** idea de Adrián en la conversación: ver con la cámara cómo queda una
+  instalación (30 m de bandeja, tubo…) y calcular el material; pestaña «Replanteo» común,
+  especializada por departamento; solo encargados; el trazado debe sortear instalaciones
+  existentes (por debajo / esquivar / sujeto a lo existente). Se acordó empezar por la foto
+  (funciona en todos los móviles) y dejar el AR de Android como fase 2 con prueba real de
+  deriva. El catálogo de arranque lo dio por bueno.
+- **Archivos:** `docs/decisions/ADR-0024-REPLANTEO-ASISTIDO-POR-CAMARA.md` (Propuesto),
+  `migrate_replanteos.sql` (nueva), `worker.js` (bloque al final del archivo + 9 rutas junto a
+  las de CPD), `index.html` (tarjeta `cardReplanteo`, entrada en `_HOME_TRADE_MODS`,
+  `setupHomeModules`, ramas en `navTo`/`_applyScreen`, pantallas `screenReplanteo` y
+  `screenReplanteoEditor` + 5 modales, bloque JS «REPLANTEO» antes de OBRA DASHBOARD),
+  `panel.html` (`_HOME_TRADE_MODS`), `alejandra-agente/lib.js` (allowlist), los cuatro
+  marcadores de versión (9.34). Detalle en `CHANGELOG.md`.
+- **Decisiones de diseño que conviene conocer:**
+  - Los puntos del trazado se guardan en **píxeles naturales de la foto**; la escala es
+    px/m (referencia de dos puntos + metros) o se deriva de la longitud total conocida.
+  - El material lo calcula **solo el servidor** (`calcularMaterialReplanteo`, pura). El
+    editor pide `POST /replanteos/calcular` con 450 ms de retardo y el servidor recalcula
+    al guardar. No hay reglas de negocio en `index.html`.
+  - Reglas de arranque **provisionales** (tramo 3 m, soporte cada 1,5 m en bandeja, cada
+    0,8 m en tubo rígido…), impresas en el modal de material y en el informe.
+  - Obstáculos: `debajo`/`esquivar` → +2 codos y +2×dimensión; `sujetar` → los soportes de
+    ese tramo pasan a «abrazadera a instalación existente».
+  - Un replanteo en estado `pedido` es de solo lectura (409 al editar).
+  - DEPT-01: un replanteo de otro departamento devuelve 404 a los no privilegiados.
+- **Pruebas:** `node --check` de los dos Workers OK; `npm --prefix alejandra-agente test`
+  230/230; `scripts/check-versiones.js` 9.34 OK; `scripts/inventario-rutas.js --check` 0
+  rutas sin autorización; `scripts/inventario-entorno.js --check` OK; encoding de líneas
+  añadidas OK; los cinco `<script>` inline de `index.html` parsean igual que en `main` (el
+  #1 ya fallaba antes, es un bloque no-JS). Cálculo probado extrayendo la función: 30 m
+  rectos → 11 tramos / 10 uniones / 21 soportes / 42 anclajes; 30 m + giro 90° + obstáculo
+  «debajo» 0,4 m + «sujetar» 5 m → 30,8 m, 3 codos, 13 uniones, 18 soportes a techo + 4
+  a instalación existente; cable con longitud manual 30 m → 33 m; sin escala y con un
+  punto → aviso, sin material.
+- **Límite honesto:** **no se ha abierto la app en ningún navegador** (Adrián pidió
+  expresamente no usar el navegador interno). Lo que no está probado: el gesto táctil de
+  trazar/arrastrar, la captura con `capture="environment"`, el `crossOrigin` de la foto
+  para incrustar el canvas en el informe, y el `print()` del iframe en Android. Todo ello
+  sigue el mismo patrón que Sondas CPD, que sí está verificado en móvil.
+- **Riesgos:** cantidades erróneas por reglas provisionales (mitigado: se imprimen las
+  reglas); `toDataURL` puede fallar si la foto viene sin CORS (se cae a la foto sin
+  trazado); en la PWA `print()` abre el diálogo del sistema (igual que CPD).
+- **Rollback:** revertir la PR; no hay migración aplicada; las tablas creadas al primer uso
+  quedan vacías o con replanteos de prueba (no molestan).
+- **Siguiente acción exacta:** ver `TASKS.md` (fusionar, desplegar los dos Workers + Pages,
+  aprobar `production`, probar en el Android de Adrián). Después: que Adrián decida sobre
+  ADR-0024 y autorice `migrate_replanteos.sql`.
+- **No tocar:** el formato SSE del chat ni nada de Sondas CPD; esta tarea no los modifica.
+
 ## DOCS-UI-02 — tarjetas de Documentación a dos filas (2026-09-04, v9.33)
 
 Adrián, con captura del móvil tras el v9.32 (PR #144): «se sigue sin ver los nombres» y

@@ -1,5 +1,35 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-04, tarde): **REPLANTEO-01 — replanteo asistido por cámara
+sobre foto (ADR-0024, fase 1) implementado en la rama `feat/replanteo-foto-v1`, v9.34. Pendiente:
+fusionar la PR con CI en verde, desplegar los dos Workers + Pages y verificar en el móvil
+de Adrián.** Ver `HANDOFF.md`/`CHANGELOG.md`.
+- **REPLANTEO-01** (En revisión, rama `feat/replanteo-foto-v1`): pestaña «📐 Replanteo» en todos
+  los oficios (solo encargado y superiores), catálogo por departamento, editor sobre foto
+  (trazado, escala, obstáculos con acción debajo/esquivar/sujetar), material calculado por
+  el servidor, informe imprimible y «A Pedidos». Pruebas: `node --check` de los dos
+  Workers, 230/230 tests del agente, `check-versiones` 9.34, `inventario-rutas` 0 rutas sin
+  auth, `inventario-entorno` OK, encoding OK, y la función de cálculo probada con casos
+  reales (30 m rectos, giro + obstáculos, longitud manual, sin escala). **No verificado en
+  navegador** (Adrián pidió no usar el navegador interno): la primera comprobación real es
+  en su Android tras desplegar.
+  - Siguiente acción exacta: fusionar la PR → `deploy-worker.yml` (`DEPLOY_API_WORKER`),
+    `deploy-alejandra-agente.yml` y `pages.yml` (`PUBLISH_GITHUB_PAGES`, SHA de 40
+    caracteres) → aprobar el entorno `production` (humano) → probar en el móvil con la
+    empresa demo: nuevo replanteo con foto, trazar, escala con referencia, un obstáculo
+    «debajo» y otro «sujetar», Material, Guardar, Informe, A Pedidos, y comprobar que un
+    operario no ve la tarjeta y que otro departamento no ve el replanteo.
+  - Migración `migrate_replanteos.sql`: **pendiente de autorización de Adrián** (no bloquea:
+    el Worker crea las tablas al primer uso).
+- **REPLANTEO-02** (Pendiente, fase 2 del ADR-0024): prototipo AR en Android (WebXR
+  `immersive-ar` + hit-test) que produzca el mismo trazado; medir deriva en un tramo de
+  ~30 m en un móvil real de la plantilla; depth sensing solo como aviso de obstáculo. Abre
+  su propia rama y, si cambia el modelo, enmienda al ADR.
+- **REPLANTEO-03** (Pendiente, pequeño): lista de replanteos en `panel.html` y editor del
+  catálogo por empresa (`replanteo_catalogo`) para ajustar las reglas de arranque con
+  fichas reales de fabricante.
+- **Decisión humana pendiente:** aceptar ADR-0024 (Propuesto).
+
 Estado (actualizado 2026-09-04): **Cerradas las dos verificaciones que quedaban abiertas
 (SYNC-SELECT-01 y el quiosco de ARC-022). Las dos pasan.** Ver `HANDOFF.md`.
 - **SYNC-SELECT-01 / TELECOM-NAV-02:** la PR ya estaba fusionada y Pages ya la había

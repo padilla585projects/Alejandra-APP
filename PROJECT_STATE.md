@@ -1,6 +1,15 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-09-04
+- Estado (2026-09-04, tarde): **REPLANTEO-01 — replanteo asistido por cámara sobre foto
+  (ADR-0024, fase 1), implementado en `feat/replanteo-foto-v1`, v9.34, pendiente de fusionar,
+  desplegar y probar en el móvil.** Pestaña «📐 Replanteo» en todos los oficios (solo
+  encargado y superiores), catálogo por departamento servido por el backend, editor sobre
+  foto (trazado, escala por referencia o longitud conocida, obstáculos con acción
+  debajo/esquivar/sujetar), material calculado solo en el servidor, informe imprimible y
+  «A Pedidos». Sin verificación en navegador (petición expresa de Adrián de no usar el
+  interno). Fase AR (Android, WebXR) = REPLANTEO-02. `migrate_replanteos.sql` pendiente de
+  autorización; el Worker crea las tablas al primer uso. Detalle en `HANDOFF.md`/`TASKS.md`.
 - Estado (2026-09-04): **Cerradas las dos verificaciones pendientes: SYNC-SELECT-01 y el
   quiosco de ARC-022. Las dos pasan. Sin cambios de código, esquema ni versión, y sin tocar
   D1.** SYNC-SELECT-01 ya estaba desplegado (PR #142 → `f4f6f5c`, run `33794071508`) y los
