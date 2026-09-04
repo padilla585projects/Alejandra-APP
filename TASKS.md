@@ -2,14 +2,16 @@
 
 Estado (actualizado 2026-09-04, noche): **REPLANTEO-03 — Replanteos en la oficina + editor
 del catálogo por empresa, v9.36, fusionado (PR #151 → `965d5b2`) y Pages publicado (run
-`33895624663`). API Worker run `33895627643` esperando aprobación humana.** Ver `HANDOFF.md`.
+`33895624663`). API Worker `33895627643` y agente `33859282942` desplegados (aprobados 16:41).** Ver `HANDOFF.md`.
 - **REPLANTEO-03** (Hecho, pendiente de verificación en Office): página «📐 Replanteos» en
   `panel.html` (lista, detalle con trazado redibujado, informe, «A Pedidos», eliminar) y editor
   del catálogo por empresa (`replanteo_catalogo`) para admins. Rutas nuevas en `worker.js`.
-  - Siguiente acción exacta: aprobar `33895627643` (API, incluye REPLANTEO-01/02/03; los runs
-    `33859279300` y `33894942811` quedan obsoletos) y `33859282942` (agente) → comprobar en
-    Office la lista, el detalle, el informe, «A Pedidos» y el catálogo (cambiar una regla,
-    ver que el móvil la aplica, restaurar) → registrar en `HANDOFF.md`.
+  - **Hecho (16:41):** Adrián aprobó los runs; API `33895627643` y agente `33859282942` en
+    success, `33894942811` cancelado. Las rutas `/replanteos*` responden 401 sin sesión (ya no
+    404): REPLANTEO-01/02/03 están en producción, API + agente + Pages.
+  - Siguiente acción exacta: comprobar en Office la lista, el detalle, el informe, «A Pedidos»
+    y el catálogo (cambiar una regla, ver que el móvil la aplica, restaurar); en el móvil, la
+    tarjeta Replanteo y la prueba de deriva AR → registrar en `HANDOFF.md`.
 - **REPLANTEO-02**: sin cambios (pendiente la prueba de deriva en el Android de Adrián).
 - **Decisión humana pendiente:** aceptar ADR-0024 (Propuesto) y autorizar `migrate_replanteos.sql`.
 
