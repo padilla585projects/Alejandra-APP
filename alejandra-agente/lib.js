@@ -362,6 +362,7 @@ const TABLAS_EMPRESA_PERMITIDAS = new Set([
   'invitaciones', 'kits_herramientas', 'logs', 'materiales_obra', 'movimientos_seg', 'obras',
   'partes_trabajo', 'pedidos', 'pemp', 'permisos_trabajo', 'personal_externo',
   'procedimientos_obra', 'proveedores', 'push_subscriptions', 'reconocimientos_medicos',
+  'replanteos', // ADR-0024: replanteos por foto/AR (empresa_id + departamento)
   'repostajes', 'sugerencias', 'sync_dispositivos', 'sync_eventos', 'tipos_cable',
   'tipos_carretilla', 'tipos_herramienta', 'tipos_material_seg', 'tipos_pemp', 'turnos', 'usuarios',
 ]);

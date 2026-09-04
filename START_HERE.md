@@ -4,6 +4,19 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPLANTEO-01 — replanteo asistido por cámara sobre foto (2026-09-04, tarde):** idea de
+Adrián («cojo la cámara, miro al techo y en el móvil vería cómo queda… calcular material y
+replantear bandeja, tubo, lo que sea… pestaña Replanteo para cualquier departamento,
+especializada… solo encargados… que esquive instalaciones, pase por debajo o se sujete a lo
+existente»). Se redactó `docs/decisions/ADR-0024-REPLANTEO-ASISTIDO-POR-CAMARA.md`
+(Propuesto: foto primero, AR en Android como fase 2 con prueba real de deriva) y se
+implementó la fase 1 en `feat/replanteo-foto-v1`, v9.34: tarjeta «📐 Replanteo» en todos los
+oficios, catálogo por departamento, editor sobre foto con trazado, escala y obstáculos
+(debajo / esquivar / sujetar), material calculado solo en el servidor, informe imprimible
+y «A Pedidos». **Pendiente:** fusionar, desplegar los dos Workers + Pages, probar en el
+Android de Adrián, decidir el ADR y autorizar `migrate_replanteos.sql`. Ver
+`TASKS.md`/`HANDOFF.md`/`CHANGELOG.md`.
+
 **Verificación cerrada de SYNC-SELECT-01 y del quiosco de ARC-022 (2026-09-04):** Adrián pidió
 cerrar las dos. **Las dos pasan.** SYNC-SELECT-01 ya estaba desplegado (PR #142 → `f4f6f5c`,
 run `33794071508`) y los tres escenarios se comprobaron contra el `panel.html` de producción:

@@ -4,6 +4,45 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-04 — REPLANTEO-01: replanteo asistido por cámara sobre foto, ADR-0024, v9.34)
+
+Adrián: «cojo la cámara, miro al techo y en el móvil vería cómo queda… quiero calcular
+material y replantear las instalaciones de bandeja, tubo, lo que sea… una pestaña
+"Replanteo" para cualquier departamento, especializada por departamentos… solo encargados…
+el AR debe ver si hay instalaciones de por medio para esquivarlas, pasar por debajo o
+sujetarse a la instalación existente». Fase 1 (sobre foto, cualquier móvil); la fase AR
+(Android, WebXR) queda como REPLANTEO-02 en `TASKS.md`. Decisión en
+`docs/decisions/ADR-0024-REPLANTEO-ASISTIDO-POR-CAMARA.md` (Propuesto).
+
+- `worker.js`: rutas `/replanteos/catalogo`, `/replanteos/calcular`, `/replanteos` (GET/POST
+  multipart con foto a R2 `e<empresa>/replanteo/<obra>/`), `/replanteos/:id` (GET/PATCH/
+  DELETE), `/replanteos/:id/foto`, `/replanteos/:id/pedido`. Catálogo base por departamento
+  (`REPLANTEO_CATALOGO_BASE`: eléctrico, telecom, mecánicas, control y genérico) con reglas
+  de arranque **provisionales** (tramo comercial, uniones, soportes, codos por giro,
+  tornillería, desperdicio), sobreescribible por empresa en `replanteo_catalogo`. El
+  material lo calcula **solo el servidor** (`calcularMaterialReplanteo`, función pura):
+  giros ≥ 30° → codos; obstáculos con acción `debajo`/`esquivar` → 2 codos + doble de la
+  dimensión; `sujetar` → los soportes de ese tramo pasan a abrazaderas a instalación
+  existente. Permisos: ver = no operario; crear/editar/pedir/borrar = encargado,
+  jefe_de_obra y administradores; DEPT-01 en el backend (un replanteo de otro
+  departamento devuelve 404). «A Pedidos» crea una línea de `pedidos` por material con
+  `referencia = REPL-<id>` y cierra el replanteo.
+- `index.html` (v9.34): tarjeta «📐 Replanteo» en el home de todos los oficios (oculta a
+  operario), lista de replanteos de la obra y editor: foto (cámara o galería) → trazar el
+  recorrido tocando la foto (vértices arrastrables) → escala por referencia de dos puntos
+  con medida conocida o longitud total conocida → obstáculos tocando el recorrido (tipo,
+  acción, dimensión, nota) → material (modal), guardar, informe imprimible (foto con el
+  trazado + tabla, mismo mecanismo que Sondas CPD) y envío a Pedidos.
+- `panel.html` (v9.34): la tarjeta entra en «Departamentos y submódulos» (`_HOME_TRADE_MODS`)
+  para poder activarla/desactivarla por empresa. El panel todavía no lista replanteos
+  (REPLANTEO-03).
+- `alejandra-agente/lib.js`: `replanteos` en la allowlist de `consultar_bd` para que
+  Alejandra pueda responder «cuánta bandeja hay prevista en la obra X».
+- `migrate_replanteos.sql` (nueva, aditiva; **pendiente de autorización** para aplicarla en
+  D1). Hasta entonces `worker.js` crea las tablas al primer uso (`_ensureReplanteoTables`,
+  patrón Sondas CPD).
+- Versión 9.33 → 9.34 en los cuatro marcadores.
+
 ### Fixed (2026-09-04 — DOCS-UI-02: tarjetas de Documentación a dos filas, v9.33)
 
 Adrián, tras probar el v9.32 (PR #144, nombres a 2 líneas y «Volver» en naranja) en el móvil:
