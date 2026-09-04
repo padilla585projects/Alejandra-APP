@@ -1,5 +1,93 @@
 # Handoff — Alejandra 2.0
 
+## Verificación en producción: SYNC-SELECT-01 y el quiosco de ARC-022 (2026-09-04)
+
+Adrián: "haz los dos" — cerrar las dos verificaciones que quedaban abiertas. **Las dos
+pasan**, con un límite honesto que se explica al final de cada bloque.
+
+**Nota de entorno:** la extensión de Claude in Chrome no estaba conectada (dos intentos), así
+que no se pudo reutilizar la sesión real de Adrián. Se verificó con el navegador interno
+contra el `panel.html`/`kiosco.html` **reales de producción** (Pages), instrumentando las
+funciones de producción en vez de pulsar botones con sesión. Nada de esto tocó D1: no se
+creó ningún fichaje, no se envió ninguna petición de escritura.
+
+### SYNC-SELECT-01 / TELECOM-NAV-02 — desplegado y verificado
+
+- `TASKS.md` pedía "fusionar la PR y desplegar Pages": **ya estaba hecho**. PR #142 mergeada
+  (`f4f6f5c`) y el run `33794071508` de `pages.yml` publicó ese mismo SHA. Confirmado que el
+  `panel.html` que sirve Pages es idéntico byte a byte al del repositorio (salvo CRLF→LF, que
+  explica exactamente los 43 965 bytes de diferencia = una línea).
+- Cableado del auto-refresh confirmado en la página publicada: 108 páginas en
+  `SYNC_INTERVALS`; `telecomRacks` 60 s, `accidentes` 60 s, `facturasProveedor` 90 s — los
+  tres intervalos de los escenarios pedidos.
+- **(1) Racks/Cableado, no te saca del sitio.** Se instrumentaron las seis funciones destino
+  y se disparó un tick de `telecomOfficeCargar()` en cada nivel. Cada uno vuelve donde estaba
+  el usuario: `idf`→lista, `rack`→`AbrirIdf(11)`, `pp`→`AbrirRack(22)`,
+  `puertos`→`AbrirPP(33)`, **`cuadro`→`AbrirCuadro(44)`** y
+  **`cuadro-puertos`→`AbrirComponentePuertos(55)`**. Los dos últimos son justo los que antes
+  caían a la lista de IDFs y al cuadro respectivamente.
+- **(2) Accidentes, el desplegable no acumula copias.** Seis ticks seguidos del loader sobre
+  el `<select>` real `filterAccObra`: 4 → 4 → 4 → 4 → 4 → 4 opciones (antes: 4→7→10→13…), el
+  placeholder "Todas las obras" intacto y la obra elegida por el usuario conservada.
+- **(3) Facturas de proveedor, el filtro aguanta.** Con el filtro puesto en una obra: 3 filas
+  sin filtro → 2 con filtro, y tras tres ticks el `<select>` sigue en la misma obra y la
+  tabla Tabulator sigue en 2 filas. Antes volvía a "Todas" y a las 3 filas.
+- **Límite:** los datos de las pruebas 2 y 3 son simulados (sin sesión no hay `/obras` ni
+  `/facturas-proveedor`). Lo que se ejercita es el código de producción y el mecanismo que
+  fallaba; no sustituye a que Adrián lo mire un rato con datos suyos, pero el bug concreto
+  ya no puede reproducirse.
+
+### ARC-022 — quiosco de fichaje, verificado en navegador por primera vez
+
+Desde el 11/08/2026 constaba "verificado por sintaxis y revisión manual, no en el navegador".
+Ya no. Todo contra `kiosco.html` de producción, con sesión simulada y backend interceptado.
+
+- **KIOSCO-FOCUS-01 (el bug que reportó Adrián, "no puedo meter el codigo").** Se tecleó un
+  código de 8 dígitos con 450 ms entre pulsaciones y una pausa final de 1,2 s — más de dos
+  ciclos del reenfoque de 800 ms. El foco **nunca** salió de `loginCodigo` y el valor llegó
+  entero. La guarda `if (!SESSION) return` de `focusScanInput()` hace su trabajo.
+- **Pantalla de quiosco:** empresa, marca de agua, obra, reloj y fecha en español correctos;
+  contador de personas dentro; lista de últimos fichados mezclando usuario y personal externo;
+  foco puesto en `scanInput` sin tocar nada; y una sola llamada,
+  `GET /fichajes?fecha_ini=…&fecha_fin=…&obra_id=…`.
+- **Escaneo con lector físico** (se emula lo que hace: escribir en el input + Enter):
+  - Usuario con foto y sin avisos → foto, "Constructora Demo S.L. · encargado · Electrico",
+    "✅ Acceso registrado — 07:42", estado `ok`, sin badge, input limpiado, y el `POST
+    /fichajes/scan` sale con `{"codigo":"COD-ANA-001"}`.
+  - Personal externo con dos caducidades → inicial en vez de foto, "Subcontrata SL · Personal
+    externo · DNI 12345678Z", estado `warn`, **badge ⚠️ visible** y las dos alertas debajo.
+    Esto es exactamente lo que KIOSCO-02-FIX arregló (el badge vivía dentro de
+    `#resultFotoWrap` y `innerHTML` lo borraba, haciendo fallar cualquier fichaje correcto
+    con "Error de conexión").
+  - Código no reconocido → "⚠️", el mensaje real del backend y "❌ No registrado".
+  - A los 4 s vuelve a reposo y devuelve el foco al lector.
+- **Las dos redes de seguridad de KIOSCO-02-FIX funcionan.** Se forzó una excepción dentro de
+  `mostrarResultado()`: el quiosco vuelve a reposo con el foco puesto, y **el escaneo
+  siguiente funciona** — `_kioscoBusy` no se queda atascado, que era el fallo que dejaba el
+  quiosco muerto hasta recargar a mano.
+- **Tarjeta QR, ida y vuelta completa.** `qrcodejs` carga en `panel.html` de producción. Se
+  generó el QR con las mismas líneas que `generarTarjetaTrabajadorPanel()` (220×220,
+  `correctLevel M`, PNG de ~2,5 KB) y se decodificó con `jsQR` —la librería con la que
+  `index.html` escanea con cámara—: código escrito y código leído coinciden. El circuito
+  imprimir→escanear está probado sin necesidad de imprimir nada.
+- **Límite:** no se ejercitaron `POST /verificar` con un código real ni `POST /fichajes/scan`
+  contra D1, porque eso exige introducir un código de acceso (credencial) o la sesión de
+  Adrián. Lo que falta por confirmar es de servidor, no de pantalla: que un QR real resuelva
+  contra `usuarios`/`personal_externo` y escriba el fichaje. Revisado por lectura,
+  `ficharPorCodigo()` (`worker.js:12244`) acota siempre por `empresa_id`, deduplica por día y
+  consulta `reconocimientos_medicos`/`carnets` con la columna correcta (`usuario_id` /
+  `externo_id`, comprobado contra sus `CREATE TABLE` e `INSERT`).
+
+### Hallazgo para decisión (no se toca sin que lo digas)
+
+`ficharPorCodigo()` registra el fichaje en `persona.obra_id || obraAuth`, es decir **en la
+obra asignada al trabajador, no en la del punto de acceso**. Pero la lista y el contador del
+quiosco piden `GET /fichajes?obra_id=<obra del quiosco>`. Consecuencia real: si alguien pasa
+su QR por el quiosco de una obra distinta a la suya, ficha correctamente pero **no aparece en
+la pantalla** — se lee como "he fichado y no salgo". Cambiarlo tiene consecuencias (el
+retraso se calcula con el horario de la obra, y los informes cuelgan de ahí), así que es una
+decisión de producto, no un fix. Anotado también en `ARCHITECT_BACKLOG.md`.
+
 ## SYNC-SELECT-01 / TELECOM-NAV-02 — auditoría del auto-refresh de `SYNC_INTERVALS` (2026-09-03, continuación 5)
 
 - Adrián: "audita el resto de SYNC_INTERVALS". Pendiente anotado desde TELECOM-NAV-01

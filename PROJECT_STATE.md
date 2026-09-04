@@ -1,6 +1,16 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-09-03
+- Actualizado: 2026-09-04
+- Estado (2026-09-04): **Cerradas las dos verificaciones pendientes: SYNC-SELECT-01 y el
+  quiosco de ARC-022. Las dos pasan. Sin cambios de código, esquema ni versión, y sin tocar
+  D1.** SYNC-SELECT-01 ya estaba desplegado (PR #142 → `f4f6f5c`, run `33794071508`) y los
+  tres escenarios se comprobaron contra el `panel.html` de producción; el quiosco se verificó
+  en navegador por primera vez desde el 11/08/2026 (KIOSCO-FOCUS-01, los tres caminos de
+  escaneo, las dos redes de seguridad de KIOSCO-02-FIX y el ciclo QR `panel.html` → `jsQR`).
+  Queda solo la mitad de servidor del quiosco (`POST /verificar` y `POST /fichajes/scan` con
+  un código real: exige un código de acceso o la sesión de Adrián) y el hallazgo **ARC-024**,
+  sin decidir: el fichaje se registra en la obra del trabajador, no en la del quiosco. Detalle
+  en `HANDOFF.md`.
 - Estado (2026-09-03, noche, continuación 3): **ADR-0023, verificación del Web Push a
   Chrome con matiz honesto:** `/internal/push/enviar` se ejecuta y limpia suscripciones
   muertas de verdad (confirmado con `wrangler tail`), pero no se pudo ver la notificación

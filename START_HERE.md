@@ -4,6 +4,21 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**Verificación cerrada de SYNC-SELECT-01 y del quiosco de ARC-022 (2026-09-04):** Adrián pidió
+cerrar las dos. **Las dos pasan.** SYNC-SELECT-01 ya estaba desplegado (PR #142 → `f4f6f5c`,
+run `33794071508`) y los tres escenarios se comprobaron contra el `panel.html` de producción:
+Telecom restaura los seis niveles (incluidos `cuadro` y `cuadro-puertos`), Accidentes se queda
+en 4 opciones tras 6 ticks conservando la obra elegida, y el filtro de Facturas de proveedor
+sobrevive a 3 ticks con la tabla filtrada. El quiosco (`kiosco.html`) se verificó en navegador
+**por primera vez desde el 11/08/2026**: KIOSCO-FOCUS-01, pantalla completa, los tres caminos
+de escaneo, las dos redes de seguridad de KIOSCO-02-FIX, y el ciclo QR generado por
+`panel.html` → leído por `jsQR`. Sin cambios de código, esquema ni versión. **Queda solo la
+mitad de servidor del quiosco** (`POST /verificar` y `POST /fichajes/scan` con un código real
+contra D1: exige un código de acceso o la sesión de Adrián) y un hallazgo sin decidir,
+**ARC-024** — el fichaje se registra en la obra del trabajador, no en la del quiosco, así que
+quien pase su QR por el quiosco de otra obra ficha bien pero no sale en la pantalla. Ver
+`HANDOFF.md`/`TASKS.md`/`CHANGELOG.md`.
+
 **ADR-0023, ampliación para usuarios sin Telegram (2026-09-03, noche, continuación 2):** aviso
 por push y pantalla "Pendientes de aprobar" en la app móvil (Ajustes → Sesión), v9.31,
 desplegado. **Verificado en vivo (Chrome real de Adrián, app móvil `index.html` 9.31 con su sesión):** la sección aparece en Ajustes → Sesión con el historial; petición por chat desde la app (`usuario_id` = nombre, el agente resuelve el id real por el token) → `enviar_gmail` PENDIENTE (`C84FA9`) → la sección muestra la acción con badge 1 y botones → clic real en Aprobar (con `confirm()` auto-aceptado solo en la prueba) → fila #6 `aprobada` → cron a las 12:45:05 UTC → `ejecutada`, `resultado='ok'` → correo "Prueba ADR-0023 app movil" en la bandeja real (conector de Gmail, fecha 2026-09-03T12:45:05Z). Matiz anotado: la aprobación desde la app queda con `canal_decision='panel'` (endpoint compartido; distinguir `app` sería un cambio menor). El push a Adrián se envió (tiene token FCM en `alejandra_memoria`) pero no se pudo observar desde aquí: pendiente de que Adrián confirme si le llegó al móvil. Ver `CHANGELOG.md`/`HANDOFF.md`.
