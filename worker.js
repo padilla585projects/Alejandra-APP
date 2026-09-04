@@ -30670,6 +30670,9 @@ async function crearReplanteo(request, env) {
   const foto_w = parseInt(form.get('foto_w') || 0) || null;
   const foto_h = parseInt(form.get('foto_h') || 0) || null;
   const notas = safeStr(form.get('notas') || '').trim() || null;
+  // REPLANTEO-02: 'ar' cuando la captura viene de la sesión WebXR (la "foto" es la vista en
+  // planta generada y trazado_json lleva puntos_3d en metros). Cualquier otro valor -> 'foto'.
+  const origen = form.get('origen') === 'ar' ? 'ar' : 'foto';
 
   const calc = await _replanteoCalcularDesde(env, auth.empresa_id, dept, { elemento_key, elemento_params, trazado, escala_px_m, longitud_manual_m });
   if (calc.error) return err(calc.error, 400);
@@ -30683,8 +30686,8 @@ async function crearReplanteo(request, env) {
   const r = await env.DB.prepare(`
     INSERT INTO replanteos (empresa_id, obra_id, departamento, titulo, elemento_key, elemento_json, origen, foto_r2_key, foto_w, foto_h,
                             escala_px_m, trazado_json, longitud_m, material_json, reglas_json, notas, estado, creado_por)
-    VALUES (?,?,?,?,?,?,'foto',?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(auth.empresa_id, obra_id, dept, titulo, elemento_key, JSON.stringify(elemento_params), r2Key, foto_w, foto_h,
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(auth.empresa_id, obra_id, dept, titulo, elemento_key, JSON.stringify(elemento_params), origen, r2Key, foto_w, foto_h,
           res.escala_px_m, JSON.stringify(trazado), res.longitud_m, JSON.stringify(res.material), JSON.stringify(res.reglas),
           notas, estado, auth.nombre || auth.rol).run();
   const row = await env.DB.prepare('SELECT * FROM replanteos WHERE id=?').bind(r.meta.last_row_id).first();
