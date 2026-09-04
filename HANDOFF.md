@@ -1,5 +1,45 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-03 — Replanteos en la oficina y editor del catálogo por empresa (2026-09-04, noche, v9.36)
+
+- **Agente:** Claude (Fable 5.1). **Rama:** `feat/replanteo-03-panel` → PR #151 → `965d5b2` en `main`.
+  **Tarea:** REPLANTEO-03 (siguiente aprobada de la cola tras REPLANTEO-01/02; Adrián: «seguimos»).
+- **Qué hay:** página «📐 Replanteos» en `panel.html` (sidebar, junto a Pedidos): tabla con
+  miniatura, título, obra, departamento, elemento, longitud, líneas y estado; filtros por obra,
+  estado, texto y —solo privilegiados— departamento; detalle en modal con la foto y el trazado
+  redibujado igual que en el móvil (port de `_replDibujarEn`), material, obstáculos y reglas;
+  informe imprimible (pestaña nueva, patrón Sondas CPD); «A Pedidos» y eliminar si se puede
+  editar. Editor del catálogo (botón «⚙️ Catálogo de elementos», solo admins de empresa) con
+  las 12 reglas, opciones, restaurar base, desactivar y elemento nuevo. Backend: `GET
+  /replanteos/catalogo-empresa`, `PUT`/`DELETE /replanteos/catalogo/:key`; `catalogoReplanteoDe()`
+  oculta los elementos con `activo=0`. Detalle en `CHANGELOG.md`.
+- **Decisiones:** el trazado NO se edita desde la oficina (es del encargado en obra). El
+  catálogo lo editan solo `superadmin`/`empresa_admin`/`desarrollador`: `isDeptPrivileged`
+  incluye a Seguridad por su visión transversal, pero cambiar las reglas de cálculo de toda la
+  empresa no es su función. Se guarda el juego completo de reglas (base + cambios) para que el
+  snapshot `reglas_json` de cada replanteo sea autoexplicativo.
+- **Pruebas:** `node --check worker.js`; `check-versiones` 9.36; `inventario-rutas --check` 0
+  sin autorización (604 rutas); `inventario-entorno` OK; `check-encoding` OK; 15 pruebas en
+  Node de las funciones nuevas (todas pasan). **Sin abrir en navegador** (petición de Adrián).
+- **Entrega:** PR #151 fusionada, CI en verde. Pages run `33895624663` **publicado y verificado**
+  (`version.json` → 9.36; el `panel.html` servido contiene `pageReplanteos`). API Worker run
+  `33895627643` **a la espera de la aprobación humana** del entorno `production`; sustituye a los
+  runs anteriores del API (`33859279300`, `33894942811`) porque `965d5b2` incluye REPLANTEO-01,
+  02 y 03. El agente `33859282942` sigue esperando también. Hasta aprobar el API, la página
+  «Replanteos» se ve pero la lista responde «Ruta no encontrada» (404), igual que la tarjeta
+  del móvil.
+- **Nota de proceso:** la documentación decía v9.34 pero `main` ya estaba en 9.35 (REPLANTEO-02
+  se fusionó mientras se preparaba esto); se subió a 9.36. Otro agente movió `main` local entre
+  dos comandos; la rama se creó ya sobre `869f81f` y se comprobó `merge-base` antes del push.
+- **Siguiente acción exacta:** Adrián aprueba `33895627643` (API) y `33859282942` (agente) →
+  en Office: abrir «📐 Replanteos», ver un replanteo creado desde el móvil (foto + trazado),
+  imprimir el informe, probar «A Pedidos» con uno calculado, y en «⚙️ Catálogo» cambiar
+  `soporte_cada_m` de la bandeja de rejilla, comprobar que un replanteo nuevo del móvil lo
+  aplica y «Restaurar catálogo base» → registrar en `HANDOFF.md`.
+- **No tocar:** el editor del móvil ni el cálculo (`calcularMaterialReplanteo`); esta tarea no
+  los modifica.
+
+
 ## REPLANTEO-02 — prototipo AR en Android (ADR-0024, fase 2) (2026-09-04, tarde, continuación)
 
 - **Agente:** Claude (Fable 5.1). **Rama:** `feat/replanteo-ar-prototipo`. **Tarea:** REPLANTEO-02.

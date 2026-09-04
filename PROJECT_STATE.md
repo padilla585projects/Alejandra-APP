@@ -1,6 +1,13 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-09-04
+- Estado (2026-09-04, noche): **REPLANTEO-03 — Replanteos en la oficina y editor del catálogo
+  por empresa, v9.36, fusionado (PR #151 → `965d5b2`), Pages publicado; API Worker en espera de
+  aprobación (`33895627643`).** `panel.html`: página «📐 Replanteos» con lista, filtros (obra,
+  estado, texto; departamento solo privilegiados), detalle con trazado redibujado, informe,
+  «A Pedidos» y eliminar; editor del catálogo (`replanteo_catalogo`) solo admins. `worker.js`:
+  tres rutas nuevas; `catalogoReplanteoDe()` oculta elementos con `activo=0`. 15 pruebas en Node,
+  sin abrir en navegador. Detalle en `HANDOFF.md`/`TASKS.md`.
 - Estado (2026-09-04, tarde, continuación): **REPLANTEO-02 — prototipo AR en Android
   (ADR-0024, fase 2) implementado en `feat/replanteo-ar-prototipo`, v9.35, sin probar en
   dispositivo.** WebXR `immersive-ar` + hit-test + dom-overlay + depth sensing como aviso;

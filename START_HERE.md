@@ -4,6 +4,15 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPLANTEO-03 — Replanteos en la oficina y editor del catálogo (2026-09-04, noche):** página
+«📐 Replanteos» en `panel.html` (lista con miniatura y filtros, detalle con la foto y el trazado
+redibujado como en el móvil, informe imprimible, «A Pedidos», eliminar) y editor del catálogo
+por empresa para admins (12 reglas de cálculo, opciones, restaurar base, desactivar, nuevo).
+Rutas `GET /replanteos/catalogo-empresa`, `PUT`/`DELETE /replanteos/catalogo/:key`. v9.36,
+PR #151 fusionada, Pages publicado (run `33895624663`). **Pendiente:** aprobar el API Worker
+(`33895627643`, sustituye a los runs anteriores) y el agente (`33859282942`), verificar en
+Office, decidir el ADR-0024 y autorizar `migrate_replanteos.sql`. Ver `TASKS.md`/`HANDOFF.md`.
+
 **REPLANTEO-02 — prototipo AR en Android (2026-09-04, tarde, continuación):** fase 2 del
 ADR-0024 implementada en `feat/replanteo-ar-prototipo`, v9.35: botón «📱 Medir con la
 cámara en AR» (solo Chrome Android con ARCore), puntos anclados en el techo con hit-test,
