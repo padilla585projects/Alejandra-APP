@@ -1,5 +1,25 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-04): **Cerradas las dos verificaciones que quedaban abiertas
+(SYNC-SELECT-01 y el quiosco de ARC-022). Las dos pasan.** Ver `HANDOFF.md`.
+- **SYNC-SELECT-01 / TELECOM-NAV-02:** la PR ya estaba fusionada y Pages ya la había
+  publicado (run `33794071508`, SHA `f4f6f5c`); lo que faltaba era comprobarlo. Los tres
+  escenarios verificados contra el `panel.html` de producción: los seis niveles de Telecom
+  restauran donde estaba el usuario (incluidos `cuadro` y `cuadro-puertos`), el desplegable
+  de obra de Accidentes se queda en 4 opciones tras 6 ticks conservando la elegida, y el
+  filtro de Facturas de proveedor sobrevive a 3 ticks con la tabla filtrada. Sin pendientes.
+- **ARC-022, quiosco:** verificado en navegador por primera vez desde el 11/08/2026 —
+  KIOSCO-FOCUS-01 (el foco ya no se roba en el login), pantalla de quiosco completa, los
+  tres caminos de escaneo (usuario / externo con avisos / código no reconocido), las dos
+  redes de seguridad de KIOSCO-02-FIX, y el ciclo completo del QR (generado por
+  `panel.html`, leído por `jsQR`). **Queda solo la mitad de servidor**: `POST /verificar` y
+  `POST /fichajes/scan` con un código real contra D1, que exige un código de acceso o la
+  sesión de Adrián.
+- Sin cambios de código, de esquema ni de versión en esta ronda.
+- **Un hallazgo para tu decisión** (no se toca solo): el fichaje se registra en la obra del
+  trabajador, no en la del quiosco, así que quien pase su QR por el quiosco de otra obra
+  ficha bien pero no sale en la pantalla. Detalle en `HANDOFF.md` y `ARCHITECT_BACKLOG.md`.
+
 Estado (actualizado 2026-09-03, continuación 5): **SYNC-SELECT-01 / TELECOM-NAV-02 —
 auditadas las 108 páginas con auto-refresh de `SYNC_INTERVALS`, cierra el pendiente que
 arrastraba TELECOM-NAV-01 desde el 17/08/2026. Tres clases de bug reales encontradas y

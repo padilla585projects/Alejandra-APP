@@ -4,6 +4,35 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Verified (2026-09-04 — SYNC-SELECT-01 y el quiosco de ARC-022, sin cambios de código)
+
+Ronda de verificación pura: **ningún cambio de código, de esquema ni de versión.** Se cierran
+las dos comprobaciones que quedaban abiertas, ejecutando el código de producción publicado en
+Pages. No se escribió nada en D1 (ningún fichaje creado, ninguna petición de escritura).
+
+- **SYNC-SELECT-01 / TELECOM-NAV-02 — desplegado y verificado.** `TASKS.md` daba por pendiente
+  fusionar y desplegar: ya estaba hecho (PR #142 → `f4f6f5c`, run `33794071508` de
+  `pages.yml`). El `panel.html` servido por Pages es idéntico al del repositorio salvo CRLF→LF.
+  Los tres escenarios pasan: los seis niveles de Telecom restauran donde estaba el usuario
+  (incluidos `cuadro` y `cuadro-puertos`, los que fallaban); el desplegable de obra de
+  Accidentes se queda en 4 opciones tras 6 ticks, con placeholder y elección intactos; y el
+  filtro de Facturas de proveedor sobrevive a 3 ticks con la tabla filtrada (2 de 3 filas).
+- **ARC-022 — quiosco verificado en navegador por primera vez** desde el 11/08/2026, cuando se
+  dejó anotado que solo se había revisado por sintaxis. KIOSCO-FOCUS-01 confirmado (se teclea
+  un código de 8 dígitos con pausas de 450 ms y el foco nunca se pierde); pantalla de quiosco
+  completa (empresa, marca de agua, reloj, contador, lista mixta de usuarios y externos, foco
+  en el lector); los tres caminos de escaneo (usuario con foto, externo con DNI y dos
+  caducidades mostrando badge, código no reconocido); las **dos redes de seguridad de
+  KIOSCO-02-FIX** (una excepción en `mostrarResultado()` no deja `_kioscoBusy` atascado y el
+  escaneo siguiente funciona); y el **ciclo completo del QR**: el generado por
+  `generarTarjetaTrabajadorPanel()` se decodifica correctamente con `jsQR`, la librería con la
+  que `index.html` escanea con cámara.
+- **Sin cerrar, y es de servidor:** `POST /verificar` y `POST /fichajes/scan` con un código
+  real contra D1 — exige un código de acceso o la sesión del Director.
+- **Hallazgo anotado como ARC-024** (sin decidir): el fichaje se registra en la obra del
+  trabajador, no en la del quiosco, así que quien pase su QR por el quiosco de otra obra ficha
+  bien pero no aparece en la pantalla.
+
 ### Fixed (2026-09-03 — SYNC-SELECT-01 / TELECOM-NAV-02: auditoría completa del auto-refresh de `SYNC_INTERVALS`)
 
 Adrián pidió auditar el resto de `SYNC_INTERVALS` — el patrón que ya había mordido dos veces
