@@ -4,6 +4,16 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPLANTEO-02 — prototipo AR en Android (2026-09-04, tarde, continuación):** fase 2 del
+ADR-0024 implementada en `feat/replanteo-ar-prototipo`, v9.35: botón «📱 Medir con la
+cámara en AR» (solo Chrome Android con ARCore), puntos anclados en el techo con hit-test,
+bandeja/tubo dibujados en 3D con su ancho real y la longitud medida por tramo, aviso por
+sensor de profundidad cuando algo cruza delante del punto, y al terminar una vista en planta
+que entra en el editor de la fase 1 con la longitud medida. **Sin probar en dispositivo:**
+la siguiente acción es la prueba de deriva en el Android de Adrián con cinta métrica. Los
+dos Workers de REPLANTEO-01 siguen esperando su aprobación en GitHub. Ver
+`TASKS.md`/`HANDOFF.md`/`CHANGELOG.md`.
+
 **REPLANTEO-01 — replanteo asistido por cámara sobre foto (2026-09-04, tarde):** idea de
 Adrián («cojo la cámara, miro al techo y en el móvil vería cómo queda… calcular material y
 replantear bandeja, tubo, lo que sea… pestaña Replanteo para cualquier departamento,

@@ -1981,6 +1981,9 @@ select option{background:var(--surface2);color:var(--text)}
               <input type="file" accept="image/*" style="display:none" onchange="replNuevoFotoElegida(this)"></label>
           </div>
           <div id="replNuevoFotoNombre" style="font-size:11px;color:var(--muted);margin-top:6px">Sin foto todavía</div>
+          <!-- REPLANTEO-02: solo aparece si el navegador soporta WebXR immersive-ar (Chrome Android + ARCore) -->
+          <button id="btnReplNuevoAR" class="repl-btn" style="display:none;width:100%;margin-top:10px;padding:11px" onclick="replArIniciar()">📱 Medir con la cámara en AR (sin foto)</button>
+          <div id="replNuevoARNota" style="display:none;font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4">Prototipo: el móvil ancla los puntos en el techo y mide la longitud real. Al terminar sale una vista en planta para revisar obstáculos y material.</div>
         </div>
         <div style="font-size:11px;color:var(--muted);line-height:1.4">Consejo: que en la foto salga algo de medida conocida (una placa de techo de 60 cm, una puerta de 2,10 m…) para fijar la escala después.</div>
       </div>
@@ -2065,6 +2068,19 @@ select option{background:var(--surface2);color:var(--text)}
         <button onclick="replCerrarInforme()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
       </div>
       <iframe id="replInformeFrame" style="flex:1;border:none;width:100%;background:#fff"></iframe>
+    </div>
+  </div>
+
+  <!-- REPLANTEO-02: capa DOM sobre la sesión AR (WebXR dom-overlay). Solo visible durante la sesión. -->
+  <div id="replArOverlay" style="display:none;position:fixed;inset:0;z-index:10000;pointer-events:none;font-family:'Montserrat',sans-serif">
+    <div id="replArEstado" style="position:absolute;top:14px;left:12px;right:12px;background:rgba(0,0,0,.62);color:#fff;padding:9px 11px;border-radius:10px;font-size:13px;line-height:1.35"></div>
+    <div id="replArAviso" style="display:none;position:absolute;top:72px;left:12px;right:12px;background:rgba(250,204,21,.94);color:#111;padding:9px 11px;border-radius:10px;font-size:13px;font-weight:700;line-height:1.35"></div>
+    <div style="position:absolute;bottom:22px;left:12px;right:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;pointer-events:auto">
+      <button onclick="replArPunto()" style="grid-column:1/-1;background:#f97316;border:none;color:#fff;font-size:16px;font-weight:800;padding:14px;border-radius:12px;font-family:inherit">📍 Punto</button>
+      <button onclick="replArObstaculo()" style="background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">⚠️ Obstáculo</button>
+      <button onclick="replArDeshacer()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">↩ Deshacer</button>
+      <button onclick="replArCancelar()" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;font-weight:700;padding:11px;border-radius:12px;font-family:inherit">✖ Cancelar</button>
+      <button onclick="replArTerminar()" style="background:#22c55e;border:none;color:#fff;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">✅ Terminar</button>
     </div>
   </div>
 
@@ -15097,7 +15113,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.34';
+const APP_VERSION = '9.35';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18216,6 +18232,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('replNuevoFotoNombre').textContent = 'Sin foto todavía';
     window._replNuevoFile = null;
     document.getElementById('modalReplNuevo').style.display = 'flex';
+    // REPLANTEO-02: botón AR solo si el navegador lo soporta (Chrome Android + ARCore)
+    if (typeof replArSoportado === 'function') replArSoportado().then(ok => {
+      const b = document.getElementById('btnReplNuevoAR'), n = document.getElementById('replNuevoARNota');
+      if (b) b.style.display = ok ? '' : 'none';
+      if (n) n.style.display = ok ? '' : 'none';
+    });
   }
   function replCerrarNuevo() { document.getElementById('modalReplNuevo').style.display = 'none'; }
   function replNuevoFotoElegida(input) {
@@ -18290,6 +18312,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         escala_px_m: tr.longitud_manual_m ? null : (r.escala_px_m || null),
         longitud_manual_m: tr.longitud_manual_m || null,
         calc: r.material?.length ? { longitud_m: r.longitud_m, material: r.material, reglas: r.reglas, giros: null } : null,
+        origen: r.origen || 'foto', puntos_3d: Array.isArray(tr.puntos_3d) ? tr.puntos_3d : null,
         estado: r.estado || 'borrador', modo: 'trazar', cambiado: false, notas: r.notas || '',
         creado_por: r.creado_por, creado_en: r.creado_en,
       };
@@ -18670,7 +18693,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function _replPayloadCalculo() {
     return {
       elemento_key: _repl.elemento_key, elemento_params: _repl.params,
-      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia },
+      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, puntos_3d: _repl.puntos_3d || undefined },
       escala_px_m: _repl.longitud_manual_m ? null : _repl.escala_px_m,
       longitud_manual_m: _repl.longitud_manual_m || null,
     };
@@ -18692,6 +18715,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!c || !_repl) return;
     const esc = _replEscalaActual();
     const partes = [];
+    if (_repl.origen === 'ar') partes.push(`<span style="color:#22c55e">📱 medido en AR (vista en planta)</span>`);
     partes.push(`<span>📍 <b>${_repl.puntos.length}</b> puntos</span>`);
     if (_repl.longitud_manual_m) partes.push(`<span>📏 longitud fijada: <b>${_replNum(_repl.longitud_manual_m)} m</b></span>`);
     else if (_repl.escala_px_m) partes.push(`<span>📏 escala ✔ (${_replNum(_repl.referencia?.metros || 0, 2)} m de referencia)</span>`);
@@ -18746,7 +18770,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         if (s?.obra_id) fd.append('obra_id', s.obra_id);
         fd.append('elemento_key', _repl.elemento_key);
         fd.append('elemento_json', JSON.stringify(_repl.params));
-        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia }));
+        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, puntos_3d: _repl.puntos_3d || undefined }));
+        fd.append('origen', _repl.origen === 'ar' ? 'ar' : 'foto');
         if (_repl.escala_px_m && !_repl.longitud_manual_m) fd.append('escala_px_m', _repl.escala_px_m);
         if (_repl.longitud_manual_m) fd.append('longitud_manual_m', _repl.longitud_manual_m);
         fd.append('foto_w', _repl.imgW); fd.append('foto_h', _repl.imgH);
@@ -18886,6 +18911,276 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replCerrarInforme      = replCerrarInforme;
 
   window.replDibujar = replDibujar;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // REPLANTEO-02 — AR en Android (ADR-0024, fase 2, PROTOTIPO) — 2026-09-04
+  // ───────────────────────────────────────────────────────────────────────────
+  // Adrián: "cojo la cámara, miro al techo y en el móvil vería cómo queda... el AR debe
+  // ver si hay instalaciones de por medio". Sesión WebXR `immersive-ar` (Chrome Android
+  // sobre ARCore) con hit-test: el encargado apunta, pulsa "Punto" y el móvil ancla ese
+  // punto en el mundo real; entre puntos se dibuja la bandeja/tubo en 3D con su ancho real
+  // y la longitud MEDIDA de cada tramo. Con depth sensing (si el móvil lo tiene) se avisa
+  // cuando hay algo cruzando por delante del punto apuntado -- la app NO decide qué es ni
+  // qué hacer: el encargado marca el obstáculo y en el editor elige debajo/esquivar/sujetar.
+  // Al terminar se genera una VISTA EN PLANTA (proyección XZ, rejilla de 1 m) que entra en
+  // el editor de fase 1 como si fuera la foto, con la longitud total medida en 3D como
+  // longitud conocida. Así cálculo, informe, pedido y Alejandra no cambian (ADR-0024 §2).
+  // Límites conocidos: la deriva del seguimiento en tramos largos está por medir en un
+  // Android real (REPLANTEO-02); no funciona en iPhone Safari; three.js se carga solo al
+  // entrar en AR (650 KB desde cdnjs, ya usado por la app para jsPDF).
+  // ═══════════════════════════════════════════════════════════════════════════
+  let _ar = null;
+  let _threeCargando = null;
+  const REPL_AR_ESCALA_PX_M = 100;
+
+  async function replArSoportado() {
+    try {
+      if (!navigator.xr || !navigator.xr.isSessionSupported) return false;
+      return await navigator.xr.isSessionSupported('immersive-ar');
+    } catch { return false; }
+  }
+  function _replCargarThree() {
+    if (window.THREE) return Promise.resolve(window.THREE);
+    if (_threeCargando) return _threeCargando;
+    _threeCargando = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.158.0/three.min.js';
+      s.onload = () => window.THREE ? resolve(window.THREE) : reject(new Error('three.js no disponible'));
+      s.onerror = () => { _threeCargando = null; reject(new Error('No se pudo cargar three.js (¿sin conexión?)')); };
+      document.head.appendChild(s);
+    });
+    return _threeCargando;
+  }
+  function _replArEstado(txt) { const e = document.getElementById('replArEstado'); if (e) e.textContent = txt; }
+  function _replArAviso(txt) {
+    const e = document.getElementById('replArAviso'); if (!e) return;
+    if (txt) { e.textContent = txt; e.style.display = ''; } else { e.style.display = 'none'; }
+  }
+
+  async function replArIniciar() {
+    const titulo = document.getElementById('replNuevoTitulo').value.trim();
+    const key = document.getElementById('replNuevoElemento').value;
+    if (!titulo) { toast('Escribe un título', 'error'); return; }
+    if (!(await replArSoportado())) { toast('Este móvil o navegador no soporta AR (hace falta Chrome en Android con ARCore)', 'error'); return; }
+    const btn = document.getElementById('btnReplNuevoAR');
+    if (btn) btn.disabled = true;
+    try {
+      const THREE = await _replCargarThree();
+      const el = _replCatalogo.find(e => e.key === key) || _replCatalogo[0];
+      const params = _replParamsPorDefecto(el);
+      const anchoM = ((+params.ancho_mm || +params.diametro_mm || el.reglas?.ancho_mm || 100) / 1000);
+      const overlay = document.getElementById('replArOverlay');
+      overlay.style.display = 'block';
+      _replArAviso(null);
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay', 'depth-sensing'],
+        domOverlay: { root: overlay },
+        depthSensing: { usagePreference: ['cpu-optimized'], dataFormatPreference: ['luminance-alpha'] },
+      });
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio || 1);
+      renderer.xr.enabled = true;
+      renderer.xr.setReferenceSpaceType('local');
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(70, 1, 0.01, 40);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
+      const reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+      reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
+      _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], obstaculos: [], grupo: new THREE.Group(),
+              color: el.color || '#f97316', anchoM, titulo, elemento: el, params, hit: null, tieneDepth: false, ultimoAviso: 0 };
+      scene.add(_ar.grupo);
+      session.addEventListener('end', _replArLimpiar);
+      await renderer.xr.setSession(session);
+      const viewer = await session.requestReferenceSpace('viewer');
+      _ar.hitSource = await session.requestHitTestSource({ space: viewer });
+      _replArEstado('Apunta al techo o a la pared. Cuando el anillo naranja esté sobre el punto, pulsa 📍 Punto.');
+      renderer.setAnimationLoop((t, frame) => _replArFrame(t, frame));
+    } catch (e) {
+      _replArLimpiar();
+      toast('❌ AR: ' + (e.message || 'no se pudo iniciar la sesión'), 'error');
+    } finally { if (btn) btn.disabled = false; }
+  }
+
+  function _replArFrame(t, frame) {
+    if (!_ar || !frame) return;
+    const { renderer, scene, camera, reticle } = _ar;
+    const refSpace = renderer.xr.getReferenceSpace();
+    _ar.refSpace = refSpace;
+    let hitPos = null;
+    if (_ar.hitSource) {
+      const hits = frame.getHitTestResults(_ar.hitSource);
+      if (hits.length) {
+        const pose = hits[0].getPose(refSpace);
+        if (pose) {
+          reticle.visible = true;
+          reticle.matrix.fromArray(pose.transform.matrix);
+          hitPos = new _ar.THREE.Vector3(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+        }
+      } else reticle.visible = false;
+    }
+    _ar.hit = hitPos;
+    // Depth sensing: ¿hay algo entre la cámara y el punto apuntado? (solo aviso)
+    try {
+      const vp = frame.getViewerPose(refSpace);
+      if (vp && hitPos && typeof frame.getDepthInformation === 'function') {
+        const view = vp.views[0];
+        const depth = frame.getDepthInformation(view);
+        if (depth) {
+          _ar.tieneDepth = true;
+          const d = depth.getDepthInMeters(0.5, 0.5);
+          const cam = new _ar.THREE.Vector3(vp.transform.position.x, vp.transform.position.y, vp.transform.position.z);
+          const distHit = cam.distanceTo(hitPos);
+          if (d > 0.05 && d < distHit - 0.2) {
+            _replArAviso(`⚠️ Hay algo cruzando ${(distHit - d).toFixed(2).replace('.', ',')} m por delante del punto. Si es una instalación, márcala con ⚠️ Obstáculo.`);
+            _ar.ultimoAviso = t;
+          } else if (t - _ar.ultimoAviso > 1500) _replArAviso(null);
+        }
+      }
+    } catch { /* sin depth sensing: no pasa nada */ }
+    renderer.render(scene, camera);
+  }
+
+  function _replArTexto(txt) {
+    const THREE = _ar.THREE;
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+    const c = cv.getContext('2d');
+    c.fillStyle = 'rgba(0,0,0,.7)'; c.fillRect(0, 0, 256, 64);
+    c.font = 'bold 34px sans-serif'; c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(txt, 128, 34);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
+    sp.scale.set(0.32, 0.08, 1);
+    return sp;
+  }
+  function _replArRedibujar() {
+    const { THREE, grupo, puntos, obstaculos, color, anchoM } = _ar;
+    while (grupo.children.length) { const c = grupo.children.pop(); c.geometry?.dispose?.(); c.material?.map?.dispose?.(); c.material?.dispose?.(); }
+    const mat = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+    const matBorde = new THREE.MeshBasicMaterial({ color });
+    puntos.forEach((p, i) => {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 16), new THREE.MeshBasicMaterial({ color: i === 0 ? 0x22c55e : (i === puntos.length - 1 ? 0xef4444 : 0xffffff) }));
+      s.position.copy(p); grupo.add(s);
+    });
+    for (let i = 1; i < puntos.length; i++) {
+      const a = puntos[i - 1], b = puntos[i];
+      const len = a.distanceTo(b); if (len < 0.01) continue;
+      const box = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, anchoM), mat);
+      box.position.copy(a).add(b).multiplyScalar(0.5);
+      box.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), b.clone().sub(a).normalize());
+      grupo.add(box);
+      const borde = new THREE.Mesh(new THREE.BoxGeometry(len, 0.005, anchoM + 0.01), matBorde);
+      borde.position.copy(box.position); borde.quaternion.copy(box.quaternion); grupo.add(borde);
+      const lbl = _replArTexto(len.toFixed(2).replace('.', ',') + ' m');
+      lbl.position.copy(box.position).add(new THREE.Vector3(0, 0.12, 0)); grupo.add(lbl);
+    }
+    obstaculos.forEach((o, i) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+      m.position.copy(o.pos); grupo.add(m);
+      const lbl = _replArTexto('⚠ ' + (i + 1)); lbl.position.copy(o.pos).add(new THREE.Vector3(0, 0.1, 0)); grupo.add(lbl);
+    });
+  }
+  function _replArLongitud() { let L = 0; for (let i = 1; i < _ar.puntos.length; i++) L += _ar.puntos[i - 1].distanceTo(_ar.puntos[i]); return L; }
+  function _replArEstadoResumen() {
+    const n = _ar.puntos.length;
+    _replArEstado(n < 2
+      ? (n === 0 ? 'Apunta al primer punto del recorrido y pulsa 📍 Punto.' : '1 punto. Apunta al siguiente y pulsa 📍 Punto.')
+      : `${n} puntos · ${_ar.obstaculos.length} obstáculo(s) · ${_replArLongitud().toFixed(2).replace('.', ',')} m medidos${_ar.tieneDepth ? '' : ' · (este móvil no da profundidad: los obstáculos se marcan a mano)'}`);
+  }
+  function replArPunto() {
+    if (!_ar) return;
+    if (!_ar.hit) { _replArEstado('No hay superficie bajo el anillo. Mueve el móvil despacio hasta que aparezca el anillo naranja.'); return; }
+    _ar.puntos.push(_ar.hit.clone());
+    _ar.ultimoFueObstaculo = false;
+    _replArRedibujar(); _replArEstadoResumen();
+  }
+  function replArObstaculo() {
+    if (!_ar) return;
+    if (!_ar.hit) { _replArEstado('No hay superficie bajo el anillo.'); return; }
+    if (_ar.puntos.length < 2) { _replArEstado('Marca primero al menos dos puntos del recorrido.'); return; }
+    const p = _ar.hit.clone();
+    let best = null;
+    for (let i = 1; i < _ar.puntos.length; i++) {
+      const a = _ar.puntos[i - 1], b = _ar.puntos[i];
+      const ab = b.clone().sub(a); const L2 = ab.lengthSq() || 1;
+      let t = p.clone().sub(a).dot(ab) / L2; t = Math.max(0.02, Math.min(0.98, t));
+      const q = a.clone().add(ab.multiplyScalar(t));
+      const d = q.distanceTo(p);
+      if (!best || d < best.d) best = { seg: i - 1, t, d, pos: q };
+    }
+    if (!best || best.d > 1.0) { _replArEstado('El punto está a más de 1 m del recorrido. Apunta más cerca de la bandeja/tubo.'); return; }
+    _ar.obstaculos.push({ seg: best.seg, t: best.t, pos: best.pos });
+    _ar.ultimoFueObstaculo = true;
+    _replArRedibujar(); _replArEstadoResumen();
+  }
+  function replArDeshacer() {
+    if (!_ar) return;
+    if (_ar.obstaculos.length && (!_ar.puntos.length || _ar.ultimoFueObstaculo)) _ar.obstaculos.pop();
+    else { _ar.puntos.pop(); _ar.obstaculos = _ar.obstaculos.filter(o => o.seg < _ar.puntos.length - 1); }
+    _replArRedibujar(); _replArEstadoResumen();
+  }
+  function replArCancelar() { if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
+  function _replArLimpiar() {
+    const overlay = document.getElementById('replArOverlay');
+    if (overlay) overlay.style.display = 'none';
+    if (_ar?.renderer) { try { _ar.renderer.setAnimationLoop(null); _ar.renderer.dispose(); } catch {} }
+    _ar = null;
+  }
+
+  // Vista en planta: proyección XZ del recorrido, rejilla de 1 m, 100 px/m (tope 1600 px)
+  function _replArPlano(puntos, obstaculos) {
+    const xs = puntos.map(p => p.x), zs = puntos.map(p => p.z);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
+    const margen = 0.75;
+    let esc = REPL_AR_ESCALA_PX_M;
+    const wM = (maxX - minX) + 2 * margen, hM = (maxZ - minZ) + 2 * margen;
+    if (wM * esc > 1600 || hM * esc > 1600) esc = Math.floor(1600 / Math.max(wM, hM));
+    const W = Math.max(320, Math.round(wM * esc)), H = Math.max(320, Math.round(hM * esc));
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#1f2937'; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(255,255,255,.14)'; c.lineWidth = 1;
+    for (let x = 0; x <= W; x += esc) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+    for (let y = 0; y <= H; y += esc) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+    c.fillStyle = 'rgba(255,255,255,.55)'; c.font = `${Math.max(11, esc * 0.14)}px sans-serif`; c.textBaseline = 'top';
+    c.fillText('Vista en planta (AR) · cuadrícula 1 m', 8, 8);
+    const toPx = p => ({ x: Math.round((p.x - minX + margen) * esc), y: Math.round((p.z - minZ + margen) * esc) });
+    const puntosPx = puntos.map(toPx);
+    const obstPx = obstaculos.map(o => ({ seg: o.seg, t: o.t }));
+    return { cv, puntosPx, obstPx, esc };
+  }
+  async function replArTerminar() {
+    if (!_ar) return;
+    if (_ar.puntos.length < 2) { _replArEstado('Marca al menos dos puntos antes de terminar.'); return; }
+    const { puntos, obstaculos, titulo, elemento, params } = _ar;
+    const puntos3d = puntos.map(p => ({ x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3) }));
+    const longitud3d = +_replArLongitud().toFixed(2);
+    const plano = _replArPlano(puntos, obstaculos);
+    try { await _ar.session.end(); } catch { _replArLimpiar(); }
+    const blob = await new Promise(r => plano.cv.toBlob(r, 'image/jpeg', 0.9));
+    const file = new File([blob], `replanteo-ar-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const img = await _replCargarImagen(URL.createObjectURL(file), false);
+    _repl = {
+      id: null, titulo, elemento_key: elemento.key, params, file, img, imgW: img.naturalWidth, imgH: img.naturalHeight,
+      puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
+      referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
+      calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
+    };
+    replCerrarNuevo();
+    showScreen('replanteoEditor');
+    replInitEditor();
+    if (_repl.obstaculos.length) toast(`⚠️ ${_repl.obstaculos.length} obstáculo(s) marcados en AR: toca cada uno para indicar qué es y qué hacemos`);
+    else toast(`📱 ${longitud3d.toString().replace('.', ',')} m medidos en AR`);
+    _replProgramarCalculo();
+  }
+
+  window.replArIniciar    = replArIniciar;
+  window.replArPunto      = replArPunto;
+  window.replArObstaculo  = replArObstaculo;
+  window.replArDeshacer   = replArDeshacer;
+  window.replArTerminar   = replArTerminar;
+  window.replArCancelar   = replArCancelar;
+  window.replArSoportado  = replArSoportado;
+
 
   // ══════════════════════════════════════════════════════
   // OBRA DASHBOARD (NEW-27)
