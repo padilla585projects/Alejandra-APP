@@ -4,6 +4,22 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-04 — DOCS-UI-02: tarjetas de Documentación a dos filas, v9.33)
+
+Adrián, tras probar el v9.32 (PR #144, nombres a 2 líneas y «Volver» en naranja) en el móvil:
+«se sigue sin ver los nombres» y «los botones siguen igual». La causa real no era el recorte
+sino el ancho: con cuatro botones en la misma fila al nombre le quedaban dos palabras.
+
+- `index.html` (v9.33): las tarjetas de **archivo, esquema IA y nota** de Documentación pasan
+  a dos filas — arriba icono + nombre completo (sin `line-clamp`, con `word-break`) + meta;
+  abajo los botones de acción repartidos a todo el ancho (`flex:1`). Las carpetas siguen en
+  una fila porque solo llevan dos botones y el nombre cabe.
+- `index.html`: los botones «📝 Nota» y «➕ Subir» de la cabecera de Documentación llevan el
+  texto en naranja (`var(--accent)`) para que se vean junto al «📁 Carpeta» relleno.
+- Versión 9.32 → 9.33 en los cuatro marcadores. Se corrige de paso un `style` duplicado en el
+  icono de la tarjeta de archivo (el segundo atributo se ignoraba).
+
+
 ### Verified (2026-09-04 — SYNC-SELECT-01 y el quiosco de ARC-022, sin cambios de código)
 
 Ronda de verificación pura: **ningún cambio de código, de esquema ni de versión.** Se cierran

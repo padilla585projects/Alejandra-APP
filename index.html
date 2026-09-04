@@ -11383,9 +11383,9 @@ async function docsCargar(containerId) {
           <button onclick="docsNuevaCarpeta('${containerId}')"
             style="padding:7px 12px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">📁 Carpeta</button>
           <button onclick="docsCrearNota(null,'${containerId}',null)"
-            style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">📝 Nota</button>
+            style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--accent);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">📝 Nota</button>
           <button onclick="docsAbrirSubirMenu(null,'${containerId}',null)"
-            style="padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">➕ Subir</button>
+            style="padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--accent);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">➕ Subir</button>
         </div>` : ''}
       </div>
       ${carpetas.map(cp => `
@@ -11415,19 +11415,24 @@ async function docsCargar(containerId) {
         ${esquemas.map(e => {
           const url = esquemaUrl(e.r2_key);
           const tit = (e.titulo||'').replace(/'/g,"\\'");
-          return `<div style="display:flex;align-items:center;gap:8px;padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
-            <span style="font-size:22px;flex-shrink:0;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">📐</span>
-            <div style="flex:1;min-width:0;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">
-              <div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${e.titulo}</div>
-              <div style="font-size:10px;color:var(--muted)">${e.fecha_emision||''} · Alejandra</div>
+          // DOCS-UI-02: mismo patrón de dos filas que docsRenderArchivo.
+          return `<div style="padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">
+              <span style="font-size:22px;flex-shrink:0">📐</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:13px;color:var(--text);word-break:break-word;line-height:1.3">${e.titulo}</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:2px">${e.fecha_emision||''} · Alejandra</div>
+              </div>
             </div>
+            ${(url || puedeEditar) ? `<div style="display:flex;gap:6px;margin-top:9px">
             ${url ? `<button onclick="window.open('${url}','_blank')" title="Ver esquema"
-              style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">🔗</button>` : ''}
+              style="padding:7px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">🔗</button>` : ''}
             ${puedeEditar ? `
             <button onclick="docsEsquemaRenombrar(${e.id},'${tit}','${containerId}')" title="Renombrar"
-              style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">✏️</button>
+              style="padding:7px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">✏️</button>
             <button onclick="docsEsquemaBorrar(${e.id},'${tit}','${containerId}')" title="Eliminar"
-              style="padding:6px 9px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:14px;color:#ef4444;cursor:pointer;flex-shrink:0">🗑️</button>` : ''}
+              style="padding:7px 0;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:15px;color:#ef4444;cursor:pointer;flex:1">🗑️</button>` : ''}
+            </div>` : ''}
           </div>`;
         }).join('')}` : ''}`;
   } catch {
@@ -11524,21 +11529,28 @@ function docsRenderArchivo(d, puedeEditar, carpetaId, containerId, carpetaNombre
   const nomEsc   = d.nombre.replace(/'/g,"\\'");
   const mime     = (d.mime||'').replace(/'/g,"\\'");
   return `
-  <div style="display:flex;align-items:center;gap:8px;padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
-    <span style="font-size:22px;flex-shrink:0" onclick="docsVerArchivo(${d.id},'${nomEsc}','${mime}')" style="cursor:pointer">${archivoIcono(d.mime)}</span>
-    <div style="flex:1;min-width:0;cursor:pointer" onclick="docsVerArchivo(${d.id},'${nomEsc}','${mime}')">
-      <div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${d.nombre}</div>
-      <div style="font-size:10px;color:var(--muted)">${kb}${d.subido_por?' · '+d.subido_por:''}${d.created_at?' · '+d.created_at.slice(0,10):''}</div>
+  <!-- DOCS-UI-02 (04/09/2026): Adrián -- "se sigue sin ver los nombres". Con 4 botones en la
+       misma fila al nombre le quedaban ~2 palabras. Ahora la tarjeta tiene dos filas: arriba
+       icono + nombre completo (sin recorte) + meta; abajo los botones repartidos a todo el ancho. -->
+  <div style="padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
+    <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="docsVerArchivo(${d.id},'${nomEsc}','${mime}')">
+      <span style="font-size:22px;flex-shrink:0">${archivoIcono(d.mime)}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;color:var(--text);word-break:break-word;line-height:1.3">${d.nombre}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${kb}${d.subido_por?' · '+d.subido_por:''}${d.created_at?' · '+d.created_at.slice(0,10):''}</div>
+      </div>
     </div>
-    <button onclick="docsCompartirArchivo(${d.id},'${nomEsc}','${mime}')" title="Compartir"
-      style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">📤</button>
-    <button onclick="docsDescargarDoc(${d.id},'${nomEsc}')" title="Descargar"
-      style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">⬇️</button>
-    ${puedeEditar ? `
-    <button onclick="docsEditarArchivo(${d.id},'${nomEsc}','${(d.descripcion||'').replace(/'/g,"\\'")}',${carpetaId},'${containerId}','${carpetaNombre.replace(/'/g,"\\'")}')" title="Editar"
-      style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">✏️</button>
-    <button onclick="docsBorrarArchivo(${d.id},${carpetaId},'${containerId}','${carpetaNombre.replace(/'/g,"\\'")}')" title="Eliminar"
-      style="padding:6px 9px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:14px;color:#ef4444;cursor:pointer;flex-shrink:0">🗑️</button>` : ''}
+    <div style="display:flex;gap:6px;margin-top:9px">
+      <button onclick="docsCompartirArchivo(${d.id},'${nomEsc}','${mime}')" title="Compartir"
+        style="padding:7px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">📤</button>
+      <button onclick="docsDescargarDoc(${d.id},'${nomEsc}')" title="Descargar"
+        style="padding:7px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">⬇️</button>
+      ${puedeEditar ? `
+      <button onclick="docsEditarArchivo(${d.id},'${nomEsc}','${(d.descripcion||'').replace(/'/g,"\\'")}',${carpetaId},'${containerId}','${carpetaNombre.replace(/'/g,"\\'")}')" title="Editar"
+        style="padding:7px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">✏️</button>
+      <button onclick="docsBorrarArchivo(${d.id},${carpetaId},'${containerId}','${carpetaNombre.replace(/'/g,"\\'")}')" title="Eliminar"
+        style="padding:7px 0;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:15px;color:#ef4444;cursor:pointer;flex:1">🗑️</button>` : ''}
+    </div>
   </div>`;
 }
 
@@ -11921,18 +11933,23 @@ function docsRenderNota(n, puedeEditar, carpetaId, containerId, carpetaNombre) {
   const contEsc = (n.contenido||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n');
   const titEsc  = (n.titulo||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   return `
-  <div style="display:flex;align-items:flex-start;gap:8px;padding:11px 12px;background:var(--surface);border:1px solid var(--accent)44;border-radius:12px;margin-bottom:8px">
-    <span style="font-size:22px;flex-shrink:0;cursor:pointer" onclick="mostrarDescFull('${contEsc}','${titEsc}')">📝</span>
-    <div style="flex:1;min-width:0;cursor:pointer" onclick="mostrarDescFull('${contEsc}','${titEsc}')">
-      <div style="font-weight:600;font-size:13px;color:var(--text)">${tit}</div>
-      <div style="font-size:11px;color:var(--muted)">${n.creado_por?'👤 '+n.creado_por+' · ':''}${n.updated_at?n.updated_at.slice(0,10):''}</div>
-      ${n.contenido ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;white-space:pre-wrap;max-height:48px;overflow:hidden">${n.contenido.slice(0,120)}${n.contenido.length>120?'…':''}</div>` : ''}
+  <!-- DOCS-UI-02: mismo patrón de dos filas que docsRenderArchivo. -->
+  <div style="padding:11px 12px;background:var(--surface);border:1px solid var(--accent)44;border-radius:12px;margin-bottom:8px">
+    <div style="display:flex;align-items:flex-start;gap:10px;cursor:pointer" onclick="mostrarDescFull('${contEsc}','${titEsc}')">
+      <span style="font-size:22px;flex-shrink:0">📝</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;color:var(--text);word-break:break-word;line-height:1.3">${tit}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${n.creado_por?'👤 '+n.creado_por+' · ':''}${n.updated_at?n.updated_at.slice(0,10):''}</div>
+        ${n.contenido ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;white-space:pre-wrap;max-height:48px;overflow:hidden">${n.contenido.slice(0,120)}${n.contenido.length>120?'…':''}</div>` : ''}
+      </div>
     </div>
     ${puedeEditar ? `
-    <button onclick="docsEditarNota(${n.id},'${titEsc}','${contEsc}',${carpetaId},'${containerId}','${nomEsc}')" title="Editar"
-      style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">✏️</button>
-    <button onclick="docsBorrarNota(${n.id},${carpetaId},'${containerId}','${nomEsc}')" title="Eliminar"
-      style="padding:6px 9px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:14px;color:#ef4444;cursor:pointer;flex-shrink:0">🗑️</button>` : ''}
+    <div style="display:flex;gap:6px;margin-top:9px">
+      <button onclick="docsEditarNota(${n.id},'${titEsc}','${contEsc}',${carpetaId},'${containerId}','${nomEsc}')" title="Editar"
+        style="padding:7px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">✏️</button>
+      <button onclick="docsBorrarNota(${n.id},${carpetaId},'${containerId}','${nomEsc}')" title="Eliminar"
+        style="padding:7px 0;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:15px;color:#ef4444;cursor:pointer;flex:1">🗑️</button>
+    </div>` : ''}
   </div>`;
 }
 
@@ -14876,7 +14893,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.32';
+const APP_VERSION = '9.33';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
