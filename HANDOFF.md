@@ -28,6 +28,12 @@
   02 y 03. El agente `33859282942` sigue esperando también. Hasta aprobar el API, la página
   «Replanteos» se ve pero la lista responde «Ruta no encontrada» (404), igual que la tarjeta
   del móvil.
+- **Despliegue aprobado y verificado (2026-09-04, 16:41):** Adrián aprobó los dos runs. API
+  Worker `33895627643` → success; agente `33859282942` → success; el API obsoleto `33894942811`
+  quedó cancelado. Comprobado desde fuera sin sesión: `GET /replanteos/catalogo-empresa` y
+  `GET /replanteos` responden **401** (antes 404), es decir, las rutas de REPLANTEO-01/02/03
+  están en producción. Lo que sigue sin comprobar es el uso real con sesión (lista, detalle,
+  informe, «A Pedidos», catálogo), que exige entrar en Office.
 - **Nota de proceso:** la documentación decía v9.34 pero `main` ya estaba en 9.35 (REPLANTEO-02
   se fusionó mientras se preparaba esto); se subió a 9.36. Otro agente movió `main` local entre
   dos comandos; la rama se creó ya sobre `869f81f` y se comprobó `merge-base` antes del push.
