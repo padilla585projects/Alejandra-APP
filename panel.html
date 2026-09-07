@@ -14739,8 +14739,56 @@ function _replOfficeAplicarH(H, x, y) {
   if (!d || !Number.isFinite(d)) return null;
   return { x: (H[0] * x + H[1] * y + H[2]) / d, y: (H[3] * x + H[4] * y + H[5]) / d };
 }
-function _replOfficeH(rep) { return _replOfficeHomografiaDe(rep?.trazado?.plano); }
-// Metros reales del tramo (a -> b): por el plano si lo hay, si no por la escala plana.
+// REPLANTEO-07: un replanteo puede traer varios planos (techo, pared...). Se mide cada tramo
+// con el que le toca, con EL MISMO criterio que planoDeTramo() del Worker y que el editor del
+// movil: el plano que contiene el punto medio del tramo, o el mas cercano. Si los tres se
+// separan, la oficina ensenaria cotas distintas de las que vio el encargado.
+const REPL_OFFICE_COLORES = ['#f472b6', '#22d3ee', '#a3e635', '#fbbf24', '#c084fc'];
+const _replOfficeColor = k => REPL_OFFICE_COLORES[k % REPL_OFFICE_COLORES.length];
+
+function _replOfficePlanos(rep) {
+  const tr = rep?.trazado || {};
+  const bruto = Array.isArray(tr.planos) ? tr.planos : (tr.plano ? [tr.plano] : []);
+  return bruto.map(p => ({ plano: p, H: _replOfficeHomografiaDe(p) })).filter(x => x.H);
+}
+function _replOfficeH(rep) { return _replOfficePlanos(rep)[0]?.H || null; }
+
+const _replOfficeCentroide = pts => ({ x: pts.reduce((a, p) => a + (+p.x), 0) / pts.length, y: pts.reduce((a, p) => a + (+p.y), 0) / pts.length });
+function _replOfficeDentroDe(pts, x, y) {
+  let signo = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const cruz = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+    if (Math.abs(cruz) < 1e-9) continue;
+    const sg = Math.sign(cruz);
+    if (!signo) signo = sg; else if (sg !== signo) return false;
+  }
+  return true;
+}
+function _replOfficePlanoDeTramo(planos, asignados, i, a, b) {
+  if (planos.length <= 1) return 0;
+  const forzado = Array.isArray(asignados) ? asignados[i] : null;
+  if (Number.isInteger(forzado) && forzado >= 0 && forzado < planos.length) return forzado;
+  const mx = (+a.x + +b.x) / 2, my = (+a.y + +b.y) / 2;
+  let dentro = -1, areaDentro = Infinity;
+  planos.forEach((p, k) => {
+    const pts = p.plano.pts.map(q => ({ x: +q.x, y: +q.y }));
+    if (!_replOfficeDentroDe(pts, mx, my)) return;
+    let a2 = 0;
+    for (let j = 0; j < 4; j++) { const u = pts[j], v = pts[(j + 1) % 4]; a2 += u.x * v.y - v.x * u.y; }
+    const area = Math.abs(a2) / 2;
+    if (area < areaDentro) { areaDentro = area; dentro = k; }
+  });
+  if (dentro >= 0) return dentro;
+  let mejor = 0, mejorD = Infinity;
+  planos.forEach((p, k) => {
+    const c = _replOfficeCentroide(p.plano.pts.map(q => ({ x: +q.x, y: +q.y })));
+    const d = Math.hypot(c.x - mx, c.y - my);
+    if (d < mejorD) { mejorD = d; mejor = k; }
+  });
+  return mejor;
+}
+// Metros reales del tramo (a -> b): por su plano si lo hay, si no por la escala plana.
 function _replOfficeMetrosTramo(H, a, b, esc) {
   if (H) {
     const p = _replOfficeAplicarH(H, a.x, a.y), q = _replOfficeAplicarH(H, b.x, b.y);
@@ -14773,7 +14821,9 @@ function _replOfficeDibujar(ctx, rep, img, elemento, f, paraInforme) {
   ctx.drawImage(img, ox, oy, imgW * s, imgH * s);
   const color = elemento?.color || '#f97316';
   const esc = _replOfficeEscala(rep);
-  const Hp = _replOfficeH(rep);          // REPLANTEO-04: plano rectificado, si lo tiene
+  const planosR = _replOfficePlanos(rep);   // REPLANTEO-04/07: planos rectificados, si los tiene
+  const asignados = rep?.trazado?.tramos_plano;
+  const Hp = planosR[0]?.H || null;
   const params = rep.elemento || {};
   const anchoMm = +params.ancho_mm || +params.diametro_mm || elemento?.reglas?.ancho_mm || 100;
   const anchoPx = esc ? Math.max(4, (anchoMm / 1000) * esc * s) : Math.max(6, 10 * s * (paraInforme ? 3 : 1));
@@ -14789,13 +14839,15 @@ function _replOfficeDibujar(ctx, rep, img, elemento, f, paraInforme) {
     if (esc || Hp) {
       ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       for (let i = 1; i < P.length; i++) {
-        const m = _replOfficeMetrosTramo(Hp, puntos[i - 1], puntos[i], esc);   // REPLANTEO-04
+        const kPlano = planosR.length ? _replOfficePlanoDeTramo(planosR, asignados, i - 1, puntos[i - 1], puntos[i]) : -1;
+        const m = _replOfficeMetrosTramo(kPlano >= 0 ? planosR[kPlano].H : null, puntos[i - 1], puntos[i], esc);
         if (m === null) continue;
         const mx = (P[i].x + P[i - 1].x) / 2, my = (P[i].y + P[i - 1].y) / 2;
         const txt = _replOfficeNum(m, 2) + ' m';
         const w = ctx.measureText(txt).width + 10 * k;
         ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(mx - w / 2, my - 9 * k, w, 18 * k);
-        ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+        ctx.fillStyle = planosR.length > 1 && kPlano >= 0 ? _replOfficeColor(kPlano) : '#fff';
+        ctx.fillText(txt, mx, my);
       }
     }
     ctx.restore();
@@ -14805,25 +14857,28 @@ function _replOfficeDibujar(ctx, rep, img, elemento, f, paraInforme) {
     ctx.fillStyle = i === 0 ? '#22c55e' : (i === P.length - 1 ? '#ef4444' : '#fff');
     ctx.fill(); ctx.lineWidth = 2 * k; ctx.strokeStyle = '#0b0f14'; ctx.stroke();
   });
-  const plano = rep.trazado?.plano;
-  if (Hp && plano?.pts?.length === 4) {
+  planosR.forEach((pr, idx) => {
+    const plano = pr.plano;
+    if (!plano?.pts?.length) return;
+    const color = _replOfficeColor(idx);
     const Q = plano.pts.map(p => ({ x: ox + p.x * s, y: oy + p.y * s }));
     ctx.save();
-    ctx.strokeStyle = '#f472b6'; ctx.lineWidth = Math.max(1.5, 2 * k);
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, 2 * k);
     ctx.beginPath(); Q.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); ctx.stroke();
     Q.forEach((p, i) => {
-      ctx.beginPath(); ctx.arc(p.x, p.y, 6 * k, 0, Math.PI * 2); ctx.fillStyle = '#f472b6'; ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, 6 * k, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
       ctx.font = `bold ${10 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = '#0b0f14'; ctx.fillText(String(i + 1), p.x, p.y + 0.5);
     });
     const cx = Q.reduce((a, p) => a + p.x, 0) / 4, cy = Q.reduce((a, p) => a + p.y, 0) / 4;
-    const txt = `📐 ${_replOfficeNum(plano.ancho_m, 2)} × ${_replOfficeNum(plano.alto_m, 2)} m`;
+    const n = planosR.length > 1 ? `P${idx + 1} ` : '';
+    const txt = `📐 ${n}${_replOfficeNum(plano.ancho_m, 2)} × ${_replOfficeNum(plano.alto_m, 2)} m`;
     ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const w = ctx.measureText(txt).width + 10 * k;
-    ctx.fillStyle = 'rgba(190,24,93,.85)'; ctx.fillRect(cx - w / 2, cy - 9 * k, w, 18 * k);
-    ctx.fillStyle = '#fff'; ctx.fillText(txt, cx, cy);
+    ctx.fillStyle = 'rgba(15,23,42,.85)'; ctx.fillRect(cx - w / 2, cy - 9 * k, w, 18 * k);
+    ctx.fillStyle = color; ctx.fillText(txt, cx, cy);
     ctx.restore();
-  }
+  });
   const ref = rep.trazado?.referencia;
   if (ref?.a) {
     const a = { x: ox + ref.a.x * s, y: oy + ref.a.y * s };
@@ -14917,8 +14972,10 @@ async function replOfficeAbrir(id, yInforme) {
   document.getElementById('replOfficeDetCuerpo').innerHTML = `
     <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px">
       <span>📍 ${(rep.trazado?.puntos || []).length} puntos</span>
-      <span>${_replOfficeH(rep)
-        ? `📐 perspectiva rectificada con un rectángulo de ${_replOfficeNum(rep.trazado.plano.ancho_m, 2)}×${_replOfficeNum(rep.trazado.plano.alto_m, 2)} m`
+      <span>${_replOfficePlanos(rep).length
+        ? (_replOfficePlanos(rep).length > 1
+            ? `📐 perspectiva rectificada con ${_replOfficePlanos(rep).length} planos (${_replOfficePlanos(rep).map((p, i) => `P${i + 1} ${_replOfficeNum(p.plano.ancho_m, 2)}×${_replOfficeNum(p.plano.alto_m, 2)} m`).join(', ')})`
+            : `📐 perspectiva rectificada con un rectángulo de ${_replOfficeNum(_replOfficePlanos(rep)[0].plano.ancho_m, 2)}×${_replOfficeNum(_replOfficePlanos(rep)[0].plano.alto_m, 2)} m`)
         : (rep.trazado?.longitud_manual_m ? `📏 longitud fijada a mano: ${_replOfficeNum(rep.trazado.longitud_manual_m)} m` : (esc ? `📏 escala ${_replOfficeNum(esc, 1)} px/m${rep.trazado?.referencia?.metros ? ` (referencia de ${_replOfficeNum(rep.trazado.referencia.metros, 2)} m)` : ''}` : '<span style="color:var(--yellow)">📏 sin escala</span>'))}</span>
       <span>⚠️ ${obst.length} obstáculo(s)</span>
       ${rep.notas ? `<span>📝 ${escHtml(rep.notas)}</span>` : ''}
@@ -26210,7 +26267,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.42';
+const PANEL_APP_VERSION = '9.43';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

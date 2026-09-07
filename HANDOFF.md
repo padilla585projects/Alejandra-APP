@@ -1,5 +1,35 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-07 — un plano rectificado por superficie (2026-09-07, v9.43)
+
+- **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-07-varios-planos`.
+- **Origen:** segunda de la cola que Adrián aprobó («medir en varios planos a la vez»).
+- **Problema:** la rectificación valía para un plano. Un recorrido techo → pared medía bien la
+  parte del techo y **19,9 m para 1,50 reales** en la pared (prueba sintética).
+- **Qué hace:** `trazado.planos` es una lista; cada tramo se mide con el plano que contiene su
+  punto medio en la foto (o el más cercano), y el encargado puede corregirlo **tocando el
+  tramo**. En el editor cada plano tiene color propio y las cotas salen de ese color.
+- **Criterio compartido:** `planoDeTramo` (Worker), `_replPlanoDeTramo` (móvil) y
+  `_replOfficePlanoDeTramo` (oficina) implementan lo mismo. Si se cambia uno, hay que cambiar
+  los tres: hay una prueba que lo comprueba y fallaría.
+- **Archivos:** `worker.js` (`planosDeTrazado`, `_dentroDe`, `_centroide`, `planoDeTramo`,
+  integración en `calcularMaterialReplanteo`, campos `tramos_plano` y `planos_n`), `index.html`
+  (lista de planos, colores, asignación por tramo, modal por plano con «➕ Añadir otro plano»,
+  arrastre en cualquiera, deshacer por plano), `panel.html` (mismas funciones con prefijo
+  `_replOffice`), cuatro marcadores a 9.43, `CHANGELOG.md`. Sin migración.
+- **Compatibilidad:** los replanteos hechos con REPLANTEO-04 (`plano` en singular) se abren y
+  se miden igual; hay prueba.
+- **Pruebas:** 11 del cálculo (incluida la reproducción del problema: 19,9 m con un plano →
+  1,53 m con dos) y 15 de paridad entre los tres. Todo lo anterior sigue verde: detector de
+  placas, homografía, departamentos. **Sin probar en dispositivo.**
+- **Siguiente acción exacta:** Adrián, en un sitio donde la instalación baje del techo a la
+  pared: marcar una placa del techo, «➕ Añadir otro plano», marcar un rectángulo conocido de la
+  pared (un panel, una puerta), trazar el recorrido pasando por la esquina y comprobar que cada
+  mitad cuadra con la cinta. **Poner un punto justo en la esquina**: un tramo que cruce de una
+  superficie a otra se mide entero con una de las dos.
+- **Queda de la cola:** que Alejandra sepa usar los replanteos. Y las «más cosas» que Adrián
+  aún no ha concretado.
+
 ## REPLANTEO-06 — la app reconoce la placa del falso techo (2026-09-07, v9.42)
 
 - **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-06-detectar-placas`.

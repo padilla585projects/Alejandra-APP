@@ -1,5 +1,20 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-07, noche-2): **REPLANTEO-07 — un plano rectificado por superficie
+(v9.43), en `feat/replanteo-07-varios-planos`.** Ver `HANDOFF.md`.
+- **REPLANTEO-07** (En revisión): `trazado.planos` como lista y cada tramo medido con el plano
+  que le toca; tocar un tramo lo cambia de plano. Compatible con los replanteos de
+  REPLANTEO-04. Sin migración. Probado: con un plano el tramo de pared daba 19,9 m, con dos da
+  1,53 m para 1,50 reales; y los tres (Worker, móvil, oficina) asignan igual.
+  - Siguiente acción exacta: fusionar, desplegar Pages + API Worker, y probar en un sitio donde
+    la instalación baje del techo a la pared, poniendo un punto en la esquina.
+- **Queda de la cola de Adrián:**
+  1. **Alejandra y los replanteos** — consultarlos por chat, comparar lo replanteado con lo
+     pedido, generar el pedido.
+  2. «Más cosas» que aún no ha concretado.
+- **Decisiones humanas pendientes:** aceptar el ADR-0024 y su enmienda 1, y autorizar
+  `migrate_replanteos.sql` (no bloquea).
+
 Estado (actualizado 2026-09-07, noche): **REPLANTEO-06 — la app reconoce sola la placa del
 falso techo (v9.42), en `feat/replanteo-06-detectar-placas`.** Ver `HANDOFF.md`.
 - **REPLANTEO-06** (En revisión): tocar dentro de una placa y la app saca sus 4 esquinas

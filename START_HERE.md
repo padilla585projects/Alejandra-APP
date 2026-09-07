@@ -4,6 +4,13 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPLANTEO-07 — un plano por superficie (2026-09-07, v9.43):** la rectificación valía para un
+solo plano, así que un recorrido que baja del techo a la pared medía la pared fatal (19,9 m
+para 1,50 en la prueba). Ahora `trazado.planos` es una lista: se marca un rectángulo por
+superficie, cada tramo se mide con el que le toca y tocar un tramo lo cambia de plano. Cada
+plano con su color, también en la oficina y en el informe. Compatible con lo ya guardado, sin
+migración. **Pendiente:** probarlo en una bajada techo-pared. Ver `HANDOFF.md`/`TASKS.md`.
+
 **REPLANTEO-06 — la app reconoce la placa del falso techo (2026-09-07, v9.42):** en el modo
 «📐 Plano» se toca **dentro** de una placa y la app saca sus cuatro esquinas (Sobel + Hough
 guiado por la dirección del gradiente + la celda más pequeña que rodea al dedo, verificando que
