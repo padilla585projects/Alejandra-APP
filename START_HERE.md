@@ -4,14 +4,24 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**Fix de la escala del replanteo en el móvil (2026-09-04, noche, v9.37):** primera prueba de
+Adrián con REPLANTEO-01 en producción. El modal «📏 Escala» se cerraba solo al abrirse (click
+sintético de Android sobre el backdrop, mismo riesgo latente en el de Obstáculo) y los puntos
+de la referencia no se podían corregir sin repetirlos. Arreglado con
+`_replAbrirModal()`/`_replCerrarSiBackdrop()` (400 ms de gracia) y puntos de referencia
+arrastrables. PR #154 → `ec5ef70`, Pages run `33903164644`; producción sirve 9.37. Solo
+frontend, sin redesplegar Workers. **Pendiente:** que Adrián repita la secuencia en el móvil.
+Ver `HANDOFF.md`/`TASKS.md`.
+
 **REPLANTEO-03 — Replanteos en la oficina y editor del catálogo (2026-09-04, noche):** página
 «📐 Replanteos» en `panel.html` (lista con miniatura y filtros, detalle con la foto y el trazado
 redibujado como en el móvil, informe imprimible, «A Pedidos», eliminar) y editor del catálogo
 por empresa para admins (12 reglas de cálculo, opciones, restaurar base, desactivar, nuevo).
 Rutas `GET /replanteos/catalogo-empresa`, `PUT`/`DELETE /replanteos/catalogo/:key`. v9.36,
-PR #151 fusionada, Pages publicado (run `33895624663`). **Pendiente:** aprobar el API Worker
-(`33895627643`, sustituye a los runs anteriores) y el agente (`33859282942`), verificar en
-Office, decidir el ADR-0024 y autorizar `migrate_replanteos.sql`. Ver `TASKS.md`/`HANDOFF.md`.
+PR #151 fusionada, Pages publicado (run `33895624663`). API Worker (`33895627643`) y agente
+(`33859282942`) **aprobados y desplegados el 04/09 a las 16:41**: `/replanteos*` responde 401
+sin sesión, ya no 404. **Pendiente:** verificar en Office, decidir el ADR-0024 y autorizar
+`migrate_replanteos.sql`. Ver `TASKS.md`/`HANDOFF.md`.
 
 **REPLANTEO-02 — prototipo AR en Android (2026-09-04, tarde, continuación):** fase 2 del
 ADR-0024 implementada en `feat/replanteo-ar-prototipo`, v9.35: botón «📱 Medir con la
