@@ -4,6 +4,42 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-07 — REPLANTEO-06: la app reconoce la placa del falso techo, v9.42)
+
+Adrián, sobre el plano rectificado de REPLANTEO-04: que la app **detecte sola las placas** en
+vez de tener que tocar las cuatro esquinas a mano. Ahora se toca **dentro** de una placa y la
+app busca sus cuatro esquinas.
+
+- `index.html`: detector de la retícula en el propio móvil, sin librerías ni servidor. Sobel
+  para los bordes, Hough **guiado por la dirección del gradiente** para las juntas, y de las
+  líneas más cercanas al dedo, el **cuadrilátero convexo más pequeño que lo contiene**: eso es,
+  por definición, la placa tocada. La foto se reduce a 640 px de ancho para detectar y las
+  esquinas vuelven en píxeles naturales.
+- Si no reconoce nada, ese mismo toque cuenta como la primera esquina y se sigue **a mano**
+  como hasta ahora; «Quitar el plano» vuelve a habilitar el reconocimiento.
+- Botón **⇄ Intercambiar ancho y alto** en el modal: al reconocer una placa no cuadrada
+  (120×60) el primer lado puede salir en cualquiera de los dos sentidos.
+- El plano guarda si vino **reconocido o marcado a mano** (`origen`), y el editor lo dice.
+- **Tres cosas que costaron y conviene no deshacer**, anotadas en el código: (1) el Hough tiene
+  que votar solo en los ángulos cercanos a la normal de cada borde — uno ciego se inventa
+  diagonales, porque en una retícula limpia la recta que enlaza las esquinas de las placas
+  reúne más votos que las propias juntas; (2) clasificar las líneas en dos familias por su
+  ángulo no aguanta la perspectiva (las juntas longitudinales convergen y abarcan 70° o más),
+  de ahí el enfoque local alrededor del dedo; (3) el umbral tiene que ser bajo para pillar las
+  juntas longitudinales — llegan a tener **ocho veces menos votos** que las transversales — y
+  entonces cuatro líneas de ruido forman un cuadrilátero convexo perfecto: lo que descarta esos
+  inventos es comprobar que los cuatro lados tienen borde real **y con el gradiente
+  perpendicular al lado**.
+- **Pruebas:** techos sintéticos en perspectiva — 8 comprobaciones con error de **2,7 px** en
+  las cuatro esquinas con grano de 4 a 25, **15-26 ms** sobre 480×640, detecta también la placa
+  de al lado y una más lejana y escorzada, y **no se inventa placa** ni en una pared lisa ni en
+  una de lamas verticales (repetido en cinco pasadas por el ruido aleatorio). Las mismas 8
+  contra el código **ya integrado** en `index.html`. Y 6 de extremo a extremo (foto → placa
+  reconocida → homografía → metros): un recorrido real de **1,80 m que se aleja de la cámara
+  sale en 1,744 m** (5,6 cm), uno transversal de 1,20 m en 1,182 m, y ese mismo recorrido con
+  la escala plana de antes daba **1,06 m, un 41 % corto**. **Sin probar con una foto real de
+  obra:** eso es lo siguiente.
+
 ### Fixed (2026-09-07 — Replanteos no salía en Office, y tres arreglos de la primera prueba en obra, v9.41)
 
 Adrián, probando lo recién desplegado: «no veo replanteos en Alejandra Office», y tres capturas

@@ -1,5 +1,43 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-06 — la app reconoce la placa del falso techo (2026-09-07, v9.42)
+
+- **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-06-detectar-placas`.
+- **Origen:** Adrián eligió «que detecte solo las placas» entre lo que echaba en falta.
+- **Qué hace:** en el modo «📐 Plano», el primer toque ya no marca una esquina: se toca
+  **dentro** de una placa y la app busca sus cuatro esquinas. Si no reconoce nada, ese toque
+  pasa a ser la primera esquina y se sigue a mano (`_repl.planoManual`); «Quitar el plano»
+  reactiva el reconocimiento.
+- **Cómo:** Sobel → Hough guiado por la dirección del gradiente → de las líneas más cercanas al
+  dedo, el cuadrilátero convexo **más pequeño** que lo contiene, verificando que sus cuatro
+  lados tienen borde real con el gradiente perpendicular. Todo en el móvil, sin librerías
+  (nada de OpenCV) y sin tocar el servidor; la foto se reduce a 640 px para detectar.
+- **Callejones sin salida, para no repetirlos:** un Hough ciego se inventa diagonales (la recta
+  que enlaza las esquinas de las placas reúne más votos que las juntas); clasificar las líneas
+  en dos familias por ángulo no aguanta la perspectiva (se llegó a familias de 31 y 5); y con
+  el umbral bajo que hace falta para ver las juntas longitudinales, el ruido de una pared lisa
+  formaba cuadriláteros convexos perfectos — solo la coherencia de dirección del gradiente los
+  descarta. Todo está comentado en el código.
+- **Archivos:** `index.html` (bloque nuevo antes de la homografía del cliente, `_replLuminancia`,
+  `_replDetectarPlacaEnFoto`, rama de detección en `_replTap`, hint, botón ⇄ y
+  `replPlanoIntercambiar`, `origen` del plano), cuatro marcadores a 9.42, `CHANGELOG.md`. Sin
+  cambios de backend ni de esquema.
+- **Pruebas:** 8 con techos sintéticos (2,7 px de error, 15-26 ms, sin falsos positivos en
+  pared lisa ni en lamas, repetido cinco veces), las mismas 8 contra el código ya integrado, y
+  6 de extremo a extremo: **1,80 m reales → 1,744 m** (5,6 cm), transversal 1,20 → 1,182 m, y
+  la escala plana daba 1,06 m en ese mismo recorrido. Marcar la placa a mano con pulso de ±2 px
+  cambia el resultado en 2 cm.
+- **Siguiente acción exacta:** Adrián, en un pasillo con falso techo: foto → «📐 Plano» → tocar
+  **dentro** de una placa → comprobar que el cuadrilátero cae sobre la placa (y corregir
+  arrastrando si hace falta) → 60×60 → trazar y contrastar con cinta. **Es la primera prueba
+  con una foto real: el detector solo ha visto techos sintéticos.**
+- **Lo que puede fallar en obra y hay que mirar:** techos sin retícula (escayola continua),
+  placas muy sucias o con juntas del mismo color, luminarias y rejillas que meten líneas
+  propias, y fotos movidas. En todos esos casos debería caer al marcado a mano, no dar una
+  placa mal: si diera una placa **mal puesta**, eso sí es un fallo que corregir.
+- **En la cola, pedido por Adrián:** medir en varios planos a la vez (un rectángulo por plano)
+  y que Alejandra sepa usar los replanteos. Y dijo que hay «más cosas» sin concretar.
+
 ## Replanteos no salía en Office + tres arreglos de la primera prueba en obra (2026-09-07, v9.41)
 
 - **Agente:** Claude (Opus 5). **Rama:** `fix/replanteo-office-nav-y-ar-ui`.

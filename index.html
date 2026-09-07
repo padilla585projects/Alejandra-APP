@@ -2057,6 +2057,9 @@ select option{background:var(--surface2);color:var(--text)}
           <button class="repl-btn" style="flex:1;min-width:96px;font-size:11px" onclick="replPlanoPreset(1.2,0.6)">Placa 120×60</button>
           <button class="repl-btn" style="flex:1;min-width:96px;font-size:11px" onclick="replPlanoPreset(0.8,2.03)">Puerta 80×203</button>
         </div>
+        <!-- REPLANTEO-06: reconocida la placa, el primer lado puede salir en cualquiera de los
+             dos sentidos; con placas no cuadradas (120x60) hay que poder darle la vuelta. -->
+        <button class="repl-btn" style="width:100%" onclick="replPlanoIntercambiar()">⇄ Intercambiar ancho y alto</button>
         <button class="repl-btn primary" style="width:100%" onclick="replPlanoGuardar()">Aplicar la corrección</button>
         <button class="repl-btn danger" style="width:100%" onclick="replPlanoQuitar()">Quitar el plano y volver a la escala</button>
       </div>
@@ -15172,7 +15175,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.41';
+const APP_VERSION = '9.42';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18455,7 +18458,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const hint = document.getElementById('replHint');
     if (m === 'trazar') hint.textContent = 'Toca la foto punto a punto por donde irá la instalación. Arrastra un punto para corregirlo.';
     else if (m === 'escala') hint.textContent = 'Toca los dos extremos de algo cuya medida conozcas (placa de techo, puerta, tramo ya instalado). Luego escribe los metros.';
-    else if (m === 'plano') hint.textContent = 'Toca las 4 esquinas de algo rectangular del MISMO plano del recorrido (placa de techo, panel, puerta), dando la vuelta. El primer lado que marques es el ancho.';
+    else if (m === 'plano') hint.textContent = _repl.planoManual
+      ? 'Toca las 4 esquinas de algo rectangular del MISMO plano del recorrido, dando la vuelta. El primer lado que marques es el ancho.'
+      : 'Toca DENTRO de una placa del falso techo y la reconozco sola. Si no la pillo, la marcas tú tocando sus 4 esquinas.';
     else hint.textContent = 'Toca sobre el recorrido justo donde cruza una instalación existente. Toca un obstáculo para editarlo.';
   }
 
@@ -18472,6 +18477,334 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const f = _replFit();
     return { x: (clientX - r.left - f.ox) / f.s, y: (clientY - r.top - f.oy) / f.s, f };
   }
+  // ── REPLANTEO-06 (07/09/2026): reconocer la placa del falso techo ──────────────────────
+  // Adrián, sobre el plano rectificado: que la app reconozca sola la retícula del techo en vez
+  // de tener que tocar las cuatro esquinas a mano. Toca DENTRO de una placa y aquí se busca la
+  // celda que la rodea: Sobel para los bordes, Hough guiado por la dirección del gradiente
+  // para las juntas, y de las líneas más cercanas al dedo, el cuadrilátero convexo más pequeño
+  // que lo contiene. Eso es, por definición, la placa tocada.
+  //
+  // Tres cosas que costaron y conviene no deshacer:
+  //  · El Hough tiene que votar SOLO en los ángulos cercanos a la normal del borde de cada
+  //    píxel. Un Hough ciego se inventa diagonales: en una retícula limpia, la recta que
+  //    enlaza las esquinas de las placas junta más votos que las propias juntas.
+  //  · Clasificar todas las líneas en dos familias por su ángulo NO aguanta la perspectiva
+  //    (las juntas longitudinales convergen y abarcan 70° o más). Por eso se trabaja en local,
+  //    alrededor del dedo, en vez de reconstruir la retícula entera.
+  //  · El umbral tiene que ser bajo para pillar las juntas longitudinales (llegan a tener 8
+  //    veces menos votos que las transversales), y entonces cuatro líneas de ruido forman un
+  //    cuadrilátero convexo perfecto. Lo que descarta esos inventos es comprobar que los
+  //    cuatro lados tienen borde real Y con el gradiente perpendicular al lado.
+  //
+  // Probado con techos sintéticos en perspectiva (ver el registro de la tarea): error de 2,7 px
+  // en las cuatro esquinas con grano de 4 a 25, 15-26 ms sobre 480x640, y no se inventa placa
+  // ni en una pared lisa ni en una pared de lamas verticales.
+
+  // ── Sobel: magnitud del gradiente ──────────────────────────────────────────
+  function _replSobel(lum, W, H) {
+    const mag = new Float32Array(W * H);
+    const ang = new Float32Array(W * H);      // direccion de la NORMAL del borde, en [0, pi)
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        const a = lum[i - W - 1], b = lum[i - W], c = lum[i - W + 1];
+        const d = lum[i - 1],                     e = lum[i + 1];
+        const f = lum[i + W - 1], g = lum[i + W], h = lum[i + W + 1];
+        const gx = (c + 2 * e + h) - (a + 2 * d + f);
+        const gy = (f + 2 * g + h) - (a + 2 * b + c);
+        mag[i] = Math.sqrt(gx * gx + gy * gy);
+        let t = Math.atan2(gy, gx);
+        if (t < 0) t += Math.PI;
+        if (t >= Math.PI) t -= Math.PI;
+        ang[i] = t;
+      }
+    }
+    return { mag, ang };
+  }
+
+  // Umbral por percentil (histograma de 256 cubos sobre el máximo).
+  function _replUmbralPercentil(mag, pct) {
+    let max = 0;
+    for (let i = 0; i < mag.length; i++) if (mag[i] > max) max = mag[i];
+    if (max <= 0) return Infinity;
+    const bins = new Int32Array(256);
+    for (let i = 0; i < mag.length; i++) bins[Math.min(255, (mag[i] / max * 255) | 0)]++;
+    const objetivo = mag.length * pct;
+    let acum = 0;
+    for (let b = 0; b < 256; b++) {
+      acum += bins[b];
+      if (acum >= objetivo) return (b / 255) * max;
+    }
+    return max;
+  }
+
+  // ── Hough para líneas: devuelve picos {theta (rad), rho, votos} ────────────
+  function _replHough(bordes, W, H, opts = {}) {
+    const { mag, ang } = bordes;
+    const pasosTheta = opts.pasosTheta || 180;
+    const pasoRho = opts.pasoRho || 2;
+    const umbral = opts.umbral != null ? opts.umbral : _replUmbralPercentil(mag, 0.92);
+    const D = Math.hypot(W, H);
+    const nRho = Math.ceil((2 * D) / pasoRho) + 1;
+    const acc = new Int32Array(pasosTheta * nRho);
+    const cos = new Float32Array(pasosTheta), sin = new Float32Array(pasosTheta);
+    for (let t = 0; t < pasosTheta; t++) {
+      const a = (t * Math.PI) / pasosTheta;
+      cos[t] = Math.cos(a); sin[t] = Math.sin(a);
+    }
+    // Cada pixel vota SOLO en los angulos cercanos a la normal de su borde. Un Hough ciego
+    // (todos los angulos) inventa diagonales: en una reticula limpia, la recta que enlaza las
+    // esquinas de las placas junta mas votos que las propias juntas y se lleva la deteccion.
+    const vent = opts.ventanaGrad != null ? opts.ventanaGrad : 8;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (mag[i] < umbral) continue;
+        const t0 = Math.round((ang[i] / Math.PI) * pasosTheta);
+        for (let dt = -vent; dt <= vent; dt++) {
+          const t = ((t0 + dt) % pasosTheta + pasosTheta) % pasosTheta;
+          const rho = x * cos[t] + y * sin[t];
+          const r = ((rho + D) / pasoRho) | 0;
+          if (r >= 0 && r < nRho) acc[t * nRho + r]++;
+        }
+      }
+    }
+    let maxVotos = 0;
+    for (let i = 0; i < acc.length; i++) if (acc[i] > maxVotos) maxVotos = acc[i];
+    const minVotos = Math.max(opts.minVotos || 0, maxVotos * (opts.fraccionMin || 0.08));
+    const vT = opts.ventanaTheta || 4, vR = opts.ventanaRho || 8;
+    const picos = [];
+    for (let t = 0; t < pasosTheta; t++) {
+      for (let r = 0; r < nRho; r++) {
+        const v = acc[t * nRho + r];
+        if (v < minVotos) continue;
+        let esMax = true;
+        for (let dt = -vT; dt <= vT && esMax; dt++) {
+          const tt = (t + dt + pasosTheta) % pasosTheta;
+          for (let dr = -vR; dr <= vR; dr++) {
+            const rr = r + dr;
+            if (rr < 0 || rr >= nRho || (dt === 0 && dr === 0)) continue;
+            if (acc[tt * nRho + rr] > v) { esMax = false; break; }
+          }
+        }
+        if (esMax) picos.push({ theta: (t * Math.PI) / pasosTheta, rho: r * pasoRho - D, votos: v });
+      }
+    }
+    picos.sort((a, b) => b.votos - a.votos);
+    return _replDedupLineas(picos, opts).slice(0, opts.maxLineas || 40);
+  }
+
+  // La supresion de no-maximos del acumulador no basta: con juntas limpias la misma junta deja
+  // varios picos casi identicos, y dos lineas practicamente coincidentes hacen que la celda
+  // salga degenerada (se vio en la prueba con ruido 0). Se quedan las mas votadas de cada grupo.
+  function _replDedupLineas(lineas, opts = {}) {
+    const dT = opts.dedupTheta != null ? opts.dedupTheta : 0.06;   // ~3.5 grados
+    const dR = opts.dedupRho != null ? opts.dedupRho : 14;
+    const fuera = [];
+    for (const l of lineas) {
+      const repetida = fuera.some(f => {
+        let d = Math.abs(f.theta - l.theta) % Math.PI;
+        d = Math.min(d, Math.PI - d);
+        if (d > dT) return false;
+        // Con thetas casi opuestos (0 y pi) el rho cambia de signo: se compara en valor absoluto.
+        const mismoSentido = Math.abs(f.theta - l.theta) < Math.PI / 2;
+        const rl = mismoSentido ? l.rho : -l.rho;
+        return Math.abs(f.rho - rl) <= dR;
+      });
+      if (!repetida) fuera.push(l);
+    }
+    return fuera;
+  }
+
+  // ── La celda que rodea al punto tocado ─────────────────────────────────────
+  // Clasificar TODAS las lineas en dos familias por su angulo no aguanta la perspectiva: las
+  // juntas longitudinales de un techo convergen y abarcan 70 grados o mas, asi que se mezclan
+  // con las transversales y el agrupamiento se va al traste (se probo, familias 31 y 5). No
+  // hace falta: para calibrar solo se necesita UNA placa, la que el encargado ha tocado. Se
+  // buscan las lineas mas cercanas al dedo y se prueba que cuadrilatero convexo minimo lo
+  // rodea. Eso es, por definicion, la placa tocada.
+
+  // Distancia con signo del punto a la linea.
+  const _replLado = (l, x, y) => x * Math.cos(l.theta) + y * Math.sin(l.theta) - l.rho;
+
+  function interseccion(l1, l2) {
+    const c1 = Math.cos(l1.theta), s1 = Math.sin(l1.theta);
+    const c2 = Math.cos(l2.theta), s2 = Math.sin(l2.theta);
+    const det = c1 * s2 - c2 * s1;
+    if (Math.abs(det) < 1e-6) return null;                    // paralelas
+    const p = { x: (l1.rho * s2 - l2.rho * s1) / det, y: (c1 * l2.rho - c2 * l1.rho) / det };
+    return (Number.isFinite(p.x) && Number.isFinite(p.y)) ? p : null;
+  }
+
+  const area4 = pts => {
+    let a2 = 0;
+    for (let i = 0; i < 4; i++) { const p = pts[i], q = pts[(i + 1) % 4]; a2 += p.x * q.y - q.x * p.y; }
+    return Math.abs(a2) / 2;
+  };
+
+  function convexoYContiene(pts, x, y) {
+    let signo = 0;
+    for (let i = 0; i < 4; i++) {
+      const a = pts[i], b = pts[(i + 1) % 4], c = pts[(i + 2) % 4];
+      const cruz = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      if (Math.abs(cruz) < 1e-9) return false;
+      const sg = Math.sign(cruz);
+      if (!signo) signo = sg; else if (sg !== signo) return false;
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = pts[i], b = pts[(i + 1) % 4];
+      const cruz = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+      if (Math.sign(cruz) !== signo) return false;             // el dedo se queda fuera
+    }
+    return true;
+  }
+
+  // Angulos entre lados contiguos: una placa vista en perspectiva se deforma, pero no hasta
+  // convertirse en una cuchilla. Filtra cuadrilateros degenerados que colarian por area.
+  function anguloSano(pts, minGrados = 35) {
+    const lim = Math.cos((180 - minGrados) * Math.PI / 180);
+    for (let i = 0; i < 4; i++) {
+      const a = pts[(i + 3) % 4], b = pts[i], c = pts[(i + 1) % 4];
+      const u = { x: a.x - b.x, y: a.y - b.y }, v = { x: c.x - b.x, y: c.y - b.y };
+      const lu = Math.hypot(u.x, u.y), lv = Math.hypot(v.x, v.y);
+      if (!lu || !lv) return false;
+      const cosA = (u.x * v.x + u.y * v.y) / (lu * lv);
+      if (Math.abs(cosA) > Math.abs(lim)) return false;
+    }
+    return true;
+  }
+
+  // Ordena en perimetro y empieza por la esquina de arriba a la izquierda.
+  function ordenarPerimetro(pts) {
+    const cx = pts.reduce((a, p) => a + p.x, 0) / 4, cy = pts.reduce((a, p) => a + p.y, 0) / 4;
+    const orden = pts.slice().sort((a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
+    let mejor = 0, mejorD = Infinity;
+    orden.forEach((p, i) => { const d = p.x + p.y; if (d < mejorD) { mejorD = d; mejor = i; } });
+    return orden.slice(mejor).concat(orden.slice(0, mejor));
+  }
+
+  // ¿Hay borde de verdad a lo largo de este lado? Se recorre el segmento y se cuenta que
+  // fraccion de muestras tiene gradiente fuerte a menos de 1,5 px. Sin esto, con el umbral bajo
+  // que hace falta para pillar las juntas longitudinales (llegan a tener 8 veces menos votos que
+  // las transversales), cuatro lineas de ruido en una pared lisa formaban un cuadrilatero
+  // perfectamente convexo y la app se inventaba una placa.
+  function _replSoporteLado(mag, ang, W, H, p, q, umbral) {
+    const largo = Math.hypot(q.x - p.x, q.y - p.y);
+    if (largo < 4) return 0;
+    const n = Math.max(8, Math.round(largo / 2));
+    // Normal del lado: el gradiente de una junta de verdad va perpendicular a ella. Contar solo
+    // "pixel con mucho gradiente" no basta: en una pared con grano, el 8% de los pixeles pasa el
+    // umbral y una ventana de 3x3 los encuentra en la mitad de las muestras -- de ahi salian
+    // placas inventadas sobre ruido puro. Con la direccion, el ruido deja de colar.
+    const nx = -(q.y - p.y) / largo, ny = (q.x - p.x) / largo;
+    let dentro = 0, contados = 0;
+    for (let i = 0; i <= n; i++) {
+      const x = p.x + (q.x - p.x) * i / n, y = p.y + (q.y - p.y) * i / n;
+      let hay = false;
+      for (let d = -1; d <= 1 && !hay; d++) {
+        const xi = Math.round(x + nx * d), yi = Math.round(y + ny * d);
+        if (xi < 1 || yi < 1 || xi >= W - 1 || yi >= H - 1) continue;
+        const j = yi * W + xi;
+        if (mag[j] < umbral) continue;
+        // ang[] guarda la direccion de la normal del borde, en [0, pi).
+        const dif = Math.abs(Math.cos(ang[j] - Math.atan2(ny, nx)));
+        if (dif > 0.85) hay = true;                    // dentro de unos 32 grados
+      }
+      const xi = Math.round(x), yi = Math.round(y);
+      if (xi < 1 || yi < 1 || xi >= W - 1 || yi >= H - 1) continue;
+      contados++;
+      if (hay) dentro++;
+    }
+    return contados < 6 ? 0 : dentro / contados;
+  }
+
+  function _replCeldaMinima(lineas, x, y, W, H, opts = {}) {
+    const cand = lineas.slice()
+      .sort((a, b) => Math.abs(_replLado(a, x, y)) - Math.abs(_replLado(b, x, y)))
+      .slice(0, opts.candidatas || 14);
+    if (cand.length < 4) return null;
+    const areaMin = W * H * (opts.areaMin || 0.004);
+    const areaMax = W * H * (opts.areaMax || 0.75);
+    const ladoMin = Math.min(W, H) * (opts.ladoMin || 0.04);
+    const margen = Math.max(W, H) * 0.3;
+    const posibles = [];
+    const PAREJAS = [[0, 1, 2, 3], [0, 1, 3, 2], [0, 2, 1, 3]];
+    for (let a = 0; a < cand.length; a++)
+    for (let b = a + 1; b < cand.length; b++)
+    for (let c = b + 1; c < cand.length; c++)
+    for (let d = c + 1; d < cand.length; d++) {
+      const cuatro = [cand[a], cand[b], cand[c], cand[d]];
+      for (const orden of PAREJAS) {
+        const [p, q, r, t] = orden.map(i => cuatro[i]);
+        const e1 = interseccion(p, q), e2 = interseccion(q, r), e3 = interseccion(r, t), e4 = interseccion(t, p);
+        if (!e1 || !e2 || !e3 || !e4) continue;
+        const pts = [e1, e2, e3, e4];
+        if (pts.some(pt => pt.x < -margen || pt.y < -margen || pt.x > W + margen || pt.y > H + margen)) continue;
+        if (!convexoYContiene(pts, x, y)) continue;
+        const ar = area4(pts);
+        if (ar < areaMin || ar > areaMax) continue;
+        let ladosOk = true;
+        for (let i = 0; i < 4 && ladosOk; i++) {
+          const u = pts[i], v = pts[(i + 1) % 4];
+          if (Math.hypot(v.x - u.x, v.y - u.y) < ladoMin) ladosOk = false;
+        }
+        if (!ladosOk || !anguloSano(pts)) continue;
+        posibles.push({ pts: ordenarPerimetro(pts), area: ar });
+      }
+    }
+    if (!posibles.length) return null;
+    posibles.sort((a, b) => a.area - b.area);
+    // La placa tocada es la celda MAS PEQUENA que rodea al dedo, pero solo vale si sus cuatro
+    // lados existen de verdad en la imagen.
+    const { mag, ang, umbral } = opts.bordes || {};
+    if (!mag) return posibles[0];
+    const minSoporte = opts.minSoporte || 0.55;
+    for (const c of posibles.slice(0, opts.maxVerificar || 40)) {
+      const sop = [0, 1, 2, 3].map(i => _replSoporteLado(mag, ang, W, H, c.pts[i], c.pts[(i + 1) % 4], umbral));
+      if (Math.min(...sop) >= minSoporte) return { ...c, soporte: Math.min(...sop) };
+    }
+    return null;
+  }
+
+  // ── Entrada unica: de luminancia + punto tocado a las 4 esquinas ───────────
+  function _replDetectarPlaca(lum, W, H, x, y, opts = {}) {
+    const bordes = _replSobel(lum, W, H);
+    const umbral = opts.umbral != null ? opts.umbral : _replUmbralPercentil(bordes.mag, 0.92);
+    const lineas = _replHough(bordes, W, H, { ...opts, umbral });
+    const celda = _replCeldaMinima(lineas, x, y, W, H, { ...opts, bordes: { mag: bordes.mag, ang: bordes.ang, umbral } });
+    if (!celda) return null;
+    return { pts: celda.pts, area: celda.area, soporte: celda.soporte, lineas: lineas.length };
+  }
+
+  // La foto del móvil son varios miles de píxeles de ancho: se reduce a 640 para detectar (el
+  // coste del Hough crece con el área) y las esquinas se devuelven en píxeles naturales.
+  const REPL_DET_ANCHO = 640;
+  function _replLuminancia(img, maxW) {
+    const escala = Math.min(1, maxW / img.naturalWidth);
+    const W = Math.max(8, Math.round(img.naturalWidth * escala));
+    const H = Math.max(8, Math.round(img.naturalHeight * escala));
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, W, H);
+    const d = ctx.getImageData(0, 0, W, H).data;
+    const lum = new Float32Array(W * H);
+    for (let i = 0, j = 0; i < lum.length; i++, j += 4) {
+      lum[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+    }
+    return { lum, W, H, escala };
+  }
+  // Devuelve las 4 esquinas en píxeles naturales de la foto, o null si ahí no hay una placa.
+  function _replDetectarPlacaEnFoto(xNat, yNat) {
+    if (!_repl?.img) return null;
+    try {
+      const { lum, W, H, escala } = _replLuminancia(_repl.img, REPL_DET_ANCHO);
+      const r = _replDetectarPlaca(lum, W, H, xNat * escala, yNat * escala);
+      if (!r) return null;
+      return r.pts.map(p => ({ x: p.x / escala, y: p.y / escala }));
+    } catch (e) { return null; }   // canvas contaminado por CORS al reabrir una foto guardada
+  }
+
   // ── REPLANTEO-04: homografía de 4 esquinas (mismo cálculo que el Worker) ───────────────
   // El material lo sigue calculando el servidor; esto es solo para que el editor pinte las
   // cotas correctas al instante, sin esperar a `/replanteos/calcular`. Si las dos versiones
@@ -18810,8 +19143,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       // Con las 4 esquinas ya marcadas, tocar reabre el modal para corregir las medidas: para
       // mover una esquina se arrastra, para rehacerlas están Deshacer y «Quitar el plano».
       if (pts.length >= 4) { replAbrirPlano(); return; }
+      // REPLANTEO-06: el primer toque intenta reconocer la placa que hay debajo del dedo. Si
+      // no la pilla, ese mismo toque cuenta como primera esquina y se sigue a mano.
+      if (!pts.length && !_repl.planoManual) {
+        const auto = _replDetectarPlacaEnFoto(n.x, n.y);
+        if (auto) {
+          _repl.plano = { pts: auto, ancho_m: _repl.plano?.ancho_m || null, alto_m: _repl.plano?.alto_m || null, origen: 'auto' };
+          replDibujar(); replAbrirPlano();
+          toast('📐 Placa reconocida: comprueba las esquinas y dime cuánto mide');
+          return;
+        }
+        _repl.planoManual = true;
+        toast('No he reconocido ninguna placa ahí: marca sus 4 esquinas a mano', 'error');
+      }
       pts.push({ x: n.x, y: n.y });
-      _repl.plano = { pts, ancho_m: _repl.plano?.ancho_m || null, alto_m: _repl.plano?.alto_m || null };
+      _repl.plano = { pts, ancho_m: _repl.plano?.ancho_m || null, alto_m: _repl.plano?.alto_m || null, origen: 'manual' };
       if (pts.length === 4) { replDibujar(); replAbrirPlano(); return; }
     } else if (_repl.modo === 'obstaculo') {
       // ¿Toca un obstáculo existente? → editar
@@ -18938,7 +19284,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function _replPlanoParaGuardar() {
     const p = _repl.plano;
     if (!p || !Array.isArray(p.pts) || p.pts.length !== 4 || !(p.ancho_m > 0) || !(p.alto_m > 0)) return undefined;
-    return { pts: p.pts, ancho_m: p.ancho_m, alto_m: p.alto_m };
+    return { pts: p.pts, ancho_m: p.ancho_m, alto_m: p.alto_m, origen: p.origen || 'manual' };
   }
   function _replPayloadCalculo() {
     return {
@@ -18968,7 +19314,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const partes = [];
     if (_repl.origen === 'ar') partes.push(`<span style="color:#22c55e">📱 medido en AR (vista en planta)</span>`);
     partes.push(`<span>📍 <b>${_repl.puntos.length}</b> puntos</span>`);
-    if (_replH()) partes.push(`<span style="color:#f472b6">📐 plano rectificado (${_replNum(_repl.plano.ancho_m, 2)}×${_replNum(_repl.plano.alto_m, 2)} m)</span>`);
+    if (_replH()) partes.push(`<span style="color:#f472b6">📐 plano rectificado (${_replNum(_repl.plano.ancho_m, 2)}×${_replNum(_repl.plano.alto_m, 2)} m${_repl.plano.origen === 'auto' ? ', placa reconocida' : ''})</span>`);
     else if (_repl.longitud_manual_m) partes.push(`<span>📏 longitud fijada: <b>${_replNum(_repl.longitud_manual_m)} m</b></span>`);
     else if (_repl.escala_px_m) partes.push(`<span>📏 escala ✔ (${_replNum(_repl.referencia?.metros || 0, 2)} m de referencia) <span style="color:#f97316">— solo en ese plano</span></span>`);
     else partes.push(`<span style="color:#f97316">📏 sin escala: toca "Escala" o "Plano"</span>`);
@@ -18999,7 +19345,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const alto = parseFloat(document.getElementById('replPlanoAlto').value.replace(',', '.'));
     if (!(ancho > 0) || !(alto > 0)) { toast('Escribe el ancho y el alto reales', 'error'); return; }
     if ((_repl.plano?.pts?.length || 0) !== 4) { toast('Marca las 4 esquinas primero', 'error'); return; }
-    _repl.plano = { pts: _repl.plano.pts, ancho_m: ancho, alto_m: alto };
+    _repl.plano = { pts: _repl.plano.pts, ancho_m: ancho, alto_m: alto, origen: _repl.plano.origen || 'manual' };
     if (!_replH()) { toast('Esas 4 esquinas no forman un rectángulo utilizable: repite el marcado', 'error'); return; }
     // El plano manda sobre la longitud fijada a mano: si no, el usuario corrige la perspectiva
     // y sigue viendo la medida vieja sin entender por qué.
@@ -19007,8 +19353,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     replCerrarPlano(); replModo('trazar'); replMarcarCambio(); replDibujar(); replActualizarInfo();
     toast('📐 Perspectiva corregida: las medidas ya no dependen de la distancia');
   }
+  function replPlanoIntercambiar() {
+    const a = document.getElementById('replPlanoAncho'), b = document.getElementById('replPlanoAlto');
+    const v = a.value; a.value = b.value; b.value = v;
+    if ((_repl.plano?.pts?.length || 0) === 4 && _repl.plano.ancho_m > 0 && _repl.plano.alto_m > 0) replPlanoGuardar();
+  }
   function replPlanoQuitar() {
     _repl.plano = null; _repl._hClave = null; _repl._h = null;
+    _repl.planoManual = false;   // volver a tocar dentro de una placa reintenta el reconocimiento
     replCerrarPlano(); replMarcarCambio(); replDibujar(); replActualizarInfo();
   }
 
@@ -19179,6 +19531,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replPlanoGuardar       = replPlanoGuardar;
   window.replPlanoQuitar        = replPlanoQuitar;
   window.replPlanoPreset        = replPlanoPreset;
+  window.replPlanoIntercambiar  = replPlanoIntercambiar;
   window.replDeshacer           = replDeshacer;
   window.replLimpiar            = replLimpiar;
   window.replAbrirEscala        = replAbrirEscala;

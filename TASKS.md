@@ -1,5 +1,22 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-07, noche): **REPLANTEO-06 — la app reconoce sola la placa del
+falso techo (v9.42), en `feat/replanteo-06-detectar-placas`.** Ver `HANDOFF.md`.
+- **REPLANTEO-06** (En revisión): tocar dentro de una placa y la app saca sus 4 esquinas
+  (Sobel + Hough guiado por gradiente + celda mínima verificada). Cae al marcado a mano si no
+  reconoce nada. Solo frontend. Probado con techos sintéticos: 2,7 px, 15-26 ms, y de extremo
+  a extremo 1,80 m reales → 1,744 m.
+  - Siguiente acción exacta: fusionar, desplegar Pages y **primera prueba con foto real** de un
+    pasillo con falso techo, contrastando con cinta.
+- **Cola aprobada por Adrián, por orden:**
+  1. **Varios planos a la vez** — un rectángulo por plano (techo, pared…) y cada tramo con el
+     suyo. Hoy un recorrido que baja del techo a la pared vuelve a medir mal en la pared.
+  2. **Alejandra y los replanteos** — consultarlos por chat, comparar lo replanteado con lo
+     pedido, generar el pedido.
+  3. «Más cosas» que Adrián aún no ha concretado.
+- **Decisiones humanas pendientes:** aceptar el ADR-0024 y su enmienda 1, y autorizar
+  `migrate_replanteos.sql` (no bloquea).
+
 Estado (actualizado 2026-09-07, tarde-3): **v9.41 — arreglado que «📐 Replanteos» no
 apareciera en Office con menú curado, más tres arreglos de la primera prueba en obra.**
 Ver `HANDOFF.md`.
