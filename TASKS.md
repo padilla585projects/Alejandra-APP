@@ -1,5 +1,17 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-07, tarde-2): **REPLANTEO-05 — el AR ya puede marcar en paredes y
+techos lisos (contacto, profundidad y guía), v9.40, en `feat/replanteo-05-ar-superficies-lisas`.**
+Ver `HANDOFF.md`.
+- **REPLANTEO-05** (En revisión): botón «📱 Tocar con el móvil» que ancla en la posición de la
+  cámara, profundidad que coloca además de avisar (retículo azul), guía a los 2,5 s sin
+  anclaje, y el método de cada punto guardado y visible. Solo frontend.
+  - Siguiente acción exacta: fusionar, desplegar Pages y **Adrián en la pared blanca**: ver si
+    sale retículo azul (= su móvil da profundidad) y medir dos puntos con «Tocar» contra cinta.
+- **REPLANTEO-04** (Desplegado, pendiente de prueba en obra): plano rectificado con 4 esquinas.
+- **Decisiones humanas pendientes:** aceptar el ADR-0024 y su enmienda 1, y autorizar
+  `migrate_replanteos.sql` (no bloquea).
+
 Estado (actualizado 2026-09-07, tarde): **REPLANTEO-04 — rectificación de perspectiva con 4
 esquinas (ADR-0024, enmienda 1 propuesta), v9.39, en la rama `feat/replanteo-04-homografia`.**
 Ver `HANDOFF.md`.

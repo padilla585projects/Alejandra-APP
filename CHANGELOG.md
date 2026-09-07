@@ -4,6 +4,36 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-07 — REPLANTEO-05: el AR mide en paredes y techos lisos, v9.40)
+
+Adrián, probando el AR: «cuando mide en tiempo real no detecta las paredes blancas bien». Es
+el límite de ARCore, no un fallo del código: el hit-test necesita **textura** para anclar y una
+pared o un techo blanco liso no le da rasgos que reconocer. Tres salidas, las tres pedidas por
+Adrián:
+
+- **Anclaje por contacto** (`📱 Tocar con el móvil`): se acerca el móvil al punto y se pulsa;
+  el punto se marca en la **posición de la cámara**, que la da el seguimiento del propio
+  dispositivo y **no depende de reconocer la superficie**. Es lo que resuelve la pared lisa.
+  Se añaden 10 mm hacia delante porque la cámara está dentro de la carcasa, no en su cara.
+- **La profundidad ahora coloca, no solo avisa**: si el móvil trae `depth-sensing`, cuando no
+  hay hit-test el punto se sitúa a la distancia que mide el sensor en el centro de la pantalla,
+  y el retículo se pone **azul** para que se vea con qué se está midiendo antes de pulsar.
+  Hasta ahora la profundidad solo servía para avisar de obstáculos.
+- **Guía cuando no engancha**: a los 2,5 s sin superficie ni profundidad, la app explica qué
+  pasa y qué hacer (apuntar a una esquina, moldura, tornillo o borde de placa, o usar el
+  contacto) en vez de dejar al encargado moviendo el móvil sin saber por qué.
+- Cada punto guarda **con qué método se marcó** (`m`: `hit` | `depth` | `contacto`) dentro de
+  `puntos_3d`, el resumen de la sesión cuenta cuántos hay de cada uno y los que no vienen del
+  hit-test se dibujan con un halo azul: si luego una medida no cuadra con la cinta, se sabe por
+  dónde mirar.
+- `📍 Punto` y `⚠️ Obstáculo` pasan por el mismo anclaje común (superficie → profundidad), y
+  cuando no hay ninguna de las dos **no marcan a ciegas**: lo dicen y mandan al contacto.
+- **Pruebas:** 12 comprobaciones de la lógica de anclaje con un `THREE` mínimo simulado
+  (prioridad hit > profundidad > nada, el caso exacto de la pared blanca, el desplazamiento de
+  10 mm, contacto antes de que el móvil se siteúe, resumen por métodos y los dos mensajes de
+  guía según haya sensor de profundidad o no). **Sin probar en dispositivo:** aquí no hay
+  WebXR ni ARCore, la comprobación real es la de Adrián en una pared blanca.
+
 ### Added (2026-09-07 — REPLANTEO-04: rectificación de perspectiva con 4 esquinas, v9.39)
 
 Adrián, probando el replanteo en obra: «las medidas cuando trazas la línea no son buenas». No
