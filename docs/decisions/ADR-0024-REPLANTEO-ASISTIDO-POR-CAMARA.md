@@ -118,6 +118,34 @@ cuando cambia el trazado. Evita que dos clientes (app, panel, futura AR) diverja
   (pendiente, pequeño).
 - No sustituye a un plano de ingeniería ni a la medición certificada.
 
+## Enmienda 1 (propuesta, 2026-09-07) — fase 3: rectificación de perspectiva
+
+La fase 1 salió a producción y Adrián la probó en obra. Apareció un problema que este ADR no
+había previsto: **una foto tiene una sola escala px/m, y solo es válida en el plano donde se
+marcó la referencia**. Con la referencia sobre la ventana (cerca) y el recorrido por el techo
+alejándose hacia el fondo, un tramo real de varios metros se calculaba en 0,76 m. Reproducido
+con una cámara sintética: con la cámara a 55° y 1,7 m, un recorrido de 7 m sale en **3,3 m**,
+un **53 % corto**. No era un fallo de cálculo: la app aplicaba bien una escala que no valía.
+
+Decisión de Adrián (2026-09-07), entre cuatro opciones planteadas: **rectificar el plano con 4
+puntos**. El encargado marca las cuatro esquinas de algo rectangular de medida conocida que
+esté **en el mismo plano del recorrido** (placa de falso techo 60×60, panel, puerta) y la app
+calcula la homografía que lleva la imagen a ese plano en metros. A partir de ahí las
+distancias son las reales, se aleje lo que se aleje.
+
+- Prioridad de medida: **plano rectificado > longitud total conocida > escala plana**.
+- Límite que hereda el método: solo vale para puntos que estén **en ese plano**. Un trazado que
+  cambia de plano (techo → pared) necesita otro replanteo, o el AR de la fase 2.
+- La escala plana no desaparece: sigue valiendo para trazados frontales, y se le añadió un
+  aviso en la interfaz explicando cuándo no fiarse de ella.
+- No cambia el modelo de datos en D1: el rectángulo vive dentro de `trazado_json`
+  (`plano = { pts, ancho_m, alto_m }`), así que no hace falta migración.
+
+Descartadas en la misma conversación: varias referencias por zona (más simple pero sigue
+siendo aproximado), dejar la foto solo como croquis, y esperar a la prueba del AR.
+
+Esta enmienda queda **Propuesta**: aceptarla es decisión humana (ADR-0007), igual que el ADR.
+
 ## Alternativas consideradas
 
 | Alternativa | Motivo para elegir o descartar |
@@ -127,6 +155,8 @@ cuando cambia el trazado. Evita que dos clientes (app, panel, futura AR) diverja
 | App nativa (ARCore/ARKit) | Descartada: rompe el modelo PWA único, duplica frontends y despliegues. |
 | Cálculo de material en el frontend | Descartada: duplicaría reglas de negocio en tres clientes (`AGENTS.md`). |
 | Reglas de cálculo fijas en código | Elegida como **arranque**, con tabla de sobreescritura por empresa prevista, para no bloquear la fase 1 en una migración y un editor. |
+| Escala única de la foto para todo el trazado | **Superada por la enmienda 1**: solo vale en el plano de la referencia; con el recorrido alejándose medía un 53 % corto en la prueba sintética. |
+| Varias referencias de escala, una por zona | Descartada en la enmienda 1: más simple que la homografía, pero sigue siendo una aproximación por tramos. |
 
 ## Consecuencias
 

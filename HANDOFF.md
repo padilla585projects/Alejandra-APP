@@ -1,5 +1,47 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-04 — rectificación de perspectiva con 4 esquinas (ADR-0024, enmienda 1) (2026-09-07, v9.39)
+
+- **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-04-homografia`.
+- **Origen:** Adrián en obra: «las medidas cuando trazas la línea no son buenas». Diagnóstico:
+  no era el cálculo, era el método — una foto tiene UNA escala y solo vale en el plano de la
+  referencia. Comprobado sobre su propia captura: la referencia de 1,2 m medía ~380 px y el
+  tramo de 511 px salía 1,61 m, justo lo que mostraba la app; el error estaba en aplicar esa
+  escala a un tramo que se alejaba hacia el fondo. Elegida por él la opción de **rectificar el
+  plano con 4 puntos** entre cuatro alternativas.
+- **Qué hace:** modo «📐 Plano» en el editor del móvil. Se marcan las 4 esquinas de algo
+  rectangular **del mismo plano del recorrido** (placa de falso techo, panel, puerta) dando la
+  vuelta — el primer lado marcado es el ancho — y se escriben ancho y alto reales. La app
+  calcula la homografía imagen → plano en metros y a partir de ahí mide de verdad, se aleje lo
+  que se aleje. Prioridad: **plano > longitud total conocida > escala plana**.
+- **Archivos:** `worker.js` (`_resolver8x8`, `homografia4`, `aplicarHomografia`,
+  `homografiaDePlano`, `distanciaEnPlano`, integración en `calcularMaterialReplanteo`, campos
+  `segmentos_m` y `plano_ok`), `index.html` (botón de modo, modal `modalReplPlano`, port de la
+  homografía, `_replMetrosTramo`, `_replLongitudPlano`, dibujo del cuadrilátero, arrastre de
+  esquinas, `_replPlanoParaGuardar`, deshacer/limpiar, info), `panel.html` (mismas funciones
+  con prefijo `_replOffice`, cotas y cuadrilátero en detalle e informe), los cuatro marcadores
+  de versión a 9.39, `ADR-0024` (enmienda 1, **Propuesta**), `CHANGELOG.md`.
+- **Decisiones:** el rectángulo vive en `trazado_json`, así que **no hay migración**. La
+  matemática está duplicada en los tres sitios a propósito (el editor tiene que pintar cotas
+  sin esperar al servidor, y la oficina tiene que ver lo mismo); manda siempre el Worker, que es
+  quien calcula el material que se pide. Un plano inválido se ignora en silencio y se sigue
+  midiendo con la escala de antes: nunca deja al usuario sin medida.
+- **Pruebas:** cámara sintética (plano real → proyección → medida) con 14 comprobaciones — 7 m
+  exactos con el plano, 3,3 m sin él (**53 % de error, el bug de Adrián reproducido**), planos
+  inválidos ignorados, obstáculos, prioridad y rotación de esquinas —; 13 de paridad
+  cliente↔servidor (coeficientes idénticos hasta 1e-9 y mismos rechazos) y 6 de paridad
+  panel↔Worker; 230/230 del agente; sintaxis de los dos Workers; versiones 9.39; departamentos;
+  rutas; entorno; encoding; scripts inline igual que en `main`. **Sin probar en dispositivo.**
+- **Siguiente acción exacta:** Adrián, en el techo real: foto → «📐 Plano» → 4 esquinas de una
+  placa de falso techo (60×60) → aplicar → trazar el recorrido → comparar la longitud con una
+  cinta métrica. Registrar aquí el resultado y, si cuadra, aceptar la enmienda 1 del ADR-0024.
+- **Pendiente aparte (nuevo, sin empezar):** Adrián reportó que el AR **no detecta bien las
+  paredes blancas**. Es el límite conocido de ARCore con superficies lisas sin textura: el
+  hit-test no tiene rasgos que anclar. Vías a estudiar, por orden: anclar el punto con la
+  **posición de la cámara** (tocar físicamente el punto con el móvil y pulsar, sin depender de
+  la detección de superficie), usar `depth-sensing` para colocar y no solo para avisar, y guiar
+  en pantalla hacia esquinas y molduras cuando el hit-test lleve unos segundos sin enganchar.
+
 ## REPLANTEO — fix de la escala en el móvil: puntos arrastrables y modal fantasma (2026-09-04, noche, v9.37)
 
 - **Agente:** Claude (Sonnet 5). **Rama:** `fix/replanteo-escala-drag-y-modal-fantasma` → PR #154

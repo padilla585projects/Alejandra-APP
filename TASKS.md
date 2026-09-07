@@ -1,5 +1,21 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-07, tarde): **REPLANTEO-04 — rectificación de perspectiva con 4
+esquinas (ADR-0024, enmienda 1 propuesta), v9.39, en la rama `feat/replanteo-04-homografia`.**
+Ver `HANDOFF.md`.
+- **REPLANTEO-04** (En revisión): modo «📐 Plano» en el editor del móvil, homografía de 4
+  esquinas en los tres sitios (Worker, `index.html`, `panel.html`), cotas por tramo
+  rectificadas y `segmentos_m`/`plano_ok` en el cálculo. Sin migración. Probado con cámara
+  sintética (7 m exactos con plano; 53 % de error sin él) y con paridad exacta entre los tres.
+  - Siguiente acción exacta: fusionar, desplegar Pages + API Worker, y **Adrián en el techo
+    real**: 4 esquinas de una placa 60×60 → trazar → comparar con cinta métrica.
+- **AR en paredes blancas** (Pendiente, sin empezar): Adrián reportó que midiendo en tiempo
+  real el AR no engancha en paredes blancas — límite de ARCore con superficies lisas. Vías:
+  anclar por posición de la cámara (tocar el punto con el móvil), usar `depth-sensing` para
+  colocar y no solo para avisar, y guiar hacia esquinas/molduras cuando no engancha.
+- **Decisiones humanas pendientes:** aceptar el ADR-0024 **y su enmienda 1**, y autorizar
+  `migrate_replanteos.sql` (no bloquea).
+
 Estado (actualizado 2026-09-07): **v9.37 en producción (PR #154 → `ec5ef70`, Pages run
 `33903164644`). Nada en curso: quedan tres verificaciones y dos decisiones humanas.** Ver
 `HANDOFF.md`.

@@ -1941,6 +1941,7 @@ select option{background:var(--surface2);color:var(--text)}
     <div style="display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);overflow-x:auto;align-items:center">
       <button class="repl-mode active" data-modo="trazar" onclick="replModo('trazar')">✏️ Trazar</button>
       <button class="repl-mode" data-modo="escala" onclick="replModo('escala')">📏 Escala</button>
+      <button class="repl-mode" data-modo="plano" onclick="replModo('plano')">📐 Plano</button>
       <button class="repl-mode" data-modo="obstaculo" onclick="replModo('obstaculo')">⚠️ Obstáculo</button>
       <span style="flex:1"></span>
       <button class="repl-btn" onclick="replDeshacer()" title="Deshacer">↩</button>
@@ -2021,6 +2022,41 @@ select option{background:var(--surface2);color:var(--text)}
           <input id="replEscalaManual" type="number" step="0.1" min="0.1" inputmode="decimal" class="repl-input" placeholder="Ej: 30">
           <button class="repl-btn" style="width:100%;margin-top:8px" onclick="replEscalaManualGuardar()">Usar longitud conocida</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: plano rectificado (REPLANTEO-04) -->
+  <div class="modal-overlay" id="modalReplPlano" onclick="_replCerrarSiBackdrop(event,this,replCerrarPlano)" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">📐 Rectificar la perspectiva</div>
+        <button onclick="replCerrarPlano()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;background:var(--surface2);border-radius:10px;padding:10px 12px">
+          Con las cuatro esquinas de algo rectangular que esté <b>en el mismo plano por donde va
+          la instalación</b> (una placa de falso techo, un panel, una puerta), la app corrige la
+          perspectiva y mide bien aunque el recorrido se aleje hacia el fondo.
+          <b>El primer lado que marcaste es el ancho.</b>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <label class="repl-label">Ancho real (m)</label>
+            <input id="replPlanoAncho" type="number" step="0.01" min="0.05" inputmode="decimal" class="repl-input" placeholder="0.60">
+          </div>
+          <div style="flex:1">
+            <label class="repl-label">Alto real (m)</label>
+            <input id="replPlanoAlto" type="number" step="0.01" min="0.05" inputmode="decimal" class="repl-input" placeholder="0.60">
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="repl-btn" style="flex:1;min-width:96px;font-size:11px" onclick="replPlanoPreset(0.6,0.6)">Placa 60×60</button>
+          <button class="repl-btn" style="flex:1;min-width:96px;font-size:11px" onclick="replPlanoPreset(1.2,0.6)">Placa 120×60</button>
+          <button class="repl-btn" style="flex:1;min-width:96px;font-size:11px" onclick="replPlanoPreset(0.8,2.03)">Puerta 80×203</button>
+        </div>
+        <button class="repl-btn primary" style="width:100%" onclick="replPlanoGuardar()">Aplicar la corrección</button>
+        <button class="repl-btn danger" style="width:100%" onclick="replPlanoQuitar()">Quitar el plano y volver a la escala</button>
       </div>
     </div>
   </div>
@@ -15130,7 +15166,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.38';
+const APP_VERSION = '9.39';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18331,6 +18367,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         puntos: Array.isArray(tr.puntos) ? tr.puntos.map(p => ({ x: +p.x, y: +p.y })) : [],
         obstaculos: Array.isArray(tr.obstaculos) ? tr.obstaculos : [],
         referencia: tr.referencia || null,
+        plano: (tr.plano && Array.isArray(tr.plano.pts) && tr.plano.pts.length === 4) ? tr.plano : null,
         escala_px_m: tr.longitud_manual_m ? null : (r.escala_px_m || null),
         longitud_manual_m: tr.longitud_manual_m || null,
         calc: r.material?.length ? { longitud_m: r.longitud_m, material: r.material, reglas: r.reglas, giros: null } : null,
@@ -18412,6 +18449,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const hint = document.getElementById('replHint');
     if (m === 'trazar') hint.textContent = 'Toca la foto punto a punto por donde irá la instalación. Arrastra un punto para corregirlo.';
     else if (m === 'escala') hint.textContent = 'Toca los dos extremos de algo cuya medida conozcas (placa de techo, puerta, tramo ya instalado). Luego escribe los metros.';
+    else if (m === 'plano') hint.textContent = 'Toca las 4 esquinas de algo rectangular del MISMO plano del recorrido (placa de techo, panel, puerta), dando la vuelta. El primer lado que marques es el ancho.';
     else hint.textContent = 'Toca sobre el recorrido justo donde cruza una instalación existente. Toca un obstáculo para editarlo.';
   }
 
@@ -18428,7 +18466,88 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const f = _replFit();
     return { x: (clientX - r.left - f.ox) / f.s, y: (clientY - r.top - f.oy) / f.s, f };
   }
+  // ── REPLANTEO-04: homografía de 4 esquinas (mismo cálculo que el Worker) ───────────────
+  // El material lo sigue calculando el servidor; esto es solo para que el editor pinte las
+  // cotas correctas al instante, sin esperar a `/replanteos/calcular`. Si las dos versiones
+  // se separan, manda la del Worker: es la que se guarda.
+  function _replResolver8x8(A, b) {
+    const n = b.length, M = A.map((fila, i) => [...fila, b[i]]);
+    for (let col = 0; col < n; col++) {
+      let piv = col;
+      for (let f = col + 1; f < n; f++) if (Math.abs(M[f][col]) > Math.abs(M[piv][col])) piv = f;
+      if (Math.abs(M[piv][col]) < 1e-9) return null;
+      [M[col], M[piv]] = [M[piv], M[col]];
+      for (let f = 0; f < n; f++) {
+        if (f === col) continue;
+        const factor = M[f][col] / M[col][col];
+        if (!factor) continue;
+        for (let c = col; c <= n; c++) M[f][c] -= factor * M[col][c];
+      }
+    }
+    const x = new Array(n);
+    for (let i = 0; i < n; i++) { x[i] = M[i][n] / M[i][i]; if (!Number.isFinite(x[i])) return null; }
+    return x;
+  }
+  function _replHomografiaDe(plano) {
+    if (!plano || !Array.isArray(plano.pts) || plano.pts.length !== 4) return null;
+    const W = Number(plano.ancho_m), A = Number(plano.alto_m);
+    if (!(W > 0) || !(A > 0)) return null;
+    const pts = plano.pts.map(p => ({ x: +p.x, y: +p.y }));
+    if (!pts.every(p => Number.isFinite(p.x) && Number.isFinite(p.y))) return null;
+    let area2 = 0;
+    for (let i = 0; i < 4; i++) { const a = pts[i], b = pts[(i + 1) % 4]; area2 += a.x * b.y - b.x * a.y; }
+    if (Math.abs(area2) < 200) return null;
+    const dst = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: A }, { x: 0, y: A }];
+    const M = [], v = [];
+    for (let i = 0; i < 4; i++) {
+      const x = pts[i].x, y = pts[i].y, u = dst[i].x, w = dst[i].y;
+      M.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); v.push(u);
+      M.push([0, 0, 0, x, y, 1, -w * x, -w * y]); v.push(w);
+    }
+    const sol = _replResolver8x8(M, v);
+    return sol ? [...sol, 1] : null;
+  }
+  function _replAplicarH(H, x, y) {
+    const d = H[6] * x + H[7] * y + H[8];
+    if (!d || !Number.isFinite(d)) return null;
+    return { x: (H[0] * x + H[1] * y + H[2]) / d, y: (H[3] * x + H[4] * y + H[5]) / d };
+  }
+  // H del plano actual, cacheada mientras el plano no cambie (se recalcula al arrastrar).
+  function _replH() {
+    if (!_repl?.plano) return null;
+    const clave = JSON.stringify(_repl.plano);
+    if (_repl._hClave !== clave) { _repl._hClave = clave; _repl._h = _replHomografiaDe(_repl.plano); }
+    return _repl._h;
+  }
+  // Metros reales del tramo i (del punto i-1 al i): por el plano si lo hay, si no por la escala.
+  function _replMetrosTramo(i, esc) {
+    const a = _repl.puntos[i - 1], b = _repl.puntos[i];
+    if (!a || !b) return null;
+    const H = _replH();
+    if (H) {
+      const p = _replAplicarH(H, a.x, a.y), q = _replAplicarH(H, b.x, b.y);
+      if (p && q) { const d = Math.hypot(q.x - p.x, q.y - p.y); if (Number.isFinite(d)) return d; }
+    }
+    return esc ? Math.hypot(b.x - a.x, b.y - a.y) / esc : null;
+  }
+  function _replLongitudPlano() {
+    if (!_replH() || _repl.puntos.length < 2) return null;
+    let t = 0;
+    for (let i = 1; i < _repl.puntos.length; i++) { const m = _replMetrosTramo(i, null); if (m === null) return null; t += m; }
+    return t;
+  }
+
   function _replEscalaActual() {
+    // Con el plano rectificado no hay una sola escala px/m: se devuelve la media equivalente,
+    // que los dibujos usan para el GROSOR de la banda y el tamaño de los obstáculos. Las
+    // cotas y la longitud salen de _replMetrosTramo, no de aquí.
+    const Hp = _replH();
+    if (Hp) {
+      const L = _replLongitudPlano();
+      if (L > 0) return _replLongitudPx() / L;
+      const p = _repl.plano.pts, ladoPx = Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y);
+      return ladoPx > 0 ? ladoPx / Number(_repl.plano.ancho_m) : null;
+    }
     if (_repl.longitud_manual_m > 0) {
       const px = _replLongitudPx();
       return px > 0 ? px / _repl.longitud_manual_m : null;
@@ -18468,7 +18587,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (esc) {
         ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         for (let i = 1; i < P.length; i++) {
-          const m = Math.hypot(_repl.puntos[i].x - _repl.puntos[i - 1].x, _repl.puntos[i].y - _repl.puntos[i - 1].y) / esc;
+          const m = _replMetrosTramo(i, esc);   // REPLANTEO-04: metros reales, no píxeles/escala
+          if (m === null) continue;
           const mx = (P[i].x + P[i - 1].x) / 2, my = (P[i].y + P[i - 1].y) / 2;
           const txt = _replNum(m, 2) + ' m';
           const w = ctx.measureText(txt).width + 10 * k;
@@ -18484,6 +18604,36 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       ctx.fillStyle = i === 0 ? '#22c55e' : (i === P.length - 1 ? '#ef4444' : '#fff');
       ctx.fill(); ctx.lineWidth = 2 * k; ctx.strokeStyle = '#0b0f14'; ctx.stroke();
     });
+    // Plano rectificado (REPLANTEO-04)
+    if (_repl.plano?.pts?.length) {
+      const Q = _repl.plano.pts.map(p => ({ x: ox + p.x * s, y: oy + p.y * s }));
+      const completo = Q.length === 4 && !!_replH();
+      ctx.save();
+      ctx.strokeStyle = completo ? '#f472b6' : '#fb7185';
+      ctx.lineWidth = Math.max(1.5, 2 * k);
+      if (!completo) ctx.setLineDash([6 * k, 4 * k]);
+      if (Q.length >= 2) {
+        ctx.beginPath(); Q.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+        if (Q.length === 4) ctx.closePath();
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      Q.forEach((p, i) => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 6 * k, 0, Math.PI * 2);
+        ctx.fillStyle = completo ? '#f472b6' : '#fb7185'; ctx.fill();
+        ctx.font = `bold ${10 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#0b0f14'; ctx.fillText(String(i + 1), p.x, p.y + 0.5);
+      });
+      if (completo) {
+        const cx = Q.reduce((a, p) => a + p.x, 0) / 4, cy = Q.reduce((a, p) => a + p.y, 0) / 4;
+        const txt = `📐 ${_replNum(_repl.plano.ancho_m, 2)} × ${_replNum(_repl.plano.alto_m, 2)} m`;
+        ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const w = ctx.measureText(txt).width + 10 * k;
+        ctx.fillStyle = 'rgba(190,24,93,.85)'; ctx.fillRect(cx - w / 2, cy - 9 * k, w, 18 * k);
+        ctx.fillStyle = '#fff'; ctx.fillText(txt, cx, cy);
+      }
+      ctx.restore();
+    }
     // Referencia de escala
     if (_repl.referencia?.a) {
       const a = { x: ox + _repl.referencia.a.x * s, y: oy + _repl.referencia.a.y * s };
@@ -18556,7 +18706,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (!_repl || _replSoloLectura()) return;
       ev.preventDefault();
       const n = _replANatural(ev.clientX, ev.clientY);
-      _replDrag = { x0: ev.clientX, y0: ev.clientY, moved: false, idx: -1, refKey: null, nat: n };
+      _replDrag = { x0: ev.clientX, y0: ev.clientY, moved: false, idx: -1, refKey: null, planoIdx: -1, nat: n };
       if (_repl.modo === 'trazar') {
         // ¿Ha tocado un vértice existente? → arrastrar
         const tol = 18 / n.f.s;
@@ -18575,6 +18725,13 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           if (d < bd) { bd = d; best = k; }
         });
         _replDrag.refKey = best;
+      } else if (_repl.modo === 'plano' && _repl.plano?.pts?.length) {
+        // Las 4 esquinas se corrigen arrastrando, igual que los vértices del trazado: en el
+        // móvil es imposible acertar a la primera y rehacer las cuatro cansa.
+        const tol = 18 / n.f.s;
+        let best = -1, bd = tol;
+        _repl.plano.pts.forEach((p, i) => { const d = Math.hypot(p.x - n.x, p.y - n.y); if (d < bd) { bd = d; best = i; } });
+        _replDrag.planoIdx = best;
       }
       try { cv.setPointerCapture(ev.pointerId); } catch {}
     });
@@ -18584,6 +18741,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (_replDrag.idx >= 0 && _replDrag.moved) {
         const n = _replANatural(ev.clientX, ev.clientY);
         _repl.puntos[_replDrag.idx] = { x: Math.max(0, Math.min(_repl.imgW, n.x)), y: Math.max(0, Math.min(_repl.imgH, n.y)) };
+        replDibujar();
+      } else if (_replDrag.planoIdx >= 0 && _replDrag.moved) {
+        const n = _replANatural(ev.clientX, ev.clientY);
+        _repl.plano.pts[_replDrag.planoIdx] = { x: Math.max(0, Math.min(_repl.imgW, n.x)), y: Math.max(0, Math.min(_repl.imgH, n.y)) };
         replDibujar();
       } else if (_replDrag.refKey && _replDrag.moved) {
         const n = _replANatural(ev.clientX, ev.clientY);
@@ -18600,6 +18761,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const d = _replDrag; _replDrag = null;
       if (d.idx >= 0 && d.moved) { replMarcarCambio(); replActualizarInfo(); return; }
       if (d.refKey && d.moved) { replMarcarCambio(); replActualizarInfo(); return; }
+      if (d.planoIdx >= 0 && d.moved) { replMarcarCambio(); replActualizarInfo(); return; }
       if (d.moved) return;
       const n = d.nat;
       if (n.x < 0 || n.y < 0 || n.x > _repl.imgW || n.y > _repl.imgH) return; // fuera de la foto
@@ -18637,6 +18799,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         replAbrirEscala();
         return;
       }
+    } else if (_repl.modo === 'plano') {
+      const pts = (_repl.plano?.pts || []).slice();
+      // Con las 4 esquinas ya marcadas, tocar reabre el modal para corregir las medidas: para
+      // mover una esquina se arrastra, para rehacerlas están Deshacer y «Quitar el plano».
+      if (pts.length >= 4) { replAbrirPlano(); return; }
+      pts.push({ x: n.x, y: n.y });
+      _repl.plano = { pts, ancho_m: _repl.plano?.ancho_m || null, alto_m: _repl.plano?.alto_m || null };
+      if (pts.length === 4) { replDibujar(); replAbrirPlano(); return; }
     } else if (_repl.modo === 'obstaculo') {
       // ¿Toca un obstáculo existente? → editar
       const tol = 16 / n.f.s;
@@ -18665,6 +18835,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function replDeshacer() {
     if (!_repl || _replSoloLectura()) return;
     if (_repl.modo === 'escala') { _repl.referencia = null; _repl.escala_px_m = null; }
+    else if (_repl.modo === 'plano') {
+      const pts = _repl.plano?.pts || [];
+      pts.pop();
+      _repl.plano = pts.length ? { ...(_repl.plano || {}), pts } : null;
+    }
     else if (_repl.modo === 'obstaculo') { _repl.obstaculos.pop(); }
     else {
       _repl.puntos.pop();
@@ -18674,8 +18849,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   function replLimpiar() {
     if (!_repl || _replSoloLectura()) return;
-    if (!confirm('¿Borrar todo el trazado, la escala y los obstáculos de esta foto?')) return;
+    if (!confirm('¿Borrar todo el trazado, la escala, el plano y los obstáculos de esta foto?')) return;
     _repl.puntos = []; _repl.obstaculos = []; _repl.referencia = null; _repl.escala_px_m = null; _repl.longitud_manual_m = null; _repl.calc = null;
+    _repl.plano = null; _repl._hClave = null; _repl._h = null;
     replMarcarCambio(); replDibujar(); replActualizarInfo();
   }
 
@@ -18751,11 +18927,18 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     clearTimeout(_replCalcTimer);
     _replCalcTimer = setTimeout(replCalcular, 450);
   }
+  // Solo se guarda un plano COMPLETO: 4 esquinas y las dos medidas. Uno a medias no mide
+  // nada y ensuciaría trazado_json de replanteos viejos.
+  function _replPlanoParaGuardar() {
+    const p = _repl.plano;
+    if (!p || !Array.isArray(p.pts) || p.pts.length !== 4 || !(p.ancho_m > 0) || !(p.alto_m > 0)) return undefined;
+    return { pts: p.pts, ancho_m: p.ancho_m, alto_m: p.alto_m };
+  }
   function _replPayloadCalculo() {
     return {
       departamento: _repl.departamento || _replCatalogoDept || undefined, // REPL-DEPT-POST-01
       elemento_key: _repl.elemento_key, elemento_params: _repl.params,
-      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, puntos_3d: _repl.puntos_3d || undefined },
+      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, plano: _replPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined },
       escala_px_m: _repl.longitud_manual_m ? null : _repl.escala_px_m,
       longitud_manual_m: _repl.longitud_manual_m || null,
     };
@@ -18779,11 +18962,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const partes = [];
     if (_repl.origen === 'ar') partes.push(`<span style="color:#22c55e">📱 medido en AR (vista en planta)</span>`);
     partes.push(`<span>📍 <b>${_repl.puntos.length}</b> puntos</span>`);
-    if (_repl.longitud_manual_m) partes.push(`<span>📏 longitud fijada: <b>${_replNum(_repl.longitud_manual_m)} m</b></span>`);
-    else if (_repl.escala_px_m) partes.push(`<span>📏 escala ✔ (${_replNum(_repl.referencia?.metros || 0, 2)} m de referencia)</span>`);
-    else partes.push(`<span style="color:#f97316">📏 sin escala: toca "Escala"</span>`);
+    if (_replH()) partes.push(`<span style="color:#f472b6">📐 plano rectificado (${_replNum(_repl.plano.ancho_m, 2)}×${_replNum(_repl.plano.alto_m, 2)} m)</span>`);
+    else if (_repl.longitud_manual_m) partes.push(`<span>📏 longitud fijada: <b>${_replNum(_repl.longitud_manual_m)} m</b></span>`);
+    else if (_repl.escala_px_m) partes.push(`<span>📏 escala ✔ (${_replNum(_repl.referencia?.metros || 0, 2)} m de referencia) <span style="color:#f97316">— solo en ese plano</span></span>`);
+    else partes.push(`<span style="color:#f97316">📏 sin escala: toca "Escala" o "Plano"</span>`);
     if (esc && _repl.puntos.length >= 2) {
-      const L = _repl.calc?.longitud_m ?? (_replLongitudPx() / esc);
+      const L = _repl.calc?.longitud_m ?? (_replLongitudPlano() ?? (_replLongitudPx() / esc));
       partes.push(`<span>➡️ <b>${_replNum(L)} m</b>${_repl.calc ? '' : ' (calculando…)'}</span>`);
     }
     if (_repl.obstaculos.length) partes.push(`<span>⚠️ <b>${_repl.obstaculos.length}</b> obstáculo(s)</span>`);
@@ -18791,6 +18975,35 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (_repl.calc?.material?.length) partes.push(`<span>🧮 <b>${_repl.calc.material.length}</b> líneas de material</span>`);
     if (_repl.cambiado && _repl.id) partes.push(`<span style="color:#f97316">● sin guardar</span>`);
     c.innerHTML = partes.join('');
+  }
+
+  // ── Plano rectificado (REPLANTEO-04) ────────────────────────────────────
+  function replAbrirPlano() {
+    document.getElementById('replPlanoAncho').value = _repl.plano?.ancho_m || '';
+    document.getElementById('replPlanoAlto').value = _repl.plano?.alto_m || '';
+    _replAbrirModal('modalReplPlano');
+  }
+  function replCerrarPlano() { document.getElementById('modalReplPlano').style.display = 'none'; }
+  function replPlanoPreset(ancho, alto) {
+    document.getElementById('replPlanoAncho').value = ancho;
+    document.getElementById('replPlanoAlto').value = alto;
+  }
+  function replPlanoGuardar() {
+    const ancho = parseFloat(document.getElementById('replPlanoAncho').value.replace(',', '.'));
+    const alto = parseFloat(document.getElementById('replPlanoAlto').value.replace(',', '.'));
+    if (!(ancho > 0) || !(alto > 0)) { toast('Escribe el ancho y el alto reales', 'error'); return; }
+    if ((_repl.plano?.pts?.length || 0) !== 4) { toast('Marca las 4 esquinas primero', 'error'); return; }
+    _repl.plano = { pts: _repl.plano.pts, ancho_m: ancho, alto_m: alto };
+    if (!_replH()) { toast('Esas 4 esquinas no forman un rectángulo utilizable: repite el marcado', 'error'); return; }
+    // El plano manda sobre la longitud fijada a mano: si no, el usuario corrige la perspectiva
+    // y sigue viendo la medida vieja sin entender por qué.
+    _repl.longitud_manual_m = null;
+    replCerrarPlano(); replModo('trazar'); replMarcarCambio(); replDibujar(); replActualizarInfo();
+    toast('📐 Perspectiva corregida: las medidas ya no dependen de la distancia');
+  }
+  function replPlanoQuitar() {
+    _repl.plano = null; _repl._hClave = null; _repl._h = null;
+    replCerrarPlano(); replMarcarCambio(); replDibujar(); replActualizarInfo();
   }
 
   // ── Material ────────────────────────────────────────────────────────────
@@ -18834,7 +19047,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         if (dept) fd.append('departamento', dept);
         fd.append('elemento_key', _repl.elemento_key);
         fd.append('elemento_json', JSON.stringify(_repl.params));
-        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, puntos_3d: _repl.puntos_3d || undefined }));
+        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, plano: _replPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined }));
         fd.append('origen', _repl.origen === 'ar' ? 'ar' : 'foto');
         if (_repl.escala_px_m && !_repl.longitud_manual_m) fd.append('escala_px_m', _repl.escala_px_m);
         if (_repl.longitud_manual_m) fd.append('longitud_manual_m', _repl.longitud_manual_m);
@@ -18955,6 +19168,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replCambiarOpcion      = replCambiarOpcion;
   window.replMarcarCambio       = replMarcarCambio;
   window.replModo               = replModo;
+  window.replAbrirPlano         = replAbrirPlano;
+  window.replCerrarPlano        = replCerrarPlano;
+  window.replPlanoGuardar       = replPlanoGuardar;
+  window.replPlanoQuitar        = replPlanoQuitar;
+  window.replPlanoPreset        = replPlanoPreset;
   window.replDeshacer           = replDeshacer;
   window.replLimpiar            = replLimpiar;
   window.replAbrirEscala        = replAbrirEscala;
