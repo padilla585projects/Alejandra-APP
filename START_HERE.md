@@ -4,6 +4,13 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPLANTEO-05 — el AR en paredes lisas (2026-09-07, v9.40):** Adrián: «cuando mide en tiempo
+real no detecta las paredes blancas bien». Límite de ARCore (el hit-test necesita textura), no
+del código. Tres salidas: botón «📱 Tocar con el móvil» que ancla el punto en la posición de la
+cámara sin depender de la superficie, la profundidad pasa a **colocar** además de avisar
+(retículo azul), y una guía a los 2,5 s sin anclaje. Cada punto guarda con qué método se marcó.
+Solo frontend. **Pendiente:** probarlo en la pared donde falló. Ver `HANDOFF.md`/`TASKS.md`.
+
 **REPLANTEO-04 — rectificación de perspectiva (2026-09-07, v9.39):** Adrián en obra: «las
 medidas cuando trazas la línea no son buenas». No era el cálculo: una foto tiene UNA escala y
 solo vale en el plano de la referencia, así que un recorrido que se aleja se medía corto (53 %

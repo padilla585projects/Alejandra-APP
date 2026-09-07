@@ -1,5 +1,39 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-05 — el AR en paredes y techos lisos (2026-09-07, v9.40)
+
+- **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-05-ar-superficies-lisas`.
+- **Origen:** Adrián: «cuando mide en tiempo real no detecta las paredes blancas bien». Pidió
+  las tres vías propuestas.
+- **Causa:** no es un fallo del código. El hit-test de ARCore necesita textura para anclar; una
+  pared o techo blanco liso no ofrece rasgos, así que no devuelve resultado y el retículo no
+  aparece nunca. El **seguimiento de posición** (VIO) sí funciona, porque usa toda la escena.
+- **Qué se hizo:**
+  1. `replArContacto()` — botón «📱 Tocar con el móvil»: ancla el punto en la posición de la
+     cámara (+10 mm hacia delante, `REPL_AR_OFFSET_CONTACTO`). No necesita reconocer superficie.
+  2. La profundidad coloca además de avisar: `_ar.depthPos` = cámara + dirección × profundidad
+     del centro de pantalla, y el retículo se pinta azul en ese modo. La lectura de profundidad
+     ya no depende de que haya hit (antes estaba dentro de `if (vp && hitPos)`, justo el caso
+     que no se da en una pared lisa).
+  3. Guía a los 2,5 s sin anclaje, con qué hacer.
+  4. `_replArAnclaje()` centraliza la prioridad (hit → profundidad → nada) y la usan `Punto` y
+     `Obstáculo`; el método de cada punto se guarda en `_ar.metodos` y viaja en `puntos_3d.m`.
+- **Archivos:** `index.html` (bloque AR: cabecera, estado de sesión, `_replArFrame`,
+  `_replArAnclaje`, `replArPunto`, `replArContacto`, `replArObstaculo`, `_replArResumenMetodos`,
+  halo azul en `_replArRedibujar`, botón del overlay, `window.replArContacto`), los cuatro
+  marcadores de versión a 9.40, `CHANGELOG.md`. Sin cambios de backend ni de esquema.
+- **Pruebas:** 12 comprobaciones de la lógica de anclaje con un `THREE` mínimo simulado (ver
+  `scratchpad/probar_ar.py`), sintaxis de los scripts inline igual que en `main`, versiones
+  9.40, encoding. **Sin probar en dispositivo.**
+- **Siguiente acción exacta:** Adrián, en la pared blanca donde falló: entrar en AR, comprobar
+  (a) si aparece el retículo azul — eso diría que su móvil tiene sensor de profundidad y ya
+  puede marcar sin tocar —, y (b) marcar dos puntos con «📱 Tocar» separados una distancia
+  conocida y comparar con la cinta. El resumen de abajo dice cuántos puntos se marcaron con cada
+  método. Registrar aquí el resultado.
+- **Lo que esto NO arregla:** la deriva del seguimiento en tramos largos sigue sin medirse
+  (REPLANTEO-02), y el contacto obliga a llegar físicamente al punto — en un techo alto no
+  sirve, y ahí la salida es la foto con el plano rectificado de REPLANTEO-04.
+
 ## REPLANTEO-04 — rectificación de perspectiva con 4 esquinas (ADR-0024, enmienda 1) (2026-09-07, v9.39)
 
 - **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-04-homografia`.

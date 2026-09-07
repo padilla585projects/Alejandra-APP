@@ -2122,6 +2122,7 @@ select option{background:var(--surface2);color:var(--text)}
     <div id="replArAviso" style="display:none;position:absolute;top:72px;left:12px;right:12px;background:rgba(250,204,21,.94);color:#111;padding:9px 11px;border-radius:10px;font-size:13px;font-weight:700;line-height:1.35"></div>
     <div style="position:absolute;bottom:22px;left:12px;right:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;pointer-events:auto">
       <button onclick="replArPunto()" style="grid-column:1/-1;background:#f97316;border:none;color:#fff;font-size:16px;font-weight:800;padding:14px;border-radius:12px;font-family:inherit">📍 Punto</button>
+      <button id="btnReplArContacto" onclick="replArContacto()" style="grid-column:1/-1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:14px;font-weight:800;padding:12px;border-radius:12px;font-family:inherit">📱 Tocar con el móvil (pared lisa)</button>
       <button onclick="replArObstaculo()" style="background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">⚠️ Obstáculo</button>
       <button onclick="replArDeshacer()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">↩ Deshacer</button>
       <button onclick="replArCancelar()" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;font-weight:700;padding:11px;border-radius:12px;font-family:inherit">✖ Cancelar</button>
@@ -15166,7 +15167,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.39';
+const APP_VERSION = '9.40';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -19211,10 +19212,27 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // Límites conocidos: la deriva del seguimiento en tramos largos está por medir en un
   // Android real (REPLANTEO-02); no funciona en iPhone Safari; three.js se carga solo al
   // entrar en AR (650 KB desde cdnjs, ya usado por la app para jsPDF).
+  //
+  // REPLANTEO-05 (07/09/2026) — Adrián en obra: "cuando mide en tiempo real no detecta las
+  // paredes blancas bien". Es el límite de ARCore: el hit-test necesita TEXTURA para anclar
+  // y una pared o un techo blanco liso no le da rasgos. Tres salidas, por orden de uso:
+  //   1. `replArContacto()` — se acerca el móvil al punto y se pulsa: el punto se ancla en la
+  //      POSICIÓN DE LA CÁMARA, que la da el seguimiento (VIO) del propio dispositivo y no
+  //      depende de que se reconozca la superficie. Es lo que resuelve la pared lisa.
+  //   2. Profundidad — si el móvil trae `depth-sensing`, el punto se coloca a la distancia que
+  //      mide el sensor en el centro de la pantalla. Antes la profundidad solo servía para
+  //      avisar de obstáculos; ahora también coloca cuando el hit-test no engancha.
+  //   3. Guía — si lleva unos segundos sin superficie ni profundidad, se explica en pantalla
+  //      qué hacer (apuntar a una esquina, moldura o tornillo, o usar el contacto).
+  // Cada punto guarda con qué método se marcó (`m`: hit | depth | contacto) en `puntos_3d`:
+  // sin eso, una medida rara no se puede diagnosticar después.
   // ═══════════════════════════════════════════════════════════════════════════
   let _ar = null;
   let _threeCargando = null;
   const REPL_AR_ESCALA_PX_M = 100;
+  // REPLANTEO-05: la cámara está unos milímetros dentro de la carcasa; al apoyar el móvil en
+  // la pared, el punto real queda ligeramente por delante de la pose que da WebXR.
+  const REPL_AR_OFFSET_CONTACTO = 0.01;
 
   async function replArSoportado() {
     try {
@@ -19271,13 +19289,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
       reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
       _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], obstaculos: [], grupo: new THREE.Group(),
-              color: el.color || '#f97316', anchoM, titulo, elemento: el, params, hit: null, tieneDepth: false, ultimoAviso: 0 };
+              color: el.color || '#f97316', anchoM, titulo, elemento: el, params, hit: null, tieneDepth: false, ultimoAviso: 0,
+              // REPLANTEO-05
+              metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false };
       scene.add(_ar.grupo);
       session.addEventListener('end', _replArLimpiar);
       await renderer.xr.setSession(session);
       const viewer = await session.requestReferenceSpace('viewer');
       _ar.hitSource = await session.requestHitTestSource({ space: viewer });
-      _replArEstado('Apunta al techo o a la pared. Cuando el anillo naranja esté sobre el punto, pulsa 📍 Punto.');
+      _replArEstado('Apunta al techo o a la pared. Con el anillo naranja sobre el punto, pulsa 📍 Punto. Si la superficie es lisa y no aparece el anillo, acerca el móvil al punto y pulsa 📱 Tocar.');
       renderer.setAnimationLoop((t, frame) => _replArFrame(t, frame));
     } catch (e) {
       _replArLimpiar();
@@ -19303,26 +19323,72 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       } else reticle.visible = false;
     }
     _ar.hit = hitPos;
-    // Depth sensing: ¿hay algo entre la cámara y el punto apuntado? (solo aviso)
+    // REPLANTEO-05: la pose de la cámara la da el seguimiento del dispositivo, no la
+    // detección de superficies, así que está disponible aunque la pared sea lisa. Es la base
+    // del anclaje por contacto y del rayo central que usa la profundidad.
+    const THREE = _ar.THREE;
+    let vp = null;
+    try { vp = frame.getViewerPose(refSpace); } catch { vp = null; }
+    if (vp) {
+      _ar.camPos = new THREE.Vector3(vp.transform.position.x, vp.transform.position.y, vp.transform.position.z);
+      const q = vp.transform.orientation;
+      _ar.camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(q.x, q.y, q.z, q.w));
+    }
+    // Profundidad: ahora COLOCA (cuando no hay hit-test) además de avisar.
+    _ar.depthPos = null;
     try {
-      const vp = frame.getViewerPose(refSpace);
-      if (vp && hitPos && typeof frame.getDepthInformation === 'function') {
-        const view = vp.views[0];
-        const depth = frame.getDepthInformation(view);
+      if (vp && typeof frame.getDepthInformation === 'function') {
+        const depth = frame.getDepthInformation(vp.views[0]);
         if (depth) {
           _ar.tieneDepth = true;
-          const d = depth.getDepthInMeters(0.5, 0.5);
-          const cam = new _ar.THREE.Vector3(vp.transform.position.x, vp.transform.position.y, vp.transform.position.z);
-          const distHit = cam.distanceTo(hitPos);
-          if (d > 0.05 && d < distHit - 0.2) {
-            _replArAviso(`⚠️ Hay algo cruzando ${(distHit - d).toFixed(2).replace('.', ',')} m por delante del punto. Si es una instalación, márcala con ⚠️ Obstáculo.`);
-            _ar.ultimoAviso = t;
-          } else if (t - _ar.ultimoAviso > 1500) _replArAviso(null);
+          const d = depth.getDepthInMeters(0.5, 0.5);          // centro de la pantalla
+          if (d > 0.1 && d < 8 && _ar.camPos && _ar.camDir) {
+            _ar.depthPos = _ar.camPos.clone().add(_ar.camDir.clone().multiplyScalar(d));
+          }
+          if (hitPos && _ar.camPos) {
+            const distHit = _ar.camPos.distanceTo(hitPos);
+            if (d > 0.05 && d < distHit - 0.2) {
+              _replArAviso(`⚠️ Hay algo cruzando ${(distHit - d).toFixed(2).replace('.', ',')} m por delante del punto. Si es una instalación, márcala con ⚠️ Obstáculo.`);
+              _ar.ultimoAviso = t;
+            } else if (t - _ar.ultimoAviso > 1500) _replArAviso(null);
+          }
         }
       }
     } catch { /* sin depth sensing: no pasa nada */ }
+    // Retículo azul cuando el punto va a anclarse por profundidad: el encargado tiene que ver
+    // con qué está midiendo antes de pulsar, no después.
+    if (!hitPos && _ar.depthPos) {
+      reticle.visible = true;
+      reticle.material.color.set(0x38bdf8);
+      const mira = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), _ar.camDir.clone().negate().normalize());
+      reticle.matrix.compose(_ar.depthPos, mira, new THREE.Vector3(1, 1, 1));
+    } else if (hitPos) {
+      reticle.material.color.set(0xf97316);
+    }
+    // Guía: sin superficie NI profundidad, decir qué hacer en vez de dejar al usuario
+    // moviendo el móvil sin saber por qué no engancha.
+    if (!hitPos && !_ar.depthPos) {
+      if (!_ar.sinAnclajeDesde) _ar.sinAnclajeDesde = t;
+      if (t - _ar.sinAnclajeDesde > 2500 && !_ar.guiaMostrada) {
+        _ar.guiaMostrada = true;
+        _replArAviso('Aquí no hay nada a lo que agarrarse: las paredes y techos lisos no tienen textura que reconocer. Apunta a una esquina, una moldura, un tornillo o el borde de una placa — o acerca el móvil al punto y pulsa 📱 Tocar.');
+      }
+    } else if (_ar.sinAnclajeDesde) {
+      _ar.sinAnclajeDesde = 0;
+      if (_ar.guiaMostrada) { _ar.guiaMostrada = false; _replArAviso(null); }
+    }
     renderer.render(scene, camera);
   }
+
+  // REPLANTEO-05: de dónde sale el punto al pulsar 📍 Punto — superficie reconocida primero,
+  // profundidad si no hay superficie. El contacto es siempre explícito (su propio botón).
+  function _replArAnclaje() {
+    if (!_ar) return null;
+    if (_ar.hit) return { pos: _ar.hit.clone(), metodo: 'hit' };
+    if (_ar.depthPos) return { pos: _ar.depthPos.clone(), metodo: 'depth' };
+    return null;
+  }
+  const REPL_AR_METODO_TXT = { hit: 'sobre la superficie', depth: 'por profundidad', contacto: 'tocando con el móvil' };
 
   function _replArTexto(txt) {
     const THREE = _ar.THREE;
@@ -19341,8 +19407,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const mat = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
     const matBorde = new THREE.MeshBasicMaterial({ color });
     puntos.forEach((p, i) => {
+      // REPLANTEO-05: los puntos marcados por contacto o por profundidad se ven distintos
+      // (anillo azul alrededor), para que se sepa de un vistazo cuales no vienen del
+      // hit-test si luego una medida no cuadra.
+      const met = (_ar.metodos || [])[i] || 'hit';
       const s = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 16), new THREE.MeshBasicMaterial({ color: i === 0 ? 0x22c55e : (i === puntos.length - 1 ? 0xef4444 : 0xffffff) }));
       s.position.copy(p); grupo.add(s);
+      if (met !== 'hit') {
+        const halo = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.45 }));
+        halo.position.copy(p); grupo.add(halo);
+      }
     });
     for (let i = 1; i < puntos.length; i++) {
       const a = puntos[i - 1], b = puntos[i];
@@ -19363,24 +19437,53 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     });
   }
   function _replArLongitud() { let L = 0; for (let i = 1; i < _ar.puntos.length; i++) L += _ar.puntos[i - 1].distanceTo(_ar.puntos[i]); return L; }
+  // Cuántos puntos se marcaron con cada método: si luego la medida no cuadra con la cinta,
+  // esto dice por dónde mirar.
+  function _replArResumenMetodos() {
+    const c = { hit: 0, depth: 0, contacto: 0 };
+    (_ar.metodos || []).forEach(m => { if (c[m] != null) c[m]++; });
+    const partes = Object.entries(c).filter(([, n]) => n > 0).map(([m, n]) => `${n} ${REPL_AR_METODO_TXT[m]}`);
+    return partes.length > 1 ? ` · ${partes.join(', ')}` : '';
+  }
   function _replArEstadoResumen() {
     const n = _ar.puntos.length;
     _replArEstado(n < 2
       ? (n === 0 ? 'Apunta al primer punto del recorrido y pulsa 📍 Punto.' : '1 punto. Apunta al siguiente y pulsa 📍 Punto.')
-      : `${n} puntos · ${_ar.obstaculos.length} obstáculo(s) · ${_replArLongitud().toFixed(2).replace('.', ',')} m medidos${_ar.tieneDepth ? '' : ' · (este móvil no da profundidad: los obstáculos se marcan a mano)'}`);
+      : `${n} puntos · ${_ar.obstaculos.length} obstáculo(s) · ${_replArLongitud().toFixed(2).replace('.', ',')} m medidos${_replArResumenMetodos()}${_ar.tieneDepth ? '' : ' · (este móvil no da profundidad: los obstáculos se marcan a mano)'}`);
   }
   function replArPunto() {
     if (!_ar) return;
-    if (!_ar.hit) { _replArEstado('No hay superficie bajo el anillo. Mueve el móvil despacio hasta que aparezca el anillo naranja.'); return; }
-    _ar.puntos.push(_ar.hit.clone());
+    const a = _replArAnclaje();
+    if (!a) {
+      _replArEstado(_ar.tieneDepth
+        ? 'Ni superficie ni profundidad aquí. Apunta a una esquina o moldura, o acerca el móvil al punto y pulsa 📱 Tocar.'
+        : 'No hay superficie bajo el anillo. En pared o techo liso no la habrá: acerca el móvil al punto y pulsa 📱 Tocar.');
+      return;
+    }
+    _ar.puntos.push(a.pos);
+    _ar.metodos.push(a.metodo);
+    _ar.ultimoFueObstaculo = false;
+    _replArRedibujar(); _replArEstadoResumen();
+  }
+  // Anclaje por contacto: el punto se marca donde está el móvil. No necesita reconocer la
+  // superficie, solo el seguimiento de posición, que sí funciona en una pared blanca mientras
+  // haya algo de textura en el resto de la habitación.
+  function replArContacto() {
+    if (!_ar) return;
+    if (!_ar.camPos) { _replArEstado('El móvil aún no se ha situado. Muévelo despacio un segundo y vuelve a intentarlo.'); return; }
+    // Unos milímetros hacia delante: la cámara está dentro de la carcasa, no en su cara.
+    const pos = _ar.camDir ? _ar.camPos.clone().add(_ar.camDir.clone().multiplyScalar(REPL_AR_OFFSET_CONTACTO)) : _ar.camPos.clone();
+    _ar.puntos.push(pos);
+    _ar.metodos.push('contacto');
     _ar.ultimoFueObstaculo = false;
     _replArRedibujar(); _replArEstadoResumen();
   }
   function replArObstaculo() {
     if (!_ar) return;
-    if (!_ar.hit) { _replArEstado('No hay superficie bajo el anillo.'); return; }
+    const anc = _replArAnclaje();
+    if (!anc) { _replArEstado('No hay superficie ni profundidad bajo el anillo. Apunta a la instalación que cruza, que sí suele tener relieve.'); return; }
     if (_ar.puntos.length < 2) { _replArEstado('Marca primero al menos dos puntos del recorrido.'); return; }
-    const p = _ar.hit.clone();
+    const p = anc.pos;
     let best = null;
     for (let i = 1; i < _ar.puntos.length; i++) {
       const a = _ar.puntos[i - 1], b = _ar.puntos[i];
@@ -19398,7 +19501,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function replArDeshacer() {
     if (!_ar) return;
     if (_ar.obstaculos.length && (!_ar.puntos.length || _ar.ultimoFueObstaculo)) _ar.obstaculos.pop();
-    else { _ar.puntos.pop(); _ar.obstaculos = _ar.obstaculos.filter(o => o.seg < _ar.puntos.length - 1); }
+    else { _ar.puntos.pop(); _ar.metodos.pop(); _ar.obstaculos = _ar.obstaculos.filter(o => o.seg < _ar.puntos.length - 1); }
     _replArRedibujar(); _replArEstadoResumen();
   }
   function replArCancelar() { if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
@@ -19435,7 +19538,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!_ar) return;
     if (_ar.puntos.length < 2) { _replArEstado('Marca al menos dos puntos antes de terminar.'); return; }
     const { puntos, obstaculos, titulo, elemento, params } = _ar;
-    const puntos3d = puntos.map(p => ({ x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3) }));
+    const metodos = _ar.metodos || [];
+    const puntos3d = puntos.map((p, i) => ({ x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), m: metodos[i] || 'hit' }));
     const longitud3d = +_replArLongitud().toFixed(2);
     const plano = _replArPlano(puntos, obstaculos);
     try { await _ar.session.end(); } catch { _replArLimpiar(); }
@@ -19458,6 +19562,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   window.replArIniciar    = replArIniciar;
   window.replArPunto      = replArPunto;
+  window.replArContacto   = replArContacto;
   window.replArObstaculo  = replArObstaculo;
   window.replArDeshacer   = replArDeshacer;
   window.replArTerminar   = replArTerminar;
