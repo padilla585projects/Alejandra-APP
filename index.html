@@ -2001,6 +2001,15 @@ select option{background:var(--surface2);color:var(--text)}
         <button onclick="replCerrarEscala()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
       </div>
       <div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px">
+        <!-- REPL-PERSPECTIVA-01: una foto tiene UNA escala, válida solo en el plano de la
+             referencia. Un recorrido que se aleja de la cámara sale corto y la app lo daba
+             por bueno sin decir nada; ahora al menos se avisa de cuándo NO fiarse. -->
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;background:var(--surface2);border-radius:10px;padding:10px 12px">
+          ⚠️ <b>La escala de una foto solo vale en un plano.</b> Marca la referencia sobre la
+          misma pared o techo por donde va el recorrido y a la misma distancia de la cámara.
+          Si el trazado se aleja hacia el fondo, la foto lo mide <b>corto</b>: en ese caso usa
+          la longitud total conocida (abajo) o mide en AR.
+        </div>
         <div id="replEscalaRefBloque">
           <label class="repl-label">Distancia real entre los dos puntos marcados (metros)</label>
           <input id="replEscalaMetros" type="number" step="0.01" min="0.01" inputmode="decimal" class="repl-input" placeholder="Ej: 0.60">
@@ -7296,7 +7305,15 @@ function seleccionarDepto(dept) {
   if (dept === 'mecanicas') currentModule = 'pemp';
   s.departamento = dept;
   setSession(s);
-  if (s.token) apiCall('/sesion/departamento', { method: 'PUT', body: JSON.stringify({ departamento: dept }) }).catch(() => {});
+  // DEPT-CONTROL-01: este PUT fija el departamento en la sesión de D1, que es la que manda
+  // en el servidor (SEC-14 no acepta X-Departamento). Su fallo se tragaba entero, así que
+  // con `control` — que faltaba en la lista del Worker — la app seguía con un departamento
+  // local que la sesión real no tenía y los POST se validaban contra el anterior.
+  if (s.token) {
+    apiCall('/sesion/departamento', { method: 'PUT', body: JSON.stringify({ departamento: dept }) })
+      .then(res => { if (!res.ok) toast('No se pudo fijar el departamento en el servidor: recarga la app si algo falla', 'error'); })
+      .catch(() => {});
+  }
   renderHeader();
   renderAjustesInfo();
   setupHomeModules();
@@ -15113,7 +15130,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.37';
+const APP_VERSION = '9.38';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18155,6 +18172,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   const REPL_TIPOS = { tuberia: 'Tubería', conducto: 'Conducto de clima', bandeja_existente: 'Bandeja existente', viga: 'Viga / pilar', luminaria: 'Luminaria', otro: 'Otro' };
   let _repl = null;             // replanteo abierto en el editor
   let _replCatalogo = [];       // catálogo del departamento (del servidor)
+  // REPL-DEPT-POST-01: departamento con el que el SERVIDOR resolvió ese catálogo. Se reenvía
+  // al calcular y al crear porque las dos son POST y `_conDeptoFiltro` solo añade
+  // ?departamento= a los GET: sin esto el catálogo se pedía para un departamento y el
+  // elemento se validaba contra otro — «Elemento no válido para este departamento».
+  let _replCatalogoDept = null;
   let _replPuedeEditar = false;
   let _replCalcTimer = null;
   let _replDrag = null;         // { idx, x0, y0, moved } al arrastrar un vértice
@@ -18171,7 +18193,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     try {
       const res = await apiCall('/replanteos/catalogo');
       const data = await res.json().catch(() => ({}));
-      if (res.ok) { _replCatalogo = data.elementos || []; return _replCatalogo; }
+      if (res.ok) { _replCatalogo = data.elementos || []; _replCatalogoDept = data.departamento || null; return _replCatalogo; }
       toast(data.error || 'No se pudo cargar el catálogo', 'error');
     } catch (e) { toast('Sin conexión para cargar el catálogo', 'error'); }
     return _replCatalogo;
@@ -18269,7 +18291,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const img = await _replCargarImagen(url, false);
       const el = _replCatalogo.find(e => e.key === key) || _replCatalogo[0];
       _repl = {
-        id: null, titulo, elemento_key: el.key, params: _replParamsPorDefecto(el), file, img,
+        id: null, titulo, elemento_key: el.key, params: _replParamsPorDefecto(el), file, img, departamento: _replCatalogoDept,
         imgW: img.naturalWidth, imgH: img.naturalHeight,
         puntos: [], obstaculos: [], referencia: null, escala_px_m: null, longitud_manual_m: null,
         calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
@@ -18304,7 +18326,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       catch { img = await _replCargarImagen(replFotoUrl(id), false); } // sin CORS: se ve, pero el informe no podrá incrustar el canvas
       const tr = r.trazado || {};
       _repl = {
-        id: r.id, titulo: r.titulo, elemento_key: r.elemento_key, params: r.elemento || {}, file: null, img,
+        id: r.id, titulo: r.titulo, elemento_key: r.elemento_key, params: r.elemento || {}, file: null, img, departamento: r.departamento || _replCatalogoDept,
         imgW: r.foto_w || img.naturalWidth, imgH: r.foto_h || img.naturalHeight,
         puntos: Array.isArray(tr.puntos) ? tr.puntos.map(p => ({ x: +p.x, y: +p.y })) : [],
         obstaculos: Array.isArray(tr.obstaculos) ? tr.obstaculos : [],
@@ -18731,6 +18753,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   function _replPayloadCalculo() {
     return {
+      departamento: _repl.departamento || _replCatalogoDept || undefined, // REPL-DEPT-POST-01
       elemento_key: _repl.elemento_key, elemento_params: _repl.params,
       trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, puntos_3d: _repl.puntos_3d || undefined },
       escala_px_m: _repl.longitud_manual_m ? null : _repl.escala_px_m,
@@ -18807,6 +18830,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         fd.append('file', _repl.file);
         fd.append('titulo', _repl.titulo);
         if (s?.obra_id) fd.append('obra_id', s.obra_id);
+        const dept = _repl.departamento || _replCatalogoDept;   // REPL-DEPT-POST-01
+        if (dept) fd.append('departamento', dept);
         fd.append('elemento_key', _repl.elemento_key);
         fd.append('elemento_json', JSON.stringify(_repl.params));
         fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, puntos_3d: _repl.puntos_3d || undefined }));
@@ -19200,7 +19225,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const file = new File([blob], `replanteo-ar-${Date.now()}.jpg`, { type: 'image/jpeg' });
     const img = await _replCargarImagen(URL.createObjectURL(file), false);
     _repl = {
-      id: null, titulo, elemento_key: elemento.key, params, file, img, imgW: img.naturalWidth, imgH: img.naturalHeight,
+      id: null, titulo, elemento_key: elemento.key, params, file, img, departamento: _replCatalogoDept, imgW: img.naturalWidth, imgH: img.naturalHeight,
       puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
       referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,

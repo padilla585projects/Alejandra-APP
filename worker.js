@@ -7552,6 +7552,16 @@ async function verificarAcceso(request, env, ctx) {
   return err('Código inválido', 401);
 }
 
+// DEPT-CONTROL-01 (07/09/2026): la lista de departamentos válidos vivía suelta dentro de
+// actualizarSesionDepartamento y se quedó sin `control` cuando se creó ese departamento. El
+// PUT devolvía 400, el frontend se lo tragaba y la sesión de D1 conservaba el departamento
+// anterior: el catálogo de replanteo se pedía para Control (los GET sí llevan
+// ?departamento=) y el guardado se validaba contra el departamento viejo. Una sola lista,
+// y scripts/check-departamentos.js falla en CI si se desincroniza de _DEPTS_CATALOG de
+// index.html y panel.html. Es la segunda vez que pasa: antes tenía 4 de 11 (SEC-14).
+const DEPTS_VALIDOS = ['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil',
+  'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'ingenieria', 'control'];
+
 async function actualizarSesionDepartamento(request, env) {
   const xToken = request.headers.get('X-Token');
   if (!xToken) return err('No autorizado', 403);
@@ -7563,11 +7573,9 @@ async function actualizarSesionDepartamento(request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.usuario_id) return err('No autorizado', 403);
   const { departamento } = await request.json().catch(() => ({}));
-  // SEC-14: lista completa de departamentos válidos (debe reflejar _DEPTS_CATALOG en index.html).
-  // Antes solo tenía 4 de 11 — cambiar a "oficina" (u otros 6) fallaba en silencio aquí y
-  // dejaba el departamento de la sesión desactualizado en D1.
-  const validos = ['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil', 'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'ingenieria'];
-  if (!departamento || !validos.includes(departamento)) return err('Departamento inválido', 400);
+  // SEC-14 + DEPT-CONTROL-01: la lista completa vive en DEPTS_VALIDOS (arriba) y debe
+  // reflejar _DEPTS_CATALOG de index.html y panel.html; lo comprueba CI.
+  if (!departamento || !DEPTS_VALIDOS.includes(departamento)) return err('Departamento inválido', 400);
   const res = await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
   if (!res?.meta?.changes) return err('Sesión no encontrada', 404);
   return json({ ok: true });
@@ -30462,8 +30470,7 @@ function _replanteoDeptDe(auth, pedido) {
   if (isDeptPrivileged(auth) && pedido && _DEPTS_REPLANTEO_VALIDOS.has(pedido)) return pedido;
   return auth.departamento || 'electrico';
 }
-const _DEPTS_REPLANTEO_VALIDOS = new Set(['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil',
-  'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'ingenieria', 'control']);
+const _DEPTS_REPLANTEO_VALIDOS = new Set(DEPTS_VALIDOS); // DEPT-CONTROL-01: una sola lista
 
 async function catalogoReplanteoDe(env, empresa_id, departamento) {
   const base = (REPLANTEO_CATALOGO_BASE[departamento] || REPLANTEO_CATALOGO_BASE._default)
@@ -30716,7 +30723,9 @@ function _parseReplanteoRow(r) {
 async function _replanteoCalcularDesde(env, empresa_id, departamento, { elemento_key, elemento_params, trazado, escala_px_m, longitud_manual_m }) {
   const catalogo = await catalogoReplanteoDe(env, empresa_id, departamento);
   const elemento = catalogo.find(e => e.key === elemento_key);
-  if (!elemento) return { error: 'Elemento no válido para este departamento' };
+  // El departamento va en el mensaje a propósito: en DEPT-CONTROL-01 el síntoma era este
+  // error sin forma de saber que el servidor estaba mirando otro departamento.
+  if (!elemento) return { error: `Elemento no válido para el departamento ${departamento}` };
   return { elemento, resultado: calcularMaterialReplanteo({ elemento, elemento_params, trazado, escala_px_m, longitud_manual_m }) };
 }
 

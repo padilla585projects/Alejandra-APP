@@ -34,6 +34,10 @@ jobs:
           node scripts/check-encoding.js "$BASE"
       - name: Check version markers are in sync
         run: node scripts/check-versiones.js
+      # DEPT-CONTROL-01: un departamento en el frontend que el Worker no acepta deja la
+      # sesion de D1 con el anterior y el servidor decide con otro departamento.
+      - name: Check departments match between Worker and frontends
+        run: node scripts/check-departamentos.js
       - name: Check every route declares an authorization mechanism
         run: node scripts/inventario-rutas.js --check
       # Solo compara NOMBRES: nunca lee valores de secretos ni contacta con Cloudflare.
