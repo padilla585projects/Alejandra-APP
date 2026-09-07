@@ -4,6 +4,15 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**Replanteos no salía en Office (2026-09-07, v9.41):** Adrián: «no veo replanteos en Alejandra
+Office». La página estaba desde REPLANTEO-03, pero vive pegada bajo la cabecera «Pedidos» y
+`ocultarSeccion('pedidosSec')` oculta la cabecera y todo lo que va detrás: ningún departamento
+con menú curado la veía. Recolocada explícitamente. Con ello, tres arreglos salidos de sus
+capturas: el estado del AR se comía bajo la barra del sistema, un punto marcado por contacto
+tapaba la pantalla, y la barra de modos no daba para cuatro botones. Sus capturas confirman que
+el retículo azul y el anclaje por contacto **funcionan** en pared blanca. Ver
+`HANDOFF.md`/`TASKS.md`.
+
 **REPLANTEO-05 — el AR en paredes lisas (2026-09-07, v9.40):** Adrián: «cuando mide en tiempo
 real no detecta las paredes blancas bien». Límite de ARCore (el hit-test necesita textura), no
 del código. Tres salidas: botón «📱 Tocar con el móvil» que ancla el punto en la posición de la

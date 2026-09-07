@@ -1,5 +1,34 @@
 # Handoff — Alejandra 2.0
 
+## Replanteos no salía en Office + tres arreglos de la primera prueba en obra (2026-09-07, v9.41)
+
+- **Agente:** Claude (Opus 5). **Rama:** `fix/replanteo-office-nav-y-ar-ui`.
+- **Origen:** Adrián: «no veo replanteos en Alejandra Office» + tres capturas del móvil.
+- **Lo importante (REPL-OFFICE-NAV-01):** la página estaba puesta desde REPLANTEO-03, pero
+  **ningún departamento con menú curado la veía**. `📐 Replanteos` vive en el HTML pegado
+  debajo de la cabecera `pedidosSec`, y `ocultarSeccion()` oculta la cabecera y **todos los
+  hermanos** hasta la siguiente sección; `_organizarSidebarRolDept` llama a
+  `ocultarSeccion('pedidosSec')` para todo el que no sea Almacén. Como REPLANTEO-03 se
+  entregó sin abrir el navegador (petición de Adrián), no se vio. Arreglado recolocando el
+  botón al final de la función: detrás de Pedidos si quedó visible, si no al final de
+  «Principal». **Lección reutilizable:** meter un `nav-item` justo detrás de una cabecera de
+  sección en `panel.html` lo ata al destino de esa sección; si es transversal, hay que
+  recolocarlo explícitamente (ya pasó al revés con Repostajes y Seguridad de Obra).
+- **De las capturas:** el estado del AR se comía bajo la barra del sistema (REPL-AR-UI-01,
+  área segura); un punto marcado por contacto se dibujaba como un pegote que tapaba la
+  pantalla, porque queda a un dedo del objetivo (REPL-AR-UI-02: plano cercano 1 → 8 cm, no se
+  pinta lo que esté a menos de 25 cm, halo más pequeño); el aviso amarillo se queda fijo
+  (ahora se retira a los 6 s); y la barra de modos no daba para cuatro botones (REPL-UI-03).
+- **Lo que las capturas confirman que SÍ funciona:** el retículo azul aparece — **el móvil de
+  Adrián tiene sensor de profundidad** — y el resumen dio «2 puntos · 1,28 m medidos · 1 por
+  profundidad, 1 tocando con el móvil»: las dos vías nuevas de REPLANTEO-05 marcan punto en
+  una pared blanca lisa. Falta contrastar esos 1,28 m con una cinta.
+- **Pruebas:** 11 comprobaciones del sidebar con un DOM mínimo construido con el **orden real**
+  de `panel.html` (Control, Eléctrico y Almacén) que además **reproducen el bug** tal y como
+  estaba; versiones 9.41; scripts inline; encoding.
+- **Siguiente acción exacta:** Adrián entra en Office con Control y comprueba que «📐
+  Replanteos» aparece ahora en «Principal», y abre el replanteo que hizo desde el móvil.
+
 ## REPLANTEO-05 — el AR en paredes y techos lisos (2026-09-07, v9.40)
 
 - **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-05-ar-superficies-lisas`.

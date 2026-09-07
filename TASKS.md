@@ -1,5 +1,18 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-07, tarde-3): **v9.41 — arreglado que «📐 Replanteos» no
+apareciera en Office con menú curado, más tres arreglos de la primera prueba en obra.**
+Ver `HANDOFF.md`.
+- **REPL-OFFICE-NAV-01** (En revisión): la página estaba pegada bajo la cabecera «Pedidos» y
+  `ocultarSeccion('pedidosSec')` se la llevaba en todos los departamentos con menú curado.
+- **REPL-AR-UI-01/02 y REPL-UI-03** (En revisión): área segura del estado en AR, el punto
+  marcado por contacto ya no tapa la pantalla, el aviso de guía se retira solo, y la barra de
+  modos da para los cuatro botones.
+- **Pendiente de la prueba de Adrián:** contrastar con cinta (a) los 1,28 m que dio el AR entre
+  un punto por profundidad y otro por contacto, y (b) un recorrido con el plano rectificado.
+- **Decisiones humanas pendientes:** aceptar el ADR-0024 y su enmienda 1, y autorizar
+  `migrate_replanteos.sql` (no bloquea).
+
 Estado (actualizado 2026-09-07, tarde-2): **REPLANTEO-05 — el AR ya puede marcar en paredes y
 techos lisos (contacto, profundidad y guía), v9.40, en `feat/replanteo-05-ar-superficies-lisas`.**
 Ver `HANDOFF.md`.
