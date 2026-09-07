@@ -4,6 +4,29 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-04 — REPLANTEO: escala arrastrable y modal fantasma en Android, v9.37)
+
+Primera prueba real de Adrián en su móvil con REPLANTEO-01 ya desplegado. Dos problemas, los
+dos en el editor sobre foto de `index.html`:
+
+- **REPL-MODAL-GHOST-01** — tras marcar los dos puntos de la referencia, el modal «📏 Escala»
+  se abría y se cerraba solo: no daba tiempo a escribir los metros. En Android, el toque en el
+  canvas que abre el modal genera además un `click` sintético con las mismas coordenadas justo
+  después del `pointerup`; el modal ya cubre la pantalla en ese instante y su backdrop llega
+  hasta donde se tocó (la hoja inferior no sube tanto), así que ese click fantasma caía sobre
+  el fondo y disparaba el cierre. Los modales de Escala y de Obstáculo (mismo riesgo latente:
+  se abre igual desde el canvas) pasan a abrirse con `_replAbrirModal()`, que sella
+  `dataset.abiertoEn`, y a cerrarse con `_replCerrarSiBackdrop()`, que ignora un click sobre el
+  backdrop en los primeros 400 ms.
+- **REPL-ESCALA-DRAG-01** — petición explícita de Adrián: los dos puntos de la referencia de
+  escala se arrastran ahora igual que los vértices del trazado (tolerancia de 18 px de
+  pantalla, `_replDrag.refKey` en los tres manejadores de puntero), en vez de tener que
+  borrarlos y repetir. Si ya había metros fijados, `escala_px_m` se recalcula en vivo.
+- Versión 9.36 → 9.37 en los cuatro marcadores. **Solo frontend:** `worker.js` y
+  `alejandra-agente/` no cambian, así que no hubo que redesplegar Workers.
+- **Entrega:** PR #154 fusionada (`ec5ef70`), CI en verde; Pages run `33903164644` publicado y
+  verificado (`version.json` → 9.37). **Pendiente:** que Adrián repita la secuencia en el móvil.
+
 ### Added (2026-09-04 — REPLANTEO-03: Replanteos en la oficina y editor del catálogo por empresa, v9.36)
 
 Adrián: «seguimos». Siguiente tarea aprobada de la cola tras REPLANTEO-01/02: lo que los

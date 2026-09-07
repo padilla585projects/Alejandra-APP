@@ -1,5 +1,38 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO — fix de la escala en el móvil: puntos arrastrables y modal fantasma (2026-09-04, noche, v9.37)
+
+- **Agente:** Claude (Sonnet 5). **Rama:** `fix/replanteo-escala-drag-y-modal-fantasma` → PR #154
+  → `ec5ef70` en `main`. **Origen:** Adrián probando REPLANTEO-01 en su Android recién desplegado.
+- **Síntoma:** tras marcar los dos puntos de referencia, el modal «📏 Escala» no dejaba escribir
+  los metros — se cerraba solo al abrirse.
+- **Causa (REPL-MODAL-GHOST-01):** en Android, el toque del canvas que abre el modal emite
+  después un `click` sintético con las mismas coordenadas. El modal ya está encima y su
+  backdrop cubre esa zona (la hoja inferior no llega hasta ahí), así que el click caía en el
+  fondo y ejecutaba el cierre. Mismo riesgo latente en el modal de Obstáculo, que se abre
+  igual desde el canvas.
+- **Arreglo:** `_replAbrirModal(id)` marca `dataset.abiertoEn` al mostrar el modal y
+  `_replCerrarSiBackdrop(ev, el, fn)` descarta cualquier click sobre el backdrop en los
+  primeros 400 ms. Los dos modales pasan por ahí.
+- **De paso (REPL-ESCALA-DRAG-01):** los dos puntos de la referencia de escala se arrastran
+  como los vértices del trazado; con metros ya fijados, `escala_px_m` se recalcula en vivo.
+- **Archivos:** `index.html` (los dos `onclick` de los modales, `_replDrag.refKey` en
+  `pointerdown`/`pointermove`/`fin`, las dos funciones nuevas) y los cuatro marcadores de
+  versión a 9.37 (`version.json`, `sw.js`, `index.html`, `panel.html`). Sin cambios de backend
+  ni de esquema.
+- **Entrega y despliegue:** PR #154 fusionada, CI en verde (runs `33903108767` y `33903115063`);
+  Pages run `33903164644` en success. Producción sirve `version.json` → `{"v":"9.37"}`
+  (comprobado el 2026-09-07). Los Workers **no** se redesplegaron porque el fix es solo de
+  frontend: siguen en `965d5b2` (API `33895627643` y agente `33859282942`, los dos en success).
+- **Siguiente acción exacta:** Adrián repite en el móvil, con recarga forzada para que el
+  service worker tome 9.37 — foto → trazar → «📏 Escala» → dos puntos de referencia → escribir
+  los metros → arrastrar uno de los dos puntos y ver que la escala se recalcula — y se registra
+  aquí el resultado.
+- **Nota de proceso:** este fix se desplegó el 04/09 sin registrarse en `CHANGELOG.md`,
+  `HANDOFF.md`, `TASKS.md` ni `START_HERE.md`: la documentación se quedó en 9.36 y seguía
+  diciendo que los Workers esperaban aprobación cuando ya se habían aprobado a las 16:41.
+  Cuadrado el 2026-09-07 en `docs/replanteo-fix-9-37-registro`.
+
 ## REPLANTEO-03 — Replanteos en la oficina y editor del catálogo por empresa (2026-09-04, noche, v9.36)
 
 - **Agente:** Claude (Fable 5.1). **Rama:** `feat/replanteo-03-panel` → PR #151 → `965d5b2` en `main`.

@@ -1,5 +1,23 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-07): **v9.37 en producción (PR #154 → `ec5ef70`, Pages run
+`33903164644`). Nada en curso: quedan tres verificaciones y dos decisiones humanas.** Ver
+`HANDOFF.md`.
+- **REPLANTEO — fix v9.37** (Hecho, pendiente de verificación en el móvil): puntos de la
+  referencia de escala arrastrables y modal que se cerraba solo al abrirse (click sintético de
+  Android sobre el backdrop; también en el de Obstáculo, latente). Solo frontend: los Workers
+  no se redesplegaron.
+  - Siguiente acción exacta: Adrián repite en su Android con recarga forzada — foto → trazar
+    → Escala → dos puntos → escribir los metros → arrastrar un punto — y confirma.
+- **REPLANTEO-03** (Hecho, pendiente de verificación en Office): API `33895627643` y agente
+  `33859282942` desplegados (aprobados el 04/09 a las 16:41); `/replanteos*` responde 401 sin
+  sesión. Falta comprobar con sesión la lista, el detalle, el informe, «A Pedidos» y el
+  catálogo (cambiar una regla, ver que el móvil la aplica, restaurar).
+- **REPLANTEO-02** (Hecho, pendiente de la prueba de deriva en el Android de Adrián: ~30 m de
+  techo con 4-6 puntos, comparar con cinta métrica).
+- **Decisiones humanas pendientes:** aceptar el ADR-0024 (Propuesto) y autorizar
+  `migrate_replanteos.sql` (no bloquea: el Worker crea las tablas al primer uso).
+
 Estado (actualizado 2026-09-04, noche): **REPLANTEO-03 — Replanteos en la oficina + editor
 del catálogo por empresa, v9.36, fusionado (PR #151 → `965d5b2`) y Pages publicado (run
 `33895624663`). API Worker `33895627643` y agente `33859282942` desplegados (aprobados 16:41).** Ver `HANDOFF.md`.
