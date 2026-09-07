@@ -4,6 +4,15 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPLANTEO-06 — la app reconoce la placa del falso techo (2026-09-07, v9.42):** en el modo
+«📐 Plano» se toca **dentro** de una placa y la app saca sus cuatro esquinas (Sobel + Hough
+guiado por la dirección del gradiente + la celda más pequeña que rodea al dedo, verificando que
+sus lados tienen borde real). Si no reconoce nada, se sigue a mano. Todo en el móvil, sin
+librerías. Probado con techos sintéticos (2,7 px, 15-26 ms) y de extremo a extremo: 1,80 m
+reales → 1,744 m, donde la escala plana daba 1,06 m. **Pendiente:** la primera prueba con una
+foto real de obra. En la cola: varios planos a la vez y Alejandra usando los replanteos. Ver
+`HANDOFF.md`/`TASKS.md`.
+
 **Replanteos no salía en Office (2026-09-07, v9.41):** Adrián: «no veo replanteos en Alejandra
 Office». La página estaba desde REPLANTEO-03, pero vive pegada bajo la cabecera «Pedidos» y
 `ocultarSeccion('pedidosSec')` oculta la cabecera y todo lo que va detrás: ningún departamento
