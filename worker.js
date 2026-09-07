@@ -30618,6 +30618,89 @@ async function borrarReplanteoCatalogo(request, env, path) {
 // Entrada: elemento (del catálogo, con reglas), parámetros elegidos, trazado {puntos, obstaculos},
 // escala en px/m o longitud manual. Salida: { longitud_m, escala_px_m, giros, material:[...] }.
 // Es una función pura: no toca D1, y por eso la puede llamar tanto /calcular como el guardado.
+// ── REPLANTEO-04 (07/09/2026): rectificacion de perspectiva por homografia ──────────────
+// Una foto tiene UNA escala px/m y solo vale en el plano donde se midio la referencia. Adrian
+// lo vio en obra: con la referencia marcada sobre la ventana (cerca), un tramo de techo que
+// se alejaba hacia el fondo se calculaba en 0,76 m cuando media bastante mas. Marcando las 4
+// esquinas de un rectangulo REAL del mismo plano por donde va el recorrido (una placa de
+// falso techo 60x60, un panel, una puerta) se obtiene la homografia que lleva la imagen a ese
+// plano en metros, y ahi las distancias ya son las de verdad, se aleje lo que se aleje.
+//
+// Limite que hay que tener presente: solo es correcta para puntos que esten EN ese plano. Un
+// trazado que cambia de plano (techo -> pared) necesita su propio replanteo, o el AR.
+//
+// H es 3x3 con h[8] = 1: 8 incognitas y 4 correspondencias (2 ecuaciones cada una).
+// Se resuelve por eliminacion gaussiana con pivoteo parcial.
+function _resolver8x8(A, b) {
+  const n = b.length;
+  const M = A.map((fila, i) => [...fila, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let f = col + 1; f < n; f++) if (Math.abs(M[f][col]) > Math.abs(M[piv][col])) piv = f;
+    if (Math.abs(M[piv][col]) < 1e-9) return null;          // singular: puntos colineales
+    [M[col], M[piv]] = [M[piv], M[col]];
+    for (let f = 0; f < n; f++) {
+      if (f === col) continue;
+      const factor = M[f][col] / M[col][col];
+      if (!factor) continue;
+      for (let c = col; c <= n; c++) M[f][c] -= factor * M[col][c];
+    }
+  }
+  const x = new Array(n);
+  for (let i = 0; i < n; i++) {
+    x[i] = M[i][n] / M[i][i];
+    if (!Number.isFinite(x[i])) return null;
+  }
+  return x;
+}
+
+// src/dst: 4 pares {x,y}. Devuelve los 9 coeficientes de H (el ultimo siempre 1) o null.
+function homografia4(src, dst) {
+  if (!Array.isArray(src) || !Array.isArray(dst) || src.length !== 4 || dst.length !== 4) return null;
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const x = +src[i].x, y = +src[i].y, u = +dst[i].x, v = +dst[i].y;
+    if (![x, y, u, v].every(Number.isFinite)) return null;
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+  }
+  const h = _resolver8x8(A, b);
+  return h ? [...h, 1] : null;
+}
+
+function aplicarHomografia(H, x, y) {
+  const d = H[6] * x + H[7] * y + H[8];
+  if (!d || !Number.isFinite(d)) return null;
+  return { x: (H[0] * x + H[1] * y + H[2]) / d, y: (H[3] * x + H[4] * y + H[5]) / d };
+}
+
+// `plano` = { pts: [4 esquinas en px naturales, siguiendo el perimetro], ancho_m, alto_m }.
+// El PRIMER lado marcado (pts[0] -> pts[1]) es el ancho: asi el usuario no tiene que adivinar
+// que esquina es cual, solo dar la vuelta al rectangulo empezando por el lado que mide `ancho_m`.
+function homografiaDePlano(plano) {
+  if (!plano || !Array.isArray(plano.pts) || plano.pts.length !== 4) return null;
+  const W = Number(plano.ancho_m), A = Number(plano.alto_m);
+  if (!(W > 0) || !(A > 0)) return null;
+  const pts = plano.pts.map(p => ({ x: +p.x, y: +p.y }));
+  if (!pts.every(p => Number.isFinite(p.x) && Number.isFinite(p.y))) return null;
+  // Area del cuadrilatero (formula del cordon): descarta 4 puntos casi alineados o repetidos.
+  let area2 = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = pts[i], b = pts[(i + 1) % 4];
+    area2 += a.x * b.y - b.x * a.y;
+  }
+  if (Math.abs(area2) < 200) return null;                   // < 100 px2: no es un rectangulo util
+  return homografia4(pts, [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: A }, { x: 0, y: A }]);
+}
+
+// Distancia real entre dos puntos de la imagen, medida en el plano rectificado.
+function distanciaEnPlano(H, a, b) {
+  const p = aplicarHomografia(H, +a.x, +a.y), q = aplicarHomografia(H, +b.x, +b.y);
+  if (!p || !q) return null;
+  const d = Math.hypot(q.x - p.x, q.y - p.y);
+  return Number.isFinite(d) ? d : null;
+}
+
 function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {}, escala_px_m = null, longitud_manual_m = null }) {
   const reglas = { ...(elemento?.reglas || {}) };
   const puntos = Array.isArray(trazado.puntos) ? trazado.puntos.filter(p => Number.isFinite(+p.x) && Number.isFinite(+p.y)) : [];
@@ -30632,12 +30715,34 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
     segPx.push(Math.hypot(dx, dy));
   }
   const totalPx = segPx.reduce((a, b) => a + b, 0);
-  let escala = Number(escala_px_m) > 0 ? Number(escala_px_m) : null;
-  if (Number(longitud_manual_m) > 0 && totalPx > 0) escala = totalPx / Number(longitud_manual_m);
-  if (!escala) {
-    return { longitud_m: 0, escala_px_m: null, giros: 0, material: [], reglas, aviso: 'Falta la escala: marca una referencia conocida o escribe la longitud total' };
+  // REPLANTEO-04: prioridad plano rectificado > longitud total conocida > escala plana. El
+  // plano es una medicion geometrica completa (da cada tramo por separado y aguanta la
+  // perspectiva); los otros dos reparten una unica escala entre todo el trazado.
+  const H = homografiaDePlano(trazado.plano);
+  let segM = null, longitudBase = 0, escala = null, usadoPlano = false;
+  if (H) {
+    segM = [];
+    for (let i = 1; i < puntos.length; i++) {
+      const d = distanciaEnPlano(H, puntos[i - 1], puntos[i]);
+      if (d === null) { segM = null; break; }
+      segM.push(d);
+    }
   }
-  const longitudBase = totalPx / escala;
+  if (segM) {
+    usadoPlano = true;
+    longitudBase = segM.reduce((a, b) => a + b, 0);
+    // Escala media equivalente: los dos frontends la usan para el GROSOR de la banda y el
+    // tamano de los obstaculos, no para medir. Las cotas por tramo salen de segmentos_m.
+    escala = longitudBase > 0 ? totalPx / longitudBase : null;
+  } else {
+    escala = Number(escala_px_m) > 0 ? Number(escala_px_m) : null;
+    if (Number(longitud_manual_m) > 0 && totalPx > 0) escala = totalPx / Number(longitud_manual_m);
+    if (!escala) {
+      return { longitud_m: 0, escala_px_m: null, giros: 0, material: [], reglas, aviso: 'Falta la escala: marca una referencia conocida, rectifica el plano con 4 esquinas o escribe la longitud total' };
+    }
+    longitudBase = totalPx / escala;
+    segM = segPx.map(px => px / escala);
+  }
   // Giros: un codo por cada cambio de dirección >= giro_min_grados
   const giroMin = Number(reglas.giro_min_grados) > 0 ? Number(reglas.giro_min_grados) : 30;
   let giros = 0;
@@ -30710,7 +30815,11 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
                       detalle: `${tornPorSop} por soporte a techo/pared` });
     }
   }
-  return { longitud_m: r1(longitud), longitud_base_m: r1(longitudBase), escala_px_m: escala, giros, obstaculos: obstResumen, material, reglas };
+  return { longitud_m: r1(longitud), longitud_base_m: r1(longitudBase), escala_px_m: escala, giros,
+           // REPLANTEO-04: segmentos_m son los metros REALES de cada tramo (con el plano
+           // rectificado no se pueden deducir de los pixeles y una escala unica).
+           segmentos_m: segM.map(m => Math.round(m * 100) / 100), plano_ok: usadoPlano,
+           obstaculos: obstResumen, material, reglas };
 }
 
 function _parseReplanteoRow(r) {

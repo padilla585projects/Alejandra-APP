@@ -4,6 +4,16 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPLANTEO-04 — rectificación de perspectiva (2026-09-07, v9.39):** Adrián en obra: «las
+medidas cuando trazas la línea no son buenas». No era el cálculo: una foto tiene UNA escala y
+solo vale en el plano de la referencia, así que un recorrido que se aleja se medía corto (53 %
+en la prueba sintética). Nuevo modo «📐 Plano»: se marcan las 4 esquinas de algo rectangular
+del mismo plano (placa de techo, panel, puerta) y la homografía corrige la perspectiva.
+Prioridad plano > longitud conocida > escala. Sin migración. **Pendiente:** fusionar,
+desplegar y que Adrián lo compare con una cinta métrica en un techo real. También queda
+abierto que el **AR no engancha en paredes blancas** (límite de ARCore). Ver
+`HANDOFF.md`/`TASKS.md`.
+
 **Fix de la escala del replanteo en el móvil (2026-09-04, noche, v9.37):** primera prueba de
 Adrián con REPLANTEO-01 en producción. El modal «📏 Escala» se cerraba solo al abrirse (click
 sintético de Android sobre el backdrop, mismo riesgo latente en el de Obstáculo) y los puntos

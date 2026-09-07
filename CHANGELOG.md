@@ -4,6 +4,44 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-07 — REPLANTEO-04: rectificación de perspectiva con 4 esquinas, v9.39)
+
+Adrián, probando el replanteo en obra: «las medidas cuando trazas la línea no son buenas». No
+era un fallo de cálculo — la app aplicaba bien la escala — sino el método: **una foto tiene una
+sola escala px/m y solo vale en el plano donde se marcó la referencia**. Con la referencia en la
+ventana (cerca) y el recorrido por el techo alejándose, un tramo de varios metros salía en
+0,76 m. Reproducido con una cámara sintética: 7 m reales se calculaban en **3,3 m, un 53 %
+corto**. Elegido por Adrián entre cuatro opciones: rectificar el plano con 4 puntos
+(ADR-0024, enmienda 1 propuesta).
+
+- `worker.js`: homografía de 4 correspondencias (`homografia4`, `homografiaDePlano`,
+  `aplicarHomografia`, `distanciaEnPlano`, y `_resolver8x8` — gaussiana con pivoteo parcial).
+  `calcularMaterialReplanteo` mide cada tramo **en el plano rectificado** cuando el trazado
+  trae `plano = { pts, ancho_m, alto_m }`; prioridad **plano > longitud total conocida >
+  escala plana**. El resultado añade `segmentos_m` (metros reales por tramo, que con
+  perspectiva ya no se pueden deducir de los píxeles) y `plano_ok`. Un plano inválido
+  (3 esquinas, medidas a 0, puntos alineados, cuadrilátero diminuto) **se ignora** y se sigue
+  midiendo como hasta ahora.
+- `index.html` (v9.39): modo **📐 Plano** en el editor. El encargado toca las 4 esquinas de algo
+  rectangular del mismo plano del recorrido dando la vuelta — el primer lado es el ancho —,
+  escribe ancho y alto (con atajos: placa 60×60, placa 120×60, puerta 80×203) y la perspectiva
+  queda corregida. Las esquinas se **arrastran** como los vértices del trazado, el cuadrilátero
+  se dibuja con sus esquinas numeradas y su medida, y las **cotas de cada tramo** pasan a
+  calcularse con la homografía (en el cliente, para que se vean al instante; el material lo
+  sigue calculando solo el servidor).
+- `panel.html` (v9.39): misma homografía en la oficina — el detalle y el informe imprimible
+  dibujan el cuadrilátero y las cotas rectificadas, y la ficha dice «perspectiva rectificada
+  con un rectángulo de A×B m» en vez de la escala.
+- **Sin migración**: el rectángulo viaja dentro de `trazado_json`.
+- **Pruebas:** `node --check` de los dos Workers; 230/230 del agente; 14 comprobaciones con una
+  **cámara sintética** (plano real → foto → medida) que verifican 7 m exactos con el plano,
+  demuestran el 53 % de error sin él, y cubren prioridad, planos inválidos, obstáculos y
+  empezar por otra esquina; 13 comprobaciones más de que **cliente y servidor calculan
+  exactamente lo mismo** (coeficientes idénticos y mismos rechazos) y 6 para `panel.html`;
+  check-versiones 9.39; check-departamentos OK; inventario-rutas 0 sin autorización;
+  inventario-entorno OK; encoding OK; scripts inline de los dos frontends igual que en `main`.
+  **Sin probar en dispositivo:** la primera comprobación real es la de Adrián en el techo.
+
 ### Fixed (2026-09-04 — REPLANTEO: escala arrastrable y modal fantasma en Android, v9.37)
 
 Primera prueba real de Adrián en su móvil con REPLANTEO-01 ya desplegado. Dos problemas, los
