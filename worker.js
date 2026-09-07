@@ -30701,6 +30701,62 @@ function distanciaEnPlano(H, a, b) {
   return Number.isFinite(d) ? d : null;
 }
 
+// ── REPLANTEO-07 (07/09/2026): un plano por superficie ─────────────────────────────────────
+// La rectificacion de REPLANTEO-04 vale para UN plano. Un recorrido que baja del techo a la
+// pared tiene la mitad de sus tramos fuera de ese plano, y esa mitad vuelve a medirse mal.
+// Adrian pidio poder marcar un rectangulo por superficie. Cada tramo se mide con el plano que
+// le toca: el que contiene su punto medio en la foto y, si ninguno lo contiene, el mas cercano.
+//
+// Limite que queda, y que la app avisa: un tramo que CRUZA de una superficie a otra se mide
+// entero con uno de los dos. La solucion es marcar un punto en la esquina y partirlo en dos.
+function planosDeTrazado(trazado) {
+  const bruto = Array.isArray(trazado?.planos) ? trazado.planos
+              : (trazado?.plano ? [trazado.plano] : []);      // compatibilidad con REPLANTEO-04
+  return bruto.map(p => ({ plano: p, H: homografiaDePlano(p) })).filter(x => x.H);
+}
+
+function _centroide(pts) {
+  return { x: pts.reduce((a, p) => a + (+p.x), 0) / pts.length, y: pts.reduce((a, p) => a + (+p.y), 0) / pts.length };
+}
+
+function _dentroDe(pts, x, y) {
+  let signo = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const cruz = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+    if (Math.abs(cruz) < 1e-9) continue;
+    const s = Math.sign(cruz);
+    if (!signo) signo = s; else if (s !== signo) return false;
+  }
+  return true;
+}
+
+// Indice del plano con el que se mide el tramo (a -> b). `asignados` permite al encargado
+// corregir a mano lo que la automatica no acierta.
+function planoDeTramo(planos, asignados, i, a, b) {
+  if (planos.length <= 1) return 0;
+  const forzado = Array.isArray(asignados) ? asignados[i] : null;
+  if (Number.isInteger(forzado) && forzado >= 0 && forzado < planos.length) return forzado;
+  const mx = (+a.x + +b.x) / 2, my = (+a.y + +b.y) / 2;
+  let dentro = -1, areaDentro = Infinity;
+  planos.forEach((p, k) => {
+    const pts = p.plano.pts.map(q => ({ x: +q.x, y: +q.y }));
+    if (!_dentroDe(pts, mx, my)) return;
+    let a2 = 0;
+    for (let j = 0; j < 4; j++) { const u = pts[j], v = pts[(j + 1) % 4]; a2 += u.x * v.y - v.x * u.y; }
+    const area = Math.abs(a2) / 2;
+    if (area < areaDentro) { areaDentro = area; dentro = k; }   // el mas ajustado gana
+  });
+  if (dentro >= 0) return dentro;
+  let mejor = 0, mejorD = Infinity;
+  planos.forEach((p, k) => {
+    const c = _centroide(p.plano.pts.map(q => ({ x: +q.x, y: +q.y })));
+    const d = Math.hypot(c.x - mx, c.y - my);
+    if (d < mejorD) { mejorD = d; mejor = k; }
+  });
+  return mejor;
+}
+
 function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {}, escala_px_m = null, longitud_manual_m = null }) {
   const reglas = { ...(elemento?.reglas || {}) };
   const puntos = Array.isArray(trazado.puntos) ? trazado.puntos.filter(p => Number.isFinite(+p.x) && Number.isFinite(+p.y)) : [];
@@ -30718,14 +30774,16 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
   // REPLANTEO-04: prioridad plano rectificado > longitud total conocida > escala plana. El
   // plano es una medicion geometrica completa (da cada tramo por separado y aguanta la
   // perspectiva); los otros dos reparten una unica escala entre todo el trazado.
-  const H = homografiaDePlano(trazado.plano);
-  let segM = null, longitudBase = 0, escala = null, usadoPlano = false;
-  if (H) {
-    segM = [];
+  // REPLANTEO-07: puede haber varios, y cada tramo se mide con el que le toca.
+  const planos = planosDeTrazado(trazado);
+  let segM = null, longitudBase = 0, escala = null, usadoPlano = false, tramosPlano = null;
+  if (planos.length) {
+    segM = []; tramosPlano = [];
     for (let i = 1; i < puntos.length; i++) {
-      const d = distanciaEnPlano(H, puntos[i - 1], puntos[i]);
-      if (d === null) { segM = null; break; }
-      segM.push(d);
+      const k = planoDeTramo(planos, trazado.tramos_plano, i - 1, puntos[i - 1], puntos[i]);
+      const d = distanciaEnPlano(planos[k].H, puntos[i - 1], puntos[i]);
+      if (d === null) { segM = null; tramosPlano = null; break; }
+      segM.push(d); tramosPlano.push(k);
     }
   }
   if (segM) {
@@ -30738,7 +30796,7 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
     escala = Number(escala_px_m) > 0 ? Number(escala_px_m) : null;
     if (Number(longitud_manual_m) > 0 && totalPx > 0) escala = totalPx / Number(longitud_manual_m);
     if (!escala) {
-      return { longitud_m: 0, escala_px_m: null, giros: 0, material: [], reglas, aviso: 'Falta la escala: marca una referencia conocida, rectifica el plano con 4 esquinas o escribe la longitud total' };
+      return { longitud_m: 0, escala_px_m: null, giros: 0, material: [], reglas, aviso: 'Falta la escala: marca una referencia conocida, rectifica el plano tocando una placa del techo o escribe la longitud total' };
     }
     longitudBase = totalPx / escala;
     segM = segPx.map(px => px / escala);
@@ -30819,6 +30877,9 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
            // REPLANTEO-04: segmentos_m son los metros REALES de cada tramo (con el plano
            // rectificado no se pueden deducir de los pixeles y una escala unica).
            segmentos_m: segM.map(m => Math.round(m * 100) / 100), plano_ok: usadoPlano,
+           // REPLANTEO-07: con que plano se ha medido cada tramo, y cuantos hay. Los dos
+           // frontends lo pintan; sin esto, una cota rara no se puede explicar.
+           tramos_plano: usadoPlano ? tramosPlano : null, planos_n: planos.length,
            obstaculos: obstResumen, material, reglas };
 }
 

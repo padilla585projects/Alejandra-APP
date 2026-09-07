@@ -2032,7 +2032,7 @@ select option{background:var(--surface2);color:var(--text)}
   <div class="modal-overlay" id="modalReplPlano" onclick="_replCerrarSiBackdrop(event,this,replCerrarPlano)" style="display:none;align-items:flex-end;justify-content:center;padding:0;z-index:9999">
     <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;display:flex;flex-direction:column">
       <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center">
-        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">📐 Rectificar la perspectiva</div>
+        <div id="replPlanoTitulo" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">📐 Rectificar la perspectiva</div>
         <button onclick="replCerrarPlano()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
       </div>
       <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
@@ -2061,7 +2061,10 @@ select option{background:var(--surface2);color:var(--text)}
              dos sentidos; con placas no cuadradas (120x60) hay que poder darle la vuelta. -->
         <button class="repl-btn" style="width:100%" onclick="replPlanoIntercambiar()">⇄ Intercambiar ancho y alto</button>
         <button class="repl-btn primary" style="width:100%" onclick="replPlanoGuardar()">Aplicar la corrección</button>
-        <button class="repl-btn danger" style="width:100%" onclick="replPlanoQuitar()">Quitar el plano y volver a la escala</button>
+        <!-- REPLANTEO-07: si el recorrido baja del techo a la pared, cada superficie necesita
+             su propio rectángulo; con uno solo, la mitad de los tramos vuelve a medir mal. -->
+        <button id="btnReplPlanoOtro" class="repl-btn" style="width:100%;display:none" onclick="replPlanoOtro()">➕ Añadir otro plano (otra superficie)</button>
+        <button class="repl-btn danger" style="width:100%" onclick="replPlanoQuitar()">Quitar este plano</button>
       </div>
     </div>
   </div>
@@ -15175,7 +15178,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.42';
+const APP_VERSION = '9.43';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18336,7 +18339,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const img = await _replCargarImagen(url, false);
       const el = _replCatalogo.find(e => e.key === key) || _replCatalogo[0];
       _repl = {
-        id: null, titulo, elemento_key: el.key, params: _replParamsPorDefecto(el), file, img, departamento: _replCatalogoDept,
+        id: null, titulo, elemento_key: el.key, params: _replParamsPorDefecto(el), file, img, departamento: _replCatalogoDept, planos: [],
         imgW: img.naturalWidth, imgH: img.naturalHeight,
         puntos: [], obstaculos: [], referencia: null, escala_px_m: null, longitud_manual_m: null,
         calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
@@ -18376,7 +18379,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         puntos: Array.isArray(tr.puntos) ? tr.puntos.map(p => ({ x: +p.x, y: +p.y })) : [],
         obstaculos: Array.isArray(tr.obstaculos) ? tr.obstaculos : [],
         referencia: tr.referencia || null,
-        plano: (tr.plano && Array.isArray(tr.plano.pts) && tr.plano.pts.length === 4) ? tr.plano : null,
+        // REPLANTEO-07: `planos` es lo actual; `plano` en singular son los replanteos hechos
+        // con REPLANTEO-04, que se siguen abriendo igual.
+        planos: Array.isArray(tr.planos) ? tr.planos.filter(p => p && Array.isArray(p.pts) && p.pts.length === 4)
+              : ((tr.plano && Array.isArray(tr.plano.pts) && tr.plano.pts.length === 4) ? [tr.plano] : []),
+        tramosPlano: Array.isArray(tr.tramos_plano) ? tr.tramos_plano : null,
         escala_px_m: tr.longitud_manual_m ? null : (r.escala_px_m || null),
         longitud_manual_m: tr.longitud_manual_m || null,
         calc: r.material?.length ? { longitud_m: r.longitud_m, material: r.material, reglas: r.reglas, giros: null } : null,
@@ -18460,7 +18467,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     else if (m === 'escala') hint.textContent = 'Toca los dos extremos de algo cuya medida conozcas (placa de techo, puerta, tramo ya instalado). Luego escribe los metros.';
     else if (m === 'plano') hint.textContent = _repl.planoManual
       ? 'Toca las 4 esquinas de algo rectangular del MISMO plano del recorrido, dando la vuelta. El primer lado que marques es el ancho.'
-      : 'Toca DENTRO de una placa del falso techo y la reconozco sola. Si no la pillo, la marcas tú tocando sus 4 esquinas.';
+      : (_replHs().length > 1
+        ? 'Cada tramo se mide con el plano de su superficie. Toca un tramo para cambiarlo de plano, o una placa de otra superficie para añadir otro.'
+        : 'Toca DENTRO de una placa del falso techo y la reconozco sola. Si no la pillo, la marcas tú tocando sus 4 esquinas.');
     else hint.textContent = 'Toca sobre el recorrido justo donde cruza una instalación existente. Toca un obstáculo para editarlo.';
   }
 
@@ -18851,41 +18860,110 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!d || !Number.isFinite(d)) return null;
     return { x: (H[0] * x + H[1] * y + H[2]) / d, y: (H[3] * x + H[4] * y + H[5]) / d };
   }
-  // H del plano actual, cacheada mientras el plano no cambie (se recalcula al arrastrar).
-  function _replH() {
-    if (!_repl?.plano) return null;
-    const clave = JSON.stringify(_repl.plano);
-    if (_repl._hClave !== clave) { _repl._hClave = clave; _repl._h = _replHomografiaDe(_repl.plano); }
-    return _repl._h;
+  // ── REPLANTEO-07: un plano por superficie ──────────────────────────────────────────────
+  // Adrián: un recorrido que baja del techo a la pared tenía la mitad de los tramos fuera del
+  // plano rectificado, y esa mitad volvía a medirse mal (en la prueba, 19,9 m para 1,5 reales).
+  // Ahora se marca un rectángulo por superficie y cada tramo se mide con el que le toca. La
+  // asignación es automática — el plano que contiene el punto medio del tramo en la foto, o el
+  // más cercano — y el encargado puede corregirla tocando el tramo. MISMO criterio que el
+  // Worker (planoDeTramo): si se cambia uno, hay que cambiar el otro.
+  const REPL_PLANO_COLORES = ['#f472b6', '#22d3ee', '#a3e635', '#fbbf24', '#c084fc'];
+  const _replColorPlano = k => REPL_PLANO_COLORES[k % REPL_PLANO_COLORES.length];
+
+  // [{ plano, H }] de los planos que dan una homografía válida, cacheado mientras no cambien.
+  function _replHs() {
+    if (!_repl) return [];
+    const lista = Array.isArray(_repl.planos) ? _repl.planos : [];
+    const clave = JSON.stringify(lista);
+    if (_repl._hClave !== clave) {
+      _repl._hClave = clave;
+      _repl._hs = lista.map(p => ({ plano: p, H: _replHomografiaDe(p) })).filter(x => x.H);
+    }
+    return _repl._hs || [];
   }
-  // Metros reales del tramo i (del punto i-1 al i): por el plano si lo hay, si no por la escala.
+  function _replH() { return _replHs()[0]?.H || null; }   // ¿hay alguna rectificación en pie?
+
+  const _replCentroide = pts => ({ x: pts.reduce((a, p) => a + (+p.x), 0) / pts.length, y: pts.reduce((a, p) => a + (+p.y), 0) / pts.length });
+  function _replDentroDe(pts, x, y) {
+    let signo = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const cruz = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+      if (Math.abs(cruz) < 1e-9) continue;
+      const s = Math.sign(cruz);
+      if (!signo) signo = s; else if (s !== signo) return false;
+    }
+    return true;
+  }
+  // Índice (dentro de _replHs()) del plano con el que se mide el tramo i (del punto i-1 al i).
+  function _replPlanoDeTramo(i) {
+    const hs = _replHs();
+    if (hs.length <= 1) return 0;
+    const forzado = (_repl.tramosPlano || [])[i - 1];
+    if (Number.isInteger(forzado) && forzado >= 0 && forzado < hs.length) return forzado;
+    const a = _repl.puntos[i - 1], b = _repl.puntos[i];
+    if (!a || !b) return 0;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    let dentro = -1, areaDentro = Infinity;
+    hs.forEach((x, k) => {
+      const pts = x.plano.pts.map(q => ({ x: +q.x, y: +q.y }));
+      if (!_replDentroDe(pts, mx, my)) return;
+      let a2 = 0;
+      for (let j = 0; j < 4; j++) { const u = pts[j], v = pts[(j + 1) % 4]; a2 += u.x * v.y - v.x * u.y; }
+      const area = Math.abs(a2) / 2;
+      if (area < areaDentro) { areaDentro = area; dentro = k; }
+    });
+    if (dentro >= 0) return dentro;
+    let mejor = 0, mejorD = Infinity;
+    hs.forEach((x, k) => {
+      const c = _replCentroide(x.plano.pts.map(q => ({ x: +q.x, y: +q.y })));
+      const d = Math.hypot(c.x - mx, c.y - my);
+      if (d < mejorD) { mejorD = d; mejor = k; }
+    });
+    return mejor;
+  }
+  // Metros reales del tramo i: por su plano si lo hay, si no por la escala plana.
   function _replMetrosTramo(i, esc) {
     const a = _repl.puntos[i - 1], b = _repl.puntos[i];
     if (!a || !b) return null;
-    const H = _replH();
-    if (H) {
+    const hs = _replHs();
+    if (hs.length) {
+      const H = hs[_replPlanoDeTramo(i)].H;
       const p = _replAplicarH(H, a.x, a.y), q = _replAplicarH(H, b.x, b.y);
       if (p && q) { const d = Math.hypot(q.x - p.x, q.y - p.y); if (Number.isFinite(d)) return d; }
     }
     return esc ? Math.hypot(b.x - a.x, b.y - a.y) / esc : null;
   }
   function _replLongitudPlano() {
-    if (!_replH() || _repl.puntos.length < 2) return null;
+    if (!_replHs().length || _repl.puntos.length < 2) return null;
     let t = 0;
     for (let i = 1; i < _repl.puntos.length; i++) { const m = _replMetrosTramo(i, null); if (m === null) return null; t += m; }
     return t;
+  }
+  // Plano que se está marcando ahora mismo (el último de la lista si aún no tiene medidas).
+  // El color va por posición entre los planos válidos, que es como los numera el cálculo.
+  function _replIndiceValido(idx) {
+    const lista = _repl?.planos || [];
+    let n = 0;
+    for (let i = 0; i < idx && i < lista.length; i++) if (_replHomografiaDe(lista[i])) n++;
+    return n;
+  }
+  function _replPlanoEnCurso() {
+    const l = _repl?.planos || [];
+    const u = l[l.length - 1];
+    return (u && (u.pts.length < 4 || !(u.ancho_m > 0))) ? l.length - 1 : -1;
   }
 
   function _replEscalaActual() {
     // Con el plano rectificado no hay una sola escala px/m: se devuelve la media equivalente,
     // que los dibujos usan para el GROSOR de la banda y el tamaño de los obstáculos. Las
     // cotas y la longitud salen de _replMetrosTramo, no de aquí.
-    const Hp = _replH();
-    if (Hp) {
+    const hs = _replHs();
+    if (hs.length) {
       const L = _replLongitudPlano();
       if (L > 0) return _replLongitudPx() / L;
-      const p = _repl.plano.pts, ladoPx = Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y);
-      return ladoPx > 0 ? ladoPx / Number(_repl.plano.ancho_m) : null;
+      const p = hs[0].plano.pts, ladoPx = Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y);
+      return ladoPx > 0 ? ladoPx / Number(hs[0].plano.ancho_m) : null;
     }
     if (_repl.longitud_manual_m > 0) {
       const px = _replLongitudPx();
@@ -18932,7 +19010,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           const txt = _replNum(m, 2) + ' m';
           const w = ctx.measureText(txt).width + 10 * k;
           ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(mx - w / 2, my - 9 * k, w, 18 * k);
-          ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+          // REPLANTEO-07: con varios planos, la cota se pinta del color del plano que la mide.
+          const hsN = _replHs().length;
+          ctx.fillStyle = hsN > 1 ? _replColorPlano(_replPlanoDeTramo(i)) : '#fff';
+          ctx.fillText(txt, mx, my);
         }
       }
       ctx.restore();
@@ -18943,12 +19024,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       ctx.fillStyle = i === 0 ? '#22c55e' : (i === P.length - 1 ? '#ef4444' : '#fff');
       ctx.fill(); ctx.lineWidth = 2 * k; ctx.strokeStyle = '#0b0f14'; ctx.stroke();
     });
-    // Plano rectificado (REPLANTEO-04)
-    if (_repl.plano?.pts?.length) {
-      const Q = _repl.plano.pts.map(p => ({ x: ox + p.x * s, y: oy + p.y * s }));
-      const completo = Q.length === 4 && !!_replH();
+    // Planos rectificados (REPLANTEO-04 / REPLANTEO-07): uno por superficie, cada uno con su
+    // color, que es el mismo con el que se pinta la cota de los tramos que mide.
+    (_repl.planos || []).forEach((pl, idx) => {
+      if (!pl?.pts?.length) return;
+      const Q = pl.pts.map(p => ({ x: ox + p.x * s, y: oy + p.y * s }));
+      const completo = Q.length === 4 && !!_replHomografiaDe(pl);
+      const color = completo ? _replColorPlano(_replIndiceValido(idx)) : '#fb7185';
       ctx.save();
-      ctx.strokeStyle = completo ? '#f472b6' : '#fb7185';
+      ctx.strokeStyle = color;
       ctx.lineWidth = Math.max(1.5, 2 * k);
       if (!completo) ctx.setLineDash([6 * k, 4 * k]);
       if (Q.length >= 2) {
@@ -18959,20 +19043,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       ctx.setLineDash([]);
       Q.forEach((p, i) => {
         ctx.beginPath(); ctx.arc(p.x, p.y, 6 * k, 0, Math.PI * 2);
-        ctx.fillStyle = completo ? '#f472b6' : '#fb7185'; ctx.fill();
+        ctx.fillStyle = color; ctx.fill();
         ctx.font = `bold ${10 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = '#0b0f14'; ctx.fillText(String(i + 1), p.x, p.y + 0.5);
       });
       if (completo) {
         const cx = Q.reduce((a, p) => a + p.x, 0) / 4, cy = Q.reduce((a, p) => a + p.y, 0) / 4;
-        const txt = `📐 ${_replNum(_repl.plano.ancho_m, 2)} × ${_replNum(_repl.plano.alto_m, 2)} m`;
+        const n = (_repl.planos.length > 1) ? `P${idx + 1} ` : '';
+        const txt = `📐 ${n}${_replNum(pl.ancho_m, 2)} × ${_replNum(pl.alto_m, 2)} m`;
         ctx.font = `bold ${11 * k}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         const w = ctx.measureText(txt).width + 10 * k;
-        ctx.fillStyle = 'rgba(190,24,93,.85)'; ctx.fillRect(cx - w / 2, cy - 9 * k, w, 18 * k);
-        ctx.fillStyle = '#fff'; ctx.fillText(txt, cx, cy);
+        ctx.fillStyle = 'rgba(15,23,42,.85)'; ctx.fillRect(cx - w / 2, cy - 9 * k, w, 18 * k);
+        ctx.fillStyle = color; ctx.fillText(txt, cx, cy);
       }
       ctx.restore();
-    }
+    });
     // Referencia de escala
     if (_repl.referencia?.a) {
       const a = { x: ox + _repl.referencia.a.x * s, y: oy + _repl.referencia.a.y * s };
@@ -19045,7 +19130,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (!_repl || _replSoloLectura()) return;
       ev.preventDefault();
       const n = _replANatural(ev.clientX, ev.clientY);
-      _replDrag = { x0: ev.clientX, y0: ev.clientY, moved: false, idx: -1, refKey: null, planoIdx: -1, nat: n };
+      _replDrag = { x0: ev.clientX, y0: ev.clientY, moved: false, idx: -1, refKey: null, planoIdx: -1, planoPlano: -1, nat: n };
       if (_repl.modo === 'trazar') {
         // ¿Ha tocado un vértice existente? → arrastrar
         const tol = 18 / n.f.s;
@@ -19064,13 +19149,17 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           if (d < bd) { bd = d; best = k; }
         });
         _replDrag.refKey = best;
-      } else if (_repl.modo === 'plano' && _repl.plano?.pts?.length) {
-        // Las 4 esquinas se corrigen arrastrando, igual que los vértices del trazado: en el
-        // móvil es imposible acertar a la primera y rehacer las cuatro cansa.
+      } else if (_repl.modo === 'plano' && _repl.planos?.length) {
+        // Las esquinas se corrigen arrastrando, igual que los vértices del trazado: en el
+        // móvil es imposible acertar a la primera y rehacer las cuatro cansa. Con varios
+        // planos (REPLANTEO-07) se busca en todos.
         const tol = 18 / n.f.s;
-        let best = -1, bd = tol;
-        _repl.plano.pts.forEach((p, i) => { const d = Math.hypot(p.x - n.x, p.y - n.y); if (d < bd) { bd = d; best = i; } });
-        _replDrag.planoIdx = best;
+        let best = -1, bp = -1, bd = tol;
+        _repl.planos.forEach((pl, k) => (pl?.pts || []).forEach((p, i) => {
+          const d = Math.hypot(p.x - n.x, p.y - n.y);
+          if (d < bd) { bd = d; best = i; bp = k; }
+        }));
+        _replDrag.planoIdx = best; _replDrag.planoPlano = bp;
       }
       try { cv.setPointerCapture(ev.pointerId); } catch {}
     });
@@ -19081,9 +19170,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         const n = _replANatural(ev.clientX, ev.clientY);
         _repl.puntos[_replDrag.idx] = { x: Math.max(0, Math.min(_repl.imgW, n.x)), y: Math.max(0, Math.min(_repl.imgH, n.y)) };
         replDibujar();
-      } else if (_replDrag.planoIdx >= 0 && _replDrag.moved) {
+      } else if (_replDrag.planoIdx >= 0 && _replDrag.planoPlano >= 0 && _replDrag.moved) {
         const n = _replANatural(ev.clientX, ev.clientY);
-        _repl.plano.pts[_replDrag.planoIdx] = { x: Math.max(0, Math.min(_repl.imgW, n.x)), y: Math.max(0, Math.min(_repl.imgH, n.y)) };
+        _repl.planos[_replDrag.planoPlano].pts[_replDrag.planoIdx] = { x: Math.max(0, Math.min(_repl.imgW, n.x)), y: Math.max(0, Math.min(_repl.imgH, n.y)) };
         replDibujar();
       } else if (_replDrag.refKey && _replDrag.moved) {
         const n = _replANatural(ev.clientX, ev.clientY);
@@ -19139,17 +19228,43 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         return;
       }
     } else if (_repl.modo === 'plano') {
-      const pts = (_repl.plano?.pts || []).slice();
-      // Con las 4 esquinas ya marcadas, tocar reabre el modal para corregir las medidas: para
-      // mover una esquina se arrastra, para rehacerlas están Deshacer y «Quitar el plano».
-      if (pts.length >= 4) { replAbrirPlano(); return; }
-      // REPLANTEO-06: el primer toque intenta reconocer la placa que hay debajo del dedo. Si
-      // no la pilla, ese mismo toque cuenta como primera esquina y se sigue a mano.
+      if (!Array.isArray(_repl.planos)) _repl.planos = [];
+      const enCurso = _replPlanoEnCurso();
+      // REPLANTEO-07: con dos o más planos en pie, tocar SOBRE el recorrido cambia ese tramo al
+      // siguiente plano. La asignación automática acierta casi siempre, pero en la esquina
+      // techo-pared hay que poder decidir a mano sin menús.
+      if (enCurso < 0 && _replHs().length > 1 && _repl.puntos.length >= 2) {
+        const tol = 26 / n.f.s;
+        let best = null;
+        for (let i = 1; i < _repl.puntos.length; i++) {
+          const a = _repl.puntos[i - 1], b = _repl.puntos[i];
+          const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1;
+          let t = ((n.x - a.x) * dx + (n.y - a.y) * dy) / L2; t = Math.max(0, Math.min(1, t));
+          const d = Math.hypot(a.x + dx * t - n.x, a.y + dy * t - n.y);
+          if (!best || d < best.d) best = { i, d };
+        }
+        if (best && best.d < tol) {
+          if (!Array.isArray(_repl.tramosPlano)) _repl.tramosPlano = [];
+          const hs = _replHs().length;
+          const actual = _replPlanoDeTramo(best.i);
+          _repl.tramosPlano[best.i - 1] = (actual + 1) % hs;
+          toast(`Tramo ${best.i} → plano ${_repl.tramosPlano[best.i - 1] + 1}`);
+          replMarcarCambio(); replDibujar(); replActualizarInfo();
+          return;
+        }
+      }
+      // Un plano ya terminado: tocar reabre su modal. Para mover una esquina se arrastra.
+      if (enCurso < 0 && _repl.planos.length && _replHs().length && !_repl.puntos.length) { replAbrirPlano(_repl.planos.length - 1); return; }
+      const idx = enCurso >= 0 ? enCurso : _repl.planos.length;
+      const pts = (_repl.planos[idx]?.pts || []).slice();
+      if (pts.length >= 4) { replAbrirPlano(idx); return; }
+      // REPLANTEO-06: el primer toque de cada plano intenta reconocer la placa que hay debajo
+      // del dedo. Si no la pilla, ese mismo toque cuenta como primera esquina y se sigue a mano.
       if (!pts.length && !_repl.planoManual) {
         const auto = _replDetectarPlacaEnFoto(n.x, n.y);
         if (auto) {
-          _repl.plano = { pts: auto, ancho_m: _repl.plano?.ancho_m || null, alto_m: _repl.plano?.alto_m || null, origen: 'auto' };
-          replDibujar(); replAbrirPlano();
+          _repl.planos[idx] = { pts: auto, ancho_m: null, alto_m: null, origen: 'auto' };
+          replDibujar(); replAbrirPlano(idx);
           toast('📐 Placa reconocida: comprueba las esquinas y dime cuánto mide');
           return;
         }
@@ -19157,8 +19272,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         toast('No he reconocido ninguna placa ahí: marca sus 4 esquinas a mano', 'error');
       }
       pts.push({ x: n.x, y: n.y });
-      _repl.plano = { pts, ancho_m: _repl.plano?.ancho_m || null, alto_m: _repl.plano?.alto_m || null, origen: 'manual' };
-      if (pts.length === 4) { replDibujar(); replAbrirPlano(); return; }
+      _repl.planos[idx] = { pts, ancho_m: _repl.planos[idx]?.ancho_m || null, alto_m: _repl.planos[idx]?.alto_m || null, origen: _repl.planos[idx]?.origen || 'manual' };
+      if (pts.length === 4) { replDibujar(); replAbrirPlano(idx); return; }
     } else if (_repl.modo === 'obstaculo') {
       // ¿Toca un obstáculo existente? → editar
       const tol = 16 / n.f.s;
@@ -19188,9 +19303,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!_repl || _replSoloLectura()) return;
     if (_repl.modo === 'escala') { _repl.referencia = null; _repl.escala_px_m = null; }
     else if (_repl.modo === 'plano') {
-      const pts = _repl.plano?.pts || [];
-      pts.pop();
-      _repl.plano = pts.length ? { ...(_repl.plano || {}), pts } : null;
+      // Deshacer quita la última esquina del plano que se esté marcando; si no hay ninguno a
+      // medias, retira el último plano entero.
+      if (!Array.isArray(_repl.planos)) _repl.planos = [];
+      const enCurso = _replPlanoEnCurso();
+      if (enCurso >= 0) {
+        const pts = _repl.planos[enCurso].pts;
+        pts.pop();
+        if (!pts.length) _repl.planos.splice(enCurso, 1);
+      } else if (_repl.planos.length) {
+        _repl.planos.pop();
+        _repl.tramosPlano = null;      // los índices guardados ya no significan lo mismo
+      }
+      _repl.planoManual = false;
     }
     else if (_repl.modo === 'obstaculo') { _repl.obstaculos.pop(); }
     else {
@@ -19203,7 +19328,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!_repl || _replSoloLectura()) return;
     if (!confirm('¿Borrar todo el trazado, la escala, el plano y los obstáculos de esta foto?')) return;
     _repl.puntos = []; _repl.obstaculos = []; _repl.referencia = null; _repl.escala_px_m = null; _repl.longitud_manual_m = null; _repl.calc = null;
-    _repl.plano = null; _repl._hClave = null; _repl._h = null;
+    _repl.planos = []; _repl.tramosPlano = null; _repl._hClave = null; _repl._hs = null;
     replMarcarCambio(); replDibujar(); replActualizarInfo();
   }
 
@@ -19281,16 +19406,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   // Solo se guarda un plano COMPLETO: 4 esquinas y las dos medidas. Uno a medias no mide
   // nada y ensuciaría trazado_json de replanteos viejos.
-  function _replPlanoParaGuardar() {
-    const p = _repl.plano;
-    if (!p || !Array.isArray(p.pts) || p.pts.length !== 4 || !(p.ancho_m > 0) || !(p.alto_m > 0)) return undefined;
-    return { pts: p.pts, ancho_m: p.ancho_m, alto_m: p.alto_m, origen: p.origen || 'manual' };
+  function _replPlanosParaGuardar() {
+    const l = (_repl.planos || []).filter(p => p && Array.isArray(p.pts) && p.pts.length === 4 && p.ancho_m > 0 && p.alto_m > 0)
+      .map(p => ({ pts: p.pts, ancho_m: p.ancho_m, alto_m: p.alto_m, origen: p.origen || 'manual' }));
+    return l.length ? l : undefined;
+  }
+  // Solo se guardan las asignaciones que el encargado ha tocado a mano; el resto lo decide el
+  // servidor con el mismo criterio que el editor.
+  function _replTramosPlanoParaGuardar() {
+    const t = _repl.tramosPlano;
+    if (!Array.isArray(t) || !t.some(v => Number.isInteger(v))) return undefined;
+    return t.map(v => (Number.isInteger(v) ? v : null));
   }
   function _replPayloadCalculo() {
     return {
       departamento: _repl.departamento || _replCatalogoDept || undefined, // REPL-DEPT-POST-01
       elemento_key: _repl.elemento_key, elemento_params: _repl.params,
-      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, plano: _replPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined },
+      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined },
       escala_px_m: _repl.longitud_manual_m ? null : _repl.escala_px_m,
       longitud_manual_m: _repl.longitud_manual_m || null,
     };
@@ -19314,7 +19446,13 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const partes = [];
     if (_repl.origen === 'ar') partes.push(`<span style="color:#22c55e">📱 medido en AR (vista en planta)</span>`);
     partes.push(`<span>📍 <b>${_repl.puntos.length}</b> puntos</span>`);
-    if (_replH()) partes.push(`<span style="color:#f472b6">📐 plano rectificado (${_replNum(_repl.plano.ancho_m, 2)}×${_replNum(_repl.plano.alto_m, 2)} m${_repl.plano.origen === 'auto' ? ', placa reconocida' : ''})</span>`);
+    const _hs = _replHs();
+    if (_hs.length > 1) {
+      partes.push(`<span>📐 ${_hs.map((x, k) => `<b style="color:${_replColorPlano(k)}">plano ${k + 1}</b>`).join(' + ')} (cada tramo con el suyo)</span>`);
+    } else if (_hs.length) {
+      const p0 = _hs[0].plano;
+      partes.push(`<span style="color:#f472b6">📐 plano rectificado (${_replNum(p0.ancho_m, 2)}×${_replNum(p0.alto_m, 2)} m${p0.origen === 'auto' ? ', placa reconocida' : ''})</span>`);
+    }
     else if (_repl.longitud_manual_m) partes.push(`<span>📏 longitud fijada: <b>${_replNum(_repl.longitud_manual_m)} m</b></span>`);
     else if (_repl.escala_px_m) partes.push(`<span>📏 escala ✔ (${_replNum(_repl.referencia?.metros || 0, 2)} m de referencia) <span style="color:#f97316">— solo en ese plano</span></span>`);
     else partes.push(`<span style="color:#f97316">📏 sin escala: toca "Escala" o "Plano"</span>`);
@@ -19330,10 +19468,26 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
 
   // ── Plano rectificado (REPLANTEO-04) ────────────────────────────────────
-  function replAbrirPlano() {
-    document.getElementById('replPlanoAncho').value = _repl.plano?.ancho_m || '';
-    document.getElementById('replPlanoAlto').value = _repl.plano?.alto_m || '';
+  // REPLANTEO-07: el modal trabaja siempre sobre un plano concreto de la lista.
+  let _replPlanoIdx = 0;
+  function replAbrirPlano(idx) {
+    if (!Array.isArray(_repl.planos)) _repl.planos = [];
+    _replPlanoIdx = Number.isInteger(idx) ? idx : Math.max(0, _repl.planos.length - 1);
+    const pl = _repl.planos[_replPlanoIdx];
+    document.getElementById('replPlanoAncho').value = pl?.ancho_m || '';
+    document.getElementById('replPlanoAlto').value = pl?.alto_m || '';
+    const t = document.getElementById('replPlanoTitulo');
+    if (t) t.textContent = _repl.planos.length > 1 ? `📐 Plano ${_replPlanoIdx + 1} de ${_repl.planos.length}` : '📐 Rectificar la perspectiva';
+    const btnOtro = document.getElementById('btnReplPlanoOtro');
+    if (btnOtro) btnOtro.style.display = (pl && pl.pts?.length === 4 && pl.ancho_m > 0) ? '' : 'none';
     _replAbrirModal('modalReplPlano');
+  }
+  // Añadir otro plano: se cierra el modal y el siguiente toque empieza uno nuevo (con
+  // reconocimiento de placa otra vez, que para eso está).
+  function replPlanoOtro() {
+    _repl.planoManual = false;
+    replCerrarPlano(); replModo('plano');
+    toast('Toca ahora dentro de una placa de la OTRA superficie (pared, techo bajo…)');
   }
   function replCerrarPlano() { document.getElementById('modalReplPlano').style.display = 'none'; }
   function replPlanoPreset(ancho, alto) {
@@ -19344,23 +19498,36 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const ancho = parseFloat(document.getElementById('replPlanoAncho').value.replace(',', '.'));
     const alto = parseFloat(document.getElementById('replPlanoAlto').value.replace(',', '.'));
     if (!(ancho > 0) || !(alto > 0)) { toast('Escribe el ancho y el alto reales', 'error'); return; }
-    if ((_repl.plano?.pts?.length || 0) !== 4) { toast('Marca las 4 esquinas primero', 'error'); return; }
-    _repl.plano = { pts: _repl.plano.pts, ancho_m: ancho, alto_m: alto, origen: _repl.plano.origen || 'manual' };
-    if (!_replH()) { toast('Esas 4 esquinas no forman un rectángulo utilizable: repite el marcado', 'error'); return; }
+    const pl = _repl.planos?.[_replPlanoIdx];
+    if ((pl?.pts?.length || 0) !== 4) { toast('Marca las 4 esquinas primero', 'error'); return; }
+    _repl.planos[_replPlanoIdx] = { pts: pl.pts, ancho_m: ancho, alto_m: alto, origen: pl.origen || 'manual' };
+    if (!_replHomografiaDe(_repl.planos[_replPlanoIdx])) {
+      toast('Esas 4 esquinas no forman un rectángulo utilizable: repite el marcado', 'error');
+      return;
+    }
+    _repl._hClave = null;   // la caché de homografías se rehace
     // El plano manda sobre la longitud fijada a mano: si no, el usuario corrige la perspectiva
     // y sigue viendo la medida vieja sin entender por qué.
     _repl.longitud_manual_m = null;
-    replCerrarPlano(); replModo('trazar'); replMarcarCambio(); replDibujar(); replActualizarInfo();
-    toast('📐 Perspectiva corregida: las medidas ya no dependen de la distancia');
+    _repl.planoManual = false;
+    const n = _replHs().length;
+    replCerrarPlano(); replModo(n > 1 ? 'plano' : 'trazar'); replMarcarCambio(); replDibujar(); replActualizarInfo();
+    toast(n > 1
+      ? `📐 ${n} planos: cada tramo se mide con el suyo. Toca un tramo para cambiarlo de plano.`
+      : '📐 Perspectiva corregida: las medidas ya no dependen de la distancia');
   }
   function replPlanoIntercambiar() {
     const a = document.getElementById('replPlanoAncho'), b = document.getElementById('replPlanoAlto');
     const v = a.value; a.value = b.value; b.value = v;
-    if ((_repl.plano?.pts?.length || 0) === 4 && _repl.plano.ancho_m > 0 && _repl.plano.alto_m > 0) replPlanoGuardar();
+    const pl = _repl.planos?.[_replPlanoIdx];
+    if ((pl?.pts?.length || 0) === 4 && pl.ancho_m > 0 && pl.alto_m > 0) replPlanoGuardar();
   }
   function replPlanoQuitar() {
-    _repl.plano = null; _repl._hClave = null; _repl._h = null;
-    _repl.planoManual = false;   // volver a tocar dentro de una placa reintenta el reconocimiento
+    if (Array.isArray(_repl.planos) && _repl.planos.length > _replPlanoIdx) _repl.planos.splice(_replPlanoIdx, 1);
+    else _repl.planos = [];
+    _repl.tramosPlano = null;     // los índices guardados dejan de significar lo mismo
+    _repl._hClave = null; _repl._hs = null;
+    _repl.planoManual = false;    // volver a tocar dentro de una placa reintenta el reconocimiento
     replCerrarPlano(); replMarcarCambio(); replDibujar(); replActualizarInfo();
   }
 
@@ -19405,7 +19572,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         if (dept) fd.append('departamento', dept);
         fd.append('elemento_key', _repl.elemento_key);
         fd.append('elemento_json', JSON.stringify(_repl.params));
-        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, plano: _replPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined }));
+        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined }));
         fd.append('origen', _repl.origen === 'ar' ? 'ar' : 'foto');
         if (_repl.escala_px_m && !_repl.longitud_manual_m) fd.append('escala_px_m', _repl.escala_px_m);
         if (_repl.longitud_manual_m) fd.append('longitud_manual_m', _repl.longitud_manual_m);
@@ -19532,6 +19699,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replPlanoQuitar        = replPlanoQuitar;
   window.replPlanoPreset        = replPlanoPreset;
   window.replPlanoIntercambiar  = replPlanoIntercambiar;
+  window.replPlanoOtro          = replPlanoOtro;
   window.replDeshacer           = replDeshacer;
   window.replLimpiar            = replLimpiar;
   window.replAbrirEscala        = replAbrirEscala;
@@ -19918,7 +20086,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const file = new File([blob], `replanteo-ar-${Date.now()}.jpg`, { type: 'image/jpeg' });
     const img = await _replCargarImagen(URL.createObjectURL(file), false);
     _repl = {
-      id: null, titulo, elemento_key: elemento.key, params, file, img, departamento: _replCatalogoDept, imgW: img.naturalWidth, imgH: img.naturalHeight,
+      id: null, titulo, elemento_key: elemento.key, params, file, img, departamento: _replCatalogoDept, planos: [], planos: [], imgW: img.naturalWidth, imgH: img.naturalHeight,
       puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
       referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,

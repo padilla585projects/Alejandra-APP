@@ -144,6 +144,14 @@ distancias son las reales, se aleje lo que se aleje.
 Descartadas en la misma conversación: varias referencias por zona (más simple pero sigue
 siendo aproximado), dejar la foto solo como croquis, y esperar a la prueba del AR.
 
+Ampliación de la misma enmienda (REPLANTEO-06 y 07, 2026-09-07): el rectángulo **se reconoce
+solo** cuando es una placa de falso techo — el encargado toca dentro y la app saca las cuatro
+esquinas — y puede haber **un plano por superficie**, midiendo cada tramo con el suyo. Lo
+segundo era necesario: con un único plano, un recorrido que baja del techo a la pared medía esa
+pared con el plano del techo (19,9 m para 1,50 reales en la prueba sintética). Sigue sin
+resolverse, y la app lo advierte, el tramo que **cruza** de una superficie a otra: hay que
+partirlo poniendo un punto en la esquina.
+
 Esta enmienda queda **Propuesta**: aceptarla es decisión humana (ADR-0007), igual que el ADR.
 
 ## Alternativas consideradas

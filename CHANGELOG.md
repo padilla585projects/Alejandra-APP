@@ -4,6 +4,36 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-07 — REPLANTEO-07: un plano rectificado por superficie, v9.43)
+
+Segunda de la cola de Adrián. La rectificación de REPLANTEO-04 valía para **un** plano: un
+recorrido que baja del techo a la pared tenía la mitad de los tramos fuera de él, y esa mitad
+volvía a medirse mal. En la prueba sintética, un tramo de pared de 1,50 m salía en **19,9 m**
+midiéndolo con el plano del techo.
+
+- `worker.js`: `trazado.planos` es ahora una **lista**, y cada tramo se mide con el que le toca
+  (`planoDeTramo`): el plano que contiene su punto medio en la foto y, si ninguno lo contiene,
+  el más cercano. El resultado añade `tramos_plano` (con qué plano se midió cada tramo) y
+  `planos_n`. `trazado.tramos_plano` permite forzar la asignación a mano. **Compatibilidad:**
+  los replanteos guardados con `plano` en singular se siguen midiendo exactamente igual.
+- `index.html` (v9.43): en el modo «📐 Plano», tras aplicar el primero aparece **➕ Añadir otro
+  plano**; cada uno se dibuja con su color y las cotas salen del color del plano que las mide.
+  Con dos o más en pie, **tocar un tramo lo cambia de plano** (la automática acierta casi
+  siempre, pero en la esquina techo-pared conviene poder decidir). El reconocimiento de placa
+  de REPLANTEO-06 funciona en cada plano nuevo.
+- `panel.html` (v9.43): la oficina dibuja todos los planos y usa el mismo reparto por tramo, en
+  el detalle y en el informe imprimible; la ficha dice cuántos planos hay y cuánto mide cada uno.
+- **Sin migración:** todo vive dentro de `trazado_json`.
+- **Lo que sigue sin resolver, y la app lo dice:** un tramo que **cruza** de una superficie a
+  otra se mide entero con una de las dos. La salida es marcar un punto en la esquina y partirlo
+  en dos, que es lo natural al replantear.
+- **Pruebas:** 11 sobre un recorrido sintético que baja del techo a la pared — con un solo
+  plano el tramo de pared da 19,9 m, con dos da **1,53 m para 1,50 reales** y el total 3,40 m
+  clavado; la asignación automática acierta sin ayuda; una asignación a mano se respeta; un
+  plano inválido dentro de la lista se descarta sin tumbar al resto; y un replanteo antiguo
+  (plano en singular) se mide igual que antes. Más 15 de paridad: **Worker, editor y oficina
+  asignan cada tramo al mismo plano y dan los mismos metros** (hasta 1e-9).
+
 ### Added (2026-09-07 — REPLANTEO-06: la app reconoce la placa del falso techo, v9.42)
 
 Adrián, sobre el plano rectificado de REPLANTEO-04: que la app **detecte sola las placas** en
