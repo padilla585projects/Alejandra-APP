@@ -4,6 +4,36 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-07 — Replanteos no salía en Office, y tres arreglos de la primera prueba en obra, v9.41)
+
+Adrián, probando lo recién desplegado: «no veo replanteos en Alejandra Office», y tres capturas
+del móvil que enseñan lo demás.
+
+- **REPL-OFFICE-NAV-01** — la página «📐 Replanteos» estaba en el sidebar, pero **nunca se veía
+  en un departamento con menú curado**. Vive en el HTML justo debajo de la cabecera «Pedidos»,
+  y `ocultarSeccion()` esconde la cabecera **y todo lo que va detrás** hasta la siguiente
+  sección: el `ocultarSeccion('pedidosSec')` de `_organizarSidebarRolDept` se la llevaba por
+  delante en Control, Ingeniería y compañía, cuando el replanteo es transversal por diseño
+  (ADR-0024). Es el mismo patrón que ya mordió a «Repostajes» (PREVIEW-ADMIN-06) y a «Seguridad
+  de Obra» (OBRA-SOBRA-02), pero al revés: aquí ocultaba de más. Ahora se recoloca
+  explícitamente — detrás de Pedidos si Pedidos quedó visible, y si no, al final de
+  «Principal». Lo que se ve dentro sigue filtrado por departamento en el backend (DEPT-01).
+- **REPL-AR-UI-01** — el texto de estado del AR se comía bajo la barra del sistema: el
+  `dom-overlay` ocupa la pantalla entera, notch incluido. Respeta el área segura
+  (`env(safe-area-inset-top)`) y limita su altura para no tapar media cámara.
+- **REPL-AR-UI-02** — al marcar un punto «tocando con el móvil», ese punto queda a un dedo del
+  objetivo y su esfera se dibujaba como un pegote que tapaba la pantalla. El plano cercano de
+  la cámara pasa de 1 a 8 cm, lo que esté a menos de 25 cm no se pinta, y el halo azul es algo
+  menor. Al retirar el móvil vuelve a verse con normalidad.
+- El aviso de guía **se retira solo a los 6 s** (cumplida su función estorba delante de la
+  cámara) y es más corto cuando ya hay puntos marcados.
+- **REPL-UI-03** — con el modo Plano son cuatro botones y el cuarto quedaba cortado en un
+  móvil normal: menos relleno y letra algo menor, ahora caben.
+- **Pruebas:** 11 comprobaciones del sidebar con un DOM mínimo y el **orden real** de
+  `panel.html`, para Control (menú curado sin material), Eléctrico (con Pedidos visible) y
+  Almacén (Pedidos como sección propia), **incluida la reproducción del bug** tal y como
+  estaba; versiones 9.41; scripts inline de los dos frontends igual que en `main`; encoding.
+
 ### Added (2026-09-07 — REPLANTEO-05: el AR mide en paredes y techos lisos, v9.40)
 
 Adrián, probando el AR: «cuando mide en tiempo real no detecta las paredes blancas bien». Es

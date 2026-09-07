@@ -11845,6 +11845,38 @@ function _organizarSidebarRolDept(config) {
       el.setAttribute('data-hidden-by-perms', 'true');
     });
   }
+
+  // REPL-OFFICE-NAV-01 (07/09/2026) — Adrián: «no veo replanteos en Alejandra Office».
+  // «Replanteos» vive en el HTML justo debajo de la cabecera «Pedidos», y ocultarSeccion()
+  // esconde la cabecera Y TODO lo que va detrás hasta la siguiente sección: el
+  // `ocultarSeccion('pedidosSec')` de arriba se lo llevaba por delante en CUALQUIER
+  // departamento con menú curado (Control entre ellos), aunque el replanteo es transversal
+  // por diseño (ADR-0024: «pestaña común para cualquier departamento»). Mismo patrón que ya
+  // mordió a «Repostajes» (PREVIEW-ADMIN-06) y a «Seguridad de Obra» (OBRA-SOBRA-02), pero
+  // al revés: aquí se ocultaba de más en vez de enseñar de más. Se recoloca explícitamente
+  // detrás de Pedidos si Pedidos quedó visible, y si no, al final de «Principal».
+  // Lo que se ve dentro sigue filtrado por departamento en el backend (DEPT-01).
+  const btnRepl = item('replanteos');
+  if (btnRepl) {
+    const pedidos = item('pedidos');
+    let ancla = (pedidos && pedidos.style.display !== 'none') ? pedidos : null;
+    if (!ancla) {
+      const cab = seccion('principal');
+      if (cab && cab.style.display !== 'none') {
+        ancla = cab;
+        let sig = cab.nextElementSibling;
+        while (sig && !sig.classList.contains('sidebar-section')) {
+          if (sig.style.display !== 'none') ancla = sig;
+          sig = sig.nextElementSibling;
+        }
+      }
+    }
+    if (ancla) {
+      ancla.insertAdjacentElement('afterend', btnRepl);
+      btnRepl.style.display = '';
+      btnRepl.removeAttribute('data-hidden-by-perms');
+    }
+  }
 }
 
 // INGENIERIA-01: el departamento de Ingeniería reúne la coordinación técnica
@@ -26178,7 +26210,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.40';
+const PANEL_APP_VERSION = '9.41';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

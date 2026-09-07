@@ -1895,7 +1895,9 @@ select option{background:var(--surface2);color:var(--text)}
     .repl-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
     .repl-btn.danger{color:#ef4444;border-color:rgba(239,68,68,.5)}
     .repl-btn:disabled{opacity:.45;cursor:not-allowed}
-    .repl-mode{background:var(--card);border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;white-space:nowrap;font-family:inherit}
+    /* REPL-UI-03: con el modo Plano son cuatro y en un móvil normal el cuarto quedaba
+       cortado a la derecha (captura de Adrián). Menos relleno y letra algo menor: caben. */
+    .repl-mode{background:var(--card);border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:11.5px;font-weight:700;padding:7px 9px;cursor:pointer;white-space:nowrap;font-family:inherit}
     .repl-mode.active{background:var(--accent);border-color:var(--accent);color:#fff}
     .repl-input{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);font-family:inherit}
     .repl-label{font-size:11px;color:var(--muted);display:block;margin-bottom:4px}
@@ -2118,8 +2120,11 @@ select option{background:var(--surface2);color:var(--text)}
 
   <!-- REPLANTEO-02: capa DOM sobre la sesión AR (WebXR dom-overlay). Solo visible durante la sesión. -->
   <div id="replArOverlay" style="display:none;position:fixed;inset:0;z-index:10000;pointer-events:none;font-family:'Montserrat',sans-serif">
-    <div id="replArEstado" style="position:absolute;top:14px;left:12px;right:12px;background:rgba(0,0,0,.62);color:#fff;padding:9px 11px;border-radius:10px;font-size:13px;line-height:1.35"></div>
-    <div id="replArAviso" style="display:none;position:absolute;top:72px;left:12px;right:12px;background:rgba(250,204,21,.94);color:#111;padding:9px 11px;border-radius:10px;font-size:13px;font-weight:700;line-height:1.35"></div>
+    <!-- REPL-AR-UI-01: en el móvil de Adrián el texto se comía bajo la barra de estado — el
+         dom-overlay ocupa la pantalla entera, notch incluido. Se respeta el área segura y se
+         limita la altura para que un aviso largo no tape media cámara. -->
+    <div id="replArEstado" style="position:absolute;top:calc(14px + env(safe-area-inset-top, 0px));left:12px;right:12px;background:rgba(0,0,0,.62);color:#fff;padding:9px 11px;border-radius:10px;font-size:13px;line-height:1.35;max-height:22vh;overflow:auto"></div>
+    <div id="replArAviso" style="display:none;position:absolute;top:calc(84px + env(safe-area-inset-top, 0px));left:12px;right:12px;background:rgba(250,204,21,.94);color:#111;padding:9px 11px;border-radius:10px;font-size:12.5px;font-weight:700;line-height:1.3;max-height:26vh;overflow:auto"></div>
     <div style="position:absolute;bottom:22px;left:12px;right:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;pointer-events:auto">
       <button onclick="replArPunto()" style="grid-column:1/-1;background:#f97316;border:none;color:#fff;font-size:16px;font-weight:800;padding:14px;border-radius:12px;font-family:inherit">📍 Punto</button>
       <button id="btnReplArContacto" onclick="replArContacto()" style="grid-column:1/-1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:14px;font-weight:800;padding:12px;border-radius:12px;font-family:inherit">📱 Tocar con el móvil (pared lisa)</button>
@@ -15167,7 +15172,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.40';
+const APP_VERSION = '9.41';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -19284,14 +19289,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       renderer.xr.enabled = true;
       renderer.xr.setReferenceSpaceType('local');
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(70, 1, 0.01, 40);
+      // REPL-AR-UI-02: el plano cercano estaba a 1 cm, así que un punto marcado por contacto
+      // (que queda a un dedo del objetivo) se dibujaba como un pegote que tapaba la pantalla.
+      const camera = new THREE.PerspectiveCamera(70, 1, 0.08, 40);
       scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
       const reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
       reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
       _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], obstaculos: [], grupo: new THREE.Group(),
               color: el.color || '#f97316', anchoM, titulo, elemento: el, params, hit: null, tieneDepth: false, ultimoAviso: 0,
               // REPLANTEO-05
-              metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false };
+              metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false, guiaHasta: 0 };
       scene.add(_ar.grupo);
       session.addEventListener('end', _replArLimpiar);
       await renderer.xr.setSession(session);
@@ -19365,13 +19372,24 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     } else if (hitPos) {
       reticle.material.color.set(0xf97316);
     }
+    // REPL-AR-UI-02: lo que esté a menos de 25 cm de la cámara no se pinta. Al marcar por
+    // contacto el móvil queda pegado al punto, y esa esfera vista desde 1 cm ocupaba toda la
+    // pantalla (captura de Adrián). Al retirar el móvil vuelve a verse con normalidad.
+    if (_ar.camPos) {
+      _ar.grupo.children.forEach(o => { o.visible = _ar.camPos.distanceTo(o.position) > 0.25; });
+    }
+    // El aviso de guía se retira solo: cumplida su función, estorba delante de la cámara.
+    if (_ar.guiaHasta && t > _ar.guiaHasta) { _ar.guiaHasta = 0; _replArAviso(null); }
     // Guía: sin superficie NI profundidad, decir qué hacer en vez de dejar al usuario
     // moviendo el móvil sin saber por qué no engancha.
     if (!hitPos && !_ar.depthPos) {
       if (!_ar.sinAnclajeDesde) _ar.sinAnclajeDesde = t;
       if (t - _ar.sinAnclajeDesde > 2500 && !_ar.guiaMostrada) {
         _ar.guiaMostrada = true;
-        _replArAviso('Aquí no hay nada a lo que agarrarse: las paredes y techos lisos no tienen textura que reconocer. Apunta a una esquina, una moldura, un tornillo o el borde de una placa — o acerca el móvil al punto y pulsa 📱 Tocar.');
+        _ar.guiaHasta = t + 6000;
+        _replArAviso(_ar.puntos.length
+          ? 'Sin superficie ni profundidad aquí. Apunta a una esquina o moldura, o acerca el móvil y pulsa 📱 Tocar.'
+          : 'Aquí no hay nada a lo que agarrarse: las paredes y techos lisos no tienen textura que reconocer. Apunta a una esquina, una moldura o el borde de una placa — o acerca el móvil al punto y pulsa 📱 Tocar.');
       }
     } else if (_ar.sinAnclajeDesde) {
       _ar.sinAnclajeDesde = 0;
@@ -19414,7 +19432,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const s = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 16), new THREE.MeshBasicMaterial({ color: i === 0 ? 0x22c55e : (i === puntos.length - 1 ? 0xef4444 : 0xffffff) }));
       s.position.copy(p); grupo.add(s);
       if (met !== 'hit') {
-        const halo = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.45 }));
+        const halo = new THREE.Mesh(new THREE.SphereGeometry(0.038, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4 }));
         halo.position.copy(p); grupo.add(halo);
       }
     });
