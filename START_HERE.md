@@ -4,6 +4,21 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPL-ROUTING-01 — «¿qué replanteos hay?» no llegaba a las tools (2026-09-08, noche):**
+al probar REPLANTEO-08 por chat con la sesión real —la prueba que quedaba pendiente— la primera
+pregunta ya falló: no matcheaba ninguna regla de `REGEX_ROUTES`, el clasificador la mandaba al
+experto `simple` (el único sin las tools nuevas) y Alejandra, en vez de decir que no podía,
+improvisó **6 consultas SQL a tientas** y respondió **que no había replanteos**. Falso. Tercera vez
+que se repite el patrón (CORREO-AYUDANTE-ROUTING-01, «bandeja»): cablear una tool no basta si el
+routing no lleva ahí las preguntas. Arreglado con una regla determinista y las tools de lectura
+también en `simple`; de paso, `consultar_bd` ya no revienta por params sobrantes. PR #164 →
+`ced0fc6`, desplegado y verificado (248 tests, 4 fallan sin el fix). Con el fix, el resto de
+REPLANTEO-08 quedó **probado de extremo a extremo**: lista, detalle, comparación, generación del
+pedido con confirmación previa e idempotencia. **Hay cuatro replanteos de ejemplo (ids 4-7) y un
+pedido REPL-4 de prueba en producción**, creados por el agente con permiso: decidir si se borran.
+**Sigue sin probarse el aislamiento por departamento** (hace falta un usuario no privilegiado) y
+las tres pruebas en obra de REPLANTEO-05/06/07. Ver `HANDOFF.md`/`TASKS.md`.
+
 **REPLANTEO-08 — Alejandra y los replanteos (2026-09-08):** último punto de la cola que Adrián
 aprobó tras REPLANTEO-06. Alejandra consulta los replanteos por chat, compara lo replanteado con
 lo pedido y genera el pedido (`consultar_replanteos`, `comparar_replanteo_pedido`,

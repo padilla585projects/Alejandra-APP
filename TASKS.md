@@ -1,5 +1,30 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-08, noche): **REPL-ROUTING-01 desplegado y verificado**, y
+REPLANTEO-08 **probado de extremo a extremo por chat con sesión real** — la prueba que llevaba
+pendiente desde el mediodía. Nada en curso. Ver `HANDOFF.md`.
+- **REPL-ROUTING-01** (Desplegado y verificado): «¿qué replanteos hay?» caía en el experto
+  `simple`, que no tenía las tools de REPLANTEO-08, y Alejandra respondía **una cosa falsa** tras
+  6 `consultar_bd` a tientas. Regla nueva en `REGEX_ROUTES` → `app`, y las dos tools de lectura
+  también en `simple`. PR #164 → `ced0fc6`, agente run `34269967798` `success`. 248 tests (4 de
+  ellos fallan sin el fix). Sin migración, sin frontend, sin subir versión (9.43).
+- **REPLANTEO-08** (Verificado con datos reales): lista → detalle → comparar → generar pedido →
+  idempotencia → comparar de nuevo. **No genera el pedido sin confirmación** y **no lo genera dos
+  veces** (ni llega a llamar la tool). Igual en la app móvil y en Office.
+- **Cuatro replanteos de ejemplo en producción (ids 4, 5, 6, 7), creados por el agente** con fotos
+  sintéticas, más el pedido REPL-4 (líneas #13-#17, con su aviso de Telegram ya enviado).
+  - **Decisión de Adrián:** borrarlos o dejarlos como juego de pruebas.
+- **Pruebas en obra pendientes, por orden de riesgo** (sin cambios — necesitan cámara y cinta):
+  1. **REPLANTEO-06** — primera foto real de un falso techo.
+  2. **REPLANTEO-07** — bajada techo→pared con un punto en la esquina.
+  3. **REPLANTEO-05** — «📱 Tocar con el móvil» en la pared blanca donde falló el AR.
+- **Sigue sin probarse el aislamiento por departamento:** Adrián es superadmin y ve todo por
+  diseño. Hace falta un encargado (no privilegiado) para que la prueba valga.
+- **Decisiones humanas pendientes:** aceptar el ADR-0024 y su enmienda 1; autorizar
+  `migrate_replanteos.sql` (no bloquea); **REPL-DEPT-01** (`consultar_bd` no filtra por
+  departamento); **ARC-024** (el quiosco ficha en la obra del trabajador); y el matiz nuevo de que
+  en el panel la página filtra por el departamento de la vista pero el chat no.
+
 Estado (actualizado 2026-09-08): **REPLANTEO-08 — Alejandra y los replanteos**, en
 `feat/replanteo-08-alejandra-replanteos`. Ver `HANDOFF.md`.
 - **REPLANTEO-07** (Desplegado 2026-09-08): Adrián aprobó el despliegue del API Worker que
