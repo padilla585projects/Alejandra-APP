@@ -1,6 +1,20 @@
 # Estado del proyecto — Alejandra 2.0
 
 - Actualizado: 2026-09-08
+- Estado (2026-09-08, noche): **REPL-ROUTING-01 desplegado y verificado, y REPLANTEO-08 probado
+  de extremo a extremo por chat con sesión real.** Al hacer esa prueba pendiente, la primera
+  pregunta —«¿qué replanteos hay?»— destapó que no matcheaba ninguna regla de `REGEX_ROUTES`,
+  caía en el experto `simple` (el único sin las tools nuevas) y Alejandra respondía **que no
+  había replanteos** tras 6 `consultar_bd` a tientas: falso, y con aplomo. Tercera vez que se
+  repite el patrón «el experto que atiende no tiene la tool» (CORREO-AYUDANTE-ROUTING-01,
+  «bandeja»). Arreglado con una regla determinista → `app` y las dos tools de lectura también en
+  `simple`; de paso `consultar_bd` deja de reventar por params sobrantes. PR #164 → `ced0fc6`,
+  agente run `34269967798`. 248 tests (4 fallan sin el fix). Sin migración, sin frontend, sin
+  subir versión (9.43). Con el fix: lista, detalle, comparación, generación del pedido **con
+  confirmación previa** e **idempotencia**, verificados con datos reales en Office y en la app.
+  Quedan en producción **cuatro replanteos de ejemplo (ids 4-7) y el pedido REPL-4**, creados por
+  el agente con permiso — decidir si se borran. **El aislamiento por departamento sigue sin
+  probarse**: hace falta un usuario no privilegiado.
 - Estado (2026-09-08): **REPLANTEO-08 — Alejandra y los replanteos**, en
   `feat/replanteo-08-alejandra-replanteos`. Tres tools (`consultar_replanteos`,
   `comparar_replanteo_pedido`, `generar_pedido_replanteo`) en los expertos

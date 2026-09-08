@@ -1,5 +1,92 @@
 # Handoff — Alejandra 2.0
 
+## REPL-ROUTING-01 — «¿qué replanteos hay?» no llegaba a las tools (2026-09-08, noche)
+
+- **Agente:** Claude (Opus 5). **Rama:** `fix/replanteo-routing-experto-simple` → PR #164 → `ced0fc6`.
+- **Origen:** la prueba que quedó pendiente en REPLANTEO-08 — probarlo por chat con la sesión real
+  de Adrián. Se hizo en su Chrome, contra producción, **instrumentando el stream SSE** para ver qué
+  tools se llamaban de verdad y no solo lo que aparecía en pantalla. La primera pregunta ya destapó
+  el fallo.
+- **El bug:** «¿qué replanteos hay?» no matcheaba **ninguna** regla de `REGEX_ROUTES`, caía en la
+  capa 2 (Haiku) y esta la clasificaba como `simple` — el único experto sin las tools de
+  REPLANTEO-08. Sin `consultar_replanteos`, el modelo intentó suplirla con `consultar_bd` a
+  tientas: **6 llamadas** sobre `incidencias` y `permisos_trabajo`, 3 con error SQL, 65k tokens y
+  0,066 €, para acabar respondiendo que no había replanteos «porque no hay incidencias de ese tipo»
+  y ofrecer una incidencia de un racor. **Una respuesta falsa dicha con aplomo.** La misma pregunta
+  como «muéstrame los replanteos» (que sí matchea una regla → `app`) llamaba a la tool a la primera
+  y respondía bien: así se aisló la causa antes de tocar nada.
+- **Tercera repetición del mismo patrón**, ya documentado dos veces en ese archivo:
+  CORREO-AYUDANTE-ROUTING-01 (el experto `web` sin `delegar_tarea` → «Gmail no está integrado») y
+  el fix de «bandeja». **Cablear una tool a los expertos no basta**: hay que comprobar que el
+  routing lleva ahí las preguntas que la necesitan. Merece regla fija — toda tool nueva estrena
+  regla en `REGEX_ROUTES`, o se justifica por qué no.
+- **Qué cambia:** regla determinista para `replanteo|replantear|replanteado…` → `app`, colocada
+  **después** de las de ingeniería (así «¿qué sección de cable para el replanteo?» sigue yendo a
+  `ingenieria`, que tiene esas tools **y** las de cálculo); y las dos tools de **lectura** también
+  en `simple` como defensa en profundidad (`generar_pedido_replanteo` no: escribe en Pedidos).
+- **Hallazgo lateral, arreglado:** el modelo manda a menudo `params: ["1"]` en una query sin ningún
+  `?`; D1 responde «Wrong number of parameter bindings», un error opaco que no dice qué sobra, y en
+  la traza lo repitió **dos veces seguidas**. `consultar_bd` ahora ignora los params si no hay
+  placeholders, y si el desajuste es real el error dice cuántos esperaba. **`escribir_bd` no recibe
+  ese trato** — en una escritura un desajuste debe reventar — y hay una prueba que lo fija.
+- **Archivos:** `alejandra-agente/worker.js`, `alejandra-agente/lib.test.js`, `CHANGELOG.md`. Sin
+  migración, sin frontend, **sin subir versión** (los cuatro marcadores siguen en 9.43).
+- **Pruebas:** **248** (antes 241). Los 4 que cubren el fix **fallan con el worker anterior y pasan
+  con este** — comprobado revirtiendo el fichero y volviéndolo a poner. Parsean `REGEX_ROUTES` del
+  fuente, así que cubren el **orden** de las reglas, no solo su existencia.
+- **Desplegado y verificado (2026-09-08).** Agente run `34269967798`, `success` tras la aprobación
+  de Adrián. La misma pregunta, después: experto `app`, **1** llamada a `consultar_replanteos`, 27k
+  tokens y la respuesta correcta. Igual en la app móvil (paridad de frontends).
+
+### Los cuatro replanteos de ejemplo son DE PRUEBA (los creó el agente)
+
+No había ni uno en producción — por eso REPLANTEO-08 nunca se había podido probar de verdad.
+Adrián autorizó crearlos. **Fotos sintéticas generadas en canvas, no obra real:**
+
+| id | Depto | Elemento | Longitud | Para qué sirve |
+|---|---|---|---|---|
+| 4 | electrico | Bandeja rejilla 300 | 18,00 m | Camino feliz completo; **tiene pedido REPL-4 (líneas #13-#17)** |
+| 5 | telecom | Canaleta PVC 60 | 14,50 m | Contraste de departamento distinto |
+| 6 | electrico | Tubo rígido Ø25 | 13,90 m | Mismo recorrido que el 7 **sin** rectificar |
+| 7 | electrico | Tubo rígido Ø25 | 6,80 m | Mismo recorrido **con 2 planos** (REPLANTEO-07) |
+
+El par 6/7 es la demostración numérica de REPLANTEO-07 sobre datos reales: **13,90 m sin rectificar
+frente a 6,80 m con los dos planos**, y el 6,80 coincide al centímetro con el cálculo a mano de la
+homografía. El #6 se dejó a propósito, y nació de un error propio que conviene no repetir: el campo
+del plano es `pts`, no `esquinas`, y **un plano mal formado no avisa — `homografiaDePlano` devuelve
+null, se ignora en silencio y sale la escala plana**.
+
+**Pendiente de Adrián:** decidir si borra los cuatro y el pedido REPL-4, o los deja como juego de
+pruebas. El pedido generó aviso de Telegram (autorizado antes de hacerlo).
+
+### Qué quedó verificado por chat, con datos reales
+
+Lista → detalle → comparación → generación del pedido → idempotencia → comparación después. Todo
+correcto, y en particular las dos cosas que eran el motivo de la prueba:
+
+- **No genera el pedido sin confirmación:** con «enséñame el material del replanteo 4» enseñó el
+  material con el criterio de cada línea (18 m + 5 % = 18,9 m → 7 tramos; 13 soportes; 26 anclajes)
+  y **preguntó**. Solo al confirmar llamó a la tool, y antes pasó por `consultar_replanteos` +
+  `comparar_replanteo_pedido`.
+- **Idempotencia:** al pedirlo por segunda vez **ni siquiera llamó** a `generar_pedido_replanteo` —
+  vio el estado `pedido` en el detalle y se paró.
+- En Office: la página «📐 Replanteos» lista, filtra por obra/departamento/estado, y el detalle
+  redibuja el trazado con **un color por plano** (P1 Techo 6×1,8 m en rosa, P2 Pared 1,2×2,4 m en
+  cian) y las cotas por tramo (3,15 + 1,59 + 2,03 ≈ 6,8 m).
+
+### Lo que NO se pudo probar, y por qué
+
+- **El aislamiento por departamento sigue sin probarse de verdad.** Adrián es `superadmin`, o sea
+  `isDeptPrivileged` → ve todos los departamentos por diseño. Hace falta un usuario **no
+  privilegiado** (un encargado) para que la comprobación signifique algo. Sigue pendiente.
+- **Matiz de coherencia, no fuga:** en el panel, con el selector global en «Eléctrico», la página
+  filtra (vía `_conDeptoPreview`) pero **el chat no aplica ese selector** y lista también los de
+  telecom. Para un privilegiado es correcto, y para un no privilegiado el backend filtra igual, así
+  que no hay fuga — pero la página y Alejandra dicen cosas distintas en la misma pantalla.
+  Registrado aquí, sin decidir.
+- Las tres pruebas en obra (REPLANTEO-05/06/07) siguen necesitando cámara, techo real y cinta
+  métrica. No salen de un navegador de escritorio.
+
 ## REPLANTEO-08 — Alejandra y los replanteos (2026-09-08)
 
 - **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-08-alejandra-replanteos`.
