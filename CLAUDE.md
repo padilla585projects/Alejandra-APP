@@ -146,7 +146,7 @@ git commit -m "tipo: descripción"
 ```powershell
 node --check worker.js
 node --check alejandra-agente/worker.js
-npm --prefix alejandra-agente test    # 94 tests de políticas y tools
+npm --prefix alejandra-agente test    # 241 tests de políticas y tools
 ```
 
 Ejecutar la sintaxis de los Workers cuando se modifiquen, y los tests del agente ante

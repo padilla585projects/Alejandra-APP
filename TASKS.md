@@ -1,5 +1,32 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-08): **REPLANTEO-08 — Alejandra y los replanteos**, en
+`feat/replanteo-08-alejandra-replanteos`. Ver `HANDOFF.md`.
+- **REPLANTEO-07** (Desplegado 2026-09-08): Adrián aprobó el despliegue del API Worker que
+  llevaba parado desde el 07/09 (run `34107625467`). Pages 9.43 + Worker `e8f5ec93`: el
+  multi-plano ya cuadra en móvil, oficina y servidor. Verificado: `/health` `healthy`,
+  `/replanteos` 401 sin sesión.
+- **REPLANTEO-08** (En revisión): tres tools —`consultar_replanteos`,
+  `comparar_replanteo_pedido`, `generar_pedido_replanteo`— más `POST /internal/replanteos` en el
+  worker raíz. El agente no reimplementa lógica de replanteos: la llama. Sin migración, sin
+  frontend, sin subir versión. 241 tests en verde.
+  - Siguiente acción exacta: fusionar, desplegar **los dos Workers** (no hace falta Pages) y
+    probar por chat: «¿qué replanteos hay?» → detalle → «¿lo pedido cubre el replanteo?» →
+    generar el pedido. Comprobar que solo se ven los del departamento propio y que el pedido
+    **no** se genera sin confirmación previa.
+- **Pruebas en obra pendientes, por orden de riesgo:**
+  1. **REPLANTEO-06** — primera foto real de un falso techo: el detector de placas solo ha visto
+     techos sintéticos. Si diera una placa **mal puesta** (en vez de caer al marcado a mano), eso
+     sí es un fallo que corregir.
+  2. **REPLANTEO-07** — bajada techo→pared con un punto en la esquina, contrastando cada mitad
+     con la cinta.
+  3. **REPLANTEO-05** — el botón «📱 Tocar con el móvil» en la pared blanca donde falló el AR.
+- **Queda de la cola de Adrián:** las «más cosas» que aún no ha concretado.
+- **Decisiones humanas pendientes:** aceptar el ADR-0024 y su enmienda 1; autorizar
+  `migrate_replanteos.sql` (no bloquea); **REPL-DEPT-01** (`consultar_bd` no filtra por
+  departamento, ver `ARCHITECT_BACKLOG.md`); **ARC-024** (el quiosco ficha en la obra del
+  trabajador, no en la del punto de acceso).
+
 Estado (actualizado 2026-09-07, noche-2): **REPLANTEO-07 — un plano rectificado por superficie
 (v9.43), en `feat/replanteo-07-varios-planos`.** Ver `HANDOFF.md`.
 - **REPLANTEO-07** (En revisión): `trazado.planos` como lista y cada tramo medido con el plano

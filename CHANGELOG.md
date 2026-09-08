@@ -4,6 +4,58 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-08 — REPLANTEO-08: Alejandra y los replanteos)
+
+Último punto de la cola que Adrián aprobó tras REPLANTEO-06: «que Alejandra sepa usar los
+replanteos» — consultarlos por chat, comparar lo replanteado con lo pedido y generar el pedido.
+Solo Workers: **ningún cambio de frontend y ninguna subida de versión** (los cuatro marcadores
+siguen en 9.43).
+
+- **Tres tools nuevas en `alejandra-agente/worker.js`**: `consultar_replanteos` (lista, o el
+  detalle de uno con su material línea a línea, longitud, obstáculos, planos de rectificación y
+  las líneas de pedido que ya generó), `comparar_replanteo_pedido` (si lo pedido cubre lo
+  replanteado) y `generar_pedido_replanteo` (equivale al botón «A Pedidos»). Cableadas a los
+  expertos `app`/`tecnico`/`completo`/`ingenieria` y al **ayudante de Pedidos**, cuyo prompt
+  ahora sabe que el material de un recorrido medido sale de un replanteo y no de una estimación.
+- **`POST /internal/replanteos` en `worker.js`** (acciones `listar`/`detalle`/`pedido`), al que
+  el agente llama por Service Binding igual que ya hace con Gmail y los planos. **El agente no
+  reimplementa nada de replanteos**: permisos, aislamiento por departamento y alta en `pedidos`
+  siguen viviendo en un solo worker. Es la regla «UNA Alejandra, DOS cerebros» de `CLAUDE.md`
+  aplicada por el lado bueno — no hay barrera que descompensar porque no hay lógica duplicada.
+- **`_replanteoAPedidos()`**: el cuerpo de `enviarReplanteoAPedidos` se extrae a un núcleo que
+  ahora comparten el botón «A Pedidos» (REST) y Alejandra por chat. Una sola implementación del
+  INSERT, la idempotencia (un replanteo no se puede pedir dos veces), el `syncPedidos` y el
+  aviso de Telegram.
+- **`compararMaterialConPedidos()` en `alejandra-agente/lib.js`** (pura, 8 pruebas en el CI). El
+  vínculo entre `replanteos` y `pedidos` es solo la referencia `REPL-<id>`, así que el
+  emparejamiento va por nombre: se normalizan acentos, mayúsculas, signos y espacios, se suman
+  las líneas repetidas del mismo material y se aplica una tolerancia del 1 % a las cantidades.
+  Lo que sobra se enseña pero **no** invalida la cobertura: una línea añadida a mano
+  (tornillería, un consumible) es legítima y decide el humano.
+
+### Fixed (2026-09-08)
+
+- **`Ø` en los nombres de material** (encontrado por una prueba de REPLANTEO-08): `Ø` y `⌀` no
+  son letras con diacrítico, así que `normalize('NFD')` no los descompone y la normalización los
+  borraba — «Tubo Ø25» quedaba en «TUBO 25» y no emparejaba con el «TUBO O25» que teclea quien
+  no tiene el símbolo a mano. En material eléctrico el diámetro sale en medio catálogo, así que
+  habría sido el falso «falta por pedir» más frecuente. Se mapean a `O`.
+
+### Security (2026-09-08)
+
+- **`_authReplanteoInterno()`**: el endpoint interno **no** reutiliza `_getAuthPlano()`, que con
+  el secreto interno devuelve `rol: 'agente_ia'` y ningún departamento — con él,
+  `isDeptPrivileged()` habría dado false y `_replanteoDeptDe()` habría caído a `electrico` para
+  todo el mundo (un encargado de Mecánicas viendo Eléctrico y ninguno de los suyos). En su
+  lugar resuelve la sesión **real** del usuario contra `sesiones`, la misma tabla y el mismo
+  criterio de caducidad con que los dos workers validan un token: ni el agente ni el modelo
+  detrás de él eligen su rol, su departamento ni su empresa. Sin sesión viva, 403.
+- Las tres tools entran en `TOOLS_REQUIEREN_SESION`; `generar_pedido_replanteo` entra además en
+  `TOOLS_PROHIBIDAS_CRON` (crea líneas reales y dispara Telegram), mismo criterio que
+  `gestionar_pedido`. Consultar y comparar se dejan fuera de esa prohibición a propósito: son
+  lectura, y el informe nocturno puede querer avisar de un replanteo calculado sin pedir.
+
+
 ### Added (2026-09-07 — REPLANTEO-07: un plano rectificado por superficie, v9.43)
 
 Segunda de la cola de Adrián. La rectificación de REPLANTEO-04 valía para **un** plano: un

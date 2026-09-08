@@ -27,6 +27,9 @@ import {
   esInvocacionN1DeLectura,
   clasificarResultadoTool,
   puedeVerTodosLosDepartamentos,
+  compararMaterialConPedidos,
+  TOOLS_REQUIEREN_SESION,
+  TOOLS_PROHIBIDAS_CRON,
   redactarTexto,
   redactarDetalle,
   extraerTablaDDL,
@@ -2031,5 +2034,143 @@ describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
     const a = await codigoConfirmacionOp('ENVIO_GMAIL::x@y.com::Hola::Cuerpo 1');
     const b = await codigoConfirmacionOp('ENVIO_GMAIL::x@y.com::Hola::Cuerpo 2');
     expect(a).not.toBe(b);
+  });
+});
+
+// ── REPLANTEO-08 (08/09/2026): Alejandra y los replanteos ────────────────────
+// La comparación "lo replanteado vs lo pedido" empareja por NOMBRE (no hay FK entre
+// `replanteos` y `pedidos`, solo la referencia REPL-<id>), así que lo que se prueba
+// aquí es sobre todo que la normalización no invente diferencias donde no las hay.
+describe('compararMaterialConPedidos (REPLANTEO-08)', () => {
+  const MAT = [
+    { nombre: 'Bandeja rejilla 60x150', cantidad: 12, unidad: 'm' },
+    { nombre: 'Soporte de pared', cantidad: 9, unidad: 'ud' },
+  ];
+
+  it('un replanteo sin ninguna línea de pedido se marca sin_pedido y no cubierto', () => {
+    const r = compararMaterialConPedidos(MAT, []);
+    expect(r.sin_pedido).toBe(true);
+    expect(r.cubierto).toBe(false);
+    expect(r.faltan).toHaveLength(2);
+  });
+
+  it('cuando el pedido cuadra exactamente, todo coincide y cubierto es true', () => {
+    const r = compararMaterialConPedidos(MAT, [
+      { id: 1, descripcion: 'Bandeja rejilla 60x150', cantidad: 12, unidad: 'm' },
+      { id: 2, descripcion: 'Soporte de pared', cantidad: 9, unidad: 'ud' },
+    ]);
+    expect(r.cubierto).toBe(true);
+    expect(r.coinciden).toHaveLength(2);
+    expect(r.faltan).toHaveLength(0);
+    expect(r.difieren).toHaveLength(0);
+  });
+
+  // El caso que motiva la normalización: la línea de pedido la puede haber editado una
+  // persona desde el panel. Sin quitar acentos/mayúsculas/signos, esto saldría a la vez
+  // como "falta" y como "sobra" -- daría a entender que el pedido está mal cuando solo
+  // cambia cómo está escrito.
+  it('empareja pese a mayúsculas, acentos, guiones y espacios de más', () => {
+    const r = compararMaterialConPedidos(
+      [{ nombre: 'Canalización eléctrica Ø25', cantidad: 30, unidad: 'm' }],
+      [{ id: 7, descripcion: '  CANALIZACION-ELECTRICA  O25 ', cantidad: 30, unidad: 'm' }]
+    );
+    expect(r.faltan).toHaveLength(0);
+    expect(r.sobran).toHaveLength(0);
+    expect(r.cubierto).toBe(true);
+  });
+
+  it('detecta cantidad distinta y reporta el signo de la diferencia', () => {
+    const r = compararMaterialConPedidos(MAT, [
+      { id: 1, descripcion: 'Bandeja rejilla 60x150', cantidad: 10, unidad: 'm' },
+      { id: 2, descripcion: 'Soporte de pared', cantidad: 9, unidad: 'ud' },
+    ]);
+    expect(r.cubierto).toBe(false);
+    expect(r.difieren).toHaveLength(1);
+    expect(r.difieren[0].diferencia).toBe(-2);
+  });
+
+  // El material calculado sale de una longitud medida con decimales y el pedido se
+  // redondea. Sin tolerancia esto sería una "diferencia" y el informe sería puro ruido.
+  it('12.001 frente a 12 no es una diferencia (tolerancia del 1%)', () => {
+    const r = compararMaterialConPedidos(
+      [{ nombre: 'Bandeja', cantidad: 12.001, unidad: 'm' }],
+      [{ id: 1, descripcion: 'Bandeja', cantidad: 12, unidad: 'm' }]
+    );
+    expect(r.difieren).toHaveLength(0);
+    expect(r.cubierto).toBe(true);
+  });
+
+  it('suma las líneas repetidas del mismo material en vez de tratarlas por separado', () => {
+    const r = compararMaterialConPedidos(
+      [{ nombre: 'Bandeja', cantidad: 24, unidad: 'm' }],
+      [
+        { id: 1, descripcion: 'Bandeja', cantidad: 12, unidad: 'm' },
+        { id: 2, descripcion: 'bandeja', cantidad: 12, unidad: 'm' },
+      ]
+    );
+    expect(r.cubierto).toBe(true);
+    expect(r.coinciden[0].pedido).toBe(24);
+    expect(r.coinciden[0].pedido_ids).toEqual([1, 2]);
+  });
+
+  // Una línea añadida a mano (tornillería, un consumible) es legítima: se enseña, pero
+  // no puede hacer que un pedido correcto se declare "no cubre el replanteo".
+  it('una línea de pedido de más sale en sobran y NO invalida la cobertura', () => {
+    const r = compararMaterialConPedidos(
+      [{ nombre: 'Bandeja', cantidad: 12, unidad: 'm' }],
+      [
+        { id: 1, descripcion: 'Bandeja', cantidad: 12, unidad: 'm' },
+        { id: 2, descripcion: 'Tacos y tornillería', cantidad: 1, unidad: 'caja' },
+      ]
+    );
+    expect(r.cubierto).toBe(true);
+    expect(r.sobran).toHaveLength(1);
+    expect(r.sobran[0].pedido_ids).toEqual([2]);
+  });
+
+  it('aguanta entradas nulas o mal formadas sin lanzar', () => {
+    expect(() => compararMaterialConPedidos(null, null)).not.toThrow();
+    expect(compararMaterialConPedidos(null, null).cubierto).toBe(false);
+    expect(compararMaterialConPedidos([{ nombre: null }], [{ id: 1, descripcion: '' }]).faltan).toHaveLength(1);
+  });
+});
+
+describe('cableado de las tools de replanteo (REPLANTEO-08)', () => {
+  it('las tres exigen sesión y solo generar_pedido_replanteo está prohibida al cron', () => {
+    for (const t of ['consultar_replanteos', 'comparar_replanteo_pedido', 'generar_pedido_replanteo']) {
+      expect(TOOLS_REQUIEREN_SESION.has(t)).toBe(true);
+    }
+    expect(TOOLS_PROHIBIDAS_CRON.has('generar_pedido_replanteo')).toBe(true);
+    // Lectura: el informe nocturno sí puede mirar replanteos calculados sin pedir.
+    expect(TOOLS_PROHIBIDAS_CRON.has('consultar_replanteos')).toBe(false);
+    expect(TOOLS_PROHIBIDAS_CRON.has('comparar_replanteo_pedido')).toBe(false);
+  });
+
+  // El motivo de que estas tools existan es no duplicar la lógica de replanteos en el
+  // segundo cerebro (CLAUDE.md, "UNA Alejandra, DOS cerebros"). Si alguien las reescribe
+  // algún día contra D1 directamente, este test se lo dice.
+  it('el agente no reimplementa replanteos: llama al worker raíz por Service Binding', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("    case 'consultar_replanteos':");
+    const fin = src.indexOf("    case 'consultar_inventario': {", inicio);
+    const cuerpo = src.slice(inicio, fin);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    expect(cuerpo).toMatch(/env\.API_WEB\.fetch/);
+    expect(cuerpo).toMatch(/\/internal\/replanteos/);
+    // Ni SQL propio ni alta de pedidos por su cuenta.
+    expect(cuerpo).not.toMatch(/env\.DB/);
+    expect(cuerpo).not.toMatch(/INSERT INTO/i);
+  });
+
+  it('el rol y el departamento no se mandan desde el agente: los resuelve el worker raíz', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("    case 'consultar_replanteos':");
+    const fin = src.indexOf("    case 'consultar_inventario': {", inicio);
+    const cuerpo = src.slice(inicio, fin);
+    expect(cuerpo).toMatch(/usuario_id,/);
+    // DEPT-01: si esto dejara de cumplirse, el modelo podría elegir su departamento.
+    expect(cuerpo).not.toMatch(/departamento:/);
+    expect(cuerpo).not.toMatch(/rol:/);
   });
 });

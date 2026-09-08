@@ -5687,6 +5687,7 @@ export default {
       // internalGmailEnviar/internalGmailListar, ver comentario en _getAuthPlano.
       if (path === '/internal/telegram/enviar' && method === 'POST') return await internalTelegramEnviar(request, env);
       if (path === '/internal/push/enviar' && method === 'POST') return await internalPushEnviar(request, env); // ADR-0023 ampliación: Web Push por usuario
+      if (path === '/internal/replanteos' && method === 'POST') return await internalReplanteos(request, env, ctx); // REPLANTEO-08: Alejandra consulta/compara/pide replanteos
       if (path === '/tareas-programadas' && method === 'GET')       return await getTareasProgramadas(request, env);
       if (path === '/tareas-programadas' && method === 'POST')      return await crearTareaProgramada(request, env);
       if (path.match(/^\/tareas-programadas\/\d+$/) && method === 'DELETE') return await cancelarTareaProgramadaPanel(parseInt(path.split('/')[2]), request, env);
@@ -31090,20 +31091,20 @@ async function eliminarReplanteo(request, env, path) {
 
 // Enviar a Pedidos: una línea de pedido por material, referencia REPL-<id>, mismo INSERT que
 // crearPedido (index.html nunca manda solicitado_por: fallback al usuario autenticado).
-async function enviarReplanteoAPedidos(request, env, path, ctx) {
-  const auth = await getAuth(request, env);
-  if (!auth.empresa_id) return err('No autorizado', 401);
-  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden enviar a Pedidos', 403);
-  const id = parseInt(path.split('/')[2]);
-  if (!id) return err('ID inválido', 400);
-  await _ensureReplanteoTables(env);
+//
+// REPLANTEO-08 (08/09/2026): el cuerpo se extrae a _replanteoAPedidos() porque ahora hay DOS
+// caminos que hacen exactamente esto -- el botón "A Pedidos" (este endpoint REST) y Alejandra
+// por chat (POST /internal/replanteos, más abajo). Reimplementarlo en el worker del agente
+// habría duplicado el INSERT, la idempotencia, el syncPedidos y el aviso de Telegram en el
+// otro cerebro: justo lo que CLAUDE.md ("UNA Alejandra, DOS cerebros") advierte que acaba
+// descompensado. Un solo núcleo, dos llamadores.
+async function _replanteoAPedidos(env, auth, id, opciones, ctx) {
   const row = await _replanteoDe(env, auth, id);
-  if (!row) return err('Replanteo no encontrado', 404);
-  if (row.estado === 'pedido') return err('Este replanteo ya se envió a Pedidos', 409);
+  if (!row) return { error: 'Replanteo no encontrado', status: 404 };
+  if (row.estado === 'pedido') return { error: 'Este replanteo ya se envió a Pedidos', status: 409 };
   const rep = _parseReplanteoRow(row);
-  if (!rep.material.length) return err('El replanteo no tiene material calculado', 400);
-  const body = await request.json().catch(() => ({}));
-  const proveedor = safeStr(body.proveedor || '').trim() || null;
+  if (!rep.material.length) return { error: 'El replanteo no tiene material calculado', status: 400 };
+  const proveedor = safeStr(opciones?.proveedor || '').trim() || null;
   const solicitado_por = auth.nombre || auth.rol || null;
   const ids = [];
   for (const m of rep.material) {
@@ -31117,5 +31118,158 @@ async function enviarReplanteoAPedidos(request, env, path, ctx) {
     .bind(JSON.stringify(ids), id, auth.empresa_id).run();
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', row.departamento), auth.empresa_id));
   await sendTelegram(env, `📐 <b>Replanteo → Pedidos</b> [${row.departamento}]\n👤 ${solicitado_por || '—'}\n📝 ${row.titulo} · ${rep.material.length} líneas · ${row.longitud_m || 0} m`);
-  return json({ ok: true, pedido_ids: ids });
+  return { pedido_ids: ids, material: rep.material, titulo: row.titulo, departamento: row.departamento, longitud_m: rep.longitud_m || row.longitud_m || 0 };
+}
+
+async function enviarReplanteoAPedidos(request, env, path, ctx) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden enviar a Pedidos', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const body = await request.json().catch(() => ({}));
+  const r = await _replanteoAPedidos(env, auth, id, { proveedor: body.proveedor }, ctx);
+  if (r.error) return err(r.error, r.status || 400);
+  return json({ ok: true, pedido_ids: r.pedido_ids });
+}
+
+// ── Alejandra y los replanteos (REPLANTEO-08, 08/09/2026) ────────────────────────────
+// Último punto de la cola que Adrián aprobó en REPLANTEO-06: "que Alejandra sepa usar los
+// replanteos" -- consultarlos por chat, comparar lo replanteado con lo pedido y generar el
+// pedido. El worker del agente es solo cliente de esto (Service Binding API_WEB), igual que
+// ya hace con Gmail y con los planos.
+//
+// Por qué NO se reutiliza _getAuthPlano() aquí: con el secreto interno devuelve
+// `rol: 'agente_ia'` y ningún departamento, así que isDeptPrivileged() daría false y
+// _replanteoDeptDe() caería a 'electrico' para TODO el mundo -- un encargado de Mecánicas
+// vería los replanteos de Eléctrico y ninguno de los suyos. Este helper resuelve la sesión
+// REAL del usuario contra `sesiones` (la misma tabla y el mismo criterio de caducidad con
+// que los dos workers validan un token), de modo que el rol y el departamento no son algo
+// que el agente -- ni el modelo detrás de él -- pueda elegir en el body.
+async function _authReplanteoInterno(request, env, body) {
+  const secreto = request.headers.get('X-Internal-Secret');
+  if (!secreto || !env.AGENT_INTERNAL_SECRET || secreto !== env.AGENT_INTERNAL_SECRET) return null;
+  const uid = parseInt(body && body.usuario_id, 10);
+  if (!Number.isInteger(uid) || uid <= 0) return null;
+  const s = await env.DB.prepare(
+    `SELECT s.usuario_id, s.empresa_id, s.rol, s.nombre, s.departamento, s.obra_id, s.es_admin, u.roles_extra
+       FROM sesiones s LEFT JOIN usuarios u ON s.usuario_id = u.id
+      WHERE s.usuario_id = ? AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))
+      ORDER BY s.last_used DESC LIMIT 1`
+  ).bind(uid).first().catch(() => null);
+  if (!s) return null;
+  const extras = [];
+  try { if (s.roles_extra) extras.push(...JSON.parse(s.roles_extra)); } catch {}
+  const roles = [s.rol, ...extras].filter(Boolean);
+  const departamento = s.departamento || 'electrico';
+  return {
+    isAdmin: s.es_admin === 1,
+    isSuperadmin: s.es_admin === 1 || roles.includes('superadmin') || roles.includes('desarrollador'),
+    isEmpresaAdmin: roles.includes('empresa_admin') || roles.includes('desarrollador'),
+    isDesarrollador: roles.includes('desarrollador'),
+    isEncargado: roles.includes('encargado'),
+    isJefeObra: roles.includes('jefe_de_obra'),
+    isOficina: roles.includes('oficina'),
+    isSeguridad: departamento === 'seguridad',
+    rol: s.rol, roles,
+    obra_id: s.obra_id || null, obraId: s.obra_id || null,
+    usuario_id: s.usuario_id, usuario: s.nombre || '', nombre: s.nombre || '',
+    codigo: '', departamento, empresa_id: s.empresa_id || 1,
+  };
+}
+
+// Las líneas que un replanteo ya generó en `pedidos`. La referencia REPL-<id> la escribe
+// _replanteoAPedidos y es el único vínculo entre las dos tablas (no hay FK), así que la
+// comparación "lo replanteado vs lo pedido" se apoya en ella. Se filtra igualmente por
+// empresa: la referencia por sí sola no es un identificador seguro.
+async function _lineasPedidoDeReplanteo(env, empresa_id, id) {
+  const { results } = await env.DB.prepare(
+    `SELECT id, descripcion, cantidad, unidad, estado, proveedor, created_at
+       FROM pedidos WHERE empresa_id = ? AND referencia = ? ORDER BY id`
+  ).bind(empresa_id, `REPL-${id}`).all().catch(() => ({ results: [] }));
+  return results || [];
+}
+
+async function internalReplanteos(request, env, ctx) {
+  const body = await request.json().catch(() => ({}));
+  const auth = await _authReplanteoInterno(request, env, body);
+  // Fallar cerrado: sin secreto válido o sin sesión real del usuario no se responde nada.
+  // El usuario_id 'adrian'/'anon:N' (ADMIN_TOKEN o sesión anónima) cae aquí a propósito:
+  // sin fila en `sesiones` no hay empresa ni departamento con los que aplicar DEPT-01.
+  if (!auth) return err('No autorizado', 403);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  await _ensureReplanteoTables(env);
+  const accion = safeStr(body.accion || 'listar');
+
+  if (accion === 'listar') {
+    const conds = ['empresa_id = ?']; const params = [auth.empresa_id];
+    // DEPT-01, mismo criterio exacto que listarReplanteos (el endpoint REST): fuera de los
+    // roles con visión transversal, cada uno ve solo su departamento.
+    const deptFiltro = isDeptPrivileged(auth)
+      ? (_DEPTS_REPLANTEO_VALIDOS.has(safeStr(body.departamento)) ? safeStr(body.departamento) : null)
+      : auth.departamento;
+    if (deptFiltro) { conds.push('departamento = ?'); params.push(deptFiltro); }
+    const obraId = parseInt(body.obra_id || 0) || null;
+    if (obraId) { conds.push('obra_id = ?'); params.push(obraId); }
+    const estado = safeStr(body.estado || '');
+    if (['borrador', 'calculado', 'pedido'].includes(estado)) { conds.push('estado = ?'); params.push(estado); }
+    const q = safeStr(body.query || '').trim();
+    if (q) { conds.push('UPPER(titulo) LIKE ?'); params.push(`%${q.toUpperCase()}%`); }
+    const limite = Math.min(Math.max(parseInt(body.limite || 15, 10) || 15, 1), 50);
+    const { results } = await env.DB.prepare(
+      `SELECT id, obra_id, departamento, titulo, elemento_key, origen, longitud_m, material_json, estado,
+              pedido_ids, creado_por, creado_en, actualizado_en
+         FROM replanteos WHERE ${conds.join(' AND ')} ORDER BY actualizado_en DESC LIMIT ?`
+    ).bind(...params, limite).all();
+    const replanteos = (results || []).map(r => {
+      const rep = _parseReplanteoRow(r);
+      return { id: rep.id, obra_id: rep.obra_id, departamento: rep.departamento, titulo: rep.titulo,
+               elemento_key: rep.elemento_key, origen: rep.origen, longitud_m: rep.longitud_m,
+               estado: rep.estado, lineas_material: rep.material.length, pedido_ids: rep.pedido_ids,
+               creado_por: rep.creado_por, actualizado_en: rep.actualizado_en };
+    });
+    return json({ ok: true, replanteos, departamento: deptFiltro || 'todos' });
+  }
+
+  if (accion === 'detalle' || accion === 'comparar') {
+    const id = parseInt(body.replanteo_id || 0) || 0;
+    if (!id) return err('Falta replanteo_id', 400);
+    // _replanteoDe ya aplica empresa_id y el filtro por departamento de DEPT-01.
+    const row = await _replanteoDe(env, auth, id);
+    if (!row) return err('Replanteo no encontrado', 404);
+    const rep = _parseReplanteoRow(row);
+    const trazado = rep.trazado || {};
+    const planos = Array.isArray(trazado.planos) ? trazado.planos : (trazado.plano ? [trazado.plano] : []);
+    return json({
+      ok: true,
+      replanteo: {
+        id: rep.id, titulo: rep.titulo, departamento: rep.departamento, obra_id: rep.obra_id,
+        elemento_key: rep.elemento_key, elemento: rep.elemento, origen: rep.origen,
+        longitud_m: rep.longitud_m, estado: rep.estado, notas: rep.notas,
+        creado_por: rep.creado_por, creado_en: rep.creado_en, actualizado_en: rep.actualizado_en,
+        material: rep.material,
+        puntos: Array.isArray(trazado.puntos) ? trazado.puntos.length : 0,
+        obstaculos: Array.isArray(trazado.obstaculos) ? trazado.obstaculos : [],
+        planos_n: planos.length,
+      },
+      lineas_pedido: await _lineasPedidoDeReplanteo(env, auth.empresa_id, id),
+      puede_pedir: puedeEditarReplanteo(auth),
+    });
+  }
+
+  if (accion === 'pedido') {
+    // Misma barrera de rol que el botón "A Pedidos": encargado y superiores. No se añade
+    // una confirmación por código encima (el camino REST equivalente tampoco la tiene, y
+    // el alta es reversible borrando las líneas), pero sí queda fuera del cron: esta acción
+    // solo ocurre con un humano delante pidiéndola -- ver TOOLS_PROHIBIDAS_CRON en el agente.
+    if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden enviar a Pedidos', 403);
+    const id = parseInt(body.replanteo_id || 0) || 0;
+    if (!id) return err('Falta replanteo_id', 400);
+    const r = await _replanteoAPedidos(env, auth, id, { proveedor: body.proveedor }, ctx);
+    if (r.error) return err(r.error, r.status || 400);
+    return json({ ok: true, pedido_ids: r.pedido_ids, material: r.material, titulo: r.titulo, longitud_m: r.longitud_m });
+  }
+
+  return err(`Acción no reconocida: ${accion}`, 400);
 }

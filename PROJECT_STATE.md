@@ -1,6 +1,19 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-09-04
+- Actualizado: 2026-09-08
+- Estado (2026-09-08): **REPLANTEO-08 — Alejandra y los replanteos**, en
+  `feat/replanteo-08-alejandra-replanteos`. Tres tools (`consultar_replanteos`,
+  `comparar_replanteo_pedido`, `generar_pedido_replanteo`) en los expertos
+  `app`/`tecnico`/`completo`/`ingenieria` y en el ayudante de Pedidos, más
+  `POST /internal/replanteos` en `worker.js`. El worker del agente es solo cliente por Service
+  Binding: permisos, DEPT-01 y el alta en `pedidos` siguen en un único worker, y el botón
+  «A Pedidos» comparte núcleo con el chat (`_replanteoAPedidos`). El rol y el departamento se
+  resuelven contra la sesión real (`_authReplanteoInterno`), no con lo que mande el agente.
+  Sin migración, sin frontend, sin subir versión (9.43). 241 tests en verde.
+- Estado (2026-09-08): **REPLANTEO-07 desplegado del todo.** Adrián aprobó el despliegue del API
+  Worker parado desde el 07/09 (run `34107625467`, 14:32 UTC). Pages 9.43 + Worker `e8f5ec93`:
+  el multi-plano ya cuadra en móvil, oficina y servidor. Verificado: `/health` `healthy` con D1
+  y R2 disponibles, `/replanteos` 401 sin sesión.
 - Estado (2026-09-04, noche): **REPLANTEO-03 — Replanteos en la oficina y editor del catálogo
   por empresa, v9.36, fusionado (PR #151 → `965d5b2`), Pages publicado; API Worker en espera de
   aprobación (`33895627643`).** `panel.html`: página «📐 Replanteos» con lista, filtros (obra,
