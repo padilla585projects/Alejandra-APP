@@ -37,6 +37,7 @@ import {
   esInvocacionN1DeLectura,
   clasificarResultadoTool,
   puedeVerTodosLosDepartamentos,
+  compararMaterialConPedidos,
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
@@ -159,6 +160,11 @@ REGLA DE IDs DE EMPRESA/OBRA (PEMP-EMPRESA-OBRA-01, 14/08/2026): un resumen de c
 · Tras el cambio, valida con validar_cambios_bd usando un JOIN que compruebe la consistencia real, no solo el campo que cambiaste — ej: SELECT p.empresa_id, o.empresa_id as obra_empresa_id FROM pemp p LEFT JOIN obras o ON p.obra_id=o.id WHERE p.id=? y confirma que ambos empresa_id coinciden antes de decir "corregido".
 
 REGLA DE INCIDENCIAS (BUZON-TELEGRAM-01, 10/08/2026): si te topas con un problema real ayudando a alguien — una tool que falla repetidamente, un dato que no cuadra, un permiso que te falta, algo que te bloquea y no puedes resolver en la conversación — usa memory_save con tipo='error'. Si el problema bloquea AHORA MISMO a un usuario real (no una duda hipotética, no algo que ya resolviste dando un rodeo), pon importancia 4 o 5: eso avisa a Adrián por Telegram casi al momento, además de quedar archivado. Si es menor o puedes seguir sin bloquear al usuario, importancia 1-3 — queda solo en el buzón para que Adrián lo repase cuando quiera (puede preguntarte "qué tienes en el buzón" y se lo cuentas con memory_read). No abuses de importancia 5: resérvala para lo que de verdad le interesaría saber ya mismo, no para cada error menor.
+
+REPLANTEOS (REPLANTEO-08, 08/09/2026): un replanteo es una medición hecha con la cámara del móvil — el encargado fotografía el techo o la pared, marca el recorrido de una bandeja/tubo/canaleta y la app calcula la longitud real y el material que hace falta (o lo mide en AR, andando por la obra). Tienes tres herramientas: consultar_replanteos (lista, o el detalle de uno con su material línea a línea), comparar_replanteo_pedido (si lo que se ha pedido cubre lo replanteado: qué falta, qué cantidad no cuadra) y generar_pedido_replanteo (pasa ese material a Pedidos, igual que el botón "A Pedidos" de la app).
+· Si te preguntan cuánto material hace falta para un recorrido que alguien ya midió, NO lo estimes ni lo calcules de cabeza: mira si hay un replanteo con consultar_replanteos. Sus cantidades salen de una medida real sobre la foto; las tuyas serían inventadas.
+· Antes de generar el pedido, enséñale al usuario el material que se va a pedir y espera a que te lo confirme. Es una acción que crea líneas reales en Pedidos y avisa por Telegram: no la lances por iniciativa propia. Si ese replanteo ya se envió, la herramienta te lo dirá — díselo y no insistas.
+· Cada uno ve solo los replanteos de su departamento (salvo admin y seguridad, que los ven todos). Si alguien no encuentra el suyo, no es que no exista: puede ser de otro departamento y no le corresponde verlo.
 
 REGLA DE AYUDANTES (CORREO-AYUDANTE-ROUTING-01, 12/08/2026): tienes delegar_tarea para delegar en sub-agentes especializados. Si te piden leer, revisar o resumir su correo/email/Gmail/bandeja de entrada, o mandar un correo desde su cuenta real, usa SIEMPRE delegar_tarea con ayudante='correos' — NUNCA respondas que no tienes acceso al correo ni que haría falta implementar OAuth2/Gmail API: ya está construido y conectado, es tu propia capacidad, solo que vive en un sub-agente al que tienes que delegar explícitamente. Igual con pedidos de material a proveedores (crear/listar/actualizar/eliminar): usa delegar_tarea con ayudante='pedidos' en vez de (o antes de) usar gestionar_pedido directo si la petición es compleja o menciona un proveedor/referencia que no conoces (el ayudante de pedidos puede buscar en la web). No inventes limitaciones que no existen — si dudas de si una tool o ayudante cubre lo que te piden, mira la lista de ayudantes disponibles en la descripción de delegar_tarea antes de decir que no puedes.`,
 
@@ -2653,8 +2659,11 @@ const AYUDANTES = {
   // descripción que le haya dado el humano -- nunca ha hecho falta que exista en ningún
   // catálogo para crear un pedido.
   pedidos: {
-    tools: [TOOL_GESTIONAR_PEDIDO, TOOL_BUSCAR_WEB],
-    systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Los proveedores habituales son Hilti (fijación y anclajes), Pemsa (bandejas portacables) y Würth (tornillería y fijaciones) -- si te piden un material y no conoces la referencia exacta, usa buscar_web (prioriza hilti.es, pemsa-rejiband.com o wurth.es en la búsqueda) para encontrar la referencia y descripción reales antes de crear el pedido. Si la búsqueda no encuentra nada fiable, crea igualmente el pedido con la descripción que te haya dado el humano -- nunca inventes un código de referencia que parezca oficial sin haberlo verificado; en ese caso dilo explícitamente en la descripción/notas. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.',
+    // REPLANTEO-08 (08/09/2026): el ayudante de Pedidos es el sitio natural del flujo
+    // "replanteo -> pedido" -- antes de crear líneas a mano puede mirar si ya hay un
+    // replanteo que las calcula, y comparar lo pedido con lo replanteado.
+    tools: [TOOL_GESTIONAR_PEDIDO, TOOL_BUSCAR_WEB, TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO],
+    systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Los proveedores habituales son Hilti (fijación y anclajes), Pemsa (bandejas portacables) y Würth (tornillería y fijaciones) -- si te piden un material y no conoces la referencia exacta, usa buscar_web (prioriza hilti.es, pemsa-rejiband.com o wurth.es en la búsqueda) para encontrar la referencia y descripción reales antes de crear el pedido. Si la búsqueda no encuentra nada fiable, crea igualmente el pedido con la descripción que te haya dado el humano -- nunca inventes un código de referencia que parezca oficial sin haberlo verificado; en ese caso dilo explícitamente en la descripción/notas. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.\n\nREPLANTEOS (REPLANTEO-08): parte del material de obra no se pide a ojo, sale de un replanteo hecho con la cámara (el encargado fotografía el techo o la pared, traza el recorrido y la app calcula el material). Si te piden material que suena a un recorrido medido (bandeja, tubo, canaleta, "lo del pasillo", "lo que replanteó Fulano"), mira primero con consultar_replanteos si ya existe ese replanteo en vez de crear líneas a mano: sus cantidades son medidas, las tuyas serían inventadas. Para pasar un replanteo a Pedidos usa generar_pedido_replanteo (equivale al botón "A Pedidos" de la app), NUNCA gestionar_pedido línea a línea: así queda la referencia REPL-<id> que enlaza pedido y replanteo, y sin ella la comparación posterior no funciona. Antes de generarlo, enséñale al usuario el material que va a pedir y espera su confirmación; y si ya se generó, la tool te lo dirá -- no insistas. Si preguntan si un pedido cubre lo replanteado, o por qué no cuadra, usa comparar_replanteo_pedido y cuéntale el resultado tal cual, sin redondear a "está todo bien".',
   },
   correos: {
     tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL, TOOL_CATEGORIZAR_CORREOS, TOOL_PROGRAMAR_CORREO],
@@ -3472,6 +3481,75 @@ const TOOL_CONSULTAR_INVENTARIO = {
   nivel_riesgo: 'N0',
 };
 
+// ── REPLANTEO-08 (08/09/2026): Alejandra y los replanteos ────────────────────
+// Último punto de la cola que Adrián aprobó tras REPLANTEO-06: "que Alejandra sepa
+// usar los replanteos" -- consultarlos por chat, comparar lo replanteado con lo
+// pedido y generar el pedido.
+//
+// Las tres son clientes de POST /internal/replanteos (worker.js raíz) vía Service
+// Binding API_WEB, mismo patrón que leer_gmail/generar_plano. NADA de la lógica de
+// replanteos se reimplementa aquí: los permisos (puedeVerReplanteo/
+// puedeEditarReplanteo), el aislamiento por departamento (DEPT-01) y el alta en
+// `pedidos` viven en el otro worker y solo allí. Es la regla "UNA Alejandra, DOS
+// cerebros" de CLAUDE.md aplicada al revés de como duele: en vez de copiar la
+// barrera a los dos sitios y arriesgarse a que se descompensen, aquí no hay barrera
+// que copiar porque no hay lógica.
+//
+// consultar_bd ya podía leer la tabla `replanteos` (está en TABLAS_EMPRESA_PERMITIDAS
+// desde ADR-0024), pero solo con SQL crudo, sin filtro por departamento y devolviendo
+// material_json/trazado_json como texto JSON que el modelo tenía que interpretar a
+// mano. Estas tres tools son el camino bueno; ver el hallazgo REPL-DEPT-01 en
+// ARCHITECT_BACKLOG.md sobre el hueco que sigue abierto en consultar_bd.
+const TOOL_CONSULTAR_REPLANTEOS = {
+  name: 'consultar_replanteos',
+  description: 'Consulta los replanteos hechos con la cámara (medidas sobre foto o AR: bandeja, tubo, canaleta...). Sin replanteo_id devuelve la lista; con replanteo_id devuelve el detalle completo de uno (material calculado línea a línea, longitud, obstáculos, estado y las líneas de pedido que ya generó). Úsalo cuando pregunten qué se ha replanteado, cuánto material sale de un replanteo o en qué estado está.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      replanteo_id: { type: 'number', description: 'ID de un replanteo concreto. Si lo pones, devuelve su detalle en vez de la lista.' },
+      obra_id:      { type: 'number', description: 'Filtrar por obra (opcional)' },
+      estado:       { type: 'string', enum: ['borrador', 'calculado', 'pedido'], description: 'Filtrar por estado (opcional)' },
+      query:        { type: 'string', description: 'Buscar por título (opcional)' },
+      limite:       { type: 'number', description: 'Máximo de resultados en la lista (por defecto 15, máximo 50)' }
+    },
+    required: []
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
+};
+
+const TOOL_COMPARAR_REPLANTEO_PEDIDO = {
+  name: 'comparar_replanteo_pedido',
+  description: 'Compara el material que sale de un replanteo con lo que realmente se ha pedido para él, y dice si el pedido lo cubre: qué falta por pedir, qué cantidades no cuadran y qué líneas de pedido no corresponden a ningún material del replanteo. Úsalo cuando pregunten si lo pedido cubre lo replanteado, si falta material o por qué no cuadra un pedido.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      replanteo_id: { type: 'number', description: 'ID del replanteo a comparar' }
+    },
+    required: ['replanteo_id']
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
+};
+
+const TOOL_GENERAR_PEDIDO_REPLANTEO = {
+  name: 'generar_pedido_replanteo',
+  description: 'Genera el pedido de material de un replanteo: crea una línea en Pedidos por cada material calculado, con la referencia REPL-<id>. Es exactamente lo mismo que el botón "A Pedidos" de la app. Solo encargados y superiores, y solo una vez por replanteo (si ya se envió, avisa). ANTES de llamarla, enséñale al usuario el material que se va a pedir (consultar_replanteos con ese replanteo_id) y espera a que te lo confirme: no la llames por iniciativa propia ni "por si acaso".',
+  input_schema: {
+    type: 'object',
+    properties: {
+      replanteo_id: { type: 'number', description: 'ID del replanteo del que generar el pedido' },
+      proveedor:    { type: 'string', description: 'Proveedor para todas las líneas (opcional)' }
+    },
+    required: ['replanteo_id']
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
+};
+
 // Tools de "capacidades avanzadas" (ver módulo de prompt `capacidades_avanzadas`).
 // Estas 7 herramientas ya tenían su `case` implementado en el switch de ejecución
 // pero no existía el schema TOOL_* correspondiente ni estaban cableadas en
@@ -3740,18 +3818,18 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  app:        [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  tecnico:    [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  completo:   [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   // GESTION-AUTO-CORREOS-01 (31/08/2026): TOOL_DELEGAR_TAREA añadida aquí también -- era el
   // único experto "de trabajo" (app/tecnico/completo sí la tienen) sin acceso a los
   // ayudantes (correos/pedidos). Encontrado en vivo: un mensaje sobre gestionar correos que
   // clasificó (por error, ver fix de "bandeja" en REGEX_ROUTES) como "ingenieria" se quedó
   // sin poder alcanzar el ayudante de Correos -- defensa en profundidad para que un desvío
   // de clasificación futuro no repita el mismo fallo.
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA]
+  ingenieria: [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -8330,6 +8408,90 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `Encontrados ${rows.length} registros de personal:\n\n${items.join('\n\n')}`;
       } catch (err) {
         return `Error consultando personal: ${err.message}`;
+      }
+    }
+
+    // REPLANTEO-08: las tres tools de replanteo. Toda la lógica (permisos, DEPT-01,
+    // alta en pedidos) vive en worker.js raíz -- aquí solo se llama y se formatea.
+    // usuario_id se manda tal cual: el otro worker resuelve con él la sesión REAL
+    // contra `sesiones` y de ahí saca rol/departamento/empresa. Este worker no
+    // decide ninguno de los tres, precisamente para que el modelo no pueda.
+    case 'consultar_replanteos':
+    case 'comparar_replanteo_pedido':
+    case 'generar_pedido_replanteo': {
+      try {
+        if (!env.API_WEB) return JSON.stringify({ ok: false, error: 'Service binding API_WEB no disponible.' });
+        const repId = parseInt(input.replanteo_id, 10) || 0;
+        const accion = nombre === 'generar_pedido_replanteo' ? 'pedido'
+                     : (nombre === 'comparar_replanteo_pedido' || repId) ? 'detalle'
+                     : 'listar';
+        if (accion !== 'listar' && !repId) return 'Falta replanteo_id (el ID del replanteo). Pídeselo al usuario o localízalo antes con consultar_replanteos.';
+        const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/replanteos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+          body: JSON.stringify({
+            accion, usuario_id, replanteo_id: repId || undefined,
+            obra_id: input.obra_id, estado: input.estado, query: input.query, limite: input.limite,
+            proveedor: input.proveedor,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.ok === false) {
+          // 403 aquí casi siempre significa "sin sesión iniciada en la app", no falta de
+          // permiso: el endpoint exige una fila viva en `sesiones` para saber el
+          // departamento. Se distingue para no mandar al usuario a pedir permisos que ya tiene.
+          if (resp.status === 403) return data.error || 'No se puede consultar replanteos sin una sesión iniciada en la app (o el usuario no tiene permiso).';
+          return JSON.stringify({ ok: false, error: data.error || `Error consultando replanteos (HTTP ${resp.status})` });
+        }
+
+        if (accion === 'listar') {
+          const lista = data.replanteos || [];
+          if (!lista.length) return 'No hay replanteos que coincidan.';
+          const filas = lista.map(r => {
+            const est = r.estado === 'pedido' ? '✅ pedido' : (r.estado === 'calculado' ? '📐 calculado' : '✏️ borrador');
+            const ped = (r.pedido_ids || []).length ? ` · pedido #${(r.pedido_ids || []).join(', #')}` : '';
+            return `• [id:${r.id}] ${r.titulo} — ${r.elemento_key || '—'} · ${(r.longitud_m || 0).toFixed ? (r.longitud_m || 0).toFixed(2) : r.longitud_m} m · ${r.lineas_material} línea(s) de material · ${est}${ped}\n  ${r.origen === 'ar' ? 'AR' : 'foto'} · ${r.departamento} · ${r.creado_por || '—'} · ${r.actualizado_en || ''}`;
+          });
+          return `📐 ${lista.length} replanteo(s):\n${filas.join('\n')}`;
+        }
+
+        if (accion === 'pedido') {
+          const mat = data.material || [];
+          const det = mat.map(m => `  • ${m.nombre}: ${m.cantidad} ${m.unidad || 'ud'}`).join('\n');
+          return `✅ Pedido generado desde el replanteo "${data.titulo}" (${data.longitud_m || 0} m).\n${mat.length} línea(s) creadas en Pedidos (ids #${(data.pedido_ids || []).join(', #')}), referencia REPL-${repId}:\n${det}`;
+        }
+
+        // detalle / comparar
+        const r = data.replanteo || {};
+        const lineas = data.lineas_pedido || [];
+        if (nombre === 'comparar_replanteo_pedido') {
+          const c = compararMaterialConPedidos(r.material, lineas);
+          if (c.sin_pedido) {
+            const pend = (r.material || []).map(m => `  • ${m.nombre}: ${m.cantidad} ${m.unidad || 'ud'}`).join('\n');
+            return `📐 "${r.titulo}" (id ${r.id}, ${r.longitud_m || 0} m) todavía NO tiene ningún pedido.\nMaterial que saldría:\n${pend}`;
+          }
+          const bloques = [`📐 "${r.titulo}" (id ${r.id}, ${r.longitud_m || 0} m) — ${c.cubierto ? '✅ lo pedido cubre el replanteo' : '⚠️ el pedido NO cubre el replanteo'}`];
+          if (c.coinciden.length) bloques.push(`✅ Cuadra (${c.coinciden.length}):\n` + c.coinciden.map(x => `  • ${x.nombre}: ${x.pedido} ${x.unidad}`).join('\n'));
+          if (c.faltan.length)    bloques.push(`❌ Falta por pedir (${c.faltan.length}):\n` + c.faltan.map(x => `  • ${x.nombre}: ${x.cantidad} ${x.unidad}`).join('\n'));
+          if (c.difieren.length)  bloques.push(`⚠️ Cantidad distinta (${c.difieren.length}):\n` + c.difieren.map(x => `  • ${x.nombre}: replanteo ${x.calculado} ${x.unidad}, pedido ${x.pedido} ${x.unidad} (${x.diferencia > 0 ? '+' : ''}${x.diferencia})`).join('\n'));
+          if (c.sobran.length)    bloques.push(`➕ Pedido sin material equivalente en el replanteo (${c.sobran.length}) — puede ser legítimo, decide el humano:\n` + c.sobran.map(x => `  • ${x.nombre}: ${x.cantidad} ${x.unidad} (pedido #${(x.pedido_ids || []).join(', #')})`).join('\n'));
+          return bloques.join('\n\n');
+        }
+
+        const mat = (r.material || []).map(m => `  • ${m.nombre}: ${m.cantidad} ${m.unidad || 'ud'}${m.detalle ? ' — ' + m.detalle : ''}`).join('\n') || '  (sin material calculado)';
+        const obst = (r.obstaculos || []).length
+          ? '\nObstáculos: ' + r.obstaculos.map(o => `${o.tipo || 'otro'} (${o.accion || '—'})`).join(', ')
+          : '';
+        const ped = lineas.length
+          ? `\nYa pedido (${lineas.length} línea(s), REPL-${r.id}): ` + lineas.map(l => `#${l.id} ${l.descripcion} ${l.cantidad} ${l.unidad || 'ud'} [${l.estado || 'pendiente'}]`).join('; ')
+          : '\nSin pedido generado todavía.';
+        return `📐 Replanteo id ${r.id}: "${r.titulo}"\n` +
+               `Elemento: ${r.elemento_key || '—'} · Origen: ${r.origen === 'ar' ? 'AR' : 'foto'} · Departamento: ${r.departamento}\n` +
+               `Longitud: ${r.longitud_m || 0} m · ${r.puntos} punto(s) · ${r.planos_n} plano(s) de rectificación · Estado: ${r.estado}\n` +
+               `Creado por ${r.creado_por || '—'} el ${r.creado_en || '—'}${r.notas ? '\nNotas: ' + r.notas : ''}${obst}\n` +
+               `Material calculado:\n${mat}${ped}`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error en replanteos: ' + e.message });
       }
     }
 

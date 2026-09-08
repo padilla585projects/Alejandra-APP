@@ -4,6 +4,19 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**REPLANTEO-08 — Alejandra y los replanteos (2026-09-08):** último punto de la cola que Adrián
+aprobó tras REPLANTEO-06. Alejandra consulta los replanteos por chat, compara lo replanteado con
+lo pedido y genera el pedido (`consultar_replanteos`, `comparar_replanteo_pedido`,
+`generar_pedido_replanteo`). El worker del agente **no reimplementa nada**: llama a
+`POST /internal/replanteos` en el worker raíz por Service Binding, y el botón «A Pedidos»
+comparte con el chat un solo núcleo (`_replanteoAPedidos`) — «UNA Alejandra, DOS cerebros» sin
+lógica duplicada que descompensar. El aislamiento por departamento se resuelve contra la sesión
+real, no con lo que mande el agente. Sin migración, sin frontend y **sin subir versión** (sigue
+9.43); 241 tests en verde, uno de ellos encontró un bug real (`Ø` en los nombres de material).
+De paso se desbloqueó el despliegue del API Worker de REPLANTEO-07, parado desde el 07/09
+esperando aprobación. **Pendiente:** probarlo por chat. **Hallazgo registrado sin decidir:**
+REPL-DEPT-01 — `consultar_bd` no filtra por departamento. Ver `HANDOFF.md`/`TASKS.md`.
+
 **REPLANTEO-07 — un plano por superficie (2026-09-07, v9.43):** la rectificación valía para un
 solo plano, así que un recorrido que baja del techo a la pared medía la pared fatal (19,9 m
 para 1,50 en la prueba). Ahora `trazado.planos` es una lista: se marca un rectángulo por

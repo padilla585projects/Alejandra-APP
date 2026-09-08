@@ -161,6 +161,11 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   'github_buscar', 'github_leer', 'github_listar', 'grep_codigo',
   'ram_clear', 'ram_read', 'ram_save', 'descubrir_herramientas', 'validar_cambios_bd',
   'verificar_deploy',
+  // REPLANTEO-08 (08/09/2026): las tres leen o escriben datos de una empresa y de un
+  // departamento concretos. Sin sesión el otro worker ni siquiera puede resolver cuál
+  // es el departamento del que pregunta (DEPT-01), así que devolvería 403 igualmente;
+  // se gatean aquí también por defensa en profundidad, como el resto de esta lista.
+  'consultar_replanteos', 'comparar_replanteo_pedido', 'generar_pedido_replanteo',
 
   // ARC-008 §8 / F-2.1 paso 3, decisión del Director (2026-08-02, "Opción A"): primera
   // tool de lectura sobre memoria_gobernada. empresa_id sale de la sesión, nunca del
@@ -300,6 +305,12 @@ const TOOLS_PROHIBIDAS_CRON = new Set([
   // F-6.1 Fase 2 (2026-08-12): leer/enviar Gmail en nombre de un usuario concreto
   // no es algo que el cron deba iniciar sin nadie delante.
   'leer_gmail', 'enviar_gmail',
+  // REPLANTEO-08 (08/09/2026): generar el pedido de un replanteo crea líneas reales en
+  // `pedidos` y dispara el aviso de Telegram -- mismo criterio exacto que
+  // gestionar_pedido, que ya está en esta lista. Consultar y comparar sí quedan fuera
+  // de la prohibición: son lectura, y el informe nocturno puede querer avisar de un
+  // replanteo calculado que lleva días sin pedirse.
+  'generar_pedido_replanteo',
 ]);
 
 // Se detecta por identidad, no por un flag que haya que acordarse de pasar: el cron
@@ -349,6 +360,104 @@ function validarSoloSelectBD(query) {
     return 'Consulta rechazada: contiene operaciones de escritura no permitidas.';
   }
   return null;
+}
+
+// ── REPLANTEO-08 (08/09/2026): comparar lo replanteado con lo pedido ─────────
+// Adrián, en la cola aprobada tras REPLANTEO-06: que Alejandra pueda "comparar lo
+// replanteado con lo pedido". El vínculo entre las dos tablas es la referencia
+// REPL-<id> que escribe _replanteoAPedidos (worker.js raíz) -- no hay FK ni un id
+// de material, así que el emparejamiento tiene que ser por NOMBRE.
+//
+// Normalizar de verdad importa: el material calculado sale del catálogo
+// ("Bandeja rejilla 60x150") y la línea de pedido puede haberla editado una
+// persona después desde el panel ("BANDEJA REJIBAND 60x150 "). Sin quitar
+// acentos, mayúsculas y espacios repetidos, casi todo saldría como "falta" y
+// "sobra" a la vez, que es la peor respuesta posible: parecería que el pedido
+// está mal cuando solo cambia la forma de escribirlo.
+//
+// Se compara SIEMPRE contra el material calculado como referencia; una línea de
+// pedido añadida a mano que no corresponda a ningún material del replanteo sale
+// en `sobran` y no se trata como error -- puede ser perfectamente legítima
+// (tornillería extra, un consumible). Quien decide es el humano; esto solo
+// enseña las diferencias.
+function _normNombreMaterial(s) {
+  return String(s == null ? '' : s)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // quita acentos
+    .toUpperCase()
+    // \u00d8/\u2300 (di\u00e1metro) no son letras con diacr\u00edtico, as\u00ed que NFD no los descompone y el
+    // paso siguiente los borrar\u00eda: "Tubo \u00d825" quedar\u00eda como "TUBO 25" y no emparejar\u00eda
+    // con el "TUBO O25" que teclea quien no tiene el s\u00edmbolo a mano. En material
+    // el\u00e9ctrico el di\u00e1metro sale en medio nombre del cat\u00e1logo, as\u00ed que este caso no es
+    // raro: es el que m\u00e1s veces se dar\u00eda.
+    .replace(/[\u00d8\u2300]/g, 'O')
+    .replace(/[^A-Z0-9]+/g, ' ')                        // signos y guiones -> espacio
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+// Tolerancia relativa del 1% (y 0.01 absoluto) al comparar cantidades: el material
+// calculado sale de una longitud medida con decimales y el pedido suele redondearse.
+// Sin tolerancia, 12.0 vs 12.001 se reportaría como diferencia y el resultado sería ruido.
+function _mismaCantidad(a, b) {
+  const x = Number(a) || 0, y = Number(b) || 0;
+  return Math.abs(x - y) <= Math.max(0.01, Math.abs(x) * 0.01);
+}
+
+function compararMaterialConPedidos(material, lineas) {
+  const mats = Array.isArray(material) ? material : [];
+  const lins = Array.isArray(lineas) ? lineas : [];
+
+  // Las líneas de pedido se agrupan por nombre normalizado y se SUMAN: enviar dos
+  // veces el mismo replanteo, o añadir a mano una segunda línea del mismo material,
+  // debe leerse como "hay 24 m pedidos", no como dos filas sueltas de 12.
+  const porNombre = new Map();
+  for (const l of lins) {
+    const k = _normNombreMaterial(l && l.descripcion);
+    if (!k) continue;
+    const prev = porNombre.get(k);
+    if (prev) {
+      prev.cantidad += Number(l.cantidad) || 0;
+      prev.ids.push(l.id);
+    } else {
+      porNombre.set(k, {
+        nombre: l.descripcion, cantidad: Number(l.cantidad) || 0,
+        unidad: l.unidad || null, ids: [l.id], estado: l.estado || null,
+      });
+    }
+  }
+
+  const coinciden = [], difieren = [], faltan = [];
+  const emparejados = new Set();
+  for (const m of mats) {
+    const k = _normNombreMaterial(m && m.nombre);
+    const enPedido = k ? porNombre.get(k) : null;
+    if (!enPedido) {
+      faltan.push({ nombre: m.nombre, cantidad: Number(m.cantidad) || 0, unidad: m.unidad || 'ud' });
+      continue;
+    }
+    emparejados.add(k);
+    const fila = {
+      nombre: m.nombre, unidad: m.unidad || enPedido.unidad || 'ud',
+      calculado: Number(m.cantidad) || 0, pedido: enPedido.cantidad,
+      pedido_ids: enPedido.ids, estado: enPedido.estado,
+    };
+    if (_mismaCantidad(fila.calculado, fila.pedido)) coinciden.push(fila);
+    else difieren.push({ ...fila, diferencia: Number((fila.pedido - fila.calculado).toFixed(3)) });
+  }
+
+  const sobran = [];
+  for (const [k, v] of porNombre) {
+    if (emparejados.has(k)) continue;
+    sobran.push({ nombre: v.nombre, cantidad: v.cantidad, unidad: v.unidad || 'ud', pedido_ids: v.ids });
+  }
+
+  return {
+    coinciden, difieren, faltan, sobran,
+    // `cubierto` es la pregunta real del encargado: "¿lo que pedí cubre el replanteo?".
+    // Lo que sobra NO lo invalida (ver arriba): solo faltantes y cantidades que no cuadran.
+    cubierto: mats.length > 0 && faltan.length === 0 && difieren.length === 0,
+    sin_pedido: lins.length === 0,
+  };
 }
 
 // ── Aislamiento por empresa_id para consultar_bd / escribir_bd (fix IDOR) ───
@@ -829,6 +938,7 @@ export {
   esInvocacionN1DeLectura,
   clasificarResultadoTool,
   puedeVerTodosLosDepartamentos,
+  compararMaterialConPedidos,
   filtrarToolsPorAuth,
   TOOLS_PROHIBIDAS_CRON,
   esInvocacionCron,

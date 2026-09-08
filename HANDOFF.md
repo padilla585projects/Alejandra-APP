@@ -1,5 +1,53 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-08 — Alejandra y los replanteos (2026-09-08)
+
+- **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-08-alejandra-replanteos`.
+- **Origen:** último punto de la cola que Adrián aprobó tras REPLANTEO-06 («que Alejandra sepa
+  usar los replanteos»). Antes de empezar se desbloqueó el despliegue del API Worker que llevaba
+  desde el 07/09 esperando aprobación (run `34107625467`, aprobado por Adrián el 08/09 a las
+  14:32 UTC): con Pages ya en 9.43 pero el Worker en 9.42, el móvil dejaba marcar dos planos y el
+  servidor seguía calculando con uno. Verificado tras el despliegue: `/health` `healthy` (D1 y R2
+  ok, versión `e8f5ec93`), `/replanteos` 401 sin sesión.
+- **Qué hace:** tres tools — `consultar_replanteos`, `comparar_replanteo_pedido` y
+  `generar_pedido_replanteo` — en los expertos `app`/`tecnico`/`completo`/`ingenieria` y en el
+  ayudante de Pedidos. El prompt del núcleo explica qué es un replanteo y, sobre todo, que **no
+  se estime a ojo** el material de un recorrido que alguien ya midió.
+- **Decisión de arquitectura (la importante):** el agente **no reimplementa nada**. Llama a
+  `POST /internal/replanteos` (worker.js raíz) por Service Binding, igual que con Gmail y los
+  planos, y `enviarReplanteoAPedidos` se refactoriza a `_replanteoAPedidos()` para que el botón
+  «A Pedidos» y el chat compartan un solo INSERT, una sola idempotencia, un solo `syncPedidos` y
+  un solo aviso de Telegram. Es «UNA Alejandra, DOS cerebros» resuelto por el lado bueno: no hay
+  barrera que copiar porque no hay lógica duplicada. Hay dos pruebas que fallan si alguien
+  reescribe esas tools contra D1 directamente.
+- **Aislamiento por departamento:** `_getAuthPlano()` **no** vale aquí — con el secreto interno
+  devuelve `rol: 'agente_ia'` sin departamento, así que `isDeptPrivileged()` daría false y
+  `_replanteoDeptDe()` caería a `electrico` para todo el mundo. `_authReplanteoInterno()` resuelve
+  la sesión **real** contra `sesiones`; el agente solo manda `usuario_id`. Sin sesión viva, 403.
+- **Archivos:** `worker.js` (`_replanteoAPedidos`, `_authReplanteoInterno`,
+  `_lineasPedidoDeReplanteo`, `internalReplanteos`, ruta `/internal/replanteos`),
+  `alejandra-agente/worker.js` (tres schemas, un `case` compartido, cableado a 4 expertos + el
+  ayudante de Pedidos, bloque nuevo en el prompt), `alejandra-agente/lib.js`
+  (`compararMaterialConPedidos`, gating de sesión y de cron), `alejandra-agente/lib.test.js`,
+  `CHANGELOG.md`, `ARCHITECT_BACKLOG.md`, `CLAUDE.md`. **Sin migración, sin cambios de frontend
+  y sin subir versión** (los cuatro marcadores siguen en 9.43).
+- **Pruebas:** 241 del agente en verde (10 nuevas: 8 de la comparación, 2 del cableado) más
+  `node --check` de los dos Workers. Una de las 8 encontró un bug real y se corrigió: `Ø`/`⌀` no
+  se descomponen con NFD, así que «Tubo Ø25» y «TUBO O25» no emparejaban — habría sido el falso
+  «falta por pedir» más frecuente, porque el diámetro sale en medio catálogo eléctrico.
+- **Siguiente acción exacta:** Adrián, por chat desde la app o el panel: «¿qué replanteos hay?»
+  → «enséñame el material del replanteo N» → «¿lo que pedí cubre ese replanteo?» → «genera el
+  pedido». Comprobar sobre todo dos cosas: que **solo ve los de su departamento**, y que
+  `generar_pedido_replanteo` **no se dispara sin confirmarlo antes**.
+- **Hallazgo lateral registrado, no arreglado (REPL-DEPT-01, `ARCHITECT_BACKLOG.md`):**
+  `consultar_bd` acota por empresa pero no por departamento, y `replanteos` está en su allowlist
+  desde ADR-0024 — hoy se pueden leer por SQL crudo los replanteos de otro departamento. No es
+  exclusivo de replanteos (le pasa a `pedidos`, `incidencias`, `documentos_obra`…) y arreglarlo
+  es genérico, con riesgo de romper consultas legítimas: queda como decisión, fuera de este
+  alcance.
+- **Queda de la cola:** las «más cosas» que Adrián aún no ha concretado. Y las tres pruebas en
+  obra pendientes de REPLANTEO-05/06/07.
+
 ## REPLANTEO-07 — un plano rectificado por superficie (2026-09-07, v9.43)
 
 - **Agente:** Claude (Opus 5). **Rama:** `feat/replanteo-07-varios-planos`.
