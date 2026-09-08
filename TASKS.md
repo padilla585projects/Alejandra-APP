@@ -6,7 +6,11 @@ Estado (actualizado 2026-09-08): **REPLANTEO-08 — Alejandra y los replanteos**
   llevaba parado desde el 07/09 (run `34107625467`). Pages 9.43 + Worker `e8f5ec93`: el
   multi-plano ya cuadra en móvil, oficina y servidor. Verificado: `/health` `healthy`,
   `/replanteos` 401 sin sesión.
-- **REPLANTEO-08** (En revisión): tres tools —`consultar_replanteos`,
+- **REPLANTEO-08** (Desplegado y verificado 2026-09-08): API Worker `53f78e70` + agente
+  `fe603f28`, los dos `success` tras la aprobación de Adrián. Verificado en producción:
+  `/health` ok en ambos, `/internal/replanteos` 403 sin secreto y con secreto falso, las
+  rutas REST de replanteos siguen en 401 (el refactor no las rompió) y el chat anónimo NO
+  recibe las tres tools. **Falta la prueba con sesión real, que es de Adrián.** tres tools —`consultar_replanteos`,
   `comparar_replanteo_pedido`, `generar_pedido_replanteo`— más `POST /internal/replanteos` en el
   worker raíz. El agente no reimplementa lógica de replanteos: la llama. Sin migración, sin
   frontend, sin subir versión. 241 tests en verde.
