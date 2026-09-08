@@ -35,6 +35,17 @@
   `node --check` de los dos Workers. Una de las 8 encontró un bug real y se corrigió: `Ø`/`⌀` no
   se descomponen con NFD, así que «Tubo Ø25» y «TUBO O25» no emparejaban — habría sido el falso
   «falta por pedir» más frecuente, porque el diámetro sale en medio catálogo eléctrico.
+- **Desplegado y verificado (2026-09-08).** Adrián aprobó los dos entornos; API Worker
+  `53f78e70` (run `34240785643`) y agente `fe603f28` (run `34240792101`), los dos `success`.
+  Comprobado contra producción: `/health` `healthy` en ambos (D1, R2 y Anthropic disponibles);
+  `POST /internal/replanteos` devuelve **403 sin secreto y 403 con un secreto falso** (falla
+  cerrado); las cuatro rutas REST de replanteos siguen respondiendo 401 y no 404/500, así que el
+  refactor de `_replanteoAPedidos` no rompió el camino del botón; y una petición de chat
+  **anónima** pidiendo `consultar_replanteos` obtiene la respuesta correcta: Alejandra sabe que
+  las tres tools existen (el prompt está desplegado) pero **no las tiene ofrecidas** sin sesión
+  (`TOOLS_REQUIEREN_SESION` filtrando de verdad).
+- **Lo que NO se ha podido verificar desde aquí:** el camino feliz con datos reales, porque exige
+  una sesión iniciada de un usuario real. Es justo la prueba que queda para Adrián.
 - **Siguiente acción exacta:** Adrián, por chat desde la app o el panel: «¿qué replanteos hay?»
   → «enséñame el material del replanteo N» → «¿lo que pedí cubre ese replanteo?» → «genera el
   pedido». Comprobar sobre todo dos cosas: que **solo ve los de su departamento**, y que
