@@ -3815,7 +3815,13 @@ const TOOL_CONSULTAR_PRECIOS = {
 };
 
 const TOOLS_POR_EXPERTO = {
-  simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
+  // REPL-ROUTING-01 (08/09/2026): las dos tools de LECTURA de replanteos también aquí, como
+  // defensa en profundidad -- igual que GESTION-AUTO-CORREOS-01 hizo con delegar_tarea. La
+  // regla de REGEX_ROUTES ya desvía a 'app' todo lo que nombre un replanteo, pero si alguien
+  // pregunta sin usar la palabra ("¿cuánta bandeja sale del pasillo que midió Jose?") y el
+  // clasificador manda el mensaje aquí, más vale que pueda mirarlo a que se lo invente.
+  // generar_pedido_replanteo NO se añade: escribe en Pedidos y no es para el experto barato.
+  simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH, TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
   app:        [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
@@ -8264,7 +8270,14 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         // Solo permitir SELECT (validarSoloSelectBD, compartida con configurar_alerta/exportar_datos)
         const rechazoSelect = validarSoloSelectBD(query);
         if (rechazoSelect) return rechazoSelect;
-        const params = input.params || [];
+        let params = input.params || [];
+        // REPL-ROUTING-01 (08/09/2026), hallazgo lateral: el modelo manda a menudo params
+        // (p.ej. ["1"]) en una query que ya lleva el empresa_id escrito y no tiene ningún
+        // '?'. D1 responde "Wrong number of parameter bindings", un error opaco que no dice
+        // qué sobra: en la traza del 08/09 lo repitió dos veces en la misma respuesta. Si no
+        // hay ni un placeholder no hay nada que bindear, así que los params sobran por
+        // definición y se ignoran en vez de reventar la consulta.
+        if (params.length > 0 && !query.includes('?')) params = [];
         // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
         const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo);
         if (rechazo) return rechazo;
@@ -8277,6 +8290,10 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         const truncated = rows.length > 50 ? `\n\n[... mostrando 50 de ${rows.length} registros]` : '';
         return `${rows.length} registro(s):\n${output.substring(0, 6000)}${truncated}`;
       } catch (err) {
+        // Pista accionable para el binding: el mensaje crudo de D1 no dice cuántos esperaba.
+        if (/parameter bindings/i.test(err.message || '')) {
+          return `Error en consulta BD: ${err.message}\nLa query tiene ${((input.query || '').match(/\?/g) || []).length} placeholder(s) '?' y has mandado ${(input.params || []).length} parámetro(s). Repite la llamada con params que cuadren, o sin params si la query no lleva '?'.`;
+        }
         return `Error en consulta BD: ${err.message}`;
       }
     }
@@ -12705,6 +12722,19 @@ const REGEX_ROUTES = [
   { re: /\b(sección de cable|caída de tensión|magnetotérmico|diferencial|protección|bandeja(?!\s+de\s+entrada)|canalización|ITC-BT|REBT|UNE|instalación eléctrica|trifásico|monofásico|cuadro eléctrico|esquema eléctrico|unifiliar|multifilar|plano eléctrico|arrancador|contactor|relé|autómata|variador|SCADA|HMI|motor eléctrico|transformador|puesta a tierra)\b/i, expert: 'ingenieria', web: false },
   { re: /\b(calcula|dimensiona|qué sección|qué cable|qué protección|foto de obra|analiza esta foto|diseña|dibuja|hazme un esquema|hazme el esquema|genera un esquema|genera el esquema|haz el esquema|haz un esquema|qué es este cuadro|qué componentes|analiza este cuadro|arranque directo|arranque dol|dol|estrella.triángulo|star.delta|circuito de mando|circuito de control|circuito de potencia|esquema electrico|esquema eléctrico)\b/i, expert: 'ingenieria', web: false },
   { re: /\b(ITC-BT|REBT|IEC 60364|IEC 60617|EN 61439|UNE 20460|RD 614|instalacion electrica|cuadro electrico|interruptor automatico|diferencial|guardamotor|variador de frecuencia|PLC|PROFIBUS|PROFINET|Modbus|SCADA|VFD|DOL|kVA|kvar|cos.?fi|cos phi)\b/i, expert: 'ingenieria', web: false },
+  // REPL-ROUTING-01 (08/09/2026): "¿qué replanteos hay?" no matcheaba NINGUNA regla y caía
+  // en la capa 2 (Haiku), que la clasificó como "simple" -- y TOOLS_POR_EXPERTO.simple no
+  // tenía las tools de REPLANTEO-08. Sin ellas el modelo intentó suplirlas con consultar_bd
+  // a tientas (6 llamadas sobre `incidencias` y `permisos_trabajo`, 3 con error SQL, 65k
+  // tokens) y respondió que no había replanteos "porque no hay incidencias de ese tipo":
+  // una respuesta falsa dicha con aplomo. Reproducido en producción el 08/09/2026; la misma
+  // pregunta como "muéstrame los replanteos" (que sí matchea la regla de abajo -> app)
+  // llamaba a consultar_replanteos a la primera y respondía bien. Mismo patrón exacto que
+  // CORREO-AYUDANTE-ROUTING-01 y que el fix de "bandeja": el experto que atiende no tiene
+  // la tool. Va DESPUÉS de las reglas de ingeniería a propósito: "replanteo de bandeja" o
+  // "qué sección sale del replanteo" siguen yendo a 'ingenieria', que también tiene las tres
+  // tools y además las de cálculo; lo que aquí se rescata es el replanteo "a secas".
+  { re: /\b(replanteo|replanteos|replantear|replanteé|replanteó|replanteado|replanteada)\b/i, expert: 'app', web: false },
   // Saludos/confirmaciones cortas PRIMERO (match exacto ^...$): deben ganar siempre a la regla
   // de enclíticos de abajo. Bug detectado 07/07/2026: "hola" contiene "la" al final y
   // \w+(la) lo capturaba como enclítico → nunca llegaba a "simple". Iban aquí después,

@@ -2174,3 +2174,116 @@ describe('cableado de las tools de replanteo (REPLANTEO-08)', () => {
     expect(cuerpo).not.toMatch(/rol:/);
   });
 });
+describe('routing de replanteos (REPL-ROUTING-01)', () => {
+  // Reproduce la CAPA 1 de clasificarConHaiku (worker.js): recorre REGEX_ROUTES en orden y
+  // devuelve el primer experto que matchea. Se parsea del fuente porque el array no se
+  // exporta; si algun dia deja de parsearse, los tests fallan en vez de pasar en falso.
+  const fuente = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+
+  function reglasDeRouting() {
+    const ini = fuente.indexOf('const REGEX_ROUTES = [');
+    const fin = fuente.indexOf('\n];', ini);
+    expect(ini).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(ini);
+    const cuerpo = fuente.slice(ini, fin);
+    const reglas = [];
+    for (const linea of cuerpo.split('\n')) {
+      const m = linea.match(/^\s*\{\s*re:\s*\/(.*)\/([a-z]*)\s*,\s*expert:\s*'([a-z]+)'/);
+      if (m) reglas.push({ re: new RegExp(m[1], m[2]), expert: m[3] });
+    }
+    return reglas;
+  }
+
+  function expertoDe(mensaje) {
+    for (const r of reglasDeRouting()) if (r.re.test(mensaje.trim())) return r.expert;
+    return null; // cae en la capa 2 (Haiku) -- indeterminista, y ahi estuvo el bug
+  }
+
+  function toolsDelExperto(nombre) {
+    const ini = fuente.indexOf('const TOOLS_POR_EXPERTO = {');
+    const fin = fuente.indexOf('\n};', ini);
+    const cuerpo = fuente.slice(ini, fin);
+    const linea = cuerpo.split('\n').find(l => l.trim().startsWith(nombre + ':'));
+    expect(linea).toBeTruthy();
+    return linea;
+  }
+
+  it('el array se parsea de verdad (si no, el resto de este describe no probaria nada)', () => {
+    const reglas = reglasDeRouting();
+    expect(reglas.length).toBeGreaterThan(10);
+    // Control: una frase que ya se enrutaba bien antes de este fix.
+    expect(expertoDe('muestrame los replanteos')).toBe('app');
+  });
+
+  // El bug, tal cual se reprodujo en produccion el 08/09/2026: esta pregunta no matcheaba
+  // ninguna regla, caia en Haiku, Haiku decia "simple", y simple no tenia consultar_replanteos.
+  // Alejandra respondio que no habia replanteos "porque no hay incidencias de ese tipo",
+  // tras 6 consultar_bd a tientas (3 con error SQL) sobre incidencias y permisos_trabajo.
+  it('las preguntas por replanteos no caen en la capa 2: la regex las resuelve', () => {
+    const frases = [
+      '\u00bfqu\u00e9 replanteos hay?',
+      'que replanteos hay',
+      '\u00bfhay alg\u00fan replanteo del pasillo?',
+      'el replanteo que hizo Jose',
+      'lo que se replante\u00f3 ayer',
+      '\u00bfcu\u00e1nto material sale del replanteo 3?',
+      'quiero replantear el pasillo norte',
+    ];
+    for (const f of frases) {
+      expect([f, expertoDe(f)]).toEqual([f, expect.any(String)]);
+    }
+  });
+
+  it('y el experto al que van tiene las tres tools de REPLANTEO-08', () => {
+    const frases = ['\u00bfqu\u00e9 replanteos hay?', 'el replanteo que hizo Jose', '\u00bfcu\u00e1nto material sale del replanteo 3?'];
+    for (const f of frases) {
+      const exp = expertoDe(f);
+      const linea = toolsDelExperto(exp);
+      expect([f, exp, linea.includes('TOOL_CONSULTAR_REPLANTEOS')]).toEqual([f, exp, true]);
+      expect([f, exp, linea.includes('TOOL_COMPARAR_REPLANTEO_PEDIDO')]).toEqual([f, exp, true]);
+      expect([f, exp, linea.includes('TOOL_GENERAR_PEDIDO_REPLANTEO')]).toEqual([f, exp, true]);
+    }
+  });
+
+  // Un replanteo nombrado junto a terminos de ingenieria debe seguir yendo a 'ingenieria'
+  // (que tambien tiene las tres tools, mas las de calculo): por eso la regla nueva va
+  // DESPUES de las de ingenieria en el array, no la primera.
+  it('la regla no le roba a ingenieria lo que es suyo', () => {
+    expect(expertoDe('\u00bfqu\u00e9 secci\u00f3n de cable necesito para el replanteo del pasillo?')).toBe('ingenieria');
+    const linea = toolsDelExperto('ingenieria');
+    expect(linea.includes('TOOL_CONSULTAR_REPLANTEOS')).toBe(true);
+  });
+
+  // Defensa en profundidad (mismo criterio que GESTION-AUTO-CORREOS-01): si un desvio de
+  // clasificacion futuro vuelve a mandar un mensaje de replanteos al experto barato, que
+  // al menos pueda MIRARLOS. Escribir en Pedidos desde 'simple' sigue prohibido.
+  it('simple puede leer replanteos, pero no generar el pedido', () => {
+    const linea = toolsDelExperto('simple');
+    expect(linea.includes('TOOL_CONSULTAR_REPLANTEOS')).toBe(true);
+    expect(linea.includes('TOOL_COMPARAR_REPLANTEO_PEDIDO')).toBe(true);
+    expect(linea.includes('TOOL_GENERAR_PEDIDO_REPLANTEO')).toBe(false);
+  });
+
+  // Hallazgo lateral de la misma traza: el modelo mando params:["1"] en una query sin
+  // ningun '?', D1 respondio "Wrong number of parameter bindings" y lo repitio dos veces.
+  it('consultar_bd ignora los params cuando la query no tiene placeholders', () => {
+    const ini = fuente.indexOf("    case 'consultar_bd': {");
+    const fin = fuente.indexOf("    case 'buscar_documentos': {", ini);
+    const cuerpo = fuente.slice(ini, fin);
+    expect(ini).toBeGreaterThanOrEqual(0);
+    expect(cuerpo).toMatch(/if \(params\.length > 0 && !query\.includes\('\?'\)\) params = \[\];/);
+    // Y si el desajuste es real (hay '?', pero no cuadran), el error dice cuantos esperaba.
+    expect(cuerpo).toMatch(/parameter bindings/i);
+    expect(cuerpo).toMatch(/placeholder/i);
+  });
+
+  // escribir_bd NO recibe el mismo trato: en una escritura, un desajuste de bindings debe
+  // reventar, no auto-corregirse en silencio.
+  it('escribir_bd no ignora params: ahi un desajuste tiene que fallar', () => {
+    const ini = fuente.indexOf("    case 'escribir_bd': {");
+    const fin = fuente.indexOf('\n    case ', ini + 10);
+    const cuerpo = fuente.slice(ini, fin);
+    expect(ini).toBeGreaterThanOrEqual(0);
+    expect(cuerpo).not.toMatch(/params = \[\];/);
+  });
+});
