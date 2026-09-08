@@ -4,6 +4,46 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-08 — REPL-ROUTING-01: «¿qué replanteos hay?» no llegaba a las tools)
+
+Encontrado probando REPLANTEO-08 en producción con la sesión real de Adrián, que era justo la
+prueba que quedaba pendiente. Solo `alejandra-agente/worker.js`: sin migración, sin frontend y
+sin subir versión (los cuatro marcadores siguen en 9.43).
+
+- **El bug:** «¿qué replanteos hay?» no matcheaba **ninguna** regla de `REGEX_ROUTES`, caía en la
+  capa 2 (Haiku) y esta la clasificaba como `simple` — el único experto sin las tools de
+  REPLANTEO-08. Sin `consultar_replanteos`, el modelo intentó suplirla con `consultar_bd` a
+  tientas: **6 llamadas** sobre `incidencias` y `permisos_trabajo`, 3 de ellas con error SQL,
+  65k tokens y 0,066 €, para acabar respondiendo que no había replanteos «porque no hay
+  incidencias de ese tipo» y ofrecer una incidencia de un racor. Una respuesta falsa dicha con
+  aplomo. La misma pregunta como «muéstrame los replanteos» (que sí matchea una regla → `app`)
+  llamaba a `consultar_replanteos` a la primera y respondía bien.
+- **Tercera repetición del mismo patrón**, ya documentado dos veces en ese archivo: el experto
+  que atiende no tiene la tool y el modelo improvisa en vez de decir que no puede — como en
+  CORREO-AYUDANTE-ROUTING-01 (el experto `web` sin `delegar_tarea` → «Gmail no está integrado»)
+  y en el fix de «bandeja». Cablear una tool a los expertos **no** basta: hay que comprobar
+  también que el routing lleva ahí las preguntas que la necesitan.
+- **Regla determinista en `REGEX_ROUTES`** para `replanteo|replanteos|replantear|replanteé|
+  replanteó|replanteado|replanteada` → `app`. Colocada **después** de las reglas de ingeniería
+  a propósito: «¿qué sección de cable necesito para el replanteo?» sigue yendo a `ingenieria`,
+  que tiene las tres tools de replanteo **y** las de cálculo.
+- **Defensa en profundidad:** las dos tools de **lectura** (`consultar_replanteos`,
+  `comparar_replanteo_pedido`) también en el experto `simple`, con el mismo criterio que
+  GESTION-AUTO-CORREOS-01. Si un desvío de clasificación futuro vuelve a mandar ahí una
+  pregunta de replanteos, que al menos pueda mirarlos antes que inventarlos.
+  `generar_pedido_replanteo` **no** se añade: escribe en Pedidos y no es para el experto barato.
+- **Hallazgo lateral de la misma traza:** el modelo manda a menudo `params: ["1"]` en una query
+  que ya lleva el `empresa_id` escrito y no tiene ningún `?`; D1 responde «Wrong number of
+  parameter bindings», un error opaco que no dice qué sobra, y en la traza lo repitió dos veces
+  en la misma respuesta. Ahora `consultar_bd` ignora los params cuando la query no tiene
+  placeholders (no hay nada que bindear), y si el desajuste es real el error dice cuántos
+  esperaba y cuántos recibió. **`escribir_bd` no recibe el mismo trato**, y hay una prueba que
+  lo fija: en una escritura, un desajuste de bindings debe reventar, no auto-corregirse.
+- **7 pruebas nuevas** (248 en total, antes 241). Cuatro fallan con el worker anterior y pasan
+  con este: se comprobó revirtiendo el fichero. Reproducen la capa 1 del clasificador parseando
+  `REGEX_ROUTES` del fuente, así que cubren el **orden** de las reglas, no solo su existencia.
+
+
 ### Added (2026-09-08 — REPLANTEO-08: Alejandra y los replanteos)
 
 Último punto de la cola que Adrián aprobó tras REPLANTEO-06: «que Alejandra sepa usar los
