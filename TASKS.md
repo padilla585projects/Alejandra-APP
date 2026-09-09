@@ -1,5 +1,32 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-09): **REPL-REDISEÑO — plan escrito, sin implementar.** Ver
+`docs/decisions/ADR-0025-REPLANTEO-REDISENO-CAMARA-SENSORES.md` (Propuesto) y la memoria
+`project-replanteo-redesign`.
+- **Contexto:** los replanteos actuales (ADR-0024, foto+homografía) no convencen a Adrián.
+  Rediseño definido en maqueta (artifacts `89a001ad-…` flujo, `e38cc365-…` AR/3D). ADR-0025
+  amplía el 0024 reutilizando su backend (`replanteos`, cálculo en servidor, pedido `REPL-<id>`).
+- **Aprobado por Adrián (2026-09-09):** opción (a) F1 sin precio/stock; dejar el plan escrito en
+  el repo. **Aceptar el ADR sigue siendo decisión humana** (ADR-0007) — está Propuesto.
+- **Fases:**
+  - **F1** — captura (cámara en directo + grabar/andar + sensores nivel/brújula/giros +
+    calibración asistida «la app sugiere dónde medir») y **catálogo ampliado**: Rejiband,
+    **bandeja de escalera 300–900** (≠ Rejiband), bandeja de chapa, tubo acero/PVC **huecos**
+    M16–M63, tubo flexo, canal; **cajas de registro** (con tetones / ciega + **racores** 2/caja,
+    la app sugiere medida por diámetro). Material por cálculo, **sin precio/stock**.
+  - **F2** — pedido + **reconciliación opción A**: retirar el candado de `estado='pedido'`
+    (worker.js:31207), edición manual de la oficina en el panel, botón **«Actualizar replanteo»**
+    que reajusta las líneas `pendiente` del pedido y respeta las `recibidas`.
+  - **F3** — **vídeo a R2** (≤3 min) como documentación (hoy no existe: añadir `video_r2_key`,
+    aceptar `video/*`, endpoint `/replanteos/{id}/video`).
+  - **F4** — **previsualización de la instalación completa** (recorrido con curvas): en directo
+    si el móvil admite AR (Android/ARCore), o procesada después desde el trazado grabado (visor
+    3D en cualquier dispositivo). Amplía la fase 2 (AR) de ADR-0024.
+- **Aislamiento:** cada departamento, lo suyo — el pedido va SOLO a Pedidos de su departamento
+  (fijo por login). Nada de mezclar.
+- **Siguiente:** con el ADR aceptado, arrancar **F1** en `index.html` + `worker.js`
+  (rama `feat/`), enganchado al backend de replanteos/pedidos ya existente.
+
 Estado (actualizado 2026-09-09): **CPD-BMS-03 — cuadro BMS por MÓDULOS de PLC (v9.48), paso 1
 (backend + móvil) desplegado y verificado E2E.** Ver `HANDOFF.md`.
 - **CPD-BMS-03 paso 1** (Desplegado, backend verificado E2E): el cuadro se define por módulos
