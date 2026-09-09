@@ -30179,53 +30179,100 @@ async function eliminarCpdPlano(request, env, path) {
 const CPD_TIPOS_PERMITIDOS = new Set(['sonda_ambiental:temp_hum', 'sonda_ambiental:presion_diferencial', 'cuadro_bms:cuadro']);
 const CPD_TIPO_LABEL = { temp_hum: 'Temp/Hum', presion_diferencial: 'Presión Dif.', cuadro: 'Cuadro BMS' };
 const CPD_MAX_BORNES = 200;
+// CPD-BMS-03 (09/09/2026): el cuadro se define por MÓDULOS/tarjetas del PLC (Schneider
+// SpaceLogic), no por N bornes iguales. Cada módulo tiene un tipo de E/S y sus canales; las
+// sondas se enchufan a canales de ENTRADA (UI/DI). config_json = { modulos:[{id,nombre,tarjeta,
+// io,canales,bloque}] }. Retrocompatible: un config viejo { num_bornes:N } se lee como un único
+// módulo genérico de N canales de entrada, y una conexión vieja { canal,borne } como pin de ese
+// módulo. Las bornas de señal/común y las de alimentación DC de campo son la vista del regletero
+// (frontend), derivadas de los canales; el backend solo guarda módulos y conexiones.
+const CPD_IO = new Set(['UI', 'DI', 'AO', 'DO', 'bus', 'power', 'prot']);
+const CPD_IO_ENTRADA = new Set(['UI', 'DI']); // canales donde se enchufan las sondas
+const CPD_MAX_MODULOS = 40;
+const CPD_MAX_CANALES_MOD = 64;
 
-// Normaliza y valida el config_json de un cuadro BMS. Devuelve { json } (string listo para
-// guardar) o { error }. Hoy solo num_bornes (1..CPD_MAX_BORNES).
+// Normaliza y valida el config_json de un cuadro BMS. Devuelve { json } (siempre en formato
+// { modulos:[...] }) o { error }. Acepta tanto { modulos } (nuevo) como { num_bornes } (viejo).
 function _cpdNormalizarConfigCuadro(raw) {
   let cfg = {};
   if (raw && typeof raw === 'object') cfg = raw;
   else if (typeof raw === 'string' && raw.trim()) { try { cfg = JSON.parse(raw); } catch { return { error: 'config_json no es un JSON valido' }; } }
-  const n = parseInt(cfg.num_bornes, 10);
-  if (!Number.isFinite(n) || n < 1 || n > CPD_MAX_BORNES) return { error: `num_bornes debe estar entre 1 y ${CPD_MAX_BORNES}` };
-  return { json: JSON.stringify({ num_bornes: n }) };
+  // Compat: si llega el formato viejo { num_bornes } (frontend anterior a módulos), se preserva
+  // tal cual para no romper ese frontend al releer. El formato nuevo es { modulos:[...] }.
+  if (!Array.isArray(cfg.modulos)) {
+    const n = parseInt(cfg.num_bornes, 10);
+    if (Number.isFinite(n) && n >= 1 && n <= CPD_MAX_BORNES) return { json: JSON.stringify({ num_bornes: n }) };
+    return { error: 'define al menos un módulo (o num_bornes)' };
+  }
+  const modsIn = cfg.modulos;
+  if (modsIn.length < 1 || modsIn.length > CPD_MAX_MODULOS) return { error: `el nº de módulos debe estar entre 1 y ${CPD_MAX_MODULOS}` };
+  const ids = new Set(); const mods = [];
+  for (const m of modsIn) {
+    const id = String(m.id || ('m' + (mods.length + 1))).slice(0, 20);
+    if (ids.has(id)) return { error: `módulo duplicado: ${id}` }; ids.add(id);
+    const io = String(m.io || 'UI'); if (!CPD_IO.has(io)) return { error: `tipo de E/S no válido: ${io}` };
+    const canales = parseInt(m.canales, 10) || 0;
+    if (canales < 0 || canales > CPD_MAX_CANALES_MOD) return { error: `los canales de ${id} deben estar entre 0 y ${CPD_MAX_CANALES_MOD}` };
+    mods.push({ id, nombre: String(m.nombre || id).slice(0, 40), tarjeta: String(m.tarjeta || 'generico').slice(0, 30), io, canales, bloque: m.bloque ? String(m.bloque).slice(0, 12) : null });
+  }
+  return { json: JSON.stringify({ modulos: mods }) };
+}
+
+// Módulos de un cuadro a partir de su config_json (con compat num_bornes → módulo genérico).
+function _cpdModulos(configJson) {
+  try {
+    const c = JSON.parse(configJson || '{}');
+    if (Array.isArray(c.modulos)) return c.modulos;
+    const n = parseInt(c.num_bornes, 10);
+    if (Number.isFinite(n)) return [{ id: 'm1', nombre: 'Bornes', tarjeta: 'generico', io: 'UI', canales: n }];
+  } catch {}
+  return [];
 }
 
 const CPD_CANALES = new Set(['temp', 'hum', 'presion', 'otro']);
-const CPD_MAX_CONEXIONES = 8; // por sonda (temp+hum bastan, margen para casos raros)
+const CPD_MAX_CONEXIONES = 8; // por sonda
 
-// Devuelve el Set de bornes ya ocupados en un cuadro (unión de las conexiones de todas sus
-// sondas), excluyendo opcionalmente una sonda (para poder editarla sin chocar consigo misma).
+// Set de canales ocupados en un cuadro (clave "modulo:pin"), excluyendo opcionalmente una sonda.
 async function _cpdOcupacionCuadro(env, cuadroId, excluirSondaId) {
   const { results } = await env.DB.prepare(
     'SELECT id, conexiones_json FROM plano_elementos WHERE cuadro_id=?'
   ).bind(cuadroId).all();
-  const ocupados = new Map(); // borne -> id sonda
+  const ocupados = new Map();
   for (const r of (results || [])) {
     if (String(r.id) === String(excluirSondaId || 0)) continue;
     let cx = []; try { cx = JSON.parse(r.conexiones_json || '[]'); } catch {}
-    for (const c of cx) if (Number.isFinite(c.borne)) ocupados.set(c.borne, r.id);
+    for (const c of cx) { const pin = (c.pin != null ? c.pin : c.borne); if (pin != null) ocupados.set((c.modulo || 'm1') + ':' + pin, r.id); }
   }
   return ocupados;
 }
 
-// CPD-BMS-02: normaliza y valida la lista de conexiones de una sonda contra un cuadro del
-// mismo plano. Devuelve { json, cuadroId } o { error }. `ocupados` = Map borne->idSonda de
-// _cpdOcupacionCuadro (ya excluyendo la sonda que se edita).
-function _cpdNormalizarConexiones(conexiones, numBornes, ocupados) {
+// CPD-BMS-03: valida las conexiones de una sonda contra los módulos del cuadro. Cada conexión
+// {canal, modulo, pin, color} debe ir a un canal de entrada (UI/DI) en rango y libre. Acepta la
+// forma vieja {canal, borne} si el cuadro tiene un solo módulo (mapea borne→pin de ese módulo).
+function _cpdNormalizarConexiones(conexiones, modulos, ocupados) {
   if (!Array.isArray(conexiones)) return { error: 'conexiones debe ser una lista' };
   if (conexiones.length > CPD_MAX_CONEXIONES) return { error: `demasiadas conexiones (máx ${CPD_MAX_CONEXIONES})` };
-  const usados = new Set();
-  const limpio = [];
+  const modById = {}; modulos.forEach(m => modById[m.id] = m);
+  const soloUno = modulos.length === 1 ? modulos[0] : null;
+  const usados = new Set(); const limpio = [];
   for (const c of conexiones) {
-    const borne = parseInt(c.borne, 10);
     const canal = String(c.canal || 'otro');
     if (!CPD_CANALES.has(canal)) return { error: `canal no válido: ${canal}` };
-    if (!Number.isFinite(borne) || borne < 1 || borne > numBornes) return { error: `el borne debe estar entre 1 y ${numBornes}` };
-    if (usados.has(borne)) return { error: `el borne ${borne} está repetido en esta sonda` };
-    if (ocupados.has(borne)) return { error: `el borne ${borne} ya está ocupado por otra sonda` };
-    usados.add(borne);
-    limpio.push({ canal, borne, color: (c.color || '').toString().slice(0, 30) || null, senal: (c.senal || '').toString().slice(0, 60) || null });
+    const modId = c.modulo != null ? String(c.modulo) : (soloUno ? soloUno.id : null);
+    const pin = parseInt(c.pin != null ? c.pin : c.borne, 10);
+    const m = modById[modId];
+    if (!m) return { error: `el módulo ${modId || '(vacío)'} no existe en el cuadro` };
+    if (!CPD_IO_ENTRADA.has(m.io)) return { error: `el módulo ${m.nombre} no es de entrada (las sondas van a UI/DI)` };
+    if (!Number.isFinite(pin) || pin < 1 || pin > m.canales) return { error: `el canal debe estar entre 1 y ${m.canales} en ${m.nombre}` };
+    const key = modId + ':' + pin;
+    if (usados.has(key)) return { error: `el canal ${m.nombre}·${pin} está repetido en esta sonda` };
+    if (ocupados.has(key)) return { error: `el canal ${m.nombre}·${pin} ya está ocupado por otra sonda` };
+    usados.add(key);
+    const limpia = { canal, color: (c.color || '').toString().slice(0, 30) || null, senal: (c.senal || '').toString().slice(0, 60) || null };
+    // Compat: si la conexión llegó en formato viejo (solo `borne`, cuadro de un módulo), se
+    // preserva ese formato para no romper el frontend anterior al releer; si no, formato nuevo.
+    if (c.borne != null && c.modulo == null) limpia.borne = pin; else { limpia.modulo = modId; limpia.pin = pin; }
+    limpio.push(limpia);
   }
   return { json: JSON.stringify(limpio) };
 }
@@ -30264,9 +30311,8 @@ async function crearCpdSonda(request, env) {
     cuadro_id = parseInt(body.cuadro_id, 10);
     const cuadro = await env.DB.prepare("SELECT config_json FROM plano_elementos WHERE id=? AND empresa_id=? AND plano_id=? AND categoria='cuadro_bms'").bind(cuadro_id, empresa_id, plano_id).first();
     if (!cuadro) return err('El cuadro BMS indicado no existe en este plano', 400);
-    let numB = 0; try { numB = JSON.parse(cuadro.config_json || '{}').num_bornes || 0; } catch {}
     const ocup = await _cpdOcupacionCuadro(env, cuadro_id, null);
-    const norm = _cpdNormalizarConexiones(body.conexiones || [], numB, ocup);
+    const norm = _cpdNormalizarConexiones(body.conexiones || [], _cpdModulos(cuadro.config_json), ocup);
     if (norm.error) return err(norm.error, 400);
     conexiones_json = norm.json;
   }
@@ -30296,18 +30342,19 @@ async function actualizarCpdSonda(request, env, path) {
   if (typeof body.zona === 'string') { sets.push('zona=?'); params.push(body.zona.trim() || null); }
   if (body.pos_x !== undefined && Number.isFinite(Number(body.pos_x))) { sets.push('pos_x=?'); params.push(Number(body.pos_x)); }
   if (body.pos_y !== undefined && Number.isFinite(Number(body.pos_y))) { sets.push('pos_y=?'); params.push(Number(body.pos_y)); }
-  // CPD-BMS-01/02: config del cuadro (num_bornes). Al reducir, no se pierde silenciosamente:
-  // se rechaza si alguna conexión de una sonda sigue en un borne que dejaría de existir.
-  if (row.categoria === 'cuadro_bms' && (body.config_json !== undefined || body.num_bornes !== undefined)) {
-    const norm = _cpdNormalizarConfigCuadro(body.config_json ?? { num_bornes: body.num_bornes });
+  // CPD-BMS-03: config del cuadro (módulos). Al cambiarla no se pierde silenciosamente: se
+  // rechaza si alguna conexión existente quedaría sin módulo o en un canal fuera de rango.
+  if (row.categoria === 'cuadro_bms' && (body.config_json !== undefined || body.num_bornes !== undefined || body.modulos !== undefined)) {
+    const norm = _cpdNormalizarConfigCuadro(body.config_json ?? (body.modulos ? { modulos: body.modulos } : { num_bornes: body.num_bornes }));
     if (norm.error) return err(norm.error, 400);
-    const nuevoNum = JSON.parse(norm.json).num_bornes;
+    const nuevos = JSON.parse(norm.json).modulos;
+    const capacidad = {}; nuevos.forEach(m => capacidad[m.id] = m.canales);
     const ocup = await _cpdOcupacionCuadro(env, id, null);
-    const fuera = [...ocup.keys()].filter(b => b > nuevoNum).length;
-    if (fuera > 0) return err(`No se puede reducir a ${nuevoNum} bornes: hay ${fuera} conexión(es) en un borne superior. Desconéctalas primero.`, 409);
+    const fuera = [...ocup.keys()].filter(k => { const [mid, pin] = k.split(':'); return !(capacidad[mid] >= 0) || parseInt(pin, 10) > capacidad[mid]; }).length;
+    if (fuera > 0) return err(`No se puede aplicar: hay ${fuera} conexión(es) en un canal que dejaría de existir. Desconéctalas primero.`, 409);
     sets.push('config_json=?'); params.push(norm.json);
   }
-  // CPD-BMS-02: (re)asignar o desconectar una sonda. cuadro_id null/'' = desconectar del todo.
+  // CPD-BMS-03: (re)asignar o desconectar una sonda. cuadro_id null/'' = desconectar del todo.
   if (row.categoria !== 'cuadro_bms' && body.cuadro_id !== undefined) {
     if (body.cuadro_id === null || body.cuadro_id === '') {
       sets.push('cuadro_id=?', 'conexiones_json=?'); params.push(null, null);
@@ -30315,9 +30362,8 @@ async function actualizarCpdSonda(request, env, path) {
       const cId = parseInt(body.cuadro_id, 10);
       const cuadro = await env.DB.prepare("SELECT config_json FROM plano_elementos WHERE id=? AND empresa_id=? AND plano_id=? AND categoria='cuadro_bms'").bind(cId, empresa_id, row.plano_id).first();
       if (!cuadro) return err('El cuadro BMS indicado no existe en este plano', 400);
-      let numB = 0; try { numB = JSON.parse(cuadro.config_json || '{}').num_bornes || 0; } catch {}
       const ocup = await _cpdOcupacionCuadro(env, cId, id);
-      const norm = _cpdNormalizarConexiones(body.conexiones || [], numB, ocup);
+      const norm = _cpdNormalizarConexiones(body.conexiones || [], _cpdModulos(cuadro.config_json), ocup);
       if (norm.error) return err(norm.error, 400);
       sets.push('cuadro_id=?', 'conexiones_json=?'); params.push(cId, norm.json);
     }

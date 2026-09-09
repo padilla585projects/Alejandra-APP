@@ -1880,13 +1880,15 @@ select option{background:var(--surface2);color:var(--text)}
 
         <!-- CPD-BMS-01: configuración del cuadro BMS (nº de bornes + regletero) -->
         <div id="cpdCuadroConfigWrap" style="display:none;flex-direction:column;gap:10px">
-          <div style="max-width:160px">
-            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Nº de bornes</label>
-            <input id="cpdCuadroNumBornes" type="number" min="1" max="200" onchange="cpdRenderBornero()" oninput="cpdRenderBornero()" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
+          <!-- CPD-BMS-03: el cuadro se define por módulos (tarjetas del PLC). -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" onclick="cpdCargarPlantillaBMS()" class="btn-primary" style="margin:0;flex:1;min-width:130px">⚡ Plantilla BMS</button>
+            <button type="button" onclick="cpdAddModulo()" style="flex:1;min-width:110px;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-weight:600;cursor:pointer">+ Módulo</button>
           </div>
+          <div id="cpdModulosList" style="display:flex;flex-direction:column;gap:5px"></div>
           <div>
-            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Bornero — elige en cada borne qué sonda y canal va (se guarda al momento)</div>
-            <div id="cpdBornero" style="display:flex;flex-direction:column;gap:4px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface2)"></div>
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Bornero — elige en cada canal qué sonda va (se guarda al momento)</div>
+            <div id="cpdBornero" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface2)"></div>
           </div>
         </div>
 
@@ -15206,7 +15208,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.47';
+const APP_VERSION = '9.48';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -17689,6 +17691,41 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function cpdCuadrosDelPlano() {
     return (window._cpdPlanoActual?.sondas || []).filter(cpdEsCuadro);
   }
+  // CPD-BMS-03: el cuadro se define por MÓDULOS/tarjetas del PLC. Catálogo, plantilla del
+  // esquema real (Schneider SpaceLogic, Sala 304) y helpers. Retrocompat: un cuadro viejo con
+  // {num_bornes} se ve como un módulo genérico de N canales de entrada.
+  const CPD_TARJETAS = {
+    'AUTO-2P': { io:'prot',  canales:0,  desc:'Automáticos de línea' },
+    'AUTO-24V':{ io:'prot',  canales:0,  desc:'Automático 24 Vdc salida' },
+    'PS-24V':  { io:'power', canales:0,  desc:'Fuente 24 Vdc' },
+    'RED-24V': { io:'power', canales:0,  desc:'Redundancia 24 Vdc' },
+    'AS-P':    { io:'bus',   canales:0,  desc:'Controlador SpaceLogic' },
+    'UI-16':   { io:'UI',    canales:16, desc:'16 entradas universales' },
+    'UI-8':    { io:'UI',    canales:8,  desc:'8 entradas universales' },
+    'AO-8':    { io:'AO',    canales:8,  desc:'8 salidas analógicas' },
+    'DO-12':   { io:'DO',    canales:12, desc:'12 salidas digitales' },
+  };
+  const CPD_IO_LABEL = { UI:'Entrada UI', DI:'Entrada DI', AO:'Salida AO', DO:'Salida DO', bus:'Bus', power:'Aliment.', prot:'Autom.' };
+  const CPD_IO_ENTRADA_F = new Set(['UI','DI']);
+  const CPD_PLANTILLA_BMS = [
+    ['AUT.1','AUTO-2P'],['AUT.2','AUTO-2P'],['FA.1','PS-24V'],['FA.2','PS-24V'],['RED','RED-24V'],
+    ['AU.PLC','AUTO-24V'],['AU.BOR','AUTO-24V'],['MOD.2','AS-P'],
+    ['MOD.3','UI-16'],['MOD.4','UI-16'],['MOD.5','UI-16'],['MOD.8','AO-8'],['MOD.9','DO-12'],
+  ];
+  // Módulos de un cuadro (compat: {num_bornes} → un módulo genérico de entrada).
+  function cpdModulos(cuadro) {
+    try { const c = JSON.parse(cuadro.config_json || '{}');
+      if (Array.isArray(c.modulos)) return c.modulos;
+      const n = parseInt(c.num_bornes, 10); if (Number.isFinite(n)) return [{ id:'m1', nombre:'Bornes', tarjeta:'generico', io:'UI', canales:n }];
+    } catch {}
+    return [];
+  }
+  // Bloque de regletero (X2, X3…) de un módulo según su orden entre los que tienen canales.
+  function cpdBloqueDe(cuadro, modId) {
+    const eio = cpdModulos(cuadro).filter(m => m.canales > 0);
+    const i = eio.findIndex(m => m.id === modId);
+    return i < 0 ? '' : 'X' + (i + 2);
+  }
   function cpdNumBornes(cuadro) {
     try { return JSON.parse(cuadro.config_json || '{}').num_bornes || 0; } catch { return 0; }
   }
@@ -17935,8 +17972,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const esCuadro = herramienta.categoria === 'cuadro_bms';
     try {
       const cuerpo = { plano_id: st.plano.id, categoria: herramienta.categoria, tipo: herramienta.tipo, pos_x: x, pos_y: y };
-      // CPD-BMS-01: un cuadro nace con 12 bornes por defecto; se ajustan al configurarlo.
-      if (esCuadro) cuerpo.config_json = { num_bornes: 12 };
+      // CPD-BMS-03: un cuadro nace con la plantilla BMS del esquema (editable después).
+      let _plantilla = null;
+      if (esCuadro) { let n = 0; _plantilla = CPD_PLANTILLA_BMS.map(([nombre, tarjeta]) => ({ id: 'm' + (++n), nombre, tarjeta, io: CPD_TARJETAS[tarjeta].io, canales: CPD_TARJETAS[tarjeta].canales })); cuerpo.config_json = { modulos: _plantilla }; }
       const res = await apiCall('/cpd/sondas', {
         method: 'POST',
         body: JSON.stringify(cuerpo)
@@ -17948,7 +17986,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       // imagen del plano y recrea todos los marcadores) — se veía como un parpadeo de
       // pantalla cada vez que se colocaba una sonda. Ahora solo se añade el marcador
       // nuevo al canvas ya existente, con los datos que ya devuelve el POST.
-      const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y, config_json: esCuadro ? JSON.stringify({ num_bornes: 12 }) : null, cuadro_id: null, conexiones_json: null };
+      const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y, config_json: esCuadro ? JSON.stringify({ modulos: _plantilla }) : null, cuadro_id: null, conexiones_json: null };
       st.sondas.push(nuevaSonda);
       const canvas = document.getElementById('cpdPlanoCanvas');
       if (canvas) cpdAddSondaMarker(canvas, nuevaSonda);
@@ -18080,7 +18118,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const lecturasWrap = document.getElementById('cpdSondaLecturasWrap');
     if (lecturasWrap) lecturasWrap.style.display = esSonda ? '' : 'none';
     if (esCuadro) {
-      document.getElementById('cpdCuadroNumBornes').value = cpdNumBornes(sonda) || 12;
+      cpdRenderModulosList();
       cpdRenderBornero();
     } else {
       cpdPoblarSelectorCuadros(sonda);
@@ -18088,9 +18126,53 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('modalCpdSonda').style.display = 'flex';
     if (esSonda) cpdCargarLecturas(sonda.id);
   }
+  // ── CPD-BMS-03: módulos del cuadro (móvil, simple) ──
+  function cpdCuadroActual() { return (window._cpdPlanoActual?.sondas || []).find(s => String(s.id) === String(window._cpdSondaActualId)); }
+  function cpdRenderModulosList() {
+    const cont = document.getElementById('cpdModulosList'); if (!cont) return;
+    const cuadro = cpdCuadroActual(); const mods = cuadro ? cpdModulos(cuadro) : [];
+    cont.innerHTML = mods.length ? mods.map(m => {
+      const bloque = m.canales > 0 ? cpdBloqueDe(cuadro, m.id) : '';
+      return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 8px">
+        <span style="font-family:monospace;font-weight:700;min-width:46px">${esc(m.nombre)}</span>
+        <span style="flex:1;min-width:0">${esc(m.tarjeta)} <span style="color:var(--muted)">· ${CPD_IO_LABEL[m.io] || m.io}${m.canales ? ' · ' + m.canales + ' ch' + (bloque ? ' · ' + bloque : '') : ''}</span></span>
+        <button type="button" onclick="cpdQuitarModulo('${m.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px">✕</button>
+      </div>`;
+    }).join('') : '<div style="color:var(--muted);font-size:12px">Sin módulos. Pulsa «Plantilla BMS».</div>';
+  }
+  async function cpdGuardarConfigCuadro(cuadro, modulos) {
+    const res = await apiCall(`/cpd/sondas/${cuadro.id}`, { method: 'PATCH', body: JSON.stringify({ config_json: { modulos } }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Error al guardar el cuadro');
+    cuadro.config_json = JSON.stringify({ modulos });
+    cpdRenderModulosList(); cpdRenderBornero(); cpdRenderEditor();
+  }
+  async function cpdCargarPlantillaBMS() {
+    const cuadro = cpdCuadroActual(); if (!cuadro) return;
+    let n = 0;
+    const modulos = CPD_PLANTILLA_BMS.map(([nombre, tarjeta]) => ({ id: 'm' + (++n), nombre, tarjeta, io: CPD_TARJETAS[tarjeta].io, canales: CPD_TARJETAS[tarjeta].canales }));
+    try { await cpdGuardarConfigCuadro(cuadro, modulos); toast('✅ Plantilla BMS cargada'); }
+    catch (e) { toast('❌ ' + e.message, 'error'); }
+  }
+  async function cpdAddModulo() {
+    const cuadro = cpdCuadroActual(); if (!cuadro) return;
+    const mods = cpdModulos(cuadro).slice();
+    mods.push({ id: 'm' + Date.now(), nombre: 'MOD.' + (mods.length + 1), tarjeta: 'UI-16', io: 'UI', canales: 16 });
+    try { await cpdGuardarConfigCuadro(cuadro, mods); } catch (e) { toast('❌ ' + e.message, 'error'); }
+  }
+  async function cpdQuitarModulo(modId) {
+    const cuadro = cpdCuadroActual(); if (!cuadro) return;
+    if (!confirm('¿Quitar este módulo del cuadro?')) return;
+    const mods = cpdModulos(cuadro).filter(m => m.id !== modId);
+    try { await cpdGuardarConfigCuadro(cuadro, mods); }
+    catch (e) { toast('❌ ' + (e.message || 'No se pudo: ¿hay sondas conectadas a ese módulo?'), 'error'); }
+  }
+  window.cpdCargarPlantillaBMS = cpdCargarPlantillaBMS;
+  window.cpdAddModulo = cpdAddModulo;
+  window.cpdQuitarModulo = cpdQuitarModulo;
 
-  // CPD-BMS-02: rellena el selector "Cuadro BMS" y, al elegir cuadro, pinta una fila por
-  // canal de la sonda (temp/hum/ΔP) con su borne (libres) y color de cable.
+  // CPD-BMS-03: en la ficha de la sonda, por cada canal (temp/hum/ΔP) un selector de
+  // "módulo · canal" (entradas UI libres del cuadro) + color de cable.
   function cpdPoblarSelectorCuadros(sonda) {
     const selC = document.getElementById('cpdSondaCuadro');
     const cuadros = cpdCuadrosDelPlano();
@@ -18099,6 +18181,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     selC.value = sonda.cuadro_id ? String(sonda.cuadro_id) : '';
     cpdSondaCuadroCambio(cpdConexiones(sonda));
   }
+  // Clave de un canal ocupado, tolerando formato viejo (borne) y nuevo (modulo/pin).
+  function cpdCxKey(c) { return (c.modulo || 'm1') + ':' + (c.pin != null ? c.pin : c.borne); }
   function cpdSondaCuadroCambio(conexActuales) {
     const st = window._cpdPlanoActual;
     const selC = document.getElementById('cpdSondaCuadro');
@@ -18106,83 +18190,69 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const sonda = (st?.sondas || []).find(s => String(s.id) === String(window._cpdSondaActualId));
     const cuadro = (st?.sondas || []).find(s => String(s.id) === selC.value);
     if (!cuadro || !sonda) { cont.innerHTML = ''; return; }
-    const n = cpdNumBornes(cuadro);
     const yo = window._cpdSondaActualId;
-    // bornes ocupados por OTRAS sondas de este cuadro
+    const modsEntrada = cpdModulos(cuadro).filter(m => CPD_IO_ENTRADA_F.has(m.io) && m.canales > 0);
     const ocupados = {};
     (st.sondas || []).forEach(s => {
       if (String(s.id) === String(yo) || String(s.cuadro_id) !== String(cuadro.id)) return;
-      cpdConexiones(s).forEach(c => { if (c.borne) ocupados[c.borne] = s.nombre || ('#' + s.id); });
+      cpdConexiones(s).forEach(c => { ocupados[cpdCxKey(c)] = s.nombre || ('#' + s.id); });
     });
     const prev = {}; (Array.isArray(conexActuales) ? conexActuales : []).forEach(c => { prev[c.canal] = c; });
     const colorOpts = (sel) => '<option value="">color…</option>' + CPD_COLORES.map(c => `<option value="${c.v}" ${sel===c.v?'selected':''}>${c.v}</option>`).join('');
-    const canales = cpdCanalesDeTipo(sonda.tipo);
-    cont.innerHTML = canales.map(canal => {
+    cont.innerHTML = cpdCanalesDeTipo(sonda.tipo).map(canal => {
       const pc = prev[canal] || {};
-      let bopts = '<option value="">— sin asignar —</option>';
-      for (let k = 1; k <= n; k++) {
-        const librePorOtro = !ocupados[k];
-        const sel = String(pc.borne) === String(k) ? 'selected' : '';
-        bopts += `<option value="${k}" ${librePorOtro ? '' : 'disabled'} ${sel}>Borne ${k}${librePorOtro ? '' : ' (ocupado: ' + esc(ocupados[k]) + ')'}</option>`;
-      }
+      const valPrev = pc.modulo != null ? `${pc.modulo}:${pc.pin}` : (pc.borne != null ? `m1:${pc.borne}` : '');
+      let opts = '<option value="">— sin asignar —</option>';
+      modsEntrada.forEach(m => { const bloque = cpdBloqueDe(cuadro, m.id); for (let k = 1; k <= m.canales; k++) {
+        const key = m.id + ':' + k; const libre = !ocupados[key]; const sel = key === valPrev ? 'selected' : '';
+        opts += `<option value="${key}" ${libre ? '' : 'disabled'} ${sel}>${esc(m.nombre)} · ${m.io}${k}${bloque ? ' (' + bloque + ')' : ''}${libre ? '' : ' ocupado'}</option>`;
+      } });
       return `<div style="display:flex;gap:6px;align-items:center" data-canal="${canal}">
         <span style="min-width:42px;font-size:11px;font-weight:800;color:var(--accent)">${CPD_CANAL_LABEL[canal] || canal}</span>
-        <select class="cpd-cx-borne" style="flex:1;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text)">${bopts}</select>
-        <select class="cpd-cx-color" style="width:96px;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text)">${colorOpts(pc.color)}</select>
+        <select class="cpd-cx-mp" style="flex:1;min-width:0;padding:7px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text)">${opts}</select>
+        <select class="cpd-cx-color" style="width:88px;padding:7px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text)">${colorOpts(pc.color)}</select>
       </div>`;
     }).join('');
   }
-  // Lee las conexiones del formulario (canal/borne/color), omitiendo canales sin borne.
   function cpdLeerConexionesForm() {
     const cont = document.getElementById('cpdSondaConexiones');
-    const filas = [...cont.querySelectorAll('[data-canal]')];
     const cx = [];
-    for (const f of filas) {
-      const canal = f.dataset.canal;
-      const borne = parseInt(f.querySelector('.cpd-cx-borne').value, 10);
-      const color = f.querySelector('.cpd-cx-color').value || null;
-      if (Number.isFinite(borne)) cx.push({ canal, borne, color });
-    }
+    [...cont.querySelectorAll('[data-canal]')].forEach(f => {
+      const canal = f.dataset.canal; const mp = f.querySelector('.cpd-cx-mp').value; const color = f.querySelector('.cpd-cx-color').value || null;
+      if (mp) { const [modulo, pin] = mp.split(':'); cx.push({ canal, modulo, pin: +pin, color }); }
+    });
     return cx;
   }
 
-  // CPD-BMS-02: regletero del cuadro (1..N). Cada borne muestra el lado CAMPO (color del cable
-  // + sonda) y el lado CUADRO (canal → entrada). La asignación se edita desde cada sonda.
+  // CPD-BMS-03: bornero del cuadro agrupado por módulo (bloque X). Los canales de entrada (UI)
+  // llevan un selector para enchufar sonda·canal; los de salida (AO/DO) quedan reservados.
   function cpdRenderBornero() {
-    const cont = document.getElementById('cpdBornero');
-    if (!cont) return;
+    const cont = document.getElementById('cpdBornero'); if (!cont) return;
     const st = window._cpdPlanoActual;
-    const cuadroId = window._cpdSondaActualId;
-    const n = Math.max(0, Math.min(200, parseInt(document.getElementById('cpdCuadroNumBornes').value, 10) || 0));
-    const porBorne = {}; // borne -> {s, c}
-    (st?.sondas || []).forEach(s => {
-      if (String(s.cuadro_id) !== String(cuadroId)) return;
-      cpdConexiones(s).forEach(c => { if (c.borne) porBorne[c.borne] = { s, c }; });
-    });
-    // Opciones de asignación: cada sonda del plano (no cuadro) × sus canales.
-    const sondas = (st?.sondas || []).filter(s => !cpdEsCuadro(s));
-    const opciones = (valSel) => {
-      let o = '<option value="">— libre —</option>';
-      sondas.forEach(s => cpdCanalesDeTipo(s.tipo).forEach(canal => {
-        const v = `${s.id}:${canal}`;
-        o += `<option value="${v}" ${v === valSel ? 'selected' : ''}>${esc(s.nombre || ('#' + s.id))} · ${CPD_CANAL_LABEL[canal] || canal}</option>`;
-      }));
-      return o;
-    };
-    let html = '';
-    for (let k = 1; k <= n; k++) {
-      const e = porBorne[k];
-      const val = e ? `${e.s.id}:${e.c.canal}` : '';
-      const swatch = e && e.c.color ? `<span title="${esc(e.c.color)}" style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--border);background:${cpdColorHex(e.c.color)};flex-shrink:0"></span>` : '<span style="width:12px;flex-shrink:0"></span>';
-      html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 4px;border-radius:6px;background:${e ? 'rgba(99,102,241,.12)' : 'transparent'}">
-        <span style="font-weight:800;min-width:26px;color:var(--muted)">${k}</span>
-        ${swatch}
-        <select onchange="cpdBorneAsignar(${k}, this.value)" style="flex:1;min-width:0;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text)">${opciones(val)}</select>
-      </div>`;
-    }
-    cont.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Indica el nº de bornes.</div>';
+    const cuadro = (st?.sondas || []).find(s => String(s.id) === String(window._cpdSondaActualId));
+    if (!cuadro) { cont.innerHTML = ''; return; }
+    const mods = cpdModulos(cuadro).filter(m => m.canales > 0);
+    const porPin = {};
+    (st.sondas || []).forEach(s => { if (String(s.cuadro_id) !== String(cuadro.id)) return; cpdConexiones(s).forEach(c => { porPin[cpdCxKey(c)] = { s, c }; }); });
+    const sondas = (st.sondas || []).filter(s => !cpdEsCuadro(s));
+    const opciones = (valSel) => { let o = '<option value="">— libre —</option>'; sondas.forEach(s => cpdCanalesDeTipo(s.tipo).forEach(canal => { const v = `${s.id}:${canal}`; o += `<option value="${v}" ${v === valSel ? 'selected' : ''}>${esc(s.nombre || ('#' + s.id))} · ${CPD_CANAL_LABEL[canal] || canal}</option>`; })); return o; };
+    cont.innerHTML = mods.map(m => {
+      const bloque = cpdBloqueDe(cuadro, m.id); const entrada = CPD_IO_ENTRADA_F.has(m.io);
+      let filas = '';
+      for (let k = 1; k <= m.canales; k++) {
+        const e = porPin[m.id + ':' + k]; const val = e ? `${e.s.id}:${e.c.canal}` : '';
+        const et = `<span style="font-family:monospace;font-size:10px;color:var(--muted);min-width:56px">${bloque}·${m.io}${k}</span>`;
+        if (entrada) {
+          const sw = e && e.c.color ? `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;border:1px solid var(--border);background:${cpdColorHex(e.c.color)};flex-shrink:0"></span>` : '';
+          filas += `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">${et}${sw}<select onchange="cpdBorneAsignar('${m.id}',${k},this.value)" style="flex:1;min-width:0;padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text)">${opciones(val)}</select></div>`;
+        } else {
+          filas += `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">${et}<span style="flex:1;color:var(--muted);font-size:11px">salida — válvula/equipo (próximamente)</span></div>`;
+        }
+      }
+      return `<div style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:3px">${esc(m.nombre)} · ${esc(m.tarjeta)} <span style="color:var(--muted);font-weight:600">${bloque}</span></div>${filas}</div>`;
+    }).join('') || '<div style="color:var(--muted);font-size:12px">Carga la plantilla o añade módulos con canales.</div>';
   }
-  // Guarda las conexiones de una sonda (PATCH) y refresca el estado local.
   async function cpdGuardarConexionesSonda(sonda, conexiones, cuadroId) {
     const cid = (cuadroId !== undefined) ? cuadroId : sonda.cuadro_id;
     const res = await apiCall(`/cpd/sondas/${sonda.id}`, { method: 'PATCH', body: JSON.stringify({ cuadro_id: cid, conexiones }) });
@@ -18190,31 +18260,28 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!res.ok) throw new Error(data.error || 'Error al asignar');
     sonda.cuadro_id = cid; sonda.conexiones_json = JSON.stringify(conexiones);
   }
-  // CPD-BMS-02: asignar/liberar un borne DESDE el propio bornero del cuadro. La conexión vive
-  // en la sonda; aquí se traduce a los PATCH necesarios (liberar el ocupante previo y colocar
-  // la nueva conexión). valor = '' (libre) o 'sondaId:canal'.
-  async function cpdBorneAsignar(borne, valor) {
+  // Asignar/liberar un canal DESDE el bornero del cuadro. valor = '' | 'sondaId:canal'.
+  async function cpdBorneAsignar(modId, pin, valor) {
     const st = window._cpdPlanoActual;
     const cuadroId = window._cpdSondaActualId;
+    const enEsteCanal = (c) => (c.modulo || 'm1') === modId && (c.pin != null ? c.pin : c.borne) === pin;
     let owner = null;
-    (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId)) cpdConexiones(s).forEach(c => { if (c.borne === borne) owner = { s, c }; }); });
+    (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId)) cpdConexiones(s).forEach(c => { if (enEsteCanal(c)) owner = { s, c }; }); });
     try {
       if (!valor) {
-        if (owner) await cpdGuardarConexionesSonda(owner.s, cpdConexiones(owner.s).filter(c => c.borne !== borne));
+        if (owner) await cpdGuardarConexionesSonda(owner.s, cpdConexiones(owner.s).filter(c => !enEsteCanal(c)));
       } else {
         const [sid, canal] = valor.split(':');
-        const S = (st?.sondas || []).find(s => String(s.id) === String(sid));
-        if (!S) return;
+        const S = (st?.sondas || []).find(s => String(s.id) === String(sid)); if (!S) return;
         if (owner && !(String(owner.s.id) === String(sid) && owner.c.canal === canal)) {
-          await cpdGuardarConexionesSonda(owner.s, cpdConexiones(owner.s).filter(c => c.borne !== borne));
+          await cpdGuardarConexionesSonda(owner.s, cpdConexiones(owner.s).filter(c => !enEsteCanal(c)));
         }
         const prevColor = (cpdConexiones(S).find(c => c.canal === canal) || {}).color || null;
         const nuevas = cpdConexiones(S).filter(c => c.canal !== canal);
-        nuevas.push({ canal, borne, color: prevColor });
+        nuevas.push({ canal, modulo: modId, pin, color: prevColor });
         await cpdGuardarConexionesSonda(S, nuevas, cuadroId);
       }
-      cpdRenderBornero();
-      cpdRenderEditor();
+      cpdRenderBornero(); cpdRenderEditor();
     } catch (e) { toast('❌ ' + (e.message || 'Error'), 'error'); cpdRenderBornero(); }
   }
   window.cpdSondaCuadroCambio = cpdSondaCuadroCambio;
@@ -18237,15 +18304,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
     try {
       if (cpdEsCuadro(sonda)) {
-        // CPD-BMS-01: guardar el cuadro (nombre, serie, notas y nº de bornes).
-        const num_bornes = parseInt(document.getElementById('cpdCuadroNumBornes').value, 10);
-        if (!Number.isFinite(num_bornes) || num_bornes < 1 || num_bornes > 200) { toast('El nº de bornes debe estar entre 1 y 200', 'error'); return; }
-        const res = await apiCall(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify({ nombre, numero_serie, notas, num_bornes }) });
+        // CPD-BMS-03: los módulos se guardan al cargar plantilla / añadir / quitar; aquí solo
+        // los datos del cuadro (nombre, nº de serie, notas).
+        const res = await apiCall(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify({ nombre, numero_serie, notas }) });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Error al guardar');
         sonda.nombre = nombre; sonda.numero_serie = numero_serie; sonda.notas = notas;
-        sonda.config_json = JSON.stringify({ num_bornes });
-        cpdRenderBornero();
       } else {
         const modelo = document.getElementById('cpdSondaModelo').value.trim();
         const zona = document.getElementById('cpdSondaZona').value;
@@ -18400,24 +18464,32 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           width:16px;height:16px;border-radius:${cua ? '3px' : '50%'};background:${info.color};border:1.5px solid #fff;
           display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff">${s._n}</div>`;
       }).join('');
-      const conexResumen = (s) => cpdConexiones(s).map(c => `${nombreCuadro(s.cuadro_id)} b${c.borne} (${CPD_CANAL_LABEL[c.canal] || c.canal})`).join(', ');
+      const cuadroObj = (cid) => cuadros.find(c => String(c.id) === String(cid));
+      const conexResumen = (s) => { const c0 = cuadroObj(s.cuadro_id); return cpdConexiones(s).map(c => { const m = (c0 ? cpdModulos(c0) : []).find(mm => mm.id === (c.modulo || 'm1')); const io = m ? m.io : 'UI'; const bloque = c0 ? cpdBloqueDe(c0, c.modulo || 'm1') : ''; return `${bloque ? bloque + '·' : ''}${io}${c.pin != null ? c.pin : c.borne} (${CPD_CANAL_LABEL[c.canal] || c.canal})`; }).join(', '); };
       const filasSondas = sondas.map(s => `<tr>
           <td>${s._n}</td><td>${_escHtml(s.nombre)}</td><td>${_escHtml(s.numero_serie || '—')}</td>
           <td>${s.cuadro_id ? _escHtml(conexResumen(s) || nombreCuadro(s.cuadro_id)) : '—'}</td>
         </tr>`).join('');
-      // Una sección de bornero por cada cuadro BMS: borne → color de cable, sonda y canal.
+      // CPD-BMS-03: una tabla de bornas por cuadro. Orden: borna → nombre → nº serie → E/S del PLC.
+      // 2 bornas por canal (señal/común) + las de 24 V del módulo, numeración por bloque.
       const seccionesCuadros = cuadros.map(c => {
-        const n = cpdNumBornes(c);
-        const porBorne = {}; sondas.forEach(s => { if (String(s.cuadro_id) === String(c.id)) cpdConexiones(s).forEach(cx => { if (cx.borne) porBorne[cx.borne] = { s, cx }; }); });
+        const mods = cpdModulos(c).filter(m => m.canales > 0);
+        const porPin = {}; sondas.forEach(s => { if (String(s.cuadro_id) === String(c.id)) cpdConexiones(s).forEach(cx => { porPin[(cx.modulo || 'm1') + ':' + (cx.pin != null ? cx.pin : cx.borne)] = { s, cx }; }); });
         let filas = '';
-        for (let k = 1; k <= n; k++) {
-          const e = porBorne[k];
-          const sw = e && e.cx.color ? `<span style="display:inline-block;width:11px;height:11px;border-radius:2px;border:1px solid #bbb;background:${cpdColorHex(e.cx.color)};vertical-align:middle"></span> ${_escHtml(e.cx.color)}` : '—';
-          filas += `<tr><td>${k}</td><td>${sw}</td><td>${e ? _escHtml(e.s.nombre) + ' · ' + (CPD_CANAL_LABEL[e.cx.canal] || e.cx.canal) : '<span style=\"color:#8a94a6\">libre</span>'}</td><td>${e ? _escHtml(e.s.numero_serie || '—') : ''}</td></tr>`;
-        }
-        return `<h2 style="font-size:15px;margin-top:22px">🗄️ ${_escHtml(c.nombre || ('Cuadro ' + c.id))}${c.numero_serie ? ' · <span style="font-weight:400;color:#5b6472">Nº serie ' + _escHtml(c.numero_serie) + '</span>' : ''} <span style="font-weight:400;color:#5b6472">(${n} bornes)</span></h2>
-          <table><thead><tr><th>Borne</th><th>Cable</th><th>Sonda · canal</th><th>Nº serie</th></tr></thead>
-          <tbody>${filas || '<tr><td colspan="4">Sin bornes</td></tr>'}</tbody></table>`;
+        mods.forEach(m => {
+          const bloque = cpdBloqueDe(c, m.id); let bn = 0;
+          const d1 = ++bn, d2 = ++bn;
+          filas += `<tr><td>${bloque}:${d1}/${d2}</td><td colspan="2" style="color:#b45309">24 V (DC+/DC−) · alimentación de campo</td><td>${bloque}</td></tr>`;
+          for (let k = 1; k <= m.canales; k++) {
+            const bS = ++bn, bC = ++bn; const e = porPin[m.id + ':' + k];
+            const sw = e && e.cx.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:1px solid #bbb;background:${cpdColorHex(e.cx.color)};vertical-align:middle"></span> ` : '';
+            const nom = e ? sw + _escHtml(e.s.nombre) + ' · ' + (CPD_CANAL_LABEL[e.cx.canal] || e.cx.canal) : '<span style="color:#8a94a6">libre</span>';
+            filas += `<tr><td>${bloque}:${bS}/${bC}</td><td>${nom}</td><td>${e ? _escHtml(e.s.numero_serie || '—') : ''}</td><td>${bloque}·${m.io}${k}</td></tr>`;
+          }
+        });
+        return `<h2 style="font-size:15px;margin-top:22px">🗄️ ${_escHtml(c.nombre || ('Cuadro ' + c.id))}${c.numero_serie ? ' · <span style="font-weight:400;color:#5b6472">Nº serie ' + _escHtml(c.numero_serie) + '</span>' : ''}</h2>
+          <table><thead><tr><th>Bornas</th><th>Nombre</th><th>Nº serie</th><th>E/S del PLC</th></tr></thead>
+          <tbody>${filas || '<tr><td colspan="4">Sin módulos con canales</td></tr>'}</tbody></table>`;
       }).join('');
       document.getElementById('cpdInformeTitulo').textContent = 'Informe · ' + st.plano.titulo;
       frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe ${_escHtml(st.plano.titulo)}</title>
@@ -18436,7 +18508,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         <div class="plano-wrap"><img src="${imgUrl}">${marcadoresHtml}</div>
         <h2 style="font-size:15px">Sondas</h2>
         <table>
-          <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Conexiones (cuadro · borne · canal)</th></tr></thead>
+          <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Conexiones (bloque · E/S del PLC)</th></tr></thead>
           <tbody>${filasSondas || '<tr><td colspan="4">Sin sondas</td></tr>'}</tbody>
         </table>
         ${seccionesCuadros}
