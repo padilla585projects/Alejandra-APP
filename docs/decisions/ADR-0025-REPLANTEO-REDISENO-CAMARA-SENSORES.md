@@ -2,8 +2,8 @@
 
 - Identificador: ADR-0025
 - Fecha: 2026-09-09
-- Estado: **Propuesto** — redactado tras varias sesiones de maqueta con Adrián (2026-09-09).
-  Aceptarlo formalmente sigue siendo decisión humana (ADR-0007).
+- Estado: **Aceptado** — aceptado por Adrián el 2026-09-09 (decisión humana, ADR-0007).
+  Redactado tras varias sesiones de maqueta con Adrián ese mismo día.
 - Decisores: Director del Proyecto
 - Amplía / evoluciona: **ADR-0024** (Replanteo asistido por cámara — foto primero, AR después)
 - Depende de: ADR-0007 (autonomía), ADR-0011 (migraciones por vertical), DEPT-01 (aislamiento
