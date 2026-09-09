@@ -1988,7 +1988,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <div class="modal-overlay" id="modalCpdOfficeSonda" style="display:none" onclick="if(event.target===this)cpdOfficeCerrarSonda()">
         <div class="modal" style="max-width:520px">
           <div class="modal-header">
-            <div class="modal-title">Sonda</div>
+            <div class="modal-title" id="cpdOfficeSondaTitulo">Sonda</div>
             <button class="modal-close" onclick="cpdOfficeCerrarSonda()">✕</button>
           </div>
           <div class="modal-body">
@@ -2001,27 +2001,55 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <label>Nº de serie</label>
               <input class="form-input" id="cpdOfficeSondaSerie" type="text">
             </div>
-            <div class="form-group">
-              <label>Zona</label>
-              <select class="form-input" id="cpdOfficeSondaZona">
-                <option value="">Sin especificar</option>
-                <option value="parte_1">Parte 1</option>
-                <option value="parte_2">Parte 2</option>
-                <option value="parte_3">Parte 3</option>
-                <option value="pasillo_caliente">Pasillo caliente</option>
-              </select>
+          </div>
+          <div id="cpdOfficeCamposSondaExtra">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Zona</label>
+                <select class="form-input" id="cpdOfficeSondaZona">
+                  <option value="">Sin especificar</option>
+                  <option value="parte_1">Parte 1</option>
+                  <option value="parte_2">Parte 2</option>
+                  <option value="parte_3">Parte 3</option>
+                  <option value="pasillo_caliente">Pasillo caliente</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Modelo</label>
+                <input class="form-input" id="cpdOfficeSondaModelo" type="text">
+              </div>
             </div>
-            <div class="form-group">
-              <label>Modelo</label>
-              <input class="form-input" id="cpdOfficeSondaModelo" type="text">
+            <!-- CPD-BMS-01: conexión de la sonda a un cuadro BMS + borne -->
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Cuadro BMS</label>
+                <select class="form-input" id="cpdOfficeSondaCuadro" onchange="cpdOfficeSondaCuadroCambio()">
+                  <option value="">Sin conectar</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Borne (par PLC)</label>
+                <select class="form-input" id="cpdOfficeSondaBorne"><option value="">—</option></select>
+              </div>
             </div>
           </div>
           <div class="form-group">
             <label>Notas</label>
             <textarea class="form-input" id="cpdOfficeSondaNotas" rows="2"></textarea>
           </div>
+
+          <!-- CPD-BMS-01: configuración del cuadro BMS (nº de bornes + regletero) -->
+          <div id="cpdOfficeCuadroConfigWrap" style="display:none">
+            <div class="form-group" style="max-width:180px">
+              <label>Nº de bornes</label>
+              <input class="form-input" id="cpdOfficeCuadroNumBornes" type="number" min="1" max="200" oninput="cpdOfficeRenderBornero()" onchange="cpdOfficeRenderBornero()">
+            </div>
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:6px 0">Bornero — cada borne es doble (señal + común PLC)</div>
+            <div id="cpdOfficeBornero" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:#f8fafc"></div>
+          </div>
+
           <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-secondary" style="flex:1;color:var(--danger)" onclick="cpdOfficeSondaEliminar()">🗑 Eliminar sonda</button>
+            <button class="btn btn-secondary" style="flex:1;color:var(--danger)" onclick="cpdOfficeSondaEliminar()">🗑 Eliminar</button>
             <button class="btn btn-primary" style="flex:1" onclick="cpdOfficeSondaGuardarDatos()">Guardar cambios</button>
           </div>
 
@@ -14097,12 +14125,17 @@ window._cpdOfficePlantillaSeleccionada = null;
 // Catalogo de tipos de elemento colocables en el plano — igual que index.html,
 // hoy solo sondas ambientales, manana camaras/control de acceso.
 const CPD_OFFICE_TIPOS_ELEMENTO = [
-  { categoria: 'sonda_ambiental', tipo: 'temp_hum',            icono: '🌡️', label: 'Temp/Hum' },
-  { categoria: 'sonda_ambiental', tipo: 'presion_diferencial', icono: '📉', label: 'Presión Dif.' },
+  { categoria: 'sonda_ambiental', tipo: 'temp_hum',            icono: '🌡️', label: 'Temp/Hum', color: '#22c55e' },
+  { categoria: 'sonda_ambiental', tipo: 'presion_diferencial', icono: '📉', label: 'Presión Dif.', color: '#22c55e' },
+  // CPD-BMS-01: cuadro BMS donde se enchufan las sondas (bornero PLC).
+  { categoria: 'cuadro_bms',      tipo: 'cuadro',              icono: '🗄️', label: 'Cuadro BMS', color: '#6366f1' },
 ];
 function cpdOfficeTipoInfo(tipo) {
   return CPD_OFFICE_TIPOS_ELEMENTO.find(t => t.tipo === tipo) || CPD_OFFICE_TIPOS_ELEMENTO[0];
 }
+function cpdOfficeEsCuadro(el) { return (el?.categoria || el?.tipo) === 'cuadro_bms' || el?.tipo === 'cuadro'; }
+function cpdOfficeCuadrosDelPlano() { return (window._cpdOfficePlano?.sondas || []).filter(cpdOfficeEsCuadro); }
+function cpdOfficeNumBornes(cuadro) { try { return JSON.parse(cuadro.config_json || '{}').num_bornes || 0; } catch { return 0; } }
 window._cpdOfficeHerramientaActiva = null;
 
 function cpdOfficeRenderToolbar() {
@@ -14246,7 +14279,7 @@ async function cpdOfficeAbrirPlano(id) {
         </select>
       </div>
       <div id="cpdOfficeToolbarHint" style="font-size:11px;color:var(--muted);margin-bottom:8px">Elige un tipo y haz clic en el plano para colocarlo · doble clic en un icono para editarlo · ＋/－ para ampliar</div>
-      <div id="cpdOfficeCanvasWrap" style="width:100%;max-height:75vh;overflow:auto;border-radius:8px">
+      <div id="cpdOfficeCanvasWrap" style="width:100%;max-height:88vh;overflow:auto;border-radius:8px">
         <div id="cpdOfficeCanvas" style="position:relative;width:100%;background:#0b0f14;transform-origin:0 0">
           <img id="cpdOfficeImg" src="${_cpdOfficeImagenUrl(data.plano.id)}" style="width:100%;display:block;user-select:none" draggable="false">
         </div>
@@ -14272,18 +14305,22 @@ async function cpdOfficeAbrirPlano(id) {
 async function cpdOfficeCrearSondaEn(x, y, herramienta) {
   const st = window._cpdOfficePlano;
   if (!st) return;
+  const esCuadro = herramienta.categoria === 'cuadro_bms';
   try {
-    const data = await api('/cpd/sondas', { method: 'POST', body: JSON.stringify({ plano_id: st.plano.id, categoria: herramienta.categoria, tipo: herramienta.tipo, pos_x: x, pos_y: y }) });
+    const cuerpo = { plano_id: st.plano.id, categoria: herramienta.categoria, tipo: herramienta.tipo, pos_x: x, pos_y: y };
+    if (esCuadro) cuerpo.config_json = { num_bornes: 12 }; // CPD-BMS-01: cuadro nace con 12 bornes
+    const data = await api('/cpd/sondas', { method: 'POST', body: JSON.stringify(cuerpo) });
     if (data?.ok === false) throw new Error(data.error || 'Error al crear la sonda');
     // CPD-FLICKER-01 (10/08/2026): mismo fix que index.html — cpdOfficeAbrirPlano()
     // reconstruye todo el editor (recarga la imagen del plano incluida), se veía como
     // un parpadeo cada vez que se colocaba una sonda. Solo se añade el marcador nuevo.
-    const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y };
+    const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y, config_json: esCuadro ? JSON.stringify({ num_bornes: 12 }) : null, cuadro_id: null, borne: null };
     st.sondas.push(nuevaSonda);
     const canvas = document.getElementById('cpdOfficeCanvas');
     if (canvas) _cpdOfficeAddMarker(canvas, nuevaSonda);
     window._cpdOfficeHerramientaActiva = herramienta;
     cpdOfficeRenderToolbar();
+    if (esCuadro) cpdOfficeAbrirSonda(data.id); // abrir su config para fijar bornes
   } catch (e) {
     toast(e.message || 'Error al crear la sonda', 'err');
   }
@@ -14293,9 +14330,12 @@ function _cpdOfficeAddMarker(canvas, sonda) {
   const info = cpdOfficeTipoInfo(sonda.tipo);
   const el = document.createElement('div');
   el.dataset.id = sonda.id;
+  // CPD-BMS-01: color por tipo; el cuadro BMS se dibuja cuadrado (azul) para distinguirlo.
+  const esCuadro = cpdOfficeEsCuadro(sonda);
+  const dim = esCuadro ? 30 : 26;
   el.style.cssText = `position:absolute;left:${sonda.pos_x}%;top:${sonda.pos_y}%;transform:translate(-50%,-50%);
-    width:26px;height:26px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
-    display:flex;align-items:center;justify-content:center;font-size:13px;cursor:grab;touch-action:none;z-index:5`;
+    width:${dim}px;height:${dim}px;border-radius:${esCuadro ? '6px' : '50%'};background:${info.color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);
+    display:flex;align-items:center;justify-content:center;font-size:${esCuadro ? '15px' : '13px'};cursor:grab;touch-action:none;z-index:${esCuadro ? 4 : 5}`;
   el.textContent = info.icono;
   const label = document.createElement('div');
   label.textContent = cpdOfficeTextoEtiqueta(sonda);
@@ -14361,6 +14401,10 @@ function cpdOfficeAbrirSonda(id) {
   const sonda = window._cpdOfficePlano?.sondas.find(s => String(s.id) === String(id));
   if (!sonda) return;
   window._cpdOfficeSondaId = sonda.id;
+  const info = cpdOfficeTipoInfo(sonda.tipo);
+  const esCuadro = cpdOfficeEsCuadro(sonda);
+  const esSonda = sonda.categoria === 'sonda_ambiental';
+  document.getElementById('cpdOfficeSondaTitulo').textContent = esCuadro ? '🗄️ Cuadro BMS' : `${info.icono} Sonda`;
   document.getElementById('cpdOfficeSondaNombre').value = sonda.nombre || '';
   document.getElementById('cpdOfficeSondaSerie').value = sonda.numero_serie || '';
   document.getElementById('cpdOfficeSondaModelo').value = sonda.modelo || '';
@@ -14369,9 +14413,16 @@ function cpdOfficeAbrirSonda(id) {
   document.getElementById('cpdOfficeLecturaTemp').value = '';
   document.getElementById('cpdOfficeLecturaHum').value = '';
   document.getElementById('cpdOfficeLecturaPresion').value = '';
-  const esSonda = sonda.categoria === 'sonda_ambiental';
+  document.getElementById('cpdOfficeCamposSondaExtra').style.display = esCuadro ? 'none' : '';
+  document.getElementById('cpdOfficeCuadroConfigWrap').style.display = esCuadro ? 'block' : 'none';
   const lecturasWrap = document.getElementById('cpdOfficeLecturasWrap');
   if (lecturasWrap) lecturasWrap.style.display = esSonda ? '' : 'none';
+  if (esCuadro) {
+    document.getElementById('cpdOfficeCuadroNumBornes').value = cpdOfficeNumBornes(sonda) || 12;
+    cpdOfficeRenderBornero();
+  } else {
+    cpdOfficePoblarSelectorCuadros(sonda);
+  }
   document.getElementById('modalCpdOfficeSonda').style.display = 'flex';
   if (esSonda) cpdOfficeCargarLecturas(sonda.id);
 }
@@ -14380,21 +14431,81 @@ function cpdOfficeCerrarSonda() {
   window._cpdOfficeSondaId = null;
 }
 
+// CPD-BMS-01: selector de cuadro + borne (bornes libres) para una sonda.
+function cpdOfficePoblarSelectorCuadros(sonda) {
+  const selC = document.getElementById('cpdOfficeSondaCuadro');
+  const cuadros = cpdOfficeCuadrosDelPlano();
+  selC.innerHTML = '<option value="">Sin conectar</option>' +
+    cuadros.map(c => `<option value="${c.id}">${escHtml(c.nombre || ('Cuadro ' + c.id))}</option>`).join('');
+  selC.value = sonda.cuadro_id ? String(sonda.cuadro_id) : '';
+  cpdOfficeSondaCuadroCambio(sonda.borne);
+}
+function cpdOfficeSondaCuadroCambio(borneActual) {
+  const st = window._cpdOfficePlano;
+  const selC = document.getElementById('cpdOfficeSondaCuadro');
+  const selB = document.getElementById('cpdOfficeSondaBorne');
+  const cuadro = (st?.sondas || []).find(s => String(s.id) === selC.value);
+  if (!cuadro) { selB.innerHTML = '<option value="">—</option>'; selB.disabled = true; return; }
+  selB.disabled = false;
+  const n = cpdOfficeNumBornes(cuadro);
+  const yo = window._cpdOfficeSondaId;
+  const ocupados = {};
+  (st.sondas || []).forEach(s => { if (String(s.id) !== String(yo) && String(s.cuadro_id) === String(cuadro.id) && s.borne) ocupados[s.borne] = s.nombre || ('#' + s.id); });
+  let html = '<option value="">— sin asignar —</option>';
+  for (let k = 1; k <= n; k++) { const libre = !ocupados[k]; html += `<option value="${k}" ${libre ? '' : 'disabled'}>Borne ${k}${libre ? '' : ' (ocupado: ' + escHtml(ocupados[k]) + ')'}</option>`; }
+  selB.innerHTML = html;
+  selB.value = (borneActual && borneActual <= n && !ocupados[borneActual]) ? String(borneActual) : '';
+}
+// CPD-BMS-01: regletero del cuadro (1..N), cada borne doble (S/C del PLC).
+function cpdOfficeRenderBornero() {
+  const cont = document.getElementById('cpdOfficeBornero');
+  if (!cont) return;
+  const st = window._cpdOfficePlano;
+  const cuadroId = window._cpdOfficeSondaId;
+  const n = Math.max(0, Math.min(200, parseInt(document.getElementById('cpdOfficeCuadroNumBornes').value, 10) || 0));
+  const porBorne = {};
+  (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId) && s.borne) porBorne[s.borne] = s; });
+  let html = '';
+  for (let k = 1; k <= n; k++) {
+    const s = porBorne[k];
+    const chip = 'display:inline-block;min-width:16px;text-align:center;font-size:9px;font-weight:800;padding:1px 4px;border-radius:4px;border:1px solid var(--border)';
+    html += `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 4px;border-radius:6px;background:${s ? 'rgba(99,102,241,.12)' : 'transparent'}">
+      <span style="font-weight:800;min-width:34px;color:var(--muted)">${k}</span>
+      <span style="${chip}" title="Señal">S</span><span style="${chip}" title="Común">C</span>
+      <span style="flex:1">${s ? escHtml(s.nombre || ('Sonda #' + s.id)) + (s.numero_serie ? ' · ' + escHtml(s.numero_serie) : '') : '<span style="color:var(--muted)">libre</span>'}</span>
+    </div>`;
+  }
+  cont.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Indica el nº de bornes.</div>';
+}
+
 async function cpdOfficeSondaGuardarDatos() {
   const id = window._cpdOfficeSondaId;
   if (!id) return;
+  const sonda = window._cpdOfficePlano?.sondas.find(s => String(s.id) === String(id));
+  if (!sonda) return;
   const nombre = document.getElementById('cpdOfficeSondaNombre').value.trim();
   const numero_serie = document.getElementById('cpdOfficeSondaSerie').value.trim();
-  const modelo = document.getElementById('cpdOfficeSondaModelo').value.trim();
   const notas = document.getElementById('cpdOfficeSondaNotas').value.trim();
-  const zona = document.getElementById('cpdOfficeSondaZona').value;
   if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
   try {
-    const data = await api(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify({ nombre, numero_serie, modelo, notas, zona }) });
+    let body;
+    if (cpdOfficeEsCuadro(sonda)) {
+      const num_bornes = parseInt(document.getElementById('cpdOfficeCuadroNumBornes').value, 10);
+      if (!Number.isFinite(num_bornes) || num_bornes < 1 || num_bornes > 200) { toast('El nº de bornes debe estar entre 1 y 200', 'err'); return; }
+      body = { nombre, numero_serie, notas, num_bornes };
+    } else {
+      const modelo = document.getElementById('cpdOfficeSondaModelo').value.trim();
+      const zona = document.getElementById('cpdOfficeSondaZona').value;
+      const cuadroSel = document.getElementById('cpdOfficeSondaCuadro').value;
+      const borneSel = document.getElementById('cpdOfficeSondaBorne').value;
+      const cuadro_id = cuadroSel ? parseInt(cuadroSel, 10) : null;
+      const borne = (cuadro_id && borneSel) ? parseInt(borneSel, 10) : null;
+      if (cuadro_id && !borne) { toast('Elige el borne del cuadro (o quita el cuadro)', 'err'); return; }
+      body = { nombre, numero_serie, modelo, notas, zona, cuadro_id, borne };
+    }
+    const data = await api(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
     if (data?.ok === false) throw new Error(data.error);
-    const s = window._cpdOfficePlano?.sondas.find(s => String(s.id) === String(id));
-    if (s) { s.nombre = nombre; s.numero_serie = numero_serie; s.modelo = modelo; s.notas = notas; s.zona = zona; }
-    toast('Sonda actualizada');
+    toast('Guardado');
     cpdOfficeAbrirPlano(window._cpdOfficePlano.plano.id);
   } catch (e) { toast(e.message || 'Error al guardar', 'err'); }
 }
@@ -14402,7 +14513,11 @@ async function cpdOfficeSondaGuardarDatos() {
 async function cpdOfficeSondaEliminar() {
   const id = window._cpdOfficeSondaId;
   if (!id) return;
-  if (!confirm('¿Eliminar esta sonda y su histórico de lecturas?')) return;
+  const el0 = window._cpdOfficePlano?.sondas.find(s => String(s.id) === String(id));
+  const msg = el0 && cpdOfficeEsCuadro(el0)
+    ? '¿Eliminar este cuadro BMS? Las sondas enchufadas quedarán sin conectar (no se borran).'
+    : '¿Eliminar esta sonda y su histórico de lecturas?';
+  if (!confirm(msg)) return;
   try {
     await api(`/cpd/sondas/${id}`, { method: 'DELETE' });
     cpdOfficeCerrarSonda();
@@ -14489,13 +14604,31 @@ async function cpdOfficeGenerarInforme() {
     // reducida a #/Nombre/Nº serie (ya no hace falta pedir la última lectura de cada
     // sonda).
     const imgUrl = _cpdOfficeImagenUrl(st.plano.id);
-    const marcadoresHtml = st.sondas.map((s, i) => `
-      <div style="position:absolute;left:${s.pos_x}%;top:${s.pos_y}%;transform:translate(-50%,-50%);
-        width:15px;height:15px;border-radius:50%;background:#22c55e;border:1.5px solid #fff;
-        display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff">${i + 1}</div>`).join('');
-    const filas = st.sondas.map((s, i) => `<tr>
-        <td>${i + 1}</td><td>${escHtml(s.nombre)}</td><td>${escHtml(s.numero_serie || '—')}</td>
+    // CPD-BMS-01: numeramos todos los elementos por orden; separamos sondas de cuadros y
+    // añadimos una sección de bornero por cada cuadro BMS.
+    const elems = st.sondas.map((s, i) => ({ ...s, _n: i + 1 }));
+    const cuadros = elems.filter(cpdOfficeEsCuadro);
+    const sondas = elems.filter(s => !cpdOfficeEsCuadro(s));
+    const nombreCuadro = (cid) => { const c = cuadros.find(c => String(c.id) === String(cid)); return c ? (c.nombre || ('Cuadro ' + c.id)) : ''; };
+    const marcadoresHtml = elems.map(s => {
+      const info = cpdOfficeTipoInfo(s.tipo); const cua = cpdOfficeEsCuadro(s);
+      return `<div style="position:absolute;left:${s.pos_x}%;top:${s.pos_y}%;transform:translate(-50%,-50%);
+        width:16px;height:16px;border-radius:${cua ? '3px' : '50%'};background:${info.color};border:1.5px solid #fff;
+        display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff">${s._n}</div>`;
+    }).join('');
+    const filasSondas = sondas.map(s => `<tr>
+        <td>${s._n}</td><td>${escHtml(s.nombre)}</td><td>${escHtml(s.numero_serie || '—')}</td>
+        <td>${s.cuadro_id ? escHtml(nombreCuadro(s.cuadro_id)) + (s.borne ? ' · borne ' + s.borne : '') : '—'}</td>
       </tr>`).join('');
+    const seccionesCuadros = cuadros.map(c => {
+      const n = cpdOfficeNumBornes(c);
+      const porBorne = {}; sondas.forEach(s => { if (String(s.cuadro_id) === String(c.id) && s.borne) porBorne[s.borne] = s; });
+      let filas = '';
+      for (let k = 1; k <= n; k++) { const s = porBorne[k]; filas += `<tr><td>${k}</td><td>S / C</td><td>${s ? escHtml(s.nombre) : '<span style=\"color:#8a94a6\">libre</span>'}</td><td>${s ? escHtml(s.numero_serie || '—') : ''}</td></tr>`; }
+      return `<h2 style="font-size:15px;margin-top:22px">🗄️ ${escHtml(c.nombre || ('Cuadro ' + c.id))}${c.numero_serie ? ' · <span style="font-weight:400;color:#5b6472">Nº serie ' + escHtml(c.numero_serie) + '</span>' : ''} <span style="font-weight:400;color:#5b6472">(${n} bornes)</span></h2>
+        <table><thead><tr><th>Borne</th><th>Par PLC</th><th>Sonda</th><th>Nº serie</th></tr></thead>
+        <tbody>${filas || '<tr><td colspan="4">Sin bornes</td></tr>'}</tbody></table>`;
+    }).join('');
     w.document.open();
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Informe ${escHtml(st.plano.titulo)}</title>
       <style>
@@ -14504,7 +14637,8 @@ async function cpdOfficeGenerarInforme() {
         button{padding:8px 14px;border-radius:6px;border:1px solid #ccc;cursor:pointer;font-weight:700}
         .plano-wrap{position:relative;max-width:1300px;margin:0 auto 24px;border:1px solid #ddd;border-radius:8px;overflow:hidden}
         .plano-wrap img{width:100%;display:block}
-        table{width:100%;max-width:500px;border-collapse:collapse;font-size:13px;margin-top:20px}
+        h2{font-size:15px}
+        table{width:100%;max-width:640px;border-collapse:collapse;font-size:13px;margin-top:8px}
         th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}
         th{background:#e3f1f1}
         @media print{.acciones{display:none}.plano-wrap{max-width:100%}}
@@ -14513,10 +14647,12 @@ async function cpdOfficeGenerarInforme() {
       <h1>${escHtml(st.plano.titulo)}</h1>
       <p style="color:#5b6472">Sondas CPD · generado ${new Date().toLocaleDateString('es-ES')}</p>
       <div class="plano-wrap"><img src="${imgUrl}">${marcadoresHtml}</div>
+      <h2>Sondas</h2>
       <table>
-        <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th></tr></thead>
-        <tbody>${filas || '<tr><td colspan="3">Sin sondas</td></tr>'}</tbody>
+        <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Cuadro · borne</th></tr></thead>
+        <tbody>${filasSondas || '<tr><td colspan="4">Sin sondas</td></tr>'}</tbody>
       </table>
+      ${seccionesCuadros}
       </body></html>`);
     w.document.close();
     w.focus();
@@ -26267,7 +26403,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.43';
+const PANEL_APP_VERSION = '9.44';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

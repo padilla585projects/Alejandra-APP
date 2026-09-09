@@ -30027,6 +30027,15 @@ async function _ensureCpdTables(env) {
       usuario               TEXT
     )
   `).run();
+  // CPD-BMS-01 (09/09/2026): cuadro BMS como elemento del plano + bornero PLC. Columnas
+  // aditivas sobre plano_elementos (mismo patron de DDL en caliente idempotente del resto
+  // del modulo, ver runDDL): config_json guarda los datos propios del cuadro ({num_bornes});
+  // cuadro_id/borne los usan las SONDAS para decir a que cuadro y borne (1..N) van enchufadas.
+  // La asignacion vive en la sonda (fuente unica): el bornero del cuadro se dibuja leyendo
+  // que sonda ocupa cada borne, sin duplicar el dato.
+  await runDDL(env, 'ALTER TABLE plano_elementos ADD COLUMN config_json TEXT');
+  await runDDL(env, 'ALTER TABLE plano_elementos ADD COLUMN cuadro_id INTEGER');
+  await runDDL(env, 'ALTER TABLE plano_elementos ADD COLUMN borne INTEGER');
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_planos_obra ON cpd_planos(obra_id)').run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_plano_elementos_plano ON plano_elementos(plano_id)').run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cpd_lecturas_sonda_fecha ON cpd_lecturas(sonda_id, fecha)').run();
@@ -30159,8 +30168,38 @@ async function eliminarCpdPlano(request, env, path) {
 }
 
 // categoria:tipo permitidos hoy — ampliar aqui cuando se anadan camaras/control de acceso.
-const CPD_TIPOS_PERMITIDOS = new Set(['sonda_ambiental:temp_hum', 'sonda_ambiental:presion_diferencial']);
-const CPD_TIPO_LABEL = { temp_hum: 'Temp/Hum', presion_diferencial: 'Presión Dif.' };
+// CPD-BMS-01: cuadro_bms:cuadro es el cuadro donde se enchufan las sondas (bornero PLC).
+const CPD_TIPOS_PERMITIDOS = new Set(['sonda_ambiental:temp_hum', 'sonda_ambiental:presion_diferencial', 'cuadro_bms:cuadro']);
+const CPD_TIPO_LABEL = { temp_hum: 'Temp/Hum', presion_diferencial: 'Presión Dif.', cuadro: 'Cuadro BMS' };
+const CPD_MAX_BORNES = 200;
+
+// Normaliza y valida el config_json de un cuadro BMS. Devuelve { json } (string listo para
+// guardar) o { error }. Hoy solo num_bornes (1..CPD_MAX_BORNES).
+function _cpdNormalizarConfigCuadro(raw) {
+  let cfg = {};
+  if (raw && typeof raw === 'object') cfg = raw;
+  else if (typeof raw === 'string' && raw.trim()) { try { cfg = JSON.parse(raw); } catch { return { error: 'config_json no es un JSON valido' }; } }
+  const n = parseInt(cfg.num_bornes, 10);
+  if (!Number.isFinite(n) || n < 1 || n > CPD_MAX_BORNES) return { error: `num_bornes debe estar entre 1 y ${CPD_MAX_BORNES}` };
+  return { json: JSON.stringify({ num_bornes: n }) };
+}
+
+// Valida que una sonda pueda enchufarse a (cuadro_id, borne) dentro del mismo plano:
+// el cuadro existe, es un cuadro_bms, el borne esta en rango y no lo ocupa otra sonda.
+// excluirId permite editar la propia sonda sin chocar consigo misma. Devuelve null u error.
+async function _cpdValidarBorne(env, empresa_id, plano_id, cuadro_id, borne, excluirId) {
+  const cuadro = await env.DB.prepare(
+    "SELECT config_json FROM plano_elementos WHERE id=? AND empresa_id=? AND plano_id=? AND categoria='cuadro_bms'"
+  ).bind(cuadro_id, empresa_id, plano_id).first();
+  if (!cuadro) return 'El cuadro BMS indicado no existe en este plano';
+  let num = 0; try { num = JSON.parse(cuadro.config_json || '{}').num_bornes || 0; } catch {}
+  if (!Number.isFinite(borne) || borne < 1 || borne > num) return `El borne debe estar entre 1 y ${num}`;
+  const ocupado = await env.DB.prepare(
+    'SELECT id FROM plano_elementos WHERE cuadro_id=? AND borne=? AND id<>?'
+  ).bind(cuadro_id, borne, excluirId || 0).first();
+  if (ocupado) return `El borne ${borne} ya está ocupado por otra sonda`;
+  return null;
+}
 
 async function crearCpdSonda(request, env) {
   const auth = await getAuth(request, env);
@@ -30185,10 +30224,23 @@ async function crearCpdSonda(request, env) {
   }
   const numero_serie = (body.numero_serie || '').trim() || null;
   const zona = (body.zona || '').trim() || null;
+  // CPD-BMS-01: un cuadro BMS lleva config_json ({num_bornes}); una sonda puede indicar a
+  // que cuadro/borne va enchufada. Nunca ambos en el mismo elemento.
+  let config_json = null, cuadro_id = null, borne = null;
+  if (categoria === 'cuadro_bms') {
+    const norm = _cpdNormalizarConfigCuadro(body.config_json ?? { num_bornes: body.num_bornes });
+    if (norm.error) return err(norm.error, 400);
+    config_json = norm.json;
+  } else if (body.cuadro_id) {
+    cuadro_id = parseInt(body.cuadro_id, 10);
+    borne = parseInt(body.borne, 10);
+    const errBorne = await _cpdValidarBorne(env, empresa_id, plano_id, cuadro_id, borne, null);
+    if (errBorne) return err(errBorne, 400);
+  }
   const r = await env.DB.prepare(`
-    INSERT INTO plano_elementos (plano_id, empresa_id, categoria, tipo, nombre, numero_serie, zona, pos_x, pos_y)
-    VALUES (?,?,?,?,?,?,?,?,?)
-  `).bind(plano_id, empresa_id, categoria, tipo, nombre, numero_serie, zona, pos_x, pos_y).run();
+    INSERT INTO plano_elementos (plano_id, empresa_id, categoria, tipo, nombre, numero_serie, zona, pos_x, pos_y, config_json, cuadro_id, borne)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(plano_id, empresa_id, categoria, tipo, nombre, numero_serie, zona, pos_x, pos_y, config_json, cuadro_id, borne).run();
   return json({ ok: true, id: r.meta.last_row_id, nombre }, 201);
 }
 
@@ -30200,7 +30252,7 @@ async function actualizarCpdSonda(request, env, path) {
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
-  const row = await env.DB.prepare('SELECT id FROM plano_elementos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const row = await env.DB.prepare('SELECT id, plano_id, categoria, config_json FROM plano_elementos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!row) return err('Sonda no encontrada', 404);
   const body = await request.json().catch(() => ({}));
   const sets = [], params = [];
@@ -30211,6 +30263,27 @@ async function actualizarCpdSonda(request, env, path) {
   if (typeof body.zona === 'string') { sets.push('zona=?'); params.push(body.zona.trim() || null); }
   if (body.pos_x !== undefined && Number.isFinite(Number(body.pos_x))) { sets.push('pos_x=?'); params.push(Number(body.pos_x)); }
   if (body.pos_y !== undefined && Number.isFinite(Number(body.pos_y))) { sets.push('pos_y=?'); params.push(Number(body.pos_y)); }
+  // CPD-BMS-01: config del cuadro (num_bornes). Al reducir, no se pierde silenciosamente:
+  // se rechaza si alguna sonda sigue enchufada a un borne que dejaria de existir.
+  if (row.categoria === 'cuadro_bms' && (body.config_json !== undefined || body.num_bornes !== undefined)) {
+    const norm = _cpdNormalizarConfigCuadro(body.config_json ?? { num_bornes: body.num_bornes });
+    if (norm.error) return err(norm.error, 400);
+    const nuevoNum = JSON.parse(norm.json).num_bornes;
+    const fuera = await env.DB.prepare('SELECT COUNT(*) AS c FROM plano_elementos WHERE cuadro_id=? AND borne>?').bind(id, nuevoNum).first();
+    if ((fuera?.c || 0) > 0) return err(`No se puede reducir a ${nuevoNum} bornes: hay ${fuera.c} sonda(s) enchufada(s) en un borne superior. Desconéctalas primero.`, 409);
+    sets.push('config_json=?'); params.push(norm.json);
+  }
+  // CPD-BMS-01: (re)asignar o desconectar una sonda de un borne. cuadro_id null = desconectar.
+  if (row.categoria !== 'cuadro_bms' && body.cuadro_id !== undefined) {
+    if (body.cuadro_id === null || body.cuadro_id === '') {
+      sets.push('cuadro_id=?', 'borne=?'); params.push(null, null);
+    } else {
+      const cId = parseInt(body.cuadro_id, 10), b = parseInt(body.borne, 10);
+      const errBorne = await _cpdValidarBorne(env, empresa_id, row.plano_id, cId, b, id);
+      if (errBorne) return err(errBorne, 400);
+      sets.push('cuadro_id=?', 'borne=?'); params.push(cId, b);
+    }
+  }
   if (!sets.length) return err('Nada que actualizar', 400);
   sets.push("actualizado_en=datetime('now')");
   params.push(id, empresa_id);
@@ -30226,8 +30299,12 @@ async function eliminarCpdSonda(request, env, path) {
   const id = parseInt(path.split('/')[3]);
   if (!id) return err('ID invalido', 400);
   await _ensureCpdTables(env);
-  const row = await env.DB.prepare('SELECT id FROM plano_elementos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const row = await env.DB.prepare('SELECT id, categoria FROM plano_elementos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!row) return err('Sonda no encontrada', 404);
+  // CPD-BMS-01: si se borra un cuadro BMS, sus sondas dejan de estar enchufadas (no se borran).
+  if (row.categoria === 'cuadro_bms') {
+    await env.DB.prepare('UPDATE plano_elementos SET cuadro_id=NULL, borne=NULL WHERE cuadro_id=?').bind(id).run();
+  }
   await env.DB.prepare('DELETE FROM cpd_lecturas WHERE sonda_id=?').bind(id).run();
   await env.DB.prepare('DELETE FROM plano_elementos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
