@@ -2022,12 +2022,34 @@ select option{background:var(--surface2);color:var(--text)}
           <!-- REPLANTEO-02: solo aparece si el navegador soporta WebXR immersive-ar (Chrome Android + ARCore) -->
           <button id="btnReplNuevoAR" class="repl-btn" style="display:none;width:100%;margin-top:10px;padding:11px" onclick="replArIniciar()">📱 Medir con la cámara en AR (sin foto)</button>
           <div id="replNuevoARNota" style="display:none;font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4">Prototipo: el móvil ancla los puntos en el techo y mide la longitud real. Al terminar sale una vista en planta para revisar obstáculos y material.</div>
+          <button id="btnReplCamViva" class="repl-btn" style="width:100%;margin-top:10px;padding:11px" onclick="replCamIniciar()">📹 Cámara en directo (marcar recorrido)</button>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4">Enfoca por dónde va la instalación y toca para ir marcando el recorrido, con nivel y brújula. Al terminar congela la imagen y pasas al editor a fijar la escala.</div>
         </div>
         <div style="font-size:11px;color:var(--muted);line-height:1.4">Consejo: que en la foto salga algo de medida conocida (una placa de techo de 60 cm, una puerta de 2,10 m…) para fijar la escala después.</div>
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border)">
         <button id="btnReplNuevoContinuar" class="repl-btn primary" style="width:100%;padding:11px" onclick="replNuevoContinuar()">Continuar →</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Cámara en directo del replanteo (marcar recorrido sobre vídeo) -->
+  <div id="replCamViva" style="display:none;position:fixed;inset:0;z-index:10000;background:#000">
+    <video id="replCamVideo" playsinline muted autoplay style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000"></video>
+    <canvas id="replCamCanvas" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none"></canvas>
+    <div style="position:absolute;top:10px;left:10px;right:10px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none">
+      <span id="replCamPuntos" style="background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700">0 puntos</span>
+      <span id="replCamBrujula" style="background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700;font-family:monospace">🧭 —</span>
+    </div>
+    <div style="position:absolute;left:12px;bottom:82px;width:66px;height:16px;border-radius:8px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.35);overflow:hidden;pointer-events:none">
+      <span style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,.4);transform:translateX(-50%)"></span>
+      <span id="replCamBurbuja" style="position:absolute;top:3px;left:50%;transform:translateX(-50%);width:10px;height:10px;border-radius:50%;background:#22c55e;transition:left .1s"></span>
+    </div>
+    <div id="replCamHint" style="position:absolute;left:10px;right:10px;bottom:58px;text-align:center;color:#fff;font-size:11px;background:rgba(0,0,0,.5);border-radius:8px;padding:5px 8px;pointer-events:none">Toca por dónde va la instalación · el nivel y la brújula te ayudan</div>
+    <div style="position:absolute;left:10px;right:10px;bottom:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <button class="repl-btn" onclick="replCamDeshacer()">↩ Deshacer</button>
+      <button class="repl-btn danger" onclick="replCamCancelar()">✕ Salir</button>
+      <button class="repl-btn primary" onclick="replCamUsar()">✓ Usar</button>
     </div>
   </div>
 
@@ -20487,6 +20509,93 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replArTerminar   = replArTerminar;
   window.replArCancelar   = replArCancelar;
   window.replArSoportado  = replArSoportado;
+
+  // ── Cámara en directo: marcar el recorrido sobre el vídeo y congelar un fotograma ──
+  // No necesita AR ni sensores especiales; funciona en cualquier móvil. Los puntos que tocas
+  // sobre el vídeo se guardan en las mismas coordenadas (px) del fotograma que se congela, así
+  // el editor de siempre (escala/plano/material) los usa sin conversiones.
+  let _camv = null;
+  function _camvEl(id) { return document.getElementById(id); }
+  async function replCamIniciar() {
+    if (!_replPuedeEditar) { toast('Solo los encargados pueden replantear', 'error'); return; }
+    const titulo = (_camvEl('replNuevoTitulo').value || '').trim();
+    const key = _camvEl('replNuevoElemento').value;
+    if (!titulo) { toast('Escribe un título primero', 'error'); return; }
+    const v = _camvEl('replCamVideo');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      v.srcObject = stream; await v.play().catch(() => {});
+      _camv = { stream, pts: [], key, titulo, orient: null };
+      replCerrarNuevo();
+      _camvEl('replCamViva').style.display = 'block';
+      _camvResize(); window.addEventListener('resize', _camvResize);
+      _camvBind(); _camvSensores(); _camvDibujar();
+    } catch (e) { toast('No se pudo abrir la cámara: ' + (e.message || e), 'error'); }
+  }
+  function _camvResize() { const c = _camvEl('replCamCanvas'); if (!c) return; const r = c.getBoundingClientRect(); c.width = Math.round(r.width); c.height = Math.round(r.height); _camvDibujar(); }
+  function _camvBind() {
+    const c = _camvEl('replCamCanvas'); if (!c || c._camvBound) return; c._camvBound = true;
+    c.addEventListener('pointerdown', e => { if (!_camv) return; const r = c.getBoundingClientRect(); _camv.pts.push({ x: e.clientX - r.left, y: e.clientY - r.top }); _camvDibujar(); });
+  }
+  function _camvDibujar() {
+    const c = _camvEl('replCamCanvas'); if (!c || !c.getContext) return;
+    const ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height);
+    const pts = _camv ? _camv.pts : [];
+    _camvEl('replCamPuntos').textContent = pts.length + ' punto' + (pts.length === 1 ? '' : 's');
+    if (pts.length > 1) { ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke(); }
+    pts.forEach((p, i) => { ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.fillStyle = i === 0 ? '#fff' : '#22c55e'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#0b0f14'; ctx.stroke(); });
+  }
+  function replCamDeshacer() { if (_camv && _camv.pts.length) { _camv.pts.pop(); _camvDibujar(); } }
+  function _camvSensores() {
+    const on = e => {
+      const g = e.gamma || 0, a = (e.alpha == null ? null : e.alpha);
+      const b = _camvEl('replCamBurbuja'); if (b) { const off = Math.max(-28, Math.min(28, g)); b.style.left = (50 + off) + '%'; b.style.background = Math.abs(g) < 3 ? '#22c55e' : '#f59e0b'; }
+      if (a != null) { const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO']; const d = dirs[Math.round(((360 - a) % 360) / 45) % 8]; const cb = _camvEl('replCamBrujula'); if (cb) cb.textContent = '🧭 ' + d; }
+    };
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(r => { if (r === 'granted') { window.addEventListener('deviceorientation', on); if (_camv) _camv.orient = on; } }).catch(() => {});
+      } else if (typeof DeviceOrientationEvent !== 'undefined') { window.addEventListener('deviceorientation', on); if (_camv) _camv.orient = on; }
+    } catch (_) {}
+  }
+  function _camvStop() {
+    if (!_camv) return;
+    try { _camv.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+    if (_camv.orient) { try { window.removeEventListener('deviceorientation', _camv.orient); } catch (_) {} }
+    window.removeEventListener('resize', _camvResize);
+    _camvEl('replCamViva').style.display = 'none';
+    const v = _camvEl('replCamVideo'); if (v) v.srcObject = null;
+  }
+  function replCamCancelar() { _camvStop(); _camv = null; }
+  async function replCamUsar() {
+    if (!_camv) return;
+    if (_camv.pts.length < 2) { toast('Marca al menos 2 puntos del recorrido', 'error'); return; }
+    const v = _camvEl('replCamVideo'), c = _camvEl('replCamCanvas');
+    const w = c.width, h = c.height;
+    const cap = document.createElement('canvas'); cap.width = w; cap.height = h;
+    const ctx = cap.getContext('2d');
+    // congelar el fotograma con recorte "cover" (igual que se ve en pantalla)
+    const vw = v.videoWidth || w, vh = v.videoHeight || h, s = Math.max(w / vw, h / vh), dw = vw * s, dh = vh * s;
+    ctx.drawImage(v, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    const pts = _camv.pts.map(p => ({ x: p.x, y: p.y })), key = _camv.key, titulo = _camv.titulo;
+    const dataUrl = cap.toDataURL('image/jpeg', 0.9);
+    const blob = await new Promise(res => cap.toBlob(res, 'image/jpeg', 0.9));
+    const file = new File([blob], 'replanteo-camara.jpg', { type: 'image/jpeg' });
+    let img; try { img = await _replCargarImagen(dataUrl, false); } catch { img = null; }
+    _camvStop(); _camv = null;
+    const el = _replCatalogo.find(e => e.key === key) || _replCatalogo[0];
+    _repl = {
+      id: null, titulo, elemento_key: el.key, params: _replParamsPorDefecto(el), file, img, departamento: _replCatalogoDept, planos: [],
+      imgW: w, imgH: h, puntos: pts, obstaculos: [], referencia: null, escala_px_m: null, longitud_manual_m: null,
+      calc: null, estado: 'borrador', modo: 'trazar', cambiado: true, origen: 'foto',
+    };
+    showScreen('replanteoEditor'); replInitEditor();
+    toast('Recorrido marcado. Fija la escala (📏) para calcular el material', 'info');
+  }
+  window.replCamIniciar  = replCamIniciar;
+  window.replCamDeshacer = replCamDeshacer;
+  window.replCamCancelar = replCamCancelar;
+  window.replCamUsar     = replCamUsar;
 
 
   // ══════════════════════════════════════════════════════
