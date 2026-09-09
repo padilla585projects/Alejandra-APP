@@ -2019,19 +2019,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
                 <input class="form-input" id="cpdOfficeSondaModelo" type="text">
               </div>
             </div>
-            <!-- CPD-BMS-01: conexión de la sonda a un cuadro BMS + borne -->
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Cuadro BMS</label>
-                <select class="form-input" id="cpdOfficeSondaCuadro" onchange="cpdOfficeSondaCuadroCambio()">
-                  <option value="">Sin conectar</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Borne (par PLC)</label>
-                <select class="form-input" id="cpdOfficeSondaBorne"><option value="">—</option></select>
-              </div>
+            <!-- CPD-BMS-02: conexión al cuadro BMS — una fila por canal (temp/hum/ΔP) con borne + color -->
+            <div class="form-group">
+              <label>Cuadro BMS</label>
+              <select class="form-input" id="cpdOfficeSondaCuadro" onchange="cpdOfficeSondaCuadroCambio()">
+                <option value="">Sin conectar</option>
+              </select>
             </div>
+            <div id="cpdOfficeSondaConexiones" style="display:flex;flex-direction:column;gap:6px"></div>
           </div>
           <div class="form-group">
             <label>Notas</label>
@@ -14134,6 +14129,21 @@ function cpdOfficeTipoInfo(tipo) {
   return CPD_OFFICE_TIPOS_ELEMENTO.find(t => t.tipo === tipo) || CPD_OFFICE_TIPOS_ELEMENTO[0];
 }
 function cpdOfficeEsCuadro(el) { return (el?.categoria || el?.tipo) === 'cuadro_bms' || el?.tipo === 'cuadro'; }
+// CPD-BMS-02: colores de cable y canales por tipo (una sonda de ambiente = temp + hum).
+const CPD_OFFICE_COLORES = [
+  { v:'marron', hex:'#8B4513' }, { v:'azul', hex:'#2563eb' }, { v:'gris', hex:'#9ca3af' },
+  { v:'negro', hex:'#111827' }, { v:'rojo', hex:'#dc2626' }, { v:'verde', hex:'#16a34a' },
+  { v:'blanco', hex:'#e5e7eb' }, { v:'amarillo', hex:'#eab308' }, { v:'naranja', hex:'#f97316' },
+  { v:'violeta', hex:'#7c3aed' },
+];
+const cpdOfficeColorHex = (v) => (CPD_OFFICE_COLORES.find(c => c.v === v) || {}).hex || 'transparent';
+const CPD_OFFICE_CANAL_LABEL = { temp:'Temp', hum:'Hum', presion:'ΔP', otro:'Señal' };
+function cpdOfficeCanalesDeTipo(tipo) {
+  if (tipo === 'temp_hum') return ['temp', 'hum'];
+  if (tipo === 'presion_diferencial') return ['presion'];
+  return ['otro'];
+}
+function cpdOfficeConexiones(sonda) { try { return JSON.parse(sonda.conexiones_json || '[]'); } catch { return []; } }
 function cpdOfficeCuadrosDelPlano() { return (window._cpdOfficePlano?.sondas || []).filter(cpdOfficeEsCuadro); }
 function cpdOfficeNumBornes(cuadro) { try { return JSON.parse(cuadro.config_json || '{}').num_bornes || 0; } catch { return 0; } }
 window._cpdOfficeHerramientaActiva = null;
@@ -14314,7 +14324,7 @@ async function cpdOfficeCrearSondaEn(x, y, herramienta) {
     // CPD-FLICKER-01 (10/08/2026): mismo fix que index.html — cpdOfficeAbrirPlano()
     // reconstruye todo el editor (recarga la imagen del plano incluida), se veía como
     // un parpadeo cada vez que se colocaba una sonda. Solo se añade el marcador nuevo.
-    const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y, config_json: esCuadro ? JSON.stringify({ num_bornes: 12 }) : null, cuadro_id: null, borne: null };
+    const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y, config_json: esCuadro ? JSON.stringify({ num_bornes: 12 }) : null, cuadro_id: null, conexiones_json: null };
     st.sondas.push(nuevaSonda);
     const canvas = document.getElementById('cpdOfficeCanvas');
     if (canvas) _cpdOfficeAddMarker(canvas, nuevaSonda);
@@ -14431,32 +14441,53 @@ function cpdOfficeCerrarSonda() {
   window._cpdOfficeSondaId = null;
 }
 
-// CPD-BMS-01: selector de cuadro + borne (bornes libres) para una sonda.
+// CPD-BMS-02: selector de cuadro + una fila por canal (temp/hum/ΔP) con borne y color.
 function cpdOfficePoblarSelectorCuadros(sonda) {
   const selC = document.getElementById('cpdOfficeSondaCuadro');
   const cuadros = cpdOfficeCuadrosDelPlano();
   selC.innerHTML = '<option value="">Sin conectar</option>' +
     cuadros.map(c => `<option value="${c.id}">${escHtml(c.nombre || ('Cuadro ' + c.id))}</option>`).join('');
   selC.value = sonda.cuadro_id ? String(sonda.cuadro_id) : '';
-  cpdOfficeSondaCuadroCambio(sonda.borne);
+  cpdOfficeSondaCuadroCambio(cpdOfficeConexiones(sonda));
 }
-function cpdOfficeSondaCuadroCambio(borneActual) {
+function cpdOfficeSondaCuadroCambio(conexActuales) {
   const st = window._cpdOfficePlano;
   const selC = document.getElementById('cpdOfficeSondaCuadro');
-  const selB = document.getElementById('cpdOfficeSondaBorne');
+  const cont = document.getElementById('cpdOfficeSondaConexiones');
+  const sonda = (st?.sondas || []).find(s => String(s.id) === String(window._cpdOfficeSondaId));
   const cuadro = (st?.sondas || []).find(s => String(s.id) === selC.value);
-  if (!cuadro) { selB.innerHTML = '<option value="">—</option>'; selB.disabled = true; return; }
-  selB.disabled = false;
+  if (!cuadro || !sonda) { cont.innerHTML = ''; return; }
   const n = cpdOfficeNumBornes(cuadro);
   const yo = window._cpdOfficeSondaId;
   const ocupados = {};
-  (st.sondas || []).forEach(s => { if (String(s.id) !== String(yo) && String(s.cuadro_id) === String(cuadro.id) && s.borne) ocupados[s.borne] = s.nombre || ('#' + s.id); });
-  let html = '<option value="">— sin asignar —</option>';
-  for (let k = 1; k <= n; k++) { const libre = !ocupados[k]; html += `<option value="${k}" ${libre ? '' : 'disabled'}>Borne ${k}${libre ? '' : ' (ocupado: ' + escHtml(ocupados[k]) + ')'}</option>`; }
-  selB.innerHTML = html;
-  selB.value = (borneActual && borneActual <= n && !ocupados[borneActual]) ? String(borneActual) : '';
+  (st.sondas || []).forEach(s => {
+    if (String(s.id) === String(yo) || String(s.cuadro_id) !== String(cuadro.id)) return;
+    cpdOfficeConexiones(s).forEach(c => { if (c.borne) ocupados[c.borne] = s.nombre || ('#' + s.id); });
+  });
+  const prev = {}; (Array.isArray(conexActuales) ? conexActuales : []).forEach(c => { prev[c.canal] = c; });
+  const colorOpts = (sel) => '<option value="">color…</option>' + CPD_OFFICE_COLORES.map(c => `<option value="${c.v}" ${sel===c.v?'selected':''}>${c.v}</option>`).join('');
+  cont.innerHTML = cpdOfficeCanalesDeTipo(sonda.tipo).map(canal => {
+    const pc = prev[canal] || {};
+    let bopts = '<option value="">— sin asignar —</option>';
+    for (let k = 1; k <= n; k++) {
+      const libre = !ocupados[k]; const sel = String(pc.borne) === String(k) ? 'selected' : '';
+      bopts += `<option value="${k}" ${libre ? '' : 'disabled'} ${sel}>Borne ${k}${libre ? '' : ' (ocupado: ' + escHtml(ocupados[k]) + ')'}</option>`;
+    }
+    return `<div style="display:flex;gap:6px;align-items:center" data-canal="${canal}">
+      <span style="min-width:42px;font-size:11px;font-weight:800;color:var(--accent)">${CPD_OFFICE_CANAL_LABEL[canal] || canal}</span>
+      <select class="form-input cpd-cx-borne" style="flex:1">${bopts}</select>
+      <select class="form-input cpd-cx-color" style="width:110px">${colorOpts(pc.color)}</select>
+    </div>`;
+  }).join('');
 }
-// CPD-BMS-01: regletero del cuadro (1..N), cada borne doble (S/C del PLC).
+function cpdOfficeLeerConexionesForm() {
+  const cont = document.getElementById('cpdOfficeSondaConexiones');
+  return [...cont.querySelectorAll('[data-canal]')].map(f => {
+    const borne = parseInt(f.querySelector('.cpd-cx-borne').value, 10);
+    return Number.isFinite(borne) ? { canal: f.dataset.canal, borne, color: f.querySelector('.cpd-cx-color').value || null } : null;
+  }).filter(Boolean);
+}
+// CPD-BMS-02: regletero del cuadro (1..N): borne → color de cable + sonda · canal.
 function cpdOfficeRenderBornero() {
   const cont = document.getElementById('cpdOfficeBornero');
   if (!cont) return;
@@ -14464,15 +14495,15 @@ function cpdOfficeRenderBornero() {
   const cuadroId = window._cpdOfficeSondaId;
   const n = Math.max(0, Math.min(200, parseInt(document.getElementById('cpdOfficeCuadroNumBornes').value, 10) || 0));
   const porBorne = {};
-  (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId) && s.borne) porBorne[s.borne] = s; });
+  (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId)) cpdOfficeConexiones(s).forEach(c => { if (c.borne) porBorne[c.borne] = { s, c }; }); });
   let html = '';
   for (let k = 1; k <= n; k++) {
-    const s = porBorne[k];
-    const chip = 'display:inline-block;min-width:16px;text-align:center;font-size:9px;font-weight:800;padding:1px 4px;border-radius:4px;border:1px solid var(--border)';
-    html += `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 4px;border-radius:6px;background:${s ? 'rgba(99,102,241,.12)' : 'transparent'}">
-      <span style="font-weight:800;min-width:34px;color:var(--muted)">${k}</span>
-      <span style="${chip}" title="Señal">S</span><span style="${chip}" title="Común">C</span>
-      <span style="flex:1">${s ? escHtml(s.nombre || ('Sonda #' + s.id)) + (s.numero_serie ? ' · ' + escHtml(s.numero_serie) : '') : '<span style="color:var(--muted)">libre</span>'}</span>
+    const e = porBorne[k];
+    const swatch = e && e.c.color ? `<span title="${escHtml(e.c.color)}" style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--border);background:${cpdOfficeColorHex(e.c.color)};flex-shrink:0"></span>` : '<span style="width:12px;flex-shrink:0"></span>';
+    html += `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 4px;border-radius:6px;background:${e ? 'rgba(99,102,241,.12)' : 'transparent'}">
+      <span style="font-weight:800;min-width:30px;color:var(--muted)">${k}</span>
+      ${swatch}
+      <span style="flex:1">${e ? escHtml(e.s.nombre || ('Sonda #' + e.s.id)) + ' <span style=\"color:var(--accent);font-weight:700\">' + (CPD_OFFICE_CANAL_LABEL[e.c.canal] || e.c.canal) + '</span>' : '<span style="color:var(--muted)">libre</span>'}</span>
     </div>`;
   }
   cont.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Indica el nº de bornes.</div>';
@@ -14497,11 +14528,9 @@ async function cpdOfficeSondaGuardarDatos() {
       const modelo = document.getElementById('cpdOfficeSondaModelo').value.trim();
       const zona = document.getElementById('cpdOfficeSondaZona').value;
       const cuadroSel = document.getElementById('cpdOfficeSondaCuadro').value;
-      const borneSel = document.getElementById('cpdOfficeSondaBorne').value;
       const cuadro_id = cuadroSel ? parseInt(cuadroSel, 10) : null;
-      const borne = (cuadro_id && borneSel) ? parseInt(borneSel, 10) : null;
-      if (cuadro_id && !borne) { toast('Elige el borne del cuadro (o quita el cuadro)', 'err'); return; }
-      body = { nombre, numero_serie, modelo, notas, zona, cuadro_id, borne };
+      const conexiones = cuadro_id ? cpdOfficeLeerConexionesForm() : [];
+      body = { nombre, numero_serie, modelo, notas, zona, cuadro_id, conexiones };
     }
     const data = await api(`/cpd/sondas/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
     if (data?.ok === false) throw new Error(data.error);
@@ -14616,17 +14645,22 @@ async function cpdOfficeGenerarInforme() {
         width:16px;height:16px;border-radius:${cua ? '3px' : '50%'};background:${info.color};border:1.5px solid #fff;
         display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff">${s._n}</div>`;
     }).join('');
+    const conexResumen = (s) => cpdOfficeConexiones(s).map(c => `${nombreCuadro(s.cuadro_id)} b${c.borne} (${CPD_OFFICE_CANAL_LABEL[c.canal] || c.canal})`).join(', ');
     const filasSondas = sondas.map(s => `<tr>
         <td>${s._n}</td><td>${escHtml(s.nombre)}</td><td>${escHtml(s.numero_serie || '—')}</td>
-        <td>${s.cuadro_id ? escHtml(nombreCuadro(s.cuadro_id)) + (s.borne ? ' · borne ' + s.borne : '') : '—'}</td>
+        <td>${s.cuadro_id ? escHtml(conexResumen(s) || nombreCuadro(s.cuadro_id)) : '—'}</td>
       </tr>`).join('');
     const seccionesCuadros = cuadros.map(c => {
       const n = cpdOfficeNumBornes(c);
-      const porBorne = {}; sondas.forEach(s => { if (String(s.cuadro_id) === String(c.id) && s.borne) porBorne[s.borne] = s; });
+      const porBorne = {}; sondas.forEach(s => { if (String(s.cuadro_id) === String(c.id)) cpdOfficeConexiones(s).forEach(cx => { if (cx.borne) porBorne[cx.borne] = { s, cx }; }); });
       let filas = '';
-      for (let k = 1; k <= n; k++) { const s = porBorne[k]; filas += `<tr><td>${k}</td><td>S / C</td><td>${s ? escHtml(s.nombre) : '<span style=\"color:#8a94a6\">libre</span>'}</td><td>${s ? escHtml(s.numero_serie || '—') : ''}</td></tr>`; }
+      for (let k = 1; k <= n; k++) {
+        const e = porBorne[k];
+        const sw = e && e.cx.color ? `<span style="display:inline-block;width:11px;height:11px;border-radius:2px;border:1px solid #bbb;background:${cpdOfficeColorHex(e.cx.color)};vertical-align:middle"></span> ${escHtml(e.cx.color)}` : '—';
+        filas += `<tr><td>${k}</td><td>${sw}</td><td>${e ? escHtml(e.s.nombre) + ' · ' + (CPD_OFFICE_CANAL_LABEL[e.cx.canal] || e.cx.canal) : '<span style=\"color:#8a94a6\">libre</span>'}</td><td>${e ? escHtml(e.s.numero_serie || '—') : ''}</td></tr>`;
+      }
       return `<h2 style="font-size:15px;margin-top:22px">🗄️ ${escHtml(c.nombre || ('Cuadro ' + c.id))}${c.numero_serie ? ' · <span style="font-weight:400;color:#5b6472">Nº serie ' + escHtml(c.numero_serie) + '</span>' : ''} <span style="font-weight:400;color:#5b6472">(${n} bornes)</span></h2>
-        <table><thead><tr><th>Borne</th><th>Par PLC</th><th>Sonda</th><th>Nº serie</th></tr></thead>
+        <table><thead><tr><th>Borne</th><th>Cable</th><th>Sonda · canal</th><th>Nº serie</th></tr></thead>
         <tbody>${filas || '<tr><td colspan="4">Sin bornes</td></tr>'}</tbody></table>`;
     }).join('');
     w.document.open();
@@ -14649,7 +14683,7 @@ async function cpdOfficeGenerarInforme() {
       <div class="plano-wrap"><img src="${imgUrl}">${marcadoresHtml}</div>
       <h2>Sondas</h2>
       <table>
-        <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Cuadro · borne</th></tr></thead>
+        <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Conexiones (cuadro · borne · canal)</th></tr></thead>
         <tbody>${filasSondas || '<tr><td colspan="4">Sin sondas</td></tr>'}</tbody>
       </table>
       ${seccionesCuadros}
@@ -26403,7 +26437,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.44';
+const PANEL_APP_VERSION = '9.45';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
