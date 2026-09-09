@@ -2040,7 +2040,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               <input class="form-input" id="cpdOfficeCuadroNumBornes" type="number" min="1" max="200" oninput="cpdOfficeRenderBornero()" onchange="cpdOfficeRenderBornero()">
             </div>
             <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:6px 0">Bornero — elige en cada borne qué sonda y canal va (se guarda al momento)</div>
-            <div id="cpdOfficeBornero" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:#f8fafc"></div>
+            <div id="cpdOfficeBornero" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface)"></div>
           </div>
 
           <div style="display:flex;gap:8px;margin-top:10px">
@@ -2061,7 +2061,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
             <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
               <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Tendencia</div>
-              <canvas id="cpdOfficeSondaCanvas" width="460" height="160" style="width:100%;height:160px;background:#f8fafc;border-radius:8px"></canvas>
+              <canvas id="cpdOfficeSondaCanvas" width="460" height="160" style="width:100%;height:160px;background:var(--surface2);border-radius:8px"></canvas>
               <div id="cpdOfficeSondaLeyenda" style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted)"></div>
             </div>
           </div>
@@ -26478,7 +26478,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.46';
+const PANEL_APP_VERSION = '9.47';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
