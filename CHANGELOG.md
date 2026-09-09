@@ -4,6 +4,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Changed (2026-09-09 — CPD-BMS-02b: bornero del cuadro editable, v9.46)
+
+Adrián, probando en vivo: «me deja editar el cuadro y decir cuántas bornas tiene, pero no me
+deja indicar en qué bornas están las sondas». La asignación solo estaba en la ficha de cada
+sonda (poco visible); en el cuadro el bornero era de solo lectura.
+
+- El **bornero del cuadro es ahora editable**: cada borne tiene un desplegable para elegir qué
+  **sonda · canal** (Temp/Hum/ΔP) va en él, o dejarlo libre; se guarda al momento (PATCH a la
+  sonda — la conexión sigue viviendo en la sonda). Al asignar se libera el ocupante previo del
+  borne y se mueve la conexión si estaba en otro. Sigue disponible la asignación desde la ficha
+  de la sonda. Solo frontend (`index.html`+`panel.html`), v9.46. PR #171 → `0502a00`.
+
 ### Added (2026-09-09 — CPD-BMS-02: bornero enriquecido del cuadro BMS, v9.45)
 
 Continuación de CPD-BMS-01 tras revisar el esquema real del cuadro (ESMAD Data Center, Sala
