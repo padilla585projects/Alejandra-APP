@@ -801,6 +801,94 @@ describe('validarScopeEmpresaBD', () => {
       expect(r).toBeNull();
     });
   });
+
+  // ── REPL-DEPT-01 (09/09/2026): aislamiento por departamento en consultar_bd ──
+  // Confirmado en vivo entrando como encargado: un usuario no privilegiado veía datos
+  // de otro departamento con SQL crudo ("SELECT * FROM replanteos WHERE empresa_id=1")
+  // aunque el REST y las tools dedicadas sí aislaban. Estos tests fijan el fix.
+  describe('aislamiento por departamento (REPL-DEPT-01)', () => {
+    // Firma: (query, params, empresaId, esDevVerificado, bypassEmpresaActivo, rol, departamento)
+    const enc = (q, params = []) => validarScopeEmpresaBD(q, params, 1, false, true, 'encargado', 'electrico');
+
+    it('rechaza SELECT sobre tabla con departamento si no se filtra por departamento', () => {
+      const r = enc('SELECT * FROM replanteos WHERE empresa_id = 1');
+      expect(r).toMatch(/debes filtrar por tu departamento/);
+    });
+
+    it('rechaza SELECT que filtra por OTRO departamento (el ataque real)', () => {
+      const r = enc("SELECT * FROM replanteos WHERE empresa_id = 1 AND departamento = 'telecom'");
+      expect(r).toMatch(/departamento no coincide/);
+    });
+
+    it("rechaza el 'departamento <> el mio' que en la práctica lista los ajenos", () => {
+      const r = enc("SELECT * FROM fichajes WHERE empresa_id = 1 AND departamento <> 'electrico'");
+      expect(r).toMatch(/debes filtrar por tu departamento/);
+    });
+
+    it('acepta SELECT que filtra por el departamento propio (literal)', () => {
+      const r = enc("SELECT * FROM replanteos WHERE empresa_id = 1 AND departamento = 'electrico'");
+      expect(r).toBeNull();
+    });
+
+    it('acepta el departamento propio aunque venga con prefijo de tabla (JOIN)', () => {
+      const r = enc("SELECT * FROM fichajes f JOIN usuarios u ON u.id=f.usuario_id WHERE f.empresa_id = 1 AND f.departamento = 'electrico'");
+      expect(r).toBeNull();
+    });
+
+    it('acepta el departamento propio por placeholder ?', () => {
+      const r = validarScopeEmpresaBD(
+        'SELECT * FROM pedidos WHERE empresa_id = ? AND departamento = ?',
+        [1, 'electrico'], 1, false, true, 'encargado', 'electrico'
+      );
+      expect(r).toBeNull();
+    });
+
+    it('rechaza el placeholder ? de departamento con valor ajeno', () => {
+      const r = validarScopeEmpresaBD(
+        'SELECT * FROM pedidos WHERE empresa_id = ? AND departamento = ?',
+        [1, 'telecom'], 1, false, true, 'encargado', 'electrico'
+      );
+      expect(r).toMatch(/departamento no coincide/);
+    });
+
+    it('NO exige departamento en tablas que no lo tienen (obras)', () => {
+      const r = enc('SELECT * FROM obras WHERE empresa_id = 1');
+      expect(r).toBeNull();
+    });
+
+    it('superadmin ve todos los departamentos (no exige el filtro)', () => {
+      const r = validarScopeEmpresaBD('SELECT * FROM replanteos WHERE empresa_id = 1', [], 1, false, true, 'superadmin', null);
+      expect(r).toBeNull();
+    });
+
+    it('empresa_admin ve todos los departamentos', () => {
+      const r = validarScopeEmpresaBD('SELECT * FROM replanteos WHERE empresa_id = 1', [], 1, false, true, 'empresa_admin', null);
+      expect(r).toBeNull();
+    });
+
+    it('el departamento seguridad tiene visión transversal (mismo criterio que el REST)', () => {
+      const r = validarScopeEmpresaBD('SELECT * FROM replanteos WHERE empresa_id = 1', [], 1, false, true, 'encargado', 'seguridad');
+      expect(r).toBeNull();
+    });
+
+    it('el aislamiento por empresa sigue mandando: otra empresa se rechaza antes de mirar el departamento', () => {
+      const r = validarScopeEmpresaBD("SELECT * FROM replanteos WHERE empresa_id = 4 AND departamento = 'electrico'", [], 1, false, true, 'encargado', 'electrico');
+      expect(r).toMatch(/empresa_id no coincide/);
+    });
+
+    it('retrocompat: sin datos de sesión (rol y depto null) NO se exige departamento', () => {
+      // Los tests antiguos y los call sites que no pasan sesión mantienen su comportamiento.
+      const r = validarScopeEmpresaBD('SELECT * FROM replanteos WHERE empresa_id = 1', [], 1, false);
+      expect(r).toBeNull();
+    });
+
+    it('solo afecta a SELECT: un DELETE por su empresa no se bloquea aquí por el departamento', () => {
+      // El aislamiento de escritura vive en otras barreras (confirmación humana); este fix
+      // es de lectura. Un DELETE con empresa correcta no debe fallar por falta de departamento.
+      const r = enc('DELETE FROM replanteos WHERE empresa_id = 1 AND id = 9');
+      expect(r).toBeNull();
+    });
+  });
 });
 
 // ── debeOmitirRateLimitDev (fix continuación 15: interruptor dev-bypass) ────

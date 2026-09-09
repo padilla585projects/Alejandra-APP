@@ -477,6 +477,24 @@ const TABLAS_EMPRESA_PERMITIDAS = new Set([
 ]);
 const COLUMNA_BLOQUEADA_BD = /\bpassword_hash\b/i;
 
+// REPL-DEPT-01 (09/09/2026): tablas de la allowlist que TIENEN columna `departamento`
+// y por tanto guardan datos separados por departamento. validarScopeEmpresaBD ya acota
+// por empresa, pero NO por departamento: un encargado de eléctrico podía pedir por chat
+// "SELECT * FROM replanteos WHERE empresa_id=1" y ver los de telecom, aunque el endpoint
+// REST y las tools dedicadas (consultar_replanteos…) sí lo impiden. No era exclusivo de
+// replanteos — le pasaba a las 25 tablas de aquí. Confirmado en vivo entrando como
+// encargado (ver HANDOFF). La lista se derivó verificando el esquema REAL de D1 el
+// 09/09/2026 (el esquema no es reproducible desde el repo, ver deuda ARC-011): cruce de
+// las columnas `departamento` reales con TABLAS_EMPRESA_PERMITIDAS. Si se añade una tabla
+// con columna `departamento` a la allowlist, añadirla también aquí.
+const TABLAS_CON_DEPARTAMENTO = new Set([
+  'bobinas', 'carpetas', 'carretillas', 'checklist_plantillas', 'docs_dept', 'docs_notas',
+  'documentos_obra', 'epis_asignados', 'eventos_calendario', 'fichajes', 'fotos_obra',
+  'herramientas', 'incidencias', 'inspecciones_seg', 'inventario_seg', 'invitaciones',
+  'kits_herramientas', 'materiales_obra', 'partes_trabajo', 'pedidos', 'pemp',
+  'personal_externo', 'replanteos', 'sugerencias', 'usuarios',
+]);
+
 function extraerTablasQuery(query) {
   const tablas = new Set();
   const patrones = [/\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bJOIN\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bINTO\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bUPDATE\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi];
@@ -499,7 +517,7 @@ function extraerTablasQuery(query) {
 // auditado en alejandra_logs. Default = true para no cambiar el comportamiento
 // de quien no pase este argumento (todos los call sites existentes lo pasan ya,
 // pero mantenemos el default por si se añade alguno nuevo sin pensarlo).
-function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypassEmpresaActivo = true) {
+function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypassEmpresaActivo = true, rolSesion = null, departamentoSesion = null) {
   if (esDevVerificado && bypassEmpresaActivo) return null;
   if (COLUMNA_BLOQUEADA_BD.test(query)) {
     return 'Consulta rechazada: no se permite acceder a columnas sensibles (password_hash) sin sesión de desarrollador verificada.';
@@ -513,6 +531,47 @@ function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypass
       return `Consulta rechazada: la tabla "${t}" no está permitida sin sesión de desarrollador verificada.`;
     }
   }
+  // REPL-DEPT-01 (09/09/2026): además del aislamiento por empresa (abajo), exigir el
+  // filtro por departamento en las tablas que lo tienen, para los roles que NO ven todos
+  // los departamentos. Mismo criterio que el REST (isDeptPrivileged) y que el resto de
+  // tools del agente (puedeVerTodosLosDepartamentos, DEPT-AGENTE-01): superadmin /
+  // empresa_admin / desarrollador / seguridad ven todo; el resto solo su departamento.
+  // Solo se aplica a SELECT (el hueco confirmado es de LECTURA vía consultar_bd); las
+  // escrituras ya pasan por otras barreras (confirmación humana en DELETE/UPDATE masivo).
+  // Retrocompatibilidad: si no se pasan datos de sesión (rol y departamento ambos null,
+  // p. ej. call sites internos o los tests antiguos) se mantiene el comportamiento previo
+  // y no se exige departamento — igual que el default de bypassEmpresaActivo. Los call
+  // sites reales de consultar_bd SÍ pasan el rol y el departamento verificados de la sesión.
+  const hayInfoSesion = rolSesion !== null || departamentoSesion !== null;
+  const validarDepartamento = () => {
+    if (!hayInfoSesion) return null;
+    if (!/^\s*SELECT\b/i.test(query)) return null;
+    if (puedeVerTodosLosDepartamentos(rolSesion, departamentoSesion)) return null;
+    const tablasDept = tablas.filter(t => TABLAS_CON_DEPARTAMENTO.has(t));
+    if (tablasDept.length === 0) return null;
+    if (!departamentoSesion) {
+      return 'Consulta rechazada: no se puede determinar tu departamento para filtrar esta tabla.';
+    }
+    // Literal: departamento = 'electrico' (admite prefijo de tabla: u.departamento = '...')
+    const lit = query.match(/\b(?:[a-z_]\w*\.)?departamento\s*=\s*'([^']*)'/i);
+    if (lit) {
+      if (lit[1].toLowerCase() !== String(departamentoSesion).toLowerCase()) {
+        return 'Consulta rechazada: el filtro departamento no coincide con tu departamento.';
+      }
+      return null;
+    }
+    // Placeholder: departamento = ?
+    const posDept = query.search(/\b(?:[a-z_]\w*\.)?departamento\s*=\s*\?/i);
+    if (posDept !== -1) {
+      const idx = (query.slice(0, posDept).match(/\?/g) || []).length;
+      const valor = (params || [])[idx];
+      if (valor === undefined || String(valor).toLowerCase() !== String(departamentoSesion).toLowerCase()) {
+        return 'Consulta rechazada: el valor pasado en params para departamento no coincide con tu departamento (o falta).';
+      }
+      return null;
+    }
+    return `Consulta rechazada: para la tabla "${tablasDept[0]}" debes filtrar por tu departamento (ej. AND departamento = '${departamentoSesion}').`;
+  };
   // INSERT-SCOPE-01 (10/08/2026): un INSERT no tiene WHERE — empresa_id se declara en la
   // lista de columnas ("INSERT INTO t (empresa_id, ...) VALUES (?, ...)"), nunca como
   // "empresa_id = ?". La lógica de abajo está pensada para SELECT/UPDATE/DELETE (con WHERE)
@@ -560,7 +619,7 @@ function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypass
     if (String(parseInt(literal[1], 10)) !== String(parseInt(empresaId, 10))) {
       return 'Consulta rechazada: el filtro empresa_id no coincide con tu empresa.';
     }
-    return null;
+    return validarDepartamento();
   }
   const posPlaceholder = query.search(/\bempresa_id\s*=\s*\?/i);
   if (posPlaceholder !== -1) {
@@ -569,7 +628,7 @@ function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypass
     if (valor === undefined || String(parseInt(valor, 10)) !== String(parseInt(empresaId, 10))) {
       return 'Consulta rechazada: el valor pasado en params para empresa_id no coincide con tu empresa (o falta).';
     }
-    return null;
+    return validarDepartamento();
   }
   return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
 }
