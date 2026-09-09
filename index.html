@@ -1885,7 +1885,7 @@ select option{background:var(--surface2);color:var(--text)}
             <input id="cpdCuadroNumBornes" type="number" min="1" max="200" onchange="cpdRenderBornero()" oninput="cpdRenderBornero()" style="width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text)">
           </div>
           <div>
-            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Bornero — cada borne es doble (señal + común PLC)</div>
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Bornero — elige en cada borne qué sonda y canal va (se guarda al momento)</div>
             <div id="cpdBornero" style="display:flex;flex-direction:column;gap:4px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface2)"></div>
           </div>
         </div>
@@ -15206,7 +15206,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.45';
+const APP_VERSION = '9.46';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18154,25 +18154,72 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const st = window._cpdPlanoActual;
     const cuadroId = window._cpdSondaActualId;
     const n = Math.max(0, Math.min(200, parseInt(document.getElementById('cpdCuadroNumBornes').value, 10) || 0));
-    const porBorne = {}; // borne -> {sonda, canal, color}
+    const porBorne = {}; // borne -> {s, c}
     (st?.sondas || []).forEach(s => {
       if (String(s.cuadro_id) !== String(cuadroId)) return;
       cpdConexiones(s).forEach(c => { if (c.borne) porBorne[c.borne] = { s, c }; });
     });
+    // Opciones de asignación: cada sonda del plano (no cuadro) × sus canales.
+    const sondas = (st?.sondas || []).filter(s => !cpdEsCuadro(s));
+    const opciones = (valSel) => {
+      let o = '<option value="">— libre —</option>';
+      sondas.forEach(s => cpdCanalesDeTipo(s.tipo).forEach(canal => {
+        const v = `${s.id}:${canal}`;
+        o += `<option value="${v}" ${v === valSel ? 'selected' : ''}>${esc(s.nombre || ('#' + s.id))} · ${CPD_CANAL_LABEL[canal] || canal}</option>`;
+      }));
+      return o;
+    };
     let html = '';
     for (let k = 1; k <= n; k++) {
       const e = porBorne[k];
+      const val = e ? `${e.s.id}:${e.c.canal}` : '';
       const swatch = e && e.c.color ? `<span title="${esc(e.c.color)}" style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--border);background:${cpdColorHex(e.c.color)};flex-shrink:0"></span>` : '<span style="width:12px;flex-shrink:0"></span>';
-      html += `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 4px;border-radius:6px;background:${e ? 'rgba(99,102,241,.12)' : 'transparent'}">
-        <span style="font-weight:800;min-width:30px;color:var(--muted)">${k}</span>
+      html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 4px;border-radius:6px;background:${e ? 'rgba(99,102,241,.12)' : 'transparent'}">
+        <span style="font-weight:800;min-width:26px;color:var(--muted)">${k}</span>
         ${swatch}
-        <span style="flex:1;color:var(--text)">${e ? esc(e.s.nombre || ('Sonda #' + e.s.id)) + ' <span style=\"color:var(--accent);font-weight:700\">' + (CPD_CANAL_LABEL[e.c.canal] || e.c.canal) + '</span>' : '<span style="color:var(--muted)">libre</span>'}</span>
+        <select onchange="cpdBorneAsignar(${k}, this.value)" style="flex:1;min-width:0;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text)">${opciones(val)}</select>
       </div>`;
     }
     cont.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Indica el nº de bornes.</div>';
   }
+  // Guarda las conexiones de una sonda (PATCH) y refresca el estado local.
+  async function cpdGuardarConexionesSonda(sonda, conexiones, cuadroId) {
+    const cid = (cuadroId !== undefined) ? cuadroId : sonda.cuadro_id;
+    const res = await apiCall(`/cpd/sondas/${sonda.id}`, { method: 'PATCH', body: JSON.stringify({ cuadro_id: cid, conexiones }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Error al asignar');
+    sonda.cuadro_id = cid; sonda.conexiones_json = JSON.stringify(conexiones);
+  }
+  // CPD-BMS-02: asignar/liberar un borne DESDE el propio bornero del cuadro. La conexión vive
+  // en la sonda; aquí se traduce a los PATCH necesarios (liberar el ocupante previo y colocar
+  // la nueva conexión). valor = '' (libre) o 'sondaId:canal'.
+  async function cpdBorneAsignar(borne, valor) {
+    const st = window._cpdPlanoActual;
+    const cuadroId = window._cpdSondaActualId;
+    let owner = null;
+    (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId)) cpdConexiones(s).forEach(c => { if (c.borne === borne) owner = { s, c }; }); });
+    try {
+      if (!valor) {
+        if (owner) await cpdGuardarConexionesSonda(owner.s, cpdConexiones(owner.s).filter(c => c.borne !== borne));
+      } else {
+        const [sid, canal] = valor.split(':');
+        const S = (st?.sondas || []).find(s => String(s.id) === String(sid));
+        if (!S) return;
+        if (owner && !(String(owner.s.id) === String(sid) && owner.c.canal === canal)) {
+          await cpdGuardarConexionesSonda(owner.s, cpdConexiones(owner.s).filter(c => c.borne !== borne));
+        }
+        const prevColor = (cpdConexiones(S).find(c => c.canal === canal) || {}).color || null;
+        const nuevas = cpdConexiones(S).filter(c => c.canal !== canal);
+        nuevas.push({ canal, borne, color: prevColor });
+        await cpdGuardarConexionesSonda(S, nuevas, cuadroId);
+      }
+      cpdRenderBornero();
+      cpdRenderEditor();
+    } catch (e) { toast('❌ ' + (e.message || 'Error'), 'error'); cpdRenderBornero(); }
+  }
   window.cpdSondaCuadroCambio = cpdSondaCuadroCambio;
   window.cpdRenderBornero = cpdRenderBornero;
+  window.cpdBorneAsignar = cpdBorneAsignar;
   function cerrarModalCpdSonda() {
     document.getElementById('modalCpdSonda').style.display = 'none';
     window._cpdSondaActualId = null;
