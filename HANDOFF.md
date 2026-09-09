@@ -1,5 +1,30 @@
 # Handoff — Alejandra 2.0
 
+## CPD-BMS-02 — bornero enriquecido del cuadro BMS (2026-09-09, v9.45)
+
+- **Agente:** Claude (Opus 4.8). **Rama:** `feat/cpd-bms-bornero-enriquecido` → PR #169 → `2f3641b`.
+- **Origen:** Adrián subió a documentos de Control el esquema real del cuadro (`Esquema BMS Sala
+  304.pdf`, docs_dept id 64, empresa 1/obra 1): ESMAD Data Center, controlador Schneider
+  SpaceLogic AS‑P, tarjetas UI‑16 para las sondas. Reveló que el bornero simple de CPD-BMS-01
+  (1 sonda = 1 borne) se queda corto: una sonda de ambiente da **temp y hum** (dos bornes) y
+  cada conexión lleva **color de cable**. Adrián eligió (AskUserQuestion) el nivel "bornero
+  enriquecido" y "2 canales por sonda".
+- **Modelo:** la sonda pasa de `borne` único a `conexiones_json` (columna nueva, DDL en
+  caliente): `[{canal:'temp'|'hum'|'presion'|'otro', borne, color, senal}]`. `cuadro_id` sigue
+  diciendo a qué cuadro va. Canales por tipo: temp_hum→[temp,hum], presion_diferencial→[presion].
+- **Validación backend** (`_cpdNormalizarConexiones` + `_cpdOcupacionCuadro`): canal válido;
+  borne en rango, no repetido en la sonda ni ocupado por otra del cuadro; reducir num_bornes
+  rechaza 409 si dejaría conexiones fuera; borrar el cuadro limpia cuadro_id+conexiones.
+- **Frontend (paridad):** modal de sonda con una fila por canal (borne libre + color de cable,
+  paleta estándar); regletero del cuadro con swatch de color + sonda + canal; informe con las
+  conexiones por sonda y el bornero por cuadro.
+- **Verificado E2E en producción** (usuario 357, empresa 5): temp+hum en 2 bornes con color,
+  rechazo por repetido/ocupado/fuera de rango, 409 al reducir, GET con conexiones_json; plano
+  de prueba borrado. Worker + Pages 9.45 desplegados y verificados.
+- **Pendiente:** prueba visual de Adrián en el móvil, y **decidir el nivel "cuadro por módulos"**
+  (tarjetas UI‑16/AO‑8/AS‑P con lado cuadro/campo, hoja por hoja como el esquema). Hoy el lado
+  cuadro/campo es solo visual. El icono del cuadro sigue en 🗄️.
+
 ## CPD-BMS-01 — cuadro BMS con bornero PLC en Sondas CPD (2026-09-09, v9.44)
 
 - **Agente:** Claude (Opus 4.8). **Rama:** `feat/cpd-cuadro-bms-bornero` → PR #167 → `0b94a3f`.

@@ -1,5 +1,17 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-09): **CPD-BMS-02 — bornero enriquecido del cuadro BMS (v9.45)**
+desplegado y verificado E2E; **REPL-DEPT-01** cerrado en producción. Ver `HANDOFF.md`.
+- **CPD-BMS-02** (Desplegado, verificado E2E): tras revisar el esquema real (Sala 304, Schneider
+  AS‑P) que Adrián subió a documentos de Control. Una sonda de ambiente ocupa 2 bornes (temp+hum),
+  cada conexión con color de cable; `conexiones_json` sustituye al borne único. Regletero e
+  informe con color+canal. PR #169 → `2f3641b`. Worker + Pages 9.45. **Pendiente:** prueba visual
+  de Adrián en el móvil, e icono del cuadro (🗄️).
+  - **Decisión pendiente de Adrián:** subir al nivel "cuadro por módulos" (tarjetas UI‑16/AO‑8/
+    AS‑P con lado cuadro/campo, hoja por hoja como el esquema) o quedarse en el enriquecido actual.
+- **REPL-DEPT-01** (Cerrado en producción): worker del agente desplegado y verificado en vivo —
+  como encargado, pedir datos de otro departamento con SQL crudo se rechaza; el propio pasa.
+
 Estado (actualizado 2026-09-09): **CPD-BMS-01 — cuadro BMS con bornero PLC en Sondas CPD
 (v9.44)** desplegado y verificado E2E; **REPL-DEPT-01** arreglado y mergeado. Ver `HANDOFF.md`.
 - **CPD-BMS-01** (Desplegado, backend verificado E2E): el cuadro BMS es un elemento del plano
