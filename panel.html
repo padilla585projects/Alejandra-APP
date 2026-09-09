@@ -2035,12 +2035,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
           <!-- CPD-BMS-01: configuración del cuadro BMS (nº de bornes + regletero) -->
           <div id="cpdOfficeCuadroConfigWrap" style="display:none">
-            <div class="form-group" style="max-width:180px">
-              <label>Nº de bornes</label>
-              <input class="form-input" id="cpdOfficeCuadroNumBornes" type="number" min="1" max="200" oninput="cpdOfficeRenderBornero()" onchange="cpdOfficeRenderBornero()">
+            <!-- CPD-BMS-03: vista del cuadro por pisos + editor de módulos + bornero. -->
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:2px 0 6px">Vista del cuadro</div>
+            <div id="cpdOfficeArmarioInfo" style="font-size:11px;color:var(--power,#f87171);margin-bottom:6px"></div>
+            <div style="overflow-x:auto;margin-bottom:12px"><div id="cpdOfficeArmario" style="min-width:560px"></div></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+              <button type="button" class="btn btn-primary btn-sm" onclick="cpdOfficeCargarPlantillaBMS()">⚡ Plantilla BMS</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="cpdOfficeAddModulo()">+ Módulo</button>
             </div>
-            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:6px 0">Bornero — elige en cada borne qué sonda y canal va (se guarda al momento)</div>
-            <div id="cpdOfficeBornero" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface)"></div>
+            <div id="cpdOfficeModulosList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px"></div>
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:6px 0">Bornero — elige en cada canal qué sonda va (se guarda al momento)</div>
+            <div id="cpdOfficeBornero" style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface)"></div>
           </div>
 
           <div style="display:flex;gap:8px;margin-top:10px">
@@ -14146,6 +14151,39 @@ function cpdOfficeCanalesDeTipo(tipo) {
 function cpdOfficeConexiones(sonda) { try { return JSON.parse(sonda.conexiones_json || '[]'); } catch { return []; } }
 function cpdOfficeCuadrosDelPlano() { return (window._cpdOfficePlano?.sondas || []).filter(cpdOfficeEsCuadro); }
 function cpdOfficeNumBornes(cuadro) { try { return JSON.parse(cuadro.config_json || '{}').num_bornes || 0; } catch { return 0; } }
+// CPD-BMS-03: el cuadro se define por MÓDULOS/tarjetas del PLC. Catálogo, plantilla del cuadro
+// real (Schneider SpaceLogic, Sala 304) y helpers. Retrocompat: {num_bornes} → módulo genérico.
+const CPD_OFFICE_TARJETAS = {
+  'AUTO-2P': { io:'prot',  canales:0,  desc:'Automáticos de línea' },
+  'AUTO-24V':{ io:'prot',  canales:0,  desc:'Automático 24 Vdc salida' },
+  'PS-24V':  { io:'power', canales:0,  desc:'Fuente 24 Vdc' },
+  'RED-24V': { io:'power', canales:0,  desc:'Redundancia 24 Vdc' },
+  'AS-P':    { io:'bus',   canales:0,  desc:'Controlador SpaceLogic' },
+  'UI-16':   { io:'UI',    canales:16, desc:'16 entradas universales' },
+  'UI-8':    { io:'UI',    canales:8,  desc:'8 entradas universales' },
+  'AO-8':    { io:'AO',    canales:8,  desc:'8 salidas analógicas' },
+  'DO-12':   { io:'DO',    canales:12, desc:'12 salidas digitales' },
+};
+const CPD_OFFICE_IO_LABEL = { UI:'Entrada UI', DI:'Entrada DI', AO:'Salida AO', DO:'Salida DO', bus:'Bus', power:'Aliment.', prot:'Autom.' };
+const CPD_OFFICE_IO_ENTRADA = new Set(['UI','DI']);
+const CPD_OFFICE_PLANTILLA_BMS = [
+  ['AUT.1','AUTO-2P'],['AUT.2','AUTO-2P'],['FA.1','PS-24V'],['FA.2','PS-24V'],['RED','RED-24V'],
+  ['AU.PLC','AUTO-24V'],['AU.BOR','AUTO-24V'],['MOD.2','AS-P'],
+  ['MOD.3','UI-16'],['MOD.4','UI-16'],['MOD.5','UI-16'],['MOD.8','AO-8'],['MOD.9','DO-12'],
+];
+function cpdOfficeModulos(cuadro) {
+  try { const c = JSON.parse(cuadro.config_json || '{}');
+    if (Array.isArray(c.modulos)) return c.modulos;
+    const n = parseInt(c.num_bornes, 10); if (Number.isFinite(n)) return [{ id:'m1', nombre:'Bornes', tarjeta:'generico', io:'UI', canales:n }];
+  } catch {}
+  return [];
+}
+function cpdOfficeBloqueDe(cuadro, modId) {
+  const eio = cpdOfficeModulos(cuadro).filter(m => m.canales > 0);
+  const i = eio.findIndex(m => m.id === modId); return i < 0 ? '' : 'X' + (i + 2);
+}
+function cpdOfficeCxKey(c) { return (c.modulo || 'm1') + ':' + (c.pin != null ? c.pin : c.borne); }
+function cpdOfficePlantillaModulos() { let n = 0; return CPD_OFFICE_PLANTILLA_BMS.map(([nombre, tarjeta]) => ({ id:'m' + (++n), nombre, tarjeta, io:CPD_OFFICE_TARJETAS[tarjeta].io, canales:CPD_OFFICE_TARJETAS[tarjeta].canales })); }
 window._cpdOfficeHerramientaActiva = null;
 
 function cpdOfficeRenderToolbar() {
@@ -14318,13 +14356,14 @@ async function cpdOfficeCrearSondaEn(x, y, herramienta) {
   const esCuadro = herramienta.categoria === 'cuadro_bms';
   try {
     const cuerpo = { plano_id: st.plano.id, categoria: herramienta.categoria, tipo: herramienta.tipo, pos_x: x, pos_y: y };
-    if (esCuadro) cuerpo.config_json = { num_bornes: 12 }; // CPD-BMS-01: cuadro nace con 12 bornes
+    let _plantilla = null;
+    if (esCuadro) { _plantilla = cpdOfficePlantillaModulos(); cuerpo.config_json = { modulos: _plantilla }; } // CPD-BMS-03: nace con la plantilla BMS
     const data = await api('/cpd/sondas', { method: 'POST', body: JSON.stringify(cuerpo) });
     if (data?.ok === false) throw new Error(data.error || 'Error al crear la sonda');
     // CPD-FLICKER-01 (10/08/2026): mismo fix que index.html — cpdOfficeAbrirPlano()
     // reconstruye todo el editor (recarga la imagen del plano incluida), se veía como
     // un parpadeo cada vez que se colocaba una sonda. Solo se añade el marcador nuevo.
-    const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y, config_json: esCuadro ? JSON.stringify({ num_bornes: 12 }) : null, cuadro_id: null, conexiones_json: null };
+    const nuevaSonda = { id: data.id, categoria: herramienta.categoria, tipo: herramienta.tipo, nombre: data.nombre, numero_serie: null, zona: null, pos_x: x, pos_y: y, config_json: esCuadro ? JSON.stringify({ modulos: _plantilla }) : null, cuadro_id: null, conexiones_json: null };
     st.sondas.push(nuevaSonda);
     const canvas = document.getElementById('cpdOfficeCanvas');
     if (canvas) _cpdOfficeAddMarker(canvas, nuevaSonda);
@@ -14428,8 +14467,7 @@ function cpdOfficeAbrirSonda(id) {
   const lecturasWrap = document.getElementById('cpdOfficeLecturasWrap');
   if (lecturasWrap) lecturasWrap.style.display = esSonda ? '' : 'none';
   if (esCuadro) {
-    document.getElementById('cpdOfficeCuadroNumBornes').value = cpdOfficeNumBornes(sonda) || 12;
-    cpdOfficeRenderBornero();
+    cpdOfficeRenderModulosList(); cpdOfficeRenderVistaCuadro(); cpdOfficeRenderBornero();
   } else {
     cpdOfficePoblarSelectorCuadros(sonda);
   }
@@ -14441,7 +14479,82 @@ function cpdOfficeCerrarSonda() {
   window._cpdOfficeSondaId = null;
 }
 
-// CPD-BMS-02: selector de cuadro + una fila por canal (temp/hum/ΔP) con borne y color.
+// ── CPD-BMS-03: módulos del cuadro + vista por pisos (panel, más completo que el móvil) ──
+function cpdOfficeCuadroActual() { return (window._cpdOfficePlano?.sondas || []).find(s => String(s.id) === String(window._cpdOfficeSondaId)); }
+const CPD_OFFICE_IOCOL = { UI:'#22d3ee', DI:'#22d3ee', AO:'#f5a524', DO:'#ec4899', bus:'#a78bfa', power:'#f87171', prot:'#fbbf24' };
+function cpdOfficeRenderModulosList() {
+  const cont = document.getElementById('cpdOfficeModulosList'); if (!cont) return;
+  const cuadro = cpdOfficeCuadroActual(); const mods = cuadro ? cpdOfficeModulos(cuadro) : [];
+  cont.innerHTML = mods.length ? mods.map(m => {
+    const bloque = m.canales > 0 ? cpdOfficeBloqueDe(cuadro, m.id) : '';
+    return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-left:4px solid ${CPD_OFFICE_IOCOL[m.io]||'var(--border)'};border-radius:8px;padding:6px 8px">
+      <span style="font-family:monospace;font-weight:700;min-width:46px">${escHtml(m.nombre)}</span>
+      <span style="flex:1;min-width:0">${escHtml(m.tarjeta)} <span style="color:var(--muted)">· ${CPD_OFFICE_IO_LABEL[m.io] || m.io}${m.canales ? ' · ' + m.canales + ' ch' + (bloque ? ' · ' + bloque : '') : ''}</span></span>
+      <button type="button" onclick="cpdOfficeQuitarModulo('${m.id}')" style="background:none;border:none;color:var(--danger,#ef4444);cursor:pointer;font-size:14px">✕</button>
+    </div>`;
+  }).join('') : '<div style="color:var(--muted);font-size:12px">Sin módulos. Pulsa «Plantilla BMS».</div>';
+}
+async function cpdOfficeGuardarConfigCuadro(cuadro, modulos) {
+  const data = await api(`/cpd/sondas/${cuadro.id}`, { method: 'PATCH', body: JSON.stringify({ config_json: { modulos } }) });
+  if (data?.ok === false) throw new Error(data.error || 'Error al guardar el cuadro');
+  cuadro.config_json = JSON.stringify({ modulos });
+  cpdOfficeRenderModulosList(); cpdOfficeRenderVistaCuadro(); cpdOfficeRenderBornero();
+}
+async function cpdOfficeCargarPlantillaBMS() {
+  const cuadro = cpdOfficeCuadroActual(); if (!cuadro) return;
+  try { await cpdOfficeGuardarConfigCuadro(cuadro, cpdOfficePlantillaModulos()); toast('Plantilla BMS cargada'); }
+  catch (e) { toast(e.message, 'err'); }
+}
+async function cpdOfficeAddModulo() {
+  const cuadro = cpdOfficeCuadroActual(); if (!cuadro) return;
+  const mods = cpdOfficeModulos(cuadro).slice();
+  mods.push({ id: 'm' + Date.now(), nombre: 'MOD.' + (mods.length + 1), tarjeta: 'UI-16', io: 'UI', canales: 16 });
+  try { await cpdOfficeGuardarConfigCuadro(cuadro, mods); } catch (e) { toast(e.message, 'err'); }
+}
+async function cpdOfficeQuitarModulo(modId) {
+  const cuadro = cpdOfficeCuadroActual(); if (!cuadro) return;
+  if (!confirm('¿Quitar este módulo del cuadro?')) return;
+  const mods = cpdOfficeModulos(cuadro).filter(m => m.id !== modId);
+  try { await cpdOfficeGuardarConfigCuadro(cuadro, mods); }
+  catch (e) { toast(e.message || 'No se pudo: ¿hay sondas conectadas a ese módulo?', 'err'); }
+}
+window.cpdOfficeCargarPlantillaBMS = cpdOfficeCargarPlantillaBMS;
+window.cpdOfficeAddModulo = cpdOfficeAddModulo;
+window.cpdOfficeQuitarModulo = cpdOfficeQuitarModulo;
+// Vista del cuadro por pisos (alimentación / PLC 1-2 pisos / reservado / bornas) + topología.
+function cpdOfficeRenderVistaCuadro() {
+  const cont = document.getElementById('cpdOfficeArmario'); if (!cont) return;
+  const cuadro = cpdOfficeCuadroActual(); if (!cuadro) { cont.innerHTML = ''; return; }
+  const st = window._cpdOfficePlano;
+  const mods = cpdOfficeModulos(cuadro);
+  const occ = {}; (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadro.id)) cpdOfficeConexiones(s).forEach(c => { occ[cpdOfficeCxKey(c)] = 1; }); });
+  const nAuto = mods.filter(m => m.tarjeta === 'AUTO-2P').length, nSal = mods.filter(m => m.tarjeta === 'AUTO-24V').length, nFa = mods.filter(m => m.tarjeta === 'PS-24V').length, hayRed = mods.some(m => m.tarjeta === 'RED-24V');
+  document.getElementById('cpdOfficeArmarioInfo').innerHTML = (nAuto || nFa) ? `⚡ ${nAuto} automáticos → ${nFa} fuentes 24 V ${hayRed ? '→ redundancia' : ''} ${nSal ? '→ ' + nSal + ' automáticos de salida (PLC y bornas)' : ''}` : '';
+  const tarjeta = m => { const col = CPD_OFFICE_IOCOL[m.io] || 'var(--border)'; const oc = Object.keys(occ).filter(k => k.startsWith(m.id + ':')).length;
+    let pines = ''; if (m.canales > 0) { for (let k = 1; k <= Math.min(m.canales, 24); k++) pines += `<span style="width:6px;height:6px;border-radius:2px;background:${occ[m.id + ':' + k] ? 'var(--accent)' : 'var(--surface3,#2b3252)'};border:1px solid var(--border)"></span>`; }
+    return `<div style="min-width:72px;background:#131830;border:1px solid var(--border);border-top:4px solid ${col};border-radius:8px;padding:7px 6px;display:flex;flex-direction:column;gap:4px;align-items:center">
+      <span style="font-family:monospace;font-weight:700;font-size:11px">${escHtml(m.nombre)}</span>
+      <span style="font-size:8.5px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:999px;color:${col};background:${col}22">${escHtml(m.tarjeta)}</span>
+      <span style="font-size:9px;color:var(--muted)">${m.canales ? oc + '/' + m.canales : '—'}</span>
+      ${pines ? `<div style="display:grid;grid-template-columns:repeat(8,1fr);gap:2px">${pines}</div>` : ''}</div>`;
+  };
+  const piso = (lbl, inner) => `<div style="position:relative;padding:9px 8px 9px 74px;border-radius:8px;border-bottom:1px dashed rgba(255,255,255,.08)">
+    <span style="position:absolute;left:6px;top:50%;transform:translateY(-50%);width:62px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)">${lbl}</span>${inner}</div>`;
+  const carril = (arr) => `<div style="display:flex;gap:8px;flex-wrap:wrap">${arr.map(tarjeta).join('') || '<span style="color:var(--muted);font-size:11px">—</span>'}</div>`;
+  const pwr = mods.filter(m => m.io === 'power' || m.io === 'prot');
+  const plc = mods.filter(m => m.io !== 'power' && m.io !== 'prot');
+  const eio = mods.filter(m => m.canales > 0);
+  let plcInner; if (plc.length > 5) { const mid = Math.ceil(plc.length / 2); plcInner = `<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;gap:8px;flex-wrap:wrap">${plc.slice(0, mid).map(tarjeta).join('')}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${plc.slice(mid).map(tarjeta).join('')}</div></div>`; } else plcInner = carril(plc);
+  let reg = ''; eio.forEach(m => { const bloque = cpdOfficeBloqueDe(cuadro, m.id); let cells = `<div title="${bloque} DC+/DC−" style="display:flex;gap:1px"><span style="width:10px;height:18px;border-radius:2px;background:rgba(248,113,113,.18);border:1px solid #f87171"></span><span style="width:10px;height:18px;border-radius:2px;background:rgba(248,113,113,.18);border:1px solid #f87171"></span></div>`;
+    for (let k = 1; k <= m.canales; k++) { const on = occ[m.id + ':' + k]; cells += `<div style="display:flex;gap:1px"><span style="width:10px;height:18px;border-radius:2px;background:${on ? 'var(--accent)' : 'var(--surface3,#2b3252)'};border:1px solid var(--border)"></span><span style="width:10px;height:18px;border-radius:2px;background:${on ? 'var(--accent)' : 'var(--surface3,#2b3252)'};border:1px solid var(--border)"></span></div>`; }
+    reg += `<div style="display:flex;flex-direction:column;gap:3px;padding:5px 6px;border:1px solid var(--border);border-radius:7px;background:rgba(0,0,0,.18)"><span style="font-family:monospace;font-size:9px;color:var(--muted);white-space:nowrap">${bloque} · ${m.io}1–${m.io}${m.canales}</span><div style="display:flex;gap:2px;flex-wrap:wrap">${cells}</div></div>`; });
+  cont.innerHTML = mods.length ? `<div style="background:linear-gradient(155deg,#3a4160,#2a3049);border:1px solid #4a5378;border-radius:10px;padding:8px 10px;display:flex;flex-direction:column">
+    ${piso('1 Aliment.', carril(pwr))}${piso('2 PLC', plcInner)}${piso('3 Reservado', '<span style="color:var(--muted);font-size:11px">Carril libre (ampliación)</span>')}<div style="position:relative;padding:9px 8px 4px 74px"><span style="position:absolute;left:6px;top:16px;width:62px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)">4 Bornas</span><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">${reg || '<span style="color:var(--muted);font-size:11px">Sin bornas</span>'}</div></div>
+  </div>` : '<div style="color:var(--muted);font-size:12px">Sin módulos.</div>';
+}
+
+// CPD-BMS-03: en la ficha de la sonda, por canal un selector de "módulo · canal" (entradas UI
+// libres del cuadro) + color de cable.
 function cpdOfficePoblarSelectorCuadros(sonda) {
   const selC = document.getElementById('cpdOfficeSondaCuadro');
   const cuadros = cpdOfficeCuadrosDelPlano();
@@ -14457,66 +14570,60 @@ function cpdOfficeSondaCuadroCambio(conexActuales) {
   const sonda = (st?.sondas || []).find(s => String(s.id) === String(window._cpdOfficeSondaId));
   const cuadro = (st?.sondas || []).find(s => String(s.id) === selC.value);
   if (!cuadro || !sonda) { cont.innerHTML = ''; return; }
-  const n = cpdOfficeNumBornes(cuadro);
   const yo = window._cpdOfficeSondaId;
+  const modsEntrada = cpdOfficeModulos(cuadro).filter(m => CPD_OFFICE_IO_ENTRADA.has(m.io) && m.canales > 0);
   const ocupados = {};
-  (st.sondas || []).forEach(s => {
-    if (String(s.id) === String(yo) || String(s.cuadro_id) !== String(cuadro.id)) return;
-    cpdOfficeConexiones(s).forEach(c => { if (c.borne) ocupados[c.borne] = s.nombre || ('#' + s.id); });
-  });
+  (st.sondas || []).forEach(s => { if (String(s.id) === String(yo) || String(s.cuadro_id) !== String(cuadro.id)) return; cpdOfficeConexiones(s).forEach(c => { ocupados[cpdOfficeCxKey(c)] = s.nombre || ('#' + s.id); }); });
   const prev = {}; (Array.isArray(conexActuales) ? conexActuales : []).forEach(c => { prev[c.canal] = c; });
   const colorOpts = (sel) => '<option value="">color…</option>' + CPD_OFFICE_COLORES.map(c => `<option value="${c.v}" ${sel===c.v?'selected':''}>${c.v}</option>`).join('');
   cont.innerHTML = cpdOfficeCanalesDeTipo(sonda.tipo).map(canal => {
     const pc = prev[canal] || {};
-    let bopts = '<option value="">— sin asignar —</option>';
-    for (let k = 1; k <= n; k++) {
-      const libre = !ocupados[k]; const sel = String(pc.borne) === String(k) ? 'selected' : '';
-      bopts += `<option value="${k}" ${libre ? '' : 'disabled'} ${sel}>Borne ${k}${libre ? '' : ' (ocupado: ' + escHtml(ocupados[k]) + ')'}</option>`;
-    }
+    const valPrev = pc.modulo != null ? `${pc.modulo}:${pc.pin}` : (pc.borne != null ? `m1:${pc.borne}` : '');
+    let opts = '<option value="">— sin asignar —</option>';
+    modsEntrada.forEach(m => { const bloque = cpdOfficeBloqueDe(cuadro, m.id); for (let k = 1; k <= m.canales; k++) {
+      const key = m.id + ':' + k; const libre = !ocupados[key]; const sel = key === valPrev ? 'selected' : '';
+      opts += `<option value="${key}" ${libre ? '' : 'disabled'} ${sel}>${escHtml(m.nombre)} · ${m.io}${k}${bloque ? ' (' + bloque + ')' : ''}${libre ? '' : ' ocupado'}</option>`;
+    } });
     return `<div style="display:flex;gap:6px;align-items:center" data-canal="${canal}">
       <span style="min-width:42px;font-size:11px;font-weight:800;color:var(--accent)">${CPD_OFFICE_CANAL_LABEL[canal] || canal}</span>
-      <select class="form-input cpd-cx-borne" style="flex:1">${bopts}</select>
-      <select class="form-input cpd-cx-color" style="width:110px">${colorOpts(pc.color)}</select>
+      <select class="form-input cpd-cx-mp" style="flex:1">${opts}</select>
+      <select class="form-input cpd-cx-color" style="width:100px">${colorOpts(pc.color)}</select>
     </div>`;
   }).join('');
 }
 function cpdOfficeLeerConexionesForm() {
   const cont = document.getElementById('cpdOfficeSondaConexiones');
   return [...cont.querySelectorAll('[data-canal]')].map(f => {
-    const borne = parseInt(f.querySelector('.cpd-cx-borne').value, 10);
-    return Number.isFinite(borne) ? { canal: f.dataset.canal, borne, color: f.querySelector('.cpd-cx-color').value || null } : null;
+    const mp = f.querySelector('.cpd-cx-mp').value; if (!mp) return null;
+    const [modulo, pin] = mp.split(':'); return { canal: f.dataset.canal, modulo, pin: +pin, color: f.querySelector('.cpd-cx-color').value || null };
   }).filter(Boolean);
 }
-// CPD-BMS-02: regletero del cuadro (1..N): borne → color de cable + sonda · canal.
+// CPD-BMS-03: bornero por módulo (bloque X). Entradas con selector de sonda·canal; salidas reservadas.
 function cpdOfficeRenderBornero() {
-  const cont = document.getElementById('cpdOfficeBornero');
-  if (!cont) return;
+  const cont = document.getElementById('cpdOfficeBornero'); if (!cont) return;
   const st = window._cpdOfficePlano;
-  const cuadroId = window._cpdOfficeSondaId;
-  const n = Math.max(0, Math.min(200, parseInt(document.getElementById('cpdOfficeCuadroNumBornes').value, 10) || 0));
-  const porBorne = {};
-  (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId)) cpdOfficeConexiones(s).forEach(c => { if (c.borne) porBorne[c.borne] = { s, c }; }); });
-  const sondas = (st?.sondas || []).filter(s => !cpdOfficeEsCuadro(s));
-  const opciones = (valSel) => {
-    let o = '<option value="">— libre —</option>';
-    sondas.forEach(s => cpdOfficeCanalesDeTipo(s.tipo).forEach(canal => {
-      const v = `${s.id}:${canal}`;
-      o += `<option value="${v}" ${v === valSel ? 'selected' : ''}>${escHtml(s.nombre || ('#' + s.id))} · ${CPD_OFFICE_CANAL_LABEL[canal] || canal}</option>`;
-    }));
-    return o;
-  };
-  let html = '';
-  for (let k = 1; k <= n; k++) {
-    const e = porBorne[k];
-    const val = e ? `${e.s.id}:${e.c.canal}` : '';
-    const swatch = e && e.c.color ? `<span title="${escHtml(e.c.color)}" style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--border);background:${cpdOfficeColorHex(e.c.color)};flex-shrink:0"></span>` : '<span style="width:12px;flex-shrink:0"></span>';
-    html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 4px;border-radius:6px;background:${e ? 'rgba(99,102,241,.12)' : 'transparent'}">
-      <span style="font-weight:800;min-width:26px;color:var(--muted)">${k}</span>
-      ${swatch}
-      <select onchange="cpdOfficeBorneAsignar(${k}, this.value)" class="form-input" style="flex:1;min-width:0;padding:5px 6px;font-size:12px">${opciones(val)}</select>
-    </div>`;
-  }
-  cont.innerHTML = html || '<div style="color:var(--muted);font-size:12px">Indica el nº de bornes.</div>';
+  const cuadro = (st?.sondas || []).find(s => String(s.id) === String(window._cpdOfficeSondaId));
+  if (!cuadro) { cont.innerHTML = ''; return; }
+  const mods = cpdOfficeModulos(cuadro).filter(m => m.canales > 0);
+  const porPin = {};
+  (st.sondas || []).forEach(s => { if (String(s.cuadro_id) !== String(cuadro.id)) return; cpdOfficeConexiones(s).forEach(c => { porPin[cpdOfficeCxKey(c)] = { s, c }; }); });
+  const sondas = (st.sondas || []).filter(s => !cpdOfficeEsCuadro(s));
+  const opciones = (valSel) => { let o = '<option value="">— libre —</option>'; sondas.forEach(s => cpdOfficeCanalesDeTipo(s.tipo).forEach(canal => { const v = `${s.id}:${canal}`; o += `<option value="${v}" ${v === valSel ? 'selected' : ''}>${escHtml(s.nombre || ('#' + s.id))} · ${CPD_OFFICE_CANAL_LABEL[canal] || canal}</option>`; })); return o; };
+  cont.innerHTML = mods.map(m => {
+    const bloque = cpdOfficeBloqueDe(cuadro, m.id); const entrada = CPD_OFFICE_IO_ENTRADA.has(m.io);
+    let filas = '';
+    for (let k = 1; k <= m.canales; k++) {
+      const e = porPin[m.id + ':' + k]; const val = e ? `${e.s.id}:${e.c.canal}` : '';
+      const et = `<span style="font-family:monospace;font-size:10px;color:var(--muted);min-width:56px">${bloque}·${m.io}${k}</span>`;
+      if (entrada) {
+        const sw = e && e.c.color ? `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;border:1px solid var(--border);background:${cpdOfficeColorHex(e.c.color)};flex-shrink:0"></span>` : '';
+        filas += `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">${et}${sw}<select onchange="cpdOfficeBorneAsignar('${m.id}',${k},this.value)" class="form-input" style="flex:1;min-width:0;padding:5px;font-size:12px">${opciones(val)}</select></div>`;
+      } else {
+        filas += `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">${et}<span style="flex:1;color:var(--muted);font-size:11px">salida — válvula/equipo (próximamente)</span></div>`;
+      }
+    }
+    return `<div style="border:1px solid var(--border);border-radius:8px;padding:6px 8px"><div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:3px">${escHtml(m.nombre)} · ${escHtml(m.tarjeta)} <span style="color:var(--muted);font-weight:600">${bloque}</span></div>${filas}</div>`;
+  }).join('') || '<div style="color:var(--muted);font-size:12px">Carga la plantilla o añade módulos con canales.</div>';
 }
 async function cpdOfficeGuardarConexionesSonda(sonda, conexiones, cuadroId) {
   const cid = (cuadroId !== undefined) ? cuadroId : sonda.cuadro_id;
@@ -14524,28 +14631,28 @@ async function cpdOfficeGuardarConexionesSonda(sonda, conexiones, cuadroId) {
   if (data?.ok === false) throw new Error(data.error || 'Error al asignar');
   sonda.cuadro_id = cid; sonda.conexiones_json = JSON.stringify(conexiones);
 }
-// CPD-BMS-02: asignar/liberar un borne desde el bornero del cuadro (Office).
-async function cpdOfficeBorneAsignar(borne, valor) {
+// CPD-BMS-03: asignar/liberar un canal desde el bornero del cuadro (Office). valor = '' | 'sondaId:canal'.
+async function cpdOfficeBorneAsignar(modId, pin, valor) {
   const st = window._cpdOfficePlano;
   const cuadroId = window._cpdOfficeSondaId;
+  const enEsteCanal = (c) => (c.modulo || 'm1') === modId && (c.pin != null ? c.pin : c.borne) === pin;
   let owner = null;
-  (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId)) cpdOfficeConexiones(s).forEach(c => { if (c.borne === borne) owner = { s, c }; }); });
+  (st?.sondas || []).forEach(s => { if (String(s.cuadro_id) === String(cuadroId)) cpdOfficeConexiones(s).forEach(c => { if (enEsteCanal(c)) owner = { s, c }; }); });
   try {
     if (!valor) {
-      if (owner) await cpdOfficeGuardarConexionesSonda(owner.s, cpdOfficeConexiones(owner.s).filter(c => c.borne !== borne));
+      if (owner) await cpdOfficeGuardarConexionesSonda(owner.s, cpdOfficeConexiones(owner.s).filter(c => !enEsteCanal(c)));
     } else {
       const [sid, canal] = valor.split(':');
-      const S = (st?.sondas || []).find(s => String(s.id) === String(sid));
-      if (!S) return;
+      const S = (st?.sondas || []).find(s => String(s.id) === String(sid)); if (!S) return;
       if (owner && !(String(owner.s.id) === String(sid) && owner.c.canal === canal)) {
-        await cpdOfficeGuardarConexionesSonda(owner.s, cpdOfficeConexiones(owner.s).filter(c => c.borne !== borne));
+        await cpdOfficeGuardarConexionesSonda(owner.s, cpdOfficeConexiones(owner.s).filter(c => !enEsteCanal(c)));
       }
       const prevColor = (cpdOfficeConexiones(S).find(c => c.canal === canal) || {}).color || null;
       const nuevas = cpdOfficeConexiones(S).filter(c => c.canal !== canal);
-      nuevas.push({ canal, borne, color: prevColor });
+      nuevas.push({ canal, modulo: modId, pin, color: prevColor });
       await cpdOfficeGuardarConexionesSonda(S, nuevas, cuadroId);
     }
-    cpdOfficeRenderBornero();
+    cpdOfficeRenderBornero(); cpdOfficeRenderVistaCuadro();
   } catch (e) { toast(e.message || 'Error', 'err'); cpdOfficeRenderBornero(); }
 }
 window.cpdOfficeBorneAsignar = cpdOfficeBorneAsignar;
@@ -14562,9 +14669,8 @@ async function cpdOfficeSondaGuardarDatos() {
   try {
     let body;
     if (cpdOfficeEsCuadro(sonda)) {
-      const num_bornes = parseInt(document.getElementById('cpdOfficeCuadroNumBornes').value, 10);
-      if (!Number.isFinite(num_bornes) || num_bornes < 1 || num_bornes > 200) { toast('El nº de bornes debe estar entre 1 y 200', 'err'); return; }
-      body = { nombre, numero_serie, notas, num_bornes };
+      // CPD-BMS-03: los módulos se guardan al cargar plantilla / añadir / quitar; aquí solo datos.
+      body = { nombre, numero_serie, notas };
     } else {
       const modelo = document.getElementById('cpdOfficeSondaModelo').value.trim();
       const zona = document.getElementById('cpdOfficeSondaZona').value;
@@ -14686,23 +14792,32 @@ async function cpdOfficeGenerarInforme() {
         width:16px;height:16px;border-radius:${cua ? '3px' : '50%'};background:${info.color};border:1.5px solid #fff;
         display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff">${s._n}</div>`;
     }).join('');
-    const conexResumen = (s) => cpdOfficeConexiones(s).map(c => `${nombreCuadro(s.cuadro_id)} b${c.borne} (${CPD_OFFICE_CANAL_LABEL[c.canal] || c.canal})`).join(', ');
+    const cuadroObj = (cid) => cuadros.find(c => String(c.id) === String(cid));
+    const conexResumen = (s) => { const c0 = cuadroObj(s.cuadro_id); return cpdOfficeConexiones(s).map(c => { const m = (c0 ? cpdOfficeModulos(c0) : []).find(mm => mm.id === (c.modulo || 'm1')); const io = m ? m.io : 'UI'; const bloque = c0 ? cpdOfficeBloqueDe(c0, c.modulo || 'm1') : ''; return `${bloque ? bloque + '·' : ''}${io}${c.pin != null ? c.pin : c.borne} (${CPD_OFFICE_CANAL_LABEL[c.canal] || c.canal})`; }).join(', '); };
     const filasSondas = sondas.map(s => `<tr>
         <td>${s._n}</td><td>${escHtml(s.nombre)}</td><td>${escHtml(s.numero_serie || '—')}</td>
         <td>${s.cuadro_id ? escHtml(conexResumen(s) || nombreCuadro(s.cuadro_id)) : '—'}</td>
       </tr>`).join('');
+    // CPD-BMS-03: tabla de bornas por cuadro. Orden: borna → nombre → nº serie → E/S del PLC.
+    // 2 bornas por canal (señal/común) + DC de 24 V, numeración por bloque.
     const seccionesCuadros = cuadros.map(c => {
-      const n = cpdOfficeNumBornes(c);
-      const porBorne = {}; sondas.forEach(s => { if (String(s.cuadro_id) === String(c.id)) cpdOfficeConexiones(s).forEach(cx => { if (cx.borne) porBorne[cx.borne] = { s, cx }; }); });
+      const mods = cpdOfficeModulos(c).filter(m => m.canales > 0);
+      const porPin = {}; sondas.forEach(s => { if (String(s.cuadro_id) === String(c.id)) cpdOfficeConexiones(s).forEach(cx => { porPin[(cx.modulo || 'm1') + ':' + (cx.pin != null ? cx.pin : cx.borne)] = { s, cx }; }); });
       let filas = '';
-      for (let k = 1; k <= n; k++) {
-        const e = porBorne[k];
-        const sw = e && e.cx.color ? `<span style="display:inline-block;width:11px;height:11px;border-radius:2px;border:1px solid #bbb;background:${cpdOfficeColorHex(e.cx.color)};vertical-align:middle"></span> ${escHtml(e.cx.color)}` : '—';
-        filas += `<tr><td>${k}</td><td>${sw}</td><td>${e ? escHtml(e.s.nombre) + ' · ' + (CPD_OFFICE_CANAL_LABEL[e.cx.canal] || e.cx.canal) : '<span style=\"color:#8a94a6\">libre</span>'}</td><td>${e ? escHtml(e.s.numero_serie || '—') : ''}</td></tr>`;
-      }
-      return `<h2 style="font-size:15px;margin-top:22px">🗄️ ${escHtml(c.nombre || ('Cuadro ' + c.id))}${c.numero_serie ? ' · <span style="font-weight:400;color:#5b6472">Nº serie ' + escHtml(c.numero_serie) + '</span>' : ''} <span style="font-weight:400;color:#5b6472">(${n} bornes)</span></h2>
-        <table><thead><tr><th>Borne</th><th>Cable</th><th>Sonda · canal</th><th>Nº serie</th></tr></thead>
-        <tbody>${filas || '<tr><td colspan="4">Sin bornes</td></tr>'}</tbody></table>`;
+      mods.forEach(m => {
+        const bloque = cpdOfficeBloqueDe(c, m.id); let bn = 0;
+        const d1 = ++bn, d2 = ++bn;
+        filas += `<tr><td>${bloque}:${d1}/${d2}</td><td colspan="2" style="color:#b45309">24 V (DC+/DC−) · alimentación de campo</td><td>${bloque}</td></tr>`;
+        for (let k = 1; k <= m.canales; k++) {
+          const bS = ++bn, bC = ++bn; const e = porPin[m.id + ':' + k];
+          const sw = e && e.cx.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;border:1px solid #bbb;background:${cpdOfficeColorHex(e.cx.color)};vertical-align:middle"></span> ` : '';
+          const nom = e ? sw + escHtml(e.s.nombre) + ' · ' + (CPD_OFFICE_CANAL_LABEL[e.cx.canal] || e.cx.canal) : '<span style="color:#8a94a6">libre</span>';
+          filas += `<tr><td>${bloque}:${bS}/${bC}</td><td>${nom}</td><td>${e ? escHtml(e.s.numero_serie || '—') : ''}</td><td>${bloque}·${m.io}${k}</td></tr>`;
+        }
+      });
+      return `<h2 style="font-size:15px;margin-top:22px">🗄️ ${escHtml(c.nombre || ('Cuadro ' + c.id))}${c.numero_serie ? ' · <span style="font-weight:400;color:#5b6472">Nº serie ' + escHtml(c.numero_serie) + '</span>' : ''}</h2>
+        <table><thead><tr><th>Bornas</th><th>Nombre</th><th>Nº serie</th><th>E/S del PLC</th></tr></thead>
+        <tbody>${filas || '<tr><td colspan="4">Sin módulos con canales</td></tr>'}</tbody></table>`;
     }).join('');
     w.document.open();
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Informe ${escHtml(st.plano.titulo)}</title>
@@ -14724,7 +14839,7 @@ async function cpdOfficeGenerarInforme() {
       <div class="plano-wrap"><img src="${imgUrl}">${marcadoresHtml}</div>
       <h2>Sondas</h2>
       <table>
-        <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Conexiones (cuadro · borne · canal)</th></tr></thead>
+        <thead><tr><th>#</th><th>Nombre</th><th>Nº serie</th><th>Conexiones (bloque · E/S del PLC)</th></tr></thead>
         <tbody>${filasSondas || '<tr><td colspan="4">Sin sondas</td></tr>'}</tbody>
       </table>
       ${seccionesCuadros}
@@ -26478,7 +26593,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.49';
+const PANEL_APP_VERSION = '9.50';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
