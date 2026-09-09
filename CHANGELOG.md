@@ -4,6 +4,28 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-09 — CPD-BMS-02: bornero enriquecido del cuadro BMS, v9.45)
+
+Continuación de CPD-BMS-01 tras revisar el esquema real del cuadro (ESMAD Data Center, Sala
+304, Schneider SpaceLogic AS‑P) que Adrián subió a documentos de Control. `worker.js` + los dos
+frontends; los 4 marcadores suben a **9.45**.
+
+- Una sonda de ambiente ocupa **dos bornes** (Temp y Hum); la de presión, uno (ΔP). La sonda
+  pasa de un `borne` único a una lista de **conexiones** en la columna nueva `conexiones_json`
+  (DDL en caliente): `[{canal:'temp'|'hum'|'presion'|'otro', borne, color, senal}]`. `cuadro_id`
+  sigue indicando el cuadro.
+- Cada conexión lleva **color de cable** (paleta estándar marrón/azul/gris/negro/rojo/…), con
+  swatch en el regletero y en el informe.
+- Validación: canal válido; borne en rango, no repetido en la sonda ni ocupado por otra;
+  reducir `num_bornes` rechaza (409) si dejaría conexiones fuera; borrar el cuadro limpia
+  `cuadro_id`+`conexiones` de sus sondas.
+- Modal de sonda con una fila por canal (borne libre + color); regletero con color/sonda/canal;
+  informe con las conexiones por sonda y el bornero por cuadro.
+- Verificado E2E en producción (temp+hum en 2 bornes con color, repetido, ocupado, fuera de
+  rango, 409 al reducir). PR #169 → `2f3641b`. Worker + Pages 9.45 desplegados.
+- **Pendiente:** decidir si se sube al nivel "cuadro por módulos" (tarjetas UI‑16/AO‑8/AS‑P con
+  lado cuadro/campo, como el esquema hoja por hoja). Hoy el lado cuadro/campo es solo visual.
+
 ### Added (2026-09-09 — CPD-BMS-01: cuadro BMS con bornero PLC en Sondas CPD, v9.44)
 
 Pedido de Adrián (dept. Control). `worker.js` (rutas `/cpd/*`) + `index.html` + `panel.html`;
