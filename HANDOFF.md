@@ -1,6 +1,6 @@
 # Handoff — Alejandra 2.0
 
-## CPD-BMS-03 — cuadro BMS por módulos de PLC, paso 1: backend + móvil (2026-09-09, v9.48)
+## CPD-BMS-03 — cuadro BMS por módulos de PLC (2026-09-09, v9.48 móvil + v9.50 panel)
 
 - **Agente:** Claude (Opus 4.8). **Rama:** `feat/cpd-bms-03-modulos-movil` → PR #174 → `b92dd65`.
 - **Origen:** Adrián pidió que las bornas se enlacen a las entradas/salidas del PLC (esquema BMS
@@ -23,10 +23,14 @@
 - **Móvil (index.html):** cuadro nace con la plantilla BMS (editable: ⚡ Plantilla BMS / + Módulo
   / quitar); bornero por módulo (bloque X) con selector sonda·canal en las entradas y salidas
   reservadas; ficha de sonda con módulo·canal + color; informe por módulos con el orden pedido.
-- **Pendiente (paso 2):** migrar `panel.html` al modelo por módulos + la **vista del cuadro por
-  pisos con topología** + informe. **Mientras tanto, gestionar los cuadros BMS desde el móvil**
-  (el panel sigue en el modelo viejo, que el backend mantiene compatible). Falta también la prueba
-  visual/táctil de Adrián en el móvil.
+- **Paso 2 (HECHO, v9.50, PR #176 → `04d04af`):** `panel.html` migrado al mismo modelo por
+  módulos + **vista del cuadro por pisos con topología** (alimentación con automáticos+fuentes+
+  redundancia, PLC en 1-2 pisos, reservado, regletero por bloque con DC+/DC−) + informe por
+  bloques. **Panel y app sincronizados** (mismo backend/datos). Los cuadros se gestionan desde
+  cualquiera de los dos. La vista gráfica por pisos es exclusiva del panel (el móvil es simple,
+  como pidió Adrián). Falta la prueba visual/táctil en vivo (móvil + panel) y decidir el icono.
+- **FAB-SUPERADMIN-01 (v9.49):** el chat de Alejandra volvió al panel (ver CHANGELOG). El FAB de
+  scan remoto se oculta a propósito sin móvil conectado (confirmado por Adrián), no es bug.
 
 ## CPD-BMS-02 — bornero enriquecido del cuadro BMS (2026-09-09, v9.45)
 
