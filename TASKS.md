@@ -1,7 +1,20 @@
 # TASKS — Cola operativa inmediata
 
-Estado (actualizado 2026-09-09): **REPL-REDISEÑO — plan escrito, sin implementar.** Ver
-`docs/decisions/ADR-0025-REPLANTEO-REDISENO-CAMARA-SENSORES.md` (Propuesto) y la memoria
+Estado (actualizado 2026-09-10): **REPL-REDISEÑO F1–F4 — IMPLEMENTADO Y DESPLEGADO.** ADR-0025
+aceptado. En producción: **v9.51** (F1) y **v9.52** (F2/F3/F4). Worker + Pages desplegados y
+verificados (Pages sirve 9.52; deploy del worker success). PRs #180 #181 #182 (F1), #184 (F2),
+#185 (F3), #186 (F4), releases #183 (9.51) y #187 (9.52).
+- **F1** catálogo (bandeja de escalera 300–900, cajas de registro tetones/ciega + racores,
+  variante tubo acero/PVC) + selector de caja + cámara en directo para marcar el recorrido.
+- **F2** editar tras envío + «Actualizar pedido» con reconciliación opción A (respeta recibidas).
+- **F3** vídeo del recorrido a R2 (MediaRecorder, ≤3 min) — endpoints `/replanteos/{id}/video`.
+- **F4** previsualización 3D de la instalación (three.js) + AR «ver en mi espacio» (Android).
+- **Pendiente de probar Adrián en el Oppo:** cámara en directo, nivel/brújula, grabación de vídeo,
+  AR anclado (F4). Verificado en local: catálogo, cajas, reconciliación, preview 3D, 262 tests.
+- **Futuro (fuera de F1):** precio/stock desde almacén; editor de replanteos en `panel.html`.
+
+Estado (histórico 2026-09-09): **REPL-REDISEÑO — plan escrito.** Ver
+`docs/decisions/ADR-0025-REPLANTEO-REDISENO-CAMARA-SENSORES.md` y la memoria
 `project-replanteo-redesign`.
 - **Contexto:** los replanteos actuales (ADR-0024, foto+homografía) no convencen a Adrián.
   Rediseño definido en maqueta (artifacts `89a001ad-…` flujo, `e38cc365-…` AR/3D). ADR-0025

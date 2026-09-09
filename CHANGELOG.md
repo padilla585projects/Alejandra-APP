@@ -4,6 +4,36 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-09/10 — Rediseño del Replanteo F1–F4, ADR-0025, v9.51 + v9.52)
+
+Rediseño completo de la herramienta de Replanteo (ADR-0025, aceptado por Adrián), en cuatro
+fases, sobre el backend existente (`replanteos`/`replanteo_catalogo`, cálculo en servidor,
+pedido por `referencia REPL-<id>`). Aislamiento por departamento intacto (cada replanteo y su
+pedido, solo a su departamento).
+
+- **F1 (v9.51, desplegado y verificado):** catálogo ampliado en `REPLANTEO_CATALOGO_BASE` —
+  **bandeja de escalera** (anchos 300–900, distinta de Rejiband/chapa), Rejiband aclarado,
+  **variante tubo Acero/PVC**, y **cajas de registro** en tubo (`caja_cada_m`): una por codo +
+  una por tramo largo, tipo **tetones** (tubo directo) o **ciega** (+ **racores**, 2/caja), con
+  medida sugerida por diámetro. `calcularMaterialReplanteo` emite cajas y racores. Frontend: nuevo
+  selector de caja y **captura por cámara en directo** (marcar el recorrido tocando el vídeo, con
+  nivel/brújula por DeviceOrientation; congela un fotograma → editor de siempre). PRs #180/#181/#182.
+- **F2 (v9.52):** la oficina/encargado puede **editar un replanteo aunque ya esté en Pedidos**
+  (retirado el candado 409) y el botón **«Actualizar pedido»** reconcilia las líneas — **opción A**:
+  ajusta/borra solo las `pendiente`, respeta las `recibidas` (la diferencia se añade como línea
+  nueva). La IA mantiene la idempotencia (REPLANTEO-08). `puedeEditarReplanteo` incluye oficina.
+  PR #184.
+- **F3 (v9.52):** **vídeo del recorrido a R2** — columnas `video_r2_key/video_mime/video_dur`,
+  `POST/GET /replanteos/{id}/video`; la cámara en directo graba (MediaRecorder, máx. 3 min) y sube
+  tras guardar. Documentación de la instalación. PR #185.
+- **F4 (v9.52):** **previsualización 3D de la instalación** (botón «Ver en 3D», three.js r158 ya
+  cargado por el AR de captura): la bandeja/tubo con sus tramos y curvas, rotatoria en cualquier
+  dispositivo; y **«Ver en mi espacio»** (AR anclado, WebXR hit-test) en Android/ARCore. PR #186.
+
+Pendiente de prueba en dispositivo (Oppo Find X5 Pro): cámara en directo, sensores, grabación de
+vídeo y AR anclado. Fuera de alcance de F1 (para más adelante): precio/stock desde almacén y un
+editor dedicado de replanteos en `panel.html`.
+
 ### Added (2026-09-09 — CPD-BMS-03 paso 2: cuadro por módulos en el panel + vista por pisos, v9.50)
 
 Migra `panel.html` al mismo modelo por módulos que el móvil → **panel y app sincronizados**

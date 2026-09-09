@@ -1,5 +1,31 @@
 # Handoff — Alejandra 2.0
 
+## REPL-REDISEÑO — Replanteo F1–F4 (2026-09-09/10, v9.51 + v9.52, desplegado)
+
+- **Agente:** Claude (Opus 4.8). **ADR:** `docs/decisions/ADR-0025-REPLANTEO-REDISENO-CAMARA-SENSORES.md` (Aceptado).
+- **Origen:** los replanteos previos (ADR-0024, foto+homografía) no convencían a Adrián. Rediseño
+  definido en maquetas (artifacts `89a001ad-…` flujo, `e38cc365-…` AR/3D three.js) e implementado
+  por fases sobre el backend existente (`replanteos`, cálculo en servidor, pedido `REPL-<id>`).
+- **Entregado (todo en `main`, desplegado):**
+  - **F1** (v9.51): `REPLANTEO_CATALOGO_BASE` + `calcularMaterialReplanteo` — bandeja de escalera
+    (300–900), variante tubo Acero/PVC, **cajas de registro** (`elemento_params.caja_tipo`
+    tetones|ciega, `caja_mm`; racores 2/caja si ciega). Frontend: selector de caja +
+    `replCamIniciar` (cámara en directo, marcar tocando, nivel/brújula por DeviceOrientation,
+    congela fotograma → editor). PRs #180/#181/#182.
+  - **F2** (v9.52): `actualizarReplanteo` sin candado 409; `_replanteoReconciliarPedido` (opción A:
+    solo `pendiente`, respeta `recibidas`); REST reconcilia, IA mantiene 409; `puedeEditarReplanteo`
+    incluye oficina; botón «Actualizar pedido». PR #184.
+  - **F3** (v9.52): columnas `video_r2_key/video_mime/video_dur`; `POST/GET /replanteos/{id}/video`;
+    MediaRecorder en la captura (≤3 min) sube tras guardar. PR #185.
+  - **F4** (v9.52): `replVer3D()` (three.js r158) construye la instalación desde `puntos_3d` o el
+    trazado 2D escalado; `replVer3DEnEspacio()` AR anclado WebXR (Android). PR #186.
+- **Verificado:** Pages sirve 9.52; deploy worker success; 262 tests del agente; catálogo/cajas/
+  reconciliación/preview 3D probados en local.
+- **PENDIENTE de Adrián (en el Oppo Find X5 Pro):** cámara en directo, nivel/brújula, grabación de
+  vídeo y AR anclado (F4) — no verificables sin dispositivo.
+- **Futuro (fuera de alcance de F1):** precio/stock desde almacén por departamento; editor de
+  replanteos dedicado en `panel.html` (hoy la edición de oficina usa el editor del móvil).
+
 ## CPD-BMS-03 — cuadro BMS por módulos de PLC (2026-09-09, v9.48 móvil + v9.50 panel)
 
 - **Agente:** Claude (Opus 4.8). **Rama:** `feat/cpd-bms-03-modulos-movil` → PR #174 → `b92dd65`.
