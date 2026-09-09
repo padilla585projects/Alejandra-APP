@@ -2,6 +2,10 @@
 
 Estado (actualizado 2026-09-09): **CPD-BMS-02 — bornero enriquecido del cuadro BMS (v9.45)**
 desplegado y verificado E2E; **REPL-DEPT-01** cerrado en producción. Ver `HANDOFF.md`.
+- **CPD-BMS-02b** (Desplegado, v9.46): el bornero del cuadro es **editable** — desde el cuadro se
+  asigna en cada borne qué sonda·canal va (antes solo se podía desde la ficha de la sonda, poco
+  visible). Se guarda al momento. PR #171 → `0502a00`, Pages 9.46. Solo frontend. Pendiente prueba
+  visual de Adrián.
 - **CPD-BMS-02** (Desplegado, verificado E2E): tras revisar el esquema real (Sala 304, Schneider
   AS‑P) que Adrián subió a documentos de Control. Una sonda de ambiente ocupa 2 bornes (temp+hum),
   cada conexión con color de cable; `conexiones_json` sustituye al borne único. Regletero e
