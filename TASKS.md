@@ -1,5 +1,20 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-09): **CPD-BMS-01 — cuadro BMS con bornero PLC en Sondas CPD
+(v9.44)** desplegado y verificado E2E; **REPL-DEPT-01** arreglado y mergeado. Ver `HANDOFF.md`.
+- **CPD-BMS-01** (Desplegado, backend verificado E2E): el cuadro BMS es un elemento del plano
+  (`plano_elementos`, `cuadro_bms:cuadro`) con nombre, nº de serie, nº de bornes y **bornero**
+  (1…N, cada borne doble señal+común PLC, una sonda por borne). Las sondas guardan `cuadro_id`/
+  `borne`. Informe con columna «Cuadro · borne» y sección de bornero por cuadro. Más espacio de
+  plano (móvil «solo plano»; oficina 88vh). PR #167 → `0b94a3f`. Worker desplegado y verificado
+  por API (crear/asignar/validaciones/borrado, todos los casos); Pages 9.44 == local.
+  - **Pendiente de Adrián:** prueba visual/táctil en el móvil (dept Control) y decidir el icono
+    del cuadro (hoy 🗄️).
+- **REPL-DEPT-01** (Arreglado, mergeado, deploy del agente pendiente de aprobación): `consultar_bd`
+  ya exige filtrar por departamento para roles no privilegiados (25 tablas). PR #166 → `d9b741b`,
+  262 tests. **El worker `alejandra-agente` está esperando la aprobación del entorno `production`**
+  (run `34316317222`). Hasta que se apruebe, la fuga sigue viva en producción.
+
 Estado (actualizado 2026-09-08, noche): **REPL-ROUTING-01 desplegado y verificado**, y
 REPLANTEO-08 **probado de extremo a extremo por chat con sesión real** — la prueba que llevaba
 pendiente desde el mediodía. Nada en curso. Ver `HANDOFF.md`.

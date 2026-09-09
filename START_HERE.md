@@ -4,6 +4,24 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**CPD-BMS-01 — cuadro BMS con bornero PLC en Sondas CPD (2026-09-09, v9.44):** pedido de Adrián
+(dept. Control). El cuadro BMS donde se enchufan las sondas es ahora un elemento del plano
+(`plano_elementos`, `cuadro_bms:cuadro`): se coloca, se pincha para su config (nombre, nº serie,
+nº de bornes) y tiene un **bornero** (1…N, cada borne doble señal+común del PLC, una sonda por
+borne). Las sondas guardan a qué cuadro/borne van (`cuadro_id`/`borne`; la asignación vive en la
+sonda). El informe lleva columna «Cuadro · borne» y una sección de bornero por cuadro. Más
+espacio de plano (móvil «solo plano», oficina 88vh). Solo `worker.js` raíz + los dos frontends;
+DDL en caliente, sin migración. PR #167 → `0b94a3f`, Worker desplegado y verificado E2E por API,
+Pages 9.44 publicado. **Pendiente:** prueba visual/táctil de Adrián en el móvil y el icono (hoy
+🗄️). Ver `HANDOFF.md`/`TASKS.md`.
+
+**REPL-DEPT-01 — `consultar_bd` no aislaba por departamento (2026-09-09):** confirmado en vivo
+entrando como encargado; el REST y las tools dedicadas aíslan bien, pero `consultar_bd` con SQL
+crudo sacaba datos de otro departamento (25 tablas). Arreglado en `validarScopeEmpresaBD` (exige
+el departamento propio a roles no privilegiados). PR #166 → `d9b741b`, 262 tests. **El despliegue
+del worker `alejandra-agente` espera la aprobación del entorno `production` (run 34316317222);
+hasta entonces la fuga sigue viva.** Ver `HANDOFF.md`/`ARCHITECT_BACKLOG.md`.
+
 **REPL-ROUTING-01 — «¿qué replanteos hay?» no llegaba a las tools (2026-09-08, noche):**
 al probar REPLANTEO-08 por chat con la sesión real —la prueba que quedaba pendiente— la primera
 pregunta ya falló: no matcheaba ninguna regla de `REGEX_ROUTES`, el clasificador la mandaba al

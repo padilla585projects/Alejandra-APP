@@ -1,5 +1,54 @@
 # Handoff — Alejandra 2.0
 
+## CPD-BMS-01 — cuadro BMS con bornero PLC en Sondas CPD (2026-09-09, v9.44)
+
+- **Agente:** Claude (Opus 4.8). **Rama:** `feat/cpd-cuadro-bms-bornero` → PR #167 → `0b94a3f`.
+- **Origen:** pedido de Adrián (dept. Control) mientras revisaba el aislamiento de departamentos:
+  «necesito más espacio para trabajar en los planos y añadir las sondas con su nº de serie y
+  nombre. Además de los dos tipos de sonda, un elemento más: el cuadro de BMS donde van las
+  sondas. En ese cuadro un bornero para decir dónde va enchufada cada una. El cuadro se pincha
+  para entrar en su config, ver todos los datos y editarlos. Y que salga en el informe.»
+- **Modelo:** el cuadro BMS es un elemento más de `plano_elementos` (`categoria='cuadro_bms'`,
+  `tipo='cuadro'`), reutilizando toda la infra de marcadores/arrastre/ficha. Columnas nuevas
+  (DDL en caliente idempotente, `runDDL`, sin migración manual): `config_json` (datos del
+  cuadro: `{num_bornes}`), y `cuadro_id`/`borne` en cada **sonda** (a qué cuadro y borne va
+  enchufada). **Fuente única:** la asignación vive en la sonda; el bornero del cuadro se dibuja
+  leyendo qué sonda ocupa cada borne — sin duplicar, sin inconsistencias.
+- **Bornero PLC:** el cuadro define N bornes (1..200) al editarlo; cada borne es **doble**
+  (señal + común del PLC) y admite una sonda. Validaciones en backend: tipo permitido, borne en
+  rango y no ocupado, reducir bornes rechazado (409) si dejaría sondas fuera, borrar un cuadro
+  desconecta sus sondas.
+- **Frontend (paridad `index.html` + `panel.html`):** barra con el nuevo Cuadro BMS (cuadrado
+  azul); al colocarlo se abre su config (nombre, nº serie, nº de bornes, bornero); modal de
+  sonda con selector Cuadro+Borne (solo libres); informe con columna «Cuadro · borne» y una
+  sección de bornero por cuadro; más espacio de plano (móvil ⛶ «solo plano», oficina 88vh);
+  color de marcador por tipo.
+- **Dos cerebros:** vive solo en `worker.js` raíz (rutas `/cpd/*`) + los dos frontends; el
+  worker `alejandra-agente` no tiene rutas CPD, no aplica.
+- **Verificación:** backend E2E por API contra producción con el usuario de prueba `empresa_admin`
+  (id 357, empresa 5) — crear cuadro/sondas, asignar borne, rechazo por ocupado y por fuera de
+  rango, rechazo 409 al reducir bornes, `GET` con columnas nuevas, borrado que desconecta; plano
+  de prueba eliminado. Pages 9.44 publicado y byte-idéntico al local. `node --check` + sintaxis
+  de los bloques nuevos OK; encoding limpio; 4 marcadores sincronizados a 9.44.
+- **Pendiente de Adrián:** prueba visual/táctil en su móvil (dept Control) y el icono del cuadro
+  (hoy 🗄️).
+
+## REPL-DEPT-01 — `consultar_bd` no aislaba por departamento (2026-09-09)
+
+- **Agente:** Claude (Opus 5→4.8). **Rama:** `fix/repl-dept-01-consultar-bd-departamento` → PR
+  #166 → `d9b741b`. Origen: revisión del aislamiento por departamento entrando como encargado
+  de prueba (`alberto@test.local`, eléctrico), instrumentando el stream SSE.
+- **Confirmado en vivo:** el REST y las tres tools dedicadas aíslan bien, pero `consultar_bd`
+  con SQL crudo sacaba datos de otro departamento (replanteo de telecom con material y
+  `foto_r2_key`, fichajes, usuarios con email). No exclusivo de replanteos: 25 tablas de la
+  allowlist con columna `departamento`. La barrera de empresa sí era sólida.
+- **Fix:** `validarScopeEmpresaBD` (SELECT) exige el departamento propio para roles no
+  privilegiados (mismo criterio que `puedeVerTodosLosDepartamentos`); rol/departamento de la
+  sesión verificada. Retrocompatible. `TABLAS_CON_DEPARTAMENTO` nueva. No aplica al raíz
+  (`sql_query` solo dev). 13 tests, 262 en verde.
+- **Pendiente:** el despliegue del worker `alejandra-agente` **espera la aprobación del entorno
+  `production`** (run `34316317222`). Hasta entonces la fuga sigue viva en producción.
+
 ## REPL-ROUTING-01 — «¿qué replanteos hay?» no llegaba a las tools (2026-09-08, noche)
 
 - **Agente:** Claude (Opus 5). **Rama:** `fix/replanteo-routing-experto-simple` → PR #164 → `ced0fc6`.
