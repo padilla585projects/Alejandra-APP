@@ -30471,8 +30471,8 @@ async function listarCpdLecturas(request, env, path) {
 //   ancho_mm: ancho visual por defecto para dibujarlo sobre la foto
 const REPLANTEO_CATALOGO_BASE = (() => {
   const bandejaRejilla = {
-    key: 'bandeja_rejilla', nombre: 'Bandeja de rejilla', icono: '🪜', unidad: 'm', color: '#f97316',
-    opciones: { anchos_mm: [60, 100, 150, 200, 300, 400, 500] },
+    key: 'bandeja_rejilla', nombre: 'Bandeja de rejilla (Rejiband)', icono: '▦', unidad: 'm', color: '#f97316',
+    opciones: { anchos_mm: [60, 100, 150, 200, 300, 400, 500, 600] },
     reglas: { tramo_m: 3, union_nombre: 'Unión rápida de rejilla', uniones_por_tramo: 1, soporte_cada_m: 1.5,
               soporte_nombre: 'Soporte a techo (varilla + perfil)', codo_nombre: 'Codo / cambio de dirección (rejilla cortada)',
               giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
@@ -30486,21 +30486,33 @@ const REPLANTEO_CATALOGO_BASE = (() => {
               giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
               sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 200 }
   };
+  const bandejaEscalera = {
+    key: 'bandeja_escalera', nombre: 'Bandeja de escalera', icono: '🪜', unidad: 'm', color: '#d97706',
+    opciones: { anchos_mm: [300, 400, 500, 600, 750, 900] },
+    reglas: { tramo_m: 3, union_nombre: 'Unión de escalera + tornillería', uniones_por_tramo: 1, soporte_cada_m: 1.5,
+              soporte_nombre: 'Soporte a techo (varilla + perfil)', codo_nombre: 'Codo / cambio de dirección de escalera',
+              giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
+              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 300 }
+  };
+  // Tubo (acero / PVC). Lleva CAJAS DE REGISTRO: en codos y tramos largos (caja_cada_m). Si la
+  // caja es 'ciega' (elemento_params.caja_tipo) hay que taladrar y poner racores (2 por caja).
   const tuboRigido = {
-    key: 'tubo_rigido', nombre: 'Tubo rígido (PVC / metálico)', icono: '🧪', unidad: 'm', color: '#38bdf8',
-    opciones: { diametros_mm: [16, 20, 25, 32, 40, 50, 63] },
+    key: 'tubo_rigido', nombre: 'Tubo rígido', icono: '🧪', unidad: 'm', color: '#38bdf8',
+    opciones: { variantes: ['Acero', 'PVC'], diametros_mm: [16, 20, 25, 32, 40, 50, 63] },
     reglas: { tramo_m: 3, union_nombre: 'Manguito de unión', uniones_por_tramo: 1, soporte_cada_m: 0.8,
               soporte_nombre: 'Abrazadera / grapa a techo o pared', codo_nombre: 'Curva / codo',
               giro_min_grados: 30, tornilleria_por_soporte: 1, tornilleria_nombre: 'Taco + tornillo',
-              sujecion_existente_nombre: 'Abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 25 }
+              sujecion_existente_nombre: 'Abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 25,
+              caja_cada_m: 15, caja_nombre: 'Caja de registro', racor_nombre: 'Racor' }
   };
   const tuboCorrugado = {
-    key: 'tubo_corrugado', nombre: 'Tubo corrugado', icono: '🌀', unidad: 'm', color: '#a3e635',
+    key: 'tubo_corrugado', nombre: 'Tubo corrugado (flexo)', icono: '🌀', unidad: 'm', color: '#a3e635',
     opciones: { diametros_mm: [16, 20, 25, 32, 40, 50] },
     reglas: { tramo_m: null, union_nombre: null, uniones_por_tramo: 0, soporte_cada_m: 0.6,
               soporte_nombre: 'Grapa / brida de fijación', codo_nombre: null, giro_min_grados: 30,
               tornilleria_por_soporte: 1, tornilleria_nombre: 'Taco + tornillo',
-              sujecion_existente_nombre: 'Brida a instalación existente', desperdicio_pct: 10, ancho_mm: 20 }
+              sujecion_existente_nombre: 'Brida a instalación existente', desperdicio_pct: 10, ancho_mm: 20,
+              caja_cada_m: 15, caja_nombre: 'Caja de registro', racor_nombre: 'Racor' }
   };
   const canalPvc = {
     key: 'canal_pvc', nombre: 'Canal / canaleta PVC', icono: '▭', unidad: 'm', color: '#e2e8f0',
@@ -30556,11 +30568,11 @@ const REPLANTEO_CATALOGO_BASE = (() => {
               sujecion_existente_nombre: 'Fijación a elemento existente', desperdicio_pct: 5, ancho_mm: 50 }
   };
   return {
-    electrico: [bandejaRejilla, bandejaChapa, tuboRigido, tuboCorrugado, canalPvc, cable],
-    telecom:   [bandejaRejilla, tuboRigido, canalPvc, cableDatos],
-    mecanicas: [tuberia, conductoClima, bandejaRejilla],
+    electrico: [bandejaRejilla, bandejaEscalera, bandejaChapa, tuboRigido, tuboCorrugado, canalPvc, cable],
+    telecom:   [bandejaRejilla, bandejaEscalera, tuboRigido, canalPvc, cableDatos],
+    mecanicas: [tuberia, conductoClima, bandejaRejilla, bandejaEscalera],
     control:   [cableadoSondas, canalPvc, tuboCorrugado],
-    _default:  [generico, bandejaRejilla, tuboRigido, canalPvc],
+    _default:  [generico, bandejaRejilla, bandejaEscalera, tuboRigido, canalPvc],
   };
 })();
 
@@ -31033,6 +31045,23 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
     if (tornPorSop && reglas.tornilleria_nombre && soportesTecho > 0) {
       material.push({ key: 'tornilleria', nombre: reglas.tornilleria_nombre, cantidad: soportesTecho * tornPorSop, unidad: 'ud',
                       detalle: `${tornPorSop} por soporte a techo/pared` });
+    }
+  }
+  // Cajas de registro (tubo): una en cada codo y una por tramo largo (caja_cada_m). Si la caja
+  // es 'ciega' hace falta taladrar y poner racores (2 por caja); 'tetones' = el tubo entra directo.
+  const cajaCada = Number(reglas.caja_cada_m) > 0 ? Number(reglas.caja_cada_m) : null;
+  if (cajaCada && reglas.caja_nombre) {
+    const nCajas = codos + Math.floor(longitud / cajaCada);
+    if (nCajas > 0) {
+      const cajaMed = elemento_params.caja_mm ? ` ${elemento_params.caja_mm}` : '';
+      const ciega = elemento_params.caja_tipo === 'ciega';
+      material.push({ key: 'cajas', nombre: `${reglas.caja_nombre}${cajaMed} (${ciega ? 'ciega' : 'con tetones'})`, cantidad: nCajas, unidad: 'ud',
+                      detalle: `${codos} en codos` + (Math.floor(longitud / cajaCada) ? ` + ${Math.floor(longitud / cajaCada)} en tramos largos (1/${cajaCada} m)` : '') });
+      if (ciega && reglas.racor_nombre) {
+        const diam = elemento_params.diametro_mm ? ` M${elemento_params.diametro_mm}` : '';
+        material.push({ key: 'racores', nombre: `${reglas.racor_nombre}${diam}`, cantidad: nCajas * 2, unidad: 'ud',
+                        detalle: 'caja ciega: 2 racores por caja (entrada + salida)' });
+      }
     }
   }
   return { longitud_m: r1(longitud), longitud_base_m: r1(longitudBase), escala_px_m: escala, giros,
