@@ -1966,6 +1966,11 @@ select option{background:var(--surface2);color:var(--text)}
       <select id="replElemento" class="repl-input" style="flex:1;padding:7px 8px" onchange="replCambiarElemento()"></select>
       <select id="replOpcion" class="repl-input" style="width:128px;padding:7px 8px" onchange="replCambiarOpcion()"></select>
     </div>
+    <div id="replCajaRow" style="padding:0 12px 8px;display:none;gap:6px;align-items:center">
+      <span style="font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap">📦 Caja registro</span>
+      <select id="replCajaTipo" class="repl-input" style="flex:1;padding:7px 8px" onchange="replCambiarCaja()"></select>
+      <select id="replCajaMed" class="repl-input" style="width:120px;padding:7px 8px" onchange="replCambiarCaja()"></select>
+    </div>
     <div id="replCanvasWrap" style="position:relative;background:#0b0f14;height:50vh;min-height:230px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none">
       <canvas id="replCanvas" style="display:block;width:100%;height:100%"></canvas>
       <div id="replHint" style="position:absolute;left:8px;right:8px;bottom:8px;font-size:11px;color:#fff;background:rgba(0,0,0,.55);padding:6px 8px;border-radius:8px;pointer-events:none;line-height:1.35"></div>
@@ -18699,12 +18704,17 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       toast('❌ ' + e.message, 'error');
     } finally { btn.disabled = false; }
   }
+  // Cajas de registro (solo tubo): la app sugiere la medida por el diámetro; tipo tetones|ciega.
+  const _REPL_CAJAS = ['100×100', '100×100×50', '150×150', '200×200'];
+  function _replEsTubo(el) { return !!(el?.opciones?.diametros_mm?.length && el?.reglas?.caja_cada_m); }
+  function _replCajaSugerida(mm) { const m = +mm || 0; return m <= 20 ? '100×100' : (m <= 32 ? '100×100×50' : (m <= 40 ? '150×150' : '200×200')); }
   function _replParamsPorDefecto(el) {
     const o = el.opciones || {};
     const p = {};
     if (o.variantes?.length) p.variante = o.variantes[0];
     if (o.anchos_mm?.length) p.ancho_mm = o.anchos_mm.includes(el.reglas?.ancho_mm) ? el.reglas.ancho_mm : o.anchos_mm[0];
     if (o.diametros_mm?.length) p.diametro_mm = o.diametros_mm.includes(el.reglas?.ancho_mm) ? el.reglas.ancho_mm : o.diametros_mm[0];
+    if (_replEsTubo(el)) { p.caja_tipo = 'tetones'; p.caja_mm = _replCajaSugerida(p.diametro_mm); }
     return p;
   }
 
@@ -18762,6 +18772,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('replTitulo').disabled = ro;
     document.getElementById('replElemento').disabled = ro;
     document.getElementById('replOpcion').disabled = ro;
+    document.getElementById('replCajaTipo').disabled = ro;
+    document.getElementById('replCajaMed').disabled = ro;
     document.getElementById('btnReplGuardar').disabled = ro;
     document.getElementById('btnReplPedido').disabled = ro || !_repl?.id || !(_repl?.calc?.material?.length);
     document.getElementById('btnReplBorrar').style.display = (_replPuedeEditar && _repl?.id) ? '' : 'none';
@@ -18781,6 +18793,26 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (o.diametros_mm?.length) o.diametros_mm.forEach(d => opts.push({ v: 'diametro_mm:' + d, t: 'Ø' + d + ' mm', sel: +_repl.params.diametro_mm === d }));
     sel.style.display = opts.length ? '' : 'none';
     sel.innerHTML = opts.map(x => `<option value="${x.v}" ${x.sel ? 'selected' : ''}>${_escHtml(x.t)}</option>`).join('');
+    _replRenderCaja(el);
+  }
+  function _replRenderCaja(el) {
+    const row = document.getElementById('replCajaRow');
+    if (!_replEsTubo(el)) { row.style.display = 'none'; return; }
+    if (!_repl.params.caja_tipo) _repl.params.caja_tipo = 'tetones';
+    if (!_repl.params.caja_mm) _repl.params.caja_mm = _replCajaSugerida(_repl.params.diametro_mm);
+    row.style.display = 'flex';
+    const tSel = document.getElementById('replCajaTipo');
+    tSel.innerHTML = [['tetones', 'Con tetones (tubo directo)'], ['ciega', 'Ciega (taladrar + racores)']]
+      .map(([v, t]) => `<option value="${v}" ${_repl.params.caja_tipo === v ? 'selected' : ''}>${t}</option>`).join('');
+    const mSel = document.getElementById('replCajaMed');
+    mSel.innerHTML = _REPL_CAJAS.map(c => `<option value="${c}" ${_repl.params.caja_mm === c ? 'selected' : ''}>${c}</option>`).join('');
+  }
+  function replCambiarCaja() {
+    if (!_repl) return;
+    _repl.params.caja_tipo = document.getElementById('replCajaTipo').value;
+    _repl.params.caja_mm = document.getElementById('replCajaMed').value;
+    replMarcarCambio();
+    replDibujar();
   }
   function replCambiarElemento() {
     const key = document.getElementById('replElemento').value;
