@@ -8279,7 +8279,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         // definición y se ignoran en vez de reventar la consulta.
         if (params.length > 0 && !query.includes('?')) params = [];
         // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
-        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo);
+        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo, rol, departamento);
         if (rechazo) return rechazo;
         const stmt = env.DB.prepare(query);
         const result = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
@@ -8907,7 +8907,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         }
         const params = input.params || [];
         // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
-        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo);
+        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo, rol, departamento);
         if (rechazo) return rechazo;
         // Barrera humana (alcance equilibrado): cualquier DELETE y los UPDATE
         // masivos exigen que el HUMANO escriba "CONFIRMO BORRADO <código>" en su
@@ -11984,7 +11984,7 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
             // Antes solo se exigía que empezara por "SELECT" (case-insensitive, sin
             // bloquear tablas/columnas sensibles ni exigir empresa_id) -- ahora pasa
             // por el mismo aislamiento multi-empresa que consultar_bd.
-            const rechazoScope = validarScopeEmpresaBD(sqlCustom, [], empresa_id, esDevVerificado, bypassEmpresaActivo);
+            const rechazoScope = validarScopeEmpresaBD(sqlCustom, [], empresa_id, esDevVerificado, bypassEmpresaActivo, rol, departamento);
             if (rechazoScope) return rechazoScope;
             sql = sqlCustom;
             filename = `custom_${fecha}`;
