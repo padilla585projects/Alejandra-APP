@@ -4,6 +4,21 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-09 — CPD-BMS-03 paso 2: cuadro por módulos en el panel + vista por pisos, v9.50)
+
+Migra `panel.html` al mismo modelo por módulos que el móvil → **panel y app sincronizados**
+(mismo backend, mismos datos: un cuadro creado en uno se ve/edita en el otro). Editor del cuadro
+por módulos con plantilla BMS; bornero por módulo (bloque X); ficha de sonda con módulo·canal +
+color. **Vista del cuadro por pisos** (el panel es más completo que el móvil): alimentación
+(automáticos + 2 fuentes + redundancia), PLC (1-2 filas), reservado y regletero por bloque con
+DC+/DC−; topología de alimentación; colores por E/S. Informe con orden borna → nombre → nº serie
+→ E/S del PLC, 2 bornas/canal + 24 V, numeración por bloque. Sin cambios de backend. PR #176 →
+`04d04af`, Pages 9.50.
+
+Aclaración (no es bug): el **FAB de "Escanear con el móvil"** del panel se oculta a propósito
+cuando no hay ningún teléfono conectado a la sesión (FAB-SCAN-OCULTO-01) — aparece al abrir la
+app Alejandra en el móvil con la misma cuenta/obra. Confirmado por Adrián.
+
 ### Fixed (2026-09-09 — FAB-SUPERADMIN-01: el chat de Alejandra no salía en el panel, v9.49)
 
 Adrián: «Alejandra chat ya no está en el panel de oficina». Diagnosticado en su Chrome real
