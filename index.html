@@ -19853,6 +19853,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const partes = [];
     if (_repl.origen === 'ar') partes.push(`<span style="color:#22c55e">📱 medido en AR (vista en planta)</span>`);
     partes.push(`<span>📍 <b>${_repl.puntos.length}</b> puntos</span>`);
+    if (_repl.video_r2_key || _repl.videoBlob) partes.push(`<span style="color:#22c55e">🎥 vídeo del recorrido${_repl.videoBlob && !_repl.video_r2_key ? ' (se sube al guardar)' : ''}</span>`);
     const _hs = _replHs();
     if (_hs.length > 1) {
       partes.push(`<span>📐 ${_hs.map((x, k) => `<b style="color:${_replColorPlano(k)}">plano ${k + 1}</b>`).join(' + ')} (cada tramo con el suyo)</span>`);
@@ -19994,8 +19995,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const r = data.replanteo;
       _repl.id = r.id; _repl.estado = r.estado; _repl.cambiado = false;
       if (data.calculo) _repl.calc = data.calculo;
+      if (r.video_r2_key) _repl.video_r2_key = r.video_r2_key;
       _replAplicarPermisos(); replActualizarInfo();
       toast('✅ Replanteo guardado');
+      // ADR-0025 F3: si hay vídeo grabado pendiente, subirlo ahora que ya hay id
+      if (_repl.videoBlob && _repl.id) {
+        try {
+          const vr = await apiCallRaw(`/replanteos/${_repl.id}/video`, { method: 'POST',
+            headers: { 'Content-Type': _repl.videoBlob.type || 'video/webm', 'X-Duracion-S': String(Math.round(_repl.videoDur || 0)) },
+            body: _repl.videoBlob });
+          if (vr.ok) { _repl.video_r2_key = 'set'; _repl.videoBlob = null; replActualizarInfo(); toast('🎥 Vídeo del recorrido guardado'); }
+          else { toast('Guardado, pero el vídeo no se pudo subir', 'error'); }
+        } catch (_) { toast('Guardado, pero el vídeo no se pudo subir', 'error'); }
+      }
     } catch (e) {
       toast('❌ ' + e.message, 'error');
     } finally { btn.disabled = _replSoloLectura(); btn.textContent = '💾 Guardar'; }
@@ -20539,11 +20551,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
       v.srcObject = stream; await v.play().catch(() => {});
-      _camv = { stream, pts: [], key, titulo, orient: null };
+      _camv = { stream, pts: [], key, titulo, orient: null, rec: null, chunks: [], recStart: 0, recTimer: null };
       replCerrarNuevo();
       _camvEl('replCamViva').style.display = 'block';
       _camvResize(); window.addEventListener('resize', _camvResize);
       _camvBind(); _camvSensores(); _camvDibujar();
+      _camvGrabar(stream);   // graba el recorrido como documentación (ADR-0025 F3)
     } catch (e) { toast('No se pudo abrir la cámara: ' + (e.message || e), 'error'); }
   }
   function _camvResize() { const c = _camvEl('replCamCanvas'); if (!c) return; const r = c.getBoundingClientRect(); c.width = Math.round(r.width); c.height = Math.round(r.height); _camvDibujar(); }
@@ -20560,6 +20573,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     pts.forEach((p, i) => { ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.fillStyle = i === 0 ? '#fff' : '#22c55e'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#0b0f14'; ctx.stroke(); });
   }
   function replCamDeshacer() { if (_camv && _camv.pts.length) { _camv.pts.pop(); _camvDibujar(); } }
+  function _camvGrabar(stream) {
+    try {
+      if (typeof MediaRecorder === 'undefined') return;
+      const tipos = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+      const mime = tipos.find(t => { try { return MediaRecorder.isTypeSupported(t); } catch (_) { return false; } }) || '';
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      _camv.rec = rec; _camv.chunks = []; _camv.recStart = Date.now();
+      rec.ondataavailable = e => { if (e.data && e.data.size) _camv.chunks.push(e.data); };
+      rec.start(1000);
+      const rc = _camvEl('replCamPuntos'); if (rc) {} // el HUD de puntos ya se ve; añadimos aviso de REC en el hint
+      const hint = _camvEl('replCamHint'); if (hint) hint.textContent = '🔴 Grabando · toca por dónde va la instalación · máx. 3 min';
+      _camv.recTimer = setTimeout(() => { try { if (_camv && _camv.rec && _camv.rec.state === 'recording') _camv.rec.stop(); } catch (_) {} }, 180000);
+    } catch (_) {}
+  }
   function _camvSensores() {
     const on = e => {
       const g = e.gamma || 0, a = (e.alpha == null ? null : e.alpha);
@@ -20572,8 +20599,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       } else if (typeof DeviceOrientationEvent !== 'undefined') { window.addEventListener('deviceorientation', on); if (_camv) _camv.orient = on; }
     } catch (_) {}
   }
+  function _camvPararGrabacion() {
+    return new Promise(resolve => {
+      const c = _camv; if (!c || !c.rec) { resolve(null); return; }
+      if (c.recTimer) { clearTimeout(c.recTimer); c.recTimer = null; }
+      const dur = (Date.now() - c.recStart) / 1000;
+      if (c.rec.state === 'inactive') { const b = c.chunks.length ? new Blob(c.chunks, { type: c.rec.mimeType || 'video/webm' }) : null; resolve(b ? { blob: b, dur } : null); return; }
+      c.rec.onstop = () => { const b = c.chunks.length ? new Blob(c.chunks, { type: c.rec.mimeType || 'video/webm' }) : null; resolve(b ? { blob: b, dur } : null); };
+      try { c.rec.stop(); } catch (_) { resolve(null); }
+    });
+  }
   function _camvStop() {
     if (!_camv) return;
+    if (_camv.recTimer) { try { clearTimeout(_camv.recTimer); } catch (_) {} }
+    try { if (_camv.rec && _camv.rec.state === 'recording') _camv.rec.stop(); } catch (_) {}
     try { _camv.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
     if (_camv.orient) { try { window.removeEventListener('deviceorientation', _camv.orient); } catch (_) {} }
     window.removeEventListener('resize', _camvResize);
@@ -20596,12 +20635,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const blob = await new Promise(res => cap.toBlob(res, 'image/jpeg', 0.9));
     const file = new File([blob], 'replanteo-camara.jpg', { type: 'image/jpeg' });
     let img; try { img = await _replCargarImagen(dataUrl, false); } catch { img = null; }
+    const vid = await _camvPararGrabacion();   // vídeo del recorrido (documentación)
     _camvStop(); _camv = null;
     const el = _replCatalogo.find(e => e.key === key) || _replCatalogo[0];
     _repl = {
       id: null, titulo, elemento_key: el.key, params: _replParamsPorDefecto(el), file, img, departamento: _replCatalogoDept, planos: [],
       imgW: w, imgH: h, puntos: pts, obstaculos: [], referencia: null, escala_px_m: null, longitud_manual_m: null,
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true, origen: 'foto',
+      videoBlob: vid ? vid.blob : null, videoDur: vid ? vid.dur : null,
     };
     showScreen('replanteoEditor'); replInitEditor();
     toast('Recorrido marcado. Fija la escala (📏) para calcular el material', 'info');

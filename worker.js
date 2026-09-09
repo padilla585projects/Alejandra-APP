@@ -7101,6 +7101,8 @@ export default {
       if (path === '/replanteos'                             && method === 'POST')   return await crearReplanteo(request, env);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'GET')    return await getReplanteo(request, env, path);
       if (/^\/replanteos\/\d+\/foto$/.test(path)             && method === 'GET')    return await getReplanteoFoto(request, env, path);
+      if (/^\/replanteos\/\d+\/video$/.test(path)            && method === 'GET')    return await getReplanteoVideo(request, env, path);
+      if (/^\/replanteos\/\d+\/video$/.test(path)            && method === 'POST')   return await subirReplanteoVideo(request, env, path);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'PATCH')  return await actualizarReplanteo(request, env, path);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'DELETE') return await eliminarReplanteo(request, env, path);
       if (/^\/replanteos\/\d+\/pedido$/.test(path)           && method === 'POST')   return await enviarReplanteoAPedidos(request, env, path, ctx);
@@ -30609,6 +30611,10 @@ async function _ensureReplanteoTables(env) {
     )
   `).run();
   await runDDL(env, 'CREATE INDEX IF NOT EXISTS idx_replanteos_empresa_obra ON replanteos(empresa_id, obra_id, departamento)');
+  // ADR-0025 F3: vídeo del recorrido (documentación, máx. 3 min) en R2. Aditivo, idempotente.
+  await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_r2_key TEXT');
+  await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_mime TEXT');
+  await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_dur REAL');
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS replanteo_catalogo (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31226,6 +31232,48 @@ async function getReplanteoFoto(request, env, path) {
   });
 }
 
+// ADR-0025 F3: vídeo del recorrido (documentación, máx. 3 min). Se sube aparte de la foto
+// (POST /replanteos/{id}/video con el blob en el body) para no tocar el multipart de crear.
+async function subirReplanteoVideo(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden replantear', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  if (!row) return err('Replanteo no encontrado', 404);
+  const mime = (request.headers.get('content-type') || 'video/webm').split(';')[0];
+  if (!/^video\//.test(mime)) return err('El archivo debe ser un vídeo', 400);
+  const buf = await request.arrayBuffer();
+  if (!buf || !buf.byteLength) return err('Vídeo vacío', 400);
+  if (buf.byteLength > 80 * 1024 * 1024) return err('Vídeo demasiado grande (máx. 80 MB)', 413);
+  const dur = Number(request.headers.get('x-duracion-s')) || null;
+  const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+  const key = `e${auth.empresa_id}/replanteo/${row.obra_id || 0}/video_${id}_${Date.now()}.${ext}`;
+  await env.FILES.put(key, buf, { httpMetadata: { contentType: mime } });
+  if (row.video_r2_key && row.video_r2_key !== key) await env.FILES.delete(row.video_r2_key).catch(() => {});
+  await env.DB.prepare("UPDATE replanteos SET video_r2_key=?, video_mime=?, video_dur=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?")
+    .bind(key, mime, dur, id, auth.empresa_id).run();
+  return json({ ok: true, video: true, duracion_s: dur });
+}
+
+async function getReplanteoVideo(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  if (!row || !row.video_r2_key) return err('Vídeo no disponible', 404);
+  const obj = await env.FILES.get(row.video_r2_key);
+  if (!obj) return err('Vídeo no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': obj.httpMetadata?.contentType || row.video_mime || 'video/webm', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
 async function actualizarReplanteo(request, env, path) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 401);
@@ -31281,6 +31329,7 @@ async function eliminarReplanteo(request, env, path) {
   if (!row) return err('Replanteo no encontrado', 404);
   await env.DB.prepare('DELETE FROM replanteos WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).run();
   if (row.foto_r2_key) await env.FILES.delete(row.foto_r2_key).catch(() => {});
+  if (row.video_r2_key) await env.FILES.delete(row.video_r2_key).catch(() => {});
   return json({ ok: true });
 }
 
