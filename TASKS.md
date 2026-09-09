@@ -1,5 +1,19 @@
 # TASKS — Cola operativa inmediata
 
+Estado (actualizado 2026-09-09): **CPD-BMS-03 — cuadro BMS por MÓDULOS de PLC (v9.48), paso 1
+(backend + móvil) desplegado y verificado E2E.** Ver `HANDOFF.md`.
+- **CPD-BMS-03 paso 1** (Desplegado, backend verificado E2E): el cuadro se define por módulos
+  (UI-16/AO-8/DO/AS-P/fuentes/automáticos); las sondas van a canales de entrada UI. Móvil con
+  plantilla BMS, bornero por módulo (bloque X), informe con orden borna→nombre→nº serie→E/S PLC.
+  Backend retrocompatible (preserva num_bornes/borne viejos). PR #174 → `b92dd65`. Worker+Pages 9.48.
+  - **Validado con Adrián en maqueta** (artifact) a partir de esquema + foto del cuadro real.
+  - **Pendiente paso 2:** migrar el **panel** (panel.html) al modelo por módulos + **vista del
+    cuadro por pisos + topología** (2 automáticos → 2 fuentes → redundancia → 2 automáticos de
+    salida PLC/bornas; bus AS-P) + informe. Mientras, gestionar cuadros BMS desde el móvil.
+  - Detalles del cuadro real (para el paso 2): pisos alimentación/PLC(1-2)/reservado/bornas;
+    bloques de regletero X2..X6 con 1..24; DC+/DC− (peine 24 V de campo) a la izquierda; 2 bornas
+    por canal (señal + RET); salidas AO/DO para válvulas en el futuro.
+
 Estado (actualizado 2026-09-09): **CPD-BMS-02 — bornero enriquecido del cuadro BMS (v9.45)**
 desplegado y verificado E2E; **REPL-DEPT-01** cerrado en producción. Ver `HANDOFF.md`.
 - **CPD-BMS-02b** (Desplegado, v9.46): el bornero del cuadro es **editable** — desde el cuadro se

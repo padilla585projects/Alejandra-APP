@@ -26478,7 +26478,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.48';
+const PANEL_APP_VERSION = '9.49';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -27681,11 +27681,16 @@ document.getElementById('wInput').focus();
              || JSON.parse(localStorage.getItem('panel_session') || 'null')?.rol;
     const usuarioId = (typeof SESSION !== 'undefined' ? SESSION?.usuario_id : null)
              || JSON.parse(localStorage.getItem('panel_session') || 'null')?.usuario_id;
-    if (!rol || !usuarioId) return;
+    // FAB-SUPERADMIN-01 (09/09/2026): antes exigía rol Y usuario_id para AMBOS botones. Un
+    // superadmin que entra con el ADMIN_CODE maestro no tiene usuario_id en su sesión
+    // (crearSesion no lo pone), así que se quedaba sin el chat de Alejandra ni el de equipo.
+    // El chat de Alejandra Office funciona con la sesión/token, no necesita usuario_id → basta
+    // con tener rol. El chat de equipo 1-a-1 sí lo necesita (identifica al remitente).
+    if (!rol) return;
     const fabEl = document.getElementById('fabAlejandra');
     if (fabEl) fabEl.style.display = 'flex';
     const fabChat = document.getElementById('fabChatEquipo');
-    if (fabChat) fabChat.style.display = 'flex';
+    if (fabChat) fabChat.style.display = usuarioId ? 'flex' : 'none';
   }
   window._mostrarFabsEquipo = _mostrarFabsEquipo;
   _mostrarFabsEquipo();

@@ -1,5 +1,33 @@
 # Handoff — Alejandra 2.0
 
+## CPD-BMS-03 — cuadro BMS por módulos de PLC, paso 1: backend + móvil (2026-09-09, v9.48)
+
+- **Agente:** Claude (Opus 4.8). **Rama:** `feat/cpd-bms-03-modulos-movil` → PR #174 → `b92dd65`.
+- **Origen:** Adrián pidió que las bornas se enlacen a las entradas/salidas del PLC (esquema BMS
+  de plantilla; «ahora son todos iguales»). Iterado en una **maqueta interactiva** (artifact
+  `claude.ai/code/artifact/6f9e3d7e-496d-4781-bc3c-baf840746671`) a partir del esquema y **dos
+  fotos del cuadro real** (ESMAD Data Center, Sala 304, Schneider SpaceLogic) que subió al chat.
+- **Decisiones de Adrián recogidas:** módulos/tarjetas del PLC con plantilla BMS editable; PLC
+  Schneider encadenables; 2 automáticos de línea → 2 fuentes 24 V en paralelo → módulo de
+  redundancia → 2 automáticos de salida (uno PLC, otro bornas); cada canal = 2 bornas (señal +
+  común/RET); numeración **por bloque** (X2:1–24…, no corrida); bornas de 24 V (DC+/DC−) por
+  módulo para alimentar las sondas de campo; vista del cuadro por **pisos** (alimentación / PLC
+  1-2 pisos / reservado / bornas); salidas AO/DO para válvulas en el futuro; **móvil fácil para
+  obra, panel más completo**; informe con orden **borna → nombre → nº serie → E/S del PLC**.
+- **Backend (worker.js), retrocompatible:** `config_json` = `{modulos:[{id,nombre,tarjeta,io,
+  canales,bloque}]}` — preserva `{num_bornes}` viejo si llega. Conexiones de sonda =
+  `{canal,modulo,pin,color}` — preserva `{borne}` viejo. Helpers `_cpdModulos`,
+  `_cpdNormalizarConfigCuadro`, `_cpdNormalizarConexiones`, `_cpdOcupacionCuadro`. Validación:
+  canal de entrada (UI/DI), pin en rango y libre; cambiar módulos → 409 si dejaría conexiones
+  fuera. Verificado E2E por API (usuario 357): módulos, rechazo salida/rango, 409, GET.
+- **Móvil (index.html):** cuadro nace con la plantilla BMS (editable: ⚡ Plantilla BMS / + Módulo
+  / quitar); bornero por módulo (bloque X) con selector sonda·canal en las entradas y salidas
+  reservadas; ficha de sonda con módulo·canal + color; informe por módulos con el orden pedido.
+- **Pendiente (paso 2):** migrar `panel.html` al modelo por módulos + la **vista del cuadro por
+  pisos con topología** + informe. **Mientras tanto, gestionar los cuadros BMS desde el móvil**
+  (el panel sigue en el modelo viejo, que el backend mantiene compatible). Falta también la prueba
+  visual/táctil de Adrián en el móvil.
+
 ## CPD-BMS-02 — bornero enriquecido del cuadro BMS (2026-09-09, v9.45)
 
 - **Agente:** Claude (Opus 4.8). **Rama:** `feat/cpd-bms-bornero-enriquecido` → PR #169 → `2f3641b`.

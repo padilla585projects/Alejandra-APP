@@ -4,6 +4,39 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-09 — FAB-SUPERADMIN-01: el chat de Alejandra no salía en el panel, v9.49)
+
+Adrián: «Alejandra chat ya no está en el panel de oficina». Diagnosticado en su Chrome real
+(consola sin errores; el FAB existía con display:none y su `inline` sin tocar). Causa:
+`_mostrarFabsEquipo()` exigía `rol` **y** `usuario_id` para mostrar los dos botones flotantes
+(chat de Alejandra y chat de equipo); un superadmin que entra con el ADMIN_CODE maestro no tiene
+`usuario_id` en la sesión, así que salía por el `return` y no se mostraba **ninguno**. No era
+regresión de los cambios CPD (ese código estaba igual que en 9.43). Fix: el FAB de **Alejandra**
+se muestra solo con `rol` (su chat va con la sesión/token, no necesita usuario_id); el de **chat
+de equipo** sigue requiriendo `usuario_id` (identifica al remitente 1-a-1). Verificado en vivo:
+con `usuario_id=null`, el FAB pasa de `none` a `flex`. Solo panel.html.
+
+### Added (2026-09-09 — CPD-BMS-03: cuadro BMS por módulos de PLC, backend + móvil, v9.48)
+
+Validado con Adrián en una maqueta interactiva a partir del esquema y la foto del cuadro real
+(ESMAD Data Center, Sala 304, Schneider SpaceLogic). El cuadro deja de ser N bornes iguales y se
+define por **módulos/tarjetas del PLC**. Paso 1 de 2 (backend + móvil); el panel va en el paso 2.
+
+- **Backend (worker.js), retrocompatible:** `config_json` = `{ modulos:[{id,nombre,tarjeta,io,
+  canales,bloque}] }` (se preserva `{ num_bornes }` viejo si llega). Conexiones de sonda =
+  `{ canal, modulo, pin, color }` (se preserva `{ borne }` viejo). Validación: canal de entrada
+  (UI/DI), pin en rango y libre; cambiar módulos rechaza 409 si dejaría conexiones fuera.
+- **Móvil (index.html):** un cuadro nace con la **plantilla BMS** (2 automáticos + 2 fuentes +
+  redundancia + 2 automáticos de salida + AS‑P + 3×UI‑16 + AO‑8 + DO‑12), editable. Bornero por
+  módulo (bloque X2, X3…); canales de entrada con selector de sonda·canal; salidas reservadas
+  para válvulas/equipos. Ficha de sonda: módulo·canal + color. Informe con orden borna → nombre
+  → nº serie → E/S del PLC, 2 bornas/canal (señal/común) + 24 V, numeración por bloque.
+- Verificado E2E por API en producción (módulos, rechazo por salida/rango, 409 al quitar módulo
+  con sondas). PR #174 → `b92dd65`. Worker + Pages 9.48 desplegados.
+- **Pendiente (paso 2):** migrar el panel (panel.html) al modelo por módulos con la **vista del
+  cuadro por pisos + topología** (alimentación redundante, bus del AS‑P) e informe. Hasta
+  entonces, gestionar los cuadros BMS desde el móvil.
+
 ### Changed (2026-09-09 — CPD-BMS-02b: bornero del cuadro editable, v9.46)
 
 Adrián, probando en vivo: «me deja editar el cuadro y decir cuántas bornas tiene, pero no me
