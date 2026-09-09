@@ -4,6 +4,45 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-09 — CPD-BMS-01: cuadro BMS con bornero PLC en Sondas CPD, v9.44)
+
+Pedido de Adrián (dept. Control). `worker.js` (rutas `/cpd/*`) + `index.html` + `panel.html`;
+el worker `alejandra-agente` no toca CPD. Los cuatro marcadores de versión suben a **9.44**.
+
+- **Cuadro BMS** como elemento del plano (`plano_elementos`, `categoria='cuadro_bms'`,
+  `tipo='cuadro'`): se coloca, arrastra y pincha como una sonda (cuadrado azul). Se configura
+  con nombre, nº de serie y **nº de bornes**, y muestra su **bornero** (regletero 1…N; cada
+  borne es doble = señal + común del PLC; una sonda por borne).
+- Columnas nuevas en `plano_elementos` vía DDL en caliente idempotente (sin migración manual):
+  `config_json` (datos del cuadro), y `cuadro_id`/`borne` en cada **sonda** (a qué cuadro/borne
+  va enchufada). La asignación vive en la sonda (fuente única); el bornero se dibuja leyéndola.
+- Validaciones en el backend: tipo `cuadro_bms:cuadro`; `num_bornes` 1..200; borne en rango y
+  no ocupado por otra sonda del mismo cuadro; reducir bornes se rechaza (409) si dejaría sondas
+  fuera; borrar un cuadro desconecta sus sondas (no las borra).
+- Modal de sonda con selector **Cuadro BMS + Borne** (solo bornes libres). **Informe** con
+  columna «Cuadro · borne» en la tabla de sondas y una sección de bornero por cada cuadro.
+- **Más espacio de plano**: móvil con modo «solo plano» (⛶, oculta cabecera y barra); oficina
+  sube el canvas de 75vh a 88vh. Marcador coloreado por tipo.
+- Verificado E2E por API contra producción (crear/asignar/validar/borrar, todos los casos) y
+  Pages 9.44 == local. Prueba visual/táctil final pendiente de Adrián en el móvil.
+- PR #167 → `0b94a3f`. Worker `deploy-worker` desplegado y verificado; Pages 9.44 publicado.
+
+### Fixed (2026-09-09 — REPL-DEPT-01: `consultar_bd` no aislaba por departamento)
+
+Confirmado en vivo entrando como encargado (`alberto@test.local`, eléctrico): `consultar_bd`
+acotaba por `empresa_id` pero no por departamento, así que un no privilegiado podía leer con
+SQL crudo datos de otro departamento (replanteos de telecom, fichajes, usuarios…) — 25 tablas
+de la allowlist con columna `departamento`. El REST y las tools dedicadas ya aislaban bien.
+Solo `alejandra-agente/lib.js`: sin migración, sin frontend, sin subir versión.
+
+- `validarScopeEmpresaBD`, en el camino SELECT, exige filtrar por el departamento propio para
+  los roles que no ven todo (mismo criterio que `isDeptPrivileged`/`puedeVerTodosLosDepartamentos`:
+  superadmin/empresa_admin/desarrollador/seguridad ven todo). Rol y departamento de la sesión
+  verificada, nunca del body. Solo SELECT; retrocompatible. Nueva `TABLAS_CON_DEPARTAMENTO`.
+- No aplica al worker raíz: su `sql_query` está en `TOOLS_SOLO_DEV_AITOOL` (solo desarrollador).
+- 13 tests nuevos, 262 en verde. PR #166 → `d9b741b`. **Despliegue del agente pendiente de la
+  aprobación del entorno `production` (barrera humana).**
+
 ### Fixed (2026-09-08 — REPL-ROUTING-01: «¿qué replanteos hay?» no llegaba a las tools)
 
 Encontrado probando REPLANTEO-08 en producción con la sesión real de Adrián, que era justo la
