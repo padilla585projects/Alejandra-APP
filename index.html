@@ -1988,10 +1988,24 @@ select option{background:var(--surface2);color:var(--text)}
     <div id="replAcciones" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:4px 12px 24px">
       <button class="repl-btn" onclick="replVerMaterial()">🧮 Material</button>
       <button id="btnReplGuardar" class="repl-btn primary" onclick="replGuardar()">💾 Guardar</button>
+      <button class="repl-btn" onclick="replVer3D()">👁 Ver en 3D</button>
       <button class="repl-btn" onclick="replInforme()">📄 Informe</button>
       <button id="btnReplPedido" class="repl-btn" onclick="replEnviarPedidos()">📦 A Pedidos</button>
       <button id="btnReplBorrar" class="repl-btn danger" onclick="replBorrar()" style="grid-column:1/-1">🗑 Borrar replanteo</button>
     </div>
+  </div>
+
+  <!-- Previsualización 3D de la instalación (ADR-0025 F4) -->
+  <div id="replPreview3D" style="display:none;position:fixed;inset:0;z-index:10000;background:#0b0f14">
+    <canvas id="repl3DCanvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none"></canvas>
+    <div style="position:absolute;top:10px;left:10px;right:10px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none">
+      <span id="repl3DInfo" style="background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700">Instalación en 3D</span>
+    </div>
+    <div style="position:absolute;left:10px;right:10px;bottom:12px;display:flex;gap:8px">
+      <button class="repl-btn danger" style="flex:1" onclick="replCerrar3D()">✕ Cerrar</button>
+      <button id="btnRepl3DAR" class="repl-btn primary" style="flex:1;display:none" onclick="replVer3DEnEspacio()">📷 Ver en mi espacio</button>
+    </div>
+    <div style="position:absolute;left:10px;right:10px;bottom:56px;text-align:center;color:#fff;font-size:11px;background:rgba(0,0,0,.5);border-radius:8px;padding:5px 8px;pointer-events:none">Arrastra para girar · pellizca para acercar</div>
   </div>
 
   <!-- MODAL: nuevo replanteo (título + elemento + foto) -->
@@ -20651,6 +20665,97 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replCamDeshacer = replCamDeshacer;
   window.replCamCancelar = replCamCancelar;
   window.replCamUsar     = replCamUsar;
+
+  // ── F4: previsualización 3D de la INSTALACIÓN completa (recorrido con curvas) ──
+  // Rotatoria en cualquier dispositivo; y "ver en mi espacio" (AR anclado) en Android/ARCore.
+  let _p3d = null;
+  function _repl3DPath() {
+    if (Array.isArray(_repl.puntos_3d) && _repl.puntos_3d.length >= 2) return _repl.puntos_3d.map(p => ({ x: +p.x || 0, y: +p.y || 0, z: +p.z || 0 }));
+    const pts = _repl.puntos || []; if (pts.length < 2) return null;
+    let esc = (typeof _replEscalaActual === 'function' && _replEscalaActual()) || _repl.escala_px_m || 0;
+    const aprox = !(esc > 0); if (aprox) esc = 200;   // sin escala: forma orientativa
+    return pts.map(p => ({ x: p.x / esc, y: 0, z: p.y / esc, _aprox: aprox }));
+  }
+  function _repl3DEsTubo() { const el = _replElemento && _replElemento(); return !!(el?.opciones?.diametros_mm?.length) || !!(_repl.params && _repl.params.diametro_mm); }
+  function _repl3DAncho() { const p = _repl.params || {}; if (p.ancho_mm) return Math.max(0.03, p.ancho_mm / 1000); if (p.diametro_mm) return Math.max(0.012, p.diametro_mm / 1000); return 0.2; }
+  function _repl3DBuild(THREE, path) {
+    const g = new THREE.Group(), w = _repl3DAncho(), esTubo = _repl3DEsTubo();
+    const mat = new THREE.MeshStandardMaterial({ color: esTubo ? 0xaab3bf : 0x9aa7b6, metalness: .8, roughness: .4, side: THREE.DoubleSide });
+    const X = new THREE.Vector3(1, 0, 0);
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = new THREE.Vector3(path[i].x, path[i].y, path[i].z), b = new THREE.Vector3(path[i + 1].x, path[i + 1].y, path[i + 1].z);
+      const dir = new THREE.Vector3().subVectors(b, a), len = dir.length(); if (len < 1e-3) continue;
+      let seg;
+      if (esTubo) { const geo = new THREE.CylinderGeometry(w / 2, w / 2, len, 20); geo.rotateZ(Math.PI / 2); seg = new THREE.Mesh(geo, mat); }
+      else seg = new THREE.Mesh(new THREE.BoxGeometry(len, Math.max(0.02, w * 0.12), w), mat);
+      seg.position.copy(a).addScaledVector(dir, 0.5); seg.quaternion.setFromUnitVectors(X, dir.clone().normalize()); g.add(seg);
+      if (i > 0) { const v = new THREE.Mesh(new THREE.SphereGeometry(esTubo ? w / 2 : w * 0.5, 12, 12), mat); v.position.copy(a); g.add(v); }
+    }
+    return g;
+  }
+  async function replVer3D() {
+    if (!_repl) return;
+    const path = _repl3DPath();
+    if (!path) { toast('Marca al menos 2 puntos del recorrido', 'error'); return; }
+    document.getElementById('replPreview3D').style.display = 'block';
+    document.getElementById('repl3DInfo').textContent = 'Cargando 3D…';
+    let THREE; try { THREE = await _replCargarThree(); } catch (e) { toast('❌ ' + e.message, 'error'); replCerrar3D(); return; }
+    const canvas = document.getElementById('repl3DCanvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    const scene = new THREE.Scene();
+    const cam = new THREE.PerspectiveCamera(55, 1, 0.01, 200);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x33404d, 1.1));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.0); dl.position.set(1, 2, 1.5); scene.add(dl);
+    const run = _repl3DBuild(THREE, path);
+    const box = new THREE.Box3().setFromObject(run), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+    run.position.sub(c);
+    const pivot = new THREE.Group(); pivot.add(run); scene.add(pivot);
+    const rad = Math.max(size.length(), 0.5); let dist = rad * 1.6, rotY = 0.6, rotX = 0.5, drag = false, px = 0, py = 0, pd = 0;
+    function resize() { const r = canvas.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); cam.aspect = (r.width || 1) / (r.height || 1); cam.updateProjectionMatrix(); }
+    resize(); window.addEventListener('resize', resize);
+    const dn = e => { drag = true; const p = e.touches ? e.touches[0] : e; px = p.clientX; py = p.clientY; };
+    const mv = e => {
+      if (e.touches && e.touches.length === 2) { const dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY, d = Math.hypot(dx, dy); if (pd) dist = Math.max(rad * 0.6, Math.min(rad * 6, dist - (d - pd) * 0.01)); pd = d; return; }
+      if (!drag) return; const p = e.touches ? e.touches[0] : e; rotY += (p.clientX - px) * 0.01; rotX = Math.max(-1.3, Math.min(1.3, rotX + (p.clientY - py) * 0.01)); px = p.clientX; py = p.clientY;
+    };
+    const up = () => { drag = false; pd = 0; };
+    canvas.addEventListener('mousedown', dn); canvas.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+    canvas.addEventListener('touchstart', dn, { passive: true }); canvas.addEventListener('touchmove', mv, { passive: true }); canvas.addEventListener('touchend', up);
+    const wheel = e => { e.preventDefault(); dist = Math.max(rad * 0.6, Math.min(rad * 6, dist + e.deltaY * 0.01 * rad)); };
+    canvas.addEventListener('wheel', wheel, { passive: false });
+    let raf;
+    function loop() { pivot.rotation.y = rotY; pivot.rotation.x = rotX; cam.position.set(0, rad * 0.4, dist); cam.lookAt(0, 0, 0); renderer.render(scene, cam); raf = requestAnimationFrame(loop); }
+    loop();
+    _p3d = { stop() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); window.removeEventListener('mouseup', up); try { renderer.dispose(); } catch (_) {} } };
+    const el = _replElemento && _replElemento();
+    document.getElementById('repl3DInfo').textContent = (el?.nombre || 'Instalación') + ' · ' + (path.length - 1) + ' tramo(s)' + (path[0]._aprox ? ' · escala aproximada' : '');
+    try { const ok = await replArSoportado(); document.getElementById('btnRepl3DAR').style.display = ok ? '' : 'none'; } catch (_) {}
+  }
+  function replCerrar3D() { if (_p3d) { try { _p3d.stop(); } catch (_) {} _p3d = null; } const m = document.getElementById('replPreview3D'); if (m) m.style.display = 'none'; const b = document.getElementById('btnRepl3DAR'); if (b) b.style.display = 'none'; }
+  // AR anclado: coloca la instalación sobre el suelo con la cámara (WebXR + hit-test).
+  async function replVer3DEnEspacio() {
+    const path = _repl3DPath(); if (!path) return;
+    let THREE; try { THREE = await _replCargarThree(); } catch (e) { toast('❌ ' + e.message, 'error'); return; }
+    if (!(navigator.xr && await navigator.xr.isSessionSupported('immersive-ar').catch(() => false))) { toast('Tu dispositivo no admite AR aquí', 'error'); return; }
+    let session; try { session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'], domOverlay: { root: document.body } }); }
+    catch (e) { toast('No se pudo iniciar AR: ' + (e.message || e), 'error'); return; }
+    replCerrar3D();
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.xr.enabled = true;
+    const scene = new THREE.Scene(); const cam = new THREE.PerspectiveCamera();
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.2));
+    const reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.075, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x22c55e }));
+    reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
+    await renderer.xr.setSession(session);
+    const refSpace = await session.requestReferenceSpace('local'); const viewer = await session.requestReferenceSpace('viewer');
+    let hitSource = await session.requestHitTestSource({ space: viewer }); let colocado = false;
+    session.addEventListener('select', () => { if (!reticle.visible || colocado) return; const run = _repl3DBuild(THREE, path); run.position.setFromMatrixPosition(reticle.matrix); run.quaternion.setFromRotationMatrix(reticle.matrix); scene.add(run); colocado = true; reticle.visible = false; });
+    session.addEventListener('end', () => { try { renderer.dispose(); } catch (_) {} });
+    renderer.setAnimationLoop((t, frame) => {
+      if (frame && hitSource && !colocado) { const hits = frame.getHitTestResults(hitSource); if (hits.length) { const pose = hits[0].getPose(refSpace); reticle.visible = true; reticle.matrix.fromArray(pose.transform.matrix); } else reticle.visible = false; }
+      renderer.render(scene, cam);
+    });
+  }
+  window.replVer3D = replVer3D; window.replCerrar3D = replCerrar3D; window.replVer3DEnEspacio = replVer3DEnEspacio;
 
 
   // ══════════════════════════════════════════════════════
