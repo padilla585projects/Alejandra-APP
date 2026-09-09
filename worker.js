@@ -30633,9 +30633,11 @@ function puedeVerReplanteo(auth) {
   return !!(auth?.empresa_id && auth.rol !== 'operario');
 }
 function puedeEditarReplanteo(auth) {
+  // ADR-0025: la oficina también puede editar el replanteo (corregir a mano) y actualizar el
+  // pedido. El aislamiento por departamento lo sigue garantizando _replanteoDe (empresa+dept).
   return !!(auth?.empresa_id && (
-    isDeptPrivileged(auth) || auth.isEncargado || auth.isJefeObra ||
-    auth.rol === 'encargado' || auth.rol === 'jefe_de_obra'
+    isDeptPrivileged(auth) || auth.isEncargado || auth.isJefeObra || auth.isOficina ||
+    auth.rol === 'encargado' || auth.rol === 'jefe_de_obra' || auth.rol === 'oficina'
   ));
 }
 // DEPT-01: el departamento del replanteo lo fija la sesión, nunca el cliente, salvo para los
@@ -31233,7 +31235,8 @@ async function actualizarReplanteo(request, env, path) {
   await _ensureReplanteoTables(env);
   const row = await _replanteoDe(env, auth, id);
   if (!row) return err('Replanteo no encontrado', 404);
-  if (row.estado === 'pedido') return err('Este replanteo ya se envió a Pedidos; crea uno nuevo para cambiarlo', 409);
+  // ADR-0025: se PERMITE editar aunque ya esté en 'pedido' (la oficina corrige a mano) y luego
+  // el botón "Actualizar pedido" reconcilia las líneas. Antes esto devolvía 409.
   const body = await request.json().catch(() => ({}));
   const titulo = body.titulo !== undefined ? safeStr(body.titulo).trim() : row.titulo;
   if (!titulo) return err('El título es obligatorio', 400);
@@ -31254,7 +31257,9 @@ async function actualizarReplanteo(request, env, path) {
   const calc = await _replanteoCalcularDesde(env, auth.empresa_id, row.departamento, { elemento_key, elemento_params, trazado, escala_px_m, longitud_manual_m });
   if (calc.error) return err(calc.error, 400);
   const res = calc.resultado;
-  const estado = res.material.length ? 'calculado' : 'borrador';
+  // Si ya se había enviado a Pedidos, se mantiene 'pedido' (el material queda desincronizado
+  // del pedido hasta que se pulse "Actualizar pedido", que reconcilia — ADR-0025 opción A).
+  const estado = row.estado === 'pedido' ? 'pedido' : (res.material.length ? 'calculado' : 'borrador');
   await env.DB.prepare(`
     UPDATE replanteos SET titulo=?, elemento_key=?, elemento_json=?, escala_px_m=?, trazado_json=?, longitud_m=?, material_json=?,
            reglas_json=?, notas=?, estado=?, actualizado_en=datetime('now')
@@ -31291,7 +31296,13 @@ async function eliminarReplanteo(request, env, path) {
 async function _replanteoAPedidos(env, auth, id, opciones, ctx) {
   const row = await _replanteoDe(env, auth, id);
   if (!row) return { error: 'Replanteo no encontrado', status: 404 };
-  if (row.estado === 'pedido') return { error: 'Este replanteo ya se envió a Pedidos', status: 409 };
+  // ADR-0025 opción A: si ya está en 'pedido' y el llamador pide reconciliar (botón de la
+  // oficina "Actualizar pedido"), se reconcilian las líneas en vez de bloquear. Sin la opción
+  // (p.ej. la IA) se mantiene el 409 idempotente de REPLANTEO-08.
+  if (row.estado === 'pedido') {
+    if (opciones?.reconciliar) return await _replanteoReconciliarPedido(env, auth, row, ctx);
+    return { error: 'Este replanteo ya se envió a Pedidos', status: 409 };
+  }
   const rep = _parseReplanteoRow(row);
   if (!rep.material.length) return { error: 'El replanteo no tiene material calculado', status: 400 };
   const proveedor = safeStr(opciones?.proveedor || '').trim() || null;
@@ -31319,9 +31330,62 @@ async function enviarReplanteoAPedidos(request, env, path, ctx) {
   if (!id) return err('ID inválido', 400);
   await _ensureReplanteoTables(env);
   const body = await request.json().catch(() => ({}));
-  const r = await _replanteoAPedidos(env, auth, id, { proveedor: body.proveedor }, ctx);
+  // Desde el botón de la app/panel siempre se permite reconciliar (opción A). La idempotencia
+  // estricta se mantiene solo para la IA (POST /internal/replanteos), que no pide reconciliar.
+  const r = await _replanteoAPedidos(env, auth, id, { proveedor: body.proveedor, reconciliar: true }, ctx);
   if (r.error) return err(r.error, r.status || 400);
-  return json({ ok: true, pedido_ids: r.pedido_ids });
+  return json({ ok: true, pedido_ids: r.pedido_ids, reconciliado: !!r.reconciliado, resumen: r.resumen || null });
+}
+
+// ADR-0025 opción A — reconciliar el pedido con el material actual del replanteo:
+//  · líneas 'pendiente' → se ACTUALIZAN (cantidad/unidad/notas) o se BORRAN si ya no están;
+//  · líneas ya recibidas/tramitadas (estado != 'pendiente') NO se tocan; si el material subió,
+//    la diferencia se añade como línea nueva.
+async function _replanteoReconciliarPedido(env, auth, row, ctx) {
+  const id = row.id;
+  const rep = _parseReplanteoRow(row);
+  if (!rep.material.length) return { error: 'El replanteo no tiene material calculado', status: 400 };
+  const ref = `REPL-${id}`;
+  const prev = (await env.DB.prepare('SELECT * FROM pedidos WHERE empresa_id=? AND referencia=?').bind(auth.empresa_id, ref).all()).results || [];
+  const solicitado_por = auth.nombre || auth.rol || null;
+  const notaBase = `Replanteo "${row.titulo}" (${rep.longitud_m || row.longitud_m || 0} m).`;
+  let add = 0, upd = 0, del = 0, keep = 0;
+  const ids = [];
+  const usados = new Set();
+  for (const m of rep.material) {
+    const cant = m.cantidad || 1, uni = m.unidad || 'ud', nota = `${notaBase} ${m.detalle || ''}`.trim();
+    // ¿ya recibida esta descripción? (no se toca)
+    const recibida = prev.find(p => p.descripcion === m.nombre && p.estado && p.estado !== 'pendiente' && !usados.has(p.id));
+    const pend = prev.find(p => p.descripcion === m.nombre && (!p.estado || p.estado === 'pendiente') && !usados.has(p.id));
+    if (recibida) {
+      usados.add(recibida.id); keep++;
+      const falta = cant - (recibida.cantidad || 0);
+      if (falta > 0) { // pedir la diferencia como línea nueva
+        const r = await env.DB.prepare('INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)')
+          .bind(auth.empresa_id, row.obra_id || null, row.departamento, ref, m.nombre, falta, uni, null, solicitado_por, `${nota} (diferencia sobre lo ya recibido)`).run();
+        ids.push(r.meta.last_row_id); add++;
+      }
+      if (pend) { await env.DB.prepare('DELETE FROM pedidos WHERE id=? AND empresa_id=?').bind(pend.id, auth.empresa_id).run(); usados.add(pend.id); }
+    } else if (pend) {
+      usados.add(pend.id); upd++;
+      await env.DB.prepare("UPDATE pedidos SET cantidad=?, unidad=?, notas=? WHERE id=? AND empresa_id=?").bind(cant, uni, nota, pend.id, auth.empresa_id).run();
+      ids.push(pend.id);
+    } else {
+      const r = await env.DB.prepare('INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)')
+        .bind(auth.empresa_id, row.obra_id || null, row.departamento, ref, m.nombre, cant, uni, null, solicitado_por, nota).run();
+      ids.push(r.meta.last_row_id); add++;
+    }
+  }
+  // líneas pendientes que ya no están en el material → se borran
+  for (const p of prev) {
+    if (usados.has(p.id)) continue;
+    if (!p.estado || p.estado === 'pendiente') { await env.DB.prepare('DELETE FROM pedidos WHERE id=? AND empresa_id=?').bind(p.id, auth.empresa_id).run(); del++; }
+    else { keep++; ids.push(p.id); }
+  }
+  await env.DB.prepare("UPDATE replanteos SET pedido_ids=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?").bind(JSON.stringify(ids), id, auth.empresa_id).run();
+  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', row.departamento), auth.empresa_id));
+  await sendTelegram(env, `♻️ <b>Replanteo → Pedidos (actualizado)</b> [${row.departamento}]\n👤 ${solicitado_por || '—'}\n📝 ${row.titulo}: +${add} · ~${upd} · −${del}` + (keep ? ` · ${keep} recibidas intactas` : ''));
+  return { pedido_ids: ids, reconciliado: true, resumen: { anadidas: add, actualizadas: upd, borradas: del, intactas: keep }, titulo: row.titulo, departamento: row.departamento };
 }
 
 // ── Alejandra y los replanteos (REPLANTEO-08, 08/09/2026) ────────────────────────────

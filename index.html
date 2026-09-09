@@ -18788,7 +18788,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!_replEventosListos) { _replBindCanvas(); _replEventosListos = true; }
     requestAnimationFrame(() => { replDibujar(); replActualizarInfo(); });
   }
-  function _replSoloLectura() { return !_replPuedeEditar || _repl?.estado === 'pedido'; }
+  // ADR-0025: un replanteo ya enviado a Pedidos SIGUE siendo editable (la oficina lo corrige);
+  // al guardar, el botón pasa a "Actualizar pedido" y reconcilia las líneas. Solo lectura si no
+  // tienes permiso de edición.
+  function _replSoloLectura() { return !_replPuedeEditar; }
   function _replAplicarPermisos() {
     const ro = _replSoloLectura();
     document.getElementById('replTitulo').disabled = ro;
@@ -18797,7 +18800,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('replCajaTipo').disabled = ro;
     document.getElementById('replCajaMed').disabled = ro;
     document.getElementById('btnReplGuardar').disabled = ro;
-    document.getElementById('btnReplPedido').disabled = ro || !_repl?.id || !(_repl?.calc?.material?.length);
+    const bp = document.getElementById('btnReplPedido');
+    bp.disabled = ro || !_repl?.id || !(_repl?.calc?.material?.length);
+    bp.textContent = _repl?.estado === 'pedido' ? '♻️ Actualizar pedido' : '📦 A Pedidos';
     document.getElementById('btnReplBorrar').style.display = (_replPuedeEditar && _repl?.id) ? '' : 'none';
     const badge = document.getElementById('replEstadoBadge');
     badge.className = 'repl-badge ' + (_repl?.estado || 'borrador');
@@ -20000,14 +20005,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (_repl.cambiado) { toast('Guarda los cambios antes de enviar a Pedidos', 'error'); return; }
     const n = _repl.calc?.material?.length || 0;
     if (!n) { toast('No hay material calculado', 'error'); return; }
-    if (!confirm(`Se crearán ${n} líneas en Pedidos con referencia REPL-${_repl.id}. Después el replanteo queda cerrado. ¿Continuar?`)) return;
+    const yaPedido = _repl.estado === 'pedido';
+    const msg = yaPedido
+      ? `Actualizar el pedido REPL-${_repl.id}: se ajustan las líneas pendientes al material actual (las ya recibidas no se tocan). ¿Continuar?`
+      : `Se crearán ${n} líneas en Pedidos con referencia REPL-${_repl.id}. ¿Continuar?`;
+    if (!confirm(msg)) return;
     try {
       const res = await apiCall(`/replanteos/${_repl.id}/pedido`, { method: 'POST', body: JSON.stringify({}) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Error al enviar');
       _repl.estado = 'pedido';
       _replAplicarPermisos(); replActualizarInfo();
-      toast(`📦 ${data.pedido_ids?.length || n} pedidos creados`);
+      if (data.reconciliado && data.resumen) {
+        const s = data.resumen;
+        toast(`♻️ Pedido actualizado: +${s.anadidas} · ~${s.actualizadas} · −${s.borradas}` + (s.intactas ? ` · ${s.intactas} recibidas intactas` : ''));
+      } else {
+        toast(`📦 ${data.pedido_ids?.length || n} pedidos creados`);
+      }
     } catch (e) { toast('❌ ' + e.message, 'error'); }
   }
   async function replBorrar() {
