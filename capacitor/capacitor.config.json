@@ -1,0 +1,12 @@
+{
+  "appId": "com.padilla585.alejandra",
+  "appName": "Alejandra",
+  "webDir": "www",
+  "server": {
+    "url": "https://padilla585projects.github.io/Alejandra-APP/",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
