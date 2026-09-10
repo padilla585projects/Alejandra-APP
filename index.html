@@ -20439,7 +20439,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     // semitransparente para ver la pared real detrás. Mismo render que la vista "Ver en 3D".
     if (puntos.length >= 2) {
       const tipo = _replTipoRender(_ar.elemento?.key, _ar.params);
-      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6 }));
+      const obst = (obstaculos || []).map(o => ({ seg: o.seg, t: o.t, accion: o.accion || 'debajo', dimension_m: o.dimension_m || 0.3 }));
+      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6, obstaculos: obst }));
     }
     for (let i = 1; i < puntos.length; i++) {                 // cotas por tramo
       const a = puntos[i - 1], b = puntos[i]; const len = a.distanceTo(b); if (len < 0.01) continue;
@@ -20857,8 +20858,33 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // Render REALISTA compartido (AR y vista 3D): tubo hueco con grapas y cajas de registro en los
   // codos; Rejiband como malla de varillas con borde; escalera con largueros y travesaños; chapa
   // en perfil U; canal PVC. Soportes en las bandejas. pts = THREE.Vector3[] en metros.
+  // Inserta el QUIEBRO automático de la instalación al pasar un obstáculo: 'debajo' baja d y
+  // vuelve a subir (pasa por debajo); 'esquivar' se desvía d en horizontal; 'sujetar' no desvía.
+  function _replConDesvios(THREE, pts, obst) {
+    if (!obst || !obst.length) return pts;
+    const up = new THREE.Vector3(0, 1, 0), bySeg = {};
+    obst.forEach(o => { if (o && o.seg != null && o.t != null) (bySeg[o.seg] = bySeg[o.seg] || []).push(o); });
+    Object.values(bySeg).forEach(a => a.sort((x, y) => x.t - y.t));
+    const out = [pts[0].clone()];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], segObst = bySeg[i - 1] || [];
+      const dir = b.clone().sub(a), len = dir.length() || 1, u = dir.clone().normalize();
+      const right = new THREE.Vector3().crossVectors(u, up).normalize();
+      for (const o of segObst) {
+        if (o.accion === 'sujetar') continue;
+        const d = Math.max(0.1, +o.dimension_m || 0.3), hw = Math.min(0.15, len * 0.15);
+        const q = a.clone().addScaledVector(u, Math.max(0, Math.min(1, o.t)) * len);
+        const off = o.accion === 'esquivar' ? right.clone().multiplyScalar(d) : up.clone().multiplyScalar(-d);
+        const p1 = q.clone().addScaledVector(u, -hw), p2 = q.clone().addScaledVector(u, hw);
+        out.push(p1, p1.clone().add(off), p2.clone().add(off), p2);
+      }
+      out.push(b.clone());
+    }
+    return out;
+  }
   function _replInstal3D(THREE, pts, opts) {
     opts = opts || {}; const tipo = opts.tipo || 'tubo', w = opts.w || 0.2, op = opts.opacity != null ? opts.opacity : 1;
+    if (opts.obstaculos) pts = _replConDesvios(THREE, pts, opts.obstaculos);
     const g = new THREE.Group(), X = new THREE.Vector3(1, 0, 0);
     const M = (c, met, ro) => new THREE.MeshStandardMaterial({ color: c, metalness: met, roughness: ro, transparent: op < 1, opacity: op, side: THREE.DoubleSide });
     const matTubo = M(0xcdd4dd, .12, .7), matMetal = M(0x9aa7b6, .75, .45), matAcc = M(0x3b424d, .4, .6), matCaja = M(0xd97706, .1, .8);
@@ -20898,7 +20924,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   function _repl3DBuild(THREE, path) {
     const pts = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
-    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1 });
+    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1, obstaculos: _repl.obstaculos || [] });
     (_repl.complementos || []).forEach(comp => { const o = _replComplemento3D(THREE, comp.key); o.position.set(comp.x || 0, comp.y || 0, comp.z || 0); if (comp.q) o.quaternion.set(comp.q.x, comp.q.y, comp.q.z, comp.q.w); g.add(o); });
     return g;
   }
