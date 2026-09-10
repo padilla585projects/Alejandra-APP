@@ -20256,7 +20256,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       _replArAviso(null);
       const session = await navigator.xr.requestSession('immersive-ar', {
         requiredFeatures: ['hit-test'],
-        optionalFeatures: ['dom-overlay', 'depth-sensing'],
+        optionalFeatures: ['dom-overlay', 'depth-sensing', 'plane-detection'],   // ADR-0025: detección de suelo/pared/techo
         domOverlay: { root: overlay },
         depthSensing: { usagePreference: ['cpu-optimized'], dataFormatPreference: ['luminance-alpha'] },
       });
@@ -20318,6 +20318,28 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const q = vp.transform.orientation;
       _ar.camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(q.x, q.y, q.z, q.w));
     }
+    // ADR-0025: detección de planos (suelo/pared/techo) en tiempo real. Clasifica por
+    // orientación y altura respecto a la cámara, y saca la altura libre (suelo↔techo).
+    try {
+      if (frame.detectedPlanes) {
+        let floorY = null, ceilY = null; const sup = [];
+        frame.detectedPlanes.forEach(pl => {
+          const pp = frame.getPose(pl.planeSpace, refSpace); if (!pp) return;
+          const y = pp.transform.position.y;
+          let tipo;
+          if (pl.orientation === 'vertical') tipo = 'pared';
+          else { tipo = (_ar.camPos && y > _ar.camPos.y + 0.3) ? 'techo' : 'suelo'; if (tipo === 'suelo') floorY = floorY == null ? y : Math.min(floorY, y); else ceilY = ceilY == null ? y : Math.max(ceilY, y); }
+          sup.push({ tipo, y, x: pp.transform.position.x, z: pp.transform.position.z });
+        });
+        _ar.superficies = sup;
+        _ar.alturaLibre = (floorY != null && ceilY != null) ? +(ceilY - floorY).toFixed(2) : null;
+        // superficie bajo el punto apuntado (la más cercana al hit en Y para horizontales)
+        if (_ar.hit && sup.length) {
+          let best = null; for (const s of sup) { const d = s.tipo === 'pared' ? Math.hypot(_ar.hit.x - s.x, _ar.hit.z - s.z) : Math.abs(_ar.hit.y - s.y); if (!best || d < best.d) best = { tipo: s.tipo, d }; }
+          _ar.superficieHit = best ? best.tipo : null;
+        } else _ar.superficieHit = null;
+      }
+    } catch (_) { /* sin plane-detection: no pasa nada */ }
     // Profundidad: ahora COLOCA (cuando no hay hit-test) además de avisar.
     _ar.depthPos = null;
     try {
@@ -20454,11 +20476,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const partes = Object.entries(c).filter(([, n]) => n > 0).map(([m, n]) => `${n} ${REPL_AR_METODO_TXT[m]}`);
     return partes.length > 1 ? ` · ${partes.join(', ')}` : '';
   }
+  function _replArInfoSup() {
+    const s = _ar.superficieHit ? ` · sobre ${_ar.superficieHit}` : '';
+    const h = _ar.alturaLibre ? ` · altura libre ${_ar.alturaLibre.toFixed(2).replace('.', ',')} m` : '';
+    return s + h;
+  }
   function _replArEstadoResumen() {
     const n = _ar.puntos.length;
-    _replArEstado(n < 2
+    _replArEstado((n < 2
       ? (n === 0 ? 'Apunta al primer punto del recorrido y pulsa 📍 Punto.' : '1 punto. Apunta al siguiente y pulsa 📍 Punto.')
-      : `${n} puntos · ${_ar.obstaculos.length} obstáculo(s) · ${_replArLongitud().toFixed(2).replace('.', ',')} m medidos${_replArResumenMetodos()}${_ar.tieneDepth ? '' : ' · (este móvil no da profundidad: los obstáculos se marcan a mano)'}`);
+      : `${n} puntos · ${_ar.obstaculos.length} obstáculo(s) · ${_replArLongitud().toFixed(2).replace('.', ',')} m medidos${_replArResumenMetodos()}${_ar.tieneDepth ? '' : ' · (este móvil no da profundidad: los obstáculos se marcan a mano)'}`) + _replArInfoSup());
   }
   function replArPunto() {
     if (!_ar) return;
