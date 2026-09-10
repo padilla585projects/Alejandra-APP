@@ -30490,7 +30490,7 @@ const REPLANTEO_CATALOGO_BASE = (() => {
   //  - pared_plano: pegada y en el plano de la pared (montante perforado + abrazadera), como
   //                 la bandeja de escalera de la foto de obra.
   const MONTAJES_BANDEJA = {
-    colgado:     { etiqueta: 'Colgada del techo',       soporte_nombre: 'Soporte colgado a techo (varilla roscada + perfil)' },
+    colgado:     { etiqueta: 'Colgada del techo (Hilti MQ)', kit: 'hilti_mq', soporte_nombre: 'Cuelgue Hilti MQ (varilla + carril MQ-41)' },
     pared_perp:  { etiqueta: 'En pared (perpendicular)', soporte_nombre: 'Soporte de pared (ménsula / escuadra)' },
     pared_plano: { etiqueta: 'En pared (en plano)',      soporte_nombre: 'Fijación en plano a pared (montante perforado + abrazadera)' },
   };
@@ -31081,18 +31081,33 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
     const soportesTotal = Math.ceil(longitud / soporteCada) + 1;
     const soportesExist = Math.min(soportesTotal, Math.ceil(sujetarM / soporteCada));
     const soportesTecho = soportesTotal - soportesExist;
-    if (soportesTecho > 0 && reglas.soporte_nombre) {
+    const kitHilti = montaje && reglas.montajes && reglas.montajes[montaje] && reglas.montajes[montaje].kit === 'hilti_mq';
+    if (soportesTecho > 0 && kitHilti) {
+      // Cuelgue Hilti MQ: carril MQ-41 transversal por soporte + 2 varillas roscadas (M8/M10)
+      // ancladas al hormigón, con conectores MQA y tuercas de canal MQN. Carril de techo opcional.
+      const varilla = (elemento_params.varilla === 'M8') ? 'M8' : 'M10';
+      const altura = Number(elemento_params.altura_cuelgue_m) > 0 ? Number(elemento_params.altura_cuelgue_m) : 0.5;
+      const anchoM = (Number(elemento_params.ancho_mm) || Number(reglas.ancho_mm) || 200) / 1000;
+      material.push({ key: 'hilti_carril_sop', nombre: 'Carril Hilti MQ-41 (soporte transversal)', cantidad: r1(soportesTecho * (anchoM + 0.1)), unidad: 'm',
+                      detalle: `${soportesTecho} soportes × (${r1(anchoM)} m + 0,1 m)` });
+      material.push({ key: 'hilti_varilla', nombre: `Varilla roscada ${varilla}`, cantidad: r1(2 * soportesTecho * altura), unidad: 'm',
+                      detalle: `2 varillas × ${soportesTecho} soportes × ${r1(altura)} m de cuelgue` });
+      material.push({ key: 'hilti_conector', nombre: `Conector varilla-carril Hilti MQA-${varilla}`, cantidad: 2 * soportesTecho, unidad: 'ud', detalle: '2 por soporte' });
+      material.push({ key: 'hilti_tuerca', nombre: 'Tuerca de canal Hilti MQN + tornillo', cantidad: 2 * soportesTecho, unidad: 'ud', detalle: '2 por soporte (bandeja al MQ-41)' });
+      material.push({ key: 'hilti_anclaje', nombre: 'Anclaje a hormigón (taco Hilti)', cantidad: 2 * soportesTecho, unidad: 'ud', detalle: '2 por soporte (varillas al techo)' });
+      if (elemento_params.carril_techo) material.push({ key: 'hilti_carril_techo', nombre: 'Carril Hilti MQ-41 (techo)', cantidad: r1(longitud), unidad: 'm', detalle: 'carril del techo a lo largo del recorrido' });
+    } else if (soportesTecho > 0 && reglas.soporte_nombre) {
       material.push({ key: 'soportes', nombre: reglas.soporte_nombre, cantidad: soportesTecho, unidad: 'ud',
                       detalle: `1 cada ${soporteCada} m sobre ${r1(longitud - sujetarM)} m` });
+      const tornPorSop = Number(reglas.tornilleria_por_soporte) > 0 ? Number(reglas.tornilleria_por_soporte) : 0;
+      if (tornPorSop && reglas.tornilleria_nombre) {
+        material.push({ key: 'tornilleria', nombre: reglas.tornilleria_nombre, cantidad: soportesTecho * tornPorSop, unidad: 'ud',
+                        detalle: `${tornPorSop} por soporte a techo/pared` });
+      }
     }
     if (soportesExist > 0 && reglas.sujecion_existente_nombre) {
       material.push({ key: 'sujecion_existente', nombre: reglas.sujecion_existente_nombre, cantidad: soportesExist, unidad: 'ud',
                       detalle: `${r1(sujetarM)} m sujetos a instalación existente` });
-    }
-    const tornPorSop = Number(reglas.tornilleria_por_soporte) > 0 ? Number(reglas.tornilleria_por_soporte) : 0;
-    if (tornPorSop && reglas.tornilleria_nombre && soportesTecho > 0) {
-      material.push({ key: 'tornilleria', nombre: reglas.tornilleria_nombre, cantidad: soportesTecho * tornPorSop, unidad: 'ud',
-                      detalle: `${tornPorSop} por soporte a techo/pared` });
     }
   }
   // Cajas de registro (tubo): una en cada codo y una por tramo largo (caja_cada_m). Si la caja
