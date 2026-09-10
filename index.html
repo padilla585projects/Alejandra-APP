@@ -2237,6 +2237,16 @@ select option{background:var(--surface2);color:var(--text)}
         <select id="replArElem" onchange="replArCambiarElem()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
         <select id="replArMed" onchange="replArCambiarMed()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
       </div>
+      <!-- Montaje (colgada/pared) + tapa: solo para bandejas -->
+      <div id="replArMontajeWrap" style="display:none;gap:8px;align-items:stretch">
+        <select id="replArMontaje" onchange="replArCambiarMontaje()" style="flex:1;min-width:0;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
+        <label style="display:flex;align-items:center;gap:6px;color:#fff;font-size:12.5px;font-weight:700;white-space:nowrap;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:0 12px"><input type="checkbox" id="replArTapa" onchange="replArToggleTapa()" style="width:17px;height:17px">Tapa</label>
+      </div>
+      <!-- Cuelgue Hilti MQ: solo cuando la bandeja va colgada del techo -->
+      <div id="replArColgadoWrap" style="display:none;gap:8px;align-items:stretch">
+        <select id="replArVarilla" onchange="replArCambiarVarilla()" style="flex:1;min-width:0;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"><option value="M10">Varilla M10</option><option value="M8">Varilla M8</option></select>
+        <label style="display:flex;align-items:center;gap:6px;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:0 12px"><input type="checkbox" id="replArCarrilTecho" onchange="replArToggleCarrilTecho()" style="width:17px;height:17px">Carril techo</label>
+      </div>
       <div style="display:flex;gap:8px">
         <select id="replArComp" style="flex:1;min-width:0;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
         <button onclick="replArColocarComp()" style="background:#a855f7;border:none;color:#fff;font-size:13px;font-weight:800;padding:10px 12px;border-radius:10px;font-family:inherit;white-space:nowrap">➕ Colocar</button>
@@ -15432,7 +15442,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.65';
+const APP_VERSION = '9.66';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18934,8 +18944,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (o.anchos_mm?.length) p.ancho_mm = o.anchos_mm.includes(el.reglas?.ancho_mm) ? el.reglas.ancho_mm : o.anchos_mm[0];
     if (o.diametros_mm?.length) p.diametro_mm = o.diametros_mm.includes(el.reglas?.ancho_mm) ? el.reglas.ancho_mm : o.diametros_mm[0];
     if (_replEsTubo(el)) { p.caja_tipo = 'tetones'; p.caja_mm = _replCajaSugerida(p.diametro_mm); }
+    if (el.reglas?.montajes) { p.montaje = el.reglas.montaje_default || 'colgado'; p.tapa = false; p.varilla = 'M10'; p.altura_cuelgue_m = 0.5; p.carril_techo = false; }
     return p;
   }
+  function _replAdmiteMontaje(el) { return !!(el && el.reglas && el.reglas.montajes); }
 
   // ── Abrir uno existente ─────────────────────────────────────────────────
   async function abrirReplanteo(id) {
@@ -20791,8 +20803,34 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function _replArAnchoDe(el, params) { return ((+params.ancho_mm || +params.diametro_mm || el.reglas?.ancho_mm || 100) / 1000); }
   function _replArLlenarMaterial() {
     const se = document.getElementById('replArElem'); if (se) se.innerHTML = _replCatalogo.map(e => `<option value="${e.key}" ${e.key === _ar.elemento.key ? 'selected' : ''}>${e.icono || ''} ${_escHtml(e.nombre)}</option>`).join('');
-    _replArLlenarMedida();
+    _replArLlenarMedida(); _replArLlenarMontaje();
   }
+  function _replArLlenarMontaje() {
+    const wrap = document.getElementById('replArMontajeWrap');
+    const admite = _replAdmiteMontaje(_ar.elemento);
+    if (wrap) wrap.style.display = admite ? 'flex' : 'none';
+    if (!admite) return;
+    const montajes = _ar.elemento.reglas.montajes || {};
+    const actual = _ar.params.montaje || _ar.elemento.reglas.montaje_default || Object.keys(montajes)[0];
+    const sel = document.getElementById('replArMontaje');
+    if (sel) sel.innerHTML = Object.keys(montajes).map(k => `<option value="${k}" ${k === actual ? 'selected' : ''}>${_escHtml(montajes[k].etiqueta || k)}</option>`).join('');
+    const tapa = document.getElementById('replArTapa');
+    if (tapa) { tapa.checked = !!_ar.params.tapa; if (tapa.parentElement) tapa.parentElement.style.display = _ar.elemento.reglas.admite_tapa ? '' : 'none'; }
+    // Cuelgue Hilti: solo si el montaje seleccionado lo usa (colgado)
+    const colgadoWrap = document.getElementById('replArColgadoWrap');
+    const esKitHilti = !!(montajes[actual] && montajes[actual].kit === 'hilti_mq');
+    if (colgadoWrap) colgadoWrap.style.display = esKitHilti ? 'flex' : 'none';
+    if (esKitHilti) {
+      const sv = document.getElementById('replArVarilla'); if (sv) sv.value = _ar.params.varilla || 'M10';
+      const ct = document.getElementById('replArCarrilTecho'); if (ct) ct.checked = !!_ar.params.carril_techo;
+    }
+  }
+  function replArCambiarMontaje() { if (!_ar) return; _ar.params.montaje = document.getElementById('replArMontaje').value; _ar.montajeManual = true; _replArLlenarMontaje(); _replArRedibujar(); }
+  function replArToggleTapa() { if (!_ar) return; _ar.params.tapa = !!(document.getElementById('replArTapa') || {}).checked; _replArRedibujar(); }
+  function replArCambiarVarilla() { if (!_ar) return; _ar.params.varilla = document.getElementById('replArVarilla').value; }
+  function replArToggleCarrilTecho() { if (!_ar) return; _ar.params.carril_techo = !!(document.getElementById('replArCarrilTecho') || {}).checked; }
+  window.replArCambiarMontaje = replArCambiarMontaje; window.replArToggleTapa = replArToggleTapa;
+  window.replArCambiarVarilla = replArCambiarVarilla; window.replArToggleCarrilTecho = replArToggleCarrilTecho;
   function _replArLlenarMedida() {
     const sm = document.getElementById('replArMed'); if (!sm) return;
     const o = _ar.elemento.opciones || {}, p = _ar.params, opts = [];
@@ -20807,7 +20845,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const key = document.getElementById('replArElem').value;
     const el = _replCatalogo.find(e => e.key === key); if (!el) return;
     _ar.elemento = el; _ar.params = _replParamsPorDefecto(el); _ar.color = el.color || '#f97316'; _ar.anchoM = _replArAnchoDe(el, _ar.params);
-    _replArLlenarMedida(); _replArRedibujar();
+    _replArLlenarMedida(); _replArLlenarMontaje(); _replArRedibujar();
   }
   function replArCambiarMed() {
     if (!_ar) return;
