@@ -7104,6 +7104,8 @@ export default {
       if (/^\/replanteos\/\d+\/foto$/.test(path)             && method === 'GET')    return await getReplanteoFoto(request, env, path);
       if (/^\/replanteos\/\d+\/video$/.test(path)            && method === 'GET')    return await getReplanteoVideo(request, env, path);
       if (/^\/replanteos\/\d+\/video$/.test(path)            && method === 'POST')   return await subirReplanteoVideo(request, env, path);
+      if (/^\/replanteos\/\d+\/foto-doc$/.test(path)         && method === 'POST')   return await subirReplanteoFotoDoc(request, env, path);
+      if (/^\/replanteos\/\d+\/foto-doc\/\d+$/.test(path)    && method === 'GET')    return await getReplanteoFotoDoc(request, env, path);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'PATCH')  return await actualizarReplanteo(request, env, path);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'DELETE') return await eliminarReplanteo(request, env, path);
       if (/^\/replanteos\/\d+\/pedido$/.test(path)           && method === 'POST')   return await enviarReplanteoAPedidos(request, env, path, ctx);
@@ -30616,6 +30618,8 @@ async function _ensureReplanteoTables(env) {
   await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_r2_key TEXT');
   await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_mime TEXT');
   await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_dur REAL');
+  // ADR-0025 (fotos de documentación en el AR): lista de claves R2 de fotos adjuntas.
+  await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN fotos_json TEXT');
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS replanteo_catalogo (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31259,6 +31263,47 @@ async function subirReplanteoVideo(request, env, path) {
   return json({ ok: true, video: true, duracion_s: dur });
 }
 
+// ADR-0025: fotos de documentación del replanteo (varias, hechas en el AR). Se guardan en R2
+// y sus claves en fotos_json. Blob en el body.
+async function subirReplanteoFotoDoc(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden replantear', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  if (!row) return err('Replanteo no encontrado', 404);
+  const mime = (request.headers.get('content-type') || 'image/jpeg').split(';')[0];
+  if (!/^image\//.test(mime)) return err('Debe ser una imagen', 400);
+  const buf = await request.arrayBuffer();
+  if (!buf || !buf.byteLength) return err('Imagen vacía', 400);
+  if (buf.byteLength > 15 * 1024 * 1024) return err('Imagen demasiado grande (máx. 15 MB)', 413);
+  let fotos; try { fotos = JSON.parse(row.fotos_json || '[]'); } catch { fotos = []; }
+  if (fotos.length >= 12) return err('Máximo 12 fotos por replanteo', 409);
+  const key = `e${auth.empresa_id}/replanteo/${row.obra_id || 0}/doc_${id}_${Date.now()}.jpg`;
+  await env.FILES.put(key, buf, { httpMetadata: { contentType: mime } });
+  fotos.push(key);
+  await env.DB.prepare("UPDATE replanteos SET fotos_json=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?").bind(JSON.stringify(fotos), id, auth.empresa_id).run();
+  return json({ ok: true, n: fotos.length });
+}
+
+async function getReplanteoFotoDoc(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  const parts = path.split('/'); const id = parseInt(parts[2]); const idx = parseInt(parts[4]);
+  if (!id || isNaN(idx)) return err('Parámetros inválidos', 400);
+  await _ensureReplanteoTables(env);
+  const row = await _replanteoDe(env, auth, id);
+  let fotos; try { fotos = JSON.parse(row?.fotos_json || '[]'); } catch { fotos = []; }
+  const k = fotos[idx];
+  if (!k) return err('Foto no disponible', 404);
+  const obj = await env.FILES.get(k);
+  if (!obj) return err('Foto no disponible', 404);
+  return new Response(obj.body, { headers: { 'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS } });
+}
+
 async function getReplanteoVideo(request, env, path) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 401);
@@ -31331,6 +31376,7 @@ async function eliminarReplanteo(request, env, path) {
   await env.DB.prepare('DELETE FROM replanteos WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).run();
   if (row.foto_r2_key) await env.FILES.delete(row.foto_r2_key).catch(() => {});
   if (row.video_r2_key) await env.FILES.delete(row.video_r2_key).catch(() => {});
+  try { for (const k of JSON.parse(row.fotos_json || '[]')) await env.FILES.delete(k).catch(() => {}); } catch {}
   return json({ ok: true });
 }
 
