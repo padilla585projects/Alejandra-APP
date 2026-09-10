@@ -2225,29 +2225,47 @@ select option{background:var(--surface2);color:var(--text)}
     <!-- REPL-AR-UI-01: en el móvil de Adrián el texto se comía bajo la barra de estado — el
          dom-overlay ocupa la pantalla entera, notch incluido. Se respeta el área segura y se
          limita la altura para que un aviso largo no tape media cámara. -->
-    <div id="replArEstado" style="position:absolute;top:calc(14px + env(safe-area-inset-top, 0px));left:12px;right:12px;background:rgba(0,0,0,.62);color:#fff;padding:9px 11px;border-radius:10px;font-size:13px;line-height:1.35;max-height:22vh;overflow:auto"></div>
-    <div id="replArAviso" style="display:none;position:absolute;top:calc(84px + env(safe-area-inset-top, 0px));left:12px;right:12px;background:rgba(250,204,21,.94);color:#111;padding:9px 11px;border-radius:10px;font-size:12.5px;font-weight:700;line-height:1.3;max-height:26vh;overflow:auto"></div>
-    <div style="position:absolute;bottom:22px;left:12px;right:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;pointer-events:auto">
-      <button onclick="replArPunto()" style="grid-column:1/-1;background:#f97316;border:none;color:#fff;font-size:16px;font-weight:800;padding:14px;border-radius:12px;font-family:inherit">📍 Punto</button>
-      <button id="btnReplArContacto" onclick="replArContacto()" style="grid-column:1/-1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:14px;font-weight:800;padding:12px;border-radius:12px;font-family:inherit">📱 Tocar con el móvil (pared lisa)</button>
-      <select id="replArElem" onchange="replArCambiarElem()" style="background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
-      <select id="replArMed" onchange="replArCambiarMed()" style="background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
-      <select id="replArComp" style="grid-column:1/-1;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:11px;font-family:inherit;font-size:13px;font-weight:700"></select>
-      <button onclick="replArColocarComp()" style="grid-column:1/-1;background:#a855f7;border:none;color:#fff;font-size:14px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">➕ Colocar complemento</button>
-      <div style="grid-column:1/-1;display:flex;gap:6px;align-items:center;background:rgba(0,0,0,.5);border-radius:12px;padding:6px 8px">
-        <span style="color:#fff;font-size:11px;font-weight:700;white-space:nowrap">Ajustar lo último:</span>
-        <button onclick="replArNudge(-1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">⬅</button>
-        <button onclick="replArNudge(0,1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">⬆</button>
-        <button onclick="replArNudge(0,-1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">⬇</button>
-        <button onclick="replArNudge(1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">➡</button>
-        <button onclick="replArRotarComp()" style="flex:1;background:rgba(168,85,247,.9);border:none;color:#fff;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">↻</button>
+    <!-- REPL-AR-UI-02: el HUD tapaba casi toda la cámara. Ahora es compacto: aviso breve
+         arriba, una barra inferior mínima (Punto + iconos) y el material/ajustes en un panel
+         que se despliega solo al pulsar ⚙️. Así la cámara queda casi entera para ver el AR. -->
+    <div id="replArEstado" style="position:absolute;top:calc(10px + env(safe-area-inset-top, 0px));left:10px;right:10px;background:rgba(0,0,0,.55);color:#fff;padding:7px 10px;border-radius:10px;font-size:12px;line-height:1.3;max-height:15vh;overflow:auto"></div>
+    <div id="replArAviso" style="display:none;position:absolute;top:calc(64px + env(safe-area-inset-top, 0px));left:10px;right:10px;background:rgba(250,204,21,.94);color:#111;padding:7px 10px;border-radius:10px;font-size:12px;font-weight:700;line-height:1.25;max-height:16vh;overflow:auto"></div>
+
+    <!-- Panel de material y ajustes: oculto por defecto, se abre con ⚙️ -->
+    <div id="replArPanelOpts" style="display:none;position:absolute;left:8px;right:8px;bottom:118px;background:rgba(0,0,0,.82);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <select id="replArElem" onchange="replArCambiarElem()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
+        <select id="replArMed" onchange="replArCambiarMed()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
       </div>
-      <button onclick="replArIdentificar()" style="background:rgba(139,92,246,.95);border:none;color:#fff;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">🔍 ¿Qué es? (IA)</button>
-      <button onclick="replArFoto()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">📸 Foto</button>
-      <button onclick="replArObstaculo()" style="grid-column:1/-1;background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">⚠️ Obstáculo</button>
-      <button onclick="replArDeshacer()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">↩ Deshacer</button>
-      <button onclick="replArCancelar()" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;font-weight:700;padding:11px;border-radius:12px;font-family:inherit">✖ Cancelar</button>
-      <button onclick="replArTerminar()" style="background:#22c55e;border:none;color:#fff;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">✅ Terminar</button>
+      <div style="display:flex;gap:8px">
+        <select id="replArComp" style="flex:1;min-width:0;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
+        <button onclick="replArColocarComp()" style="background:#a855f7;border:none;color:#fff;font-size:13px;font-weight:800;padding:10px 12px;border-radius:10px;font-family:inherit;white-space:nowrap">➕ Colocar</button>
+      </div>
+      <button id="btnReplArContacto" onclick="replArContacto()" style="background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:13px;font-weight:800;padding:10px;border-radius:10px;font-family:inherit">📱 Tocar con el móvil (pared lisa)</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="color:#fff;font-size:11px;font-weight:700;white-space:nowrap">Ajustar:</span>
+        <button onclick="replArNudge(-1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">⬅</button>
+        <button onclick="replArNudge(0,1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">⬆</button>
+        <button onclick="replArNudge(0,-1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">⬇</button>
+        <button onclick="replArNudge(1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">➡</button>
+        <button onclick="replArRotarComp()" style="flex:1;background:rgba(168,85,247,.9);border:none;color:#fff;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">↻</button>
+      </div>
+    </div>
+
+    <!-- Barra inferior compacta (siempre visible) -->
+    <div style="position:absolute;bottom:calc(10px + env(safe-area-inset-bottom, 0px));left:8px;right:8px;display:flex;flex-direction:column;gap:8px;pointer-events:auto">
+      <div style="display:flex;gap:8px">
+        <button onclick="replArPunto()" style="flex:1;background:#f97316;border:none;color:#fff;font-size:16px;font-weight:800;padding:14px;border-radius:12px;font-family:inherit">📍 Punto</button>
+        <button id="btnReplArOpts" onclick="_replArToggleOpts()" title="Material y ajustes" style="width:56px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:20px;font-weight:800;padding:14px 0;border-radius:12px;font-family:inherit">⚙️</button>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="replArIdentificar()" title="¿Qué es? (IA)" style="flex:1;background:rgba(139,92,246,.92);border:none;color:#fff;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">🔍</button>
+        <button onclick="replArFoto()" title="Foto" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">📸</button>
+        <button onclick="replArObstaculo()" title="Obstáculo" style="flex:1;background:rgba(250,204,21,.95);border:none;color:#111;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">⚠️</button>
+        <button onclick="replArDeshacer()" title="Deshacer" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">↩</button>
+        <button onclick="replArCancelar()" title="Cancelar" style="flex:1;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">✖</button>
+        <button onclick="replArTerminar()" title="Terminar" style="flex:1.4;background:#22c55e;border:none;color:#fff;font-size:15px;font-weight:800;padding:11px 0;border-radius:11px;font-family:inherit">✅ Fin</button>
+      </div>
     </div>
   </div>
 
@@ -15407,7 +15425,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.63';
+const APP_VERSION = '9.64';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -20945,6 +20963,18 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replArFoto = replArFoto;
   window.replArColocarComp = replArColocarComp; window.replArCambiarElem = replArCambiarElem;
   window.replArCambiarMed = replArCambiarMed; window.replArNudge = replArNudge; window.replArRotarComp = replArRotarComp;
+
+  // Despliega/oculta el panel de material y ajustes del AR (por defecto oculto para no tapar
+  // la cámara). REPL-AR-UI-02.
+  function _replArToggleOpts() {
+    var p = document.getElementById('replArPanelOpts');
+    if (!p) return;
+    var abierto = p.style.display === 'flex';
+    p.style.display = abierto ? 'none' : 'flex';
+    var b = document.getElementById('btnReplArOpts');
+    if (b) b.style.background = abierto ? 'rgba(0,0,0,.6)' : 'rgba(168,85,247,.92)';
+  }
+  window._replArToggleOpts = _replArToggleOpts;
 
   // ── Cámara en directo: marcar el recorrido sobre el vídeo y congelar un fotograma ──
   // No necesita AR ni sensores especiales; funciona en cualquier móvil. Los puntos que tocas
