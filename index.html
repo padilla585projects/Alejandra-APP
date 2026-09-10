@@ -2205,6 +2205,8 @@ select option{background:var(--surface2);color:var(--text)}
     <div style="position:absolute;bottom:22px;left:12px;right:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;pointer-events:auto">
       <button onclick="replArPunto()" style="grid-column:1/-1;background:#f97316;border:none;color:#fff;font-size:16px;font-weight:800;padding:14px;border-radius:12px;font-family:inherit">📍 Punto</button>
       <button id="btnReplArContacto" onclick="replArContacto()" style="grid-column:1/-1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:14px;font-weight:800;padding:12px;border-radius:12px;font-family:inherit">📱 Tocar con el móvil (pared lisa)</button>
+      <select id="replArComp" style="grid-column:1/-1;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:11px;font-family:inherit;font-size:13px;font-weight:700"></select>
+      <button onclick="replArColocarComp()" style="grid-column:1/-1;background:#a855f7;border:none;color:#fff;font-size:14px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">➕ Colocar complemento</button>
       <button onclick="replArObstaculo()" style="background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">⚠️ Obstáculo</button>
       <button onclick="replArDeshacer()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">↩ Deshacer</button>
       <button onclick="replArCancelar()" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;font-weight:700;padding:11px;border-radius:12px;font-family:inherit">✖ Cancelar</button>
@@ -18782,6 +18784,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         longitud_manual_m: tr.longitud_manual_m || null,
         calc: r.material?.length ? { longitud_m: r.longitud_m, material: r.material, reglas: r.reglas, giros: null } : null,
         origen: r.origen || 'foto', puntos_3d: Array.isArray(tr.puntos_3d) ? tr.puntos_3d : null,
+        complementos: Array.isArray(tr.complementos) ? tr.complementos : [],
         estado: r.estado || 'borrador', modo: 'trazar', cambiado: false, notas: r.notas || '',
         creado_por: r.creado_por, creado_en: r.creado_en,
       };
@@ -19843,7 +19846,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     return {
       departamento: _repl.departamento || _replCatalogoDept || undefined, // REPL-DEPT-POST-01
       elemento_key: _repl.elemento_key, elemento_params: _repl.params,
-      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined },
+      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined, complementos: _repl.complementos || undefined },
       escala_px_m: _repl.longitud_manual_m ? null : _repl.escala_px_m,
       longitud_manual_m: _repl.longitud_manual_m || null,
     };
@@ -20258,7 +20261,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
       const reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
       reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
-      _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], obstaculos: [], grupo: new THREE.Group(),
+      _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], obstaculos: [], complementos: [], grupo: new THREE.Group(),
               color: el.color || '#f97316', anchoM, titulo, elemento: el, params, hit: null, tieneDepth: false, ultimoAviso: 0,
               // REPLANTEO-05
               metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false, guiaHasta: 0 };
@@ -20268,6 +20271,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const viewer = await session.requestReferenceSpace('viewer');
       _ar.hitSource = await session.requestHitTestSource({ space: viewer });
       _replArEstado('Apunta al techo o a la pared. Con el anillo naranja sobre el punto, pulsa 📍 Punto. Si la superficie es lisa y no aparece el anillo, acerca el móvil al punto y pulsa 📱 Tocar.');
+      _replArLlenarComplementos();
       renderer.setAnimationLoop((t, frame) => _replArFrame(t, frame));
     } catch (e) {
       _replArLimpiar();
@@ -20399,23 +20403,37 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         halo.position.copy(p); grupo.add(halo);
       }
     });
-    for (let i = 1; i < puntos.length; i++) {
-      const a = puntos[i - 1], b = puntos[i];
-      const len = a.distanceTo(b); if (len < 0.01) continue;
-      const box = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, anchoM), mat);
-      box.position.copy(a).add(b).multiplyScalar(0.5);
-      box.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), b.clone().sub(a).normalize());
-      grupo.add(box);
-      const borde = new THREE.Mesh(new THREE.BoxGeometry(len, 0.005, anchoM + 0.01), matBorde);
-      borde.position.copy(box.position); borde.quaternion.copy(box.quaternion); grupo.add(borde);
+    // Instalación realista (tubo con grapas/cajas, Rejiband/escalera/chapa según el elemento),
+    // semitransparente para ver la pared real detrás. Mismo render que la vista "Ver en 3D".
+    if (puntos.length >= 2) {
+      const tipo = _replTipoRender(_ar.elemento?.key, _ar.params);
+      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6 }));
+    }
+    for (let i = 1; i < puntos.length; i++) {                 // cotas por tramo
+      const a = puntos[i - 1], b = puntos[i]; const len = a.distanceTo(b); if (len < 0.01) continue;
+      const mid = a.clone().add(b).multiplyScalar(0.5);
       const lbl = _replArTexto(len.toFixed(2).replace('.', ',') + ' m');
-      lbl.position.copy(box.position).add(new THREE.Vector3(0, 0.12, 0)); grupo.add(lbl);
+      lbl.position.copy(mid).add(new THREE.Vector3(0, 0.12, 0)); grupo.add(lbl);
     }
     obstaculos.forEach((o, i) => {
       const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
       m.position.copy(o.pos); grupo.add(m);
       const lbl = _replArTexto('⚠ ' + (i + 1)); lbl.position.copy(o.pos).add(new THREE.Vector3(0, 0.1, 0)); grupo.add(lbl);
     });
+    // (los codos ya los dibuja _replInstal3D)
+    // Complementos colocados (mecanismos/cajas/cuadro/luminarias).
+    (_ar.complementos || []).forEach(comp => {
+      const obj = _replComplemento3D(THREE, comp.key);
+      obj.position.copy(comp.pos);
+      if (comp.quat) obj.quaternion.set(comp.quat.x, comp.quat.y, comp.quat.z, comp.quat.w);
+      grupo.add(obj);
+    });
+    // Cota total del recorrido, junto al último punto.
+    if (puntos.length >= 2) {
+      const L = puntos.reduce((s, p, i) => i ? s + puntos[i - 1].distanceTo(p) : 0, 0);
+      const tot = _replArTexto('Σ ' + L.toFixed(2).replace('.', ',') + ' m');
+      tot.scale.set(0.4, 0.1, 1); tot.position.copy(puntos[puntos.length - 1]).add(new THREE.Vector3(0, 0.22, 0)); grupo.add(tot);
+    }
   }
   function _replArLongitud() { let L = 0; for (let i = 1; i < _ar.puntos.length; i++) L += _ar.puntos[i - 1].distanceTo(_ar.puntos[i]); return L; }
   // Cuántos puntos se marcaron con cada método: si luego la medida no cuadra con la cinta,
@@ -20443,7 +20461,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
     _ar.puntos.push(a.pos);
     _ar.metodos.push(a.metodo);
-    _ar.ultimoFueObstaculo = false;
+    _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = false;
     _replArRedibujar(); _replArEstadoResumen();
   }
   // Anclaje por contacto: el punto se marca donde está el móvil. No necesita reconocer la
@@ -20456,7 +20474,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const pos = _ar.camDir ? _ar.camPos.clone().add(_ar.camDir.clone().multiplyScalar(REPL_AR_OFFSET_CONTACTO)) : _ar.camPos.clone();
     _ar.puntos.push(pos);
     _ar.metodos.push('contacto');
-    _ar.ultimoFueObstaculo = false;
+    _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = false;
     _replArRedibujar(); _replArEstadoResumen();
   }
   function replArObstaculo() {
@@ -20476,14 +20494,71 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
     if (!best || best.d > 1.0) { _replArEstado('El punto está a más de 1 m del recorrido. Apunta más cerca de la bandeja/tubo.'); return; }
     _ar.obstaculos.push({ seg: best.seg, t: best.t, pos: best.pos });
-    _ar.ultimoFueObstaculo = true;
+    _ar.ultimoFueObstaculo = true; _ar.ultimoFueComp = false;
     _replArRedibujar(); _replArEstadoResumen();
   }
   function replArDeshacer() {
     if (!_ar) return;
-    if (_ar.obstaculos.length && (!_ar.puntos.length || _ar.ultimoFueObstaculo)) _ar.obstaculos.pop();
+    if (_ar.ultimoFueComp && _ar.complementos.length) { _ar.complementos.pop(); _ar.ultimoFueComp = false; }
+    else if (_ar.obstaculos.length && (!_ar.puntos.length || _ar.ultimoFueObstaculo)) _ar.obstaculos.pop();
     else { _ar.puntos.pop(); _ar.metodos.pop(); _ar.obstaculos = _ar.obstaculos.filter(o => o.seg < _ar.puntos.length - 1); }
     _replArRedibujar(); _replArEstadoResumen();
+  }
+  // ── Complementos colocables en el AR (mecanismos Legrand/Simon, cajas, cuadro, luminarias) ──
+  // Familias representativas (no cada referencia); dimensiones aproximadas en metros. La marca
+  // es orientativa (el mecanismo se ve igual); se amplía añadiendo entradas aquí.
+  const REPL_COMPLEMENTOS = [
+    { key: 'enchufe',      nombre: '🔌 Enchufe schuko',        marca: 'Legrand/Simon', build: 'mecanismo' },
+    { key: 'interruptor',  nombre: '💡 Interruptor',           marca: 'Legrand/Simon', build: 'mecanismo' },
+    { key: 'conmutador',   nombre: '💡 Conmutador',            marca: 'Legrand/Simon', build: 'mecanismo' },
+    { key: 'doble',        nombre: '💡 Doble interruptor',     marca: 'Legrand/Simon', build: 'mecanismo' },
+    { key: 'pulsador',     nombre: '🔘 Pulsador',              marca: 'Legrand/Simon', build: 'mecanismo' },
+    { key: 'regulador',    nombre: '🎚 Regulador',             marca: 'Legrand/Simon', build: 'mecanismo' },
+    { key: 'rj45',         nombre: '🌐 Toma de red RJ45',      marca: 'Legrand/Simon', build: 'mecanismo' },
+    { key: 'tv',           nombre: '📺 Toma de TV',            marca: 'Legrand/Simon', build: 'mecanismo' },
+    { key: 'caja_mecanismo', nombre: '⬜ Caja de mecanismo',   marca: '',              build: 'caja_mec' },
+    { key: 'caja_registro',  nombre: '📦 Caja de registro',    marca: '',              build: 'caja_reg' },
+    { key: 'cuadro',       nombre: '🗄 Cuadro eléctrico',      marca: '',              build: 'cuadro' },
+    { key: 'luminaria',    nombre: '💡 Luminaria',             marca: '',              build: 'luminaria' },
+  ];
+  function _replArLlenarComplementos() {
+    const sel = document.getElementById('replArComp'); if (!sel) return;
+    sel.innerHTML = REPL_COMPLEMENTOS.map(c => `<option value="${c.key}">${c.nombre}${c.marca ? ' · ' + c.marca : ''}</option>`).join('');
+  }
+  // Devuelve un THREE.Group con el complemento, orientado en su eje +Z hacia fuera de la superficie.
+  function _replComplemento3D(THREE, key) {
+    const g = new THREE.Group();
+    const c = REPL_COMPLEMENTOS.find(x => x.key === key) || REPL_COMPLEMENTOS[0];
+    const plate = (w, h, col) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.012), new THREE.MeshStandardMaterial({ color: col, metalness: .1, roughness: .7 })); return m; };
+    if (c.build === 'mecanismo') {
+      g.add(plate(0.08, 0.08, 0xf2f2f2));                                   // placa (marco)
+      if (key === 'enchufe') { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.027, 0.01, 24), new THREE.MeshStandardMaterial({ color: 0xe8e8e8 })); b.rotation.x = Math.PI / 2; b.position.z = 0.011; g.add(b);
+        [-0.012, 0.012].forEach(x => { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.016, 12), new THREE.MeshStandardMaterial({ color: 0x222222 })); h.rotation.x = Math.PI / 2; h.position.set(x, 0, 0.013); g.add(h); }); }
+      else if (key === 'rj45' || key === 'tv') { const b = plate(0.03, 0.03, 0xdddddd); b.position.z = 0.012; g.add(b); }
+      else { const tecla = new THREE.Mesh(new THREE.BoxGeometry(key === 'doble' ? 0.024 : 0.05, 0.05, 0.012), new THREE.MeshStandardMaterial({ color: 0xffffff })); tecla.position.set(key === 'doble' ? -0.014 : 0, 0, 0.012); g.add(tecla);
+        if (key === 'doble') { const t2 = tecla.clone(); t2.position.x = 0.014; g.add(t2); }
+        if (key === 'regulador') { const kn = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.014, 20), new THREE.MeshStandardMaterial({ color: 0xcccccc })); kn.rotation.x = Math.PI / 2; kn.position.z = 0.014; g.remove(g.children[1]); g.add(kn); } }
+    } else if (c.build === 'caja_mec') { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.05), new THREE.MeshStandardMaterial({ color: 0xff8c00, metalness: .1, roughness: .8 }))); }
+    else if (c.build === 'caja_reg') { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.10, 0.05), new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: .1, roughness: .8 }))); }
+    else if (c.build === 'cuadro') { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.50, 0.11), new THREE.MeshStandardMaterial({ color: 0xdfe3e8, metalness: .3, roughness: .5 })));
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.44, 0.01), new THREE.MeshStandardMaterial({ color: 0x2b3542 })); p.position.z = 0.06; g.add(p); }
+    else if (c.build === 'luminaria') { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.03, 32), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2cc, emissiveIntensity: 0.9 })); d.rotation.x = Math.PI / 2; g.add(d); }
+    return g;
+  }
+  function replArColocarComp() {
+    if (!_ar) return;
+    const a = _replArAnclaje();
+    if (!a) { _replArEstado('Apunta a la pared/techo donde va el complemento (con el anillo) y vuelve a pulsar ➕.'); return; }
+    const key = (document.getElementById('replArComp') || {}).value || REPL_COMPLEMENTOS[0].key;
+    const THREE = _ar.THREE;
+    let quat = new THREE.Quaternion();
+    if (_ar.hit && _ar.reticle.visible) quat.setFromRotationMatrix(_ar.reticle.matrix);            // pegado a la superficie
+    else if (_ar.camDir) quat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _ar.camDir.clone().negate().normalize());
+    _ar.complementos.push({ key, pos: a.pos.clone(), quat: { x: quat.x, y: quat.y, z: quat.z, w: quat.w } });
+    _ar.ultimoFueObstaculo = false;
+    _replArRedibujar();
+    const nom = (REPL_COMPLEMENTOS.find(x => x.key === key) || {}).nombre || 'complemento';
+    _replArEstado(`${nom} colocado · ${_ar.complementos.length} complemento(s). Sigue marcando o pulsa ✅ Terminar.`);
   }
   function replArCancelar() { if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
   function _replArLimpiar() {
@@ -20531,6 +20606,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       id: null, titulo, elemento_key: elemento.key, params, file, img, departamento: _replCatalogoDept, planos: [], planos: [], imgW: img.naturalWidth, imgH: img.naturalHeight,
       puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
       referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
+      complementos: (_ar.complementos || []).map(c => ({ key: c.key, x: +c.pos.x.toFixed(3), y: +c.pos.y.toFixed(3), z: +c.pos.z.toFixed(3), q: c.quat })),
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
     };
     replCerrarNuevo();
@@ -20678,19 +20754,61 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   function _repl3DEsTubo() { const el = _replElemento && _replElemento(); return !!(el?.opciones?.diametros_mm?.length) || !!(_repl.params && _repl.params.diametro_mm); }
   function _repl3DAncho() { const p = _repl.params || {}; if (p.ancho_mm) return Math.max(0.03, p.ancho_mm / 1000); if (p.diametro_mm) return Math.max(0.012, p.diametro_mm / 1000); return 0.2; }
-  function _repl3DBuild(THREE, path) {
-    const g = new THREE.Group(), w = _repl3DAncho(), esTubo = _repl3DEsTubo();
-    const mat = new THREE.MeshStandardMaterial({ color: esTubo ? 0xaab3bf : 0x9aa7b6, metalness: .8, roughness: .4, side: THREE.DoubleSide });
-    const X = new THREE.Vector3(1, 0, 0);
-    for (let i = 0; i < path.length - 1; i++) {
-      const a = new THREE.Vector3(path[i].x, path[i].y, path[i].z), b = new THREE.Vector3(path[i + 1].x, path[i + 1].y, path[i + 1].z);
-      const dir = new THREE.Vector3().subVectors(b, a), len = dir.length(); if (len < 1e-3) continue;
-      let seg;
-      if (esTubo) { const geo = new THREE.CylinderGeometry(w / 2, w / 2, len, 20); geo.rotateZ(Math.PI / 2); seg = new THREE.Mesh(geo, mat); }
-      else seg = new THREE.Mesh(new THREE.BoxGeometry(len, Math.max(0.02, w * 0.12), w), mat);
-      seg.position.copy(a).addScaledVector(dir, 0.5); seg.quaternion.setFromUnitVectors(X, dir.clone().normalize()); g.add(seg);
-      if (i > 0) { const v = new THREE.Mesh(new THREE.SphereGeometry(esTubo ? w / 2 : w * 0.5, 12, 12), mat); v.position.copy(a); g.add(v); }
+  // Tipo de render de la instalación a partir del elemento del catálogo.
+  function _replTipoRender(key, params) {
+    if (key === 'bandeja_rejilla') return 'rejiband';
+    if (key === 'bandeja_escalera') return 'escalera';
+    if (key === 'bandeja_chapa') return 'chapa';
+    if (key === 'canal_pvc') return 'canal';
+    if (key && key.indexOf('tubo') === 0) return 'tubo';
+    return (params && params.diametro_mm) ? 'tubo' : 'tray';
+  }
+  // Render REALISTA compartido (AR y vista 3D): tubo hueco con grapas y cajas de registro en los
+  // codos; Rejiband como malla de varillas con borde; escalera con largueros y travesaños; chapa
+  // en perfil U; canal PVC. Soportes en las bandejas. pts = THREE.Vector3[] en metros.
+  function _replInstal3D(THREE, pts, opts) {
+    opts = opts || {}; const tipo = opts.tipo || 'tubo', w = opts.w || 0.2, op = opts.opacity != null ? opts.opacity : 1;
+    const g = new THREE.Group(), X = new THREE.Vector3(1, 0, 0);
+    const M = (c, met, ro) => new THREE.MeshStandardMaterial({ color: c, metalness: met, roughness: ro, transparent: op < 1, opacity: op, side: THREE.DoubleSide });
+    const matTubo = M(0xcdd4dd, .12, .7), matMetal = M(0x9aa7b6, .75, .45), matAcc = M(0x3b424d, .4, .6), matCaja = M(0xd97706, .1, .8);
+    const rTubo = Math.max(0.008, w / 2);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], dir = new THREE.Vector3().subVectors(b, a), len = dir.length(); if (len < 1e-3) continue;
+      const sub = new THREE.Group(); sub.position.copy(a).addScaledVector(dir, 0.5); sub.quaternion.setFromUnitVectors(X, dir.clone().normalize()); g.add(sub);
+      if (tipo === 'tubo') {
+        sub.add(new THREE.Mesh(new THREE.CylinderGeometry(rTubo, rTubo, len, 20, 1, true).rotateZ(Math.PI / 2), matTubo));
+        const n = Math.max(1, Math.floor(len / 0.6));                                   // grapas cada ~0,6 m
+        for (let k = 1; k < n; k++) { const t = new THREE.Mesh(new THREE.TorusGeometry(rTubo * 1.2, rTubo * 0.22, 8, 14), matAcc); t.rotation.y = Math.PI / 2; t.position.x = -len / 2 + k * (len / n); sub.add(t); }
+      } else if (tipo === 'rejiband') {
+        const rr = 0.004;
+        for (const zf of [-0.5, -0.17, 0.17, 0.5]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, len, 6).rotateZ(Math.PI / 2), matMetal); l.position.z = zf * w; sub.add(l); }
+        const nt = Math.max(1, Math.floor(len / 0.1));
+        for (let k = 0; k <= nt; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, w, 6).rotateX(Math.PI / 2), matMetal); c.position.x = -len / 2 + k * (len / nt); sub.add(c); }
+        for (const zf of [-0.5, 0.5]) { const e = new THREE.Mesh(new THREE.CylinderGeometry(rr * 1.5, rr * 1.5, len, 8).rotateZ(Math.PI / 2), matMetal); e.position.set(0, 0.03, zf * w); sub.add(e); }
+      } else if (tipo === 'escalera') {
+        for (const zf of [-0.5, 0.5]) { const rl = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.02), matMetal); rl.position.z = zf * w; sub.add(rl); }
+        const nt = Math.max(1, Math.floor(len / 0.28));
+        for (let k = 0; k <= nt; k++) { const rung = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.015, w), matMetal); rung.position.x = -len / 2 + k * (len / nt); sub.add(rung); }
+      } else if (tipo === 'chapa') {
+        sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.006, w), matMetal));
+        for (const zf of [-0.5, 0.5]) { const wall = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.006), matMetal); wall.position.set(0, 0.025, zf * w); sub.add(wall); }
+      } else if (tipo === 'canal') {
+        sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, w * 0.7, w), M(0xeef1f5, .1, .7)));
+      } else { sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, w), matMetal)); }
+      if (tipo !== 'tubo' && tipo !== 'canal') { const ns = Math.floor(len / 1.5); for (let k = 1; k <= ns; k++) { const br = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, w * 1.1), matAcc); br.position.set(-len / 2 + k * (len / (ns + 1)), -0.03, 0); sub.add(br); } }
     }
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i];
+      if (tipo === 'tubo') { const codo = new THREE.Mesh(new THREE.SphereGeometry(rTubo, 14, 14), matTubo); codo.position.copy(p); g.add(codo);
+        const caja = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.05), matCaja); caja.position.copy(p); g.add(caja); }
+      else { const codo = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, w), matMetal); codo.position.copy(p); g.add(codo); }
+    }
+    return g;
+  }
+  function _repl3DBuild(THREE, path) {
+    const pts = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
+    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1 });
+    (_repl.complementos || []).forEach(comp => { const o = _replComplemento3D(THREE, comp.key); o.position.set(comp.x || 0, comp.y || 0, comp.z || 0); if (comp.q) o.quaternion.set(comp.q.x, comp.q.y, comp.q.z, comp.q.w); g.add(o); });
     return g;
   }
   async function replVer3D() {
@@ -20704,16 +20822,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     const scene = new THREE.Scene();
     const cam = new THREE.PerspectiveCamera(55, 1, 0.01, 200);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x33404d, 1.1));
-    const dl = new THREE.DirectionalLight(0xffffff, 1.0); dl.position.set(1, 2, 1.5); scene.add(dl);
+    scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x20262e, 1.15));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.1); dl.position.set(1.5, 2.5, 1.5); scene.add(dl);
+    const dl2 = new THREE.DirectionalLight(0x9db4ff, 0.4); dl2.position.set(-1.5, 0.5, -1); scene.add(dl2);
     const run = _repl3DBuild(THREE, path);
     const box = new THREE.Box3().setFromObject(run), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
     run.position.sub(c);
     const pivot = new THREE.Group(); pivot.add(run); scene.add(pivot);
-    const rad = Math.max(size.length(), 0.5); let dist = rad * 1.6, rotY = 0.6, rotX = 0.5, drag = false, px = 0, py = 0, pd = 0;
+    // base tipo tornamesa: una rejilla bajo la instalación para leer la escala
+    const rad = Math.max(size.length(), 0.5);
+    const grid = new THREE.GridHelper(Math.max(2, Math.ceil(rad) * 2), Math.max(4, Math.ceil(rad) * 2), 0x3b4757, 0x222b36);
+    grid.position.y = -size.y / 2 - 0.05; pivot.add(grid);
+    let dist = rad * 1.7, rotY = 0.5, rotX = 0.62, drag = false, px = 0, py = 0, pd = 0, auto = true;
     function resize() { const r = canvas.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); cam.aspect = (r.width || 1) / (r.height || 1); cam.updateProjectionMatrix(); }
     resize(); window.addEventListener('resize', resize);
-    const dn = e => { drag = true; const p = e.touches ? e.touches[0] : e; px = p.clientX; py = p.clientY; };
+    const dn = e => { drag = true; auto = false; const p = e.touches ? e.touches[0] : e; px = p.clientX; py = p.clientY; };
     const mv = e => {
       if (e.touches && e.touches.length === 2) { const dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY, d = Math.hypot(dx, dy); if (pd) dist = Math.max(rad * 0.6, Math.min(rad * 6, dist - (d - pd) * 0.01)); pd = d; return; }
       if (!drag) return; const p = e.touches ? e.touches[0] : e; rotY += (p.clientX - px) * 0.01; rotX = Math.max(-1.3, Math.min(1.3, rotX + (p.clientY - py) * 0.01)); px = p.clientX; py = p.clientY;
@@ -20724,7 +20847,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const wheel = e => { e.preventDefault(); dist = Math.max(rad * 0.6, Math.min(rad * 6, dist + e.deltaY * 0.01 * rad)); };
     canvas.addEventListener('wheel', wheel, { passive: false });
     let raf;
-    function loop() { pivot.rotation.y = rotY; pivot.rotation.x = rotX; cam.position.set(0, rad * 0.4, dist); cam.lookAt(0, 0, 0); renderer.render(scene, cam); raf = requestAnimationFrame(loop); }
+    function loop() { if (auto) rotY += 0.004; pivot.rotation.y = rotY; pivot.rotation.x = rotX; cam.position.set(0, rad * 0.45, dist); cam.lookAt(0, 0, 0); renderer.render(scene, cam); raf = requestAnimationFrame(loop); }
     loop();
     _p3d = { stop() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); window.removeEventListener('mouseup', up); try { renderer.dispose(); } catch (_) {} } };
     const el = _replElemento && _replElemento();
