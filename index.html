@@ -2059,6 +2059,7 @@ select option{background:var(--surface2);color:var(--text)}
       <span style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,.4);transform:translateX(-50%)"></span>
       <span id="replCamBurbuja" style="position:absolute;top:3px;left:50%;transform:translateX(-50%);width:10px;height:10px;border-radius:50%;background:#22c55e;transition:left .1s"></span>
     </div>
+    <button onclick="replCamIdentificar()" style="position:absolute;top:46px;right:10px;z-index:3;background:rgba(139,92,246,.92);border:none;color:#fff;font-weight:800;font-size:12px;padding:8px 12px;border-radius:999px;font-family:'Montserrat',sans-serif">🔍 ¿Qué es?</button>
     <div id="replCamHint" style="position:absolute;left:10px;right:10px;bottom:58px;text-align:center;color:#fff;font-size:11px;background:rgba(0,0,0,.5);border-radius:8px;padding:5px 8px;pointer-events:none">Toca por dónde va la instalación · el nivel y la brújula te ayudan</div>
     <div style="position:absolute;left:10px;right:10px;bottom:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
       <button class="repl-btn" onclick="replCamDeshacer()">↩ Deshacer</button>
@@ -2217,6 +2218,7 @@ select option{background:var(--surface2);color:var(--text)}
         <button onclick="replArNudge(1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">➡</button>
         <button onclick="replArRotarComp()" style="flex:1;background:rgba(168,85,247,.9);border:none;color:#fff;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">↻</button>
       </div>
+      <button onclick="replArIdentificar()" style="grid-column:1/-1;background:rgba(139,92,246,.95);border:none;color:#fff;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">🔍 ¿Qué es esto? (IA)</button>
       <button onclick="replArObstaculo()" style="background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">⚠️ Obstáculo</button>
       <button onclick="replArDeshacer()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">↩ Deshacer</button>
       <button onclick="replArCancelar()" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;font-weight:700;padding:11px;border-radius:12px;font-family:inherit">✖ Cancelar</button>
@@ -20256,7 +20258,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       _replArAviso(null);
       const session = await navigator.xr.requestSession('immersive-ar', {
         requiredFeatures: ['hit-test'],
-        optionalFeatures: ['dom-overlay', 'depth-sensing', 'plane-detection'],   // ADR-0025: detección de suelo/pared/techo
+        optionalFeatures: ['dom-overlay', 'depth-sensing', 'plane-detection', 'camera-access'],   // ADR-0025: planos + "¿qué es esto?" (visión IA)
         domOverlay: { root: overlay },
         depthSensing: { usagePreference: ['cpu-optimized'], dataFormatPreference: ['luminance-alpha'] },
       });
@@ -20291,6 +20293,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   function _replArFrame(t, frame) {
     if (!_ar || !frame) return;
+    _ar.lastFrame = frame;   // para "¿qué es esto?" (captura de cámara con camera-access)
     const { renderer, scene, camera, reticle } = _ar;
     const refSpace = renderer.xr.getReferenceSpace();
     _ar.refSpace = refSpace;
@@ -20652,6 +20655,60 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     u.obj.quat = { x: q.x, y: q.y, z: q.z, w: q.w };
     _replArRedibujar();
   }
+  // ── "¿Qué es esto?": captura la cámara del AR (camera-access) y la manda a Gemini ──
+  async function _replIdentificarIA(dataUrl) {
+    const res = await apiCall('/replanteos/identificar', { method: 'POST', body: JSON.stringify({ imagen: dataUrl }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'IA no disponible');
+    return d;
+  }
+  // Lee la imagen de la cámara del frame WebXR (raw camera access) a un data URL, o null.
+  function _replArCapturaCamara(frame) {
+    try {
+      const refSpace = _ar.renderer.xr.getReferenceSpace();
+      const vp = frame.getViewerPose(refSpace); if (!vp) return null;
+      const view = (vp.views || []).find(v => v.camera); if (!view) return null;
+      const gl = _ar.renderer.getContext();
+      const binding = _ar.renderer.xr.getBinding && _ar.renderer.xr.getBinding();
+      const tex = binding && binding.getCameraImage && binding.getCameraImage(view.camera);
+      if (!tex) return null;
+      const w = view.camera.width, h = view.camera.height; if (!w || !h) return null;
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      const px = new Uint8Array(w * h * 4);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(fb);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d');
+      const id = c.createImageData(w, h); id.data.set(px); c.putImageData(id, 0, 0);
+      // WebGL es bottom-up: volteamos en vertical
+      const cv2 = document.createElement('canvas'); cv2.width = w; cv2.height = h; const c2 = cv2.getContext('2d');
+      c2.translate(0, h); c2.scale(1, -1); c2.drawImage(cv, 0, 0);
+      return cv2.toDataURL('image/jpeg', 0.7);
+    } catch (e) { return null; }
+  }
+  async function replArIdentificar() {
+    if (!_ar) return;
+    _replArEstado('🔍 Identificando con IA…');
+    const dataUrl = _ar.lastFrame ? _replArCapturaCamara(_ar.lastFrame) : null;
+    if (!dataUrl) { _replArEstado('No pude capturar la cámara aquí (este móvil no da acceso a la imagen en AR). Prueba "¿qué es?" desde la Cámara en directo.'); return; }
+    try {
+      const d = await _replIdentificarIA(dataUrl);
+      // si hay recorrido y superficie, marcar un obstáculo con lo identificado
+      const anc = _replArAnclaje();
+      if (anc && _ar.puntos.length >= 2) {
+        let best = null;
+        for (let i = 1; i < _ar.puntos.length; i++) {
+          const a = _ar.puntos[i - 1], b = _ar.puntos[i], ab = b.clone().sub(a), L2 = ab.lengthSq() || 1;
+          let tt = anc.pos.clone().sub(a).dot(ab) / L2; tt = Math.max(0.02, Math.min(0.98, tt));
+          const q = a.clone().add(ab.multiplyScalar(tt)), dd = q.distanceTo(anc.pos);
+          if (!best || dd < best.d) best = { seg: i - 1, t: tt, d: dd, pos: q };
+        }
+        if (best && best.d <= 1.2) { _ar.obstaculos.push({ seg: best.seg, t: best.t, pos: best.pos, tipo: d.tipo, accion: d.accion_sugerida || 'debajo', dimension_m: 0.3, etiqueta: d.etiqueta }); _ar.ultimoFueObstaculo = true; _ar.ultimoFueComp = false; _replArRedibujar(); }
+      }
+      _replArEstado(`🔍 ${d.etiqueta}${d.tipo ? ' (' + d.tipo + ')' : ''}${d.detalle ? ' · ' + d.detalle : ''}${d.accion_sugerida ? ' · sugiero: ' + d.accion_sugerida : ''}`);
+    } catch (e) { _replArEstado('🔍 ' + (e.message || 'no se pudo identificar')); }
+  }
   function replArCancelar() { if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
   function _replArLimpiar() {
     const overlay = document.getElementById('replArOverlay');
@@ -20717,6 +20774,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replArTerminar   = replArTerminar;
   window.replArCancelar   = replArCancelar;
   window.replArSoportado  = replArSoportado;
+  window.replArIdentificar = replArIdentificar;
+  window.replArColocarComp = replArColocarComp; window.replArCambiarElem = replArCambiarElem;
+  window.replArCambiarMed = replArCambiarMed; window.replArNudge = replArNudge; window.replArRotarComp = replArRotarComp;
 
   // ── Cámara en directo: marcar el recorrido sobre el vídeo y congelar un fotograma ──
   // No necesita AR ni sensores especiales; funciona en cualquier móvil. Los puntos que tocas
@@ -20802,6 +20862,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const v = _camvEl('replCamVideo'); if (v) v.srcObject = null;
   }
   function replCamCancelar() { _camvStop(); _camv = null; }
+  async function replCamIdentificar() {
+    const v = _camvEl('replCamVideo'); if (!v || !v.videoWidth) { toast('La cámara aún no está lista', 'error'); return; }
+    const w = Math.min(1024, v.videoWidth), h = Math.round(v.videoHeight * (w / v.videoWidth));
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(v, 0, 0, w, h);
+    const hint = _camvEl('replCamHint'); if (hint) hint.textContent = '🔍 Identificando con IA…';
+    try { const d = await _replIdentificarIA(cv.toDataURL('image/jpeg', 0.7)); if (hint) hint.textContent = `🔍 ${d.etiqueta}${d.tipo ? ' (' + d.tipo + ')' : ''}${d.detalle ? ' · ' + d.detalle : ''}`; }
+    catch (e) { if (hint) hint.textContent = '🔍 ' + (e.message || 'no se pudo identificar'); }
+  }
+  window.replCamIdentificar = replCamIdentificar;
   async function replCamUsar() {
     if (!_camv) return;
     if (_camv.pts.length < 2) { toast('Marca al menos 2 puntos del recorrido', 'error'); return; }
