@@ -14183,7 +14183,8 @@ function googleAuthUrl(request, env) {
   if (!env.GOOGLE_OAUTH_CLIENT_ID) return err('Google OAuth no configurado', 503);
   // Si hay nonce, lo guardamos en state para recuperarlo después del redirect
   const panelReturn = url.searchParams.get('panel_return') || '';
-  const state = nonce ? JSON.stringify({ nonce, redirect_uri, ...(panelReturn ? { panel_return: panelReturn } : {}) }) : '';
+  const appScheme = url.searchParams.get('app_scheme') || '';  // suite Capacitor: volver a ESA app
+  const state = nonce ? JSON.stringify({ nonce, redirect_uri, ...(panelReturn ? { panel_return: panelReturn } : {}), ...(appScheme ? { app_scheme: appScheme } : {}) }) : '';
   const params = new URLSearchParams({
     client_id:     env.GOOGLE_OAUTH_CLIENT_ID,
     redirect_uri,
@@ -14319,10 +14320,15 @@ async function googleAuthCallback(request, env) {
   });
 }
 
-// Página que devuelve al usuario a la app móvil mediante deep link (alejandraia://auth)
-function _appReturnHtml(titulo, mensaje) {
-  const deep = 'alejandraia://auth?ok=1';
-  const intent = 'intent://auth?ok=1#Intent;scheme=alejandraia;package=com.adrianpadilla.alejandra_ia;end';
+// Página que devuelve al usuario a la app móvil mediante deep link.
+// scheme opcional: si se pasa (p. ej. 'com.padilla585.alejandra' de la suite Capacitor),
+// vuelve a ESA app; si no, mantiene el flujo de la app Flutter del chat (alejandraia://).
+function _appReturnHtml(titulo, mensaje, scheme) {
+  const safe = (typeof scheme === 'string' && /^[a-z0-9.]{3,64}$/.test(scheme)) ? scheme : '';
+  const deep = safe ? (safe + '://auth?ok=1') : 'alejandraia://auth?ok=1';
+  const intent = safe
+    ? ('intent://auth?ok=1#Intent;scheme=' + safe + ';package=' + safe + ';end')
+    : 'intent://auth?ok=1#Intent;scheme=alejandraia;package=com.adrianpadilla.alejandra_ia;end';
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${titulo}</title>
@@ -14349,12 +14355,13 @@ async function googleMobileRedirect(request, env) {
   if (!code) return new Response('<h1>Error: falta código de autorización</h1>', { status: 400, headers: { 'Content-Type': 'text/html' } });
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return new Response('<h1>Google OAuth no configurado</h1>', { status: 503, headers: { 'Content-Type': 'text/html' } });
 
-  // Extraer nonce y panel_return del state parameter
+  // Extraer nonce, panel_return y app_scheme del state parameter
   let nonce = null;
   let panelReturn = null;
+  let appScheme = null;
   const stateRaw = url.searchParams.get('state');
   if (stateRaw) {
-    try { const st = JSON.parse(stateRaw); nonce = st.nonce; panelReturn = st.panel_return || null; } catch(_) {}
+    try { const st = JSON.parse(stateRaw); nonce = st.nonce; panelReturn = st.panel_return || null; appScheme = st.app_scheme || null; } catch(_) {}
   }
 
   const redirectUri = 'https://alejandra-app-api.alejandra-app.workers.dev/auth/google/mobile-redirect';
@@ -14402,7 +14409,7 @@ async function googleMobileRedirect(request, env) {
       try { await sendTelegram(env, `📓 <b>Solicitud acceso Google (móvil)</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}`); } catch(_) {}
     }
     if (nonce) await _saveNonceResult(env, nonce, { pendiente: true, msg: 'Solicitud enviada. El administrador debe aprobarla.' });
-    return _appReturnHtml('Solicitud enviada', 'El administrador debe aprobar tu cuenta. Te devolvemos a la app.');
+    return _appReturnHtml('Solicitud enviada', 'El administrador debe aprobar tu cuenta. Te devolvemos a la app.', appScheme);
   }
 
   const tokenArr = new Uint8Array(32);
@@ -14433,7 +14440,7 @@ async function googleMobileRedirect(request, env) {
     return Response.redirect(panelReturn + '?panel_nonce=' + encodeURIComponent(nonce), 302);
   }
 
-  return _appReturnHtml('Login exitoso', 'Te estamos devolviendo a la app Alejandra…');
+  return _appReturnHtml('Login exitoso', 'Te estamos devolviendo a la app Alejandra…', appScheme);
 }
 
 // ── Nonce store para Google login polling ──────────────────────────────────

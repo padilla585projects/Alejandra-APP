@@ -6622,11 +6622,18 @@ async function _pollNonce(nonce, intentos) {
 // Login de Google en la app nativa: abre Google en un Custom Tab (donde Google SÍ
 // permite OAuth) con redirect al Worker (/auth/google/mobile-redirect, ya registrado
 // en Google Console) y recoge la sesión por polling del nonce, sin salir a la PWA.
+const _APP_SCHEME = 'com.padilla585.alejandra';  // deep link del login (ver AndroidManifest)
 async function loginConGoogleNativo(btn, errEl, btnYa) {
   const Browser = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+  const App = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  // Al volver por el deep link (com.padilla585.alejandra://auth), cerrar el Custom Tab.
+  if (App && !window._appUrlLoginListener) {
+    window._appUrlLoginListener = true;
+    App.addListener('appUrlOpen', function () { try { if (Browser) Browser.close(); } catch (_) {} });
+  }
   const nonce = _genNonce();
   const redirectUri = getAPI() + '/auth/google/mobile-redirect';
-  const res = await fetch(getAPI() + '/auth/google/url?redirect_uri=' + encodeURIComponent(redirectUri) + '&nonce=' + encodeURIComponent(nonce));
+  const res = await fetch(getAPI() + '/auth/google/url?redirect_uri=' + encodeURIComponent(redirectUri) + '&nonce=' + encodeURIComponent(nonce) + '&app_scheme=' + encodeURIComponent(_APP_SCHEME));
   const data = await res.json();
   if (!res.ok || !data.url) { errEl.textContent = data.error || 'Error al conectar con Google'; _resetBtnGoogle(btn); return; }
   if (btn) btn.textContent = 'Abriendo Google…';
@@ -15350,7 +15357,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.61';
+const APP_VERSION = '9.62';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
