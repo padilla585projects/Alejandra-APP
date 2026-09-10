@@ -2205,8 +2205,18 @@ select option{background:var(--surface2);color:var(--text)}
     <div style="position:absolute;bottom:22px;left:12px;right:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;pointer-events:auto">
       <button onclick="replArPunto()" style="grid-column:1/-1;background:#f97316;border:none;color:#fff;font-size:16px;font-weight:800;padding:14px;border-radius:12px;font-family:inherit">📍 Punto</button>
       <button id="btnReplArContacto" onclick="replArContacto()" style="grid-column:1/-1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:14px;font-weight:800;padding:12px;border-radius:12px;font-family:inherit">📱 Tocar con el móvil (pared lisa)</button>
+      <select id="replArElem" onchange="replArCambiarElem()" style="background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
+      <select id="replArMed" onchange="replArCambiarMed()" style="background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
       <select id="replArComp" style="grid-column:1/-1;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:11px;font-family:inherit;font-size:13px;font-weight:700"></select>
       <button onclick="replArColocarComp()" style="grid-column:1/-1;background:#a855f7;border:none;color:#fff;font-size:14px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">➕ Colocar complemento</button>
+      <div style="grid-column:1/-1;display:flex;gap:6px;align-items:center;background:rgba(0,0,0,.5);border-radius:12px;padding:6px 8px">
+        <span style="color:#fff;font-size:11px;font-weight:700;white-space:nowrap">Ajustar lo último:</span>
+        <button onclick="replArNudge(-1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">⬅</button>
+        <button onclick="replArNudge(0,1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">⬆</button>
+        <button onclick="replArNudge(0,-1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">⬇</button>
+        <button onclick="replArNudge(1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">➡</button>
+        <button onclick="replArRotarComp()" style="flex:1;background:rgba(168,85,247,.9);border:none;color:#fff;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">↻</button>
+      </div>
       <button onclick="replArObstaculo()" style="background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">⚠️ Obstáculo</button>
       <button onclick="replArDeshacer()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">↩ Deshacer</button>
       <button onclick="replArCancelar()" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;font-weight:700;padding:11px;border-radius:12px;font-family:inherit">✖ Cancelar</button>
@@ -20271,7 +20281,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const viewer = await session.requestReferenceSpace('viewer');
       _ar.hitSource = await session.requestHitTestSource({ space: viewer });
       _replArEstado('Apunta al techo o a la pared. Con el anillo naranja sobre el punto, pulsa 📍 Punto. Si la superficie es lisa y no aparece el anillo, acerca el móvil al punto y pulsa 📱 Tocar.');
-      _replArLlenarComplementos();
+      _replArLlenarComplementos(); _replArLlenarMaterial();
       renderer.setAnimationLoop((t, frame) => _replArFrame(t, frame));
     } catch (e) {
       _replArLimpiar();
@@ -20559,6 +20569,60 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     _replArRedibujar();
     const nom = (REPL_COMPLEMENTOS.find(x => x.key === key) || {}).nombre || 'complemento';
     _replArEstado(`${nom} colocado · ${_ar.complementos.length} complemento(s). Sigue marcando o pulsa ✅ Terminar.`);
+  }
+  // ── Elegir material y medida DENTRO del AR (sin salir de la sesión) ──
+  function _replArAnchoDe(el, params) { return ((+params.ancho_mm || +params.diametro_mm || el.reglas?.ancho_mm || 100) / 1000); }
+  function _replArLlenarMaterial() {
+    const se = document.getElementById('replArElem'); if (se) se.innerHTML = _replCatalogo.map(e => `<option value="${e.key}" ${e.key === _ar.elemento.key ? 'selected' : ''}>${e.icono || ''} ${_escHtml(e.nombre)}</option>`).join('');
+    _replArLlenarMedida();
+  }
+  function _replArLlenarMedida() {
+    const sm = document.getElementById('replArMed'); if (!sm) return;
+    const o = _ar.elemento.opciones || {}, p = _ar.params, opts = [];
+    if (o.variantes?.length) o.variantes.forEach(v => opts.push({ v: 'variante:' + v, t: v, sel: p.variante === v }));
+    if (o.anchos_mm?.length) o.anchos_mm.forEach(a => opts.push({ v: 'ancho_mm:' + a, t: a + ' mm', sel: +p.ancho_mm === a }));
+    if (o.diametros_mm?.length) o.diametros_mm.forEach(d => opts.push({ v: 'diametro_mm:' + d, t: 'Ø' + d + ' mm', sel: +p.diametro_mm === d }));
+    sm.style.display = opts.length ? '' : 'none';
+    sm.innerHTML = opts.map(x => `<option value="${x.v}" ${x.sel ? 'selected' : ''}>${_escHtml(x.t)}</option>`).join('');
+  }
+  function replArCambiarElem() {
+    if (!_ar) return;
+    const key = document.getElementById('replArElem').value;
+    const el = _replCatalogo.find(e => e.key === key); if (!el) return;
+    _ar.elemento = el; _ar.params = _replParamsPorDefecto(el); _ar.color = el.color || '#f97316'; _ar.anchoM = _replArAnchoDe(el, _ar.params);
+    _replArLlenarMedida(); _replArRedibujar();
+  }
+  function replArCambiarMed() {
+    if (!_ar) return;
+    const [k, val] = (document.getElementById('replArMed').value || '').split(':'); if (!k) return;
+    _ar.params[k] = (k === 'variante') ? val : +val;
+    _ar.anchoM = _replArAnchoDe(_ar.elemento, _ar.params);
+    _replArRedibujar();
+  }
+  // ── Mover / rotar lo último colocado (punto del recorrido o complemento) ──
+  function _replArUltimo() {
+    if (_ar.ultimoFueComp && _ar.complementos.length) return { tipo: 'comp', obj: _ar.complementos[_ar.complementos.length - 1] };
+    if (_ar.puntos.length) return { tipo: 'punto', idx: _ar.puntos.length - 1 };
+    return null;
+  }
+  function replArNudge(dx, dy) {
+    if (!_ar) return; const u = _replArUltimo(); if (!u) { _replArEstado('Nada que ajustar todavía.'); return; }
+    const THREE = _ar.THREE, paso = 0.02;                         // 2 cm por toque
+    const up = new THREE.Vector3(0, 1, 0);
+    const fwd = (_ar.camDir || new THREE.Vector3(0, 0, -1)).clone(); fwd.y = 0; if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, -1); fwd.normalize();
+    const right = new THREE.Vector3().crossVectors(fwd, up).normalize();   // relativo a la pantalla
+    const delta = right.multiplyScalar(dx * paso).add(up.clone().multiplyScalar(dy * paso));
+    if (u.tipo === 'punto') _ar.puntos[u.idx].add(delta); else u.obj.pos.add(delta);
+    _replArRedibujar();
+  }
+  function replArRotarComp() {
+    if (!_ar) return; const u = _replArUltimo();
+    if (!u || u.tipo !== 'comp') { _replArEstado('El giro solo aplica al último complemento colocado.'); return; }
+    const THREE = _ar.THREE;
+    const q = new THREE.Quaternion(u.obj.quat.x, u.obj.quat.y, u.obj.quat.z, u.obj.quat.w);
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 12));  // 15° sobre su eje
+    u.obj.quat = { x: q.x, y: q.y, z: q.z, w: q.w };
+    _replArRedibujar();
   }
   function replArCancelar() { if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
   function _replArLimpiar() {
