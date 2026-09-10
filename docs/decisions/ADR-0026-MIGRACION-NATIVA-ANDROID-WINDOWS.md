@@ -7,6 +7,14 @@
 - Decisores: Director del Proyecto
 - Depende de: ADR-0025 (rediseño del Replanteo, el AR es el motivo de ir a nativo), ADR-0007 (autonomía), DEPT-01 (aislamiento)
 
+## Aclaración (Adrián, 2026-09-10): no es un reemplazo, es multi-plataforma
+
+No se "migra" abandonando la web: Capacitor y Tauri **empaquetan la MISMA web** como superficies
+adicionales (Android y Windows). **La PWA sigue viva** y Alejandra se usa donde se quiera (web,
+Android, Windows) a la vez, con el mismo backend. Cuánto se apoya en lo nativo depende de las
+funciones que se metan; **decidir "migrar del todo" o no queda para el futuro**. Por eso el título
+dice "migración" pero el alcance real es **empaquetado multi-plataforma incremental y reversible**.
+
 ## Contexto
 
 La suite es una **PWA** (`index.html` móvil + `panel.html` oficina) sobre backend Cloudflare
