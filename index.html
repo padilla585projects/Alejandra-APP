@@ -2267,7 +2267,7 @@ select option{background:var(--surface2);color:var(--text)}
       <button id="btnReplArRotar" onclick="replArRotarComp()" style="display:none;background:rgba(168,85,247,.92);border:none;color:#fff;font-size:13px;font-weight:800;padding:10px;border-radius:10px;font-family:inherit">↻ Girar complemento 15°</button>
     </div>
     <!-- Botón flotante de modificación: aparece solo cuando hay algo colocado -->
-    <button id="btnReplArMod" onclick="_replArToggleMod()" title="Mover / girar lo último" style="display:none;position:absolute;right:12px;bottom:92px;width:42px;height:42px;align-items:center;justify-content:center;border-radius:50%;background:rgba(168,85,247,.95);border:2px solid rgba(255,255,255,.55);color:#fff;font-size:18px;pointer-events:auto;box-shadow:0 3px 10px rgba(0,0,0,.45)">✥</button>
+    <button id="btnReplArMod" onclick="_replArToggleMod()" title="Mover / girar lo último" style="display:flex;position:absolute;right:12px;bottom:92px;width:42px;height:42px;align-items:center;justify-content:center;border-radius:50%;background:rgba(168,85,247,.95);border:2px solid rgba(255,255,255,.55);color:#fff;font-size:18px;pointer-events:auto;box-shadow:0 3px 10px rgba(0,0,0,.45)">✥</button>
 
     <!-- Barra inferior compacta (siempre visible) -->
     <div style="position:absolute;bottom:calc(8px + env(safe-area-inset-bottom, 0px));left:8px;right:8px;display:flex;flex-direction:column;gap:6px;pointer-events:auto">
@@ -15442,7 +15442,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.67';
+const APP_VERSION = '9.68';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -21037,9 +21037,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // complemento. Se llama tras cada cambio (vía _replArEstadoResumen y al colocar complemento).
   function _replArActualizarMod() {
     if (!_ar) return;
+    // El botón ✥ está siempre visible (si no hay nada que ajustar, los controles lo avisan).
     var hay = (_ar.puntos && _ar.puntos.length) || (_ar.complementos && _ar.complementos.length);
-    var fab = document.getElementById('btnReplArMod'); if (fab) fab.style.display = hay ? 'flex' : 'none';
-    if (!hay) { var p = document.getElementById('replArPanelMod'); if (p) p.style.display = 'none'; }
+    var fab = document.getElementById('btnReplArMod'); if (fab) fab.style.display = 'flex';
     var u = (typeof _replArUltimo === 'function') ? _replArUltimo() : null;
     var br = document.getElementById('btnReplArRotar'); if (br) br.style.display = (u && u.tipo === 'comp') ? '' : 'none';
   }
