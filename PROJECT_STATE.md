@@ -1,6 +1,15 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-09-08
+- Actualizado: 2026-09-10
+- Estado (2026-09-10): **App Android (Capacitor) en marcha y Replanteo AR muy mejorado.**
+  Desplegado v9.60→v9.67: app Android F1 (envuelve la suite, descargable desde la PWA) + F2 (login
+  Google en Custom Tab con retorno por deep link, pulido nativo, descargas/compartir nativas). En el
+  Replanteo AR: HUD compacto (cámara ~85%, botón flotante ✥), **montaje de bandeja** (colgada Hilti MQ /
+  pared perpendicular / pared en plano) + **tapa**, con desglose del **kit Hilti MQ** (MQ-41, varilla
+  M10/M8, MQA, MQN, anclaje) en el cálculo del pedido. Multi-plataforma (ADR-0026 Propuesto): la PWA
+  sigue viva. Toolchain Rust+VS Build Tools instalado para Windows/Tauri (sin usar aún). Pendiente
+  (acordado): auto-sugerencia del montaje + render 3D del soporte + bandeja completa + referencias Hilti
+  exactas; F3 AR nativo ARCore; `.msi` de Windows. Detalle en `HANDOFF.md` y `CHANGELOG.md`.
 - Estado (2026-09-08, noche): **REPL-ROUTING-01 desplegado y verificado, y REPLANTEO-08 probado
   de extremo a extremo por chat con sesión real.** Al hacer esa prueba pendiente, la primera
   pregunta —«¿qué replanteos hay?»— destapó que no matcheaba ninguna regla de `REGEX_ROUTES`,
