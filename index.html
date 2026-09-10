@@ -2242,15 +2242,22 @@ select option{background:var(--surface2);color:var(--text)}
         <button onclick="replArColocarComp()" style="background:#a855f7;border:none;color:#fff;font-size:13px;font-weight:800;padding:10px 12px;border-radius:10px;font-family:inherit;white-space:nowrap">➕ Colocar</button>
       </div>
       <button id="btnReplArContacto" onclick="replArContacto()" style="background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:13px;font-weight:800;padding:10px;border-radius:10px;font-family:inherit">📱 Tocar con el móvil (pared lisa)</button>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="color:#fff;font-size:11px;font-weight:700;white-space:nowrap">Ajustar:</span>
-        <button onclick="replArNudge(-1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">⬅</button>
-        <button onclick="replArNudge(0,1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">⬆</button>
-        <button onclick="replArNudge(0,-1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">⬇</button>
-        <button onclick="replArNudge(1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">➡</button>
-        <button onclick="replArRotarComp()" style="flex:1;background:rgba(168,85,247,.9);border:none;color:#fff;font-weight:800;padding:9px;border-radius:9px;font-family:inherit">↻</button>
-      </div>
     </div>
+
+    <!-- Opciones de modificación: mini-panel que sale del botón flotante ✥ (mover/girar lo
+         último colocado). Se abre solo si hace falta. REPL-AR-UI-03. -->
+    <div id="replArPanelMod" style="display:none;position:absolute;right:10px;bottom:192px;background:rgba(0,0,0,.85);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:8px;width:66vw;max-width:250px">
+      <div style="color:#fff;font-size:11px;font-weight:700">Ajustar lo último (2 cm)</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="replArNudge(-1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:11px;border-radius:9px;font-family:inherit">⬅</button>
+        <button onclick="replArNudge(0,1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:11px;border-radius:9px;font-family:inherit">⬆</button>
+        <button onclick="replArNudge(0,-1)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:11px;border-radius:9px;font-family:inherit">⬇</button>
+        <button onclick="replArNudge(1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:11px;border-radius:9px;font-family:inherit">➡</button>
+      </div>
+      <button id="btnReplArRotar" onclick="replArRotarComp()" style="display:none;background:rgba(168,85,247,.92);border:none;color:#fff;font-size:13px;font-weight:800;padding:10px;border-radius:10px;font-family:inherit">↻ Girar complemento 15°</button>
+    </div>
+    <!-- Botón flotante de modificación: aparece solo cuando hay algo colocado -->
+    <button id="btnReplArMod" onclick="_replArToggleMod()" title="Mover / girar lo último" style="display:none;position:absolute;right:12px;bottom:130px;width:52px;height:52px;align-items:center;justify-content:center;border-radius:50%;background:rgba(168,85,247,.95);border:2px solid rgba(255,255,255,.55);color:#fff;font-size:22px;pointer-events:auto;box-shadow:0 3px 10px rgba(0,0,0,.45)">✥</button>
 
     <!-- Barra inferior compacta (siempre visible) -->
     <div style="position:absolute;bottom:calc(10px + env(safe-area-inset-bottom, 0px));left:8px;right:8px;display:flex;flex-direction:column;gap:8px;pointer-events:auto">
@@ -15425,7 +15432,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.64';
+const APP_VERSION = '9.65';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -20667,6 +20674,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     _replArEstado((n < 2
       ? (n === 0 ? 'Apunta al primer punto del recorrido y pulsa 📍 Punto.' : '1 punto. Apunta al siguiente y pulsa 📍 Punto.')
       : `${n} puntos · ${_ar.obstaculos.length} obstáculo(s) · ${_replArLongitud().toFixed(2).replace('.', ',')} m medidos${_replArResumenMetodos()}${_ar.tieneDepth ? '' : ' · (este móvil no da profundidad: los obstáculos se marcan a mano)'}`) + _replArInfoSup());
+    _replArActualizarMod();
   }
   function replArPunto() {
     if (!_ar) return;
@@ -20773,10 +20781,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (_ar.hit && _ar.reticle.visible) quat.setFromRotationMatrix(_ar.reticle.matrix);            // pegado a la superficie
     else if (_ar.camDir) quat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _ar.camDir.clone().negate().normalize());
     _ar.complementos.push({ key, pos: a.pos.clone(), quat: { x: quat.x, y: quat.y, z: quat.z, w: quat.w } });
-    _ar.ultimoFueObstaculo = false;
+    _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = true;   // mover/girar afectan a este complemento
     _replArRedibujar();
     const nom = (REPL_COMPLEMENTOS.find(x => x.key === key) || {}).nombre || 'complemento';
     _replArEstado(`${nom} colocado · ${_ar.complementos.length} complemento(s). Sigue marcando o pulsa ✅ Terminar.`);
+    _replArActualizarMod();
   }
   // ── Elegir material y medida DENTRO del AR (sin salir de la sesión) ──
   function _replArAnchoDe(el, params) { return ((+params.ancho_mm || +params.diametro_mm || el.reglas?.ancho_mm || 100) / 1000); }
@@ -20973,8 +20982,30 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     p.style.display = abierto ? 'none' : 'flex';
     var b = document.getElementById('btnReplArOpts');
     if (b) b.style.background = abierto ? 'rgba(0,0,0,.6)' : 'rgba(168,85,247,.92)';
+    if (!abierto) { var pm = document.getElementById('replArPanelMod'); if (pm) pm.style.display = 'none'; }  // no solapar
   }
   window._replArToggleOpts = _replArToggleOpts;
+
+  // Botón flotante ✥ de modificación: muestra/oculta el mini-panel de mover/girar.
+  function _replArToggleMod() {
+    var p = document.getElementById('replArPanelMod'); if (!p) return;
+    var abierto = p.style.display === 'flex';
+    p.style.display = abierto ? 'none' : 'flex';
+    if (!abierto) { var po = document.getElementById('replArPanelOpts'); if (po) po.style.display = 'none'; var bo = document.getElementById('btnReplArOpts'); if (bo) bo.style.background = 'rgba(0,0,0,.6)'; }
+  }
+  window._replArToggleMod = _replArToggleMod;
+
+  // Muestra el botón ✥ solo cuando hay algo colocado, y el "girar" solo si lo último es un
+  // complemento. Se llama tras cada cambio (vía _replArEstadoResumen y al colocar complemento).
+  function _replArActualizarMod() {
+    if (!_ar) return;
+    var hay = (_ar.puntos && _ar.puntos.length) || (_ar.complementos && _ar.complementos.length);
+    var fab = document.getElementById('btnReplArMod'); if (fab) fab.style.display = hay ? 'flex' : 'none';
+    if (!hay) { var p = document.getElementById('replArPanelMod'); if (p) p.style.display = 'none'; }
+    var u = (typeof _replArUltimo === 'function') ? _replArUltimo() : null;
+    var br = document.getElementById('btnReplArRotar'); if (br) br.style.display = (u && u.tipo === 'comp') ? '' : 'none';
+  }
+  window._replArActualizarMod = _replArActualizarMod;
 
   // ── Cámara en directo: marcar el recorrido sobre el vídeo y congelar un fotograma ──
   // No necesita AR ni sensores especiales; funciona en cualquier móvil. Los puntos que tocas
