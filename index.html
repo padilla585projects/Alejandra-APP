@@ -451,6 +451,30 @@ select option{background:var(--surface2);color:var(--text)}
 </head>
 <body>
 
+<!-- Banner de descarga de la app Android (.apk) — solo en móvil Android, fuera de la app nativa -->
+<div id="apkBanner" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:9500;background:#0b0f14;border-top:1px solid var(--border);padding:10px 12px;align-items:center;gap:10px;box-shadow:0 -6px 20px rgba(0,0,0,.4)">
+  <span style="font-size:22px">📱</span>
+  <div style="flex:1;min-width:0;line-height:1.25">
+    <div style="font-weight:800;font-size:13px;color:var(--text)">Instala Alejandra en tu Android</div>
+    <div style="font-size:11px;color:var(--muted)">App nativa: cámara, sensores y replanteo AR</div>
+  </div>
+  <a href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download style="text-decoration:none;background:var(--accent);color:#04120a;font-weight:800;font-size:13px;padding:9px 13px;border-radius:10px;white-space:nowrap">⬇️ Descargar</a>
+  <button onclick="_cerrarApkBanner()" aria-label="Cerrar" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:2px 6px">×</button>
+</div>
+<script>
+  function _cerrarApkBanner(){ try{ localStorage.setItem('apkBannerDismiss','1'); }catch(_){}; var b=document.getElementById('apkBanner'); if(b) b.style.display='none'; }
+  (function(){
+    try {
+      var esAndroid = /Android/i.test(navigator.userAgent);
+      var enCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+      var descartado = false; try { descartado = localStorage.getItem('apkBannerDismiss')==='1'; } catch(_){}
+      if (esAndroid && !enCapacitor && !descartado) {
+        window.addEventListener('DOMContentLoaded', function(){ var b=document.getElementById('apkBanner'); if(b) b.style.display='flex'; });
+      }
+    } catch(_){}
+  })();
+</script>
+
 <!-- ══════════════════════════════════════════
      WIZARD DE BIENVENIDA (NEW-02)
 ══════════════════════════════════════════ -->
@@ -4238,6 +4262,12 @@ select option{background:var(--surface2);color:var(--text)}
           <div class="settings-row"><span>Obra</span><strong id="ajustesObra">—</strong></div>
           <div class="settings-row" id="ajDeptRow"><span>Departamento</span><strong id="ajustesDept">—</strong></div>
           <button class="btn-primary btn-danger" style="margin-top:12px;font-size:14px" onclick="cerrarSesion()">🚪 Cerrar mi sesión</button>
+        </div>
+        <!-- App Android (.apk) — descarga de la app nativa (Capacitor) -->
+        <div class="settings-section" id="seccionAppAndroid" style="margin-top:16px">
+          <div class="settings-title">📱 App para Android</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Instala Alejandra como app en el móvil (acceso a cámara, sensores y, próximamente, replanteo en AR nativo). Descarga el .apk e instálalo (permite "orígenes desconocidos" si te lo pide).</div>
+          <a id="btnDescargarApk" class="btn-primary" style="display:block;text-align:center;text-decoration:none;font-size:14px" href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download>⬇️ Descargar app Android (.apk)</a>
         </div>
         <!-- Telegram personal -->
         <div class="settings-section" id="seccionMiTelegram" style="margin-top:16px;display:none">
@@ -15264,7 +15294,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.59';
+const APP_VERSION = '9.60';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
