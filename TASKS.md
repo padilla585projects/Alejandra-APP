@@ -1,5 +1,17 @@
 # TASKS — Cola operativa inmediata
 
+Estado (2026-09-10): **MIGRACIÓN NATIVA — plan escrito (ADR-0026, Propuesto).** Decidido con
+Adrián; aceptarlo es humano (ADR-0007). No implementado.
+- **Android (la SUITE, no el chat):** **Capacitor** envolviendo la PWA + **módulo AR nativo ARCore**
+  para el replanteo. Condición: Capacitor da **acceso completo al móvil** (cámara/ficheros/sensores/
+  GPS/segundo plano/notificaciones + plugin ARCore) — por eso, no TWA. Mismo backend.
+- **Windows (Alejandra Office / panel):** **Tauri** (WebView2), para margen a futuras herramientas de
+  escritorio. Electron descartado por peso; PWA/MSIX descartado por falta de margen nativo.
+- **Aparte (ya existe):** el chat de Alejandra en Android es la app **Flutter `alejandra-ia`**
+  (documentada en SESION.md), independiente de la suite.
+- **Fases:** F1 Tauri del panel · F2 Capacitor APK de la suite · F3 módulo AR ARCore. Prueba en el
+  HTC U11 (ADB) por fase. Tooling nuevo: Android Studio/Kotlin + Rust/Tauri.
+
 Estado (actualizado 2026-09-10): **REPL-REDISEÑO F1–F4 — IMPLEMENTADO Y DESPLEGADO.** ADR-0025
 aceptado. En producción: **v9.51** (F1) y **v9.52** (F2/F3/F4). Worker + Pages desplegados y
 verificados (Pages sirve 9.52; deploy del worker success). PRs #180 #181 #182 (F1), #184 (F2),
