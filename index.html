@@ -2218,8 +2218,9 @@ select option{background:var(--surface2);color:var(--text)}
         <button onclick="replArNudge(1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">➡</button>
         <button onclick="replArRotarComp()" style="flex:1;background:rgba(168,85,247,.9);border:none;color:#fff;font-weight:800;padding:8px;border-radius:9px;font-family:inherit">↻</button>
       </div>
-      <button onclick="replArIdentificar()" style="grid-column:1/-1;background:rgba(139,92,246,.95);border:none;color:#fff;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">🔍 ¿Qué es esto? (IA)</button>
-      <button onclick="replArObstaculo()" style="background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">⚠️ Obstáculo</button>
+      <button onclick="replArIdentificar()" style="background:rgba(139,92,246,.95);border:none;color:#fff;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">🔍 ¿Qué es? (IA)</button>
+      <button onclick="replArFoto()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">📸 Foto</button>
+      <button onclick="replArObstaculo()" style="grid-column:1/-1;background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">⚠️ Obstáculo</button>
       <button onclick="replArDeshacer()" style="background:rgba(255,255,255,.92);border:none;color:#111;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">↩ Deshacer</button>
       <button onclick="replArCancelar()" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;font-weight:700;padding:11px;border-radius:12px;font-family:inherit">✖ Cancelar</button>
       <button onclick="replArTerminar()" style="background:#22c55e;border:none;color:#fff;font-size:13px;font-weight:800;padding:11px;border-radius:12px;font-family:inherit">✅ Terminar</button>
@@ -18797,6 +18798,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         calc: r.material?.length ? { longitud_m: r.longitud_m, material: r.material, reglas: r.reglas, giros: null } : null,
         origen: r.origen || 'foto', puntos_3d: Array.isArray(tr.puntos_3d) ? tr.puntos_3d : null,
         complementos: Array.isArray(tr.complementos) ? tr.complementos : [],
+        fotosDoc: [], fotosN: (() => { try { return JSON.parse(r.fotos_json || '[]').length; } catch { return 0; } })(),
         estado: r.estado || 'borrador', modo: 'trazar', cambiado: false, notas: r.notas || '',
         creado_por: r.creado_por, creado_en: r.creado_en,
       };
@@ -19883,6 +19885,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (_repl.origen === 'ar') partes.push(`<span style="color:#22c55e">📱 medido en AR (vista en planta)</span>`);
     partes.push(`<span>📍 <b>${_repl.puntos.length}</b> puntos</span>`);
     if (_repl.video_r2_key || _repl.videoBlob) partes.push(`<span style="color:#22c55e">🎥 vídeo del recorrido${_repl.videoBlob && !_repl.video_r2_key ? ' (se sube al guardar)' : ''}</span>`);
+    { const nf = (_repl.fotosN || 0) + ((_repl.fotosDoc || []).length); if (nf) partes.push(`<span style="color:#22c55e">📸 ${nf} foto(s)${(_repl.fotosDoc || []).length ? ' (se suben al guardar)' : ''}</span>`); }
     const _hs = _replHs();
     if (_hs.length > 1) {
       partes.push(`<span>📐 ${_hs.map((x, k) => `<b style="color:${_replColorPlano(k)}">plano ${k + 1}</b>`).join(' + ')} (cada tramo con el suyo)</span>`);
@@ -20036,6 +20039,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           if (vr.ok) { _repl.video_r2_key = 'set'; _repl.videoBlob = null; replActualizarInfo(); toast('🎥 Vídeo del recorrido guardado'); }
           else { toast('Guardado, pero el vídeo no se pudo subir', 'error'); }
         } catch (_) { toast('Guardado, pero el vídeo no se pudo subir', 'error'); }
+      }
+      // ADR-0025: subir las fotos de documentación hechas en el AR
+      if (_repl.fotosDoc && _repl.fotosDoc.length && _repl.id) {
+        let subidas = 0;
+        for (const durl of _repl.fotosDoc.slice()) {
+          try {
+            const b = await (await fetch(durl)).blob();
+            const fr = await apiCallRaw(`/replanteos/${_repl.id}/foto-doc`, { method: 'POST', headers: { 'Content-Type': b.type || 'image/jpeg' }, body: b });
+            if (fr.ok) subidas++;
+          } catch (_) {}
+        }
+        _repl.fotosN = (_repl.fotosN || 0) + subidas; _repl.fotosDoc = []; replActualizarInfo();
+        if (subidas) toast(`📸 ${subidas} foto(s) de documentación guardadas`);
       }
     } catch (e) {
       toast('❌ ' + e.message, 'error');
@@ -20273,7 +20289,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
       const reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
       reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
-      _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], obstaculos: [], complementos: [], grupo: new THREE.Group(),
+      _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], obstaculos: [], complementos: [], fotosDoc: [], grupo: new THREE.Group(),
               color: el.color || '#f97316', anchoM, titulo, elemento: el, params, hit: null, tieneDepth: false, ultimoAviso: 0,
               // REPLANTEO-05
               metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false, guiaHasta: 0 };
@@ -20709,6 +20725,13 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       _replArEstado(`🔍 ${d.etiqueta}${d.tipo ? ' (' + d.tipo + ')' : ''}${d.detalle ? ' · ' + d.detalle : ''}${d.accion_sugerida ? ' · sugiero: ' + d.accion_sugerida : ''}`);
     } catch (e) { _replArEstado('🔍 ' + (e.message || 'no se pudo identificar')); }
   }
+  function replArFoto() {
+    if (!_ar) return;
+    const dataUrl = _ar.lastFrame ? _replArCapturaCamara(_ar.lastFrame) : null;
+    if (!dataUrl) { _replArEstado('No pude capturar la foto aquí (este móvil no da acceso a la imagen en AR).'); return; }
+    _ar.fotosDoc.push(dataUrl);
+    _replArEstado(`📸 Foto ${_ar.fotosDoc.length} guardada (documentación). Se subirán al terminar y guardar.`);
+  }
   function replArCancelar() { if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
   function _replArLimpiar() {
     const overlay = document.getElementById('replArOverlay');
@@ -20756,6 +20779,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
       referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
       complementos: (_ar.complementos || []).map(c => ({ key: c.key, x: +c.pos.x.toFixed(3), y: +c.pos.y.toFixed(3), z: +c.pos.z.toFixed(3), q: c.quat })),
+      fotosDoc: (_ar.fotosDoc || []).slice(),
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
     };
     replCerrarNuevo();
@@ -20775,6 +20799,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replArCancelar   = replArCancelar;
   window.replArSoportado  = replArSoportado;
   window.replArIdentificar = replArIdentificar;
+  window.replArFoto = replArFoto;
   window.replArColocarComp = replArColocarComp; window.replArCambiarElem = replArCambiarElem;
   window.replArCambiarMed = replArCambiarMed; window.replArNudge = replArNudge; window.replArRotarComp = replArRotarComp;
 
