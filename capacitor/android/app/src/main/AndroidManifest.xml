@@ -33,6 +33,9 @@
 
         </activity>
 
+        <!-- ARCore opcional (F3): la app se instala también en móviles sin ARCore (HTC U11) -->
+        <meta-data android:name="com.google.ar.core" android:value="optional" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
