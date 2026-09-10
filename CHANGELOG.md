@@ -20,6 +20,53 @@ empaquetada como app Android sin abandonar la PWA (mismo backend, misma web).
 - PR #205 → `35ac886`. Pages desplegado y verificado (prod sirve 9.60, banner/Ajustes presentes,
   APK 302→200 / 4.117.690 B / `application/vnd.android.package-archive`).
 
+### Fixed (2026-09-10 — Login de Google en la app Android, v9.61)
+
+- En la app Capacitor, "Entrar con Google" sacaba al usuario a la PWA de Chrome: el login hacía
+  `window.location` a Google **dentro del WebView** (Google prohíbe OAuth en WebView) y el redirect
+  a Pages abría el navegador. **Fix** reutilizando el flujo móvil que ya existía para la app Flutter
+  (`/auth/google/mobile-redirect` + `check-nonce`, ya registrado en Google): en nativo se abre Google
+  en **Custom Tab** (`@capacitor/browser`) y la sesión se recoge por **polling del nonce**; el flujo
+  web/PWA queda idéntico. AndroidManifest con permisos (cámara/mic para la cámara en directo, GPS,
+  almacenamiento, notificaciones). `worker.js`: `departamento` añadido al `sessionData` móvil.
+  PR #208 → `0992a0e`. APK `app-android-v2` (7,4 MB). **Requiere reinstalar el APK.**
+
+### Added (2026-09-10 — App Android F2: nativo, v9.62/9.63)
+
+- **Retorno automático del login (v9.62):** el Custom Tab redirige a `com.padilla585.alejandra://auth`
+  (deep link propio, intent-filter en `MainActivity`) → la app vuelve al frente sola. `googleAuthUrl`/
+  `googleMobileRedirect` propagan `app_scheme` (aditivo; la app Flutter mantiene `alejandraia://`).
+  `+@capacitor/app`. PR #209 → APK `app-android-v3`.
+- **Pulido nativo + descargas (v9.63):** barra de estado acorde al tema, ocultar splash, aviso de
+  conexión (`+status-bar/splash-screen/network`). Helper `_guardarCompartirBlob` (Filesystem+Share) y
+  `_abrirUrlExterna` (Browser) porque el WebView no soporta `<a download>` ni `window.open`; aplicado a
+  albaranes, documentos, informe docx, fotos, ver albarán y enlace de Telegram. PR #210 → `app-android-v4`.
+
+### Changed (2026-09-10 — Rediseño del HUD del AR del Replanteo, v9.64/9.65/9.67)
+
+- **HUD compacto (v9.64):** la botonera del AR tapaba ~60% de la pantalla. Rediseñado a una barra
+  inferior mínima (📍 Punto + iconos) con material/medida/complemento/ajuste en un panel desplegable
+  con ⚙️. Cámara ~70% (verificado en móvil). PR #211.
+- **Opciones de modificación en botón flotante ✥ (v9.65):** mover/girar lo último salen de un FAB que
+  aparece al colocar algo; "girar" solo si lo último es un complemento (la medida ya se autooculta si
+  el material no la tiene). Fix lateral: `replArColocarComp` no marcaba `_ar.ultimoFueComp`. PR #212.
+- **Barra aún más pequeña (v9.67):** iconos/botones reducidos, cámara ~85%. PR #214.
+
+### Added (2026-09-10 — Montaje de bandeja + tapa + cuelgue Hilti MQ, v9.66)
+
+- Las bandejas (rejilla/chapa/escalera) distinguen **montaje**: **colgada del techo (kit Hilti MQ)**,
+  **en pared perpendicular** (ménsula) y **en pared en plano** (montante + abrazadera), cada uno con su
+  soporte; y **tapa** opcional. `worker.js`: `MONTAJES_BANDEJA`, `reglas.montajes/montaje_default/
+  admite_tapa/tapa_nombre`; `calcularMaterialReplanteo` aplica el soporte del montaje y, si es colgado
+  con `kit:'hilti_mq'`, **desglosa el kit real**: carril **MQ-41** transversal, **varilla M10/M8**
+  (2×soporte×altura), conector **MQA**, tuerca de canal **MQN**, **anclaje a hormigón**, y carril MQ-41
+  de techo opcional. UI en el panel ⚙️ del AR (montaje + tapa; varilla + carril-techo si colgado).
+  Decisiones de obra: varilla M10 por defecto, 2 varillas/soporte, carril de techo por replanteo.
+  **Referencias Hilti a validar en obra.** PR #213 → `e59eac9`.
+- Pendiente (siguiente): editor sobre foto con los mismos selectores, **auto-sugerencia** del montaje
+  por el plano (techo→colgado / pared→pared), **render 3D del soporte** por montaje y bandeja completa,
+  altura de cuelgue editable.
+
 ### Added (2026-09-09/10 — Rediseño del Replanteo F1–F4, ADR-0025, v9.51 + v9.52)
 
 Rediseño completo de la herramienta de Replanteo (ADR-0025, aceptado por Adrián), en cuatro

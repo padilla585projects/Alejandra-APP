@@ -1,5 +1,32 @@
 # Handoff — Alejandra 2.0
 
+## APP-ANDROID + REPLANTEO-AR-V4 (2026-09-10, v9.60→v9.67, desplegado)
+
+- **Agente:** Claude (Opus 4.8). **ADR:** `docs/decisions/ADR-0026-MIGRACION-NATIVA-ANDROID-WINDOWS.md`
+  (Propuesto) + `docs/PLAN-APP-ANDROID.md` / `docs/PLAN-APP-WINDOWS.md`. Detalle en CHANGELOG.
+- **App Android (Capacitor, `capacitor/`):** F1 (envuelve la suite, descargable desde la PWA) + F2
+  (login Google en Custom Tab con retorno por deep link `com.padilla585.alejandra://`, pulido nativo,
+  descargas/compartir con Filesystem+Share). Plugins: app, browser, status-bar, splash-screen, share,
+  filesystem, network. APK debug distribuido por GitHub Releases (`releases/latest/download/alejandra.apk`,
+  hoy `app-android-v4`). Login: ver [[reference_login_google_movil_nonce]] en memoria.
+- **Replanteo AR:** HUD rehecho compacto (barra mínima + panel ⚙️ + botón flotante ✥ para mover/girar,
+  oculto si no hay nada). **Montaje de bandeja** (colgada Hilti MQ / pared perp / pared plano) + **tapa**,
+  con desglose del **kit Hilti MQ** en el cálculo (MQ-41, varilla M10/M8, MQA, MQN, anclaje).
+- **Toolchain instalado en la máquina de Adrián:** Android Studio jbr (JDK 21) + SDK; Rust + VS C++
+  Build Tools (para Tauri/Windows, aún sin usar). Build APK: `cd capacitor && npx cap sync android &&
+  cd android && JAVA_HOME=<jbr> ANDROID_HOME=<sdk> ./gradlew assembleDebug`; subir asset a nueva Release.
+- **PENDIENTE (acordado, "después seguimos"):**
+  1. **Replanteo AR:** auto-sugerencia del montaje por el plano (techo→colgado / pared→pared); **render 3D
+     del soporte** según montaje y **bandeja completa**; editor sobre foto con los mismos selectores
+     (montaje/tapa/varilla); altura de cuelgue editable; **validar referencias Hilti exactas** (MQA/MQN/taco);
+     opción de elegir tipo/acción/dimensión del **obstáculo** en el propio AR (hoy se marca solo la posición
+     y se ajusta en el editor).
+  2. **App Android F3:** módulo AR nativo ARCore (WebXR no existe en el WebView del sistema).
+  3. **Windows/Tauri:** compilar el `.msi` de Alejandra Office (andamiaje en `tauri/`, toolchain listo).
+- **Verificación:** todo verificado server-side (Pages 9.67, workers desplegados, node --check, JS de
+  index.html validado por bloques, HUD en viewport móvil). Las funciones de cámara/AR/sensores/login solo
+  se prueban en dispositivo (Adrián, en obra).
+
 ## REPL-REDISEÑO — Replanteo F1–F4 (2026-09-09/10, v9.51 + v9.52, desplegado)
 
 - **Agente:** Claude (Opus 4.8). **ADR:** `docs/decisions/ADR-0025-REPLANTEO-REDISENO-CAMARA-SENSORES.md` (Aceptado).
