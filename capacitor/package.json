@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@capacitor/android": "^8.5.1",
+    "@capacitor/browser": "^8.0.4",
     "@capacitor/cli": "^8.5.1",
     "@capacitor/core": "^8.5.1"
   }

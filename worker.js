@@ -14419,6 +14419,7 @@ async function googleMobileRedirect(request, env) {
   const sessionData = {
     ok: true, token,
     nombre: gUser.name || u.nombre, rol: u.rol,
+    departamento: u.departamento || '',
     empresa_id: u.empresa_id || '', empresa_nombre: empresa ? empresa.nombre : '',
     obra_id: u.obra_id || '', obra_nombre: obra ? obra.nombre : '',
     usuario_id: u.id,
