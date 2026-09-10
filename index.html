@@ -20665,7 +20665,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (puntos.length >= 2) {
       const tipo = _replTipoRender(_ar.elemento?.key, _ar.params);
       const obst = (obstaculos || []).map(o => ({ seg: o.seg, t: o.t, accion: o.accion || 'debajo', dimension_m: o.dimension_m || 0.3 }));
-      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6, obstaculos: obst }));
+      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6, obstaculos: obst, montaje: _ar.params && _ar.params.montaje, altura: _ar.params && _ar.params.altura_cuelgue_m }));
     }
     for (let i = 1; i < puntos.length; i++) {                 // cotas por tramo
       const a = puntos[i - 1], b = puntos[i]; const len = a.distanceTo(b); if (len < 0.01) continue;
@@ -21248,12 +21248,33 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
     return out;
   }
+  // Las curvas de bandeja NO se hacen a 90°: se cortan en dos a 45°+45° (chaflán) para que la
+  // curva quede más amplia y los cables entren mejor. Reemplaza cada vértice por dos puntos.
+  function _replChaflan(THREE, pts, d) {
+    if (!pts || pts.length < 3) return pts;
+    const out = [pts[0].clone()];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i], a = pts[i - 1], b = pts[i + 1];
+      const dIn = new THREE.Vector3().subVectors(p, a), lIn = dIn.length();
+      const dOut = new THREE.Vector3().subVectors(b, p), lOut = dOut.length();
+      if (lIn < 1e-3 || lOut < 1e-3) { out.push(p.clone()); continue; }
+      dIn.normalize(); dOut.normalize();
+      if (dIn.dot(dOut) > 0.985) { out.push(p.clone()); continue; }   // casi recto: sin chaflán
+      const off = Math.min(d, lIn * 0.45, lOut * 0.45);
+      out.push(p.clone().addScaledVector(dIn, -off));                 // entrada del chaflán (45°)
+      out.push(p.clone().addScaledVector(dOut, off));                 // salida del chaflán (45°)
+    }
+    out.push(pts[pts.length - 1].clone());
+    return out;
+  }
   function _replInstal3D(THREE, pts, opts) {
     opts = opts || {}; const tipo = opts.tipo || 'tubo', w = opts.w || 0.2, op = opts.opacity != null ? opts.opacity : 1;
     if (opts.obstaculos) pts = _replConDesvios(THREE, pts, opts.obstaculos);
+    // Chaflán 45°+45° en las curvas de bandeja (no en tubo/canal, que curvan con codo).
+    if (tipo === 'rejiband' || tipo === 'escalera' || tipo === 'chapa') pts = _replChaflan(THREE, pts, Math.max(0.12, w * 1.4));
     const g = new THREE.Group(), X = new THREE.Vector3(1, 0, 0);
     const M = (c, met, ro) => new THREE.MeshStandardMaterial({ color: c, metalness: met, roughness: ro, transparent: op < 1, opacity: op, side: THREE.DoubleSide });
-    const matTubo = M(0xcdd4dd, .12, .7), matMetal = M(0x9aa7b6, .75, .45), matAcc = M(0x3b424d, .4, .6), matCaja = M(0xd97706, .1, .8);
+    const matTubo = M(0xd7dee7, .1, .6), matMetal = M(0xbcc6d2, .35, .55), matAcc = M(0x5a6675, .3, .6), matCaja = M(0xe08a1e, .1, .75);
     const rTubo = Math.max(0.008, w / 2);
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1], b = pts[i], dir = new THREE.Vector3().subVectors(b, a), len = dir.length(); if (len < 1e-3) continue;
@@ -21278,19 +21299,72 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       } else if (tipo === 'canal') {
         sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, w * 0.7, w), M(0xeef1f5, .1, .7)));
       } else { sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, w), matMetal)); }
-      if (tipo !== 'tubo' && tipo !== 'canal') { const ns = Math.floor(len / 1.5); for (let k = 1; k <= ns; k++) { const br = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, w * 1.1), matAcc); br.position.set(-len / 2 + k * (len / (ns + 1)), -0.03, 0); sub.add(br); } }
+    }
+    // Soportes de bandeja: uno antes y otro después de cada curva/quiebro, y cada 1,5 m en los
+    // tramos rectos. El tipo de soporte depende del montaje (colgado Hilti MQ / pared perp / plano).
+    if (tipo === 'rejiband' || tipo === 'escalera' || tipo === 'chapa') {
+      const montaje = opts.montaje || 'colgado';
+      const altura = Math.max(0.15, +opts.altura || 0.5);
+      for (const s of _replPuntosSoporte(THREE, pts, 1.5, 0.3)) _replSoporte3D(THREE, g, s.pos, s.dir, w, montaje, altura, { matMetal, matAcc });
     }
     for (let i = 1; i < pts.length - 1; i++) {
       const p = pts[i];
       if (tipo === 'tubo') { const codo = new THREE.Mesh(new THREE.SphereGeometry(rTubo, 14, 14), matTubo); codo.position.copy(p); g.add(codo);
         const caja = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.05), matCaja); caja.position.copy(p); g.add(caja); }
-      else { const codo = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, w), matMetal); codo.position.copy(p); g.add(codo); }
+      // Bandejas: la curva ya es continua por el chaflán 45°+45°; no lleva pieza extra en el vértice.
     }
     return g;
   }
+  // Puntos donde va un soporte de bandeja: extremos, uno antes y otro después de cada curva/quiebro
+  // (para sujetar bien el cambio de dirección) y cada `cada` m en los tramos rectos. Dedup < 0,4 m.
+  function _replPuntosSoporte(THREE, pts, cada, dCurva) {
+    const segs = [];
+    for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i]; const d = new THREE.Vector3().subVectors(b, a); const len = d.length(); if (len < 1e-3) continue; segs.push({ a, b, dir: d.multiplyScalar(1 / len), len }); }
+    if (!segs.length) return [];
+    const res = [];
+    res.push({ pos: segs[0].a.clone().addScaledVector(segs[0].dir, Math.min(0.1, segs[0].len * 0.3)), dir: segs[0].dir });
+    const last = segs[segs.length - 1];
+    res.push({ pos: last.b.clone().addScaledVector(last.dir, -Math.min(0.1, last.len * 0.3)), dir: last.dir });
+    for (let k = 1; k < segs.length; k++) {                                   // a cada lado del vértice
+      const v = segs[k].a;
+      res.push({ pos: v.clone().addScaledVector(segs[k - 1].dir, -Math.min(dCurva, segs[k - 1].len * 0.4)), dir: segs[k - 1].dir });
+      res.push({ pos: v.clone().addScaledVector(segs[k].dir, Math.min(dCurva, segs[k].len * 0.4)), dir: segs[k].dir });
+    }
+    let dist = 0, target = cada;                                              // cada `cada` m
+    for (const s of segs) { const segStart = dist; while (target <= dist + s.len) { res.push({ pos: s.a.clone().addScaledVector(s.dir, target - segStart), dir: s.dir }); target += cada; } dist += s.len; }
+    const out = [];
+    for (const r of res) if (!out.some(o => o.pos.distanceTo(r.pos) < 0.4)) out.push(r);
+    return out;
+  }
+  // Soporte 3D de una bandeja en un punto del recorrido, según el montaje. Se dibuja en coords
+  // mundo (arriba = +Y): colgado = 2 varillas + carril MQ-41 hasta el techo; pared perpendicular =
+  // ménsula con tirante; pared en plano = abrazadera/placa pegada.
+  function _replSoporte3D(THREE, g, pos, dir, w, montaje, altura, mats) {
+    const grp = new THREE.Group();
+    grp.position.copy(pos);
+    grp.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), dir.clone().normalize()); // X→recorrido, Z→transversal
+    g.add(grp);
+    const steel = mats.matMetal, acc = mats.matAcc;
+    const at = (mesh, x, y, z) => { mesh.position.set(x, y, z); grp.add(mesh); return mesh; };
+    const box = (x, y, z, m) => new THREE.Mesh(new THREE.BoxGeometry(x, y, z), m);
+    const rod = (h, r, m) => new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 8), m);
+    if (montaje === 'pared_perp') {
+      const wallZ = w * 0.65;
+      at(box(0.03, 0.03, w * 1.1, steel), 0, -0.02, 0);        // brazo bajo la bandeja
+      at(box(0.03, 0.18, 0.03, steel), 0, 0.05, wallZ);        // montante en la pared
+      const tir = at(rod(Math.hypot(w, 0.13), 0.005, acc), 0, -0.06, wallZ * 0.5); tir.rotation.x = Math.atan2(wallZ, 0.13); // tirante diagonal
+    } else if (montaje === 'pared_plano') {
+      at(box(0.05, 0.05, w * 1.15, steel), 0, -0.035, 0);      // montante/placa detrás
+      const abr = at(new THREE.Mesh(new THREE.TorusGeometry(Math.max(0.03, w * 0.5), 0.006, 6, 16), acc), 0, 0, 0); abr.rotation.y = Math.PI / 2; // abrazadera
+    } else { // colgado — Hilti MQ
+      at(box(0.04, 0.04, w * 1.35, acc), 0, 0.055, 0);         // carril MQ-41 bajo la bandeja
+      for (const zf of [-0.55, 0.55]) at(rod(altura, 0.006, steel), 0, 0.055 + altura / 2, zf * w); // 2 varillas
+      at(box(0.06, 0.03, w * 1.6, acc), 0, 0.055 + altura, 0); // carril MQ-41 del techo
+    }
+  }
   function _repl3DBuild(THREE, path) {
     const pts = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
-    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1, obstaculos: _repl.obstaculos || [] });
+    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1, obstaculos: _repl.obstaculos || [], montaje: _repl.params && _repl.params.montaje, altura: _repl.params && _repl.params.altura_cuelgue_m });
     (_repl.complementos || []).forEach(comp => { const o = _replComplemento3D(THREE, comp.key); o.position.set(comp.x || 0, comp.y || 0, comp.z || 0); if (comp.q) o.quaternion.set(comp.q.x, comp.q.y, comp.q.z, comp.q.w); g.add(o); });
     return g;
   }
@@ -21305,9 +21379,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     const scene = new THREE.Scene();
     const cam = new THREE.PerspectiveCamera(55, 1, 0.01, 200);
-    scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x20262e, 1.15));
-    const dl = new THREE.DirectionalLight(0xffffff, 1.1); dl.position.set(1.5, 2.5, 1.5); scene.add(dl);
-    const dl2 = new THREE.DirectionalLight(0x9db4ff, 0.4); dl2.position.set(-1.5, 0.5, -1); scene.add(dl2);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x5b6472, 1.7));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(1.5, 2.5, 1.5); scene.add(dl);
+    const dl2 = new THREE.DirectionalLight(0xdbe4ff, 0.8); dl2.position.set(-1.5, 0.8, -1.2); scene.add(dl2);
+    const dl3 = new THREE.DirectionalLight(0xffffff, 0.5); dl3.position.set(0, -1.5, 0.5); scene.add(dl3);
     const run = _repl3DBuild(THREE, path);
     const box = new THREE.Box3().setFromObject(run), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
     run.position.sub(c);
