@@ -6566,23 +6566,79 @@ async function doLogin() {
 }
 
 // ── Google OAuth ────────────────────────────────────────────────────────────
+// HTML del botón "Entrar con Google" (para restaurarlo tras un error).
+const _BTN_GOOGLE_HTML = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.2 30.2 0 24 0 14.7 0 6.7 5.4 2.9 13.3l8 6.2C12.7 13 17.9 9.5 24 9.5z"/><path fill="#4285F4" d="M46.6 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.2-10.1 7.2-17z"/><path fill="#FBBC05" d="M10.9 28.5c-.5-1.5-.8-3-.8-4.5s.3-3 .8-4.5l-8-6.2C1.1 16.5 0 20.1 0 24s1.1 7.5 2.9 10.7l8-6.2z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2.1 1.4-4.7 2.3-7.7 2.3-6.1 0-11.3-3.5-13.1-8.5l-8 6.2C6.7 42.6 14.7 48 24 48z"/></svg> Entrar con Google';
+function _resetBtnGoogle(btn) { if (btn) { btn.disabled = false; btn.innerHTML = _BTN_GOOGLE_HTML; } }
+
+// ¿Estamos dentro de la app nativa (Capacitor), no en el navegador/PWA?
+function _esNativo() {
+  try { return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()); }
+  catch (_) { return false; }
+}
+
 async function loginConGoogle() {
   const btn = document.getElementById('btnLoginGoogle');
   const errEl = document.getElementById('loginErr');
   const btnYa = document.getElementById('btnYaAprobado');
-  errEl.textContent = '';
+  errEl.textContent = ''; errEl.style.color = '';
   if (btnYa) btnYa.style.display = 'none';
   btn.disabled = true; btn.textContent = 'Conectando...';
   try {
+    // App nativa (Capacitor): Google prohíbe OAuth dentro del WebView y el redirect
+    // a Pages abriría la PWA en Chrome. Usamos el flujo móvil (Custom Tab + nonce).
+    if (_esNativo()) { await loginConGoogleNativo(btn, errEl, btnYa); return; }
     const redirectUri = 'https://padilla585projects.github.io/Alejandra-APP/';
     const res = await fetch(getAPI() + '/auth/google/url?redirect_uri=' + encodeURIComponent(redirectUri));
     const data = await res.json();
-    if (!res.ok || !data.url) { errEl.textContent = data.error || 'Error al conectar con Google'; btn.disabled = false; btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.2 30.2 0 24 0 14.7 0 6.7 5.4 2.9 13.3l8 6.2C12.7 13 17.9 9.5 24 9.5z"/><path fill="#4285F4" d="M46.6 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.2-10.1 7.2-17z"/><path fill="#FBBC05" d="M10.9 28.5c-.5-1.5-.8-3-.8-4.5s.3-3 .8-4.5l-8-6.2C1.1 16.5 0 20.1 0 24s1.1 7.5 2.9 10.7l8-6.2z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2.1 1.4-4.7 2.3-7.7 2.3-6.1 0-11.3-3.5-13.1-8.5l-8 6.2C6.7 42.6 14.7 48 24 48z"/></svg> Entrar con Google'; return; }
+    if (!res.ok || !data.url) { errEl.textContent = data.error || 'Error al conectar con Google'; _resetBtnGoogle(btn); return; }
     window.location.href = data.url;
   } catch {
     errEl.textContent = 'Error de conexión';
     btn.disabled = false;
   }
+}
+
+// Genera un nonce aleatorio (36 hex) para amarrar el login móvil.
+function _genNonce() {
+  const a = new Uint8Array(18); (window.crypto || crypto).getRandomValues(a);
+  return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Sondea /auth/google/check-nonce hasta que el backend guarde el resultado del login
+// (o hasta agotar los intentos). Devuelve el objeto de sesión, {pendiente}, {error} o null.
+async function _pollNonce(nonce, intentos) {
+  for (let i = 0; i < intentos; i++) {
+    await new Promise(r => setTimeout(r, 1500));
+    try {
+      const r = await fetch(getAPI() + '/auth/google/check-nonce?nonce=' + encodeURIComponent(nonce));
+      if (r.status === 202) continue; // waiting: aún no ha vuelto de Google
+      const d = await r.json();
+      if (d && (d.token || d.error || d.pendiente)) return d;
+    } catch (_) { /* red intermitente: seguir sondeando */ }
+  }
+  return null;
+}
+
+// Login de Google en la app nativa: abre Google en un Custom Tab (donde Google SÍ
+// permite OAuth) con redirect al Worker (/auth/google/mobile-redirect, ya registrado
+// en Google Console) y recoge la sesión por polling del nonce, sin salir a la PWA.
+async function loginConGoogleNativo(btn, errEl, btnYa) {
+  const Browser = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+  const nonce = _genNonce();
+  const redirectUri = getAPI() + '/auth/google/mobile-redirect';
+  const res = await fetch(getAPI() + '/auth/google/url?redirect_uri=' + encodeURIComponent(redirectUri) + '&nonce=' + encodeURIComponent(nonce));
+  const data = await res.json();
+  if (!res.ok || !data.url) { errEl.textContent = data.error || 'Error al conectar con Google'; _resetBtnGoogle(btn); return; }
+  if (btn) btn.textContent = 'Abriendo Google…';
+  try { if (Browser) await Browser.open({ url: data.url }); else window.location.href = data.url; }
+  catch (_) { try { window.location.href = data.url; } catch (__) {} }
+  const sess = await _pollNonce(nonce, 120); // 120 × 1,5 s = 3 min
+  try { if (Browser) await Browser.close(); } catch (_) {}
+  if (!sess) { errEl.style.color = '#ef4444'; errEl.textContent = 'No se completó el inicio de sesión. Inténtalo de nuevo.'; _resetBtnGoogle(btn); return; }
+  if (sess.pendiente) { errEl.style.color = '#f59e0b'; errEl.textContent = (sess.msg || 'Solicitud pendiente de aprobación.') + ' Cuando el administrador te apruebe, pulsa el botón verde.'; if (btnYa) btnYa.style.display = ''; _resetBtnGoogle(btn); return; }
+  if (sess.error || !sess.token) { errEl.style.color = '#ef4444'; errEl.textContent = sess.error || sess.msg || 'Error al verificar con Google'; _resetBtnGoogle(btn); return; }
+  localStorage.removeItem('alejandra_inv_codigo');
+  setSession({ token: sess.token, nombre: sess.nombre, rol: sess.rol, departamento: sess.departamento, empresa_id: sess.empresa_id, empresa_nombre: sess.empresa_nombre, obra_id: sess.obra_id, obra_nombre: sess.obra_nombre });
 }
 
 async function handleGoogleCallback(code) {
@@ -15294,7 +15350,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.60';
+const APP_VERSION = '9.61';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
