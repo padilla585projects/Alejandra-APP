@@ -4303,6 +4303,9 @@ select option{background:var(--surface2);color:var(--text)}
           <div class="settings-title">📱 App para Android</div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Instala Alejandra como app en el móvil (acceso a cámara, sensores y, próximamente, replanteo en AR nativo). Descarga el .apk e instálalo (permite "orígenes desconocidos" si te lo pide).</div>
           <a id="btnDescargarApk" class="btn-primary" style="display:block;text-align:center;text-decoration:none;font-size:14px" href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download>⬇️ Descargar app Android (.apk)</a>
+          <!-- F3.1: prueba del AR nativo (solo en la app, si el móvil soporta ARCore). No toca el
+               replanteo real: solo lanza la sesión AR nativa y muestra puntos + medida. -->
+          <button id="btnProbarARNativo" onclick="probarARNativo()" class="btn-primary" style="display:none;width:100%;margin-top:10px;font-size:13px;background:#8b5cf6">🧪 Probar AR nativo (beta)</button>
         </div>
         <!-- Telegram personal -->
         <div class="settings-section" id="seccionMiTelegram" style="margin-top:16px;display:none">
@@ -7093,7 +7096,30 @@ function _initNativo() {
       });
     }
   } catch (_) {}
+  // F3.1: mostrar el botón "Probar AR nativo" solo si este móvil soporta ARCore.
+  try {
+    if (P.ReplanteoAR && P.ReplanteoAR.isSupported) {
+      P.ReplanteoAR.isSupported().then(function (r) {
+        if (r && r.supported) { var b = document.getElementById('btnProbarARNativo'); if (b) b.style.display = 'block'; }
+      }).catch(function () {});
+    }
+  } catch (_) {}
 }
+
+// F3.1: lanza la sesión AR nativa (ARCore) y muestra el resultado. No construye el replanteo aún;
+// sirve para validar en dispositivo que el módulo nativo mide bien antes de engancharlo al flujo.
+async function probarARNativo() {
+  var AR = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ReplanteoAR;
+  if (!AR) { toast('El AR nativo solo está disponible en la app Android', 'err'); return; }
+  try {
+    const r = await AR.abrirAR({});
+    if (!r || !r.ok) { toast(r && r.error ? r.error : 'AR cancelado', r && r.error ? 'err' : undefined); return; }
+    const n = (r.puntos || []).length;
+    const m = (typeof r.longitud === 'number' ? r.longitud : 0).toString().replace('.', ',');
+    toast('✅ AR nativo OK: ' + n + ' punto(s) · ' + m + ' m', 'ok');
+  } catch (e) { toast('Error del AR nativo: ' + (e && e.message ? e.message : e), 'err'); }
+}
+window.probarARNativo = probarARNativo;
 
 async function iniciarApp() {
   _initNativo();
@@ -15442,7 +15468,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.67';
+const APP_VERSION = '9.68';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

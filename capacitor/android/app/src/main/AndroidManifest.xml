@@ -36,6 +36,13 @@
         <!-- ARCore opcional (F3): la app se instala también en móviles sin ARCore (HTC U11) -->
         <meta-data android:name="com.google.ar.core" android:value="optional" />
 
+        <!-- F3.1: sesión AR nativa del replanteo -->
+        <activity
+            android:name=".ar.ReplanteoARActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
