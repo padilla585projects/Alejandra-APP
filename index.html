@@ -20870,10 +20870,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const a = pts[i - 1], b = pts[i], segObst = bySeg[i - 1] || [];
       const dir = b.clone().sub(a), len = dir.length() || 1, u = dir.clone().normalize();
       const right = new THREE.Vector3().crossVectors(u, up).normalize();
+      let ultimo = -Infinity;                           // agrupa obstáculos casi en el mismo punto
       for (const o of segObst) {
         if (o.accion === 'sujetar') continue;
         const d = Math.max(0.1, +o.dimension_m || 0.3), hw = Math.min(0.15, len * 0.15);
-        const q = a.clone().addScaledVector(u, Math.max(0, Math.min(1, o.t)) * len);
+        const s = Math.max(0, Math.min(1, o.t)) * len;   // posición a lo largo del tramo (m)
+        if (s - ultimo < 2 * hw * 1.15) continue;        // demasiado cerca del anterior → se funde
+        ultimo = s;
+        const q = a.clone().addScaledVector(u, s);
         const off = o.accion === 'esquivar' ? right.clone().multiplyScalar(d) : up.clone().multiplyScalar(-d);
         const p1 = q.clone().addScaledVector(u, -hw), p2 = q.clone().addScaledVector(u, hw);
         out.push(p1, p1.clone().add(off), p2.clone().add(off), p2);
