@@ -6998,7 +6998,70 @@ function _onAppVisible() {
   if (typeof rmReconectarSync === 'function') rmReconectarSync();
 }
 
+// Descargar/compartir un blob. En la app nativa el WebView NO soporta <a download> ni
+// navigator.share con ficheros → se escribe a la caché con Filesystem y se comparte con Share
+// (menú del sistema: guardar, WhatsApp, Drive…). En la web se mantiene el comportamiento previo.
+async function _guardarCompartirBlob(blob, filename, title) {
+  if (_esNativo()) {
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    try {
+      const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onerror = rej; fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+      const b64 = String(dataUrl).split(',')[1] || '';
+      if (!P || !P.Filesystem) throw new Error('sin Filesystem');
+      const w = await P.Filesystem.writeFile({ path: filename, data: b64, directory: 'CACHE' });
+      const uri = w && w.uri ? w.uri : null;
+      if (uri && P.Share) { try { await P.Share.share({ title: title || filename, url: uri }); } catch (e) { if (!(e && /cancel/i.test(e.message || ''))) throw e; } return true; }
+      if (uri) { toast('Guardado en la app: ' + filename, 'ok'); return true; }
+      return false;
+    } catch (e) { toast('No se pudo preparar el archivo: ' + (e && e.message || e), 'err'); return false; }
+  }
+  // Web: Web Share con ficheros y, si no, descarga clásica
+  try {
+    const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) { await navigator.share({ title: title || filename, files: [file] }); return true; }
+  } catch (e) { if (e && e.name === 'AbortError') return true; }
+  const url = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500); return true;
+}
+
+// Abrir una URL (ver/descargar un recurso del servidor). En la app nativa la abre en el
+// navegador del sistema (Custom Tab) — window.open devuelve null en el WebView; en la web
+// mantiene window.open.
+function _abrirUrlExterna(url) {
+  if (_esNativo()) {
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    try { if (P && P.Browser) { P.Browser.open({ url: url }); return; } } catch (_) {}
+  }
+  try { window.open(url, '_blank'); } catch (_) { location.href = url; }
+}
+
+// Ajustes nativos (solo dentro de la app Capacitor): barra de estado acorde al tema,
+// ocultar el splash y avisar de la pérdida de conexión. Idempotente y sin efecto en la web.
+function _initNativo() {
+  if (window._nativoInitDone || !_esNativo()) return;
+  window._nativoInitDone = true;
+  const P = window.Capacitor && window.Capacitor.Plugins;
+  if (!P) return;
+  try {
+    if (P.StatusBar) {
+      P.StatusBar.setOverlaysWebView({ overlay: false });
+      P.StatusBar.setBackgroundColor({ color: '#0f172a' });
+      P.StatusBar.setStyle({ style: 'DARK' }); // fondo oscuro → iconos claros
+    }
+  } catch (_) {}
+  try { if (P.SplashScreen) P.SplashScreen.hide(); } catch (_) {}
+  try {
+    if (P.Network) {
+      P.Network.addListener('networkStatusChange', function (st) {
+        try { toast(st && st.connected ? 'Conexión restablecida' : 'Sin conexión — algunos datos pueden no cargar'); } catch (_) {}
+      });
+    }
+  } catch (_) {}
+}
+
 async function iniciarApp() {
+  _initNativo();
   const s = getSession();
   if (!s) {
     document.getElementById('mainHeader').style.display = 'none';
@@ -8045,7 +8108,7 @@ async function vincularTelegram() {
     const res = await apiCall('/telegram/vincular', { method: 'POST' });
     if (!res.ok) { toast('❌ Error al generar el enlace', 'err'); return; }
     const { link } = await res.json();
-    window.open(link, '_blank');
+    _abrirUrlExterna(link);
     toast('👆 Pulsa "Start" en Telegram para vincular tu cuenta');
     // Comprobar si ya vinculó (polling suave: 3 intentos cada 5s)
     let intentos = 0;
@@ -9296,24 +9359,13 @@ function appCerrarAlbaran() {
 async function appDescargarAlbaran(id) {
   try {
     const { item, blob } = await _appAlbBlob(id);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = _appAlbArchivo(item);
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-    toast('✅ Descarga preparada', 'ok');
+    await _guardarCompartirBlob(blob, _appAlbArchivo(item), _appAlbNombre(item));
   } catch (e) { toast('❌ ' + e.message, 'err'); }
 }
 async function appCompartirAlbaran(id) {
   try {
     const { item, blob } = await _appAlbBlob(id);
-    const file = new File([blob], _appAlbArchivo(item), { type: blob.type || item.mime_type || 'image/jpeg' });
-    if (navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))) {
-      await navigator.share({ title:_appAlbNombre(item), text:item.num_albaran ? `Albarán ${item.num_albaran}` : 'Albarán de bobinas', files:[file] });
-    } else {
-      await appDescargarAlbaran(id);
-      toast('Se ha descargado para que puedas adjuntarlo y compartirlo.', 'info');
-    }
+    await _guardarCompartirBlob(blob, _appAlbArchivo(item), item.num_albaran ? `Albarán ${item.num_albaran}` : (_appAlbNombre(item) || 'Albarán de bobinas'));
   } catch (e) { if (e.name !== 'AbortError') toast('❌ No se pudo compartir: ' + e.message, 'err'); }
 }
 
@@ -10561,7 +10613,7 @@ async function segRegVer(id) {
 function segRegRenderDetalle(reg) {
   document.getElementById('segRegDetalleTitulo').textContent = reg.titulo;
   const fotosHtml = (reg.fotos || []).map(f =>
-    `<img src="${getAPI()}/seg-registro-fotos/${f.id}?token=${encodeURIComponent(getSession()?.token||'')}" onclick="window.open(this.src,'_blank')"
+    `<img src="${getAPI()}/seg-registro-fotos/${f.id}?token=${encodeURIComponent(getSession()?.token||'')}" onclick="_abrirUrlExterna(this.src)"
       style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`
   ).join('');
   const comentariosHtml = (reg.comentarios || []).length
@@ -10700,7 +10752,7 @@ async function segInfCargar() {
             ${a.contratista ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(a.contratista)}</div>` : ''}
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
               ${(a.fotos || []).map(fo => `<div style="text-align:center">
-                <img src="${getAPI()}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(getSession()?.token || '')}" onclick="window.open(this.src,'_blank')" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:block">
+                <img src="${getAPI()}/informes-seg-fotos/${fo.id}?token=${encodeURIComponent(getSession()?.token || '')}" onclick="_abrirUrlExterna(this.src)" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:block">
                 ${fo.titulo ? `<div style="font-size:9px;color:var(--muted);max-width:60px;overflow-wrap:anywhere;margin-top:2px">${esc(fo.titulo)}</div>` : ''}
               </div>`).join('')}
               <button onclick="segInfAnadirFoto(${a.id})" style="width:60px;height:60px;border-radius:6px;border:1px dashed var(--border);background:none;color:var(--muted);font-size:20px;cursor:pointer">+</button>
@@ -10916,7 +10968,7 @@ async function segInfReabrir() {
 function segInfDescargarDocx() {
   const id = document.getElementById('segInfCierreId').value;
   const s = getSession();
-  window.open(`${getAPI()}/informes-seg/${id}/docx?token=${encodeURIComponent(s?.token || '')}`, '_blank');
+  _abrirUrlExterna(`${getAPI()}/informes-seg/${id}/docx?token=${encodeURIComponent(s?.token || '')}`);
 }
 
 // Ventana de impresión (Guardar como PDF) -- mismo patrón que el resto de la app.
@@ -12037,7 +12089,13 @@ async function docsVerArchivo(id, nombre, mime) {
     btnGuardar.href = url; btnGuardar.download = nombre;
     btnGuardar.textContent = '⬇️ Guardar';
     btnGuardar.style.cssText = 'padding:8px 14px;background:var(--accent);color:#000;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none';
-    btnGuardar.onclick = (e) => e.stopPropagation();
+    btnGuardar.onclick = (e) => {
+      e.stopPropagation();
+      if (_esNativo()) {  // el WebView no descarga con <a download>: bajar el blob y compartir
+        e.preventDefault();
+        (async () => { try { const r = await apiCall('/docs-dept/' + id); await _guardarCompartirBlob(await r.blob(), nombre, nombre); } catch (_) { toast('❌ No se pudo guardar', 'err'); } })();
+      }
+    };
     const btns = document.createElement('div');
     btns.style.cssText = 'position:absolute;top:14px;right:14px;display:flex;gap:8px';
     btns.appendChild(btnGuardar); btns.appendChild(btnCerrar);
@@ -12059,8 +12117,9 @@ async function docsVerArchivo(id, nombre, mime) {
     const res = await apiCall('/docs-dept/' + id);
     if (!res.ok) return toast('❌ Error al abrir', 'err');
     const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
     toast('');
+    if (_esNativo()) { await _guardarCompartirBlob(blob, nombre, nombre); return; }
+    const url  = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.target = '_blank'; a.rel = 'noopener';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -12074,18 +12133,9 @@ async function docsCompartirArchivo(id, nombre, mime) {
     const res = await apiCall('/docs-dept/' + id);
     if (!res.ok) return toast('❌ Error', 'err');
     const blob = await res.blob();
-    const file = new File([blob], nombre, { type: mime || blob.type });
+    if (mime && !blob.type) { try { /* conservar mime */ } catch (_) {} }
     toast('');
-    if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: nombre });
-    } else {
-      // Fallback: descargar
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = nombre; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast('📥 Descargando (compartir no disponible en este navegador)');
-    }
+    await _guardarCompartirBlob(blob, nombre, nombre);
   } catch(e) {
     if (e?.name !== 'AbortError') toast('❌ Error al compartir', 'err');
   }
@@ -15357,7 +15407,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.62';
+const APP_VERSION = '9.63';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -16471,7 +16521,7 @@ if ('serviceWorker' in navigator) {
   }
 
   function verAlbaran(aid) {
-    window.open(`${getAPI()}/albaranes/${aid}`, '_blank');
+    _abrirUrlExterna(`${getAPI()}/albaranes/${aid}`);
   }
 
   window.abrirAlbaranes      = abrirAlbaranes;
@@ -28264,7 +28314,7 @@ window.turnoToggle   = turnoToggle;
     if (imageUrls && imageUrls.length) {
       html += '<div style="display:flex;flex-wrap:wrap;gap:4px;' + (text ? 'margin-bottom:6px' : '') + '">';
       for (const url of imageUrls) {
-        html += '<img src="' + url + '" style="max-width:180px;max-height:180px;border-radius:8px;object-fit:cover;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" onerror="this.style.display=\'none\'">';
+        html += '<img src="' + url + '" style="max-width:180px;max-height:180px;border-radius:8px;object-fit:cover;cursor:pointer;display:block" onclick="_abrirUrlExterna(this.src)" onerror="this.style.display=\'none\'">';
       }
       html += '</div>';
     }
