@@ -22,6 +22,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep link del login: el Custom Tab redirige a com.padilla585.alejandra://auth
+                 al terminar en Google → trae la app al frente y cierra la pestaña. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.padilla585.alejandra" />
+            </intent-filter>
+
         </activity>
 
         <provider
