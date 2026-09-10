@@ -4,6 +4,22 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-10 — App Android F1: Capacitor + descarga del .apk desde la PWA, v9.60, ADR-0026)
+
+Primera fase de la estrategia multi-plataforma (ADR-0026 / `docs/PLAN-APP-ANDROID.md`): la suite
+empaquetada como app Android sin abandonar la PWA (mismo backend, misma web).
+
+- **Proyecto Capacitor (`capacitor/`):** envuelve la suite (`appId` `com.padilla585.alejandra`,
+  carga la web de producción vía `server.url`). APK debug (4,1 MB) compilado con Gradle e
+  **instalado y verificado en el HTC U11** por ADB (abre la suite real). `node_modules/`, `www/`,
+  salidas de build, `*.apk`/`*.aab` y keystores quedan en `.gitignore`.
+- **Descarga desde la PWA (`index.html`):** banner de descarga **solo en Android** (fuera de la app
+  nativa, descartable con `localStorage`) y apartado **"📱 App para Android"** en Ajustes → Sesión.
+  El enlace usa `releases/latest/download/alejandra.apk` (Release `app-android-v1`).
+- Sin cambios de backend. El AR sigue en WebXR/PWA; el módulo ARCore nativo es F3 (futuro).
+- PR #205 → `35ac886`. Pages desplegado y verificado (prod sirve 9.60, banner/Ajustes presentes,
+  APK 302→200 / 4.117.690 B / `application/vnd.android.package-archive`).
+
 ### Added (2026-09-09/10 — Rediseño del Replanteo F1–F4, ADR-0025, v9.51 + v9.52)
 
 Rediseño completo de la herramienta de Replanteo (ADR-0025, aceptado por Adrián), en cuatro
