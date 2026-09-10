@@ -7097,6 +7097,7 @@ export default {
       if (/^\/replanteos\/catalogo\/[a-z0-9_]+$/.test(path) && method === 'PUT')    return await guardarReplanteoCatalogo(request, env, path);
       if (/^\/replanteos\/catalogo\/[a-z0-9_]+$/.test(path) && method === 'DELETE') return await borrarReplanteoCatalogo(request, env, path);
       if (path === '/replanteos/calcular'                    && method === 'POST')   return await calcularReplanteo(request, env);
+      if (path === '/replanteos/identificar'                 && method === 'POST')   return await identificarImagenReplanteo(request, env);
       if (path === '/replanteos'                             && method === 'GET')    return await listarReplanteos(request, env);
       if (path === '/replanteos'                             && method === 'POST')   return await crearReplanteo(request, env);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'GET')    return await getReplanteo(request, env, path);
@@ -31369,6 +31370,27 @@ async function _replanteoAPedidos(env, auth, id, opciones, ctx) {
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', row.departamento), auth.empresa_id));
   await sendTelegram(env, `📐 <b>Replanteo → Pedidos</b> [${row.departamento}]\n👤 ${solicitado_por || '—'}\n📝 ${row.titulo} · ${rep.material.length} líneas · ${row.longitud_m || 0} m`);
   return { pedido_ids: ids, material: rep.material, titulo: row.titulo, departamento: row.departamento, longitud_m: rep.longitud_m || row.longitud_m || 0 };
+}
+
+// ADR-0025 (fase obstáculos): "¿qué es esto?" — manda una foto del punto apuntado a Gemini
+// (visión, más eficaz según Adrián) y devuelve qué instalación/obstáculo hay. Reutiliza callGemini.
+async function identificarImagenReplanteo(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const m = String(body.imagen || '').match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  if (!m) return err('Falta la imagen (data URL base64)', 400);
+  const prompt = 'Eres un técnico de instalaciones en obra. Mira la foto y di QUÉ es el elemento o instalación principal que cruza o está junto al recorrido de una canalización (bandeja/tubo). Responde SOLO con un JSON válido, sin ningún otro texto ni markdown: {"tipo":"luminaria|bandeja|tubo|tuberia|conducto_clima|deteccion_incendios|viga|pilar|ventana|puerta|mecanismo|cuadro|otro","etiqueta":"texto corto en español","detalle":"una frase breve","accion_sugerida":"debajo|esquivar|sujetar"}';
+  const geminiBody = {
+    contents: [{ parts: [{ inline_data: { mime_type: m[1], data: m[2] } }, { text: prompt }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 300 },
+  };
+  const r = await callGemini(env, geminiBody, 'replanteo-identificar');
+  if (r.error) return err(r.error, r.status || 502);
+  const txt = (r.data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+  let out; try { out = JSON.parse(txt.replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { out = { tipo: 'otro', etiqueta: (txt || 'No identificado').slice(0, 80) }; }
+  return json({ ok: true, tipo: out.tipo || 'otro', etiqueta: out.etiqueta || 'No identificado', detalle: out.detalle || '', accion_sugerida: out.accion_sugerida || null });
 }
 
 async function enviarReplanteoAPedidos(request, env, path, ctx) {
