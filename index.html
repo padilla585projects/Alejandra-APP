@@ -2232,7 +2232,7 @@ select option{background:var(--surface2);color:var(--text)}
     <div id="replArAviso" style="display:none;position:absolute;top:calc(64px + env(safe-area-inset-top, 0px));left:10px;right:10px;background:rgba(250,204,21,.94);color:#111;padding:7px 10px;border-radius:10px;font-size:12px;font-weight:700;line-height:1.25;max-height:16vh;overflow:auto"></div>
 
     <!-- Panel de material y ajustes: oculto por defecto, se abre con ⚙️ -->
-    <div id="replArPanelOpts" style="display:none;position:absolute;left:8px;right:8px;bottom:118px;background:rgba(0,0,0,.82);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:8px">
+    <div id="replArPanelOpts" style="display:none;position:absolute;left:8px;right:8px;bottom:92px;background:rgba(0,0,0,.82);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:8px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <select id="replArElem" onchange="replArCambiarElem()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
         <select id="replArMed" onchange="replArCambiarMed()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
@@ -2256,7 +2256,7 @@ select option{background:var(--surface2);color:var(--text)}
 
     <!-- Opciones de modificación: mini-panel que sale del botón flotante ✥ (mover/girar lo
          último colocado). Se abre solo si hace falta. REPL-AR-UI-03. -->
-    <div id="replArPanelMod" style="display:none;position:absolute;right:10px;bottom:192px;background:rgba(0,0,0,.85);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:8px;width:66vw;max-width:250px">
+    <div id="replArPanelMod" style="display:none;position:absolute;right:10px;bottom:150px;background:rgba(0,0,0,.85);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:8px;width:66vw;max-width:250px">
       <div style="color:#fff;font-size:11px;font-weight:700">Ajustar lo último (2 cm)</div>
       <div style="display:flex;gap:6px">
         <button onclick="replArNudge(-1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:11px;border-radius:9px;font-family:inherit">⬅</button>
@@ -2267,21 +2267,21 @@ select option{background:var(--surface2);color:var(--text)}
       <button id="btnReplArRotar" onclick="replArRotarComp()" style="display:none;background:rgba(168,85,247,.92);border:none;color:#fff;font-size:13px;font-weight:800;padding:10px;border-radius:10px;font-family:inherit">↻ Girar complemento 15°</button>
     </div>
     <!-- Botón flotante de modificación: aparece solo cuando hay algo colocado -->
-    <button id="btnReplArMod" onclick="_replArToggleMod()" title="Mover / girar lo último" style="display:none;position:absolute;right:12px;bottom:130px;width:52px;height:52px;align-items:center;justify-content:center;border-radius:50%;background:rgba(168,85,247,.95);border:2px solid rgba(255,255,255,.55);color:#fff;font-size:22px;pointer-events:auto;box-shadow:0 3px 10px rgba(0,0,0,.45)">✥</button>
+    <button id="btnReplArMod" onclick="_replArToggleMod()" title="Mover / girar lo último" style="display:none;position:absolute;right:12px;bottom:92px;width:42px;height:42px;align-items:center;justify-content:center;border-radius:50%;background:rgba(168,85,247,.95);border:2px solid rgba(255,255,255,.55);color:#fff;font-size:18px;pointer-events:auto;box-shadow:0 3px 10px rgba(0,0,0,.45)">✥</button>
 
     <!-- Barra inferior compacta (siempre visible) -->
-    <div style="position:absolute;bottom:calc(10px + env(safe-area-inset-bottom, 0px));left:8px;right:8px;display:flex;flex-direction:column;gap:8px;pointer-events:auto">
-      <div style="display:flex;gap:8px">
-        <button onclick="replArPunto()" style="flex:1;background:#f97316;border:none;color:#fff;font-size:16px;font-weight:800;padding:14px;border-radius:12px;font-family:inherit">📍 Punto</button>
-        <button id="btnReplArOpts" onclick="_replArToggleOpts()" title="Material y ajustes" style="width:56px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:20px;font-weight:800;padding:14px 0;border-radius:12px;font-family:inherit">⚙️</button>
+    <div style="position:absolute;bottom:calc(8px + env(safe-area-inset-bottom, 0px));left:8px;right:8px;display:flex;flex-direction:column;gap:6px;pointer-events:auto">
+      <div style="display:flex;gap:6px">
+        <button onclick="replArPunto()" style="flex:1;background:#f97316;border:none;color:#fff;font-size:13px;font-weight:800;padding:9px;border-radius:10px;font-family:inherit">📍 Punto</button>
+        <button id="btnReplArOpts" onclick="_replArToggleOpts()" title="Material y ajustes" style="width:44px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:16px;font-weight:800;padding:9px 0;border-radius:10px;font-family:inherit">⚙️</button>
       </div>
       <div style="display:flex;gap:6px">
-        <button onclick="replArIdentificar()" title="¿Qué es? (IA)" style="flex:1;background:rgba(139,92,246,.92);border:none;color:#fff;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">🔍</button>
-        <button onclick="replArFoto()" title="Foto" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">📸</button>
-        <button onclick="replArObstaculo()" title="Obstáculo" style="flex:1;background:rgba(250,204,21,.95);border:none;color:#111;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">⚠️</button>
-        <button onclick="replArDeshacer()" title="Deshacer" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">↩</button>
-        <button onclick="replArCancelar()" title="Cancelar" style="flex:1;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:18px;padding:11px 0;border-radius:11px;font-family:inherit">✖</button>
-        <button onclick="replArTerminar()" title="Terminar" style="flex:1.4;background:#22c55e;border:none;color:#fff;font-size:15px;font-weight:800;padding:11px 0;border-radius:11px;font-family:inherit">✅ Fin</button>
+        <button onclick="replArIdentificar()" title="¿Qué es? (IA)" style="flex:1;background:rgba(139,92,246,.92);border:none;color:#fff;font-size:13px;padding:5px 0;border-radius:9px;font-family:inherit">🔍</button>
+        <button onclick="replArFoto()" title="Foto" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-size:13px;padding:5px 0;border-radius:9px;font-family:inherit">📸</button>
+        <button onclick="replArObstaculo()" title="Obstáculo" style="flex:1;background:rgba(250,204,21,.95);border:none;color:#111;font-size:13px;padding:5px 0;border-radius:9px;font-family:inherit">⚠️</button>
+        <button onclick="replArDeshacer()" title="Deshacer" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-size:13px;padding:5px 0;border-radius:9px;font-family:inherit">↩</button>
+        <button onclick="replArCancelar()" title="Cancelar" style="flex:1;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;padding:5px 0;border-radius:9px;font-family:inherit">✖</button>
+        <button onclick="replArTerminar()" title="Terminar" style="flex:1.3;background:#22c55e;border:none;color:#fff;font-size:12px;font-weight:800;padding:5px 0;border-radius:9px;font-family:inherit">✅ Fin</button>
       </div>
     </div>
   </div>
@@ -15442,7 +15442,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.66';
+const APP_VERSION = '9.67';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
