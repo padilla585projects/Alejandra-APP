@@ -30483,13 +30483,25 @@ async function listarCpdLecturas(request, env, path) {
 //   desperdicio_pct: margen sobre la longitud total
 //   ancho_mm: ancho visual por defecto para dibujarlo sobre la foto
 const REPLANTEO_CATALOGO_BASE = (() => {
+  // Montaje de bandeja: el soporte cambia según cómo va instalada. La app lo sugiere por el
+  // plano donde marcaste (techo → colgada; pared → pared) y el usuario lo confirma.
+  //  - colgado:     del techo, con varilla roscada y perfil.
+  //  - pared_perp:  a la pared saliendo como repisa (ménsula/escuadra).
+  //  - pared_plano: pegada y en el plano de la pared (montante perforado + abrazadera), como
+  //                 la bandeja de escalera de la foto de obra.
+  const MONTAJES_BANDEJA = {
+    colgado:     { etiqueta: 'Colgada del techo',       soporte_nombre: 'Soporte colgado a techo (varilla roscada + perfil)' },
+    pared_perp:  { etiqueta: 'En pared (perpendicular)', soporte_nombre: 'Soporte de pared (ménsula / escuadra)' },
+    pared_plano: { etiqueta: 'En pared (en plano)',      soporte_nombre: 'Fijación en plano a pared (montante perforado + abrazadera)' },
+  };
   const bandejaRejilla = {
     key: 'bandeja_rejilla', nombre: 'Bandeja de rejilla (Rejiband)', icono: '▦', unidad: 'm', color: '#f97316',
     opciones: { anchos_mm: [60, 100, 150, 200, 300, 400, 500, 600] },
     reglas: { tramo_m: 3, union_nombre: 'Unión rápida de rejilla', uniones_por_tramo: 1, soporte_cada_m: 1.5,
               soporte_nombre: 'Soporte a techo (varilla + perfil)', codo_nombre: 'Codo / cambio de dirección (rejilla cortada)',
               giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
-              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 200 }
+              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 200,
+              montajes: MONTAJES_BANDEJA, montaje_default: 'colgado', admite_tapa: true, tapa_nombre: 'Tapa de bandeja de rejilla' }
   };
   const bandejaChapa = {
     key: 'bandeja_chapa', nombre: 'Bandeja de chapa perforada', icono: '📏', unidad: 'm', color: '#eab308',
@@ -30497,7 +30509,8 @@ const REPLANTEO_CATALOGO_BASE = (() => {
     reglas: { tramo_m: 3, union_nombre: 'Placa de unión + tornillería', uniones_por_tramo: 1, soporte_cada_m: 1.5,
               soporte_nombre: 'Soporte a techo (ménsula / varilla)', codo_nombre: 'Codo 90° / curva de chapa',
               giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
-              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 200 }
+              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 200,
+              montajes: MONTAJES_BANDEJA, montaje_default: 'colgado', admite_tapa: true, tapa_nombre: 'Tapa de bandeja de chapa' }
   };
   const bandejaEscalera = {
     key: 'bandeja_escalera', nombre: 'Bandeja de escalera', icono: '🪜', unidad: 'm', color: '#d97706',
@@ -30505,7 +30518,8 @@ const REPLANTEO_CATALOGO_BASE = (() => {
     reglas: { tramo_m: 3, union_nombre: 'Unión de escalera + tornillería', uniones_por_tramo: 1, soporte_cada_m: 1.5,
               soporte_nombre: 'Soporte a techo (varilla + perfil)', codo_nombre: 'Codo / cambio de dirección de escalera',
               giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
-              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 300 }
+              sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 300,
+              montajes: MONTAJES_BANDEJA, montaje_default: 'colgado', admite_tapa: true, tapa_nombre: 'Tapa de bandeja de escalera' }
   };
   // Tubo (acero / PVC). Lleva CAJAS DE REGISTRO: en codos y tramos largos (caja_cada_m). Si la
   // caja es 'ciega' (elemento_params.caja_tipo) hay que taladrar y poner racores (2 por caja).
@@ -30954,6 +30968,13 @@ function planoDeTramo(planos, asignados, i, a, b) {
 
 function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {}, escala_px_m = null, longitud_manual_m = null }) {
   const reglas = { ...(elemento?.reglas || {}) };
+  // Montaje de bandeja (colgada / pared perpendicular / pared en plano): cambia el soporte.
+  const montaje = elemento_params.montaje || reglas.montaje_default;
+  if (montaje && reglas.montajes && reglas.montajes[montaje]) {
+    const m = reglas.montajes[montaje];
+    if (m.soporte_nombre) reglas.soporte_nombre = m.soporte_nombre;
+    if (m.soporte_cada_m) reglas.soporte_cada_m = m.soporte_cada_m;
+  }
   const puntos = Array.isArray(trazado.puntos) ? trazado.puntos.filter(p => Number.isFinite(+p.x) && Number.isFinite(+p.y)) : [];
   const obstaculos = Array.isArray(trazado.obstaculos) ? trazado.obstaculos : [];
   if (puntos.length < 2) {
@@ -31037,6 +31058,12 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
   } else {
     material.push({ key: 'principal', nombre: nombreElem, cantidad: Math.ceil(longitudConDesp), unidad: 'm',
                     detalle: `${r1(longitud)} m + ${desp}% desperdicio` });
+  }
+  // Tapa de bandeja (opcional): mismos metros que la bandeja. En tramos si la bandeja va en tramos.
+  if (elemento_params.tapa && reglas.admite_tapa && reglas.tapa_nombre) {
+    if (tramoM) material.push({ key: 'tapa', nombre: `${reglas.tapa_nombre} (tramo de ${tramoM} m)`, cantidad: tramos, unidad: 'ud',
+                                detalle: `tapa para ${r1(longitud)} m de bandeja` });
+    else material.push({ key: 'tapa', nombre: reglas.tapa_nombre, cantidad: Math.ceil(longitudConDesp), unidad: 'm', detalle: 'tapa continua' });
   }
   const codos = giros + codosObst;
   if (reglas.codo_nombre && codos > 0) {
