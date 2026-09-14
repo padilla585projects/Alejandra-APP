@@ -27925,7 +27925,12 @@ window.turnoToggle   = turnoToggle;
         // PARIDAD-HISTORIAL-CANAL-01: sin filtro de canal, esta llamada devolvía los
         // últimos mensajes de TODOS los canales del usuario mezclados (panel, telegram...),
         // no solo los de esta ventana (app_android) -- ver el mismo fix en panel.html.
-        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=app_android`, {
+        // SYNC-DISPOSITIVOS-01 (14/09/2026): un único canal ('app_android') impedía ver en
+        // el móvil lo hablado en el panel de oficina, y viceversa -- Adrián lo pidió
+        // explícitamente ("trabajas en obra con el móvil y sigues luego en el panel"). Se
+        // agrupan los tres canales de la app+paneles (misma Alejandra/alejandra-agente);
+        // telegram/dev quedan fuera a propósito, son la otra Alejandra (worker.js).
+        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=app_android,pwa,panel`, {
               headers: { 'X-Token': getSession()?.token || '' }
             });
         // FIX-ALEJANDRA-SYNC-02 (29/07/2026): Adrián reportó que la PWA "no seguía la
@@ -28585,7 +28590,10 @@ async function _alejandraRestaurarChat() {
   const uid = s?.usuario_id || s?.nombre || null;
   if (uid) {
     try {
-      const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
+      // SYNC-DISPOSITIVOS-01 (14/09/2026): esta llamada no filtraba por canal -- mezclaba
+      // telegram/dev con la conversación real de la app (justo lo que BUG-HISTORIAL-CANAL-01
+      // evitó en otros sitios). Se alinea con el mismo grupo app+paneles que el resto.
+      const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=app_android,pwa,panel`, {
             headers: { 'X-Token': getSession()?.token || '' }
           });
       const data = await res.json();
