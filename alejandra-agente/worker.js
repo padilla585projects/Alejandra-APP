@@ -6680,10 +6680,22 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
   // llamado de verdad en ese turno (traza real: sin invocación). El turno terminó ahí, sin
   // esquema, y la conversación siguió sin que él lo hubiera pedido de nuevo. Los checks de
   // arriba (ESQUEMA-02/03) solo cubren enlaces falsos; esto es una promesa sin enlace ni
-  // acción. Un usuario final nunca debería ver el nombre interno de una tool de escritura
-  // en su respuesta — si aparece y esa tool concreta no corrió este turno, es narración
-  // fantasma, no trabajo real. Se sustituye toda la respuesta, igual que un enlace falso.
-  const toolNarradaSinEjecutar = toolsEscritura.find(t => textoFinal.includes(t) && !toolsEscritos.has(t));
+  // acción. Se sustituye toda la respuesta, igual que un enlace falso.
+  // FALSO-POSITIVO-ESQUEMA-04-01 (14/09/2026, revisión de código): la primera versión
+  // disparaba con CUALQUIER mención del nombre interno de una tool de escritura, aunque no
+  // fuera una promesa -- p.ej. un usuario con rol `desarrollador` preguntando "¿qué tool usas
+  // para generar esquemas?" recibía su respuesta correcta sustituida por "no llegué a
+  // ejecutar...". Ahora además exige una señal de acción en curso cerca del nombre (el
+  // fraseo real del incidente: "ejecutando", "voy a", "procedo a", "dame un momento"...) --
+  // una mención aislada del nombre de la tool, sin esa señal, ya no se trata como promesa.
+  const CUE_ACCION_TOOL = /\b(ejecutando|ejecuto|voy a|procedo a|dame un momento|un momento|enseguida|ahora mismo)\b/i;
+  const toolNarradaSinEjecutar = toolsEscritura.find(t => {
+    if (toolsEscritos.has(t)) return false;
+    const idx = textoFinal.indexOf(t);
+    if (idx === -1) return false;
+    const contexto = textoFinal.slice(Math.max(0, idx - 60), idx + t.length + 20);
+    return CUE_ACCION_TOOL.test(contexto);
+  });
   if (toolNarradaSinEjecutar) {
     return `No llegué a ejecutar "${toolNarradaSinEjecutar}" en este turno — iba a describirlo como si lo hubiera hecho, pero la herramienta real nunca se llamó. Pídemelo otra vez y lo hago ahora.`;
   }
