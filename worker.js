@@ -11923,10 +11923,22 @@ async function eliminarDocumentoObra(id, request, env) {
   const { empresa_id, rol, isSuperadmin, isEmpresaAdmin, isDesarrollador, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
-  // Si el doc tiene r2_key en esquemas/ (generado por IA), borrar también de R2
+  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
+  const params = [id, empresa_id];
+  let deptGuard = '';
+  if (!_isPriv && departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(departamento); }
+  // BUG-DOC-OBRA-BORRADO-CRUZADO-01 (14/09/2026, revision de codigo): este SELECT no
+  // llevaba el mismo deptGuard que el DELETE de mas abajo -- un encargado/oficina de un
+  // departamento, probando el id de un documento de OTRO departamento con r2_key en
+  // esquemas/, conseguia que su objeto de R2 se borrara de verdad (este bloque no
+  // comprobaba departamento) mientras la fila en documentos_obra se quedaba intacta (el
+  // DELETE de abajo si esta filtrado por departamento y no la afectaba) -- fila huerfana
+  // apuntando a un archivo que ya no existe, para un departamento que no era el suyo.
+  // Mismo deptGuard en el SELECT para que solo se borre de R2 si tambien se va a borrar la
+  // fila.
   if (env.FILES) {
     try {
-      const doc = await env.DB.prepare(`SELECT r2_key FROM documentos_obra WHERE id=? AND empresa_id=?`).bind(id, empresa_id).first();
+      const doc = await env.DB.prepare(`SELECT r2_key FROM documentos_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).first();
       if (doc?.r2_key?.startsWith('esquemas/')) {
         await env.FILES.delete(doc.r2_key);
         const svgKey = doc.r2_key.replace('.html', '.svg');
@@ -11934,10 +11946,6 @@ async function eliminarDocumentoObra(id, request, env) {
       }
     } catch {} // Non-fatal: borrar el registro de BD aunque R2 falle
   }
-  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
-  const params = [id, empresa_id];
-  let deptGuard = '';
-  if (!_isPriv && departamento) { deptGuard = ` AND (departamento=? OR departamento IS NULL)`; params.push(departamento); }
   await env.DB.prepare(`DELETE FROM documentos_obra WHERE id=? AND empresa_id=?${deptGuard}`).bind(...params).run();
   return json({ ok: true });
 }
