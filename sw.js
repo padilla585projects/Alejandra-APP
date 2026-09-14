@@ -99,8 +99,17 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     fetch(e.request)
       .then(res => {
+        // FIX-DESCARGA-GENERICA-01 (14/09/2026): el guard de arriba solo cubre el .apk por
+        // URL, pero el mismo problema (clonar+cachear compite por E/S con una descarga real
+        // en curso) aplica a cualquier descarga real servida por nuestro propio API —
+        // documentos, backups, informes, exportaciones DSAR — todas responden con
+        // `Content-Disposition: attachment`. En vez de mantener una lista de URLs, se usa
+        // esa cabecera como señal genérica: si el servidor la marca como descarga real, el
+        // SW no la clona ni la cachea (offline no tiene sentido para un fichero que el
+        // usuario ya está guardando en su dispositivo).
+        const esDescarga = (res.headers.get('Content-Disposition') || '').toLowerCase().includes('attachment');
         // Solo cachear GET con respuesta OK — ver comentario arriba.
-        if (e.request.method === 'GET' && res.ok) {
+        if (e.request.method === 'GET' && res.ok && !esDescarga) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy));
         }

@@ -15549,11 +15549,19 @@ function mostrarBannerActualizacion(v) {
 // 5 min, o a los 3s de detectar una versión nueva) y `_hayTrabajoSinGuardar()` no sabía
 // nada de una descarga en curso -- si el usuario cambia de app mientras el .apk baja (muy
 // fácil en una conexión lenta) y vuelve, el visibilitychange puede disparar el reload
-// justo encima de la descarga. Se marca aquí una ventana de 90s (suficiente para 7 MB
-// incluso en una conexión lenta) tras tocar "Descargar" en la que el reload automático se
-// aplaza igual que con un modal abierto o un replanteo sin guardar.
+// justo encima de la descarga. Se marca aquí una ventana tras tocar "Descargar" en la que
+// el reload automático se aplaza igual que con un modal abierto o un replanteo sin guardar.
+// FIX-DESCARGA-APK-04 (14/09/2026, revisión de código): 90s fijos no cubre el caso real que
+// motivó este fix -- si el usuario cambia de app mientras el .apk baja en una conexión
+// realmente lenta y tarda más de 90s en volver, la ventana ya expiró y el siguiente chequeo
+// (al volver a primer plano) fuerza el reload igual, justo sobre la descarga que seguía en
+// curso. No hay forma de medir el progreso real (window.open/Browser.open es opaco), así
+// que en vez de una ventana fija se renueva cada vez que la app vuelve a primer plano
+// mientras sigan dentro de un límite total razonable (10 min desde que se tocó
+// "Descargar") -- ver el listener de visibilitychange más abajo.
 function _marcarDescargaApkEnCurso() {
-  window._descargaApkHasta = Date.now() + 90000;
+  window._descargaApkInicio = Date.now();
+  window._descargaApkHasta = Date.now() + 300000;
 }
 // BUG-DESCARGA-APK-03 (14/09/2026): Adrián, tras arreglar la firma de release (el .apk
 // dejó de ser debug): "desde GitHub directo descarga, pero a través de la app no" --
@@ -15567,7 +15575,15 @@ function _marcarDescargaApkEnCurso() {
 // esto mismo (ver el comentario junto a su definición) y usa window.open() en vez de
 // depender del atributo download, forzando una navegación de verdad que sale del scope
 // del WebAPK igual que la descarga directa que sí funciona.
+// FIX-DESCARGA-APK-05 (14/09/2026, revisión de código): sin protección contra doble toque,
+// pulsar el botón dos veces seguidas (fácil en un dispositivo lento o con doble tap
+// accidental) abre dos descargas/pestañas en paralelo del mismo .apk -- no rompe nada pero
+// es confuso y gasta datos/batería por duplicado.
+let _descargaApkEnCurso = false;
 function _descargarApk(url) {
+  if (_descargaApkEnCurso) return false;
+  _descargaApkEnCurso = true;
+  setTimeout(() => { _descargaApkEnCurso = false; }, 5000);
   _marcarDescargaApkEnCurso();
   _abrirUrlExterna(url);
   return false;
@@ -25750,6 +25766,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // BUG-009: pausa polling en background, reanuda al volver al frente
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      // FIX-DESCARGA-APK-04: si la descarga del .apk sigue "reciente" (dentro de los 10 min
+      // desde que se tocó "Descargar"), renovar su ventana de gracia antes del chequeo de
+      // abajo -- así una conexión lenta que tarda más de 5 min no se lleva por delante el
+      // reload automático en cuanto el usuario vuelve a la app. Pasados los 10 min se deja
+      // de renovar (evita bloquear el auto-update para siempre si algo quedó a medias).
+      if (window._descargaApkInicio && (Date.now() - window._descargaApkInicio) < 600000) {
+        window._descargaApkHasta = Date.now() + 300000;
+      }
       // Al volver: chequeo inmediato + reinicia intervalos
       navigator.serviceWorker.getRegistration().then(reg => reg?.update());
       checkVersionAndUpdate();
