@@ -1,5 +1,71 @@
 # TASKS — Cola operativa inmediata
 
+Estado (2026-09-14, tarde): **Tanda grande de bugs de campo en la app Android, arreglados y
+verificados en dispositivo real (HTC U11 + Oppo Find X5 Pro). `main` en v9.72 (PRs #221-#244).**
+Este documento y `HANDOFF.md`/`CHANGELOG.md` llevaban 25 PRs sin actualizar (última entrada
+registrada correspondía a #219/#220) — puestos al día ahora. Ver `HANDOFF.md` para el detalle
+completo de cada bug.
+- **Botón atrás nativo, dos rondas** (BUG-ATRAS-01): la primera (#227) no bastó porque
+  `App.exitApp()` estaba anidado en el listener de `popstate`, que nunca se dispara en nativo con
+  gestos de retroceder predictivos (Android 13+). Arreglado de verdad (#233) enganchando
+  `App.addListener('backButton', ...)`; verificado en vivo en el HTC instrumentando el WebView
+  por Chrome DevTools (CDP): 0 disparos de `popstate` tras varias pulsaciones reales.
+- **Firma de release + icono real** (#241): el `.apk` distribuido era la build de depuración
+  (firma genérica `CN=Android Debug`, sin `signingConfig` de release) — más sospechosa para el
+  escaneo de descargas de Android/Chrome modernos. Añadido `signingConfigs.release` desde
+  `keystore.properties` (fuera del repo). Icono/splash regenerados desde `icon-512.png` (antes el
+  placeholder azul de Capacitor). Release ya reemplazada en GitHub Releases con el binario firmado.
+- **Descarga del `.apk` atascada al 100%, dos causas más** (la del Service Worker ya estaba
+  cerrada por APK-DESCARGA-01):
+  - **BUG-DESCARGA-APK-02** (#239): la recarga automática por actualización de versión podía
+    cortar la descarga a medias si el usuario cambiaba de app mientras bajaba. Ventana de 90s tras
+    pulsar "Descargar" que aplaza el reload.
+  - **BUG-DESCARGA-APK-03** (#243), reportado en un Oppo tras arreglar la firma: dentro de la app
+    ya instalada (WebAPK), un `<a download>` hacia GitHub (origen cruzado) se resolvía como
+    petición interna en vez de navegación de nivel superior — el WebAPK no la reconocía como
+    "fuera de scope". Arreglado reutilizando `_abrirUrlExterna()` (`window.open()`).
+- **Edge-to-edge real** (#242): Adrián — "la app no aprovecha toda la pantalla". Modo overlay del
+  StatusBar con `padding-top: env(safe-area-inset-top)` en vez de reservar una franja sólida
+  aparte (causa del bug `HEADER-COMPACTO-03` de julio). Cubre cabecera, login/wizard y los dos
+  chats; cámara/AR/Replanteo quedan fuera a propósito, necesitan revisión propia.
+- **Sincronización del chat de Alejandra entre app y paneles** (BUG-HISTORIAL-CANAL-01,
+  revertido parcialmente, #231): el aislamiento por canal (`app_android` vs `panel`) que evitaba
+  mezclar Telegram/dev también impedía que la misma conversación continuara entre móvil y panel.
+  `worker.js` acepta ahora una lista de canales (`app_android,pwa,panel`); Telegram/dev quedan
+  fuera a propósito. Efecto secundario real (#232, FIX-HISTORIAL-VACIO-01): una ventana corta del
+  despliegue en la que el frontend ya pedía el grupo pero el Worker aún procesaba uno solo hizo
+  que Adrián viera su conversación real "desaparecer" (0 mensajes, sin error) — los datos nunca se
+  tocaron (verificado contra D1). Reintento automático a los 4s en ambos frontends si la primera
+  carga llega vacía.
+- **`usuario_id` perdido al cambiar de empresa** (#235): `/auth/cambiar-empresa` no devolvía
+  `usuario_id` en su respuesta; `panel.html` lo reconstruía como `null` y lo persistía en
+  `localStorage`, rompiendo en silencio el chat flotante de Alejandra solo para quien cambia de
+  empresa (superadmin/desarrollador/empresa_admin). Corregido en el Worker + fallback a
+  `SESSION.nombre` en el frontend.
+- **Chat de Alejandra en el panel mostraba los mensajes más recientes arriba** (#237): mismo bug
+  que SCAN-05 (25/07/2026, corregido entonces en el chat de equipo pero nunca replicado aquí) — un
+  `.reverse()` de más sobre un backend que ya devuelve orden cronológico.
+- **Alejandra prometía guardar/generar sin ejecutar la tool, dos rondas** (#228, #236): el modelo
+  narraba una acción en curso o inminente ("ejecutando...", "ahora guardo...") y terminaba el
+  turno sin llamar la tool real. Detección genérica en `verificarAccionesAfirmadas()`
+  (`alejandra-agente/worker.js`) para cualquier tool de escritura, no solo esquemas.
+  **`#236` está fusionado pero el Worker `alejandra-agente` seguía sin desplegar desde `#228`** —
+  detectado al escribir esta entrada; **despliegue ya iniciado** (run `34882480721`), **esperando
+  tu aprobación del entorno `production`**.
+- **Documentos de Obra no se podían abrir para revisar** (#238): tenían el archivo real en
+  `r2_key` pero solo se podía editar metadatos o borrar. Nuevo `GET /documentos-obra/:id/archivo`
+  + botón "👁 Ver" en el panel — afecta en concreto a los esquemas que Alejandra guarda ahí.
+- **jsQR vendorizado local** (#221, + fix del workflow de Pages #229 que se lo había dejado
+  fuera): evita depender de un CDN de terceros tras el incidente jsQR-01 (404 de cdnjs).
+- **Menor**: háptica al fichar y al marcar puntos en Replanteo (#222); permisos de ubicación sin
+  uso retirados del manifest Android (#224); el sync se reengancha también por el evento nativo
+  `resume` de Capacitor, no solo `visibilitychange` (#225); accesos directos del icono
+  Escanear/Fichar/Incidencia (#226) — **pendiente confirmar la navegación real tocando cada uno
+  en dispositivo**, la prueba se interrumpió.
+- Versión sincronizada de 9.68 → **9.72** en cuatro pasos (#230/9.69, #234/9.70, #240/9.71,
+  #244/9.72). Pages desplegado en cada paso y verificado en producción; Workers desplegados donde
+  aplicaba, salvo el pendiente de `alejandra-agente` señalado arriba.
+
 Estado (2026-09-14): **REPLANTEO-RELOAD-01 + APK-DESCARGA-01 — arreglados, desplegados y
 verificados en el HTC U11 real de Adrián.** Dos bugs reportados probando en campo justo tras el
 despliegue de F3.1 (el momento en que más probable es que el Service Worker se actualice a

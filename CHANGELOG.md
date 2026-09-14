@@ -4,6 +4,41 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-14, tarde — tanda de bugs de campo en la app Android, v9.69→v9.72)
+
+- **Botón atrás nativo** no cerraba la app (BUG-ATRAS-01): `popstate` nunca se dispara en nativo
+  con gestos de retroceder predictivos (Android 13+); movido a
+  `Capacitor.Plugins.App` `backButton`. Verificado en vivo en el HTC por Chrome DevTools (CDP).
+  PR #227, #233.
+- **Firma de release real + icono/splash reales** (antes: build de depuración sin `signingConfig`,
+  placeholder azul de Capacitor). PR #241.
+- **Descarga del `.apk` atascada al 100%**, dos causas más allá del Service Worker (ya cerrado):
+  la recarga automática por versión podía cortarla a medias (BUG-DESCARGA-APK-02, PR #239); dentro
+  de la app instalada (WebAPK), un `<a download>` a origen cruzado no salía del scope
+  (BUG-DESCARGA-APK-03, PR #243).
+- **Edge-to-edge real**: modo overlay del StatusBar en vez de una franja sólida aparte, cubre
+  cabecera/login/wizard/chats. PR #242.
+- **Chat de Alejandra no se sincronizaba entre app móvil y paneles** (BUG-HISTORIAL-CANAL-01): el
+  aislamiento por canal impedía la continuidad de conversación; `getIAChatHistory` acepta ahora un
+  grupo de canales. PR #231. Efecto secundario del propio despliegue: historial "desaparecido" por
+  una ventana corta con canal desincronizado (datos intactos en D1); reintento a los 4s en ambos
+  frontends si la primera carga llega vacía. PR #232.
+- **`usuario_id` perdido al cambiar de empresa** en el panel, rompía en silencio el chat flotante
+  de Alejandra. PR #235.
+- **Chat de Alejandra en el panel mostraba los mensajes más recientes arriba** (mismo bug que
+  SCAN-05, nunca replicado aquí). PR #237.
+- **Alejandra prometía guardar/generar sin ejecutar la tool**, dos rondas de detección genérica en
+  `verificarAccionesAfirmadas()`/`patronesAccion` (`alejandra-agente/worker.js`). PR #228, #236.
+- **jsQR vendorizado local** en vez de CDN (evita el incidente jsQR-01). PR #221, #229.
+- Menor: háptica al fichar/marcar puntos de Replanteo (#222); permisos de ubicación sin uso
+  retirados del manifest Android (#224); sync se reengancha también por el evento nativo `resume`
+  (#225); accesos directos del icono Escanear/Fichar/Incidencia (#226).
+
+### Added (2026-09-14, tarde — Documentos de Obra abren su archivo real, v9.70)
+
+- Nuevo `GET /documentos-obra/:id/archivo` + botón "👁 Ver" en el panel — antes solo se podía
+  editar metadatos o borrar. Afecta en concreto a los esquemas que Alejandra guarda ahí. PR #238.
+
 ### Added (2026-09-10 — App Android F1: Capacitor + descarga del .apk desde la PWA, v9.60, ADR-0026)
 
 Primera fase de la estrategia multi-plataforma (ADR-0026 / `docs/PLAN-APP-ANDROID.md`): la suite

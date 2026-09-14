@@ -1,5 +1,178 @@
 # Handoff — Alejandra 2.0
 
+## Tanda de bugs de campo en la app Android (2026-09-14, tarde, PRs #221-#244, `main` v9.72)
+
+- **Agente:** Claude (Sonnet 5), sesión `alejandra-app-72`. Este `HANDOFF.md`/`TASKS.md`/
+  `CHANGELOG.md` llevaban 25 PRs sin actualizar (la última entrada registrada era #219/#220,
+  REPLANTEO-RELOAD-01+APK-DESCARGA-01 más abajo); reconstruido a partir de `git log` y las
+  descripciones reales de cada PR por otra sesión (`alejandra-app-22`) que detectó el desfase.
+- **BUG-ATRAS-01, botón atrás nativo, dos rondas:**
+  - Ronda 1 (#227, `35fc2c0`): la segunda pulsación en <2.5s empezó a llamar
+    `Capacitor.Plugins.App.exitApp()` en vez de solo `history.back()` (no-op sin historial que
+    consumir). No verificable sin desplegar — Adrián lo pidió como decisión de entrega aparte.
+  - Ronda 2 (#233, `2aa6d6d`), tras desplegar: seguía sin cerrar en el HTC real. Causa: la llamada
+    a `exitApp()` estaba anidada dentro del listener de `popstate`, y **`popstate` nunca se
+    dispara en nativo con los gestos de retroceder predictivos de Android 13+** — Android resuelve
+    el gesto contra el `OnBackPressedDispatcher` de la Activity sin llegar a `WebView.goBack()`.
+    Confirmado instrumentando el WebView en vivo por Chrome DevTools (`adb forward` + CDP): 0
+    disparos de `popstate` tras varias pulsaciones reales, mientras que
+    `Capacitor.Plugins.App` `backButton` sí se disparaba siempre. Extraída la lógica compartida a
+    `_manejarBotonAtras()`; en nativo se engancha por `App.addListener('backButton', ...)`
+    (`_initNativo()`), en web/PWA se mantiene `popstate`. **Verificado en vivo en el HTC**: primera
+    pulsación → toast + flag; segunda en <2.5s → `ResumedActivity` pasa de `MainActivity` al
+    launcher del sistema — la app sale de verdad. PR #234 → v9.70.
+- **Firma de release + icono real (#241, `4e95910`):** investigando por qué en un Oppo moderno la
+  descarga del `.apk` se quedaba al 100% sin completar (Chrome nativo, sin PWA/SW de por medio),
+  aparecieron dos problemas reales:
+  1. El `.apk` distribuido era la **build de depuración**, firmada con la clave genérica de
+     depuración de Android (`CN=Android Debug`, idéntica en cualquier instalación del SDK) — nunca
+     hubo `signingConfig` de release. Un APK debuggable/firmado así recibe más sospecha del
+     escaneo de descargas de Android/Chrome modernos. Añadido `signingConfigs.release` leyendo de
+     `keystore.properties` (gitignored, solo en las máquinas que generan la entrega real).
+     Verificado con `apksigner`: firma `CN=Alejandra APP`, `debuggable` ya no aparece en
+     `aapt2 dump badging`.
+  2. Faltaba el **icono real** — launcher y splash seguían siendo el placeholder azul genérico de
+     la plantilla de Capacitor. Regenerados con `@capacitor/assets` desde `icon-512.png` (el mismo
+     que ya usa la PWA); `capacitor/resources/icon.png` queda en el repo como fuente.
+  - El `.apk` de GitHub Releases ya se reemplazó manualmente por la build de release firmada.
+- **Descarga del `.apk` atascada al 100%, dos causas más** (la del Service Worker cacheándola ya
+  estaba cerrada por APK-DESCARGA-01, PR #220):
+  - **BUG-DESCARGA-APK-02 (#239, `ce2644f`):** el chequeo de versión recarga la página sola (al
+    volver a primer plano, cada 5 min, o a los 3s de detectar versión nueva) y
+    `_hayTrabajoSinGuardar()` no sabía nada de una descarga en curso — si el usuario cambia de app
+    mientras el `.apk` (~7 MB) baja en una conexión lenta y vuelve, el `visibilitychange` podía
+    disparar el reload justo encima. Se marca una ventana de 90s tras tocar "Descargar" (banner de
+    home + sección de ajustes) en la que el reload automático se aplaza, reutilizando el mismo
+    guard que las tres vías de `FIX-RELOAD-REPLANTEO-01`. PR #240 → v9.71.
+  - **BUG-DESCARGA-APK-03 (#243, `cb9b8f7`):** Adrián, tras la firma de release — "desde GitHub
+    directo descarga, pero a través de la app no". Con la app instalada (WebAPK), un
+    `<a download>` hacia un origen cruzado (GitHub → `objects.githubusercontent.com`) se resuelve
+    como petición de recurso dentro del propio contexto de la app en vez de navegación de nivel
+    superior — el WebAPK no la reconoce como "fuera de scope" y no la entrega al gestor de
+    descargas del sistema. Arreglado reutilizando `_abrirUrlExterna()` (ya existía para esto
+    mismo, usa `window.open()` en vez del atributo `download`). Verificado en el Oppo. PR #244 →
+    v9.72.
+- **Edge-to-edge real (#242, `4ede7d4`):** Adrián — "la app no aprovecha toda la pantalla, la
+  barra de notificación se ve, y las apps deben ocupar toda la pantalla y adaptarse al móvil en
+  cuestión". Antes se evitaba el modo overlay a propósito (`HEADER-COMPACTO-03`, 25/07/2026: una
+  franja naranja encima de la cabecera), reservando la barra de estado como franja sólida aparte
+  — justo lo contrario de edge-to-edge, cada vez más fuera de lugar con `targetSdk 36` (Android
+  fuerza edge-to-edge desde API 35). Activado el overlay (Capacitor StatusBar, fondo transparente)
+  con `padding-top: env(safe-area-inset-top)` en el CSS de cada pantalla en vez de intentar que el
+  color de la barra coincida a mano (causa del bug original) + `viewport-fit=cover` (sin él,
+  `env(safe-area-inset-*)` vale 0 siempre). Cubre cabecera principal, login/registro/wizard, y los
+  dos paneles de chat (equipo + Alejandra AI). **Fuera de alcance a propósito:** las vistas a
+  pantalla completa de cámara/AR/Replanteo (`#replCamViva`, `#replPreview3D`, `#replArOverlay`) —
+  necesitan revisión propia de sus controles superpuestos antes de tocarlas.
+- **Sincronización del chat de Alejandra entre app móvil y paneles (#231, `c5777ef`):** Adrián
+  preguntó por qué la conversación con Alejandra no se sincroniza entre dispositivos ("trabajas en
+  obra con el móvil y sigues luego en el panel"). Causa: `BUG-HISTORIAL-CANAL-01` (histórico) fijó
+  cada frontend a ver solo su propio canal (`index.html` → `app_android`, `panel.html` → `panel`)
+  para no mezclar Telegram/dev — efecto secundario no buscado: también impidió la continuidad real
+  entre app móvil y paneles, que son la misma Alejandra (`alejandra-agente`). `getIAChatHistory`
+  (`worker.js`) acepta ahora `canal` como lista separada por comas además de un valor único
+  (compatibilidad hacia atrás intacta); `index.html`/`panel.html` piden el grupo
+  `app_android,pwa,panel`. Telegram/dev quedan fuera a propósito — es la otra Alejandra
+  (`worker.js`/dev), no debe mezclarse. De paso corregido el segundo widget de `index.html`
+  (`_alejandraRestaurarChat`), que no filtraba canal en absoluto. `alejandra-panel.html` (panel
+  standalone, auth por `adminToken`) se deja fuera a propósito, para no mezclar un problema de
+  sync con uno de auth.
+  - **Efecto secundario real del propio despliegue (#232, FIX-HISTORIAL-VACIO-01, `e7adca8`):**
+    hubo una ventana corta en la que el frontend ya pedía el grupo de canales pero el Worker
+    desplegado aún procesaba uno solo — la consulta no encontraba coincidencia exacta y devolvía
+    vacío (`ok:true`, 0 mensajes), sin error visible. Adrián vio su conversación real
+    "desaparecer" en la PWA y en el panel Office. **Los datos nunca se tocaron** — verificado
+    contra D1 en caliente (sus 82 mensajes seguían intactos). `index.html` ya tenía un comentario
+    "reintenta cuando session esté lista" pero el evento `sessionReady` del que dependía nunca se
+    disparaba en ningún sitio del archivo — reintento muerto desde siempre; `panel.html` no tenía
+    ninguno. Añadido reintento automático a los 4s si la primera carga no trae mensajes, en ambos
+    frontends.
+- **`usuario_id` perdido al cambiar de empresa (#235, `d738051`):** Adrián abrió el chat flotante
+  de Alejandra en el panel Office (el FAB) y aparecía vacío — pero solo en SU sesión, no en una
+  cuenta de prueba recién logueada, apuntando a un problema de sesión y no de datos. Causa: la
+  ruta `/auth/cambiar-empresa` (selector de empresa del panel, para superadmin/desarrollador/
+  empresa_admin) nunca devolvía `usuario_id` en su respuesta JSON, aunque la sesión en D1 se
+  creaba correctamente con el `usuario_id` real. `cambiarEmpresaAdmin` en `panel.html`
+  reconstruía `SESSION` con `usuario_id: null` a falta de ese campo, y ese `null` quedaba
+  persistido en `localStorage` — rompiendo en silencio `cargarAlejandraChat()`, que no tenía
+  fallback a `nombre` y simplemente no hacía la petición si `usuario_id` era `null`. Los mensajes
+  de Adrián nunca se tocaron (verificado contra D1). Corregido: `worker.js`
+  (`cambiarEmpresaSesion`) incluye `usuario_id` en las dos ramas de la respuesta;
+  `cambiarEmpresaAdmin` lee `r.usuario_id`; `cargarAlejandraChat()` añade fallback a
+  `SESSION.nombre` igual que ya tenía `index.html`.
+- **Chat de Alejandra en el panel mostraba los mensajes más recientes arriba (#237, `97a9e6b`):**
+  Adrián — "por qué está al revés el chat? los recientes arriba" (widget flotante, panel Office).
+  Mismo bug que SCAN-05 (25/07/2026), corregido entonces en el chat de equipo pero nunca replicado
+  aquí: el backend (`getIAChatHistory`) ya devuelve orden cronológico; `cargarAlejandraChat()` y
+  `_alejandraResincronizarFirmas()` volvían a invertirlos con un `.reverse()` extra. Quitado en
+  ambas funciones (deben coincidir en orden entre sí — una sincroniza el registro de firmas que la
+  otra usa para el pintado incremental).
+- **Alejandra prometía guardar/generar sin ejecutar la tool, dos rondas (`alejandra-agente/worker.js`):**
+  - **ALEJANDRA-ESQUEMA-04 (#228, `c64af88`):** Adrián pidió el esquema de conexión AXG125→BMS
+    (canal `app_android`) y Alejandra respondió "Ejecutando: generar_esquema_electrico... dame un
+    momento" sin llegar a llamar la tool ese turno — el turno terminó ahí, sin esquema.
+    `verificarAccionesAfirmadas()` ya detectaba enlaces falsos de esquemas/planos
+    (ALEJANDRA-ESQUEMA-02/03) pero no una promesa en curso sin enlace. Añadido un check genérico:
+    si el texto visible menciona el nombre interno de una tool de escritura sin que se haya
+    ejecutado ese turno, se sustituye la respuesta por un aviso honesto — aplica a cualquier tool
+    de escritura, no solo esquemas. Aclarado también el prompt de generación de esquemas para que
+    nunca narre el proceso como parte de la respuesta visible. Solo `alejandra-agente/worker.js`
+    (la tool no existe en `worker.js` raíz, no aplica la paridad de los dos cerebros). **Desplegado**
+    (run `34857557997`, SHA `c64af88`, éxito).
+  - **Continuación (#236, `6918a35`):** Adrián pidió guardar dos fotos y el esquema del BMS como
+    documentos de Control; la respuesta dijo "Ahora guardo las dos fotos... y el esquema
+    también..." — confirmado contra la traza real y `documentos_obra` que ninguna tool de
+    escritura se llamó, nada se guardó. Mismo patrón que ALEJANDRA-ESQUEMA-04 pero con otro
+    fraseo que no cubría: presente/inminente ("ahora guardo") en vez de nombrar la tool o afirmar
+    un pasado completado. Añadido ese fraseo a `patronesAccion`. 262 tests OK.
+    **⚠️ Fusionado en `main` pero SIN DESPLEGAR** — detectado el 14/09 tarde al reconstruir este
+    handoff: el último despliegue del Worker (`34857557997`) es de antes de este PR. **Despliegue
+    ya iniciado por esta sesión** (`gh workflow run deploy-alejandra-agente.yml`, run
+    `34882480721`), **esperando tu aprobación del entorno `production`** en GitHub Actions.
+- **Documentos de Obra no se podían abrir para revisar (#238, `f8716f6`):** Adrián — "por qué los
+  documentos de obra no se pueden abrir para revisar? todo lo que se guarde se tiene que abrir
+  para ver y editar también" (comparando con Planos, que ya tiene su botón "Ver"). La tabla de
+  Documentos de Obra (PRL) siempre tuvo el archivo real en `r2_key`, pero solo ofrecía editar
+  metadatos y borrar — nunca verlo. Afecta en concreto a los esquemas que Alejandra guarda ahí
+  (`generar_esquema_electrico` con `obra_id` inserta en esta misma tabla). Nuevo
+  `GET /documentos-obra/:id/archivo` (mismo patrón que `descargarArchivo()`, ya existente para la
+  tabla `archivos`, más el filtro empresa/departamento del resto de endpoints de este recurso;
+  sirve inline). `panel.html`: botón "👁 Ver" por fila (solo si tiene archivo) — los esquemas de
+  Alejandra van directos a su visor público ya existente, cualquier otro documento usa el endpoint
+  nuevo. Alcance: solo "Documentos de Obra" (PRL); "Planos" y "Fotos" ya tenían su propio visor.
+  Desplegado (`Deploy API Worker` run `34862599143`, éxito).
+- **jsQR vendorizado local (#221, `74a6ecf`; + fix del workflow #229, `a965ff2`):** el escaneo QR
+  (bobinas, EPIs, herramientas, fichaje) cargaba `jsQR` desde `cdn.jsdelivr.net` en tiempo de
+  ejecución — ya causó el incidente jsQR-01 (404 de cdnjs, escaneo roto en silencio). Vendorizado
+  `vendor/jsQR.js` (misma versión 1.4.0, sin cambio de comportamiento). El workflow de Pages
+  (`pages.yml`) copia carpetas concretas a `_site/` y no incluía `vendor/` — publicar tal cual
+  habría roto el escaneo QR en producción con un 404, justo el incidente que el cambio pretendía
+  evitar; añadida la carpeta a la lista.
+- **Menor:**
+  - Háptica (`navigator.vibrate`) al confirmar fichaje por QR/manual y al añadir un punto en el
+    flujo web de Replanteo (#222, `205bf82`).
+  - Permisos `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` retirados del manifest Android (#224,
+    `17b7453`): declarados pero sin ninguna llamada a geolocalización real en `index.html` ni en
+    el módulo AR nativo (verificado — el único match de "Location" en el paquete AR es
+    `glGetAttribLocation`, shader OpenGL, no GPS). Se puede volver a añadir cuando haya código real
+    que lo use.
+  - El reenganche de sync (`rmReconectarSync`/`_onAppVisible()`) también por el evento nativo
+    `App.addListener('resume', ...)` de Capacitor (#225, `893010b`), porque Android puede congelar
+    los `setInterval` en segundo plano sin que `visibilitychange` llegue a tiempo; autolimitado a
+    una vez cada 15s, no duplica trabajo si ambos eventos llegan juntos.
+  - Accesos directos del icono (mantener pulsado → Escanear/Fichar/Nueva incidencia, Android
+    7.1+), sin plugin nuevo (#226, `7ab8fa0`): `shortcuts.xml` + `MainActivity.java` (lee el extra
+    en `onCreate` y `onNewIntent`, dispara `CustomEvent('alejandraShortcut', ...)`) +
+    `index.html` reutiliza la navegación ya existente (`navTo('scan'/'personal'/'incidencias')` +
+    `abrirFormIncidencia`). Build Gradle OK, instalado en el HTC, `dumpsys shortcut` confirma los 3
+    registrados con icono/etiqueta correctos. **Pendiente: confirmar la navegación real tocando
+    cada shortcut** — la prueba se interrumpió.
+- **Versión:** sincronizada de 9.68 → **9.72** en cuatro pasos — #230 (9.69: agrupa #221/#222/
+  #224/#225/#226/#227/#229), #234 (9.70: #233), #240 (9.71: #239), #244 (9.72: #242/#243). Pages
+  publicado y verificado en cada paso (`version.json` sirve la versión esperada). Deploy API
+  Worker: run `34862599143` (para #235/#238, verificado `/health`). Deploy Alejandra Agent Worker:
+  run `34857557997` (para #228) desplegado; **run `34882480721` (para #236) esperando aprobación**.
+
 ## REPLANTEO-RELOAD-01 + APK-DESCARGA-01 (2026-09-14, desplegado y verificado en el HTC real)
 
 - **Agente:** Claude (Sonnet 5). Dos bugs de campo reportados por Adrián probando justo tras el
