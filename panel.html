@@ -18484,12 +18484,26 @@ async function docObraCargar() {
         <td>${i.elaborado_por||'—'}</td>
         <td>${i.aprobado_por||'—'}</td>
         <td>
+          ${i.r2_key ? `<button class="btn btn-sm" onclick="docObraAbrir(${i.id}, '${escHtml(i.r2_key)}')" title="Ver archivo">👁</button>` : ''}
           <button class="btn btn-sm" onclick="docObraEditar(${i.id})">✏️</button>
           <button class="btn btn-sm btn-danger" onclick="docObraEliminar(${i.id})">🗑</button>
         </td>
       </tr>`
     ).join('') || '<tr><td colspan="8" class="empty">Sin documentos registrados</td></tr>';
   } catch(e) { console.error(e); }
+}
+
+// VER-DOCUMENTOS-OBRA-01 (14/09/2026): esta tabla solo tenía editar-metadatos y borrar --
+// nunca una forma de abrir el archivo real. Los esquemas que genera Alejandra
+// (generar_esquema_electrico con obra_id) tienen su propio visor público ya funcionando
+// (r2_key con prefijo "esquemas/"); para cualquier otro documento con archivo se usa el
+// endpoint genérico nuevo (abrirArchivoDocumentoObra en worker.js), con el token por query
+// porque es una navegación de pestaña normal, no un fetch con cabeceras.
+function docObraAbrir(id, r2Key) {
+  const url = r2Key.startsWith('esquemas/')
+    ? `https://alejandra-agente.alejandra-app.workers.dev/api/esquemas/view/${encodeURIComponent(r2Key.slice('esquemas/'.length))}`
+    : `${API}/documentos-obra/${id}/archivo?token=${encodeURIComponent(TOKEN)}`;
+  window.open(url, '_blank');
 }
 
 function docObraNuevo() {

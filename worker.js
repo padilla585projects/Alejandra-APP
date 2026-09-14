@@ -6892,7 +6892,9 @@ export default {
       if (path === '/documentos-obra' && method === 'GET')  return await getDocumentosObra(request, env);
       if (path === '/documentos-obra' && method === 'POST') return await crearDocumentoObra(request, env);
       if (path.startsWith('/documentos-obra/')) {
-        const doid = parseInt(path.split('/documentos-obra/')[1]);
+        const docoRest = path.split('/documentos-obra/')[1];
+        const doid = parseInt(docoRest);
+        if (method === 'GET' && docoRest.endsWith('/archivo')) return await abrirArchivoDocumentoObra(doid, request, env);
         if (method === 'PUT')    return await actualizarDocumentoObra(doid, request, env);
         if (method === 'DELETE') return await eliminarDocumentoObra(doid, request, env);
       }
@@ -11866,6 +11868,38 @@ async function crearDocumentoObra(request, env) {
     departamento || null // DEPT-01
   ).run();
   return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+// VER-DOCUMENTOS-OBRA-01 (14/09/2026): Adrián -- "por qué los documentos de obra no se
+// pueden abrir para revisar? todo lo que se guarde se tiene que poder abrir". La tabla
+// siempre tuvo r2_key (columna real, incluida en el SELECT * de getDocumentosObra), pero
+// ni el backend exponía una forma de leer el archivo ni el frontend tenía ningún botón
+// "Ver" -- solo editar metadatos (título/estado/fechas) y borrar. Afectaba en concreto a
+// los esquemas que Alejandra guarda aquí (generar_esquema_electrico con obra_id inserta
+// en esta misma tabla): se guardaban de verdad, pero no había manera de volver a abrirlos
+// desde el panel. Sirve el archivo inline (no forzar descarga) para que PDFs/imágenes/SVG
+// se puedan ver directamente en una pestaña nueva, con el mismo filtro de
+// empresa/departamento que ya usa el resto de endpoints de este recurso.
+async function abrirArchivoDocumentoObra(id, request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isDesarrollador, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const _isPriv = isSuperadmin || isEmpresaAdmin || isDesarrollador || departamento === 'seguridad';
+  let sql = `SELECT titulo, r2_key FROM documentos_obra WHERE id=? AND empresa_id=?`;
+  const binds = [id, empresa_id];
+  if (!_isPriv && departamento) { sql += ` AND (departamento=? OR departamento IS NULL)`; binds.push(departamento); }
+  const meta = await env.DB.prepare(sql).bind(...binds).first();
+  if (!meta?.r2_key) return err('Documento sin archivo asociado', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible en almacenamiento', 404);
+  const nombreArchivo = meta.r2_key.split('/').pop() || meta.titulo || 'documento';
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
+      'Content-Disposition': `inline; filename="${encodeURIComponent(nombreArchivo)}"`,
+      'Cache-Control': 'private, max-age=3600',
+      ...CORS,
+    },
+  });
 }
 
 async function actualizarDocumentoObra(id, request, env) {
