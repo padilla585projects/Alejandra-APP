@@ -15487,6 +15487,21 @@ function mostrarBannerActualizacion(v) {
   banner.classList.add('show');
 }
 
+// FIX-RELOAD-REPLANTEO-01 (14/09/2026): las tres vías de recarga forzada por actualización
+// (banner periódico, mensaje SW_ACTUALIZADO, controllerchange) tiraban la página sin avisar
+// aunque hubiera un replanteo a medio hacer — no es un modal, es una pantalla completa, así
+// que el guardado de FIX-RELOAD-TRABAJO-01 no lo cubría. Adrián: "hago un replanteo y no me
+// deja guardar" tras probar justo después de un despliegue (el momento en que más probable
+// es que el SW se actualice a mitad de sesión). Punto único para las tres vías.
+function _hayTrabajoSinGuardar() {
+  const modalAbierto = [...document.querySelectorAll('.modal-overlay')]
+    .some(m => getComputedStyle(m).display !== 'none');
+  // _repl vive dentro del IIFE del editor de Replanteo (no es visible aquí); el editor
+  // expone window._replHayCambiosSinGuardar() como único punto de acceso a su estado.
+  const replanteoSinGuardar = typeof window._replHayCambiosSinGuardar === 'function' && window._replHayCambiosSinGuardar();
+  return modalAbierto || replanteoSinGuardar;
+}
+
 async function forzarActualizacion() {
   const banner = document.getElementById('updateBanner');
   if (banner) banner.innerHTML = '<span>⏳ Actualizando...</span>';
@@ -15524,12 +15539,11 @@ async function checkVersionAndUpdate(useWorkerFallback = false) {
     mostrarBannerActualizacion(remoteVersion);
     // FIX-RELOAD-TRABAJO-01 (12/08/2026): antes se forzaba el reload a los 3s pasara
     // lo que pasara -- si el operario tenía una incidencia o un plano a medio rellenar,
-    // se perdía sin aviso real. Si hay un modal abierto, se deja el banner (con su botón
-    // "Actualizar ahora" ya disponible) y se reintenta en el siguiente check periódico
-    // en vez de forzar; solo se auto-recarga cuando no hay nada a medio hacer.
-    const hayModalAbierto = [...document.querySelectorAll('.modal-overlay')]
-      .some(m => getComputedStyle(m).display !== 'none');
-    if (hayModalAbierto) return;
+    // se perdía sin aviso real. Si hay trabajo sin guardar (modal abierto o un replanteo
+    // con cambios, FIX-RELOAD-REPLANTEO-01), se deja el banner (con su botón "Actualizar
+    // ahora" ya disponible) y se reintenta en el siguiente check periódico en vez de
+    // forzar; solo se auto-recarga cuando no hay nada a medio hacer.
+    if (_hayTrabajoSinGuardar()) return;
     _actualizando = true;
     setTimeout(forzarActualizacion, 3000);
   }
@@ -20371,6 +20385,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replCambiarElemento    = replCambiarElemento;
   window.replCambiarOpcion      = replCambiarOpcion;
   window.replMarcarCambio       = replMarcarCambio;
+  // FIX-RELOAD-REPLANTEO-01: _repl vive en el cierre de este IIFE, no es visible desde
+  // fuera — este getter es lo único que necesita _hayTrabajoSinGuardar() (fuera de aquí,
+  // junto a checkVersionAndUpdate) para saber si hay un replanteo a medio hacer.
+  window._replHayCambiosSinGuardar = () => !!(_repl && _repl.cambiado);
   window.replModo               = replModo;
   window.replAbrirPlano         = replAbrirPlano;
   window.replCerrarPlano        = replCerrarPlano;
@@ -25609,7 +25627,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (newV && newV !== APP_VERSION) {
         localStorage.setItem('alejandra_just_updated', newV);
         mostrarBannerActualizacion(newV);
-        setTimeout(forzarActualizacion, 4000);
+        // FIX-RELOAD-REPLANTEO-01: igual que en checkVersionAndUpdate, no forzar con
+        // trabajo sin guardar — el banner se queda y el chequeo periódico reintenta.
+        if (!_hayTrabajoSinGuardar()) { _actualizando = true; setTimeout(forzarActualizacion, 4000); }
       }
     }
     // Navegar a sección al pulsar notificación del sistema (Bug #107)
@@ -25625,9 +25645,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
   });
 
-  // controllerchange = nuevo SW tomó el control → recarga para cargar el nuevo index.html
+  // controllerchange = nuevo SW tomó el control → recarga para cargar el nuevo index.html.
+  // FIX-RELOAD-REPLANTEO-01: no si hay trabajo sin guardar — el SW ya quedó activado (no
+  // hace falta repetir el cambio), solo se pospone la recarga en sí hasta que sea segura.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!_actualizando) recargarApp();
+    if (_actualizando || _hayTrabajoSinGuardar()) return;
+    recargarApp();
   });
 
   // BUG-009: pausa polling en background, reanuda al volver al frente
