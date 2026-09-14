@@ -27986,8 +27986,20 @@ window.turnoToggle   = turnoToggle;
     box.innerHTML = iaSaludo();
   }
   // Ejecutar carga — reintenta cuando session esté lista
+  // FIX-HISTORIAL-VACIO-01 (14/09/2026): el comentario de arriba decía "reintenta cuando
+  // session esté lista", pero 'sessionReady' nunca se disparaba en ningún sitio de
+  // index.html -- el reintento llevaba muerto desde siempre. Se notó porque Adrián vio su
+  // conversación real "desaparecer" tras un despliegue: hubo una ventana corta en la que
+  // el frontend ya pedía varios canales a la vez pero el Worker desplegado todavía
+  // procesaba uno solo, así que la consulta no encontraba coincidencia y devolvía vacío
+  // (ok:true, 0 mensajes) -- sin error visible, caía directo al saludo, pareciendo que se
+  // había borrado el historial. Los datos nunca se tocaron (siguen en D1), solo la
+  // pantalla se quedó con la respuesta vacía de esa ventana. Un reintento a los pocos
+  // segundos cubre este caso (y cualquier otro fallo transitorio de red/despliegue) sin
+  // depender de un evento que nunca llega.
   iaCargarHistorial();
   document.addEventListener('sessionReady', () => iaCargarHistorial());
+  setTimeout(() => iaCargarHistorial(), 4000);
 
   window.iaLimpiarChat = function() {
     if (!confirm('¿Borrar el historial del chat con Alejandra?')) return;
