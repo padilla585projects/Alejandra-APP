@@ -22411,7 +22411,13 @@ async function cargarAlejandraChat() {
     // nadie en ese worker, así que la petición se trataba como anónima y devolvía 403 al pedir
     // el historial de "otro usuario" (null). El envío ya funcionaba (FIX-ALEJANDRA-FAB-01) pero
     // la respuesta nunca se veía porque este fetch para repintarla siempre fallaba.
-    const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}`, {
+    // BUG-CHAT-CANAL-FAB-01 (14/09/2026): este fetch se quedó sin el &canal= que PR #231
+    // (c5777ef) añadió al resto de puntos de llamada (index.html, y el otro widget de
+    // panel.html en `_aiCargarHistorialServidor`) para agrupar app+paneles sin mezclar
+    // telegram/dev -- getIAChatHistory (worker.js) devuelve TODOS los canales del usuario
+    // si no se manda `canal`. El chat flotante FAB seguía mezclando conversaciones de
+    // Telegram/dev con las de app+panel.
+    const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}&canal=app_android,pwa,panel`, {
       headers: { 'X-Token': TOKEN }
     });
     if (!r.ok) return;
@@ -22483,7 +22489,10 @@ async function _alejandraResincronizarFirmas() {
   const usuarioId = SESSION?.usuario_id || null;
   if (!usuarioId) return;
   try {
-    const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}`, {
+    // BUG-CHAT-CANAL-FAB-01 (14/09/2026): mismo fix que cargarAlejandraChat() (ver comentario
+    // ahí) -- sin &canal=, este sondeo volvía a traer telegram/dev y desincronizaba las firmas
+    // respecto a lo que cargarAlejandraChat() sí filtraba, con el mismo efecto de repintado.
+    const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}&canal=app_android,pwa,panel`, {
       headers: { 'X-Token': TOKEN }
     });
     if (!r.ok) return;
