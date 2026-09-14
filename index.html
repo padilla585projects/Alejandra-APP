@@ -461,7 +461,7 @@ select option{background:var(--surface2);color:var(--text)}
     <div style="font-weight:800;font-size:13px;color:var(--text)">Instala Alejandra en tu Android</div>
     <div style="font-size:11px;color:var(--muted)">App nativa: cámara, sensores y replanteo AR</div>
   </div>
-  <a href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download onclick="_marcarDescargaApkEnCurso()" style="text-decoration:none;background:var(--accent);color:#04120a;font-weight:800;font-size:13px;padding:9px 13px;border-radius:10px;white-space:nowrap">⬇️ Descargar</a>
+  <a href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" onclick="return _descargarApk(this.href)" style="text-decoration:none;background:var(--accent);color:#04120a;font-weight:800;font-size:13px;padding:9px 13px;border-radius:10px;white-space:nowrap">⬇️ Descargar</a>
   <button onclick="_cerrarApkBanner()" aria-label="Cerrar" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:2px 6px">×</button>
 </div>
 <script>
@@ -4305,7 +4305,7 @@ select option{background:var(--surface2);color:var(--text)}
         <div class="settings-section" id="seccionAppAndroid" style="margin-top:16px">
           <div class="settings-title">📱 App para Android</div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Instala Alejandra como app en el móvil (acceso a cámara, sensores y, próximamente, replanteo en AR nativo). Descarga el .apk e instálalo (permite "orígenes desconocidos" si te lo pide).</div>
-          <a id="btnDescargarApk" class="btn-primary" style="display:block;text-align:center;text-decoration:none;font-size:14px" href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download onclick="_marcarDescargaApkEnCurso()">⬇️ Descargar app Android (.apk)</a>
+          <a id="btnDescargarApk" class="btn-primary" style="display:block;text-align:center;text-decoration:none;font-size:14px" href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" onclick="return _descargarApk(this.href)">⬇️ Descargar app Android (.apk)</a>
           <!-- F3.1: prueba del AR nativo (solo en la app, si el móvil soporta ARCore). No toca el
                replanteo real: solo lanza la sesión AR nativa y muestra puntos + medida. -->
           <button id="btnProbarARNativo" onclick="probarARNativo()" class="btn-primary" style="display:none;width:100%;margin-top:10px;font-size:13px;background:#8b5cf6">🧪 Probar AR nativo (beta)</button>
@@ -15554,6 +15554,23 @@ function mostrarBannerActualizacion(v) {
 // aplaza igual que con un modal abierto o un replanteo sin guardar.
 function _marcarDescargaApkEnCurso() {
   window._descargaApkHasta = Date.now() + 90000;
+}
+// BUG-DESCARGA-APK-03 (14/09/2026): Adrián, tras arreglar la firma de release (el .apk
+// dejó de ser debug): "desde GitHub directo descarga, pero a través de la app no" --
+// mismo cuelgue al 100% de siempre, pero solo tocando el botón dentro de la PWA
+// instalada, nunca navegando a la URL directamente. La app instalada es un WebAPK: un
+// <a download> hacia un origen cruzado (GitHub → objects.githubusercontent.com) se
+// resuelve como una petición de recurso dentro del propio contexto de la app en vez de
+// como una navegación de nivel superior que el WebAPK reconoce como "fuera de scope" y
+// entrega limpiamente al gestor de descargas del sistema -- que es justo lo que sí pasa
+// al abrir el enlace en una pestaña normal de Chrome. _abrirUrlExterna() ya existía para
+// esto mismo (ver el comentario junto a su definición) y usa window.open() en vez de
+// depender del atributo download, forzando una navegación de verdad que sale del scope
+// del WebAPK igual que la descarga directa que sí funciona.
+function _descargarApk(url) {
+  _marcarDescargaApkEnCurso();
+  _abrirUrlExterna(url);
+  return false;
 }
 function _hayTrabajoSinGuardar() {
   const modalAbierto = [...document.querySelectorAll('.modal-overlay')]
