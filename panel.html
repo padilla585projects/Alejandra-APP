@@ -26818,7 +26818,11 @@ document.addEventListener('visibilitychange', () => {
     const tok = typeof TOKEN !== 'undefined' ? TOKEN : localStorage.getItem('panel_token') || '';
     if (uid && tok) {
       try {
-        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=panel`, {
+        // SYNC-DISPOSITIVOS-01 (14/09/2026): canal=panel en solitario impedía ver en el
+        // panel lo hablado desde el móvil (Adrián: "trabajas en obra con el móvil y sigues
+        // luego en el panel"). Se agrupan los tres canales de app+paneles; telegram/dev
+        // quedan fuera, son la otra Alejandra (worker.js).
+        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=app_android,pwa,panel`, {
           headers: { 'X-Token': tok }
         });
         const data = await res.json();

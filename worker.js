@@ -18179,13 +18179,23 @@ async function getIAChatHistory(request, env) {
   // telegram...) mezclados, dando la sensación de que "aparecían mensajes viejos de la
   // nada" al recargar la página. canal es opcional para no romper llamadas existentes que
   // sí quieran ver todo.
-  const canal = url.searchParams.get('canal');
+  // SYNC-DISPOSITIVOS-01 (14/09/2026): el filtro de un único canal resolvió el problema de
+  // arriba pero introdujo uno nuevo -- Adrián preguntó "por qué no se sincroniza la
+  // conversación en cualquier dispositivo", y el motivo es que index.html pedía solo
+  // canal=app_android y panel.html solo canal=panel: cada frontend veía nada más que sus
+  // propios mensajes, nunca los del otro. Admite ahora una lista separada por comas (p.ej.
+  // "app_android,pwa,panel") para agrupar los canales que SÍ deben verse como una sola
+  // conversación continua (app móvil + los dos paneles), sin mezclar telegram/dev, que es
+  // justo lo que BUG-HISTORIAL-CANAL-01 quería evitar.
+  const canalParam = url.searchParams.get('canal');
+  const canales = canalParam ? canalParam.split(',').map(c => c.trim()).filter(Boolean) : [];
   try {
     // Buscar por usuario_id numérico O por nombre (la app guarda ambos formatos)
     const nombre = s.nombre || '';
+    const placeholders = canales.map(() => '?').join(',');
     const sql = "SELECT rol, contenido, created_at FROM alejandra_historial WHERE (LOWER(usuario_id) = LOWER(?) OR LOWER(usuario_id) = LOWER(?)) AND rol IN ('user','assistant')" +
-      (canal ? " AND canal = ?" : "") + " ORDER BY created_at DESC LIMIT ?";
-    const binds = canal ? [String(uid), nombre, canal, limit] : [String(uid), nombre, limit];
+      (canales.length ? ` AND canal IN (${placeholders})` : "") + " ORDER BY created_at DESC LIMIT ?";
+    const binds = canales.length ? [String(uid), nombre, ...canales, limit] : [String(uid), nombre, limit];
     const rows = await env.DB.prepare(sql).bind(...binds).all();
     return json({ ok: true, mensajes: (rows.results || []).reverse() });
   } catch (e) {
