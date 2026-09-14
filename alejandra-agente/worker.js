@@ -6699,6 +6699,16 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
     // cubre el caso en que afirma haber generado/guardado algo sin llegar a dar un
     // enlace con el formato reconocible (esquema, informe, documento, plano).
     /\b(esquema generado|informe generado|documento generado|plano generado|esquema creado|informe creado|documento creado|guardado en R2|guardado correctamente|redactado y guardado)\b/i,
+    // BUG-GUARDAR-NARRADO-01 (14/09/2026): Adrián pidió guardar dos fotos y un esquema
+    // como documentos del departamento de control -- la respuesta dijo "Ahora guardo las
+    // dos fotos... y el esquema también... como documentos", pero la traza real de ese
+    // turno solo tiene tools de lectura (listar_archivos, consultar_bd, listar_esquemas):
+    // ninguna tool de escritura (subir_archivo/generar_documento) se llamó, y
+    // documentos_obra no tiene ninguna fila nueva. Ni ESQUEMA-02 (pasado: "guardado") ni
+    // el check de nombre de tool literal (ESQUEMA-04) cubrían este fraseo en presente/
+    // inminente ("ahora guardo", "voy a guardar..."), que es justo el mismo patrón de
+    // promesa-sin-acción con otras palabras.
+    /\b(ahora (guardo|subo|creo|genero|añado|adjunto)|voy a (guardar|subir|crear|añadir|adjuntar)|guardando (ahora|esto|los|las)|procedo a (guardar|subir|crear|añadir))\b/i,
   ];
 
   const usóEscritura = toolsEscritura.some(t => toolsEscritos.has(t));
