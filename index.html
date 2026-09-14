@@ -15649,10 +15649,20 @@ window.addEventListener('popstate', function() {
   } else {
     // Sin historial: estamos en una pantalla raíz
     if (_backPressedOnce) {
-      // Segunda pulsación en <2.5s: ya estamos en la entrada base; retroceder una vez más
-      // entrega el control al sistema y conserva el gesto esperado de doble pulsación.
+      // Segunda pulsación en <2.5s: ya estamos en la entrada base. history.back() aquí es
+      // un no-op silencioso en cuanto el WebView se queda sin historial que consumir --
+      // BUG-ATRAS-01 (14/09/2026): en el HTC real, varias pulsaciones seguidas nunca
+      // cerraban la app porque no había ningún App.addListener('backButton', ...) que
+      // pidiera la salida explícita; se dependía de un fallback nativo implícito que no
+      // disparaba. Pedirle la salida a Capacitor.Plugins.App directamente es fiable en
+      // cualquier Android/fabricante; en web/PWA (sin ese plugin) se mantiene el
+      // history.back() de siempre, que sí puede cerrar la pestaña o volver atrás en el navegador.
       clearTimeout(_backPressTimer);
       _backPressedOnce = false;
+      try {
+        var _appPl = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+        if (_esNativo() && _appPl && _appPl.exitApp) { _appPl.exitApp(); return; }
+      } catch (_) {}
       setTimeout(() => history.back(), 0);
       return;
     }
