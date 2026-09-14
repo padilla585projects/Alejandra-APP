@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Accesos directos al mantener pulsado el icono de la app (Android 7.1+).
+     El intent de cada uno lanza MainActivity con el extra shortcut_action;
+     MainActivity lo lee (onCreate / onNewIntent) y dispara el evento JS
+     'alejandraShortcut' que index.html escucha para navegar a la pantalla
+     correspondiente. Ver MainActivity.java. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="fichar"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_fichar"
+        android:shortcutShortLabel="@string/shortcut_fichar_short"
+        android:shortcutLongLabel="@string/shortcut_fichar_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.padilla585.alejandra"
+            android:targetClass="com.padilla585.alejandra.MainActivity">
+            <extra android:name="shortcut_action" android:value="fichar" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="escanear"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_scan"
+        android:shortcutShortLabel="@string/shortcut_escanear_short"
+        android:shortcutLongLabel="@string/shortcut_escanear_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.padilla585.alejandra"
+            android:targetClass="com.padilla585.alejandra.MainActivity">
+            <extra android:name="shortcut_action" android:value="escanear" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="incidencia"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_incidencia"
+        android:shortcutShortLabel="@string/shortcut_incidencia_short"
+        android:shortcutLongLabel="@string/shortcut_incidencia_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.padilla585.alejandra"
+            android:targetClass="com.padilla585.alejandra.MainActivity">
+            <extra android:name="shortcut_action" android:value="incidencia" />
+        </intent>
+    </shortcut>
+</shortcuts>

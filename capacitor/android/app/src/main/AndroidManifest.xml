@@ -31,6 +31,11 @@
                 <data android:scheme="com.padilla585.alejandra" />
             </intent-filter>
 
+            <!-- Accesos directos del icono (mantener pulsado): Escanear/Fichar/Incidencia -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
         </activity>
 
         <!-- ARCore opcional (F3): la app se instala también en móviles sin ARCore (HTC U11) -->

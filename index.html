@@ -7117,6 +7117,29 @@ function _initNativo() {
       }).catch(function () {});
     }
   } catch (_) {}
+  // Accesos directos del icono (MainActivity.java dispara este evento desde el intent
+  // extra shortcut_action). Si aún no hay sesión (arranque en frío desde el shortcut,
+  // antes del login) se guarda y se aplica en cuanto iniciarApp() llegue a una pantalla
+  // utilizable -- ver _aplicarAccionPendienteShortcut().
+  window.addEventListener('alejandraShortcut', function (e) {
+    var action = e && e.detail && e.detail.action;
+    if (!action) return;
+    if (getSession()) _ejecutarAccionShortcut(action);
+    else window._pendingShortcutAction = action;
+  });
+}
+
+function _ejecutarAccionShortcut(action) {
+  if (action === 'escanear') navTo('scan');
+  else if (action === 'fichar') navTo('personal');
+  else if (action === 'incidencia') { navTo('incidencias'); abrirFormIncidencia(null); }
+}
+
+function _aplicarAccionPendienteShortcut() {
+  var action = window._pendingShortcutAction;
+  if (!action) return;
+  window._pendingShortcutAction = null;
+  _ejecutarAccionShortcut(action);
 }
 
 // F3.1: lanza la sesión AR nativa (ARCore) y muestra el resultado. No construye el replanteo aún;
@@ -7243,6 +7266,7 @@ async function iniciarApp() {
   if (s.departamento === 'personal') {
     showScreen('personal');
     personalSelTab(-1);
+    _aplicarAccionPendienteShortcut();
     return;
   }
 
@@ -7252,6 +7276,7 @@ async function iniciarApp() {
     cargarBadgeIdeas();
     cargarObrasSelectUsuario();
   }
+  _aplicarAccionPendienteShortcut();
 }
 
 function rolLabel(rol) {
