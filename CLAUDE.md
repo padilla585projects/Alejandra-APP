@@ -128,6 +128,23 @@ Todo despliegue autónomo exige **verificación posterior registrada**.
 Ramas: una tarea principal por rama, con prefijos `docs/`, `chore/`, `feat/`, `fix/` y
 formato `tipo/area-descripcion`. Nunca trabajar directamente sobre `main`.
 
+### Varios chats/agentes a la vez → worktree, no la carpeta compartida
+
+> ⚠️ **INCIDENTE 14/09/2026**: dos sesiones de Claude Code editando a la vez la misma carpeta
+> (`C:\Users\Adrian\Downloads\Projects\alejandra-app`) hizo que una viera como "cambios sin
+> commitear" contenido que en realidad ya estaba fusionado en `main` — el checkout compartido
+> tenía la rama vieja de la otra sesión a medio actualizar. No se perdió nada, pero costó
+> tiempo diagnosticarlo como espejismo. Ver `[[project_multiples_sesiones_worktree]]`.
+
+Si vas a trabajar aquí sabiendo (o sospechando) que **otra sesión/chat puede estar editando el
+mismo repo a la vez**, no edites directamente en la carpeta compartida: usa un **worktree**
+propio (rama + carpeta aislada) y haz `commit`/`push`/PR desde ahí. En Claude Code, la
+herramienta `EnterWorktree` crea uno bajo `.claude/worktrees/`; en terminal equivale a
+`git worktree add ../alejandra-app-wt-<tuyo> main -b <tu-rama>`. Antes de dar por buenos unos
+`git diff` que parezcan "cambios ajenos sin commitear" en la carpeta compartida, comprueba con
+`git log`/`git fetch` si ese contenido ya está fusionado en remoto — puede ser una rama vieja
+desincronizada, no trabajo real en curso.
+
 ### Verificación antes de commit
 
 ```powershell
