@@ -1,5 +1,21 @@
 apply plugin: 'com.android.application'
 
+// BUG-APK-DEBUG-FIRMA-01 (14/09/2026): el .apk que se distribuía en GitHub Releases era
+// en realidad la build de depuración (assembleDebug), firmada con la clave de depuración
+// genérica de Android ("CN=Android Debug", la misma en cualquier instalación del SDK) --
+// nunca hubo signingConfig para release. Adrián, probando en un Oppo moderno: la descarga
+// se quedaba al 100% sin completar nunca (Chrome/Android tratan un .apk debuggable/firmado
+// con esa clave como más sospechoso; en el HTC más antiguo no se notaba). keystore.properties
+// (gitignored, nunca commitear) vive fuera del repo (ver capacitor/android/.gitignore) y
+// solo existe en las máquinas que generan la entrega real -- si no está, release cae a sin
+// firmar en vez de romper el build en otras máquinas/CI.
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasReleaseSigning = keystorePropertiesFile.exists()
+if (hasReleaseSigning) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.padilla585.alejandra"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +32,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
