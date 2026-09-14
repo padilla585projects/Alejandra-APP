@@ -26810,7 +26810,7 @@ document.addEventListener('visibilitychange', () => {
     }
     box.scrollTop = box.scrollHeight;
   }
-  (async function() {
+  async function _aiCargarHistorialServidor() {
     // 1. Intentar servidor
     const uid = (typeof SESSION !== 'undefined' ? SESSION?.usuario_id || SESSION?.nombre : null)
              || JSON.parse(localStorage.getItem('panel_session') || 'null')?.usuario_id
@@ -26830,7 +26830,7 @@ document.addEventListener('visibilitychange', () => {
           aiHistory = data.mensajes.map(m => ({ role: m.rol === 'assistant' ? 'assistant' : 'user', content: m.contenido }));
           _aiRenderHistory();
           try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
-          return;
+          return true;
         }
       } catch {}
     }
@@ -26839,6 +26839,18 @@ document.addEventListener('visibilitychange', () => {
       const saved = JSON.parse(localStorage.getItem(AI_HIST_KEY) || '[]');
       if (saved.length > 0) { aiHistory = saved; _aiRenderHistory(); }
     } catch {}
+    return false;
+  }
+  (async function() {
+    const ok = await _aiCargarHistorialServidor();
+    // FIX-HISTORIAL-VACIO-01 (14/09/2026): esta carga solo se intentaba una vez al abrir la
+    // página. Adrián vio su conversación real "desaparecer" tras un despliegue: hubo una
+    // ventana corta en la que el frontend ya pedía varios canales a la vez pero el Worker
+    // desplegado todavía procesaba uno solo, la consulta no encontró coincidencia y
+    // devolvió vacío (ok:true, 0 mensajes) sin error visible. Los datos nunca se tocaron
+    // (siguen en D1); un reintento a los pocos segundos cubre esta ventana de despliegue y
+    // cualquier otro fallo transitorio de red, sin esperar a que el usuario recargue.
+    if (!ok) setTimeout(_aiCargarHistorialServidor, 4000);
   })();
 
   // SCAN-04: el botón vive ahora en el sidebar (#btnDevAI, junto a DevTools) — su
