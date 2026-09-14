@@ -21115,7 +21115,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function _camvResize() { const c = _camvEl('replCamCanvas'); if (!c) return; const r = c.getBoundingClientRect(); c.width = Math.round(r.width); c.height = Math.round(r.height); _camvDibujar(); }
   function _camvBind() {
     const c = _camvEl('replCamCanvas'); if (!c || c._camvBound) return; c._camvBound = true;
-    c.addEventListener('pointerdown', e => { if (!_camv) return; const r = c.getBoundingClientRect(); _camv.pts.push({ x: e.clientX - r.left, y: e.clientY - r.top }); _camvDibujar(); });
+    c.addEventListener('pointerdown', e => { if (!_camv) return; const r = c.getBoundingClientRect(); _camv.pts.push({ x: e.clientX - r.left, y: e.clientY - r.top }); _camvDibujar(); if (navigator.vibrate) navigator.vibrate(40); });
   }
   function _camvDibujar() {
     const c = _camvEl('replCamCanvas'); if (!c || !c.getContext) return;
@@ -25153,6 +25153,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (!res.ok) { const e=await res.json().catch(()=>({error:'Error'})); return toast('❌ '+(e.error||'Error'),'err'); }
       cerrarFormFichaje();
       toast(id ? '✅ Fichaje actualizado' : '✅ Fichaje registrado');
+      if (navigator.vibrate) navigator.vibrate(100);
       const tab = [0,1,2].find(i => document.getElementById('perTab'+i)?.classList.contains('active')) ?? 0;
       if (tab===0) cargarHoy();
       else if (tab===1) cargarSemana();
@@ -25370,6 +25371,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (r.ok) {
         res.style.color = '#10b981';
         res.innerHTML = `✅<br>${data.nombre || 'Fichado'}<br><span style="font-weight:400;font-size:12px">${data.hora_entrada || ''}</span>`;
+        if (navigator.vibrate) navigator.vibrate(100);
         cargarHoy();
       } else {
         res.style.color = '#ef4444';
