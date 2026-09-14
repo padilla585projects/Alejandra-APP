@@ -71,6 +71,14 @@ self.addEventListener('activate', e => {
 // desde su propia HTTP cache (bug de "actualiza y vuelve a la anterior").
 // Resto de recursos: red primero, caché como fallback offline
 self.addEventListener('fetch', e => {
+  // FIX-DESCARGA-APK-01 (14/09/2026): el .apk se descarga desde GitHub Releases (~7 MB,
+  // origen cruzado) con <a download>. Como la app está instalada, este SW intercepta esa
+  // petición igual que cualquier otra y el código de abajo la clona entera para meterla
+  // en la caché de "offline" — no sirve de nada (no hace falta acceso offline a un
+  // instalador ya descargado) y compite por E/S con la descarga real mientras dura.
+  // Adrián, probando desde la app instalada: "la barra de progreso llega casi al final
+  // y no termina". Estas se dejan pasar sin interceptar ni cachear.
+  if (/\.apk(\?|$)/i.test(e.request.url) || e.request.url.includes('/releases/download/')) return;
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request, { cache: 'no-store' })
