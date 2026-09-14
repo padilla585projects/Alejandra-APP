@@ -49,9 +49,9 @@ completo de cada bug.
   narraba una acción en curso o inminente ("ejecutando...", "ahora guardo...") y terminaba el
   turno sin llamar la tool real. Detección genérica en `verificarAccionesAfirmadas()`
   (`alejandra-agente/worker.js`) para cualquier tool de escritura, no solo esquemas.
-  **`#236` está fusionado pero el Worker `alejandra-agente` seguía sin desplegar desde `#228`** —
-  detectado al escribir esta entrada; **despliegue ya iniciado** (run `34882480721`), **esperando
-  tu aprobación del entorno `production`**.
+  **`#236` estaba fusionado pero el Worker `alejandra-agente` seguía sin desplegar desde `#228`**
+  — detectado al escribir esta entrada; Adrián aprobó el entorno `production` en chat, desplegado
+  y verificado (run `34882480721`, `/health` → `healthy`, D1/R2/Anthropic OK). Sin pendientes.
 - **Documentos de Obra no se podían abrir para revisar** (#238): tenían el archivo real en
   `r2_key` pero solo se podía editar metadatos o borrar. Nuevo `GET /documentos-obra/:id/archivo`
   + botón "👁 Ver" en el panel — afecta en concreto a los esquemas que Alejandra guarda ahí.
@@ -63,8 +63,8 @@ completo de cada bug.
   Escanear/Fichar/Incidencia (#226) — **pendiente confirmar la navegación real tocando cada uno
   en dispositivo**, la prueba se interrumpió.
 - Versión sincronizada de 9.68 → **9.72** en cuatro pasos (#230/9.69, #234/9.70, #240/9.71,
-  #244/9.72). Pages desplegado en cada paso y verificado en producción; Workers desplegados donde
-  aplicaba, salvo el pendiente de `alejandra-agente` señalado arriba.
+  #244/9.72). Pages desplegado en cada paso y verificado en producción; Workers desplegados y
+  verificados, incluido el de `alejandra-agente` señalado arriba. **Sin pendientes de esta ronda.**
 
 Estado (2026-09-14): **REPLANTEO-RELOAD-01 + APK-DESCARGA-01 — arreglados, desplegados y
 verificados en el HTC U11 real de Adrián.** Dos bugs reportados probando en campo justo tras el

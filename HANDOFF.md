@@ -125,10 +125,11 @@
     escritura se llamó, nada se guardó. Mismo patrón que ALEJANDRA-ESQUEMA-04 pero con otro
     fraseo que no cubría: presente/inminente ("ahora guardo") en vez de nombrar la tool o afirmar
     un pasado completado. Añadido ese fraseo a `patronesAccion`. 262 tests OK.
-    **⚠️ Fusionado en `main` pero SIN DESPLEGAR** — detectado el 14/09 tarde al reconstruir este
-    handoff: el último despliegue del Worker (`34857557997`) es de antes de este PR. **Despliegue
-    ya iniciado por esta sesión** (`gh workflow run deploy-alejandra-agente.yml`, run
-    `34882480721`), **esperando tu aprobación del entorno `production`** en GitHub Actions.
+    **Detectado el 14/09 tarde al reconstruir este handoff:** fusionado en `main` pero el último
+    despliegue del Worker (`34857557997`) era de antes de este PR. Iniciado
+    (`gh workflow run deploy-alejandra-agente.yml`, run `34882480721`); **Adrián aprobó el
+    entorno `production` en chat**; desplegado y verificado — `/health` responde `healthy` con
+    `d1`/`r2`/`anthropic` en `true`. Sin pendientes.
 - **Documentos de Obra no se podían abrir para revisar (#238, `f8716f6`):** Adrián — "por qué los
   documentos de obra no se pueden abrir para revisar? todo lo que se guarde se tiene que abrir
   para ver y editar también" (comparando con Planos, que ya tiene su botón "Ver"). La tabla de
@@ -171,7 +172,8 @@
   #224/#225/#226/#227/#229), #234 (9.70: #233), #240 (9.71: #239), #244 (9.72: #242/#243). Pages
   publicado y verificado en cada paso (`version.json` sirve la versión esperada). Deploy API
   Worker: run `34862599143` (para #235/#238, verificado `/health`). Deploy Alejandra Agent Worker:
-  run `34857557997` (para #228) desplegado; **run `34882480721` (para #236) esperando aprobación**.
+  run `34857557997` (para #228) y run `34882480721` (para #236, aprobado por Adrián en chat el
+  14/09), los dos desplegados y verificados por `/health`. Sin pendientes de esta ronda.
 
 ## REPLANTEO-RELOAD-01 + APK-DESCARGA-01 (2026-09-14, desplegado y verificado en el HTC real)
 
