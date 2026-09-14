@@ -11224,7 +11224,13 @@ async function cambiarEmpresaAdmin(empresaId) {
     return;
   }
   TOKEN = r.token;
-  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: null, departamento: r.departamento, obra_id: r.obra_id || null, obra_nombre: r.obra_nombre || null, obras_asignadas: r.obra_id ? [r.obra_id] : [] };
+  // BUG-USUARIO-ID-PERDIDO-01 (14/09/2026): usuario_id iba hardcodeado a null aquí -- el
+  // backend no lo devolvía en la respuesta (ya corregido en worker.js), pero además esta
+  // línea ni siquiera intentaba leer r.usuario_id como el resto de sitios que reconstruyen
+  // SESSION. Ese null quedaba guardado en localStorage y rompía en silencio cualquier cosa
+  // que dependiera de SESSION.usuario_id sin fallback a nombre -- entre otras cosas, el
+  // chat flotante de Alejandra dejaba de cargar el historial tras cambiar de empresa.
+  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null, departamento: r.departamento, obra_id: r.obra_id || null, obra_nombre: r.obra_nombre || null, obras_asignadas: r.obra_id ? [r.obra_id] : [] };
   localStorage.setItem('panel_token', TOKEN);
   localStorage.setItem('panel_session', JSON.stringify(SESSION));
   location.reload();
@@ -22380,7 +22386,10 @@ function alejandraChatCerrar() {
 })();
 
 async function cargarAlejandraChat() {
-  const usuarioId = SESSION?.usuario_id || null;
+  // BUG-USUARIO-ID-PERDIDO-01: fallback a nombre igual que index.html -- si algún otro
+  // camino futuro vuelve a dejar SESSION.usuario_id vacío, que esta función no se quede
+  // muda por completo (el backend ya acepta nombre como identificador alternativo).
+  const usuarioId = SESSION?.usuario_id || SESSION?.nombre || null;
   if (!usuarioId) return;
   try {
     // FIX-ALEJANDRA-FAB-02 (29/07/2026): este endpoint vive en worker.js (alejandra-app-api),
