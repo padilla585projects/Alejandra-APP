@@ -22402,7 +22402,13 @@ async function cargarAlejandraChat() {
     });
     if (!r.ok) return;
     const data = await r.json();
-    const msgs = (data.mensajes || []).reverse();
+    // BUG-CHAT-ORDEN-01 (14/09/2026): mismo bug que SCAN-05 (25/07/2026) en cargarChat()
+    // (chat de equipo), sin corregir aquí -- getIAChatHistory (worker.js) ya devuelve los
+    // mensajes en orden cronológico (más antiguos primero: ORDER BY DESC + .reverse() en
+    // el propio backend). Este .reverse() extra en el frontend los volvía a invertir,
+    // mostrando los mensajes recientes arriba del todo en vez de abajo -- Adrián: "porque
+    // está al revés el chat? los recientes arriba".
+    const msgs = data.mensajes || [];
     const cont = document.getElementById('alejandraMensajes');
     // FIX-ALEJANDRA-FAB-04/05 (03/08/2026): alejandra_historial es una tabla compartida a
     // propósito entre app+panel+telegram (sync entre dispositivos), y este fetch se repite
@@ -22468,7 +22474,10 @@ async function _alejandraResincronizarFirmas() {
     });
     if (!r.ok) return;
     const data = await r.json();
-    const msgs = (data.mensajes || []).reverse();
+    // BUG-CHAT-ORDEN-01: mismo orden que cargarAlejandraChat() (ver comentario ahí) -- si
+    // difieren, las firmas de aquí nunca coinciden con las de allí y cada sondeo repinta
+    // todo el chat en vez de solo añadir lo nuevo.
+    const msgs = data.mensajes || [];
     alejandraMensajesRenderizados = msgs.map(m => `${m.created_at}|${m.rol}|${m.contenido}`);
   } catch (e) {
     console.error('Error resincronizando firmas Alejandra:', e);
