@@ -461,7 +461,7 @@ select option{background:var(--surface2);color:var(--text)}
     <div style="font-weight:800;font-size:13px;color:var(--text)">Instala Alejandra en tu Android</div>
     <div style="font-size:11px;color:var(--muted)">App nativa: cámara, sensores y replanteo AR</div>
   </div>
-  <a href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download style="text-decoration:none;background:var(--accent);color:#04120a;font-weight:800;font-size:13px;padding:9px 13px;border-radius:10px;white-space:nowrap">⬇️ Descargar</a>
+  <a href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download onclick="_marcarDescargaApkEnCurso()" style="text-decoration:none;background:var(--accent);color:#04120a;font-weight:800;font-size:13px;padding:9px 13px;border-radius:10px;white-space:nowrap">⬇️ Descargar</a>
   <button onclick="_cerrarApkBanner()" aria-label="Cerrar" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:2px 6px">×</button>
 </div>
 <script>
@@ -4305,7 +4305,7 @@ select option{background:var(--surface2);color:var(--text)}
         <div class="settings-section" id="seccionAppAndroid" style="margin-top:16px">
           <div class="settings-title">📱 App para Android</div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Instala Alejandra como app en el móvil (acceso a cámara, sensores y, próximamente, replanteo en AR nativo). Descarga el .apk e instálalo (permite "orígenes desconocidos" si te lo pide).</div>
-          <a id="btnDescargarApk" class="btn-primary" style="display:block;text-align:center;text-decoration:none;font-size:14px" href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download>⬇️ Descargar app Android (.apk)</a>
+          <a id="btnDescargarApk" class="btn-primary" style="display:block;text-align:center;text-decoration:none;font-size:14px" href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" download onclick="_marcarDescargaApkEnCurso()">⬇️ Descargar app Android (.apk)</a>
           <!-- F3.1: prueba del AR nativo (solo en la app, si el móvil soporta ARCore). No toca el
                replanteo real: solo lanza la sesión AR nativa y muestra puntos + medida. -->
           <button id="btnProbarARNativo" onclick="probarARNativo()" class="btn-primary" style="display:none;width:100%;margin-top:10px;font-size:13px;background:#8b5cf6">🧪 Probar AR nativo (beta)</button>
@@ -15534,13 +15534,28 @@ function mostrarBannerActualizacion(v) {
 // que el guardado de FIX-RELOAD-TRABAJO-01 no lo cubría. Adrián: "hago un replanteo y no me
 // deja guardar" tras probar justo después de un despliegue (el momento en que más probable
 // es que el SW se actualice a mitad de sesión). Punto único para las tres vías.
+// BUG-DESCARGA-APK-02 (14/09/2026): Adrián en el Oppo, con la PWA ya instalada de antes:
+// "empieza [la descarga del .apk] pero se queda a medias" -- mismo síntoma que
+// FIX-DESCARGA-APK-01 (el SW interceptando la descarga), pero ese ya está arreglado. La
+// otra vía por la que una descarga de ~7 MB puede cortarse a medias sin avisar: el propio
+// chequeo de versión recarga la página automáticamente (al volver a primer plano, cada
+// 5 min, o a los 3s de detectar una versión nueva) y `_hayTrabajoSinGuardar()` no sabía
+// nada de una descarga en curso -- si el usuario cambia de app mientras el .apk baja (muy
+// fácil en una conexión lenta) y vuelve, el visibilitychange puede disparar el reload
+// justo encima de la descarga. Se marca aquí una ventana de 90s (suficiente para 7 MB
+// incluso en una conexión lenta) tras tocar "Descargar" en la que el reload automático se
+// aplaza igual que con un modal abierto o un replanteo sin guardar.
+function _marcarDescargaApkEnCurso() {
+  window._descargaApkHasta = Date.now() + 90000;
+}
 function _hayTrabajoSinGuardar() {
   const modalAbierto = [...document.querySelectorAll('.modal-overlay')]
     .some(m => getComputedStyle(m).display !== 'none');
   // _repl vive dentro del IIFE del editor de Replanteo (no es visible aquí); el editor
   // expone window._replHayCambiosSinGuardar() como único punto de acceso a su estado.
   const replanteoSinGuardar = typeof window._replHayCambiosSinGuardar === 'function' && window._replHayCambiosSinGuardar();
-  return modalAbierto || replanteoSinGuardar;
+  const descargandoApk = !!window._descargaApkHasta && Date.now() < window._descargaApkHasta;
+  return modalAbierto || replanteoSinGuardar || descargandoApk;
 }
 
 async function forzarActualizacion() {
