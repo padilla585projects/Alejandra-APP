@@ -17650,7 +17650,11 @@ async function getAdjuntoMantenimiento(id, request, env) {
   return new Response(obj.body, {
     headers: {
       'Content-Type': ct,
-      'Content-Disposition': `inline; filename="${reg.adjunto_nombre || 'adjunto'}"`,
+      // BUG-FILENAME-HEADER-01 (14/09/2026, revision de codigo): adjunto_nombre viene del
+      // nombre real del fichero subido, sin sanitizar -- si contiene una comilla doble
+      // rompe el valor de esta cabecera para cualquiera que abra el adjunto despues.
+      // encodeURIComponent(), igual que el resto de endpoints de descarga del archivo.
+      'Content-Disposition': `inline; filename="${encodeURIComponent(reg.adjunto_nombre || 'adjunto')}"`,
       ...CORS,
     },
   });
@@ -20391,7 +20395,10 @@ async function getPlanoObraFile(id, request, env) {
   return new Response(obj.body, {
     headers: {
       'Content-Type': p.archivo_mime || 'application/octet-stream',
-      'Content-Disposition': `inline; filename="${p.archivo_nombre || 'plano'}"`,
+      // BUG-FILENAME-HEADER-01 (14/09/2026, revision de codigo): mismo problema que
+      // getAdjuntoMantenimiento -- archivo_nombre sin sanitizar rompe esta cabecera si
+      // contiene una comilla doble. encodeURIComponent(), igual que el resto de endpoints.
+      'Content-Disposition': `inline; filename="${encodeURIComponent(p.archivo_nombre || 'plano')}"`,
       'Cache-Control': 'private, max-age=3600',
       // SEC-AUDIT-01 (26/07/2026): único endpoint del archivo que sobrescribía CORS a
       // '*' en vez de usar la constante CORS global (restringida al origen del panel) —
