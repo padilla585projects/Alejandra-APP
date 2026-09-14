@@ -7107,6 +7107,9 @@ function _initNativo() {
   try {
     if (P.App) {
       P.App.addListener('resume', function () { try { _onAppVisible(); } catch (_) {} });
+      // BUG-ATRAS-01: el botón físico/gesto "Atrás" en nativo se gestiona aquí, no con
+      // 'popstate' -- ver el comentario junto a _manejarBotonAtras() más abajo.
+      P.App.addListener('backButton', function () { try { _manejarBotonAtras(); } catch (_) {} });
     }
   } catch (_) {}
   // F3.1: mostrar el botón "Probar AR nativo" solo si este móvil soporta ARCore.
@@ -15621,56 +15624,58 @@ document.addEventListener('visibilitychange', () => {
 })();
 
 
-// Botón físico "Atrás" en Android — navega dentro de la app en vez de cerrarla
-window.addEventListener('popstate', function() {
+// Botón físico "Atrás" — navega dentro de la app en vez de cerrarla, y con doble
+// pulsación en una pantalla raíz, sale.
+// BUG-ATRAS-01 (14/09/2026): esto vivía solo en 'popstate'. En el HTC real, con gestos
+// de retroceder predictivos (Android 13+), Android resuelve el back entero contra el
+// OnBackPressedDispatcher de la Activity y JAMÁS llega a llamar WebView.goBack() -- así
+// que 'popstate' no se disparaba nunca (confirmado instrumentando el WebView por Chrome
+// DevTools: 0 disparos tras varias pulsaciones reales). Todo esto era código muerto en
+// nativo: ni navegaba pantallas con el botón físico ni llegaba nunca al aviso de "pulsa
+// atrás de nuevo para salir". Capacitor expone su propio evento (App 'backButton') que
+// SÍ viene del OnBackPressedDispatcher y por tanto es fiable independientemente del modo
+// de navegación (gestos o botones) o el fabricante -- es el mecanismo correcto en
+// nativo. 'popstate' se conserva tal cual solo para la PWA/navegador, donde sigue siendo
+// el único mecanismo disponible (no existe Capacitor.Plugins.App fuera de la app).
+function _manejarBotonAtras() {
   const s = getSession();
-  if (!s) return;
+  if (!s) return true;
 
   // Si el chat de Alejandra está abierto, el botón atrás lo cierra (no navega la app)
   const alePanel = document.getElementById('alejandraPanel');
-  if (alePanel && alePanel.style.display === 'flex') {
-    alejandraAbrir(false);
-    history.pushState({ alejandra: 1 }, '');
-    return;
-  }
+  if (alePanel && alePanel.style.display === 'flex') { alejandraAbrir(false); return true; }
 
   // Si hay una foto de sugerencia zoomed, cerrarla primero
   const zoomedImg = document.querySelector('img[data-zoomed="1"]');
-  if (zoomedImg) {
-    abrirFotoSug(zoomedImg);
-    history.pushState({ alejandra: 1 }, '');
-    return;
-  }
+  if (zoomedImg) { abrirFotoSug(zoomedImg); return true; }
 
-  if (_navHistory.length > 0) {
-    // Hay historial: navegar atrás dentro de la app
-    irAtras();
-    history.pushState({ alejandra: 1 }, '');
-  } else {
-    // Sin historial: estamos en una pantalla raíz
-    if (_backPressedOnce) {
-      // Segunda pulsación en <2.5s: ya estamos en la entrada base. history.back() aquí es
-      // un no-op silencioso en cuanto el WebView se queda sin historial que consumir --
-      // BUG-ATRAS-01 (14/09/2026): en el HTC real, varias pulsaciones seguidas nunca
-      // cerraban la app porque no había ningún App.addListener('backButton', ...) que
-      // pidiera la salida explícita; se dependía de un fallback nativo implícito que no
-      // disparaba. Pedirle la salida a Capacitor.Plugins.App directamente es fiable en
-      // cualquier Android/fabricante; en web/PWA (sin ese plugin) se mantiene el
-      // history.back() de siempre, que sí puede cerrar la pestaña o volver atrás en el navegador.
-      clearTimeout(_backPressTimer);
-      _backPressedOnce = false;
+  if (_navHistory.length > 0) { irAtras(); return true; } // hay historial: navegar atrás dentro de la app
+
+  // Sin historial: estamos en una pantalla raíz
+  if (_backPressedOnce) {
+    // Segunda pulsación en <2.5s: pedir la salida.
+    clearTimeout(_backPressTimer);
+    _backPressedOnce = false;
+    if (_esNativo()) {
       try {
         var _appPl = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-        if (_esNativo() && _appPl && _appPl.exitApp) { _appPl.exitApp(); return; }
+        if (_appPl && _appPl.exitApp) { _appPl.exitApp(); return true; }
       } catch (_) {}
-      setTimeout(() => history.back(), 0);
-      return;
     }
-    toast('Pulsa atrás de nuevo para salir');
-    _backPressedOnce = true;
-    _backPressTimer = setTimeout(() => { _backPressedOnce = false; }, 2500);
-    history.pushState({ alejandra: 1 }, ''); // re-empujar para seguir capturando
+    // Web/PWA: no existe exitApp(); dejar que el historial se agote de verdad (sin
+    // re-empujar) para que el navegador resuelva el back como toque (cerrar pestaña, etc).
+    setTimeout(() => history.back(), 0);
+    return false;
   }
+  toast('Pulsa atrás de nuevo para salir');
+  _backPressedOnce = true;
+  _backPressTimer = setTimeout(() => { _backPressedOnce = false; }, 2500);
+  return true;
+}
+
+window.addEventListener('popstate', function() {
+  if (_esNativo()) return; // en nativo lo gestiona el listener 'backButton' de _initNativo()
+  if (_manejarBotonAtras()) history.pushState({ alejandra: 1 }, ''); // re-empujar para seguir capturando
 });
 
 // ── Service Worker ────────────────────────────────────────────────────────────
