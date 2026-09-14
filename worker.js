@@ -7213,7 +7213,17 @@ async function cambiarEmpresaSesion(request, env) {
       nombre: auth.nombre, rol: auth.rol, obra_id: null, obra_nombre: null, departamento: null,
       es_admin: auth.isAdmin, usuario_id: auth.usuario_id, empresa_id: targetId,
     });
-    return json({ ok: true, token, nombre: auth.nombre, rol: auth.rol, empresa_id: targetId, empresa_nombre: emp.nombre, obra_id: null, obra_nombre: null, departamento: null });
+    // BUG-USUARIO-ID-PERDIDO-01 (14/09/2026): esta respuesta nunca incluyó usuario_id, y
+    // panel.html (cambiarEmpresaAdmin) reconstruía SESSION poniendo usuario_id:null a
+    // falta de r.usuario_id -- ese null quedaba persistido en localStorage y rompía en
+    // silencio cualquier función que dependiera de SESSION.usuario_id sin fallback a
+    // nombre (p.ej. el chat flotante de Alejandra, cargarAlejandraChat(), que directamente
+    // no hace la petición si usuario_id es null). Adrián lo sufrió así: cambió de empresa
+    // en el panel Office y desde ese momento el chat de Alejandra dejó de cargar su
+    // historial -- los mensajes seguían intactos en D1, solo el frontend nunca preguntaba
+    // por ellos. crearSesion() ya recibía auth.usuario_id correctamente (la sesión en D1
+    // siempre fue válida); solo faltaba devolverlo en el JSON.
+    return json({ ok: true, token, nombre: auth.nombre, rol: auth.rol, usuario_id: auth.usuario_id, empresa_id: targetId, empresa_nombre: emp.nombre, obra_id: null, obra_nombre: null, departamento: null });
   }
 
   const yo = await env.DB.prepare('SELECT email FROM usuarios WHERE id = ?').bind(auth.usuario_id).first();
@@ -7230,7 +7240,7 @@ async function cambiarEmpresaSesion(request, env) {
     nombre: destino.nombre, rol: destino.rol, obra_id: destino.obra_id, obra_nombre: destino.obra_nombre,
     departamento: dept, es_admin: false, usuario_id: destino.id, empresa_id: targetId,
   });
-  return json({ ok: true, token, nombre: destino.nombre, rol: destino.rol, empresa_id: targetId, empresa_nombre: destino.empresa_nombre, obra_id: destino.obra_id, obra_nombre: destino.obra_nombre, departamento: dept });
+  return json({ ok: true, token, nombre: destino.nombre, rol: destino.rol, usuario_id: destino.id, empresa_id: targetId, empresa_nombre: destino.empresa_nombre, obra_id: destino.obra_id, obra_nombre: destino.obra_nombre, departamento: dept });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
