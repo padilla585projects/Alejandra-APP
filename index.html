@@ -24,7 +24,10 @@
 <!-- jsQR-01 (11/08/2026): la ruta de cdnjs (jsQR/1.4.0/jsQR.min.js) devolvía 404 -- la
      librería ya no está en cdnjs. Esto rompía en silencio el escaneo de QR/código de
      barras de bobinas, EPIs y herramientas (jsQR undefined, sin error visible para el
-     usuario, solo un 404 en consola) -- posiblemente desde hace tiempo en producción. -->
+     usuario, solo un 404 en consola) -- posiblemente desde hace tiempo en producción.
+     Se movió a jsdelivr, pero seguía dependiendo de un CDN externo en tiempo de ejecución;
+     ahora se sirve vendorizada desde el propio repo (vendor/jsQR.js, misma versión 1.4.0)
+     para que el escaneo QR no dependa de que un tercero esté arriba. -->
 <!-- PERF-01 (26/08/2026): Adrián -- "la app tarda mucho en abrirse por primera vez". Estas
      9 librerías (5 dominios distintos) se cargaban bloqueando el renderizado -- el
      navegador no pintaba nada hasta descargar y ejecutar las nueve, aunque ninguna hace
@@ -33,7 +36,7 @@
      descargan en paralelo sin bloquear el pintado y se ejecutan justo antes de que arranque
      el script de la app, en el mismo orden -- mantiene la dependencia jspdf-autotable→jspdf
      y marked→highlight.js intacta. -->
-<script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script defer src="vendor/jsQR.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
