@@ -1079,14 +1079,27 @@ WORKFLOW PARA GENERAR CUALQUIER ESQUEMA (eléctrico o no):
 IMPORTANTE: Para DOL y otros arranques de motor, SIEMPRE usa componentes={...}, NUNCA svg_content.
 El servidor genera el esquema IEC 60617 completo automáticamente.
 
+ALEJANDRA-ESQUEMA-04 (14/09/2026): NUNCA narres el proceso de composición ni la llamada a
+la tool en el texto que ve el usuario ("voy a componer el SVG ahora", "preparando el
+esquema...", "ejecutando: generar_esquema_electrico"). Esa narración NO es la tool — es
+solo texto — y si la escribes y el turno termina ahí (por límite de longitud o cualquier
+otro motivo), el usuario se queda con una promesa vacía y ningún esquema, sin saber por
+qué. Adrián lo sufrió en producción: pidió el esquema del AXG125→BMS, Alejandra respondió
+"Ejecutando: generar_esquema_electrico... dame un momento" y ahí se cortó, sin haber
+llamado a la tool de verdad. La composición del SVG es un paso interno tuyo: hazla y llama
+a la tool directamente, sin describir el proceso como si fuera la respuesta al usuario. El
+usuario nunca debe ver el nombre de una tool en tu respuesta.
+
 TRANSPARENCIA SI FALLA (ALEJANDRA-ESQUEMA-01, 25/08/2026): si una llamada a
 generar_esquema_electrico (o cualquier otra tool) devuelve error, no respondas con un
 mensaje genérico como si nada hubiera pasado. Dile al usuario que hubo un problema
 generándolo y que lo estás reintentando ("dame un momento, estoy preparando el esquema")
-antes de volver a intentarlo. Adrián detectó este patrón exacto: dos intentos fallidos de
-esquema quedaron invisibles para él porque la respuesta visible no tenía relación con lo
-que pasaba por dentro — eso rompe la confianza tanto como inventar un dato (ver REGLA DE
-HONESTIDAD TÉCNICA). Se aplica a cualquier tool, no solo a esquemas.`,
+Y LLAMA A LA TOOL DE NUEVO EN ESE MISMO TURNO antes de terminar tu respuesta — ese aviso
+nunca puede ser la última línea que el usuario lea si el reintento no ha ocurrido de
+verdad (ver ALEJANDRA-ESQUEMA-04 arriba). Adrián detectó este patrón exacto: dos intentos
+fallidos de esquema quedaron invisibles para él porque la respuesta visible no tenía
+relación con lo que pasaba por dentro — eso rompe la confianza tanto como inventar un dato
+(ver REGLA DE HONESTIDAD TÉCNICA). Se aplica a cualquier tool, no solo a esquemas.`,
 
   // INGENIERIA-ALTA-TENSION-01 (26/08/2026): Adrián — "creo que debemos añadirle otro
   // experto para Alta Tensión... para que controle sobre celdas en alta y cualquier
@@ -6609,6 +6622,10 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
 function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
   const toolsEscritos = new Set(herramientasUsadas.map(t => t.nombre));
 
+  // Tools de escritura que deberían ejecutarse si afirma acción (declarado aquí arriba
+  // porque ALEJANDRA-ESQUEMA-04 lo necesita antes que el resto de checks de esta función).
+  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix', 'generar_esquema_electrico', 'marcar_plano', 'generar_plano', 'editar_plano', 'importar_plano_dxf', 'generar_informe'];
+
   // ALEJANDRA-ESQUEMA-03 (29/08/2026): revisando el historial real de producción
   // (alejandra_historial + alejandra_trazas, usuario 3, 28/08 07:52) se encontró un
   // FALSO POSITIVO del fix de ayer (ALEJANDRA-ESQUEMA-02): Alejandra generó un esquema
@@ -6657,6 +6674,20 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
     return 'No llegué a generar ningún plano en este turno — iba a describírtelo como si lo hubiera hecho, pero no ejecuté la herramienta real y el enlace que iba a darte no existiría de verdad. Pídemelo otra vez y lo genero ahora.';
   }
 
+  // ALEJANDRA-ESQUEMA-04 (14/09/2026): Adrián pidió el esquema AXG125→BMS y la respuesta
+  // visible fue "Ejecutando: generar_esquema_electrico con el SVG completo... dame un
+  // momento" — una narración del nombre interno de la tool, sin que la tool se hubiera
+  // llamado de verdad en ese turno (traza real: sin invocación). El turno terminó ahí, sin
+  // esquema, y la conversación siguió sin que él lo hubiera pedido de nuevo. Los checks de
+  // arriba (ESQUEMA-02/03) solo cubren enlaces falsos; esto es una promesa sin enlace ni
+  // acción. Un usuario final nunca debería ver el nombre interno de una tool de escritura
+  // en su respuesta — si aparece y esa tool concreta no corrió este turno, es narración
+  // fantasma, no trabajo real. Se sustituye toda la respuesta, igual que un enlace falso.
+  const toolNarradaSinEjecutar = toolsEscritura.find(t => textoFinal.includes(t) && !toolsEscritos.has(t));
+  if (toolNarradaSinEjecutar) {
+    return `No llegué a ejecutar "${toolNarradaSinEjecutar}" en este turno — iba a describirlo como si lo hubiera hecho, pero la herramienta real nunca se llamó. Pídemelo otra vez y lo hago ahora.`;
+  }
+
   // Patrones de afirmación de acción completada
   const patronesAccion = [
     /\b(ya lo hice|ya está hecho|ya lo cambié|ya lo modifiqué|acabo de hacer|acabo de cambiar|acabo de escribir|acabo de modificar|acabo de implementar|acabo de crear|acabo de aplicar|ya lo apliqué|ya lo arreglé|ya está arreglado|ya lo actualicé|ya lo subí|lo he hecho|lo he cambiado|lo he modificado|lo he implementado|he hecho el cambio|he aplicado|he modificado|he actualizado)\b/i,
@@ -6670,8 +6701,6 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
     /\b(esquema generado|informe generado|documento generado|plano generado|esquema creado|informe creado|documento creado|guardado en R2|guardado correctamente|redactado y guardado)\b/i,
   ];
 
-  // Tools de escritura que deberían ejecutarse si afirma acción
-  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix', 'generar_esquema_electrico', 'marcar_plano', 'generar_plano', 'editar_plano', 'importar_plano_dxf', 'generar_informe'];
   const usóEscritura = toolsEscritura.some(t => toolsEscritos.has(t));
 
   const afirmaAccion = patronesAccion.some(p => p.test(textoFinal));
