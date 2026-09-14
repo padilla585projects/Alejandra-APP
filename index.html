@@ -7099,6 +7099,16 @@ function _initNativo() {
       });
     }
   } catch (_) {}
+  // El reenganche de sync en _onAppVisible ya cubre visibilitychange, pero Android puede
+  // congelar los setInterval en segundo plano sin que ese evento llegue a disparar (o
+  // llega tarde) -- 'resume' del ciclo de vida nativo (onResume de la Activity) es más
+  // fiable para saber que la app ha vuelto a primer plano. _onAppVisible ya se autolimita
+  // a una vez cada 15s, así que llamarla también aquí no duplica trabajo.
+  try {
+    if (P.App) {
+      P.App.addListener('resume', function () { try { _onAppVisible(); } catch (_) {} });
+    }
+  } catch (_) {}
   // F3.1: mostrar el botón "Probar AR nativo" solo si este móvil soporta ARCore.
   try {
     if (P.ReplanteoAR && P.ReplanteoAR.isSupported) {
