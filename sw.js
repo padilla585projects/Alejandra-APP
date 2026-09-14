@@ -79,6 +79,20 @@ self.addEventListener('fetch', e => {
   // Adrián, probando desde la app instalada: "la barra de progreso llega casi al final
   // y no termina". Estas se dejan pasar sin interceptar ni cachear.
   if (/\.apk(\?|$)/i.test(e.request.url) || e.request.url.includes('/releases/download/')) return;
+  // FIX-DESCARGA-GENERICA-01 (14/09/2026): el guard de arriba solo cubre el .apk por URL,
+  // pero el mismo problema (clonar+cachear compite por E/S con una descarga real en curso)
+  // aplica a cualquier descarga real servida por nuestro propio API — documentos, backups,
+  // informes, exportaciones DSAR — todas responden con `Content-Disposition: attachment`.
+  // En vez de mantener una lista de URLs, se usa esa cabecera como señal genérica: si el
+  // servidor la marca como descarga real, el SW no la clona ni la cachea (offline no tiene
+  // sentido para un fichero que el usuario ya está guardando en su dispositivo). Se
+  // comprueba en las DOS ramas de abajo (navigate y genérica) porque, en la WebAPK
+  // instalada, una apertura de `_abrirUrlExterna()` hacia un origen cruzado puede llegar
+  // como `mode:'navigate'` igual que la navegación de una descarga directa (mismo mecanismo
+  // ya documentado arriba para el .apk) — solo cubrir la rama genérica dejaba ese caso vivo.
+  function _esDescarga(res) {
+    return (res.headers.get('Content-Disposition') || '').toLowerCase().includes('attachment');
+  }
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request, { cache: 'no-store' })
@@ -86,7 +100,7 @@ self.addEventListener('fetch', e => {
           // Solo cachear GET con respuesta OK (Cache API no soporta HEAD ni POST).
           // Nunca cachear errores (4xx/5xx): si no, un fallo puntual de red queda
           // "grabado a fuego" y se re-sirve luego aunque el servidor ya funcione bien.
-          if (e.request.method === 'GET' && res.ok) {
+          if (e.request.method === 'GET' && res.ok && !_esDescarga(res)) {
             const copy = res.clone();
             caches.open(CACHE).then(c => c.put(e.request, copy));
           }
@@ -100,7 +114,7 @@ self.addEventListener('fetch', e => {
     fetch(e.request)
       .then(res => {
         // Solo cachear GET con respuesta OK — ver comentario arriba.
-        if (e.request.method === 'GET' && res.ok) {
+        if (e.request.method === 'GET' && res.ok && !_esDescarga(res)) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy));
         }
