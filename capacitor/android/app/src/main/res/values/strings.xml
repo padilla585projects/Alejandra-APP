@@ -4,4 +4,12 @@
     <string name="title_activity_main">Alejandra</string>
     <string name="package_name">com.padilla585.alejandra</string>
     <string name="custom_url_scheme">com.padilla585.alejandra</string>
+
+    <!-- Accesos directos del icono (res/xml/shortcuts.xml) -->
+    <string name="shortcut_fichar_short">Fichar</string>
+    <string name="shortcut_fichar_long">Fichar entrada/salida</string>
+    <string name="shortcut_escanear_short">Escanear</string>
+    <string name="shortcut_escanear_long">Escanear código</string>
+    <string name="shortcut_incidencia_short">Incidencia</string>
+    <string name="shortcut_incidencia_long">Nueva incidencia</string>
 </resources>
