@@ -1,5 +1,44 @@
 # Handoff — Alejandra 2.0
 
+## REPLANTEO-RELOAD-01 + APK-DESCARGA-01 (2026-09-14, desplegado y verificado en el HTC real)
+
+- **Agente:** Claude (Sonnet 5). Dos bugs de campo reportados por Adrián probando justo tras el
+  despliegue de F3.1 — el momento en que más probable es que el Service Worker se actualice a
+  mitad de sesión (chequeo cada 5 min + al recuperar el foco).
+- **REPLANTEO-RELOAD-01:** Adrián: "cuando hago un replanteo y lo quiero guardar no puedo, no me
+  deja". Causa: las tres vías de recarga forzada por actualización del SW (banner periódico,
+  mensaje `SW_ACTUALIZADO`, `controllerchange`) recargaban la página sin avisar aunque hubiera un
+  replanteo a medio hacer — el editor es una pantalla completa, no un `.modal-overlay`, así que
+  `FIX-RELOAD-TRABAJO-01` (12/08) no lo cubría; dos de las tres vías ni siquiera tenían esa
+  protección parcial. El guardado en sí no estaba roto (reproducido con `curl` directo contra la
+  API real: `POST /replanteos` → 201, con el montaje Hilti MQ incluido). `_hayTrabajoSinGuardar()`
+  centraliza el aviso (modal abierto o replanteo con cambios sin guardar) para las tres vías;
+  como `_repl` vive en el cierre del IIFE del editor de Replanteo, se expone
+  `window._replHayCambiosSinGuardar()` como único punto de acceso a su estado desde fuera. PR
+  #219 → fusionada, solo `index.html`, sin cambio de versión (sigue 9.68).
+- **APK-DESCARGA-01:** Adrián, probando desde el HTC con la app instalada: "sigo sin poder
+  descargarme alejandra.apk desde chrome, se queda pillada la descarga antes de terminarla" (la
+  barra de progreso llegaba casi al final y no terminaba). Descartada corrupción del asset:
+  descargado entero y comprobado por SHA-256 contra la Release `app-android-v5` — coincide byte a
+  byte, con `Content-Length`/`Content-Disposition`/`Accept-Ranges` correctos en el CDN. Causa: con
+  la app instalada, el Service Worker intercepta también esa petición (~7 MB, origen cruzado a
+  GitHub Releases) y el manejador genérico de `fetch` la clona entera para meterla en la caché de
+  "modo offline" — no sirve de nada y compite por E/S con la descarga real mientras dura. Las
+  peticiones a un `.apk` o a `/releases/download/` se dejan pasar sin interceptar ni cachear. PR
+  #220 → fusionada, solo `sw.js`, sin cambio de versión.
+- **Publicado:** workflow `Publish GitHub Pages (manual)` run `34836302794`, éxito; confirmado
+  servido en producción (`_hayTrabajoSinGuardar` presente en `index.html`,
+  `FIX-DESCARGA-APK-01` presente en `sw.js`).
+- **Verificado de extremo a extremo en el HTC U11 real de Adrián** (conectado por ADB —
+  `adb shell input`/`screencap`, sobre su sesión real sin tocar sus datos ni sus empresas):
+  descarga completa en ~1 s (7,22 MB, antes se quedaba pillada); SHA-256 del archivo en
+  `/sdcard/Download/alejandra.apk` idéntico al de la Release; `adb install -r` sobre ese mismo
+  APK → `Success` (misma firma que la app ya instalada, actualizada sin perder datos); la app
+  abre y llega a la pantalla de login normal. Sin pendientes de esta ronda.
+- Limpieza: borrados los dos replanteos de prueba (`#16` "Prueba diagnostico guardado", `#17`
+  "Diagnostico UI guardado") creados en "Nave Industrial Demo" al verificar el guardado por API,
+  con confirmación explícita de Adrián antes de borrar.
+
 ## APP-ANDROID + REPLANTEO-AR-V4 (2026-09-10, v9.60→v9.67, desplegado)
 
 - **Agente:** Claude (Opus 4.8). **ADR:** `docs/decisions/ADR-0026-MIGRACION-NATIVA-ANDROID-WINDOWS.md`

@@ -1,5 +1,23 @@
 # TASKS — Cola operativa inmediata
 
+Estado (2026-09-14): **REPLANTEO-RELOAD-01 + APK-DESCARGA-01 — arreglados, desplegados y
+verificados en el HTC U11 real de Adrián.** Dos bugs reportados probando en campo justo tras el
+despliegue de F3.1 (el momento en que más probable es que el Service Worker se actualice a
+mitad de sesión):
+- **REPLANTEO-RELOAD-01:** "cuando hago un replanteo y lo quiero guardar no puedo, no me deja" —
+  las tres vías de recarga forzada por actualización del SW (banner periódico, mensaje
+  `SW_ACTUALIZADO`, `controllerchange`) recargaban la página sin avisar aunque hubiera un
+  replanteo a medio hacer (pantalla completa, no modal, sin cubrir por `FIX-RELOAD-TRABAJO-01`
+  del 12/08). El guardado en sí no estaba roto. PR #219, solo `index.html`.
+- **APK-DESCARGA-01:** "se queda pillada la descarga antes de terminarla" — con la app instalada,
+  el Service Worker interceptaba también la descarga del `.apk` (~7 MB, origen cruzado) y la
+  clonaba entera para cachearla, compitiendo por E/S con la descarga real. El asset en sí estaba
+  íntegro (SHA-256 verificado). PR #220, solo `sw.js`.
+- Fusionadas, publicadas (Pages run 34836302794, sin cambio de versión — sigue 9.68) y
+  verificadas end-to-end por ADB en el HTC: descarga completa (7,22 MB) + SHA-256 correcto +
+  `adb install -r` con éxito (misma firma) + la app abre a la pantalla de login. Sin pendientes.
+  Detalle en `HANDOFF.md`.
+
 Estado (2026-09-10): **MIGRACIÓN NATIVA — plan escrito (ADR-0026, Propuesto).** Decidido con
 Adrián; aceptarlo es humano (ADR-0007). No implementado.
 - **Android (la SUITE, no el chat):** **Capacitor** envolviendo la PWA + **módulo AR nativo ARCore**
