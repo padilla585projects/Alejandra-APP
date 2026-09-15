@@ -20,6 +20,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
@@ -77,6 +79,10 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // AR-INSETS-01: forzar edge-to-edge explícito en vez de depender del default de
+        // targetSdk 35+ -- así el ajuste de insets de abajo funciona igual en cualquier
+        // dispositivo/fabricante, no solo en los que ya lo activan por su cuenta.
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         FrameLayout root = new FrameLayout(this);
 
@@ -109,6 +115,30 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         bar.addView(makeBtn("↩", "#ffffff", "#111111", 1f, v -> undo()));
         bar.addView(makeBtn("✖", "#000000", "#ffffff", 1f, v -> { setResult(RESULT_CANCELED); finish(); }));
         bar.addView(makeBtn("✅ Fin", "#22c55e", "#ffffff", 1.4f, v -> terminar()));
+
+        // AR-INSETS-01 (15/09/2026): Adrián probando el AR real -- "no se ven los controles" --
+        // y en la captura el texto superior se solapaba con la barra de estado (hora/batería).
+        // Android 15+ (targetSdk 35, este proyecto ya compila con compileSdk 36) pinta las
+        // apps edge-to-edge POR DEFECTO -- el contenido llega hasta los bordes reales de la
+        // pantalla salvo que la Activity reserve hueco ella misma. index.html/MainActivity ya
+        // se adaptaron esta semana (StatusBar.setOverlaysWebView + env(safe-area-inset-*) en
+        // CSS), pero esta es una Activity nativa APARTE con su propia ventana -- ese fix no la
+        // cubre. Sin gestionar los insets, la barra de estado tapaba el texto de arriba y la
+        // barra de navegación (gestos/botones) tapaba o dejaba casi sin margen la fila de
+        // botones de abajo. Se añade el inset real de systemBars() al padding fijo que ya
+        // tenía cada vista, en vez de sustituirlo -- así se conserva el aire visual original.
+        final int infoPadL = 28, infoPadT = 40, infoPadR = 28, infoPadB = 20;
+        ViewCompat.setOnApplyWindowInsetsListener(infoText, (v, insets) -> {
+            int top = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top;
+            v.setPadding(infoPadL, infoPadT + top, infoPadR, infoPadB);
+            return insets;
+        });
+        final int barPadL = 20, barPadT = 16, barPadR = 20, barPadB = 40;
+        ViewCompat.setOnApplyWindowInsetsListener(bar, (v, insets) -> {
+            int bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            v.setPadding(barPadL, barPadT, barPadR, barPadB + bottom);
+            return insets;
+        });
 
         setContentView(root);
     }
