@@ -4500,7 +4500,15 @@ export default {
         // atacante. Las tools de datos ya están gateadas en TOOLS_REQUIEREN_SESION; esto
         // es defensa en profundidad y cierra además el historial por empresa.
         const empresa   = sesionAuth ? sesionAuth.empresa_id : 'default';
-        const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
+        // BUG-CONTEXTO-ADJUNTO-CORTO-01 (15/09/2026): 10 filas (~5 turnos) se quedaban
+        // cortas para una conversación técnica normal con adjuntos -- Adrián mandó un PDF
+        // de una sonda, y 8 mensajes después (misma conversación, mismos minutos) Alejandra
+        // ya no tenía ni rastro de que existiera: "no me ha llegado ningún PDF en este
+        // turno", y le pedía el modelo que ÉL MISMO le había dado unos turnos antes según
+        // ese PDF. Ver construirMessages(): un adjunto reciente (<2h) SÍ se re-adjunta si su
+        // fila sigue dentro de esta ventana -- el problema no era la reconstrucción en sí,
+        // sino que la fila se caía de la ventana antes de esas 2h. Subido a 24 (~12 turnos).
+        const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 24);
         const canalChat = canal || 'web';
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
         // FIX-ALEJANDRA-ROL-01 (29/07/2026): con sesión verificada, el rol/nombre real
@@ -4562,7 +4570,8 @@ export default {
 
         // SEC-ANON-01: ver la nota en /api/chat. Sin sesión, el empresa_id del body se ignora.
         const empresa  = sesionAuth ? sesionAuth.empresa_id : 'default';
-        const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
+        // BUG-CONTEXTO-ADJUNTO-CORTO-01 (15/09/2026): ver comentario en /api/chat.
+        const contexto = await obtenerContextoChat(env, usuario_id, empresa, 24);
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
         // FIX-ALEJANDRA-ROL-01: ver comentario en /api/chat — rol/nombre de la sesión
         // verificada tienen prioridad sobre lo que mande el body sin verificar.
@@ -6016,8 +6025,14 @@ REGLAS GENERALES:
 
       // Si respondió algo que no sea SIN_ACCION, loguear
       if (respuesta.texto && !respuesta.texto.includes('SIN_ACCION')) {
+        // BUG-LOGS-COLUMNAS-01 (15/09/2026): esta tabla no tiene columnas `tipo`/`contenido`
+        // (son `accion`/`resultado`, ver PRAGMA table_info real) -- el INSERT fallaba
+        // SIEMPRE con SQLITE_ERROR, silenciado por el .catch(() => {}) de abajo. Ningún log
+        // de cron/deploy/rollback/alerta_creditos se ha guardado nunca. Corregido aquí y en
+        // los otros 4 sitios con el mismo error (deploy_directo, deploy, rollback,
+        // alerta_creditos).
         await env.DB.prepare(
-          `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('cron', ?, datetime('now'))`
+          `INSERT INTO alejandra_logs (accion, resultado, status, created_at) VALUES ('cron', ?, 'ok', datetime('now'))`
         ).bind(respuesta.texto.substring(0, 500)).run().catch(() => {});
       }
     } catch (err) {
@@ -6257,7 +6272,10 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // con procesarConNEXUSStream (4/10) pese a que el comentario de abajo decía que
     // estaban unificados -- mismo usuario podía "recordar más o menos" según qué
     // endpoint atendiera su mensaje, sin relación con el canal real. Unificados ahora.
-    const limitHistorial      = clas.experto === 'simple' ? 4 : 10;
+    // BUG-CONTEXTO-ADJUNTO-CORTO-01 (15/09/2026): 10 se quedaba corto -- ver comentario
+    // junto a obtenerContextoChat() en /api/chat. Sigue unificado con
+    // procesarConNEXUSStream (línea ~6469) por el mismo motivo que ALEJANDRA-CONTEXTO-01.
+    const limitHistorial      = clas.experto === 'simple' ? 4 : 24;
     // Aprendizajes para todo experto salvo 'simple'. Unificado con el criterio
     // de procesarConNEXUSStream (linea ~5023) para evitar que app/panel vean un
     // comportamiento distinto segun usen streaming o no — 'simple' excluye
@@ -6457,7 +6475,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       ...calcularModulosDinamicos(clas, expert, mensaje, pantalla, departamento)
     ];
     const systemPrompt      = await buildAnthropicSystemBlocks(modulosFinal, tools, env);
-    const limitHistorial    = clas.experto === 'simple' ? 4 : 10;
+    // BUG-CONTEXTO-ADJUNTO-CORTO-01 (15/09/2026): ver comentario en procesarConNEXUS.
+    const limitHistorial    = clas.experto === 'simple' ? 4 : 24;
     const incluirAprendizajes = clas.experto !== 'simple';
     const messages          = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto, usuario_label, empresa_id);
 
@@ -8964,7 +8983,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
           if (cfR.ok) {
             await env.DB.prepare(
-              `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy_directo', ?, datetime('now'))`
+              `INSERT INTO alejandra_logs (accion, resultado, status, created_at) VALUES ('deploy_directo', ?, 'ok', datetime('now'))`
             ).bind(`Deploy directo ${workerName}: ${motivo} (SHA: ${fileData.sha?.substring(0,7)})`).run().catch(() => {});
             // Esperar 8 segundos para propagación de Cloudflare
             await new Promise(r => setTimeout(r, 8000));
@@ -8988,7 +9007,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
         if (r.status === 204) {
           await env.DB.prepare(
-            `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy', ?, datetime('now'))`
+            `INSERT INTO alejandra_logs (accion, resultado, status, created_at) VALUES ('deploy', ?, 'ok', datetime('now'))`
           ).bind(`Deploy ${worker} via Actions: ${motivo}`).run().catch(() => {});
           return `✅ Deploy del worker "${worker}" iniciado via GitHub Actions (deploy directo no disponible).\nMotivo: ${motivo}${reviewWarning}\n⏳ Usa verificar_deploy + test_endpoint.`;
         }
@@ -9160,7 +9179,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
         // Log
         await env.DB.prepare(
-          `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('rollback', ?, datetime('now'))`
+          `INSERT INTO alejandra_logs (accion, resultado, status, created_at) VALUES ('rollback', ?, 'ok', datetime('now'))`
         ).bind(`Revert ${lastSha.substring(0,7)} → ${prevSha.substring(0,7)}: ${input.motivo}`).run().catch(() => {});
 
         return `✅ Rollback ejecutado.\nRevertido: ${lastSha.substring(0,7)} "${lastMsg}"\nAhora en: ${prevSha.substring(0,7)}\nMotivo: ${input.motivo}\n\n⚠️ Usa ejecutar_deploy para que el worker se actualice con el código anterior.`;
@@ -13390,7 +13409,7 @@ async function notificarSinCreditos(env) {
     if (env.TELEGRAM_BOT_TOKEN) await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, '⚠️ <b>Alejandra sin créditos Anthropic</b>\nUsando GPT-4o de respaldo. Recarga en console.anthropic.com');
     // Log en BD
     await env.DB.prepare(
-      `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('alerta_creditos', 'Anthropic sin saldo — fallback GPT-4o activado', datetime('now'))`
+      `INSERT INTO alejandra_logs (accion, resultado, status, created_at) VALUES ('alerta_creditos', 'Anthropic sin saldo — fallback GPT-4o activado', 'ok', datetime('now'))`
     ).run().catch(() => {});
   } catch (_) {}
 }
