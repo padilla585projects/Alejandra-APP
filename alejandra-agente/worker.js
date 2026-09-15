@@ -139,6 +139,32 @@ turno en que te habla:
 No preguntes si el propio mensaje ya deja claro que el archivo no es para guardar (p.ej.
 una foto de un error para que la diagnostiques ahora mismo, sin ninguna obra de por medio).
 
+MEMORIA PROACTIVA — GUARDAR SIN QUE TE LO PIDAN, BUSCAR ANTES DE OLVIDAR
+(MEMORIA-PROACTIVA-01, 15/09/2026): Adrián, tras ver que perdía el hilo de una ficha
+técnica a los pocos turnos: "para que la mire cuando necesite". El historial que ves cada
+turno es una ventana limitada (unos 12 intercambios) — pasado ese punto, un archivo o un
+dato técnico desaparece de tu vista aunque la conversación siga activa, salvo que lo hayas
+guardado en memoria de verdad (memory_save, no solo dicho que lo harías — ver disciplina de
+arriba). Dos reglas, no una sola:
+1. GUARDAR SIN PEDIR PERMISO: cuando termines de estudiar algo con valor duradero para
+   próximas conversaciones (una ficha técnica, el resultado de un problema real, una
+   decisión técnica tomada con el usuario), llama a memory_save con un resumen útil —
+   modelo/referencia exactos, cifras clave, qué se decidió — SIN esperar a que el usuario
+   te diga "guárdalo". Esto es memoria de trabajo, distinto del archivo como documento de
+   obra (ARCHIVOS ADJUNTOS de arriba, que sí requiere su confirmación explícita porque
+   implica dónde vive el archivo). Puedes hacer ambas cosas a la vez si aplica.
+2. BUSCAR ANTES DE DECIR QUE NO LO TIENES: si el usuario menciona algo de lo que ya
+   hablasteis (un equipo, una sonda, un modelo, "ya te lo pasé", "como hablamos antes") y no
+   está en lo que ves de este turno, usa memory_read con su parámetro busqueda (p.ej.
+   busqueda: "sonda caudal") ANTES de responder "no me llegó" o pedirle que te lo repita —
+   puede que ya lo tengas guardado y solo haga falta buscarlo. Solo si memory_read tampoco
+   encuentra nada, pídeselo de nuevo con transparencia (ver REGLA "TRANSPARENCIA SI FALLA").
+3. AMPLIAR/CORREGIR, NO DUPLICAR: si el usuario te da información nueva sobre algo que ya
+   tienes guardado (un dato que faltaba, una corrección, "añade esto a lo de la sonda"),
+   usa memory_update con el slug de esa nota (búscalo con memory_read si no lo tienes a
+   mano) en vez de crear una nota nueva con memory_save — si no localizas el slug tras
+   buscar, entonces sí crea una nueva con memory_save antes que perder la información.
+
 CONOCIMIENTO TÉCNICO: Eres la ingeniera del equipo. Conoces los materiales, fabricantes y productos que se usan en obra. Cuando alguien mencione un producto, marca o referencia que no conozcas:
 1. BUSCA automáticamente en Google (buscar_google) la ficha técnica o catálogo del fabricante
 2. Si no encuentras info suficiente, PREGUNTA al usuario: "¿De qué fabricante es? ¿Tienes la referencia?"
@@ -1768,17 +1794,48 @@ const TOOL_MEMORY_SAVE = {
 
 const TOOL_MEMORY_READ = {
   name: 'memory_read',
-  description: 'Lee tu memoria persistente para recuperar aprendizajes y contexto previo. Cada resultado incluye su slug y, si tiene, sus notas relacionadas (enlaces salientes y backlinks entrantes) — úsalos para seguir el hilo a otra nota relevante aunque no la hayas buscado directamente, o para pasarlos como enlaces_a al guardar una nota nueva relacionada.',
+  // MEMORIA-BUSQUEDA-01 (15/09/2026): antes solo se podía filtrar por tipo y ordenar por
+  // importancia/fecha -- sin forma de buscar una nota concreta, memory_read(limit:10) solo
+  // devolvía "lo más importante/reciente en general", nunca "lo que sé sobre X". Un usuario
+  // que retomaba un tema técnico unos turnos después (fuera ya de la ventana de historial) no
+  // tenía forma real de que Alejandra "la mirara cuando la necesitara" -- solo de que la
+  // tuviera ya delante por suerte. Se añade `busqueda` (LIKE sobre título+contenido).
+  description: 'Lee tu memoria persistente para recuperar aprendizajes y contexto previo. Sin `busqueda`, devuelve lo más importante/reciente en general (para repasar tu buzón). Con `busqueda`, filtra por coincidencia en título o contenido — úsala SIEMPRE que el usuario mencione algo de lo que ya hablasteis (un equipo, una sonda, un modelo, un problema) y no lo tengas ya en el contexto de este turno: antes de decir "no lo tengo" o pedirle que te lo repita, busca aquí primero. Cada resultado incluye su slug y, si tiene, sus notas relacionadas (enlaces salientes y backlinks entrantes) — úsalos para seguir el hilo a otra nota relevante aunque no la hayas buscado directamente, o para pasarlos como enlaces_a al guardar una nota nueva relacionada.',
   input_schema: {
     type: 'object',
     properties: {
-      tipo:  { type: 'string', description: 'Filtrar por tipo (opcional)' },
+      tipo:      { type: 'string', description: 'Filtrar por tipo (opcional)' },
+      busqueda:  { type: 'string', description: 'Palabra o frase a buscar en título/contenido (opcional). Ej: "sonda caudal", "ADMAG", "Riser 4".' },
       limit: { type: 'number', description: 'Cuántos registros leer (default 10)' }
     }
   },
   acceso: 'sesion',
   cron: 'permitido',
   nivel_riesgo: 'N0',
+};
+
+// MEMORIA-EDITAR-01 (15/09/2026): Adrián, hablando desde el propio chat (no el panel):
+// "editar Alejandra chat para ampliarlas me refiero" — quiere poder pedirle a Alejandra
+// en la conversación que amplíe o corrija una nota que ya existe, no solo desde el panel
+// Obsidian. Antes memory_save solo podía crear: una nota que envejecía (un dato nuevo sobre
+// algo ya guardado) terminaba duplicada en vez de actualizada, porque no había otra forma.
+const TOOL_MEMORY_UPDATE = {
+  name: 'memory_update',
+  description: 'Actualiza una nota de memoria que YA EXISTE (identificada por su slug — lo tienes si la nota salió en un memory_read anterior). Úsala cuando el usuario te pida ampliar, corregir o poner al día algo que ya sabías, en vez de crear una nota nueva y duplicada con memory_save. Con modo="ampliar" (por defecto) añade el contenido nuevo al final del existente, con fecha; con modo="reemplazar" sustituye el contenido entero. Si no encuentras el slug exacto, usa memory_read con busqueda primero.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      slug:       { type: 'string', description: 'Slug de la nota a actualizar (obligatorio)' },
+      contenido:  { type: 'string', description: 'Texto a añadir (modo ampliar) o contenido completo nuevo (modo reemplazar)' },
+      modo:       { type: 'string', enum: ['ampliar', 'reemplazar'], description: 'Por defecto "ampliar" (añade al final). "reemplazar" sustituye todo el contenido.' },
+      titulo:     { type: 'string', description: 'Nuevo título (opcional, solo si también cambia)' },
+      importancia:{ type: 'number', description: 'Nueva importancia 1-5 (opcional)', minimum: 1, maximum: 5 }
+    },
+    required: ['slug', 'contenido']
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
 };
 
 const TOOL_PROPOSE_MEJORA = {
@@ -3958,18 +4015,18 @@ const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH, TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
-  tecnico:    [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
-  web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
-  completo:   [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  app:        [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  tecnico:    [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
+  completo:   [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   // GESTION-AUTO-CORREOS-01 (31/08/2026): TOOL_DELEGAR_TAREA añadida aquí también -- era el
   // único experto "de trabajo" (app/tecnico/completo sí la tienen) sin acceso a los
   // ayudantes (correos/pedidos). Encontrado en vivo: un mensaje sobre gestionar correos que
   // clasificó (por error, ver fix de "bandeja" en REGEX_ROUTES) como "ingenieria" se quedó
   // sin poder alcanzar el ayudante de Correos -- defensa en profundidad para que un desvío
   // de clasificación futuro no repita el mismo fallo.
-  ingenieria: [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA]
+  ingenieria: [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -4767,6 +4824,51 @@ export default {
             }
           }
           return json({ ok: true, id: nuevoId, slug, enlazadas });
+        }
+
+        // MEMORIA-EDITAR-01 (15/09/2026): Adrián, viendo la ventana de historial corta
+        // (BUG-CONTEXTO-ADJUNTO-CORTO-01) y la nueva regla de guardar en memoria sin que se
+        // lo pida (MEMORIA-PROACTIVA-01): "las memorias que las pueda editar si es
+        // necesario" -- hasta ahora el panel Obsidian solo podía crear (POST) y borrar
+        // (DELETE) notas; una nota mal guardada por Alejandra (o que envejece: un dato que
+        // cambió) solo se podía arreglar borrándola y creando otra, perdiendo el id y
+        // cualquier backlink que otras notas tuvieran hacia ella. PUT edita en el sitio.
+        if (path === '/api/memoria/vault' && req.method === 'PUT') {
+          const id = parseInt(url.searchParams.get('id'), 10);
+          if (!id) return json({ error: 'id requerido' }, 400);
+          const existente = await env.DB.prepare('SELECT id, empresa_id FROM alejandra_memoria WHERE id = ?').bind(id).first();
+          if (!existente) return json({ error: 'Nota no encontrada' }, 404);
+          const body = await req.json().catch(() => ({}));
+          const { tipo, titulo, contenido, importancia = 1, enlaces_a } = body;
+          if (!tipo || !titulo || !contenido) return json({ error: 'Faltan campos: tipo, titulo, contenido' }, 400);
+          const eidSlug = existente.empresa_id || 'system';
+          const contenidoLimpio = String(contenido).replace(/(ignore|olvida|descarta)\s+(all|todas|tus)\s+(instructions|instrucciones|reglas)/gi, '[REDACTED]');
+          // El slug no se regenera al editar: mantenerlo estable evita romper enlaces_a que
+          // otras notas ya le apunten por ese slug, aunque cambie el título.
+          await env.DB.prepare(
+            `UPDATE alejandra_memoria SET tipo=?, titulo=?, contenido=?, importancia=? WHERE id=?`
+          ).bind(tipo, String(titulo).slice(0, 200), contenidoLimpio, importancia, id).run();
+          // Enlaces salientes: si se manda enlaces_a, se sustituyen los actuales por los
+          // nuevos (mismo criterio que "guardar" en un editor de notas real, no un merge
+          // parcial que vaya acumulando enlaces que ya no aplican).
+          let enlazadas = 0;
+          if (Array.isArray(enlaces_a)) {
+            await env.DB.prepare('DELETE FROM memoria_enlaces WHERE origen_id = ?').bind(id).run();
+            const slugs = [...new Set(enlaces_a.map(s => String(s || '').trim()).filter(Boolean))].slice(0, 20);
+            if (slugs.length) {
+              const placeholders = slugs.map(() => '?').join(',');
+              const destinos = await env.DB.prepare(
+                `SELECT id FROM alejandra_memoria WHERE empresa_id = ? AND slug IN (${placeholders}) AND id != ?`
+              ).bind(eidSlug, ...slugs, id).all();
+              for (const d of (destinos.results || [])) {
+                await env.DB.prepare(
+                  `INSERT INTO memoria_enlaces (origen_id, destino_id, created_at) VALUES (?, ?, datetime('now'))`
+                ).bind(id, d.id).run().catch(() => {});
+                enlazadas++;
+              }
+            }
+          }
+          return json({ ok: true, id, enlazadas });
         }
 
         if (path === '/api/memoria/vault' && req.method === 'DELETE') {
@@ -8336,15 +8438,28 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
       try {
         const tipo  = input.tipo;
         const limit = input.limit || 10;
+        // MEMORIA-BUSQUEDA-01 (15/09/2026): LIKE simple sobre título+contenido -- basta
+        // para que "sonda caudal" encuentre una nota titulada "ADMAG TI Series AXG" si el
+        // texto menciona "sonda de caudal" en el contenido, sin montar FTS5 para un
+        // volumen de notas que hoy es pequeño. Si crece mucho, revisar.
+        const busqueda = input.busqueda ? String(input.busqueda).trim() : null;
+        const like = busqueda ? `%${busqueda.replace(/[%_]/g, c => '\\' + c)}%` : null;
         // SEC-CHAT-CONTEXTO-LEGACY: scopear por empresa_id (sesion) para que
         // memory_read no devuelva recuerdos de otra empresa. empresa_id proviene
         // de ejecutarTool (resuelta del token de sesion), nunca del input del modelo.
         const eid = empresa_id ? String(empresa_id) : null;
-        const rows  = tipo
-          ? await env.DB.prepare('SELECT id,tipo,titulo,contenido,importancia,slug,created_at FROM alejandra_memoria WHERE empresa_id = ? AND tipo=? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, tipo, limit).all()
-          : await env.DB.prepare('SELECT id,tipo,titulo,contenido,importancia,slug,created_at FROM alejandra_memoria WHERE empresa_id = ? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, limit).all();
+        let rows;
+        if (tipo && like) {
+          rows = await env.DB.prepare('SELECT id,tipo,titulo,contenido,importancia,slug,created_at FROM alejandra_memoria WHERE empresa_id = ? AND tipo=? AND (titulo LIKE ? ESCAPE \'\\\' OR contenido LIKE ? ESCAPE \'\\\') ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, tipo, like, like, limit).all();
+        } else if (like) {
+          rows = await env.DB.prepare('SELECT id,tipo,titulo,contenido,importancia,slug,created_at FROM alejandra_memoria WHERE empresa_id = ? AND (titulo LIKE ? ESCAPE \'\\\' OR contenido LIKE ? ESCAPE \'\\\') ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, like, like, limit).all();
+        } else if (tipo) {
+          rows = await env.DB.prepare('SELECT id,tipo,titulo,contenido,importancia,slug,created_at FROM alejandra_memoria WHERE empresa_id = ? AND tipo=? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, tipo, limit).all();
+        } else {
+          rows = await env.DB.prepare('SELECT id,tipo,titulo,contenido,importancia,slug,created_at FROM alejandra_memoria WHERE empresa_id = ? ORDER BY importancia DESC,created_at DESC LIMIT ?').bind(eid, limit).all();
+        }
         const items = rows.results || [];
-        if (!items.length) return 'No hay registros en memoria para ese filtro.';
+        if (!items.length) return busqueda ? `No hay ninguna nota en memoria que coincida con "${busqueda}".` : 'No hay registros en memoria para ese filtro.';
         // MEMORIA-ENLAZADA-01: enlaces salientes y backlinks a un salto, para todos los
         // resultados de golpe (2 queries, no N+1) -- mismo principio que "linked mentions"
         // de Obsidian: una nota relacionada aparece aunque no comparta texto con la consulta.
@@ -8357,6 +8472,35 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
         }).join('\n');
       } catch (err) {
         return `Error al leer memoria: ${err.message}`;
+      }
+    }
+
+    // MEMORIA-EDITAR-01 (15/09/2026): ver comentario junto a TOOL_MEMORY_UPDATE. Scopeado
+    // por empresa_id igual que memory_read/memory_save, para que no se pueda editar (ni
+    // siquiera "a ciegas" conociendo el slug) una nota de otra empresa.
+    case 'memory_update': {
+      try {
+        const slug = String(input.slug || '').trim();
+        if (!slug) return 'Error: falta el slug de la nota a actualizar.';
+        const nuevoContenido = String(input.contenido || '').trim();
+        if (!nuevoContenido) return 'Error: falta el contenido.';
+        const eid = empresa_id ? String(empresa_id) : null;
+        const nota = await env.DB.prepare(
+          'SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria WHERE empresa_id = ? AND slug = ?'
+        ).bind(eid, slug).first();
+        if (!nota) return `No encuentro ninguna nota con slug "${slug}". Usa memory_read con busqueda para localizar el slug correcto antes de actualizar.`;
+        const modo = input.modo === 'reemplazar' ? 'reemplazar' : 'ampliar';
+        const contenidoFinal = modo === 'reemplazar'
+          ? nuevoContenido
+          : `${nota.contenido}\n\n[Actualizado ${new Date().toISOString().slice(0,10)}] ${nuevoContenido}`;
+        const tituloFinal = input.titulo ? String(input.titulo).slice(0, 200) : nota.titulo;
+        const importanciaFinal = (typeof input.importancia === 'number') ? input.importancia : nota.importancia;
+        await env.DB.prepare(
+          'UPDATE alejandra_memoria SET titulo=?, contenido=?, importancia=? WHERE id=?'
+        ).bind(tituloFinal, contenidoFinal, importanciaFinal, nota.id).run();
+        return `✅ Nota "${slug}" actualizada (${modo}).`;
+      } catch (err) {
+        return `Error al actualizar memoria: ${err.message}`;
       }
     }
 
@@ -13044,7 +13188,7 @@ ${(memoria.results||[]).map(m=>`[${m.tipo}] ${m.titulo}`).join('\n')}${preguntas
 Datos:\n${resumen}`
     }];
 
-    const tools = [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_PREGUNTAR_USUARIO];
+    const tools = [TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_PREGUNTAR_USUARIO];
     let respAPI = await llamarAnthropic(env, messages, tools, MODEL_EXPERTO, 2048, reflexionPrompt);
 
     // Ejecutar tools si las usa
