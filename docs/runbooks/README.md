@@ -9,3 +9,5 @@ Los runbooks describen operaciones repetibles y seguras. No contienen secretos. 
 - `MAINTENANCE-TEMPLATE.md`: mantenimiento planificado.
 - `UPDATE-TEMPLATE.md`: actualización de dependencia, plataforma o proveedor.
 - `AUDIT-TEMPLATE.md`: auditoría técnica o de permisos.
+- `CI-CD-Y-MIGRACIONES.md`: operación manual de CI, CD, secretos y migraciones D1.
+- `COMPILAR-APK-ANDROID.md`: compilar, firmar en release y publicar la APK Android (Capacitor).
