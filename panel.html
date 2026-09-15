@@ -26820,6 +26820,36 @@ async function _registrarPushDeveloper() {
   }
 })();
 
+// FIX-FABS-DESAPARECIDOS-01 (15/09/2026): FUSION-CHAT-DEVTOOLS-01 (#270) borró el bloque
+// entero del antiguo chat flotante "DevTools IA" (aiChatPanel/aiFloatBtn), pero
+// _mostrarFabsEquipo() vivía ahí dentro y en realidad no tenía nada que ver con ese chat: es
+// la función que muestra los DOS botones flotantes que siguen existiendo (#fabAlejandra y
+// #fabChatEquipo, ambos display:none por CSS hasta que esto los active), y sigue habiendo una
+// llamada a ella en iniciarApp() que se quedó apuntando a una función inexistente. Se recupera
+// tal cual estaba (reintentar cada 3s indefinidamente, patrón BUG-FAB-01 25/07/2026), como su
+// propio bloque en vez de volver a meterla dentro del chat.
+(function() {
+  function _mostrarFabsEquipo() {
+    const rol = (typeof SESSION !== 'undefined' ? SESSION?.rol : null)
+             || JSON.parse(localStorage.getItem('panel_session') || 'null')?.rol;
+    const usuarioId = (typeof SESSION !== 'undefined' ? SESSION?.usuario_id : null)
+             || JSON.parse(localStorage.getItem('panel_session') || 'null')?.usuario_id;
+    // FAB-SUPERADMIN-01 (09/09/2026): el chat de Alejandra Office funciona con la
+    // sesión/token, no necesita usuario_id → basta con tener rol. El chat de equipo 1-a-1 sí
+    // lo necesita (identifica al remitente).
+    if (!rol) return;
+    const fabEl = document.getElementById('fabAlejandra');
+    if (fabEl) fabEl.style.display = 'flex';
+    const fabChat = document.getElementById('fabChatEquipo');
+    if (fabChat) fabChat.style.display = usuarioId ? 'flex' : 'none';
+  }
+  window._mostrarFabsEquipo = _mostrarFabsEquipo;
+  _mostrarFabsEquipo();
+  document.addEventListener('sessionReady', _mostrarFabsEquipo);
+  setTimeout(_mostrarFabsEquipo, 1500);
+  setInterval(_mostrarFabsEquipo, 3000);
+})();
+
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
 const PANEL_APP_VERSION = '9.73';
