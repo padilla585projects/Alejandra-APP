@@ -1,5 +1,32 @@
 # TASKS — Cola operativa inmediata
 
+Estado (2026-09-15): **REPL-AR-NATIVO-01 — el AR de Replanteo ya funciona dentro de la APK
+instalada (antes no aparecía el botón).** Ver `HANDOFF.md`.
+- Adrián, probando la APK real: "no funciona en la apk el replanteo" — captura de pantalla del
+  modal "Nuevo replanteo" mostrando solo Foto/Galería, sin el botón de AR. Causa: el AR de hoy
+  usa WebXR, que no existe dentro del WebView de Capacitor — solo funciona en Chrome. Ya existía
+  un módulo ARCore nativo (F3.0/F3.1) pero como botón de prueba aislado, sin conectar al
+  Replanteo real.
+- Conectado: `replArIniciar()` detecta si el plugin nativo `ReplanteoAR` está disponible
+  (`Capacitor.Plugins.ReplanteoAR.isSupported()`) y, si es así, usa la sesión ARCore nativa ya
+  existente en vez de intentar WebXR. Al terminar construye el mismo objeto `_repl` que ya usa
+  el AR de Chrome (reutilizando `_replArPlano()` sin tocarlo) y pasa al editor de siempre.
+- De paso, diseñado para no tener que rehacerlo: `ReplanteoARActivity.terminar()` ahora manda
+  también el quaternion de cada punto (antes solo posición), y la web ya calcula la normal de
+  la superficie a partir de él y la guarda en `puntos_3d` — sin usar todavía en el render, pero
+  lista para cuando se aborde la alineación de accesorios/soportes (pendiente, ver más abajo).
+- **Alcance de esta fase**: la sesión nativa solo captura el trazado (puntos + longitud), sin
+  marcado de obstáculos ni colocación de complementos eléctricos dentro de la sesión (como ya
+  pasa hoy en el modo Foto, se añaden después en el editor).
+- Verificado: `Pose.qx()/qy()/qz()/qw()` compilan bien (`assembleDebug`/`compileDebugJavaWithJavac`
+  en verde), sintaxis de `index.html` revisada por bloques. **Pendiente**: probar en el Oppo real
+  — abrir Replanteo → Nuevo → confirmar que ahora aparece "📱 Medir con la cámara en AR" y que
+  el flujo completo (marcar puntos → Terminar → editor → Guardar) funciona de extremo a extremo.
+- **Pendiente, fase aparte (no incluida aquí, a petición de Adrián — "vamos a hacerlo bien"):**
+  usar la normal ya capturada para orientar los soportes/accesorios del render 3D según la pared
+  real (hoy usan la misma geometría genérica siempre, sin relación con el tipo de montaje ni con
+  el ángulo de la pared), y capturar esa misma normal también en el AR de WebXR/Chrome.
+
 Estado (2026-09-15): **REPL-QUITAR-CAM-DIRECTA-01 — retirado el modo "cámara en directo" de
 Replanteo, decisión de Adrián.** Ver `HANDOFF.md`.
 - Adrián, comparando los modos de captura del Replanteo: "esa función no me gusta nada,

@@ -139,6 +139,12 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             try {
                 JSONObject o = new JSONObject();
                 o.put("x", round3(p.tx())); o.put("y", round3(p.ty())); o.put("z", round3(p.tz()));
+                // REPL-AR-NATIVO-01: el quaternion de rotacion del Anchor ya estaba disponible
+                // aqui (viene del Pose de ARCore) pero no se enviaba -- sin el, la web no puede
+                // saber hacia donde mira la pared/techo en ese punto, solo su posicion. Se manda
+                // para que index.html pueda orientar la instalacion segun la superficie real.
+                o.put("qx", round3(p.qx())); o.put("qy", round3(p.qy()));
+                o.put("qz", round3(p.qz())); o.put("qw", round3(p.qw()));
                 arr.put(o);
             } catch (Exception ignored) {}
             if (prev != null) {

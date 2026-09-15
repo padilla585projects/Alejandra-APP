@@ -4,6 +4,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-15 — el AR de Replanteo no funcionaba dentro de la APK)
+
+- El botón de AR no aparecía en la app instalada (WebXR no existe en el WebView de Capacitor).
+  Conectado el módulo ARCore nativo (hasta ahora un botón de prueba aislado) al flujo real de
+  Replanteo: `replArIniciar()` usa la sesión nativa cuando está disponible y produce el mismo
+  resultado que el AR de Chrome (reutilizando su vista en planta sin duplicar código). De paso,
+  la web ya recibe y calcula la orientación real de la superficie en cada punto (antes solo
+  posición), lista para usarse en una fase aparte para alinear soportes/accesorios con la pared.
+
 ### Removed (2026-09-15 — Replanteo: retirado el modo "cámara en directo")
 
 - Decisión de Adrián, comparando con el modo AR. Quitado el botón "📹 Cámara en directo" del
