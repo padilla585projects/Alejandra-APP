@@ -987,6 +987,81 @@ function construirCacheKeyNormativa({ consulta, itc, tema }) {
   return `${NX_CACHE_PREFIX}${hashHex}`;
 }
 
+// ── Generador server-side: esquemas de cableado de instrumentación ───────────
+// ALEJANDRA-ESQUEMA-05 (15/09/2026): el esquema real de sondas del CPD Getafe salió
+// mal en MODO B (SVG redactado a mano por el modelo) -- componentes alucinados
+// (sondas Vaisala/pasillo caliente que no existen en el proyecto), caudalímetros
+// reales omitidos, layout roto (diagnóstico completo en el chat real, 14/09/2026).
+// Mismo remedio que potencia_motor (MODO A): plantilla determinista en el servidor
+// para el caso de uso más común de "cableado de campo a un cuadro/panel central"
+// (sondas, instrumentación, cualquier grupo de señales que confluye en un solo
+// punto) -- el modelo solo aporta datos estructurados (grupos + hilos + cable + si
+// está confirmado o no), nunca dibuja nada él mismo. Layout: N grupos repartidos en
+// dos columnas (izquierda/derecha) alrededor de un panel central, línea continua
+// para lo confirmado y discontinua para lo pendiente de verificar -- mismo lenguaje
+// visual que ya se validó a mano con Adrián en el esquema de referencia de sondas.
+function construirSVGCableadoInstrumentacion(titulo, descripcion, panelLabel, grupos) {
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const n = Math.max(1, grupos.length);
+  const leftN = Math.ceil(n / 2);
+  const rightN = n - leftN;
+  const boxW = 220, boxH = 110, gapY = 28, rowH = boxH + gapY;
+  const marginTop = 60, marginBottom = 46;
+  const maxRows = Math.max(leftN, rightN, 1);
+  const H = marginTop + maxRows * rowH - gapY + marginBottom;
+  const colLeftX = 40, gapCenter = 150, panelW = 210, panelH = 110, labelW = 120;
+  const panelX = colLeftX + boxW + gapCenter;
+  const colRightX = panelX + panelW + gapCenter;
+  const W = colRightX + boxW + 40;
+  const panelY = H / 2 - panelH / 2;
+
+  function boxesCol(count, x, side) {
+    let out = '';
+    for (let i = 0; i < count; i++) {
+      const g = grupos[side === 'L' ? i : leftN + i];
+      if (!g) continue;
+      const y = marginTop + i * rowH;
+      const cy = y + boxH / 2;
+      const confirmado = g.confirmado !== false;
+      const color = confirmado ? '#333' : '#e67e22';
+      const dash = confirmado ? '' : ' stroke-dasharray="7 4"';
+      const boxEdgeX = side === 'L' ? x + boxW : x;
+      const panelEdgeX = side === 'L' ? panelX : panelX + panelW;
+      const panelEdgeY = panelY + ((i + 0.5) / count) * panelH;
+      const midX = (boxEdgeX + panelEdgeX) / 2;
+      const midY = (cy + panelEdgeY) / 2;
+
+      out += `
+  <line x1="${boxEdgeX}" y1="${cy}" x2="${panelEdgeX}" y2="${panelEdgeY}" stroke="${color}" stroke-width="2"${dash}/>
+  <rect x="${midX - labelW/2}" y="${midY - 17}" width="${labelW}" height="34" fill="white"/>
+  <text x="${midX}" y="${midY - 5}" text-anchor="middle" font-size="11.5" font-weight="bold" fill="${color}">${esc(g.hilos || '')}</text>
+  <text x="${midX}" y="${midY + 9}" text-anchor="middle" font-size="10.5" fill="${color}">${esc(g.cable || '')}</text>
+  <rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="10" fill="white" stroke="${color}" stroke-width="1.5"${dash}/>
+  <text x="${x + 14}" y="${y + 26}" font-size="13" font-weight="bold" fill="#222">${esc(g.nombre || '')}</text>
+  <text x="${x + 14}" y="${y + 44}" font-size="11" fill="#333">${esc(g.detalle || '')}</text>
+  <text x="${x + 14}" y="${y + 62}" font-size="10.5" fill="${confirmado ? '#27ae60' : '#e67e22'}">${confirmado ? '✓ confirmado' : '⚠ ' + esc(g.nota || 'pendiente de verificar')}</text>${g.nota && confirmado ? `
+  <text x="${x + 14}" y="${y + 80}" font-size="10" fill="#777">${esc(g.nota)}</text>` : ''}`;
+    }
+    return out;
+  }
+
+  const fecha = new Date().toLocaleDateString('es-ES');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Arial,sans-serif">
+  <rect width="${W}" height="${H}" fill="white"/>
+  <rect x="1" y="1" width="${W-2}" height="${H-2}" fill="none" stroke="#333" stroke-width="2"/>
+  <rect x="1" y="1" width="${W-2}" height="36" fill="#1a1a2e"/>
+  <text x="${W/2}" y="24" text-anchor="middle" fill="white" font-size="14" font-weight="bold">🔌 ${esc(titulo)}</text>
+  <text x="10" y="${H-10}" fill="#666" font-size="9">${esc(descripcion || '')} · Alejandra IA · ${fecha}</text>
+  <text x="${W-10}" y="${H-10}" fill="#666" font-size="9" text-anchor="end">Línea continua = confirmado · discontinua = pendiente de verificar</text>
+  ${boxesCol(leftN, colLeftX, 'L')}
+  ${boxesCol(rightN, colRightX, 'R')}
+  <rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="10" fill="#eaf3ee" stroke="#27ae60" stroke-width="2"/>
+  <text x="${panelX + panelW/2}" y="${H/2 - 6}" text-anchor="middle" font-size="14" font-weight="bold" fill="#1b7a43">${esc(panelLabel || 'CUADRO')}</text>
+</svg>`;
+}
+
 export {
   timingSafeEqual,
   PRECIOS_USD,
@@ -1030,4 +1105,5 @@ export {
   RANGO_CONFIANZA,
   construirConsultaMemoriaGobernada,
   construirQueryAprendizajesEmpresa,
+  construirSVGCableadoInstrumentacion,
 };

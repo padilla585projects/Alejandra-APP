@@ -38,6 +38,7 @@ import {
   construirQueryAprendizajesEmpresa,
   RANGO_CONFIANZA,
   construirCacheKeyNormativa,
+  construirSVGCableadoInstrumentacion,
 } from './lib.js';
 
 describe('aislamiento del contexto del chat', () => {
@@ -2382,5 +2383,80 @@ describe('routing de replanteos (REPL-ROUTING-01)', () => {
     const cuerpo = fuente.slice(ini, fin);
     expect(ini).toBeGreaterThanOrEqual(0);
     expect(cuerpo).not.toMatch(/params = \[\];/);
+  });
+});
+
+// ── ALEJANDRA-ESQUEMA-05 (15/09/2026) — MODO C: cableado de instrumentación ──
+// Generador determinista server-side (mismo espíritu que potencia_motor/MODO A):
+// el modelo aporta datos estructurados, nunca dibuja el SVG él mismo. Motivado por
+// el esquema real de sondas del CPD Getafe que salió mal en MODO B (componentes
+// alucinados, layout roto) -- ver el comentario junto a la función en lib.js.
+describe('construirSVGCableadoInstrumentacion — ALEJANDRA-ESQUEMA-05', () => {
+  const gruposEjemplo = [
+    { nombre: '10x Sonda temperatura', detalle: 'BAPI PT1000 (RTD pasiva)', hilos: '2 hilos', cable: '2x1mm² apant. LSZH', confirmado: true, nota: 'confirmado por foto de etiqueta' },
+    { nombre: '4x Caudalímetro', detalle: 'Yokogawa ADMAG AXG125', hilos: '5 hilos (2 cables)', cable: 'EX1/EX2 + A/B/C apant.', confirmado: true },
+    { nombre: '4x Alarma Glycol', detalle: 'Contacto seco', hilos: '2 hilos', cable: '2x1mm² LSZH', confirmado: true },
+    { nombre: '4 CDU + 4 TSU', detalle: 'bus daisy-chain (asumido)', hilos: '3 hilos (estimado)', cable: 'D+/D-/GND', confirmado: false, nota: 'confirmar con integrador' },
+  ];
+
+  it('genera un SVG válido, sin "undefined" ni "NaN" filtrados por datos faltantes', () => {
+    const svg = construirSVGCableadoInstrumentacion('Esquema de Sondas BMS — CPD Getafe', 'desc', 'CUADRO BMS', gruposEjemplo);
+    expect(svg).toMatch(/^<svg /);
+    expect(svg).toContain('</svg>');
+    expect(svg).not.toContain('undefined');
+    expect(svg).not.toContain('NaN');
+  });
+
+  it('un grupo confirmado usa línea continua (sin stroke-dasharray) y marca "✓ confirmado"', () => {
+    const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', [gruposEjemplo[0]]);
+    expect(svg).toContain('✓ confirmado');
+    expect(svg).not.toContain('stroke-dasharray');
+  });
+
+  it('un grupo NO confirmado usa línea discontinua y muestra la nota de qué falta verificar', () => {
+    const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', [gruposEjemplo[3]]);
+    expect(svg).toContain('stroke-dasharray="7 4"');
+    expect(svg).toContain('⚠ confirmar con integrador');
+    expect(svg).not.toContain('✓ confirmado');
+  });
+
+  it('escapa XML en texto del usuario -- nunca rompe el documento SVG con < > & sueltos', () => {
+    const grupos = [{ nombre: '<script>alert(1)</script> & "sondas"', detalle: 'x', hilos: '2 hilos', cable: '<tag>', confirmado: true }];
+    const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', grupos);
+    expect(svg).not.toContain('<script>');
+    expect(svg).toContain('&lt;script&gt;');
+    expect(svg).toContain('&amp;');
+  });
+
+  it('usa "CUADRO" como panel_label por defecto si no se indica', () => {
+    const svg = construirSVGCableadoInstrumentacion('T', '', undefined, [gruposEjemplo[0]]);
+    expect(svg).toContain('>CUADRO<');
+  });
+
+  it('reparte los grupos en dos columnas (izquierda/derecha) y no pierde ninguno con cantidades impares', () => {
+    const un_grupo = construirSVGCableadoInstrumentacion('T', '', 'C', [gruposEjemplo[0]]);
+    expect((un_grupo.match(/<rect/g) || []).length).toBeGreaterThan(0);
+    const cinco = construirSVGCableadoInstrumentacion('T', '', 'C', [gruposEjemplo[0], gruposEjemplo[1], gruposEjemplo[2], gruposEjemplo[3], gruposEjemplo[0]]);
+    // Cada grupo real produce su nombre en el SVG -- los 5 deben aparecer, ninguno se pierde por el reparto en columnas.
+    expect((cinco.match(/10x Sonda temperatura/g) || []).length).toBe(2);
+    expect(cinco).toContain('4x Caudalímetro');
+    expect(cinco).toContain('4x Alarma Glycol');
+    expect(cinco).toContain('4 CDU + 4 TSU');
+  });
+
+  it('worker.js conecta tipo="cableado_instrumentacion" con la función real, no con svg_content manual', () => {
+    const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(worker).toContain("tipo === 'cableado_instrumentacion'");
+    expect(worker).toContain('construirSVGCableadoInstrumentacion(titulo, descripcion, input.panel_label, input.grupos)');
+    expect(worker).toContain("construirSVGCableadoInstrumentacion,");
+  });
+
+  it('worker.js rechaza grupos incompletos (sin nombre/hilos/cable) en vez de dibujar cajas vacías', () => {
+    const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const ini = worker.indexOf("tipo === 'cableado_instrumentacion'");
+    const fin = worker.indexOf('} else {', ini);
+    const cuerpo = worker.slice(ini, fin);
+    expect(cuerpo).toContain('gruposInvalidos');
+    expect(cuerpo).toMatch(/!g\.nombre \|\| !g\.hilos \|\| !g\.cable/);
   });
 });

@@ -58,6 +58,7 @@ import {
   determinarEstadoSalud,
   construirCacheKeyNormativa,
   construirQueryAprendizajesEmpresa,
+  construirSVGCableadoInstrumentacion,
 } from './lib.js';
 // Cerebro v2 (F-1.3/ADR-0020): nucleo-cognitivo dividido en subcarpetas locales.
 // Wrangler bundlea el import directamente — no requiere npm.
@@ -1083,13 +1084,36 @@ lugar:
   vez de inventarte referencias de bornes sin verificar (ver REGLA DE HONESTIDAD
   TÉCNICA) — usa lo que tengas guardado en memoria (aprendizajes técnicos) o pregunta al
   usuario los datos exactos del equipo.
+- EXCEPCIÓN — cableado de sondas/instrumentación hacia un panel central (BMS, cuadro de
+  control, PLC...): NO redactes el SVG a mano para esto, ni aunque te parezca sencillo.
+  Usa el MODO C de generar_esquema_electrico (tipo="cableado_instrumentacion" +
+  "grupos") — ver ALEJANDRA-ESQUEMA-05 más abajo.
+
+ALEJANDRA-ESQUEMA-05 (15/09/2026): "cableado de varios grupos de señal hasta un panel
+central" es un caso tan común (sondas de temperatura/caudal/presión, contactos secos de
+alarma, buses de comunicación... todo hacia un mismo cuadro BMS/PLC) que tiene su propio
+MODO C determinista, igual que potencia_motor tiene el MODO A — nunca lo redactes tú en
+MODO B. Llama a generar_esquema_electrico con tipo="cableado_instrumentacion" y "grupos"
+(un elemento por cada tipo de sonda/señal: nombre, detalle, hilos, cable, confirmado,
+nota) + opcionalmente "panel_label". El servidor dibuja el panel en el centro con cada
+grupo alrededor, línea continua para lo confirmado y discontinua para lo pendiente de
+verificar. CRÍTICO -- confirmado=true SOLO si ese dato concreto está verificado de
+verdad en esta conversación (foto real de una etiqueta, ficha técnica, documento
+subido); si es una estimación o algo que dijiste de memoria sin comprobar, confirmado
+=false y explica en "nota" qué falta verificar en obra. Poner confirmado=true sin
+haberlo comprobado es EXACTAMENTE el fallo que motivó este modo: el esquema real de
+sondas del CPD Getafe (14/09/2026) inventó sondas Vaisala/"pasillo caliente" que no
+existían en el proyecto y omitió caudalímetros reales -- un usuario en obra no puede
+distinguir a simple vista qué parte del esquema es de fiar y cuál no si todo se ve
+igual de "confirmado".
 
 WORKFLOW PARA GENERAR CUALQUIER ESQUEMA (eléctrico o no):
 1. pensar() — qué tipo de esquema es, qué componentes/equipos y conexiones necesita.
 2. Si faltan datos críticos → PREGUNTAR primero, no adivines valores importantes.
 3. Para arranque DOL (directo): llamar generar_esquema_electrico con tipo="potencia_motor" y componentes={contactor, motor, guardamotor, motor_kw, tension_red, tension_mando}. El SVG se genera automáticamente en el servidor — NO generar SVG manualmente.
-4. Para CUALQUIER OTRO esquema (cuadro general, control de accesos, red, CCTV, mecánico...): redacta el SVG COMPLETO tú misma, palabra por palabra, como parte de tu propio razonamiento, ANTES de llamar a la tool. NUNCA llames a generar_esquema_electrico con un tipo distinto de potencia_motor/mando_motor sin haber compuesto ya el svg_content entero — si llamas sin haberlo redactado antes, la tool falla, y esa respuesta sin sentido es justo lo que rompe la confianza del usuario (ver más abajo). Compón primero, llama después, nunca al revés.
-5. Responder con el enlace recibido + explicación técnica del esquema.
+4. Para cableado de sondas/instrumentación a un panel central: llamar generar_esquema_electrico con tipo="cableado_instrumentacion" y grupos=[...] (ver ALEJANDRA-ESQUEMA-05). El SVG se genera automáticamente en el servidor — NO generar SVG manualmente.
+5. Para CUALQUIER OTRO esquema (cuadro general, control de accesos, red, CCTV, mecánico que no sea "varios grupos a un panel"...): redacta el SVG COMPLETO tú misma, palabra por palabra, como parte de tu propio razonamiento, ANTES de llamar a la tool. NUNCA llames a generar_esquema_electrico con un tipo distinto de potencia_motor/mando_motor/cableado_instrumentacion sin haber compuesto ya el svg_content entero — si llamas sin haberlo redactado antes, la tool falla, y esa respuesta sin sentido es justo lo que rompe la confianza del usuario (ver más abajo). Compón primero, llama después, nunca al revés.
+6. Responder con el enlace recibido + explicación técnica del esquema.
 
 IMPORTANTE: Para DOL y otros arranques de motor, SIEMPRE usa componentes={...}, NUNCA svg_content.
 El servidor genera el esquema IEC 60617 completo automáticamente.
@@ -1870,20 +1894,23 @@ const TOOL_ANALIZAR_FOTO = {
 
 const TOOL_GENERAR_ESQUEMA = {
   name: 'generar_esquema_electrico',
-  description: `Guarda CUALQUIER esquema técnico (eléctrico o no: control de accesos, red/rack, CCTV, mecánico...) en R2 y devuelve la URL pública. Dos modos de uso:
+  description: `Guarda CUALQUIER esquema técnico (eléctrico o no: control de accesos, red/rack, CCTV, mecánico...) en R2 y devuelve la URL pública. Tres modos de uso:
 
 MODO A — COMPONENTES (solo arranques de motor estándar, DOL/Y-Δ):
   Llama a la tool con "tipo" = "potencia_motor" o "mando_motor" y pasa "componentes" con los datos del circuito.
   El esquema SVG se genera automáticamente en el servidor con símbolos IEC 60617.
   Ejemplo: tipo="potencia_motor", componentes={"contactor":"KM1","motor":"M1","guardamotor":"QF1","motor_kw":"5.5","tension_red":"400V","tension_mando":"230V"}
 
-MODO B — SVG MANUAL (para TODO lo demás: eléctrico no-DOL, control de accesos, red, CCTV, mecánico...):
+MODO C — GRUPOS (cableado de sondas/instrumentación/cualquier señal de campo que confluye en un panel central -- BMS, cuadro de control, PLC...):
+  Llama a la tool con "tipo" = "cableado_instrumentacion" y pasa "grupos" (uno por cada tipo de sonda/señal) + opcionalmente "panel_label". El esquema (panel central + cada grupo alrededor, con hilos/cable en cada línea) se genera automáticamente en el servidor -- NUNCA redactes tú el SVG para esto, ni siquiera si te parece sencillo: usa SIEMPRE este modo cuando el esquema sea "cablear varias cosas hasta un cuadro/panel". Cada grupo con confirmado=true/false según si el dato viene de una fuente verificada en esta conversación (foto de etiqueta, ficha técnica real, documento subido) o es una estimación -- nunca pongas confirmado=true si no lo has verificado de verdad (ver REGLA DE HONESTIDAD TÉCNICA).
+
+MODO B — SVG MANUAL (para TODO lo demás: eléctrico no-DOL, control de accesos, red, CCTV, mecánico que no sea "varios grupos a un panel"...):
   Redacta el SVG COMPLETO tú misma, palabra por palabra, ANTES de llamar a esta tool, y pásalo ya terminado en "svg_content". Fondo blanco, cuadrícula 40px. Símbolos IEC 60617 solo si es un circuito eléctrico; para cualquier otro dominio, rectángulos etiquetados + líneas de conexión con flecha y el nombre real del borne en cada extremo. NUNCA llames a esta tool en MODO B sin "svg_content" ya relleno — sin él, la llamada falla y no hay forma de recuperarla en el mismo turno.`,
   input_schema: {
     type: 'object',
     properties: {
       titulo:      { type: 'string', description: 'Título del esquema (ej: "Arranque DOL motor bomba 1")' },
-      tipo:        { type: 'string', enum: ['unifiliar','multifilar','cuadro','potencia_motor','mando_motor','alumbrado','tierra','control_plc','personalizado'], description: 'Tipo de esquema eléctrico' },
+      tipo:        { type: 'string', enum: ['unifiliar','multifilar','cuadro','potencia_motor','mando_motor','alumbrado','tierra','control_plc','cableado_instrumentacion','personalizado'], description: 'Tipo de esquema. Usa "cableado_instrumentacion" (MODO C, con "grupos") para sondas/instrumentación hacia un panel central.' },
       componentes: {
         type: 'object',
         description: 'Componentes del circuito para generación automática (MODO A). Campos opcionales: guardamotor, contactor, rele_termico, motor, fusible_mando, pulsador_parada, pulsador_marcha, piloto, tension_mando, tension_red, motor_kw',
@@ -1901,7 +1928,24 @@ MODO B — SVG MANUAL (para TODO lo demás: eléctrico no-DOL, control de acceso
           motor_kw:        { type: 'string', description: 'Potencia del motor en kW, ej: "5.5"' }
         }
       },
-      svg_content: { type: 'string', description: 'MODO B: SVG completo generado manualmente. Usar solo para circuitos que no sean DOL estándar.' },
+      grupos: {
+        type: 'array',
+        description: 'MODO C (tipo="cableado_instrumentacion"): un elemento por cada grupo de señal que se cablea hasta el panel central. Ej: [{"nombre":"10x Sonda temperatura","detalle":"BAPI PT1000 (RTD pasiva)","hilos":"2 hilos","cable":"2x1mm² apantallado LSZH","confirmado":true,"nota":"confirmado por foto de etiqueta"}]',
+        items: {
+          type: 'object',
+          properties: {
+            nombre:     { type: 'string', description: 'Nombre del grupo con cantidad, ej: "10x Sonda temperatura"' },
+            detalle:    { type: 'string', description: 'Modelo/tipo del grupo, ej: "BAPI PT1000 (RTD pasiva)"' },
+            hilos:      { type: 'string', description: 'Número de hilos y su función, ej: "2 hilos" o "5 hilos (2 cables)"' },
+            cable:      { type: 'string', description: 'Especificación de cable, ej: "2x1mm² apantallado LSZH"' },
+            confirmado: { type: 'boolean', description: 'true SOLO si el dato está verificado de verdad en esta conversación (foto real, ficha técnica, documento). false si es una estimación -- se dibuja con línea discontinua y aviso de pendiente.' },
+            nota:       { type: 'string', description: 'Nota corta opcional -- si confirmado=false, qué falta comprobar (ej: "verificar bornes en placa"); si confirmado=true, cómo se verificó (ej: "confirmado por foto de etiqueta")' }
+          },
+          required: ['nombre', 'hilos', 'cable', 'confirmado']
+        }
+      },
+      panel_label: { type: 'string', description: 'MODO C: etiqueta del panel/cuadro central, ej: "CUADRO BMS". Por defecto "CUADRO" si no se indica.' },
+      svg_content: { type: 'string', description: 'MODO B: SVG completo generado manualmente. Usar solo para circuitos que no sean DOL estándar ni cableado de instrumentación a un panel.' },
       descripcion: { type: 'string', description: 'Descripción técnica del esquema (componentes, normativa aplicada)' },
       obra_id:     { type: 'number', description: 'ID de obra (opcional). Si se indica, guarda el esquema en los documentos de esa obra — aparece en la sección Documentos de la app.' }
     },
@@ -9614,8 +9658,19 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
   <text x="305" y="631" fill="#555" font-size="8">REBT ITC-BT-47</text>
   <text x="305" y="643" fill="#555" font-size="8">Alejandra IA</text>
 </svg>`;
+          } else if (tipo === 'cableado_instrumentacion' && Array.isArray(input.grupos) && input.grupos.length > 0) {
+            // MODO C (ALEJANDRA-ESQUEMA-05): grupos de señal → panel central, generado
+            // en el servidor -- nunca redactado por el modelo. Validar cada grupo antes
+            // de dibujar: un grupo sin nombre/hilos/cable es peor que no dibujarlo (el
+            // usuario vería una caja vacía sin saber por qué), así que se rechaza aquí
+            // con un error claro en vez de generar un esquema a medias.
+            const gruposInvalidos = input.grupos.filter(g => !g || !g.nombre || !g.hilos || !g.cable);
+            if (gruposInvalidos.length > 0) {
+              return JSON.stringify({ ok: false, error: `${gruposInvalidos.length} grupo(s) sin "nombre", "hilos" o "cable" -- los tres son obligatorios en cada grupo de "grupos".` });
+            }
+            svgContent = construirSVGCableadoInstrumentacion(titulo, descripcion, input.panel_label, input.grupos);
           } else {
-            return JSON.stringify({ ok: false, error: 'No se proporcionó svg_content ni componentes válidos. Para arranque DOL, pasa componentes: {contactor, motor, guardamotor, ...}. Para circuito personalizado, pasa svg_content con el SVG completo.' });
+            return JSON.stringify({ ok: false, error: 'No se proporcionó svg_content ni componentes/grupos válidos. Para arranque DOL, pasa componentes: {contactor, motor, guardamotor, ...}. Para cableado de sondas/instrumentación, pasa tipo="cableado_instrumentacion" y grupos: [...]. Para circuito personalizado, pasa svg_content con el SVG completo.' });
           }
         }
 
