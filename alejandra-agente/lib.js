@@ -1149,7 +1149,7 @@ function construirSVGCableadoInstrumentacion(titulo, descripcion, panelLabel, gr
   <text x="${lgX + 60}" y="${lgY + 62}" font-size="9.5" fill="${NEGRO}">Pendiente de verificar en obra</text>
   <rect x="${lgX + 28}" y="${lgY + 74}" width="8" height="8" fill="white" stroke="${NEGRO}" stroke-width="1.2"/>
   <text x="${lgX + 60}" y="${lgY + 82}" font-size="9.5" fill="${NEGRO}">Terminal numerado en el bornero del cuadro (Xn)</text>
-  ${descripcion ? `<text x="${lgX + 10}" y="${lgY + 104}" font-size="8.5" fill="${GRIS}">${esc(descripcion.length > 90 ? descripcion.slice(0, 90) + '…' : descripcion)}</text>` : ''}`;
+  ${descripcion ? textoMultilinea(descripcion, lgX + 10, lgY + 104, 12, 65, 2, `font-size="8.5" fill="${GRIS}"`) : ''}`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Arial,Helvetica,sans-serif">
   <rect width="${W}" height="${H}" fill="white"/>
