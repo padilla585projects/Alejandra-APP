@@ -9726,8 +9726,32 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descripcion}</div>` : ''}
 <script>
   let scale = 1;
-  function zoom(f) { scale = Math.min(Math.max(scale * f, 0.1), 5); document.getElementById('svg-wrapper').style.transform = 'scale(' + scale + ')'; document.getElementById('zoom-val').textContent = Math.round(scale * 100) + '%'; }
-  function resetZoom() { scale = 1; document.getElementById('svg-wrapper').style.transform = 'scale(1)'; document.getElementById('zoom-val').textContent = '100%'; }
+  function aplicarZoom() { document.getElementById('svg-wrapper').style.transform = 'scale(' + scale + ')'; document.getElementById('zoom-val').textContent = Math.round(scale * 100) + '%'; }
+  function zoom(f) { scale = Math.min(Math.max(scale * f, 0.1), 5); aplicarZoom(); }
+  // VISOR-AJUSTAR-01 (15/09/2026): Adrián, en móvil -- "el visor ahí que ajustarlo a pantalla,
+  // aunque luego se pueda hacer zoom y mover pero no se ve bien en el móvil". Antes el esquema
+  // se pintaba siempre a escala 100% real (podía ser un SVG de 1000px de ancho), desbordando
+  // la pantalla de un móvil y obligando a hacer zoom manual solo para ver el conjunto la
+  // primera vez. Ahora calcula la escala inicial para que quepa entero (ancho Y alto) en el
+  // hueco visible, sin subir de 100% en esquemas pequeños -- y el botón "Resetear" vuelve a
+  // este ajuste, no a un 100% que puede seguir sin caber.
+  function calcularEscalaAjuste() {
+    const svg = document.querySelector('#svg-wrapper svg');
+    const canvas = document.getElementById('canvas');
+    if (!svg || !canvas) return 1;
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    const svgW = (vb && vb.width) || svg.getBoundingClientRect().width;
+    const svgH = (vb && vb.height) || svg.getBoundingClientRect().height;
+    if (!svgW || !svgH) return 1;
+    const availW = canvas.clientWidth - 32;
+    const availH = canvas.clientHeight - 32;
+    const fit = Math.min(availW / svgW, availH / svgH, 1);
+    return (fit > 0 && isFinite(fit)) ? fit : 1;
+  }
+  function ajustarAPantalla() { scale = calcularEscalaAjuste(); aplicarZoom(); }
+  function resetZoom() { ajustarAPantalla(); }
+  window.addEventListener('load', ajustarAPantalla);
+  window.addEventListener('resize', ajustarAPantalla);
   document.addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); zoom(e.deltaY < 0 ? 1.1 : 0.9); } }, { passive: false });
 </script>
 </body>
