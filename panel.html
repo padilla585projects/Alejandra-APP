@@ -22656,7 +22656,12 @@ async function cargarAlejandraChat() {
     const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}&canal=app_android,pwa,panel`, {
       headers: { 'X-Token': TOKEN }
     });
-    if (!r.ok) return;
+    // BUG-HISTORIAL-APK-VACIO-01 (15/09/2026): mismo fallo silencioso que tenía index.html
+    // (ver comentario junto a _alejandraCargarHistorialServidor ahí) -- aquí el riesgo es
+    // menor porque esto se sondea cada 5s mientras el chat está abierto (un fallo puntual
+    // se autocorrige en el siguiente sondeo), pero sin loguear el fallo tampoco había forma
+    // de distinguir "está fallando de verdad" de "no hay nada nuevo".
+    if (!r.ok) { console.warn('[Alejandra] historial (panel): HTTP', r.status); return; }
     const data = await r.json();
     // BUG-CHAT-ORDEN-01 (14/09/2026): mismo bug que SCAN-05 (25/07/2026) en cargarChat()
     // (chat de equipo), sin corregir aquí -- getIAChatHistory (worker.js) ya devuelve los
@@ -22731,7 +22736,7 @@ async function _alejandraResincronizarFirmas() {
     const r = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(usuarioId)}&canal=app_android,pwa,panel`, {
       headers: { 'X-Token': TOKEN }
     });
-    if (!r.ok) return;
+    if (!r.ok) { console.warn('[Alejandra] resincronizar firmas: HTTP', r.status); return; }
     const data = await r.json();
     // BUG-CHAT-ORDEN-01: mismo orden que cargarAlejandraChat() (ver comentario ahí) -- si
     // difieren, las firmas de aquí nunca coinciden con las de allí y cada sondeo repinta

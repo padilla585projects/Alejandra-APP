@@ -28756,6 +28756,38 @@ function _alejandraPersistir() {
   } catch {}
 }
 
+// BUG-HISTORIAL-APK-VACIO-01 (15/09/2026): Adrián -- "cuando cierro la app [APK] y la
+// vuelvo a abrir ya no hay historial [de Alejandra]". El fetch de abajo puede fallar sin
+// que se note por dos motivos concretos en un arranque en frío de la APK (Capacitor mata
+// el proceso al cerrarla del todo, a diferencia de una pestaña de navegador que solo se
+// recarga): 1) el `catch {}` vacío no dejaba ni rastro del error real en los logs -- no
+// había forma de saber SI fallaba ni POR QUÉ sin conectar el móvil por USB y mirar
+// chrome://inspect en vivo; 2) el stack de red de Android puede tardar en estar listo
+// justo tras el arranque en frío -- un intento único sin reintento pierde esa ventana.
+// Ninguna de las dos causas se ha podido confirmar sin logs reales del dispositivo (el
+// entorno de desarrollo no tiene acceso a la APK en ejecución), así que este fix ataca las
+// dos a la vez: deja rastro real del fallo (consultable con `chrome://inspect` con el
+// móvil en modo depuración USB) y reintenta una vez tras una pausa corta antes de rendirse
+// al respaldo local. Si el problema persiste tras esto, los logs dirán por fin el motivo
+// exacto en vez de fallar en silencio.
+async function _alejandraCargarHistorialServidor(uid, intento = 1) {
+  try {
+    const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=app_android,pwa,panel`, {
+          headers: { 'X-Token': getSession()?.token || '' }
+        });
+    if (!res.ok) {
+      console.warn('[Alejandra] historial: HTTP', res.status, 'intento', intento);
+      if (intento < 2) { await new Promise(r => setTimeout(r, 1500)); return _alejandraCargarHistorialServidor(uid, intento + 1); }
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    console.warn('[Alejandra] historial: fallo de red', e.message, 'intento', intento);
+    if (intento < 2) { await new Promise(r => setTimeout(r, 1500)); return _alejandraCargarHistorialServidor(uid, intento + 1); }
+    return null;
+  }
+}
+
 async function _alejandraRestaurarChat() {
   const list = document.getElementById('alejandraList');
   if (!list) return;
@@ -28767,11 +28799,9 @@ async function _alejandraRestaurarChat() {
       // SYNC-DISPOSITIVOS-01 (14/09/2026): esta llamada no filtraba por canal -- mezclaba
       // telegram/dev con la conversación real de la app (justo lo que BUG-HISTORIAL-CANAL-01
       // evitó en otros sitios). Se alinea con el mismo grupo app+paneles que el resto.
-      const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=app_android,pwa,panel`, {
-            headers: { 'X-Token': getSession()?.token || '' }
-          });
-      const data = await res.json();
-      if (data.ok && data.mensajes && data.mensajes.length > 0) {
+      const data = await _alejandraCargarHistorialServidor(uid);
+      if (data && !data.ok) console.warn('[Alejandra] historial: respuesta sin ok', data.error || data);
+      if (data?.ok && data.mensajes && data.mensajes.length > 0) {
         _alejandraPanelHist = data.mensajes.map(m => ({
           texto: m.contenido,
           tipo: m.rol === 'assistant' ? 'bot' : 'user',
@@ -28796,7 +28826,9 @@ async function _alejandraRestaurarChat() {
         try { localStorage.setItem(ALEJANDRA_PANEL_HIST_KEY, JSON.stringify(_alejandraPanelHist)); } catch {}
         return;
       }
-    } catch {}
+    } catch (e) { console.warn('[Alejandra] historial: error inesperado procesando la respuesta', e.message); }
+  } else {
+    console.warn('[Alejandra] historial: sin usuario_id/nombre en getSession(), no se pidió al servidor');
   }
   // 2. Fallback: localStorage
   try {
@@ -28815,7 +28847,8 @@ async function _alejandraRestaurarChat() {
       list.scrollTop = list.scrollHeight;
       return;
     }
-  } catch {}
+    console.warn('[Alejandra] historial: tampoco hay nada en el respaldo local (' + ALEJANDRA_PANEL_HIST_KEY + ')');
+  } catch (e) { console.warn('[Alejandra] historial: error leyendo el respaldo local', e.message); }
 }
 
 function alejandraAbrir(show = true) {
