@@ -23,8 +23,15 @@ android {
         applicationId "com.padilla585.alejandra"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // VERSION-NATIVA-01 (15/09/2026): venía en 1/"1.0" fijo desde el primer scaffold de
+        // Capacitor, sin tocarse en ninguna de las 5 releases nativas anteriores -- Adrián:
+        // "hay que tratarla como una app normal de Android, con sus actualizaciones y todo".
+        // Pista propia (independiente de APP_VERSION, que es solo de la PWA/web): versionCode
+        // sube 1 por cada APK publicada de verdad (debe coincidir con el número de la release
+        // de GitHub "app-android-vN" -- lo lee en runtime la comprobación de actualización
+        // nativa en index.html, comparando contra el tag_name de la release "latest").
+        versionCode 6
+        versionName "1.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

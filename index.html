@@ -4601,6 +4601,7 @@ select option{background:var(--surface2);color:var(--text)}
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
           <div class="settings-row"><span>Versión</span><strong id="versionAjustes">v4.42</strong></div>
+          <div class="settings-row" id="filaVersionNativa" style="display:none"><span>Versión app (Android)</span><strong id="versionNativaAjustes">—</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -6189,7 +6190,7 @@ select option{background:var(--surface2);color:var(--text)}
 <div id="updatedBanner"></div>
 <div id="updateBanner">
   <span id="updateBannerText">🔄 Nueva versión disponible</span>
-  <button onclick="forzarActualizacion()">Actualizar ahora</button>
+  <button onclick="_onClickBotonActualizar()">Actualizar ahora</button>
 </div>
 
 <script>
@@ -7095,12 +7096,30 @@ function _initNativo() {
   // a una vez cada 15s, así que llamarla también aquí no duplica trabajo.
   try {
     if (P.App) {
-      P.App.addListener('resume', function () { try { _onAppVisible(); } catch (_) {} });
+      P.App.addListener('resume', function () {
+        try { _onAppVisible(); } catch (_) {}
+        try { checkNativeAppUpdate(); } catch (_) {} // VERSION-NATIVA-01: igual que al volver a primer plano en web
+      });
       // BUG-ATRAS-01: el botón físico/gesto "Atrás" en nativo se gestiona aquí, no con
       // 'popstate' -- ver el comentario junto a _manejarBotonAtras() más abajo.
       P.App.addListener('backButton', function () { try { _manejarBotonAtras(); } catch (_) {} });
     }
   } catch (_) {}
+  // VERSION-NATIVA-01 (15/09/2026): versión real del APK instalado (nunca hardcodeada en
+  // JS -- siempre la que Android reporta de verdad desde versionName/versionCode), mostrada
+  // en Ajustes → Acerca de junto a la versión web. Y arrancar ya la comprobación de si hay
+  // una APK más nueva publicada.
+  try {
+    if (P.App && P.App.getInfo) {
+      P.App.getInfo().then(function (info) {
+        var fila = document.getElementById('filaVersionNativa');
+        var span = document.getElementById('versionNativaAjustes');
+        if (span) span.textContent = 'v' + info.version + ' (build ' + info.build + ')';
+        if (fila) fila.style.display = 'flex';
+      }).catch(function () {});
+    }
+  } catch (_) {}
+  try { checkNativeAppUpdate(); } catch (_) {}
   // F3.1: mostrar el botón "Probar AR nativo" solo si este móvil soporta ARCore.
   try {
     if (P.ReplanteoAR && P.ReplanteoAR.isSupported) {
@@ -15513,8 +15532,50 @@ function mostrarBannerActualizacion(v) {
   const banner = document.getElementById('updateBanner');
   const txt    = document.getElementById('updateBannerText');
   if (!banner) return;
+  // El banner es compartido con la actualización nativa (ver _onClickBotonActualizar) --
+  // esto es una actualización WEB, así que el botón vuelve a significar "recargar", no
+  // "descargar el APK", aunque hubiera una nativa detectada antes en esta misma sesión.
+  _nativeUpdateUrl = null;
   if (txt) txt.textContent = '🔄 Nueva versión v' + v + ' disponible';
   banner.classList.add('show');
+}
+
+// VERSION-NATIVA-01 (15/09/2026): Adrián -- "tenemos que tratarla como una app normal de
+// Android, con sus actualizaciones y todo". Sin Play Store no hay auto-update real: la app
+// comprueba ella misma la última Release de GitHub y avisa, igual que ya hace con la
+// versión web (mismo banner, mismo patrón), pero la acción del botón es descargar el .apk
+// en vez de recargar la página -- son actualizaciones de naturaleza distinta.
+// versionCode del APK instalado se compara contra el número de la última release
+// "app-android-vN" (ver ese esquema en build.gradle) -- no hace falta ningún endpoint
+// propio, la API pública de GitHub Releases ya da lo que hace falta sin autenticación.
+let _nativeUpdateUrl = null;
+async function checkNativeAppUpdate() {
+  if (!_esNativo()) return;
+  try {
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    if (!P || !P.App || !P.App.getInfo) return;
+    const info = await P.App.getInfo();
+    const localBuild = parseInt(info.build, 10) || 0;
+    const resp = await fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/releases/latest');
+    if (!resp.ok) return;
+    const rel = await resp.json();
+    const m = /-v(\d+)$/.exec(rel.tag_name || '');
+    const remoteBuild = m ? parseInt(m[1], 10) : 0;
+    if (!remoteBuild || remoteBuild <= localBuild) return;
+    const asset = (rel.assets || []).find(a => a.name === 'alejandra.apk');
+    if (!asset) return;
+    _nativeUpdateUrl = asset.browser_download_url;
+    const banner = document.getElementById('updateBanner');
+    const txt = document.getElementById('updateBannerText');
+    if (txt) txt.textContent = '🔄 Nueva versión de la app disponible';
+    if (banner) banner.classList.add('show');
+  } catch (_) {} // sin conexión o API de GitHub caída: no molestar, se reintenta al volver a primer plano
+}
+// El botón del banner sirve para las dos actualizaciones (web y nativa): si hay una APK
+// nueva detectada, descarga esa; si no, es la recarga web de siempre.
+function _onClickBotonActualizar() {
+  if (_nativeUpdateUrl) { _descargarApk(_nativeUpdateUrl); return; }
+  forzarActualizacion();
 }
 
 // FIX-RELOAD-REPLANTEO-01 (14/09/2026): las tres vías de recarga forzada por actualización
