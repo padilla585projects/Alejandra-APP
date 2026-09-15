@@ -1676,7 +1676,7 @@ select option{background:var(--surface2);color:var(--text)}
           <div style="padding:12px;border-radius:8px;background:#0f2a17;border:1px solid #14532d;color:#4ade80;font-size:13px"></div>
         </div>
       </div>
-      <div id="genPlanoMovilActions" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <div id="genPlanoMovilActions" style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
         <button onclick="cerrarModalGenerarPlanoMovil()" style="flex:0 0 90px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:700">Cancelar</button>
         <button id="btnGenerarPlanoMovil" onclick="ejecutarGenerarPlanoMovil()" class="btn-primary" style="flex:1;margin-top:0">✨ Generar</button>
       </div>
@@ -1696,7 +1696,7 @@ select option{background:var(--surface2);color:var(--text)}
         <div class="progress-bar-track" style="margin-top:10px"><div class="progress-bar-fill"></div></div>
       </div>
       <div id="editCircuitosMsg" style="display:none;margin:0 16px 10px;font-size:13px;padding:10px 12px;border-radius:8px"></div>
-      <div id="editCircuitosActions" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <div id="editCircuitosActions" style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
         <button onclick="cerrarModalEditarCircuitos()" style="flex:0 0 90px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:700">Cancelar</button>
         <button id="btnGuardarCircuitosMovil" onclick="guardarCircuitosMovil()" class="btn-primary" style="flex:1;margin-top:0">💾 Guardar</button>
       </div>
@@ -1775,7 +1775,7 @@ select option{background:var(--surface2);color:var(--text)}
         </div>
         <div id="cpdNuevoPlanoStatus" style="display:none;font-size:12px;color:var(--muted);text-align:center;padding:10px">⏳ Subiendo…</div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
         <button onclick="cerrarModalCpdNuevoPlano()" style="flex:0 0 90px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:700">Cancelar</button>
         <button id="btnCpdNuevoPlano" onclick="ejecutarCpdNuevoPlano()" class="btn-primary" style="flex:1;margin-top:0">Crear</button>
       </div>
@@ -2071,7 +2071,7 @@ select option{background:var(--surface2);color:var(--text)}
         </div>
         <div style="font-size:11px;color:var(--muted);line-height:1.4">Consejo: que en la foto salga algo de medida conocida (una placa de techo de 60 cm, una puerta de 2,10 m…) para fijar la escala después.</div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border)">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border)">
         <button id="btnReplNuevoContinuar" class="repl-btn primary" style="width:100%;padding:11px" onclick="replNuevoContinuar()">Continuar →</button>
       </div>
     </div>
@@ -2175,7 +2175,7 @@ select option{background:var(--surface2);color:var(--text)}
           <input id="replObstNota" type="text" class="repl-input" placeholder="Ej: conducto de clima 400x300">
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;gap:8px">
         <button id="btnReplObstQuitar" class="repl-btn danger" style="display:none" onclick="replObstaculoQuitar()">Quitar</button>
         <button class="repl-btn primary" style="flex:1;padding:11px" onclick="replObstaculoGuardar()">Guardar obstáculo</button>
       </div>
@@ -2346,7 +2346,7 @@ select option{background:var(--surface2);color:var(--text)}
             oninput="document.getElementById('fasePctLabel').textContent=this.value">
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="conBoton(this, fasesGuardar)">💾 Guardar fase</button>
       </div>
     </div>
@@ -2388,7 +2388,7 @@ select option{background:var(--surface2);color:var(--text)}
           <input id="ncrMobileNotas" class="form-input" placeholder="Observaciones..." style="margin-top:4px">
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="conBoton(this, ncrMobileGuardar)">🚫 Registrar NCR</button>
       </div>
     </div>
@@ -2454,7 +2454,7 @@ select option{background:var(--surface2);color:var(--text)}
             style="margin-top:3px;width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="conBoton(this, diarioGuardar)">📓 Guardar entrada</button>
       </div>
     </div>
@@ -2517,7 +2517,7 @@ select option{background:var(--surface2);color:var(--text)}
             style="margin-top:3px;width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="tareaGuardar()">✅ Guardar tarea</button>
       </div>
     </div>
@@ -2582,7 +2582,7 @@ select option{background:var(--surface2);color:var(--text)}
             style="margin-top:3px;width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;outline:none;box-sizing:border-box">
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="presupuestoGuardar()">💾 Guardar partida</button>
       </div>
     </div>
@@ -2677,7 +2677,7 @@ select option{background:var(--surface2);color:var(--text)}
           </div>
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="rfiGuardar()">💾 Guardar RFI</button>
       </div>
     </div>
@@ -2739,7 +2739,7 @@ select option{background:var(--surface2);color:var(--text)}
           <textarea id="ocNotas" rows="2" placeholder="Notas adicionales…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="ocGuardar()">💾 Guardar Orden de Cambio</button>
       </div>
     </div>
@@ -2756,7 +2756,7 @@ select option{background:var(--surface2);color:var(--text)}
       <div style="overflow-y:auto;flex:1;padding:12px 16px" id="checklistPreguntas">
         <div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <div class="form-group" style="margin-bottom:10px">
           <textarea id="checklistComentario" rows="2" placeholder="Comentario opcional…"
             style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
@@ -2948,7 +2948,7 @@ select option{background:var(--surface2);color:var(--text)}
           <input id="defResueltoPor" type="text" placeholder="Resuelto por…" style="width:100%;margin-top:6px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="defGuardar()">💾 Guardar</button>
       </div>
     </div>
@@ -3098,7 +3098,7 @@ select option{background:var(--surface2);color:var(--text)}
           </div>
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
         <button id="telecomEliminarDesdeModalBtn" onclick="_telecomEliminarDesdeModal()" style="display:none;background:none;border:1px solid var(--border);color:#ef4444;border-radius:10px;padding:12px 16px;font-weight:800;font-size:14px;cursor:pointer">🗑</button>
         <button onclick="conBoton(this, telecomGuardarModal)" style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
       </div>
@@ -3149,7 +3149,7 @@ select option{background:var(--surface2);color:var(--text)}
           <textarea id="telecomPuertoNotas" rows="2" maxlength="1000" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
         <button onclick="telecomVaciarPuerto()" style="flex:1;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">Vaciar</button>
         <button onclick="conBoton(this, telecomGuardarPuerto)" style="flex:2;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
       </div>
@@ -3247,7 +3247,7 @@ select option{background:var(--surface2);color:var(--text)}
           </div>
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
         <button class="btn-primary" style="flex:1" onclick="actaGuardar()">💾 Guardar Acta</button>
         <button onclick="actaGuardarYAlejandra()" style="padding:9px 12px;background:#a855f722;color:#a855f7;border:1px solid #a855f744;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">🤖 Guardar + crear tareas</button>
       </div>
@@ -3339,7 +3339,7 @@ select option{background:var(--surface2);color:var(--text)}
           <button onclick="subcEliminar()" style="width:100%;padding:9px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:9px;color:#ef4444;font-weight:700;font-size:13px;cursor:pointer">🗑 Eliminar subcontrata</button>
         </div>
       </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+      <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0">
         <button onclick="subcGuardar()" style="width:100%;padding:12px;background:#6366f1;border:none;border-radius:9px;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
       </div>
     </div>
@@ -5860,7 +5860,7 @@ select option{background:var(--surface2);color:var(--text)}
         <label for="rdpMFirmar" style="font-size:13px;font-weight:600">✍️ Firmar y cerrar (no podrá eliminarse)</label>
       </div>
     </div>
-    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+    <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
       <button onclick="rdpCerrarModal()" style="flex:1;padding:12px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
       <button onclick="conBoton(this, rdpGuardar)" style="flex:2;padding:12px;border:none;border-radius:10px;background:#1e3a5f;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
     </div>
@@ -5913,7 +5913,7 @@ select option{background:var(--surface2);color:var(--text)}
         <textarea id="hormMObs" rows="2" placeholder="Condiciones, incidencias…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
       </div>
     </div>
-    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+    <div style="padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
       <button onclick="hormCerrarModal()" style="flex:1;padding:12px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
       <button onclick="conBoton(this, hormGuardar)" style="flex:2;padding:12px;border:none;border-radius:10px;background:#78350f;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
     </div>
