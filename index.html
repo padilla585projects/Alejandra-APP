@@ -1305,6 +1305,18 @@ select option{background:var(--surface2);color:var(--text)}
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <!-- ALEJANDRA-ESQUEMA-08 (15/09/2026): Adrián -- "vamos a crear otro apartado con
+           Esquemas... todo lo que genere Alejandra se guardará en Esquemas o Planos
+           depende. filtrado por departamentos" -- antes vivían metidos dentro de
+           Documentación, sin apartado propio. Mismo patrón visual/de datos que Planos. -->
+      <div class="module-card" id="cardEsquemas" onclick="navTo('esquemas')" style="display:none;border-left:3px solid #7c3aed">
+        <div class="module-emoji">🔌</div>
+        <div class="module-info">
+          <div class="module-name">Esquemas</div>
+          <div class="module-desc">Esquemas eléctricos y de cableado generados por Alejandra</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardChat" onclick="chatAbrir()" style="display:none;pointer-events:none;height:0;padding:0;margin:0;overflow:hidden">
         <div class="module-emoji">💬</div>
         <div class="module-info">
@@ -1632,6 +1644,20 @@ select option{background:var(--surface2);color:var(--text)}
     <!-- Filtros por tipo (generados dinámicamente según los planos existentes) -->
     <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0" id="planoFiltroBar"></div>
     <div id="planoList" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando…</div>
+    </div>
+  </div>
+
+  <!-- ALEJANDRA-ESQUEMA-08 (15/09/2026): ESQUEMAS (lectura -- se generan hablando con
+       Alejandra, "genérame el esquema de..."; no hay formulario manual como en Planos). -->
+  <div id="screenEsquemas" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">🔌 Esquemas</div>
+      <button onclick="cargarEsquemas()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px" title="Actualizar">↻</button>
+    </div>
+    <div style="padding:8px 14px 0;font-size:11px;color:var(--muted);flex-shrink:0">Pídeselos a Alejandra por chat: "genérame el esquema de…"</div>
+    <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0" id="esquemaFiltroBar"></div>
+    <div id="esquemaList" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
       <div class="empty-state">Cargando…</div>
     </div>
   </div>
@@ -7383,6 +7409,7 @@ const _HOME_DEPT_ALLOWED_CARDS = {
     'cardHerramientas',
     'cardDocs',
     'cardPlanos',
+    'cardEsquemas',
     'cardObraDashboard',
     'cardEpisDotacion',
   ]),
@@ -7427,6 +7454,7 @@ function setupHomeModules() {
   const cardCal2    = document.getElementById('cardCalidad');
   const cardSubc    = document.getElementById('cardSubcontratas');
   const cardPlanos  = document.getElementById('cardPlanos');
+  const cardEsquemas = document.getElementById('cardEsquemas');
   const cardTelecomRacks = document.getElementById('cardTelecomRacks');
   const cardCpdSondas = document.getElementById('cardCpdSondas');
   // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard, Incidencias y Galería
@@ -7447,6 +7475,7 @@ function setupHomeModules() {
     if (cardCal2) cardCal2.style.display = 'flex';
     if (cardSubc) cardSubc.style.display = 'flex';
     if (cardPlanos) cardPlanos.style.display = 'flex';
+    if (cardEsquemas) cardEsquemas.style.display = 'flex';
     if (cardPartes) cardPartes.style.display = 'none';
     const cardHerrSeg = document.getElementById('cardHerramientas');
     if (cardHerrSeg) cardHerrSeg.style.display = 'flex';
@@ -7497,6 +7526,7 @@ function setupHomeModules() {
   if (cardCal2)   cardCal2.style.display   = 'flex';
   if (cardSubc)   cardSubc.style.display   = 'flex';
   if (cardPlanos) cardPlanos.style.display = 'flex';
+  if (cardEsquemas) cardEsquemas.style.display = 'flex';
   // Nuevos módulos PRL/calidad: visible a encargado y superiores (no operario)
   const s4 = getSession();
   const esEncargadoPlus = s4 && s4.rol !== 'operario';
@@ -7939,6 +7969,7 @@ const _HOME_TRADE_MODS = [
   { card: 'cardPartes',           label: '📋 Partes de trabajo' },
   { card: 'cardDocs',             label: '📂 Documentación' },
   { card: 'cardPlanos',           label: '📐 Planos' },
+  { card: 'cardEsquemas',         label: '🔌 Esquemas' },
 ];
 const _SEG_MODS = [
   { key: 'seg_escaner',      label: '📷 Escáner' },
@@ -8997,6 +9028,7 @@ function _applyScreen(name) {
   if (name === 'obraDashboard')  { cargarObraDashboard(); }
   if (name === 'incidencias')    { cargarIncidencias(); }
   if (name === 'planos')         { cargarPlanos(); }
+  if (name === 'esquemas')       { cargarEsquemas(); }
   if (name === 'cpdSondas')      { cargarCpdPlanos(); }
   if (name === 'replanteo')      { cargarReplanteos(); }
   if (name === 'replanteoEditor') { if (typeof replDibujar === 'function') requestAnimationFrame(replDibujar); }
@@ -9119,6 +9151,10 @@ function navTo(target) {
   }
   if (target === 'planos') {
     showScreen('planos');
+    return;
+  }
+  if (target === 'esquemas') {
+    showScreen('esquemas');
     return;
   }
   if (target === 'cpdSondas') {
@@ -11957,23 +11993,18 @@ async function docsCargar(containerId) {
 
   c.innerHTML = '<div class="empty-state">Cargando...</div>';
   try {
-    const [resCarpetas, resDocs, resNotas, resEsquemas] = await Promise.all([
+    // ALEJANDRA-ESQUEMA-08 (15/09/2026): los esquemas ya NO se cargan/renderizan aquí --
+    // tienen su propia sección "Esquemas" (cardEsquemas/screenEsquemas, cargarEsquemas()).
+    // Antes vivían mezclados dentro de Documentación; sacarlos evita cargar ese fetch dos
+    // veces y mantiene "todo organizado" (petición de Adrián) en vez de duplicado.
+    const [resCarpetas, resDocs, resNotas] = await Promise.all([
       apiCall(`/carpetas?obra_id=${obraId}&departamento=${dept}`),
       apiCall(`/docs-dept?obra_id=${obraId}&departamento=${dept}`),
       apiCall(`/docs-notas?obra_id=${obraId}&departamento=${dept}`),
-      apiCall(`/documentos-obra?obra_id=${obraId}&elaborado_por=Alejandra+IA`),
     ]);
     const carpetas   = resCarpetas.ok  ? await resCarpetas.json()  : [];
     const rootDocs   = resDocs.ok      ? await resDocs.json()      : [];
     const rootNotas  = resNotas.ok     ? await resNotas.json()      : [];
-    const esqData    = resEsquemas.ok  ? await resEsquemas.json()  : {};
-    const esquemas   = esqData.items || [];
-
-    const AGENTE_BASE = 'https://alejandra-agente.alejandra-app.workers.dev';
-    function esquemaUrl(r2Key) {
-      if (!r2Key) return null;
-      return `${AGENTE_BASE}/api/esquemas/view/${encodeURIComponent(r2Key.replace('esquemas/',''))}`;
-    }
 
     c.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
@@ -12004,62 +12035,11 @@ async function docsCargar(containerId) {
         </div>`).join('')}
       ${rootNotas.map(n => docsRenderNota(n, puedeEditar, null, containerId, null)).join('')}
       ${rootDocs.map(d  => docsRenderArchivo(d, puedeEditar, null, containerId, '')).join('')}
-      ${!carpetas.length && !rootDocs.length && !rootNotas.length && !esquemas.length
-        ? '<div class="empty-state">Sin documentos. Crea una carpeta o sube un archivo.</div>' : ''}
-      ${esquemas.length ? `
-        <div style="margin-top:18px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-          <div style="flex:1;height:1px;background:var(--border)"></div>
-          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--muted);white-space:nowrap">📐 ESQUEMAS</div>
-          <div style="flex:1;height:1px;background:var(--border)"></div>
-        </div>
-        ${esquemas.map(e => {
-          const url = esquemaUrl(e.r2_key);
-          const tit = (e.titulo||'').replace(/'/g,"\\'");
-          // DOCS-UI-02: mismo patrón de dos filas que docsRenderArchivo.
-          return `<div style="padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
-            <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">
-              <span style="font-size:22px;flex-shrink:0">📐</span>
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:600;font-size:13px;color:var(--text);word-break:break-word;line-height:1.3">${e.titulo}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${e.fecha_emision||''} · Alejandra</div>
-              </div>
-            </div>
-            ${(url || puedeEditar) ? `<div style="display:flex;gap:6px;margin-top:9px">
-            ${url ? `<button onclick="window.open('${url}','_blank')" title="Ver esquema"
-              style="padding:7px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">🔗</button>` : ''}
-            ${puedeEditar ? `
-            <button onclick="docsEsquemaRenombrar(${e.id},'${tit}','${containerId}')" title="Renombrar"
-              style="padding:7px 0;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">✏️</button>
-            <button onclick="docsEsquemaBorrar(${e.id},'${tit}','${containerId}')" title="Eliminar"
-              style="padding:7px 0;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:15px;color:#ef4444;cursor:pointer;flex:1">🗑️</button>` : ''}
-            </div>` : ''}
-          </div>`;
-        }).join('')}` : ''}`;
+      ${!carpetas.length && !rootDocs.length && !rootNotas.length
+        ? '<div class="empty-state">Sin documentos. Crea una carpeta o sube un archivo.</div>' : ''}`;
   } catch {
     c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>';
   }
-}
-
-// ── Esquemas IA: renombrar y borrar desde la pantalla Docs ───────────────────
-async function docsEsquemaRenombrar(id, tituloActual, containerId) {
-  const nuevo = prompt('Nuevo nombre para el esquema:', tituloActual);
-  if (!nuevo || !nuevo.trim() || nuevo.trim() === tituloActual) return;
-  try {
-    const r = await apiCall('/documentos-obra/' + id, { method: 'PUT', body: JSON.stringify({ titulo: nuevo.trim() }) });
-    const d = await r.json();
-    if (d.ok) { docsCargar(containerId); toast('✅ Nombre actualizado', 'ok'); }
-    else toast('Error: ' + (d.error || 'desconocido'), 'err');
-  } catch { toast('Error de red', 'err'); }
-}
-
-async function docsEsquemaBorrar(id, titulo, containerId) {
-  if (!confirm(`¿Eliminar el esquema "${titulo}"?\n\nSe borrarán los archivos SVG y HTML de R2 y el registro. Esta acción no se puede deshacer.`)) return;
-  try {
-    const r = await apiCall('/documentos-obra/' + id, { method: 'DELETE' });
-    const d = await r.json();
-    if (d.ok) { docsCargar(containerId); toast('🗑️ Esquema eliminado', 'ok'); }
-    else toast('Error: ' + (d.error || 'desconocido'), 'err');
-  } catch { toast('Error de red', 'err'); }
 }
 
 // MEJ-155: subcarpetas | MEJ-136: notas | firma actualizada (parentCarpetaId, parentNombre)
@@ -17688,6 +17668,156 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       renderPlanos(window._planosCache);
     } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
   }
+
+  // ── ALEJANDRA-ESQUEMA-08 (15/09/2026): apartado propio "Esquemas" ────────────
+  // Mismo patrón que Planos (filtros por tipo, lista, apiCall), pero leyendo de
+  // documentos_obra (elaborado_por=Alejandra IA) -- que es donde generar_esquema_electrico
+  // ya guarda todo. Ver/descargar/compartir reutilizan _guardarCompartirBlob(), que ya
+  // resuelve la diferencia PWA/APK (Share nativo vs Web Share/descarga).
+  const ESQUEMA_TIPO_LABELS = {
+    unifiliar: '📊 Unifilar', multifilar: '🔀 Multifilar', cuadro: '🗄️ Cuadro',
+    potencia_motor: '⚙️ Motor (potencia)', mando_motor: '🕹️ Motor (mando)',
+    alumbrado: '💡 Alumbrado', tierra: '🌍 Tierra', control_plc: '🖥️ Control/PLC',
+    cableado_instrumentacion: '🔌 Instrumentación', personalizado: '✏️ Personalizado',
+    otro: '📄 Otro',
+  };
+  const ESQUEMA_AGENTE_BASE = 'https://alejandra-agente.alejandra-app.workers.dev';
+  function esquemaViewerUrl(r2Key, ext) {
+    if (!r2Key) return null;
+    const base = r2Key.replace('esquemas/', '').replace(/\.html$/, '');
+    return `${ESQUEMA_AGENTE_BASE}/api/esquemas/view/${encodeURIComponent(base)}.${ext || 'html'}`;
+  }
+
+  function esquemaRenderFiltros() {
+    const bar = document.getElementById('esquemaFiltroBar');
+    if (!bar) return;
+    const cache = window._esquemasCache || [];
+    const tipos = [...new Set(cache.map(e => e.tipo).filter(Boolean))];
+    const activo = window._esquemaFiltro || 'todos';
+    let html = `<button onclick="esquemaSetFiltro('todos')" class="filter-chip${activo === 'todos' ? ' active' : ''}">Todos</button>`;
+    tipos.forEach(t => {
+      html += `<button onclick="esquemaSetFiltro('${t}')" class="filter-chip${activo === t ? ' active' : ''}">${esc(ESQUEMA_TIPO_LABELS[t] || t)}</button>`;
+    });
+    bar.innerHTML = html;
+  }
+
+  function esquemaSetFiltro(tipo) {
+    window._esquemaFiltro = tipo;
+    esquemaRenderFiltros();
+    renderEsquemas(window._esquemasCache);
+  }
+
+  async function esquemaAbrir(url) {
+    if (!url) return;
+    await _abrirUrlExterna(url);
+  }
+
+  async function esquemaDescargar(r2Key, titulo) {
+    const url = esquemaViewerUrl(r2Key, 'svg');
+    if (!url) { toast('Sin archivo disponible', 'err'); return; }
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const blob = await r.blob();
+      await _guardarCompartirBlob(blob, (titulo || 'esquema').replace(/[^a-zA-Z0-9_\-áéíóúñÁÉÍÓÚÑ ]/g, '_') + '.svg', titulo);
+    } catch (e) { toast('No se pudo descargar: ' + (e && e.message || e), 'err'); }
+  }
+
+  async function esquemaCompartir(r2Key, titulo) {
+    const url = esquemaViewerUrl(r2Key, 'html');
+    if (!url) return;
+    if (navigator.share) { try { await navigator.share({ title: titulo, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    esquemaDescargar(r2Key, titulo);
+  }
+
+  async function esquemaRenombrar(id, tituloActual) {
+    const nuevo = prompt('Nuevo nombre para el esquema:', tituloActual);
+    if (!nuevo || !nuevo.trim() || nuevo.trim() === tituloActual) return;
+    try {
+      const r = await apiCall('/documentos-obra/' + id, { method: 'PUT', body: JSON.stringify({ titulo: nuevo.trim() }) });
+      const d = await r.json();
+      if (d.ok) { cargarEsquemas(); toast('✅ Nombre actualizado', 'ok'); }
+      else toast('Error: ' + (d.error || 'desconocido'), 'err');
+    } catch { toast('Error de red', 'err'); }
+  }
+
+  async function esquemaBorrar(id, titulo) {
+    if (!confirm(`¿Eliminar el esquema "${titulo}"?\n\nSe borrarán los archivos SVG y HTML de R2 y el registro. Esta acción no se puede deshacer.`)) return;
+    try {
+      const r = await apiCall('/documentos-obra/' + id, { method: 'DELETE' });
+      const d = await r.json();
+      if (d.ok) { cargarEsquemas(); toast('🗑️ Esquema eliminado', 'ok'); }
+      else toast('Error: ' + (d.error || 'desconocido'), 'err');
+    } catch { toast('Error de red', 'err'); }
+  }
+
+  function renderEsquemas(lista) {
+    const c = document.getElementById('esquemaList');
+    if (!c) return;
+    const s = getSession();
+    const puedeEditar = s?.rol !== 'operario';
+    const filtro = window._esquemaFiltro || 'todos';
+    const items = filtro === 'todos' ? lista : lista.filter(e => e.tipo === filtro);
+    if (!items.length) {
+      c.innerHTML = `<div class="empty-state">Sin esquemas${filtro !== 'todos' ? ' de este tipo' : ''}. Pídeselos a Alejandra por chat.</div>`;
+      return;
+    }
+    c.innerHTML = items.map(e => {
+      const label = ESQUEMA_TIPO_LABELS[e.tipo] || ('🔌 ' + (e.tipo || ''));
+      const urlVer = esquemaViewerUrl(e.r2_key, 'html');
+      const titEsc = esc(e.titulo).replace(/'/g, '&#39;');
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid #7c3aed;border-radius:12px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:flex-start;gap:8px;cursor:pointer" onclick="esquemaAbrir('${urlVer}')">
+          <span style="font-size:22px;line-height:1.2">🔌</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px">${esc(e.titulo)}</div>
+            ${e.notas ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.notas)}</div>` : ''}
+            <div style="font-size:10px;color:var(--muted);margin-top:4px">${esc((e.fecha_emision || '').slice(0, 10))} · Alejandra</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#7c3aed;white-space:nowrap;padding:3px 8px;border-radius:20px;border:1px solid #7c3aed40;background:#7c3aed15">${esc(label)}</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:9px">
+          <button onclick="esquemaAbrir('${urlVer}')" title="Ver"
+            style="padding:7px 0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">👁️</button>
+          <button onclick="esquemaDescargar('${e.r2_key}','${titEsc}')" title="Descargar"
+            style="padding:7px 0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">⬇️</button>
+          <button onclick="esquemaCompartir('${e.r2_key}','${titEsc}')" title="Compartir"
+            style="padding:7px 0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">📤</button>
+          ${puedeEditar ? `
+          <button onclick="esquemaRenombrar(${e.id},'${titEsc}')" title="Renombrar"
+            style="padding:7px 0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:15px;cursor:pointer;flex:1">✏️</button>
+          <button onclick="esquemaBorrar(${e.id},'${titEsc}')" title="Eliminar"
+            style="padding:7px 0;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:15px;color:#ef4444;cursor:pointer;flex:1">🗑️</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function cargarEsquemas() {
+    const c = document.getElementById('esquemaList');
+    if (!c) return;
+    const s = getSession();
+    const obraId = s?.obra_id;
+    if (!obraId) { c.innerHTML = '<div class="empty-state">Sin obra asignada.</div>'; return; }
+    c.innerHTML = '<div class="empty-state">Cargando…</div>';
+    try {
+      const res = await apiCall(`/documentos-obra?obra_id=${obraId}&elaborado_por=Alejandra+IA`);
+      if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al cargar</div>'; return; }
+      const data = await res.json().catch(() => ({}));
+      window._esquemasCache = data.items || [];
+      esquemaRenderFiltros();
+      renderEsquemas(window._esquemasCache);
+    } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+  }
+
+  window.cargarEsquemas      = cargarEsquemas;
+  window.renderEsquemas      = renderEsquemas;
+  window.esquemaSetFiltro    = esquemaSetFiltro;
+  window.esquemaAbrir        = esquemaAbrir;
+  window.esquemaDescargar    = esquemaDescargar;
+  window.esquemaCompartir    = esquemaCompartir;
+  window.esquemaRenombrar    = esquemaRenombrar;
+  window.esquemaBorrar       = esquemaBorrar;
 
   // ── Generar plano con IA desde la app ─────────────────────────────────
   function abrirModalGenerarPlanoMovil() {
