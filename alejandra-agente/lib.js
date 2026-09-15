@@ -996,70 +996,214 @@ function construirCacheKeyNormativa({ consulta, itc, tema }) {
 // para el caso de uso más común de "cableado de campo a un cuadro/panel central"
 // (sondas, instrumentación, cualquier grupo de señales que confluye en un solo
 // punto) -- el modelo solo aporta datos estructurados (grupos + hilos + cable + si
-// está confirmado o no), nunca dibuja nada él mismo. Layout: N grupos repartidos en
-// dos columnas (izquierda/derecha) alrededor de un panel central, línea continua
-// para lo confirmado y discontinua para lo pendiente de verificar -- mismo lenguaje
-// visual que ya se validó a mano con Adrián en el esquema de referencia de sondas.
+// está confirmado o no), nunca dibuja nada él mismo.
+// ALEJANDRA-ESQUEMA-06 (15/09/2026): primera versión (cajas redondeadas, líneas
+// diagonales de color, sin cajetín) generaba algo real y correcto pero Adrián,
+// viéndolo: "no me gustan, no parecen profesionales, parecen dibujos... tenemos
+// que usar como si fuera CAD" -- comparándolo con el plano de Mecánicas real que
+// había mandado (HHAngus/Levitec: esquinas rectas, routing ortogonal, cajetín de
+// plano, terminales numerados). Rediseño con esas convenciones: esquinas rectas
+// (nada de rx redondeado), tendido en ángulo recto (nunca diagonal) con terminales
+// cuadrados numerados en el borde del cuadro (como un bornero real TB1), cajetín
+// de plano (proyecto/fecha/escala/revisión) y leyenda formal -- todo en negro con
+// un único acento ámbar para lo pendiente de confirmar, en vez de colores por tipo.
 function construirSVGCableadoInstrumentacion(titulo, descripcion, panelLabel, grupos) {
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // ALEJANDRA-ESQUEMA-07 (15/09/2026): la v2 (cajetín + terminales) seguía sin ser
+  // usable de verdad -- Adrián: "se ve fatal el plano... se cortan las letras y
+  // solapan". SVG no envuelve texto solo -- cualquier campo largo (nota, detalle,
+  // "EX1/EX2 + A/B/C apantallado", "Bus de comunicación (Modbus/BACnet asumido)")
+  // se salía de su caja o pisaba al vecino. Envuelve por palabras a un nº de
+  // caracteres estimado para el ancho/tamaño de fuente real de cada campo, hasta
+  // maxLineas, truncando con "…" solo si de verdad no cabe ni así -- nunca deja
+  // una línea sin cortar que se salga del hueco disponible.
+  function envolver(texto, maxChars, maxLineas) {
+    const palabras = String(texto || '').split(/\s+/).filter(Boolean);
+    if (!palabras.length) return [];
+    const lineas = [];
+    let actual = '';
+    for (const p of palabras) {
+      const candidato = actual ? actual + ' ' + p : p;
+      if (candidato.length > maxChars && actual) {
+        lineas.push(actual);
+        actual = p;
+        if (lineas.length >= maxLineas) break;
+      } else {
+        actual = candidato;
+      }
+    }
+    if (lineas.length < maxLineas && actual) lineas.push(actual);
+    if (lineas.length === maxLineas) {
+      const usado = lineas.join(' ').length;
+      const total = palabras.join(' ').length;
+      if (usado < total) {
+        const ultima = lineas.length - 1;
+        lineas[ultima] = lineas[ultima].slice(0, Math.max(0, maxChars - 1)) + '…';
+      }
+    }
+    return lineas;
+  }
+  function textoMultilinea(texto, x, y, lineH, maxChars, maxLineas, attrs) {
+    return envolver(texto, maxChars, maxLineas)
+      .map((linea, idx) => `<text x="${x}" y="${y + idx * lineH}" ${attrs}>${esc(linea)}</text>`)
+      .join('\n  ');
+  }
 
+  const NEGRO = '#1a1a1a', GRIS = '#555', PENDIENTE = '#b5651d';
   const n = Math.max(1, grupos.length);
   const leftN = Math.ceil(n / 2);
   const rightN = n - leftN;
-  const boxW = 220, boxH = 110, gapY = 28, rowH = boxH + gapY;
-  const marginTop = 60, marginBottom = 46;
+  const boxW = 240, boxH = 128, gapY = 40, rowH = boxH + gapY;
+  const marginTop = 88, marginBottom = 168;
   const maxRows = Math.max(leftN, rightN, 1);
-  const H = marginTop + maxRows * rowH - gapY + marginBottom;
-  const colLeftX = 40, gapCenter = 150, panelW = 210, panelH = 110, labelW = 120;
+  const gruposBlockH = maxRows * rowH - gapY;
+  const H = marginTop + gruposBlockH + marginBottom;
+  const colLeftX = 50, gapCenter = 260;
+  const panelW = 190;
+  const panelH = Math.max(140, Math.max(leftN, rightN) * 44);
   const panelX = colLeftX + boxW + gapCenter;
   const colRightX = panelX + panelW + gapCenter;
-  const W = colRightX + boxW + 40;
-  const panelY = H / 2 - panelH / 2;
+  const W = colRightX + boxW + 50;
+  const panelY = marginTop + gruposBlockH / 2 - panelH / 2;
 
-  function boxesCol(count, x, side) {
+  let pin = 0;
+  function lado(count, x, side) {
     let out = '';
     for (let i = 0; i < count; i++) {
       const g = grupos[side === 'L' ? i : leftN + i];
       if (!g) continue;
+      pin++;
       const y = marginTop + i * rowH;
       const cy = y + boxH / 2;
       const confirmado = g.confirmado !== false;
-      const color = confirmado ? '#333' : '#e67e22';
-      const dash = confirmado ? '' : ' stroke-dasharray="7 4"';
+      const dash = confirmado ? '' : ' stroke-dasharray="6 4"';
+      const col = confirmado ? NEGRO : PENDIENTE;
       const boxEdgeX = side === 'L' ? x + boxW : x;
+      const midX = side === 'L' ? (x + boxW + gapCenter / 2) : (x - gapCenter / 2);
       const panelEdgeX = side === 'L' ? panelX : panelX + panelW;
-      const panelEdgeY = panelY + ((i + 0.5) / count) * panelH;
-      const midX = (boxEdgeX + panelEdgeX) / 2;
-      const midY = (cy + panelEdgeY) / 2;
+      const panelPinY = panelY + ((i + 0.5) / count) * panelH;
+      const labelMidX = (boxEdgeX + midX) / 2;
+      const numAnchor = side === 'L' ? 'end' : 'start';
+      const numX = side === 'L' ? panelEdgeX - 13 : panelEdgeX + 13;
+      const itemAnchor = side === 'L' ? 'end' : 'start';
+      const itemX = side === 'L' ? x + boxW : x;
 
       out += `
-  <line x1="${boxEdgeX}" y1="${cy}" x2="${panelEdgeX}" y2="${panelEdgeY}" stroke="${color}" stroke-width="2"${dash}/>
-  <rect x="${midX - labelW/2}" y="${midY - 17}" width="${labelW}" height="34" fill="white"/>
-  <text x="${midX}" y="${midY - 5}" text-anchor="middle" font-size="11.5" font-weight="bold" fill="${color}">${esc(g.hilos || '')}</text>
-  <text x="${midX}" y="${midY + 9}" text-anchor="middle" font-size="10.5" fill="${color}">${esc(g.cable || '')}</text>
-  <rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="10" fill="white" stroke="${color}" stroke-width="1.5"${dash}/>
-  <text x="${x + 14}" y="${y + 26}" font-size="13" font-weight="bold" fill="#222">${esc(g.nombre || '')}</text>
-  <text x="${x + 14}" y="${y + 44}" font-size="11" fill="#333">${esc(g.detalle || '')}</text>
-  <text x="${x + 14}" y="${y + 62}" font-size="10.5" fill="${confirmado ? '#27ae60' : '#e67e22'}">${confirmado ? '✓ confirmado' : '⚠ ' + esc(g.nota || 'pendiente de verificar')}</text>${g.nota && confirmado ? `
-  <text x="${x + 14}" y="${y + 80}" font-size="10" fill="#777">${esc(g.nota)}</text>` : ''}`;
+  <path d="M${boxEdgeX},${cy} L${midX},${cy} L${midX},${panelPinY} L${panelEdgeX},${panelPinY}" fill="none" stroke="${col}" stroke-width="1.3"${dash}/>
+  <rect x="${boxEdgeX - 4}" y="${cy - 4}" width="8" height="8" fill="white" stroke="${NEGRO}" stroke-width="1.2"/>
+  <rect x="${panelEdgeX - 4}" y="${panelPinY - 4}" width="8" height="8" fill="white" stroke="${NEGRO}" stroke-width="1.2"/>
+  <text x="${numX}" y="${panelPinY + 3}" text-anchor="${numAnchor}" font-size="9" fill="${NEGRO}">X${pin}</text>
+  ${textoMultilinea(g.hilos, labelMidX, cy - 22, 12, 19, 2, `text-anchor="middle" font-size="9.5" font-weight="bold" fill="${col}"`)}
+  ${textoMultilinea(g.cable, labelMidX, cy + 15, 12, 20, 2, `text-anchor="middle" font-size="8.5" fill="${col}"`)}
+  <rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" fill="white" stroke="${NEGRO}" stroke-width="1.4"${dash}/>
+  <text x="${itemX}" y="${y - 6}" text-anchor="${itemAnchor}" font-size="8" fill="#999">ÍTEM ${pin}</text>
+  ${textoMultilinea(g.nombre, x + 12, y + 20, 14, 28, 1, `font-size="12" font-weight="bold" fill="#111"`)}
+  <line x1="${x + 12}" y1="${y + 30}" x2="${x + boxW - 12}" y2="${y + 30}" stroke="#ccc" stroke-width="1"/>
+  ${textoMultilinea(g.detalle, x + 12, y + 46, 13, 34, 2, `font-size="10" fill="#333"`)}
+  <text x="${x + 12}" y="${y + 84}" font-size="9.5" font-weight="bold" fill="${confirmado ? '#1b7a43' : PENDIENTE}">${confirmado ? '● CONFIRMADO' : '○ PENDIENTE DE VERIFICAR'}</text>
+  ${textoMultilinea(g.nota, x + 12, y + 100, 11, 42, 2, `font-size="8.5" fill="#666"`)}`;
     }
     return out;
   }
 
   const fecha = new Date().toLocaleDateString('es-ES');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Arial,sans-serif">
+  const fechaISO = new Date().toISOString().split('T')[0];
+  const planoNum = `ESQ-CI-${fechaISO}`;
+
+  // Cajetín de plano (esquina inferior derecha, convención de plano técnico real)
+  const tbW = 300, tbH = 150, tbX = W - tbW - 20, tbY = H - marginBottom + 10;
+  const tituloCorto = titulo.length > 42 ? titulo.slice(0, 42) + '…' : titulo;
+  const cajetin = `
+  <rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="white" stroke="${NEGRO}" stroke-width="1.5"/>
+  <text x="${tbX + 10}" y="${tbY + 18}" font-size="9" fill="${GRIS}">PROYECTO</text>
+  <text x="${tbX + 10}" y="${tbY + 31}" font-size="11" font-weight="bold" fill="${NEGRO}">${esc(tituloCorto)}</text>
+  <line x1="${tbX}" y1="${tbY + 40}" x2="${tbX + tbW}" y2="${tbY + 40}" stroke="${NEGRO}" stroke-width="1"/>
+  <text x="${tbX + 10}" y="${tbY + 55}" font-size="9" fill="${GRIS}">Nº PLANO</text>
+  <text x="${tbX + 10}" y="${tbY + 68}" font-size="10.5" fill="${NEGRO}">${esc(planoNum)}</text>
+  <line x1="${tbX + tbW / 2}" y1="${tbY + 40}" x2="${tbX + tbW / 2}" y2="${tbY + tbH}" stroke="${NEGRO}" stroke-width="1"/>
+  <text x="${tbX + tbW / 2 + 10}" y="${tbY + 55}" font-size="9" fill="${GRIS}">REV.</text>
+  <text x="${tbX + tbW / 2 + 10}" y="${tbY + 68}" font-size="10.5" fill="${NEGRO}">1</text>
+  <line x1="${tbX}" y1="${tbY + 80}" x2="${tbX + tbW}" y2="${tbY + 80}" stroke="${NEGRO}" stroke-width="1"/>
+  <text x="${tbX + 10}" y="${tbY + 95}" font-size="9" fill="${GRIS}">FECHA</text>
+  <text x="${tbX + 10}" y="${tbY + 108}" font-size="10.5" fill="${NEGRO}">${esc(fecha)}</text>
+  <text x="${tbX + tbW / 2 + 10}" y="${tbY + 95}" font-size="9" fill="${GRIS}">ESCALA</text>
+  <text x="${tbX + tbW / 2 + 10}" y="${tbY + 108}" font-size="10.5" fill="${NEGRO}">S/E</text>
+  <line x1="${tbX}" y1="${tbY + 120}" x2="${tbX + tbW}" y2="${tbY + 120}" stroke="${NEGRO}" stroke-width="1"/>
+  <text x="${tbX + 10}" y="${tbY + 135}" font-size="9" fill="${GRIS}">ELABORADO POR</text>
+  <text x="${tbX + 10}" y="${tbY + 147}" font-size="10.5" fill="${NEGRO}">Alejandra IA</text>`;
+
+  // Leyenda (esquina inferior izquierda)
+  const lgX = 20, lgY = tbY, lgW = tbX - lgX - 20, lgH = tbH;
+  const leyenda = `
+  <rect x="${lgX}" y="${lgY}" width="${lgW}" height="${lgH}" fill="white" stroke="${NEGRO}" stroke-width="1.5"/>
+  <text x="${lgX + 10}" y="${lgY + 18}" font-size="9" font-weight="bold" fill="${NEGRO}">LEYENDA</text>
+  <line x1="${lgX + 12}" y1="${lgY + 36}" x2="${lgX + 52}" y2="${lgY + 36}" stroke="${NEGRO}" stroke-width="1.3"/>
+  <text x="${lgX + 60}" y="${lgY + 40}" font-size="9.5" fill="${NEGRO}">Dato confirmado (verificado en obra/documentación)</text>
+  <line x1="${lgX + 12}" y1="${lgY + 58}" x2="${lgX + 52}" y2="${lgY + 58}" stroke="${PENDIENTE}" stroke-width="1.3" stroke-dasharray="6 4"/>
+  <text x="${lgX + 60}" y="${lgY + 62}" font-size="9.5" fill="${NEGRO}">Pendiente de verificar en obra</text>
+  <rect x="${lgX + 28}" y="${lgY + 74}" width="8" height="8" fill="white" stroke="${NEGRO}" stroke-width="1.2"/>
+  <text x="${lgX + 60}" y="${lgY + 82}" font-size="9.5" fill="${NEGRO}">Terminal numerado en el bornero del cuadro (Xn)</text>
+  ${descripcion ? `<text x="${lgX + 10}" y="${lgY + 104}" font-size="8.5" fill="${GRIS}">${esc(descripcion.length > 90 ? descripcion.slice(0, 90) + '…' : descripcion)}</text>` : ''}`;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Arial,Helvetica,sans-serif">
   <rect width="${W}" height="${H}" fill="white"/>
-  <rect x="1" y="1" width="${W-2}" height="${H-2}" fill="none" stroke="#333" stroke-width="2"/>
-  <rect x="1" y="1" width="${W-2}" height="36" fill="#1a1a2e"/>
-  <text x="${W/2}" y="24" text-anchor="middle" fill="white" font-size="14" font-weight="bold">🔌 ${esc(titulo)}</text>
-  <text x="10" y="${H-10}" fill="#666" font-size="9">${esc(descripcion || '')} · Alejandra IA · ${fecha}</text>
-  <text x="${W-10}" y="${H-10}" fill="#666" font-size="9" text-anchor="end">Línea continua = confirmado · discontinua = pendiente de verificar</text>
-  ${boxesCol(leftN, colLeftX, 'L')}
-  ${boxesCol(rightN, colRightX, 'R')}
-  <rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" rx="10" fill="#eaf3ee" stroke="#27ae60" stroke-width="2"/>
-  <text x="${panelX + panelW/2}" y="${H/2 - 6}" text-anchor="middle" font-size="14" font-weight="bold" fill="#1b7a43">${esc(panelLabel || 'CUADRO')}</text>
+  <rect x="1" y="1" width="${W-2}" height="${H-2}" fill="none" stroke="${NEGRO}" stroke-width="1.5"/>
+  <rect x="1" y="1" width="${W-2}" height="40" fill="${NEGRO}"/>
+  <text x="20" y="26" fill="white" font-size="13" font-weight="bold" letter-spacing="0.5">${esc(titulo).toUpperCase()}</text>
+  <text x="${W-20}" y="26" fill="#ccc" font-size="9" text-anchor="end">ESQUEMA DE CABLEADO DE CAMPO</text>
+  ${lado(leftN, colLeftX, 'L')}
+  ${lado(rightN, colRightX, 'R')}
+  <rect x="${panelX}" y="${panelY}" width="${panelW}" height="${panelH}" fill="#f4f4f4" stroke="${NEGRO}" stroke-width="2"/>
+  <rect x="${panelX}" y="${panelY}" width="${panelW}" height="26" fill="${NEGRO}"/>
+  <text x="${panelX + panelW/2}" y="${panelY + 18}" text-anchor="middle" font-size="11" font-weight="bold" fill="white">${esc((panelLabel || 'CUADRO').toUpperCase())}</text>
+  <text x="${panelX + panelW/2}" y="${panelY + panelH/2 + 10}" text-anchor="middle" font-size="9.5" fill="${GRIS}">BORNERO TB1</text>
+  <text x="${panelX + panelW/2}" y="${panelY + panelH/2 + 24}" text-anchor="middle" font-size="9.5" fill="${GRIS}">${pin} terminales</text>
+  ${leyenda}
+  ${cajetin}
 </svg>`;
+}
+
+// ── Validador de estilo CAD para SVG redactado a mano (MODO B) ───────────────
+// ALEJANDRA-ESQUEMA-07 (15/09/2026): Adrián -- "y si no lo escribe en CAD? [...]
+// como los ingenieros de verdad" -- las CONVENCIONES DE DIBUJO TÉCNICO del prompt
+// (esquinas rectas, cajetín, leyenda, texto partido a mano) son solo instrucciones;
+// nada obligaba a que el modelo las siguiera de verdad. Mismo principio que
+// gruposInvalidos en MODO C: comprobar de verdad en servidor antes de aceptar el
+// SVG, no confiar en que el prompt baste -- si no cumple, se rechaza con un motivo
+// concreto para que el modelo lo corrija, igual que un ingeniero que revisa su
+// propio plano contra una checklist antes de entregarlo. Heurístico, no perfecto
+// (no hay forma barata de parsear SVG de verdad aquí), pero atrapa los fallos
+// reales que ya vimos: esquinas redondeadas, sin cajetín/leyenda, texto sin partir.
+function validarEstiloCAD(svgContent) {
+  const problemas = [];
+  const svg = String(svgContent || '');
+
+  const rectRedondeados = svg.match(/<rect[^>]*\brx="([1-9]\d*)"/g) || [];
+  if (rectRedondeados.length > 0) {
+    problemas.push('usa esquinas redondeadas (rx>0) en al menos un rectángulo -- un plano técnico usa esquinas rectas (rx="0" o sin rx), las redondeadas se ven como interfaz de app, no como CAD.');
+  }
+
+  if (!/PROYECTO|Nº\s*PLANO|N°\s*PLANO/i.test(svg)) {
+    problemas.push('falta el cajetín de plano (recuadro con PROYECTO / Nº PLANO / FECHA / REV. / ELABORADO POR en una esquina) -- todo esquema técnico real lo lleva.');
+  }
+
+  if (!/LEYENDA/i.test(svg)) {
+    problemas.push('falta la leyenda que explique las convenciones visuales usadas (qué significa cada tipo de línea, símbolo, color).');
+  }
+
+  // Texto sin partir: cualquier <text>...</text> de más de 70 caracteres es
+  // casi con seguridad una frase larga escrita como una sola línea sin envolver
+  // -- el umbral es generoso a propósito para no disparar con cabeceras/pies
+  // legítimamente largos, pero sí atrapa el fallo real (una nota/descripción
+  // entera en un solo <text>, que se sale de su caja o pisa al vecino).
+  const textos = [...svg.matchAll(/<text\b[^>]*>([^<]*)<\/text>/g)].map(m => m[1]);
+  const textoLargo = textos.find(t => t.length > 70);
+  if (textoLargo) {
+    problemas.push(`al menos un <text> tiene ${textoLargo.length} caracteres en una sola línea ("${textoLargo.slice(0, 40)}…") -- pártelo en varias líneas <text> cortas (mismo x, distinto y), nunca dejes una frase larga sin envolver.`);
+  }
+
+  return problemas;
 }
 
 export {
@@ -1106,4 +1250,5 @@ export {
   construirConsultaMemoriaGobernada,
   construirQueryAprendizajesEmpresa,
   construirSVGCableadoInstrumentacion,
+  validarEstiloCAD,
 };

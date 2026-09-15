@@ -59,6 +59,7 @@ import {
   construirCacheKeyNormativa,
   construirQueryAprendizajesEmpresa,
   construirSVGCableadoInstrumentacion,
+  validarEstiloCAD,
 } from './lib.js';
 // Cerebro v2 (F-1.3/ADR-0020): nucleo-cognitivo dividido en subcarpetas locales.
 // Wrangler bundlea el import directamente — no requiere npm.
@@ -1089,6 +1090,41 @@ lugar:
   Usa el MODO C de generar_esquema_electrico (tipo="cableado_instrumentacion" +
   "grupos") — ver ALEJANDRA-ESQUEMA-05 más abajo.
 
+CONVENCIONES DE DIBUJO TÉCNICO — ESTILO CAD (ALEJANDRA-ESQUEMA-07, 15/09/2026): Adrián,
+tras ver la primera versión (cajas redondeadas, líneas diagonales de color, sin cajetín):
+"no me gustan, no parecen profesionales, parecen dibujos... tenemos que usar como si fuera
+CAD", comparándolo con un plano real de ingeniería que había mandado. Y después, tras la
+segunda versión (con cajetín pero con texto cortado/solapado): "se ve fatal el plano... se
+cortan las letras y solapan" — y finalmente: "vamos a tener que dar un experto Alejandra
+para que sepa diseñar en CAD". Esto ES ese experto: aplica estas convenciones SIEMPRE que
+redactes un SVG a mano (MODO B), no solo para sondas/instrumentación:
+- Esquinas RECTAS (rx=0). Nada de bordes redondeados — eso lee como interfaz de app, no
+  como plano técnico.
+- Tendido ORTOGONAL (ángulo recto: horizontal-vertical-horizontal), NUNCA una línea
+  diagonal entre dos puntos. Es la convención universal de un plano de cableado/circuito
+  real — una diagonal se ve como un boceto a mano alzada.
+- Paleta: blanco de fondo, negro/gris oscuro (#1a1a1a) para TODA la estructura (cajas,
+  líneas, texto). Reserva un ÚNICO color de acento (ámbar #b5651d o similar) para lo
+  incierto/pendiente de confirmar — nunca un color distinto por categoría o tipo de
+  elemento, eso se ve como una app coloreada, no como un plano.
+- Cualquier punto de conexión a un cuadro/panel es un TERMINAL: dibújalo como un pequeño
+  cuadrado en el borde, numerado secuencialmente (X1, X2, X3...), como un bornero real.
+- Cajetín de plano obligatorio (esquina inferior derecha): PROYECTO, Nº PLANO (genera una
+  referencia tipo "ESQ-{tipo}-{fecha}"), FECHA, REV. (empieza en "1"), ESCALA ("S/E" si no
+  aplica escala real), ELABORADO POR ("Alejandra IA").
+- Leyenda formal obligatoria (esquina inferior izquierda o donde quepa): explica CADA
+  convención visual que uses (qué significa línea continua vs discontinua, qué es un
+  terminal numerado, etc.) — nunca asumas que se entiende sin decirlo.
+- CRÍTICO — SVG NO envuelve texto solo, tú tienes que partirlo a mano: cualquier etiqueta
+  o descripción larga que escribas como un único elemento <text> se saldrá de su caja o
+  pisará al elemento vecino si no la partes tú misma en varias líneas <text> cortas (una
+  por cada "y" distinto, con el mismo "x"). Regla de oro: ninguna línea de texto de más de
+  ~30-35 caracteres dentro de una caja de ~240px de ancho a tamaño de letra normal (10-12).
+  Antes de dar el SVG por bueno, revisa mentalmente cada campo de texto largo (descripción,
+  notas, nombres largos) y pártelo en 2-3 líneas cortas por palabras completas — nunca
+  dejes una frase larga en una sola línea confiando en que "se ajustará sola", porque no lo
+  hace. Esto fue exactamente el bug real que motivó esta sección.
+
 ALEJANDRA-ESQUEMA-05 (15/09/2026): "cableado de varios grupos de señal hasta un panel
 central" es un caso tan común (sondas de temperatura/caudal/presión, contactos secos de
 alarma, buses de comunicación... todo hacia un mismo cuadro BMS/PLC) que tiene su propio
@@ -1901,16 +1937,16 @@ MODO A — COMPONENTES (solo arranques de motor estándar, DOL/Y-Δ):
   El esquema SVG se genera automáticamente en el servidor con símbolos IEC 60617.
   Ejemplo: tipo="potencia_motor", componentes={"contactor":"KM1","motor":"M1","guardamotor":"QF1","motor_kw":"5.5","tension_red":"400V","tension_mando":"230V"}
 
-MODO C — GRUPOS (cableado de sondas/instrumentación/cualquier señal de campo que confluye en un panel central -- BMS, cuadro de control, PLC...):
-  Llama a la tool con "tipo" = "cableado_instrumentacion" y pasa "grupos" (uno por cada tipo de sonda/señal) + opcionalmente "panel_label". El esquema (panel central + cada grupo alrededor, con hilos/cable en cada línea) se genera automáticamente en el servidor -- NUNCA redactes tú el SVG para esto, ni siquiera si te parece sencillo: usa SIEMPRE este modo cuando el esquema sea "cablear varias cosas hasta un cuadro/panel". Cada grupo con confirmado=true/false según si el dato viene de una fuente verificada en esta conversación (foto de etiqueta, ficha técnica real, documento subido) o es una estimación -- nunca pongas confirmado=true si no lo has verificado de verdad (ver REGLA DE HONESTIDAD TÉCNICA).
+MODO C — GRUPOS (CUALQUIER esquema con forma "N dispositivos de campo → 1 panel/controlador central": sondas/instrumentación a un BMS, lectores de control de accesos a su controladora, cámaras a un NVR, detectores de incendio a su central, tomas de red a un switch/rack, cualquier bus/loop con un maestro... -- el nombre "cableado_instrumentacion" es histórico, el uso es general, IGUAL que "potencia_motor" no es solo para bombas):
+  Llama a la tool con "tipo" = "cableado_instrumentacion" y pasa "grupos" (uno por cada tipo de dispositivo/señal) + opcionalmente "panel_label" (usa el nombre real del panel: "CUADRO BMS", "CONTROLADORA ACCESOS", "NVR", "RACK PRINCIPAL"...). El esquema (panel central + cada grupo alrededor, con hilos/cable/terminales numerados en cada línea, estilo CAD real) se genera automáticamente en el servidor -- NUNCA redactes tú el SVG a mano para esta forma de esquema, ni siquiera si te parece sencillo o de un dominio "no eléctrico": un LLM dibujando SVG a mano es poco fiable con coordenadas y con el texto (se corta, se solapa, se inventa componentes) -- ver ALEJANDRA-ESQUEMA-07. Usa SIEMPRE este modo cuando el esquema sea "cablear varias cosas hasta un cuadro/panel/controlador", sea cual sea el dominio. Cada grupo con confirmado=true/false según si el dato viene de una fuente verificada en esta conversación (foto de etiqueta, ficha técnica real, documento subido) o es una estimación -- nunca pongas confirmado=true si no lo has verificado de verdad (ver REGLA DE HONESTIDAD TÉCNICA).
 
-MODO B — SVG MANUAL (para TODO lo demás: eléctrico no-DOL, control de accesos, red, CCTV, mecánico que no sea "varios grupos a un panel"...):
-  Redacta el SVG COMPLETO tú misma, palabra por palabra, ANTES de llamar a esta tool, y pásalo ya terminado en "svg_content". Fondo blanco, cuadrícula 40px. Símbolos IEC 60617 solo si es un circuito eléctrico; para cualquier otro dominio, rectángulos etiquetados + líneas de conexión con flecha y el nombre real del borne en cada extremo. NUNCA llames a esta tool en MODO B sin "svg_content" ya relleno — sin él, la llamada falla y no hay forma de recuperarla en el mismo turno.`,
+MODO B — SVG MANUAL (ÚLTIMO RECURSO, solo para lo que de verdad NO tenga forma de "N dispositivos a 1 panel": eléctrico no-DOL con topología propia, un plano con varios paneles/controladores entre sí, mecánico con flujo de proceso...):
+  Redacta el SVG COMPLETO tú misma, palabra por palabra, ANTES de llamar a esta tool, y pásalo ya terminado en "svg_content". Sigue las CONVENCIONES DE DIBUJO TÉCNICO — ESTILO CAD del módulo de esquemas (esquinas rectas, routing ortogonal, terminales numerados, cajetín de plano, leyenda, texto partido a mano en líneas cortas). NUNCA llames a esta tool en MODO B sin "svg_content" ya relleno — sin él, la llamada falla y no hay forma de recuperarla en el mismo turno.`,
   input_schema: {
     type: 'object',
     properties: {
       titulo:      { type: 'string', description: 'Título del esquema (ej: "Arranque DOL motor bomba 1")' },
-      tipo:        { type: 'string', enum: ['unifiliar','multifilar','cuadro','potencia_motor','mando_motor','alumbrado','tierra','control_plc','cableado_instrumentacion','personalizado'], description: 'Tipo de esquema. Usa "cableado_instrumentacion" (MODO C, con "grupos") para sondas/instrumentación hacia un panel central.' },
+      tipo:        { type: 'string', enum: ['unifiliar','multifilar','cuadro','potencia_motor','mando_motor','alumbrado','tierra','control_plc','cableado_instrumentacion','personalizado'], description: 'Tipo de esquema. Usa "cableado_instrumentacion" (MODO C, con "grupos") para CUALQUIER esquema de "N dispositivos de campo a 1 panel central" -- sondas, control de accesos, CCTV, alarmas, red... no solo instrumentación pese al nombre.' },
       componentes: {
         type: 'object',
         description: 'Componentes del circuito para generación automática (MODO A). Campos opcionales: guardamotor, contactor, rele_termico, motor, fusible_mando, pulsador_parada, pulsador_marcha, piloto, tension_mando, tension_red, motor_kw',
@@ -9439,6 +9475,10 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       try {
         const titulo = (input.titulo || 'Esquema eléctrico').trim();
         let svgContent = (input.svg_content || '').trim();
+        // ALEJANDRA-ESQUEMA-07: si vino de MODO B (el modelo lo redactó a mano), hay que
+        // pasarlo por validarEstiloCAD() más abajo -- MODO A/C lo genera el servidor y
+        // SIEMPRE cumple por construcción (ni falta pasarlo por la checklist).
+        const esModoBManual = !!svgContent;
         const descripcion = (input.descripcion || '').trim();
         const tipo = input.tipo || 'personalizado';
         const comp = input.componentes || {};
@@ -9675,6 +9715,20 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         }
 
         if (!svgContent.includes('<svg')) return JSON.stringify({ ok: false, error: 'svg_content no contiene un elemento <svg> válido.' });
+
+        // ALEJANDRA-ESQUEMA-07 (15/09/2026): Adrián -- "y si no lo escribe en CAD?" --
+        // checklist real en servidor antes de aceptar un SVG redactado a mano (MODO B),
+        // igual que gruposInvalidos valida MODO C. Si no cumple, se rechaza con el motivo
+        // exacto para que se corrija -- nunca se guarda un plano que no pasa la revisión.
+        if (esModoBManual) {
+          const problemasCAD = validarEstiloCAD(svgContent);
+          if (problemasCAD.length > 0) {
+            return JSON.stringify({
+              ok: false,
+              error: `El SVG no cumple las convenciones de dibujo técnico (estilo CAD) -- corrígelo y vuelve a llamar a la tool:\n- ${problemasCAD.join('\n- ')}`
+            });
+          }
+        }
 
         const fecha = new Date().toISOString().split('T')[0];
         const safeTitle = titulo.replace(/[^a-zA-Z0-9_\-áéíóúñÁÉÍÓÚÑ ]/g, '_').substring(0, 50);

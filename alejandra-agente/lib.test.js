@@ -39,6 +39,7 @@ import {
   RANGO_CONFIANZA,
   construirCacheKeyNormativa,
   construirSVGCableadoInstrumentacion,
+  validarEstiloCAD,
 } from './lib.js';
 
 describe('aislamiento del contexto del chat', () => {
@@ -2407,17 +2408,22 @@ describe('construirSVGCableadoInstrumentacion — ALEJANDRA-ESQUEMA-05', () => {
     expect(svg).not.toContain('NaN');
   });
 
-  it('un grupo confirmado usa línea continua (sin stroke-dasharray) y marca "✓ confirmado"', () => {
+  it('un grupo confirmado usa línea continua (su caja no lleva stroke-dasharray) y marca "● CONFIRMADO"', () => {
+    // La leyenda SIEMPRE incluye una línea de ejemplo discontinua (para explicar qué
+    // significa), así que no basta con buscar "stroke-dasharray" en todo el SVG --
+    // hay que comprobar específicamente que la caja de ESTE grupo confirmado no la lleva.
     const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', [gruposEjemplo[0]]);
-    expect(svg).toContain('✓ confirmado');
-    expect(svg).not.toContain('stroke-dasharray');
+    expect(svg).toContain('● CONFIRMADO');
+    expect(svg).toContain('stroke-width="1.4"/>'); // caja del grupo: continua, sin dasharray
+    expect(svg).not.toMatch(/stroke-width="1\.4" stroke-dasharray/); // la caja NO es discontinua
   });
 
   it('un grupo NO confirmado usa línea discontinua y muestra la nota de qué falta verificar', () => {
     const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', [gruposEjemplo[3]]);
-    expect(svg).toContain('stroke-dasharray="7 4"');
-    expect(svg).toContain('⚠ confirmar con integrador');
-    expect(svg).not.toContain('✓ confirmado');
+    expect(svg).toContain('stroke-dasharray="6 4"');
+    expect(svg).toContain('○ PENDIENTE DE VERIFICAR');
+    expect(svg).toContain('confirmar con integrador');
+    expect(svg).not.toContain('● CONFIRMADO');
   });
 
   it('escapa XML en texto del usuario -- nunca rompe el documento SVG con < > & sueltos', () => {
@@ -2458,5 +2464,88 @@ describe('construirSVGCableadoInstrumentacion — ALEJANDRA-ESQUEMA-05', () => {
     const cuerpo = worker.slice(ini, fin);
     expect(cuerpo).toContain('gruposInvalidos');
     expect(cuerpo).toMatch(/!g\.nombre \|\| !g\.hilos \|\| !g\.cable/);
+  });
+
+  // ALEJANDRA-ESQUEMA-07 (15/09/2026): Adrián -- "se ve fatal el plano... se cortan
+  // las letras y solapan" -- un campo largo debe partirse en varias líneas <text>
+  // dentro del hueco disponible, nunca quedarse en una sola línea que se salga.
+  it('un texto largo (nota/detalle) se envuelve en varias líneas <text>, no en una que se salga', () => {
+    const grupoTextoLargo = {
+      nombre: 'Grupo de prueba', detalle: 'Bus de comunicación (Modbus/BACnet asumido) con cable apantallado especial',
+      hilos: '3 hilos', cable: 'D+/D-/GND, 3x0,5mm² apantallado LSZH y tierra equipotencial aparte',
+      confirmado: false, nota: 'protocolo y topología pendientes de confirmar con el integrador del fabricante'
+    };
+    const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', [grupoTextoLargo]);
+    // Cada línea envuelta es su propio <text> -- ninguna debe contener la frase completa entera.
+    expect(svg).not.toContain('>' + grupoTextoLargo.detalle + '<');
+    expect(svg).not.toContain('>' + grupoTextoLargo.nota + '<');
+    expect(svg).not.toContain('>' + grupoTextoLargo.cable + '<');
+    // Pero el contenido real sigue estando (repartido), no se pierde información.
+    expect(svg).toContain('Bus de comunicación');
+    expect(svg).toContain('confirmar con el');
+  });
+
+  it('un texto que no cabe ni envuelto en el máximo de líneas se trunca con "…", nunca se deja sin cortar', () => {
+    const grupo = { nombre: 'X', detalle: 'X', hilos: '2 hilos', cable: 'X', confirmado: true,
+      nota: 'Esta nota es deliberadamente muchísimo más larga de lo que cabría en dos líneas cortas dentro de la caja del esquema, para forzar el truncado' };
+    const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', [grupo]);
+    expect(svg).toContain('…');
+    expect(svg).not.toContain(grupo.nota); // el texto completo sin cortar nunca debe aparecer
+  });
+});
+
+// ── ALEJANDRA-ESQUEMA-07 (15/09/2026) — validarEstiloCAD ─────────────────────
+// Adrián: "y si no lo escribe en CAD?" -- checklist real en servidor para el SVG
+// que el modelo redacta a mano (MODO B), en vez de confiar solo en el prompt.
+describe('validarEstiloCAD — ALEJANDRA-ESQUEMA-07', () => {
+  const svgBueno = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect x="10" y="10" width="100" height="50" fill="white" stroke="#000"/>
+  <text x="20" y="30">PROYECTO</text>
+  <text x="20" y="60">Nº PLANO ESQ-1</text>
+  <text x="20" y="90">LEYENDA</text>
+  <text x="20" y="120">Línea continua = confirmado</text>
+</svg>`;
+
+  it('un SVG con cajetín, leyenda, esquinas rectas y texto corto no tiene problemas', () => {
+    expect(validarEstiloCAD(svgBueno)).toEqual([]);
+  });
+
+  it('rechaza esquinas redondeadas (rx>0) -- se ve como interfaz de app, no como CAD', () => {
+    const svg = svgBueno.replace('stroke="#000"/>', 'stroke="#000" rx="8"/>');
+    const problemas = validarEstiloCAD(svg);
+    expect(problemas.some(p => /esquinas redondeadas/i.test(p))).toBe(true);
+  });
+
+  it('permite rx="0" explícito (no es "redondeado", es la forma explícita de decir esquina recta)', () => {
+    const svg = svgBueno.replace('stroke="#000"/>', 'stroke="#000" rx="0"/>');
+    const problemas = validarEstiloCAD(svg);
+    expect(problemas.some(p => /esquinas redondeadas/i.test(p))).toBe(false);
+  });
+
+  it('rechaza si falta el cajetín de plano (PROYECTO / Nº PLANO)', () => {
+    const svg = svgBueno.replace('<text x="20" y="30">PROYECTO</text>', '').replace('<text x="20" y="60">Nº PLANO ESQ-1</text>', '');
+    const problemas = validarEstiloCAD(svg);
+    expect(problemas.some(p => /cajetín/i.test(p))).toBe(true);
+  });
+
+  it('rechaza si falta la leyenda', () => {
+    const svg = svgBueno.replace('<text x="20" y="90">LEYENDA</text>', '');
+    const problemas = validarEstiloCAD(svg);
+    expect(problemas.some(p => /leyenda/i.test(p))).toBe(true);
+  });
+
+  it('rechaza un <text> largo sin partir (más de 70 caracteres en una sola línea)', () => {
+    const fraseLarga = 'Esta es una frase deliberadamente muy larga que un modelo podría escribir de un tirón sin partirla en líneas cortas como se le pidió';
+    const svg = svgBueno.replace('</svg>', `<text x="20" y="150">${fraseLarga}</text></svg>`);
+    const problemas = validarEstiloCAD(svg);
+    expect(problemas.some(p => /pártelo en varias líneas/i.test(p))).toBe(true);
+  });
+
+  it('worker.js valida SOLO el MODO B (svg_content manual), nunca el SVG que genera el propio servidor', () => {
+    const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(worker).toContain('esModoBManual');
+    expect(worker).toContain('validarEstiloCAD(svgContent)');
+    // La condición debe depender de que input.svg_content viniera relleno, no del tipo.
+    expect(worker).toMatch(/const esModoBManual = !!svgContent;/);
   });
 });
