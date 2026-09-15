@@ -1550,13 +1550,18 @@ describe('F-4.4 ejecutarToolConTelemetria wiring', () => {
     expect(worker).toContain('registrarUsoTool(env, {');
   });
 
-  it('envuelve exactamente los 4 paths con tráfico usuario', () => {
+  it('envuelve exactamente los 5 paths con tráfico usuario', () => {
     // F-6.1 / ADR-0022 (2026-08-12): delegar_tarea añade un 4º path -- el loop
     // interno del ayudante también ejecuta tools por encargo de un usuario real,
     // así que también debe quedar telemetrado (antes eran 3: no-stream, stream
     // y un tercer path histórico).
+    // BUG-GUARDAR-NARRADO-03 (15/09/2026): verificarYReintentarSiNecesario añade
+    // un 5º path -- el reintento automático de una acción narrada sin ejecutar
+    // también es tráfico de un usuario real (solo se dispara cuando el propio
+    // Alejandra dijo que iba a escribir algo y no lo hizo), así que igual debe
+    // quedar telemetrado como el resto.
     const llamadas = worker.match(/await ejecutarToolConTelemetria\(/g) || [];
-    expect(llamadas.length).toBe(4);
+    expect(llamadas.length).toBe(5);
   });
 
   it('mantiene exactamente 2 llamadas directas a ejecutarTool (wrapper interno + reflexion interno)', () => {
@@ -1725,8 +1730,12 @@ describe('ADR-0020 rebanada 3 — piloto N1 de lectura (ARC-020, enmienda 2)', (
     expect(src).toMatch(/esInvocacionN1DeLectura\(toolName, input\)/);
     // Los 3 call sites (chat normal, streaming, recuperación de tool-use) deben
     // seguir invocando la función renombrada, no la N0 original, y pasar tb.input.
+    // BUG-GUARDAR-NARRADO-03 (15/09/2026): 4º call site en
+    // verificarYReintentarSiNecesario -- el reintento automático de una acción
+    // narrada sin ejecutar pasa por el mismo control cognitivo que cualquier otra
+    // tool real, nunca se salta la evaluación de permisos.
     const llamadas = src.match(/await evaluarInvocacionCognitiva\(env, tb\.name, tb\.input, tools/g) || [];
-    expect(llamadas.length).toBe(3);
+    expect(llamadas.length).toBe(4);
     expect(src).not.toMatch(/evaluarInvocacionCognitivaN0/);
   });
 });

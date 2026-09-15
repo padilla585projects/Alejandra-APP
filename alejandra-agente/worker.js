@@ -6265,7 +6265,10 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     } else if (!textoRaw) {
       textoRaw = 'No he podido procesar tu mensaje. ¿Puedes reformularlo?';
     }
-    const textoFinal = verificarAccionesAfirmadas(textoRaw, herramientasUsadas, messages);
+    const textoFinal = await verificarYReintentarSiNecesario(env, textoRaw, herramientasUsadas, messages, {
+      tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
+      send: undefined, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol
+    });
 
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
 
@@ -6522,10 +6525,12 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       // ALEJANDRA-ESQUEMA-02: verificar ANTES de enviar -- esta rama manda el texto de
       // una vez (no token a token), así que aún se puede corregir antes de que el
       // usuario lo vea, a diferencia del streaming real de la rama de abajo.
-      textoFinal = verificarAccionesAfirmadas(
+      textoFinal = await verificarYReintentarSiNecesario(env,
         respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(),
         herramientasUsadas,
-        messages
+        messages,
+        { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
+          send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol }
       );
       await send({ type: 'text', texto: textoFinal });
     } else {
@@ -6570,10 +6575,12 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         // Fallback: usar respuesta ya obtenida si el stream falla
         // ALEJANDRA-ESQUEMA-02: mismo motivo que la rama de arriba -- se envía de una
         // vez, así que verificar antes de mandarlo sí evita que el usuario lo vea.
-        textoFinal = verificarAccionesAfirmadas(
+        textoFinal = await verificarYReintentarSiNecesario(env,
           respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta',
           herramientasUsadas,
-          messages
+          messages,
+          { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
+            send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol }
         );
         await send({ type: 'text', texto: textoFinal });
       }
@@ -6583,13 +6590,18 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // se aplicó antes del send() (así el usuario nunca llega a verlo) y aquí es
     // idempotente. Para el streaming real en vivo (token a token) es la ÚNICA pasada --
     // el usuario ya vio el texto sin corregir en pantalla, imposible de deshacer sin
-    // renunciar al streaming en tiempo real; si detecta el problema aquí, al menos se
-    // corrige lo que se GUARDA (para no contaminar el historial futuro con el enlace
-    // falso) y se manda un aviso aparte para que quede constancia en el propio chat.
+    // renunciar al streaming en tiempo real. BUG-GUARDAR-NARRADO-03 (15/09/2026): antes
+    // esto solo avisaba y le devolvía el problema al usuario ("pídemelo otra vez"); ahora
+    // verificarYReintentarSiNecesario() intenta la acción real una vez más aquí mismo --
+    // el usuario ve el texto original sin corregir seguido del resultado real (o, si el
+    // reintento también falla, el mismo aviso honesto de siempre.
     const textoAntesDeVerificar = textoFinal;
-    textoFinal = verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages);
+    textoFinal = await verificarYReintentarSiNecesario(env, textoFinal, herramientasUsadas, messages,
+      { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
+        send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol }
+    );
     if (textoFinal !== textoAntesDeVerificar) {
-      await send({ type: 'text', texto: '\n\n⚠️ Corrección: lo que acabo de describir no llegué a generarlo de verdad -- no ejecuté la herramienta real. Pídemelo otra vez y lo hago ahora.' });
+      await send({ type: 'text', texto: '\n\n' + textoFinal });
     }
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
 
@@ -6757,6 +6769,64 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
     return textoFinal + '\n\n⚠️ *Nota: Esta respuesta afirma haber realizado un cambio pero no se ejecutó ninguna tool de escritura en este turno. Si esperabas que algo se modificara, pídeme que lo haga explícitamente.*';
   }
   return textoFinal;
+}
+
+// ── Reintento automático de acción narrada sin ejecutar ──────────────────────
+// BUG-GUARDAR-NARRADO-03 (15/09/2026): Adrián, tras ver que el fix de arriba solo le
+// devolvía el problema al usuario ("pídemelo otra vez y lo hago ahora"): "si no [lo hace
+// ella sola] no me vale de nada. Si yo le digo que me haga algo es porque necesito que lo
+// haga". verificarAccionesAfirmadas() detecta el fallo pero no lo resuelve -- esta función
+// sí: si detecta que se narró una acción de escritura sin ejecutarla, intenta la acción
+// real UNA vez más (instrucción correctiva + nueva llamada al modelo con tools + ejecución
+// real de la tool que devuelva, mismo pipeline que el resto del turno) antes de rendirse.
+// Solo si ese reintento TAMBIÉN falla en llamar a una tool de escritura real cae al mensaje
+// honesto de siempre -- nunca un segundo reintento silencioso, para no doblar coste ni
+// arriesgar un bucle si el modelo insiste en no llamar a la tool.
+async function verificarYReintentarSiNecesario(env, textoOriginal, herramientasUsadas, messages, ctx) {
+  const textoVerificado = verificarAccionesAfirmadas(textoOriginal, herramientasUsadas, messages);
+  if (textoVerificado === textoOriginal) return textoVerificado; // nada que corregir, camino normal
+
+  const { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto, send,
+          codigosConfirmados, codigosConfirmadosEnvio, departamento, rol } = ctx;
+
+  try {
+    messages.push({ role: 'assistant', content: [{ type: 'text', text: textoOriginal }] });
+    messages.push({ role: 'user', content: [{ type: 'text', text:
+      '[INSTRUCCIÓN: acabas de describir una acción de escritura (guardar/generar/registrar/subir...) sin llamar a la herramienta real -- el turno se cortó en una narración vacía. Ejecuta AHORA MISMO, en esta respuesta, la herramienta real correspondiente con los mismos datos que acabas de describir. No vuelvas a narrar el proceso en texto: llama a la tool directamente, sin describirlo antes.]'
+    }] });
+
+    const respReintento = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
+    const toolBlocks = (respReintento.content || []).filter(b => b.type === 'tool_use');
+    if (!toolBlocks.length) return textoVerificado; // el reintento tampoco llamó a nada real
+
+    messages.push({ role: 'assistant', content: respReintento.content });
+    const toolResults = [];
+    let algunaEscrituraReal = false;
+    for (const tb of toolBlocks) {
+      const t0 = Date.now();
+      herramientasUsadas.push({ nombre: tb.name, input: tb.input });
+      if (send) await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
+      const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, experto);
+      const resultado = control.permitida
+        ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
+        : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
+      if (clasificarResultadoTool(resultado)) algunaEscrituraReal = true;
+      const previewText = typeof resultado === 'string' && resultado.startsWith('[{') ? '(imagen analizada)' : String(resultado).substring(0, 200);
+      if (send) await send({ type: 'tool_end', nombre: tb.name, preview: previewText, duracion_ms: Date.now() - t0 });
+      toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content: parseToolResultContent(resultado) });
+    }
+    messages.push({ role: 'user', content: toolResults });
+
+    if (!algunaEscrituraReal) return textoVerificado; // reintentó de verdad pero también falló
+
+    const respFinal = await llamarExperto(env, messages, [], expert, systemPrompt, usuario_id);
+    const textoFinalReintento = (respFinal.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    const textoVerificadoOtraVez = verificarAccionesAfirmadas(textoFinalReintento || 'Hecho ✅', herramientasUsadas, messages);
+    return `⚠️ Se me había quedado a medias — reintentando de verdad:\n\n${textoVerificadoOtraVez}`;
+  } catch (err) {
+    console.error('[verificarYReintentarSiNecesario] error en reintento:', err.message);
+    return textoVerificado; // ante cualquier fallo del reintento, el mensaje honesto de siempre
+  }
 }
 
 // ── Parsear resultado de tool para soporte de visión ─────────────────────────
