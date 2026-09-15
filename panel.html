@@ -9848,15 +9848,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </div>
           <div class="modal-footer">
             <button class="btn" onclick="memCerrarDetalle()">Cerrar</button>
+            <button class="btn btn-secondary" id="memDetalleEditarBtn" onclick="memEditarDesdeDetalle()">✏️ Editar</button>
             <button class="btn btn-danger" id="memDetalleBorrarBtn" onclick="memBorrarDesdeDetalle()">🗑️ Borrar</button>
           </div>
         </div>
       </div>
 
-      <!-- Modal crear nota -->
+      <!-- Modal crear/editar nota (MEMORIA-EDITAR-01, 15/09/2026: mismo modal para ambas
+           acciones -- memAbrirModalNota(nota) lo precarga y pasa a modo edición si recibe
+           una nota, memGuardarNota() decide POST/PUT según _memEditandoId). -->
       <div id="memModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)memCerrarModal()">
         <div class="modal" style="max-width:560px">
-          <div class="modal-header"><h3>Nueva nota de memoria</h3><span class="modal-close" onclick="memCerrarModal()">✕</span></div>
+          <div class="modal-header"><h3 id="memModalTitulo">Nueva nota de memoria</h3><span class="modal-close" onclick="memCerrarModal()">✕</span></div>
           <div class="modal-body">
             <div class="form-row">
               <div class="form-group"><label>Tipo</label><select id="memTipo">
@@ -16157,16 +16160,36 @@ function memIrANota(slug) {
   setTimeout(() => { el.style.boxShadow = ''; }, 1500);
 }
 
-function memAbrirModalNota() {
-  document.getElementById('memTipo').value = 'contexto';
-  document.getElementById('memImportancia').value = '1';
-  document.getElementById('memTitulo').value = '';
-  document.getElementById('memContenido').value = '';
+// MEMORIA-EDITAR-01 (15/09/2026): null = modo "nueva nota" (POST); con id = modo "editar"
+// (PUT a ese id). Los enlaces_a de una nota existente vienen ya como objetos {slug,...} en
+// nota.relacionado (solo salientes+entrantes juntos, sin distinguir dirección) -- para
+// precargar el campo de edición basta con los backlinks que YA sabemos que son salientes:
+// como el backend no separa esa dirección en el listado, se precarga vacío y el usuario
+// vuelve a escribir los que quiera mantener (evita reconstruir mal la lista y borrar
+// enlaces por error).
+let _memEditandoId = null;
+
+function memAbrirModalNota(nota) {
+  _memEditandoId = nota ? nota.id : null;
+  document.getElementById('memModalTitulo').textContent = nota ? 'Editar nota de memoria' : 'Nueva nota de memoria';
+  document.getElementById('memTipo').value = nota ? nota.tipo : 'contexto';
+  document.getElementById('memImportancia').value = nota ? nota.importancia : '1';
+  document.getElementById('memTitulo').value = nota ? nota.titulo : '';
+  document.getElementById('memContenido').value = nota ? nota.contenido : '';
   document.getElementById('memEnlacesA').value = '';
   document.getElementById('memModal').style.display = 'flex';
 }
 
+function memEditarDesdeDetalle() {
+  if (_memDetalleAbiertoId == null) return;
+  const nota = _memNotas.find(n => n.id === _memDetalleAbiertoId);
+  if (!nota) { toast ? toast('Esa nota no está cargada (recarga la memoria)', 'warn') : null; return; }
+  memCerrarDetalle();
+  memAbrirModalNota(nota);
+}
+
 function memCerrarModal() {
+  _memEditandoId = null;
   document.getElementById('memModal').style.display = 'none';
 }
 
@@ -16181,12 +16204,17 @@ async function memGuardarNota() {
     importancia: parseInt(document.getElementById('memImportancia').value, 10) || 1,
     enlaces_a,
   };
+  const editando = _memEditandoId != null;
   try {
-    const res = await fetch(`${MEM_API}/vault`, { method: 'POST', headers: _memHeaders(), body: JSON.stringify(body) });
+    const res = await fetch(`${MEM_API}/vault${editando ? '?id=' + _memEditandoId : ''}`, {
+      method: editando ? 'PUT' : 'POST',
+      headers: _memHeaders(),
+      body: JSON.stringify(body)
+    });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
     memCerrarModal();
-    toast ? toast(`Guardado (slug: ${data.slug})`, 'ok') : null;
+    toast ? toast(editando ? 'Nota actualizada' : `Guardado (slug: ${data.slug})`, 'ok') : null;
     await memCargarVault();
   } catch (e) {
     toast ? toast('Error guardando: ' + e.message, 'err') : alert('Error guardando: ' + e.message);
