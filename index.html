@@ -20537,8 +20537,24 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   async function replArSoportado() {
     try {
+      if (await _replArNativoDisponible()) return true;
       if (!navigator.xr || !navigator.xr.isSessionSupported) return false;
       return await navigator.xr.isSessionSupported('immersive-ar');
+    } catch { return false; }
+  }
+  // REPL-AR-NATIVO-01 (15/09/2026): WebXR no existe dentro del WebView de la app instalada
+  // (Capacitor) -- por eso, con la APK, el botón de AR del Replanteo nunca aparecía (Adrián lo
+  // confirmó probando: el modal de "Nuevo replanteo" solo mostraba Foto/Galería). El módulo
+  // ARCore nativo (`ReplanteoAR`, F3.0/F3.1) ya existía como botón de prueba aislado en Ajustes
+  // → App Android; esto lo conecta al flujo real. Se comprueba en cada llamada (barato, sin
+  // caché) porque el resultado puede cambiar si Play Services for AR se instala/actualiza
+  // mientras la app está abierta.
+  async function _replArNativoDisponible() {
+    try {
+      const AR = window.Capacitor?.Plugins?.ReplanteoAR;
+      if (!AR) return false;
+      const r = await AR.isSupported();
+      return !!r?.supported;
     } catch { return false; }
   }
   function _replCargarThree() {
@@ -20564,6 +20580,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const key = document.getElementById('replNuevoElemento').value;
     if (!titulo) { toast('Escribe un título', 'error'); return; }
     if (!(await replArSoportado())) { toast('Este móvil o navegador no soporta AR (hace falta Chrome en Android con ARCore)', 'error'); return; }
+    // REPL-AR-NATIVO-01: dentro de la app instalada, usar la sesión ARCore nativa (ya existente)
+    // en vez de intentar abrir una sesión WebXR que ahí siempre fallaría.
+    if (await _replArNativoDisponible()) { await _replArIniciarNativo(titulo, key); return; }
     const btn = document.getElementById('btnReplNuevoAR');
     if (btn) btn.disabled = true;
     try {
@@ -21117,6 +21136,71 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     replInitEditor();
     if (_repl.obstaculos.length) toast(`⚠️ ${_repl.obstaculos.length} obstáculo(s) marcados en AR: toca cada uno para indicar qué es y qué hacemos`);
     else toast(`📱 ${longitud3d.toString().replace('.', ',')} m medidos en AR`);
+    _replProgramarCalculo();
+  }
+
+  // REPL-AR-NATIVO-01: contraparte de replArIniciar()/replArTerminar() para cuando la sesión AR
+  // la da el plugin nativo ReplanteoAR (ARCore) en vez de WebXR -- misma pantalla de destino
+  // (replanteoEditor) y mismo objeto _repl, para no duplicar el editor. A diferencia del WebXR
+  // de hoy, esta sesión nativa solo captura el trazado (puntos + longitud): no hay marcado de
+  // obstáculos ni colocación de complementos eléctricos dentro de la sesión (eso exigiría UI
+  // propia en la Activity nativa, fuera de alcance de esta primera conexión) -- igual que en el
+  // modo Foto, se guarda con obstaculos/complementos vacíos y se añaden después en el editor si
+  // hace falta.
+  async function _replArIniciarNativo(titulo, key) {
+    const btn = document.getElementById('btnReplNuevoAR');
+    if (btn) btn.disabled = true;
+    try {
+      const el = _replCatalogo.find(e => e.key === key) || _replCatalogo[0];
+      const params = _replParamsPorDefecto(el);
+      const resultado = await window.Capacitor.Plugins.ReplanteoAR.abrirAR({});
+      if (!resultado?.ok) {
+        if (!resultado?.cancelado) toast('❌ AR: ' + (resultado?.error || 'no se pudo medir'), 'error');
+        return;
+      }
+      await _replArTerminarNativo(resultado, titulo, key, el, params);
+    } catch (e) {
+      toast('❌ AR: ' + (e.message || 'no se pudo iniciar la sesión nativa'), 'error');
+    } finally { if (btn) btn.disabled = false; }
+  }
+  async function _replArTerminarNativo(resultado, titulo, key, el, params) {
+    const puntosNativos = Array.isArray(resultado.puntos) ? resultado.puntos : [];
+    if (puntosNativos.length < 2) { toast('Marca al menos dos puntos antes de terminar', 'error'); return; }
+    // El eje Y local del quaternion de cada punto apunta a lo largo de la normal de la
+    // superficie (misma convención que el hit-test de WebXR usa en replArColocarComp) -- se
+    // guarda ya calculada en puntos_3d para cuando se aborde orientar soportes/accesorios según
+    // la pared real; el trazado/editor de hoy no la necesita todavía.
+    const normalDeQuat = q => {
+      if (q == null || q.qx == null) return null;
+      const { qx, qy, qz, qw } = q;
+      return {
+        nx: 2 * (qx * qy - qw * qz),
+        ny: 1 - 2 * (qx * qx + qz * qz),
+        nz: 2 * (qy * qz + qw * qx),
+      };
+    };
+    const puntos = puntosNativos.map(p => ({ x: +p.x, y: +p.y, z: +p.z }));
+    const puntos3d = puntosNativos.map(p => {
+      const n = normalDeQuat(p);
+      const base = { x: +(+p.x).toFixed(3), y: +(+p.y).toFixed(3), z: +(+p.z).toFixed(3), m: 'hit' };
+      return n ? { ...base, nx: +n.nx.toFixed(3), ny: +n.ny.toFixed(3), nz: +n.nz.toFixed(3) } : base;
+    });
+    const longitud3d = +(+resultado.longitud || 0).toFixed(2);
+    const plano = _replArPlano(puntos, []);
+    const blob = await new Promise(r => plano.cv.toBlob(r, 'image/jpeg', 0.9));
+    const file = new File([blob], `replanteo-ar-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const img = await _replCargarImagen(URL.createObjectURL(file), false);
+    _repl = {
+      id: null, titulo, elemento_key: el.key, params, file, img, departamento: _replCatalogoDept, planos: [], imgW: img.naturalWidth, imgH: img.naturalHeight,
+      puntos: plano.puntosPx, obstaculos: [],
+      referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
+      complementos: [], fotosDoc: [],
+      calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
+    };
+    replCerrarNuevo();
+    showScreen('replanteoEditor');
+    replInitEditor();
+    toast(`📱 ${longitud3d.toString().replace('.', ',')} m medidos en AR`);
     _replProgramarCalculo();
   }
 

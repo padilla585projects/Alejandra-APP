@@ -1,5 +1,70 @@
 # Handoff — Alejandra 2.0
 
+## REPL-AR-NATIVO-01 — el AR de Replanteo conectado al módulo ARCore nativo (2026-09-15)
+
+- **Agente:** Claude (Sonnet 5). **Origen:** Adrián probó la APK real y mandó una captura del
+  modal "Nuevo replanteo" con solo "Hacer foto"/"Galería" — sin el botón de AR. "No funciona en
+  la apk el replanteo".
+- **Causa:** el AR de Replanteo (`replArIniciar()`, `index.html`) usa WebXR
+  (`navigator.xr.requestSession('immersive-ar', ...)`), que **no existe dentro del WebView de
+  Capacitor** — solo funciona en Chrome navegador. `replArSoportado()` comprobaba únicamente
+  `navigator.xr.isSessionSupported`, así que en la APK devolvía siempre `false` y el botón se
+  quedaba oculto (línea 19018-19019, toggle de visibilidad). Esto explica por qué existe desde
+  el 10/09 un módulo ARCore nativo (F3.0/F3.1, `ReplanteoARPlugin`/`ReplanteoARActivity`,
+  `capacitor/android/`) — pero hasta hoy era **solo un botón de prueba aislado** en Ajustes →
+  App Android (`probarARNativo()`), que medía y hacía `toast()` sin crear ningún replanteo.
+- **Antes de tocar código:** dos rondas de exploración (agentes en background) confirmaron que
+  la infraestructura ya estaba casi lista y solo hacía falta conectarla:
+  - `ReplanteoARPlugin.java` ya sigue el patrón idiomático de Capacitor (`@CapacitorPlugin`,
+    `startActivityForResult` + `@ActivityCallback` resolviendo `call.resolve({ok, puntos,
+    longitud})`) — nada que tocar ahí ni en el registro del plugin (`MainActivity.java:11`).
+  - `ReplanteoARActivity.terminar()` ya tenía el `Pose` completo de cada `Anchor` pero solo
+    serializaba la posición (`tx/ty/tz`), no la rotación.
+  - `_replArPlano(puntos, obstaculos)` (`index.html:21074-21094`, vista en planta del AR de
+    Chrome) es una función **pura** — sin ningún estado de sesión WebXR — así que es
+    directamente reutilizable para el resultado del AR nativo, sin duplicar lógica.
+- **Cambios:**
+  - `ReplanteoARActivity.java` (`terminar()`): añade `qx/qy/qz/qw` (quaternion de rotación del
+    `Pose`, ya disponible ahí, solo faltaba serializarlo) al JSON de cada punto. Cambio de 6
+    líneas, sin tocar nada más.
+  - `index.html`: `replArSoportado()` ahora también devuelve `true` si el plugin nativo
+    `ReplanteoAR` está disponible y `isSupported()` lo confirma (nueva `_replArNativoDisponible()`).
+    `replArIniciar()` ramifica: si hay backend nativo, llama a `Capacitor.Plugins.ReplanteoAR.
+    abrirAR({})` (nueva `_replArIniciarNativo()`) en vez de abrir sesión WebXR. Al recibir el
+    resultado, nueva `_replArTerminarNativo()` construye el mismo objeto `_repl` que ya produce
+    `replArTerminar()` (mismos campos: `origen:'ar'`, `puntos_3d`, `escala_px_m:null`,
+    `longitud_manual_m`...), reutilizando `_replArPlano()` sin cambios, y pasa a
+    `showScreen('replanteoEditor')` igual que siempre.
+  - `puntos_3d` amplía su formato a `{x,y,z,m,nx,ny,nz}`: la normal de la superficie sale de
+    rotar el vector `(0,1,0)` por el quaternion nativo (misma convención que ya usa WebXR en
+    `replArColocarComp`, línea 20929, donde el eje Y local de la pose del hit-test apunta a lo
+    largo de la normal). **Se guarda pero todavía no se usa** en el render — queda lista para
+    cuando se aborde la orientación de soportes/accesorios (ver pendiente abajo). Para los
+    puntos que vengan de WebXR, `nx/ny/nz` quedan `null` en esta fase (esa captura no se toca).
+- **Alcance explícito de esta fase (decidido antes de implementar, en modo Plan):** la sesión
+  nativa solo captura el trazado — sin marcado de obstáculos ni colocación de complementos
+  eléctricos dentro de la sesión (eso exigiría UI propia en `OverlayView.java`, fuera de
+  alcance). Se guarda con `obstaculos:[]`/`complementos:[]`, igual que ya pasa en el modo Foto;
+  el usuario los añade después en el editor si hace falta.
+- **Verificado:** `assembleDebug`/`compileDebugJavaWithJavac` en verde (confirma que
+  `Pose.qx()/qy()/qz()/qw()` son la API correcta de ARCore — no había ningún uso previo en el
+  repo para copiar, se verificó compilando de verdad, no solo por lectura), sintaxis de
+  `index.html` revisada por bloques (script principal de 480 KB, sin errores). **Pendiente:
+  probar en el Oppo real** — confirmar que el botón de AR aparece en la APK y que el flujo
+  completo (marcar puntos → Terminar → editor → Guardar) funciona de principio a fin.
+- **Pendiente, fase aparte (a petición explícita de Adrián — "hicimos una APK para aprovechar al
+  máximo el teléfono... vamos a hacerlo bien", pidió decidir el orden técnico):**
+  1. Usar la normal ya capturada (nativa) para orientar los soportes/accesorios del render 3D
+     (`_replInstal3D`/`_replComplemento3D`) según la pared/techo real — hoy los soportes de
+     bandeja/tubo son la misma geometría genérica siempre, sin relación con el tipo de montaje
+     (Hilti MQ / ménsula / montante) ni con el ángulo real de la pared; los mecanismos
+     eléctricos sí usan la orientación cuando el hit-test funciona, pero caen a "mirar a la
+     cámara" cuando el punto se ancla por profundidad o contacto (justo el caso de pared blanca).
+  2. Dar geometría 3D propia a cada tipo de montaje (hoy solo están definidos para el cálculo de
+     material en `worker.js:30546-30550`, sin geometría 3D distinta).
+  3. Capturar también la normal real en el AR de WebXR/Chrome (hoy el hit-test la calcula pero
+     se descarta salvo en un único sitio).
+
 ## REPL-QUITAR-CAM-DIRECTA-01 — retirado el modo "cámara en directo" de Replanteo (2026-09-15)
 
 - **Agente:** Claude (Sonnet 5). **Origen:** decisión directa de Adrián, no un bug. Le pregunté
