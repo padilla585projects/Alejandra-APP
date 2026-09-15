@@ -113,6 +113,32 @@ Adrián lo resumió así: "las mismas prácticas que tiene un agente de código,
 fallar tanto en crear cosas o diagnosticarlas" — ese es el nivel de rigor esperado en
 cualquier tarea, no solo al escribir código.
 
+ARCHIVOS ADJUNTOS — PREGUNTAR ANTES DE GUARDAR (FEAT-GUARDAR-ADJUNTO-01, 15/09/2026):
+Adrián: "eso es fundamental que Alejandra pueda guardar y abrir y lo que sea en toda la
+suite" — vale para los tres frontends web (app móvil, panel de oficina, panel standalone)
+y para Telegram, sea cual sea el canal desde el que te hablen (compartes la misma memoria
+y BD en todos). Cuando el usuario adjunte un archivo (foto, PDF, plano...) en el MISMO
+turno en que te habla:
+1. Resuelve primero lo que te pidió sobre el archivo (analizarlo, responder sus dudas,
+   etc.) — eso siempre tiene prioridad.
+2. Si el usuario NO te ha dicho ya explícitamente qué hacer con el archivo (ni "guárdalo",
+   ni "es solo para que lo mires", ni nada parecido), pregúntale al final de tu respuesta,
+   en una frase corta: "¿Quieres que guarde este archivo en la app?".
+3. Si contesta que sí, pregúntale DÓNDE antes de guardar nada: qué obra y qué tipo de
+   documento es (usa las categorías de documentos_obra si aplica — pss/ficha técnica/foto
+   de replanteo/otro — o simplemente el título que él te diga). No asumas la obra por la
+   sesión si hay ambigüedad; si solo hay una obra posible en su contexto, confírmasela en
+   vez de preguntar a ciegas.
+4. Solo con esa confirmación de obra/tipo, guárdalo de verdad con escribir_bd (INSERT INTO
+   documentos_obra con el r2_key exacto del adjunto — lo tienes en este turno como
+   "[Adjunto: key="..."]" en el contenido que acabas de recibir, no hace falta volver a
+   subirlo) y sigue la disciplina de arriba: LLAMA a la tool en esta misma respuesta, nunca
+   narres "lo guardo" sin ejecutarla, y confirma con el resultado real tras validar.
+5. Si dice que no, no lo guardes — el archivo ya vive en R2 desde que se subió (por si
+   hiciera falta recuperarlo), simplemente no queda registrado como documento de la obra.
+No preguntes si el propio mensaje ya deja claro que el archivo no es para guardar (p.ej.
+una foto de un error para que la diagnostiques ahora mismo, sin ninguna obra de por medio).
+
 CONOCIMIENTO TÉCNICO: Eres la ingeniera del equipo. Conoces los materiales, fabricantes y productos que se usan en obra. Cuando alguien mencione un producto, marca o referencia que no conozcas:
 1. BUSCA automáticamente en Google (buscar_google) la ficha técnica o catálogo del fabricante
 2. Si no encuentras info suficiente, PREGUNTA al usuario: "¿De qué fabricante es? ¿Tienes la referencia?"
@@ -6731,7 +6757,11 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
 
   // Tools de escritura que deberían ejecutarse si afirma acción (declarado aquí arriba
   // porque ALEJANDRA-ESQUEMA-04 lo necesita antes que el resto de checks de esta función).
-  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix', 'generar_esquema_electrico', 'marcar_plano', 'generar_plano', 'editar_plano', 'importar_plano_dxf', 'generar_informe'];
+  // BUG-GUARDAR-NARRADO-04 (15/09/2026): memory_save no estaba en esta lista -- "He
+  // guardado en memoria la ficha técnica..." (sin llamar a memory_save de verdad, alejandra_
+  // memoria sin fila nueva ese turno, verificado contra D1) ni siquiera habría contado como
+  // acción de escritura real aunque el patrón de abajo hubiera saltado.
+  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix', 'generar_esquema_electrico', 'marcar_plano', 'generar_plano', 'editar_plano', 'importar_plano_dxf', 'generar_informe', 'memory_save'];
 
   // ALEJANDRA-ESQUEMA-03 (29/08/2026): revisando el historial real de producción
   // (alejandra_historial + alejandra_trazas, usuario 3, 28/08 07:52) se encontró un
@@ -6837,7 +6867,16 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
     // turno (ninguna tool de escritura se llamó). Cubre el verbo en primera persona cuando
     // aparece cerca de un objeto guardable -- exige esa cercanía para no disparar con frases
     // sueltas sin relación (ej. "no guardo relación con eso").
-    /\b(guardo|registro|subo|adjunto|archivo)\b[^.!?]{0,50}\b(foto|fotos|imagen|imágenes|documento|documentos|archivo|archivos|esquema|esquemas|plano|planos|informe|informes|carpeta)\b/i,
+    /\b(guardo|registro|subo|adjunto|archivo)\b[^.!?]{0,50}\b(foto|fotos|imagen|imágenes|documento|documentos|archivo|archivos|esquema|esquemas|plano|planos|informe|informes|carpeta|memoria|ficha técnica)\b/i,
+    // BUG-GUARDAR-NARRADO-04 (15/09/2026): Adrián subió un PDF ("estudia esto, tengo
+    // dudas") y la respuesta fue "He guardado en memoria la ficha técnica del ADMAG TI
+    // Series AXG..." -- pretérito perfecto ("he guardado"), un tiempo verbal que NINGUNO
+    // de los patrones de arriba cubre (solo miran presente: "guardo"/"ahora guardo"/"voy a
+    // guardar"), con "memoria"/"ficha técnica" como objeto (añadido arriba, tampoco estaba
+    // antes). alejandra_memoria no tuvo ninguna fila nueva ese turno (verificado contra
+    // D1) y memory_save no se llamó -- promesa vacía, calcada a NARRADO-01/02 pero en
+    // pasado en vez de presente/inminente.
+    /\b(he guardado|ya guardé|guardé|he registrado|ya registré|registré)\b[^.!?]{0,60}\b(foto|fotos|imagen|imágenes|documento|documentos|archivo|archivos|esquema|esquemas|plano|planos|informe|informes|carpeta|memoria|ficha técnica)\b/i,
   ];
 
   const usóEscritura = toolsEscritura.some(t => toolsEscritos.has(t));
@@ -6975,6 +7014,13 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
           contentBlocks.push({ type: 'text', text: `[Imagen HEIC adjunta: ${key} — usa la tool analizar_foto_obra para verla]` });
         } else if (bytes.length <= 3.7 * 1024 * 1024) {
           const base64 = uint8ToBase64(bytes);
+          // FEAT-GUARDAR-ADJUNTO-01 (15/09/2026): sin este texto, este turno no veía el R2
+          // key en ningún sitio (solo va como bytes de imagen) -- si el usuario luego pide
+          // guardarla como documento (documentos_obra.r2_key), Alejandra no tenía forma de
+          // saber qué key referenciar sin re-subirla. El key sí llega en turnos futuros vía
+          // el historial (guardarMensajeChat lo anota como "[adjuntos: key]"), pero no en
+          // el turno en el que se sube.
+          contentBlocks.push({ type: 'text', text: `[Adjunto: key="${key}"]` });
           contentBlocks.push({
             type: 'image',
             source: { type: 'base64', media_type: ct, data: base64 }
@@ -6991,6 +7037,10 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
         const bytes = new Uint8Array(buf);
         if (bytes.length <= 4.5 * 1024 * 1024) {
           const base64 = uint8ToBase64(bytes);
+          // FEAT-GUARDAR-ADJUNTO-01 (15/09/2026): mismo motivo que en la rama de imagen
+          // de arriba -- el R2 key tiene que estar disponible en ESTE turno para poder
+          // guardar el PDF como documento sin re-subirlo.
+          contentBlocks.push({ type: 'text', text: `[Adjunto: key="${key}"]` });
           contentBlocks.push({
             type: 'document',
             source: { type: 'base64', media_type: 'application/pdf', data: base64 }
