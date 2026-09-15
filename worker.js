@@ -7104,8 +7104,6 @@ export default {
       if (path === '/replanteos'                             && method === 'POST')   return await crearReplanteo(request, env);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'GET')    return await getReplanteo(request, env, path);
       if (/^\/replanteos\/\d+\/foto$/.test(path)             && method === 'GET')    return await getReplanteoFoto(request, env, path);
-      if (/^\/replanteos\/\d+\/video$/.test(path)            && method === 'GET')    return await getReplanteoVideo(request, env, path);
-      if (/^\/replanteos\/\d+\/video$/.test(path)            && method === 'POST')   return await subirReplanteoVideo(request, env, path);
       if (/^\/replanteos\/\d+\/foto-doc$/.test(path)         && method === 'POST')   return await subirReplanteoFotoDoc(request, env, path);
       if (/^\/replanteos\/\d+\/foto-doc\/\d+$/.test(path)    && method === 'GET')    return await getReplanteoFotoDoc(request, env, path);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'PATCH')  return await actualizarReplanteo(request, env, path);
@@ -30705,10 +30703,12 @@ async function _ensureReplanteoTables(env) {
     )
   `).run();
   await runDDL(env, 'CREATE INDEX IF NOT EXISTS idx_replanteos_empresa_obra ON replanteos(empresa_id, obra_id, departamento)');
-  // ADR-0025 F3: vídeo del recorrido (documentación, máx. 3 min) en R2. Aditivo, idempotente.
-  await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_r2_key TEXT');
-  await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_mime TEXT');
-  await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN video_dur REAL');
+  // REPL-QUITAR-CAM-DIRECTA-01 (15/09/2026): las columnas video_r2_key/video_mime/video_dur
+  // (ADR-0025 F3) ya no se crean aqui -- Adrian decidio retirar el modo "camara en directo"
+  // (comparado con AR, no convencia) y con el, su grabacion automatica de video. Las columnas
+  // siguen existiendo en D1 para instalaciones donde ya se creo la tabla (nunca se hace DROP
+  // COLUMN sin autorizacion explicita, ver CLAUDE.md) pero quedan sin uso -- worker.js ya no
+  // escribe ni sirve ningun video de replanteo.
   // ADR-0025 (fotos de documentación en el AR): lista de claves R2 de fotos adjuntas.
   await runDDL(env, 'ALTER TABLE replanteos ADD COLUMN fotos_json TEXT');
   await env.DB.prepare(`
@@ -31356,32 +31356,6 @@ async function getReplanteoFoto(request, env, path) {
   });
 }
 
-// ADR-0025 F3: vídeo del recorrido (documentación, máx. 3 min). Se sube aparte de la foto
-// (POST /replanteos/{id}/video con el blob en el body) para no tocar el multipart de crear.
-async function subirReplanteoVideo(request, env, path) {
-  const auth = await getAuth(request, env);
-  if (!auth.empresa_id) return err('No autorizado', 401);
-  if (!puedeEditarReplanteo(auth)) return err('Solo los encargados pueden replantear', 403);
-  const id = parseInt(path.split('/')[2]);
-  if (!id) return err('ID inválido', 400);
-  await _ensureReplanteoTables(env);
-  const row = await _replanteoDe(env, auth, id);
-  if (!row) return err('Replanteo no encontrado', 404);
-  const mime = (request.headers.get('content-type') || 'video/webm').split(';')[0];
-  if (!/^video\//.test(mime)) return err('El archivo debe ser un vídeo', 400);
-  const buf = await request.arrayBuffer();
-  if (!buf || !buf.byteLength) return err('Vídeo vacío', 400);
-  if (buf.byteLength > 80 * 1024 * 1024) return err('Vídeo demasiado grande (máx. 80 MB)', 413);
-  const dur = Number(request.headers.get('x-duracion-s')) || null;
-  const ext = mime.includes('mp4') ? 'mp4' : 'webm';
-  const key = `e${auth.empresa_id}/replanteo/${row.obra_id || 0}/video_${id}_${Date.now()}.${ext}`;
-  await env.FILES.put(key, buf, { httpMetadata: { contentType: mime } });
-  if (row.video_r2_key && row.video_r2_key !== key) await env.FILES.delete(row.video_r2_key).catch(() => {});
-  await env.DB.prepare("UPDATE replanteos SET video_r2_key=?, video_mime=?, video_dur=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?")
-    .bind(key, mime, dur, id, auth.empresa_id).run();
-  return json({ ok: true, video: true, duracion_s: dur });
-}
-
 // ADR-0025: fotos de documentación del replanteo (varias, hechas en el AR). Se guardan en R2
 // y sus claves en fotos_json. Blob en el body.
 async function subirReplanteoFotoDoc(request, env, path) {
@@ -31421,22 +31395,6 @@ async function getReplanteoFotoDoc(request, env, path) {
   const obj = await env.FILES.get(k);
   if (!obj) return err('Foto no disponible', 404);
   return new Response(obj.body, { headers: { 'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS } });
-}
-
-async function getReplanteoVideo(request, env, path) {
-  const auth = await getAuth(request, env);
-  if (!auth.empresa_id) return err('No autorizado', 401);
-  if (!puedeVerReplanteo(auth)) return err('No autorizado', 403);
-  const id = parseInt(path.split('/')[2]);
-  if (!id) return err('ID inválido', 400);
-  await _ensureReplanteoTables(env);
-  const row = await _replanteoDe(env, auth, id);
-  if (!row || !row.video_r2_key) return err('Vídeo no disponible', 404);
-  const obj = await env.FILES.get(row.video_r2_key);
-  if (!obj) return err('Vídeo no disponible', 404);
-  return new Response(obj.body, {
-    headers: { 'Content-Type': obj.httpMetadata?.contentType || row.video_mime || 'video/webm', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
-  });
 }
 
 async function actualizarReplanteo(request, env, path) {

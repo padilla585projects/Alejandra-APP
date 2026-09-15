@@ -4,6 +4,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Removed (2026-09-15 — Replanteo: retirado el modo "cámara en directo")
+
+- Decisión de Adrián, comparando con el modo AR. Quitado el botón "📹 Cámara en directo" del
+  modal de nuevo replanteo, la pantalla de trazado en vivo, su grabación automática de vídeo
+  (`MediaRecorder`, máx. 3 min) y las rutas de subida/descarga de ese vídeo en `worker.js`.
+  Foto y AR quedan como únicos modos de captura, sin cambios entre ellos.
+
 ### Fixed (2026-09-14, tarde — tanda de bugs de campo en la app Android, v9.69→v9.72)
 
 - **Botón atrás nativo** no cerraba la app (BUG-ATRAS-01): `popstate` nunca se dispara en nativo
