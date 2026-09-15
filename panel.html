@@ -1019,6 +1019,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     <button class="nav-item" data-page="planos" onclick="navTo('planos')">
       <span class="nav-icon">📐</span> Planos IA
     </button>
+    <!-- ALEJANDRA-ESQUEMA-08 (15/09/2026): paridad con el apartado "Esquemas" de la app
+         móvil — mismos datos (documentos_obra, elaborado_por=Alejandra IA), adaptado a la
+         UI de escritorio de Office (grid + filtros, como Planos IA) en vez de las tarjetas
+         del home móvil, que aquí no existen. -->
+    <button class="nav-item" data-page="esquemas" onclick="navTo('esquemas')">
+      <span class="nav-icon">🔌</span> Esquemas IA
+    </button>
     <!-- BUG-SIDEBAR-ADMIN-01 (25/07/2026): Adrián: "ahí un departamento que se llama admin
      que no tiene el mismo estilo de los demás" — le faltaba el <span> del texto y el
      <span class="sec-chevron"> que sí tienen el resto de cabeceras de sección. -->
@@ -10324,6 +10331,55 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
       </div><!-- /pagePlanos -->
 
+      <!-- ═══════════════════════════════════════════════════════════
+           ESQUEMAS IA (ALEJANDRA-ESQUEMA-08, 15/09/2026)
+           Paridad con el apartado "Esquemas" de la app móvil: mismos datos
+           (documentos_obra, elaborado_por=Alejandra IA vía generar_esquema_electrico),
+           adaptado al formato grid+filtros de esta página (como Planos IA) en vez de
+           las tarjetas del home móvil, que aquí no existen.
+           ═══════════════════════════════════════════════════════════ -->
+      <div class="page" id="pageEsquemas">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
+          <div class="page-title" style="margin-bottom:0">🔌 Esquemas IA</div>
+          <button class="btn btn-secondary" onclick="cargarEsquemasIA()">🔄 Actualizar</button>
+        </div>
+        <div class="page-sub">Esquemas eléctricos/instrumentación generados por Alejandra IA — cableado de campo, motores, cuadros. Pídeselos por chat.</div>
+
+        <!-- Filtros -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px;align-items:center">
+          <select id="esquemasFiltroObra" onchange="cargarEsquemasIA()"
+                  style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text)">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select id="esquemasFiltroTipo" onchange="filtrarEsquemasIALocal()"
+                  style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text)">
+            <option value="">🔌 Todos los tipos</option>
+            <option value="unifiliar">📊 Unifilar</option>
+            <option value="multifilar">🔀 Multifilar</option>
+            <option value="cuadro">🗄️ Cuadro</option>
+            <option value="potencia_motor">⚙️ Motor (potencia)</option>
+            <option value="mando_motor">🕹️ Motor (mando)</option>
+            <option value="alumbrado">💡 Alumbrado</option>
+            <option value="tierra">🌍 Tierra</option>
+            <option value="control_plc">🖥️ Control/PLC</option>
+            <option value="cableado_instrumentacion">🔌 Instrumentación</option>
+            <option value="personalizado">✏️ Personalizado</option>
+            <option value="otro">📄 Otro</option>
+          </select>
+          <input id="esquemasBuscar" type="text" placeholder="🔍 Buscar por título..."
+                 oninput="filtrarEsquemasIALocal()"
+                 style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text);min-width:200px;flex:1">
+          <span id="esquemasCount" style="font-size:12px;color:var(--muted);white-space:nowrap"></span>
+        </div>
+
+        <!-- Grid de esquemas -->
+        <div id="esquemasIAGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px"></div>
+        <div id="esquemasEmpty" style="display:none" class="empty-state">
+          <div class="empty-icon">🔌</div>
+          <div class="empty-text">No hay esquemas generados todavía.</div>
+        </div>
+      </div><!-- /pageEsquemas -->
+
     </div><!-- /content -->
   </div><!-- /mainArea -->
 </div><!-- /appShell -->
@@ -15676,6 +15732,7 @@ const PAGE_TITLES = {
     rdpRegistros:       '📋 Registro Diario de Prevención (RdP) — Ley 31/1995',
     libroSubcontratacion: '📖 Libro de Subcontratación / Subcontractor Register (Ley 32/2006)',
     planos: '📐 Planos Técnicos IA',
+    esquemas: '🔌 Esquemas IA',
 };
 
 // AYUDA-01 (22/07/2026): descripción corta de cada sección para tooltips del sidebar,
@@ -15795,6 +15852,7 @@ const AYUDA_SECCIONES = {
   cronogramaPagos: 'Calendario de pagos previstos y realizados.',
   rdpRegistros: 'Registro Diario de Prevención exigido por la Ley 31/1995.',
   planos: 'Generación de planos técnicos con ayuda de IA.',
+  esquemas: 'Esquemas eléctricos/instrumentación generados por Alejandra — cableado, motores, cuadros.',
   usuarios: 'Gestión de usuarios de la empresa: altas, roles y permisos.',
   empresa: 'Datos generales de la empresa y su configuración.',
   logs: 'Registro de actividad relevante del sistema (solo admins).',
@@ -16018,6 +16076,7 @@ const PAGE_LOADERS = {
     rdpRegistros:       (...a) => cargarRdpRegistros(...a),
     libroSubcontratacion: (...a) => cargarLibroSubcontratacion(...a),
     planos: (...a) => cargarPlanos(...a),
+    esquemas: (...a) => cargarEsquemasIA(...a),
 };
 
 // ── MEMORIA-ENLAZADA-02 (25/08/2026): panel de memoria estilo Obsidian ─────────
@@ -43239,6 +43298,147 @@ function renderPlanosGrid(lista) {
 
 function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── ALEJANDRA-ESQUEMA-08 (15/09/2026): Esquemas IA — paridad con el apartado
+// "Esquemas" de la app móvil. Datos de documentos_obra (elaborado_por=Alejandra IA,
+// misma fuente que generar_esquema_electrico), no de /planos -- son sistemas distintos
+// pese al nombre parecido. Ver/descargar/copiar enlace en vez de "compartir" (Web
+// Share API no es un patrón de escritorio) -- adaptación de plataforma, no copia literal
+// de los botones del móvil.
+const ESQUEMA_TIPO_LABELS_PANEL = {
+  unifiliar: '📊 Unifilar', multifilar: '🔀 Multifilar', cuadro: '🗄️ Cuadro',
+  potencia_motor: '⚙️ Motor (potencia)', mando_motor: '🕹️ Motor (mando)',
+  alumbrado: '💡 Alumbrado', tierra: '🌍 Tierra', control_plc: '🖥️ Control/PLC',
+  cableado_instrumentacion: '🔌 Instrumentación', personalizado: '✏️ Personalizado',
+  otro: '📄 Otro',
+};
+const ESQUEMA_AGENTE_BASE_PANEL = 'https://alejandra-agente.alejandra-app.workers.dev';
+function esquemaIAViewerUrl(r2Key, ext) {
+  if (!r2Key) return null;
+  const base = r2Key.replace('esquemas/', '').replace(/\.html$/, '');
+  return `${ESQUEMA_AGENTE_BASE_PANEL}/api/esquemas/view/${encodeURIComponent(base)}.${ext || 'html'}`;
+}
+
+let _esquemasIAData = [];
+
+async function cargarEsquemasIA() {
+  const grid  = document.getElementById('esquemasIAGrid');
+  const empty = document.getElementById('esquemasEmpty');
+  const count = document.getElementById('esquemasCount');
+  if (!grid) return;
+  await poblarSelectObras('esquemasFiltroObra');
+  const obraId = document.getElementById('esquemasFiltroObra')?.value || '';
+  grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px">Cargando...</div>';
+  empty.style.display = 'none';
+  try {
+    let path = '/documentos-obra?elaborado_por=' + encodeURIComponent('Alejandra IA');
+    if (obraId) path += '&obra_id=' + obraId;
+    const res = await apiRaw(path);
+    const d   = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Error');
+    _esquemasIAData = d.items || d.documentos || [];
+    renderEsquemasIAGrid(_esquemasIAData);
+    count.textContent = _esquemasIAData.length + ' esquema' + (_esquemasIAData.length !== 1 ? 's' : '');
+  } catch(e) {
+    grid.innerHTML = '<div style="color:#f87171;font-size:13px;padding:20px">Error: ' + e.message + '</div>';
+  }
+}
+
+function filtrarEsquemasIALocal() {
+  const tipo = document.getElementById('esquemasFiltroTipo')?.value || '';
+  const q = (document.getElementById('esquemasBuscar')?.value || '').toLowerCase().trim();
+  let filtered = _esquemasIAData;
+  if (tipo) filtered = filtered.filter(e => e.tipo === tipo);
+  if (q) filtered = filtered.filter(e => (e.titulo||'').toLowerCase().includes(q) || (e.notas||'').toLowerCase().includes(q));
+  renderEsquemasIAGrid(filtered);
+  const count = document.getElementById('esquemasCount');
+  if (count) count.textContent = filtered.length + ' esquema' + (filtered.length !== 1 ? 's' : '');
+}
+
+function renderEsquemasIAGrid(lista) {
+  const grid  = document.getElementById('esquemasIAGrid');
+  const empty = document.getElementById('esquemasEmpty');
+  if (!grid) return;
+  if (!lista.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+  const puedeEditar = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador', 'oficina', 'jefe_de_obra', 'encargado');
+  grid.innerHTML = lista.map(e => {
+    const label = ESQUEMA_TIPO_LABELS_PANEL[e.tipo] || ('🔌 ' + (e.tipo || 'Otro'));
+    const fecha = e.fecha_emision || '—';
+    const notas = (e.notas || '').slice(0, 140) + ((e.notas||'').length > 140 ? '…' : '');
+    return `
+      <div class="section-card" style="display:flex;flex-direction:column;gap:10px;position:relative;cursor:default">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="background:#7c3aed;color:#fff;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;white-space:nowrap">${label}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap">${fecha}</span>
+        </div>
+        <div style="font-weight:700;font-size:14px;color:var(--text);line-height:1.3">${escHtml(e.titulo)}</div>
+        ${notas ? `<div style="font-size:12px;color:var(--muted);line-height:1.5">${escHtml(notas)}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:auto;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="esquemaIAVer(${e.id})">👁 Ver</button>
+          <button class="btn btn-secondary btn-sm" onclick="esquemaIADescargar(${e.id})">⬇ SVG</button>
+          <button class="btn btn-secondary btn-sm" onclick="esquemaIACopiarEnlace(${e.id})">🔗 Copiar enlace</button>
+          ${puedeEditar ? `<button class="btn btn-secondary btn-sm" onclick="esquemaIARenombrar(${e.id},'${escHtml(e.titulo).replace(/'/g,"\\'")}')">✏️</button>
+          <button class="btn btn-secondary btn-sm" style="margin-left:auto;color:#f87171;border-color:#f87171" onclick="esquemaIABorrar(${e.id},'${escHtml(e.titulo).replace(/'/g,"\\'")}')">🗑</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function esquemaIAVer(id) {
+  const e = _esquemasIAData.find(x => x.id === id);
+  const url = esquemaIAViewerUrl(e?.r2_key, 'html');
+  if (!url) { toast('Sin archivo disponible', 'err'); return; }
+  window.open(url, '_blank', 'noopener');
+}
+
+async function esquemaIADescargar(id) {
+  const e = _esquemasIAData.find(x => x.id === id);
+  const url = esquemaIAViewerUrl(e?.r2_key, 'svg');
+  if (!url) { toast('Sin archivo disponible', 'err'); return; }
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const nombre = (e.titulo || 'esquema').replace(/[^a-zA-Z0-9_\-áéíóúñÁÉÍÓÚÑ ]/g, '_') + '.svg';
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = objUrl; a.download = nombre; a.click();
+    URL.revokeObjectURL(objUrl);
+  } catch(e2) { toast('No se pudo descargar: ' + e2.message, 'err'); }
+}
+
+async function esquemaIACopiarEnlace(id) {
+  const e = _esquemasIAData.find(x => x.id === id);
+  const url = esquemaIAViewerUrl(e?.r2_key, 'html');
+  if (!url) { toast('Sin archivo disponible', 'err'); return; }
+  try { await navigator.clipboard.writeText(url); toast('🔗 Enlace copiado', 'ok'); }
+  catch { toast(url, 'ok'); }
+}
+
+async function esquemaIARenombrar(id, tituloActual) {
+  const nuevo = prompt('Nuevo nombre para el esquema:', tituloActual);
+  if (!nuevo || !nuevo.trim() || nuevo.trim() === tituloActual) return;
+  try {
+    const r = await apiRaw('/documentos-obra/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ titulo: nuevo.trim() }) });
+    const d = await r.json();
+    if (d.ok) { cargarEsquemasIA(); toast('✅ Nombre actualizado', 'ok'); }
+    else toast('Error: ' + (d.error || 'desconocido'), 'err');
+  } catch { toast('Error de red', 'err'); }
+}
+
+async function esquemaIABorrar(id, titulo) {
+  if (!confirm(`¿Eliminar el esquema "${titulo}"?\n\nSe borrarán los archivos SVG y HTML de R2 y el registro. Esta acción no se puede deshacer.`)) return;
+  try {
+    const r = await apiRaw('/documentos-obra/' + id, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) { cargarEsquemasIA(); toast('🗑️ Esquema eliminado', 'ok'); }
+    else toast('Error: ' + (d.error || 'desconocido'), 'err');
+  } catch { toast('Error de red', 'err'); }
 }
 
 function abrirModalGenerarPlano() {
