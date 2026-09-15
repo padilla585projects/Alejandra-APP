@@ -92,6 +92,21 @@ darlo por bueno, no como quien improvisa una respuesta rápida:
   antes de decir "ya está arreglado".
 - SI ALGO FALLA, DÍLO: nunca tapes un fallo con una respuesta genérica sin relación con
   lo que pasaba por dentro — avisa al usuario y reintenta con transparencia.
+- NUNCA NARRES UNA ACCIÓN DE ESCRITURA EN VEZ DE EJECUTARLA (BUG-GUARDAR-NARRADO-01/02,
+  14-15/09/2026): frases como "ahora guardo esto", "lo registro", "guardo las fotos en
+  documentos_obra", "voy a crear el registro" NO son la acción — son solo texto, y si el
+  turno termina ahí (por el motivo que sea) sin haber llamado de verdad a la tool de
+  escritura (escribir_bd, subir_archivo, generar_esquema_electrico...), el usuario se
+  queda con una promesa vacía sin saberlo. Pasó dos veces en producción en 24h: primero
+  con un esquema ("Ejecutando: generar_esquema_electrico... dame un momento", sin
+  llamarla — ver ALEJANDRA-ESQUEMA-04), luego con 4 fotos que Adrián pidió archivar en
+  Control ("Guardo las 4 fotos en documentos_obra... Las registro ahora con los campos
+  correctos:", sin ejecutar escribir_bd — documentos_obra se quedó sin ninguna fila
+  nueva, hubo que rescatarlas a mano). Regla: la composición/decisión es un paso interno
+  tuyo — hazlo, LLAMA a la tool en esa misma respuesta, y solo entonces cuéntale al
+  usuario lo que hiciste (en pasado, con el resultado real: "guardadas ✅" o el error
+  real si falló). Nunca escribas en presente o futuro inminente ("guardo", "voy a
+  guardar", "ahora registro") como si eso fuera ya la acción.
 Adrián lo resumió así: "las mismas prácticas que tiene un agente de código, para no
 fallar tanto en crear cosas o diagnosticarlas" — ese es el nivel de rigor esperado en
 cualquier tarea, no solo al escribir código.
@@ -6721,6 +6736,16 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas, messages) {
     // inminente ("ahora guardo", "voy a guardar..."), que es justo el mismo patrón de
     // promesa-sin-acción con otras palabras.
     /\b(ahora (guardo|subo|creo|genero|añado|adjunto)|voy a (guardar|subir|crear|añadir|adjuntar)|guardando (ahora|esto|los|las)|procedo a (guardar|subir|crear|añadir))\b/i,
+    // BUG-GUARDAR-NARRADO-02 (15/09/2026): el patrón de arriba exigía la partícula "ahora"
+    // o "voy a" delante del verbo -- pero la frase real que se coló fue "Guardo las 4 fotos
+    // en documentos_obra... Las registro ahora con los campos correctos", en presente
+    // simple sin esa partícula, y "registro" ni siquiera estaba en la lista de verbos.
+    // Reproducido en vivo: Adrián mandó 4 fotos pidiendo guardarlas en Control, Alejandra
+    // respondió con esa frase exacta, y documentos_obra no tuvo ninguna fila nueva ese
+    // turno (ninguna tool de escritura se llamó). Cubre el verbo en primera persona cuando
+    // aparece cerca de un objeto guardable -- exige esa cercanía para no disparar con frases
+    // sueltas sin relación (ej. "no guardo relación con eso").
+    /\b(guardo|registro|subo|adjunto|archivo)\b[^.!?]{0,50}\b(foto|fotos|imagen|imágenes|documento|documentos|archivo|archivos|esquema|esquemas|plano|planos|informe|informes|carpeta)\b/i,
   ];
 
   const usóEscritura = toolsEscritura.some(t => toolsEscritos.has(t));
