@@ -1007,7 +1007,7 @@ function construirCacheKeyNormativa({ consulta, itc, tema }) {
 // cuadrados numerados en el borde del cuadro (como un bornero real TB1), cajetín
 // de plano (proyecto/fecha/escala/revisión) y leyenda formal -- todo en negro con
 // un único acento ámbar para lo pendiente de confirmar, en vez de colores por tipo.
-function construirSVGCableadoInstrumentacion(titulo, descripcion, panelLabel, grupos) {
+function construirSVGCableadoInstrumentacion(titulo, descripcion, panelLabel, grupos, planoNumReal, revisionReal) {
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   // ALEJANDRA-ESQUEMA-07 (15/09/2026): la v2 (cajetín + terminales) seguía sin ser
@@ -1109,7 +1109,12 @@ function construirSVGCableadoInstrumentacion(titulo, descripcion, panelLabel, gr
 
   const fecha = new Date().toLocaleDateString('es-ES');
   const fechaISO = new Date().toISOString().split('T')[0];
-  const planoNum = `ESQ-CI-${fechaISO}`;
+  // ALEJANDRA-ESQUEMA-08 (15/09/2026): nº de plano y revisión REALES (registro real por
+  // obra, calculado en worker.js antes de llamar aquí -- ver ese comentario) en vez de un
+  // número basado solo en la fecha y una revisión fija en "1". Si no se pasan (llamada
+  // directa/tests, o sin obra_id real), caen a un valor por defecto razonable.
+  const planoNum = planoNumReal || `ESQ-CI-${fechaISO}`;
+  const revision = revisionReal || 1;
 
   // Cajetín de plano (esquina inferior derecha, convención de plano técnico real)
   const tbW = 300, tbH = 150, tbX = W - tbW - 20, tbY = H - marginBottom + 10;
@@ -1123,7 +1128,7 @@ function construirSVGCableadoInstrumentacion(titulo, descripcion, panelLabel, gr
   <text x="${tbX + 10}" y="${tbY + 68}" font-size="10.5" fill="${NEGRO}">${esc(planoNum)}</text>
   <line x1="${tbX + tbW / 2}" y1="${tbY + 40}" x2="${tbX + tbW / 2}" y2="${tbY + tbH}" stroke="${NEGRO}" stroke-width="1"/>
   <text x="${tbX + tbW / 2 + 10}" y="${tbY + 55}" font-size="9" fill="${GRIS}">REV.</text>
-  <text x="${tbX + tbW / 2 + 10}" y="${tbY + 68}" font-size="10.5" fill="${NEGRO}">1</text>
+  <text x="${tbX + tbW / 2 + 10}" y="${tbY + 68}" font-size="10.5" fill="${NEGRO}">${revision}</text>
   <line x1="${tbX}" y1="${tbY + 80}" x2="${tbX + tbW}" y2="${tbY + 80}" stroke="${NEGRO}" stroke-width="1"/>
   <text x="${tbX + 10}" y="${tbY + 95}" font-size="9" fill="${GRIS}">FECHA</text>
   <text x="${tbX + 10}" y="${tbY + 108}" font-size="10.5" fill="${NEGRO}">${esc(fecha)}</text>
