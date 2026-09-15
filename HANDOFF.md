@@ -1,5 +1,48 @@
 # Handoff — Alejandra 2.0
 
+## REPL-QUITAR-CAM-DIRECTA-01 — retirado el modo "cámara en directo" de Replanteo (2026-09-15)
+
+- **Agente:** Claude (Sonnet 5). **Origen:** decisión directa de Adrián, no un bug. Le pregunté
+  qué tenía Replanteo con grabación de vídeo y contestó "esa función no me gusta nada,
+  comparada con la AR es una mierda" — al preguntarle qué fallaba en concreto, marcó "la
+  experiencia de uso" y "el vídeo grabado en sí" (no la precisión de medida). Propuso él mismo
+  el alcance: "propongo eliminarla y dedicarnos solo a la de AR y foto".
+- **Antes de tocar código:** mapeado con un agente en background todo lo que pertenecía al
+  modo "cámara en directo" (REPL-REDISEÑO F1, ADR-0025) frente a lo compartido con Foto/AR, para
+  no romper nada al eliminar. Confirmado: Foto (homografía) y AR son módulos completamente
+  separados — cero solapamiento de funciones, y `_repl.videoBlob`/`video_r2_key` nunca los
+  rellena el modo AR (solo la cámara en directo).
+- **Frontend (`index.html`):**
+  - Quitado el botón "📹 Cámara en directo (marcar recorrido)" + su texto explicativo del modal
+    `#modalReplNuevo` (dejando "📷 Hacer foto"/"🖼 Galería" y "📱 Medir con la cámara en AR" como
+    únicas opciones).
+  - Quitada la pantalla completa `#replCamViva` (vídeo + canvas de trazado + nivel/brújula +
+    botón "¿Qué es?").
+  - Quitadas las 13 funciones JS exclusivas: `_camv`/`_camvEl`/`replCamIniciar`/`_camvResize`/
+    `_camvBind`/`_camvDibujar`/`replCamDeshacer`/`_camvGrabar` (arrancaba `MediaRecorder`, máx.
+    3 min, con fallback silencioso si el navegador no lo soporta)/`_camvSensores`/
+    `_camvPararGrabacion`/`_camvStop`/`replCamCancelar`/`replCamIdentificar`/`replCamUsar`.
+  - Limpiadas las referencias a `videoBlob`/`video_r2_key`/`videoDur` en `replActualizarInfo`
+    (badge informativo "🎥 vídeo del recorrido") y en `replGuardar` (subida del vídeo tras
+    guardar) — quedaban huérfanas, nada las rellena ya.
+- **Backend (`worker.js`):**
+  - Quitadas las rutas `GET`/`POST /replanteos/{id}/video` y sus funciones
+    `getReplanteoVideo`/`subirReplanteoVideo`. Confirmado que ningún frontend (`index.html`,
+    `panel.html`, `alejandra-panel.html`) llamaba ya a la de lectura — no había ni reproductor
+    de vídeo en ningún sitio, así que tampoco quedaba nada roto por quitar el GET.
+  - Las 3 `ALTER TABLE ADD COLUMN` de `video_r2_key`/`video_mime`/`video_dur` ya no se ejecutan
+    para instalaciones nuevas. **Las columnas NO se borran de D1** — un `DROP COLUMN` es una
+    migración destructiva que exige autorización aparte (ver `CLAUDE.md`); quedan simplemente
+    sin uso. La limpieza de R2 al borrar un replanteo (`eliminarReplanteo`) se mantiene intacta
+    por si queda algún replanteo antiguo con vídeo grabado antes de este cambio.
+- **Verificado:** `node --check worker.js`, `node --check alejandra-agente/worker.js`, 262 tests
+  del agente en verde (sin relación con este cambio — verificación de rutina), grep completo sin
+  referencias huérfanas en ningún archivo (`index.html`, `worker.js`, `alejandra-agente/worker.js`,
+  `panel.html`, `alejandra-panel.html`).
+- **Pendiente:** decidir si se potencia el modo AR para cubrir lo que la cámara en directo
+  aportaba (nivel/brújula, identificar con IA) — Adrián no lo ha pedido todavía, no se inventa
+  la decisión.
+
 ## Tanda de bugs de campo en la app Android (2026-09-14, tarde, PRs #221-#244, `main` v9.72)
 
 - **Agente:** Claude (Sonnet 5), sesión `alejandra-app-72`. Este `HANDOFF.md`/`TASKS.md`/

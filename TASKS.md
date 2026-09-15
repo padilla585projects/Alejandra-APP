@@ -1,5 +1,21 @@
 # TASKS — Cola operativa inmediata
 
+Estado (2026-09-15): **REPL-QUITAR-CAM-DIRECTA-01 — retirado el modo "cámara en directo" de
+Replanteo, decisión de Adrián.** Ver `HANDOFF.md`.
+- Adrián, comparando los modos de captura del Replanteo: "esa función no me gusta nada,
+  comparada con la AR es una mierda" (le disgustan la experiencia de uso y el vídeo grabado
+  automáticamente) → "propongo eliminarla y dedicarnos solo a la de AR y foto".
+- Retirado por completo: el botón "📹 Cámara en directo (marcar recorrido)" del modal de nuevo
+  replanteo, la pantalla `#replCamViva`, las 13 funciones JS exclusivas (`_camv*`/`replCam*`,
+  incluida la grabación automática con `MediaRecorder`, máx. 3 min), y en el backend las rutas
+  `GET`/`POST /replanteos/{id}/video` + sus dos funciones. Las 3 columnas de vídeo
+  (`video_r2_key`/`video_mime`/`video_dur`) ya no se crean para instalaciones nuevas, pero no
+  se borran de D1 (sin migración destructiva sin autorización aparte); la limpieza de R2 al
+  borrar un replanteo antiguo con vídeo se mantiene, por si queda alguno de antes.
+- Sin tocar: el editor de Foto (homografía) y el modo AR — completamente separados,
+  confirmado antes de tocar nada. `panel.html` no dependía de esto.
+- 262 tests del agente en verde (sin relación con este cambio, verificación de rutina).
+
 Estado (2026-09-14, tarde): **Tanda grande de bugs de campo en la app Android, arreglados y
 verificados en dispositivo real (HTC U11 + Oppo Find X5 Pro). `main` en v9.72 (PRs #221-#244).**
 Este documento y `HANDOFF.md`/`CHANGELOG.md` llevaban 25 PRs sin actualizar (última entrada
