@@ -2453,8 +2453,43 @@ describe('construirSVGCableadoInstrumentacion — ALEJANDRA-ESQUEMA-05', () => {
   it('worker.js conecta tipo="cableado_instrumentacion" con la función real, no con svg_content manual', () => {
     const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
     expect(worker).toContain("tipo === 'cableado_instrumentacion'");
-    expect(worker).toContain('construirSVGCableadoInstrumentacion(titulo, descripcion, input.panel_label, input.grupos)');
+    expect(worker).toContain('construirSVGCableadoInstrumentacion(titulo, descripcion, input.panel_label, input.grupos, planoNumReal, revisionReal)');
     expect(worker).toContain("construirSVGCableadoInstrumentacion,");
+  });
+
+  // ALEJANDRA-ESQUEMA-08 (15/09/2026): "el proceso de creación de planos en una empresa
+  // de verdad" -- numeración real por obra (registro) y revisión que sube de verdad si
+  // se regenera el mismo título, en vez de un nº basado solo en la fecha y "Rev. 1" fijo.
+  it('sin planoNumReal/revisionReal cae a valores por defecto razonables (llamada directa/tests)', () => {
+    const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', [gruposEjemplo[0]]);
+    expect(svg).toContain('REV.');
+    expect(svg).toContain('>1<'); // revisión por defecto: 1
+    expect(svg).toMatch(/ESQ-CI-\d{4}-\d{2}-\d{2}/); // nº de plano por defecto basado en fecha
+  });
+
+  it('con planoNumReal/revisionReal reales, el cajetín los usa tal cual (no el nº basado en fecha ni "1" fijo)', () => {
+    const svg = construirSVGCableadoInstrumentacion('T', '', 'CUADRO', [gruposEjemplo[0]], 'ESQ-1-007', 3);
+    expect(svg).toContain('ESQ-1-007');
+    expect(svg).toContain('>3<');
+    expect(svg).not.toMatch(/ESQ-CI-\d{4}/);
+  });
+
+  it('worker.js calcula nº de plano y revisión reales contando documentos_obra existentes de esta obra (registro real, no solo fecha)', () => {
+    const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const ini = worker.indexOf('let planoNumReal');
+    const fin = worker.indexOf('// ── Generadores SVG server-side', ini);
+    const cuerpo = worker.slice(ini, fin);
+    expect(ini).toBeGreaterThanOrEqual(0);
+    expect(cuerpo).toMatch(/SELECT COUNT\(\*\) as n FROM documentos_obra WHERE obra_id=\? AND elaborado_por='Alejandra IA'/);
+    expect(cuerpo).toMatch(/SELECT COUNT\(\*\) as n FROM documentos_obra WHERE obra_id=\? AND titulo=\? AND elaborado_por='Alejandra IA'/);
+  });
+
+  it('worker.js guarda el "tipo" real del esquema en documentos_obra, no el genérico "otro" (ESQUEMA-08 -- antes indistinguible del resto de documentos)', () => {
+    const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const ini = worker.indexOf('INSERT INTO documentos_obra (empresa_id, obra_id, tipo, titulo, estado, fecha_emision, elaborado_por, r2_key, notas, created_by)');
+    expect(ini).toBeGreaterThanOrEqual(0);
+    const bindIdx = worker.indexOf('.bind(obra.empresa_id, obraIdParam, tipo, titulo, fecha, r2Key,', ini);
+    expect(bindIdx).toBeGreaterThan(ini); // .bind() pasa la variable "tipo" real, no un literal 'otro'
   });
 
   it('worker.js rechaza grupos incompletos (sin nombre/hilos/cable) en vez de dibujar cajas vacías', () => {

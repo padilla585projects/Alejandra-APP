@@ -9482,6 +9482,28 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         const descripcion = (input.descripcion || '').trim();
         const tipo = input.tipo || 'personalizado';
         const comp = input.componentes || {};
+        const obraIdParam = input.obra_id ? parseInt(input.obra_id) : null;
+
+        // ALEJANDRA-ESQUEMA-08 (15/09/2026): Adrián, sobre el proceso real de una oficina
+        // técnica -- "numeración y registro" antes de dibujar, y la revisión sube de
+        // verdad si se regenera el mismo plano, nunca se queda fija en "1". Sin migración
+        // de esquema (ALTER TABLE requiere decisión humana, ver CLAUDE.md): el propio
+        // recuento de filas ya existentes en documentos_obra hace de registro real -- nº
+        // de plano = cuántos esquemas de Alejandra hay ya en esta obra + 1 (secuencial de
+        // verdad, no solo la fecha); revisión = cuántas veces se ha guardado ya ESTE mismo
+        // título en esta obra + 1 (si es la primera vez, Rev. 1; si se regenera, sube).
+        let planoNumReal = `ESQ-CI-${new Date().toISOString().split('T')[0]}`;
+        let revisionReal = 1;
+        if (obraIdParam && env.DB) {
+          try {
+            const [{ n: totalEsquemas } = { n: 0 }, { n: mismoTitulo } = { n: 0 }] = await Promise.all([
+              env.DB.prepare(`SELECT COUNT(*) as n FROM documentos_obra WHERE obra_id=? AND elaborado_por='Alejandra IA'`).bind(obraIdParam).first(),
+              env.DB.prepare(`SELECT COUNT(*) as n FROM documentos_obra WHERE obra_id=? AND titulo=? AND elaborado_por='Alejandra IA'`).bind(obraIdParam, titulo).first(),
+            ]);
+            planoNumReal = `ESQ-${obraIdParam}-${String((totalEsquemas || 0) + 1).padStart(3, '0')}`;
+            revisionReal = (mismoTitulo || 0) + 1;
+          } catch (_) {} // si falla el recuento, se queda en el numero/revision por defecto -- nunca bloquea la generacion
+        }
 
         // ── Generadores SVG server-side para circuitos estándar ──────────────
         // Si no se proporciona svg_content, generar automáticamente según tipo y componentes
@@ -9507,7 +9529,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
   <rect x="1" y="1" width="898" height="36" fill="#1a1a2e"/>
   <text x="450" y="23" text-anchor="middle" fill="white" font-size="14" font-weight="bold">⚡ ${titulo}</text>
   <text x="10" y="655" fill="#666" font-size="9">Esquema IEC 60617 · Alejandra IA · Norma: REBT ITC-BT-47 · ${new Date().toLocaleDateString('es-ES')}</text>
-  <text x="890" y="655" fill="#666" font-size="9" text-anchor="end">Revisión 1</text>
+  <text x="890" y="655" fill="#666" font-size="9" text-anchor="end">${planoNumReal} · Rev. ${revisionReal}</text>
 
   <!-- ═══════════════════════════════════════════════ -->
   <!-- CIRCUITO DE POTENCIA (izquierda) -->
@@ -9708,7 +9730,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
             if (gruposInvalidos.length > 0) {
               return JSON.stringify({ ok: false, error: `${gruposInvalidos.length} grupo(s) sin "nombre", "hilos" o "cable" -- los tres son obligatorios en cada grupo de "grupos".` });
             }
-            svgContent = construirSVGCableadoInstrumentacion(titulo, descripcion, input.panel_label, input.grupos);
+            svgContent = construirSVGCableadoInstrumentacion(titulo, descripcion, input.panel_label, input.grupos, planoNumReal, revisionReal);
           } else {
             return JSON.stringify({ ok: false, error: 'No se proporcionó svg_content ni componentes/grupos válidos. Para arranque DOL, pasa componentes: {contactor, motor, guardamotor, ...}. Para cableado de sondas/instrumentación, pasa tipo="cableado_instrumentacion" y grupos: [...]. Para circuito personalizado, pasa svg_content con el SVG completo.' });
           }
@@ -9825,15 +9847,18 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         });
 
         // ── Si se proporcionó obra_id, guardar en documentos_obra ──────────
-        const obraIdParam = input.obra_id ? parseInt(input.obra_id) : null;
+        // ALEJANDRA-ESQUEMA-08: antes se guardaba siempre con tipo='otro' -- indistinguible
+        // de cualquier otro documento, imposible de filtrar por tipo de esquema en la
+        // sección Esquemas de la app. Ahora se guarda el "tipo" real (potencia_motor,
+        // cableado_instrumentacion, etc.), y el nº de plano/revisión reales van en "notas".
         if (obraIdParam && env.DB) {
           try {
             const obra = await env.DB.prepare('SELECT empresa_id FROM obras WHERE id=?').bind(obraIdParam).first();
             if (obra?.empresa_id) {
               await env.DB.prepare(
                 `INSERT INTO documentos_obra (empresa_id, obra_id, tipo, titulo, estado, fecha_emision, elaborado_por, r2_key, notas, created_by)
-                 VALUES (?, ?, 'otro', ?, 'vigente', ?, 'Alejandra IA', ?, ?, 'alejandra')`
-              ).bind(obra.empresa_id, obraIdParam, titulo, fecha, r2Key, `SVG: ${r2KeySvg} | ${descripcion || tipo}`, 'alejandra').run();
+                 VALUES (?, ?, ?, ?, 'vigente', ?, 'Alejandra IA', ?, ?, 'alejandra')`
+              ).bind(obra.empresa_id, obraIdParam, tipo, titulo, fecha, r2Key, `${planoNumReal} · Rev. ${revisionReal} | SVG: ${r2KeySvg} | ${descripcion || tipo}`, 'alejandra').run();
             }
           } catch (dbErr) {
             console.error('[esquema] Error guardando en documentos_obra:', dbErr.message);
