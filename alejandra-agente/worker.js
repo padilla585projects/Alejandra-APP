@@ -4338,15 +4338,25 @@ export default {
         }
         const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
         const offset = parseInt(url.searchParams.get('offset') || '0');
+        // HISTORIAL-UNIFICADO-01 (16/09/2026): este endpoint no filtraba por canal, a
+        // diferencia de /ia-chat-history en worker.js (que ya arregló el mismo problema como
+        // BUG-HISTORIAL-CANAL-01 / SYNC-DISPOSITIVOS-01) -- AlejandraIA, admin.html y
+        // alejandra-panel.html reciben aquí telegram/dev mezclados con la conversación real.
+        // Mismo patrón: canal es opcional (no rompe llamadas existentes que quieran verlo
+        // todo) y admite lista separada por comas para agrupar varios canales como una sola
+        // conversación continua.
+        const canalParam = url.searchParams.get('canal');
+        const canales = canalParam ? canalParam.split(',').map(c => c.trim()).filter(Boolean) : [];
+        const canalSql = canales.length ? ` AND canal IN (${canales.map(() => '?').join(',')})` : '';
         try {
           const rows = await env.DB.prepare(
-            `SELECT id, rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`
-          ).bind(usuario_id_q, limit, offset).all();
+            `SELECT id, rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=?${canalSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+          ).bind(usuario_id_q, ...canales, limit, offset).all();
           const mensajes = (rows.results || []).reverse();
-          // Contar total para paginación
+          // Contar total para paginación (mismo filtro de canal, si lo hay)
           const total = await env.DB.prepare(
-            `SELECT COUNT(*) as n FROM alejandra_historial WHERE usuario_id=?`
-          ).bind(usuario_id_q).first().catch(() => ({ n: 0 }));
+            `SELECT COUNT(*) as n FROM alejandra_historial WHERE usuario_id=?${canalSql}`
+          ).bind(usuario_id_q, ...canales).first().catch(() => ({ n: 0 }));
           return json({ ok: true, mensajes, total: total?.n || 0, limit, offset });
         } catch (e) {
           return json({ ok: true, mensajes: [], total: 0 });

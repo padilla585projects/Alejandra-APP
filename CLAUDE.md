@@ -220,7 +220,7 @@ npx wrangler d1 execute alejandra-db --command "SELECT ..." --remote   # requier
 > es **código separado**. Casi se deja un flanco abierto.
 
 Para el usuario existe **una sola Alejandra** (misma personalidad y memoria, comparten BD
-D1). Pero por dentro son **DOS workers con código distinto**. Se le habla desde **tres
+D1). Pero por dentro son **DOS workers con código distinto**. Se le habla desde **cuatro
 frontends** (todos contra `alejandra-agente`) más **Telegram** (el único que habla con el
 otro worker):
 
@@ -229,6 +229,7 @@ otro worker):
 | App móvil/PWA (`index.html`) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
 | Panel de oficina (`panel.html`, "Alejandra Office") | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
 | Panel de control standalone (`alejandra-panel.html`, login con Google/token admin) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
+| Panel admin (`admin.html`, "Alejandra Agente — Panel de Control", sección "Chat Directo con Alejandra", token propio en `localStorage`) | `alejandra-agente` | `escribir_bd` | ⚖️ Equilibrada (SEC-09) |
 | Telegram | `alejandra-app-api` (`worker.js`, `handleDevAI`/`devAIChat`, invocado directo desde el webhook) | `sql_query`, `run_migration` | 🔒 Estricta (SEC-08) |
 
 > ℹ️ **FUSIÓN-CHAT-DEVTOOLS-01 (15/09/2026)**: `panel.html` tenía un segundo chat flotante
@@ -239,12 +240,27 @@ otro worker):
 > estado real desde `19b352b`: el endpoint `/dev/ai-chat` de `worker.js` solo lo usa Telegram,
 > nadie más lo llama por HTTP.
 
-> ⚠️ **`alejandra-panel.html` es un frontend aparte**, con su propio parseo del stream SSE
-> de `/api/chat/stream` — no reutiliza código de `index.html` ni `panel.html`. Cualquier
-> cambio en el formato de eventos SSE (`routing`/`token`/`tool_start`/`tool_end`/`text`/`done`)
-> hay que verificarlo en **los tres** frontends de `alejandra-agente`, no solo en los dos
-> "grandes". (Incidente 29/07/2026: el evento `token` se añadió en mayo y nunca se implementó
-> aquí — la respuesta se generaba bien en el servidor pero no se pintaba nunca.)
+> ⚠️ **`admin.html` no estaba documentado aquí (detectado 16/09/2026)**: tiene chat propio
+> contra `alejandra-agente` desde el commit `8e08f88` ("paridad completa de chat en todas las
+> frontends", 06/08/2026), que ya lo trató como cuarta superficie junto a `index.html` y
+> `panel.html`. `CLAUDE.md` nunca se actualizó para reflejarlo — si se audita "todas las
+> versiones de Alejandra" contando solo tres frontends + Telegram, este panel se queda fuera.
+
+> ⚠️ **`alejandra-panel.html` y `admin.html` son frontends aparte**, cada uno con su propio
+> parseo del stream SSE de `/api/chat/stream` — no reutilizan código de `index.html` ni
+> `panel.html`. Cualquier cambio en el formato de eventos SSE
+> (`routing`/`token`/`tool_start`/`tool_end`/`text`/`done`) hay que verificarlo en **los
+> cuatro** frontends de `alejandra-agente`, no solo en los dos "grandes". (Incidente
+> 29/07/2026: el evento `token` se añadió en mayo y nunca se implementó en
+> `alejandra-panel.html` — la respuesta se generaba bien en el servidor pero no se pintaba
+> nunca.)
+>
+> ⚠️ **`AlejandraIA` (app Flutter/Android nativa) es un QUINTO consumidor del mismo SSE, fuera
+> de este repositorio.** Vive en `C:\Users\Adrian\Downloads\Projects\alejandra-ia`, repo y
+> ciclo de versiones propios, con su propio parser del stream en Dart
+> (`lib/services/agent_service.dart`). No aparece en el checklist de arriba porque no es un
+> archivo de `alejandra-app`, pero cualquier cambio de formato SSE en `alejandra-agente/worker.js`
+> la rompe igual que a los cuatro frontends HTML. Verificarla aparte al tocar el protocolo SSE.
 
 **Regla de oro:** toda mejora/fix de **seguridad, tools, permisos o barreras** hay que
 aplicarla —o decidir conscientemente que no aplica— en **LOS DOS** workers (`worker.js`
@@ -323,6 +339,7 @@ Registrado como deuda en `ARCHITECT_BACKLOG.md`.
 | `index.html` | App móvil PWA (toda la lógica frontend en un solo archivo) |
 | `panel.html` | Panel web de oficina |
 | `alejandra-panel.html` | Panel de control standalone (frontend independiente) |
+| `admin.html` | Panel admin standalone ("Alejandra Agente — Panel de Control": telemetría, config, memoria y chat propio contra `alejandra-agente`) |
 | `worker.js` | Backend Cloudflare Worker `alejandra-app-api` (API REST + Alejandra "dev" + crons) |
 | `alejandra-agente/worker.js` | Worker SEPARADO `alejandra-agente` (Alejandra de la app web/móvil y del panel de oficina). Tiene sus propios `lib.js`/`lib.test.js` |
 | `sw.js` | Service Worker (caché offline, push notifications) |
