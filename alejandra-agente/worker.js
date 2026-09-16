@@ -4943,8 +4943,15 @@ export default {
         if (path === '/api/admin/config' && req.method === 'POST') {
           const { modo, auto_fix, max_iterations, tope_gasto_diario_usd } = await req.json();
           const tope = (typeof tope_gasto_diario_usd === 'number' && tope_gasto_diario_usd > 0) ? tope_gasto_diario_usd : TOPE_GASTO_DIARIO_USD;
+          // FILA-DUPLICADA-CONFIG-01 (16/09/2026): sin el id explícito, INTEGER PRIMARY
+          // KEY DEFAULT 1 no aplicaba el default al omitirse la columna -- SQLite le
+          // asignaba un rowid nuevo en vez de actualizar la fila 1, así que
+          // ON CONFLICT(id) nunca se disparaba. Encontradas 2 filas reales en producción
+          // (id=1 de mayo, id=2 del 29/05 con modo='confirmacion' -- la que ORDER BY
+          // updated_at DESC LIMIT 1 devolvía en todas las lecturas). Con id=1 explícito,
+          // el UPSERT por fin actualiza siempre la misma fila.
           await env.DB.prepare(
-            `INSERT INTO agente_config (modo,auto_fix,max_iterations,tope_gasto_diario_usd,updated_at) VALUES(?,?,?,?,datetime('now'))
+            `INSERT INTO agente_config (id,modo,auto_fix,max_iterations,tope_gasto_diario_usd,updated_at) VALUES(1,?,?,?,?,datetime('now'))
              ON CONFLICT(id) DO UPDATE SET modo=?,auto_fix=?,max_iterations=?,tope_gasto_diario_usd=?,updated_at=datetime('now')`
           ).bind(modo,auto_fix??1,max_iterations??15,tope,modo,auto_fix??1,max_iterations??15,tope).run();
           return json({ ok: true, modo });
@@ -8610,8 +8617,10 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         if (tipo === 'config' && auto_aplicar && confianza >= 0.8 && parametros) {
           const modo      = parametros.modo || 'autonomo';
           const maxIter   = parametros.max_iterations || 15;
+          // FILA-DUPLICADA-CONFIG-01: mismo fix que /api/admin/config POST -- id
+          // explícito para que el UPSERT actualice siempre la fila 1, no una nueva.
           await env.DB.prepare(
-            `INSERT INTO agente_config (modo,auto_fix,max_iterations,updated_at) VALUES(?,1,?,datetime('now'))
+            `INSERT INTO agente_config (id,modo,auto_fix,max_iterations,updated_at) VALUES(1,?,1,?,datetime('now'))
              ON CONFLICT(id) DO UPDATE SET modo=?,auto_fix=1,max_iterations=?,updated_at=datetime('now')`
           ).bind(modo, maxIter, modo, maxIter).run();
           aplicado  = true;
