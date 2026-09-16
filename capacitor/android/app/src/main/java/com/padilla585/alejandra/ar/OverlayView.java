@@ -16,7 +16,12 @@ public class OverlayView extends View {
     private final Paint dotBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint reticlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private float[] pts = new float[0];   // x0,y0,x1,y1... en píxeles; NaN = punto no visible
-    private boolean reticleActive = false;
+    // FASE-A-AR-PAREDES-LISAS-01 (16/09/2026): antes solo había activo/inactivo (naranja/blanco).
+    // Se añade un tercer estado -- azul, mismo color que usa la PWA (WebXR) para su retículo por
+    // profundidad -- para que quede claro quEE un "Punto" aquí ancla por instant placement/
+    // profundidad, no sobre una superficie confirmada, antes de que el usuario pulse.
+    public static final int RETICLE_NONE = 0, RETICLE_HIT = 1, RETICLE_FALLBACK = 2;
+    private int reticleState = RETICLE_NONE;
 
     public OverlayView(Context c) {
         super(c);
@@ -27,13 +32,14 @@ public class OverlayView extends View {
     }
 
     public void setPoints(float[] screenPts) { this.pts = screenPts != null ? screenPts : new float[0]; postInvalidate(); }
-    public void setReticleActive(boolean a) { this.reticleActive = a; postInvalidate(); }
+    public void setReticleState(int state) { this.reticleState = state; postInvalidate(); }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float cx = getWidth() / 2f, cy = getHeight() / 2f;
-        reticlePaint.setColor(reticleActive ? Color.parseColor("#f97316") : Color.WHITE);
+        reticlePaint.setColor(reticleState == RETICLE_HIT ? Color.parseColor("#f97316")
+                : reticleState == RETICLE_FALLBACK ? Color.parseColor("#38bdf8") : Color.WHITE);
         canvas.drawCircle(cx, cy, 26f, reticlePaint);
         canvas.drawCircle(cx, cy, 3f, dotPaint);
         for (int i = 2; i + 1 < pts.length; i += 2) {

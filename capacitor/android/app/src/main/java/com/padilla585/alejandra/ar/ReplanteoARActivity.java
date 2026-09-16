@@ -36,6 +36,7 @@ import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
 import com.google.ar.core.exceptions.CameraNotAvailableException;
+import com.google.ar.core.exceptions.NotYetAvailableException;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException;
@@ -45,8 +46,10 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.nio.ShortBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import android.media.Image;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -75,6 +78,13 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
 
     private final List<Anchor> anchors = new ArrayList<>();
     private volatile boolean pendingPoint = false;
+    // FASE-A-AR-PAREDES-LISAS-01: modo "Tocar" explícito -- ancla por profundidad/instant
+    // placement a corta distancia aunque no haya ninguna superficie reconocida bajo el retículo.
+    private volatile boolean pendingContact = false;
+    // Última distancia estimada por la Depth API bajo el centro de la pantalla (metros), o -1 si
+    // no hay profundidad disponible en este frame. Se usa como approximateDistanceMeters para
+    // instant placement -- mucho más preciso que un valor fijo cuando el dispositivo lo soporta.
+    private float ultimaProfundidadM = -1f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -112,6 +122,11 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         root.addView(bar, barLp);
 
         bar.addView(makeBtn("📍 Punto", "#f97316", "#ffffff", 2f, v -> pendingPoint = true));
+        // FASE-A-AR-PAREDES-LISAS-01 (16/09/2026): Adrián probando en el HTC -- "no me detecta
+        // las paredes blancas... le cuesta mucho". La PWA (WebXR) ya tenía este mismo botón
+        // ("📱 Tocar con el móvil (pared lisa)") para anclar por contacto cuando ni el hit-test
+        // ni la profundidad enganchan en una superficie lisa/sin textura -- aquí no existía.
+        bar.addView(makeBtn("📱 Tocar", "#38bdf8", "#062a3d", 1.6f, v -> pendingContact = true));
         bar.addView(makeBtn("↩", "#ffffff", "#111111", 1f, v -> undo()));
         bar.addView(makeBtn("✖", "#000000", "#ffffff", 1f, v -> { setResult(RESULT_CANCELED); finish(); }));
         bar.addView(makeBtn("✅ Fin", "#22c55e", "#ffffff", 1.4f, v -> terminar()));
@@ -289,6 +304,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             background.draw(frame);
 
             boolean tracking = camera.getTrackingState() == TrackingState.TRACKING;
+            ultimaProfundidadM = tracking ? estimarProfundidadCentroM(frame) : -1f;
 
             if (pendingPoint && tracking) {
                 pendingPoint = false;
@@ -296,6 +312,13 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             } else if (pendingPoint && !tracking) {
                 pendingPoint = false;
                 runOnUiThread(() -> infoText.setText("Mueve el móvil despacio para que la cámara se sitúe, y vuelve a pulsar Punto."));
+            }
+            if (pendingContact && tracking) {
+                pendingContact = false;
+                colocarPorContacto(frame);
+            } else if (pendingContact && !tracking) {
+                pendingContact = false;
+                runOnUiThread(() -> infoText.setText("Mueve el móvil despacio para que la cámara se sitúe, y vuelve a pulsar Tocar."));
             }
 
             // Proyección de los anclajes a coordenadas de pantalla
@@ -315,12 +338,41 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                 screen[i * 2 + 1] = (1f - (ndcy * 0.5f + 0.5f)) * viewportH;
             }
             overlay.setPoints(screen);
-            overlay.setReticleActive(tracking);
+            // FASE-A-AR-PAREDES-LISAS-01: retículo de tres estados (ver OverlayView) -- naranja
+            // solo cuando hay plano/punto confirmado bajo el círculo, azul cuando eso falla pero
+            // instant placement/profundidad podría anclar igualmente (lo que antes no se veía:
+            // el usuario pulsaba "Punto" a ciegas y solo se enteraba del fallo después).
+            int reticleState = OverlayView.RETICLE_NONE;
+            if (tracking) {
+                boolean hayHitReal = false;
+                for (HitResult h : frame.hitTest(viewportW / 2f, viewportH / 2f)) {
+                    Trackable t = h.getTrackable();
+                    if ((t instanceof Plane && ((Plane) t).isPoseInPolygon(h.getHitPose())) || t instanceof Point) { hayHitReal = true; break; }
+                }
+                reticleState = hayHitReal ? OverlayView.RETICLE_HIT : OverlayView.RETICLE_FALLBACK;
+            }
+            overlay.setReticleState(reticleState);
             actualizarInfo(tracking);
         } catch (CameraNotAvailableException e) {
             fail("Cámara no disponible.");
         } catch (Throwable t) {
             // Un fallo de GL/render no debe cerrar la app en silencio.
+        }
+    }
+
+    // Profundidad bajo el centro de la pantalla en metros, o -1 si no hay dato disponible este
+    // frame (dispositivo sin Depth API, imagen aún no lista, o profundidad inválida ahí).
+    private float estimarProfundidadCentroM(Frame frame) {
+        try (Image depth = frame.acquireDepthImage16Bits()) {
+            int w = depth.getWidth(), h = depth.getHeight();
+            Image.Plane plane = depth.getPlanes()[0];
+            ShortBuffer buf = plane.getBuffer().asShortBuffer();
+            int rowStrideShorts = plane.getRowStride() / 2;
+            short raw = buf.get((h / 2) * rowStrideShorts + (w / 2));
+            int mm = raw & 0x1FFF; // 13 bits de profundidad en milimetros (formato DEPTH16 de ARCore)
+            return mm > 0 ? mm / 1000f : -1f;
+        } catch (Exception e) {
+            return -1f; // sin Depth API, imagen aun no lista, etc. -- no es un error real
         }
     }
 
@@ -333,11 +385,33 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             if (t instanceof Point && chosen == null) chosen = hit;
         }
         if (chosen == null && !hits.isEmpty()) chosen = hits.get(0);
+        // FASE-A-AR-PAREDES-LISAS-01 (16/09/2026): Adrián -- "no me detecta las paredes
+        // blancas... le cuesta mucho". Sin plano/punto confirmado, en vez de rendirse ya
+        // mismo, instant placement (ya activado en la config de la sesión) con la distancia
+        // real de la Depth API si la hay, o una estimación fija razonable si no -- misma idea
+        // que el respaldo por profundidad que ya tenía la PWA (WebXR) para este caso exacto.
         if (chosen == null) {
-            runOnUiThread(() -> infoText.setText("Sin superficie bajo el círculo. Apunta a una zona con textura o acerca el móvil."));
+            float distancia = ultimaProfundidadM > 0 ? ultimaProfundidadM : 2.0f;
+            List<HitResult> ip = frame.hitTestInstantPlacement(viewportW / 2f, viewportH / 2f, distancia);
+            if (!ip.isEmpty()) chosen = ip.get(0);
+        }
+        if (chosen == null) {
+            runOnUiThread(() -> infoText.setText("Sin superficie ni profundidad bajo el círculo. Acerca el móvil al punto y pulsa 📱 Tocar."));
             return;
         }
         anchors.add(chosen.createAnchor());
+    }
+
+    // "Tocar": el móvil está pegado o casi pegado a la superficie -- mismo botón y misma idea
+    // que "📱 Tocar con el móvil (pared lisa)" en la PWA (WebXR), para paredes/techos lisos
+    // donde ni el hit-test ni una estimación de profundidad a distancia normal enganchan.
+    private void colocarPorContacto(Frame frame) {
+        List<HitResult> ip = frame.hitTestInstantPlacement(viewportW / 2f, viewportH / 2f, 0.1f);
+        if (ip.isEmpty()) {
+            runOnUiThread(() -> infoText.setText("No se pudo anclar por contacto. Prueba de nuevo, bien pegado a la superficie."));
+            return;
+        }
+        anchors.add(ip.get(0).createAnchor());
     }
 
     private void actualizarInfo(boolean tracking) {
