@@ -22382,6 +22382,27 @@ let alejandraMensajesRenderizados = [];
 // abierto) siguen respetando si el usuario subió a leer mensajes antiguos.
 let _alejandraForzarScrollInicial = false;
 
+// PARIDAD-CHAT-APK-01 (16/09/2026): mismo fix que index.html (BUG-CAJON-APK-01) -- el cajón
+// de texto no guardaba nada, se perdía al cerrar la pestaña/recargar el panel de oficina.
+const ALEJANDR_DRAFT_KEY = 'alejandr_chat_draft';
+let _alejandrDraftTimer = null;
+function _alejandrGuardarBorrador(valor) {
+  clearTimeout(_alejandrDraftTimer);
+  _alejandrDraftTimer = setTimeout(() => {
+    try {
+      if (valor && valor.trim()) localStorage.setItem(ALEJANDR_DRAFT_KEY, valor);
+      else localStorage.removeItem(ALEJANDR_DRAFT_KEY);
+    } catch {}
+  }, 300);
+}
+function _alejandrRestaurarBorrador() {
+  const input = document.getElementById('alejandrInput');
+  if (!input) return;
+  let borrador = '';
+  try { borrador = localStorage.getItem(ALEJANDR_DRAFT_KEY) || ''; } catch {}
+  if (borrador && !input.value) input.value = borrador;
+}
+
 function alejandraFabAbrir() {
   const panel = document.getElementById('alejandraChatPanel');
   panel.style.display = 'flex';
@@ -22391,6 +22412,8 @@ function alejandraFabAbrir() {
   cargarAlejandraChat();
   if (!alejandrPolling) alejandrPolling = setInterval(cargarAlejandraChat, 5000);
   document.getElementById('fabAlejandra').style.display = 'none';
+  _alejandrRestaurarBorrador();
+  _fabRevisarAdjPendientes();
   // FUSION-CHAT-DEVTOOLS-01 (15/09/2026): paridad portada del extinto chat "DevTools IA"
   // (toggleAIChat) -- registra una entrada en el historial del navegador para que el botón
   // "atrás" del móvil cierre el chat en vez de salir del panel o de la app.
@@ -22635,12 +22658,30 @@ async function wSend(){
   handle.addEventListener('pointercancel', pararResize);
 })();
 
+// PARIDAD-CHAT-APK-01 (16/09/2026): el sondeo de 5s ya actúa como reintento implícito (un
+// fallo puntual se autocorrige solo), pero un fallo SOSTENIDO (sesión caducada, red caída)
+// se quedaba en un console.warn perpetuo sin que Adrián se enterase nunca. Tras 2 fallos
+// seguidos se muestra un aviso discreto con reintento manual; se quita en cuanto un sondeo
+// vuelve a tener éxito. El guard de _alejandraHistBusy evita que dos llamadas se solapen si
+// una tarda más de 5s (p.ej. red lenta) justo cuando salta el siguiente intervalo.
+let _alejandraHistBusy = false;
+let _alejandraHistFallos = 0;
+function _alejandraHistAvisar() {
+  const cont = document.getElementById('alejandraMensajes');
+  if (!cont || cont.querySelector('.alejandra-hist-aviso')) return;
+  cont.insertAdjacentHTML('afterbegin', `<div class="alejandra-hist-aviso" style="text-align:center;font-size:11px;color:#d97706;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:8px 12px;margin-bottom:8px">
+    ⚠️ No se puede sincronizar el historial
+    <span onclick="cargarAlejandraChat()" style="display:block;margin-top:4px;font-weight:700;text-decoration:underline;cursor:pointer">🔄 Reintentar</span>
+  </div>`);
+}
 async function cargarAlejandraChat() {
   // BUG-USUARIO-ID-PERDIDO-01: fallback a nombre igual que index.html -- si algún otro
   // camino futuro vuelve a dejar SESSION.usuario_id vacío, que esta función no se quede
   // muda por completo (el backend ya acepta nombre como identificador alternativo).
   const usuarioId = SESSION?.usuario_id || SESSION?.nombre || null;
   if (!usuarioId) return;
+  if (_alejandraHistBusy) return;
+  _alejandraHistBusy = true;
   try {
     // FIX-ALEJANDRA-FAB-02 (29/07/2026): este endpoint vive en worker.js (alejandra-app-api),
     // que solo reconoce X-Token (ver getAuth() ahí) -- Authorization: Bearer no identifica a
@@ -22661,8 +22702,14 @@ async function cargarAlejandraChat() {
     // menor porque esto se sondea cada 5s mientras el chat está abierto (un fallo puntual
     // se autocorrige en el siguiente sondeo), pero sin loguear el fallo tampoco había forma
     // de distinguir "está fallando de verdad" de "no hay nada nuevo".
-    if (!r.ok) { console.warn('[Alejandra] historial (panel): HTTP', r.status); return; }
+    if (!r.ok) {
+      console.warn('[Alejandra] historial (panel): HTTP', r.status);
+      if (++_alejandraHistFallos >= 2) _alejandraHistAvisar();
+      return;
+    }
     const data = await r.json();
+    _alejandraHistFallos = 0;
+    document.querySelector('#alejandraMensajes .alejandra-hist-aviso')?.remove();
     // BUG-CHAT-ORDEN-01 (14/09/2026): mismo bug que SCAN-05 (25/07/2026) en cargarChat()
     // (chat de equipo), sin corregir aquí -- getIAChatHistory (worker.js) ya devuelve los
     // mensajes en orden cronológico (más antiguos primero: ORDER BY DESC + .reverse() en
@@ -22715,8 +22762,13 @@ async function cargarAlejandraChat() {
     }
     alejandraMensajesRenderizados = firmas;
     if (cercaDelFinal) cont.scrollTop = cont.scrollHeight;
+    _alejandraHistFallos = 0;
+    document.querySelector('#alejandraMensajes .alejandra-hist-aviso')?.remove();
   } catch (e) {
     console.error('Error cargando chat Alejandra:', e);
+    if (++_alejandraHistFallos >= 2) _alejandraHistAvisar();
+  } finally {
+    _alejandraHistBusy = false;
   }
 }
 
@@ -22830,6 +22882,65 @@ const _fabAllowedTypes = [
   'model/vnd.dxf','image/vnd.dwg'
 ];
 
+// PARIDAD-CHAT-APK-01 (16/09/2026): mismo fix que index.html/alejandra-panel.html
+// (BUG-ADJUNTO-APK-01) -- aquí el archivo solo vivía en el array en memoria
+// _fabAttachments desde que se seleccionaba hasta que se mandaba el mensaje (la subida
+// real ocurre dentro de alejandrEnviar(), no al seleccionar). Si se cierra la pestaña o
+// se pierde la conexión en ese hueco, el archivo desaparecía sin rastro. Se guarda en
+// IndexedDB nada más leerlo; se borra de ahí en cuanto se sube con éxito dentro de
+// alejandrEnviar(). Si queda huérfano (la pestaña murió antes de enviar), se recupera
+// solo al reabrir el chat (_fabRevisarAdjPendientes).
+function _fabAdjDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('alejandr_fab_adjuntos_pendientes', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('pendientes', { keyPath: 'id' }); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function _fabAdjGuardarPendiente(a) {
+  try {
+    const db = await _fabAdjDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('pendientes', 'readwrite');
+      tx.objectStore('pendientes').put(a);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { console.warn('[Alejandra] adjunto: no se pudo guardar pendiente', e.message); }
+}
+async function _fabAdjBorrarPendiente(id) {
+  try {
+    const db = await _fabAdjDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('pendientes', 'readwrite');
+      tx.objectStore('pendientes').delete(id);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch {}
+}
+async function _fabRevisarAdjPendientes() {
+  try {
+    const db = await _fabAdjDB();
+    const pendientes = await new Promise((res, rej) => {
+      const req = db.transaction('pendientes', 'readonly').objectStore('pendientes').getAll();
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = () => rej(req.error);
+    });
+    if (!pendientes.length) return;
+    const yaCargados = new Set(_fabAttachments.map(a => a.id));
+    let recuperados = 0;
+    for (const p of pendientes) {
+      if (yaCargados.has(p.id)) continue;
+      _fabAttachments.push(p);
+      recuperados++;
+    }
+    if (recuperados) {
+      _fabRenderAdjuntos();
+      toast(`📎 ${recuperados} adjunto(s) recuperado(s) de una sesión anterior sin enviar`);
+    }
+  } catch (e) { console.warn('[Alejandra] adjuntos pendientes: fallo leyendo', e.message); }
+}
+
 function alejandrOnFiles(ev) {
   const files = Array.from(ev.target.files || []);
   for (const f of files) {
@@ -22840,7 +22951,10 @@ function alejandrOnFiles(ev) {
     const reader = new FileReader();
     reader.onload = () => {
       const b64 = reader.result.split(',')[1];
-      _fabAttachments.push({ b64, mime: f.type || 'application/octet-stream', name: f.name, size: f.size });
+      const id = Date.now() + '_' + Math.random().toString(36).slice(2);
+      const attachment = { id, b64, mime: f.type || 'application/octet-stream', name: f.name, size: f.size };
+      _fabAttachments.push(attachment);
+      _fabAdjGuardarPendiente(attachment);
       _fabRenderAdjuntos();
     };
     reader.readAsDataURL(f);
@@ -22861,7 +22975,8 @@ function _fabRenderAdjuntos() {
 }
 
 function alejandrQuitarAdjunto(i) {
-  _fabAttachments.splice(i, 1);
+  const [removido] = _fabAttachments.splice(i, 1);
+  if (removido?.id) _fabAdjBorrarPendiente(removido.id);
   _fabRenderAdjuntos();
 }
 
@@ -23064,6 +23179,7 @@ async function alejandrEnviar() {
   const msg = input.value.trim();
   if (!msg) return;
   input.value = '';
+  try { localStorage.removeItem(ALEJANDR_DRAFT_KEY); } catch {}
   const usuarioId = SESSION?.usuario_id || null;
   if (!usuarioId) {
     alert('No hay sesión activa');
@@ -23108,6 +23224,7 @@ async function alejandrEnviar() {
 
     // Subir archivos adjuntos a R2 y obtener URLs
     const adjuntosR2 = [];
+    const adjuntosFallidos = [];
     for (const a of _fabAttachments) {
       try {
         const blob = await fetch(`data:${a.mime};base64,${a.b64}`).then(r => r.blob());
@@ -23116,9 +23233,20 @@ async function alejandrEnviar() {
         fd.append('usuario_id', usuarioId);
         const upRes = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method: 'POST', body: fd });
         const upData = await upRes.json();
-        if (upData.ok) adjuntosR2.push(upData.url);
-      } catch (ue) { console.warn('Upload error:', ue); }
+        if (upData.ok) {
+          adjuntosR2.push(upData.url);
+          if (a.id) _fabAdjBorrarPendiente(a.id);
+        } else {
+          adjuntosFallidos.push(a.name);
+        }
+      } catch (ue) {
+        console.warn('Upload error:', ue);
+        adjuntosFallidos.push(a.name);
+        // Se queda en IndexedDB (ya se guardó al seleccionarlo) -- se recupera solo al
+        // reabrir el chat, en vez de perderse en silencio como antes.
+      }
     }
+    if (adjuntosFallidos.length) toast(`⚠️ No se pudo subir: ${adjuntosFallidos.join(', ')} — se recuperará al reabrir el chat`);
 
     const res = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream', {
       method: 'POST',
@@ -28131,7 +28259,7 @@ document.addEventListener('visibilitychange', () => {
   <div style="display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)">
     <input type="file" id="alejandrFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandrOnFiles(event)">
     <button onclick="document.getElementById('alejandrFile').click()" title="Adjuntar archivo" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s">📎</button>
-    <input id="alejandrInput" class="form-input" placeholder="Escribe tu pregunta..." style="flex:1;padding:8px 12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandrEnviar()}">
+    <input id="alejandrInput" class="form-input" placeholder="Escribe tu pregunta..." style="flex:1;padding:8px 12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandrEnviar()}" oninput="_alejandrGuardarBorrador(this.value)">
     <button id="alejandrVozBtn" onclick="alejandrToggleVoz()" title="Voz" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s,background .2s">🎙️</button>
     <button class="btn btn-primary" onclick="alejandrEnviar()" style="padding:8px 14px">➤</button>
   </div>

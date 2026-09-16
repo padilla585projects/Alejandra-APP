@@ -662,11 +662,40 @@ function initChat() {
         <input type="file" id="chatFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="subirAdjuntos(event)">
         <textarea id="chatInput" class="chat-ta" rows="1" placeholder="Pregunta algo a Alejandra..."
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarChat()}"
-          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px';_guardarBorrador(this.value)"></textarea>
         <button class="chat-btn chat-btn-send" onclick="enviarChat()">⚡</button>
       </div>
     </div>`;
   _restaurarHistorialChat();
+  _restaurarBorrador();
+  _revisarAdjPendientes();
+}
+
+// PARIDAD-CHAT-APK-01 (16/09/2026): mismo fix que index.html (BUG-CAJON-APK-01) -- aquí el
+// riesgo es peor porque initChat() reconstruye el HTML del chat entero cada vez que se
+// vuelve a esta pestaña (no solo al cerrar la ventana), así que sin esto el borrador se
+// perdía con solo cambiar de sección y volver.
+const CHAT_DRAFT_KEY = 'alej_chat_draft';
+let _draftTimer = null;
+function _guardarBorrador(valor) {
+  clearTimeout(_draftTimer);
+  _draftTimer = setTimeout(() => {
+    try {
+      if (valor && valor.trim()) localStorage.setItem(CHAT_DRAFT_KEY, valor);
+      else localStorage.removeItem(CHAT_DRAFT_KEY);
+    } catch {}
+  }, 300);
+}
+function _restaurarBorrador() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  let borrador = '';
+  try { borrador = localStorage.getItem(CHAT_DRAFT_KEY) || ''; } catch {}
+  if (borrador && !input.value) {
+    input.value = borrador;
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+  }
 }
 
 // HISTORIAL-UNIFICADO-01 (16/09/2026): este panel nunca cargaba el historial guardado --
@@ -674,15 +703,38 @@ function initChat() {
 // existiera en index.html/panel.html. Mismo endpoint y mismo grupo de canales
 // (app_android,pwa,panel) que ya usa index.html en _alejandraCargarHistorialServidor(),
 // para que sea de verdad una sola conversación continua entre sitios.
-async function _restaurarHistorialChat() {
-  const msgs = document.getElementById('chatMsgs');
-  if (!msgs || !chatUserId) return;
+// PARIDAD-CHAT-APK-01: mismo refuerzo de reintentos que index.html (BUG-HISTORIAL-APK-VACIO-01)
+// -- 3 intentos con espera creciente en vez de rendirse al primer fallo.
+async function _fetchHistorialConReintento(intento = 1) {
+  const maxIntentos = 3;
   try {
     const res = await fetch(`${API}/api/chat/history?usuario_id=${encodeURIComponent(chatUserId)}&canal=app_android,pwa,panel&limit=50`, {
       headers: adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {}
     });
-    if (!res.ok) { console.warn('[Alejandra] historial: HTTP', res.status); return; }
-    const data = await res.json();
+    if (!res.ok) {
+      console.warn('[Alejandra] historial: HTTP', res.status, 'intento', intento);
+      if (intento < maxIntentos) { await new Promise(r => setTimeout(r, 1000 * intento)); return _fetchHistorialConReintento(intento + 1); }
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    console.warn('[Alejandra] historial: fallo de red', e.message, 'intento', intento);
+    if (intento < maxIntentos) { await new Promise(r => setTimeout(r, 1000 * intento)); return _fetchHistorialConReintento(intento + 1); }
+    return null;
+  }
+}
+async function _restaurarHistorialChat() {
+  const msgs = document.getElementById('chatMsgs');
+  if (!msgs || !chatUserId) return;
+  try {
+    const data = await _fetchHistorialConReintento();
+    if (!data) {
+      msgs.insertAdjacentHTML('beforeend', `<div style="text-align:center;font-size:11px;color:#d97706;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:8px 12px;margin:8px 12px">
+        ⚠️ No se pudo cargar el historial de conversación
+        <span onclick="_restaurarHistorialChat()" style="display:block;margin-top:4px;font-weight:700;text-decoration:underline;cursor:pointer">🔄 Reintentar</span>
+      </div>`);
+      return;
+    }
     if (!data?.ok || !data.mensajes || data.mensajes.length === 0) return;
     msgs.innerHTML = '';
     for (const m of data.mensajes) {
@@ -719,32 +771,121 @@ function formatToolInput(nombre, input) {
 }
 
 // ── Adjuntos (R2 upload) ──────────────────────────────────────
+// PARIDAD-CHAT-APK-01: mismo fix que index.html (BUG-ADJUNTO-APK-01) -- si se pierde la
+// conexión o se recarga/cierra la pestaña a medio subir, antes el archivo desaparecía sin
+// rastro. Se guarda en IndexedDB antes de intentar subirlo; si falla, queda un botón
+// "Reintentar" que reusa el archivo ya guardado.
 let _adjuntos = [];
+const CHAT_ADJ_DB = 'alej_chat_adjuntos_pendientes';
+
+function _adjDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(CHAT_ADJ_DB, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('pendientes', { keyPath: 'id' }); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function _adjGuardarPendiente(id, file) {
+  try {
+    const db = await _adjDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('pendientes', 'readwrite');
+      tx.objectStore('pendientes').put({ id, name: file.name, type: file.type, blob: file, ts: Date.now() });
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { console.warn('[Alejandra] adjunto: no se pudo guardar pendiente', e.message); }
+}
+async function _adjBorrarPendiente(id) {
+  try {
+    const db = await _adjDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('pendientes', 'readwrite');
+      tx.objectStore('pendientes').delete(id);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch {}
+}
+async function _adjListarPendientes() {
+  try {
+    const db = await _adjDB();
+    return await new Promise((res, rej) => {
+      const req = db.transaction('pendientes', 'readonly').objectStore('pendientes').getAll();
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = () => rej(req.error);
+    });
+  } catch { return []; }
+}
+
+function _adjChipPendiente(id, name) {
+  const chip = document.createElement('div');
+  chip.dataset.pendId = id;
+  chip.style.cssText = 'background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px';
+  chip.innerHTML = `<span>⚠️</span><span>${esc(name)}</span><span style="cursor:pointer;color:#ef4444;font-weight:700;text-decoration:underline" onclick="_adjReintentar('${id}',this.parentElement)">Reintentar</span><span style="cursor:pointer;color:var(--muted)" onclick="_adjDescartarPendiente('${id}',this.parentElement)">×</span>`;
+  return chip;
+}
+
+async function _adjSubirBlob(id, file, chip) {
+  chip.innerHTML = `<span>⏳</span><span>${esc(file.name)}</span>`;
+  try {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('usuario_id', chatUserId || 'adrian');
+    const r = await fetch(`${API}/upload`, { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'upload failed');
+    _adjuntos.push(j.url);
+    await _adjBorrarPendiente(id);
+    chip.dataset.pendId = '';
+    chip.innerHTML = `<span>📎</span><span>${esc(file.name)}</span><span style="cursor:pointer;color:var(--muted)" onclick="quitarAdjunto('${j.url}', this.parentElement)">×</span>`;
+  } catch (e) {
+    chip.parentElement?.appendChild(_adjChipPendiente(id, file.name));
+    chip.remove();
+  }
+}
 
 async function subirAdjuntos(ev) {
   const files = Array.from(ev.target.files || []);
   ev.target.value = '';
+  const cont = document.getElementById('chatAdjuntos');
   for (const f of files) {
     if (f.size > 20 * 1024 * 1024) { alert(`${f.name} supera 20MB`); continue; }
-    const cont = document.getElementById('chatAdjuntos');
+    const id = Date.now() + '_' + Math.random().toString(36).slice(2);
+    await _adjGuardarPendiente(id, f);
     const chip = document.createElement('div');
     chip.style.cssText = 'background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text)';
     chip.innerHTML = `<span>⏳</span><span>${esc(f.name)}</span>`;
     cont.appendChild(chip); cont.style.display = 'flex';
-    try {
-      const fd = new FormData();
-      fd.append('file', f);
-      fd.append('usuario_id', chatUserId || 'adrian');
-      const r = await fetch(`${API}/upload`, { method: 'POST', body: fd });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'upload failed');
-      _adjuntos.push(j.url);
-      chip.innerHTML = `<span>📎</span><span>${esc(f.name)}</span><span style="cursor:pointer;color:var(--muted)" onclick="quitarAdjunto('${j.url}', this.parentElement)">×</span>`;
-    } catch(e) {
-      chip.innerHTML = `<span style="color:#f55">❌ ${esc(f.name)}</span>`;
-      setTimeout(()=>chip.remove(), 3000);
-    }
+    await _adjSubirBlob(id, f, chip);
   }
+}
+
+async function _adjReintentar(id, chip) {
+  try {
+    const db = await _adjDB();
+    const registro = await new Promise((res, rej) => {
+      const req = db.transaction('pendientes', 'readonly').objectStore('pendientes').get(id);
+      req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error);
+    });
+    if (!registro) { chip.remove(); return; }
+    await _adjSubirBlob(id, registro.blob, chip);
+  } catch (e) { alert('No se pudo reintentar: ' + e.message); }
+}
+
+async function _adjDescartarPendiente(id, chip) {
+  await _adjBorrarPendiente(id);
+  chip.remove();
+  const cont = document.getElementById('chatAdjuntos');
+  if (cont && !cont.children.length) cont.style.display = 'none';
+}
+
+async function _revisarAdjPendientes() {
+  const pendientes = await _adjListarPendientes();
+  if (!pendientes.length) return;
+  const cont = document.getElementById('chatAdjuntos');
+  if (!cont) return;
+  for (const p of pendientes) cont.appendChild(_adjChipPendiente(p.id, p.name));
+  cont.style.display = 'flex';
 }
 
 function quitarAdjunto(url, chip) {
@@ -764,6 +905,7 @@ async function enviarChat() {
   if (!msg) return;
   _chatBusy = true;
   input.value = ''; input.style.height = 'auto';
+  try { localStorage.removeItem(CHAT_DRAFT_KEY); } catch {}
   const adjuntosEnviados = _adjuntos.slice();
   _adjuntos = [];
   const cont = document.getElementById('chatAdjuntos');
