@@ -19221,6 +19221,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         puntos: [], obstaculos: [], referencia: null, escala_px_m: null, longitud_manual_m: null,
         calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
       };
+      // BUG-REPL-GUARDAR-AR-01: mismo motivo que en los dos caminos de AR -- un replanteo
+      // recién creado siempre se puede guardar, por definición.
+      _replPuedeEditar = true;
       replCerrarNuevo();
       showScreen('replanteoEditor');
       replInitEditor();
@@ -21296,6 +21299,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       fotosDoc: (_ar.fotosDoc || []).slice(),
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
     };
+    // BUG-REPL-GUARDAR-AR-01 (16/09/2026): Adrián -- "termino de replantear y le doy a
+    // guardar, no se guarda" (APK y PWA por igual). _replPuedeEditar es una variable
+    // aparte de _repl que puede quedar desincronizada tras la sesión AR (cambio de
+    // Activity nativa en la APK, sesión inmersiva WebXR aquí) -- _repl llegaba con los
+    // puntos trazados bien, pero el botón Guardar quedaba deshabilitado porque
+    // _replAplicarPermisos() la seguía viendo en false. Para un replanteo recién creado
+    // (id: null) la pregunta "¿puede editar?" no tiene sentido -- si lo acabas de crear,
+    // por definición puedes guardarlo.
+    _replPuedeEditar = true;
     replCerrarNuevo();
     showScreen('replanteoEditor');
     replInitEditor();
@@ -21362,6 +21374,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       complementos: [], fotosDoc: [],
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
     };
+    // BUG-REPL-GUARDAR-AR-01: ver comentario en el camino WebXR -- mismo motivo.
+    _replPuedeEditar = true;
     replCerrarNuevo();
     showScreen('replanteoEditor');
     replInitEditor();
