@@ -816,6 +816,55 @@
   <script>
     const ADMIN_WORKER_URL = 'https://alejandra-agente.alejandra-app.workers.dev/api/admin';
     const ADMIN_TOKEN = localStorage.getItem('alejandra_admin_token') || 'admin_inicial_setup_alejandra_2026';
+    // HISTORIAL-UNIFICADO-01 (16/09/2026): antes se mandaba usuario_id fijo 'admin_web' y
+    // canal 'web' -- los mensajes de este panel quedaban en su propio silo, invisibles desde
+    // index.html/panel.html/alejandra-panel.html aunque fuera la misma persona (Adrián,
+    // único usuario de este panel). alej_uid es la misma clave de localStorage que ya usa
+    // alejandra-panel.html (mismo origen, mismo storage) -- si se cambia en un sitio, se
+    // refleja en el otro.
+    const _chatUserId = localStorage.getItem('alej_uid') || 'adrian';
+
+    // MARKDOWN-ADMIN-01 (16/09/2026): marked.js/highlight.js y el CSS .admin-md/.code-header
+    // ya estaban cargados desde el commit 8e08f88 ("paridad completa de chat... admin.html"),
+    // pero renderMd()/addCopyBtns()/copyCode() nunca se llegaron a escribir -- las llamadas
+    // en enviarMensaje() y cargarHistorialChat() lanzaban ReferenceError silenciado por el
+    // catch de fuera, así que el markdown nunca se aplicaba (el chat se veía siempre en texto
+    // plano con saltos de línea, sin negritas/código/listas). Mismo patrón que ya usa
+    // alejandra-panel.html.
+    function setupMarked() {
+      if (typeof marked === 'undefined' || typeof hljs === 'undefined') return;
+      marked.setOptions({
+        breaks: true,
+        gfm: true,
+        highlight: (code, lang) => {
+          if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+          return hljs.highlightAuto(code).value;
+        }
+      });
+    }
+    setupMarked();
+
+    function renderMd(txt) {
+      if (typeof marked === 'undefined') return escapeHtml(txt).replace(/\n/g, '<br>');
+      return marked.parse(txt);
+    }
+
+    function addCopyBtns(el) {
+      el.querySelectorAll('pre').forEach(pre => {
+        if (pre.querySelector('.code-header')) return;
+        const code = pre.querySelector('code');
+        const lang = (code?.className || '').replace('language-', '').replace('hljs ', '').split(' ')[0] || '';
+        const header = document.createElement('div');
+        header.className = 'code-header';
+        header.innerHTML = `<span>${lang}</span><button class="code-copy" onclick="copyCode(this)">Copiar</button>`;
+        pre.insertBefore(header, pre.firstChild);
+      });
+    }
+
+    function copyCode(btn) {
+      const code = btn.closest('pre')?.querySelector('code')?.innerText || '';
+      navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copiado!'; setTimeout(() => btn.textContent = 'Copiar', 2000); });
+    }
 
     function switchTab(tabName) {
       // Hide all tabs
@@ -847,6 +896,44 @@
       if (tabName === 'memory') cargarMemoria();
        if (tabName === 'trazas') cargarTrazas();
        if (tabName === 'telemetrica') cargarTelemetrica();
+      if (tabName === 'chat') cargarHistorialChat();
+    }
+
+    // HISTORIAL-UNIFICADO-01 (16/09/2026): este panel nunca restauraba historial -- cada
+    // visita a la pestaña empezaba con el saludo fijo aunque ya hubiera conversación previa
+    // en otros sitios. Solo se carga una vez por sesión de página (no en cada clic a la
+    // pestaña) para no pisar una conversación en curso.
+    let _historialChatCargado = false;
+    async function cargarHistorialChat() {
+      if (_historialChatCargado) return;
+      _historialChatCargado = true;
+      const messagesDiv = document.getElementById('chatMessages');
+      if (!messagesDiv) return;
+      try {
+        const res = await fetch(`https://alejandra-agente.alejandra-app.workers.dev/api/chat/history?usuario_id=${encodeURIComponent(_chatUserId)}&canal=app_android,pwa,panel&limit=50`, {
+          headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+        });
+        if (!res.ok) { console.warn('[Alejandra] historial: HTTP', res.status); return; }
+        const data = await res.json();
+        if (!data?.ok || !data.mensajes || data.mensajes.length === 0) return;
+        messagesDiv.innerHTML = '';
+        for (const m of data.mensajes) {
+          if (m.rol !== 'user' && m.rol !== 'assistant') continue;
+          const div = document.createElement('div');
+          if (m.rol === 'user') {
+            div.className = 'message user';
+            div.innerHTML = `<div class="message-bubble">${escapeHtml(m.contenido)}</div>`;
+          } else {
+            div.className = 'message bot';
+            div.innerHTML = `<div class="message-bubble admin-md">${renderMd(m.contenido)}</div>`;
+            addCopyBtns(div);
+          }
+          messagesDiv.appendChild(div);
+        }
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      } catch (e) {
+        console.warn('[Alejandra] historial: fallo de red', e.message);
+      }
     }
 
     async function cargarConfiguracion() {
@@ -1009,7 +1096,9 @@
         const res = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${typeof ADMIN_TOKEN !== 'undefined' ? ADMIN_TOKEN : ''}` },
-          body: JSON.stringify({ mensaje, usuario_id: 'admin_web', empresa_id: 'admin', canal: 'web' })
+          // canal 'panel': se une al mismo grupo que index.html/panel.html leen como una
+          // sola conversación (app_android,pwa,panel) -- ver HISTORIAL-UNIFICADO-01 arriba.
+          body: JSON.stringify({ mensaje, usuario_id: _chatUserId, empresa_id: 'admin', canal: 'panel' })
         });
 
         if (!res.ok) {

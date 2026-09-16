@@ -666,6 +666,42 @@ function initChat() {
         <button class="chat-btn chat-btn-send" onclick="enviarChat()">⚡</button>
       </div>
     </div>`;
+  _restaurarHistorialChat();
+}
+
+// HISTORIAL-UNIFICADO-01 (16/09/2026): este panel nunca cargaba el historial guardado --
+// cada vez que se abría el chat empezaba en blanco aunque la misma conversación ya
+// existiera en index.html/panel.html. Mismo endpoint y mismo grupo de canales
+// (app_android,pwa,panel) que ya usa index.html en _alejandraCargarHistorialServidor(),
+// para que sea de verdad una sola conversación continua entre sitios.
+async function _restaurarHistorialChat() {
+  const msgs = document.getElementById('chatMsgs');
+  if (!msgs || !chatUserId) return;
+  try {
+    const res = await fetch(`${API}/api/chat/history?usuario_id=${encodeURIComponent(chatUserId)}&canal=app_android,pwa,panel&limit=50`, {
+      headers: adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {}
+    });
+    if (!res.ok) { console.warn('[Alejandra] historial: HTTP', res.status); return; }
+    const data = await res.json();
+    if (!data?.ok || !data.mensajes || data.mensajes.length === 0) return;
+    msgs.innerHTML = '';
+    for (const m of data.mensajes) {
+      if (m.rol !== 'user' && m.rol !== 'assistant') continue;
+      const div = document.createElement('div');
+      if (m.rol === 'user') {
+        div.className = 'msg-u';
+        div.innerHTML = `<div class="bub-u">${esc(m.contenido)}</div>`;
+      } else {
+        div.className = 'msg-b';
+        div.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b">${renderMd(m.contenido)}</div>`;
+        addCopyBtns(div);
+      }
+      msgs.appendChild(div);
+    }
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch (e) {
+    console.warn('[Alejandra] historial: fallo de red', e.message);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────
