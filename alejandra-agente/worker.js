@@ -6387,7 +6387,16 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // BUG-CONTEXTO-ADJUNTO-CORTO-01 (15/09/2026): 10 se quedaba corto -- ver comentario
     // junto a obtenerContextoChat() en /api/chat. Sigue unificado con
     // procesarConNEXUSStream (línea ~6469) por el mismo motivo que ALEJANDRA-CONTEXTO-01.
-    const limitHistorial      = clas.experto === 'simple' ? 4 : 24;
+    // BUG-CONTEXTO-FOTO-SIMPLE-01 (16/09/2026): Adrián mandó la misma foto de una placa de
+    // motor 3 veces porque Alejandra decía no tenerla -- el router clasificaba los mensajes
+    // de seguimiento ("el motor está en triángulo", "ahí unas bornas que no sé para qué
+    // valen") como 'simple', y con solo 4 mensajes de margen (2 turnos) una foto mandada 3
+    // turnos antes desaparecía del contexto por completo, aunque siguiera dentro de la
+    // ventana de <2h que sí la reconstruye como imagen real (ver construirMessages).
+    // Subido a 12 (6 turnos) -- cubre una secuencia realista de idas y vueltas sobre una
+    // misma foto sin llegar al límite de 24 de los turnos no-simples (el coste extra en
+    // turnos simples, que existen precisamente por ser baratos, sigue acotado).
+    const limitHistorial      = clas.experto === 'simple' ? 12 : 24;
     // Aprendizajes para todo experto salvo 'simple'. Unificado con el criterio
     // de procesarConNEXUSStream (linea ~5023) para evitar que app/panel vean un
     // comportamiento distinto segun usen streaming o no — 'simple' excluye
@@ -6587,8 +6596,9 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       ...calcularModulosDinamicos(clas, expert, mensaje, pantalla, departamento)
     ];
     const systemPrompt      = await buildAnthropicSystemBlocks(modulosFinal, tools, env);
-    // BUG-CONTEXTO-ADJUNTO-CORTO-01 (15/09/2026): ver comentario en procesarConNEXUS.
-    const limitHistorial    = clas.experto === 'simple' ? 4 : 24;
+    // BUG-CONTEXTO-ADJUNTO-CORTO-01 (15/09/2026) / BUG-CONTEXTO-FOTO-SIMPLE-01 (16/09/2026):
+    // ver comentario en procesarConNEXUSStream -- mismo límite, unificado por el mismo motivo.
+    const limitHistorial    = clas.experto === 'simple' ? 12 : 24;
     const incluirAprendizajes = clas.experto !== 'simple';
     const messages          = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto, usuario_label, empresa_id);
 
