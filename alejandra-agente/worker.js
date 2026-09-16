@@ -4180,6 +4180,20 @@ async function leerConfigDevBypass(env) {
   }
 }
 
+// PANEL-ALEJANDRA-REAL-01 (16/09/2026): TOPE_GASTO_DIARIO_USD era una constante fija --
+// se mueve a agente_config (migrate_014) para poder ajustarla desde admin.html sin
+// deploy. Fallback a la constante si la columna aún no existe (migración no aplicada)
+// o la fila está vacía, para no cambiar comportamiento por defecto.
+async function leerTopeGastoDiario(env) {
+  try {
+    const row = await env.DB.prepare('SELECT tope_gasto_diario_usd FROM agente_config ORDER BY updated_at DESC LIMIT 1').first();
+    const v = row?.tope_gasto_diario_usd;
+    return (typeof v === 'number' && v > 0) ? v : TOPE_GASTO_DIARIO_USD;
+  } catch (_) {
+    return TOPE_GASTO_DIARIO_USD;
+  }
+}
+
 async function validarTopeGastoDiario(env) {
   try {
     const cacheKey = 'gasto:hoy';
@@ -4197,7 +4211,8 @@ async function validarTopeGastoDiario(env) {
         await env.RATE_LIMIT_KV.put(cacheKey, String(gasto), { expirationTtl: 60 }).catch(() => {});
       }
     }
-    return gasto < TOPE_GASTO_DIARIO_USD;
+    const tope = await leerTopeGastoDiario(env);
+    return gasto < tope;
   } catch (_) {
     return true; // fail-open: si falla la comprobación, no tumbamos el servicio
   }
@@ -4923,15 +4938,42 @@ export default {
 
         if (path === '/api/admin/config' && req.method === 'GET') {
           const c = await env.DB.prepare('SELECT * FROM agente_config ORDER BY updated_at DESC LIMIT 1').first();
-          return json(c || { modo: 'autonomo', auto_fix: 1, max_iterations: 15 });
+          return json(c || { modo: 'autonomo', auto_fix: 1, max_iterations: 15, tope_gasto_diario_usd: TOPE_GASTO_DIARIO_USD });
         }
         if (path === '/api/admin/config' && req.method === 'POST') {
-          const { modo, auto_fix, max_iterations } = await req.json();
+          const { modo, auto_fix, max_iterations, tope_gasto_diario_usd } = await req.json();
+          const tope = (typeof tope_gasto_diario_usd === 'number' && tope_gasto_diario_usd > 0) ? tope_gasto_diario_usd : TOPE_GASTO_DIARIO_USD;
           await env.DB.prepare(
-            `INSERT INTO agente_config (modo,auto_fix,max_iterations,updated_at) VALUES(?,?,?,datetime('now'))
-             ON CONFLICT(id) DO UPDATE SET modo=?,auto_fix=?,max_iterations=?,updated_at=datetime('now')`
-          ).bind(modo,auto_fix??1,max_iterations??15,modo,auto_fix??1,max_iterations??15).run();
+            `INSERT INTO agente_config (modo,auto_fix,max_iterations,tope_gasto_diario_usd,updated_at) VALUES(?,?,?,?,datetime('now'))
+             ON CONFLICT(id) DO UPDATE SET modo=?,auto_fix=?,max_iterations=?,tope_gasto_diario_usd=?,updated_at=datetime('now')`
+          ).bind(modo,auto_fix??1,max_iterations??15,tope,modo,auto_fix??1,max_iterations??15,tope).run();
           return json({ ok: true, modo });
+        }
+        // PANEL-ALEJANDRA-REAL-01 (16/09/2026): datos reales para el nuevo admin.html --
+        // sustituye los números hardcodeados del dashboard viejo (127/8/34/"Online v5.86").
+        // Solo sobre Alejandra misma (mensajes, acciones, memoria, gasto) -- las KPIs de
+        // toda la plataforma (sesiones, R2, D1 general) ya viven en DevTools/panel.html,
+        // a propósito no se duplican aquí.
+        if (path === '/api/admin/salud' && req.method === 'GET') {
+          const [mensajes24h, fixes24h, memoriaTotal, gastoHoy, config, ultimoFix] = await Promise.all([
+            env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_historial WHERE rol='user' AND created_at >= datetime('now','-1 day')`).first().catch(()=>({n:0})),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_fixes WHERE created_at >= datetime('now','-1 day')`).first().catch(()=>({n:0})),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_memoria`).first().catch(()=>({n:0})),
+            env.DB.prepare(`SELECT SUM(coste_usd) as total FROM alejandra_token_uso WHERE date(created_at) = date('now')`).first().catch(()=>({total:0})),
+            env.DB.prepare('SELECT modo,auto_fix,max_iterations,tope_gasto_diario_usd FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(()=>null),
+            env.DB.prepare(`SELECT descripcion,archivo,commit_sha,created_at FROM alejandra_fixes ORDER BY created_at DESC LIMIT 1`).first().catch(()=>null),
+          ]);
+          return json({
+            mensajes_24h: mensajes24h?.n || 0,
+            fixes_24h: fixes24h?.n || 0,
+            memoria_total: memoriaTotal?.n || 0,
+            gasto_hoy_usd: gastoHoy?.total || 0,
+            tope_gasto_diario_usd: config?.tope_gasto_diario_usd || TOPE_GASTO_DIARIO_USD,
+            rate_limit_por_minuto: RATE_LIMIT_POR_MINUTO,
+            modo: config?.modo || 'autonomo',
+            auto_fix: config?.auto_fix ?? 1,
+            ultimo_fix: ultimoFix || null,
+          });
         }
         // Fix continuación 15: interruptor dev-bypass (rate limit / aislamiento
         // empresa_id), solo visible/editable desde sesión de dev verificada -- ya
@@ -11799,7 +11841,30 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
     case 'direct_fix': {
       if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      // FIX-MODO-CONFIRMACION-01 (16/09/2026): "Modo: Confirmación" y "Auto-fix en directo"
+      // en admin.html se guardaban en agente_config pero nunca se llegaban a consultar
+      // aquí -- direct_fix hacía push a GitHub siempre, sin mirar ninguno de los dos
+      // toggles. Un control de seguridad que no bloquea nada es peor que no tenerlo
+      // (Adrián, 16/09/2026: "sinceramente no vale para nada no?"). Ahora si cualquiera
+      // de los dos pide confirmación, el fix NO se aplica -- se deja constancia en
+      // alejandra_memoria para que Adrián lo revise y lo aplique él mismo si quiere.
+      const cfgFix = await env.DB.prepare('SELECT modo,auto_fix FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(() => null);
+      const bloqueado = cfgFix && (cfgFix.modo === 'confirmacion' || cfgFix.auto_fix === 0);
       const { descripcion, archivo, old_code, new_code, razon } = input;
+      if (bloqueado) {
+        await env.DB.prepare(
+          `INSERT INTO alejandra_memoria (tipo,canal,empresa_id,titulo,contenido,importancia,created_at)
+           VALUES('propuesta_fix','panel','system',?,?,4,datetime('now'))`
+        ).bind(`Fix propuesto (sin aplicar): ${descripcion.substring(0,60)}`,
+          `ARCHIVO: ${archivo}\nRAZÓN: ${razon}\n\n--- CÓDIGO ACTUAL ---\n${old_code}\n\n--- CÓDIGO PROPUESTO ---\n${new_code}`
+        ).run().catch(() => {});
+        return JSON.stringify({
+          ok: false,
+          bloqueado: true,
+          motivo: 'Modo confirmación / auto-fix desactivado en admin.html — el cambio no se ha aplicado.',
+          descripcion, archivo, razon
+        });
+      }
       try {
         const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(archivo)}`, {
           headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }

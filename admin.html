@@ -4,9 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Alejandra Agente — Panel de Control</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -259,75 +256,6 @@
       cursor: pointer;
     }
 
-    /* CHAT PANEL */
-    .chat-container {
-      background: white;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-      display: flex;
-      flex-direction: column;
-      height: 600px;
-    }
-
-    .chat-messages {
-      flex: 1;
-      overflow-y: auto;
-      margin-bottom: 15px;
-      padding: 10px 0;
-    }
-
-    .message {
-      margin-bottom: 15px;
-      display: flex;
-      gap: 10px;
-    }
-
-    .message.user {
-      justify-content: flex-end;
-    }
-
-    .message-bubble {
-      max-width: 70%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      word-wrap: break-word;
-    }
-
-    .message.user .message-bubble {
-      background: var(--primary);
-      color: white;
-      border-bottom-right-radius: 4px;
-    }
-
-    .message.bot .message-bubble {
-      background: var(--light);
-      color: var(--text);
-      border-bottom-left-radius: 4px;
-      border: 1px solid var(--border);
-    }
-
-    .chat-input-area {
-      display: flex;
-      gap: 10px;
-    }
-
-    .chat-input {
-      flex: 1;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 14px;
-      resize: none;
-      max-height: 100px;
-    }
-
-    .chat-input:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-    }
-
     .btn {
       padding: 10px 20px;
       border: none;
@@ -494,27 +422,7 @@
       .dashboard-grid {
         grid-template-columns: 1fr;
       }
-
-      .message-bubble {
-        max-width: 85%;
-      }
     }
-    .admin-md p{margin:0 0 10px}.admin-md p:last-child{margin-bottom:0}
-    .admin-md h1,.admin-md h2,.admin-md h3{font-weight:700;margin:16px 0 8px;color:#8b5cf6}
-    .admin-md h1{font-size:18px}.admin-md h2{font-size:16px}.admin-md h3{font-size:14px}
-    .admin-md ul,.admin-md ol{margin:6px 0 10px 20px}.admin-md li{margin-bottom:4px}
-    .admin-md strong{color:#fff;font-weight:600}.admin-md em{color:#c4b5fd}
-    .admin-md code{background:#1e1e2e;padding:2px 6px;border-radius:4px;font-size:12px;color:#a78bfa;font-family:'Courier New',monospace}
-    .admin-md pre{background:#1e1e2e;border:1px solid #334155;border-radius:10px;margin:10px 0;overflow:hidden}
-    .admin-md pre code{background:none;color:#c4b5fd;padding:14px 16px;display:block;overflow-x:auto;font-size:13px;line-height:1.5}
-    .admin-md blockquote{border-left:3px solid #8b5cf6;padding:6px 12px;color:#94a3b8;margin:8px 0;font-style:italic}
-    .admin-md table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
-    .admin-md th{padding:6px 10px;border:1px solid #334155;background:#1e2d40;color:#c4b5fd;text-align:left}
-    .admin-md td{padding:6px 10px;border:1px solid #334155}
-    .code-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#181825;border-bottom:1px solid #313244;border-radius:10px 10px 0 0}
-    .code-lang{font-size:11px;color:#6c7086;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:1px}
-    .code-copy{font-size:11px;color:#6c7086;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .2s}
-    .code-copy:hover{color:#c4b5fd}
   </style>
 </head>
 <body>
@@ -528,16 +436,10 @@
 
       <nav>
         <div class="nav-item active" onclick="switchTab('dashboard')">
-          <span>📊 Dashboard</span>
+          <span>💓 Salud</span>
         </div>
         <div class="nav-item" onclick="switchTab('config')">
           <span>⚙️ Configuración</span>
-        </div>
-        <div class="nav-item" onclick="switchTab('chat')">
-          <span>💬 Chat</span>
-        </div>
-        <div class="nav-item" onclick="switchTab('logs')">
-          <span>📋 Audit Logs</span>
         </div>
         <div class="nav-item" onclick="switchTab('memory')">
           <span>🧠 Memoria</span>
@@ -569,47 +471,55 @@
       <!-- CONTENT -->
       <div class="content">
 
-        <!-- DASHBOARD TAB -->
+        <!-- SALUD TAB (PANEL-ALEJANDRA-REAL-01, 16/09/2026): sustituye el dashboard
+             viejo, que tenía casi todos los números hardcodeados en el JS (127/8/34,
+             "Online v5.86", "Hace 2 minutos", "256 mensajes" -- ninguno se leía de
+             ningún sitio). Ahora todo viene de /health (público) y /api/admin/salud. -->
         <div id="tab-dashboard" class="tab-content show">
+          <div class="config-section">
+            <h2>💓 Estado del worker</h2>
+            <div id="saludWorker" class="config-row"><span>Comprobando...</span></div>
+          </div>
+
           <div class="dashboard-grid">
             <div class="card">
               <h3>Mensajes Procesados</h3>
-              <div class="value" id="statMensajes">0</div>
-              <div class="stat">Últimos 24 horas</div>
+              <div class="value" id="statMensajes">—</div>
+              <div class="stat">Últimas 24 horas</div>
             </div>
 
             <div class="card">
-              <h3>Acciones Ejecutadas</h3>
-              <div class="value" id="statAcciones">0</div>
-              <div class="stat">Direct fixes, migrations, etc</div>
+              <h3>Fixes Aplicados</h3>
+              <div class="value" id="statAcciones">—</div>
+              <div class="stat">direct_fix, últimas 24h</div>
             </div>
 
             <div class="card">
-              <h3>Aprendizajes</h3>
-              <div class="value" id="statAprendizajes">0</div>
-              <div class="stat">En memoria de Alejandra</div>
+              <h3>Memoria</h3>
+              <div class="value" id="statAprendizajes">—</div>
+              <div class="stat">Notas/aprendizajes guardados</div>
             </div>
 
             <div class="card">
               <h3>Modo Actual</h3>
-              <div class="value" style="font-size: 18px; color: var(--success);" id="modoActual">Autónomo</div>
-              <div class="stat">Auto-fix: sí</div>
+              <div class="value" style="font-size: 18px; color: var(--success);" id="modoActual">—</div>
+              <div class="stat" id="modoActualSub">Auto-fix: —</div>
             </div>
           </div>
 
           <div class="config-section">
-            <h2>Estado Rápido</h2>
+            <h2>💶 Gasto y límites</h2>
             <div class="config-row">
-              <span>Alejandra Agente</span>
-              <span id="statusAgente" style="color: var(--success); font-weight: 600;">🟢 Online v5.86</span>
+              <span>Gasto hoy (Anthropic)</span>
+              <span id="statGasto" style="font-weight: 600;">—</span>
             </div>
             <div class="config-row">
-              <span>Última acción</span>
-              <span id="lastAction" style="color: #6b7280;">Hace 2 minutos</span>
+              <span>Rate limit</span>
+              <span id="statRateLimit" style="color: #6b7280;">—</span>
             </div>
-            <div class="config-row">
-              <span>Chat Memory</span>
-              <span id="chatMemory" style="color: #6b7280;">256 mensajes</span>
+            <div class="config-row" style="border: none;">
+              <span>Último fix aplicado</span>
+              <span id="statUltimoFix" style="color: #6b7280; text-align: right; max-width: 60%;">—</span>
             </div>
           </div>
         </div>
@@ -619,10 +529,16 @@
           <div class="config-section">
             <h2>⚙️ Configuración de Alejandra</h2>
 
+            <!-- FIX-MODO-CONFIRMACION-01 (16/09/2026): hasta ahora estos dos controles se
+                 guardaban en agente_config pero direct_fix nunca los consultaba -- daba
+                 igual lo que pusieras aquí, el fix se aplicaba siempre. Ya bloquean de
+                 verdad (alejandra-agente/worker.js, case 'direct_fix'): si CUALQUIERA de
+                 los dos pide confirmación, el cambio no se aplica y queda propuesto en
+                 memoria para que lo apliques tú. -->
             <div class="config-row">
               <div>
                 <div class="config-label">Modo de Operación</div>
-                <div class="config-description">Autónomo: executa direct_fix sin confirmar. Confirmación: pide aprobación primero.</div>
+                <div class="config-description">Autónomo: direct_fix se aplica sin pedir aprobación. Confirmación: direct_fix NO se aplica, se guarda como propuesta en Memoria.</div>
               </div>
               <select class="select" id="modoSelect" onchange="actualizarModo()">
                 <option value="autonomo">🤖 Autónomo (sin confirmación)</option>
@@ -633,7 +549,7 @@
             <div class="config-row">
               <div>
                 <div class="config-label">Auto-fix en Directo</div>
-                <div class="config-description">Si está activo, Alejandra puede modificar código y hacer push sin tu intervención.</div>
+                <div class="config-description">Si se desactiva, direct_fix tampoco se aplica (igual que "Confirmación" arriba) -- son dos barreras independientes, basta una para bloquear.</div>
               </div>
               <label class="toggle">
                 <input type="checkbox" id="autoFixToggle" onchange="actualizarAutoFix()">
@@ -646,7 +562,15 @@
                 <div class="config-label">Máximo de Iteraciones LLM</div>
                 <div class="config-description">Cuántas veces puede iterar Alejandra para resolver un problema (default: 15).</div>
               </div>
-              <input type="number" value="15" min="1" max="50" style="width: 80px; padding: 8px; border: 1px solid var(--border); border-radius: 6px;">
+              <input type="number" id="maxIterationsInput" value="15" min="1" max="50" style="width: 80px; padding: 8px; border: 1px solid var(--border); border-radius: 6px;">
+            </div>
+
+            <div class="config-row" style="border: none;">
+              <div>
+                <div class="config-label">Tope de gasto diario (USD)</div>
+                <div class="config-description">Si el gasto de hoy en Anthropic supera este valor, el chat se rechaza hasta mañana (antes era una constante fija de $10 en el código).</div>
+              </div>
+              <input type="number" id="topeGastoInput" value="10" min="0.5" step="0.5" style="width: 80px; padding: 8px; border: 1px solid var(--border); border-radius: 6px;">
             </div>
 
             <div class="config-row" style="border: none; padding-top: 20px; justify-content: flex-end;">
@@ -672,57 +596,11 @@
           </div>
         </div>
 
-        <!-- CHAT TAB -->
-        <div id="tab-chat" class="tab-content">
-          <h2 style="margin-bottom: 20px;">💬 Chat Directo con Alejandra</h2>
-          <div class="chat-container">
-            <div class="chat-messages" id="chatMessages">
-              <div class="message bot">
-                <div class="message-bubble">
-                  👋 Hola, soy Alejandra. ¿Cómo puedo ayudarte?
-                </div>
-              </div>
-            </div>
-            <div class="chat-input-area">
-              <textarea class="chat-input" id="chatInput" placeholder="Escribe tu mensaje..." rows="2" onkeypress="enviarMensajeEnter(event)"></textarea>
-              <button class="btn btn-primary" onclick="enviarMensaje()">📤 Enviar</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- LOGS TAB -->
-        <div id="tab-logs" class="tab-content">
-          <h2 style="margin-bottom: 20px;">📋 Audit Logs</h2>
-          <div class="config-section">
-            <table class="logs-table">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Acción</th>
-                  <th>Usuario</th>
-                  <th>Estado</th>
-                  <th>Resultado</th>
-                </tr>
-              </thead>
-              <tbody id="logsTableBody">
-                <tr>
-                  <td>2026-05-14 10:30</td>
-                  <td>check_encoding</td>
-                  <td>admin_01</td>
-                  <td><span class="badge badge-success">OK</span></td>
-                  <td>No corruption found</td>
-                </tr>
-                <tr>
-                  <td>2026-05-14 10:15</td>
-                  <td>direct_fix</td>
-                  <td>admin_01</td>
-                  <td><span class="badge badge-success">OK</span></td>
-                  <td>Fixed widget.html line 42</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <!-- PANEL-ALEJANDRA-REAL-01 (16/09/2026): se quitan Chat y Audit Logs --
+             chat duplicaba index.html/panel.html/alejandra-panel.html sin aportar nada
+             (ni adjuntos siquiera), y Audit Logs nunca se llegó a conectar (cargarLogs()
+             pedía los datos pero nunca los pintaba -- estas 2 filas eran fijas desde
+             mayo). "Server Logs"/"Actividad" reales ya viven en DevTools (panel.html). -->
 
         <!-- MEMORY TAB -->
         <div id="tab-memory" class="tab-content">
@@ -816,56 +694,6 @@
   <script>
     const ADMIN_WORKER_URL = 'https://alejandra-agente.alejandra-app.workers.dev/api/admin';
     const ADMIN_TOKEN = localStorage.getItem('alejandra_admin_token') || 'admin_inicial_setup_alejandra_2026';
-    // HISTORIAL-UNIFICADO-01 (16/09/2026): antes se mandaba usuario_id fijo 'admin_web' y
-    // canal 'web' -- los mensajes de este panel quedaban en su propio silo, invisibles desde
-    // index.html/panel.html/alejandra-panel.html aunque fuera la misma persona (Adrián,
-    // único usuario de este panel). alej_uid es la misma clave de localStorage que ya usa
-    // alejandra-panel.html (mismo origen, mismo storage) -- si se cambia en un sitio, se
-    // refleja en el otro.
-    const _chatUserId = localStorage.getItem('alej_uid') || 'adrian';
-
-    // MARKDOWN-ADMIN-01 (16/09/2026): marked.js/highlight.js y el CSS .admin-md/.code-header
-    // ya estaban cargados desde el commit 8e08f88 ("paridad completa de chat... admin.html"),
-    // pero renderMd()/addCopyBtns()/copyCode() nunca se llegaron a escribir -- las llamadas
-    // en enviarMensaje() y cargarHistorialChat() lanzaban ReferenceError silenciado por el
-    // catch de fuera, así que el markdown nunca se aplicaba (el chat se veía siempre en texto
-    // plano con saltos de línea, sin negritas/código/listas). Mismo patrón que ya usa
-    // alejandra-panel.html.
-    function setupMarked() {
-      if (typeof marked === 'undefined' || typeof hljs === 'undefined') return;
-      marked.setOptions({
-        breaks: true,
-        gfm: true,
-        highlight: (code, lang) => {
-          if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
-          return hljs.highlightAuto(code).value;
-        }
-      });
-    }
-    setupMarked();
-
-    function renderMd(txt) {
-      if (typeof marked === 'undefined') return escapeHtml(txt).replace(/\n/g, '<br>');
-      return marked.parse(txt);
-    }
-
-    function addCopyBtns(el) {
-      el.querySelectorAll('pre').forEach(pre => {
-        if (pre.querySelector('.code-header')) return;
-        const code = pre.querySelector('code');
-        const lang = (code?.className || '').replace('language-', '').replace('hljs ', '').split(' ')[0] || '';
-        const header = document.createElement('div');
-        header.className = 'code-header';
-        header.innerHTML = `<span>${lang}</span><button class="code-copy" onclick="copyCode(this)">Copiar</button>`;
-        pre.insertBefore(header, pre.firstChild);
-      });
-    }
-
-    function copyCode(btn) {
-      const code = btn.closest('pre')?.querySelector('code')?.innerText || '';
-      navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copiado!'; setTimeout(() => btn.textContent = 'Copiar', 2000); });
-    }
-
     function switchTab(tabName) {
       // Hide all tabs
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('show'));
@@ -880,59 +708,64 @@
 
       // Update page title
       const titles = {
-        dashboard: '📊 Dashboard',
+        dashboard: '💓 Salud',
         config: '⚙️ Configuración',
-        chat: '💬 Chat',
-        logs: '📋 Audit Logs',
         memory: '🧠 Memoria',
         trazas: '🧵 Trazas',
         telemetrica: '📈 Telemetría'
       };
-      document.getElementById('pageTitle').textContent = titles[tabName] || 'Dashboard';
+      document.getElementById('pageTitle').textContent = titles[tabName] || 'Salud';
 
       // Load data
+      if (tabName === 'dashboard') cargarSalud();
       if (tabName === 'config') cargarConfiguracion();
-      if (tabName === 'logs') cargarLogs();
       if (tabName === 'memory') cargarMemoria();
-       if (tabName === 'trazas') cargarTrazas();
-       if (tabName === 'telemetrica') cargarTelemetrica();
-      if (tabName === 'chat') cargarHistorialChat();
+      if (tabName === 'trazas') cargarTrazas();
+      if (tabName === 'telemetrica') cargarTelemetrica();
     }
 
-    // HISTORIAL-UNIFICADO-01 (16/09/2026): este panel nunca restauraba historial -- cada
-    // visita a la pestaña empezaba con el saludo fijo aunque ya hubiera conversación previa
-    // en otros sitios. Solo se carga una vez por sesión de página (no en cada clic a la
-    // pestaña) para no pisar una conversación en curso.
-    let _historialChatCargado = false;
-    async function cargarHistorialChat() {
-      if (_historialChatCargado) return;
-      _historialChatCargado = true;
-      const messagesDiv = document.getElementById('chatMessages');
-      if (!messagesDiv) return;
+    // PANEL-ALEJANDRA-REAL-01 (16/09/2026): /health es público (sin auth) y ya
+    // comprueba D1/R2/Anthropic con presupuesto de tiempo acotado (ver comentario
+    // ADR-0014 §4 junto a la ruta en el worker) -- se reutiliza tal cual en vez de
+    // duplicar esa lógica aquí. /api/admin/salud trae los datos reales específicos
+    // de Alejandra (mensajes, fixes, memoria, gasto) que sustituyen al dashboard falso.
+    async function cargarSalud() {
+      const elWorker = document.getElementById('saludWorker');
       try {
-        const res = await fetch(`https://alejandra-agente.alejandra-app.workers.dev/api/chat/history?usuario_id=${encodeURIComponent(_chatUserId)}&canal=app_android,pwa,panel&limit=50`, {
-          headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
-        });
-        if (!res.ok) { console.warn('[Alejandra] historial: HTTP', res.status); return; }
-        const data = await res.json();
-        if (!data?.ok || !data.mensajes || data.mensajes.length === 0) return;
-        messagesDiv.innerHTML = '';
-        for (const m of data.mensajes) {
-          if (m.rol !== 'user' && m.rol !== 'assistant') continue;
-          const div = document.createElement('div');
-          if (m.rol === 'user') {
-            div.className = 'message user';
-            div.innerHTML = `<div class="message-bubble">${escapeHtml(m.contenido)}</div>`;
-          } else {
-            div.className = 'message bot';
-            div.innerHTML = `<div class="message-bubble admin-md">${renderMd(m.contenido)}</div>`;
-            addCopyBtns(div);
-          }
-          messagesDiv.appendChild(div);
+        const [healthRes, saludRes] = await Promise.all([
+          fetch('https://alejandra-agente.alejandra-app.workers.dev/health'),
+          fetch(`${ADMIN_WORKER_URL}/salud`, { headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` } }),
+        ]);
+        const health = await healthRes.json().catch(() => null);
+        const salud = saludRes.ok ? await saludRes.json().catch(() => null) : null;
+
+        if (health) {
+          const colorEstado = health.estado === 'healthy' ? '#22c55e' : health.estado === 'degraded' ? '#f59e0b' : '#ef4444';
+          const iconoEstado = health.estado === 'healthy' ? '🟢' : health.estado === 'degraded' ? '🟡' : '🔴';
+          elWorker.innerHTML = `<span>alejandra-agente</span>
+            <span style="color:${colorEstado};font-weight:600">${iconoEstado} ${escaparHTML(health.estado || 'desconocido')}
+              · D1 ${health.d1 ? '✓' : '✕'} · R2 ${health.r2 ? '✓' : '✕'} · Anthropic ${health.anthropic ? '✓' : '✕'}
+              · v${escaparHTML(health.version || '?')}</span>`;
+        } else {
+          elWorker.innerHTML = `<span>alejandra-agente</span><span style="color:#ef4444;font-weight:600">🔴 sin respuesta</span>`;
         }
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      } catch (e) {
-        console.warn('[Alejandra] historial: fallo de red', e.message);
+
+        if (salud) {
+          document.getElementById('statMensajes').textContent = salud.mensajes_24h;
+          document.getElementById('statAcciones').textContent = salud.fixes_24h;
+          document.getElementById('statAprendizajes').textContent = salud.memoria_total;
+          document.getElementById('modoActual').textContent = salud.modo === 'autonomo' ? 'Autónomo' : 'Confirmación';
+          document.getElementById('modoActualSub').textContent = 'Auto-fix: ' + (salud.auto_fix ? 'sí' : 'no');
+          const pct = salud.tope_gasto_diario_usd > 0 ? Math.round(100 * salud.gasto_hoy_usd / salud.tope_gasto_diario_usd) : 0;
+          document.getElementById('statGasto').innerHTML = `$${salud.gasto_hoy_usd.toFixed(2)} / $${salud.tope_gasto_diario_usd.toFixed(2)}
+            <span style="color:${pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e'}">(${pct}%)</span>`;
+          document.getElementById('statRateLimit').textContent = `${salud.rate_limit_por_minuto} peticiones/min por identidad`;
+          document.getElementById('statUltimoFix').textContent = salud.ultimo_fix
+            ? `${salud.ultimo_fix.descripcion} (${escaparHTML(salud.ultimo_fix.archivo)}, ${escaparHTML((salud.ultimo_fix.created_at || '').replace('T',' ').slice(0,16))})`
+            : 'Ninguno registrado';
+        }
+      } catch (err) {
+        elWorker.innerHTML = `<span style="color:#ef4444">Error comprobando salud: ${escaparHTML(err.message)}</span>`;
       }
     }
 
@@ -945,6 +778,8 @@
 
         document.getElementById('modoSelect').value = config.modo || 'autonomo';
         document.getElementById('autoFixToggle').checked = config.auto_fix === 1;
+        document.getElementById('maxIterationsInput').value = config.max_iterations || 15;
+        document.getElementById('topeGastoInput').value = config.tope_gasto_diario_usd || 10;
         document.getElementById('modoActual').textContent = config.modo === 'autonomo' ? 'Autónomo' : 'Confirmación';
       } catch (err) {
         console.error('Error cargando config:', err);
@@ -963,13 +798,22 @@
 
     async function actualizarConfiguracion(cambios) {
       try {
+        // FIX-MODO-CONFIRMACION-01: guardarConfiguracion() manda siempre TODOS los
+        // campos actuales del formulario (no solo el que cambió) -- si se mandara solo
+        // {modo} aquí, el POST del worker (que espera el objeto completo) pondría
+        // auto_fix/max_iterations/tope_gasto_diario_usd a sus defaults, deshaciendo
+        // silenciosamente cualquier valor ya guardado.
+        const modo = document.getElementById('modoSelect').value;
+        const auto_fix = document.getElementById('autoFixToggle').checked ? 1 : 0;
+        const max_iterations = parseInt(document.getElementById('maxIterationsInput').value, 10) || 15;
+        const tope_gasto_diario_usd = parseFloat(document.getElementById('topeGastoInput').value) || 10;
         const res = await fetch(`${ADMIN_WORKER_URL}/config`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${ADMIN_TOKEN}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(cambios)
+          body: JSON.stringify({ modo, auto_fix, max_iterations, tope_gasto_diario_usd, ...cambios })
         });
         const result = await res.json();
         console.log('Config actualizada:', result);
@@ -979,33 +823,33 @@
     }
 
     async function guardarConfiguracion() {
-      const modo = document.getElementById('modoSelect').value;
-      const auto_fix = document.getElementById('autoFixToggle').checked ? 1 : 0;
-      await actualizarConfiguracion({ modo, auto_fix });
+      await actualizarConfiguracion({});
       alert('✅ Configuración guardada');
     }
 
-    async function cargarLogs() {
-      try {
-        const res = await fetch(`${ADMIN_WORKER_URL}/logs?limit=50`, {
-          headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
-        });
-        const logs = await res.json();
-        // Render logs...
-      } catch (err) {
-        console.error('Error cargando logs:', err);
-      }
-    }
-
     async function cargarMemoria() {
+      const tbody = document.getElementById('memoryTableBody');
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;">Cargando…</td></tr>';
       try {
-        const res = await fetch(`${ADMIN_WORKER_URL}/memoria`, {
+        const res = await fetch(`${ADMIN_WORKER_URL}/memoria?limit=50`, {
           headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
         });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const memoria = await res.json();
-        // Render memoria...
+        const filas = Array.isArray(memoria) ? memoria : [];
+        if (filas.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;">Sin memoria guardada.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = filas.map(m => `
+          <tr>
+            <td><span class="badge badge-success">${escaparHTML(m.tipo || '')}</span></td>
+            <td title="${escaparHTML(m.contenido || '')}">${escaparHTML(m.titulo || '')}</td>
+            <td>${'⭐'.repeat(Math.max(0, Math.min(5, m.importancia || 0)))}</td>
+            <td>${escaparHTML((m.created_at || '').replace('T', ' ').slice(0, 19))}</td>
+          </tr>`).join('');
       } catch (err) {
-        console.error('Error cargando memoria:', err);
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;">Error cargando memoria: ${escaparHTML(err.message)}</td></tr>`;
       }
     }
 
@@ -1072,135 +916,15 @@
       }
     }
 
-    async function enviarMensaje() {
-      const input = document.getElementById('chatInput');
-      const mensaje = input.value.trim();
-
-      if (!mensaje) return;
-
-      const messagesDiv = document.getElementById('chatMessages');
-      const userBubble = document.createElement('div');
-      userBubble.className = 'message user';
-      userBubble.innerHTML = `<div class="message-bubble">${escapeHtml(mensaje)}</div>`;
-      messagesDiv.appendChild(userBubble);
-
-      input.value = '';
-
-      const typingEl = document.createElement('div');
-      typingEl.className = 'message bot';
-      typingEl.innerHTML = '<div class="message-bubble" style="color:#94a3b8">Escribiendo…</div>';
-      messagesDiv.appendChild(typingEl);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-      try {
-        const res = await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${typeof ADMIN_TOKEN !== 'undefined' ? ADMIN_TOKEN : ''}` },
-          // canal 'panel': se une al mismo grupo que index.html/panel.html leen como una
-          // sola conversación (app_android,pwa,panel) -- ver HISTORIAL-UNIFICADO-01 arriba.
-          body: JSON.stringify({ mensaje, usuario_id: _chatUserId, empresa_id: 'admin', canal: 'panel' })
-        });
-
-        if (!res.ok) {
-          typingEl.remove();
-          const errBub = document.createElement('div');
-          errBub.className = 'message bot';
-          errBub.innerHTML = `<div class="message-bubble">❌ Error HTTP ${res.status}</div>`;
-          messagesDiv.appendChild(errBub);
-          messagesDiv.scrollTop = messagesDiv.scrollHeight;
-          return;
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '', textoAcum = '', bubbleEl = null;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            let ev;
-            try { ev = JSON.parse(line.slice(6)); } catch { continue; }
-            if (ev.type === 'token' || ev.type === 'text') {
-              typingEl.remove();
-              if (!bubbleEl) {
-                bubbleEl = document.createElement('div');
-                bubbleEl.className = 'message bot';
-                const bc = document.createElement('div');
-                bc.className = 'message-bubble admin-md';
-                bubbleEl.appendChild(bc);
-                messagesDiv.appendChild(bubbleEl);
-              }
-              textoAcum += ev.texto;
-              const mdEl = bubbleEl.querySelector('.admin-md');
-              if (mdEl) mdEl.innerHTML = escapeHtml(textoAcum).replace(/\n/g, '<br>');
-              messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            } else if (ev.type === 'done') {
-              typingEl.remove();
-            } else if (ev.type === 'error') {
-              typingEl.remove();
-              const eb = document.createElement('div');
-              eb.className = 'message bot';
-              eb.innerHTML = `<div class="message-bubble">❌ ${escapeHtml(ev.mensaje || 'Error')}</div>`;
-              messagesDiv.appendChild(eb);
-              messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            }
-          }
-        }
-
-        typingEl.remove();
-        if (bubbleEl && textoAcum) {
-          const mdEl = bubbleEl.querySelector('.admin-md');
-          if (mdEl) { mdEl.innerHTML = renderMd(textoAcum); addCopyBtns(mdEl); }
-        } else if (!textoAcum) {
-          const eb = document.createElement('div');
-          eb.className = 'message bot';
-          eb.innerHTML = '<div class="message-bubble">Sin respuesta</div>';
-          messagesDiv.appendChild(eb);
-        }
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      } catch (err) {
-        typingEl.remove();
-        console.error('Error enviando mensaje:', err);
-      }
-    }
-
-    function enviarMensajeEnter(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        enviarMensaje();
-      }
-    }
-
     function regenerarToken() {
       const newToken = 'token_' + Math.random().toString(36).substring(2, 15);
       localStorage.setItem('alejandra_admin_token', newToken);
       alert(`✅ Nuevo token generado: ${newToken}`);
     }
 
-    function escapeHtml(text) {
-      const map = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-      };
-      return text.replace(/[&<>"']/g, m => map[m]);
-    }
-
     // Load dashboard data on page load
     window.addEventListener('load', async () => {
-      setupMarked();
-      await cargarConfiguracion();
-      // Load stats
-      document.getElementById('statMensajes').textContent = '127';
-      document.getElementById('statAcciones').textContent = '8';
-      document.getElementById('statAprendizajes').textContent = '34';
+      await Promise.all([cargarSalud(), cargarConfiguracion()]);
     });
   </script>
 </body>
