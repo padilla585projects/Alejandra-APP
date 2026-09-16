@@ -865,7 +865,7 @@ select option{background:var(--surface2);color:var(--text)}
     <div class="ale-input-row">
       <textarea id="alejandraInput" placeholder="Escribe un mensaje..." rows="1"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandraEnviar()}"
-        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px';_alejandraGuardarBorrador(this.value)"></textarea>
       <button onclick="document.getElementById('alejandraFile').click()" title="Adjuntar" class="ale-tool-btn">📎</button>
       <input type="file" id="alejandraFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandraSubirAdjuntos(event)">
       <button id="alejandraVozBtn" onclick="alejandraToggleVoz()" title="Voz" class="ale-tool-btn">🎙️</button>
@@ -28756,6 +28756,34 @@ function _alejandraPersistir() {
   } catch {}
 }
 
+// BUG-CAJON-APK-01 (16/09/2026): Adrián -- "borra lo que tenía escrito en el cajón de
+// escribir" al cerrar y reabrir la APK. Capacitor mata el proceso al cerrar del todo, así
+// que cualquier cosa que solo viva en memoria (el valor del textarea) se pierde. Se guarda
+// en localStorage con cada tecla (debounce corto, no en cada pulsación literal) y se
+// restaura al abrir el panel.
+const ALEJANDRA_DRAFT_KEY = 'alejandra_draft';
+let _alejandraDraftTimer = null;
+function _alejandraGuardarBorrador(valor) {
+  clearTimeout(_alejandraDraftTimer);
+  _alejandraDraftTimer = setTimeout(() => {
+    try {
+      if (valor && valor.trim()) localStorage.setItem(ALEJANDRA_DRAFT_KEY, valor);
+      else localStorage.removeItem(ALEJANDRA_DRAFT_KEY);
+    } catch {}
+  }, 300);
+}
+function _alejandraRestaurarBorrador() {
+  const input = document.getElementById('alejandraInput');
+  if (!input) return;
+  let borrador = '';
+  try { borrador = localStorage.getItem(ALEJANDRA_DRAFT_KEY) || ''; } catch {}
+  if (borrador && !input.value) {
+    input.value = borrador;
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+  }
+}
+
 // BUG-HISTORIAL-APK-VACIO-01 (15/09/2026): Adrián -- "cuando cierro la app [APK] y la
 // vuelvo a abrir ya no hay historial [de Alejandra]". El fetch de abajo puede fallar sin
 // que se note por dos motivos concretos en un arranque en frío de la APK (Capacitor mata
@@ -28770,6 +28798,14 @@ function _alejandraPersistir() {
 // móvil en modo depuración USB) y reintenta una vez tras una pausa corta antes de rendirse
 // al respaldo local. Si el problema persiste tras esto, los logs dirán por fin el motivo
 // exacto en vez de fallar en silencio.
+// BUG-HISTORIAL-APK-VACIO-01 seguía reproduciéndose (16/09/2026, Adrián: "vuelve al
+// mensaje de siempre que tenía guardado de no se cuando") con el único reintento de arriba.
+// Se sube a 3 intentos con espera creciente (1s/2s/4s, ~7s peor caso) para darle más margen
+// al stack de red en un arranque en frío real -- sigue sin poder confirmarse la causa exacta
+// sin logs de dispositivo (chrome://inspect), pero esto es una mejora segura en cualquier
+// caso. Si aun así falla, _alejandraRestaurarChat() ya no lo esconde: avisa claramente de
+// que lo que se ve es una copia local, no la conversación real.
+const ALEJANDRA_HIST_MAX_INTENTOS = 3;
 async function _alejandraCargarHistorialServidor(uid, intento = 1) {
   try {
     const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}&canal=app_android,pwa,panel`, {
@@ -28777,13 +28813,13 @@ async function _alejandraCargarHistorialServidor(uid, intento = 1) {
         });
     if (!res.ok) {
       console.warn('[Alejandra] historial: HTTP', res.status, 'intento', intento);
-      if (intento < 2) { await new Promise(r => setTimeout(r, 1500)); return _alejandraCargarHistorialServidor(uid, intento + 1); }
+      if (intento < ALEJANDRA_HIST_MAX_INTENTOS) { await new Promise(r => setTimeout(r, 1000 * intento)); return _alejandraCargarHistorialServidor(uid, intento + 1); }
       return null;
     }
     return await res.json();
   } catch (e) {
     console.warn('[Alejandra] historial: fallo de red', e.message, 'intento', intento);
-    if (intento < 2) { await new Promise(r => setTimeout(r, 1500)); return _alejandraCargarHistorialServidor(uid, intento + 1); }
+    if (intento < ALEJANDRA_HIST_MAX_INTENTOS) { await new Promise(r => setTimeout(r, 1000 * intento)); return _alejandraCargarHistorialServidor(uid, intento + 1); }
     return null;
   }
 }
@@ -28831,11 +28867,17 @@ async function _alejandraRestaurarChat() {
     console.warn('[Alejandra] historial: sin usuario_id/nombre en getSession(), no se pidió al servidor');
   }
   // 2. Fallback: localStorage
+  // BUG-HISTORIAL-APK-VACIO-01: esta copia local no lleva fecha, solo hora -- un mensaje de
+  // hace días se veía igual que uno de hace un minuto, y Adrián no tenía forma de saber que
+  // no era la conversación real. Ahora se avisa explícitamente en vez de colarla en silencio.
   try {
     const saved = JSON.parse(localStorage.getItem(ALEJANDRA_PANEL_HIST_KEY) || '[]');
     if (saved.length > 0) {
       _alejandraPanelHist = saved;
-      list.innerHTML = '';
+      list.innerHTML = `<div class="ale-hist-aviso" style="text-align:center;font-size:11px;color:#d97706;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:8px 12px;margin-bottom:8px">
+        ⚠️ Sin conexión con el historial real — esto es una copia local, puede estar desactualizada
+        <span onclick="_alejandraRestaurarChat()" style="display:block;margin-top:4px;font-weight:700;text-decoration:underline;cursor:pointer">🔄 Reintentar</span>
+      </div>`;
       for (const m of _alejandraPanelHist) {
         const div = document.createElement('div');
         div.className = 'ale-msg ' + m.tipo;
@@ -28863,6 +28905,8 @@ function alejandraAbrir(show = true) {
     const list = document.getElementById('alejandraList');
     const tieneMsg = list && list.querySelector('[data-ale-msg]');
     if (!tieneMsg) _alejandraRestaurarChat();
+    _alejandraRestaurarBorrador();
+    _alejandraRevisarAdjPendientes();
     document.getElementById('alejandraInput')?.focus();
     if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
   } else {
@@ -28952,7 +28996,86 @@ function alejandraToggleVoz() {
 }
 
 // ── Adjuntos ──────────────────────────────────────────────────────────────────
+// BUG-ADJUNTO-APK-01 (16/09/2026): Adrián -- "si se está subiendo una imagen da error"
+// cuando la APK se cierra a medio subir. Capacitor mata el proceso entero, así que un
+// fetch() en curso muere sin remedio y no queda ni rastro (el archivo estaba solo en
+// memoria). Se guarda cada archivo en IndexedDB (sí sobrevive al cierre, a diferencia de
+// localStorage que no admite blobs cómodamente) ANTES de intentar subirlo; si la subida
+// falla o la app muere a medias, al reabrir se ofrece un botón "Reintentar" que usa el
+// archivo ya guardado -- no hace falta volver a seleccionarlo. Reintento manual, no
+// automático (decisión de Adrián: prefiere confirmar él antes de gastar datos/batería).
 let _alejandraAdjuntos = [];
+const ALEJANDRA_ADJ_DB = 'alejandra_adjuntos_pendientes';
+
+function _alejandraAdjDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(ALEJANDRA_ADJ_DB, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('pendientes', { keyPath: 'id' }); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function _alejandraAdjGuardarPendiente(id, file) {
+  try {
+    const db = await _alejandraAdjDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('pendientes', 'readwrite');
+      tx.objectStore('pendientes').put({ id, name: file.name, type: file.type, blob: file, ts: Date.now() });
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { console.warn('[Alejandra] adjunto: no se pudo guardar pendiente', e.message); }
+}
+async function _alejandraAdjBorrarPendiente(id) {
+  try {
+    const db = await _alejandraAdjDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('pendientes', 'readwrite');
+      tx.objectStore('pendientes').delete(id);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch {}
+}
+async function _alejandraAdjListarPendientes() {
+  try {
+    const db = await _alejandraAdjDB();
+    return await new Promise((res, rej) => {
+      const req = db.transaction('pendientes', 'readonly').objectStore('pendientes').getAll();
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = () => rej(req.error);
+    });
+  } catch { return []; }
+}
+
+function _alejandraAdjChipPendiente(id, name) {
+  const chip = document.createElement('div');
+  chip.dataset.pendId = id;
+  chip.style.cssText = 'background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px';
+  chip.innerHTML = `<span>⚠️</span><span>${alejandraEsc(name)}</span><span style="cursor:pointer;color:#ef4444;font-weight:700;text-decoration:underline" onclick="_alejandraAdjReintentar('${id}',this.parentElement)">Reintentar</span><span style="cursor:pointer;color:var(--muted)" onclick="_alejandraAdjDescartarPendiente('${id}',this.parentElement)">×</span>`;
+  return chip;
+}
+
+async function _alejandraAdjSubirBlob(id, file, chip) {
+  const s = getSession();
+  if (!s || !(s.usuario_id || s.nombre)) { toast('❌ Inicia sesión', 'err'); return; }
+  chip.innerHTML = `<span>⏳</span><span>${alejandraEsc(file.name)}</span>`;
+  try {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('usuario_id', s.usuario_id || s.nombre);
+    const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method:'POST', body:fd });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'fail');
+    _alejandraAdjuntos.push(j.url);
+    await _alejandraAdjBorrarPendiente(id);
+    chip.dataset.pendId = '';
+    chip.innerHTML = `<span>📎</span><span>${alejandraEsc(file.name)}</span><span style="cursor:pointer;color:var(--muted)" onclick="alejandraQuitarAdj('${j.url}',this.parentElement)">×</span>`;
+  } catch (e) {
+    // El archivo se queda en IndexedDB (ya se guardó antes de intentar subir) -- el chip
+    // de error se queda con botón de reintento en vez de autodestruirse.
+    chip.parentElement?.appendChild(_alejandraAdjChipPendiente(id, file.name));
+    chip.remove();
+  }
+}
 
 async function alejandraSubirAdjuntos(ev) {
   const files = Array.from(ev.target.files || []);
@@ -28962,24 +29085,49 @@ async function alejandraSubirAdjuntos(ev) {
   const cont = document.getElementById('alejandraAdjuntos');
   for (const f of files) {
     if (f.size > 20*1024*1024) { toast(`❌ ${f.name} supera 20MB`, 'err'); continue; }
+    const id = Date.now() + '_' + Math.random().toString(36).slice(2);
+    await _alejandraAdjGuardarPendiente(id, f);
     const chip = document.createElement('div');
     chip.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px';
     chip.innerHTML = `<span>⏳</span><span>${alejandraEsc(f.name)}</span>`;
     cont.appendChild(chip); cont.style.display = 'flex';
-    try {
-      const fd = new FormData();
-      fd.append('file', f);
-      fd.append('usuario_id', s.usuario_id || s.nombre);
-      const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method:'POST', body:fd });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'fail');
-      _alejandraAdjuntos.push(j.url);
-      chip.innerHTML = `<span>📎</span><span>${alejandraEsc(f.name)}</span><span style="cursor:pointer;color:var(--muted)" onclick="alejandraQuitarAdj('${j.url}',this.parentElement)">×</span>`;
-    } catch(e) {
-      chip.innerHTML = `<span style="color:#f55">❌ ${alejandraEsc(f.name)}</span>`;
-      setTimeout(()=>chip.remove(), 3000);
-    }
+    await _alejandraAdjSubirBlob(id, f, chip);
   }
+}
+
+async function _alejandraAdjReintentar(id, chip) {
+  try {
+    const db = await _alejandraAdjDB();
+    const registro = await new Promise((res, rej) => {
+      const req = db.transaction('pendientes', 'readonly').objectStore('pendientes').get(id);
+      req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error);
+    });
+    if (!registro) { chip.remove(); return; }
+    await _alejandraAdjSubirBlob(id, registro.blob, chip);
+  } catch (e) { toast('❌ No se pudo reintentar: ' + e.message, 'err'); }
+}
+
+async function _alejandraAdjDescartarPendiente(id, chip) {
+  await _alejandraAdjBorrarPendiente(id);
+  chip.remove();
+  const cont = document.getElementById('alejandraAdjuntos');
+  if (cont && !cont.children.length) cont.style.display = 'none';
+}
+
+// Se llama al abrir el panel (alejandraAbrir): si la APK murió con una subida a medias en
+// una sesión anterior, el archivo sigue en IndexedDB aunque el chip original ya no exista
+// (se perdió con el proceso) -- se reconstruye como chip de reintento.
+async function _alejandraRevisarAdjPendientes() {
+  const pendientes = await _alejandraAdjListarPendientes();
+  if (!pendientes.length) return;
+  const cont = document.getElementById('alejandraAdjuntos');
+  if (!cont) return;
+  const yaMostrados = new Set(Array.from(cont.querySelectorAll('[data-pend-id]')).map(el => el.dataset.pendId));
+  for (const p of pendientes) {
+    if (yaMostrados.has(p.id)) continue;
+    cont.appendChild(_alejandraAdjChipPendiente(p.id, p.name));
+  }
+  if (cont.children.length) cont.style.display = 'flex';
 }
 
 function alejandraQuitarAdj(url, chip) {
@@ -29149,6 +29297,7 @@ async function alejandraEnviar() {
 
   input.value = '';
   input.style.height = 'auto';
+  try { localStorage.removeItem(ALEJANDRA_DRAFT_KEY); } catch {}
 
   const s = getSession();
   if (!s || !(s.usuario_id || s.nombre)) {
@@ -29159,6 +29308,8 @@ async function alejandraEnviar() {
   const adjEnv = _alejandraAdjuntos.slice();
   _alejandraAdjuntos = [];
   const cont = document.getElementById('alejandraAdjuntos');
+  const pendSinSubir = cont ? cont.querySelectorAll('[data-pend-id]').length : 0;
+  if (pendSinSubir) toast(`⚠️ ${pendSinSubir} adjunto(s) no se pudieron subir y no se incluirán`, 'err');
   if (cont) { cont.innerHTML=''; cont.style.display='none'; }
 
   const msgDisplay = msg + (adjEnv.length ? `\n📎 ${adjEnv.length} archivo(s) adjunto(s)` : '');
