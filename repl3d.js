@@ -94,14 +94,61 @@ function _replConDesvios(THREE, pts, obst) {
 }
 function _replInstal3D(THREE, pts, opts) {
   opts = opts || {}; const tipo = opts.tipo || 'tubo', w = opts.w || 0.2, op = opts.opacity != null ? opts.opacity : 1;
+  // LIMITACIÓN CONOCIDA: si hay obstáculos, _replConDesvios inserta puntos nuevos (los del
+  // quiebro) y desplaza los índices -- opts.normales (abajo) sigue alineado a los puntos
+  // ORIGINALES, así que en los tramos de quiebro se cae al respaldo de "arriba" genérico en vez
+  // de la normal real. No pasa nada grave (no rompe, solo pierde precisión ahí) -- pero si algún
+  // día se necesita perfecto también en los quiebros, _replConDesvios tendría que propagar la
+  // normal del punto de origen a cada punto que inserta.
   if (opts.obstaculos) pts = _replConDesvios(THREE, pts, opts.obstaculos);
-  const g = new THREE.Group(), X = new THREE.Vector3(1, 0, 0);
+  const g = new THREE.Group();
   const M = (c, met, ro) => new THREE.MeshStandardMaterial({ color: c, metalness: met, roughness: ro, transparent: op < 1, opacity: op, side: THREE.DoubleSide });
-  const matTubo = M(0xcdd4dd, .12, .7), matMetal = M(0x9aa7b6, .75, .45), matAcc = M(0x3b424d, .4, .6), matCaja = M(0xd97706, .1, .8);
+  const matTubo = M(0xcdd4dd, .12, .7), matMetal = M(0x9aa7b6, .75, .45), matAcc = M(0x3b424d, .4, .6);
   const rTubo = Math.max(0.008, w / 2);
+  // REJIBAND-DE-CARA-01 (17/09/2026): Adrián, probando en AR con un tramo casi vertical --
+  // "el rejiband se ha colocado mirando hacia la cámara... perpendicular a la pared". Antes se
+  // orientaba cada tramo con setFromUnitVectors(X, dir) -- da la rotación MÍNIMA de +X a la
+  // dirección del tramo, pero no dice nada de en qué ángulo queda el "ancho" (eje local Z, donde
+  // van los railes/paredes de rejiband, escalera, chapa, canal) alrededor de ese eje: para un
+  // tramo casi vertical esa rotación mínima resulta -- por pura geometría del giro más corto --
+  // en que el ancho acaba apuntando hacia la cámara/profundidad en vez de a lo largo de la
+  // pared. Se construye la base a mano con una referencia "arriba" estable en vez de esa
+  // rotación mínima.
+  //
+  // PARED-NORMAL-REAL-01 (17/09/2026): Adrián, después -- "no queda pegada a la pared como una
+  // instalación real". El motivo: esta función solo recibía puntos (x,y,z), nunca la orientación
+  // real de la superficie en cada uno -- así que no había forma de saber hacia qué lado cae la
+  // pared, y el ancho/grosor se construían con una referencia "arriba del mundo" genérica, sin
+  // relación con la pared física. opts.normales (opcional, un THREE.Vector3 por punto de pts, o
+  // null si no se conoce -- el AR nativo SÍ la tiene, viene del eje Y de la pose de cada ancla de
+  // ARCore, igual convención que normalDeQuat() en index.html) es la referencia real cuando existe
+  // -- así el ancho (Z local) cae en el plano de la pared de verdad, y el alto/grosor (Y local)
+  // apunta hacia fuera de la pared en vez de "hacia arriba" genérico. Sin normal (plano 2D de una
+  // foto, o el propio AR antes de tener el dato) se mantiene el respaldo de arriba, que ya es
+  // mejor que la rotación mínima de antes.
+  const arribaMundo = new THREE.Vector3(0, 1, 0);
+  const normales = opts.normales || [];
+  // Separación de la pared para que el material no quede enterrado en ella ni flotando -- mismo
+  // criterio que una abrazadera/soporte real (unos pocos cm de vuelo), no pegado a piel.
+  const separacionPared = 0.03;
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1], b = pts[i], dir = new THREE.Vector3().subVectors(b, a), len = dir.length(); if (len < 1e-3) continue;
-    const sub = new THREE.Group(); sub.position.copy(a).addScaledVector(dir, 0.5); sub.quaternion.setFromUnitVectors(X, dir.clone().normalize()); g.add(sub);
+    const dirN = dir.clone().normalize();
+    const normalReal = normales[i - 1] || normales[i];
+    let arriba;
+    if (normalReal && normalReal.lengthSq() > 0.25) {
+      arriba = normalReal.clone().normalize();
+    } else {
+      // Sin normal real (foto 2D, o tramo casi vertical con arriba degenerado): referencia fija.
+      arriba = Math.abs(dirN.dot(arribaMundo)) > 0.999 ? new THREE.Vector3(0, 0, 1) : arribaMundo;
+    }
+    const zAxis = new THREE.Vector3().crossVectors(dirN, arriba).normalize();
+    const yAxis = new THREE.Vector3().crossVectors(zAxis, dirN).normalize();
+    const sub = new THREE.Group();
+    sub.position.copy(a).addScaledVector(dir, 0.5);
+    if (normalReal && normalReal.lengthSq() > 0.25) sub.position.addScaledVector(yAxis, separacionPared);
+    sub.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(dirN, yAxis, zAxis));
+    g.add(sub);
     if (tipo === 'tubo') {
       sub.add(new THREE.Mesh(new THREE.CylinderGeometry(rTubo, rTubo, len, 20, 1, true).rotateZ(Math.PI / 2), matTubo));
       const n = Math.max(1, Math.floor(len / 0.6));                                   // grapas cada ~0,6 m
@@ -124,10 +171,17 @@ function _replInstal3D(THREE, pts, opts) {
     } else { sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, w), matMetal)); }
     if (tipo !== 'tubo' && tipo !== 'canal') { const ns = Math.floor(len / 1.5); for (let k = 1; k <= ns; k++) { const br = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, w * 1.1), matAcc); br.position.set(-len / 2 + k * (len / (ns + 1)), -0.03, 0); sub.add(br); } }
   }
+  // CODO-SIN-CAJA-AUTO-01 (17/09/2026): Adrián -- "en cada punto pone una caja y no es así
+  // siempre, las cajas las marco yo luego. El tiene que poner curvas." caja_cada_m en las reglas
+  // del catálogo (worker.js) es una cuenta para la LISTA DE MATERIAL (cuántas cajas de registro
+  // hacen falta cada 15 m o en los giros), no una orden de "dibuja una caja en cada vértice" --
+  // aquí se estaba confundiendo ambas cosas. Las cajas de registro/mecanismo ya son complementos
+  // que el usuario coloca a mano donde tocan de verdad (_replComplemento3D, 'caja_registro'/
+  // 'caja_mecanismo'). En un codo de tubo solo debe verse el propio tubo doblando -- una esfera
+  // algo más ancha que el tubo, como el bulto real de un accesorio de curva/codo atornillado.
   for (let i = 1; i < pts.length - 1; i++) {
     const p = pts[i];
-    if (tipo === 'tubo') { const codo = new THREE.Mesh(new THREE.SphereGeometry(rTubo, 14, 14), matTubo); codo.position.copy(p); g.add(codo);
-      const caja = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.05), matCaja); caja.position.copy(p); g.add(caja); }
+    if (tipo === 'tubo') { const codo = new THREE.Mesh(new THREE.SphereGeometry(rTubo * 1.15, 16, 16), matTubo); codo.position.copy(p); g.add(codo); }
     else { const codo = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, w), matMetal); codo.position.copy(p); g.add(codo); }
   }
   return g;

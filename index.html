@@ -19437,8 +19437,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const r = data.replanteo;
       _replPuedeEditar = !!data.puede_editar;
       let img = null;
-      try { img = await _replCargarImagen(replFotoUrl(id), true); }
-      catch { img = await _replCargarImagen(replFotoUrl(id), false); } // sin CORS: se ve, pero el informe no podrá incrustar el canvas
+      // REPL-INFORME-CORS-01 (17/09/2026): Adrián -- "al generar el informe no se ve la
+      // instalación". La causa: <img crossOrigin="anonymous"> sobre la URL directa fallaba (el
+      // token va por query string, no por cabecera, y basta que el navegador rechace el CORS
+      // por cualquier motivo) y caía al modo sin CORS -- se veía la foto perfectamente, pero
+      // CUALQUIER canvas que la usara después quedaba "tainted" y silenciosamente no podía
+      // exportarse (toDataURL lanza SecurityError) -- ni el trazado 2D del informe antiguo ni
+      // la instalación 3D nueva podían pintarse encima, así que el informe salía como la foto
+      // pelada, sin avisar de nada (ambos catch de _replImagenInforme/_replImagen3DInforme se
+      // tragan el error). Se sustituye por fetch()+blob: un blob: URL nunca mancha el canvas,
+      // así que el informe siempre puede incrustar lo que dibuje encima -- y de paso el token
+      // viaja por cabecera (apiCall) en vez de por la URL.
+      try {
+        const fr = await apiCall(`/replanteos/${id}/foto`);
+        if (!fr.ok) throw new Error('foto no disponible');
+        const blob = await fr.blob();
+        img = await _replCargarImagen(URL.createObjectURL(blob), false);
+      } catch { img = await _replCargarImagen(replFotoUrl(id), false); }
       const tr = r.trazado || {};
       _repl = {
         id: r.id, titulo: r.titulo, elemento_key: r.elemento_key, params: r.elemento || {}, file: null, img, departamento: r.departamento || _replCatalogoDept,
@@ -21489,7 +21504,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       // REPL-AR-OVERLAY-01: el elemento elegido viaja a la sesión nativa para que threeOverlay
       // (WebView con repl3d.js dentro de ReplanteoARActivity) sepa qué tipo de render/ancho
       // aplicar al trazado -- antes la sesión nativa no sabía nada del elemento elegido.
-      const resultado = await window.Capacitor.Plugins.ReplanteoAR.abrirAR({ elemento_key: el.key, elemento_params: JSON.stringify(params) });
+      // REPL-AR-IDENTIFICAR-01: api_base/token viajan para que "🔍 Identificar con IA" pueda
+      // llamar a POST /replanteos/identificar igual que hace apiCall() aquí en la web -- la
+      // Activity nativa no tiene acceso a getAPI()/getSession().
+      const s = getSession();
+      const resultado = await window.Capacitor.Plugins.ReplanteoAR.abrirAR({ elemento_key: el.key, elemento_params: JSON.stringify(params), api_base: getAPI(), token: (s && s.token) || '' });
       if (!resultado?.ok) {
         if (!resultado?.cancelado) toast('❌ AR: ' + (resultado?.error || 'no se pudo medir'), 'error');
         return;
@@ -21539,7 +21558,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       id: null, titulo, elemento_key: el.key, params, file, img, departamento: _replCatalogoDept, planos: [], imgW: img.naturalWidth, imgH: img.naturalHeight,
       puntos: plano.puntosPx, obstaculos: [],
       referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
-      complementos, fotosDoc: [],
+      // REPL-AR-FOTO-01 (17/09/2026): fotos tomadas con "📸 Foto" durante la sesión AR nativa --
+      // mismo array/formato (data URLs) que _ar.fotosDoc en el camino WebXR, se suben igual al
+      // guardar (ver el bucle de fotosDoc más arriba en este archivo).
+      complementos, fotosDoc: Array.isArray(resultado.fotos) ? resultado.fotos : [],
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
     };
     // BUG-REPL-GUARDAR-AR-01: ver comentario en el camino WebXR -- mismo motivo.
@@ -21602,7 +21624,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // Rotatoria en cualquier dispositivo; y "ver en mi espacio" (AR anclado) en Android/ARCore.
   let _p3d = null;
   function _repl3DPath() {
-    if (Array.isArray(_repl.puntos_3d) && _repl.puntos_3d.length >= 2) return _repl.puntos_3d.map(p => ({ x: +p.x || 0, y: +p.y || 0, z: +p.z || 0 }));
+    // PARED-NORMAL-REAL-01 (17/09/2026): antes se descartaban nx/ny/nz aquí aunque puntos_3d ya
+    // las traía (calculadas en _replArTerminarNativo/replArTerminar) -- por eso _repl3DBuild
+    // nunca podía orientar la instalación contra la pared real, ni en AR ni en el informe.
+    if (Array.isArray(_repl.puntos_3d) && _repl.puntos_3d.length >= 2) return _repl.puntos_3d.map(p => ({ x: +p.x || 0, y: +p.y || 0, z: +p.z || 0, nx: p.nx, ny: p.ny, nz: p.nz }));
     const pts = _repl.puntos || []; if (pts.length < 2) return null;
     let esc = (typeof _replEscalaActual === 'function' && _replEscalaActual()) || _repl.escala_px_m || 0;
     const aprox = !(esc > 0); if (aprox) esc = 200;   // sin escala: forma orientativa
@@ -21615,7 +21640,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // directamente el estado global _repl de esta página.
   function _repl3DBuild(THREE, path) {
     const pts = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
-    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1, obstaculos: _repl.obstaculos || [] });
+    // PARED-NORMAL-REAL-01: normal real por punto (viene del quaternion del ancla AR, ver
+    // _repl3DPath) cuando existe -- null en los puntos de un plano 2D de foto, que no la tienen.
+    const normales = path.map(p => (p.nx != null ? new THREE.Vector3(p.nx, p.ny, p.nz) : null));
+    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1, obstaculos: _repl.obstaculos || [], normales });
     (_repl.complementos || []).forEach(comp => { const o = _replComplemento3D(THREE, comp.key); o.position.set(comp.x || 0, comp.y || 0, comp.z || 0); if (comp.q) o.quaternion.set(comp.q.x, comp.q.y, comp.q.z, comp.q.w); g.add(o); });
     return g;
   }

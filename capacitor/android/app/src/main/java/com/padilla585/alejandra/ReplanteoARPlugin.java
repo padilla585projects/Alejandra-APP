@@ -53,6 +53,14 @@ public class ReplanteoARPlugin extends Plugin {
         String elementoParams = call.getString("elemento_params");
         if (elementoKey != null) intent.putExtra("elemento_key", elementoKey);
         if (elementoParams != null) intent.putExtra("elemento_params", elementoParams);
+        // REPL-AR-IDENTIFICAR-01 (17/09/2026): "🔍 Identificar con IA" necesita llamar a
+        // POST {api_base}/replanteos/identificar con el mismo token de sesión que usa apiCall()
+        // en index.html (X-Token) -- la Activity no tiene acceso al WebView/localStorage, así
+        // que viajan como extras igual que elemento_key/elemento_params.
+        String apiBase = call.getString("api_base");
+        String token = call.getString("token");
+        if (apiBase != null) intent.putExtra("api_base", apiBase);
+        if (token != null) intent.putExtra("token", token);
         startActivityForResult(call, intent, "arResultado");
     }
 
@@ -70,6 +78,10 @@ public class ReplanteoARPlugin extends Plugin {
             // (cajas, mecanismos...) -- mismo formato que "puntos", uno más para pasar a la web.
             try { ret.put("complementos", new JSArray(data.getStringExtra("complementos") != null ? data.getStringExtra("complementos") : "[]")); }
             catch (Exception e) { ret.put("complementos", new JSArray()); }
+            // REPL-AR-FOTO-01 (17/09/2026): fotos de documentación tomadas durante la sesión AR
+            // (data URLs base64) -- mismo formato que _ar.fotosDoc en el camino WebXR.
+            try { ret.put("fotos", new JSArray(data.getStringExtra("fotos") != null ? data.getStringExtra("fotos") : "[]")); }
+            catch (Exception e) { ret.put("fotos", new JSArray()); }
         } else {
             ret.put("ok", false);
             if (data != null && data.getStringExtra("error") != null) ret.put("error", data.getStringExtra("error"));

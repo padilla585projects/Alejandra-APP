@@ -47,6 +47,8 @@
   var grupoInstalacion = null;
   var complementosGrupo = new THREE.Group();
   scene.add(complementosGrupo);
+  var planosGrupo = new THREE.Group();
+  scene.add(planosGrupo);
 
   function resize() {
     var w = window.innerWidth, h = window.innerHeight;
@@ -76,6 +78,20 @@
     return 0.2;
   }
 
+  // PARED-NORMAL-REAL-01 (17/09/2026): mismo cálculo que normalDeQuat() en index.html -- el eje Y
+  // local de la pose (columna Y de la matriz de rotación del quaternion) es la normal de la
+  // superficie, por convención de ARCore (un HitResult/Anchor sobre un plano trae su pose con Y
+  // apuntando hacia fuera de la superficie). Null si no hay quaternion (compatibilidad con datos
+  // antiguos/foto 2D sin orientación).
+  function normalDeQuat(qx, qy, qz, qw) {
+    if (qx == null) return null;
+    return new THREE.Vector3(
+      2 * (qx * qy - qw * qz),
+      1 - 2 * (qx * qx + qz * qz),
+      2 * (qy * qz + qw * qx)
+    );
+  }
+
   // Reconstruye el trazado + complementos con la MISMA geometria que usa la PWA
   // (_replTipoRender/_replInstal3D/_replComplemento3D, repl3d.js) -- path: [{x,y,z}, ...] en
   // metros, ya en el espacio de mundo de ARCore (los anchors dan directamente esas coordenadas).
@@ -89,9 +105,10 @@
       var params = JSON.parse(paramsJson || '{}');
       if (path.length >= 2) {
         var pts = path.map(function (p) { return new THREE.Vector3(p.x, p.y, p.z); });
+        var normales = path.map(function (p) { return normalDeQuat(p.qx, p.qy, p.qz, p.qw); });
         var obstaculos = JSON.parse(obstaculosJson || '[]');
         var tipo = _replTipoRender(elementoKey, params);
-        grupoInstalacion = _replInstal3D(THREE, pts, { tipo: tipo, w: anchoDeParams(params), opacity: 1, obstaculos: obstaculos });
+        grupoInstalacion = _replInstal3D(THREE, pts, { tipo: tipo, w: anchoDeParams(params), opacity: 1, obstaculos: obstaculos, normales: normales });
         scene.add(grupoInstalacion);
       } else {
         grupoInstalacion = null;
@@ -106,6 +123,45 @@
       });
     } catch (e) {
       // No tirar la sesión AR por un dato mal formado -- se reintenta en el próximo cambio.
+    }
+  };
+
+  // REFERENCIA-PLANOS-AR-01 (17/09/2026): Adrián -- "no detecta bien las paredes... debería
+  // tener referencias para saber colocarlo". Pinta cada plano que ARCore ha detectado como una
+  // rejilla translúcida en su posición/orientación real, para que el usuario vea ANTES de tocar
+  // qué superficie está trackeando la app (y note si es pequeña, si es el suelo en vez de la
+  // pared, etc.) en vez de fiarse a ciegas del retículo. planos: [{cx,cy,cz,qx,qy,qz,qw,vertical,
+  // poly:[x0,z0,x1,z1,...]}, ...] -- poly son los vértices del contorno en el espacio LOCAL del
+  // plano (mismo formato que Plane.getPolygon() de ARCore), centrados en (cx,cy,cz)/rotados por
+  // el quaternion.
+  var matPlano = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.18, side: THREE.DoubleSide });
+  var matPlanoBorde = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 });
+  window.actualizarPlanos = function (planosJson) {
+    try {
+      while (planosGrupo.children.length) planosGrupo.remove(planosGrupo.children[0]);
+      var planos = JSON.parse(planosJson || '[]');
+      planos.forEach(function (p) {
+        var poly = p.poly || [];
+        if (poly.length < 6) return;
+        var shape = new THREE.Shape();
+        shape.moveTo(poly[0], poly[1]);
+        for (var i = 2; i < poly.length; i += 2) shape.lineTo(poly[i], poly[i + 1]);
+        shape.closePath();
+        var geo = new THREE.ShapeGeometry(shape);
+        // ShapeGeometry vive en el plano XY; el contorno de ARCore es X/Z local -- se rota para
+        // que coincida (mismo criterio que la propia documentación de Plane.getPolygon()).
+        geo.rotateX(Math.PI / 2);
+        var mesh = new THREE.Mesh(geo, matPlano);
+        mesh.position.set(p.cx || 0, p.cy || 0, p.cz || 0);
+        if (p.qx != null) mesh.quaternion.set(p.qx, p.qy, p.qz, p.qw);
+        planosGrupo.add(mesh);
+        var borde = new THREE.LineLoop(new THREE.EdgesGeometry(geo), matPlanoBorde);
+        borde.position.copy(mesh.position);
+        borde.quaternion.copy(mesh.quaternion);
+        planosGrupo.add(borde);
+      });
+    } catch (e) {
+      // Igual que actualizarContenido: un JSON mal formado no debe tirar la sesión.
     }
   };
 })();
