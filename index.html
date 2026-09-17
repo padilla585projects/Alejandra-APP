@@ -20579,12 +20579,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       return _repl.id ? replFotoUrl(_repl.id) : '';
     }
   }
-  function replInforme() {
+  async function replInforme() {
     if (!_repl) return;
     const s = getSession();
     const frame = document.getElementById('replInformeFrame');
     document.getElementById('replInformeTitulo').textContent = 'Replanteo · ' + (_repl.titulo || '');
     document.getElementById('modalReplInforme').style.display = 'flex';
+    frame.srcdoc = '<body style="font-family:Arial,sans-serif;color:#5b6472;text-align:center;padding-top:80px">Generando informe…</body>';
+    // REPL-INFORME-3D-01 (17/09/2026): Adrián pidió que el informe muestre la instalación
+    // en 3D "tal como quedaría" (como en AR), no el plano en 2D con líneas -- se genera una
+    // captura de la misma escena de _repl3DBuild (repl3d.js) y solo si falla se usa el
+    // plano 2D de siempre como respaldo (ej. sin trazado suficiente para construir el 3D).
+    const foto3d = await _replImagen3DInforme().catch(() => null);
+    const imgSrc = foto3d || _replImagenInforme();
     const calc = _repl.calc;
     const el = _replElemento();
     const filas = (calc?.material || []).map(m => `<tr><td>${_escHtml(m.nombre)}</td><td style="text-align:right;font-weight:700">${m.cantidad} ${m.unidad}</td><td style="color:#5b6472">${_escHtml(m.detalle || '')}</td></tr>`).join('');
@@ -20605,7 +20612,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       </style></head><body>
       <h1>📐 ${_escHtml(_repl.titulo)}</h1>
       <div class="meta">${_escHtml(s?.obra_nombre || '')}${s?.departamento ? ' · ' + _escHtml(s.departamento) : ''} · ${_escHtml(_replNombreElemento({ elemento_key: _repl.elemento_key, elemento: _repl.params }))} · <b>${calc ? _replNum(calc.longitud_m) + ' m' : 'sin calcular'}</b> · ${new Date().toLocaleDateString('es-ES')}${_repl.creado_por ? ' · ' + _escHtml(_repl.creado_por) : ''}${_repl.id ? ' · REPL-' + _repl.id : ''}</div>
-      <img class="foto" src="${_replImagenInforme()}">
+      <img class="foto" src="${imgSrc}">
       <h2>Material</h2>
       <table><thead><tr><th>Concepto</th><th style="text-align:right">Cantidad</th><th>Detalle</th></tr></thead>
       <tbody>${filas || '<tr><td colspan="3">Sin material calculado (falta trazado o escala)</td></tr>'}</tbody></table>
@@ -21422,6 +21429,39 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1, obstaculos: _repl.obstaculos || [] });
     (_repl.complementos || []).forEach(comp => { const o = _replComplemento3D(THREE, comp.key); o.position.set(comp.x || 0, comp.y || 0, comp.z || 0); if (comp.q) o.quaternion.set(comp.q.x, comp.q.y, comp.q.z, comp.q.w); g.add(o); });
     return g;
+  }
+  // REPL-INFORME-3D-01 (17/09/2026): captura estática (un solo frame, sin canvas visible)
+  // de la misma instalación que ve "Ver en 3D" / AR, para el informe imprimible -- Adrián:
+  // no quiere el plano en 2D con líneas, quiere "verse en 3D tal como quedaría".
+  async function _replImagen3DInforme() {
+    try {
+      const path = _repl3DPath();
+      if (!path) return null;
+      const THREE = await _replCargarThree();
+      const W = 1400, H = 1000;
+      const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+      renderer.setSize(W, H, false);
+      renderer.setClearColor(0xf5f7fa, 1);
+      const scene = new THREE.Scene();
+      const cam = new THREE.PerspectiveCamera(50, W / H, 0.01, 200);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x333844, 1.2));
+      const dl = new THREE.DirectionalLight(0xffffff, 1.15); dl.position.set(1.5, 2.5, 1.5); scene.add(dl);
+      const dl2 = new THREE.DirectionalLight(0xbcd0ff, 0.4); dl2.position.set(-1.5, 0.6, -1); scene.add(dl2);
+      const run = _repl3DBuild(THREE, path);
+      const box = new THREE.Box3().setFromObject(run), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+      run.position.sub(c);
+      const pivot = new THREE.Group(); pivot.add(run); scene.add(pivot);
+      const rad = Math.max(size.length(), 0.5);
+      const grid = new THREE.GridHelper(Math.max(2, Math.ceil(rad) * 2), Math.max(4, Math.ceil(rad) * 2), 0xc7ccd4, 0xe4e7ec);
+      grid.position.y = -size.y / 2 - 0.05; pivot.add(grid);
+      pivot.rotation.set(0.5, 0.55, 0);
+      cam.position.set(0, rad * 0.55, rad * 1.9); cam.lookAt(0, 0, 0);
+      renderer.render(scene, cam);
+      const img = canvas.toDataURL('image/jpeg', 0.9);
+      try { renderer.dispose(); } catch (_) {}
+      return img;
+    } catch (e) { return null; }
   }
   async function replVer3D() {
     if (!_repl) return;
