@@ -91,7 +91,12 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;fon
    icono de departamento. En vez de otro breakpoint fijo, se usa clamp()
    para que padding/gap/anchos escalen de forma continua con el ancho de
    pantalla (vw) en lugar de saltar entre dos estados fijos. */
-header{background:var(--surface);border-bottom:2px solid var(--accent);padding:clamp(4px,1.5vw,6px) clamp(6px,2.5vw,10px);padding-top:calc(clamp(4px,1.5vw,6px) + env(safe-area-inset-top));display:flex;align-items:center;gap:clamp(3px,1.2vw,6px);flex-shrink:0;z-index:100;min-height:44px}
+/* BARRA-ESTADO-SOLAPA-01 (17/09/2026): Adrián -- "la barra superior está encima de la app"
+   (el reloj del sistema tapaba el logo). max() con --native-status-bar-h (la altura real que
+   manda MainActivity.java por cada cambio de insets) como red de seguridad, por si
+   env(safe-area-inset-top) llega en 0 en el WebView antes de que el inset esté listo. En la
+   PWA/web normal --native-status-bar-h nunca se define, max() se queda con env() de siempre. */
+header{background:var(--surface);border-bottom:2px solid var(--accent);padding:clamp(4px,1.5vw,6px) clamp(6px,2.5vw,10px);padding-top:calc(clamp(4px,1.5vw,6px) + max(env(safe-area-inset-top),var(--native-status-bar-h,0px)));display:flex;align-items:center;gap:clamp(3px,1.2vw,6px);flex-shrink:0;z-index:100;min-height:44px}
 .btn-atras{background:none;border:none;color:var(--text);font-size:20px;padding:0 2px;cursor:pointer;flex-shrink:0;line-height:1;font-family:'Montserrat',sans-serif;font-weight:900;display:none;opacity:.8;transition:opacity .2s}
 .btn-atras:hover{opacity:1}
 .header-logo{display:flex;align-items:center;flex-shrink:0;position:relative}
