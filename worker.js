@@ -30566,6 +30566,9 @@ const REPLANTEO_CATALOGO_BASE = (() => {
     opciones: { anchos_mm: [60, 100, 150, 200, 300, 400, 500, 600] },
     reglas: { tramo_m: 3, union_nombre: 'Unión rápida de rejilla', uniones_por_tramo: 1, soporte_cada_m: 1.5,
               soporte_nombre: 'Soporte a techo (varilla + perfil)', codo_nombre: 'Codo / cambio de dirección (rejilla cortada)',
+              // REPL-REJIBAND-CODO-01: la curva de 90° se corta y dobla de la propia bandeja
+              // (guía técnica Pemsa Rejiband), no es una pieza que se compra -- ver calcularMaterialReplanteo.
+              codo_formula: 'rejiband_cortada',
               giro_min_grados: 30, tornilleria_por_soporte: 2, tornilleria_nombre: 'Anclaje metálico + tornillería',
               sujecion_existente_nombre: 'Soporte / abrazadera a instalación existente', desperdicio_pct: 5, ancho_mm: 200,
               montajes: MONTAJES_BANDEJA, montaje_default: 'colgado', admite_tapa: true, tapa_nombre: 'Tapa de bandeja de rejilla' }
@@ -31105,7 +31108,34 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
     else if (accion === 'sujetar') { sujetarM += dim; }
     obstResumen.push({ tipo: o.tipo || 'otro', accion, dimension_m: dim });
   }
-  const longitud = longitudBase + extraM;
+  const codos = giros + codosObst;
+  // REPL-REJIBAND-CODO-01 (17/09/2026): Adrian -- "las curvas en rejiband y bandeja se pueden
+  // hacer en dos toques o en uno... revisa el catalogo de rejiband". Verificado en la guia
+  // tecnica oficial de Pemsa Rejiband ("Ejemplos de construccion de accesorios: cortar, doblar,
+  // unir", pag. 12): la curva de 90 grados NO es una pieza que se compra aparte -- se CORTA y
+  // dobla del mismo tramo recto de bandeja. Para anchos 200-600 mm la guia da una tabla exacta:
+  // con N = ancho_mm - 100, se corta un tramo de L = 800 + 2*N mm (esos mm salen de longitud de
+  // bandeja normal, no de una pieza nueva) y se fija con 1 "Union reforzada" + 2 "Suspension
+  // central" + 2 tornillo M6x20 + 2 tuerca M6. Para anchos menores (60/100/150 mm) la guia solo
+  // muestra un esquema fijo con 1 union reforzada, sin tabla de longitud por ancho -- no se
+  // inventa una formula que el fabricante no publica.
+  let extraLongitudCodosM = 0;
+  const materialCodoExtra = [];
+  if (reglas.codo_formula === 'rejiband_cortada' && codos > 0) {
+    const anchoBandejaMm = Number(elemento_params.ancho_mm) || Number(reglas.ancho_mm) || null;
+    const detalleGiros = `${giros} cambio(s) de dirección ≥ ${giroMin}°` + (codosObst ? ` + ${codosObst} por obstáculos` : '');
+    if (anchoBandejaMm >= 200) {
+      const lM = (800 + 2 * (anchoBandejaMm - 100)) / 1000;
+      extraLongitudCodosM = codos * lM;
+      materialCodoExtra.push({ key: 'codo_union_reforzada', nombre: 'Unión reforzada (curva cortada en obra, no se compra)', cantidad: codos, unidad: 'ud',
+                                detalle: `1 por codo · ${detalleGiros} · corte de ${Math.round(lM * 100) / 100} m de bandeja de ${anchoBandejaMm} mm por codo (guía técnica Pemsa Rejiband)` });
+      materialCodoExtra.push({ key: 'codo_suspension_central', nombre: 'Suspensión central (placa colgante)', cantidad: codos * 2, unidad: 'ud', detalle: '2 por codo' });
+      materialCodoExtra.push({ key: 'codo_tornilleria', nombre: 'Tornillo C DIN 603 M6x20 + tuerca M6', cantidad: codos * 2, unidad: 'ud', detalle: '2 juegos por codo' });
+    } else {
+      materialCodoExtra.push({ key: 'codo_union_reforzada', nombre: 'Unión reforzada (curva cortada en obra, no se compra)', cantidad: codos, unidad: 'ud', detalle: `1 por codo · ${detalleGiros}` });
+    }
+  }
+  const longitud = longitudBase + extraM + extraLongitudCodosM;
   const desp = Number(reglas.desperdicio_pct) >= 0 ? Number(reglas.desperdicio_pct) : 5;
   const longitudConDesp = longitud * (1 + desp / 100);
   const r1 = n => Math.round(n * 10) / 10;
@@ -31134,16 +31164,20 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
                                 detalle: `tapa para ${r1(longitud)} m de bandeja` });
     else material.push({ key: 'tapa', nombre: reglas.tapa_nombre, cantidad: Math.ceil(longitudConDesp), unidad: 'm', detalle: 'tapa continua' });
   }
-  const codos = giros + codosObst;
-  if (reglas.codo_nombre && codos > 0) {
+  if (reglas.codo_formula === 'rejiband_cortada') {
+    material.push(...materialCodoExtra);
+  } else if (reglas.codo_nombre && codos > 0) {
     material.push({ key: 'codos', nombre: reglas.codo_nombre, cantidad: codos, unidad: 'ud',
                     detalle: `${giros} cambio(s) de dirección ≥ ${giroMin}°` + (codosObst ? ` + ${codosObst} por obstáculos` : '') });
   }
   if (tramoM && reglas.union_nombre) {
     const porTramo = Number(reglas.uniones_por_tramo) >= 0 ? Number(reglas.uniones_por_tramo) : 1;
-    const uniones = Math.max(tramos - 1, 0) * porTramo + codos * porTramo;
+    // Rejiband: el codo ya lleva su propia "Unión reforzada" (arriba) -- no vuelve a sumar
+    // "Unión rápida" de tramo, que es una pieza distinta pensada para el empalme recto.
+    const codosEnUniones = (reglas.codo_formula === 'rejiband_cortada') ? 0 : codos;
+    const uniones = Math.max(tramos - 1, 0) * porTramo + codosEnUniones * porTramo;
     if (uniones > 0) material.push({ key: 'uniones', nombre: reglas.union_nombre, cantidad: uniones, unidad: 'ud',
-                                     detalle: `${Math.max(tramos - 1, 0)} entre tramos` + (codos ? ` + ${codos} en codos` : '') });
+                                     detalle: `${Math.max(tramos - 1, 0)} entre tramos` + (codosEnUniones ? ` + ${codosEnUniones} en codos` : '') });
   }
   const soporteCada = Number(reglas.soporte_cada_m) > 0 ? Number(reglas.soporte_cada_m) : null;
   if (soporteCada) {
