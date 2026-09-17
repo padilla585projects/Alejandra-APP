@@ -21342,6 +21342,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       return n ? { ...base, nx: +n.nx.toFixed(3), ny: +n.ny.toFixed(3), nz: +n.nz.toFixed(3) } : base;
     });
     const longitud3d = +(+resultado.longitud || 0).toFixed(2);
+    // REPL-AR-NATIVO-COMP-01 (17/09/2026): el AR nativo ya puede colocar complementos (cajas,
+    // mecanismos...) con su propio CubeRenderer -- mismo formato de campos que puntos_3d
+    // (x/y/z/qx/qy/qz/qw + key), se traduce aquí al {key,x,y,z,q:{x,y,z,w}} que ya usa
+    // _repl3DBuild/_replComplemento3D (repl3d.js) y el cálculo de material del servidor.
+    const complementosNativos = Array.isArray(resultado.complementos) ? resultado.complementos : [];
+    const complementos = complementosNativos.map(c => ({
+      key: c.key, x: +(+c.x).toFixed(3), y: +(+c.y).toFixed(3), z: +(+c.z).toFixed(3),
+      q: { x: +c.qx || 0, y: +c.qy || 0, z: +c.qz || 0, w: c.qw != null ? +c.qw : 1 },
+    }));
     const plano = _replArPlano(puntos, []);
     const blob = await new Promise(r => plano.cv.toBlob(r, 'image/jpeg', 0.9));
     const file = new File([blob], `replanteo-ar-${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -21350,7 +21359,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       id: null, titulo, elemento_key: el.key, params, file, img, departamento: _replCatalogoDept, planos: [], imgW: img.naturalWidth, imgH: img.naturalHeight,
       puntos: plano.puntosPx, obstaculos: [],
       referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
-      complementos: [], fotosDoc: [],
+      complementos, fotosDoc: [],
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
     };
     // BUG-REPL-GUARDAR-AR-01: ver comentario en el camino WebXR -- mismo motivo.
@@ -21358,7 +21367,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     replCerrarNuevo();
     showScreen('replanteoEditor');
     replInitEditor();
-    toast(`📱 ${longitud3d.toString().replace('.', ',')} m medidos en AR`);
+    toast(`📱 ${longitud3d.toString().replace('.', ',')} m medidos en AR` + (complementos.length ? ` · ${complementos.length} complemento(s)` : ''));
     _replProgramarCalculo();
   }
 

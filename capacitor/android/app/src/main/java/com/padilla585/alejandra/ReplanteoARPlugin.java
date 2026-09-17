@@ -59,6 +59,10 @@ public class ReplanteoARPlugin extends Plugin {
             try { ret.put("puntos", new JSArray(data.getStringExtra("puntos") != null ? data.getStringExtra("puntos") : "[]")); }
             catch (Exception e) { ret.put("puntos", new JSArray()); }
             ret.put("longitud", data.getDoubleExtra("longitud", 0));
+            // REPL-AR-NATIVO-COMP-01 (17/09/2026): complementos colocados en el AR nativo
+            // (cajas, mecanismos...) -- mismo formato que "puntos", uno más para pasar a la web.
+            try { ret.put("complementos", new JSArray(data.getStringExtra("complementos") != null ? data.getStringExtra("complementos") : "[]")); }
+            catch (Exception e) { ret.put("complementos", new JSArray()); }
         } else {
             ret.put("ok", false);
             if (data != null && data.getStringExtra("error") != null) ret.put("error", data.getStringExtra("error"));

@@ -12,9 +12,11 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -67,7 +69,9 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     private GLSurfaceView surfaceView;
     private OverlayView overlay;
     private TextView infoText;
+    private Spinner compSpinner;
     private final BackgroundRenderer background = new BackgroundRenderer();
+    private final CubeRenderer cubeRenderer = new CubeRenderer();
 
     private Session session;
     private boolean installRequested = false;
@@ -76,11 +80,26 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     private int viewportW = 1, viewportH = 1;
     private boolean viewportChanged = false;
 
+    private static final class Complemento {
+        final Anchor anchor; final String key;
+        Complemento(Anchor anchor, String key) { this.anchor = anchor; this.key = key; }
+    }
     private final List<Anchor> anchors = new ArrayList<>();
+    private final List<Complemento> complementos = new ArrayList<>();
+    // REPL-AR-NATIVO-COMP-01: un único historial de acciones (punto de trazado o complemento
+    // colocado) para que "↩" deshaga lo último que se hizo, sea de un tipo o del otro -- igual
+    // que _ar.ultimoFueComp en la PWA (WebXR).
+    private final List<String> accionLog = new ArrayList<>();
     private volatile boolean pendingPoint = false;
     // FASE-A-AR-PAREDES-LISAS-01: modo "Tocar" explícito -- ancla por profundidad/instant
     // placement a corta distancia aunque no haya ninguna superficie reconocida bajo el retículo.
     private volatile boolean pendingContact = false;
+    // REPL-AR-NATIVO-COMP-01 (17/09/2026): Adrián -- "en la apk faltan los accesorios como
+    // cajas, enchufes etc [comparado con la pwa]". El AR nativo (este archivo) hasta ahora solo
+    // pintaba el feed de cámara + un overlay 2D de puntos, sin ningún objeto 3D real -- no había
+    // ni dónde enganchar la colocación de complementos. pendingComp + colocarComplemento()
+    // añaden esa capacidad con un CubeRenderer mínimo (ver esa clase).
+    private volatile boolean pendingComp = false;
     // Última distancia estimada por la Depth API bajo el centro de la pantalla (metros), o -1 si
     // no hay profundidad disponible en este frame. Se usa como approximateDistanceMeters para
     // instant placement -- mucho más preciso que un valor fijo cuando el dispositivo lo soporta.
@@ -115,11 +134,35 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         infoText.setShadowLayer(6f, 0f, 2f, Color.BLACK);
         root.addView(infoText, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
 
+        // REPL-AR-NATIVO-COMP-01: fila de complementos, encima de la barra de trazado -- selector
+        // del tipo (mismas keys que REPL_COMPLEMENTOS en repl3d.js) + botón para colocarlo en el
+        // retículo, igual que el desplegable + "➕ Colocar" que ya tenía el AR de la PWA (WebXR).
+        // Las dos filas van dentro del mismo contenedor vertical: como hermanos sueltos con
+        // Gravity.BOTTOM cada una en el FrameLayout raíz, se pintarían una encima de la otra.
+        LinearLayout bottomStack = new LinearLayout(this);
+        bottomStack.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout.LayoutParams bottomStackLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        root.addView(bottomStack, bottomStackLp);
+
+        LinearLayout compBar = new LinearLayout(this);
+        compBar.setOrientation(LinearLayout.HORIZONTAL);
+        compBar.setPadding(20, 0, 20, 8);
+        bottomStack.addView(compBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        compSpinner = new Spinner(this);
+        String[] nombres = new String[ReplComplementosNativo.CATALOGO.length];
+        for (int i = 0; i < nombres.length; i++) nombres[i] = ReplComplementosNativo.CATALOGO[i].nombre;
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, nombres);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        compSpinner.setAdapter(adapter);
+        LinearLayout.LayoutParams spinnerLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 2.4f);
+        compBar.addView(compSpinner, spinnerLp);
+        compBar.addView(makeBtn("➕ Colocar", "#a855f7", "#ffffff", 1.3f, v -> pendingComp = true));
+
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setPadding(20, 16, 20, 40);
-        FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
-        root.addView(bar, barLp);
+        bottomStack.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         bar.addView(makeBtn("📍 Punto", "#f97316", "#ffffff", 2f, v -> pendingPoint = true));
         // FASE-A-AR-PAREDES-LISAS-01 (16/09/2026): Adrián probando en el HTC -- "no me detecta
@@ -172,7 +215,16 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     }
 
     private void undo() {
-        if (!anchors.isEmpty()) { anchors.remove(anchors.size() - 1).detach(); }
+        // REPL-AR-NATIVO-COMP-01: deshace lo ÚLTIMO hecho (punto o complemento), no siempre un
+        // punto -- antes de accionLog, "↩" tras colocar un complemento no hacía nada visible
+        // (el complemento se quedaba) porque solo miraba la lista de puntos.
+        if (accionLog.isEmpty()) return;
+        String last = accionLog.remove(accionLog.size() - 1);
+        if ("comp".equals(last) && !complementos.isEmpty()) {
+            complementos.remove(complementos.size() - 1).anchor.detach();
+        } else if (!anchors.isEmpty()) {
+            anchors.remove(anchors.size() - 1).detach();
+        }
     }
 
     private void terminar() {
@@ -198,9 +250,25 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             }
             prev = p;
         }
+        // REPL-AR-NATIVO-COMP-01: mismo formato de campos (x/y/z/qx/qy/qz/qw) que los puntos de
+        // arriba, más "key" -- _replArTerminarNativo() en index.html los traduce al formato
+        // {key,x,y,z,q:{...}} que ya usa _repl.complementos (WebXR y cálculo de material).
+        JSONArray compArr = new JSONArray();
+        for (Complemento c : complementos) {
+            Pose p = c.anchor.getPose();
+            try {
+                JSONObject o = new JSONObject();
+                o.put("key", c.key);
+                o.put("x", round3(p.tx())); o.put("y", round3(p.ty())); o.put("z", round3(p.tz()));
+                o.put("qx", round3(p.qx())); o.put("qy", round3(p.qy()));
+                o.put("qz", round3(p.qz())); o.put("qw", round3(p.qw()));
+                compArr.put(o);
+            } catch (Exception ignored) {}
+        }
         Intent data = new Intent();
         data.putExtra("puntos", arr.toString());
         data.putExtra("longitud", Math.round(longitud * 100.0) / 100.0);
+        data.putExtra("complementos", compArr.toString());
         setResult(RESULT_OK, data);
         finish();
     }
@@ -280,6 +348,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         GLES20.glClearColor(0f, 0f, 0f, 1f);
         background.createOnGlThread();
+        cubeRenderer.createOnGlThread();
     }
 
     @Override
@@ -320,12 +389,34 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                 pendingContact = false;
                 runOnUiThread(() -> infoText.setText("Mueve el móvil despacio para que la cámara se sitúe, y vuelve a pulsar Tocar."));
             }
+            if (pendingComp && tracking) {
+                pendingComp = false;
+                colocarComplemento(frame);
+            } else if (pendingComp && !tracking) {
+                pendingComp = false;
+                runOnUiThread(() -> infoText.setText("Mueve el móvil despacio para que la cámara se sitúe, y vuelve a pulsar ➕ Colocar."));
+            }
 
             // Proyección de los anclajes a coordenadas de pantalla
             float[] view = new float[16], proj = new float[16], vp = new float[16];
             camera.getViewMatrix(view, 0);
             camera.getProjectionMatrix(proj, 0, 0.1f, 100f);
             Matrix.multiplyMM(vp, 0, proj, 0, view, 0);
+
+            // REPL-AR-NATIVO-COMP-01: cada complemento colocado se dibuja como una caja sólida
+            // en su posición/orientación real de ARCore -- antes de esto, la sesión nativa no
+            // pintaba NINGÚN objeto 3D (solo cámara + puntos 2D, ver la clase CubeRenderer).
+            for (Complemento c : complementos) {
+                Pose p = c.anchor.getPose();
+                ReplComplementosNativo spec = ReplComplementosNativo.porKey(c.key);
+                float[] model = new float[16];
+                p.toMatrix(model, 0);
+                Matrix.scaleM(model, 0, spec.w, spec.h, spec.d);
+                float[] mvp = new float[16];
+                Matrix.multiplyMM(mvp, 0, vp, 0, model, 0);
+                cubeRenderer.draw(mvp, model, spec.r, spec.g, spec.b, 1f);
+            }
+
             float[] screen = new float[anchors.size() * 2];
             for (int i = 0; i < anchors.size(); i++) {
                 Pose p = anchors.get(i).getPose();
@@ -376,7 +467,15 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         }
     }
 
-    private void colocarEnReticulo(Frame frame) {
+    // REPL-AR-NATIVO-COMP-01: mismo hit-test que usaban colocarEnReticulo/colocarPorContacto,
+    // extraído para que colocarComplemento() no duplique la lógica de "encontrar una superficie
+    // bajo el retículo" -- ver el comentario de FASE-A-AR-PAREDES-LISAS-01 abajo para el porqué
+    // del respaldo por profundidad/instant placement.
+    private Anchor resolverAnclaje(Frame frame, boolean contacto) {
+        if (contacto) {
+            List<HitResult> ip = frame.hitTestInstantPlacement(viewportW / 2f, viewportH / 2f, 0.1f);
+            return ip.isEmpty() ? null : ip.get(0).createAnchor();
+        }
         List<HitResult> hits = frame.hitTest(viewportW / 2f, viewportH / 2f);
         HitResult chosen = null;
         for (HitResult hit : hits) {
@@ -395,23 +494,46 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             List<HitResult> ip = frame.hitTestInstantPlacement(viewportW / 2f, viewportH / 2f, distancia);
             if (!ip.isEmpty()) chosen = ip.get(0);
         }
-        if (chosen == null) {
+        return chosen == null ? null : chosen.createAnchor();
+    }
+
+    private void colocarEnReticulo(Frame frame) {
+        Anchor a = resolverAnclaje(frame, false);
+        if (a == null) {
             runOnUiThread(() -> infoText.setText("Sin superficie ni profundidad bajo el círculo. Acerca el móvil al punto y pulsa 📱 Tocar."));
             return;
         }
-        anchors.add(chosen.createAnchor());
+        anchors.add(a); accionLog.add("punto");
     }
 
     // "Tocar": el móvil está pegado o casi pegado a la superficie -- mismo botón y misma idea
     // que "📱 Tocar con el móvil (pared lisa)" en la PWA (WebXR), para paredes/techos lisos
     // donde ni el hit-test ni una estimación de profundidad a distancia normal enganchan.
     private void colocarPorContacto(Frame frame) {
-        List<HitResult> ip = frame.hitTestInstantPlacement(viewportW / 2f, viewportH / 2f, 0.1f);
-        if (ip.isEmpty()) {
+        Anchor a = resolverAnclaje(frame, true);
+        if (a == null) {
             runOnUiThread(() -> infoText.setText("No se pudo anclar por contacto. Prueba de nuevo, bien pegado a la superficie."));
             return;
         }
-        anchors.add(ip.get(0).createAnchor());
+        anchors.add(a); accionLog.add("punto");
+    }
+
+    // REPL-AR-NATIVO-COMP-01: coloca el complemento elegido en el spinner sobre el retículo,
+    // igual que replArColocarComp() en la PWA (WebXR) -- misma orientación que da el hit-test
+    // (alineada a la superficie), sin rotación extra.
+    private void colocarComplemento(Frame frame) {
+        Anchor a = resolverAnclaje(frame, false);
+        if (a == null) {
+            runOnUiThread(() -> infoText.setText("Sin superficie ni profundidad bajo el círculo para colocar el complemento."));
+            return;
+        }
+        int idx = Math.max(0, compSpinner.getSelectedItemPosition());
+        String key = ReplComplementosNativo.CATALOGO[idx].key;
+        complementos.add(new Complemento(a, key));
+        accionLog.add("comp");
+        final String nombre = ReplComplementosNativo.CATALOGO[idx].nombre;
+        final int n = complementos.size();
+        runOnUiThread(() -> infoText.setText(nombre + " colocado · " + n + " complemento(s). Sigue marcando o pulsa ✅ Fin."));
     }
 
     private void actualizarInfo(boolean tracking) {
