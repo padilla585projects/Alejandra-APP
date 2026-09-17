@@ -4628,10 +4628,17 @@ select option{background:var(--surface2);color:var(--text)}
              ningún control. Aplica tanto al chat flotante de Alejandra como al panel IA. -->
         <div class="settings-section" id="sistemaVozSection">
           <div class="settings-title">🔊 Voz de Alejandra</div>
-          <div class="form-group" style="margin-bottom:10px">
+          <!-- VOZ-NATIVA-01 (17/09/2026): Adrian -- "la voz hay que arreglarla también". En la
+               app instalada se habla con el motor TTS nativo de Android (TtsPlugin), no con
+               speechSynthesis del WebView (poco fiable ahí: getVoices() suele venir vacío). El
+               TTS nativo usa la voz por defecto del sistema, no una lista elegible como la web
+               -- el selector de voz solo tiene sentido en la PWA, se oculta en la app instalada
+               (ver _initNativo) y se deja solo la velocidad, que sí se pasa al motor nativo. -->
+          <div class="form-group" id="vozSelectGroup" style="margin-bottom:10px">
             <label class="form-label">Voz</label>
             <select class="form-input" id="vozSelect" onchange="vozGuardarSeleccion()"></select>
           </div>
+          <div id="vozNotaNativa" style="display:none;font-size:12px;color:var(--muted);margin-bottom:10px">Usa la voz del sistema Android.</div>
           <div class="form-group" style="margin-bottom:10px">
             <label class="form-label">Velocidad: <span id="vozVelocidadLabel">1.15x</span></label>
             <input type="range" id="vozVelocidad" min="0.7" max="1.6" step="0.05" style="width:100%"
@@ -7128,6 +7135,13 @@ function _initNativo() {
   window._nativoInitDone = true;
   const P = window.Capacitor && window.Capacitor.Plugins;
   if (!P) return;
+  // VOZ-NATIVA-01: el selector de voz (Ajustes → Sistema) lista speechSynthesis.getVoices(),
+  // un concepto que no existe en el TTS nativo de Android (voz única del sistema) -- se oculta
+  // y se deja solo la nota + la velocidad, que sí se aplica al motor nativo (ver _hablarTexto).
+  const vozGrupo = document.getElementById('vozSelectGroup');
+  const vozNota = document.getElementById('vozNotaNativa');
+  if (vozGrupo) vozGrupo.style.display = 'none';
+  if (vozNota) vozNota.style.display = 'block';
   // EDGE-TO-EDGE-01 (14/09/2026): Adrián -- "la app no aprovecha toda la pantalla, la
   // barra de notificación se ve, y las apps deben ocupar toda la pantalla y adaptarse al
   // móvil en cuestión". Antes se evitaba a propósito el modo overlay (HEADER-COMPACTO-03,
@@ -28411,7 +28425,7 @@ window.turnoToggle   = turnoToggle;
     if (_iaTtsEnabled) {
       iaSpeak('Voz activada.');
     } else {
-      window.speechSynthesis?.cancel();
+      _detenerVoz();
     }
   };
 
@@ -28496,18 +28510,48 @@ window.turnoToggle   = turnoToggle;
       .trim();
   }
 
-  function iaSpeak(text) {
-    if (!_iaTtsEnabled || !window.speechSynthesis) return;
-    const clean = _limpiarTextoParaVoz(text);
-    if (!clean) return;
+  // VOZ-NATIVA-01 (17/09/2026): Adrián -- "la voz hay que arreglarla también". En la app
+  // instalada, speechSynthesis del WebView de Android es poco fiable (getVoices() suele venir
+  // vacío, a diferencia de Chrome de escritorio) -- se habla con TtsPlugin (Android TextToSpeech
+  // nativo) en su lugar. Punto único usado por iaSpeak() y alejandraHablar() para no duplicar
+  // la rama nativo/web en las dos voces de la app.
+  async function _hablarTexto(texto, rate, pitch) {
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    if (_esNativo() && P && P.Tts && P.Tts.hablar) {
+      try { await P.Tts.hablar({ texto, rate: rate || 1, pitch: pitch || 1 }); return; } catch (_) {}
+    }
+    if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(clean);
+    const utt = new SpeechSynthesisUtterance(texto);
     utt.lang = 'es-ES';
-    utt.rate = _vozPrefs().rate;
-    utt.pitch = 1.1;
+    utt.rate = rate || 1;
+    utt.pitch = pitch || 1;
     const voice = _vozElegida();
     if (voice) utt.voice = voice;
     window.speechSynthesis.speak(utt);
+  }
+  function _detenerVoz() {
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    if (_esNativo() && P && P.Tts && P.Tts.detener) { try { P.Tts.detener(); } catch (_) {} }
+    try { window.speechSynthesis?.cancel(); } catch (_) {}
+  }
+  // BUG-VOZ-ALEJANDRA-SCOPE-01 (17/09/2026): _limpiarTextoParaVoz/_vozPrefs/_hablarTexto viven
+  // dentro de este IIFE (el panel IA), pero alejandraHablar() -- el chat flotante de Alejandra,
+  // FUERA de este cierre -- las llama igual (el comentario de _limpiarTextoParaVoz ya decía
+  // "compartido por las dos voces", esa siempre fue la intención). Sin exportarlas aquí,
+  // alejandraHablar() lanzaba ReferenceError en cuanto intentaba hablar -- la voz de Alejandra
+  // llevaba rota (no sonaba nunca, en PWA y en la app instalada por igual) desde que se
+  // añadieron, no es solo un problema de fiabilidad de speechSynthesis en el WebView.
+  window._detenerVoz = _detenerVoz;
+  window._limpiarTextoParaVoz = _limpiarTextoParaVoz;
+  window._vozPrefs = _vozPrefs;
+  window._hablarTexto = _hablarTexto;
+
+  function iaSpeak(text) {
+    if (!_iaTtsEnabled) return;
+    const clean = _limpiarTextoParaVoz(text);
+    if (!clean) return;
+    _hablarTexto(clean, _vozPrefs().rate, 1.1);
   }
 
   // ── Chat: input, envío, burbujas ────────────────────────────────────────
@@ -29053,7 +29097,7 @@ function alejandraAbrir(show = true) {
     panel.style.cssText = 'display:none!important';
     panel.setAttribute('hidden', '');
     if (_alejandraEscuchando && _alejandraRecognition) _alejandraRecognition.stop();
-    window.speechSynthesis?.cancel();
+    _detenerVoz();
   }
 }
 
@@ -29065,24 +29109,15 @@ function alejandraToggleAutoHablar() {
     btn.textContent = _alejandraAutoHablar ? '🔊' : '🔇';
     btn.style.borderColor = _alejandraAutoHablar ? '#8b5cf6' : 'var(--border)';
   }
-  if (!_alejandraAutoHablar) window.speechSynthesis?.cancel();
+  if (!_alejandraAutoHablar) _detenerVoz();
   toast(_alejandraAutoHablar ? '🔊 Alejandra hablará' : '🔇 Voz desactivada', 'ok');
 }
 
 function alejandraHablar(texto) {
   if (!_alejandraAutoHablar) return;
-  const synth = window.speechSynthesis;
-  if (!synth) return;
   const limpio = _limpiarTextoParaVoz(texto);
   if (!limpio) return;
-  synth.cancel();
-  const utt = new SpeechSynthesisUtterance(limpio.substring(0, 500));
-  utt.lang  = 'es-ES';
-  utt.rate  = _vozPrefs().rate;
-  utt.pitch = 1.0;
-  const voz = _vozElegida();
-  if (voz) utt.voice = voz;
-  synth.speak(utt);
+  _hablarTexto(limpio.substring(0, 500), _vozPrefs().rate, 1.0);
 }
 
 // ── Reconocimiento de voz (STT) ───────────────────────────────────────────────
@@ -29111,7 +29146,7 @@ function alejandraToggleVoz() {
     _alejandraEscuchando = true;
     if (btn)    { btn.textContent = '⏹️'; btn.style.background = '#ef4444'; btn.style.borderColor = '#ef4444'; }
     if (status) status.style.display = 'block';
-    window.speechSynthesis?.cancel();
+    _detenerVoz();
   };
 
   rec.onresult = (e) => {
