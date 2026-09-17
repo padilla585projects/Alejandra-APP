@@ -100,6 +100,12 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
    un hueco". Se quita el chip de usuario (mostraba SA/Encargado/etc, redundante con lo
    que ya sabes que eres) y en su lugar el propio logo lleva un anillo de color para
    superadmin/desarrollador — sin texto, sin ocupar hueco extra en la fila. */
+/* PARIDAD-APK-PWA-ICONO-01 (17/09/2026): Adrián -- "también la interfaz que tiene la pwa a la
+   apk que es más completa" / "debemos diferenciar apk y pwa". El mismo anillo que ya marcaba
+   rol-superadmin/desarrollador, ahora también para "esto es la app instalada, no el navegador"
+   -- se declara ANTES de los anillos de rol para que, si coinciden (un superadmin usando la
+   APK), el color de rol siga ganando (misma especificidad, la regla que va después manda). */
+.header-logo.es-nativo .logo-svg{outline:2px solid #10b981;outline-offset:2px;border-radius:10px}
 .header-logo.rol-superadmin .logo-svg{outline:2px solid #f97316;outline-offset:2px;border-radius:10px}
 .header-logo.rol-desarrollador .logo-svg{outline:2px solid #a855f7;outline-offset:2px;border-radius:10px}
 .header-center{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;gap:clamp(2px,1vw,4px);overflow:hidden}
@@ -7329,7 +7335,12 @@ function renderHeader() {
   if (logo) {
     logo.classList.remove('rol-superadmin', 'rol-desarrollador');
     if (s.rol === 'superadmin' || s.rol === 'desarrollador') logo.classList.add('rol-' + s.rol);
-    logo.title = (s.rol === 'superadmin' || s.rol === 'empresa_admin' || s.rol === 'encargado') ? rolLabel(s.rol) : (s.nombre || '');
+    // PARIDAD-APK-PWA-ICONO-01: anillo verde solo en la app instalada (APK), para distinguirla
+    // a simple vista de la PWA -- ver CSS .header-logo.es-nativo.
+    logo.classList.toggle('es-nativo', _esNativo());
+    let titulo = (s.rol === 'superadmin' || s.rol === 'empresa_admin' || s.rol === 'encargado') ? rolLabel(s.rol) : (s.nombre || '');
+    if (_esNativo()) titulo = (titulo ? titulo + ' · ' : '') + 'App instalada';
+    logo.title = titulo;
   }
 
   const deptPill = document.getElementById('deptPill');
