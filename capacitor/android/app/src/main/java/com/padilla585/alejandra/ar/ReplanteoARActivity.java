@@ -100,10 +100,10 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     // ni dónde enganchar la colocación de complementos. pendingComp + colocarComplemento()
     // añaden esa capacidad con un CubeRenderer mínimo (ver esa clase).
     private volatile boolean pendingComp = false;
-    // Última distancia estimada por la Depth API bajo el centro de la pantalla (metros), o -1 si
-    // no hay profundidad disponible en este frame. Se usa como approximateDistanceMeters para
-    // instant placement -- mucho más preciso que un valor fijo cuando el dispositivo lo soporta.
-    private float ultimaProfundidadM = -1f;
+    // RENDIMIENTO-AR-CAMARA-01: contador de frames para el retículo (ver onDrawFrame) -- el
+    // hit-test que decide su color se recalcula cada 3 frames en vez de en todos.
+    private int frameCount = 0;
+    private int reticleStateCache = OverlayView.RETICLE_NONE;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -373,7 +373,11 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             background.draw(frame);
 
             boolean tracking = camera.getTrackingState() == TrackingState.TRACKING;
-            ultimaProfundidadM = tracking ? estimarProfundidadCentroM(frame) : -1f;
+            // RENDIMIENTO-AR-CAMARA-01 (17/09/2026): Adrian -- "la camara va a saltos". Antes
+            // estimarProfundidadCentroM() (adquiere y lee una imagen de profundidad de ARCore,
+            // no es gratis) se llamaba en TODOS los frames, ~30-60 veces por segundo, aunque su
+            // resultado solo se usa en el instante en que se pulsa Punto/Tocar/Colocar -- ahora
+            // se calcula solo ahi dentro (resolverAnclaje), bajo demanda.
 
             if (pendingPoint && tracking) {
                 pendingPoint = false;
@@ -433,16 +437,24 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             // solo cuando hay plano/punto confirmado bajo el círculo, azul cuando eso falla pero
             // instant placement/profundidad podría anclar igualmente (lo que antes no se veía:
             // el usuario pulsaba "Punto" a ciegas y solo se enteraba del fallo después).
-            int reticleState = OverlayView.RETICLE_NONE;
-            if (tracking) {
-                boolean hayHitReal = false;
-                for (HitResult h : frame.hitTest(viewportW / 2f, viewportH / 2f)) {
-                    Trackable t = h.getTrackable();
-                    if ((t instanceof Plane && ((Plane) t).isPoseInPolygon(h.getHitPose())) || t instanceof Point) { hayHitReal = true; break; }
+            // RENDIMIENTO-AR-CAMARA-01: frame.hitTest() para esto NO es gratis -- recalcularlo en
+            // cada uno de los 30-60 frames/s solo para el color del retículo era otra causa de los
+            // saltos. Cada 3 frames (~10-20 Hz según el dispositivo) sigue siendo instantáneo a la
+            // vista y cuesta un tercio.
+            frameCount++;
+            if (frameCount % 3 == 0) {
+                int reticleState = OverlayView.RETICLE_NONE;
+                if (tracking) {
+                    boolean hayHitReal = false;
+                    for (HitResult h : frame.hitTest(viewportW / 2f, viewportH / 2f)) {
+                        Trackable t = h.getTrackable();
+                        if ((t instanceof Plane && ((Plane) t).isPoseInPolygon(h.getHitPose())) || t instanceof Point) { hayHitReal = true; break; }
+                    }
+                    reticleState = hayHitReal ? OverlayView.RETICLE_HIT : OverlayView.RETICLE_FALLBACK;
                 }
-                reticleState = hayHitReal ? OverlayView.RETICLE_HIT : OverlayView.RETICLE_FALLBACK;
+                reticleStateCache = reticleState;
             }
-            overlay.setReticleState(reticleState);
+            overlay.setReticleState(reticleStateCache);
             actualizarInfo(tracking);
         } catch (CameraNotAvailableException e) {
             fail("Cámara no disponible.");
@@ -490,7 +502,11 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         // real de la Depth API si la hay, o una estimación fija razonable si no -- misma idea
         // que el respaldo por profundidad que ya tenía la PWA (WebXR) para este caso exacto.
         if (chosen == null) {
-            float distancia = ultimaProfundidadM > 0 ? ultimaProfundidadM : 2.0f;
+            // RENDIMIENTO-AR-CAMARA-01: la profundidad se pide aquí, en el momento real de uso
+            // (el usuario acaba de pulsar Punto/Colocar), no en cada frame -- ver el comentario
+            // en onDrawFrame.
+            float estimada = estimarProfundidadCentroM(frame);
+            float distancia = estimada > 0 ? estimada : 2.0f;
             List<HitResult> ip = frame.hitTestInstantPlacement(viewportW / 2f, viewportH / 2f, distancia);
             if (!ip.isEmpty()) chosen = ip.get(0);
         }
