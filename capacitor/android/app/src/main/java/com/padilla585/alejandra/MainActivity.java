@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ReplanteoARPlugin.class);  // F3 — módulo AR nativo
+        registerPlugin(AppUpdatePlugin.class);    // ACTUALIZAR-APK-UN-TOQUE-01 — instalador directo de OTA
         super.onCreate(savedInstanceState);
         // Accesos directos del icono (mantener pulsado): el intent trae el extra
         // shortcut_action. La Activity es singleTask, así que en la práctica casi

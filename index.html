@@ -15653,6 +15653,19 @@ function _descargarApk(url) {
   _descargaApkEnCurso = true;
   setTimeout(() => { _descargaApkEnCurso = false; }, 5000);
   _marcarDescargaApkEnCurso();
+  // ACTUALIZAR-APK-UN-TOQUE-01 (17/09/2026): Adrián -- "tenemos que hacer que siempre se
+  // actualice a la última versión". En la app instalada, AppUpdatePlugin descarga con el
+  // DownloadManager del sistema y lanza el instalador directamente al terminar -- un solo
+  // toque real ("Instalar") en vez de navegador → notificación → buscarla → instalador. Si
+  // el plugin no está (build vieja sin él, o falla) cae al camino de siempre.
+  const P = window.Capacitor && window.Capacitor.Plugins;
+  if (_esNativo() && P && P.AppUpdate && P.AppUpdate.descargarEInstalar) {
+    P.AppUpdate.descargarEInstalar({ url }).then(r => {
+      if (!r || !r.ok) { toast('❌ ' + (r?.error || 'No se pudo descargar la actualización'), 'error'); _abrirUrlExterna(url); }
+    }).catch(() => _abrirUrlExterna(url));
+    toast('⬇️ Descargando actualización — se abrirá el instalador al terminar');
+    return false;
+  }
   _abrirUrlExterna(url);
   return false;
 }
