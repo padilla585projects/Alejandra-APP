@@ -4931,6 +4931,49 @@ export default {
         return json({ error: 'Ruta de /api/memoria/ no encontrada' }, 404);
       }
 
+      // ── Memoria de empresa (MEMORIA-EMPRESA-01, 17/09/2026) ─────────────────
+      // Adrián, revisando AlejandraIA (app Flutter nativa): "memoria y conocimiento
+      // ahí que hacerlo bien". Su pantalla de Memoria llamaba a /api/chat con un
+      // mensaje sintético pidiéndole al modelo que ejecutase memory_read y luego
+      // parseaba el JSON con una regex sobre el texto de la respuesta -- no había
+      // alternativa mejor: el único endpoint REST que ya existía (/api/memoria/vault,
+      // justo arriba) es exclusivo del desarrollador y ve TODAS las empresas sin
+      // filtrar (a propósito, es el vault estilo Obsidian de Adrián). Este es de
+      // lectura+creación para cualquier usuario autenticado, scopeado por su propio
+      // empresa_id -- mismo criterio de aislamiento que memory_read/memory_save en
+      // las tools del modelo (ver más abajo en este archivo).
+      if (path === '/memorias' && (req.method === 'GET' || req.method === 'POST')) {
+        const sesionMemE = await getAuth(req, env);
+        if (!sesionMemE) return json({ error: 'No autorizado' }, 401);
+        const eid = sesionMemE.empresa_id || 'system';
+
+        if (req.method === 'GET') {
+          const tipo = url.searchParams.get('tipo');
+          const limit = Math.min(parseInt(url.searchParams.get('limit'), 10) || 50, 200);
+          const rows = tipo
+            ? await env.DB.prepare(
+                'SELECT id, tipo, titulo, contenido, importancia, slug, created_at FROM alejandra_memoria WHERE empresa_id = ? AND tipo = ? ORDER BY importancia DESC, created_at DESC LIMIT ?'
+              ).bind(eid, tipo, limit).all()
+            : await env.DB.prepare(
+                'SELECT id, tipo, titulo, contenido, importancia, slug, created_at FROM alejandra_memoria WHERE empresa_id = ? ORDER BY importancia DESC, created_at DESC LIMIT ?'
+              ).bind(eid, limit).all();
+          return json({ ok: true, memorias: rows.results || [] });
+        }
+
+        // POST — crear nota ("Enseñar a Alejandra" en AlejandraIA)
+        const body = await req.json().catch(() => ({}));
+        const { tipo, titulo, contenido, importancia = 1 } = body;
+        if (!tipo || !titulo || !contenido) return json({ error: 'Faltan campos: tipo, titulo, contenido' }, 400);
+        // Misma sanitización que memory_save (SEC-MEM-01) y el vault del desarrollador.
+        const contenidoLimpio = String(contenido).replace(/(ignore|olvida|descarta)\s+(all|todas|tus)\s+(instructions|instrucciones|reglas)/gi, '[REDACTED]');
+        const slug = await generarSlugUnico(env, eid, titulo);
+        const ins = await env.DB.prepare(
+          `INSERT INTO alejandra_memoria (tipo,usuario_id,empresa_id,titulo,contenido,importancia,slug,created_at)
+           VALUES(?,?,?,?,?,?,?,datetime('now'))`
+        ).bind(tipo, sesionMemE.usuario_id, eid, String(titulo).slice(0, 200), contenidoLimpio, importancia, slug).run();
+        return json({ ok: true, id: ins.meta?.last_row_id, slug });
+      }
+
       // ── Admin API ─────────────────────────────────────────────────────────
       if (path.startsWith('/api/admin/')) {
         const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '');
