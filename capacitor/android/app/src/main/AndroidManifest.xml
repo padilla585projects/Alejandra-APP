@@ -63,6 +63,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- ACTUALIZAR-APK-UN-TOQUE-01: instalar el .apk de la actualizacion descargado por
+         AppUpdatePlugin. Sin este permiso, Android 8+ desvia primero a un ajuste de sistema
+         ("permitir instalar apps desconocidas de Alejandra") antes de poder lanzar el instalador. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Replanteo: cámara en directo (getUserMedia en el WebView) y grabación de vídeo -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
