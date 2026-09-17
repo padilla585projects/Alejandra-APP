@@ -4319,10 +4319,26 @@ select option{background:var(--surface2);color:var(--text)}
           <button class="btn-primary btn-danger" style="margin-top:12px;font-size:14px" onclick="cerrarSesion()">🚪 Cerrar mi sesión</button>
         </div>
         <!-- App Android (.apk) — descarga de la app nativa (Capacitor) -->
+        <!-- DESCARGA-APK-MANUAL-01 (17/09/2026): Adrián -- "habría que ver cómo lo descargamos
+             directamente si no funciona la OTA, quizás un apartado en la app en ajustes... o a
+             través de la PWA". Motivo: se descubrió que el APK instalado en su HTC llevaba
+             semanas firmado con el certificado de depuración (BUG-APK-DEBUG-FIRMA-01) -- Android
+             rechaza en silencio cualquier actualización firmada distinto sobre eso, así que el
+             banner automático (checkNativeAppUpdate) nunca consigue completarse aunque sí avise
+             y descargue. Este enlace YA apuntaba siempre a la última release (releases/latest
+             resuelve solo), tanto desde la PWA como desde la app instalada -- lo que faltaba era
+             que fuera visible como vía de rescate explícita, con la versión instalada al lado
+             para comparar, y el aviso de qué hacer si Android se niega a instalar encima. -->
         <div class="settings-section" id="seccionAppAndroid" style="margin-top:16px">
           <div class="settings-title">📱 App para Android</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Instala Alejandra como app en el móvil (acceso a cámara, sensores y replanteo en AR nativo). Descarga el .apk e instálalo (permite "orígenes desconocidos" si te lo pide).</div>
+          <div id="appAndroidCopyInstalar" style="font-size:12px;color:var(--muted);margin-bottom:12px">Instala Alejandra como app en el móvil (acceso a cámara, sensores y replanteo en AR nativo). Descarga el .apk e instálalo (permite "orígenes desconocidos" si te lo pide).</div>
+          <div id="appAndroidCopyNativo" style="display:none;font-size:12px;color:var(--muted);margin-bottom:12px">
+            Instalada: <strong id="appAndroidVersionInstalada">—</strong>.
+            Si el aviso automático de actualización no aparece o la descarga no llega a instalarse, bájala aquí directamente.
+            <span style="color:#f59e0b">Si Android dice que no puede instalarla, desinstala primero la app actual y vuelve a instalar esta — pasa cuando la instalada quedó firmada de otra manera.</span>
+          </div>
           <a id="btnDescargarApk" class="btn-primary" style="display:block;text-align:center;text-decoration:none;font-size:14px" href="https://github.com/padilla585projects/Alejandra-APP/releases/latest/download/alejandra.apk" onclick="return _descargarApk(this.href)">⬇️ Descargar app Android (.apk)</a>
+          <button id="btnComprobarActualizacionApk" class="btn-primary btn-secondary" style="display:none;width:100%;font-size:13px;margin-top:8px" onclick="comprobarActualizacionManual()">🔄 Comprobar si hay una versión más nueva</button>
         </div>
         <!-- Telegram personal -->
         <div class="settings-section" id="seccionMiTelegram" style="margin-top:16px;display:none">
@@ -7148,6 +7164,18 @@ function _initNativo() {
         var span = document.getElementById('versionNativaAjustes');
         if (span) span.textContent = 'v' + info.version + ' (build ' + info.build + ')';
         if (fila) fila.style.display = 'flex';
+        // DESCARGA-APK-MANUAL-01: en la app instalada, la sección "App para Android" de
+        // Ajustes pasa del texto de "instálala" (pensado para quien la ve desde la PWA) al
+        // de "esta es tu vía de rescate si la actualización automática no cuaja", con la
+        // versión instalada a la vista y el botón de comprobar ahora.
+        var copyInstalar = document.getElementById('appAndroidCopyInstalar');
+        var copyNativo = document.getElementById('appAndroidCopyNativo');
+        var versionInstalada = document.getElementById('appAndroidVersionInstalada');
+        var btnComprobar = document.getElementById('btnComprobarActualizacionApk');
+        if (copyInstalar) copyInstalar.style.display = 'none';
+        if (copyNativo) copyNativo.style.display = 'block';
+        if (versionInstalada) versionInstalada.textContent = 'v' + info.version + ' (build ' + info.build + ')';
+        if (btnComprobar) btnComprobar.style.display = 'block';
       }).catch(function () {});
     }
   } catch (_) {}
@@ -15538,6 +15566,35 @@ async function checkNativeAppUpdate() {
     if (txt) txt.textContent = '🔄 Nueva versión de la app disponible';
     if (banner) banner.classList.add('show');
   } catch (_) {} // sin conexión o API de GitHub caída: no molestar, se reintenta al volver a primer plano
+}
+// DESCARGA-APK-MANUAL-01 (17/09/2026): checkNativeAppUpdate() es silenciosa si no hay nada
+// nuevo (pensada para arranque/resume, sin ruido). Este botón de Ajustes es una comprobación
+// pedida a mano -- siempre da una respuesta visible, incluidos los casos que la otra ignora
+// (ya estás al día, o no se pudo comprobar), para poder confirmar que de verdad no hay
+// actualización pendiente en vez de quedarse con la duda.
+async function comprobarActualizacionManual() {
+  const btn = document.getElementById('btnComprobarActualizacionApk');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Comprobando…'; }
+  try {
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    if (!P || !P.App || !P.App.getInfo) { toast('Solo disponible en la app instalada', 'error'); return; }
+    const info = await P.App.getInfo();
+    const localBuild = parseInt(info.build, 10) || 0;
+    const resp = await fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/releases/latest');
+    if (!resp.ok) throw new Error('GitHub no respondió');
+    const rel = await resp.json();
+    const m = /-v(\d+)$/.exec(rel.tag_name || '');
+    const remoteBuild = m ? parseInt(m[1], 10) : 0;
+    const asset = (rel.assets || []).find(a => a.name === 'alejandra.apk');
+    if (!remoteBuild || !asset) { toast('No se pudo leer la última versión publicada', 'error'); return; }
+    if (remoteBuild <= localBuild) { toast(`✅ Ya tienes la última versión (build ${localBuild})`); return; }
+    toast(`🔄 Hay una nueva versión (build ${remoteBuild}) — descargando…`);
+    _descargarApk(asset.browser_download_url);
+  } catch (e) {
+    toast('❌ No se pudo comprobar — revisa la conexión', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Comprobar si hay una versión más nueva'; }
+  }
 }
 // El botón del banner sirve para las dos actualizaciones (web y nativa): si hay una APK
 // nueva detectada, descarga esa; si no, es la recarga web de siempre.
