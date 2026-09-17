@@ -4570,7 +4570,13 @@ select option{background:var(--surface2);color:var(--text)}
 
       <!-- SISTEMA -->
       <div class="ajustes-panel" id="ajPanelSistema">
-        <div class="settings-section">
+        <!-- AJUSTES-NATIVO-01 (17/09/2026): Adrian -- "el servidor API y Sheets ocultarlos en
+             la apk, backup lo dejamos". Son herramientas de administracion pensadas para PC/
+             oficina (cambiar a que backend habla la app, forzar sync de una hoja de calculo) --
+             arriesgadas de tocar sin querer desde el movil y sin utilidad real en campo. Se
+             ocultan con _esNativo() en _initNativo(), no se borran (siguen disponibles en la
+             PWA/panel de oficina). -->
+        <div class="settings-section" id="sistemaApiSection">
           <div class="settings-title">🌐 Servidor API</div>
           <div class="form-group" style="margin-bottom:8px">
             <label class="form-label">URL del Worker</label>
@@ -7179,10 +7185,17 @@ function _initNativo() {
         var copyNativo = document.getElementById('appAndroidCopyNativo');
         var versionInstalada = document.getElementById('appAndroidVersionInstalada');
         var btnComprobar = document.getElementById('btnComprobarActualizacionApk');
+        var btnDescargar = document.getElementById('btnDescargarApk');
         if (copyInstalar) copyInstalar.style.display = 'none';
         if (copyNativo) copyNativo.style.display = 'block';
         if (versionInstalada) versionInstalada.textContent = 'v' + info.version + ' (build ' + info.build + ')';
         if (btnComprobar) btnComprobar.style.display = 'block';
+        // AJUSTES-NATIVO-01 (17/09/2026): Adrian -- "descargar la apk ya no hace falta porque
+        // estamos en la apk". El enlace de descarga a ciegas (sin comprobar version) solo
+        // tiene sentido para quien ve esto desde la PWA y aún no tiene la app -- ya instalada,
+        // "🔄 Comprobar si hay una versión más nueva" es la acción correcta (compara versión
+        // real antes de descargar, y sí descarga si hace falta).
+        if (btnDescargar) btnDescargar.style.display = 'none';
       }).catch(function () {});
     }
   } catch (_) {}
@@ -14464,7 +14477,14 @@ function initAjustesTabs() {
   document.getElementById('ajTabIdeas').style.display    = (esSA || esEA) ? '' : 'none';
   document.getElementById('ajTabEmpresa').style.display     = (esSA || esEA) ? '' : 'none';
   document.getElementById('ajTabComparativa').style.display = (esSA || esEA) ? '' : 'none';
-  document.getElementById('sistemaSheetSection').style.display = esSA ? 'block' : 'none';
+  // AJUSTES-NATIVO-01: Servidor API y Google Sheets son herramientas de administración de
+  // PC/oficina (cambiar a qué backend habla la app, forzar sync de una hoja de cálculo) --
+  // arriesgadas de tocar sin querer desde el móvil y sin utilidad real en campo. Se calcula
+  // aquí (no en _initNativo, que solo corre una vez al arrancar) porque esta función se
+  // repite cada vez que se abre Ajustes y ya decide la visibilidad de sistemaSheetSection
+  // por rol -- si se ocultara solo al arrancar, esta misma línea la volvería a mostrar.
+  document.getElementById('sistemaApiSection').style.display   = _esNativo() ? 'none' : 'block';
+  document.getElementById('sistemaSheetSection').style.display = (esSA && !_esNativo()) ? 'block' : 'none';
   document.getElementById('sistemaLogsSection').style.display  = esSA ? 'block' : 'none';
   document.getElementById('sistemaPushSection').style.display  = (esSA || s.rol === 'desarrollador') ? 'block' : 'none';
   const puedeGestionarSesiones = esSA || esEnc || esEA;
@@ -15247,6 +15267,15 @@ async function forzarSync() {
 }
 
 async function buscarActualizacion() {
+  // AJUSTES-NATIVO-01 (17/09/2026): Adrian -- "el tema de actualizar ahí que arreglarlo para
+  // la apk, no que siga mirando la pwa". Este botón solo comprobaba version.json (la versión
+  // del contenido web, que también sirve dentro del WebView de la app instalada) -- para quien
+  // ya tiene la APK, lo que le importa de verdad es si hay una build nativa más nueva
+  // (versionCode), un concepto distinto que este botón ignoraba del todo. En la app instalada
+  // se delega entero en comprobarActualizacionManual() (mismo botón que ya existe en Ajustes
+  // → Sesión); en la PWA se queda el chequeo de version.json de siempre, que ahí sí es lo único
+  // que puede haber cambiado.
+  if (_esNativo()) { await comprobarActualizacionManual(); return; }
   try {
     toast('🔄 Comprobando versión...', '');
     // Forzar actualización del SW
