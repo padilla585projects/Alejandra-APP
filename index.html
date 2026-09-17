@@ -21422,7 +21422,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     try {
       const el = _replCatalogo.find(e => e.key === key) || _replCatalogo[0];
       const params = _replParamsPorDefecto(el);
-      const resultado = await window.Capacitor.Plugins.ReplanteoAR.abrirAR({});
+      // REPL-AR-OVERLAY-01: el elemento elegido viaja a la sesión nativa para que threeOverlay
+      // (WebView con repl3d.js dentro de ReplanteoARActivity) sepa qué tipo de render/ancho
+      // aplicar al trazado -- antes la sesión nativa no sabía nada del elemento elegido.
+      const resultado = await window.Capacitor.Plugins.ReplanteoAR.abrirAR({ elemento_key: el.key, elemento_params: JSON.stringify(params) });
       if (!resultado?.ok) {
         if (!resultado?.cancelado) toast('❌ AR: ' + (resultado?.error || 'no se pudo medir'), 'error');
         return;

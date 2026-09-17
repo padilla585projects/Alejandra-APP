@@ -12,6 +12,8 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -60,18 +62,27 @@ import javax.microedition.khronos.opengles.GL10;
  * F3.1 — Sesión AR nativa (ARCore) para replantear: muestra la cámara, apuntas con el retículo,
  * pulsas "Punto" y coloca una marca anclada en esa superficie; mide la longitud del recorrido y
  * devuelve los puntos 3D a la web (que arma el replanteo con los endpoints ya existentes).
- * Render mínimo (cámara + overlay 2D); la instalación 3D realista llega en F3.2.
+ * REPL-AR-OVERLAY-01 (17/09/2026): el render 3D real (trazado + complementos, con la misma
+ * geometría por tipo de material que usa la PWA) lo pinta threeOverlay, un WebView transparente
+ * superpuesto a la cámara que carga three.js + repl3d.js (ver assets/ar/overlay.html) -- este
+ * archivo solo le manda las matrices de cámara reales de ARCore cada frame y el trazado/
+ * complementos cuando cambian. No se reimplementa la geometría en Java: se reutiliza tal cual.
  */
 public class ReplanteoARActivity extends Activity implements GLSurfaceView.Renderer {
 
     private static final int RC_CAMERA = 2001;
 
     private GLSurfaceView surfaceView;
+    private WebView threeOverlay;
     private OverlayView overlay;
     private TextView infoText;
     private Spinner compSpinner;
     private final BackgroundRenderer background = new BackgroundRenderer();
-    private final CubeRenderer cubeRenderer = new CubeRenderer();
+
+    // Intent de abrirAR(): elemento elegido antes de entrar en AR (mismo elemento_key/params que
+    // ya usa el flujo de Foto), para que overlay.html sepa qué tipo de render y ancho aplicar.
+    private String elementoKey = "generico_lineal";
+    private String elementoParamsJson = "{}";
 
     private Session session;
     private boolean installRequested = false;
@@ -95,15 +106,18 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     // placement a corta distancia aunque no haya ninguna superficie reconocida bajo el retículo.
     private volatile boolean pendingContact = false;
     // REPL-AR-NATIVO-COMP-01 (17/09/2026): Adrián -- "en la apk faltan los accesorios como
-    // cajas, enchufes etc [comparado con la pwa]". El AR nativo (este archivo) hasta ahora solo
-    // pintaba el feed de cámara + un overlay 2D de puntos, sin ningún objeto 3D real -- no había
-    // ni dónde enganchar la colocación de complementos. pendingComp + colocarComplemento()
-    // añaden esa capacidad con un CubeRenderer mínimo (ver esa clase).
+    // cajas, enchufes etc [comparado con la pwa]". pendingComp + colocarComplemento() colocan el
+    // complemento elegido en el retículo; threeOverlay (ver REPL-AR-OVERLAY-01) lo dibuja con la
+    // geometría real de repl3d.js, no una caja de bulto.
     private volatile boolean pendingComp = false;
     // RENDIMIENTO-AR-CAMARA-01: contador de frames para el retículo (ver onDrawFrame) -- el
     // hit-test que decide su color se recalcula cada 3 frames en vez de en todos.
     private int frameCount = 0;
     private int reticleStateCache = OverlayView.RETICLE_NONE;
+    // REPL-AR-OVERLAY-01: se pone a true cada vez que cambian los puntos/complementos (colocar,
+    // deshacer) para que onDrawFrame reconstruya la escena de threeOverlay una sola vez, no en
+    // cada frame -- el trazado no cambia entre frames salvo que el usuario toque un botón.
+    private volatile boolean contenidoSucio = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -112,6 +126,16 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         // targetSdk 35+ -- así el ajuste de insets de abajo funciona igual en cualquier
         // dispositivo/fabricante, no solo en los que ya lo activan por su cuenta.
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+        // REPL-AR-OVERLAY-01: elemento elegido antes de entrar en AR (ver ReplanteoARPlugin.
+        // abrirAR) -- si faltan (build vieja de la web sin este extra, o se abrió sin elemento)
+        // se queda con el genérico por defecto, que overlay.html ya sabe dibujar.
+        if (getIntent() != null) {
+            String k = getIntent().getStringExtra("elemento_key");
+            String p = getIntent().getStringExtra("elemento_params");
+            if (k != null && !k.isEmpty()) elementoKey = k;
+            if (p != null && !p.isEmpty()) elementoParamsJson = p;
+        }
 
         FrameLayout root = new FrameLayout(this);
 
@@ -122,6 +146,21 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         surfaceView.setRenderer(this);
         surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
         root.addView(surfaceView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // REPL-AR-OVERLAY-01: WebView transparente encima de la cámara (three.js + repl3d.js,
+        // ver assets/ar/overlay.html), debajo del overlay 2D (retículo/puntos) y de los botones
+        // -- no necesita recibir toques (todo se maneja con los botones nativos de siempre), así
+        // que no interfiere con nada de lo que ya funcionaba.
+        threeOverlay = new WebView(this);
+        threeOverlay.setBackgroundColor(Color.TRANSPARENT);
+        threeOverlay.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        threeOverlay.setClickable(false);
+        threeOverlay.setFocusable(false);
+        WebSettings ws = threeOverlay.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(false);
+        root.addView(threeOverlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        threeOverlay.loadUrl("file:///android_asset/ar/overlay.html");
 
         overlay = new OverlayView(this);
         root.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -225,6 +264,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         } else if (!anchors.isEmpty()) {
             anchors.remove(anchors.size() - 1).detach();
         }
+        contenidoSucio = true;
     }
 
     private void terminar() {
@@ -348,7 +388,6 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         GLES20.glClearColor(0f, 0f, 0f, 1f);
         background.createOnGlThread();
-        cubeRenderer.createOnGlThread();
     }
 
     @Override
@@ -407,19 +446,15 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             camera.getProjectionMatrix(proj, 0, 0.1f, 100f);
             Matrix.multiplyMM(vp, 0, proj, 0, view, 0);
 
-            // REPL-AR-NATIVO-COMP-01: cada complemento colocado se dibuja como una caja sólida
-            // en su posición/orientación real de ARCore -- antes de esto, la sesión nativa no
-            // pintaba NINGÚN objeto 3D (solo cámara + puntos 2D, ver la clase CubeRenderer).
-            for (Complemento c : complementos) {
-                Pose p = c.anchor.getPose();
-                ReplComplementosNativo spec = ReplComplementosNativo.porKey(c.key);
-                float[] model = new float[16];
-                p.toMatrix(model, 0);
-                Matrix.scaleM(model, 0, spec.w, spec.h, spec.d);
-                float[] mvp = new float[16];
-                Matrix.multiplyMM(mvp, 0, vp, 0, model, 0);
-                cubeRenderer.draw(mvp, model, spec.r, spec.g, spec.b, 1f);
-            }
+            // REPL-AR-OVERLAY-01: la cámara de Three.js (en threeOverlay) se sincroniza con la
+            // MISMA vista/proyección reales de ARCore -- por eso el trazado/complementos 3D que
+            // pinta el WebView encajan exactamente sobre la cámara física. Cada 2 frames (no
+            // todos): el puente JS de evaluateJavascript no es gratis y ya se quitó trabajo
+            // redundante del render loop una vez (RENDIMIENTO-AR-CAMARA-01), no queremos meter
+            // otro causante de saltos por sincronizar más veces de las que hacen falta para que
+            // se vea fluido.
+            if (frameCount % 2 == 0) sincronizarCamaraOverlay(view, proj);
+            if (contenidoSucio) { contenidoSucio = false; sincronizarContenidoOverlay(); }
 
             float[] screen = new float[anchors.size() * 2];
             for (int i = 0; i < anchors.size(); i++) {
@@ -513,6 +548,52 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         return chosen == null ? null : chosen.createAnchor();
     }
 
+    // REPL-AR-OVERLAY-01: pasa las matrices reales de ARCore a la cámara de Three.js en
+    // threeOverlay (ver overlay.html actualizarCamara) -- mismo espacio de coordenadas, no hace
+    // falta transformar nada. evaluateJavascript exige hilo de UI; onDrawFrame corre en el hilo
+    // de GL, de ahí el runOnUiThread.
+    private void sincronizarCamaraOverlay(float[] view, float[] proj) {
+        if (threeOverlay == null) return;
+        final String js = "actualizarCamara(" + floatArrayJs(view) + "," + floatArrayJs(proj) + ")";
+        runOnUiThread(() -> { try { threeOverlay.evaluateJavascript(js, null); } catch (Exception ignored) {} });
+    }
+
+    // Reconstruye el trazado + complementos en threeOverlay cuando cambian (no en cada frame).
+    private void sincronizarContenidoOverlay() {
+        if (threeOverlay == null) return;
+        JSONArray path = new JSONArray();
+        for (Anchor a : anchors) {
+            Pose p = a.getPose();
+            JSONObject o = new JSONObject();
+            try { o.put("x", p.tx()); o.put("y", p.ty()); o.put("z", p.tz()); } catch (Exception ignored) {}
+            path.put(o);
+        }
+        JSONArray comps = new JSONArray();
+        for (Complemento c : complementos) {
+            Pose p = c.anchor.getPose();
+            JSONObject o = new JSONObject();
+            try {
+                o.put("key", c.key);
+                o.put("x", p.tx()); o.put("y", p.ty()); o.put("z", p.tz());
+                o.put("qx", p.qx()); o.put("qy", p.qy()); o.put("qz", p.qz()); o.put("qw", p.qw());
+            } catch (Exception ignored) {}
+            comps.put(o);
+        }
+        final String js = "actualizarContenido(" + jsStringLit(path.toString()) + "," + jsStringLit(elementoKey) + ","
+                + jsStringLit(elementoParamsJson) + "," + jsStringLit("[]") + "," + jsStringLit(comps.toString()) + ")";
+        runOnUiThread(() -> { try { threeOverlay.evaluateJavascript(js, null); } catch (Exception ignored) {} });
+    }
+
+    private static String floatArrayJs(float[] a) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < a.length; i++) { if (i > 0) sb.append(','); sb.append(a[i]); }
+        return sb.append(']').toString();
+    }
+
+    private static String jsStringLit(String s) {
+        return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'";
+    }
+
     private void colocarEnReticulo(Frame frame) {
         Anchor a = resolverAnclaje(frame, false);
         if (a == null) {
@@ -520,6 +601,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             return;
         }
         anchors.add(a); accionLog.add("punto");
+        contenidoSucio = true;
     }
 
     // "Tocar": el móvil está pegado o casi pegado a la superficie -- mismo botón y misma idea
@@ -532,6 +614,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             return;
         }
         anchors.add(a); accionLog.add("punto");
+        contenidoSucio = true;
     }
 
     // REPL-AR-NATIVO-COMP-01: coloca el complemento elegido en el spinner sobre el retículo,
@@ -547,6 +630,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         String key = ReplComplementosNativo.CATALOGO[idx].key;
         complementos.add(new Complemento(a, key));
         accionLog.add("comp");
+        contenidoSucio = true;
         final String nombre = ReplComplementosNativo.CATALOGO[idx].nombre;
         final int n = complementos.size();
         runOnUiThread(() -> infoText.setText(nombre + " colocado · " + n + " complemento(s). Sigue marcando o pulsa ✅ Fin."));

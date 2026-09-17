@@ -46,6 +46,13 @@ public class ReplanteoARPlugin extends Plugin {
     @PluginMethod
     public void abrirAR(PluginCall call) {
         Intent intent = new Intent(getContext(), ReplanteoARActivity.class);
+        // REPL-AR-OVERLAY-01 (17/09/2026): el elemento elegido en el catálogo (antes de entrar
+        // en AR, igual que en el flujo de Foto) se pasa a la Activity para que threeOverlay sepa
+        // qué tipo de render/ancho aplicar -- ver _replTipoRender en repl3d.js.
+        String elementoKey = call.getString("elemento_key");
+        String elementoParams = call.getString("elemento_params");
+        if (elementoKey != null) intent.putExtra("elemento_key", elementoKey);
+        if (elementoParams != null) intent.putExtra("elemento_params", elementoParams);
         startActivityForResult(call, intent, "arResultado");
     }
 
