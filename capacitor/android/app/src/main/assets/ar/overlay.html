@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<!--
+  REPL-AR-OVERLAY-01 (17/09/2026): Adrian -- "necesitamos hacer el overlay Three.js sincronizado
+  de AR ya... el renderizado 3D no representa bien cada tipo de material [comparado con la PWA]".
+  El AR nativo (ReplanteoARActivity, Java/ARCore) hasta ahora dibujaba los complementos como
+  cajas solidas via CubeRenderer (GLES20 a mano) y el trazado ni se pintaba en 3D -- una version
+  "de bulto" muy por debajo del renderizado real que ya tiene la PWA en repl3d.js (tubo con
+  grapas, rejiband con varillas, escalera con largueros, canal, complementos detallados...).
+
+  En vez de reimplementar esa geometria en Java (duplicando para siempre cualquier cambio futuro
+  en repl3d.js en dos sitios), esta pagina es un WebView TRANSPARENTE superpuesto al feed de
+  camara de ARCore (GLSurfaceView, debajo) que carga three.js + repl3d.js tal cual los usa la PWA
+  y renderiza EXACTAMENTE la misma escena -- ReplanteoARActivity solo le manda, por cada frame,
+  las matrices de vista/proyeccion reales de la camara de ARCore (mismo espacio de coordenadas,
+  mismas unidades en metros: no hace falta transformar nada, solo pasarlas) para que la camara de
+  Three.js mire exactamente por donde mira la camara fisica -- de ahi "sincronizado".
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; }
+  canvas { display: block; background: transparent; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="three.min.js"></script>
+<script src="repl3d.js"></script>
+<script>
+(function () {
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true, premultipliedAlpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x000000, 0);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(60, 1, 0.05, 100);
+  // La camara la gobiernan directamente las matrices que manda ARCore cada frame
+  // (actualizarCamara) -- se desactiva el auto-cálculo desde position/quaternion de Three.js.
+  camera.matrixAutoUpdate = false;
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.2));
+  var dl = new THREE.DirectionalLight(0xffffff, 1.1); dl.position.set(1.5, 2.5, 1.5); scene.add(dl);
+  var dl2 = new THREE.DirectionalLight(0x9db4ff, 0.4); dl2.position.set(-1.5, 0.5, -1); scene.add(dl2);
+
+  var grupoInstalacion = null;
+  var complementosGrupo = new THREE.Group();
+  scene.add(complementosGrupo);
+
+  function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / (h || 1);
+    camera.updateProjectionMatrix(); // se sobreescribe enseguida con la matriz real de ARCore
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Llamado por ReplanteoARActivity en cada frame (throttled) con las matrices reales de
+  // ARCore (Camera.getViewMatrix / getProjectionMatrix), column-major de 16 floats -- el mismo
+  // formato que usa THREE.Matrix4.fromArray().
+  window.actualizarCamara = function (viewArr, projArr) {
+    camera.matrixWorldInverse.fromArray(viewArr);
+    camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+    camera.projectionMatrix.fromArray(projArr);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    renderer.render(scene, camera);
+  };
+
+  // Mismo cálculo de ancho visual que _repl3DAncho() en index.html (no exportado a repl3d.js
+  // porque allí lee el estado global _repl -- aquí llega ya como el JSON de parámetros).
+  function anchoDeParams(params) {
+    if (params.ancho_mm) return Math.max(0.03, params.ancho_mm / 1000);
+    if (params.diametro_mm) return Math.max(0.012, params.diametro_mm / 1000);
+    return 0.2;
+  }
+
+  // Reconstruye el trazado + complementos con la MISMA geometria que usa la PWA
+  // (_replTipoRender/_replInstal3D/_replComplemento3D, repl3d.js) -- path: [{x,y,z}, ...] en
+  // metros, ya en el espacio de mundo de ARCore (los anchors dan directamente esas coordenadas).
+  // elementoKey/paramsJson son los mismos que maneja el catálogo de la web (ver
+  // _replArIniciarNativo en index.html), para no duplicar en Java la lógica de qué tipo de
+  // render / ancho corresponde a cada elemento -- se resuelve aquí, igual que hace la PWA.
+  window.actualizarContenido = function (pathJson, elementoKey, paramsJson, obstaculosJson, complementosJson) {
+    try {
+      if (grupoInstalacion) { scene.remove(grupoInstalacion); }
+      var path = JSON.parse(pathJson || '[]');
+      var params = JSON.parse(paramsJson || '{}');
+      if (path.length >= 2) {
+        var pts = path.map(function (p) { return new THREE.Vector3(p.x, p.y, p.z); });
+        var obstaculos = JSON.parse(obstaculosJson || '[]');
+        var tipo = _replTipoRender(elementoKey, params);
+        grupoInstalacion = _replInstal3D(THREE, pts, { tipo: tipo, w: anchoDeParams(params), opacity: 1, obstaculos: obstaculos });
+        scene.add(grupoInstalacion);
+      } else {
+        grupoInstalacion = null;
+      }
+      while (complementosGrupo.children.length) complementosGrupo.remove(complementosGrupo.children[0]);
+      var comps = JSON.parse(complementosJson || '[]');
+      comps.forEach(function (c) {
+        var o = _replComplemento3D(THREE, c.key);
+        o.position.set(c.x || 0, c.y || 0, c.z || 0);
+        if (c.qx != null) o.quaternion.set(c.qx, c.qy, c.qz, c.qw);
+        complementosGrupo.add(o);
+      });
+    } catch (e) {
+      // No tirar la sesión AR por un dato mal formado -- se reintenta en el próximo cambio.
+    }
+  };
+})();
+</script>
+</body>
+</html>
