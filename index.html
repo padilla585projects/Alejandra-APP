@@ -15703,6 +15703,33 @@ document.addEventListener('visibilitychange', () => {
 // de navegación (gestos o botones) o el fabricante -- es el mecanismo correcto en
 // nativo. 'popstate' se conserva tal cual solo para la PWA/navegador, donde sigue siendo
 // el único mecanismo disponible (no existe Capacitor.Plugins.App fuera de la app).
+// PARIDAD-APK-PWA-ICONO-01 / BACKBUTTON-JERARQUIA-01 (17/09/2026): Adrián (14/09/2026) --
+// "el último nivel antes de salir de la app debe ser el selector de empresa (superadmin) o el
+// de departamento (empresa_admin)". navTo('home') y compañía saltan directo a la pantalla
+// destino con _applyScreen() (no showScreen()) y vacían _navHistory -- así, en cuanto un
+// superadmin o empresa_admin llegaba a su home ya elegida, "atrás" pasaba de largo el selector
+// y salía de la app directamente. En vez de tocar cada sitio que navega a una pantalla raíz (son
+// muchos, ver navTo()), se calcula el nivel superior AL PULSAR atrás según el rol y la pantalla
+// activa -- más robusto que intentar mantener _navHistory sincronizado en cada salto.
+function _pantallaSuperiorJerarquia() {
+  const s = getSession();
+  if (!s) return null;
+  const activa = document.querySelector('.screen.active');
+  if (!activa) return null;
+  const raw = activa.id.replace(/^screen/, '');
+  const actual = raw.charAt(0).toLowerCase() + raw.slice(1);
+  if (s.rol === 'superadmin') {
+    if (actual === 'empresaSel') return null;              // ya está en la cima
+    if (actual === 'dept') return 'empresaSel';
+    return s.empresa_id ? 'dept' : 'empresaSel';
+  }
+  if (s.rol === 'empresa_admin') {
+    if (actual === 'dept') return null;                    // ya está en la cima
+    return 'dept';
+  }
+  return null; // resto de roles: su pantalla fija ya es la cima, no hay selector que mostrar
+}
+
 function _manejarBotonAtras() {
   const s = getSession();
   if (!s) return true;
@@ -15717,7 +15744,12 @@ function _manejarBotonAtras() {
 
   if (_navHistory.length > 0) { irAtras(); return true; } // hay historial: navegar atrás dentro de la app
 
-  // Sin historial: estamos en una pantalla raíz
+  // Sin historial de la pantalla actual: subir un nivel en la jerarquía empresa/departamento
+  // antes de dejar que las dos pulsaciones de salida entren en juego.
+  const superior = _pantallaSuperiorJerarquia();
+  if (superior) { resetearIntentoSalida(); _applyScreen(superior); return true; }
+
+  // Sin historial ni nivel superior: estamos en una pantalla raíz de verdad
   if (_backPressedOnce) {
     // Segunda pulsación en <2.5s: pedir la salida.
     clearTimeout(_backPressTimer);
