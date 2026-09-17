@@ -21433,16 +21433,26 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // REPL-INFORME-3D-01 (17/09/2026): captura estática (un solo frame, sin canvas visible)
   // de la misma instalación que ve "Ver en 3D" / AR, para el informe imprimible -- Adrián:
   // no quiere el plano en 2D con líneas, quiere "verse en 3D tal como quedaría".
+  //
+  // REPL-INFORME-3D-02 (17/09/2026): Adrián, tras ver la primera versión -- "me gusta pero
+  // se puede mejorar... me refiero a renderizar el entorno donde se pone". Flotaba sobre una
+  // rejilla vacía sin relación con el sitio real. Cuando el replanteo viene de una FOTO real
+  // (no del plano cenital sintético que genera el modo AR, ver _replArPlano) se usa esa foto
+  // del techo/pared como fondo del encuadre y el 3D se renderiza encima con fondo
+  // transparente, con una sombra de contacto en vez de rejilla, para dar sensación de "así
+  // quedaría colocado" en el sitio real. En AR no hay foto real del entorno todavía, así que
+  // se mantiene el suelo de referencia con rejilla.
   async function _replImagen3DInforme() {
     try {
       const path = _repl3DPath();
       if (!path) return null;
       const THREE = await _replCargarThree();
       const W = 1400, H = 1000;
+      const fondoFoto = (_repl.origen !== 'ar' && _repl.img) ? _repl.img : null;
       const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
       renderer.setSize(W, H, false);
-      renderer.setClearColor(0xf5f7fa, 1);
+      if (fondoFoto) renderer.setClearColor(0x000000, 0); else renderer.setClearColor(0xf5f7fa, 1);
       const scene = new THREE.Scene();
       const cam = new THREE.PerspectiveCamera(50, W / H, 0.01, 200);
       scene.add(new THREE.HemisphereLight(0xffffff, 0x333844, 1.2));
@@ -21453,12 +21463,32 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       run.position.sub(c);
       const pivot = new THREE.Group(); pivot.add(run); scene.add(pivot);
       const rad = Math.max(size.length(), 0.5);
-      const grid = new THREE.GridHelper(Math.max(2, Math.ceil(rad) * 2), Math.max(4, Math.ceil(rad) * 2), 0xc7ccd4, 0xe4e7ec);
-      grid.position.y = -size.y / 2 - 0.05; pivot.add(grid);
+      if (fondoFoto) {
+        const sombra = new THREE.Mesh(
+          new THREE.CircleGeometry(rad * 0.9, 32).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 })
+        );
+        sombra.position.y = -size.y / 2 - 0.02; pivot.add(sombra);
+      } else {
+        const grid = new THREE.GridHelper(Math.max(2, Math.ceil(rad) * 2), Math.max(4, Math.ceil(rad) * 2), 0xc7ccd4, 0xe4e7ec);
+        grid.position.y = -size.y / 2 - 0.05; pivot.add(grid);
+      }
       pivot.rotation.set(0.5, 0.55, 0);
       cam.position.set(0, rad * 0.55, rad * 1.9); cam.lookAt(0, 0, 0);
       renderer.render(scene, cam);
-      const img = canvas.toDataURL('image/jpeg', 0.9);
+      let img;
+      if (fondoFoto) {
+        const out = document.createElement('canvas'); out.width = W; out.height = H;
+        const octx = out.getContext('2d');
+        // "cover": la foto llena el encuadre sin deformarse, recortando lo que sobre
+        const s = Math.max(W / _repl.imgW, H / _repl.imgH);
+        const dw = _repl.imgW * s, dh = _repl.imgH * s;
+        octx.drawImage(fondoFoto, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        octx.drawImage(canvas, 0, 0);
+        img = out.toDataURL('image/jpeg', 0.9);
+      } else {
+        img = canvas.toDataURL('image/jpeg', 0.9);
+      }
       try { renderer.dispose(); } catch (_) {}
       return img;
     } catch (e) { return null; }
