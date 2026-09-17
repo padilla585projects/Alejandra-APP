@@ -6718,6 +6718,13 @@ async function loginConGoogleNativo(btn, errEl, btnYa) {
   if (sess.error || !sess.token) { errEl.style.color = '#ef4444'; errEl.textContent = sess.error || sess.msg || 'Error al verificar con Google'; _resetBtnGoogle(btn); return; }
   localStorage.removeItem('alejandra_inv_codigo');
   setSession({ token: sess.token, nombre: sess.nombre, rol: sess.rol, departamento: sess.departamento, empresa_id: sess.empresa_id, empresa_nombre: sess.empresa_nombre, obra_id: sess.obra_id, obra_nombre: sess.obra_nombre });
+  // BUG-LOGIN-GOOGLE-NO-RELANZA-01 (17/09/2026): Adrian -- "el login se queda en 'Abriendo
+  // Google...' sin volver a la app". Confirmado por D1: el login SÍ se completaba en el
+  // servidor (sesión real creada) y setSession() SÍ guardaba el token -- pero a diferencia de
+  // todos los demás caminos de login (que hacen `setSession(session); iniciarApp();`), este
+  // nunca llamaba a iniciarApp(), así que la pantalla de login se quedaba parada para siempre
+  // con la sesión ya guardada por debajo, sin nada que la hiciera pasar a la app.
+  iniciarApp();
 }
 
 async function handleGoogleCallback(code) {
