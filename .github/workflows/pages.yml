@@ -64,7 +64,11 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html panel.html admin.html _site/
-          for asset in alejandra-panel.html kiosco.html sw.js .nojekyll manifest.json icon-192.png icon-512.png icon.svg favicon.ico; do
+          # FASE-B-AR-01 (17/09/2026): repl3d.js es nuevo (extraido de index.html) y esta
+          # lista es un allowlist explicito -- sin añadirlo aqui, el archivo nunca se copiaba
+          # a _site/ y el deploy quedaba en produccion sirviendo un 404 para el <script src>
+          # que index.html ya carga (Adrian: "Ver en 3D" se quedaba colgado en "Cargando 3D...").
+          for asset in alejandra-panel.html kiosco.html sw.js repl3d.js .nojekyll manifest.json icon-192.png icon-512.png icon.svg favicon.ico; do
             if [ -f "$asset" ]; then cp "$asset" _site/; fi
           done
           for directory in icons fonts img packages vendor; do
