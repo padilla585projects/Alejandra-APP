@@ -9312,6 +9312,15 @@ function navTo(target) {
     actualizarBtnAtras();
     return;
   }
+  // BOTONATRAS-INVENTARIO-01 (17/09/2026): Adrián -- "lo del botón atrás no va bien... la
+  // última pantalla antes de salir de la app es el scan de bobinas... da igual en qué
+  // pantalla estés". Causa: a diferencia de TODOS los demás destinos de navTo() (que limpian
+  // _navHistory = [] antes de saltar a su pantalla raíz), scan/stock/historial cambian de
+  // pantalla a mano más abajo sin tocar _navHistory en absoluto -- cualquier cosa que hubiera
+  // ahí de antes se quedaba congelada para siempre. Como Inventario es una pantalla raíz más
+  // (accesible desde la barra inferior, igual que Inicio/Ajustes/Pedidos), debe limpiar el
+  // historial igual que ellas.
+  _navHistory = [];
   // For scan/stock/historial → show module screen
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const ms = document.getElementById('screenModule');
