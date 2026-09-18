@@ -4592,6 +4592,22 @@ select option{background:var(--surface2);color:var(--text)}
              arriesgadas de tocar sin querer desde el movil y sin utilidad real en campo. Se
              ocultan con _esNativo() en _initNativo(), no se borran (siguen disponibles en la
              PWA/panel de oficina). -->
+        <!-- REGISTRO-TECNICO-01 (18/09/2026): Adrián -- "en Ajustes, Sistema, y ahí logs, con
+             un plegable para seleccionar qué logs quieres ver". Guardado en el propio móvil
+             (localStorage), pensado para consultarlo sin depender de que nadie esté conectado
+             en directo por ADB. Solo "Replanteo / AR" por ahora -- DIAG_CATEGORIAS admite añadir
+             más categorías más adelante sin rehacer esta pantalla. -->
+        <div class="settings-section" id="sistemaLogSection">
+          <div class="settings-title">🪲 Registro técnico</div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label class="form-label">Qué registro quieres ver</label>
+            <select class="form-input" id="cfgLogCategoria"></select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-primary btn-secondary" style="flex:1;font-size:13px;margin-top:0" onclick="diagVerRegistro()">👁 Ver registro</button>
+            <button class="btn-primary btn-secondary" style="flex:1;font-size:13px;margin-top:0" onclick="diagBorrarRegistro()">🗑 Borrar</button>
+          </div>
+        </div>
         <div class="settings-section" id="sistemaApiSection">
           <div class="settings-title">🌐 Servidor API</div>
           <div class="form-group" style="margin-bottom:8px">
@@ -14155,11 +14171,16 @@ async function borrarSugerencia(id) {
 // ══════════════════════════════════════════════════════
 // LOGGING DE ERRORES
 // ══════════════════════════════════════════════════════
-function enviarLog(nivel, mensaje, detalle) {
+// REGISTRO-TECNICO-01 (18/09/2026): `origen` (nuevo, opcional -- las llamadas ya existentes lo
+// omiten y siguen igual) permite mandar registros de un módulo concreto (p.ej. "replanteo-ar")
+// en vez de todos como "cliente" genérico, para poder filtrarlos luego en `logs` (D1) por
+// `origen` sin mezclarlos con el resto de errores de la app.
+function enviarLog(nivel, mensaje, detalle, origen) {
   try {
     const s = getSession();
     const payload = {
       nivel,
+      origen:  origen || undefined,
       mensaje: String(mensaje).slice(0, 500),
       detalle: String(detalle || '').slice(0, 1000),
       usuario: s?.nombre || '—',
@@ -14191,6 +14212,52 @@ window.addEventListener('unhandledrejection', e => {
   enviarLog('promise', e.reason?.message || String(e.reason), e.reason?.stack || '');
 });
 
+// REGISTRO-TECNICO-01 (18/09/2026): Adrián, probando en obra sin nadie mirando en directo --
+// "quiero un log de la PWA y la APK para verlo cuando sea necesario", no una sesión de
+// depuración en vivo (eso depende de que el móvil esté en la misma red que quien depura, que
+// en obra no lo está). Doble vía: localStorage (consultable en el propio móvil, sin depender de
+// red -- ver diagVerRegistro()) y enviarLog() con origen propio (consultable por el equipo en
+// `logs`, D1, aunque el móvil ya no esté conectado a nada). Con categoría por si hace falta
+// añadir más aparte de AR más adelante ("podría haber más claro... los que necesitáramos").
+const DIAG_LOG_KEY = 'alejandra_diag_log';
+const DIAG_CATEGORIAS = [{ key: 'ar', nombre: '📐 Replanteo / AR' }];
+function _diagLog(cat, msg) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || '[]');
+    arr.push({ cat, t: new Date().toISOString().slice(11, 19), msg });
+    while (arr.length > 500) arr.shift();
+    localStorage.setItem(DIAG_LOG_KEY, JSON.stringify(arr));
+  } catch (_) {}
+  enviarLog('info', msg, cat, 'replanteo-' + cat);
+}
+function _diagLlenarCategorias() {
+  const sel = document.getElementById('cfgLogCategoria');
+  if (sel && !sel.options.length) sel.innerHTML = DIAG_CATEGORIAS.map(c => `<option value="${c.key}">${c.nombre}</option>`).join('');
+}
+// Muestra el registro EN PANTALLA siempre (no solo copiarlo a ciegas) -- el cuadro de `prompt`
+// deja el texto visible y seleccionable en el propio móvil, y de paso se intenta copiar al
+// portapapeles como atajo.
+async function diagVerRegistro() {
+  _diagLlenarCategorias();
+  const cat = document.getElementById('cfgLogCategoria')?.value || DIAG_CATEGORIAS[0].key;
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || '[]'); } catch (_) {}
+  const filtrado = arr.filter(e => e.cat === cat);
+  if (!filtrado.length) { toast('Sin registro todavía para esta categoría', 'error'); return; }
+  const texto = filtrado.map(e => `${e.t} ${e.msg}`).join('\n');
+  try { await navigator.clipboard.writeText(texto); } catch (_) {}
+  window.prompt(`Registro técnico (${filtrado.length} líneas, las más nuevas al final) -- copiado si tu navegador lo permite:`, texto);
+}
+function diagBorrarRegistro() {
+  _diagLlenarCategorias();
+  const cat = document.getElementById('cfgLogCategoria')?.value || DIAG_CATEGORIAS[0].key;
+  try {
+    const arr = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || '[]').filter(e => e.cat !== cat);
+    localStorage.setItem(DIAG_LOG_KEY, JSON.stringify(arr));
+  } catch (_) {}
+  toast('Registro borrado');
+}
+
 // ══════════════════════════════════════════════════════
 // AJUSTES TABS
 // ══════════════════════════════════════════════════════
@@ -14217,7 +14284,7 @@ function selAjTab(tab) {
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 60000); } // 1 min (antes 30s)
   if (tab === 'sesion')      { cargarEstadoTelegram(); cargarAccionesPendientesApp(); }
-  if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); vozPoblarSelector(); }
+  if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); vozPoblarSelector(); _diagLlenarCategorias(); }
   if (tab === 'empresa')    cargarPanelEmpresa();
   if (tab === 'comparativa') cargarComparativaObras();
 }
@@ -19293,6 +19360,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // ?departamento= a los GET: sin esto el catálogo se pedía para un departamento y el
   // elemento se validaba contra otro — «Elemento no válido para este departamento».
   let _replCatalogoDept = null;
+  // REGISTRO-TECNICO-01: _diagLog vive en ámbito global (ver junto a enviarLog()) porque lo
+  // necesita también Ajustes → Sistema, que no está dentro de este IIFE. Aquí solo el envoltorio
+  // corto para las llamadas del módulo de Replanteo.
+  function _replLog(msg) { _diagLog('ar', msg); }
   let _replPuedeEditar = false;
   let _replCalcTimer = null;
   let _replDrag = null;         // { idx, x0, y0, moved } al arrastrar un vértice
@@ -20678,7 +20749,13 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   // ── Guardar / pedidos / borrar ──────────────────────────────────────────
   async function replGuardar() {
-    if (!_repl || _replSoloLectura()) return;
+    // BUG-REPL-GUARDAR-AR-02 (18/09/2026): Adrián, probando en obra -- "el botón parece no
+    // funcionar" (sin AVISO ni error) al guardar un replanteo hecho en AR (el mismo hecho con
+    // Foto sí guarda). Estos dos "return" salían en silencio -- si la causa real es alguna de
+    // estas dos, ahora se ve un aviso claro en vez de que el botón no haga nada visible.
+    _replLog(`Guardar: pulsado (_repl=${!!_repl}, id=${_repl?.id ?? 'null'}, origen=${_repl?.origen}, soloLectura=${_replSoloLectura()})`);
+    if (!_repl) { toast('No hay ningún replanteo abierto para guardar', 'error'); return; }
+    if (_replSoloLectura()) { toast('Sin permiso para guardar -- recarga la página e inténtalo de nuevo', 'error'); return; }
     _repl.titulo = document.getElementById('replTitulo').value.trim();
     if (!_repl.titulo) { toast('Escribe un título', 'error'); return; }
     const btn = document.getElementById('btnReplGuardar');
@@ -20687,6 +20764,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const s = getSession();
       let res, data;
       if (!_repl.id) {
+        // BUG-REPL-GUARDAR-AR-02: si el trazado viene del AR (plano.cv.toBlob puede resolver
+        // null en algunos WebView/navegadores si el canvas queda vacío o se pierde el contexto
+        // WebGL al cerrar la sesión XR), _repl.file podía llegar sin contenido real y el POST
+        // fallaba en el servidor de forma poco clara. Se corta aquí con un aviso explícito.
+        _replLog(`Guardar: creando nuevo -- file=${_repl.file ? _repl.file.size + 'B' : 'null'}, puntos=${(_repl.puntos || []).length}, puntos3d=${(_repl.puntos_3d || []).length}`);
+        if (!_repl.file || !_repl.file.size) { _replLog('Guardar: ABORTA -- file vacío o nulo'); throw new Error('La imagen del trazado no se generó bien -- vuelve a intentar el AR'); }
         const fd = new FormData();
         fd.append('file', _repl.file);
         fd.append('titulo', _repl.titulo);
@@ -20725,7 +20808,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         _repl.fotosN = (_repl.fotosN || 0) + subidas; _repl.fotosDoc = []; replActualizarInfo();
         if (subidas) toast(`📸 ${subidas} foto(s) de documentación guardadas`);
       }
+      _replLog(`Guardar: OK -- id=${_repl.id}, estado=${_repl.estado}`);
     } catch (e) {
+      _replLog(`Guardar: EXCEPCIÓN -- ${e.message || e}`);
       toast('❌ ' + e.message, 'error');
     } finally { btn.disabled = _replSoloLectura(); btn.textContent = '💾 Guardar'; }
   }
@@ -20959,11 +21044,13 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   async function replArIniciar() {
     const titulo = document.getElementById('replNuevoTitulo').value.trim();
     const key = document.getElementById('replNuevoElemento').value;
+    _replLog(`AR iniciar: titulo="${titulo}" key=${key}`);
     if (!titulo) { toast('Escribe un título', 'error'); return; }
-    if (!(await replArSoportado())) { toast('Este móvil o navegador no soporta AR (hace falta Chrome en Android con ARCore)', 'error'); return; }
+    if (!(await replArSoportado())) { _replLog('AR iniciar: no soportado'); toast('Este móvil o navegador no soporta AR (hace falta Chrome en Android con ARCore)', 'error'); return; }
     // REPL-AR-NATIVO-01: dentro de la app instalada, usar la sesión ARCore nativa (ya existente)
     // en vez de intentar abrir una sesión WebXR que ahí siempre fallaría.
-    if (await _replArNativoDisponible()) { await _replArIniciarNativo(titulo, key); return; }
+    if (await _replArNativoDisponible()) { _replLog('AR iniciar: usando AR nativo'); await _replArIniciarNativo(titulo, key); return; }
+    _replLog('AR iniciar: usando WebXR');
     const btn = document.getElementById('btnReplNuevoAR');
     if (btn) btn.disabled = true;
     try {
@@ -20989,12 +21076,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         depthSensing: { usagePreference: ['cpu-optimized'], dataFormatPreference: ['luminance-alpha'] },
       };
       let session;
-      try { session = await navigator.xr.requestSession('immersive-ar', sessionOpts); }
-      catch (_) {
+      try { session = await navigator.xr.requestSession('immersive-ar', sessionOpts); _replLog('AR iniciar: sesión OK con plane-detection'); }
+      catch (e1) {
+        _replLog(`AR iniciar: sesión falló con plane-detection (${e1.message}) -- reintentando sin ella`);
         session = await navigator.xr.requestSession('immersive-ar', {
           ...sessionOpts,
           optionalFeatures: sessionOpts.optionalFeatures.filter(f => f !== 'plane-detection'),
         });
+        _replLog('AR iniciar: sesión OK sin plane-detection');
       }
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(window.devicePixelRatio || 1);
@@ -21019,7 +21108,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       _replArEstado('Apunta al techo o a la pared. Con el anillo naranja sobre el punto, pulsa 📍 Punto. Si la superficie es lisa y no aparece el anillo, acerca el móvil al punto y pulsa 📱 Tocar.');
       _replArLlenarComplementos(); _replArLlenarMaterial();
       renderer.setAnimationLoop((t, frame) => _replArFrame(t, frame));
+      _replLog('AR iniciar: sesión WebXR arrancada del todo');
     } catch (e) {
+      _replLog(`AR iniciar: EXCEPCIÓN -- ${e.message || e}`);
       _replArLimpiar();
       toast('❌ AR: ' + (e.message || 'no se pudo iniciar la sesión'), 'error');
     } finally { if (btn) btn.disabled = false; }
@@ -21521,38 +21612,51 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   async function replArTerminar() {
     if (!_ar) return;
     if (_ar.puntos.length < 2) { _replArEstado('Marca al menos dos puntos antes de terminar.'); return; }
-    const { puntos, obstaculos, titulo, elemento, params } = _ar;
-    const metodos = _ar.metodos || [];
-    const puntos3d = puntos.map((p, i) => ({ x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), m: metodos[i] || 'hit' }));
-    const longitud3d = +_replArLongitud().toFixed(2);
-    const plano = _replArPlano(puntos, obstaculos);
-    try { await _ar.session.end(); } catch { _replArLimpiar(); }
-    const blob = await new Promise(r => plano.cv.toBlob(r, 'image/jpeg', 0.9));
-    const file = new File([blob], `replanteo-ar-${Date.now()}.jpg`, { type: 'image/jpeg' });
-    const img = await _replCargarImagen(URL.createObjectURL(file), false);
-    _repl = {
-      id: null, titulo, elemento_key: elemento.key, params, file, img, departamento: _replCatalogoDept, planos: [], planos: [], imgW: img.naturalWidth, imgH: img.naturalHeight,
-      puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
-      referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
-      complementos: (_ar.complementos || []).map(c => ({ key: c.key, x: +c.pos.x.toFixed(3), y: +c.pos.y.toFixed(3), z: +c.pos.z.toFixed(3), q: c.quat })),
-      fotosDoc: (_ar.fotosDoc || []).slice(),
-      calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
-    };
-    // BUG-REPL-GUARDAR-AR-01 (16/09/2026): Adrián -- "termino de replantear y le doy a
-    // guardar, no se guarda" (APK y PWA por igual). _replPuedeEditar es una variable
-    // aparte de _repl que puede quedar desincronizada tras la sesión AR (cambio de
-    // Activity nativa en la APK, sesión inmersiva WebXR aquí) -- _repl llegaba con los
-    // puntos trazados bien, pero el botón Guardar quedaba deshabilitado porque
-    // _replAplicarPermisos() la seguía viendo en false. Para un replanteo recién creado
-    // (id: null) la pregunta "¿puede editar?" no tiene sentido -- si lo acabas de crear,
-    // por definición puedes guardarlo.
-    _replPuedeEditar = true;
-    replCerrarNuevo();
-    showScreen('replanteoEditor');
-    replInitEditor();
-    if (_repl.obstaculos.length) toast(`⚠️ ${_repl.obstaculos.length} obstáculo(s) marcados en AR: toca cada uno para indicar qué es y qué hacemos`);
-    else toast(`📱 ${longitud3d.toString().replace('.', ',')} m medidos en AR`);
-    _replProgramarCalculo();
+    _replLog(`AR terminar: ${_ar.puntos.length} puntos, ${(_ar.complementos || []).length} complementos, ${(_ar.obstaculos || []).length} obstáculos`);
+    // REGISTRO-TECNICO-REPL-01: esta función no tenía try/catch -- si algo de lo de abajo
+    // (toBlob, cargar imagen...) lanzaba, la promesa quedaba rechazada sin que nadie la
+    // recogiera (el onclick del botón no hace await): fallo totalmente silencioso, ni toast ni
+    // registro. Se envuelve para que, si pasa, quede constancia y un aviso en pantalla.
+    try {
+      const { puntos, obstaculos, titulo, elemento, params } = _ar;
+      const metodos = _ar.metodos || [];
+      const puntos3d = puntos.map((p, i) => ({ x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), m: metodos[i] || 'hit' }));
+      const longitud3d = +_replArLongitud().toFixed(2);
+      const plano = _replArPlano(puntos, obstaculos);
+      try { await _ar.session.end(); } catch { _replArLimpiar(); }
+      const blob = await new Promise(r => plano.cv.toBlob(r, 'image/jpeg', 0.9));
+      _replLog(`AR terminar: plano.cv.toBlob -> ${blob ? blob.size + 'B' : 'NULL'}`);
+      if (!blob) throw new Error('No se pudo generar la imagen del plano (canvas vacío)');
+      const file = new File([blob], `replanteo-ar-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const img = await _replCargarImagen(URL.createObjectURL(file), false);
+      _repl = {
+        id: null, titulo, elemento_key: elemento.key, params, file, img, departamento: _replCatalogoDept, planos: [], planos: [], imgW: img.naturalWidth, imgH: img.naturalHeight,
+        puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
+        referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
+        complementos: (_ar.complementos || []).map(c => ({ key: c.key, x: +c.pos.x.toFixed(3), y: +c.pos.y.toFixed(3), z: +c.pos.z.toFixed(3), q: c.quat })),
+        fotosDoc: (_ar.fotosDoc || []).slice(),
+        calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
+      };
+      // BUG-REPL-GUARDAR-AR-01 (16/09/2026): Adrián -- "termino de replantear y le doy a
+      // guardar, no se guarda" (APK y PWA por igual). _replPuedeEditar es una variable
+      // aparte de _repl que puede quedar desincronizada tras la sesión AR (cambio de
+      // Activity nativa en la APK, sesión inmersiva WebXR aquí) -- _repl llegaba con los
+      // puntos trazados bien, pero el botón Guardar quedaba deshabilitado porque
+      // _replAplicarPermisos() la seguía viendo en false. Para un replanteo recién creado
+      // (id: null) la pregunta "¿puede editar?" no tiene sentido -- si lo acabas de crear,
+      // por definición puedes guardarlo.
+      _replPuedeEditar = true;
+      _replLog(`AR terminar: _repl listo (file=${file.size}B, puntos3d=${puntos3d.length}), abriendo editor`);
+      replCerrarNuevo();
+      showScreen('replanteoEditor');
+      replInitEditor();
+      if (_repl.obstaculos.length) toast(`⚠️ ${_repl.obstaculos.length} obstáculo(s) marcados en AR: toca cada uno para indicar qué es y qué hacemos`);
+      else toast(`📱 ${longitud3d.toString().replace('.', ',')} m medidos en AR`);
+      _replProgramarCalculo();
+    } catch (e) {
+      _replLog(`AR terminar: EXCEPCIÓN -- ${e.message || e}`);
+      toast('❌ AR: no se pudo cerrar el trazado -- ' + (e.message || 'error desconocido'), 'error');
+    }
   }
 
   // REPL-AR-NATIVO-01: contraparte de replArIniciar()/replArTerminar() para cuando la sesión AR
@@ -21577,12 +21681,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       // Activity nativa no tiene acceso a getAPI()/getSession().
       const s = getSession();
       const resultado = await window.Capacitor.Plugins.ReplanteoAR.abrirAR({ elemento_key: el.key, elemento_params: JSON.stringify(params), api_base: getAPI(), token: (s && s.token) || '' });
+      _replLog(`AR nativo: abrirAR -> ok=${!!resultado?.ok} cancelado=${!!resultado?.cancelado} puntos=${(resultado?.puntos || []).length}`);
       if (!resultado?.ok) {
         if (!resultado?.cancelado) toast('❌ AR: ' + (resultado?.error || 'no se pudo medir'), 'error');
         return;
       }
       await _replArTerminarNativo(resultado, titulo, key, el, params);
     } catch (e) {
+      _replLog(`AR nativo iniciar: EXCEPCIÓN -- ${e.message || e}`);
       toast('❌ AR: ' + (e.message || 'no se pudo iniciar la sesión nativa'), 'error');
     } finally { if (btn) btn.disabled = false; }
   }
