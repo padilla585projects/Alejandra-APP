@@ -2019,9 +2019,6 @@ select option{background:var(--surface2);color:var(--text)}
     <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
       <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📐 Replanteo</div>
       <button id="btnReplNuevo" onclick="replAbrirNuevo()" class="repl-btn primary" style="display:none">+ Nuevo</button>
-      <!-- REGISTRO-TECNICO-REPL-01 (18/09/2026): ver qué ha pasado en el AR/Guardar sin
-           depender de que alguien esté conectado en directo -- ver replVerLog(). -->
-      <button onclick="replVerLog()" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px" title="Ver registro técnico">🪲</button>
       <button onclick="cargarReplanteos()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px" title="Actualizar">↻</button>
     </div>
     <div style="padding:8px 14px 0;font-size:11px;color:var(--muted)">Haz una foto del techo o la pared, marca por dónde va la instalación y obtén la lista de material. Solo encargados y superiores pueden crear replanteos.</div>
@@ -4595,6 +4592,22 @@ select option{background:var(--surface2);color:var(--text)}
              arriesgadas de tocar sin querer desde el movil y sin utilidad real en campo. Se
              ocultan con _esNativo() en _initNativo(), no se borran (siguen disponibles en la
              PWA/panel de oficina). -->
+        <!-- REGISTRO-TECNICO-01 (18/09/2026): Adrián -- "en Ajustes, Sistema, y ahí logs, con
+             un plegable para seleccionar qué logs quieres ver". Guardado en el propio móvil
+             (localStorage), pensado para consultarlo sin depender de que nadie esté conectado
+             en directo por ADB. Solo "Replanteo / AR" por ahora -- DIAG_CATEGORIAS admite añadir
+             más categorías más adelante sin rehacer esta pantalla. -->
+        <div class="settings-section" id="sistemaLogSection">
+          <div class="settings-title">🪲 Registro técnico</div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label class="form-label">Qué registro quieres ver</label>
+            <select class="form-input" id="cfgLogCategoria"></select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-primary btn-secondary" style="flex:1;font-size:13px;margin-top:0" onclick="diagVerRegistro()">👁 Ver registro</button>
+            <button class="btn-primary btn-secondary" style="flex:1;font-size:13px;margin-top:0" onclick="diagBorrarRegistro()">🗑 Borrar</button>
+          </div>
+        </div>
         <div class="settings-section" id="sistemaApiSection">
           <div class="settings-title">🌐 Servidor API</div>
           <div class="form-group" style="margin-bottom:8px">
@@ -14158,11 +14171,16 @@ async function borrarSugerencia(id) {
 // ══════════════════════════════════════════════════════
 // LOGGING DE ERRORES
 // ══════════════════════════════════════════════════════
-function enviarLog(nivel, mensaje, detalle) {
+// REGISTRO-TECNICO-01 (18/09/2026): `origen` (nuevo, opcional -- las llamadas ya existentes lo
+// omiten y siguen igual) permite mandar registros de un módulo concreto (p.ej. "replanteo-ar")
+// en vez de todos como "cliente" genérico, para poder filtrarlos luego en `logs` (D1) por
+// `origen` sin mezclarlos con el resto de errores de la app.
+function enviarLog(nivel, mensaje, detalle, origen) {
   try {
     const s = getSession();
     const payload = {
       nivel,
+      origen:  origen || undefined,
       mensaje: String(mensaje).slice(0, 500),
       detalle: String(detalle || '').slice(0, 1000),
       usuario: s?.nombre || '—',
@@ -14194,6 +14212,52 @@ window.addEventListener('unhandledrejection', e => {
   enviarLog('promise', e.reason?.message || String(e.reason), e.reason?.stack || '');
 });
 
+// REGISTRO-TECNICO-01 (18/09/2026): Adrián, probando en obra sin nadie mirando en directo --
+// "quiero un log de la PWA y la APK para verlo cuando sea necesario", no una sesión de
+// depuración en vivo (eso depende de que el móvil esté en la misma red que quien depura, que
+// en obra no lo está). Doble vía: localStorage (consultable en el propio móvil, sin depender de
+// red -- ver diagVerRegistro()) y enviarLog() con origen propio (consultable por el equipo en
+// `logs`, D1, aunque el móvil ya no esté conectado a nada). Con categoría por si hace falta
+// añadir más aparte de AR más adelante ("podría haber más claro... los que necesitáramos").
+const DIAG_LOG_KEY = 'alejandra_diag_log';
+const DIAG_CATEGORIAS = [{ key: 'ar', nombre: '📐 Replanteo / AR' }];
+function _diagLog(cat, msg) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || '[]');
+    arr.push({ cat, t: new Date().toISOString().slice(11, 19), msg });
+    while (arr.length > 500) arr.shift();
+    localStorage.setItem(DIAG_LOG_KEY, JSON.stringify(arr));
+  } catch (_) {}
+  enviarLog('info', msg, cat, 'replanteo-' + cat);
+}
+function _diagLlenarCategorias() {
+  const sel = document.getElementById('cfgLogCategoria');
+  if (sel && !sel.options.length) sel.innerHTML = DIAG_CATEGORIAS.map(c => `<option value="${c.key}">${c.nombre}</option>`).join('');
+}
+// Muestra el registro EN PANTALLA siempre (no solo copiarlo a ciegas) -- el cuadro de `prompt`
+// deja el texto visible y seleccionable en el propio móvil, y de paso se intenta copiar al
+// portapapeles como atajo.
+async function diagVerRegistro() {
+  _diagLlenarCategorias();
+  const cat = document.getElementById('cfgLogCategoria')?.value || DIAG_CATEGORIAS[0].key;
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || '[]'); } catch (_) {}
+  const filtrado = arr.filter(e => e.cat === cat);
+  if (!filtrado.length) { toast('Sin registro todavía para esta categoría', 'error'); return; }
+  const texto = filtrado.map(e => `${e.t} ${e.msg}`).join('\n');
+  try { await navigator.clipboard.writeText(texto); } catch (_) {}
+  window.prompt(`Registro técnico (${filtrado.length} líneas, las más nuevas al final) -- copiado si tu navegador lo permite:`, texto);
+}
+function diagBorrarRegistro() {
+  _diagLlenarCategorias();
+  const cat = document.getElementById('cfgLogCategoria')?.value || DIAG_CATEGORIAS[0].key;
+  try {
+    const arr = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || '[]').filter(e => e.cat !== cat);
+    localStorage.setItem(DIAG_LOG_KEY, JSON.stringify(arr));
+  } catch (_) {}
+  toast('Registro borrado');
+}
+
 // ══════════════════════════════════════════════════════
 // AJUSTES TABS
 // ══════════════════════════════════════════════════════
@@ -14220,7 +14284,7 @@ function selAjTab(tab) {
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 60000); } // 1 min (antes 30s)
   if (tab === 'sesion')      { cargarEstadoTelegram(); cargarAccionesPendientesApp(); }
-  if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); vozPoblarSelector(); }
+  if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); vozPoblarSelector(); _diagLlenarCategorias(); }
   if (tab === 'empresa')    cargarPanelEmpresa();
   if (tab === 'comparativa') cargarComparativaObras();
 }
@@ -19296,34 +19360,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // ?departamento= a los GET: sin esto el catálogo se pedía para un departamento y el
   // elemento se validaba contra otro — «Elemento no válido para este departamento».
   let _replCatalogoDept = null;
-  // REGISTRO-TECNICO-REPL-01 (18/09/2026): Adrián, probando en obra sin nadie mirando en
-  // directo -- "quiero un log de la PWA y la APK para verlo cuando sea necesario", no una
-  // sesión de depuración en vivo (eso ya se probó y depende de que el móvil esté en esta
-  // misma red, que en obra no lo está). Registro persistente en localStorage de los pasos
-  // clave del AR y de Guardar -- se puede consultar y copiar desde el propio móvil en
-  // cualquier momento con replVerLog(), sin depender de ADB ni de que nadie esté conectado.
-  const REPL_LOG_KEY = 'alejandra_repl_diag_log';
-  function _replLog(msg) {
-    try {
-      const arr = JSON.parse(localStorage.getItem(REPL_LOG_KEY) || '[]');
-      arr.push(`${new Date().toISOString().slice(11, 19)} ${msg}`);
-      while (arr.length > 300) arr.shift();
-      localStorage.setItem(REPL_LOG_KEY, JSON.stringify(arr));
-    } catch (_) {}
-  }
-  // Muestra el registro EN PANTALLA siempre (para ver qué está pasando en cualquier momento,
-  // no solo copiarlo a ciegas) -- el cuadro de `prompt` deja el texto visible y seleccionable
-  // en el propio móvil, y de paso se intenta copiar solo al portapapeles como atajo.
-  async function replVerLog() {
-    let arr = [];
-    try { arr = JSON.parse(localStorage.getItem(REPL_LOG_KEY) || '[]'); } catch (_) {}
-    if (!arr.length) { toast('Sin registro todavía -- prueba el AR o Guardar primero', 'error'); return; }
-    const texto = arr.join('\n');
-    try { await navigator.clipboard.writeText(texto); } catch (_) {}
-    window.prompt(`Registro técnico (${arr.length} líneas, las más nuevas al final) -- ya copiado al portapapeles si tu navegador lo permite:`, texto);
-  }
-  function replBorrarLog() { try { localStorage.removeItem(REPL_LOG_KEY); } catch (_) {} toast('Registro borrado'); }
-  window.replVerLog = replVerLog; window.replBorrarLog = replBorrarLog;
+  // REGISTRO-TECNICO-01: _diagLog vive en ámbito global (ver junto a enviarLog()) porque lo
+  // necesita también Ajustes → Sistema, que no está dentro de este IIFE. Aquí solo el envoltorio
+  // corto para las llamadas del módulo de Replanteo.
+  function _replLog(msg) { _diagLog('ar', msg); }
   let _replPuedeEditar = false;
   let _replCalcTimer = null;
   let _replDrag = null;         // { idx, x0, y0, moved } al arrastrar un vértice
