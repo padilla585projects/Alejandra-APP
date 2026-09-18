@@ -135,10 +135,21 @@ function _replInstal3D(THREE, pts, opts) {
     const a = pts[i - 1], b = pts[i], dir = new THREE.Vector3().subVectors(b, a), len = dir.length(); if (len < 1e-3) continue;
     const dirN = dir.clone().normalize();
     const normalReal = normales[i - 1] || normales[i];
-    let arriba;
+    // GEOMETRIA-DEGENERADA-NORMAL-01 (18/09/2026): Adrián, probando en vivo tras PLANO-SNAP-01
+    // en una esquina real -- solo se veían los puntos, el tubo entero desaparecía. Causa: si el
+    // tramo va casi paralelo a la normal real (dos puntos pegados a paredes distintas cerca de
+    // una esquina, o cualquier tramo casi perpendicular a su propia pared), cross(dirN, arriba)
+    // sale casi nulo -- normalize() de un vector casi-cero amplifica el error numérico y la base
+    // local (zAxis/yAxis/quaternion) sale degenerada, con la instalación entera fuera de sitio o
+    // invisible. Se exige que dirN y la normal no sean casi paralelos (|dot| < 0.98) antes de
+    // usar la normal real; si no, se cae al respaldo genérico SOLO para este tramo, igual que ya
+    // se hacía cuando no había normal.
+    let arriba = null, usaNormalReal = false;
     if (normalReal && normalReal.lengthSq() > 0.25) {
-      arriba = normalReal.clone().normalize();
-    } else {
+      const nr = normalReal.clone().normalize();
+      if (Math.abs(dirN.dot(nr)) < 0.98) { arriba = nr; usaNormalReal = true; }
+    }
+    if (!usaNormalReal) {
       // Sin normal real (foto 2D, o tramo casi vertical con arriba degenerado): referencia fija.
       arriba = Math.abs(dirN.dot(arribaMundo)) > 0.999 ? new THREE.Vector3(0, 0, 1) : arribaMundo;
     }
@@ -146,7 +157,7 @@ function _replInstal3D(THREE, pts, opts) {
     const yAxis = new THREE.Vector3().crossVectors(zAxis, dirN).normalize();
     const sub = new THREE.Group();
     sub.position.copy(a).addScaledVector(dir, 0.5);
-    if (normalReal && normalReal.lengthSq() > 0.25) sub.position.addScaledVector(yAxis, separacionPared);
+    if (usaNormalReal) sub.position.addScaledVector(yAxis, separacionPared);
     sub.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(dirN, yAxis, zAxis));
     g.add(sub);
     if (tipo === 'tubo') {
