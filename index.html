@@ -21168,15 +21168,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         _ar.alturaLibre = (floorY != null && ceilY != null) ? +(ceilY - floorY).toFixed(2) : null;
         // superficie bajo el punto apuntado (la más cercana al hit en Y para horizontales)
         // PLANO-SNAP-01 (18/09/2026): además de para el texto informativo, se guarda el plano
-        // completo (posición+normal) cuando el hit queda de verdad cerca de SU CARA (a lo largo
-        // de la normal, no solo cerca en planta) -- _replArAnclaje() lo usa para forzar la
-        // posición del punto contra el plano real en vez de la pose cruda del hit-test, y para
-        // guardar la normal (repl3d.js ya sabe orientar el ancho/grosor con ella, ver
-        // PARED-NORMAL-REAL-01 -- hasta ahora solo llegaba desde el AR nativo).
-        if (_ar.hit && sup.length) {
-          let best = null; for (const s of sup) { const d = s.tipo === 'pared' ? Math.hypot(_ar.hit.x - s.x, _ar.hit.z - s.z) : Math.abs(_ar.hit.y - s.y); if (!best || d < best.d) best = { tipo: s.tipo, d, s }; }
+        // completo (posición+normal) cuando el punto queda de verdad cerca de SU CARA (a lo
+        // largo de la normal, no solo cerca en planta) -- _replArAnclaje() lo usa para forzar la
+        // posición del punto contra el plano real, y para guardar la normal (repl3d.js ya sabe
+        // orientar el ancho/grosor con ella, ver PARED-NORMAL-REAL-01 -- hasta ahora solo
+        // llegaba desde el AR nativo).
+        // BUG-AR-PLANO-SOLO-HIT-01 (18/09/2026): Adrián probando en obra en una pared/techo
+        // liso -- el hit-test nunca enganchó (sin textura suficiente) y los tres puntos salieron
+        // por profundidad ('depth'), que nunca pasaba por aquí -- el pegado de arriba no se
+        // aplicaba nunca justo en el caso real que más lo necesita. frame.detectedPlanes NO
+        // depende del hit-test puntual (rastrea planos en una zona más amplia), así que se usa
+        // _ar.depthPos como referencia cuando no hay hit -- un frame por detrás como mucho (se
+        // recalcula más abajo), tan tolerable como el resto de respaldos de esta función.
+        const puntoRef = _ar.hit || _ar.depthPos;
+        if (puntoRef && sup.length) {
+          let best = null; for (const s of sup) { const d = s.tipo === 'pared' ? Math.hypot(puntoRef.x - s.x, puntoRef.z - s.z) : Math.abs(puntoRef.y - s.y); if (!best || d < best.d) best = { tipo: s.tipo, d, s }; }
           _ar.superficieHit = best ? best.tipo : null;
-          const dPlano = best ? Math.abs(_ar.hit.clone().sub(best.s.pos).dot(best.s.normal)) : Infinity;
+          const dPlano = best ? Math.abs(puntoRef.clone().sub(best.s.pos).dot(best.s.normal)) : Infinity;
           _ar.planoHit = (best && dPlano < 0.15) ? best.s : null;
         } else { _ar.superficieHit = null; _ar.planoHit = null; }
       }
@@ -21269,20 +21277,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // profundidad si no hay superficie. El contacto es siempre explícito (su propio botón).
   function _replArAnclaje() {
     if (!_ar) return null;
-    if (_ar.hit) {
-      // PLANO-SNAP-01: si frame.detectedPlanes confirma un plano bajo el hit, se proyecta la
-      // posición sobre ESE plano (en vez de la pose cruda del hit-test, que puede quedar unos
-      // cm por delante/detrás de la superficie real) y se guarda su normal.
-      if (_ar.planoHit) {
-        const plano = _ar.planoHit;
-        const dist = _ar.hit.clone().sub(plano.pos).dot(plano.normal);
-        const pos = _ar.hit.clone().sub(plano.normal.clone().multiplyScalar(dist));
-        return { pos, metodo: 'hit', normal: plano.normal.clone() };
-      }
-      return { pos: _ar.hit.clone(), metodo: 'hit' };
+    // BUG-AR-PLANO-SOLO-HIT-01: el hit-test puede no enganchar en una superficie lisa aunque
+    // frame.detectedPlanes SÍ tenga un plano ahí (no dependen el uno del otro) -- por eso
+    // _ar.planoHit se aplica tanto si el anclaje base es 'hit' como si es 'depth', no solo hit.
+    const base = _ar.hit ? { p: _ar.hit, metodo: 'hit' } : (_ar.depthPos ? { p: _ar.depthPos, metodo: 'depth' } : null);
+    if (!base) return null;
+    // PLANO-SNAP-01: si frame.detectedPlanes confirma un plano bajo el punto, se proyecta la
+    // posición sobre ESE plano (en vez de la pose cruda del hit-test/profundidad, que puede
+    // quedar unos cm por delante/detrás de la superficie real) y se guarda su normal.
+    if (_ar.planoHit) {
+      const plano = _ar.planoHit;
+      const dist = base.p.clone().sub(plano.pos).dot(plano.normal);
+      const pos = base.p.clone().sub(plano.normal.clone().multiplyScalar(dist));
+      return { pos, metodo: base.metodo, normal: plano.normal.clone() };
     }
-    if (_ar.depthPos) return { pos: _ar.depthPos.clone(), metodo: 'depth' };
-    return null;
+    return { pos: base.p.clone(), metodo: base.metodo };
   }
   const REPL_AR_METODO_TXT = { hit: 'sobre la superficie', depth: 'por profundidad', contacto: 'tocando con el móvil' };
 
