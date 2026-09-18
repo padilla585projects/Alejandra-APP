@@ -5688,6 +5688,7 @@ export default {
       if (path === '/internal/telegram/enviar' && method === 'POST') return await internalTelegramEnviar(request, env);
       if (path === '/internal/push/enviar' && method === 'POST') return await internalPushEnviar(request, env); // ADR-0023 ampliación: Web Push por usuario
       if (path === '/internal/replanteos' && method === 'POST') return await internalReplanteos(request, env, ctx); // REPLANTEO-08: Alejandra consulta/compara/pide replanteos
+      if (path === '/internal/cuadrantes-turnos' && method === 'POST') return await internalCuadrantesTurnos(request, env); // Alejandra consulta/genera cuadrantes de turnos (Seguridad)
       if (path === '/tareas-programadas' && method === 'GET')       return await getTareasProgramadas(request, env);
       if (path === '/tareas-programadas' && method === 'POST')      return await crearTareaProgramada(request, env);
       if (path.match(/^\/tareas-programadas\/\d+$/) && method === 'DELETE') return await cancelarTareaProgramadaPanel(parseInt(path.split('/')[2]), request, env);
@@ -7109,6 +7110,14 @@ export default {
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'PATCH')  return await actualizarReplanteo(request, env, path);
       if (/^\/replanteos\/\d+$/.test(path)                   && method === 'DELETE') return await eliminarReplanteo(request, env, path);
       if (/^\/replanteos\/\d+\/pedido$/.test(path)           && method === 'POST')   return await enviarReplanteoAPedidos(request, env, path, ctx);
+
+      // ── Cuadrantes de turnos (Seguridad) ──────────────────────────
+      if (path === '/cuadrantes-turnos/mios'                 && method === 'GET')    return await getMiCuadranteTurnos(request, env);
+      if (path === '/cuadrantes-turnos'                      && method === 'GET')    return await listarCuadrantesTurnos(request, env);
+      if (path === '/cuadrantes-turnos'                      && method === 'POST')   return await crearCuadranteTurnos(request, env);
+      if (/^\/cuadrantes-turnos\/\d+$/.test(path)             && method === 'GET')    return await getCuadranteTurnos(request, env, path);
+      if (/^\/cuadrantes-turnos\/\d+$/.test(path)             && method === 'PUT')    return await actualizarCuadranteTurnos(request, env, path);
+      if (/^\/cuadrantes-turnos\/\d+$/.test(path)             && method === 'DELETE') return await eliminarCuadranteTurnos(request, env, path);
 
       return err('Ruta no encontrada', 404);
     } catch (e) {
@@ -31751,6 +31760,508 @@ async function internalReplanteos(request, env, ctx) {
     const r = await _replanteoAPedidos(env, auth, id, { proveedor: body.proveedor }, ctx);
     if (r.error) return err(r.error, r.status || 400);
     return json({ ok: true, pedido_ids: r.pedido_ids, material: r.material, titulo: r.titulo, longitud_m: r.longitud_m });
+  }
+
+  return err(`Acción no reconocida: ${accion}`, 400);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// CUADRANTES DE TURNOS (Seguridad) — pedido por Adrián para repartir el horario
+// semanal de las PRL cubriendo una franja de obra (ej. 7:00-19:00), con horas
+// objetivo/semana (lo que pase se marca como hora extra) y reparto rotativo justo
+// entre semanas ("que ninguna se queje"). Módulo NUEVO y separado de `turnos`
+// (NEW-20, ver worker.js ~16573): ese es un calendario libre de texto sin horas
+// objetivo/extra ni aislamiento por departamento, y ya lo consumen syncRRHH, el
+// export RGPD y el aviso de Telegram -- meterle esta lógica encima lo rompería.
+// Mismo patrón (tablas, permisos, ruta interna para Alejandra) que Replanteos.
+// ══════════════════════════════════════════════════════════════════════════
+
+async function _ensureCuadrantesTurnosTables(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS cuadrantes_turnos (
+      id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id             INTEGER NOT NULL,
+      obra_id                INTEGER,
+      departamento           TEXT    NOT NULL,
+      nombre                 TEXT    NOT NULL,
+      hora_inicio            TEXT    NOT NULL,
+      hora_fin               TEXT    NOT NULL,
+      dias_semana            TEXT    NOT NULL,
+      personas_simultaneas   INTEGER NOT NULL DEFAULT 1,
+      horas_objetivo_semana  REAL    NOT NULL DEFAULT 40,
+      fecha_inicio           TEXT    NOT NULL,
+      semanas                INTEGER NOT NULL DEFAULT 4,
+      estado                 TEXT    NOT NULL DEFAULT 'borrador' CHECK(estado IN ('borrador','publicado')),
+      creado_por             TEXT,
+      creado_en              TEXT DEFAULT (datetime('now')),
+      actualizado_en         TEXT DEFAULT (datetime('now'))
+    )
+  `).run();
+  await runDDL(env, 'CREATE INDEX IF NOT EXISTS idx_cuadrantes_turnos_empresa ON cuadrantes_turnos(empresa_id, obra_id, departamento)');
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS cuadrante_trabajadoras (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      cuadrante_id  INTEGER NOT NULL,
+      usuario_id    INTEGER,
+      nombre        TEXT    NOT NULL,
+      color         TEXT    NOT NULL DEFAULT '#2563eb',
+      activo        INTEGER NOT NULL DEFAULT 1
+    )
+  `).run();
+  await runDDL(env, 'CREATE INDEX IF NOT EXISTS idx_cuadrante_trabajadoras_cuadrante ON cuadrante_trabajadoras(cuadrante_id)');
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS cuadrante_asignaciones (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      cuadrante_id   INTEGER NOT NULL,
+      trabajadora_id INTEGER NOT NULL,
+      fecha          TEXT    NOT NULL,
+      hora_inicio    TEXT    NOT NULL,
+      hora_fin       TEXT    NOT NULL,
+      horas          REAL    NOT NULL,
+      es_extra       INTEGER NOT NULL DEFAULT 0
+    )
+  `).run();
+  await runDDL(env, 'CREATE INDEX IF NOT EXISTS idx_cuadrante_asignaciones_cuadrante_fecha ON cuadrante_asignaciones(cuadrante_id, fecha)');
+}
+
+// Mismo orden que Date.getDay() (0=domingo) y mismo alfabeto que ya usa
+// getHorarioParaDia()/horarios_obra.dias_semana (worker.js ~11305): "LMXJV" = lunes a viernes.
+const DIAS_SEMANA_LETRAS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+
+// Ver = cualquiera de la empresa que no sea operario (las operarias/PRL ven SU turno vía
+// /cuadrantes-turnos/mios, no esta lista de gestión). Editar = encargado y superiores,
+// igual criterio que Replanteos -- Seguridad tiene visión transversal por isDeptPrivileged.
+function puedeVerCuadranteTurnos(auth) {
+  return !!(auth?.empresa_id && auth.rol !== 'operario');
+}
+function puedeEditarCuadranteTurnos(auth) {
+  return !!(auth?.empresa_id && (
+    isDeptPrivileged(auth) || auth.isEncargado || auth.isJefeObra || auth.isOficina ||
+    auth.rol === 'encargado' || auth.rol === 'jefe_de_obra' || auth.rol === 'oficina'
+  ));
+}
+function _cuadranteDeptDe(auth, pedido) {
+  if (isDeptPrivileged(auth) && pedido && DEPTS_VALIDOS.includes(pedido)) return pedido;
+  return auth.departamento || 'electrico';
+}
+async function _cuadranteDe(env, auth, id) {
+  const row = await env.DB.prepare('SELECT * FROM cuadrantes_turnos WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+  if (!row) return null;
+  if (!isDeptPrivileged(auth) && row.departamento !== auth.departamento) return null; // DEPT-01: como si no existiera
+  return row;
+}
+
+function _hmToMin(hm) {
+  const [h, m] = String(hm || '0:0').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+function _minToHm(min) {
+  const m = Math.max(0, Math.round(min));
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+// Algoritmo determinista de reparto -- nada de dejarlo a criterio del modelo, son horas
+// extra reales y la queja que Adrián quiere evitar. Cubre la ventana [hora_inicio,
+// hora_fin) con "oleadas" de `personas_simultaneas` trabajadoras cada una, SIN huecos:
+// nº de oleadas = ceil(ventana / turno), arranque de la oleada i = min(i*turno,
+// ventana-turno). Así la primera oleada siempre empieza en hora_inicio y la última
+// siempre termina en hora_fin, cubra o no el turno la ventana un nº entero de veces, y
+// en todo instante hay al menos una oleada activa (P personas) -- construcción de
+// "cobertura sin huecos", no un simple espaciado uniforme que dejaría los extremos con
+// menos gente de la pedida.
+// Rotación: qué trabajadoras entran en el reparto de cada día (si son más que las plazas
+// diarias) avanza con el índice de día, y qué oleada (turno más temprano/tardío) le toca a
+// cada plaza también avanza con el día -- determinista y auditable, ciclo completo en
+// pocos días/semanas, no una heurística difusa.
+function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, trabajadoras }) {
+  const N = (trabajadoras || []).length;
+  if (N < 1) return { error: 'Hace falta al menos una trabajadora' };
+  const diasSet = new Set(String(dias_semana || '').split('').filter(l => DIAS_SEMANA_LETRAS.includes(l)));
+  const nDias = diasSet.size;
+  if (nDias < 1) return { error: 'Selecciona al menos un día de cobertura' };
+  const V = calcHoras(hora_inicio, hora_fin);
+  if (V <= 0) return { error: 'La franja horaria no es válida' };
+  const P = Math.max(1, parseInt(personas_simultaneas, 10) || 1);
+  const H = Number(horas_objetivo_semana) > 0 ? Number(horas_objetivo_semana) : 40;
+  const nSemanas = Math.max(1, parseInt(semanas, 10) || 4);
+
+  // 1) Duración de turno por trabajadora/día, a cuarto de hora. Si horas_objetivo/días no
+  // encaja exacto, el redondeo hace que la semana entera sume algo más que H -> lo detecta
+  // el paso 4 (es_extra), no hace falta tratarlo aparte aquí.
+  let T = Math.max(0.25, Math.round((H / nDias) * 4) / 4);
+  if (T > V) T = V;
+
+  // 2) Oleadas necesarias para que P personas cubran la ventana entera sin huecos.
+  const turnoMin = Math.round(T * 60);
+  const ventanaMin = Math.round(V * 60);
+  const nOlas = Math.max(1, Math.ceil(ventanaMin / turnoMin));
+  const olaOffsetMin = [];
+  for (let i = 0; i < nOlas; i++) olaOffsetMin.push(Math.min(i * turnoMin, ventanaMin - turnoMin));
+  const slotsPorDia = nOlas * P;
+  const inicioMin = _hmToMin(hora_inicio);
+
+  // 3) Fechas cubiertas, en orden, con su índice de día (para la rotación) y de semana
+  // (para el corte de horas objetivo/extra).
+  const fechas = [];
+  const inicio = new Date(fecha_inicio + 'T00:00:00');
+  const cur = new Date(inicio);
+  for (let i = 0; i < nSemanas * 7; i++) {
+    const letra = DIAS_SEMANA_LETRAS[cur.getDay()];
+    if (diasSet.has(letra)) {
+      fechas.push({ fecha: cur.toISOString().slice(0, 10), diaIdx: fechas.length, semanaIdx: Math.floor(i / 7) });
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  // 4) Reparto + horas/extra acumuladas por trabajadora y semana.
+  const asignaciones = [];
+  const horasSemana = {}; // `${trabajadoraIdx}|${semanaIdx}` -> horas acumuladas hasta ahora
+  for (const { fecha, diaIdx, semanaIdx } of fechas) {
+    const waveOffset = diaIdx % nOlas;
+    for (let w = 0; w < nOlas; w++) {
+      const olaIdx = (w + waveOffset) % nOlas;
+      const inicioOla = inicioMin + olaOffsetMin[olaIdx];
+      for (let p = 0; p < P; p++) {
+        const slot = w * P + p;
+        const trabIdx = (diaIdx * slotsPorDia + slot) % N;
+        const trab = trabajadoras[trabIdx];
+        const key = `${trabIdx}|${semanaIdx}`;
+        const total = (horasSemana[key] || 0) + T;
+        horasSemana[key] = total;
+        asignaciones.push({
+          trabajadora_id: trab.id,
+          fecha,
+          hora_inicio: _minToHm(inicioOla),
+          hora_fin: _minToHm(inicioOla + turnoMin),
+          horas: T,
+          es_extra: total > H ? 1 : 0,
+        });
+      }
+    }
+  }
+  return { ok: true, turno_horas: T, olas_por_dia: nOlas, plazas_por_dia: slotsPorDia, asignaciones, dias_generados: fechas.length };
+}
+
+const CUADRANTE_PALETA = ['#2563eb', '#d97706', '#16a34a', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
+
+function _validarConfigCuadrante(body, existente) {
+  const nombre = safeStr(body.nombre ?? existente?.nombre ?? '').trim().slice(0, 120);
+  if (!nombre) return { error: 'El nombre es obligatorio' };
+  const hora_inicio = /^\d{2}:\d{2}$/.test(body.hora_inicio) ? body.hora_inicio : (existente?.hora_inicio || null);
+  const hora_fin    = /^\d{2}:\d{2}$/.test(body.hora_fin) ? body.hora_fin : (existente?.hora_fin || null);
+  if (!hora_inicio || !hora_fin) return { error: 'Franja horaria no válida (HH:MM)' };
+  const dias_semana = body.dias_semana !== undefined
+    ? String(body.dias_semana).split('').filter(l => DIAS_SEMANA_LETRAS.includes(l)).join('')
+    : (existente?.dias_semana || '');
+  if (!dias_semana) return { error: 'Selecciona al menos un día de cobertura' };
+  const personas_simultaneas = body.personas_simultaneas !== undefined
+    ? Math.max(1, parseInt(body.personas_simultaneas, 10) || 1)
+    : (existente?.personas_simultaneas || 1);
+  const horas_objetivo_semana = (body.horas_objetivo_semana !== undefined && Number(body.horas_objetivo_semana) > 0)
+    ? Number(body.horas_objetivo_semana)
+    : (existente?.horas_objetivo_semana || 40);
+  const fecha_inicio = /^\d{4}-\d{2}-\d{2}$/.test(body.fecha_inicio) ? body.fecha_inicio : (existente?.fecha_inicio || null);
+  if (!fecha_inicio) return { error: 'Falta la fecha de inicio' };
+  const semanas = body.semanas !== undefined ? Math.min(26, Math.max(1, parseInt(body.semanas, 10) || 4)) : (existente?.semanas || 4);
+  return { nombre, hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas };
+}
+
+async function _insertarTrabajadorasCuadrante(env, cuadranteId, trabajadorasIn) {
+  const trabajadoras = [];
+  for (let i = 0; i < trabajadorasIn.length; i++) {
+    const t = trabajadorasIn[i];
+    const nombreT = safeStr((t && typeof t === 'object') ? t.nombre : t).trim().slice(0, 80);
+    if (!nombreT) continue;
+    const usuario_id = (t && typeof t === 'object' && parseInt(t.usuario_id)) || null;
+    const color = (t && typeof t === 'object' && /^#[0-9a-fA-F]{6}$/.test(t.color || '')) ? t.color : CUADRANTE_PALETA[i % CUADRANTE_PALETA.length];
+    const tr = await env.DB.prepare('INSERT INTO cuadrante_trabajadoras (cuadrante_id, usuario_id, nombre, color) VALUES (?,?,?,?)')
+      .bind(cuadranteId, usuario_id, nombreT, color).run();
+    trabajadoras.push({ id: tr.meta.last_row_id, nombre: nombreT, color });
+  }
+  return trabajadoras;
+}
+
+async function _guardarAsignacionesCuadrante(env, cuadranteId, asignaciones) {
+  await env.DB.prepare('DELETE FROM cuadrante_asignaciones WHERE cuadrante_id=?').bind(cuadranteId).run();
+  const stmt = a => env.DB.prepare(
+    'INSERT INTO cuadrante_asignaciones (cuadrante_id, trabajadora_id, fecha, hora_inicio, hora_fin, horas, es_extra) VALUES (?,?,?,?,?,?,?)'
+  ).bind(cuadranteId, a.trabajadora_id, a.fecha, a.hora_inicio, a.hora_fin, a.horas, a.es_extra);
+  for (let i = 0; i < asignaciones.length; i += 50) {
+    await env.DB.batch(asignaciones.slice(i, i + 50).map(stmt));
+  }
+}
+
+async function listarCuadrantesTurnos(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerCuadranteTurnos(auth)) return err('No autorizado', 403);
+  await _ensureCuadrantesTurnosTables(env);
+  const url = new URL(request.url);
+  const obraId = parseInt(url.searchParams.get('obra_id') || auth.obra_id || 0) || null;
+  const conds = ['empresa_id = ?']; const params = [auth.empresa_id];
+  const deptFiltro = isDeptPrivileged(auth) ? (url.searchParams.get('departamento') || null) : auth.departamento;
+  if (deptFiltro) { conds.push('departamento = ?'); params.push(deptFiltro); }
+  if (obraId) { conds.push('obra_id = ?'); params.push(obraId); }
+  const { results } = await env.DB.prepare(
+    `SELECT id, empresa_id, obra_id, departamento, nombre, hora_inicio, hora_fin, dias_semana,
+            personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, estado, creado_por, creado_en, actualizado_en
+       FROM cuadrantes_turnos WHERE ${conds.join(' AND ')} ORDER BY actualizado_en DESC LIMIT 200`
+  ).bind(...params).all();
+  return json({ ok: true, cuadrantes: results || [], puede_editar: puedeEditarCuadranteTurnos(auth) });
+}
+
+async function crearCuadranteTurnos(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCuadranteTurnos(auth)) return err('Solo encargados/oficina pueden crear cuadrantes', 403);
+  await _ensureCuadrantesTurnosTables(env);
+  const body = await request.json().catch(() => ({}));
+  const cfg = _validarConfigCuadrante(body, null);
+  if (cfg.error) return err(cfg.error, 400);
+  const trabajadorasIn = Array.isArray(body.trabajadoras) ? body.trabajadoras : [];
+  if (!trabajadorasIn.length) return err('Añade al menos una trabajadora', 400);
+  const obra_id = parseInt(body.obra_id || auth.obra_id || 0) || null;
+  const dept = _cuadranteDeptDe(auth, body.departamento);
+
+  const r = await env.DB.prepare(`
+    INSERT INTO cuadrantes_turnos (empresa_id, obra_id, departamento, nombre, hora_inicio, hora_fin, dias_semana,
+                                    personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, estado, creado_por)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,'borrador',?)
+  `).bind(auth.empresa_id, obra_id, dept, cfg.nombre, cfg.hora_inicio, cfg.hora_fin, cfg.dias_semana,
+          cfg.personas_simultaneas, cfg.horas_objetivo_semana, cfg.fecha_inicio, cfg.semanas, auth.nombre || auth.rol).run();
+  const cuadranteId = r.meta.last_row_id;
+
+  const trabajadoras = await _insertarTrabajadorasCuadrante(env, cuadranteId, trabajadorasIn);
+  if (!trabajadoras.length) {
+    await env.DB.prepare('DELETE FROM cuadrantes_turnos WHERE id=?').bind(cuadranteId).run();
+    return err('Añade al menos una trabajadora con nombre', 400);
+  }
+
+  const gen = generarCuadranteTurnos({ ...cfg, trabajadoras });
+  if (gen.error) {
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM cuadrante_trabajadoras WHERE cuadrante_id=?').bind(cuadranteId),
+      env.DB.prepare('DELETE FROM cuadrantes_turnos WHERE id=?').bind(cuadranteId),
+    ]);
+    return err(gen.error, 400);
+  }
+  await _guardarAsignacionesCuadrante(env, cuadranteId, gen.asignaciones);
+  return json({ ok: true, id: cuadranteId, turno_horas: gen.turno_horas, olas_por_dia: gen.olas_por_dia, plazas_por_dia: gen.plazas_por_dia }, 201);
+}
+
+async function getCuadranteTurnos(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeVerCuadranteTurnos(auth)) return err('No autorizado', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureCuadrantesTurnosTables(env);
+  const row = await _cuadranteDe(env, auth, id);
+  if (!row) return err('Cuadrante no encontrado', 404);
+  const { results: trabajadoras } = await env.DB.prepare(
+    'SELECT id, usuario_id, nombre, color, activo FROM cuadrante_trabajadoras WHERE cuadrante_id=? ORDER BY id'
+  ).bind(id).all();
+  const { results: asignaciones } = await env.DB.prepare(
+    'SELECT id, trabajadora_id, fecha, hora_inicio, hora_fin, horas, es_extra FROM cuadrante_asignaciones WHERE cuadrante_id=? ORDER BY fecha, hora_inicio'
+  ).bind(id).all();
+  return json({ ok: true, cuadrante: row, trabajadoras: trabajadoras || [], asignaciones: asignaciones || [], puede_editar: puedeEditarCuadranteTurnos(auth) });
+}
+
+async function actualizarCuadranteTurnos(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCuadranteTurnos(auth)) return err('Solo encargados/oficina pueden editar cuadrantes', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureCuadrantesTurnosTables(env);
+  const row = await _cuadranteDe(env, auth, id);
+  if (!row) return err('Cuadrante no encontrado', 404);
+  const body = await request.json().catch(() => ({}));
+
+  // Solo publicar/despublicar, sin tocar el reparto ya generado.
+  if (body.estado !== undefined && Object.keys(body).length === 1) {
+    if (!['borrador', 'publicado'].includes(body.estado)) return err('Estado no válido', 400);
+    await env.DB.prepare("UPDATE cuadrantes_turnos SET estado=?, actualizado_en=datetime('now') WHERE id=?").bind(body.estado, id).run();
+    return json({ ok: true, estado: body.estado });
+  }
+
+  // Cualquier otro campo -> se regenera el cuadrante entero con la config nueva.
+  const cfg = _validarConfigCuadrante(body, row);
+  if (cfg.error) return err(cfg.error, 400);
+  await env.DB.prepare(`
+    UPDATE cuadrantes_turnos SET nombre=?, hora_inicio=?, hora_fin=?, dias_semana=?, personas_simultaneas=?,
+           horas_objetivo_semana=?, fecha_inicio=?, semanas=?, actualizado_en=datetime('now') WHERE id=?
+  `).bind(cfg.nombre, cfg.hora_inicio, cfg.hora_fin, cfg.dias_semana, cfg.personas_simultaneas,
+          cfg.horas_objetivo_semana, cfg.fecha_inicio, cfg.semanas, id).run();
+
+  let trabajadoras;
+  if (Array.isArray(body.trabajadoras)) {
+    await env.DB.prepare('DELETE FROM cuadrante_trabajadoras WHERE cuadrante_id=?').bind(id).run();
+    trabajadoras = await _insertarTrabajadorasCuadrante(env, id, body.trabajadoras);
+  } else {
+    const { results } = await env.DB.prepare('SELECT id, nombre, color FROM cuadrante_trabajadoras WHERE cuadrante_id=? ORDER BY id').bind(id).all();
+    trabajadoras = results || [];
+  }
+  if (!trabajadoras.length) return err('Añade al menos una trabajadora con nombre', 400);
+
+  const gen = generarCuadranteTurnos({ ...cfg, trabajadoras });
+  if (gen.error) return err(gen.error, 400);
+  await _guardarAsignacionesCuadrante(env, id, gen.asignaciones);
+  return json({ ok: true, turno_horas: gen.turno_horas, olas_por_dia: gen.olas_por_dia, plazas_por_dia: gen.plazas_por_dia });
+}
+
+async function eliminarCuadranteTurnos(request, env, path) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 401);
+  if (!puedeEditarCuadranteTurnos(auth)) return err('Solo encargados/oficina pueden borrar cuadrantes', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID inválido', 400);
+  await _ensureCuadrantesTurnosTables(env);
+  const row = await _cuadranteDe(env, auth, id);
+  if (!row) return err('Cuadrante no encontrado', 404);
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM cuadrante_asignaciones WHERE cuadrante_id=?').bind(id),
+    env.DB.prepare('DELETE FROM cuadrante_trabajadoras WHERE cuadrante_id=?').bind(id),
+    env.DB.prepare('DELETE FROM cuadrantes_turnos WHERE id=?').bind(id),
+  ]);
+  return json({ ok: true });
+}
+
+// "Mi horario" -- consumido por index.html. Patrón getAccionesPendientes: el filtro por
+// usuario sale SIEMPRE de la sesión (auth.usuario_id), nunca de un parámetro del cliente,
+// para que nadie pueda pedir el horario de otra persona cambiando un id en la URL. Solo
+// devuelve cuadrantes publicados: los borradores son cosa de gestión, no se enseñan.
+async function getMiCuadranteTurnos(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('No autorizado', 403);
+  await _ensureCuadrantesTurnosTables(env);
+  const url = new URL(request.url);
+  const desde = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('desde') || '') ? url.searchParams.get('desde') : null;
+  const hasta = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('hasta') || '') ? url.searchParams.get('hasta') : null;
+  const conds = ['ct.usuario_id = ?', 'cu.empresa_id = ?', "cu.estado = 'publicado'"];
+  const params = [auth.usuario_id, auth.empresa_id];
+  if (desde) { conds.push('ca.fecha >= ?'); params.push(desde); }
+  if (hasta) { conds.push('ca.fecha <= ?'); params.push(hasta); }
+  const { results } = await env.DB.prepare(`
+    SELECT ca.fecha, ca.hora_inicio, ca.hora_fin, ca.horas, ca.es_extra, cu.nombre AS cuadrante_nombre, ct.color
+      FROM cuadrante_asignaciones ca
+      JOIN cuadrante_trabajadoras ct ON ct.id = ca.trabajadora_id
+      JOIN cuadrantes_turnos cu ON cu.id = ca.cuadrante_id
+     WHERE ${conds.join(' AND ')}
+     ORDER BY ca.fecha, ca.hora_inicio
+  `).bind(...params).all();
+  return json({ ok: true, turnos: results || [] });
+}
+
+// ── Alejandra y los cuadrantes de turnos -- "Alejandra puede hacer el reparto" ──────────
+// Mismo patrón exacto que _authReplanteoInterno/internalReplanteos: el worker del agente
+// NUNCA calcula el reparto ni decide permisos -- solo manda usuario_id y este worker
+// resuelve la sesión REAL contra `sesiones` para sacar rol/departamento/empresa. El
+// número que sale (horas, turnos, extra) es siempre el de generarCuadranteTurnos(), el
+// mismo que usa el botón "Generar" del panel: el chat es solo otra forma de pedirlo, no
+// un cálculo aparte que el modelo podría hacer distinto cada vez.
+async function _authCuadranteInterno(request, env, body) {
+  const secreto = request.headers.get('X-Internal-Secret');
+  if (!secreto || !env.AGENT_INTERNAL_SECRET || secreto !== env.AGENT_INTERNAL_SECRET) return null;
+  const uid = parseInt(body && body.usuario_id, 10);
+  if (!Number.isInteger(uid) || uid <= 0) return null;
+  const s = await env.DB.prepare(
+    `SELECT s.usuario_id, s.empresa_id, s.rol, s.nombre, s.departamento, s.obra_id, s.es_admin, u.roles_extra
+       FROM sesiones s LEFT JOIN usuarios u ON s.usuario_id = u.id
+      WHERE s.usuario_id = ? AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))
+      ORDER BY s.last_used DESC LIMIT 1`
+  ).bind(uid).first().catch(() => null);
+  if (!s) return null;
+  const extras = [];
+  try { if (s.roles_extra) extras.push(...JSON.parse(s.roles_extra)); } catch {}
+  const roles = [s.rol, ...extras].filter(Boolean);
+  const departamento = s.departamento || 'electrico';
+  return {
+    isAdmin: s.es_admin === 1,
+    isSuperadmin: s.es_admin === 1 || roles.includes('superadmin') || roles.includes('desarrollador'),
+    isEmpresaAdmin: roles.includes('empresa_admin') || roles.includes('desarrollador'),
+    isDesarrollador: roles.includes('desarrollador'),
+    isEncargado: roles.includes('encargado'),
+    isJefeObra: roles.includes('jefe_de_obra'),
+    isOficina: roles.includes('oficina'),
+    isSeguridad: departamento === 'seguridad',
+    rol: s.rol, roles,
+    obra_id: s.obra_id || null, obraId: s.obra_id || null,
+    usuario_id: s.usuario_id, usuario: s.nombre || '', nombre: s.nombre || '',
+    codigo: '', departamento, empresa_id: s.empresa_id || 1,
+  };
+}
+
+async function internalCuadrantesTurnos(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const auth = await _authCuadranteInterno(request, env, body);
+  if (!auth) return err('No autorizado', 403);
+  if (!puedeVerCuadranteTurnos(auth)) return err('No autorizado', 403);
+  await _ensureCuadrantesTurnosTables(env);
+  const accion = safeStr(body.accion || 'listar');
+
+  if (accion === 'listar') {
+    const conds = ['empresa_id = ?']; const params = [auth.empresa_id];
+    const deptFiltro = isDeptPrivileged(auth)
+      ? (DEPTS_VALIDOS.includes(safeStr(body.departamento)) ? safeStr(body.departamento) : null)
+      : auth.departamento;
+    if (deptFiltro) { conds.push('departamento = ?'); params.push(deptFiltro); }
+    const { results } = await env.DB.prepare(
+      `SELECT id, nombre, departamento, hora_inicio, hora_fin, dias_semana, personas_simultaneas,
+              horas_objetivo_semana, fecha_inicio, semanas, estado, actualizado_en
+         FROM cuadrantes_turnos WHERE ${conds.join(' AND ')} ORDER BY actualizado_en DESC LIMIT 20`
+    ).bind(...params).all();
+    return json({ ok: true, cuadrantes: results || [] });
+  }
+
+  if (accion === 'detalle') {
+    const id = parseInt(body.cuadrante_id || 0) || 0;
+    if (!id) return err('Falta cuadrante_id', 400);
+    const row = await _cuadranteDe(env, auth, id);
+    if (!row) return err('Cuadrante no encontrado', 404);
+    const { results: trabajadoras } = await env.DB.prepare('SELECT id, nombre, color FROM cuadrante_trabajadoras WHERE cuadrante_id=? ORDER BY id').bind(id).all();
+    const { results: asignaciones } = await env.DB.prepare(
+      'SELECT trabajadora_id, fecha, hora_inicio, hora_fin, horas, es_extra FROM cuadrante_asignaciones WHERE cuadrante_id=? ORDER BY fecha, hora_inicio'
+    ).bind(id).all();
+    return json({ ok: true, cuadrante: row, trabajadoras: trabajadoras || [], asignaciones: asignaciones || [] });
+  }
+
+  if (accion === 'generar') {
+    if (!puedeEditarCuadranteTurnos(auth)) return err('Solo encargados/oficina pueden generar cuadrantes', 403);
+    const cfg = _validarConfigCuadrante(body, null);
+    if (cfg.error) return err(cfg.error, 400);
+    const trabajadorasIn = Array.isArray(body.trabajadoras) ? body.trabajadoras : [];
+    if (!trabajadorasIn.length) return err('Faltan las trabajadoras (nombres)', 400);
+    const dept = _cuadranteDeptDe(auth, body.departamento);
+    const obra_id = parseInt(body.obra_id || auth.obra_id || 0) || null;
+
+    const r = await env.DB.prepare(`
+      INSERT INTO cuadrantes_turnos (empresa_id, obra_id, departamento, nombre, hora_inicio, hora_fin, dias_semana,
+                                      personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, estado, creado_por)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,'borrador',?)
+    `).bind(auth.empresa_id, obra_id, dept, cfg.nombre, cfg.hora_inicio, cfg.hora_fin, cfg.dias_semana,
+            cfg.personas_simultaneas, cfg.horas_objetivo_semana, cfg.fecha_inicio, cfg.semanas, `Alejandra (${auth.nombre || auth.rol})`).run();
+    const cuadranteId = r.meta.last_row_id;
+
+    const trabajadoras = await _insertarTrabajadorasCuadrante(env, cuadranteId, trabajadorasIn);
+    if (!trabajadoras.length) {
+      await env.DB.prepare('DELETE FROM cuadrantes_turnos WHERE id=?').bind(cuadranteId).run();
+      return err('Faltan las trabajadoras (nombres)', 400);
+    }
+    const gen = generarCuadranteTurnos({ ...cfg, trabajadoras });
+    if (gen.error) {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM cuadrante_trabajadoras WHERE cuadrante_id=?').bind(cuadranteId),
+        env.DB.prepare('DELETE FROM cuadrantes_turnos WHERE id=?').bind(cuadranteId),
+      ]);
+      return err(gen.error, 400);
+    }
+    await _guardarAsignacionesCuadrante(env, cuadranteId, gen.asignaciones);
+    return json({
+      ok: true, id: cuadranteId, nombre: cfg.nombre, departamento: dept,
+      turno_horas: gen.turno_horas, olas_por_dia: gen.olas_por_dia, plazas_por_dia: gen.plazas_por_dia,
+      trabajadoras: trabajadoras.map(t => t.nombre), dias_generados: gen.dias_generados, estado: 'borrador',
+    });
   }
 
   return err(`Acción no reconocida: ${accion}`, 400);

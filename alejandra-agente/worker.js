@@ -3741,6 +3741,50 @@ const TOOL_GENERAR_PEDIDO_REPLANTEO = {
   nivel_riesgo: 'N1',
 };
 
+// Cuadrantes de turnos (Seguridad, 18/09/2026) -- Adrián pidió que Alejandra también pueda
+// hacer el reparto, no solo el botón del panel. Mismo patrón exacto que las tres tools de
+// Replanteos: toda la lógica (permisos, DEPT-01, el algoritmo de reparto en sí) vive en
+// worker.js raíz -- este worker solo llama y formatea. El cálculo de horas/turnos/extra NO
+// lo hace el modelo: siempre es generarCuadranteTurnos(), determinista, para que el número
+// sea el mismo la generes por chat o por el botón "Generar" del panel.
+const TOOL_CONSULTAR_CUADRANTE_TURNOS = {
+  name: 'consultar_cuadrante_turnos',
+  description: 'Consulta los cuadrantes de turnos (reparto semanal de horario para cubrir una franja de la obra, ej. Seguridad/PRL de 7:00 a 19:00). Sin cuadrante_id devuelve la lista de cuadrantes; con cuadrante_id devuelve el detalle completo (trabajadoras, cada turno asignado por día con sus horas y si es hora extra). Úsalo cuando pregunten qué cuadrantes hay, cómo queda el horario de alguien o cuántas horas extra lleva.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      cuadrante_id: { type: 'number', description: 'ID de un cuadrante concreto. Si lo pones, devuelve su detalle en vez de la lista.' },
+    },
+    required: [],
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
+};
+
+const TOOL_GENERAR_CUADRANTE_TURNOS = {
+  name: 'generar_cuadrante_turnos',
+  description: 'Genera un cuadrante de turnos nuevo: reparte automáticamente el horario semanal de una lista de trabajadoras para cubrir una franja horaria de la obra (ej. 7:00-19:00) cumpliendo unas horas objetivo por semana (lo que pase de ahí se marca como hora extra), rotando de forma justa quién hace el turno más temprano o más tardío cada día/semana. Se crea SIEMPRE como borrador (no se publica ni se comunica a nadie sola). Antes de llamarla, confirma con el usuario los parámetros exactos (franja horaria, días de cobertura, cuántas personas tienen que estar a la vez, horas objetivo/semana, nombres de las trabajadoras, fecha de inicio y cuántas semanas generar) y enséñale el resumen que te devuelva (turno_horas, olas_por_dia) antes de darlo por hecho -- no la llames "por si acaso" ni inventes trabajadoras o parámetros que el usuario no ha dado.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      nombre:                { type: 'string', description: 'Nombre del cuadrante, ej. "Seguridad — semana 39"' },
+      hora_inicio:           { type: 'string', description: 'Hora de inicio de la cobertura, formato HH:MM (ej. "07:00")' },
+      hora_fin:              { type: 'string', description: 'Hora de fin de la cobertura, formato HH:MM (ej. "19:00")' },
+      dias_semana:           { type: 'string', description: 'Letras de los días a cubrir, con este alfabeto exacto: L,M,X,J,V,S,D (ej. "LMXJV" para lunes a viernes)' },
+      personas_simultaneas:  { type: 'number', description: 'Cuántas trabajadoras tienen que estar presentes a la vez en todo momento dentro de la franja (por defecto 1)' },
+      horas_objetivo_semana: { type: 'number', description: 'Horas objetivo por semana y trabajadora (por defecto 40); lo que pase de esto se marca como hora extra' },
+      fecha_inicio:          { type: 'string', description: 'Fecha del primer día a generar, formato AAAA-MM-DD' },
+      semanas:               { type: 'number', description: 'Cuántas semanas generar de una vez (por defecto 4, máximo 26)' },
+      trabajadoras:          { type: 'array', items: { type: 'string' }, description: 'Nombres de las trabajadoras que entran en el reparto, en el orden que quieras' },
+    },
+    required: ['nombre', 'hora_inicio', 'hora_fin', 'dias_semana', 'fecha_inicio', 'trabajadoras'],
+  },
+  acceso: 'sesion',
+  cron: 'prohibido',
+  nivel_riesgo: 'N1',
+};
+
 // Tools de "capacidades avanzadas" (ver módulo de prompt `capacidades_avanzadas`).
 // Estas 7 herramientas ya tenían su `case` implementado en el switch de ejecución
 // pero no existía el schema TOOL_* correspondiente ni estaban cableadas en
@@ -4012,10 +4056,10 @@ const TOOLS_POR_EXPERTO = {
   // pregunta sin usar la palabra ("¿cuánta bandeja sale del pasillo que midió Jose?") y el
   // clasificador manda el mensaje aquí, más vale que pueda mirarlo a que se lo invente.
   // generar_pedido_replanteo NO se añade: escribe en Pedidos y no es para el experto barato.
-  simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH, TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO],
+  simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH, TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_CONSULTAR_CUADRANTE_TURNOS],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  app:        [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_CONSULTAR_CUADRANTE_TURNOS, TOOL_GENERAR_CUADRANTE_TURNOS, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   tecnico:    [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
@@ -9062,6 +9106,72 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
                `Material calculado:\n${mat}${ped}`;
       } catch (e) {
         return JSON.stringify({ ok: false, error: 'Error en replanteos: ' + e.message });
+      }
+    }
+
+    // Cuadrantes de turnos (Seguridad, 18/09/2026): mismo patrón que las tools de
+    // replanteo -- toda la lógica (permisos, DEPT-01, el algoritmo de reparto) vive en
+    // worker.js raíz; aquí solo se llama y se formatea. usuario_id se manda tal cual, el
+    // otro worker resuelve con él la sesión REAL contra `sesiones`.
+    case 'consultar_cuadrante_turnos':
+    case 'generar_cuadrante_turnos': {
+      try {
+        if (!env.API_WEB) return JSON.stringify({ ok: false, error: 'Service binding API_WEB no disponible.' });
+        const cuadranteId = parseInt(input.cuadrante_id, 10) || 0;
+        const accion = nombre === 'generar_cuadrante_turnos' ? 'generar' : (cuadranteId ? 'detalle' : 'listar');
+        const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/cuadrantes-turnos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+          body: JSON.stringify({
+            // DEPT-01: sin campo "departamento" a propósito, igual que las tools de
+            // replanteo -- el worker raíz usa siempre el departamento real de la sesión
+            // (_authCuadranteInterno), nunca algo que el modelo pudiera elegir.
+            accion, usuario_id, cuadrante_id: cuadranteId || undefined,
+            nombre: input.nombre, hora_inicio: input.hora_inicio, hora_fin: input.hora_fin,
+            dias_semana: input.dias_semana, personas_simultaneas: input.personas_simultaneas,
+            horas_objetivo_semana: input.horas_objetivo_semana, fecha_inicio: input.fecha_inicio,
+            semanas: input.semanas, trabajadoras: input.trabajadoras,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.ok === false) {
+          if (resp.status === 403) return data.error || 'No se puede gestionar cuadrantes de turnos sin una sesión iniciada en la app (o el usuario no tiene permiso).';
+          return JSON.stringify({ ok: false, error: data.error || `Error en cuadrantes de turnos (HTTP ${resp.status})` });
+        }
+
+        if (accion === 'listar') {
+          const lista = data.cuadrantes || [];
+          if (!lista.length) return 'No hay cuadrantes de turnos que coincidan.';
+          const filas = lista.map(c =>
+            `• [id:${c.id}] ${c.nombre} — ${c.hora_inicio}-${c.hora_fin} · días ${c.dias_semana} · ${c.personas_simultaneas} a la vez · ${c.horas_objetivo_semana}h/semana · ${c.estado} · ${c.departamento}`
+          );
+          return `🗓️ ${lista.length} cuadrante(s):\n${filas.join('\n')}`;
+        }
+
+        if (accion === 'generar') {
+          return `✅ Cuadrante "${data.nombre}" creado como borrador (id ${data.id}), departamento ${data.departamento}.\n` +
+                 `Turno de ${data.turno_horas}h por trabajadora/día, ${data.olas_por_dia} franja(s) horaria(s) y ${data.plazas_por_dia} plaza(s) por día, ${data.dias_generados} día(s) generados.\n` +
+                 `Trabajadoras: ${(data.trabajadoras || []).join(', ')}.\n` +
+                 `Sigue en borrador -- revísalo con el usuario y publícalo desde el panel cuando lo dé por bueno.`;
+        }
+
+        // detalle
+        const c = data.cuadrante || {};
+        const trabajadoras = data.trabajadoras || [];
+        const asignaciones = data.asignaciones || [];
+        const porTrabajadora = {};
+        for (const a of asignaciones) (porTrabajadora[a.trabajadora_id] ||= []).push(a);
+        const nombreDe = id => (trabajadoras.find(t => t.id === id) || {}).nombre || `#${id}`;
+        const resumen = Object.entries(porTrabajadora).map(([id, turnos]) => {
+          const horas = turnos.reduce((s, t) => s + (t.horas || 0), 0);
+          const extra = turnos.filter(t => t.es_extra).reduce((s, t) => s + (t.horas || 0), 0);
+          return `  • ${nombreDe(parseInt(id))}: ${turnos.length} turno(s), ${horas.toFixed(1)}h totales${extra ? ` (${extra.toFixed(1)}h extra)` : ''}`;
+        });
+        return `🗓️ Cuadrante id ${c.id}: "${c.nombre}" (${c.estado})\n` +
+               `${c.hora_inicio}-${c.hora_fin} · días ${c.dias_semana} · ${c.personas_simultaneas} a la vez · objetivo ${c.horas_objetivo_semana}h/semana · departamento ${c.departamento}\n` +
+               `Resumen por trabajadora:\n${resumen.join('\n')}`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error en cuadrantes de turnos: ' + e.message });
       }
     }
 

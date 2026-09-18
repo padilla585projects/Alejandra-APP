@@ -167,6 +167,12 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   // se gatean aquí también por defensa en profundidad, como el resto de esta lista.
   'consultar_replanteos', 'comparar_replanteo_pedido', 'generar_pedido_replanteo',
 
+  // Cuadrantes de turnos (Seguridad, 18/09/2026): mismo motivo exacto que las tres de
+  // REPLANTEO-08 justo arriba -- empresa_id y departamento salen de la sesión real
+  // (_authCuadranteInterno en worker.js), nunca del input; se gatean aquí también por
+  // defensa en profundidad.
+  'consultar_cuadrante_turnos', 'generar_cuadrante_turnos',
+
   // ARC-008 §8 / F-2.1 paso 3, decisión del Director (2026-08-02, "Opción A"): primera
   // tool de lectura sobre memoria_gobernada. empresa_id sale de la sesión, nunca del
   // input -- sin sesión no hay tenant al que acotar la consulta, mismo criterio que el
@@ -311,6 +317,11 @@ const TOOLS_PROHIBIDAS_CRON = new Set([
   // de la prohibición: son lectura, y el informe nocturno puede querer avisar de un
   // replanteo calculado que lleva días sin pedirse.
   'generar_pedido_replanteo',
+  // Cuadrantes de turnos (Seguridad, 18/09/2026): crea un cuadrante real (aunque nazca en
+  // borrador) con trabajadoras y horario concretos -- no es una decisión que el cron deba
+  // tomar sin nadie delante, mismo criterio que generar_pedido_replanteo. Consultar sí
+  // queda fuera: es lectura.
+  'generar_cuadrante_turnos',
 ]);
 
 // Se detecta por identidad, no por un flag que haya que acordarse de pasar: el cron
