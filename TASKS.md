@@ -38,10 +38,13 @@ Adrián.** Ver `HANDOFF.md`/`CHANGELOG.md`.
      dos capturas comparando ambas orientaciones) -- el canvas/cámara WebXR no se reajusta.
   3. Prioridades 2-4 de `docs/features/replanteo-instalacion-realista/README.md` (ángulos
      rectos, varios tubos en paralelo, modo de superficie forzada) siguen sin empezar.
-  4. Lo del informe con "fondo blanco en el aire" que mencionó Adrián (quiere que el 3D del
-     informe se renderice con contexto real, no fondo plano) -- sin decidir el enfoque; Adrián
-     apuntó la idea de escanear el entorno con la cámara durante el replanteo para tener un
-     render de referencia. Es un cambio de más calado, no evaluado todavía.
+  4. **El informe de un replanteo AR sale "flotando en el aire"** (sin fondo real del sitio,
+     a diferencia del modo Foto que ya lo resolvió el 17/09). Adrián, explícito: "si no
+     escaneamos el entorno no podemos hacer el informe real de situación" -- prefiere
+     reconstruir el entorno con la cámara durante la sesión AR antes que una foto única
+     automática (alternativa más simple, evaluada y descartada por él). Cambio de más calado,
+     toca el esquema del replanteo AR -- sin evaluar todavía. Ver
+     `docs/features/replanteo-fondo-informe-escaneo/README.md`.
 - Sin migración, sin subir versión (sigue 9.78) en ninguno de los 4 PRs -- todo frontend. Cada
   PR desplegado individualmente vía `pages.yml` con SHA + `PUBLISH_GITHUB_PAGES` + aprobación
   de Adrián del entorno `production`, verificado en vivo antes de pasar al siguiente.
