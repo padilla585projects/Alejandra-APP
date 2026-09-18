@@ -31878,10 +31878,13 @@ function _minToHm(min) {
 // en todo instante hay al menos una oleada activa (P personas) -- construcción de
 // "cobertura sin huecos", no un simple espaciado uniforme que dejaría los extremos con
 // menos gente de la pedida.
-// Rotación: qué trabajadoras entran en el reparto de cada día (si son más que las plazas
-// diarias) avanza con el índice de día, y qué oleada (turno más temprano/tardío) le toca a
-// cada plaza también avanza con el día -- determinista y auditable, ciclo completo en
-// pocos días/semanas, no una heurística difusa.
+// Rotación: qué trabajadoras entran en el reparto (si son más que las plazas diarias) y qué
+// oleada (turno más temprano/tardío) le toca a cada plaza avanzan con la SEMANA, no con el
+// día -- Adrián, 19/09/2026: "la gente no puede hacer un día un horario y otro día otro...
+// para no marear al personal". Dentro de la misma semana natural, cada persona repite
+// siempre el mismo horario; el cambio (quién entra pronto/tarde, o quién descansa qué días
+// si hay más trabajadoras que plazas) solo ocurre al pasar de una semana a la siguiente --
+// determinista y auditable, ciclo completo en pocas semanas.
 function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, trabajadoras }) {
   const N = (trabajadoras || []).length;
   if (N < 1) return { error: 'Hace falta al menos una trabajadora' };
@@ -31929,8 +31932,8 @@ function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_s
   // persona es, honestamente, un hueco de cobertura de `pausaMin` minutos -- no hay forma
   // de evitarlo con una sola persona sin inventar una más.
 
-  // 3) Fechas cubiertas, en orden, con su índice de día (para la rotación) y de semana
-  // (para el corte de horas objetivo/extra). La semana es la natural de lunes a domingo
+  // 3) Fechas cubiertas, en orden, con su índice de semana (para la rotación semanal y el
+  // corte de horas objetivo/extra). La semana es la natural de lunes a domingo
   // (España) -- Adrián: "la semana es de lunes a domingo, en España es así". Si
   // fecha_inicio no cae en lunes (ej. se genera un viernes), NO vale contar "semana 1"
   // como una ventana rodante de 7 días desde ahí: cruzaría a la semana natural siguiente y
@@ -31944,7 +31947,7 @@ function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_s
     const letra = DIAS_SEMANA_LETRAS[cur.getDay()];
     if (diasSet.has(letra)) {
       const semanaIdx = Math.round((_lunesDe(cur) - lunesInicio) / (7 * 86400000));
-      fechas.push({ fecha: cur.toISOString().slice(0, 10), diaIdx: fechas.length, semanaIdx });
+      fechas.push({ fecha: cur.toISOString().slice(0, 10), semanaIdx });
     }
     cur.setDate(cur.getDate() + 1);
   }
@@ -31952,14 +31955,14 @@ function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_s
   // 4) Reparto + horas/extra acumuladas por trabajadora y semana.
   const asignaciones = [];
   const horasSemana = {}; // `${trabajadoraIdx}|${semanaIdx}` -> horas acumuladas hasta ahora
-  for (const { fecha, diaIdx, semanaIdx } of fechas) {
-    const waveOffset = diaIdx % nOlas;
+  for (const { fecha, semanaIdx } of fechas) {
+    const waveOffset = semanaIdx % nOlas;
     for (let w = 0; w < nOlas; w++) {
       const olaIdx = (w + waveOffset) % nOlas;
       const inicioOla = inicioMin + olaOffsetMin[olaIdx];
       for (let p = 0; p < P; p++) {
         const slot = w * P + p;
-        const trabIdx = (diaIdx * slotsPorDia + slot) % N;
+        const trabIdx = (semanaIdx * slotsPorDia + slot) % N;
         const trab = trabajadoras[trabIdx];
         const key = `${trabIdx}|${semanaIdx}`;
         const total = (horasSemana[key] || 0) + T;
