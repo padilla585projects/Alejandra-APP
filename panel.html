@@ -2034,6 +2034,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
               </div>
             </div>
             <div class="form-group">
+              <label>Pausa de comida (minutos)</label>
+              <input class="form-input" id="cuadTurnosPausaComida" type="number" min="0" max="240" step="5" value="60">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">No cuenta como hora trabajada. Pon 0 si no hace falta (turnos cortos).</div>
+            </div>
+            <div class="form-group">
               <label>Trabajadoras *</label>
               <div id="cuadTurnosTrabajadoras" style="display:flex;flex-direction:column;gap:6px"></div>
               <button type="button" class="btn btn-secondary" style="margin-top:8px" onclick="cuadTurnosAddTrabajadora()">➕ Añadir trabajadora</button>
@@ -20600,6 +20605,7 @@ function cuadTurnosNuevo() {
   document.getElementById('cuadTurnosHoraFin').value = '19:00';
   document.getElementById('cuadTurnosPersonas').value = '1';
   document.getElementById('cuadTurnosHorasObjetivo').value = '40';
+  document.getElementById('cuadTurnosPausaComida').value = '60';
   document.getElementById('cuadTurnosFechaInicio').value = new Date().toISOString().slice(0, 10);
   document.getElementById('cuadTurnosSemanas').value = '4';
   const deptGroup = document.getElementById('cuadTurnosDeptoGroup');
@@ -20651,6 +20657,7 @@ async function cuadTurnosGuardar() {
   if (!dias_semana) return toast('Selecciona al menos un día de cobertura', 'err');
   const personas_simultaneas = parseInt(document.getElementById('cuadTurnosPersonas').value, 10) || 1;
   const horas_objetivo_semana = parseFloat(document.getElementById('cuadTurnosHorasObjetivo').value) || 40;
+  const pausa_comida_min = Math.max(0, parseInt(document.getElementById('cuadTurnosPausaComida').value, 10) || 0);
   const fecha_inicio = document.getElementById('cuadTurnosFechaInicio').value;
   if (!fecha_inicio) return toast('Falta la fecha de inicio', 'err');
   const semanas = parseInt(document.getElementById('cuadTurnosSemanas').value, 10) || 4;
@@ -20664,7 +20671,7 @@ async function cuadTurnosGuardar() {
   const departamento = _cuadTurnosPrivilegiado() ? document.getElementById('cuadTurnosDepto').value : undefined;
 
   const r = await api('/cuadrantes-turnos', { method: 'POST', body: JSON.stringify({
-    nombre, hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, trabajadoras, departamento,
+    nombre, hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, trabajadoras, departamento,
   }) });
   if (!r.ok) { toast(r.error || 'Error al generar', 'err'); return; }
   toast(`Cuadrante generado ✓ (turno de ${r.turno_horas}h, ${r.olas_por_dia} franja(s)/día)`, 'ok');
@@ -20745,7 +20752,8 @@ function _cuadTurnosVistaMensualHtml(trabajadoras, asignaciones, opts = {}) {
         // arriba). Adrián: "falta la hora que sale, solo está la que entra".
         const pills = turnos.map(t => {
           const trab = trabajadoras.find(w2 => w2.id === t.trabajadora_id) || {};
-          return `<div style="background:${trab.color || '#888'};color:#fff;border-radius:3px;padding:1px 4px;margin:1px 0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.hora_inicio}-${t.hora_fin}${t.es_extra ? ' ⚠️' : ''}</div>`;
+          const pausaTitle = t.pausa_inicio ? ` title="Comida ${t.pausa_inicio}-${t.pausa_fin}"` : '';
+          return `<div${pausaTitle} style="background:${trab.color || '#888'};color:#fff;border-radius:3px;padding:1px 4px;margin:1px 0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.hora_inicio}-${t.hora_fin}${t.pausa_inicio ? ' 🍴' : ''}${t.es_extra ? ' ⚠️' : ''}</div>`;
         }).join('');
         filas += `<td style="border:1px solid ${borde};vertical-align:top;padding:3px;height:64px;max-width:${100 / 7}%">
           <div style="font-size:10px;${opts.print ? 'color:#666' : 'color:var(--muted)'}">${fecha.getDate()}</div>${pills}</td>`;
@@ -20780,8 +20788,9 @@ function _cuadTurnosVistaSemanalHtml(trabajadoras, asignaciones, fechaInicio, op
         <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${t.color};margin-right:5px"></span>${escHtml(t.nombre)}</td>`;
       for (const f of fechasSemana) {
         const turno = (porFecha[f] || []).find(a => a.trabajadora_id === t.id);
+        const pausaHtml = turno?.pausa_inicio ? `<div style="font-size:10px;font-weight:400;opacity:.75">🍴 ${turno.pausa_inicio}-${turno.pausa_fin}</div>` : '';
         filas += turno
-          ? `<td style="border:1px solid ${borde};padding:5px;text-align:center;background:${t.color}22;font-size:11px;font-weight:600">${turno.hora_inicio}-${turno.hora_fin}${turno.es_extra ? ' ⚠️' : ''}</td>`
+          ? `<td style="border:1px solid ${borde};padding:5px;text-align:center;background:${t.color}22;font-size:11px;font-weight:600">${turno.hora_inicio}-${turno.hora_fin}${turno.es_extra ? ' ⚠️' : ''}${pausaHtml}</td>`
           : `<td style="border:1px solid ${borde};padding:5px;text-align:center;font-size:11px;${opts.print ? 'color:#999' : 'color:var(--muted)'}">libre</td>`;
       }
       filas += '</tr>';
@@ -20814,6 +20823,7 @@ async function cuadTurnosAbrir(id) {
     <span>📅 días ${escHtml(c.dias_semana)}</span>
     <span>👥 ${c.personas_simultaneas} a la vez</span>
     <span>🎯 ${c.horas_objetivo_semana}h/semana</span>
+    ${c.pausa_comida_min > 0 ? `<span>🍴 ${c.pausa_comida_min} min comida</span>` : ''}
     <span>${c.estado === 'publicado' ? '✅ publicado' : '✏️ borrador'}</span>`;
   document.getElementById('cuadTurnosDetLeyenda').innerHTML = data.trabajadoras.map(t =>
     `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px"><span style="width:12px;height:12px;border-radius:3px;background:${t.color};display:inline-block"></span>${escHtml(t.nombre)}</span>`

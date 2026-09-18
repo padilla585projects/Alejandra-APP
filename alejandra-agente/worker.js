@@ -3774,6 +3774,7 @@ const TOOL_GENERAR_CUADRANTE_TURNOS = {
       dias_semana:           { type: 'string', description: 'Letras de los días a cubrir, con este alfabeto exacto: L,M,X,J,V,S,D (ej. "LMXJV" para lunes a viernes)' },
       personas_simultaneas:  { type: 'number', description: 'Cuántas trabajadoras tienen que estar presentes a la vez en todo momento dentro de la franja (por defecto 1)' },
       horas_objetivo_semana: { type: 'number', description: 'Horas objetivo por semana y trabajadora (por defecto 40); lo que pase de esto se marca como hora extra' },
+      pausa_comida_min: { type: 'number', description: 'Minutos de pausa de comida por turno (por defecto 60); no cuenta como hora trabajada. Pon 0 si el turno es corto y no hace falta' },
       fecha_inicio:          { type: 'string', description: 'Fecha del primer día a generar, formato AAAA-MM-DD' },
       semanas:               { type: 'number', description: 'Cuántas semanas generar de una vez (por defecto 4, máximo 26)' },
       trabajadoras:          { type: 'array', items: { type: 'string' }, description: 'Nombres de las trabajadoras que entran en el reparto, en el orden que quieras' },
@@ -9150,8 +9151,8 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
             accion, usuario_id, cuadrante_id: cuadranteId || undefined,
             nombre: input.nombre, hora_inicio: input.hora_inicio, hora_fin: input.hora_fin,
             dias_semana: input.dias_semana, personas_simultaneas: input.personas_simultaneas,
-            horas_objetivo_semana: input.horas_objetivo_semana, fecha_inicio: input.fecha_inicio,
-            semanas: input.semanas, trabajadoras: input.trabajadoras,
+            horas_objetivo_semana: input.horas_objetivo_semana, pausa_comida_min: input.pausa_comida_min,
+            fecha_inicio: input.fecha_inicio, semanas: input.semanas, trabajadoras: input.trabajadoras,
           }),
         });
         const data = await resp.json().catch(() => ({}));
@@ -9217,7 +9218,8 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         const nombresDia = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
         const filas = turnos.map(t => {
           const d = new Date(t.fecha + 'T00:00:00');
-          return `• ${nombresDia[d.getDay()]} ${t.fecha.split('-').reverse().join('/')}: ${t.hora_inicio}-${t.hora_fin}${t.es_extra ? ' ⚠️ hora extra' : ''}`;
+          const pausa = t.pausa_inicio ? ` (comida ${t.pausa_inicio}-${t.pausa_fin})` : '';
+          return `• ${nombresDia[d.getDay()]} ${t.fecha.split('-').reverse().join('/')}: ${t.hora_inicio}-${t.hora_fin}${pausa}${t.es_extra ? ' ⚠️ hora extra' : ''}`;
         });
         return `🗓️ Tu horario:\n${filas.join('\n')}`;
       } catch (e) {

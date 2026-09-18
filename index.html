@@ -8419,9 +8419,13 @@ async function cargarMiCuadranteTurnos() {
     cont.innerHTML = turnos.map(t => {
       const dt = new Date(t.fecha + 'T00:00:00');
       const extra = t.es_extra ? ' <span style="color:#ef4444">(extra)</span>' : '';
+      const pausa = t.pausa_inicio ? `<div style="font-size:11px;color:var(--muted)">🍴 comida ${t.pausa_inicio}-${t.pausa_fin}</div>` : '';
       return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:6px;border-radius:8px;background:var(--surface2);border-left:4px solid ${t.color || '#2563eb'}">
         <div style="font-size:13px;font-weight:600">${nombresDia[dt.getDay()]} ${t.fecha.split('-').reverse().join('/')}</div>
-        <div style="font-size:12px;color:var(--muted);margin-left:auto">${t.hora_inicio}-${t.hora_fin}${extra}</div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:12px;color:var(--muted)">${t.hora_inicio}-${t.hora_fin}${extra}</div>
+          ${pausa}
+        </div>
       </div>`;
     }).join('');
   } catch { sec.style.display = 'none'; }
@@ -8442,8 +8446,9 @@ async function imprimirMiHorario() {
     const nombresDia = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     const filas = turnos.map(t => {
       const dt = new Date(t.fecha + 'T00:00:00');
+      const pausa = t.pausa_inicio ? ` · comida ${esc(t.pausa_inicio)}-${esc(t.pausa_fin)}` : '';
       return `<tr><td style="border:1px solid #999;padding:6px;font-weight:700;white-space:nowrap">${nombresDia[dt.getDay()]} ${t.fecha.split('-').reverse().join('/')}</td>
-        <td style="border:1px solid #999;padding:6px">${esc(t.hora_inicio)}-${esc(t.hora_fin)}${t.es_extra ? ' <b>(hora extra)</b>' : ''}</td></tr>`;
+        <td style="border:1px solid #999;padding:6px">${esc(t.hora_inicio)}-${esc(t.hora_fin)}${pausa}${t.es_extra ? ' <b>(hora extra)</b>' : ''}</td></tr>`;
     }).join('');
     const s = getSession();
     const win = window.open('', '_blank');
