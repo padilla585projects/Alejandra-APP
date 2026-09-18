@@ -2071,7 +2071,7 @@ describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
       expect(app).toContain('id="seccionAccionesPendientes"');
       expect(app).toContain("apiCall('/acciones-pendientes')");
       expect(app).toMatch(/apiCall\(`\/acciones-pendientes\/\$\{id\}\/\$\{decision\}`, \{ method: 'POST' \}\)/);
-      expect(app).toMatch(/if \(tab === 'sesion'\)\s*\{ cargarEstadoTelegram\(\); cargarAccionesPendientesApp\(\); \}/);
+      expect(app).toMatch(/if \(tab === 'sesion'\)\s*\{ cargarEstadoTelegram\(\); cargarAccionesPendientesApp\(\); cargarMiCuadranteTurnos\(\); \}/);
       // Aprobar desde el móvil nunca envía nada por sí mismo
       const ini = app.indexOf('async function decidirAccionPendienteApp(');
       const bloque = app.slice(ini, app.indexOf('window.cargarAccionesPendientesApp', ini));
