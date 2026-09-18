@@ -12,7 +12,7 @@ mandó Adrián).
   paredes lisas de ayer (#306) que se había quedado sin fusionar.
 - Con el tubo ya visible, Adrián compartió fotos reales de instalaciones (tubos/bandejas en
   pared y techo, cajas en los cambios de plano) y pidió que el render se parezca a eso de
-  verdad. Tres mejoras, en este orden de prioridad para él:
+  verdad. Varias mejoras, en este orden de prioridad para él:
   1. **Que la instalación se pegue a la pared/techo real, nunca "en el aire"** — la más
      importante. Ya se portaron a la PWA (mismo commit que #306 pero para WebXR, ver más abajo)
      la mediana de profundidad de 5 muestras y el ajuste manual de acercar/alejar del AR nativo,
@@ -23,7 +23,13 @@ mandó Adrián).
      a la pared/techo detectado.
   3. **Varios tubos/bandejas en paralelo** siguiendo el mismo recorrido (hoy `_replInstal3D`
      solo dibuja un elemento por trazado).
-- **Decisión explícita de Adrián: planificar las tres juntas para una sesión dedicada, no
+  4. **Modo de superficie forzada (Techo/Pared/Suelo) + editar cualquier punto ya colocado**
+     (Adrián, mismo día, probando en obra: "la bandeja no detecta el techo... baja por debajo de
+     instalaciones y eso no es así"). En vez de fiarse frame a frame del hit-test, declarar el
+     tramo como Techo/Pared/Suelo y forzar todos sus puntos a esa misma altura/plano; y poder
+     tocar cualquier punto del trazado (no solo el último) para "pegar a techo", "esquivar
+     instalación", mover o borrar. Detalle en el README de arriba.
+- **Decisión explícita de Adrián: planificar todas juntas para una sesión dedicada, no
   empezar ahora.** Es un cambio de más calado en el motor de geometría COMPARTIDO
   (`repl3d.js` — afecta a la vez a la vista 3D, el informe imprimible, el AR nativo y el AR
   WebXR) y no es prudente tocarlo sin poder probarlo en vivo en un dispositivo con ARCore (el

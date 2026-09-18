@@ -2,7 +2,7 @@
 
 Fotos reales aportadas por Adrián (18/09/2026) para fijar el objetivo de realismo del render
 3D compartido (`repl3d.js`, usado por la vista 3D, el informe imprimible, el AR nativo y el AR
-WebXR). Comparadas con el render actual (`_replInstal3D`), señalan tres mejoras pendientes,
+WebXR). Comparadas con el render actual (`_replInstal3D`), señalan varias mejoras pendientes,
 en este orden de prioridad:
 
 1. **Que la instalación se pegue de verdad a la pared/techo real, nunca "en el aire".**
@@ -19,6 +19,18 @@ en este orden de prioridad:
 3. **Varios tubos/bandejas en paralelo siguiendo el mismo recorrido** (`ref-01-...jpg`: 4-5
    tubos rígidos juntos, mismo camino, mismos giros, separación regular). Hoy `_replInstal3D`
    solo dibuja UN elemento por trazado.
+4. **Modo de superficie forzada + editar un punto ya colocado** (Adrián, 18/09/2026, probando en
+   obra: "la bandeja no detecta el techo... baja por debajo de instalaciones y eso no es así").
+   Propuesta suya, con sentido: en vez de fiarse frame a frame de lo que detecta ARCore (que
+   puede fallar puntualmente y hacer que un punto "caiga" a una altura/plano equivocado, p. ej.
+   por debajo de una instalación ya existente), declarar explícitamente la superficie de un
+   tramo — Techo / Pared / Suelo — y a partir de ahí FORZAR todos los puntos siguientes a esa
+   misma altura/plano (tomada del primer punto confirmado o del plano real detectado en ese
+   momento), aunque el hit-test de un frame concreto dé un dato raro. Además, poder tocar
+   cualquier punto YA colocado (no solo el último) y aplicarle una acción contextual — "pegar a
+   techo", "esquivar instalación", mover, borrar — para corregir sobre la marcha sin rehacer el
+   trazado entero. Encaja con el punto 1 (pegado a la superficie real) pero es un mecanismo
+   distinto: fijar una restricción explícita en vez de mejorar la estimación automática.
 
 ## Notas sueltas de las fotos
 
