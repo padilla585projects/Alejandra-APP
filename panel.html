@@ -1921,6 +1921,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           <div class="modal-footer" style="flex-wrap:wrap">
             <button class="btn btn-secondary" onclick="replOfficeInforme()">🖨 Informe</button>
             <button class="btn btn-secondary" id="replOfficeDetBtnPedido" style="display:none" onclick="replOfficeEnviarPedidos()">📥 A Pedidos</button>
+            <button class="btn btn-secondary" id="replOfficeDetBtnRenombrar" style="display:none" onclick="replOfficeRenombrar()">✏️ Renombrar</button>
             <button class="btn btn-secondary" id="replOfficeDetBtnBorrar" style="display:none;color:var(--danger)" onclick="replOfficeBorrar()">🗑 Eliminar</button>
             <button class="btn btn-primary" style="margin-left:auto" onclick="replOfficeCerrarDetalle()">Cerrar</button>
           </div>
@@ -15067,6 +15068,7 @@ function replOfficeRender() {
         <button class="btn btn-sm btn-secondary" title="Ver detalle" onclick="replOfficeAbrir(${r.id})">👁</button>
         <button class="btn btn-sm btn-secondary" title="Informe imprimible" onclick="replOfficeAbrir(${r.id}, true)">🖨</button>
         ${puedeEditar && nMat ? `<button class="btn btn-sm btn-secondary" title="Enviar a Pedidos" onclick="replOfficeEnviarPedidos(${r.id})">📥</button>` : ''}
+        ${puedeEditar ? `<button class="btn btn-sm btn-secondary" title="Renombrar" onclick="replOfficeRenombrar(${r.id})">✏️</button>` : ''}
         ${puedeEditar ? `<button class="btn btn-sm btn-secondary" title="Eliminar" style="color:var(--danger)" onclick="replOfficeBorrar(${r.id})">🗑</button>` : ''}
       </td>
     </tr>`;
@@ -15388,6 +15390,7 @@ async function replOfficeAbrir(id, yInforme) {
     </div>`;
   const puedeEditar = !!data.puede_editar && rep.estado !== 'pedido';
   document.getElementById('replOfficeDetBtnPedido').style.display = puedeEditar && (rep.material || []).length ? '' : 'none';
+  document.getElementById('replOfficeDetBtnRenombrar').style.display = puedeEditar ? '' : 'none';
   document.getElementById('replOfficeDetBtnBorrar').style.display = puedeEditar ? '' : 'none';
   document.getElementById('modalReplOfficeDetalle').style.display = 'flex';
   if (yInforme) replOfficeInforme();
@@ -15460,6 +15463,24 @@ async function replOfficeEnviarPedidos(id) {
   if (!d || d.ok === false) { toast(d?.error || 'No se pudo enviar a Pedidos', 'err'); return; }
   toast(`📥 ${d.pedido_ids?.length || n} línea(s) creadas en Pedidos (REPL-${id})`, 'ok');
   replOfficeCerrarDetalle();
+  replOfficeListar();
+}
+// Paridad con el menú "⋮" de la app móvil (18/09/2026) -- mismo PATCH parcial que ya usa el
+// editor de la app: enviar solo {titulo} conserva el resto del replanteo tal cual
+// (actualizarReplanteo en worker.js), así que no hace falta abrir ningún editor aquí tampoco.
+async function replOfficeRenombrar(id) {
+  id = id || _replOffice.det?.rep?.id;
+  if (!id) return;
+  const rep = _replOffice.det?.rep?.id === id ? _replOffice.det.rep : _replOffice.lista.find(r => r.id === id);
+  const actual = rep?.titulo || '';
+  const nuevo = prompt('Nuevo título:', actual);
+  if (nuevo == null) return;
+  const t = nuevo.trim();
+  if (!t || t === actual) return;
+  const d = await api(`/replanteos/${id}`, { method: 'PATCH', body: JSON.stringify({ titulo: t }) });
+  if (!d || d.ok === false) { toast(d?.error || 'No se pudo renombrar', 'err'); return; }
+  toast('✅ Renombrado', 'ok');
+  if (_replOffice.det?.rep?.id === id) { _replOffice.det.rep.titulo = t; const el = document.getElementById('replOfficeDetTitulo'); if (el) el.textContent = t; }
   replOfficeListar();
 }
 async function replOfficeBorrar(id) {
