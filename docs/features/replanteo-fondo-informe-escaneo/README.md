@@ -1,9 +1,27 @@
-# Idea pendiente — el informe 3D de un replanteo AR sale "flotando en el aire"
+# Idea pendiente — escaneo del entorno + IA en tiempo real para el AR del Replanteo
 
 Estado: **sin implementar, sin ADR, planificar aparte** (decisión explícita de Adrián,
 18/09/2026 noche — ver `TASKS.md`). No confundir con
 `docs/features/replanteo-instalacion-realista/README.md` (esa es sobre que la instalación
-quede PEGADA a la pared en el AR en vivo; esta es sobre el FONDO del informe imprimible).
+quede PEGADA a la pared en el AR en vivo con lo que WebXR ya detecta; esta es sobre añadir un
+escaneo previo asistido por IA que mejore esa detección de base, y de paso resuelve también el
+fondo del informe).
+
+## La visión completa de Adrián (18/09/2026, noche)
+
+Ampliada en la misma sesión, en sus palabras: al abrir el Replanteo en modo AR debería salir
+**un cartel pidiendo "escanea el entorno" ANTES de poder marcar puntos** — solo cuando la app
+detecta que el escaneo está hecho, aparecen los controles para marcar la instalación. Ese
+escaneo no es solo para tener una foto de fondo bonita: **también debe servir para que el AR
+sepa identificar qué es pared, qué es suelo, qué es techo y qué son instalaciones ya
+existentes** (más allá de la clasificación geométrica actual de `frame.detectedPlanes`, que
+solo distingue vertical/horizontal por altura, sin saber qué hay de verdad ahí). Lo escaneado
+se pasaría por IA (visión) para que analice el entorno y devuelva esa información, y esa
+información realimenta al AR **en tiempo real, mientras se sigue escaneando/marcando** —
+"IA y AR trabajan juntos en tiempo real", no un análisis puntual al final como hace hoy "¿qué
+es esto?" (`replArIdentificar()`, que el usuario dispara a mano sobre un solo punto).
+
+## El problema original que lo disparó (fondo del informe)
 
 ## El problema
 
@@ -37,6 +55,23 @@ para que el render sea representativo, no solo bonito.
 - `frame.detectedPlanes` (usado desde hoy para `PLANO-SNAP-01`) ya da la posición y normal de
   cada plano detectado — un punto de partida geométrico si se quisiera proyectar fotos sobre los
   planos reales en vez de solo mostrarlas planas.
+
+## Por qué la versión "IA y AR en tiempo real" es aún más grande
+
+- Requiere un **flujo nuevo de "fase de escaneo" obligatoria** antes de marcar puntos: pantalla/
+  cartel de guía, detectar cuándo el escaneo es "suficiente" (¿cuántos frames? ¿cuánto se ha
+  movido el móvil? ¿qué cobertura de la sala?), y solo entonces desbloquear el trazado.
+- Requiere **llamadas a IA de visión en bucle mientras se escanea** (no una vez al final como
+  "¿qué es esto?" hoy) -- implica latencia, coste por llamada, y decidir cada cuánto se manda un
+  frame nuevo sin saturar la sesión ni al usuario.
+- La realimentación "en tiempo real" al AR es la parte más incierta: hoy `frame.detectedPlanes`
+  ya clasifica vertical/horizontal por geometría pura (sin IA) -- llevar la respuesta de un
+  modelo de visión (que llega con latencia de red) hasta afectar el hit-test/snap de CADA frame
+  (60 fps) no es trivial; más realista sería que la IA ajuste una vez por escaneo (p. ej. "esto
+  de aquí es una bandeja existente, no la marques como pared") en vez de por frame.
+- Sigue sin resolver por sí sola la fusión en un entorno coherente para el fondo del informe
+  (ver alternativas de abajo) -- son dos problemas relacionados pero distintos: identificar QUÉ
+  hay (pared/suelo/techo/instalación existente) y reconstruir CÓMO se ve (el fondo del render).
 
 ## Por qué es un cambio de más calado (no una tarea de hoy)
 
