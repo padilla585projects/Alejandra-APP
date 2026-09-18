@@ -1,5 +1,51 @@
 # TASKS — Cola operativa inmediata
 
+Estado (2026-09-18, noche): **Sesión dedicada de realismo 3D del Replanteo — prioridad 1
+cerrada y verificada en vivo en el Oppo. Cadena de 4 PRs, todos desplegados y confirmados por
+Adrián.** Ver `HANDOFF.md`/`CHANGELOG.md`.
+- **BUG-REPL-GUARDAR-AR-03** (PR #318 → `06d318e`): `replArTerminar()` leía
+  `complementos`/`fotosDoc` de `_ar` DESPUÉS de `await _ar.session.end()`, que ya lo había
+  puesto a `null` (listener `'end'` → `_replArLimpiar()`) -- la app se quedaba encallada en el
+  modal "Nuevo replanteo" con el trazado AR perdido, sin ningún aviso. Diagnosticado en vivo
+  conectando el Oppo por ADB → WiFi e instrumentando el Chrome real por Chrome DevTools
+  Protocol (consola + `localStorage.alejandra_diag_log` de PR #316). **Confirmado por Adrián:
+  ya guarda.**
+- **PLANO-SNAP-01** (PR #319 → `a96d5ee`, extendido en PR #320 → `2b19013`): prioridad 1 de
+  `docs/features/replanteo-instalacion-realista/README.md` ("sobre todo que no vuelva en el
+  aire"). Cuando WebXR confirma un plano con `frame.detectedPlanes`, se fuerza la posición del
+  punto contra ESE plano (no solo la pose cruda) y se guarda su normal -- también cuando el
+  punto sale por profundidad, no solo por hit-test (la primera versión solo miraba `_ar.hit`;
+  Adrián probó en una superficie lisa donde el hit-test no enganchaba y no se aplicaba nunca).
+  Paridad con el AR nativo (`PARED-NORMAL-REAL-01`).
+- **GEOMETRIA-DEGENERADA-NORMAL-01** (PR #322 → `b3355a4`): probando en vivo tras lo anterior,
+  la instalación entera desaparecía en una esquina real (solo se veían los puntos). Causa: en
+  `_replInstal3D` (repl3d.js, compartido por vista 3D/informe/AR nativo/AR WebXR), si el tramo
+  entre dos puntos va casi paralelo a la normal real que se usa como referencia, el producto
+  vectorial sale casi nulo y la base local (rotación) sale degenerada. Se cae al respaldo
+  genérico solo para ese tramo cuando pasa. **Confirmado por Adrián con datos reales (7 puntos,
+  4 con normal de techo real, un tramo casi vertical cayendo al respaldo genérico tal como se
+  diseñó): "ahora mucho mejor que antes".**
+- **Menú renombrar/borrar en la lista** (PR #323 → `59a216c`): pedido de Adrián a media sesión,
+  "···" en cada tarjeta de `index.html` (paridad en `panel.html`: botón "✏️" junto al "🗑" ya
+  existente + botón en el detalle). Reutiliza el PATCH/DELETE que ya usaba el editor -- sin
+  backend nuevo (`actualizarReplanteo` en `worker.js` ya aceptaba `{titulo}` solo).
+  **Confirmado por Adrián: "probé borrar y renombrar, todo bien".**
+- **Pendiente, sin abordar hoy (anotado, no perder):**
+  1. El hit-test sigue sin enganchar siempre en superficies lisas ("a veces le cuesta reconocer
+     el plano") -- límite conocido de ARCore, ya cubierto por el respaldo de profundidad; no es
+     un bug nuevo de hoy.
+  2. Girar el móvil de vertical a horizontal durante la sesión AR no se maneja bien (Adrián, con
+     dos capturas comparando ambas orientaciones) -- el canvas/cámara WebXR no se reajusta.
+  3. Prioridades 2-4 de `docs/features/replanteo-instalacion-realista/README.md` (ángulos
+     rectos, varios tubos en paralelo, modo de superficie forzada) siguen sin empezar.
+  4. Lo del informe con "fondo blanco en el aire" que mencionó Adrián (quiere que el 3D del
+     informe se renderice con contexto real, no fondo plano) -- sin decidir el enfoque; Adrián
+     apuntó la idea de escanear el entorno con la cámara durante el replanteo para tener un
+     render de referencia. Es un cambio de más calado, no evaluado todavía.
+- Sin migración, sin subir versión (sigue 9.78) en ninguno de los 4 PRs -- todo frontend. Cada
+  PR desplegado individualmente vía `pages.yml` con SHA + `PUBLISH_GITHUB_PAGES` + aprobación
+  de Adrián del entorno `production`, verificado en vivo antes de pasar al siguiente.
+
 Estado (2026-09-18): **CUADRANTES-TURNOS-01 — nueva función de Seguridad, en revisión
 (PR #321, rama `feat/seguridad-cuadrantes-turnos`).**
 - Adrián pidió un cuadrante que reparta el horario semanal de las PRL cubriendo una franja
