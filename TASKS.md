@@ -1,5 +1,41 @@
 # TASKS — Cola operativa inmediata
 
+Estado (2026-09-18): **PENDIENTE (sin empezar) — realismo de la instalación 3D en Replanteo
+(pegado a la pared, ángulos rectos, tubos en paralelo).** Ver
+`docs/features/replanteo-instalacion-realista/README.md` (con las 3 fotos de referencia que
+mandó Adrián).
+- Sesión larga de hoy en el Oppo (único móvil con ARCore) probando el AR de la PWA en vivo por
+  primera vez desde que existe: se encontraron y arreglaron tres bugs reales que llevaban rotos
+  sin nadie probarlos en un dispositivo real — `plane-detection` tumbaba toda la sesión WebXR
+  (roto desde el 10/09, PR #308), la instalación 3D en directo nunca se veía por comparar
+  posición local contra mundo (roto desde el 10/09, PR #310), y de paso se publicó el fix de
+  paredes lisas de ayer (#306) que se había quedado sin fusionar.
+- Con el tubo ya visible, Adrián compartió fotos reales de instalaciones (tubos/bandejas en
+  pared y techo, cajas en los cambios de plano) y pidió que el render se parezca a eso de
+  verdad. Tres mejoras, en este orden de prioridad para él:
+  1. **Que la instalación se pegue a la pared/techo real, nunca "en el aire"** — la más
+     importante. Ya se portaron a la PWA (mismo commit que #306 pero para WebXR, ver más abajo)
+     la mediana de profundidad de 5 muestras y el ajuste manual de acercar/alejar del AR nativo,
+     que ayudan cuando falla la detección automática. Falta lo que las fotos remarcan: cuando
+     WebXR SÍ confirma un plano real (`frame.detectedPlanes`) bajo el punto, forzar la posición
+     contra ESE plano en vez de fiarse de la pose cruda del hit-test.
+  2. **Tramos siempre en ángulo recto** (nunca diagonal) — snap a horizontal/vertical relativo
+     a la pared/techo detectado.
+  3. **Varios tubos/bandejas en paralelo** siguiendo el mismo recorrido (hoy `_replInstal3D`
+     solo dibuja un elemento por trazado).
+- **Decisión explícita de Adrián: planificar las tres juntas para una sesión dedicada, no
+  empezar ahora.** Es un cambio de más calado en el motor de geometría COMPARTIDO
+  (`repl3d.js` — afecta a la vez a la vista 3D, el informe imprimible, el AR nativo y el AR
+  WebXR) y no es prudente tocarlo sin poder probarlo en vivo en un dispositivo con ARCore (el
+  Oppo estaba con Adrián en la obra, no accesible por ADB en el momento de escribir esto).
+- Relacionado, sin decidir: si el enganche automático a un cambio de plano (pared↔techo)
+  justifica volver a poner una caja de registro automática SOLO ahí — ver el README de arriba,
+  contradice en parte a CODO-SIN-CAJA-AUTO-01 (17/09) si no se matiza bien.
+- Además pendiente de verificar en vivo (no se pudo completar hoy, el Oppo se quedó sin red
+  alcanzable): que el AR realmente se pega bien a paredes/techo tras portar las mejoras de
+  profundidad, y que la instalación 3D (ya visible) se ve bien orientada en un tramo inclinado
+  o vertical real (el bug que motivó el commit #306 de ayer).
+
 Estado (2026-09-15): **REPL-AR-NATIVO-01 — el AR de Replanteo ya funciona dentro de la APK
 instalada (antes no aparecía el botón).** Ver `HANDOFF.md`.
 - Adrián, probando la APK real: "no funciona en la apk el replanteo" — captura de pantalla del
