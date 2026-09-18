@@ -15,6 +15,28 @@ Estado (2026-09-18): **CUADRANTES-TURNOS-01 — nueva función de Seguridad, en 
 - **Pendiente:** revisión de Adrián, fusionar, desplegar los dos Workers, y probar con
   datos reales de una PRL de Seguridad en obra.
 
+Estado (2026-09-18, noche): **BUG-REPL-GUARDAR-AR-03 — cerrado, desplegado y verificado en vivo
+en el Oppo.** Ver `HANDOFF.md`.
+- El botón Guardar "no hacía nada" tras terminar un replanteo por AR (WebXR/PWA) porque la app
+  ni siquiera llegaba al editor: se quedaba encallada en el modal "Nuevo replanteo" (sin
+  trazado que guardar; "Continuar →" no aplica al AR, exige una foto).
+- Diagnosticado en vivo conectando el Oppo por ADB → WiFi (`adb tcpip 5555` + `adb connect`) e
+  instrumentando el Chrome real por Chrome DevTools Protocol: cero actividad en consola/red al
+  pulsar, y el registro técnico persistente de PR #316 (`localStorage.alejandra_diag_log`)
+  mostraba `AR terminar: EXCEPCIÓN -- Cannot read properties of null (reading 'complementos')`.
+- Causa: `replArTerminar()` leía `_ar.complementos`/`_ar.fotosDoc` **después** de
+  `await _ar.session.end()`; ese `end()` dispara el listener `'end'` (`_replArLimpiar`) que
+  pone `_ar = null` antes de que el `await` resuelva del todo -- la siguiente línea reventaba,
+  abortaba la función y nunca llegaba a `replCerrarNuevo()`/`showScreen('replanteoEditor')`.
+- Fix: capturar `complementos`/`fotosDoc` en variables locales junto al resto de campos, antes
+  de terminar la sesión (mismo patrón que ya usaban `puntos`/`obstaculos`/`titulo`/`elemento`/
+  `params`). PR [#318](https://github.com/padilla585projects/Alejandra-APP/pull/318) →
+  `06d318e`, CI en verde, Pages desplegado (run `35374019629`, aprobado por Adrián) y
+  **confirmado por Adrián en vivo en el Oppo: ya guarda.** Sin subir versión (el SW sirve
+  `index.html` con network-first en navegación, no hace falta para que el fix llegue). Solo
+  frontend (`index.html`); el AR nativo de la APK (`_replArIniciarNativo`) no usa este camino
+  y no estaba afectado.
+
 Estado (2026-09-18): **PENDIENTE (sin empezar) — realismo de la instalación 3D en Replanteo
 (pegado a la pared, ángulos rectos, tubos en paralelo).** Ver
 `docs/features/replanteo-instalacion-realista/README.md` (con las 3 fotos de referencia que

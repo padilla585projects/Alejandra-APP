@@ -21137,7 +21137,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
       const reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
       reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
-      _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], obstaculos: [], complementos: [], fotosDoc: [], grupo: new THREE.Group(),
+      _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], normales: [], obstaculos: [], complementos: [], fotosDoc: [], grupo: new THREE.Group(),
               color: el.color || '#f97316', anchoM, titulo, elemento: el, params, hit: null, tieneDepth: false, ultimoAviso: 0,
               // REPLANTEO-05
               metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false, guiaHasta: 0 };
@@ -21194,19 +21194,40 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         let floorY = null, ceilY = null; const sup = [];
         frame.detectedPlanes.forEach(pl => {
           const pp = frame.getPose(pl.planeSpace, refSpace); if (!pp) return;
-          const y = pp.transform.position.y;
+          const pos = new THREE.Vector3(pp.transform.position.x, pp.transform.position.y, pp.transform.position.z);
+          // El eje Y local de la pose del plano es su normal (misma convención que
+          // normalDeQuat() usa para el AR nativo, ver _replArTerminarNativo).
+          const oq = pp.transform.orientation;
+          const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(new THREE.Quaternion(oq.x, oq.y, oq.z, oq.w));
+          const y = pos.y;
           let tipo;
           if (pl.orientation === 'vertical') tipo = 'pared';
           else { tipo = (_ar.camPos && y > _ar.camPos.y + 0.3) ? 'techo' : 'suelo'; if (tipo === 'suelo') floorY = floorY == null ? y : Math.min(floorY, y); else ceilY = ceilY == null ? y : Math.max(ceilY, y); }
-          sup.push({ tipo, y, x: pp.transform.position.x, z: pp.transform.position.z });
+          sup.push({ tipo, y, x: pos.x, z: pos.z, pos, normal });
         });
         _ar.superficies = sup;
         _ar.alturaLibre = (floorY != null && ceilY != null) ? +(ceilY - floorY).toFixed(2) : null;
         // superficie bajo el punto apuntado (la más cercana al hit en Y para horizontales)
-        if (_ar.hit && sup.length) {
-          let best = null; for (const s of sup) { const d = s.tipo === 'pared' ? Math.hypot(_ar.hit.x - s.x, _ar.hit.z - s.z) : Math.abs(_ar.hit.y - s.y); if (!best || d < best.d) best = { tipo: s.tipo, d }; }
+        // PLANO-SNAP-01 (18/09/2026): además de para el texto informativo, se guarda el plano
+        // completo (posición+normal) cuando el punto queda de verdad cerca de SU CARA (a lo
+        // largo de la normal, no solo cerca en planta) -- _replArAnclaje() lo usa para forzar la
+        // posición del punto contra el plano real, y para guardar la normal (repl3d.js ya sabe
+        // orientar el ancho/grosor con ella, ver PARED-NORMAL-REAL-01 -- hasta ahora solo
+        // llegaba desde el AR nativo).
+        // BUG-AR-PLANO-SOLO-HIT-01 (18/09/2026): Adrián probando en obra en una pared/techo
+        // liso -- el hit-test nunca enganchó (sin textura suficiente) y los tres puntos salieron
+        // por profundidad ('depth'), que nunca pasaba por aquí -- el pegado de arriba no se
+        // aplicaba nunca justo en el caso real que más lo necesita. frame.detectedPlanes NO
+        // depende del hit-test puntual (rastrea planos en una zona más amplia), así que se usa
+        // _ar.depthPos como referencia cuando no hay hit -- un frame por detrás como mucho (se
+        // recalcula más abajo), tan tolerable como el resto de respaldos de esta función.
+        const puntoRef = _ar.hit || _ar.depthPos;
+        if (puntoRef && sup.length) {
+          let best = null; for (const s of sup) { const d = s.tipo === 'pared' ? Math.hypot(puntoRef.x - s.x, puntoRef.z - s.z) : Math.abs(puntoRef.y - s.y); if (!best || d < best.d) best = { tipo: s.tipo, d, s }; }
           _ar.superficieHit = best ? best.tipo : null;
-        } else _ar.superficieHit = null;
+          const dPlano = best ? Math.abs(puntoRef.clone().sub(best.s.pos).dot(best.s.normal)) : Infinity;
+          _ar.planoHit = (best && dPlano < 0.15) ? best.s : null;
+        } else { _ar.superficieHit = null; _ar.planoHit = null; }
       }
     } catch (_) { /* sin plane-detection: no pasa nada */ }
     // Profundidad: ahora COLOCA (cuando no hay hit-test) además de avisar.
@@ -21297,9 +21318,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // profundidad si no hay superficie. El contacto es siempre explícito (su propio botón).
   function _replArAnclaje() {
     if (!_ar) return null;
-    if (_ar.hit) return { pos: _ar.hit.clone(), metodo: 'hit' };
-    if (_ar.depthPos) return { pos: _ar.depthPos.clone(), metodo: 'depth' };
-    return null;
+    // BUG-AR-PLANO-SOLO-HIT-01: el hit-test puede no enganchar en una superficie lisa aunque
+    // frame.detectedPlanes SÍ tenga un plano ahí (no dependen el uno del otro) -- por eso
+    // _ar.planoHit se aplica tanto si el anclaje base es 'hit' como si es 'depth', no solo hit.
+    const base = _ar.hit ? { p: _ar.hit, metodo: 'hit' } : (_ar.depthPos ? { p: _ar.depthPos, metodo: 'depth' } : null);
+    if (!base) return null;
+    // PLANO-SNAP-01: si frame.detectedPlanes confirma un plano bajo el punto, se proyecta la
+    // posición sobre ESE plano (en vez de la pose cruda del hit-test/profundidad, que puede
+    // quedar unos cm por delante/detrás de la superficie real) y se guarda su normal.
+    if (_ar.planoHit) {
+      const plano = _ar.planoHit;
+      const dist = base.p.clone().sub(plano.pos).dot(plano.normal);
+      const pos = base.p.clone().sub(plano.normal.clone().multiplyScalar(dist));
+      return { pos, metodo: base.metodo, normal: plano.normal.clone() };
+    }
+    return { pos: base.p.clone(), metodo: base.metodo };
   }
   const REPL_AR_METODO_TXT = { hit: 'sobre la superficie', depth: 'por profundidad', contacto: 'tocando con el móvil' };
 
@@ -21336,7 +21369,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (puntos.length >= 2) {
       const tipo = _replTipoRender(_ar.elemento?.key, _ar.params);
       const obst = (obstaculos || []).map(o => ({ seg: o.seg, t: o.t, accion: o.accion || 'debajo', dimension_m: o.dimension_m || 0.3 }));
-      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6, obstaculos: obst }));
+      // PLANO-SNAP-01: normales por punto (cuando el plano detectado las dio) para que ya en
+      // el propio AR en vivo se vea pegado a la pared/techo, no solo luego en "Ver en 3D".
+      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6, obstaculos: obst, normales: _ar.normales || [] }));
     }
     for (let i = 1; i < puntos.length; i++) {                 // cotas por tramo
       const a = puntos[i - 1], b = puntos[i]; const len = a.distanceTo(b); if (len < 0.01) continue;
@@ -21396,6 +21431,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
     _ar.puntos.push(a.pos);
     _ar.metodos.push(a.metodo);
+    _ar.normales.push(a.normal || null);
     _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = false;
     _replArRedibujar(); _replArEstadoResumen();
   }
@@ -21409,6 +21445,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const pos = _ar.camDir ? _ar.camPos.clone().add(_ar.camDir.clone().multiplyScalar(REPL_AR_OFFSET_CONTACTO)) : _ar.camPos.clone();
     _ar.puntos.push(pos);
     _ar.metodos.push('contacto');
+    _ar.normales.push(null);   // el anclaje por contacto no viene de un plano detectado
     _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = false;
     _replArRedibujar(); _replArEstadoResumen();
   }
@@ -21436,7 +21473,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!_ar) return;
     if (_ar.ultimoFueComp && _ar.complementos.length) { _ar.complementos.pop(); _ar.ultimoFueComp = false; }
     else if (_ar.obstaculos.length && (!_ar.puntos.length || _ar.ultimoFueObstaculo)) _ar.obstaculos.pop();
-    else { _ar.puntos.pop(); _ar.metodos.pop(); _ar.obstaculos = _ar.obstaculos.filter(o => o.seg < _ar.puntos.length - 1); }
+    else { _ar.puntos.pop(); _ar.metodos.pop(); _ar.normales.pop(); _ar.obstaculos = _ar.obstaculos.filter(o => o.seg < _ar.puntos.length - 1); }
     _replArRedibujar(); _replArEstadoResumen();
   }
   // ── Complementos colocables en el AR (mecanismos Legrand/Simon, cajas, cuadro, luminarias) ──
@@ -21671,7 +21708,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       // campos, antes de terminar la sesión.
       const complementosAr = (_ar.complementos || []).slice();
       const fotosDocAr = (_ar.fotosDoc || []).slice();
-      const puntos3d = puntos.map((p, i) => ({ x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), m: metodos[i] || 'hit' }));
+      // PLANO-SNAP-01 (18/09/2026): igual que metodos, se lee de _ar antes del await de
+      // session.end() de más abajo. nx/ny/nz con la misma convención que ya usa el AR nativo
+      // (normalDeQuat en _replArTerminarNativo) -- así repl3d.js (PARED-NORMAL-REAL-01) puede
+      // orientar el ancho/grosor de la instalación contra la pared/techo real también aquí.
+      const normalesAr = _ar.normales || [];
+      const puntos3d = puntos.map((p, i) => {
+        const n = normalesAr[i];
+        const base = { x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), m: metodos[i] || 'hit' };
+        return n ? { ...base, nx: +n.x.toFixed(3), ny: +n.y.toFixed(3), nz: +n.z.toFixed(3) } : base;
+      });
       const longitud3d = +_replArLongitud().toFixed(2);
       const plano = _replArPlano(puntos, obstaculos);
       try { await _ar.session.end(); } catch { _replArLimpiar(); }
