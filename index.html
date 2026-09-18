@@ -21620,6 +21620,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     try {
       const { puntos, obstaculos, titulo, elemento, params } = _ar;
       const metodos = _ar.metodos || [];
+      // BUG-REPL-GUARDAR-AR-03 (18/09/2026): complementos/fotosDoc se leían de _ar DESPUÉS de
+      // `await _ar.session.end()` -- pero ese end() dispara el listener 'end' que llama
+      // _replArLimpiar() y pone _ar = null antes de que este await termine de resolver. Leer
+      // _ar.complementos en ese punto lanzaba "Cannot read properties of null" sin toast (el
+      // catch de abajo sí registra el mensaje, pero ya era tarde: replCerrarNuevo()/
+      // showScreen('replanteoEditor') nunca se ejecutaban y la app se quedaba encallada en el
+      // modal "Nuevo replanteo" con el trazado AR perdido). Se capturan aquí, con el resto de
+      // campos, antes de terminar la sesión.
+      const complementosAr = (_ar.complementos || []).slice();
+      const fotosDocAr = (_ar.fotosDoc || []).slice();
       const puntos3d = puntos.map((p, i) => ({ x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), m: metodos[i] || 'hit' }));
       const longitud3d = +_replArLongitud().toFixed(2);
       const plano = _replArPlano(puntos, obstaculos);
@@ -21633,8 +21643,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         id: null, titulo, elemento_key: elemento.key, params, file, img, departamento: _replCatalogoDept, planos: [], planos: [], imgW: img.naturalWidth, imgH: img.naturalHeight,
         puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
         referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
-        complementos: (_ar.complementos || []).map(c => ({ key: c.key, x: +c.pos.x.toFixed(3), y: +c.pos.y.toFixed(3), z: +c.pos.z.toFixed(3), q: c.quat })),
-        fotosDoc: (_ar.fotosDoc || []).slice(),
+        complementos: complementosAr.map(c => ({ key: c.key, x: +c.pos.x.toFixed(3), y: +c.pos.y.toFixed(3), z: +c.pos.z.toFixed(3), q: c.quat })),
+        fotosDoc: fotosDocAr,
         calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
       };
       // BUG-REPL-GUARDAR-AR-01 (16/09/2026): Adrián -- "termino de replantear y le doy a
