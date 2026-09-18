@@ -31,10 +31,21 @@ mandó Adrián).
 - Relacionado, sin decidir: si el enganche automático a un cambio de plano (pared↔techo)
   justifica volver a poner una caja de registro automática SOLO ahí — ver el README de arriba,
   contradice en parte a CODO-SIN-CAJA-AUTO-01 (17/09) si no se matiza bien.
-- Además pendiente de verificar en vivo (no se pudo completar hoy, el Oppo se quedó sin red
-  alcanzable): que el AR realmente se pega bien a paredes/techo tras portar las mejoras de
-  profundidad, y que la instalación 3D (ya visible) se ve bien orientada en un tramo inclinado
-  o vertical real (el bug que motivó el commit #306 de ayer).
+- **CONFIRMADO EN VIVO por Adrián en la obra (18/09, v9.77): el AR de la PWA funciona.** La
+  instalación 3D se ve y queda pegada a la pared/techo de forma razonable tras portar la
+  mediana de profundidad + el ajuste manual de acercar/alejar. **Estado de referencia para no
+  volver a romperlo sin darse cuenta — ver el aviso nuevo en `CLAUDE.md` ("AR de Replanteo —
+  verificar SIEMPRE en un dispositivo real"): cualquier cambio futuro a la sesión WebXR o a
+  `repl3d.js` se prueba en un Android con ARCore antes de darse por bueno, no solo por CI.**
+- **BUG NUEVO, abierto (18/09, sin diagnosticar todavía):** Adrián, justo después de probar el
+  AR en la obra — "no puedo guardar el replanteo, el botón parece no funcionar" (sin ningún
+  mensaje, ni "Guardando…", ni error — el toque no parece hacer nada en absoluto). Revisado el
+  código de `replGuardar()`/`_replAplicarPermisos()`/`_replArLimpiar()` sin encontrar una causa
+  clara ni relación evidente con los cambios de hoy (BUG-REPL-GUARDAR-AR-01 del 16/09, la
+  variable `_replPuedeEditar` quedando desincronizada, sigue arreglado en el código). Sin
+  acceso en vivo al Oppo en el momento de escribir esto (se reconecta más tarde) — pendiente
+  depurar por Chrome DevTools Protocol vía ADB en cuanto esté disponible, en vez de seguir
+  adivinando por lectura de código.
 
 Estado (2026-09-15): **REPL-AR-NATIVO-01 — el AR de Replanteo ya funciona dentro de la APK
 instalada (antes no aparecía el botón).** Ver `HANDOFF.md`.

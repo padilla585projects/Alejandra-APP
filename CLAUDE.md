@@ -274,6 +274,37 @@ parte de un despliegue ordinario. Consultar el runbook antes de cualquier acció
 
 ---
 
+## AR de Replanteo — verificar SIEMPRE en un dispositivo real (CRÍTICO — leer siempre)
+
+> ⛔ **INCIDENTE 10–18/09/2026**: entre el 10/09 y el 18/09 se fueron encadenando cambios en el
+> AR de Replanteo (WebXR de la PWA y `repl3d.js`, compartido con el AR nativo/informe) que
+> "parseaban sin errores" y pasaban CI, pero **nadie los abrió en un móvil con ARCore real**.
+> Resultado: la sesión WebXR llevaba **roto ocho días sin arrancar nunca** (pedir la feature
+> `plane-detection` tumbaba `requestSession` entero, no se degradaba como dice el spec), y la
+> instalación 3D en la sesión en vivo **llevaba invisible desde que existe** (un filtro de
+> visibilidad comparaba la posición LOCAL de un grupo contra la cámara en vez de la posición en
+> el MUNDO). Los dos bugs se encontraron el 18/09 solo porque hubo una sesión con el Oppo
+> (`CPH2305`, el único Android con ARCore a mano) conectado por ADB, instrumentando la consola
+> real por Chrome DevTools Protocol — ninguna revisión de código a ciegas los habría visto.
+
+**Regla:** cualquier cambio que toque la sesión WebXR (`replArIniciar`/`_replArFrame`/
+`_replArRedibujar` en `index.html`) o la geometría compartida (`repl3d.js`, que además afecta al
+AR nativo y al informe imprimible) **no se da por terminado con que "parsee" o pase CI** — hay
+que abrirlo en un dispositivo Android real con ARCore instalado y comprobar en vivo que: (1) la
+sesión arranca, (2) se ve la instalación (no solo los puntos), y (3) queda razonablemente pegada
+a la pared/techo real. Sin un Oppo (o equivalente) a mano, el cambio se entrega marcado como
+**"sin verificar en vivo"** de forma explícita, no como terminado.
+
+Para depurar en vivo: `adb connect <ip>:5555` (o USB + `adb tcpip 5555`) y reenviar el puerto de
+depuración remota de Chrome — `adb forward tcp:PUERTO localabstract:chrome_devtools_remote`,
+luego `GET http://localhost:PUERTO/json` para el `webSocketDebuggerUrl` de la pestaña con
+`Alejandra-APP` y conectarse por WebSocket (`Runtime.enable`/`Log.enable`) para ver
+`console.*`/excepciones/avisos reales — mucho más fiable que adivinar por captura de pantalla.
+El AR nativo (APK) no tiene ese nivel de logging (sin `Log.d` en `ReplanteoARActivity`), así que
+ahí solo se ven excepciones no capturadas por `adb logcat`.
+
+---
+
 ## Esquema de base de datos (deuda conocida)
 
 > ⚠️ El esquema real de D1 **no está definido por las migraciones versionadas**. El código

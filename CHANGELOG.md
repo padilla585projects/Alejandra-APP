@@ -4,6 +4,21 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-18 — el AR de Replanteo (WebXR/PWA) llevaba roto desde el 10/09 sin que nadie lo supiera)
+
+- Sesión de verificación en vivo en un Android real con ARCore (instrumentado por Chrome
+  DevTools Protocol vía ADB) encontró dos bugs que pasaban CI pero nunca se habían probado en un
+  móvil: pedir la feature `plane-detection` (opcional, ADR-0025) hacía fallar `requestSession`
+  entero en vez de degradarse como dice el spec de WebXR — la sesión AR de la PWA no arrancaba
+  nunca (v9.75); y la instalación 3D en la sesión en vivo nunca se veía, solo los puntos, porque
+  el filtro "oculta lo que está a <25cm de la cámara" comparaba la posición LOCAL de un grupo
+  contra la cámara en vez de su posición en el MUNDO (v9.76). Con eso arreglado, se publicó
+  también el fix de paredes lisas del 17/09 (#306, colocación en superficies lisas + informe sin
+  CORS) que se había quedado sin fusionar, y se portaron a WebXR (v9.77) la mediana de
+  profundidad de 5 muestras y el ajuste manual de acercar/alejar del AR nativo. Confirmado en
+  vivo por Adrián en obra. Bug nuevo abierto sin diagnosticar: el botón Guardar del editor no
+  responde justo después de una sesión AR.
+
 ### Fixed (2026-09-15 — el AR de Replanteo no funcionaba dentro de la APK)
 
 - El botón de AR no aparecía en la app instalada (WebXR no existe en el WebView de Capacitor).

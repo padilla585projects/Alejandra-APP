@@ -1,6 +1,24 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-09-10
+- Actualizado: 2026-09-18
+- Estado (2026-09-18): **AR de Replanteo en la PWA (WebXR) CONFIRMADO FUNCIONANDO en vivo por
+  primera vez, tras estar roto sin que nadie lo supiera desde el 10/09.** Sesión de depuración en
+  dispositivo real (Oppo CPH2305 con ARCore, instrumentado por Chrome DevTools Protocol vía ADB)
+  encontró y arregló dos bugs que llevaban ocho días rotos pese a pasar CI: `plane-detection`
+  como optionalFeature tumbaba toda la sesión `requestSession` (v9.75, PR #308), y la instalación
+  3D en directo nunca se veía por comparar posición local contra mundo en el filtro de "oculta lo
+  que está muy cerca de la cámara" (v9.76, PR #310). Con eso arreglado, se publicó también el fix
+  de paredes lisas del 17/09 (#306) que se había quedado sin fusionar, y se portaron a WebXR
+  (v9.77, #312) la mediana de profundidad de 5 muestras y el ajuste manual de acercar/alejar del
+  AR nativo. Adrián probó en obra: la instalación se ve y queda pegada a la pared/techo. Regla
+  nueva en `CLAUDE.md` para que esto no se repita: ningún cambio a la sesión WebXR o a
+  `repl3d.js` se da por terminado sin probarlo en un Android con ARCore real.
+  **Bug nuevo abierto, sin diagnosticar**: el botón Guardar del editor de Replanteo no responde
+  (sin mensaje ni error) justo después de terminar una sesión AR — pendiente depurar en vivo.
+  Pendiente para sesión aparte (decisión explícita de Adrián, con fotos de referencia en
+  `docs/features/replanteo-instalacion-realista/`): que la instalación se pegue de verdad a la
+  pared cuando WebXR confirma un plano real, tramos en ángulo recto, y varios tubos en paralelo.
+  Detalle completo en `TASKS.md`.
 - Estado (2026-09-10): **App Android (Capacitor) en marcha y Replanteo AR muy mejorado.**
   Desplegado v9.60→v9.67: app Android F1 (envuelve la suite, descargable desde la PWA) + F2 (login
   Google en Custom Tab con retorno por deep link, pulido nativo, descargas/compartir nativas). En el
