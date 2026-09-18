@@ -3785,6 +3785,27 @@ const TOOL_GENERAR_CUADRANTE_TURNOS = {
   nivel_riesgo: 'N1',
 };
 
+// "también Alejandra si se le pregunta 'qué horario tengo esta semana' sabrá contestar"
+// (Adrián, 18/09/2026): a diferencia de las dos de arriba (gestión, para encargados/oficina),
+// esta es self-scoped -- cualquier trabajadora puede preguntar por SU PROPIO turno, aunque
+// sea operaria (por eso no usa puedeVerCuadranteTurnos en el endpoint interno). No hace falta
+// que diga nada del cuadrante en sí, solo sus propios turnos publicados.
+const TOOL_CONSULTAR_MI_HORARIO = {
+  name: 'consultar_mi_horario',
+  description: 'Consulta el horario/turno de la PERSONA QUE PREGUNTA (nunca el de otra persona): sus propios turnos ya publicados dentro de un cuadrante de turnos, con fecha, hora de inicio/fin y si es hora extra. Úsalo cuando alguien pregunte "qué horario tengo", "qué turno me toca esta semana", "cuándo curro", o similar, sobre sí mismo.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      desde: { type: 'string', description: 'Fecha desde la que consultar, formato AAAA-MM-DD (opcional, por defecto hoy)' },
+      hasta: { type: 'string', description: 'Fecha hasta la que consultar, formato AAAA-MM-DD (opcional, por defecto +30 días)' },
+    },
+    required: [],
+  },
+  acceso: 'sesion',
+  cron: 'permitido',
+  nivel_riesgo: 'N0',
+};
+
 // Tools de "capacidades avanzadas" (ver módulo de prompt `capacidades_avanzadas`).
 // Estas 7 herramientas ya tenían su `case` implementado en el switch de ejecución
 // pero no existía el schema TOOL_* correspondiente ni estaban cableadas en
@@ -4056,10 +4077,10 @@ const TOOLS_POR_EXPERTO = {
   // pregunta sin usar la palabra ("¿cuánta bandeja sale del pasillo que midió Jose?") y el
   // clasificador manda el mensaje aquí, más vale que pueda mirarlo a que se lo invente.
   // generar_pedido_replanteo NO se añade: escribe en Pedidos y no es para el experto barato.
-  simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH, TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_CONSULTAR_CUADRANTE_TURNOS],
+  simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH, TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_CONSULTAR_CUADRANTE_TURNOS, TOOL_CONSULTAR_MI_HORARIO],
   // Merge de PHASE 1 (sesión 14) + PHASE 2 (origen/main): todos los tools de búsqueda
   // IMPORTANTE (sesión 15): Añadido TOOL_VALIDAR_CAMBIOS_BD para fortalecer seguridad de escritura en BD
-  app:        [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_CONSULTAR_CUADRANTE_TURNOS, TOOL_GENERAR_CUADRANTE_TURNOS, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
+  app:        [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_CONSULTAR_CUADRANTE_TURNOS, TOOL_GENERAR_CUADRANTE_TURNOS, TOOL_CONSULTAR_MI_HORARIO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_GESTIONAR_CHECKLIST, TOOL_DETECTAR_CONFLICTOS_DISCIPLINAS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   tecnico:    [TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO, TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_IMPORTAR_PLANO_DXF, TOOL_ANALIZAR_PLANO_DXF, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS, TOOL_BUSCAR_DOCUMENTOS, TOOL_BUSCAR_TAREAS, TOOL_CONSULTAR_PERSONAL, TOOL_CONSULTAR_INVENTARIO, TOOL_BUSCAR_PROCEDIMIENTOS, TOOL_CONSULTAR_PUNCH_LIST, TOOL_BUSCAR_PROVEEDORES, TOOL_CONSULTAR_PRECIOS, TOOL_GENERAR_GRAFICO, TOOL_PREGUNTAR_USUARIO, TOOL_DELEGAR_TAREA, TOOL_PROGRAMAR_RECORDATORIO, TOOL_LISTAR_TAREAS_PROGRAMADAS, TOOL_CANCELAR_TAREA_PROGRAMADA],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_UPDATE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_VALIDAR_CAMBIOS_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_PREGUNTAR_USUARIO],
@@ -9172,6 +9193,35 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
                `Resumen por trabajadora:\n${resumen.join('\n')}`;
       } catch (e) {
         return JSON.stringify({ ok: false, error: 'Error en cuadrantes de turnos: ' + e.message });
+      }
+    }
+
+    // "qué horario tengo esta semana" (Adrián, 18/09/2026): self-scoped, cualquier persona
+    // autenticada puede preguntarlo -- el endpoint interno filtra siempre por su propio
+    // usuario_id, nunca por uno que el modelo pudiera elegir (mismo patrón que las demás).
+    case 'consultar_mi_horario': {
+      try {
+        if (!env.API_WEB) return JSON.stringify({ ok: false, error: 'Service binding API_WEB no disponible.' });
+        const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/internal/cuadrantes-turnos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
+          body: JSON.stringify({ accion: 'mios', usuario_id, desde: input.desde, hasta: input.hasta }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.ok === false) {
+          if (resp.status === 403) return data.error || 'No se puede consultar el horario sin una sesión iniciada en la app.';
+          return JSON.stringify({ ok: false, error: data.error || `Error consultando el horario (HTTP ${resp.status})` });
+        }
+        const turnos = data.turnos || [];
+        if (!turnos.length) return 'No tienes ningún turno publicado en ese rango de fechas.';
+        const nombresDia = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const filas = turnos.map(t => {
+          const d = new Date(t.fecha + 'T00:00:00');
+          return `• ${nombresDia[d.getDay()]} ${t.fecha.split('-').reverse().join('/')}: ${t.hora_inicio}-${t.hora_fin}${t.es_extra ? ' ⚠️ hora extra' : ''}`;
+        });
+        return `🗓️ Tu horario:\n${filas.join('\n')}`;
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: 'Error consultando el horario: ' + e.message });
       }
     }
 

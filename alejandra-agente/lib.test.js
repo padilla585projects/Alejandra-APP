@@ -2323,6 +2323,47 @@ describe('cableado de las tools de cuadrantes de turnos (Seguridad, "Alejandra p
     expect(bloque).toMatch(/por si acaso/i);
     expect(bloque).toMatch(/nivel_riesgo: 'N1'/);
   });
+
+  // "también Alejandra si se le pregunta 'qué horario tengo esta semana' sabrá contestar"
+  // (Adrián, 18/09/2026) -- self-scoped, distinta de las dos de arriba (gestión).
+  it('consultar_mi_horario exige sesión, no está prohibida al cron y es de solo lectura', () => {
+    expect(TOOLS_REQUIEREN_SESION.has('consultar_mi_horario')).toBe(true);
+    expect(TOOLS_PROHIBIDAS_CRON.has('consultar_mi_horario')).toBe(false);
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("const TOOL_CONSULTAR_MI_HORARIO = {");
+    const fin = src.indexOf("\n};", inicio);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(src.slice(inicio, fin)).toMatch(/nivel_riesgo: 'N0'/);
+  });
+
+  it('consultar_mi_horario llama al mismo endpoint interno, self-scoped por usuario_id, sin SQL propio', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("    case 'consultar_mi_horario': {");
+    const fin = src.indexOf("\n    case 'consultar_inventario': {", inicio);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    const cuerpo = src.slice(inicio, fin);
+    expect(cuerpo).toMatch(/env\.API_WEB\.fetch/);
+    expect(cuerpo).toMatch(/\/internal\/cuadrantes-turnos/);
+    expect(cuerpo).toMatch(/accion: 'mios'/);
+    expect(cuerpo).toMatch(/usuario_id,/);
+    expect(cuerpo).not.toMatch(/env\.DB/);
+    // Nunca un id de otra persona: no acepta ni manda ningún "usuario_id" que no sea el propio.
+    expect(cuerpo).not.toMatch(/input\.usuario_id/);
+  });
+
+  it('el endpoint interno /internal/cuadrantes-turnos deja pasar "mios" sin puedeVerCuadranteTurnos (self-scoped, vale para operarias)', () => {
+    const raizSrc = readFileSync(new URL('../worker.js', import.meta.url), 'utf8');
+    const inicio = raizSrc.indexOf('async function internalCuadrantesTurnos(');
+    const finGate = raizSrc.indexOf('puedeVerCuadranteTurnos(auth)', inicio);
+    const finMios = raizSrc.indexOf("accion === 'mios'", inicio);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(finMios).toBeGreaterThan(inicio);
+    expect(finGate).toBeGreaterThan(inicio);
+    // La rama "mios" tiene que aparecer y devolver ANTES de la barrera puedeVerCuadranteTurnos.
+    expect(finMios).toBeLessThan(finGate);
+    expect(raizSrc.slice(inicio, finGate)).toMatch(/ct\.usuario_id = \?/);
+  });
 });
 
 describe('routing de replanteos (REPL-ROUTING-01)', () => {

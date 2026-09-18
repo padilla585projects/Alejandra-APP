@@ -32196,9 +32196,32 @@ async function internalCuadrantesTurnos(request, env) {
   const body = await request.json().catch(() => ({}));
   const auth = await _authCuadranteInterno(request, env, body);
   if (!auth) return err('No autorizado', 403);
-  if (!puedeVerCuadranteTurnos(auth)) return err('No autorizado', 403);
   await _ensureCuadrantesTurnosTables(env);
   const accion = safeStr(body.accion || 'listar');
+
+  // "mi horario" es self-scoped (WHERE ct.usuario_id = auth.usuario_id): cualquier usuario
+  // autenticado puede preguntar por SU PROPIO turno, igual que el REST /cuadrantes-turnos/mios
+  // (getMiCuadranteTurnos) -- sin la barrera de puedeVerCuadranteTurnos (que excluye
+  // operario), porque las propias PRL suelen ser operarias y son justo quienes preguntan esto.
+  if (accion === 'mios') {
+    const desde = /^\d{4}-\d{2}-\d{2}$/.test(body.desde || '') ? body.desde : null;
+    const hasta = /^\d{4}-\d{2}-\d{2}$/.test(body.hasta || '') ? body.hasta : null;
+    const conds = ['ct.usuario_id = ?', 'cu.empresa_id = ?', "cu.estado = 'publicado'"];
+    const params = [auth.usuario_id, auth.empresa_id];
+    if (desde) { conds.push('ca.fecha >= ?'); params.push(desde); }
+    if (hasta) { conds.push('ca.fecha <= ?'); params.push(hasta); }
+    const { results } = await env.DB.prepare(`
+      SELECT ca.fecha, ca.hora_inicio, ca.hora_fin, ca.horas, ca.es_extra, cu.nombre AS cuadrante_nombre, ct.color
+        FROM cuadrante_asignaciones ca
+        JOIN cuadrante_trabajadoras ct ON ct.id = ca.trabajadora_id
+        JOIN cuadrantes_turnos cu ON cu.id = ca.cuadrante_id
+       WHERE ${conds.join(' AND ')}
+       ORDER BY ca.fecha, ca.hora_inicio
+    `).bind(...params).all();
+    return json({ ok: true, turnos: results || [] });
+  }
+
+  if (!puedeVerCuadranteTurnos(auth)) return err('No autorizado', 403);
 
   if (accion === 'listar') {
     const conds = ['empresa_id = ?']; const params = [auth.empresa_id];
