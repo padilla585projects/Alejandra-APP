@@ -2046,7 +2046,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" onclick="cuadTurnosCerrarForm()">Cancelar</button>
-            <button class="btn btn-primary" style="margin-left:auto" onclick="cuadTurnosGuardar()">Generar</button>
+            <button class="btn btn-primary" id="cuadTurnosBtnGuardar" style="margin-left:auto" onclick="cuadTurnosGuardar()">Generar</button>
           </div>
         </div>
       </div>
@@ -2069,6 +2069,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             <div class="tbl-wrap"><div id="cuadTurnosDetGrid"></div></div>
           </div>
           <div class="modal-footer" style="flex-wrap:wrap">
+            <button class="btn btn-secondary" id="cuadTurnosDetBtnEditar" onclick="cuadTurnosEditar()">✏️ Editar</button>
             <button class="btn btn-secondary" onclick="cuadTurnosImprimir()">🖨️ Imprimir</button>
             <button class="btn btn-secondary" id="cuadTurnosDetBtnPublicar" onclick="cuadTurnosTogglePublicar()">Publicar</button>
             <button class="btn btn-secondary" id="cuadTurnosDetBtnBorrar" style="color:var(--danger)" onclick="cuadTurnosBorrar()">🗑 Eliminar</button>
@@ -20537,7 +20538,7 @@ async function borrarActividadInformeSeg(informeId, actividadId) {
 // (ventana nueva + document.write + window.print diferido). Adrián también puede
 // pedirle el reparto a Alejandra por chat (mismo endpoint, ver alejandra-agente).
 const _cuadTurnos = {
-  lista: [], puedeEditar: false, detalle: null,
+  lista: [], puedeEditar: false, detalle: null, editandoId: null,
   paleta: ['#2563eb', '#d97706', '#16a34a', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d'],
 };
 const CUAD_TURNOS_DIAS = [['L', 'Lun'], ['M', 'Mar'], ['X', 'Mié'], ['J', 'Jue'], ['V', 'Vie'], ['S', 'Sáb'], ['D', 'Dom']];
@@ -20599,7 +20600,9 @@ function cuadTurnosRender() {
 }
 
 function cuadTurnosNuevo() {
+  _cuadTurnos.editandoId = null;
   document.getElementById('cuadTurnosFormTitulo').textContent = 'Nuevo cuadrante';
+  document.getElementById('cuadTurnosBtnGuardar').textContent = 'Generar';
   document.getElementById('cuadTurnosNombre').value = '';
   document.getElementById('cuadTurnosHoraInicio').value = '07:00';
   document.getElementById('cuadTurnosHoraFin').value = '19:00';
@@ -20631,19 +20634,58 @@ function cuadTurnosNuevo() {
   document.getElementById('modalCuadTurnosForm').style.display = 'flex';
 }
 
+// "Editar" reutiliza el mismo formulario que "Nuevo cuadrante", precargado con la config
+// actual -- al guardar, cuadTurnosGuardar() ve _cuadTurnos.editandoId puesto y manda PUT
+// (regenera el reparto entero) en vez de POST (crea uno nuevo). Necesario para corregir
+// nombres/horas/pausa de un cuadrante ya generado sin tener que borrar y recrear.
+function cuadTurnosEditar() {
+  const d = _cuadTurnos.detalle;
+  if (!d) return;
+  const c = d.cuadrante;
+  _cuadTurnos.editandoId = c.id;
+  document.getElementById('cuadTurnosFormTitulo').textContent = `Editar: ${c.nombre}`;
+  document.getElementById('cuadTurnosBtnGuardar').textContent = 'Guardar cambios';
+  document.getElementById('cuadTurnosNombre').value = c.nombre;
+  document.getElementById('cuadTurnosHoraInicio').value = c.hora_inicio;
+  document.getElementById('cuadTurnosHoraFin').value = c.hora_fin;
+  document.getElementById('cuadTurnosPersonas').value = c.personas_simultaneas;
+  document.getElementById('cuadTurnosHorasObjetivo').value = c.horas_objetivo_semana;
+  document.getElementById('cuadTurnosPausaComida').value = c.pausa_comida_min ?? 60;
+  document.getElementById('cuadTurnosFechaInicio').value = c.fecha_inicio;
+  document.getElementById('cuadTurnosSemanas').value = c.semanas;
+  const deptGroup = document.getElementById('cuadTurnosDeptoGroup');
+  const deptSel = document.getElementById('cuadTurnosDepto');
+  if (_cuadTurnosPrivilegiado()) {
+    deptGroup.style.display = '';
+    if (deptSel.options.length < 1) deptSel.innerHTML = _ALL_DEPTS.map(k => `<option value="${k}">${_replOfficeDeptNombre(k)}</option>`).join('');
+    deptSel.value = c.departamento;
+  } else {
+    deptGroup.style.display = 'none';
+  }
+  const dias = document.getElementById('cuadTurnosDias');
+  dias.innerHTML = CUAD_TURNOS_DIAS.map(([l, nombre]) =>
+    `<button type="button" class="btn btn-secondary cuad-dia-btn${c.dias_semana.includes(l) ? ' activo' : ''}" data-dia="${l}" onclick="this.classList.toggle('activo')" style="padding:6px 10px">${nombre}</button>`
+  ).join('');
+  const trab = document.getElementById('cuadTurnosTrabajadoras');
+  trab.innerHTML = '';
+  for (const t of d.trabajadoras) cuadTurnosAddTrabajadora(t.nombre, t.color);
+  cuadTurnosCerrarDetalle();
+  document.getElementById('modalCuadTurnosForm').style.display = 'flex';
+}
+
 function cuadTurnosCerrarForm() {
   document.getElementById('modalCuadTurnosForm').style.display = 'none';
 }
 
-function cuadTurnosAddTrabajadora() {
+function cuadTurnosAddTrabajadora(nombrePrevio, colorPrevio) {
   const cont = document.getElementById('cuadTurnosTrabajadoras');
   const idx = cont.children.length;
-  const color = _cuadTurnos.paleta[idx % _cuadTurnos.paleta.length];
+  const color = colorPrevio || _cuadTurnos.paleta[idx % _cuadTurnos.paleta.length];
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:8px;align-items:center';
   row.innerHTML = `
     <input class="form-input cuad-trab-color" type="color" value="${color}" style="width:40px;padding:2px;flex:0 0 auto">
-    <input class="form-input cuad-trab-nombre" type="text" placeholder="Nombre de la trabajadora" style="flex:1">
+    <input class="form-input cuad-trab-nombre" type="text" placeholder="Nombre de la trabajadora" style="flex:1" value="${nombrePrevio ? escHtml(nombrePrevio) : ''}">
     <button type="button" class="btn btn-secondary" onclick="this.parentElement.remove()" style="flex:0 0 auto">✕</button>`;
   cont.appendChild(row);
 }
@@ -20670,14 +20712,16 @@ async function cuadTurnosGuardar() {
   // resto lo fija siempre la sesión en el backend, nunca el cliente (DEPT-01).
   const departamento = _cuadTurnosPrivilegiado() ? document.getElementById('cuadTurnosDepto').value : undefined;
 
-  const r = await api('/cuadrantes-turnos', { method: 'POST', body: JSON.stringify({
-    nombre, hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, trabajadoras, departamento,
-  }) });
-  if (!r.ok) { toast(r.error || 'Error al generar', 'err'); return; }
-  toast(`Cuadrante generado ✓ (turno de ${r.turno_horas}h, ${r.olas_por_dia} franja(s)/día)`, 'ok');
+  const payload = { nombre, hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, trabajadoras, departamento };
+  const editandoId = _cuadTurnos.editandoId;
+  const r = editandoId
+    ? await api(`/cuadrantes-turnos/${editandoId}`, { method: 'PUT', body: JSON.stringify(payload) })
+    : await api('/cuadrantes-turnos', { method: 'POST', body: JSON.stringify(payload) });
+  if (!r.ok) { toast(r.error || 'Error al guardar', 'err'); return; }
+  toast(`Cuadrante ${editandoId ? 'actualizado' : 'generado'} ✓ (turno de ${r.turno_horas}h, ${r.olas_por_dia} franja(s)/día)`, 'ok');
   cuadTurnosCerrarForm();
   await cuadTurnosListar();
-  cuadTurnosAbrir(r.id);
+  cuadTurnosAbrir(editandoId || r.id);
 }
 
 // Adrián, viendo la primera versión (lista plana día a día): "ese cuadrante no me vale
@@ -20853,6 +20897,7 @@ async function cuadTurnosAbrir(id) {
   const btnPub = document.getElementById('cuadTurnosDetBtnPublicar');
   btnPub.textContent = c.estado === 'publicado' ? '↩️ Pasar a borrador' : '✅ Publicar';
   document.getElementById('cuadTurnosDetBtnBorrar').style.display = _cuadTurnos.puedeEditar ? '' : 'none';
+  document.getElementById('cuadTurnosDetBtnEditar').style.display = _cuadTurnos.puedeEditar ? '' : 'none';
   document.getElementById('modalCuadTurnosDetalle').style.display = 'flex';
 }
 
