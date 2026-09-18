@@ -4390,7 +4390,8 @@ select option{background:var(--surface2);color:var(--text)}
              tienes ninguno -- solo aplica a quien esté en un cuadrante publicado. -->
         <div class="settings-section" id="seccionMiHorario" style="margin-top:16px;display:none">
           <div class="settings-title" style="display:flex;align-items:center;gap:8px">🗓️ Mi horario
-            <button onclick="cargarMiCuadranteTurnos()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:8px;font-size:11px;padding:3px 8px;cursor:pointer;color:var(--muted)">🔄</button>
+            <button onclick="imprimirMiHorario()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:8px;font-size:11px;padding:3px 8px;cursor:pointer;color:var(--muted)">🖨️</button>
+            <button onclick="cargarMiCuadranteTurnos()" style="background:none;border:1px solid var(--border);border-radius:8px;font-size:11px;padding:3px 8px;cursor:pointer;color:var(--muted)">🔄</button>
           </div>
           <div id="listaMiHorario" style="font-size:13px;color:var(--muted)">—</div>
         </div>
@@ -8424,6 +8425,37 @@ async function cargarMiCuadranteTurnos() {
       </div>`;
     }).join('');
   } catch { sec.style.display = 'none'; }
+}
+
+// "cada PRL tendrá el suyo en su perfil en la app y si quieren pueden imprimirlo" (Adrián,
+// 18/09/2026): a diferencia de la tarjeta de arriba (solo las próximas 2 semanas, para no
+// abrumar), el impreso pide un rango amplio para que salga el cuadrante completo publicado.
+async function imprimirMiHorario() {
+  try {
+    const hoy = new Date();
+    const desde = hoy.toISOString().slice(0, 10);
+    const hasta = new Date(hoy.getTime() + 90 * 86400000).toISOString().slice(0, 10);
+    const res = await apiCall(`/cuadrantes-turnos/mios?desde=${desde}&hasta=${hasta}`);
+    const d = await res.json().catch(() => ({}));
+    const turnos = (d?.ok ? d.turnos : []) || [];
+    if (!turnos.length) { toast('No tienes ningún cuadrante publicado todavía', 'err'); return; }
+    const nombresDia = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const filas = turnos.map(t => {
+      const dt = new Date(t.fecha + 'T00:00:00');
+      return `<tr><td style="border:1px solid #999;padding:6px;font-weight:700;white-space:nowrap">${nombresDia[dt.getDay()]} ${t.fecha.split('-').reverse().join('/')}</td>
+        <td style="border:1px solid #999;padding:6px">${esc(t.hora_inicio)}-${esc(t.hora_fin)}${t.es_extra ? ' <b>(hora extra)</b>' : ''}</td></tr>`;
+    }).join('');
+    const s = getSession();
+    const win = window.open('', '_blank');
+    if (!win) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
+    win.document.write(`<html><head><title>Mi horario</title><meta charset="utf-8"></head>
+      <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:600px;margin:20px auto;font-size:13px">
+        <h2>Mi horario${s?.nombre ? ' — ' + esc(s.nombre) : ''}</h2>
+        <table style="width:100%;border-collapse:collapse">${filas}</table>
+        <script>window.onload = () => setTimeout(() => window.print(), 500);<\/script>
+      </body></html>`);
+    win.document.close();
+  } catch { toast('No se pudo generar la impresión (sin conexión)', 'err'); }
 }
 
 async function cargarAccionesPendientesApp() {

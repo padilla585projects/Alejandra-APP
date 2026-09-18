@@ -172,6 +172,9 @@ const TOOLS_REQUIEREN_SESION    = new Set([
   // (_authCuadranteInterno en worker.js), nunca del input; se gatean aquí también por
   // defensa en profundidad.
   'consultar_cuadrante_turnos', 'generar_cuadrante_turnos',
+  // "mi horario" es self-scoped por usuario_id de la sesión -- sin sesión no hay a quién
+  // preguntarle, mismo motivo que las dos de arriba.
+  'consultar_mi_horario',
 
   // ARC-008 §8 / F-2.1 paso 3, decisión del Director (2026-08-02, "Opción A"): primera
   // tool de lectura sobre memoria_gobernada. empresa_id sale de la sesión, nunca del
