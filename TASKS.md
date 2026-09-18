@@ -1,5 +1,20 @@
 # TASKS — Cola operativa inmediata
 
+Estado (2026-09-18): **CUADRANTES-TURNOS-01 — nueva función de Seguridad, en revisión
+(PR #321, rama `feat/seguridad-cuadrantes-turnos`).**
+- Adrián pidió un cuadrante que reparta el horario semanal de las PRL cubriendo una franja
+  de la obra (ej. 7:00-19:00) con horas objetivo/semana (extra si se pasa) y rotación justa
+  para que nadie se queje de hacer siempre el peor turno; luego pidió que se pudiera
+  imprimir diferenciando a cada PRL, y que Alejandra también pudiera generarlo por chat.
+- Implementado: tablas y algoritmo determinista en `worker.js` (cobertura "sin huecos" +
+  rotación por día/semana), pantalla en `panel.html` (crear/vista previa por colores/
+  publicar/imprimir), "Mi horario" en `index.html`, y dos tools nuevas de Alejandra que
+  llaman al mismo cálculo (no lo reimplementan) — mismo patrón que Replanteos.
+  287/287 tests del agente en verde. Verificado en navegador con sesión simulada
+  (sin red real disponible en el entorno de la sesión que lo escribió).
+- **Pendiente:** revisión de Adrián, fusionar, desplegar los dos Workers, y probar con
+  datos reales de una PRL de Seguridad en obra.
+
 Estado (2026-09-18): **PENDIENTE (sin empezar) — realismo de la instalación 3D en Replanteo
 (pegado a la pared, ángulos rectos, tubos en paralelo).** Ver
 `docs/features/replanteo-instalacion-realista/README.md` (con las 3 fotos de referencia que

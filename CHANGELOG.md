@@ -4,6 +4,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-09-18 — Cuadrantes de turnos para Seguridad)
+
+- Nueva función para Seguridad: genera automáticamente el horario semanal de las PRL para
+  cubrir una franja de la obra (ej. 7:00-19:00) con horas objetivo/semana (el resto se marca
+  hora extra) y rotación determinista para que nadie repita siempre el peor turno. Pantalla
+  en `panel.html` (crear, vista previa por colores, publicar, imprimir), "Mi horario" en
+  `index.html`, y dos tools nuevas de Alejandra (`consultar_cuadrante_turnos`,
+  `generar_cuadrante_turnos`) que llaman al mismo cálculo, no lo reimplementan. PR #321,
+  sin desplegar todavía.
+
 ### Fixed (2026-09-18 — el AR de Replanteo (WebXR/PWA) llevaba roto desde el 10/09 sin que nadie lo supiera)
 
 - Sesión de verificación en vivo en un Android real con ARCore (instrumentado por Chrome
