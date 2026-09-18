@@ -31789,6 +31789,7 @@ async function _ensureCuadrantesTurnosTables(env) {
       dias_semana            TEXT    NOT NULL,
       personas_simultaneas   INTEGER NOT NULL DEFAULT 1,
       horas_objetivo_semana  REAL    NOT NULL DEFAULT 40,
+      pausa_comida_min       INTEGER NOT NULL DEFAULT 60,
       fecha_inicio           TEXT    NOT NULL,
       semanas                INTEGER NOT NULL DEFAULT 4,
       estado                 TEXT    NOT NULL DEFAULT 'borrador' CHECK(estado IN ('borrador','publicado')),
@@ -31798,6 +31799,10 @@ async function _ensureCuadrantesTurnosTables(env) {
     )
   `).run();
   await runDDL(env, 'CREATE INDEX IF NOT EXISTS idx_cuadrantes_turnos_empresa ON cuadrantes_turnos(empresa_id, obra_id, departamento)');
+  // Adrián, 19/09/2026: "se me olvidó que también necesitan una hora para comer" -- añadido
+  // a un cuadrante ya en producción (empresa Levitec), hace falta ALTER TABLE además del
+  // CREATE (mismo patrón que fotos_json en Replanteos).
+  await runDDL(env, 'ALTER TABLE cuadrantes_turnos ADD COLUMN pausa_comida_min INTEGER NOT NULL DEFAULT 60');
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS cuadrante_trabajadoras (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31817,11 +31822,15 @@ async function _ensureCuadrantesTurnosTables(env) {
       fecha          TEXT    NOT NULL,
       hora_inicio    TEXT    NOT NULL,
       hora_fin       TEXT    NOT NULL,
+      pausa_inicio   TEXT,
+      pausa_fin      TEXT,
       horas          REAL    NOT NULL,
       es_extra       INTEGER NOT NULL DEFAULT 0
     )
   `).run();
   await runDDL(env, 'CREATE INDEX IF NOT EXISTS idx_cuadrante_asignaciones_cuadrante_fecha ON cuadrante_asignaciones(cuadrante_id, fecha)');
+  await runDDL(env, 'ALTER TABLE cuadrante_asignaciones ADD COLUMN pausa_inicio TEXT');
+  await runDDL(env, 'ALTER TABLE cuadrante_asignaciones ADD COLUMN pausa_fin TEXT');
 }
 
 // Mismo orden que Date.getDay() (0=domingo) y mismo alfabeto que ya usa
@@ -31873,7 +31882,7 @@ function _minToHm(min) {
 // diarias) avanza con el índice de día, y qué oleada (turno más temprano/tardío) le toca a
 // cada plaza también avanza con el día -- determinista y auditable, ciclo completo en
 // pocos días/semanas, no una heurística difusa.
-function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, trabajadoras }) {
+function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, trabajadoras }) {
   const N = (trabajadoras || []).length;
   if (N < 1) return { error: 'Hace falta al menos una trabajadora' };
   const diasSet = new Set(String(dias_semana || '').split('').filter(l => DIAS_SEMANA_LETRAS.includes(l)));
@@ -31885,20 +31894,40 @@ function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_s
   const H = Number(horas_objetivo_semana) > 0 ? Number(horas_objetivo_semana) : 40;
   const nSemanas = Math.max(1, parseInt(semanas, 10) || 4);
 
-  // 1) Duración de turno por trabajadora/día, a cuarto de hora. Si horas_objetivo/días no
-  // encaja exacto, el redondeo hace que la semana entera sume algo más que H -> lo detecta
-  // el paso 4 (es_extra), no hace falta tratarlo aparte aquí.
+  // 1) Duración TRABAJADA de turno por trabajadora/día, a cuarto de hora. Si
+  // horas_objetivo/días no encaja exacto, el redondeo hace que la semana entera sume algo
+  // más que H -> lo detecta el paso 4 (es_extra), no hace falta tratarlo aparte aquí.
   let T = Math.max(0.25, Math.round((H / nDias) * 4) / 4);
   if (T > V) T = V;
 
-  // 2) Oleadas necesarias para que P personas cubran la ventana entera sin huecos.
+  // Pausa de comida (Adrián, 19/09/2026: "se me olvidó que también necesitan una hora para
+  // comer") -- NO cuenta como hora trabajada (España: la comida no es tiempo efectivo de
+  // trabajo salvo que el convenio diga lo contrario), así que se añade COMO TIEMPO EXTRA DE
+  // PRESENCIA encima de T, nunca restándose de las horas objetivo. turnoMin sigue siendo
+  // solo lo trabajado (lo que cuenta para H); turnoSpanMin es el tiempo real en el sitio
+  // (trabajo + comida), y es turnoSpanMin -no turnoMin- el que se usa para tejer las
+  // oleadas sin huecos: así la persona sigue presente durante su comida, solo dependiendo
+  // de otra oleada solapada para la cobertura en ese rato.
   const turnoMin = Math.round(T * 60);
   const ventanaMin = Math.round(V * 60);
-  const nOlas = Math.max(1, Math.ceil(ventanaMin / turnoMin));
+  let pausaMin = Math.max(0, parseInt(pausa_comida_min, 10) || 0);
+  if (turnoMin + pausaMin > ventanaMin) pausaMin = Math.max(0, ventanaMin - turnoMin); // no cabe: se recorta antes que inventar horas
+  const turnoSpanMin = turnoMin + pausaMin;
+
+  // 2) Oleadas necesarias para que P personas cubran la ventana entera sin huecos (usando
+  // el tiempo de PRESENCIA, turnoSpanMin, no solo lo trabajado).
+  const nOlas = Math.max(1, Math.ceil(ventanaMin / turnoSpanMin));
   const olaOffsetMin = [];
-  for (let i = 0; i < nOlas; i++) olaOffsetMin.push(Math.min(i * turnoMin, ventanaMin - turnoMin));
+  for (let i = 0; i < nOlas; i++) olaOffsetMin.push(Math.min(i * turnoSpanMin, ventanaMin - turnoSpanMin));
   const slotsPorDia = nOlas * P;
   const inicioMin = _hmToMin(hora_inicio);
+  // Con nOlas>=2 la comida de una oleada cae siempre dentro del tramo solapado de la
+  // oleada vecina (se comprobó con el caso real: 07:00-19:00, 2 a la vez -> oleadas
+  // 07:00-16:00 y 10:00-19:00, cada comida de ~1h en su punto medio queda cubierta por la
+  // otra oleada) -- la cobertura de P personas se mantiene. Con una sola oleada (turno de
+  // presencia que ya ocupa toda la ventana) no hay otra oleada que cubra: la comida de esa
+  // persona es, honestamente, un hueco de cobertura de `pausaMin` minutos -- no hay forma
+  // de evitarlo con una sola persona sin inventar una más.
 
   // 3) Fechas cubiertas, en orden, con su índice de día (para la rotación) y de semana
   // (para el corte de horas objetivo/extra). La semana es la natural de lunes a domingo
@@ -31935,11 +31964,18 @@ function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_s
         const key = `${trabIdx}|${semanaIdx}`;
         const total = (horasSemana[key] || 0) + T;
         horasSemana[key] = total;
+        // Pausa centrada en el tramo trabajado (no en todo el turnoSpan): con turno de 8h
+        // y comida de 1h, entra a las 07:00, come de 11:30 a 12:30 (mitad de las 8h
+        // trabajadas) y sale a las 16:00 -- no a mitad del turnoSpan de 9h, que la dejaría
+        // descompensada hacia el principio.
+        const pausaInicio = pausaMin > 0 ? inicioOla + Math.round(turnoMin / 2) : null;
         asignaciones.push({
           trabajadora_id: trab.id,
           fecha,
           hora_inicio: _minToHm(inicioOla),
-          hora_fin: _minToHm(inicioOla + turnoMin),
+          hora_fin: _minToHm(inicioOla + turnoSpanMin),
+          pausa_inicio: pausaInicio !== null ? _minToHm(pausaInicio) : null,
+          pausa_fin: pausaInicio !== null ? _minToHm(pausaInicio + pausaMin) : null,
           horas: T,
           es_extra: total > H ? 1 : 0,
         });
@@ -31967,10 +32003,14 @@ function _validarConfigCuadrante(body, existente) {
   const horas_objetivo_semana = (body.horas_objetivo_semana !== undefined && Number(body.horas_objetivo_semana) > 0)
     ? Number(body.horas_objetivo_semana)
     : (existente?.horas_objetivo_semana || 40);
+  // Pausa de comida: 0 es válido a propósito (cuadrantes de menos de ~6h que no la necesitan).
+  const pausa_comida_min = body.pausa_comida_min !== undefined
+    ? Math.max(0, Math.min(240, parseInt(body.pausa_comida_min, 10) || 0))
+    : (existente?.pausa_comida_min ?? 60);
   const fecha_inicio = /^\d{4}-\d{2}-\d{2}$/.test(body.fecha_inicio) ? body.fecha_inicio : (existente?.fecha_inicio || null);
   if (!fecha_inicio) return { error: 'Falta la fecha de inicio' };
   const semanas = body.semanas !== undefined ? Math.min(26, Math.max(1, parseInt(body.semanas, 10) || 4)) : (existente?.semanas || 4);
-  return { nombre, hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas };
+  return { nombre, hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas };
 }
 
 async function _insertarTrabajadorasCuadrante(env, cuadranteId, trabajadorasIn) {
@@ -31991,8 +32031,8 @@ async function _insertarTrabajadorasCuadrante(env, cuadranteId, trabajadorasIn) 
 async function _guardarAsignacionesCuadrante(env, cuadranteId, asignaciones) {
   await env.DB.prepare('DELETE FROM cuadrante_asignaciones WHERE cuadrante_id=?').bind(cuadranteId).run();
   const stmt = a => env.DB.prepare(
-    'INSERT INTO cuadrante_asignaciones (cuadrante_id, trabajadora_id, fecha, hora_inicio, hora_fin, horas, es_extra) VALUES (?,?,?,?,?,?,?)'
-  ).bind(cuadranteId, a.trabajadora_id, a.fecha, a.hora_inicio, a.hora_fin, a.horas, a.es_extra);
+    'INSERT INTO cuadrante_asignaciones (cuadrante_id, trabajadora_id, fecha, hora_inicio, hora_fin, pausa_inicio, pausa_fin, horas, es_extra) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).bind(cuadranteId, a.trabajadora_id, a.fecha, a.hora_inicio, a.hora_fin, a.pausa_inicio || null, a.pausa_fin || null, a.horas, a.es_extra);
   for (let i = 0; i < asignaciones.length; i += 50) {
     await env.DB.batch(asignaciones.slice(i, i + 50).map(stmt));
   }
@@ -32011,7 +32051,7 @@ async function listarCuadrantesTurnos(request, env) {
   if (obraId) { conds.push('obra_id = ?'); params.push(obraId); }
   const { results } = await env.DB.prepare(
     `SELECT id, empresa_id, obra_id, departamento, nombre, hora_inicio, hora_fin, dias_semana,
-            personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, estado, creado_por, creado_en, actualizado_en
+            personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, estado, creado_por, creado_en, actualizado_en
        FROM cuadrantes_turnos WHERE ${conds.join(' AND ')} ORDER BY actualizado_en DESC LIMIT 200`
   ).bind(...params).all();
   return json({ ok: true, cuadrantes: results || [], puede_editar: puedeEditarCuadranteTurnos(auth) });
@@ -32032,10 +32072,10 @@ async function crearCuadranteTurnos(request, env) {
 
   const r = await env.DB.prepare(`
     INSERT INTO cuadrantes_turnos (empresa_id, obra_id, departamento, nombre, hora_inicio, hora_fin, dias_semana,
-                                    personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, estado, creado_por)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,'borrador',?)
+                                    personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, estado, creado_por)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'borrador',?)
   `).bind(auth.empresa_id, obra_id, dept, cfg.nombre, cfg.hora_inicio, cfg.hora_fin, cfg.dias_semana,
-          cfg.personas_simultaneas, cfg.horas_objetivo_semana, cfg.fecha_inicio, cfg.semanas, auth.nombre || auth.rol).run();
+          cfg.personas_simultaneas, cfg.horas_objetivo_semana, cfg.pausa_comida_min, cfg.fecha_inicio, cfg.semanas, auth.nombre || auth.rol).run();
   const cuadranteId = r.meta.last_row_id;
 
   const trabajadoras = await _insertarTrabajadorasCuadrante(env, cuadranteId, trabajadorasIn);
@@ -32069,7 +32109,7 @@ async function getCuadranteTurnos(request, env, path) {
     'SELECT id, usuario_id, nombre, color, activo FROM cuadrante_trabajadoras WHERE cuadrante_id=? ORDER BY id'
   ).bind(id).all();
   const { results: asignaciones } = await env.DB.prepare(
-    'SELECT id, trabajadora_id, fecha, hora_inicio, hora_fin, horas, es_extra FROM cuadrante_asignaciones WHERE cuadrante_id=? ORDER BY fecha, hora_inicio'
+    'SELECT id, trabajadora_id, fecha, hora_inicio, hora_fin, pausa_inicio, pausa_fin, horas, es_extra FROM cuadrante_asignaciones WHERE cuadrante_id=? ORDER BY fecha, hora_inicio'
   ).bind(id).all();
   return json({ ok: true, cuadrante: row, trabajadoras: trabajadoras || [], asignaciones: asignaciones || [], puede_editar: puedeEditarCuadranteTurnos(auth) });
 }
@@ -32097,9 +32137,9 @@ async function actualizarCuadranteTurnos(request, env, path) {
   if (cfg.error) return err(cfg.error, 400);
   await env.DB.prepare(`
     UPDATE cuadrantes_turnos SET nombre=?, hora_inicio=?, hora_fin=?, dias_semana=?, personas_simultaneas=?,
-           horas_objetivo_semana=?, fecha_inicio=?, semanas=?, actualizado_en=datetime('now') WHERE id=?
+           horas_objetivo_semana=?, pausa_comida_min=?, fecha_inicio=?, semanas=?, actualizado_en=datetime('now') WHERE id=?
   `).bind(cfg.nombre, cfg.hora_inicio, cfg.hora_fin, cfg.dias_semana, cfg.personas_simultaneas,
-          cfg.horas_objetivo_semana, cfg.fecha_inicio, cfg.semanas, id).run();
+          cfg.horas_objetivo_semana, cfg.pausa_comida_min, cfg.fecha_inicio, cfg.semanas, id).run();
 
   let trabajadoras;
   if (Array.isArray(body.trabajadoras)) {
@@ -32150,7 +32190,7 @@ async function getMiCuadranteTurnos(request, env) {
   if (desde) { conds.push('ca.fecha >= ?'); params.push(desde); }
   if (hasta) { conds.push('ca.fecha <= ?'); params.push(hasta); }
   const { results } = await env.DB.prepare(`
-    SELECT ca.fecha, ca.hora_inicio, ca.hora_fin, ca.horas, ca.es_extra, cu.nombre AS cuadrante_nombre, ct.color
+    SELECT ca.fecha, ca.hora_inicio, ca.hora_fin, ca.pausa_inicio, ca.pausa_fin, ca.horas, ca.es_extra, cu.nombre AS cuadrante_nombre, ct.color
       FROM cuadrante_asignaciones ca
       JOIN cuadrante_trabajadoras ct ON ct.id = ca.trabajadora_id
       JOIN cuadrantes_turnos cu ON cu.id = ca.cuadrante_id
@@ -32218,7 +32258,7 @@ async function internalCuadrantesTurnos(request, env) {
     if (desde) { conds.push('ca.fecha >= ?'); params.push(desde); }
     if (hasta) { conds.push('ca.fecha <= ?'); params.push(hasta); }
     const { results } = await env.DB.prepare(`
-      SELECT ca.fecha, ca.hora_inicio, ca.hora_fin, ca.horas, ca.es_extra, cu.nombre AS cuadrante_nombre, ct.color
+      SELECT ca.fecha, ca.hora_inicio, ca.hora_fin, ca.pausa_inicio, ca.pausa_fin, ca.horas, ca.es_extra, cu.nombre AS cuadrante_nombre, ct.color
         FROM cuadrante_asignaciones ca
         JOIN cuadrante_trabajadoras ct ON ct.id = ca.trabajadora_id
         JOIN cuadrantes_turnos cu ON cu.id = ca.cuadrante_id
@@ -32238,7 +32278,7 @@ async function internalCuadrantesTurnos(request, env) {
     if (deptFiltro) { conds.push('departamento = ?'); params.push(deptFiltro); }
     const { results } = await env.DB.prepare(
       `SELECT id, nombre, departamento, hora_inicio, hora_fin, dias_semana, personas_simultaneas,
-              horas_objetivo_semana, fecha_inicio, semanas, estado, actualizado_en
+              horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, estado, actualizado_en
          FROM cuadrantes_turnos WHERE ${conds.join(' AND ')} ORDER BY actualizado_en DESC LIMIT 20`
     ).bind(...params).all();
     return json({ ok: true, cuadrantes: results || [] });
@@ -32251,7 +32291,7 @@ async function internalCuadrantesTurnos(request, env) {
     if (!row) return err('Cuadrante no encontrado', 404);
     const { results: trabajadoras } = await env.DB.prepare('SELECT id, nombre, color FROM cuadrante_trabajadoras WHERE cuadrante_id=? ORDER BY id').bind(id).all();
     const { results: asignaciones } = await env.DB.prepare(
-      'SELECT trabajadora_id, fecha, hora_inicio, hora_fin, horas, es_extra FROM cuadrante_asignaciones WHERE cuadrante_id=? ORDER BY fecha, hora_inicio'
+      'SELECT trabajadora_id, fecha, hora_inicio, hora_fin, pausa_inicio, pausa_fin, horas, es_extra FROM cuadrante_asignaciones WHERE cuadrante_id=? ORDER BY fecha, hora_inicio'
     ).bind(id).all();
     return json({ ok: true, cuadrante: row, trabajadoras: trabajadoras || [], asignaciones: asignaciones || [] });
   }
@@ -32267,10 +32307,10 @@ async function internalCuadrantesTurnos(request, env) {
 
     const r = await env.DB.prepare(`
       INSERT INTO cuadrantes_turnos (empresa_id, obra_id, departamento, nombre, hora_inicio, hora_fin, dias_semana,
-                                      personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, estado, creado_por)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,'borrador',?)
+                                      personas_simultaneas, horas_objetivo_semana, pausa_comida_min, fecha_inicio, semanas, estado, creado_por)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'borrador',?)
     `).bind(auth.empresa_id, obra_id, dept, cfg.nombre, cfg.hora_inicio, cfg.hora_fin, cfg.dias_semana,
-            cfg.personas_simultaneas, cfg.horas_objetivo_semana, cfg.fecha_inicio, cfg.semanas, `Alejandra (${auth.nombre || auth.rol})`).run();
+            cfg.personas_simultaneas, cfg.horas_objetivo_semana, cfg.pausa_comida_min, cfg.fecha_inicio, cfg.semanas, `Alejandra (${auth.nombre || auth.rol})`).run();
     const cuadranteId = r.meta.last_row_id;
 
     const trabajadoras = await _insertarTrabajadorasCuadrante(env, cuadranteId, trabajadorasIn);
