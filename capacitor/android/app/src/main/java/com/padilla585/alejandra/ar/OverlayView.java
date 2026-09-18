@@ -11,7 +11,6 @@ import android.view.View;
  * La Activity le pasa las coordenadas de pantalla ya proyectadas desde el mundo 3D de ARCore.
  */
 public class OverlayView extends View {
-    private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dotBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint reticlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -25,7 +24,6 @@ public class OverlayView extends View {
 
     public OverlayView(Context c) {
         super(c);
-        linePaint.setColor(Color.parseColor("#f97316")); linePaint.setStrokeWidth(8f); linePaint.setStyle(Paint.Style.STROKE);
         dotPaint.setColor(Color.parseColor("#f97316"));
         dotBorder.setColor(Color.WHITE); dotBorder.setStyle(Paint.Style.STROKE); dotBorder.setStrokeWidth(4f);
         reticlePaint.setColor(Color.WHITE); reticlePaint.setStyle(Paint.Style.STROKE); reticlePaint.setStrokeWidth(4f);
@@ -42,11 +40,13 @@ public class OverlayView extends View {
                 : reticleState == RETICLE_FALLBACK ? Color.parseColor("#38bdf8") : Color.WHITE);
         canvas.drawCircle(cx, cy, 26f, reticlePaint);
         canvas.drawCircle(cx, cy, 3f, dotPaint);
-        for (int i = 2; i + 1 < pts.length; i += 2) {
-            float ax = pts[i - 2], ay = pts[i - 1], bx = pts[i], by = pts[i + 1];
-            if (Float.isNaN(ax) || Float.isNaN(bx)) continue;
-            canvas.drawLine(ax, ay, bx, by, linePaint);
-        }
+        // REPL-AR-OVERLAY-01 (17/09/2026): Adrian -- "deberia pintar directamente el tubo no la
+        // linea". Antes esta linea 2D plana entre puntos era el unico trazado visible; ahora que
+        // threeOverlay pinta el tubo/rejiband/etc. real en 3D (sincronizarContenidoOverlay, mismas
+        // matrices de camara que este overlay 2D) esa linea sobraba -- ademas de quedar mal
+        // encima del tubo real, si el tubo se veia mal colocado la linea seguia "bien" porque usa
+        // los mismos anchors, dando una falsa sensacion de que todo iba fino. Se deja solo el
+        // punto/reticula (para saber donde se ha tocado), el tubo real es el trazado.
         for (int i = 0; i + 1 < pts.length; i += 2) {
             float x = pts[i], y = pts[i + 1];
             if (Float.isNaN(x)) continue;
