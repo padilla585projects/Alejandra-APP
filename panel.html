@@ -652,6 +652,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     <button class="nav-item nav-seguridad-section" data-page="informeSegSemanal" onclick="navTo('informeSegSemanal')" style="display:none">
       <span class="nav-icon">📝</span> Informe Semanal
     </button>
+    <button class="nav-item nav-seguridad-section" data-page="cuadrantesTurnos" onclick="navTo('cuadrantesTurnos')" style="display:none">
+      <span class="nav-icon">🗓️</span> Cuadrantes de turnos
+    </button>
 
     <!-- DEPT-CPD-01 (09/08/2026): Sondas CPD tenía su propia sección aparte pero Adrian
          señaló que seguía viviendo dentro de "Inventarios" — se le da su propia
@@ -1948,6 +1951,103 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" style="flex:1" onclick="replOfficeCerrarCatalogo()">Cerrar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cuadrantes de turnos (Seguridad, 18/09/2026): reparto automático del horario
+           semanal para cubrir una franja de la obra, con horas objetivo/semana y rotación
+           justa entre semanas. Pedido por Adrián: "Alejandra puede hacer el reparto" también
+           lo genera por chat (mismo endpoint), no solo desde aquí. -->
+      <div class="page" id="pageCuadrantesTurnos">
+        <div class="page-title">🗓️ Cuadrantes de turnos</div>
+        <div class="page-sub">Reparto automático del horario semanal para cubrir una franja de la obra, con horas objetivo por semana y rotación justa</div>
+        <div class="tbl-toolbar">
+          <button class="btn btn-secondary" onclick="cuadTurnosListar()">🔄 Actualizar</button>
+          <button class="btn btn-primary" onclick="cuadTurnosNuevo()">➕ Nuevo cuadrante</button>
+        </div>
+        <div class="card" style="padding:18px">
+          <div class="tbl-wrap"><div id="cuadTurnosContent"><div class="empty-state">Cargando…</div></div></div>
+        </div>
+      </div>
+
+      <!-- Formulario: crea un cuadrante y dispara el reparto automático -->
+      <div class="modal-overlay" id="modalCuadTurnosForm" style="display:none" onclick="if(event.target===this)cuadTurnosCerrarForm()">
+        <div class="modal" style="max-width:640px;width:96%">
+          <div class="modal-header">
+            <div class="modal-title" id="cuadTurnosFormTitulo">Nuevo cuadrante</div>
+            <button class="modal-close" onclick="cuadTurnosCerrarForm()">✕</button>
+          </div>
+          <div class="modal-body" style="max-height:78vh;overflow:auto">
+            <div class="form-group">
+              <label>Nombre *</label>
+              <input class="form-input" id="cuadTurnosNombre" type="text" placeholder='Ej: "Seguridad — semana 39"'>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group">
+                <label>Cobertura desde *</label>
+                <input class="form-input" id="cuadTurnosHoraInicio" type="time" value="07:00">
+              </div>
+              <div class="form-group">
+                <label>Cobertura hasta *</label>
+                <input class="form-input" id="cuadTurnosHoraFin" type="time" value="19:00">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Días que hay que cubrir *</label>
+              <div id="cuadTurnosDias" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group">
+                <label>Personas a la vez *</label>
+                <input class="form-input" id="cuadTurnosPersonas" type="number" min="1" value="1">
+              </div>
+              <div class="form-group">
+                <label>Horas objetivo/semana *</label>
+                <input class="form-input" id="cuadTurnosHorasObjetivo" type="number" min="1" step="0.5" value="40">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group">
+                <label>Fecha de inicio *</label>
+                <input class="form-input" id="cuadTurnosFechaInicio" type="date">
+              </div>
+              <div class="form-group">
+                <label>Semanas a generar *</label>
+                <input class="form-input" id="cuadTurnosSemanas" type="number" min="1" max="26" value="4">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Trabajadoras *</label>
+              <div id="cuadTurnosTrabajadoras" style="display:flex;flex-direction:column;gap:6px"></div>
+              <button type="button" class="btn btn-secondary" style="margin-top:8px" onclick="cuadTurnosAddTrabajadora()">➕ Añadir trabajadora</button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cuadTurnosCerrarForm()">Cancelar</button>
+            <button class="btn btn-primary" style="margin-left:auto" onclick="cuadTurnosGuardar()">Generar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalle: vista previa del reparto generado, imprimir, publicar, borrar -->
+      <div class="modal-overlay" id="modalCuadTurnosDetalle" style="display:none" onclick="if(event.target===this)cuadTurnosCerrarDetalle()">
+        <div class="modal" style="max-width:960px;width:96%">
+          <div class="modal-header">
+            <div class="modal-title" id="cuadTurnosDetTitulo">Cuadrante</div>
+            <button class="modal-close" onclick="cuadTurnosCerrarDetalle()">✕</button>
+          </div>
+          <div class="modal-body" style="max-height:78vh;overflow:auto">
+            <div id="cuadTurnosDetMeta" style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+            <div id="cuadTurnosDetLeyenda" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px"></div>
+            <div id="cuadTurnosDetResumen" style="margin-bottom:14px"></div>
+            <div class="tbl-wrap"><div id="cuadTurnosDetGrid"></div></div>
+          </div>
+          <div class="modal-footer" style="flex-wrap:wrap">
+            <button class="btn btn-secondary" onclick="cuadTurnosImprimir()">🖨️ Imprimir</button>
+            <button class="btn btn-secondary" id="cuadTurnosDetBtnPublicar" onclick="cuadTurnosTogglePublicar()">Publicar</button>
+            <button class="btn btn-secondary" id="cuadTurnosDetBtnBorrar" style="color:var(--danger)" onclick="cuadTurnosBorrar()">🗑 Eliminar</button>
+            <button class="btn btn-primary" style="margin-left:auto" onclick="cuadTurnosCerrarDetalle()">Cerrar</button>
           </div>
         </div>
       </div>
@@ -15659,6 +15759,7 @@ const PAGE_TITLES = {
   partesPanel: '📋 Partes Diarios',
   segRegistros: '📷 Registro de Seguridad',
   informeSegSemanal: '📝 Informe Semanal de Seguridad',
+  cuadrantesTurnos: '🗓️ Cuadrantes de turnos',
   correos: '📧 Mis Correos',
   tareasProgramadas: '🕐 Mis Tareas Programadas',
   hitos: '🏁 Hitos de Obra',
@@ -15977,6 +16078,7 @@ const PAGE_LOADERS = {
   telecomRacks: (...a) => telecomOfficeCargar(...a),
   cpdSondas: (...a) => cpdOfficeCargar(...a),
   replanteos: (...a) => replOfficeCargar(...a),
+  cuadrantesTurnos: (...a) => cuadTurnosCargar(...a),
   seguridad: cargarSeguridad,
   obras: cargarObras,
   documentos: cargarDocumentos,
@@ -20380,6 +20482,243 @@ async function borrarActividadInformeSeg(informeId, actividadId) {
   const r = await api(`/informes-seg/actividad/${actividadId}`, { method: 'DELETE' });
   if (!r.ok) { toast(r.error || 'Error al borrar', 'err'); return; }
   verInformeSeg(informeId);
+}
+
+// ── Cuadrantes de turnos (Seguridad, 18/09/2026) ────────────────────────────
+// Reparto automático del horario semanal para cubrir una franja de la obra (ej.
+// 7:00-19:00), con horas objetivo/semana (lo que pase se marca hora extra) y rotación
+// justa entre semanas. El cálculo entero vive en worker.js (generarCuadranteTurnos);
+// aquí solo se llama, se pinta y se imprime -- mismo patrón que imprimirInformeSeg
+// (ventana nueva + document.write + window.print diferido). Adrián también puede
+// pedirle el reparto a Alejandra por chat (mismo endpoint, ver alejandra-agente).
+const _cuadTurnos = {
+  lista: [], puedeEditar: false, detalle: null,
+  paleta: ['#2563eb', '#d97706', '#16a34a', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d'],
+};
+const CUAD_TURNOS_DIAS = [['L', 'Lun'], ['M', 'Mar'], ['X', 'Mié'], ['J', 'Jue'], ['V', 'Vie'], ['S', 'Sáb'], ['D', 'Dom']];
+
+async function cuadTurnosCargar() {
+  if (!document.getElementById('cuadTurnosContent')) return;
+  await cuadTurnosListar();
+}
+
+async function cuadTurnosListar() {
+  const cont = document.getElementById('cuadTurnosContent');
+  if (!cont) return;
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const data = await api('/cuadrantes-turnos');
+  if (!data || data.ok === false) {
+    cont.innerHTML = `<div class="empty-state">${escHtml(data?.error || 'Error al cargar')}</div>`;
+    return;
+  }
+  _cuadTurnos.lista = data.cuadrantes || [];
+  _cuadTurnos.puedeEditar = !!data.puede_editar;
+  cuadTurnosRender();
+}
+
+function cuadTurnosRender() {
+  const cont = document.getElementById('cuadTurnosContent');
+  if (!cont) return;
+  const lista = _cuadTurnos.lista;
+  if (!lista.length) {
+    cont.innerHTML = '<div class="empty-state">Sin cuadrantes todavía. Crea uno con "➕ Nuevo cuadrante".</div>';
+    return;
+  }
+  const filas = lista.map(c => {
+    const [etq, cls] = c.estado === 'publicado' ? ['Publicado', 'badge-ok'] : ['Borrador', 'badge-warn'];
+    return `<tr style="cursor:pointer" onclick="cuadTurnosAbrir(${c.id})">
+      <td><div style="font-weight:700">${escHtml(c.nombre)}</div>
+          <div style="font-size:11px;color:var(--muted)">${escHtml(c.hora_inicio)}-${escHtml(c.hora_fin)} · días ${escHtml(c.dias_semana)} · ${c.personas_simultaneas} a la vez</div></td>
+      <td>${c.horas_objetivo_semana}h/semana</td>
+      <td><span class="badge ${cls}">${etq}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${escHtml(c.creado_por || '—')}</td>
+    </tr>`;
+  }).join('');
+  cont.innerHTML = `<table class="tbl"><thead><tr><th>Cuadrante</th><th>Objetivo</th><th>Estado</th><th>Creado por</th></tr></thead><tbody>${filas}</tbody></table>`;
+}
+
+function cuadTurnosNuevo() {
+  document.getElementById('cuadTurnosFormTitulo').textContent = 'Nuevo cuadrante';
+  document.getElementById('cuadTurnosNombre').value = '';
+  document.getElementById('cuadTurnosHoraInicio').value = '07:00';
+  document.getElementById('cuadTurnosHoraFin').value = '19:00';
+  document.getElementById('cuadTurnosPersonas').value = '1';
+  document.getElementById('cuadTurnosHorasObjetivo').value = '40';
+  document.getElementById('cuadTurnosFechaInicio').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('cuadTurnosSemanas').value = '4';
+  const dias = document.getElementById('cuadTurnosDias');
+  dias.innerHTML = CUAD_TURNOS_DIAS.map(([l, nombre], i) =>
+    `<button type="button" class="btn btn-secondary cuad-dia-btn${i < 5 ? ' activo' : ''}" data-dia="${l}" onclick="this.classList.toggle('activo')" style="padding:6px 10px">${nombre}</button>`
+  ).join('');
+  const trab = document.getElementById('cuadTurnosTrabajadoras');
+  trab.innerHTML = '';
+  cuadTurnosAddTrabajadora();
+  cuadTurnosAddTrabajadora();
+  document.getElementById('modalCuadTurnosForm').style.display = 'flex';
+}
+
+function cuadTurnosCerrarForm() {
+  document.getElementById('modalCuadTurnosForm').style.display = 'none';
+}
+
+function cuadTurnosAddTrabajadora() {
+  const cont = document.getElementById('cuadTurnosTrabajadoras');
+  const idx = cont.children.length;
+  const color = _cuadTurnos.paleta[idx % _cuadTurnos.paleta.length];
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;align-items:center';
+  row.innerHTML = `
+    <input class="form-input cuad-trab-color" type="color" value="${color}" style="width:40px;padding:2px;flex:0 0 auto">
+    <input class="form-input cuad-trab-nombre" type="text" placeholder="Nombre de la trabajadora" style="flex:1">
+    <button type="button" class="btn btn-secondary" onclick="this.parentElement.remove()" style="flex:0 0 auto">✕</button>`;
+  cont.appendChild(row);
+}
+
+async function cuadTurnosGuardar() {
+  const nombre = document.getElementById('cuadTurnosNombre').value.trim();
+  if (!nombre) return toast('El nombre es obligatorio', 'err');
+  const hora_inicio = document.getElementById('cuadTurnosHoraInicio').value;
+  const hora_fin = document.getElementById('cuadTurnosHoraFin').value;
+  const dias_semana = [...document.querySelectorAll('#cuadTurnosDias .cuad-dia-btn.activo')].map(b => b.dataset.dia).join('');
+  if (!dias_semana) return toast('Selecciona al menos un día de cobertura', 'err');
+  const personas_simultaneas = parseInt(document.getElementById('cuadTurnosPersonas').value, 10) || 1;
+  const horas_objetivo_semana = parseFloat(document.getElementById('cuadTurnosHorasObjetivo').value) || 40;
+  const fecha_inicio = document.getElementById('cuadTurnosFechaInicio').value;
+  if (!fecha_inicio) return toast('Falta la fecha de inicio', 'err');
+  const semanas = parseInt(document.getElementById('cuadTurnosSemanas').value, 10) || 4;
+  const trabajadoras = [...document.querySelectorAll('#cuadTurnosTrabajadoras > div')].map(row => ({
+    nombre: row.querySelector('.cuad-trab-nombre').value.trim(),
+    color: row.querySelector('.cuad-trab-color').value,
+  })).filter(t => t.nombre);
+  if (!trabajadoras.length) return toast('Añade al menos una trabajadora', 'err');
+
+  const r = await api('/cuadrantes-turnos', { method: 'POST', body: JSON.stringify({
+    nombre, hora_inicio, hora_fin, dias_semana, personas_simultaneas, horas_objetivo_semana, fecha_inicio, semanas, trabajadoras,
+  }) });
+  if (!r.ok) { toast(r.error || 'Error al generar', 'err'); return; }
+  toast(`Cuadrante generado ✓ (turno de ${r.turno_horas}h, ${r.olas_por_dia} franja(s)/día)`, 'ok');
+  cuadTurnosCerrarForm();
+  await cuadTurnosListar();
+  cuadTurnosAbrir(r.id);
+}
+
+async function cuadTurnosAbrir(id) {
+  const data = await api(`/cuadrantes-turnos/${id}`);
+  if (!data || data.ok === false) { toast(data?.error || 'Error al cargar', 'err'); return; }
+  _cuadTurnos.detalle = data;
+  _cuadTurnos.puedeEditar = !!data.puede_editar;
+  const c = data.cuadrante;
+  document.getElementById('cuadTurnosDetTitulo').textContent = c.nombre;
+  document.getElementById('cuadTurnosDetMeta').innerHTML = `
+    <span>🕐 ${escHtml(c.hora_inicio)}-${escHtml(c.hora_fin)}</span>
+    <span>📅 días ${escHtml(c.dias_semana)}</span>
+    <span>👥 ${c.personas_simultaneas} a la vez</span>
+    <span>🎯 ${c.horas_objetivo_semana}h/semana</span>
+    <span>${c.estado === 'publicado' ? '✅ publicado' : '✏️ borrador'}</span>`;
+  document.getElementById('cuadTurnosDetLeyenda').innerHTML = data.trabajadoras.map(t =>
+    `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px"><span style="width:12px;height:12px;border-radius:3px;background:${t.color};display:inline-block"></span>${escHtml(t.nombre)}</span>`
+  ).join('');
+
+  // Resumen de horas/extra por trabajadora y semana (misma semanaIdx que generarCuadranteTurnos).
+  const semanaDe = fecha => Math.floor((new Date(fecha + 'T00:00:00') - new Date(c.fecha_inicio + 'T00:00:00')) / (7 * 86400000));
+  const porSemana = {};
+  for (const a of data.asignaciones) {
+    const key = `${a.trabajadora_id}|${semanaDe(a.fecha)}`;
+    porSemana[key] = porSemana[key] || { horas: 0, extra: 0 };
+    porSemana[key].horas += a.horas;
+    if (a.es_extra) porSemana[key].extra += a.horas;
+  }
+  const semanas = [...new Set(data.asignaciones.map(a => semanaDe(a.fecha)))].sort((a, b) => a - b);
+  let resumenHtml = '<table class="tbl"><thead><tr><th>Trabajadora</th>' + semanas.map(s => `<th>Semana ${s + 1}</th>`).join('') + '</tr></thead><tbody>';
+  for (const t of data.trabajadoras) {
+    resumenHtml += `<tr><td>${escHtml(t.nombre)}</td>` + semanas.map(s => {
+      const d = porSemana[`${t.id}|${s}`] || { horas: 0, extra: 0 };
+      return `<td>${d.horas.toFixed(1)}h${d.extra ? ` <span style="color:var(--danger)">(+${d.extra.toFixed(1)} extra)</span>` : ''}</td>`;
+    }).join('') + '</tr>';
+  }
+  resumenHtml += '</tbody></table>';
+  document.getElementById('cuadTurnosDetResumen').innerHTML = resumenHtml;
+
+  // Rejilla día × turno asignado, coloreada por trabajadora.
+  const porFecha = {};
+  for (const a of data.asignaciones) (porFecha[a.fecha] ||= []).push(a);
+  const fechas = Object.keys(porFecha).sort();
+  const nombresDia = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const filasGrid = fechas.map(f => {
+    const turnos = porFecha[f].slice().sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+    const celdas = turnos.map(t => {
+      const trab = data.trabajadoras.find(w => w.id === t.trabajadora_id) || {};
+      return `<span style="display:inline-block;background:${trab.color || '#888'};color:#fff;border-radius:4px;padding:2px 6px;margin:2px;font-size:11px">${escHtml(trab.nombre || '?')} ${t.hora_inicio}-${t.hora_fin}${t.es_extra ? ' ⚠️' : ''}</span>`;
+    }).join('');
+    const dt = new Date(f + 'T00:00:00');
+    return `<tr><td style="white-space:nowrap">${nombresDia[dt.getDay()]} ${f.split('-').reverse().join('/')}</td><td>${celdas}</td></tr>`;
+  }).join('');
+  document.getElementById('cuadTurnosDetGrid').innerHTML = `<table class="tbl"><tbody>${filasGrid}</tbody></table>`;
+
+  const btnPub = document.getElementById('cuadTurnosDetBtnPublicar');
+  btnPub.textContent = c.estado === 'publicado' ? '↩️ Pasar a borrador' : '✅ Publicar';
+  document.getElementById('cuadTurnosDetBtnBorrar').style.display = _cuadTurnos.puedeEditar ? '' : 'none';
+  document.getElementById('modalCuadTurnosDetalle').style.display = 'flex';
+}
+
+function cuadTurnosCerrarDetalle() {
+  document.getElementById('modalCuadTurnosDetalle').style.display = 'none';
+}
+
+async function cuadTurnosTogglePublicar() {
+  const d = _cuadTurnos.detalle;
+  if (!d) return;
+  const nuevoEstado = d.cuadrante.estado === 'publicado' ? 'borrador' : 'publicado';
+  const r = await api(`/cuadrantes-turnos/${d.cuadrante.id}`, { method: 'PUT', body: JSON.stringify({ estado: nuevoEstado }) });
+  if (!r.ok) { toast(r.error || 'Error', 'err'); return; }
+  toast(nuevoEstado === 'publicado' ? 'Cuadrante publicado ✓ (ya lo ven sus trabajadoras en la app)' : 'Cuadrante pasado a borrador', 'ok');
+  await cuadTurnosListar();
+  cuadTurnosAbrir(d.cuadrante.id);
+}
+
+async function cuadTurnosBorrar() {
+  const d = _cuadTurnos.detalle;
+  if (!d) return;
+  if (!confirm(`¿Borrar el cuadrante "${d.cuadrante.nombre}"? No se puede deshacer.`)) return;
+  const r = await api(`/cuadrantes-turnos/${d.cuadrante.id}`, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || 'Error al borrar', 'err'); return; }
+  toast('Cuadrante borrado ✓', 'ok');
+  cuadTurnosCerrarDetalle();
+  await cuadTurnosListar();
+}
+
+function cuadTurnosImprimir() {
+  const d = _cuadTurnos.detalle;
+  if (!d) return;
+  const c = d.cuadrante;
+  const leyenda = d.trabajadoras.map(t =>
+    `<span style="display:inline-flex;align-items:center;gap:6px;margin-right:14px"><span style="width:12px;height:12px;border-radius:3px;background:${t.color};display:inline-block"></span>${escHtml(t.nombre)}</span>`
+  ).join('');
+  const porFecha = {};
+  for (const a of d.asignaciones) (porFecha[a.fecha] ||= []).push(a);
+  const fechas = Object.keys(porFecha).sort();
+  const nombresDia = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const filas = fechas.map(f => {
+    const turnos = porFecha[f].slice().sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+    const celdas = turnos.map(t => {
+      const trab = d.trabajadoras.find(w => w.id === t.trabajadora_id) || {};
+      return `<div style="display:inline-block;background:${trab.color || '#888'};color:#fff;border-radius:4px;padding:3px 8px;margin:2px;font-size:12px">${escHtml(trab.nombre || '?')}: ${t.hora_inicio}-${t.hora_fin}${t.es_extra ? ' (extra)' : ''}</div>`;
+    }).join('');
+    const dt = new Date(f + 'T00:00:00');
+    return `<tr><td style="border:1px solid #999;padding:6px;font-weight:700;white-space:nowrap">${nombresDia[dt.getDay()]} ${f.split('-').reverse().join('/')}</td>
+      <td style="border:1px solid #999;padding:6px">${celdas}</td></tr>`;
+  }).join('');
+  const win = window.open('', '_blank');
+  if (!win) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
+  win.document.write(`<html><head><title>${escHtml(c.nombre)}</title><meta charset="utf-8"></head>
+    <body style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:800px;margin:20px auto;font-size:13px">
+      <h2>${escHtml(c.nombre)}</h2>
+      <p>Cobertura ${escHtml(c.hora_inicio)}-${escHtml(c.hora_fin)} · días ${escHtml(c.dias_semana)} · ${c.personas_simultaneas} a la vez · objetivo ${c.horas_objetivo_semana}h/semana</p>
+      <div style="margin-bottom:14px">${leyenda}</div>
+      <table style="width:100%;border-collapse:collapse">${filas}</table>
+      <script>window.onload = () => setTimeout(() => window.print(), 500);<\/script>
+    </body></html>`);
+  win.document.close();
 }
 
 function imprimirInformeSeg(id) {

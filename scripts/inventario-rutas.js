@@ -96,6 +96,15 @@ function señalesEn(cuerpo) {
   // SEC-08/SEC-09 endurecieron varios handlers con una consulta directa a `sesiones` en
   // vez de getAuth(). Cuenta como autorización: valida el token y su caducidad.
   if (/FROM sesiones WHERE token\s*=\s*\?/.test(cuerpo)) s.push('sesion-directa');
+  // Patrón de las rutas /internal/* que Alejandra llama por Service Binding (REPLANTEO-08 y
+  // las que le siguieron, ej. cuadrantes de turnos): un `_auth<Modulo>Interno()` propio que
+  // exige X-Internal-Secret Y resuelve la sesión real del usuario_id del body contra
+  // `sesiones` -- no puede reutilizar getAuth()/_getAuthPlano() porque necesita las dos cosas
+  // a la vez (ver el comentario de _authReplanteoInterno en worker.js). Antes de esto el
+  // script no reconocía el helper por nombre y dependía de que algún otro patrón apareciera
+  // por casualidad dentro de los 4000 caracteres de la ventana -- con internalCuadrantesTurnos
+  // (18/09/2026) dejó de coincidir por azar y el hueco real quedó al descubierto.
+  if (/_auth\w*Interno\s*\(/.test(cuerpo)) s.push('auth-interno');
   return s;
 }
 

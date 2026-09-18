@@ -2071,7 +2071,7 @@ describe('leer_gmail / enviar_gmail (ADR-0022 Fase 2)', () => {
       expect(app).toContain('id="seccionAccionesPendientes"');
       expect(app).toContain("apiCall('/acciones-pendientes')");
       expect(app).toMatch(/apiCall\(`\/acciones-pendientes\/\$\{id\}\/\$\{decision\}`, \{ method: 'POST' \}\)/);
-      expect(app).toMatch(/if \(tab === 'sesion'\)\s*\{ cargarEstadoTelegram\(\); cargarAccionesPendientesApp\(\); \}/);
+      expect(app).toMatch(/if \(tab === 'sesion'\)\s*\{ cargarEstadoTelegram\(\); cargarAccionesPendientesApp\(\); cargarMiCuadranteTurnos\(\); \}/);
       // Aprobar desde el móvil nunca envía nada por sí mismo
       const ini = app.indexOf('async function decidirAccionPendienteApp(');
       const bloque = app.slice(ini, app.indexOf('window.cargarAccionesPendientesApp', ini));
@@ -2273,6 +2273,58 @@ describe('cableado de las tools de replanteo (REPLANTEO-08)', () => {
     expect(cuerpo).not.toMatch(/rol:/);
   });
 });
+
+describe('cableado de las tools de cuadrantes de turnos (Seguridad, "Alejandra puede hacer el reparto")', () => {
+  it('las dos exigen sesión y solo generar_cuadrante_turnos está prohibida al cron', () => {
+    for (const t of ['consultar_cuadrante_turnos', 'generar_cuadrante_turnos']) {
+      expect(TOOLS_REQUIEREN_SESION.has(t)).toBe(true);
+    }
+    expect(TOOLS_PROHIBIDAS_CRON.has('generar_cuadrante_turnos')).toBe(true);
+    // Lectura: el cron sí puede consultar cuadrantes ya generados.
+    expect(TOOLS_PROHIBIDAS_CRON.has('consultar_cuadrante_turnos')).toBe(false);
+  });
+
+  // El motivo de que estas tools existan es no duplicar el algoritmo de reparto en el
+  // segundo cerebro (CLAUDE.md, "UNA Alejandra, DOS cerebros") -- las horas/turnos/extra
+  // deben salir siempre del mismo cálculo, se pida por chat o por el panel.
+  it('el agente no reimplementa el reparto: llama al worker raíz por Service Binding', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("    case 'consultar_cuadrante_turnos':");
+    const fin = src.indexOf("    case 'consultar_inventario': {", inicio);
+    const cuerpo = src.slice(inicio, fin);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    expect(fin).toBeGreaterThan(inicio);
+    expect(cuerpo).toMatch(/env\.API_WEB\.fetch/);
+    expect(cuerpo).toMatch(/\/internal\/cuadrantes-turnos/);
+    // Ni SQL propio ni el algoritmo de reparto reimplementado aquí.
+    expect(cuerpo).not.toMatch(/env\.DB/);
+    expect(cuerpo).not.toMatch(/INSERT INTO/i);
+    expect(cuerpo).not.toMatch(/function generarCuadranteTurnos/);
+  });
+
+  it('el rol y el departamento no se mandan desde el agente: los resuelve el worker raíz', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("    case 'consultar_cuadrante_turnos':");
+    const fin = src.indexOf("    case 'consultar_inventario': {", inicio);
+    const cuerpo = src.slice(inicio, fin);
+    expect(cuerpo).toMatch(/usuario_id,/);
+    // DEPT-01: si esto dejara de cumplirse, el modelo podría elegir su departamento.
+    expect(cuerpo).not.toMatch(/departamento:/);
+    expect(cuerpo).not.toMatch(/rol:/);
+  });
+
+  it('generar_cuadrante_turnos avisa de confirmar con el usuario antes de crear (no "por si acaso")', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const inicio = src.indexOf("const TOOL_GENERAR_CUADRANTE_TURNOS = {");
+    const fin = src.indexOf("\n};", inicio);
+    expect(inicio).toBeGreaterThanOrEqual(0);
+    const bloque = src.slice(inicio, fin);
+    expect(bloque).toMatch(/confirma/i);
+    expect(bloque).toMatch(/por si acaso/i);
+    expect(bloque).toMatch(/nivel_riesgo: 'N1'/);
+  });
+});
+
 describe('routing de replanteos (REPL-ROUTING-01)', () => {
   // Reproduce la CAPA 1 de clasificarConHaiku (worker.js): recorre REGEX_ROUTES en orden y
   // devuelve el primer experto que matchea. Se parsea del fuente porque el array no se
