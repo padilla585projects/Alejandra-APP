@@ -2290,6 +2290,17 @@ select option{background:var(--surface2);color:var(--text)}
         <button onclick="replArNudge(1,0)" style="flex:1;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:11px;border-radius:9px;font-family:inherit">➡</button>
       </div>
       <button id="btnReplArRotar" onclick="replArRotarComp()" style="display:none;background:rgba(168,85,247,.92);border:none;color:#fff;font-size:13px;font-weight:800;padding:10px;border-radius:10px;font-family:inherit">↻ Girar complemento 15°</button>
+      <!-- REPL-AR-PROFUNDIDAD-MANUAL-01 (18/09/2026): paridad con el AR nativo (ver
+           ReplanteoARActivity.aplicarNudge) -- ⬅⬆⬇➡ corrige lateral/arriba-abajo EN PANTALLA,
+           pero no la distancia real a la cámara, que es justo lo que falla cuando WebXR no tiene
+           profundidad fiable en una pared lisa. Paso propio de 15 cm (mucho mayor que los 2 cm
+           de ⬅⬆⬇➡): la prueba en vivo del AR nativo confirmó que con un paso pequeño el ajuste
+           parecía no hacer nada, porque el error real en paredes sin datos fiables es de decenas
+           de centímetros o metros. -->
+      <div style="display:flex;gap:6px">
+        <button onclick="replArNudgeProfundidad(-1)" style="flex:1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:12px;font-weight:800;padding:11px 4px;border-radius:9px;font-family:inherit">⏪ Acercar</button>
+        <button onclick="replArNudgeProfundidad(1)" style="flex:1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:12px;font-weight:800;padding:11px 4px;border-radius:9px;font-family:inherit">⏩ Alejar</button>
+      </div>
     </div>
     <!-- Botón flotante de modificación: aparece solo cuando hay algo colocado -->
     <button id="btnReplArMod" onclick="_replArToggleMod()" title="Mover / girar lo último" style="display:none;position:absolute;right:12px;bottom:92px;width:42px;height:42px;align-items:center;justify-content:center;border-radius:50%;background:rgba(168,85,247,.95);border:2px solid rgba(255,255,255,.55);color:#fff;font-size:18px;pointer-events:auto;box-shadow:0 3px 10px rgba(0,0,0,.45)">✥</button>
@@ -21073,9 +21084,27 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         const depth = frame.getDepthInformation(vp.views[0]);
         if (depth) {
           _ar.tieneDepth = true;
-          const d = depth.getDepthInMeters(0.5, 0.5);          // centro de la pantalla
-          if (d > 0.1 && d < 8 && _ar.camPos && _ar.camDir) {
+          // MEDIANA-PROFUNDIDAD-01 (18/09/2026): paridad con el AR nativo
+          // (estimarProfundidadCentroM) -- un solo texel es ruidoso en superficies lisas/poco
+          // texturizadas (pared blanca): es fácil que caiga en un hueco sin dato o en una
+          // lectura errática aislada, aunque los píxeles de alrededor sean coherentes. Se
+          // muestrea una pequeña cruz de 5 puntos alrededor del centro y se toma la mediana de
+          // los válidos.
+          const off = 0.03;
+          const muestras = [[0.5, 0.5], [0.5 - off, 0.5], [0.5 + off, 0.5], [0.5, 0.5 - off], [0.5, 0.5 + off]]
+            .map(([x, y]) => depth.getDepthInMeters(x, y))
+            .filter(v => v > 0.1 && v < 8)
+            .sort((a, b) => a - b);
+          const d = muestras.length ? muestras[Math.floor(muestras.length / 2)] : -1;
+          if (d > 0 && _ar.camPos && _ar.camDir) {
             _ar.depthPos = _ar.camPos.clone().add(_ar.camDir.clone().multiplyScalar(d));
+            _ar.ultimaProfundidadValida = d;
+          } else if (_ar.camPos && _ar.camDir) {
+            // Este frame no da profundidad válida (0 muestras en la cruz) -- mejor la última que
+            // sí se midió bien (el usuario sigue trabajando a una distancia parecida) que dejar
+            // de colocar del todo, igual criterio que ultimaProfundidadValidaM en el AR nativo.
+            const dRespaldo = _ar.ultimaProfundidadValida > 0 ? _ar.ultimaProfundidadValida : 0.6;
+            _ar.depthPos = _ar.camPos.clone().add(_ar.camDir.clone().multiplyScalar(dRespaldo));
           }
           if (hitPos && _ar.camPos) {
             const distHit = _ar.camPos.distanceTo(hitPos);
@@ -21375,6 +21404,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (u.tipo === 'punto') _ar.puntos[u.idx].add(delta); else u.obj.pos.add(delta);
     _replArRedibujar();
   }
+  // REPL-AR-PROFUNDIDAD-MANUAL-01 (18/09/2026): mismo criterio que aplicarNudge() en el AR
+  // nativo -- acercar/alejar lo último colocado A LO LARGO DE hacia dónde mira la cámara ahora
+  // mismo, para corregir a mano cuando WebXR no tiene datos fiables en una pared lisa (lo que
+  // ⬅⬆⬇➡ no puede arreglar, porque esos se mueven en el plano de la pantalla, no en profundidad).
+  // dir=-1 acerca, dir=+1 aleja. Paso de 15 cm, mucho mayor que los 2 cm de replArNudge -- ver
+  // el porqué junto a los botones ⏪/⏩ en el HTML.
+  function replArNudgeProfundidad(dir) {
+    if (!_ar) return; const u = _replArUltimo(); if (!u) { _replArEstado('Nada que ajustar todavía.'); return; }
+    const fwd = (_ar.camDir || new _ar.THREE.Vector3(0, 0, -1)).clone().normalize();
+    const delta = fwd.multiplyScalar(dir * 0.15);
+    if (u.tipo === 'punto') _ar.puntos[u.idx].add(delta); else u.obj.pos.add(delta);
+    _replArRedibujar();
+    _replArEstado((dir > 0 ? '⏩ Alejado 15 cm' : '⏪ Acercado 15 cm'));
+  }
   function replArRotarComp() {
     if (!_ar) return; const u = _replArUltimo();
     if (!u || u.tipo !== 'comp') { _replArEstado('El giro solo aplica al último complemento colocado.'); return; }
@@ -21609,7 +21652,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.replArIdentificar = replArIdentificar;
   window.replArFoto = replArFoto;
   window.replArColocarComp = replArColocarComp; window.replArCambiarElem = replArCambiarElem;
-  window.replArCambiarMed = replArCambiarMed; window.replArNudge = replArNudge; window.replArRotarComp = replArRotarComp;
+  window.replArCambiarMed = replArCambiarMed; window.replArNudge = replArNudge; window.replArNudgeProfundidad = replArNudgeProfundidad; window.replArRotarComp = replArRotarComp;
 
   // Despliega/oculta el panel de material y ajustes del AR (por defecto oculto para no tapar
   // la cámara). REPL-AR-UI-02.
