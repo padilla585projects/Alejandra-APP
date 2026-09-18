@@ -20678,7 +20678,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   // ── Guardar / pedidos / borrar ──────────────────────────────────────────
   async function replGuardar() {
-    if (!_repl || _replSoloLectura()) return;
+    // BUG-REPL-GUARDAR-AR-02 (18/09/2026): Adrián, probando en obra -- "el botón parece no
+    // funcionar" (sin AVISO ni error) al guardar un replanteo hecho en AR (el mismo hecho con
+    // Foto sí guarda). Estos dos "return" salían en silencio -- si la causa real es alguna de
+    // estas dos, ahora se ve un aviso claro en vez de que el botón no haga nada visible.
+    if (!_repl) { toast('No hay ningún replanteo abierto para guardar', 'error'); return; }
+    if (_replSoloLectura()) { toast('Sin permiso para guardar -- recarga la página e inténtalo de nuevo', 'error'); return; }
     _repl.titulo = document.getElementById('replTitulo').value.trim();
     if (!_repl.titulo) { toast('Escribe un título', 'error'); return; }
     const btn = document.getElementById('btnReplGuardar');
@@ -20687,6 +20692,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const s = getSession();
       let res, data;
       if (!_repl.id) {
+        // BUG-REPL-GUARDAR-AR-02: si el trazado viene del AR (plano.cv.toBlob puede resolver
+        // null en algunos WebView/navegadores si el canvas queda vacío o se pierde el contexto
+        // WebGL al cerrar la sesión XR), _repl.file podía llegar sin contenido real y el POST
+        // fallaba en el servidor de forma poco clara. Se corta aquí con un aviso explícito.
+        if (!_repl.file || !_repl.file.size) { throw new Error('La imagen del trazado no se generó bien -- vuelve a intentar el AR'); }
         const fd = new FormData();
         fd.append('file', _repl.file);
         fd.append('titulo', _repl.titulo);
