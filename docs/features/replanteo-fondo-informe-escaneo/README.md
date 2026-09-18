@@ -46,6 +46,32 @@ el informe real de situación"** — una foto única (o ninguna) no basta para q
 muestre de verdad cómo queda la instalación en el sitio; hace falta el entorno reconstruido
 para que el render sea representativo, no solo bonito.
 
+## Otra pieza del mismo problema: el material/textura de la instalación en sí
+
+Adrián, mirando una captura real del AR en vivo (18/09/2026, noche — tubo rígido con un enchufe
+schuko de complemento, subiendo por la pared hasta el techo): "ahí que buscar material de
+verdad para renderizarlo y meterlo en el AR" y "se pueden usar catálogos de fabricantes como
+Legrand para mecanismos, ABB para cuadros, Pemsa para bandeja/Rejiband, Hilti..." La captura lo
+confirma: el tubo sale como un cilindro gris liso y uniforme, sin textura ni acabado -- no
+parece PVC ni metal, no tiene el aspecto de un producto de catálogo real. Es un problema
+DISTINTO al del fondo/escaneo de arriba (ese es sobre el ENTORNO alrededor; este es sobre el
+MATERIAL de la instalación misma):
+
+- Hoy `_replInstal3D` (`repl3d.js`) usa `THREE.MeshStandardMaterial` con un color plano por
+  tipo (`matTubo`/`matMetal`/`matAcc`, ver la constante `M()` al principio de la función) -- sin
+  mapa de textura, sin marca ni referencia a un producto real. Los complementos
+  (`_replComplemento3D`) son igual de genéricos (cajas y formas simples, no el mecanismo real de
+  Legrand con su placa/acabado).
+- La idea de catálogos de fabricante (Legrand/ABB/Pemsa/Hilti) apunta a algo más ambicioso que
+  solo texturas: geometría/modelos por producto real, quizás ligados al catálogo de material que
+  el servidor ya calcula (`worker.js`, reglas por elemento) -- si el cálculo ya sabe que hace
+  falta "Bandeja de escalera 300-900" o "Tubo rígido Acero Ø25", el render podría (en teoría)
+  usar el modelo/textura real de ese producto en vez de una forma genérica parametrizada.
+- Sin evaluar todavía: de dónde saldrían esos modelos/texturas (¿assets propios? ¿algún catálogo
+  3D de fabricante con licencia de uso? ¿generarlos con IA?), y el coste de mantenerlos
+  sincronizados con el catálogo de reglas de cálculo, que ya tiene bastante variación (tubo,
+  bandeja rejilla/escalera/chapa, canal PVC, complementos...).
+
 ## Lo que ya existe y se podría reutilizar
 
 - WebXR con `camera-access` (ya pedido como `optionalFeature` en `replArIniciar()`) da acceso a
