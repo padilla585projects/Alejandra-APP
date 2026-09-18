@@ -4,6 +4,31 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed / Added (2026-09-18 — Replanteo: Guardar tras AR, pegado a la pared real, y menú renombrar/borrar)
+
+- **Guardar no hacía nada tras terminar un replanteo por AR** (PR #318): `replArTerminar()`
+  leía `complementos`/`fotosDoc` de `_ar` después de `await _ar.session.end()`, que ya lo había
+  puesto a `null` -- la app se quedaba encallada en el modal "Nuevo replanteo" con el trazado
+  perdido, sin ningún error visible. Diagnosticado en vivo instrumentando el Chrome del Oppo por
+  Chrome DevTools Protocol (ADB por WiFi).
+- **La instalación 3D no se pegaba a la pared/techo real** (PR #319/#320): cuando WebXR confirma
+  un plano con `frame.detectedPlanes`, ahora se fuerza la posición del punto contra ese plano (no
+  solo la pose cruda del hit-test) y se guarda su normal -- también cuando el punto sale por
+  profundidad, no solo por hit-test. Paridad con el AR nativo (`PARED-NORMAL-REAL-01`), que ya la
+  calculaba.
+- **La instalación entera desaparecía en una esquina** (PR #322): `_replInstal3D` (repl3d.js,
+  compartido por vista 3D/informe/AR nativo/AR WebXR) orienta cada tramo con la normal real
+  cuando existe -- si el tramo va casi paralelo a esa normal, el producto vectorial sale casi
+  nulo y la base local (rotación) sale degenerada. Se cae al respaldo genérico solo para ese
+  tramo en ese caso.
+- **Renombrar y borrar desde la lista de Replanteo** (PR #323): menú "⋮" en cada tarjeta de la
+  app (y "✏️"/"🗑" en la tabla y el detalle de `panel.html`, paridad) -- reutiliza el
+  PATCH/DELETE que ya usaba el editor, sin backend nuevo.
+- Verificado en vivo por Adrián en el Oppo: Guardar funciona tras AR, la instalación 3D queda
+  pegada al techo/pared cuando WebXR reconoce el plano (a veces cuesta reconocerlo en superficies
+  lisas -- límite conocido de ARCore, ya cubierto por el respaldo de profundidad), y el tramo de
+  la esquina ya no desaparece.
+
 ### Added (2026-09-18 — Cuadrantes de turnos para Seguridad)
 
 - Nueva función para Seguridad: genera automáticamente el horario semanal de las PRL para
