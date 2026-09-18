@@ -21100,8 +21100,17 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     // REPL-AR-UI-02: lo que esté a menos de 25 cm de la cámara no se pinta. Al marcar por
     // contacto el móvil queda pegado al punto, y esa esfera vista desde 1 cm ocupaba toda la
     // pantalla (captura de Adrián). Al retirar el móvil vuelve a verse con normalidad.
+    // BUG-AR-TUBO-INVISIBLE-01 (18/09/2026): Adrián, probando en vivo en el Oppo -- "veo los
+    // puntos pero nada del tubo". Causa: esto comparaba contra o.position (posición LOCAL del
+    // hijo directo de _ar.grupo). Para los puntos (esferas) coincide con la posición real porque
+    // se colocan directamente ahí, pero el grupo de _replInstal3D (añadido a _ar.grupo desde el
+    // 10/09, commit 60aef73) nunca fija su propia posición -- vive en (0,0,0) local aunque su
+    // contenido esté a metros de distancia -- así que se comparaba "cámara al origen de la
+    // sesión AR" en vez de "cámara a la instalación", y con el usuario cerca de donde empezó la
+    // sesión, el tubo entero se ocultaba siempre pasase lo que pasase con su color o material.
     if (_ar.camPos) {
-      _ar.grupo.children.forEach(o => { o.visible = _ar.camPos.distanceTo(o.position) > 0.25; });
+      const wp = new _ar.THREE.Vector3();
+      _ar.grupo.children.forEach(o => { o.visible = _ar.camPos.distanceTo(o.getWorldPosition(wp)) > 0.25; });
     }
     // El aviso de guía se retira solo: cumplida su función, estorba delante de la cámara.
     if (_ar.guiaHasta && t > _ar.guiaHasta) { _ar.guiaHasta = 0; _replArAviso(null); }
