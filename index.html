@@ -20963,12 +20963,28 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const overlay = document.getElementById('replArOverlay');
       overlay.style.display = 'block';
       _replArAviso(null);
-      const session = await navigator.xr.requestSession('immersive-ar', {
+      // BUG-AR-PLANE-DETECTION-01 (18/09/2026): Adrián, probando en vivo en el HTC U11 -- el AR
+      // de la PWA no arrancaba NUNCA, con "Could not create a session because: The runtime for
+      // this configuration could not be installed". Causa: 'plane-detection' se añadió como
+      // optionalFeature en ADR-0025 (10/09) asumiendo que una feature no soportada simplemente
+      // se ignora (así lo dice el spec de WebXR) -- pero en este Chrome/ARCore, pedirla hace que
+      // TODA la sesión falle, no solo esa feature. Roto desde el 10/09, nunca se había probado
+      // en un móvil real. Se reintenta sin ella si la primera petición falla, para no perder la
+      // detección de planos en los dispositivos donde sí funcione.
+      const sessionOpts = {
         requiredFeatures: ['hit-test'],
         optionalFeatures: ['dom-overlay', 'depth-sensing', 'plane-detection', 'camera-access'],   // ADR-0025: planos + "¿qué es esto?" (visión IA)
         domOverlay: { root: overlay },
         depthSensing: { usagePreference: ['cpu-optimized'], dataFormatPreference: ['luminance-alpha'] },
-      });
+      };
+      let session;
+      try { session = await navigator.xr.requestSession('immersive-ar', sessionOpts); }
+      catch (_) {
+        session = await navigator.xr.requestSession('immersive-ar', {
+          ...sessionOpts,
+          optionalFeatures: sessionOpts.optionalFeatures.filter(f => f !== 'plane-detection'),
+        });
+      }
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(window.devicePixelRatio || 1);
       renderer.xr.enabled = true;
