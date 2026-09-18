@@ -31901,14 +31901,21 @@ function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_s
   const inicioMin = _hmToMin(hora_inicio);
 
   // 3) Fechas cubiertas, en orden, con su índice de día (para la rotación) y de semana
-  // (para el corte de horas objetivo/extra).
+  // (para el corte de horas objetivo/extra). La semana es la natural de lunes a domingo
+  // (España) -- Adrián: "la semana es de lunes a domingo, en España es así". Si
+  // fecha_inicio no cae en lunes (ej. se genera un viernes), NO vale contar "semana 1"
+  // como una ventana rodante de 7 días desde ahí: cruzaría a la semana natural siguiente y
+  // el corte de 40h/extra saldría mal. Se agrupa por el lunes de la semana de cada fecha.
+  const _lunesDe = d => { const l = new Date(d); l.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return l; };
   const fechas = [];
   const inicio = new Date(fecha_inicio + 'T00:00:00');
+  const lunesInicio = _lunesDe(inicio);
   const cur = new Date(inicio);
   for (let i = 0; i < nSemanas * 7; i++) {
     const letra = DIAS_SEMANA_LETRAS[cur.getDay()];
     if (diasSet.has(letra)) {
-      fechas.push({ fecha: cur.toISOString().slice(0, 10), diaIdx: fechas.length, semanaIdx: Math.floor(i / 7) });
+      const semanaIdx = Math.round((_lunesDe(cur) - lunesInicio) / (7 * 86400000));
+      fechas.push({ fecha: cur.toISOString().slice(0, 10), diaIdx: fechas.length, semanaIdx });
     }
     cur.setDate(cur.getDate() + 1);
   }

@@ -20693,6 +20693,23 @@ function _cuadTurnosFechaLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// "la semana es de lunes a domingo, en España es así" (Adrián, 18/09/2026): antes se
+// agrupaba en una ventana rodante de 7 días desde fecha_inicio -- si el cuadrante empezaba
+// en viernes, "semana 1" mezclaba ese viernes con el lunes-jueves de la semana natural
+// SIGUIENTE. Ahora se agrupa por el lunes real de la semana de cada fecha (mismo criterio
+// que generarCuadranteTurnos en worker.js -- tiene que coincidir con lo que ya guardó el
+// backend en es_extra).
+function _cuadTurnosLunesDe(d) {
+  const l = new Date(d);
+  l.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return l;
+}
+function _cuadTurnosSemanaIdx(fecha, fechaInicio) {
+  const lunesInicio = _cuadTurnosLunesDe(new Date(fechaInicio + 'T00:00:00'));
+  const lunesFecha = _cuadTurnosLunesDe(new Date(fecha + 'T00:00:00'));
+  return Math.round((lunesFecha - lunesInicio) / (7 * 86400000));
+}
+
 function _cuadTurnosPorFecha(asignaciones) {
   const m = {};
   for (const a of asignaciones) (m[a.fecha] ||= []).push(a);
@@ -20724,9 +20741,11 @@ function _cuadTurnosVistaMensualHtml(trabajadoras, asignaciones, opts = {}) {
         if (!fecha) { filas += `<td style="border:1px solid ${borde};height:64px"></td>`; continue; }
         const key = _cuadTurnosFechaLocal(fecha);
         const turnos = (porFecha[key] || []).slice().sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+        // Solo la hora (entrada-salida), sin nombre -- el color ya dice quién es (leyenda
+        // arriba). Adrián: "falta la hora que sale, solo está la que entra".
         const pills = turnos.map(t => {
           const trab = trabajadoras.find(w2 => w2.id === t.trabajadora_id) || {};
-          return `<div style="background:${trab.color || '#888'};color:#fff;border-radius:3px;padding:1px 4px;margin:1px 0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(trab.nombre || '?')} ${t.hora_inicio}${t.es_extra ? ' ⚠️' : ''}</div>`;
+          return `<div style="background:${trab.color || '#888'};color:#fff;border-radius:3px;padding:1px 4px;margin:1px 0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.hora_inicio}-${t.hora_fin}${t.es_extra ? ' ⚠️' : ''}</div>`;
         }).join('');
         filas += `<td style="border:1px solid ${borde};vertical-align:top;padding:3px;height:64px;max-width:${100 / 7}%">
           <div style="font-size:10px;${opts.print ? 'color:#666' : 'color:var(--muted)'}">${fecha.getDate()}</div>${pills}</td>`;
@@ -20749,8 +20768,7 @@ function _cuadTurnosVistaSemanalHtml(trabajadoras, asignaciones, fechaInicio, op
   if (!asignaciones.length) return '<div class="empty-state">Sin turnos generados</div>';
   const borde = opts.print ? '#999' : 'var(--border)';
   const porFecha = _cuadTurnosPorFecha(asignaciones);
-  const inicio = new Date(fechaInicio + 'T00:00:00');
-  const semanaDe = f => Math.floor((new Date(f + 'T00:00:00') - inicio) / (7 * 86400000));
+  const semanaDe = f => _cuadTurnosSemanaIdx(f, fechaInicio);
   const fechas = Object.keys(porFecha).sort();
   const semanas = [...new Set(fechas.map(semanaDe))].sort((a, b) => a - b);
   let html = '';
@@ -20802,7 +20820,7 @@ async function cuadTurnosAbrir(id) {
   ).join('');
 
   // Resumen de horas/extra por trabajadora y semana (misma semanaIdx que generarCuadranteTurnos).
-  const semanaDe = fecha => Math.floor((new Date(fecha + 'T00:00:00') - new Date(c.fecha_inicio + 'T00:00:00')) / (7 * 86400000));
+  const semanaDe = fecha => _cuadTurnosSemanaIdx(fecha, c.fecha_inicio);
   const porSemana = {};
   for (const a of data.asignaciones) {
     const key = `${a.trabajadora_id}|${semanaDe(a.fecha)}`;
