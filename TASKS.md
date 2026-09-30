@@ -3,8 +3,9 @@
 ## CIERRE-SEPT-01 — reanudación y cierre verificable (2026-09-30)
 
 - Responsable: Codex. Implementación: PR #332 → `0ecaa43`; relevo documental:
-  `codex/relevo-cierre-septiembre`.
-- Estado: integrado con dos checks CI verdes; despliegue API `36770433947` en `waiting`.
+  `codex/verificacion-cierre-septiembre`.
+- Estado: integrado y desplegado; run API `36770433947` success, versión `b3f97ba9`
+  confirmada por log y `/health` healthy (D1/R2 true).
 - Alcance: sincronizar la copia (5 commits), reconciliar el estado documental, proteger
   el calendario de cuadrantes contra desfases de zona horaria/cambio de hora y añadir
   regresiones al CI. No altera configuraciones, permisos, esquema ni cuadrantes guardados.
@@ -13,11 +14,9 @@
   de ambos Workers, versiones, departamentos, autorización de rutas y entorno correctos.
 - Producción al inicio: API/agente `healthy`, Pages 9.78; runs de despliegue
   `35402652711`/`35401027009`/`35403234780` completados correctamente.
-- Siguiente acción: aprobar el entorno `production` del run `36770433947`, lanzado con
-  SHA `0ecaa431f399d2337262d51c532e032173857a44` + `DEPLOY_API_WORKER`; al terminar,
-  registrar salud y versión desplegada. Rollback: redesplegar `d11128f`.
-- Después: verificar crear/editar/publicar/Mi horario con sesión autorizada; regenerar
+- Siguiente acción: verificar crear/editar/publicar/Mi horario con sesión autorizada; regenerar
   el cuadrante existente solo mediante acción explícita del usuario (ver #330).
+  Rollback: redesplegar `d11128f`.
 - AR: Adrián confirma Oppo disponible; falta USB autorizado o IP/puerto inalámbrico
   (ADB sin dispositivos el 30/09). Giro de pantalla y prioridades 2–4
   requieren diagnóstico/prueba en Android con ARCore. No constan cerrados. Escaneo+IA

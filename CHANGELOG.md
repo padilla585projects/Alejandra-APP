@@ -9,8 +9,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - El generador usa fechas de calendario UTC de principio a fin, evitando que la zona
   horaria del proceso desplace los días al serializarlos o afecte a la rotación semanal.
   Cinco pruebas de regresión se ejecutan también en CI. Sin migración ni regeneración
-  automática de cuadrantes existentes. Integrado #332 → `0ecaa43`; publicación API
-  pendiente de aprobación del entorno `production` (run `36770433947`).
+  automática de cuadrantes existentes. Integrado #332 → `0ecaa43`; API publicada
+  (run `36770433947`, versión `b3f97ba9`) y verificada `healthy`, D1/R2 disponibles.
 - Estado y relevo reconciliados con #318–#331: Guardar AR y pegado resueltos; cuadrantes
   integrados y publicados con semana natural, comida, rotación semanal y edición.
   Se conservan como pendientes la prueba autenticada de cuadrantes y las mejoras AR
