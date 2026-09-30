@@ -1,5 +1,17 @@
 # Estado del proyecto — Alejandra 2.0
 
+## Actualizador Android — 2026-10-01
+
+La APK ya tenía aviso de versión y descarga manual (AppUpdatePlugin); faltaban
+comprobación/descarga nativas automáticas y recuperación tras cerrar el proceso.
+ANDROID-OTA-01 completa el mismo canal GitHub Releases + DownloadManager, sin cambiar
+PWA ni aceptar nuevos ADR. La candidata 1.17 incluye AR #335 y OTA: comprobación al
+abrir/volver (máximo cada 6 h tras respuesta correcta), descarga Wi-Fi y oferta de
+instalación confirmada por Android. Las apps anteriores requieren una instalación
+inicial de este binario. Última entrega estable sigue 1.15; prueba física AR/OTA
+pendiente, Oppo ausente de ADB. No confundir implementación con publicación estable.
+
+
 ## Estado Android actualizado — 2026-09-30
 
 La prioridad actual es el AR de la **APK**, por indicación de Adrián: detectar suelo,

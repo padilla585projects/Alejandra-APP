@@ -1,5 +1,24 @@
 # TASKS — Cola operativa inmediata
 
+## ANDROID-OTA-01 — completar actualizador nativo (2026-10-01)
+
+- Autorización: Adrián solicita OTA para la APK; evolución del AppUpdatePlugin ya
+  existente, sin adoptar otro canal ni aceptar ADR-0026. Rama codex/android-ota.
+- Objetivo: comprobar automáticamente releases estables, descargar por Wi-Fi y ofrecer
+  el instalador Android; recuperar descargas al cerrar/reabrir la app.
+- Alcance: AppUpdatePlugin, NativeAppUpdater y política validable. Se conserva GitHub
+  Releases + DownloadManager y el contrato web; PWA/Workers/AR/datos sin modificaciones.
+- APK candidata 1.17 incluye AR #335 y OTA; sustituye para pruebas a candidata 1.16.
+  Las apps anteriores necesitan instalar una vez el nuevo binario para incorporar OTA.
+- Pruebas: rechazo de origen/versiones/firmas, compilación Java y APK firmada, CI;
+  comprobar permisos de instalación y recuperación real en Oppo cuando vuelva ADB.
+- Estado: implementación 3ca7c02 y pruebas locales correctas (política OTA 3/3,
+  AR Java 5/5, overlay 6/6; release compilada y firmada). Última estable app-android-v15.
+  No publicar estable hasta validar AR y OTA en dispositivo. No instalación silenciosa.
+- Rollback: revertir tarea y publicar código corregido con versionCode mayor; no forzar
+  downgrade ni borrar almacenamiento. Detalle y protocolo: docs/features/android-ota.md.
+
+
 ## ANDROID-AR-ESTABILIDAD-01 — APK nativa, sin cambios a la PWA (2026-09-30)
 
 - Responsable: Codex. Rama: `codex/android-ar-estabilidad`, base `9f4c596`. PR #335.

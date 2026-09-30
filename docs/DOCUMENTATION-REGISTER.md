@@ -4,6 +4,7 @@ Actualizado: 2026-09-30 (cierre de continuidad; no cambia estados de ADR).
 
 | Documento/grupo | Estado | Uso |
 |---|---|---|
+| `docs/features/android-ota.md` | En validación física | Actualización nativa APK 1.17, seguridad, bootstrap y pruebas del instalador. |
 | `docs/features/android-ar-estabilidad.md` | En validación física | APK 1.16: superficies, paridad visual, pruebas, artefacto y protocolo de verificación en Oppo. |
 | `MASTER_PLAN.md`, `MASTER_ROADMAP.md`, `TASKS.md` | Vigente | Visión, ejecución y cola operativa. |
 | `ARCHITECT_RULES.md`, `ARCHITECT_BACKLOG.md` | Vigente | Gobierno y cartera arquitectónica. |

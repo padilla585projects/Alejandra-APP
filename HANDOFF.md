@@ -1,5 +1,28 @@
 # Handoff — Alejandra 2.0
 
+## ANDROID-OTA-01 — actualización nativa (2026-10-01)
+
+- Agente: Codex. Rama codex/android-ota, base e0cb294 (AR #335 integrado).
+  Implementación: 3ca7c02 — feat(android): completar OTA con descarga y recuperación nativas.
+  Pruebas: política OTA 3/3, superficies/accesorios 5/5, overlay 6/6; Gradle y firma correctos.
+- Objetivo pedido por Adrián: OTA de la APK. Evoluciona plugin existente, no introduce
+  Play Store, OTA de bundles, migraciones o decisiones de ADR-0026.
+- Contrato descargarEInstalar conservado; comprobación nativa en lifecycle independiente
+  de index.html. Releases estables/tag Android/asset oficial; descarga Wi-Fi automática,
+  manual admite datos y no roaming. Estado DownloadManager persistido; recuperar en resume
+  incluso si se perdió broadcast. No interrumpir AR ni otra Activity con instalador.
+- Rechazo previo de APK incompleta, paquete/firma distintos, versión igual/inferior o
+  distinta de release esperada; estado real consultado antes de aceptar broadcast.
+- APK candidata 1.17 incluye cambios AR 1.16 sin editar ese módulo ni PWA. Hace falta
+  instalar inicialmente nueva APK; las versiones antiguas no adquieren código nativo OTA.
+- Siguiente prueba: instalar candidata en Oppo al recuperar ADB; validar bootstrap, sin
+  conexión, Wi-Fi/datos, descarga duplicada, cerrar/reabrir, permiso origen desconocido,
+  cancelación del instalador, versión ya instalada y rechazos. Completar también AR #335.
+  No declarar validada actualización real a versión futura sin probar ese salto.
+- No se publica estable aún (latest app-android-v15). No datos de producción, secretos,
+  instaladores silenciosos ni modificaciones de PWA. Archivos untracked ajenos preservados.
+
+
 ## ANDROID-AR-ESTABILIDAD-01 — superficies y realismo de APK (2026-09-30)
 
 - Agente: Codex. Rama: codex/android-ar-estabilidad; base 9f4c596.

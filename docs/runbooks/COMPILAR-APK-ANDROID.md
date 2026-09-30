@@ -94,13 +94,18 @@ sha256sum /tmp/check.apk
   + el fix del scope WebAPK), Adrián la descarga e instala él mismo desde el móvil en
   cuanto está publicada. Solo instalar/probar por ADB si él lo pide explícitamente.
 
-## Limitación conocida — sin OTA nativo
+## OTA de la APK (actualizado 2026-10-01)
 
-Esta app **no tiene actualización automática (OTA) del binario nativo**. La parte
-web sí es efectivamente "en vivo" (se sirve desde GitHub Pages en cada carga, sin
-rebuild), pero cualquier cambio nativo (como el de este runbook) exige: compilar →
-publicar el asset → que Adrián lo descargue e instale a mano. No hay Play Store (que
-traería auto-update gratis) ni Capacitor Live Update / Android In-App Updates
-configurado. Si en el futuro se vuelve una fricción real, valorarlo como una decisión
-de producto aparte (Play Store interno / Firebase App Distribution / Android In-App
-Update API) — no está implementado hoy.
+Ya existían aviso de actualización y descarga manual con AppUpdatePlugin; la afirmación
+anterior de que no había actualizador nativo estaba incompleta. La candidata 1.17 añade
+comprobación automática en primer plano (6 h entre respuestas correctas), descarga por
+Wi-Fi con DownloadManager y recuperación al reabrir. Android confirma la instalación.
+No hay Play Store ni sustitución silenciosa del binario. PWA sigue cargándose desde Pages.
+
+Las versiones anteriores necesitan instalar inicialmente esta APK. No publicar estable
+hasta verificar AR y OTA en dispositivo; actualmente latest sigue app-android-v15.
+Después publicar siguiendo este runbook, tag app-android-vN, asset alejandra.apk,
+versionCode N y firma release existente. El actualizador omite drafts/prereleases y
+rechaza versiones antiguas, paquetes/firma distintos y metadatos que no coinciden.
+
+Ver docs/features/android-ota.md para comportamiento, validación y recuperación.
