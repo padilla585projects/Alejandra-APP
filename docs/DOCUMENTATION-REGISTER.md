@@ -1,6 +1,6 @@
 # Registro de documentación
 
-Actualizado: 2026-08-02.
+Actualizado: 2026-09-30 (cierre de continuidad; no cambia estados de ADR).
 
 | Documento/grupo | Estado | Uso |
 |---|---|---|

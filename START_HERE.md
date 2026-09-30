@@ -4,6 +4,21 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**Reanudación y cierre de continuidad (2026-09-30):** copia sincronizada con `main`
+`3990424` (PR #331). Replanteo AR: Guardar, pegado al plano y geometría en esquinas
+corregidos y probados por Adrián el 18/09 (PRs #318–#323). Cuadrantes: PR #321 y
+#327–#331 integradas; API, agente y Pages publicados (última versión web 9.78).
+Healthchecks de ambos Workers `healthy` y Pages 9.78 comprobados hoy. El cuadrante
+existente requiere regeneración explícita desde Editar para adoptar la rotación semanal;
+no se reescriben datos automáticamente. Corrección adicional de fechas de calendario y
+cinco pruebas de regresión en `codex/cierre-pendientes-septiembre`, pendiente integración
+y despliegue. Ver `TASKS.md` y el primer apartado de `HANDOFF.md` para el siguiente paso.
+
+**Pendientes reales:** prueba con datos reales de cuadrantes; giro de pantalla en AR;
+ángulos rectos, tubos en paralelo y superficie forzada; planificación del escaneo del
+entorno con IA. ADB no detecta dispositivos hoy. ADR-0026 sigue Propuesto. Las entradas
+fechadas siguientes conservan el historial y no sustituyen este resumen actual.
+
 **CPD-BMS-01 — cuadro BMS con bornero PLC en Sondas CPD (2026-09-09, v9.44):** pedido de Adrián
 (dept. Control). El cuadro BMS donde se enchufan las sondas es ahora un elemento del plano
 (`plano_elementos`, `cuadro_bms:cuadro`): se coloca, se pincha para su config (nombre, nº serie,

@@ -1,5 +1,34 @@
 # Handoff — Alejandra 2.0
 
+## CIERRE-SEPT-01 — reanudación y calendario de cuadrantes (2026-09-30)
+
+- Agente: Codex. Rama: `codex/cierre-pendientes-septiembre`. Base de implementación:
+  `3990424` — `feat(seguridad): botón Editar en cuadrantes de turnos (#331)`.
+- Copia sincronizada mediante fast-forward desde `c096e64`, preservando sin leer ni
+  añadir `.claude/settings.local.json`, `alejandra.apk`, imágenes no seguidas y `tauri/`.
+- Estado reconstruido mediante commits y PRs #329–#331, runs de GitHub y salud pública:
+  API desde `d11128f` (run `35402652711`), agente desde `609a0ac` (`35401027009`), Pages
+  desde `3990424` (`35403234780`). Ambos Workers `healthy`, D1/R2 true, Pages 9.78.
+  No equivale a probar el módulo con sesión real ni a autorizar escrituras de datos.
+- Bug reproducido: medianoche local seguida de `toISOString()` desplaza los días en
+  Madrid; tres pruebas fallaban antes del arreglo. `worker.js` usa UTC para construir,
+  agrupar e incrementar las fechas. No cambia el algoritmo de turnos ni los permisos.
+- Archivos: `worker.js`, `scripts/cuadrantes-turnos.test.cjs`, `.github/workflows/ci.yml`
+  y documentos de continuidad/README de realismo. Sin frontend ni versión nueva.
+- Validación local: calendario 5/5, agente 290/290, sintaxis de ambos Workers, versiones,
+  departamentos, inventario de rutas y entorno correctos. No se ejecutó D1 ni R2.
+- Riesgo/rollback: afecta solo a nuevos cálculos o regeneración explícita; revertir el
+  commit o redesplegar API `d11128f`. Cuadrantes existentes siguen sin modificar.
+- Siguiente acción: integrar PR con CI correcto, lanzar `deploy-worker.yml` con SHA
+  revisado + `DEPLOY_API_WORKER`, obtener aprobación humana de `production` y registrar
+  salud/versión. Verificar crear/editar/publicar/Mi horario con sesión autorizada después.
+- Bloqueo AR observable: `adb devices -l` no lista dispositivos. Sin Android con ARCore
+  no se cierra giro de pantalla ni prioridades 2–4 (regla `CLAUDE.md`, líneas 277+).
+  Escaneo+IA precisa planificación/decisión; ADR-0026 sigue Propuesto. No tocar esquema,
+  secretos, borrados ni regenerar cuadrantes reales automáticamente.
+
+Los apartados siguientes conservan el historial; prevalece esta entrada para reanudar.
+
 ## REPL-AR-NATIVO-01 — el AR de Replanteo conectado al módulo ARCore nativo (2026-09-15)
 
 - **Agente:** Claude (Sonnet 5). **Origen:** Adrián probó la APK real y mandó una captura del

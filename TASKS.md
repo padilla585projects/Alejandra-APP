@@ -1,5 +1,29 @@
 # TASKS — Cola operativa inmediata
 
+## CIERRE-SEPT-01 — reanudación y cierre verificable (2026-09-30)
+
+- Responsable: Codex. Rama: `codex/cierre-pendientes-septiembre`, base `3990424`.
+- Estado: implementación y validación local completas; integración/despliegue pendientes.
+- Alcance: sincronizar la copia (5 commits), reconciliar el estado documental, proteger
+  el calendario de cuadrantes contra desfases de zona horaria/cambio de hora y añadir
+  regresiones al CI. No altera configuraciones, permisos, esquema ni cuadrantes guardados.
+- Pruebas: 5/5 calendario (UTC/Madrid/Los Ángeles, cambio de hora, rotación semanal,
+  cobertura del caso de cuatro PRL y comida desactivada), agente 290/290, sintaxis
+  de ambos Workers, versiones, departamentos, autorización de rutas y entorno correctos.
+- Producción al inicio: API/agente `healthy`, Pages 9.78; runs de despliegue
+  `35402652711`/`35401027009`/`35403234780` completados correctamente.
+- Siguiente acción: PR con CI verde, integración, workflow `deploy-worker.yml` con SHA
+  revisado y `DEPLOY_API_WORKER`; aprobación humana del entorno `production`, salud y
+  versión desplegada registradas. Rollback: redesplegar `d11128f`.
+- Después: verificar crear/editar/publicar/Mi horario con sesión autorizada; regenerar
+  el cuadrante existente solo mediante acción explícita del usuario (ver #330).
+- AR: ADB sin dispositivos conectados el 30/09; giro de pantalla y prioridades 2–4
+  requieren diagnóstico/prueba en Android con ARCore. No constan cerrados. Escaneo+IA
+  sigue sin ADR ni diseño aprobado; ADR-0026 continúa Propuesto. No aceptar decisiones
+  ni ejecutar migraciones/borrados como parte de este cierre.
+
+Las entradas siguientes son el historial operativo; este apartado fija la cola actual.
+
 Estado (2026-09-18, noche): **Sesión dedicada de realismo 3D del Replanteo — prioridad 1
 cerrada y verificada en vivo en el Oppo. Cadena de 4 PRs, todos desplegados y confirmados por
 Adrián.** Ver `HANDOFF.md`/`CHANGELOG.md`.
@@ -49,8 +73,8 @@ Adrián.** Ver `HANDOFF.md`/`CHANGELOG.md`.
   PR desplegado individualmente vía `pages.yml` con SHA + `PUBLISH_GITHUB_PAGES` + aprobación
   de Adrián del entorno `production`, verificado en vivo antes de pasar al siguiente.
 
-Estado (2026-09-18): **CUADRANTES-TURNOS-01 — nueva función de Seguridad, en revisión
-(PR #321, rama `feat/seguridad-cuadrantes-turnos`).**
+Estado actualizado (2026-09-30): **CUADRANTES-TURNOS-01 — integrado y desplegado
+(PR #321 y #327–#331); verificación funcional con sesión real pendiente.**
 - Adrián pidió un cuadrante que reparta el horario semanal de las PRL cubriendo una franja
   de la obra (ej. 7:00-19:00) con horas objetivo/semana (extra si se pasa) y rotación justa
   para que nadie se queje de hacer siempre el peor turno; luego pidió que se pudiera
@@ -61,8 +85,12 @@ Estado (2026-09-18): **CUADRANTES-TURNOS-01 — nueva función de Seguridad, en 
   llaman al mismo cálculo (no lo reimplementan) — mismo patrón que Replanteos.
   287/287 tests del agente en verde. Verificado en navegador con sesión simulada
   (sin red real disponible en el entorno de la sesión que lo escribió).
-- **Pendiente:** revisión de Adrián, fusionar, desplegar los dos Workers, y probar con
-  datos reales de una PRL de Seguridad en obra.
+- Semana natural/vistas y horario propio (#327/#328), pausa de comida (#329), rotación
+  semanal (#330) y Editar (#331) integrados. Despliegues: API `35402652711`, agente
+  `35401027009`, Pages `35403234780`. Salud pública comprobada el 30/09.
+- **Pendiente:** probar con datos reales de una PRL de Seguridad en obra. Los cuadrantes
+  ya generados no cambian solos: Editar y guardar regenera el reparto; requiere acción
+  explícita del usuario, no un script automático sobre D1.
 
 Estado (2026-09-18, noche): **BUG-REPL-GUARDAR-AR-03 — cerrado, desplegado y verificado en vivo
 en el Oppo.** Ver `HANDOFF.md`.
@@ -86,8 +114,8 @@ en el Oppo.** Ver `HANDOFF.md`.
   frontend (`index.html`); el AR nativo de la APK (`_replArIniciarNativo`) no usa este camino
   y no estaba afectado.
 
-Estado (2026-09-18): **PENDIENTE (sin empezar) — realismo de la instalación 3D en Replanteo
-(pegado a la pared, ángulos rectos, tubos en paralelo).** Ver
+Estado histórico (2026-09-18, antes de la sesión nocturna): **realismo de la instalación
+3D en Replanteo. Pegado cerrado después en #319/#320; prioridades 2–4 pendientes.** Ver
 `docs/features/replanteo-instalacion-realista/README.md` (con las 3 fotos de referencia que
 mandó Adrián).
 - Sesión larga de hoy en el Oppo (único móvil con ARCore) probando el AR de la PWA en vivo por
@@ -129,7 +157,7 @@ mandó Adrián).
   volver a romperlo sin darse cuenta — ver el aviso nuevo en `CLAUDE.md` ("AR de Replanteo —
   verificar SIEMPRE en un dispositivo real"): cualquier cambio futuro a la sesión WebXR o a
   `repl3d.js` se prueba en un Android con ARCore antes de darse por bueno, no solo por CI.**
-- **BUG NUEVO, abierto (18/09, sin diagnosticar todavía):** Adrián, justo después de probar el
+- **Hallazgo histórico, cerrado esa noche en #318 (ver arriba):** Adrián, justo después de probar el
   AR en la obra — "no puedo guardar el replanteo, el botón parece no funcionar" (sin ningún
   mensaje, ni "Guardando…", ni error — el toque no parece hacer nada en absoluto). Revisado el
   código de `replGuardar()`/`_replAplicarPermisos()`/`_replArLimpiar()` sin encontrar una causa

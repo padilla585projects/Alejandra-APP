@@ -31938,18 +31938,20 @@ function generarCuadranteTurnos({ hora_inicio, hora_fin, dias_semana, personas_s
   // fecha_inicio no cae en lunes (ej. se genera un viernes), NO vale contar "semana 1"
   // como una ventana rodante de 7 días desde ahí: cruzaría a la semana natural siguiente y
   // el corte de 40h/extra saldría mal. Se agrupa por el lunes de la semana de cada fecha.
-  const _lunesDe = d => { const l = new Date(d); l.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return l; };
+  // Son fechas de calendario, no instantes locales: usar UTC en toda la operación evita
+  // que toISOString() desplace el día y que el cambio de hora altere las semanas.
+  const _lunesDe = d => { const l = new Date(d); l.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return l; };
   const fechas = [];
-  const inicio = new Date(fecha_inicio + 'T00:00:00');
+  const inicio = new Date(fecha_inicio + 'T00:00:00Z');
   const lunesInicio = _lunesDe(inicio);
   const cur = new Date(inicio);
   for (let i = 0; i < nSemanas * 7; i++) {
-    const letra = DIAS_SEMANA_LETRAS[cur.getDay()];
+    const letra = DIAS_SEMANA_LETRAS[cur.getUTCDay()];
     if (diasSet.has(letra)) {
       const semanaIdx = Math.round((_lunesDe(cur) - lunesInicio) / (7 * 86400000));
       fechas.push({ fecha: cur.toISOString().slice(0, 10), semanaIdx });
     }
-    cur.setDate(cur.getDate() + 1);
+    cur.setUTCDate(cur.getUTCDate() + 1);
   }
 
   // 4) Reparto + horas/extra acumuladas por trabajadora y semana.
