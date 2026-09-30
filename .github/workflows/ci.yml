@@ -71,6 +71,8 @@ jobs:
       - name: Run agent tests
         working-directory: alejandra-agente
         run: npm test
+      - name: Check AI benchmark measurement and error handling
+        run: node --test scripts/ai-benchmark/run.test.mjs
       - name: Check shift calendars and weekly rotation
         run: node --test scripts/cuadrantes-turnos.test.cjs
       - name: Check native Android AR overlay

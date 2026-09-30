@@ -1,5 +1,24 @@
 # Handoff — Alejandra 2.0
 
+## IA-COMP-01 — auditoría y medición (2026-10-01)
+
+- Codex, codex/ai-model-benchmark, base 8ccd48a. Solicitud: evaluar novedades OpenAI
+  frente a modelos existentes, primero auditar suite; técnica/planos/Office antes de voz.
+- Inventario estático de departamentos, perfiles/tools, cálculos, planos/DXF, módulos
+  técnicos, coordinación e interacción Office. Informe en docs/features/comparacion-modelos-ia.md.
+- Piloto aislado: 20 casos sintéticos, 7 modelos, JSON exacto, completitud, fallos
+  críticos, latencia HTTP, tokens y costes con límites conservadores. No datos reales.
+- 5 pruebas del harness y 290 del agente correctas; 12 departamentos sincronizados.
+- Sin credenciales locales. GitHub production tiene los nombres OPENAI_API_KEY y
+  ANTHROPIC_API_KEY. Workflow manual conserva protección; no configura secretos.
+- Medición API aún pendiente; no confundir tests con resultados de modelos.
+- No cambios funcionales/versión/despliegue/ADR. Preservar untracked ajenos, PWA y APK.
+- Hallazgos de código, no exposición reproducida: enriquecimiento planos de bandejas
+  consulta memoria/conocimiento sin empresa; Office puede declarar plan completo tras
+  error; bloque mecánico tiene referencias normativas incorrectas. Priorizar después
+  de la evaluación, con tarea propia y validación negativa donde corresponda.
+
+
 ## ANDROID-AR-ESTABILIDAD-01 — prueba física y canvas (2026-10-01)
 
 - Codex, rama codex/android-camera-qa, base 516cea5. Implementación fbff4d8 —

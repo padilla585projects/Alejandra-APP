@@ -1,5 +1,13 @@
 # Estado del proyecto — Alejandra 2.0
 
+## Evaluación IA de la suite — 2026-10-01
+
+Adrián prioriza competencia técnica multidisciplinar, planos y uso de herramientas,
+con ayuda diaria en Office; voz secundaria. Auditoría estática inicial y piloto aislado
+preparados, sin cambiar modelos ni aplicaciones desplegadas. Hallazgos y límites en
+docs/features/comparacion-modelos-ia.md. Medición API pendiente; tests no son benchmark.
+
+
 ## Prueba real Android — 2026-10-01
 
 Oppo recuperado por ADB Wi-Fi y candidata 1.17 instalada. La prueba detectó canvas 3D

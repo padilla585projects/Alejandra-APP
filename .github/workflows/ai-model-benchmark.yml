@@ -1,0 +1,43 @@
+name: Compare AI models (synthetic pilot)
+on:
+  workflow_dispatch:
+    inputs:
+      repeats:
+        description: 'Repeticiones por caso (1 a 3)'
+        default: '1'
+        required: true
+        type: choice
+        options: ['1', '2', '3']
+permissions:
+  contents: read
+concurrency:
+  group: ai-model-benchmark
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify measurement harness
+        run: node --test scripts/ai-benchmark/run.test.mjs
+      - name: Compare synthetic tasks (no production data or tools)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BENCHMARK_REPEATS: ${{ inputs.repeats }}
+          BENCHMARK_BUDGET_USD: '2'
+        run: node scripts/ai-benchmark/run.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-model-comparison
+          path: .ai-benchmark-results/
+          retention-days: 14
+          if-no-files-found: ignore
