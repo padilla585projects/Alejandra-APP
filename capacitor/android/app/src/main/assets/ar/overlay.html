@@ -50,11 +50,27 @@
   var planosGrupo = new THREE.Group();
   scene.add(planosGrupo);
 
+  // Retirar un objeto de la escena no libera sus buffers/materiales de GPU.
+  function liberarGrupo(grupo, conservarMateriales) {
+    var geometries = new Set(), materials = new Set();
+    grupo.traverse(function (o) {
+      if (o.geometry) geometries.add(o.geometry);
+      if (!conservarMateriales && o.material) {
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { materials.add(m); });
+      }
+    });
+    geometries.forEach(function (g) { g.dispose(); });
+    materials.forEach(function (m) { m.dispose(); });
+  }
+  function vaciarGrupo(grupo, conservarMateriales) {
+    liberarGrupo(grupo, conservarMateriales);
+    while (grupo.children.length) grupo.remove(grupo.children[0]);
+  }
+
   function resize() {
     var w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
-    camera.aspect = w / (h || 1);
-    camera.updateProjectionMatrix(); // se sobreescribe enseguida con la matriz real de ARCore
+    // La proyección pertenece a ARCore; un resize solo cambia el canvas.
   }
   window.addEventListener('resize', resize);
   resize();
@@ -100,7 +116,7 @@
   // render / ancho corresponde a cada elemento -- se resuelve aquí, igual que hace la PWA.
   window.actualizarContenido = function (pathJson, elementoKey, paramsJson, obstaculosJson, complementosJson) {
     try {
-      if (grupoInstalacion) { scene.remove(grupoInstalacion); }
+      if (grupoInstalacion) { scene.remove(grupoInstalacion); liberarGrupo(grupoInstalacion, false); }
       var path = JSON.parse(pathJson || '[]');
       var params = JSON.parse(paramsJson || '{}');
       if (path.length >= 2) {
@@ -113,7 +129,7 @@
       } else {
         grupoInstalacion = null;
       }
-      while (complementosGrupo.children.length) complementosGrupo.remove(complementosGrupo.children[0]);
+      vaciarGrupo(complementosGrupo, false);
       var comps = JSON.parse(complementosJson || '[]');
       comps.forEach(function (c) {
         var o = _replComplemento3D(THREE, c.key);
@@ -138,7 +154,7 @@
   var matPlanoBorde = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 });
   window.actualizarPlanos = function (planosJson) {
     try {
-      while (planosGrupo.children.length) planosGrupo.remove(planosGrupo.children[0]);
+      vaciarGrupo(planosGrupo, true); // materiales de planos compartidos entre frames
       var planos = JSON.parse(planosJson || '[]');
       planos.forEach(function (p) {
         var poly = p.poly || [];

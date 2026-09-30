@@ -19,7 +19,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -61,6 +63,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,6 +92,10 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     private OverlayView overlay;
     private TextView infoText;
     private Spinner compSpinner;
+    private volatile int compSeleccionado = 0;
+    private volatile String superficieObjetivo = "auto";
+    private String estadoSuperficie = "Explora suelo, techo y paredes moviendo el móvil despacio.";
+    private String resumenPlanos = "Sin planos confirmados";
     private final BackgroundRenderer background = new BackgroundRenderer();
 
     // Intent de abrirAR(): elemento elegido antes de entrar en AR (mismo elemento_key/params que
@@ -108,6 +115,8 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
 
     private int viewportW = 1, viewportH = 1;
     private boolean viewportChanged = false;
+    private int lastDisplayRotation = -1;
+    private volatile boolean overlayReady = false;
 
     // REPL-AR-AJUSTE-01 (17/09/2026): ox/oy/oz/rotZ son el ajuste fino manual (⬅⬆⬇➡/↻) que se
     // suma a la pose real del Anchor al renderizar/exportar -- igual que _ar.complementos[].pos
@@ -137,6 +146,8 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     // que _ar.ultimoFueComp en la PWA (WebXR).
     private final List<String> accionLog = new ArrayList<>();
     private volatile boolean pendingPoint = false;
+    private volatile boolean pendingUndo = false, pendingFinish = false;
+    private String ultimaPoseContenido = "";
     // FASE-A-AR-PAREDES-LISAS-01: modo "Tocar" explícito -- ancla por profundidad/instant
     // placement a corta distancia aunque no haya ninguna superficie reconocida bajo el retículo.
     private volatile boolean pendingContact = false;
@@ -204,6 +215,13 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         WebSettings ws = threeOverlay.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(false);
+        threeOverlay.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                if (isFinishing() || isDestroyed()) return;
+                overlayReady = true;
+                contenidoSucio = true;
+            }
+        });
         root.addView(threeOverlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         threeOverlay.loadUrl("file:///android_asset/ar/overlay.html");
 
@@ -241,6 +259,19 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         panelMod.setVisibility(View.GONE);
         bottomStack.addView(panelMod, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        Spinner superficieSpinner = new Spinner(this);
+        ArrayAdapter<String> superficiesAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, new String[]{"Superficie: automática", "Pared", "Suelo", "Techo"});
+        superficiesAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        superficieSpinner.setAdapter(superficiesAdapter);
+        superficieSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                superficieObjetivo = new String[]{"auto", "pared", "suelo", "techo"}[position];
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        panelMod.addView(superficieSpinner);
+
         LinearLayout compRow = new LinearLayout(this);
         compRow.setOrientation(LinearLayout.HORIZONTAL);
         compRow.setPadding(0, 0, 0, 8);
@@ -251,6 +282,10 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, nombres);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         compSpinner.setAdapter(adapter);
+        compSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) { compSeleccionado = position; }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
         LinearLayout.LayoutParams spinnerLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 2.4f);
         compRow.addView(compSpinner, spinnerLp);
         compRow.addView(makeBtn("➕ Colocar", "#a855f7", "#ffffff", 1.3f, v -> pendingComp = true));
@@ -313,9 +348,9 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         // ("📱 Tocar con el móvil (pared lisa)") para anclar por contacto cuando ni el hit-test
         // ni la profundidad enganchan en una superficie lisa/sin textura -- aquí no existía.
         bar.addView(makeBtn("📱 Tocar", "#38bdf8", "#062a3d", 1.6f, v -> pendingContact = true));
-        bar.addView(makeBtn("↩", "#ffffff", "#111111", 1f, v -> undo()));
+        bar.addView(makeBtn("↩", "#ffffff", "#111111", 1f, v -> pendingUndo = true));
         bar.addView(makeBtn("✖", "#000000", "#ffffff", 1f, v -> { setResult(RESULT_CANCELED); finish(); }));
-        bar.addView(makeBtn("✅ Fin", "#22c55e", "#ffffff", 1.4f, v -> terminar()));
+        bar.addView(makeBtn("✅ Fin", "#22c55e", "#ffffff", 1.4f, v -> pendingFinish = true));
 
         // AR-INSETS-01 (15/09/2026): Adrián probando el AR real -- "no se ven los controles" --
         // y en la captura el texto superior se solapaba con la barra de estado (hora/batería).
@@ -405,8 +440,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             Pose p = c.anchor.getPose();
             // REPL-AR-AJUSTE-01: mismo combinado offset+rotación que sincronizarContenidoOverlay
             // -- lo que se ve en el AR es lo que se guarda, no la pose original sin ajustar.
-            float[] q = c.rotZ != 0f ? quatMul(new float[]{p.qx(), p.qy(), p.qz(), p.qw()}, quatEjeZ(c.rotZ))
-                                      : new float[]{p.qx(), p.qy(), p.qz(), p.qw()};
+            float[] q = orientacionComplemento(p, c.rotZ);
             try {
                 JSONObject o = new JSONObject();
                 o.put("key", c.key);
@@ -422,8 +456,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         data.putExtra("complementos", compArr.toString());
         // REPL-AR-FOTO-01: fotos de documentación tomadas con 📸 durante la sesión.
         data.putExtra("fotos", new JSONArray(fotos).toString());
-        setResult(RESULT_OK, data);
-        finish();
+        runOnUiThread(() -> { setResult(RESULT_OK, data); finish(); });
     }
 
     private static double round3(double v) { return Math.round(v * 1000.0) / 1000.0; }
@@ -491,8 +524,24 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
         redExecutor.shutdownNow();
+        overlayReady = false;
+        // onPause ya ha parado el hilo GL: liberar recursos antes de otra sesión.
+        for (Anchor anchor : anchors) anchor.detach();
+        for (Complemento comp : complementos) comp.anchor.detach();
+        anchors.clear();
+        complementos.clear();
+        puntoOffsets.clear();
+        accionLog.clear();
+        if (session != null) { session.close(); session = null; }
+        if (threeOverlay != null) {
+            if (threeOverlay.getParent() instanceof ViewGroup)
+                ((ViewGroup) threeOverlay.getParent()).removeView(threeOverlay);
+            threeOverlay.stopLoading();
+            threeOverlay.destroy();
+            threeOverlay = null;
+        }
+        super.onDestroy();
     }
 
     @Override
@@ -529,9 +578,11 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     public void onDrawFrame(GL10 gl) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         if (session == null) return;
-        if (viewportChanged) {
-            int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        // Un giro de 180° conserva ancho/alto: onSurfaceChanged no siempre se dispara.
+        if (viewportChanged || rotation != lastDisplayRotation) {
             session.setDisplayGeometry(rotation, viewportW, viewportH);
+            lastDisplayRotation = rotation;
             viewportChanged = false;
         }
         try {
@@ -539,6 +590,10 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             Frame frame = session.update();
             Camera camera = frame.getCamera();
             background.draw(frame);
+
+            // Las listas de anclas pertenecen al hilo GL, también al deshacer/exportar.
+            if (pendingUndo) { pendingUndo = false; undo(); }
+            if (pendingFinish) { pendingFinish = false; terminar(); return; }
 
             boolean tracking = camera.getTrackingState() == TrackingState.TRACKING;
             // RENDIMIENTO-AR-CAMARA-01 (17/09/2026): Adrian -- "la camara va a saltos". Antes
@@ -591,8 +646,9 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             // redundante del render loop una vez (RENDIMIENTO-AR-CAMARA-01), no queremos meter
             // otro causante de saltos por sincronizar más veces de las que hacen falta para que
             // se vea fluido.
-            if (frameCount % 2 == 0) sincronizarCamaraOverlay(view, proj);
-            if (contenidoSucio) { contenidoSucio = false; sincronizarContenidoOverlay(); }
+            if (overlayReady && frameCount % 2 == 0) sincronizarCamaraOverlay(view, proj);
+            if (frameCount % 15 == 0) comprobarPosesContenido();
+            if (overlayReady && contenidoSucio) { contenidoSucio = false; sincronizarContenidoOverlay(); }
             // REFERENCIA-PLANOS-AR-01 (17/09/2026): Adrian, probando en una pared blanca lisa --
             // "no detecta bien las paredes... deberia tener referencias para saber colocarlo". El
             // usuario no tenia forma de ver QUE ha detectado ARCore realmente antes de pulsar
@@ -603,12 +659,13 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             // hacen los ejemplos oficiales de ARCore -- para que el usuario vea la superficie real
             // trackeada antes de marcar nada. Cada 15 frames (no cada frame): la lista de planos
             // cambia poco a poco mientras se escanea, no hace falta al ritmo de camara/contenido.
-            if (frameCount % 15 == 0) sincronizarPlanosOverlay();
+            if (overlayReady && frameCount % 15 == 0) sincronizarPlanosOverlay();
 
             float[] screen = new float[anchors.size() * 2];
             for (int i = 0; i < anchors.size(); i++) {
                 Pose p = anchors.get(i).getPose();
-                float[] world = {p.tx(), p.ty(), p.tz(), 1f};
+                float[] off = puntoOffsets.get(i);
+                float[] world = {p.tx() + off[0], p.ty() + off[1], p.tz() + off[2], 1f};
                 float[] clip = new float[4];
                 Matrix.multiplyMV(clip, 0, vp, 0, world, 0);
                 if (clip[3] <= 0f) { screen[i * 2] = Float.NaN; screen[i * 2 + 1] = Float.NaN; continue; }
@@ -632,7 +689,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                     boolean hayHitReal = false;
                     for (HitResult h : frame.hitTest(viewportW / 2f, viewportH / 2f)) {
                         Trackable t = h.getTrackable();
-                        if ((t instanceof Plane && ((Plane) t).isPoseInPolygon(h.getHitPose())) || t instanceof Point) { hayHitReal = true; break; }
+                        if (t instanceof Plane && aceptaPlano((Plane) t) && ((Plane) t).isPoseInPolygon(h.getHitPose())) { hayHitReal = true; break; }
                     }
                     reticleState = hayHitReal ? OverlayView.RETICLE_HIT : OverlayView.RETICLE_FALLBACK;
                 }
@@ -647,10 +704,6 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         }
     }
 
-    // Última profundidad válida que se pudo medir (con Depth API o con un hit-test real
-    // confirmado) -- ver el porqué junto a su uso en resolverAnclaje().
-    private float ultimaProfundidadValidaM = -1f;
-
     // Profundidad bajo el centro de la pantalla en metros, o -1 si no hay dato disponible este
     // frame (dispositivo sin Depth API, imagen aún no lista, o profundidad inválida ahí).
     // MEDIANA-PROFUNDIDAD-01 (17/09/2026): un solo texel de la imagen de profundidad es ruidoso
@@ -663,7 +716,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         try (Image depth = frame.acquireDepthImage16Bits()) {
             int w = depth.getWidth(), h = depth.getHeight();
             Image.Plane plane = depth.getPlanes()[0];
-            ShortBuffer buf = plane.getBuffer().asShortBuffer();
+            ShortBuffer buf = plane.getBuffer().order(ByteOrder.LITTLE_ENDIAN).asShortBuffer();
             int rowStrideShorts = plane.getRowStride() / 2;
             int cx = w / 2, cy = h / 2, r = Math.max(1, Math.min(w, h) / 40);
             int[][] offsets = {{0, 0}, {-r, 0}, {r, 0}, {0, -r}, {0, r}};
@@ -672,66 +725,100 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                 int px = Math.max(0, Math.min(w - 1, cx + off[0]));
                 int py = Math.max(0, Math.min(h - 1, cy + off[1]));
                 short raw = buf.get(py * rowStrideShorts + px);
-                int mm = raw & 0x1FFF; // 13 bits de profundidad en milimetros (formato DEPTH16 de ARCore)
-                if (mm > 0) validasMm.add(mm);
+                int mm = SurfaceGeometry.depthMm(raw); // D_16 ARCore: 16 bits en milímetros.
+                if (mm > 100 && mm < 8000) validasMm.add(mm);
             }
             if (validasMm.isEmpty()) return -1f;
             java.util.Collections.sort(validasMm);
             float m = validasMm.get(validasMm.size() / 2) / 1000f;
-            ultimaProfundidadValidaM = m;
             return m;
         } catch (Exception e) {
             return -1f; // sin Depth API, imagen aun no lista, etc. -- no es un error real
         }
     }
 
-    // REPL-AR-NATIVO-COMP-01: mismo hit-test que usaban colocarEnReticulo/colocarPorContacto,
-    // extraído para que colocarComplemento() no duplique la lógica de "encontrar una superficie
-    // bajo el retículo" -- ver el comentario de FASE-A-AR-PAREDES-LISAS-01 abajo para el porqué
-    // del respaldo por profundidad/instant placement.
+    // Una fuente de verdad para filtrar planos al colocar trazado y complementos.
+    private boolean aceptaPlano(Plane plane) {
+        return plane.getTrackingState() == TrackingState.TRACKING && plane.getSubsumedBy() == null
+                && ("auto".equals(superficieObjetivo) || superficieObjetivo.equals(
+                    SurfaceGeometry.type(plane.getCenterPose().getYAxis()[1])));
+    }
+
+    private void comprobarPosesContenido() {
+        StringBuilder firma = new StringBuilder();
+        for (Anchor a : anchors) agregarFirmaPose(firma, a.getPose());
+        for (Complemento c : complementos) agregarFirmaPose(firma, c.anchor.getPose());
+        String actual = firma.toString();
+        if (!actual.equals(ultimaPoseContenido)) { ultimaPoseContenido = actual; contenidoSucio = true; }
+    }
+
+    private static void agregarFirmaPose(StringBuilder firma, Pose pose) {
+        for (float v : pose.getTranslation()) firma.append(Math.round(v * 1000)).append(',');
+        for (float v : pose.getRotationQuaternion()) firma.append(Math.round(v * 1000)).append(',');
+        firma.append(';');
+    }
+
+    // Pegado también por profundidad, solo dentro del contorno y a <=15 cm del plano.
+    private Anchor anclarEnPlano(Pose referencia) {
+        Plane mejor = null;
+        Pose mejorPose = null;
+        float distancia = Float.MAX_VALUE;
+        for (Plane plane : session.getAllTrackables(Plane.class)) {
+            if (!aceptaPlano(plane)) continue;
+            Pose center = plane.getCenterPose();
+            float[] projected = SurfaceGeometry.project(referencia.getTranslation(), center.getTranslation(), center.getYAxis());
+            if (projected == null) continue;
+            Pose pose = new Pose(projected, center.getRotationQuaternion());
+            if (!plane.isPoseInPolygon(pose)) continue;
+            float[] original = referencia.getTranslation();
+            float d = 0;
+            for (int i = 0; i < 3; i++) d += (original[i] - projected[i]) * (original[i] - projected[i]);
+            if (d < distancia) { distancia = d; mejor = plane; mejorPose = pose; }
+        }
+        if (mejor == null) return null;
+        estadoSuperficie = SurfaceGeometry.type(mejor.getCenterPose().getYAxis()[1]) + " detectado · punto pegado a la superficie";
+        return mejor.createAnchor(mejorPose);
+    }
+
     private Anchor resolverAnclaje(Frame frame, boolean contacto) {
-        if (contacto) {
-            List<HitResult> ip = frame.hitTestInstantPlacement(viewportW / 2f, viewportH / 2f, 0.1f);
-            return ip.isEmpty() ? null : ip.get(0).createAnchor();
+        Pose camara = frame.getCamera().getPose();
+        if (!contacto) {
+            HitResult punto = null;
+            for (HitResult hit : frame.hitTest(viewportW / 2f, viewportH / 2f)) {
+                Trackable t = hit.getTrackable();
+                if (t instanceof Plane && aceptaPlano((Plane) t) && ((Plane) t).isPoseInPolygon(hit.getHitPose())) {
+                    Plane plane = (Plane) t;
+                    estadoSuperficie = SurfaceGeometry.type(plane.getCenterPose().getYAxis()[1]) + " detectado · punto pegado a la superficie";
+                    return plane.createAnchor(new Pose(hit.getHitPose().getTranslation(), plane.getCenterPose().getRotationQuaternion()));
+                }
+                if (t instanceof Point && t.getTrackingState() == TrackingState.TRACKING
+                        && ((Point) t).getOrientationMode() == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL && punto == null) punto = hit;
+            }
+            if (punto != null) {
+                Anchor pegado = anclarEnPlano(punto.getHitPose());
+                if (pegado != null) return pegado;
+                if ("auto".equals(superficieObjetivo)) {
+                    estadoSuperficie = "Superficie estimada por puntos · comprueba la colocación";
+                    return punto.createAnchor();
+                }
+            }
         }
-        List<HitResult> hits = frame.hitTest(viewportW / 2f, viewportH / 2f);
-        HitResult chosen = null;
-        for (HitResult hit : hits) {
-            Trackable t = hit.getTrackable();
-            if (t instanceof Plane && ((Plane) t).isPoseInPolygon(hit.getHitPose())) { chosen = hit; break; }
-            if (t instanceof Point && chosen == null) chosen = hit;
+        float metros = contacto ? 0.1f : estimarProfundidadCentroM(frame);
+        if (metros <= 0) {
+            estadoSuperficie = "Sin superficie confirmada ni profundidad actual. Explora una esquina o usa Tocar.";
+            return null;
         }
-        // TUBO-MAL-COLOCADO-01 (17/09/2026): Adrián, probando en pared blanca lisa -- "el tubo lo
-        // coloca mal". Antes, si no había Plane-en-polígono ni Point, se aceptaba directamente
-        // hits.get(0) -- pero con la Depth API activada (session.configure más arriba),
-        // frame.hitTest() TAMBIÉN devuelve resultados basados en el mapa de profundidad
-        // (DepthPoint) mezclados en esa misma lista, y la profundidad estimada por
-        // cámara/movimiento en una superficie lisa y sin textura es justo el caso donde ARCore
-        // es menos fiable -- un DepthPoint ahí puede caer a una distancia muy distinta de la
-        // real (el ancla sale disparada lejos de donde se tocó). Se deja de aceptar
-        // "cualquier otro hit" a ciegas: sin Plane-en-polígono ni Point confirmado, se pasa
-        // siempre por nuestro propio respaldo de abajo (profundidad por mediana + instant
-        // placement), que es más conservador que fiarse de un único DepthPoint del frame actual.
-        // FASE-A-AR-PAREDES-LISAS-01 (16/09/2026): Adrián -- "no me detecta las paredes
-        // blancas... le cuesta mucho". Sin plano/punto confirmado, en vez de rendirse ya
-        // mismo, instant placement (ya activado en la config de la sesión) con la distancia
-        // real de la Depth API si la hay, o una estimación razonable si no -- misma idea
-        // que el respaldo por profundidad que ya tenía la PWA (WebXR) para este caso exacto.
-        if (chosen == null) {
-            // RENDIMIENTO-AR-CAMARA-01: la profundidad se pide aquí, en el momento real de uso
-            // (el usuario acaba de pulsar Punto/Colocar), no en cada frame -- ver el comentario
-            // en onDrawFrame.
-            float estimada = estimarProfundidadCentroM(frame);
-            // Si este frame no da profundidad válida, mejor la última que sí se midió bien
-            // (el usuario está trabajando a una distancia parecida) que un valor fijo -- y si
-            // nunca hubo ninguna, 0,6 m (a un brazo de distancia, lo normal en trabajo eléctrico
-            // de cerca) es un supuesto mucho más razonable que los 2 m de antes, que en una
-            // habitación normal ya caen detrás de la pared real.
-            float distancia = estimada > 0 ? estimada : (ultimaProfundidadValidaM > 0 ? ultimaProfundidadValidaM : 0.6f);
-            List<HitResult> ip = frame.hitTestInstantPlacement(viewportW / 2f, viewportH / 2f, distancia);
-            if (!ip.isEmpty()) chosen = ip.get(0);
+        // +Y local hacia la cámara: aproximación explícita, nunca una superficie reconocida.
+        Pose referencia = camara.compose(Pose.makeTranslation(0, 0, -metros))
+                .compose(Pose.makeRotation(0.70710678f, 0, 0, 0.70710678f));
+        Anchor pegado = anclarEnPlano(referencia);
+        if (pegado != null) return pegado;
+        if (!contacto && !"auto".equals(superficieObjetivo)) {
+            estadoSuperficie = "Aún no se confirma " + superficieObjetivo + " aquí. Explora su borde o esquina.";
+            return null;
         }
-        return chosen == null ? null : chosen.createAnchor();
+        estadoSuperficie = contacto ? "Contacto manual · comprueba la colocación" : "Profundidad aproximada · superficie sin confirmar";
+        return session.createAnchor(referencia);
     }
 
     // REPL-AR-OVERLAY-01: pasa las matrices reales de ARCore a la cámara de Three.js en
@@ -771,8 +858,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             Pose p = c.anchor.getPose();
             // REPL-AR-AJUSTE-01: el ajuste manual (⬅⬆⬇➡/↻) se combina aquí con la pose real del
             // Anchor -- ver el comentario junto a la clase Complemento.
-            float[] q = c.rotZ != 0f ? quatMul(new float[]{p.qx(), p.qy(), p.qz(), p.qw()}, quatEjeZ(c.rotZ))
-                                      : new float[]{p.qx(), p.qy(), p.qz(), p.qw()};
+            float[] q = orientacionComplemento(p, c.rotZ);
             JSONObject o = new JSONObject();
             try {
                 o.put("key", c.key);
@@ -793,16 +879,22 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     private void sincronizarPlanosOverlay() {
         if (threeOverlay == null || session == null) return;
         JSONArray planosArr = new JSONArray();
+        int paredes = 0, suelos = 0, techos = 0;
         for (Plane p : session.getAllTrackables(Plane.class)) {
             if (p.getTrackingState() != TrackingState.TRACKING || p.getSubsumedBy() != null) continue;
             FloatBuffer poly = p.getPolygon();
             if (poly == null || poly.remaining() < 6) continue; // menos de 3 puntos (x,z por punto)
             Pose center = p.getCenterPose();
+            String tipo = SurfaceGeometry.type(center.getYAxis()[1]);
+            if ("pared".equals(tipo)) paredes++;
+            else if ("suelo".equals(tipo)) suelos++;
+            else techos++;
             try {
                 JSONObject o = new JSONObject();
                 o.put("cx", center.tx()); o.put("cy", center.ty()); o.put("cz", center.tz());
                 o.put("qx", center.qx()); o.put("qy", center.qy()); o.put("qz", center.qz()); o.put("qw", center.qw());
                 o.put("vertical", p.getType() == Plane.Type.VERTICAL);
+                o.put("tipo", SurfaceGeometry.type(center.getYAxis()[1]));
                 JSONArray pts = new JSONArray();
                 poly.rewind();
                 while (poly.hasRemaining()) { pts.put(poly.get()); pts.put(poly.get()); }
@@ -810,6 +902,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                 planosArr.put(o);
             } catch (Exception ignored) {}
         }
+        resumenPlanos = "Pared " + paredes + " · Suelo " + suelos + " · Techo " + techos;
         final String js = "actualizarPlanos(" + jsStringLit(planosArr.toString()) + ")";
         runOnUiThread(() -> { try { threeOverlay.evaluateJavascript(js, null); } catch (Exception ignored) {} });
     }
@@ -856,7 +949,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             runOnUiThread(() -> infoText.setText("Sin superficie ni profundidad bajo el círculo para colocar el complemento."));
             return;
         }
-        int idx = Math.max(0, compSpinner.getSelectedItemPosition());
+        int idx = Math.max(0, compSeleccionado);
         String key = ReplComplementosNativo.CATALOGO[idx].key;
         complementos.add(new Complemento(a, key));
         accionLog.add("comp");
@@ -939,23 +1032,8 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         contenidoSucio = true;
     }
 
-    // Quaternion [x,y,z,w] de una rotación de angle radianes sobre el eje local Z.
-    private static float[] quatEjeZ(float angle) {
-        float h = angle / 2f;
-        return new float[]{0f, 0f, (float) Math.sin(h), (float) Math.cos(h)};
-    }
-
-    // Producto de Hamilton a*b (ambos [x,y,z,w]) -- aplica b en el espacio LOCAL de a, mismo
-    // orden que q.multiply(incremento) en Three.js/replArRotarComp().
-    private static float[] quatMul(float[] a, float[] b) {
-        float ax = a[0], ay = a[1], az = a[2], aw = a[3];
-        float bx = b[0], by = b[1], bz = b[2], bw = b[3];
-        return new float[]{
-            aw * bx + ax * bw + ay * bz - az * by,
-            aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw,
-            aw * bw - ax * bx - ay * by - az * bz,
-        };
+    private static float[] orientacionComplemento(Pose pose, float giro) {
+        return SurfaceGeometry.complementQuaternion(pose.getRotationQuaternion(), giro);
     }
 
     // REPL-AR-FOTO-01 (17/09/2026): "📸 Foto" documental -- captura lo que se ve ahora mismo
@@ -1059,21 +1137,22 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     }
 
     private void actualizarInfo(boolean tracking) {
-        double longitud = 0; Pose prev = null;
-        for (Anchor a : anchors) {
-            Pose p = a.getPose();
+        double longitud = 0;
+        float[] prev = null;
+        for (int i = 0; i < anchors.size(); i++) {
+            Pose p = anchors.get(i).getPose();
+            float[] off = puntoOffsets.get(i);
+            float[] pos = {p.tx() + off[0], p.ty() + off[1], p.tz() + off[2]};
             if (prev != null) {
-                double dx = p.tx() - prev.tx(), dy = p.ty() - prev.ty(), dz = p.tz() - prev.tz();
+                double dx = pos[0] - prev[0], dy = pos[1] - prev[1], dz = pos[2] - prev[2];
                 longitud += Math.sqrt(dx * dx + dy * dy + dz * dz);
             }
-            prev = p;
+            prev = pos;
         }
         final int n = anchors.size();
         final String lon = String.format(java.util.Locale.US, "%.2f", longitud).replace('.', ',');
-        runOnUiThread(() -> {
-            if (n == 0) infoText.setText("Apunta con el círculo a la superficie y pulsa Punto.");
-            else if (n == 1) infoText.setText("1 punto. Apunta al siguiente y pulsa Punto.");
-            else infoText.setText(n + " puntos · " + lon + " m");
-        });
+        final String estado = tracking ? resumenPlanos + " · Destino: " + superficieObjetivo + "\n" + estadoSuperficie
+                : "Buscando posición: mueve el móvil despacio y mejora la luz.";
+        runOnUiThread(() -> infoText.setText(estado + "\n" + n + " puntos · " + lon + " m"));
     }
 }
