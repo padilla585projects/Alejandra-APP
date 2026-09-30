@@ -6,12 +6,11 @@ WebXR). Comparadas con el render actual (`_replInstal3D`), señalan varias mejor
 en este orden de prioridad:
 
 1. **Que la instalación se pegue de verdad a la pared/techo real, nunca "en el aire".**
-   Prioridad más alta ("sobre todo que no vuelva en el aire" — Adrián). Parcialmente atacado ya
-   por PARED-NORMAL-REAL-01 (orientar contra la normal real cuando se conoce) y por las mejoras
-   de profundidad portadas a la PWA el 18/09 (mediana de 5 muestras + ajuste manual de
-   acercar/alejar) — pero sigue habiendo margen: cuando WebXR SÍ confirma un plano real
-   (`frame.detectedPlanes`) bajo un punto, hoy no se fuerza esa posición contra el plano, se usa
-   la pose cruda del hit-test tal cual.
+   Prioridad más alta ("sobre todo que no vuelva en el aire" — Adrián). **Cerrada y verificada
+   el 18/09:** #319/#320 fuerzan el punto contra el plano real detectado y guardan su normal,
+   tanto con hit-test como con profundidad; #322 evita geometría degenerada en esquinas.
+   Adrián confirmó el resultado en el Oppo. Se mantienen la mediana de profundidad y el
+   ajuste manual; reconocer superficies lisas sigue siendo una limitación conocida.
 2. **Tramos siempre en ángulo recto** (`ref-02-esquina-pared-techo.jpg`, `ref-03-...jpg`): sube
    vertical por la pared, gira 90° justo en la esquina, sigue horizontal por el techo — nunca en
    diagonal. El trazado actual conecta los puntos marcados en AR con una línea recta tal cual se
@@ -48,7 +47,7 @@ CODO-SIN-CAJA-AUTO-01 (17/09/2026) quitó la caja automática en cada codo del t
 Adrián pidió controlar él mismo dónde van las cajas de registro/mecanismo. Las fotos de
 referencia SÍ muestran una caja en cada cambio de plano (pared↔techo) — falta decidir si eso
 justifica una caja automática solo ahí (no en cada codo intermedio del propio tubo), o si se
-mantiene 100% manual. Sin decidir todavía — no se ha implementado nada de esto, es contexto
+mantiene 100% manual. Sin decidir todavía — prioridades 2–4 no implementadas, es contexto
 para cuando se aborde la tarea completa.
 
 ## Alcance

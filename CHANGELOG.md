@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-30 — continuidad y calendario de cuadrantes)
+
+- El generador usa fechas de calendario UTC de principio a fin, evitando que la zona
+  horaria del proceso desplace los días al serializarlos o afecte a la rotación semanal.
+  Cinco pruebas de regresión se ejecutan también en CI. Sin migración ni regeneración
+  automática de cuadrantes existentes; corrección pendiente de publicación.
+- Estado y relevo reconciliados con #318–#331: Guardar AR y pegado resueltos; cuadrantes
+  integrados y publicados con semana natural, comida, rotación semanal y edición.
+  Se conservan como pendientes la prueba autenticada de cuadrantes y las mejoras AR
+  que necesitan dispositivo real o decisiones de diseño.
+
 ### Fixed / Added (2026-09-18 — Replanteo: Guardar tras AR, pegado a la pared real, y menú renombrar/borrar)
 
 - **Guardar no hacía nada tras terminar un replanteo por AR** (PR #318): `replArTerminar()`

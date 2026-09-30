@@ -1,6 +1,20 @@
 # Estado del proyecto — Alejandra 2.0
 
-- Actualizado: 2026-09-18
+- Actualizado: 2026-09-30
+- Estado actual: **reanudación desde `3990424` (PR #331), web 9.78.** Guardar tras AR,
+  pegado al plano real y geometría en esquinas resueltos/verificados por Adrián (#318–#323).
+  Cuadrantes integrados (#321, #327–#331), con pausa de comida, semana natural, rotación
+  semanal y edición. API desplegada desde `d11128f`, agente desde `609a0ac`, Pages desde
+  `3990424`; salud pública de ambos Workers `healthy` y versión web 9.78 verificadas
+  el 30/09. Esto acredita disponibilidad, no sustituye la prueba autenticada del módulo.
+  Corrección de calendario independiente de zona horaria preparada en
+  `codex/cierre-pendientes-septiembre` (5 pruebas); pendiente integración/despliegue.
+  Riesgos activos: documentación histórica conserva estados superados; cuadrantes
+  existentes necesitan regeneración humana explícita para adoptar el nuevo reparto;
+  falta validación funcional con datos reales. ADB sin dispositivos conectados.
+  Siguiente objetivo: integrar/desplegar la corrección del calendario y verificar;
+  después probar cuadrantes con sesión autorizada y abordar AR en Android real.
+- **Historial de estados:** las entradas siguientes describen lo conocido en cada fecha.
 - Estado (2026-09-18): **AR de Replanteo en la PWA (WebXR) CONFIRMADO FUNCIONANDO en vivo por
   primera vez, tras estar roto sin que nadie lo supiera desde el 10/09.** Sesión de depuración en
   dispositivo real (Oppo CPH2305 con ARCore, instrumentado por Chrome DevTools Protocol vía ADB)
@@ -13,11 +27,12 @@
   AR nativo. Adrián probó en obra: la instalación se ve y queda pegada a la pared/techo. Regla
   nueva en `CLAUDE.md` para que esto no se repita: ningún cambio a la sesión WebXR o a
   `repl3d.js` se da por terminado sin probarlo en un Android con ARCore real.
-  **Bug nuevo abierto, sin diagnosticar**: el botón Guardar del editor de Replanteo no responde
-  (sin mensaje ni error) justo después de terminar una sesión AR — pendiente depurar en vivo.
+  El fallo de Guardar tras AR se resolvió esa noche en PR #318 (`06d318e`), confirmado
+  por Adrián en el Oppo; ya no es un bloqueo activo.
   Pendiente para sesión aparte (decisión explícita de Adrián, con fotos de referencia en
   `docs/features/replanteo-instalacion-realista/`): que la instalación se pegue de verdad a la
-  pared cuando WebXR confirma un plano real, tramos en ángulo recto, y varios tubos en paralelo.
+  pared cuando WebXR confirma un plano real (cerrado #319/#320), tramos en ángulo recto,
+  y varios tubos en paralelo (estos dos siguen pendientes).
   Detalle completo en `TASKS.md`.
 - Estado (2026-09-10): **App Android (Capacitor) en marcha y Replanteo AR muy mejorado.**
   Desplegado v9.60→v9.67: app Android F1 (envuelve la suite, descargable desde la PWA) + F2 (login
