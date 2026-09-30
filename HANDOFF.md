@@ -3,7 +3,7 @@
 ## ANDROID-AR-ESTABILIDAD-01 — superficies y realismo de APK (2026-09-30)
 
 - Agente: Codex. Rama: codex/android-ar-estabilidad; base 9f4c596.
-  Implementación: 980c5eb — fix(android): apoyar el AR en superficies reales y conservar materiales.
+  Revisión: PR #335. Implementación: 980c5eb — fix(android): apoyar el AR en superficies reales y conservar materiales.
 - Objetivo y alcance autorizado: corregir el AR **nativo** y probarlo en Oppo; preservar
   la PWA. ADR-0025 aceptado, ADR-0007 y runbook de compilación. ADR-0026 no aceptado.
 - Binario antiguo: package com.padilla585.alejandra, versión 1.15. Assets inspeccionados:

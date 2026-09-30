@@ -2,7 +2,7 @@
 
 ## ANDROID-AR-ESTABILIDAD-01 — APK nativa, sin cambios a la PWA (2026-09-30)
 
-- Responsable: Codex. Rama: `codex/android-ar-estabilidad`, base `9f4c596`.
+- Responsable: Codex. Rama: `codex/android-ar-estabilidad`, base `9f4c596`. PR #335.
 - Objetivo autorizado por Adrián: poner al día el AR de la APK y probar en su Oppo,
   preservando la PWA que funciona. No confundir WebXR con `ReplanteoARActivity` (ARCore).
 - Contexto verificado: instalada APK 1.15, paquete `com.padilla585.alejandra`; su

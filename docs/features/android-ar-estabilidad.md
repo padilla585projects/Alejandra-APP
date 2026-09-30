@@ -68,3 +68,10 @@ pared o techo lisos desde una imagen inmóvil. El selector filtra el tipo, no bl
 plano para todo el tramo. Ángulos rectos, tubos paralelos, edición de cualquier punto,
 oclusiones reales e iluminación ambiental no se declaran implementados en esta entrega.
 Escaneo + IA y ADR-0026 siguen pendientes. No se cambia el motor compartido ni la PWA.
+
+## Artefacto de revisión
+
+APK 1.16 construida desde b72a137 (implementación 980c5eb); no publicada como estable.
+SHA-256: `DB1C5E1BB512AA31F416A158CE35038E5CC1F27A548CD7B171F3AAE06F278AE2`.
+Certificado release SHA-256: `047707b5fd0281dacd127ff04a0c2f4eb46c7ed718cbbde841e9398400e3dd8c`.
+PR: [#335](https://github.com/padilla585projects/Alejandra-APP/pull/335).
