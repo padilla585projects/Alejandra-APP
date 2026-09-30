@@ -1,5 +1,11 @@
 # Alejandra 2.0 — empezar aquí
 
+**Actualizador APK (01/10):** ANDROID-OTA-01 completa comprobación/descarga automática
+nativa y recuperación de DownloadManager. Candidata 1.17 incorpora también AR #335;
+PWA intacta. Última estable 1.15. Instalar inicialmente el nuevo binario y probar AR/OTA
+en Oppo (ADB ausente) antes de publicar estable. Ver TASKS/HANDOFF y android-ota.md.
+
+
 La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual

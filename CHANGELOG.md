@@ -4,6 +4,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-10-01 — OTA nativo, candidata Android 1.17)
+
+- Comprobación nativa de releases estables al abrir/volver, descarga automática por Wi-Fi,
+  recuperación tras cerrar y oferta de instalación con confirmación Android.
+- Actualizador valida origen oficial, estado real de descarga, paquete, firma y versión;
+  evita descargas duplicadas y recupera permiso de instalación. PWA sin cambios.
+- Candidata 1.17 incluye AR #335; requiere bootstrap inicial y pruebas físicas antes
+  de publicación estable. Última estable permanece 1.15.
+
+
 ### Fixed (2026-09-30 — AR nativo Android 1.16, pendiente prueba física final)
 
 - Clasifica y filtra superficies (pared/suelo/techo), pega los puntos de profundidad a
