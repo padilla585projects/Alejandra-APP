@@ -1,5 +1,16 @@
 # TASKS — Cola operativa inmediata
 
+## Verificación Android en Oppo — 2026-10-01
+
+- Rama codex/android-camera-qa; implementación fbff4d8. Candidata 1.17 instalada por
+  ADB Wi-Fi; corrige tamaño CSS del canvas y borde de planos. Overlay 8/8, AR Java 5/5,
+  política OTA 3/3 y release correctos. Bandeja visible junto a puntos, Fin y giro probados.
+- Estado: verificación parcial. Planos horizontales detectados, paredes todavía 0;
+  falta comprobar pegado a las tres superficies, tubo y contornos finales.
+  OTA reconoce build17 sin downgrade; falta salto real y recuperación de descarga.
+- Siguiente acción: protocolo de docs/features/android-ar-estabilidad.md y android-ota.md.
+  La PWA no se modifica y no se publica APK estable hasta completar aceptación física.
+
 ## ANDROID-OTA-01 — completar actualizador nativo (2026-10-01)
 
 - Autorización: Adrián solicita OTA para la APK; evolución del AppUpdatePlugin ya
@@ -37,8 +48,8 @@
 - Pruebas: assets reales del APK, render/geometría del overlay, compilación Java/APK y
   sesión nativa en vivo (arranque, trazado/complementos, terminar, reentrada, orientación).
 - Rollback: APK 1.15 preservada temporalmente fuera del repo; revertir commits nativos.
-- Estado: implementación y pruebas locales terminadas; validación física final pendiente
-  porque ADB quedó offline. Superficies/accesorios 5/5, overlay/paridad 6/6; release
+- Estado: implementación y pruebas locales terminadas; validación física parcial del
+  01/10 según primer apartado. Superficies/accesorios 5/5, overlay/paridad inicial 6/6; release
   1.16 compilada y firmada. Ver docs/features/android-ar-estabilidad.md.
   No declarar AR cerrado ni promover APK estable hasta completar prueba en dispositivo.
 

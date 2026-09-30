@@ -2,8 +2,9 @@
 
 **Actualizador APK (01/10):** ANDROID-OTA-01 completa comprobación/descarga automática
 nativa y recuperación de DownloadManager. Candidata 1.17 incorpora también AR #335;
-PWA intacta. Última estable 1.15. Instalar inicialmente el nuevo binario y probar AR/OTA
-en Oppo (ADB ausente) antes de publicar estable. Ver TASKS/HANDOFF y android-ota.md.
+PWA intacta. Última estable 1.15. Bootstrap 1.17 realizado en Oppo por ADB Wi-Fi.
+Prueba física descubrió canvas duplicado por DPR, corregido en fbff4d8; bandeja visible
+junto a puntos y giro probado. Paredes y salto OTA aún pendientes. Ver TASKS/HANDOFF.
 
 
 La documentación versionada del repositorio es la fuente oficial.
@@ -12,8 +13,8 @@ La documentación versionada del repositorio es la fuente oficial.
 
 **Prioridad Android (30/09):** corregir AR de la APK preservando PWA 9.78. Rama
 `codex/android-ar-estabilidad`, actualización 1.16 compilada: superficies, pegado,
-accesorios, giro y recursos; pruebas 5/5 Java y 6/6 overlay. El Oppo estuvo conectado
-por Wi-Fi, ahora offline; falta instalar/probar la compilación final. El cierre de
+accesorios, giro y recursos; pruebas iniciales 5/5 Java y 6/6 overlay. El Oppo volvió
+por Wi-Fi el 01/10 y recibió 1.17; prueba física parcial según el apartado anterior. El cierre de
 AR del 18/09 acredita WebXR/PWA, no el binario Android. Ver primeros apartados de
 `PROJECT_STATE.md`, `TASKS.md` y `HANDOFF.md`.
 
