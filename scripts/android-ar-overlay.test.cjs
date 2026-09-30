@@ -12,14 +12,23 @@ test('el APK conserva exactamente la geometría y materiales actuales de la PWA'
 });
 
 function overlay() {
-  const events = {}, renders = [];
+  const events = {}, renders = [], canvas = { style: {} };
   const window = { innerWidth: 360, innerHeight: 720, devicePixelRatio: 4,
     addEventListener: (name, callback) => { events[name] = callback; } };
   const THREE = { ...three, WebGLRenderer: class {
-    setPixelRatio() {} setClearColor() {} setSize() {}
-    render(scene, camera) { renders.push({ scene, camera }); }
+    constructor() { this.pixelRatio = 1; }
+    setPixelRatio(n) { this.pixelRatio = n; } setClearColor() {}
+    setSize(w, h, updateStyle = true) {
+      canvas.width = Math.floor(w * this.pixelRatio); canvas.height = Math.floor(h * this.pixelRatio);
+      if (updateStyle) { canvas.style.width = w + 'px'; canvas.style.height = h + 'px'; }
+    }
+    render(scene, camera) {
+      // Mismo paso de actualización de cámara que WebGLRenderer r158.
+      if (camera.parent === null && camera.matrixWorldAutoUpdate === true) camera.updateMatrixWorld();
+      renders.push({ scene, camera });
+    }
   } };
-  const ctx = vm.createContext({ THREE, window, document: { getElementById: () => ({}) }, console });
+  const ctx = vm.createContext({ THREE, window, document: { getElementById: () => canvas }, console });
   vm.runInContext(readFileSync(resolve(assets, 'repl3d.js'), 'utf8'), ctx);
   const html = readFileSync(resolve(assets, 'overlay.html'), 'utf8');
   const inline = html.match(/<script>\s*([\s\S]*?)<\/script>/);
@@ -28,7 +37,7 @@ function overlay() {
   const view = new three.Matrix4().toArray();
   const projection = new three.PerspectiveCamera(65, 0.5, 0.1, 100).projectionMatrix.toArray();
   window.actualizarCamara(view, projection);
-  return { window, events, scene: renders.at(-1).scene, camera: renders.at(-1).camera, ctx, projection };
+  return { window, events, canvas, scene: renders.at(-1).scene, camera: renders.at(-1).camera, ctx, projection };
 }
 function recursos(group) {
   const geometries = new Set(), materials = new Set();
@@ -46,11 +55,35 @@ const path = JSON.stringify([
   { x: 0.001, y: 1, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 },
 ]);
 
+test('el canvas ocupa el viewport CSS sin duplicar el tamaño por la densidad del teléfono', () => {
+  const o = overlay();
+  assert.equal(o.canvas.width, 720); assert.equal(o.canvas.height, 1440);
+  assert.equal(parseFloat(o.canvas.style.width) || o.canvas.width, 360);
+  assert.equal(parseFloat(o.canvas.style.height) || o.canvas.height, 720);
+  o.window.innerWidth = 720; o.window.innerHeight = 360; o.events.resize();
+  assert.equal(parseFloat(o.canvas.style.width) || o.canvas.width, 720);
+  assert.equal(parseFloat(o.canvas.style.height) || o.canvas.height, 360);
+});
+
 test('rotar el canvas conserva la proyección real recibida de ARCore', () => {
   const o = overlay();
   o.window.innerWidth = 720; o.window.innerHeight = 360;
   o.events.resize();
   assert.deepEqual(o.camera.projectionMatrix.toArray(), o.projection);
+});
+
+test('el render conserva la pose ARCore cuando la cámara se desplaza y gira', () => {
+  const o = overlay();
+  const world = new three.Matrix4().compose(new three.Vector3(2, 1.5, -3),
+    new three.Quaternion().setFromEuler(new three.Euler(0.2, 0.8, -0.1)), new three.Vector3(1, 1, 1));
+  const view = world.clone().invert();
+  o.window.actualizarCamara(view.toArray(), o.projection);
+  o.camera.matrixWorld.elements.forEach((n, i) => assert.ok(Math.abs(n - world.elements[i]) < 1e-10));
+  o.camera.matrixWorldInverse.elements.forEach((n, i) => assert.ok(Math.abs(n - view.elements[i]) < 1e-10));
+  const target = new three.Vector3(0, 0, -2).applyMatrix4(world);
+  const screen = target.project(o.camera);
+  assert.ok(Math.abs(screen.x) < 1e-10 && Math.abs(screen.y) < 1e-10,
+    'Un punto delante de la cámara física debe permanecer en el retículo');
 });
 
 test('rehacer el trazado libera cada geometría y material de la instalación anterior', () => {
@@ -77,6 +110,9 @@ test('el refresco de planos libera buffers y conserva sus materiales compartidos
   assert.equal(n.geometriesDisposed, 2);
   assert.equal(n.materialsDisposed, 0);
   assert.equal(group.children.length, 2);
+  assert.deepEqual(Array.from(group.children[1].geometry.attributes.position.array),
+    [-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1],
+    'El borde sigue el contorno real sin conectar pares de aristas como un zigzag');
 });
 
 test('borrar complementos libera la geometría y los materiales anteriores', () => {

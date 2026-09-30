@@ -20,6 +20,8 @@ import android.view.ViewGroup;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.ConsoleMessage;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
 import android.widget.Button;
@@ -215,11 +217,26 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         WebSettings ws = threeOverlay.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(false);
+        threeOverlay.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage message) {
+                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR
+                        && message.sourceId().startsWith("file:///android_asset/ar/")) {
+                    // Registrar ubicación, nunca mensajes que puedan incluir datos recibidos.
+                    android.util.Log.e("AlejandraAR", "Error de overlay JS en línea " + message.lineNumber());
+                }
+                return true;
+            }
+        });
         threeOverlay.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
                 if (isFinishing() || isDestroyed()) return;
-                overlayReady = true;
-                contenidoSucio = true;
+                view.evaluateJavascript("typeof actualizarCamara === 'function' && typeof actualizarContenido === 'function' && typeof actualizarPlanos === 'function'", result -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    overlayReady = "true".equals(result);
+                    android.util.Log.i("AlejandraAR", overlayReady ? "Overlay 3D listo" : "Overlay 3D no disponible");
+                    if (overlayReady) contenidoSucio = true;
+                    else estadoSuperficie = "Render 3D no disponible. Sal y vuelve a entrar en AR.";
+                });
             }
         });
         root.addView(threeOverlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
