@@ -1,5 +1,21 @@
 # Estado del proyecto — Alejandra 2.0
 
+## Estado Android actualizado — 2026-09-30
+
+La prioridad actual es el AR de la **APK**, por indicación de Adrián: detectar suelo,
+techo y paredes, apoyar correctamente la instalación y conservar los materiales de la
+PWA. El cierre del 18/09 corresponde a WebXR/PWA; no acredita la APK instalada.
+Oppo CPH2305 conectado por ADB Wi-Fi: la 1.15 instalada no incorporaba el motor #322.
+Una compilación preliminar 1.16 se instaló; después el teléfono quedó offline.
+La compilación final 1.16 incluye clasificación/filtro de superficies, pegado de puntos
+por profundidad al plano, orientación de accesorios, rotación y liberación de recursos.
+Pruebas locales: superficies/accesorios 5/5, overlay/paridad de materiales 6/6 y APK
+release compilada y firmada. **Validación física final pendiente**: no presentar el AR
+nativo como resuelto hasta probar pared/techo/suelo y la instalación en movimiento.
+PWA 9.78, Workers y datos sin cambios en esta tarea. ADR-0026 continúa Propuesto.
+Ver primer apartado de TASKS/HANDOFF y docs/features/android-ar-estabilidad.md.
+
+
 - Actualizado: 2026-09-30
 - Estado actual: **reanudación desde `3990424` (PR #331), web 9.78.** Guardar tras AR,
   pegado al plano real y geometría en esquinas resueltos/verificados por Adrián (#318–#323).

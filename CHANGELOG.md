@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-09-30 — AR nativo Android 1.16, pendiente prueba física final)
+
+- Clasifica y filtra superficies (pared/suelo/techo), pega los puntos de profundidad a
+  planos confirmados y evita la distancia fija o profundidad antigua al colocar.
+- Orienta mecanismos contra la superficie, sigue el refinado de anclas y mantiene
+  marcas/longitudes coherentes con los ajustes. Corrige giro 180°, arranque del overlay
+  y liberación de recursos ARCore, WebView y GPU al reconstruir o salir.
+- APK incorpora la geometría/materiales actuales de PWA y la corrección de esquinas
+  #322; pruebas de paridad, render y superficies. No modifica ni publica la PWA.
+
+
 ### Fixed (2026-09-30 — continuidad y calendario de cuadrantes)
 
 - El generador usa fechas de calendario UTC de principio a fin, evitando que la zona

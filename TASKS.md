@@ -1,5 +1,28 @@
 # TASKS — Cola operativa inmediata
 
+## ANDROID-AR-ESTABILIDAD-01 — APK nativa, sin cambios a la PWA (2026-09-30)
+
+- Responsable: Codex. Rama: `codex/android-ar-estabilidad`, base `9f4c596`.
+- Objetivo autorizado por Adrián: poner al día el AR de la APK y probar en su Oppo,
+  preservando la PWA que funciona. No confundir WebXR con `ReplanteoARActivity` (ARCore).
+- Contexto verificado: instalada APK 1.15, paquete `com.padilla585.alejandra`; su
+  `assets/ar/overlay.html` coincide con el repo, pero `assets/ar/repl3d.js` NO incluye
+  #322 (normal degenerada). El binario publicado sigue `app-android-v15`, 17/09.
+- Dependencias: ADR-0025 aceptado, ADR-0007 y runbook de compilación APK; soporte nativo
+  existente. No se acepta ADR-0026 ni se abre una migración de plataforma.
+- Alcance: detectar/clasificar y filtrar suelo/techo/pared, pegar puntos a planos
+  confirmados, orientar accesorios, lifecycle/rotación y recursos del overlay Android;
+  compilar/firmar una actualización que incorpore #322 y probarla en el Oppo por ADB.
+  Excluidos: `index.html`, `panel.html`, `worker.js`, `repl3d.js` raíz, versiones web,
+  nuevos esquemas, escaneo+IA y escrituras sobre datos existentes.
+- Pruebas: assets reales del APK, render/geometría del overlay, compilación Java/APK y
+  sesión nativa en vivo (arranque, trazado/complementos, terminar, reentrada, orientación).
+- Rollback: APK 1.15 preservada temporalmente fuera del repo; revertir commits nativos.
+- Estado: implementación y pruebas locales terminadas; validación física final pendiente
+  porque ADB quedó offline. Superficies/accesorios 5/5, overlay/paridad 6/6; release
+  1.16 compilada y firmada. Ver docs/features/android-ar-estabilidad.md.
+  No declarar AR cerrado ni promover APK estable hasta completar prueba en dispositivo.
+
 ## CIERRE-SEPT-01 — reanudación y cierre verificable (2026-09-30)
 
 - Responsable: Codex. Implementación: PR #332 → `0ecaa43`; relevo documental:
