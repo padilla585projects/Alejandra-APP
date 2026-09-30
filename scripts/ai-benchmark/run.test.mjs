@@ -26,6 +26,20 @@ test('Sol usa Responses; las herramientas reales y el almacenamiento están desa
   assert.equal(spec.url,'https://api.openai.com/v1/responses');
   assert.equal(spec.body.store,false); assert.equal(spec.body.tools,undefined); assert.equal(spec.body.reasoning.effort,'low');
 });
+test('las salidas truncadas tienen coste aunque no resuelvan la tarea', () => {
+  const summary=summarize([{model:'gpt-6.1-sol',group:'planos',status:'incomplete',pass:false,costUsd:.03}])[0];
+  assert.equal(summary.completed,0); assert.equal(summary.accuracy,null);
+  assert.equal(summary.estimatedCostUsd,.03); assert.equal(summary.costPerSuccessUsd,null);
+});
+test('no inicia llamadas cuando la reserva supera el presupuesto', async () => {
+  const dir=await mkdtemp(join(tmpdir(),'alejandra-benchmark-budget-'));
+  const previous=process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY='synthetic-test-value';
+  try {
+    const result=await run({selected:['gpt-6-astra'],budget:.000001,outputDir:dir,fetchImpl:async()=>{throw new Error('No paid request permitted');}});
+    assert.equal(result.rows[0].status,'budget_stop'); assert.equal(result.rows.length,1);
+  } finally { if(previous===undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY=previous; await rm(dir,{recursive:true,force:true}); }
+});
 test('un error de proveedor no reintenta ni registra su cuerpo sensible', async () => {
   const dir = await mkdtemp(join(tmpdir(),'alejandra-benchmark-'));
   const previous = process.env.OPENAI_API_KEY;
