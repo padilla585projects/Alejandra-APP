@@ -1,5 +1,36 @@
 # Handoff — Alejandra 2.0
 
+## ANDROID-AR-ESTABILIDAD-01 — superficies y realismo de APK (2026-09-30)
+
+- Agente: Codex. Rama: codex/android-ar-estabilidad; base 9f4c596.
+  Revisión: PR #335. Implementación: 980c5eb — fix(android): apoyar el AR en superficies reales y conservar materiales.
+- Objetivo y alcance autorizado: corregir el AR **nativo** y probarlo en Oppo; preservar
+  la PWA. ADR-0025 aceptado, ADR-0007 y runbook de compilación. ADR-0026 no aceptado.
+- Binario antiguo: package com.padilla585.alejandra, versión 1.15. Assets inspeccionados:
+  repl3d.js sin #322. Se abrió ARCore y se colocó un punto en un borrador sin guardar.
+  La 1.16 preliminar se instaló; después ADB offline. No confundir esa instalación con
+  la compilación final que contiene las correcciones de superficies.
+- Cambios: filtro automática/pared/suelo/techo; normal y ancla del plano; snap desde
+  profundidad/puntos al contorno confirmado <=15 cm; no usar profundidad antigua ni
+  distancia inventada de 0,6 m; respaldo aproximado identificado y contacto explícito.
+  D_16 little-endian/16 bits; mecanismos con frente +Z alineado con normal +Y de ARCore;
+  actualización cuando refinan las anclas; puntos/longitud incluyen ajustes; undo/export
+  en hilo GL; giro incluso 180°, espera de overlay y limpieza ARCore/WebView/GPU.
+- Motor/materiales: assets/ar/repl3d.js idéntico al de PWA (prueba CI). No cambia el motor
+  compartido ni index.html, panel.html, Workers, marcadores web o datos guardados.
+- Validación: Java/superficies 5/5, overlay/materiales 6/6, testDebugUnitTest y
+  assembleRelease correctos, APK 1.16 firmada con identidad de release existente.
+  CI añade compilación Android y estas pruebas. No equivalen a verificación física.
+- Siguiente acción exacta: cuando ADB recupere el Oppo, instalar compilación final con
+  adb install -r; comprobar Activity nativa, pared/suelo/techo, rechazo de destino erróneo,
+  dos puntos y materiales (tubo/bandeja), complemento pegado, giro 90°/180°, Fin,
+  cancelar/reentrar y ausencia de crash. Trabajar en borrador; no Guardar ni tocar registros.
+  Registrar resultados antes de promover una entrega Android a estable.
+- Rollback: revertir commits Android; la APK 1.15 anterior está preservada fuera del repo.
+  No reinstalarla borrando datos. Mantener untracked .claude/settings.local.json,
+  alejandra.apk, tauri/ e imágenes de referencia ajenos fuera de los commits.
+
+
 ## CIERRE-SEPT-01 — reanudación y calendario de cuadrantes (2026-09-30)
 
 - Agente: Codex. Implementación integrada: `0ecaa43` —

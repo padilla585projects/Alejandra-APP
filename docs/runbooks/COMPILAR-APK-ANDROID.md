@@ -10,7 +10,7 @@ redescubrir los mismos tropiezos.
 > `index.html`/`panel.html`/JS no necesita APK nueva**, se ve en la próxima recarga.
 > Recompilar y publicar la APK solo hace falta cuando cambia código **nativo**:
 > `capacitor/android/**/*.java`, `AndroidManifest.xml`, plugins Capacitor, iconos/splash,
-> `build.gradle`.
+> `build.gradle` y assets del render nativo (`app/src/main/assets/ar/`).
 
 ## Requisitos previos (una vez por máquina)
 

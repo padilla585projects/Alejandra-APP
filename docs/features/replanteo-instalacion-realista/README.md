@@ -31,6 +31,14 @@ en este orden de prioridad:
    trazado entero. Encaja con el punto 1 (pegado a la superficie real) pero es un mecanismo
    distinto: fijar una restricción explícita en vez de mejorar la estimación automática.
 
+## Revisión nativa del 30/09
+
+La APK 1.15 instalada carecía de #322 y su respaldo de profundidad no hacía el snap
+a planos confirmados. La actualización 1.16 aborda ese desfase sin editar la PWA;
+ver [pruebas y límites](../android-ar-estabilidad.md). Incluye selección de tipo de
+superficie, pero no implementa aún bloqueo de un plano para todo el tramo ni edición
+de cualquier punto de la prioridad 4. Validación física final pendiente por ADB offline.
+
 ## Notas sueltas de las fotos
 
 - `ref-01-sensores-cpd-pared.jpg`: sondas de temperatura/humedad en CPD — tubo individual

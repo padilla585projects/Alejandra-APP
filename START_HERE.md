@@ -4,6 +4,14 @@ La documentación versionada del repositorio es la fuente oficial.
 
 ## Estado actual
 
+**Prioridad Android (30/09):** corregir AR de la APK preservando PWA 9.78. Rama
+`codex/android-ar-estabilidad`, actualización 1.16 compilada: superficies, pegado,
+accesorios, giro y recursos; pruebas 5/5 Java y 6/6 overlay. El Oppo estuvo conectado
+por Wi-Fi, ahora offline; falta instalar/probar la compilación final. El cierre de
+AR del 18/09 acredita WebXR/PWA, no el binario Android. Ver primeros apartados de
+`PROJECT_STATE.md`, `TASKS.md` y `HANDOFF.md`.
+
+
 **Reanudación y cierre de continuidad (2026-09-30):** copia sincronizada con `main`
 `3990424` (PR #331). Replanteo AR: Guardar, pegado al plano y geometría en esquinas
 corregidos y probados por Adrián el 18/09 (PRs #318–#323). Cuadrantes: PR #321 y
