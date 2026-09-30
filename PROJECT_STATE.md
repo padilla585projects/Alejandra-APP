@@ -8,11 +8,13 @@
   `3990424`; salud pública de ambos Workers `healthy` y versión web 9.78 verificadas
   el 30/09. Esto acredita disponibilidad, no sustituye la prueba autenticada del módulo.
   Corrección de calendario independiente de zona horaria preparada en
-  `codex/cierre-pendientes-septiembre` (5 pruebas); pendiente integración/despliegue.
+  PR #332 → `0ecaa43` (5 pruebas, dos checks CI verdes); despliegue API `36770433947`
+  esperando aprobación humana del entorno `production`.
   Riesgos activos: documentación histórica conserva estados superados; cuadrantes
   existentes necesitan regeneración humana explícita para adoptar el nuevo reparto;
-  falta validación funcional con datos reales. ADB sin dispositivos conectados.
-  Siguiente objetivo: integrar/desplegar la corrección del calendario y verificar;
+  falta validación funcional con datos reales. Oppo disponible según Adrián, pero ADB
+  sin dispositivos: pendiente conexión USB autorizada o IP/puerto de depuración.
+  Siguiente objetivo: aprobar el despliegue preparado y verificar salud/versión;
   después probar cuadrantes con sesión autorizada y abordar AR en Android real.
 - **Historial de estados:** las entradas siguientes describen lo conocido en cada fecha.
 - Estado (2026-09-18): **AR de Replanteo en la PWA (WebXR) CONFIRMADO FUNCIONANDO en vivo por

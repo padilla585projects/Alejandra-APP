@@ -11,12 +11,14 @@ corregidos y probados por Adrián el 18/09 (PRs #318–#323). Cuadrantes: PR #32
 Healthchecks de ambos Workers `healthy` y Pages 9.78 comprobados hoy. El cuadrante
 existente requiere regeneración explícita desde Editar para adoptar la rotación semanal;
 no se reescriben datos automáticamente. Corrección adicional de fechas de calendario y
-cinco pruebas de regresión en `codex/cierre-pendientes-septiembre`, pendiente integración
-y despliegue. Ver `TASKS.md` y el primer apartado de `HANDOFF.md` para el siguiente paso.
+cinco pruebas de regresión integradas en PR #332 → `0ecaa43`; despliegue API
+`36770433947` esperando aprobación humana de `production`. Ver `TASKS.md` y el primer
+apartado de `HANDOFF.md` para el siguiente paso.
 
 **Pendientes reales:** prueba con datos reales de cuadrantes; giro de pantalla en AR;
 ángulos rectos, tubos en paralelo y superficie forzada; planificación del escaneo del
-entorno con IA. ADB no detecta dispositivos hoy. ADR-0026 sigue Propuesto. Las entradas
+entorno con IA. Adrián confirma que el Oppo está disponible, pero ADB aún no lo detecta:
+pendiente USB autorizado o dirección de depuración inalámbrica. ADR-0026 sigue Propuesto. Las entradas
 fechadas siguientes conservan el historial y no sustituyen este resumen actual.
 
 **CPD-BMS-01 — cuadro BMS con bornero PLC en Sondas CPD (2026-09-09, v9.44):** pedido de Adrián

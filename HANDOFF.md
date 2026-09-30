@@ -2,8 +2,9 @@
 
 ## CIERRE-SEPT-01 — reanudación y calendario de cuadrantes (2026-09-30)
 
-- Agente: Codex. Rama: `codex/cierre-pendientes-septiembre`. Base de implementación:
-  `3990424` — `feat(seguridad): botón Editar en cuadrantes de turnos (#331)`.
+- Agente: Codex. Implementación integrada: `0ecaa43` —
+  `fix(cuadrantes): fechas estables y cierre del relevo de septiembre (#332)`.
+  Base: `3990424`. Rama del relevo: `codex/relevo-cierre-septiembre`.
 - Copia sincronizada mediante fast-forward desde `c096e64`, preservando sin leer ni
   añadir `.claude/settings.local.json`, `alejandra.apk`, imágenes no seguidas y `tauri/`.
 - Estado reconstruido mediante commits y PRs #329–#331, runs de GitHub y salud pública:
@@ -19,11 +20,15 @@
   departamentos, inventario de rutas y entorno correctos. No se ejecutó D1 ni R2.
 - Riesgo/rollback: afecta solo a nuevos cálculos o regeneración explícita; revertir el
   commit o redesplegar API `d11128f`. Cuadrantes existentes siguen sin modificar.
-- Siguiente acción: integrar PR con CI correcto, lanzar `deploy-worker.yml` con SHA
-  revisado + `DEPLOY_API_WORKER`, obtener aprobación humana de `production` y registrar
+- PR #332 integrada mediante merge ordinario tras dos checks CI verdes
+  (`36770165972`, `36770245625`). El intento previo con `--admin` fue rechazado por la
+  revisión automática; no se omitieron protecciones y la vía ordinaria sí se completó.
+- Siguiente acción: aprobar `production` del run `36770433947` (`waiting`), iniciado con
+  SHA `0ecaa431f399d2337262d51c532e032173857a44` + `DEPLOY_API_WORKER`, y registrar
   salud/versión. Verificar crear/editar/publicar/Mi horario con sesión autorizada después.
-- Bloqueo AR observable: `adb devices -l` no lista dispositivos. Sin Android con ARCore
-  no se cierra giro de pantalla ni prioridades 2–4 (regla `CLAUDE.md`, líneas 277+).
+- Bloqueo AR observable: Adrián confirma Oppo disponible, pero `adb devices -l` no lista
+  dispositivos; solicitada conexión USB autorizada o IP/puerto de depuración inalámbrica.
+  Hasta conectar no se cierra giro de pantalla ni prioridades 2–4 (`CLAUDE.md`, líneas 277+).
   Escaneo+IA precisa planificación/decisión; ADR-0026 sigue Propuesto. No tocar esquema,
   secretos, borrados ni regenerar cuadrantes reales automáticamente.
 
