@@ -12,7 +12,7 @@ Healthchecks de ambos Workers `healthy` y Pages 9.78 comprobados hoy. El cuadran
 existente requiere regeneración explícita desde Editar para adoptar la rotación semanal;
 no se reescriben datos automáticamente. Corrección adicional de fechas de calendario y
 cinco pruebas de regresión integradas en PR #332 → `0ecaa43`; despliegue API
-`36770433947` esperando aprobación humana de `production`. Ver `TASKS.md` y el primer
+`36770433947` completado y verificado: versión `b3f97ba9`, `healthy`, D1/R2 disponibles. Ver `TASKS.md` y el primer
 apartado de `HANDOFF.md` para el siguiente paso.
 
 **Pendientes reales:** prueba con datos reales de cuadrantes; giro de pantalla en AR;

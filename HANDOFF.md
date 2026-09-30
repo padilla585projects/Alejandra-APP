@@ -4,7 +4,8 @@
 
 - Agente: Codex. Implementación integrada: `0ecaa43` —
   `fix(cuadrantes): fechas estables y cierre del relevo de septiembre (#332)`.
-  Base: `3990424`. Rama del relevo: `codex/relevo-cierre-septiembre`.
+  Base: `3990424`. Relevo integrado #333 → `4fa8baf`. Rama de verificación:
+  `codex/verificacion-cierre-septiembre`.
 - Copia sincronizada mediante fast-forward desde `c096e64`, preservando sin leer ni
   añadir `.claude/settings.local.json`, `alejandra.apk`, imágenes no seguidas y `tauri/`.
 - Estado reconstruido mediante commits y PRs #329–#331, runs de GitHub y salud pública:
@@ -23,9 +24,13 @@
 - PR #332 integrada mediante merge ordinario tras dos checks CI verdes
   (`36770165972`, `36770245625`). El intento previo con `--admin` fue rechazado por la
   revisión automática; no se omitieron protecciones y la vía ordinaria sí se completó.
-- Siguiente acción: aprobar `production` del run `36770433947` (`waiting`), iniciado con
-  SHA `0ecaa431f399d2337262d51c532e032173857a44` + `DEPLOY_API_WORKER`, y registrar
-  salud/versión. Verificar crear/editar/publicar/Mi horario con sesión autorizada después.
+- Despliegue `36770433947` completado (`success`, 2026-09-30, 20:12 UTC), con SHA
+  `0ecaa431f399d2337262d51c532e032173857a44` + `DEPLOY_API_WORKER`. Versión
+  `b3f97ba9-7e3a-4c23-b2c0-4bfda4e87e0b` coincide entre el log de Wrangler y
+  `/health`; `healthy`, D1/R2 true. Verificación posterior registrada, sin operaciones
+  autenticadas ni modificaciones de datos. Pages/agente no necesitan redespliegue.
+- Siguiente acción: verificar crear/editar/publicar/Mi horario con sesión autorizada y
+  conectar el Oppo para reproducir el giro AR; no regenerar datos automáticamente.
 - Bloqueo AR observable: Adrián confirma Oppo disponible, pero `adb devices -l` no lista
   dispositivos; solicitada conexión USB autorizada o IP/puerto de depuración inalámbrica.
   Hasta conectar no se cierra giro de pantalla ni prioridades 2–4 (`CLAUDE.md`, líneas 277+).

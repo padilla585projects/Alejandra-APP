@@ -9,13 +9,14 @@
   el 30/09. Esto acredita disponibilidad, no sustituye la prueba autenticada del módulo.
   Corrección de calendario independiente de zona horaria preparada en
   PR #332 → `0ecaa43` (5 pruebas, dos checks CI verdes); despliegue API `36770433947`
-  esperando aprobación humana del entorno `production`.
+  completado el 30/09: versión `b3f97ba9-7e3a-4c23-b2c0-4bfda4e87e0b` coincide
+  entre el log del workflow y `/health` (`healthy`, D1/R2 true).
   Riesgos activos: documentación histórica conserva estados superados; cuadrantes
   existentes necesitan regeneración humana explícita para adoptar el nuevo reparto;
   falta validación funcional con datos reales. Oppo disponible según Adrián, pero ADB
   sin dispositivos: pendiente conexión USB autorizada o IP/puerto de depuración.
-  Siguiente objetivo: aprobar el despliegue preparado y verificar salud/versión;
-  después probar cuadrantes con sesión autorizada y abordar AR en Android real.
+  Siguiente objetivo: probar cuadrantes con sesión autorizada y abordar AR en Android
+  real cuando ADB detecte el Oppo.
 - **Historial de estados:** las entradas siguientes describen lo conocido en cada fecha.
 - Estado (2026-09-18): **AR de Replanteo en la PWA (WebXR) CONFIRMADO FUNCIONANDO en vivo por
   primera vez, tras estar roto sin que nadie lo supiera desde el 10/09.** Sesión de depuración en
