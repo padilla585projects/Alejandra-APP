@@ -3,12 +3,13 @@
 ## IA-COMP-01 — auditoría y medición (2026-10-01)
 
 - Codex, codex/ai-model-benchmark, base 8ccd48a. Solicitud: evaluar novedades OpenAI
-  frente a modelos existentes, primero auditar suite; técnica/planos/Office antes de voz.
+  frente a modelos existentes, primero auditar suite; técnica/planos/CAD/Office antes
+  de voz. Modelos distintos según tarea autorizados para evaluación.
 - Inventario estático de departamentos, perfiles/tools, cálculos, planos/DXF, módulos
   técnicos, coordinación e interacción Office. Informe en docs/features/comparacion-modelos-ia.md.
-- Piloto aislado: 20 casos sintéticos, 7 modelos, JSON exacto, completitud, fallos
+- Piloto aislado: 22 casos sintéticos, 7 modelos, JSON exacto, completitud, fallos
   críticos, latencia HTTP, tokens y costes con límites conservadores. No datos reales.
-- 5 pruebas del harness y 290 del agente correctas; 12 departamentos sincronizados.
+- 7 pruebas del harness y 290 del agente correctas; 12 departamentos sincronizados.
 - Sin credenciales locales. GitHub production tiene los nombres OPENAI_API_KEY y
   ANTHROPIC_API_KEY. Workflow manual conserva protección; no configura secretos.
 - Medición API aún pendiente; no confundir tests con resultados de modelos.

@@ -3,11 +3,12 @@
 ## IA-COMP-01 — auditoría suite y comparación técnica (2026-10-01)
 
 - Autorizado por Adrián: auditar capacidades y medir modelos; técnica multidisciplinar,
-  planos, herramientas y ayuda diaria Office primero; voz secundaria.
+  planos/CAD, herramientas y ayuda diaria Office primero; voz secundaria. Varios
+  modelos según tarea permitidos; ninguna sustitución global decidida.
 - Rama codex/ai-model-benchmark. Solo harness/CI/workflow manual y documentación;
   PWA/APK/Workers/datos/modelos de producción sin cambios.
-- Estado: auditoría estática inicial y piloto preparado (7 modelos, 20 casos sintéticos).
-  Harness 5/5 y agente 290/290. Claves locales ausentes; nombres OpenAI/Anthropic
+- Estado: auditoría estática inicial y piloto preparado (7 modelos, 22 casos sintéticos).
+  Harness 7/7 y agente 290/290. Claves locales ausentes; nombres OpenAI/Anthropic
   confirmados en entorno protegido production de GitHub, sin acceder a sus valores.
 - Siguiente: integrar con CI verde, ejecutar piloto protegido y registrar resultados
   reales; ampliar evaluación por departamentos y flujos completos según auditoría.

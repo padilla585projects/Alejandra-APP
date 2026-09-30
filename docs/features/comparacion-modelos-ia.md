@@ -72,12 +72,12 @@ _alejandraFabEjecutarPlan/_alejandraFabEjecutarAccion; docs/03 y docs/04.
 
 ## Piloto reproducible
 
-`scripts/ai-benchmark/run.mjs`: siete modelos, 20 casos sintéticos, 1–3 repeticiones.
+`scripts/ai-benchmark/run.mjs`: siete modelos, 22 casos sintéticos, 1–3 repeticiones.
 Baselines: gpt-4o-mini, gpt-4o, claude-haiku-4-5, claude-sonnet-4-6.
 Candidatos: gpt-6-luna, gpt-6.1-sol y gpt-6-astra. Mismo contexto y salida JSON;
 GPT-6 usa reasoning low (piloto de coste/latencia, no techo de capacidad).
 Grupos: extracción, cálculo, decisiones, límites, fuentes suministradas, planos,
-mecánicas, control, coordinación y Office. No se invoca ninguna herramienta real.
+mecánicas, control, coordinación, Office y contratos CAD. No se invoca ninguna herramienta real.
 
 Medidas: exactitud JSON/valores, fallos críticos, completitud, tiempo HTTP total
 p50/p95, tokens entrada/salida/caché/razonamiento y coste estimado por tarea correcta.
@@ -116,6 +116,41 @@ Tarifas Standard verificadas 2026-10-01 (USD/MTok), para texto corto sin herrami
 - [Mediciones recomendadas](https://developers.openai.com/api/docs/guides/deployment-checklist).
 
 ## Siguiente evaluación técnica
+
+### CAD: requisito principal confirmado por Adrián
+
+Existe importación DXF y exportación SVG→DXF en Office (`descargarDxfPlano`,
+panel.html:44918). Es una base útil, pero se han observado límites de fidelidad:
+- Importador convierte entidades a SVG; INSERT, SPLINE, ELLIPSE y DIMENSION
+  no se representan en esta primera versión. Arcos se muestrean y las polilíneas
+  usan vértices sin representar bulges. El archivo original se conserva.
+- Exportador asigna capa 0 a las entidades. HEADER solo incluye ACADVER;
+  no declara INSUNITS ni conversión de escala del dibujo a unidades físicas.
+- Una elipse se exporta como círculo del radio mayor; paths se discretizan.
+  La revisión observada no aplica matrices generales de transform a grupos.
+- Algunas entidades pueden recorrerse mediante grupo y de nuevo individualmente;
+  comprobar duplicación en un round-trip real antes de concluir su alcance.
+- La tool describe DWG como no soportado para importación semántica; subirlo como
+  documento no significa interpretarlo/editarlo. No se acredita flujo IFC.
+
+Por tanto, falta acreditar crear/editar CAD con entidades, IDs, unidades, capas,
+bloques, cotas y topología preservados, más importación→edición→exportación→
+reapertura con tolerancias conocidas. El piloto comprueba solo dos contratos JSON
+de geometría; NO demuestra que la suite ya tenga ese motor CAD ni opere AutoCAD.
+Especificación del flujo y formatos prioritarios: pendiente de diseño, sin inventar
+adopción de DWG/BIM o integración con software externo. No se sustituye por imágenes.
+
+### Modelos por tarea, sin sustitución global
+
+Adrián autoriza evaluar varios modelos según tarea. NEXUS ya enruta y combina
+proveedores. Hipótesis para medir, NO decisión de producción:
+- Modelo económico: clasificación, extracción y lecturas simples con herramientas.
+- Modelo técnico: requisitos, cálculo asistido, documentos y propuestas por disciplina.
+- Modelo de mayor capacidad: coordinación compleja y planificación/edición CAD.
+- Visión: fotos/planos y reconocimiento con contraste contra datos geométricos.
+La geometría, el dimensionado verificable, permisos y postcondiciones pertenecen a
+herramientas y validadores, no se delegan a la confianza declarada por un modelo.
+Evaluar resultado por tarea y grupo, no una puntuación global para elegir «el mejor».
 
 Ampliar con expedientes sintéticos por los 12 departamentos: requisitos faltantes,
 cálculos verificables, selección de material con ficha, normativa con fuente vigente,

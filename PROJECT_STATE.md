@@ -2,7 +2,7 @@
 
 ## Evaluación IA de la suite — 2026-10-01
 
-Adrián prioriza competencia técnica multidisciplinar, planos y uso de herramientas,
+Adrián prioriza competencia técnica multidisciplinar, planos/CAD y uso de herramientas,
 con ayuda diaria en Office; voz secundaria. Auditoría estática inicial y piloto aislado
 preparados, sin cambiar modelos ni aplicaciones desplegadas. Hallazgos y límites en
 docs/features/comparacion-modelos-ia.md. Medición API pendiente; tests no son benchmark.
