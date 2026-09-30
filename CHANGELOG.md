@@ -4,6 +4,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — alineamiento AR en pantallas densas)
+
+- Corrige el tamaño CSS del canvas Android: materiales y referencias de planos dejaban
+  de coincidir con la cámara al duplicarse el viewport por DPR. Bandeja verificada en Oppo.
+- Contorno de planos con vértices consecutivos, sin líneas cruzadas; arranque del motor
+  comprobado antes de declararlo listo. Ocho regresiones del overlay. PWA sin cambios.
+- Candidata 1.17 instalada, Fin/giro y consulta de versión probados; reconocimiento de
+  paredes y actualización OTA real pendientes, sin publicación estable.
+
 ### Added (2026-10-01 — OTA nativo, candidata Android 1.17)
 
 - Comprobación nativa de releases estables al abrir/volver, descarga automática por Wi-Fi,

@@ -1,5 +1,15 @@
 # Estado del proyecto — Alejandra 2.0
 
+## Prueba real Android — 2026-10-01
+
+Oppo recuperado por ADB Wi-Fi y candidata 1.17 instalada. La prueba detectó canvas 3D
+duplicado por densidad de pantalla: corrección fbff4d8 alinea bandeja con los puntos.
+Bordes de planos ordenados, overlay comprobado al cargar; ocho regresiones correctas.
+Fin vuelve al editor y giros 90°/180° no cierran AR. Se detectan planos horizontales,
+pero paredes continúan sin confirmar; no declarar resuelto el pegado a tres superficies.
+OTA muestra build17 y evita downgrade; salto real sigue pendiente. Última estable 1.15.
+PWA 9.78 intacta. Siguiente protocolo y evidencia: primer apartado de HANDOFF.
+
 ## Actualizador Android — 2026-10-01
 
 La APK ya tenía aviso de versión y descarga manual (AppUpdatePlugin); faltaban
@@ -9,7 +19,7 @@ PWA ni aceptar nuevos ADR. La candidata 1.17 incluye AR #335 y OTA: comprobació
 abrir/volver (máximo cada 6 h tras respuesta correcta), descarga Wi-Fi y oferta de
 instalación confirmada por Android. Las apps anteriores requieren una instalación
 inicial de este binario. Última entrega estable sigue 1.15; prueba física AR/OTA
-pendiente, Oppo ausente de ADB. No confundir implementación con publicación estable.
+parcial según el apartado anterior. No confundir implementación con publicación estable.
 
 
 ## Estado Android actualizado — 2026-09-30

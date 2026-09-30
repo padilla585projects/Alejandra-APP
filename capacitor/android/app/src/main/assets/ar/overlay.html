@@ -69,7 +69,9 @@
 
   function resize() {
     var w = window.innerWidth, h = window.innerHeight;
-    renderer.setSize(w, h, false);
+    // La resolución del buffer incluye DPR, pero el tamaño CSS debe ser el viewport.
+    // Sin tamaño CSS el canvas ocupa el doble y desplaza planos/materiales fuera de la mira.
+    renderer.setSize(w, h);
     // La proyección pertenece a ARCore; un resize solo cambia el canvas.
   }
   window.addEventListener('resize', resize);
@@ -171,7 +173,11 @@
         mesh.position.set(p.cx || 0, p.cy || 0, p.cz || 0);
         if (p.qx != null) mesh.quaternion.set(p.qx, p.qy, p.qz, p.qw);
         planosGrupo.add(mesh);
-        var borde = new THREE.LineLoop(new THREE.EdgesGeometry(geo), matPlanoBorde);
+        // LineLoop necesita los vértices consecutivos del contorno, no los pares
+        // independientes de EdgesGeometry (que generan líneas cruzadas).
+        var vertices = [];
+        for (var j = 0; j < poly.length; j += 2) vertices.push(new THREE.Vector3(poly[j], 0, poly[j + 1]));
+        var borde = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(vertices), matPlanoBorde);
         borde.position.copy(mesh.position);
         borde.quaternion.copy(mesh.quaternion);
         planosGrupo.add(borde);

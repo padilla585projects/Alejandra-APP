@@ -1,5 +1,30 @@
 # Handoff — Alejandra 2.0
 
+## ANDROID-AR-ESTABILIDAD-01 — prueba física y canvas (2026-10-01)
+
+- Codex, rama codex/android-camera-qa, base 516cea5. Implementación fbff4d8 —
+  fix(android): alinear overlay AR con el viewport del teléfono.
+- Oppo CPH2305 recuperado en 192.168.10.53:5555. Candidata 1.17 instalada con -r,
+  sin desinstalar ni guardar replanteos de prueba. Activity nativa confirmada.
+- Hallazgo reproducible: setSize(w,h,false) dejaba el canvas sin tamaño CSS; con DPR 2
+  su tamaño visible se duplicaba y desplazaba materiales/planos. Se fija tamaño CSS.
+  Se ordenan los vértices del borde del plano; EdgesGeometry no era un LineLoop válido.
+  Comprobar funciones reales antes de marcar overlay listo; errores locales registrados
+  por ubicación, sin mensajes/datos. La hipótesis inicial de matriz de cámara fue
+  descartada: su prueba no fallaba con el código previo y no se integra ese cambio.
+- Overlay 8/8 (regresión DPR falla antes del arreglo), Java AR 5/5, política OTA 3/3,
+  Gradle release correcto. Bandeja 3D visible junto a puntos tras corrección; mecanismo
+  exportado, Fin vuelve al editor. Giros solicitados 90°/180° sin crash; ajustes restaurados.
+- ARCore contó planos horizontales suelo/techo; pared siguió 0 durante esta prueba.
+  Rechazo de techo no confirmado correcto. No acreditar reconocimiento semántico,
+  pegado a paredes, realismo de todos los materiales ni estabilidad completa por estos datos.
+- Ajustes muestra 1.17/build17 y consulta no propone downgrade a estable 1.15.
+  Salto OTA entre dos versiones, permisos/cancelación/recuperación aún sin prueba física.
+- Siguiente acción: probar contornos finales, pared con textura/esquina, puntos pegados
+  sobre cada superficie y tubo; validar salto OTA con dos APK firmadas de prueba y
+  metadatos controlados. No publicar estable ni usar una falsa release para provocar OTA.
+- PWA/Workers/datos de replanteos intactos. Preservar archivos ajenos no seguidos.
+
 ## ANDROID-OTA-01 — actualización nativa (2026-10-01)
 
 - Agente: Codex. Rama codex/android-ota, base e0cb294 (AR #335 integrado).
@@ -15,7 +40,7 @@
   distinta de release esperada; estado real consultado antes de aceptar broadcast.
 - APK candidata 1.17 incluye cambios AR 1.16 sin editar ese módulo ni PWA. Hace falta
   instalar inicialmente nueva APK; las versiones antiguas no adquieren código nativo OTA.
-- Siguiente prueba: instalar candidata en Oppo al recuperar ADB; validar bootstrap, sin
+- Bootstrap 1.17 realizado en Oppo el 01/10; consulta sin downgrade comprobada. Validar sin
   conexión, Wi-Fi/datos, descarga duplicada, cerrar/reabrir, permiso origen desconocido,
   cancelación del instalador, versión ya instalada y rechazos. Completar también AR #335.
   No declarar validada actualización real a versión futura sin probar ese salto.

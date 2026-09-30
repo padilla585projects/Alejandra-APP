@@ -1,7 +1,8 @@
 # OTA del binario Android — candidata 1.17
 
 Fecha: 2026-10-01. Tarea ANDROID-OTA-01. Rama codex/android-ota, base e0cb294.
-Estado: implementación en validación; instalación/descarga reales pendientes de Oppo.
+Estado: implementación integrada #336; bootstrap 1.17 instalado en Oppo el 01/10.
+Consulta de versión sin downgrade verificada; descarga/salto OTA reales pendientes.
 
 ## Objetivo y alcance
 
@@ -80,4 +81,6 @@ Fuentes: [DownloadManager](https://developer.android.com/reference/android/app/D
 Implementación 3ca7c02. APK final versión 17/1.17, compilada y firma release verificada.
 SHA-256: `D43DC62500DFBDE4700B0FB116B9D88101561F4B7F9255D7D838DA1599C63983`.
 Resultado local: política OTA 3/3, superficies/accesorios 5/5 y overlay 6/6.
-No instalada ni publicada como estable; prueba física pendiente por ausencia de ADB.
+Instalada por ADB Wi-Fi el 01/10; Ajustes reconoce build17 y no propone estable15.
+Después se corrige el canvas nativo en fbff4d8; ese binario sustituye a este hash histórico.
+No publicada como estable; actualización real entre versiones continúa pendiente.

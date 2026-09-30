@@ -1,7 +1,37 @@
 # Android AR 1.16 — superficies y paridad visual
 
 Fecha: 2026-09-30. Tarea: ANDROID-AR-ESTABILIDAD-01. Rama: codex/android-ar-estabilidad.
-Estado: implementación validada localmente; prueba física final pendiente por ADB offline.
+Estado: #335 integrado; candidata conjunta 1.17 instalada y verificación física parcial.
+Corrección adicional de canvas/contornos fbff4d8; paredes aún sin confirmar.
+
+## Prueba física del 01/10 y corrección del overlay
+
+Oppo CPH2305 por ADB Wi-Fi 192.168.10.53:5555, package propio y Activity AR nativa.
+Bootstrap y reemplazos con -r, conservando datos; borradores de PrúébalaAPP sin Guardar.
+Se detectó setSize(w,h,false): el buffer DPR 2 definía también el tamaño visible porque
+el canvas carecía de dimensiones CSS. Materiales y planos aparecían desplazados.
+Regresión reproduce 720 CSS frente a 360 esperados; con tamaño CSS explícito pasa.
+Bandeja visible junto a puntos después del arreglo. Bordes usan contorno consecutivo
+en lugar de pares de EdgesGeometry; prueba verifica sus vértices y liberación.
+
+- Overlay listo confirmado por funciones JS reales; errores locales solo ubicación.
+- Overlay 8/8, superficies Java 5/5, política OTA 3/3 y release correctos.
+- Techo sin confirmar rechaza punto. Profundidad aproximada identificada como tal.
+- ARCore contó superficies horizontales de suelo/techo, pared se mantuvo 0. No acredita
+  que cada plano coincida con una superficie semántica de la habitación.
+- Dos puntos y un complemento se exportan a borrador; Fin vuelve a MainActivity.
+  Giros de sistema 90°/180° mantienen sesión y render, sin crash del proceso propio;
+  se restauraron accelerometer_rotation=1 y user_rotation=0.
+- Pendientes: contornos finales en vivo, pared texturada/esquina, dos puntos pegados
+  sobre cada superficie, tubo, orientación real del mecanismo y estabilidad en movimiento.
+  OTA positiva pendiente. No promover estable ni afirmar paridad física completa.
+
+La hipótesis inicial de sobrescritura de matriz de cámara se descartó: su test también
+pasaba sin el cambio propuesto. La corrección integrada es tamaño CSS y contorno.
+
+APK final de revisión 1.17 desde fbff4d8, misma firma release existente.
+SHA-256: `2059116B5C576357AAE99FF0A51D0594EDCD802E7E442B4AE55C1419D38FE015`.
+Sustituye los hashes históricos de candidata 1.16 y primera candidata OTA 1.17.
 
 ## Objetivo y evidencia
 
