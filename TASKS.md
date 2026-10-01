@@ -1,6 +1,22 @@
 # TASKS — Cola operativa inmediata
 
-## IA-QUALITY-06 — ambigüedad de altura humana (2026-10-02, en desarrollo)
+## IA-QUALITY-07 — sustitución de altura sin recuperar valores obsoletos (2026-10-02, en desarrollo)
+
+- Encadenado autorizado; Codex, codex/plan-height-replacement, base 384d265.
+- Dependencia #359 integrada con cuatro checks verdes; agente 785c8348 publicado
+  healthy; QA G registrada: preguntas correctas, aceptación global parcial. ADR-0007 aceptado.
+- Reproducido: altura -1 m, valor sin unidad o pulgadas en turno nuevo recuperan
+  4 m de un turno anterior. Admitir signo explícito; pedir aclaración para formato
+  no reconocido/unidad ausente y para combinaciones válidas+incompletas.
+- Alcance lib.js, regresiones y prueba del case generar_plano sin llamada API_WEB.
+  Riesgo: solicitudes ambiguas requieren más preguntas; no límites normativos nuevos.
+- Validar suite agente/técnicas/sintaxis/encoding; PR/CI, publicar/verificar agente.
+  Rollback 9d31f7570ad6f3edd62de64e1b5f7e69e76b728e; sin datos/UI/AR/APK/Pages.
+- Después CAD-SCOPE-01: auditar/corregir fallback empresa 1 en lectura/importación
+  DXF. getPlano acepta prefijos parseInt; tools importar/analizar usan default 1.
+  No ampliar privilegios ni leer otros tenants durante pruebas.
+
+## IA-QUALITY-06 — publicada; QA G parcial (2026-10-02)
 
 - Encadenado autorizado por Adrián; Codex, codex/plan-human-ambiguity, base 742b6ec.
 - Dependencia #358 integrada con cuatro checks verdes y API bd7403c9 healthy;
@@ -14,7 +30,7 @@
 - Validar negativas/positivas, suite agente, sintaxis y 33 técnicas; PR/CI,
   publicación agente y verificación posterior. Sin datos, UI/AR/APK/Pages/ADR nuevos.
 
-## IA-QUALITY-05 — altura y referencia en SVG (2026-10-02, en desarrollo)
+## IA-QUALITY-05 — API publicada; lectura verificada (2026-10-02)
 
 - Continuación/encadenado autorizado por Adrián, Codex, codex/plan-mounting-reference,
   base c825ac7. IA-QUALITY-04 publicada, ADR-0007 aceptado; sin fase/ADR nuevo.
