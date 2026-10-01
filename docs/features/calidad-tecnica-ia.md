@@ -414,3 +414,39 @@ Sin cambios de autenticación/esquemas/AR/APK/UI/Pages ni migraciones.
 Rollback agente e5eec22cc80267076612bd0d4cab08f14ca46b3c.
 Pendientes PR/CI, publicación agente, QA conversacional real y siguiente auditoría
 sobre datos de referencia entre turnos. No declarar perfección ni normativa validada.
+
+## IA-QUALITY-06 — publicada y QA G parcial (2026-10-02)
+
+PR #359 → 384d265, cuatro checks verdes; implementación 9d31f757.
+Run 36937820163 SUCCESS; agente 785c8348-ddf6-4258-9523-63be73172e5b
+healthy D1/R2 sin caché. QA G en móvil web pide confirmar alturas de ejemplo
+2.8/3.2 por tramo, datum y recorrido; no presenta los ejemplos como confirmados.
+También vuelve a calcular protección y responder QA F anterior: contexto arrastrado.
+Cierre promete «plano de ejecución real» con tres datos: NO acreditado por el
+motor actual; QA G solo supera preguntas de altura/datum, aceptación global parcial.
+No aceptar el «QA pasa» del propio modelo como verificación completa. Petición
+explícita de no crear/guardar; respuesta dice no generar. No se consultó recuento
+backend; no afirmar ausencia de escrituras como dato medido. Evidencia local
+.ai-benchmark-results/ia-quality-06/chat-qa-g.png. 300 agente/33 técnicas pasan.
+Siguiente IA-QUALITY-07 corrige recuperación de altura obsoleta cuando el nuevo
+valor carece de unidad/formato soportado. Después CAD-SCOPE-01; sobrepromesa de
+plano de ejecución y contexto QA previo quedan pendientes de corrección/medición.
+Rollback agente e5eec22cc80267076612bd0d4cab08f14ca46b3c.
+
+## IA-QUALITY-07 — altura nueva incompleta y signo (2026-10-02, en revisión)
+
+Codex, codex/plan-height-replacement, base 384d265; continuación autorizada.
+lib.js preserva signos +/− de cotas explícitas, sin inventar límites de montaje.
+Una medida numérica nueva sin unidad/formato admitido bloquea recuperar la vieja;
+lo mismo en mensajes con una altura válida y otra incompleta. Reconoce por medir
+como pendiente. Referencia «cota 0 del proyecto» no cuenta como segunda medida.
+302 pruebas del agente y 33 técnicas pasan; case real generar_plano rechaza cinco
+casos sin API_WEB y transmite −1 m confirmado como metadata. Sintaxis/encoding/diff
+correctos. Una prueba inicial detectó el falso positivo del datum cota 0: corregido.
+Unidades soportadas siguen m/cm/mm; otros formatos requieren aclaración. No
+comprensión universal ni múltiples alturas estructuradas. Sin API/UI/AR/APK/Pages,
+autorización, datos, migraciones o nuevas tablas. QA G previa sigue parcial.
+Rollback agente 9d31f7570ad6f3edd62de64e1b5f7e69e76b728e.
+Pendiente PR/CI, publicación y lectura/QA del agente. Siguiente CAD-SCOPE-01:
+corregir fallback empresa 1 y rechazo de empresa mal formada en CAD; comprobar
+propiedad R2 desconocida antes de convertir/importar. Sin pruebas con datos ajenos.

@@ -1,6 +1,9 @@
 # Changelog
 
 
+- IA-QUALITY-07: conservar signo de cotas y pedir unidad/formato de medidas nuevas en vez de recuperar una altura obsoleta.
+
+
 - IA-QUALITY-06: pedir aclaración ante ejemplos, dudas o alturas/referencias incompatibles; conservar unidades equivalentes y confirmaciones posteriores.
 
 Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).

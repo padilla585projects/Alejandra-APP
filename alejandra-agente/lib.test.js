@@ -45,6 +45,27 @@ import {
 } from './lib.js';
 
 describe('datos humanos necesarios para planos de bandejas', () => {
+  it('una medida nueva incompleta no recupera la altura antigua ni acepta solo la parte válida', () => {
+    for (const texto of [
+      'Altura de montaje 320 sin unidad',
+      'La altura será 3200 pulgadas sobre suelo terminado',
+      'Altura 3 m sobre FFL; otro tramo altura 320 sin unidad',
+      'Z=320 pulgadas sobre FFL',
+      'Altura por medir',
+    ]) {
+      const resultado = validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura 4 m sobre FFL', texto]);
+      expect(resultado.ok).toBe(false);
+      expect(resultado).not.toHaveProperty('altura_m');
+    }
+  });
+  it('conserva el signo de cotas explícitas y permite aclarar una medida incompleta', () => {
+    for (const texto of ['Corrijo altura -1 m sobre FFL', 'Z=-1000 mm sobre suelo terminado', 'cota de montaje -100 cm sobre cota 0 del proyecto']) {
+      const resultado = validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura 4 m sobre FFL', texto]);
+      expect(resultado.altura_m).toBe(-1);
+      expect(resultado.ok).toBe(true);
+    }
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura 320 sin unidad', 'Confirmo altura +320 cm sobre FFL']).altura_m).toBe(3.2);
+  });
   it('pregunta antes de elegir entre correcciones, tramos o referencias distintas', () => {
     for (const texto of [
       'Altura de montaje 2.8 m sobre suelo terminado; corrijo: altura de montaje 3.2 m sobre suelo terminado.',

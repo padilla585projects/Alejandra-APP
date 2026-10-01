@@ -1253,14 +1253,16 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
   let altura = null, fuenteAltura = null, referencia = null;
   let alturaPendiente = false, referenciaPendiente = false;
   for (const texto of [...fuentes].reverse()) {
-    const alturas = [...texto.matchAll(/\b(?:altura(?: de montaje)?\s*(?::|=|de|a)?|cota(?: de montaje)?\s*(?::|=|de|a)?|[hz]\s*=)\s*\+?(\d+(?:[.,]\d+)?)\s*(mm|cm|metros?|m)\b/gi)];
+    const alturas = [...texto.matchAll(/\b(?:altura(?: de montaje)?\s*(?::|=|de|a)?|cota(?: de montaje)?\s*(?::|=|de|a)?|[hz]\s*=)\s*([+-]?\d+(?:[.,]\d+)?)\s*(mm|cm|metros?|m)\b/gi)];
+    const medidasIndicadas = [...texto.matchAll(/\b(?:altura(?: de montaje)?|cota(?!\s+(?:0|cero)\s+(?:del|de)\s+proyecto)(?: de montaje)?|[hz]\s*=)\s*(?:(?:[:=]|de|a|es|ser[aá])\s*)?[+-]?\d/gi)];
+    const alturaIncompleta = medidasIndicadas.length > alturas.length;
     const referencias = [...texto.matchAll(/\b(?:suelo terminado|pavimento terminado|FFL|cota (?:0|cero) (?:del |de )?proyecto)\b/gi)];
     // Un ejemplo, una duda o una negación no confirma una medida. La ambigüedad
     // reciente tampoco autoriza rescatar un valor antiguo como si siguiera vigente.
-    const noConfirmado = /\b(?:ejemplos?|supong\w*|quiz[aá]s?|podr[ií]a|aproximad\w*|pendiente|sin (?:definir|confirmar)|no (?:s[eé]|sabemos|conozco|confirm\w*|es|ser[aá]|usar|uses|utilices)|desconozco)(?=\s|[,.!?;:]|$)|[¿?]/i.test(texto);
+    const noConfirmado = /\b(?:ejemplos?|supong\w*|quiz[aá]s?|podr[ií]a|aproximad\w*|pendiente|sin (?:definir|confirmar|unidad)|por (?:medir|definir|confirmar)|no (?:s[eé]|sabemos|conozco|confirm\w*|es|ser[aá]|usar|uses|utilices)|desconozco)(?=\s|[,.!?;:]|$)|[¿?]/i.test(texto);
     if (altura === null && !alturaPendiente) {
       const valores = alturas.map(match => Number(match[1].replace(',', '.')) / (match[2].toLowerCase() === 'mm' ? 1000 : match[2].toLowerCase() === 'cm' ? 100 : 1));
-      if (alturas.length && (noConfirmado || valores.some(valor => Math.abs(valor - valores[0]) > 1e-9))) {
+      if (alturaIncompleta || (alturas.length && (noConfirmado || valores.some(valor => Math.abs(valor - valores[0]) > 1e-9)))) {
         alturaPendiente = true;
       } else if (alturas.length) {
         altura = valores[0];

@@ -572,6 +572,20 @@ test('plan generation uses session identity and refuses missing scope before cal
   assert.equal(missing.error, 'DATOS_TECNICOS_FALTANTES');
   assert.equal(missing.preguntas.length, 2);
   assert.equal(sent.length, 1, 'Missing human data must not call API_WEB or start generation');
+  for (const texto of [
+    'No sé la altura; ejemplo altura 2.8 m sobre FFL',
+    'Altura 2.8 m sobre FFL; otro tramo altura 3.2 m sobre FFL',
+    'Altura 320 sin unidad',
+    'Z=320 pulgadas sobre FFL',
+    'Altura 3 m sobre FFL; otro tramo altura 320 sin unidad',
+  ]) {
+    const rechazo = JSON.parse(await run(fakeData, 1, '7', ['altura 4 m sobre FFL', texto]));
+    assert.equal(rechazo.error, 'DATOS_TECNICOS_FALTANTES');
+    assert.equal(sent.length, 1, 'Ambiguous or incomplete human data must not reach API_WEB');
+  }
   assert.equal(JSON.parse(await run(input, 1, '7', ['Haz un boceto preliminar'])).ok, true);
   assert.match(sent[1].descripcion, /No ejecutar en obra/);
+  assert.equal(JSON.parse(await run(input, 1, '7', ['altura 4 m sobre FFL', 'Corrijo altura -1 m sobre FFL'])).ok, true);
+  const bloque = JSON.parse(sent[2].descripcion.split('DATOS VERIFICADOS EN TEXTO HUMANO (prevalecen sobre los ejemplos):\n')[1]);
+  assert.equal(bloque.altura_m, -1);
 });
