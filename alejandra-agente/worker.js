@@ -1979,7 +1979,7 @@ const TOOL_CALCULAR_PROTECCION = {
   input_schema: {
     type: 'object',
     properties: {
-      intensidad_nominal_a: { type: 'number', description: 'Intensidad nominal de la carga en amperios' },
+      intensidad_nominal_a: { type: 'number', exclusiveMinimum: 0, maximum: 125, description: 'Intensidad nominal de la carga en amperios, hasta 125 A (límite de la tabla disponible)' },
       tipo_carga:           { type: 'string', enum: ['motor', 'alumbrado', 'tomas', 'mixta'], description: 'Tipo de carga (default mixta)' },
       seccion_cable_mm2:    { type: 'number', description: 'Sección del cable en mm² (para verificar coordinación)' },
       longitud_m:           { type: 'number', description: 'Longitud del circuito en metros' },
@@ -8328,7 +8328,10 @@ function calcularBandeja(input) {
 }
 
 function calcularProteccion(input) {
-  const In = input.intensidad_nominal_a;
+  const In = input?.intensidad_nominal_a;
+  if (!Number.isFinite(In) || In <= 0) {
+    return JSON.stringify({ error: 'INTENSIDAD_INVALIDA', mensaje: 'La intensidad debe ser un número finito mayor que cero.' });
+  }
   const tipoCarga = input.tipo_carga || 'mixta';
   const seccionCable = input.seccion_cable_mm2;
   const longitud = input.longitud_m;
@@ -8346,7 +8349,13 @@ function calcularProteccion(input) {
   const calibres = [6, 10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125];
 
   // Elegir calibre >= In
-  const calibreElegido = calibres.find(c => c >= In) || calibres[calibres.length - 1];
+  const calibreElegido = calibres.find(c => c >= In);
+  if (calibreElegido === undefined) {
+    return JSON.stringify({
+      error: 'FUERA_DE_RANGO', intensidad_nominal_a: In, limite_tabla_a: calibres.at(-1),
+      mensaje: 'No se puede seleccionar una protección con esta tabla. La intensidad supera 125 A; se requiere dimensionamiento específico.',
+    });
+  }
 
   // Curva según tipo de carga
   const curvas = { motor: 'D', alumbrado: 'B', tomas: 'C', mixta: 'C' };
@@ -10464,12 +10473,13 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
     case 'generar_plano': {
       try {
-        const { tipo, titulo, descripcion, empresa_id: eid_plano, usuario_id: uid_input, circuitos } = input;
-        // BUG FIX (ver editar_plano mas abajo): 'empresa_id' de contexto puede
-        // llegar como el string literal 'default' (sentinela de sesion sin
-        // empresa asignada, usado en otras partes del worker) -- ese string es
-        // truthy y rompe el fallback "|| empresa_id || 1", enviando 'default'
-        // en vez de un ID numerico real al worker raiz. resolverEid() lo filtra.
+        const { tipo, titulo, descripcion, circuitos } = input;
+        // La identidad procede exclusivamente de la sesión; el modelo no puede
+        // elegir empresa/propietario ni una sesión incompleta caer en empresa 1.
+        const empresaPlano = Number(empresa_id);
+        if (!Number.isSafeInteger(empresaPlano) || empresaPlano <= 0 || !usuario_id) {
+          return JSON.stringify({ error: 'Sesión sin empresa o usuario válido para generar planos' });
+        }
         if (!tipo || !titulo || !descripcion) return JSON.stringify({ error: 'tipo, titulo y descripcion son obligatorios' });
         const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt', 'unifilar', 'planta_electrica', 'planta_industrial'];
         if (!tiposValidos.includes(tipo)) return JSON.stringify({ error: 'tipo invalido' });
@@ -10494,8 +10504,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             body: JSON.stringify({
               tipo, titulo, descripcion,
               circuitos: circuitos || [],
-              empresa_id: resolverEid(eid_plano) || resolverEid(empresa_id) || 1,
-              usuario_id: uid_input || usuario_id || null,
+              empresa_id: empresaPlano,
+              usuario_id,
               rol: 'agente_ia'
             })
           });
