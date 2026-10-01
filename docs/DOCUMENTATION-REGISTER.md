@@ -1,9 +1,10 @@
 # Registro de documentación
 
-Actualizado: 2026-09-30 (cierre de continuidad; no cambia estados de ADR).
+Actualizado: 2026-10-01 (QA técnica publicada; no cambia estados de ADR).
 
 | Documento/grupo | Estado | Uso |
 |---|---|---|
+| `docs/features/calidad-tecnica-ia.md` | Validación parcial publicada | Barrera altura/datum de bandejas comprobada; hallazgos SVG, límites CAD y continuación IA-QUALITY-03. |
 | `docs/ideas/suite-ingenieria-cad-y-modelo-local.md` | Idea / Investigación | Requisitos multidisciplinares/CAD, extensiones de flujos y prueba del modelo local/pool por definir. |
 | `docs/features/comparacion-modelos-ia.md` | Investigación / piloto | Auditoría técnica suite, hallazgos y evaluación reproducible de modelos sin cambios de producción. |
 | `docs/features/android-ota.md` | En validación física | Actualización nativa APK 1.17, seguridad, bootstrap y pruebas del instalador. |

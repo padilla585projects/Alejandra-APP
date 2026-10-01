@@ -31,7 +31,57 @@ test('generation and editing share technical fidelity policy for missing heights
     assert.match(prompt, /unica proporcion px\/m/);
     assert.match(prompt, /BORRADOR/);
     assert.match(prompt, /No inventes/);
+    assert.match(prompt, /SVG estatico/);
   }
+});
+
+test('AI plans reject executable SVG instead of silently stripping dynamic drawing code', () => {
+  const extract = load('worker.js', '_extraerSvgCompleto');
+  for (const svg of [
+    '<svg><g><script>for(let x=0;x<=1400;x+=50){draw(x)}</script></g></svg>',
+    '<svg><script><![CDATA[drawGrid()]]></script></svg>',
+    '<svg><s:script xmlns:s="http://www.w3.org/2000/svg">draw()</s:script></svg>',
+    '<svg ONLOAD = "draw()"><path d="M0 0"/></svg>',
+    '<svg><g onclick="draw()"/></svg>',
+    '<svg><foreignObject><div>Interactive drawing</div></foreignObject></svg>',
+  ]) assert.throws(() => extract(svg), /Plano no estatico/);
+  const passive = '<svg><!-- do not use <script> --><defs><g id="tray"/></defs><use href="#tray"/><line x1="0" y1="0" x2="100" y2="0"/></svg>';
+  assert.equal(extract(passive), passive);
+});
+
+test('an executable provider response cannot persist a generated plan', async () => {
+  let writes = 0;
+  const generate = load('worker.js', '_generarPlanoInterno', {
+    _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+    _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+    fetch: async () => ({ ok: true, json: async () => ({ content: [{ text: '<svg><script>draw()</script></svg>' }] }) }),
+  });
+  await assert.rejects(generate({ DB: { prepare: () => { writes++; throw new Error('Unexpected write'); } } },
+    { tipo: 'planta', titulo: 'QA', descripcion: 'synthetic', empresa_id: 5, usuario_id: 7 }), /Plano no estatico/);
+  assert.equal(writes, 0);
+});
+
+test('AI editing rejects executable SVG without replacing the existing tenant-scoped plan', async () => {
+  let reads = 0;
+  const edit = load('worker.js', 'editarPlanoCircuitosREST', {
+    _getAuthPlano: async () => ({ empresa_id: 5, rol: 'admin' }),
+    _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+    _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+    _llamarAnthropicPlanoStream: async () => '<svg><g onload="draw()"/></svg>',
+    err: (message, status) => ({ message, status }),
+  });
+  const result = await edit({ json: async () => ({ cambios: [{ circuito_id: 'C1', campo: 'notas', valor: 'QA' }] }) },
+    { DB: { prepare(sql) {
+      assert.match(sql, /^SELECT \* FROM planos WHERE id=\? AND empresa_id=\?$/);
+      reads++;
+      return { bind(id, company) {
+        assert.equal(id, 28); assert.equal(company, 5);
+        return { first: async () => ({ tipo: 'planta', titulo: 'QA', circuitos_json: '[]' }) };
+      } };
+    } } }, '/planos/28/circuitos');
+  assert.equal(result.status, 502);
+  assert.match(result.message, /Plano no estatico/);
+  assert.equal(reads, 1, 'Only the scoped SELECT may run; no UPDATE on rejection');
 });
 
 test('an incomplete provider response cannot persist a plan', async () => {

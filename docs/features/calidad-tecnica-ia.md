@@ -102,8 +102,9 @@ Solo un boceto solicitado por el humano permite pendientes. El contexto original
 se hereda por rutas normal/stream/reintento/ayudante, sin bloques sintéticos del modelo.
 Los valores confirmados se adjuntan al generador como fuente prioritaria.
 
-Limitaciones: formatos no reconocidos requieren aclaración; no identifica por sí solo
-si un dato antiguo corresponde a otro proyecto. Solo controla altura/datum en bandejas,
+Limitaciones: formatos no reconocidos requieren aclaración; descarta datos anteriores
+ante nuevo trabajo explícito, pero no identifica cambios implícitos de proyecto.
+Solo controla altura/datum en bandejas,
 no selección/cálculo de soportes ni todos los datos necesarios de cada oficio.
 Formulario directo y otros tipos de plano siguen sin esa barrera. La política común
 ahora incluye arquitectura/delineación/oficios y exige buscar fuentes verificables
@@ -122,3 +123,35 @@ Adrián solicita terminar por hoy. IA-QUALITY-02 implementación 400f118 guardad
 295/295 agente y 15/15 técnicas; todavía sin merge/despliegue/verificación real.
 La producción conserva la política de 9.80 y su fallo QA observado. Continuar por
 HANDOFF mañana; no presentar esa política como garantía de preguntas resuelta.
+
+## Reanudación y QA publicada — IA-QUALITY-02 (2026-10-01)
+
+PR #346 integrada → f9addec01be180a9018e1ba9113a8ddf0703111d. Agente publicado
+desde 6da23e76f477e19ac92ead2c8ac8ed792030c0d3, run 36839880273 SUCCESS.
+Versión 39559254-382d-4f9d-bf4d-111e4a763915, health sin caché healthy con D1/R2.
+Primera lectura sin query devolvió versión anterior; query QA confirmó versión nueva.
+297/297 agente, 15/15 técnicas, cuatro checks CI verdes. API y Pages 9.81 conservados.
+
+QA autenticada en empresa demo 5, sin acceso a obras reales:
+
+| Caso | Resultado comprobado |
+|---|---|
+| A: bandeja 300×60 mm, planta 10×6 m, ruta (2,2)→(8,2)→(8,4), ejecución sin altura/datum | Tool devuelve DATOS_TECNICOS_FALTANTES; chat pregunta valor/unidad y referencia. IDs antes/después [27,26,25,21], no guarda. |
+| B: mismo caso, humano confirma 2,8 m sobre suelo terminado | Un plano ID 28; altura confirmada en SVG, radios/soportes pendientes. |
+| C: nuevo caso, boceto preliminar explícito sin altura/datum | ID 29; h=PENDIENTE, referencia no especificada, soportes/radios pendientes, BOCETO NO EJECUTAR; no hereda 2,8 m. |
+
+ID 28 HTTP 200 pero XML inválido: línea 206, `x <= viewBoxWidth` dentro de
+`<script>` generado para cuadrícula. Chat afirma NO EJECUTAR, texto ausente en SVG.
+ID 29 HTTP 200, XML parseable sin errores ni scripts. Ninguno acredita exactitud
+geométrica/CAD ni verificación normativa. Ambos se retienen, sin borrar datos.
+Captura local ignorada `.ai-benchmark-results/ia-quality-02/boceto.png`.
+Continuación acotada IA-QUALITY-03: SVG estático y rechazo de scripts antes de guardar.
+
+IA-QUALITY-03 usa el extractor compartido de generación/edición para rechazar
+script (incluido namespace), foreignObject y eventos antes de persistir, sin
+eliminarlos ni fabricar un resultado parcial. El prompt exige geometría estática.
+18 regresiones técnicas cubren salida dinámica, símbolos pasivos, no INSERT y
+edición con lectura limitada a empresa 5/ID 28 sin UPDATE ante rechazo.
+Esto no es un sanitizador XML completo: enlaces, XML mal formado sin código,
+avisos obligatorios y geometría requieren controles posteriores.
+Sesión de QA restaurada y comprobada por recarga: empresa 1/Seguridad.

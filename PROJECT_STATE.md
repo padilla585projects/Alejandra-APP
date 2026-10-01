@@ -2,11 +2,14 @@
 
 ## Calidad técnica — 2026-10-01
 
-Cierre solicitado por Adrián: Pages 9.81 publicada y verificada, Workers desde 158e886.
-El test real de preguntas falló (plano 27 sin altura/datum). Nueva barrera IA-QUALITY-02
-en rama codex/plan-required-data-gate, commit 400f118: 295 agente/15 técnicas pasan,
-**sin integrar/publicar**. HANDOFF contiene reanudación exacta para mañana.
-Sesión empresa 1/Seguridad restaurada; archivos ajenos y QA preservados.
+IA-QUALITY-02 integrada por PR #346 → f9addec; agente publicado desde 6da23e7
+(run 36839880273), versión 39559254-382d-4f9d-bf4d-111e4a763915, healthy.
+297 pruebas agente/15 técnicas y cuatro checks CI verdes. Demo 5: ausencia de
+altura/datum bloqueada sin nuevos planos; 2,8 m sobre suelo terminado permite ID 28;
+boceto explícito permite ID 29 con pendientes, sin heredar la altura anterior.
+Pages 9.81 y API conservados. QA preservados, sin migraciones ni borrados.
+Hallazgo pendiente: ID 28 contiene script de cuadrícula y XML inválido, además de
+omitir aviso literal NO EJECUTAR. No declarar planos profesionales válidos para obra.
 
 PR #344 integrada → 2716bff, web 9.80 y Workers publicados con CI verde.
 Health/asset y chat compacto verificados; fuentes y límites en
@@ -14,7 +17,7 @@ docs/features/calidad-tecnica-ia.md. Se refuerzan preguntas por datos faltantes,
 fidelidad de planos, rechazo de SVG truncado, controles Office y referencias mecánicas.
 Esto no acredita CAD ni auditoría normativa completa. Ajuste FAB integrado por PR #345
 → 4eeaebc y publicado 9.81; caso de viewport menor verificado en Chrome. Preguntas QA
-siguen pendientes de publicación y prueba de la nueva barrera.
+comprobadas para el mínimo altura/datum de bandejas; otros requisitos siguen pendientes.
 AR/APK/modelos de producción conservados. Sin migraciones ni datos borrados.
 
 ## Entrega técnica web 9.79 — 2026-10-01
