@@ -14,6 +14,76 @@ function load(file, name, globals = {}) {
 }
 
 const calculate = load('alejandra-agente/worker.js', 'calcularProteccion');
+test('plan generation rejects truncated or ambiguous SVG instead of fabricating a closure', () => {
+  const extract = load('worker.js', '_extraerSvgCompleto');
+  assert.equal(extract('```xml\n<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>\n```'), '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>');
+  for (const text of [null, '', '<svg><path d="M0', '<svg></svgarbage>', '<svg><svg></svg></svg>']) assert.throws(() => extract(text));
+});
+
+test('generation and editing share technical fidelity policy for missing heights and units', () => {
+  const prepare = load('worker.js', '_prepararPlanoPrompt', {
+    _PLANO_PROMPTS: { planta: 'example', bandejas: 'tray', unifilar: '{{SIMBOLOS}}' },
+    _bloqueSimbolosDinamico: () => 'symbols',
+  });
+  for (const type of ['bandejas', 'unifilar', 'planta']) {
+    const prompt = prepare(type, 'test');
+    assert.match(prompt, /Y=2 m NO es una altura/);
+    assert.match(prompt, /unica proporcion px\/m/);
+    assert.match(prompt, /BORRADOR/);
+    assert.match(prompt, /No inventes/);
+  }
+});
+
+test('an incomplete provider response cannot persist a plan', async () => {
+  let writes = 0;
+  const generate = load('worker.js', '_generarPlanoInterno', {
+    _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+    _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+    fetch: async () => ({ ok: true, json: async () => ({ content: [{ text: '<svg><path' }] }) }),
+  });
+  await assert.rejects(generate({ DB: { prepare: () => { writes++; throw new Error('Unexpected write'); } } },
+    { tipo: 'planta', titulo: 'QA', descripcion: 'synthetic', empresa_id: 5, usuario_id: 7 }), /Plano incompleto/);
+  assert.equal(writes, 0);
+});
+
+function editable(overrides = {}) {
+  return { tagName: 'INPUT', type: 'text', disabled: false, readOnly: false, value: '',
+    style: {}, matches: () => false, getAttribute: () => null, scrollIntoView() {},
+    focus() {}, click() {}, dispatchEvent() {}, ...overrides };
+}
+function officeAction(element) {
+  return load('panel.html', '_alejandraFabEjecutarAccion', {
+    document: { querySelector: () => element }, Event: class {},
+    setTimeout: fn => { fn(); },
+  });
+}
+test('Office preserves zero and refuses readonly, disabled and incompatible fields', async () => {
+  const element = editable();
+  await officeAction(element)({ tipo: 'rellenar', selector: '#qa', valor: 0 });
+  assert.equal(element.value, '0');
+  for (const invalid of [{ disabled: true }, { readOnly: true }, { type: 'file' },
+    { tagName: 'DIV' }, { type: 'checkbox' }, { matches: () => true }]) {
+    const control = editable(invalid);
+    await assert.rejects(officeAction(control)({ tipo: 'rellenar', selector: '#qa', valor: 1 }));
+    assert.equal(control.value, '');
+  }
+});
+test('Office refuses disabled clicks and unavailable options without changing selection', async () => {
+  let clicks = 0;
+  await assert.rejects(officeAction(editable({ disabled: true, click: () => clicks++ }))({ tipo: 'click', selector: '#qa' }));
+  assert.equal(clicks, 0);
+  const select = editable({ tagName: 'SELECT', value: 'old', options: [
+    { value: '0' }, { value: 'disabled', disabled: true },
+    { value: 'group', parentElement: { disabled: true } },
+  ] });
+  for (const value of ['missing', 'disabled', 'group']) {
+    await assert.rejects(officeAction(select)({ tipo: 'seleccionar', selector: '#qa', valor: value }));
+    assert.equal(select.value, 'old');
+  }
+  await officeAction(select)({ tipo: 'seleccionar', selector: '#qa', valor: 0 });
+  assert.equal(select.value, '0');
+});
+
 test('protection never proposes a smaller rating than the requested current', () => {
   for (const current of [0.5, 6, 6.1, 31, 32, 100, 124.9, 125]) {
     const result = JSON.parse(calculate({ intensidad_nominal_a: current }));

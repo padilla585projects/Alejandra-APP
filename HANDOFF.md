@@ -1,5 +1,14 @@
 # Handoff — Alejandra 2.0
 
+## IA-QUALITY-01 — en desarrollo (2026-10-01)
+
+- Codex, codex/professional-quality-controls, base ef173a2; alcance y aceptación en TASKS.
+- Mejorar causas observadas: prompts exigen completar datos ausentes; SVG truncado
+  se cierra artificialmente; Office acepta campos/opciones inválidos y pierde cero;
+  chat compacto z498 queda bajo FAB z499. Normativa mecánica cotejada con BOE.
+- Preservar AR/PWA, APK y archivos ajenos. Sin decisiones CAD nuevas ni datos destructivos.
+- Siguiente: implementar y ejecutar regresiones; registrar límites de validación.
+
 ## IA-FIX-01-ENTREGA — publicada y verificada (2026-10-01)
 
 - Codex, codex/technical-fixes-release, base 33be87e. Publicación autorizada por Adrián.

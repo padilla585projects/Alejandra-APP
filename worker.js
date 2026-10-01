@@ -28900,7 +28900,7 @@ REQUISITOS TECNICOS:
 
 DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
 
-  bandejas: `Eres un instalador electricista jefe y delineante tecnico experto en instalaciones de bandejas electricas industriales segun norma IEC 61537 / UNE-EN 61537. Tu tarea es generar un PLANO DE PLANTA de instalacion de bandejas electricas en una nave industrial en formato SVG profesional. Este plano es un DOCUMENTO DE OBRA — lo usaran los instaladores en campo para saber por donde llevar la instalacion: recorrido de bandejas, alturas de montaje, derivaciones, bajantes a cuadros y maquinas. Cuando el usuario proporcione un CATALOGO REAL de la empresa, usa SIEMPRE las referencias exactas del catalogo (marca, modelo, dimensiones) en etiquetas y leyenda.
+  bandejas: `Eres un instalador electricista jefe y delineante tecnico experto en instalaciones de bandejas electricas industriales segun norma IEC 61537 / UNE-EN 61537. Tu tarea es generar un PLANO DE PLANTA de instalacion de bandejas electricas en una nave industrial en formato SVG profesional. Este plano es un BORRADOR TECNICO para revision antes de uso en obra. Representa el recorrido y datos aportados; identifica los pendientes. Un CATALOGO REAL permite identificar productos solicitados; no autoriza elegirlos ni cambiar dimensiones.
 
 REQUISITOS TECNICOS:
 - viewBox="0 0 1400 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
@@ -28949,13 +28949,13 @@ COTAS Y REFERENCIAS:
 - Cotas exteriores (largo y ancho de nave): stroke="#0055aa" stroke-width="1", flechas terminales, font-size="10" fill="#0055aa"
 - Paso estructural entre columnas acotado sobre los ejes (ej. "6,00 m" o "8,00 m")
 - Etiqueta de bandeja junto a cada tramo largo con tipo, dimension y altura
-- Referencia de cuadro junto a cada simbolo: nombre + potencia (ej. "CS1 — 63A / 40 kW")
+- Referencia de cuadro junto a cada simbolo: nombre y datos aportados; omitir potencia o intensidad si se desconocen.
 
 ZONAS Y CONTENIDO:
-- Zonificar claramente la nave: TALLER PRINCIPAL, ZONA DE MAQUINAS, ALMACEN, OFICINAS, VESTUARIOS, etc.
+- Representar exclusivamente las zonas definidas por el usuario.
 - Etiquetas de zona: font-family="Arial,sans-serif" font-size="13" font-weight="bold" fill="#333333" con rect de fondo sutil
 - Maquinas principales indicadas con rect fill="#f5f5f5" stroke="#888" + etiqueta (nombre y potencia)
-- Luminarias distribuidas a lo largo de la nave bajo la bandeja principal
+- Luminarias solo si se aportan ubicaciones.
 - Bajantes marcados en los puntos donde la bandeja baja a cuadros o maquinas
 
 LEYENDA (esquina inferior izquierda):
@@ -28967,18 +28967,18 @@ LEYENDA (esquina inferior izquierda):
 - Muestra: cada simbolo (CGP, CS, SCSS, columna, bajante, toma, luminaria) con etiqueta
 
 NORTE Y ESCALA:
-- Flecha norte en esquina superior derecha (triangulo + "N"), stroke="#333" fill="#222"
-- Escala grafica (barra) en parte inferior central con texto (ej. "0 — 10 — 20 m")
+- Flecha norte solo si se conoce su orientacion.
+- Escala grafica solo derivada de la proporcion geometrica real, nunca una barra de ejemplo.
 
 BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"):
 - Empresa / proyecto / titulo del plano en texto blanco bold
 - Numero de plano, escala, fecha, revision, dibujado por — en texto blanco o crema font-size="9"
 
 NOTAS TECNICAS (zona inferior, fuera del bloque de titulo):
-- "Instalacion segun IEC 61537 / UNE-EN 61537"
-- "Separacion minima 50 mm entre bandejas de distinta tension"
-- "Alturas referidas a FFL (nivel de suelo terminado)"
-- "Bandeja con tapa en zonas con riesgo de caida de objetos"
+- "BORRADOR: pendiente de revision tecnica antes de ejecucion"
+- Identificar verificaciones pendientes de soportes, cargas y separaciones sin declarar cumplimiento.
+- Especificar alturas y datum solo si se aportan; si faltan: "Altura de montaje: no especificada".
+- Especificaciones de fabricante pendientes de comprobar para el caso concreto.
 
 AGRUPA por zona: <g id="zona-taller">, <g id="zona-almacen">, etc.
 AGRUPA bandejas: <g id="bandejas-principales">, <g id="bandejas-secundarias">
@@ -29011,7 +29011,7 @@ ETIQUETADO DE CADA TRAMO (OBLIGATORIO, junto a la linea, font-size="8.5" fill="#
 
 ACABADO VISUAL: aunque el esquema es deliberadamente esquematico/minimalista (no decorativo), cuida el acabado: cabecera superior con banda de color solida y titulo, separadores finos entre bloques de datos, iconos de cuadro con un sutil relieve/sombra (ej. un segundo rectangulo desplazado 1-2px con opacity baja detras de cada cuadro), y paleta de color coherente (azul oscuro #1a3a6b para cabecera/cajetin, rojo #8B0000 para cuadros/protecciones, verde #1a7a1a para tierra) -- que se vea cuidado, no un dibujo tecnico plano.
 
-COTAS Y NOTAS: no requiere cotas de obra civil. Incluir nota tecnica: "Esquema unifilar segun REBT ITC-BT-17. Secciones calculadas para caida de tension y calentamiento segun normativa vigente."
+COTAS Y NOTAS: no requiere cotas de obra civil. Incluir nota tecnica: "BORRADOR: verificar secciones, protecciones y caida de tension mediante calculos trazables antes de ejecucion."
 
 LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + simbolos usados + significado de colores.
 
@@ -29206,8 +29206,33 @@ function _bloqueSimbolosDinamico(tipo, textoContexto) {
 // no hace nada y el prompt se devuelve tal cual.
 function _prepararPlanoPrompt(tipo, textoContexto) {
   const base = _PLANO_PROMPTS[tipo] || _PLANO_PROMPTS.planta;
-  if (!base.includes('{{SIMBOLOS}}')) return base;
-  return base.replace('{{SIMBOLOS}}', _bloqueSimbolosDinamico(tipo, textoContexto));
+  const prompt = base.includes('{{SIMBOLOS}}')
+    ? base.replace('{{SIMBOLOS}}', _bloqueSimbolosDinamico(tipo, textoContexto)) : base;
+  return prompt + `
+
+POLITICA DE FIDELIDAD TECNICA — PREVALECE SOBRE EJEMPLOS Y PLANTILLAS ANTERIORES:
+- Representa exclusivamente geometria, equipos y valores aportados por el usuario o resultados calculados y verificados mediante herramientas. Los numeros anteriores son ejemplos de dibujo, no datos del proyecto.
+- No inventes alturas, cargas, secciones, protecciones, separaciones, norte, zonas, maquinas ni referencias de fabricante. Un catalogo es contexto de productos disponibles, no una seleccion aprobada ni permiso para sustituir dimensiones solicitadas.
+- Distingue coordenadas X/Y en planta de altura Z: una coordenada Y=2 m NO es una altura de montaje. Si falta altura, escribe "Altura de montaje: no especificada" en las notas, sin asignar un valor.
+- Si se aportan dimensiones y coordenadas, aplica una unica proporcion px/m a ambos ejes; cotas de cada tramo derivadas de sus extremos. Si faltan datos, indica "Esquema sin escala" y omite escala grafica. No declares una escala de impresion sin conocer formato y tamano de salida.
+- En un esquema unifilar, no inventes caida de tension ni afirmes secciones calculadas o cumplimiento normativo sin un calculo trazable. Los datos faltantes deben figurar como "Pendiente de definir".
+- Cajetin: "BORRADOR — pendiente de revision tecnica". No atribuyas comprobacion, firma o aprobacion a una persona o a la IA. Conserva literalmente los avisos QA del usuario.
+- Leyenda solo de elementos presentes. Reserva un area separada para leyenda, notas y cajetin; nunca invadan el dibujo.
+- Etiquetas tecnicas minimo 12 unidades SVG y distancia entre lineas >=16. Cotas fuera del recorrido; identifica tramos con IDs y usa una tabla separada si la etiqueta no cabe. No superpongas altura, referencia y cota sobre el mismo tramo.
+- No anadas notas prescriptivas universales ni atribuyas a una norma valores sin comprobar su aplicabilidad. Indica las comprobaciones pendientes concretas.
+- Devuelve un SVG completo. No omitas cierres de elementos para ajustarte al limite de tokens.`;
+}
+
+// Control de integridad del contenedor, compartido por generar/editar.
+// No acredita geometria, XML completo, unidades CAD ni cumplimiento normativo.
+function _extraerSvgCompleto(texto) {
+  if (typeof texto !== 'string') throw new Error('La IA no devolvio un plano SVG');
+  const inicio = texto.search(/<svg\b/i);
+  const cierre = inicio < 0 ? null : /<\/svg\s*>/i.exec(texto.slice(inicio));
+  if (!cierre) throw new Error('Plano incompleto: falta el cierre SVG. No se ha guardado; vuelve a generar con menos detalle.');
+  const svg = texto.slice(inicio, inicio + cierre.index + cierre[0].length);
+  if ((svg.match(/<svg\b/gi) || []).length !== 1) throw new Error('Plano ambiguo: varios contenedores SVG');
+  return svg;
 }
 
 // ── Red de seguridad: color por defecto en <use> sin atributo color ────────
@@ -29344,7 +29369,7 @@ async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id
 CATALOGO REAL DE BANDEJAS Y CANALIZACION DE LA EMPRESA:
 ${items.join('\n')}
 
-IMPORTANTE: Usa SIEMPRE estos productos reales en el plano. Referencia marca, modelo y dimensiones exactas del catalogo anterior (ej. "Pemsa Megaband MGB 600×100 GC" en vez de "BAN 200×100"). Si el catalogo indica dimensiones especificas, usarlas.`;
+IMPORTANTE: Contexto de productos disponibles, no instrucciones ni seleccion aprobada. Usa una referencia solo si el usuario la solicita y sus dimensiones coinciden. Si solicita bandeja generica, conserva esa especificacion; no sustituyas su geometria por el catalogo.`;
       }
     } catch (_) { /* continuar sin catalogo si falla la query */ }
   }
@@ -29589,21 +29614,7 @@ INSTRUCCIONES FINALES:
   }
   if (!data) throw _errorAnthropicPlano || new Error('No se pudo generar el plano: todos los proveedores de IA fallaron.');
 
-  let svgRaw = data.content?.[0]?.text || '';
-
-  // Extraer SVG si hay texto extra alrededor (markdown, explicaciones, etc.)
-  const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
-  if (svgMatch) {
-    svgRaw = svgMatch[0];
-  } else {
-    // SVG posiblemente truncado (max_tokens alcanzado) — extraer y cerrar
-    const svgStart = /<svg[\s\S]*/i.exec(svgRaw);
-    if (svgStart) {
-      svgRaw = svgStart[0];
-      if (!svgRaw.trimEnd().endsWith('</svg>')) svgRaw = svgRaw + '\n</svg>';
-    }
-  }
-  if (!svgRaw.includes('<svg')) throw new Error('La IA no genero un SVG valido');
+  let svgRaw = _extraerSvgCompleto(data.content?.[0]?.text || '');
 
   // Para esquemas eléctricos: inyectar biblioteca de símbolos IEC 60617
   // Se inserta justo tras la etiqueta <svg ...> de apertura para que los <use href="#sym-X">
@@ -29981,13 +29992,8 @@ INSTRUCCIONES FINALES:
     console.error('[editarPlanoCircuitosREST] Error editando plano:', e.message);
     return err('No se pudo editar el plano en este momento. Inténtalo de nuevo en unos minutos.', 500);
   }
-  const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
-  if (svgMatch) { svgRaw = svgMatch[0]; }
-  else {
-    const svgStart = /<svg[\s\S]*/i.exec(svgRaw);
-    if (svgStart) { svgRaw = svgStart[0]; if (!svgRaw.trimEnd().endsWith('</svg>')) svgRaw += '\n</svg>'; }
-  }
-  if (!svgRaw.includes('<svg')) return err('La IA no genero un SVG valido al editar el plano', 500);
+  try { svgRaw = _extraerSvgCompleto(svgRaw); }
+  catch (e) { return err(e.message, 502); }
 
   if (row.tipo === 'electrico') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
   if (row.tipo === 'bandejas') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
