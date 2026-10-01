@@ -1,5 +1,18 @@
 # Estado del proyecto — Alejandra 2.0
 
+## IA-CALC-QUALITY-01 — publicada y verificada (2026-10-01)
+
+PR #350 → e1c83580fb1eda945e0d2171cb2f493070ce173e, cuatro checks verdes.
+Agente publicado desde d4fa10df141d95fd0d62ceb984e5bc6fa4d54282,
+run 36850334644 SUCCESS; versión 8b9abd62-7aec-4107-884c-6345739669e4,
+health sin caché healthy D1/R2. 297 agente/28 técnicas, sintaxis/encoding/diff pasan.
+QA A demo 5 llama ambas tools: ocupación 0,44%, radio/desarrollo sin inventar,
+preguntas de datos y diferencial pendiente. El chat aún llama curva D «justificada»
+sin datos de arranque: límite del lenguaje registrado, no selección validada.
+API 62f451e7 y Pages 9.81 conservados; sin cambios AR/APK ni migraciones.
+Rollback agente 7d7ac10215a796e29df0c24615b102c328ea22ef.
+Siguiente: fidelidad de datum en planos y evitar sobreafirmaciones en respuestas.
+
 ## IA-QUALITY-04 — publicación verificada (2026-10-01)
 
 PR #349 integrada (8c9fea7), cuatro checks verdes. API publicada desde
@@ -1756,3 +1769,12 @@ autónomo); N3 sigue fuera del alcance autónomo por mandato de ADR-0006. Ver
 
 - **F-4.4 (2026-08-07):** investigando qué vertical elegir para F-3.1 (herramientas semánticas), se auditaron las trazas `feature_usage` reales en D1 y se detectó que el 100% se clasificaban como "error" — incluidas ejecuciones correctas. Causa: la clasificación buscaba un contrato JSON `"ok"` que la mayoría de tools no devuelve. Fix: `clasificarResultadoTool()` (función pura en `alejandra-agente/lib.js`), desplegado y verificado. Detalle en `HANDOFF.md`. **F-3.1 queda a la espera de telemetría real de uso** (las trazas hasta ahora son del cron) antes de decidir la vertical piloto — decisión del Director ("esperamos").
 - **Aislamiento por departamento en Alejandra Office (2026-08-09/10):** a raíz de un reporte de Adrián sobre fugas en desplegables entre departamentos, tres auditorías sucesivas (agentes Explore, solo lectura) sobre `worker.js`/`panel.html` encontraron y cerraron, en orden: (1) `getTrabajadores`/`getCarnets` + reorden de departamentos (Control/Telecom tras Eléctrico); (2) 19 tablas de obra sin columna `departamento` (6 migraciones D1 + `deptGuard` en ~40 endpoints, ciclo de 5 pasos de ADR-0011) más `getObsSeguridad`/`getToolboxTalks` restringidos a Seguridad; (3) `getReconocimientos` (datos de salud) y `getAccidentes` (registro legal de seguridad), última fuga real encontrada, restringidos a Seguridad+admins. **No quedan módulos conocidos sin aislar.** Un incidente de proceso propio (ALTER directo sin workflow) fue autorreportado y aceptado como caso puntual, sin extender el bypass a futuras migraciones D1. Detalle completo, commits y versiones desplegadas en `HANDOFF.md` y `CHANGELOG.md`.
+
+QA B con datos aportados: radio interior 300 mm → radio medio 450 mm/desarrollo
+707 mm, ocupación 0,44% frente a criterio aportado 40%. Cable trifásico explícito
+a 230 V → 2,51 A, caída 0,23%, estado parcial y cumplimiento no acreditado.
+La respuesta aún resume 3%/5% sin todos los casos del REBT: explicación debe
+conservar límites/supuestos y no convertir referencias generales en decisión.
+IA-CALC-QUALITY-02 corrige contexto de capacidades y exige preservar alcance/null
+antes de llamar justificada una preselección. 297 tests agente pasan; prompt no es
+garantía determinista. PR/CI/publicación/QA pendientes. Rollback agente d4fa10d.

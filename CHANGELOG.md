@@ -4,6 +4,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — IA-CALC-QUALITY-02)
+
+- Contexto de ingeniería respeta el alcance parcial de calculadores y sus null;
+  no presenta como verificadas curvas/polos sugeridos sin datos de instalación.
+
 ### Fixed (2026-10-01 — IA-CALC-QUALITY-01)
 
 - Cable/bandeja/protección rechazan entradas inválidas y rangos fuera de tablas;

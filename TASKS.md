@@ -1,6 +1,18 @@
 # TASKS — Cola operativa inmediata
 
-## IA-CALC-QUALITY-01 — entradas y alcance de resultados (2026-10-01, en desarrollo)
+## IA-CALC-QUALITY-02 — explicación fiel al alcance (2026-10-01, en desarrollo)
+
+- Continuación autorizada; Codex, codex/calculator-verification-record, base e1c8358.
+- QA A prueba sobreafirmación de curva D. Contexto de ingeniería aún promete
+  diferenciales/selectividad aunque las tools devuelven pendientes.
+- Corregir descripción de capacidades y preservar explícitamente alcance parcial,
+  null y datos necesarios; sin nuevas tablas ni decisiones normativas.
+- Pruebas agente/sintaxis, CI y publicación agente con QA posterior.
+  Riesgo: prompt no es garantía determinista; medir respuesta real.
+  Rollback agente d4fa10df141d95fd0d62ceb984e5bc6fa4d54282.
+
+
+## IA-CALC-QUALITY-01 — entradas y alcance de resultados (2026-10-01, publicada)
 
 - Autorizada continuación técnica por Adrián. Codex, codex/technical-calculator-inputs,
   base 8c9fea7; dependencia IA-QUALITY-04 integrada/publicada, API healthy.
@@ -11,6 +23,10 @@
   Bandeja: cálculo geométrico con radio aportado, no mínimos normativos inventados.
 - Pruebas: negativas, conservación de aritmética válida, cambios de contrato explícitos;
   suite agente, sintaxis, PR/CI/publicación agente y QA.
+- Publicación PR #350 → e1c8358, cuatro checks verdes; run 36850334644 SUCCESS.
+  Agente 8b9abd62-7aec-4107-884c-6345739669e4 healthy D1/R2 sin caché.
+  QA A llama bandeja/protección: preguntas de radio/ocupación/tierra y diferencial
+  pendiente correctos. Chat sobreafirma curva D como justificada: pendiente de rigor.
 - Rollback agente 7d7ac10; sin migraciones, tablas normativas nuevas ni cambios AR/PWA.
 
 ## IA-QUALITY-04 — validar archivo y avisos (2026-10-01, publicada)
