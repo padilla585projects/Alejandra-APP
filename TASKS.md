@@ -1,5 +1,17 @@
 # TASKS — Cola operativa inmediata
 
+## IA-CALC-QUALITY-04 — contrato de calibre candidato (2026-10-01, en desarrollo)
+
+- Continuación autorizada, Codex, codex/protection-candidate-contract, base ed734e0.
+- Dependencia IA-CALC-QUALITY-03 publicada/verificada; ADR-0007 aceptado.
+- Separar calibre_candidato_a de calibre_a definitivo (null), selección autorizada
+  false y coordinación como comparación parcial; preguntar por cable/instalación.
+- Mantener cálculo de candidato normalizado; no implementar coordinación normativa
+  completa ni tablas nuevas. Probar ausencia de selección aun con sección aportada.
+- 297 agente, técnicas/sintaxis/encoding, CI, publicación y QA real.
+- Riesgo de contrato: clientes tratan calibre_a null; rollback agente
+  45adbee6cfd40e7dc1b816bd780b46d761fb8d60. Sin datos/AR/APK/Pages.
+
 ## IA-CALC-QUALITY-03 — curva pendiente determinista (2026-10-01, publicada y verificada)
 
 - Continuación autorizada, Codex, codex/engineering-qa-handoff, base b4bd993.

@@ -8426,6 +8426,8 @@ function calcularProteccion(input) {
 
   const resultado = {
     estado: 'PRESELECCION_PARCIAL',
+    seleccion_definitiva_autorizada: false,
+    decision_permitida: 'Explorar un calibre candidato. No fijar, comprar ni instalar una protección con este resultado.',
     cumple_norma: null,
     verificaciones_pendientes: ['Confirmar sistema, neutro y polos; la tensión solo permite un supuesto.',
       'Verificar corriente de arranque, curva, poder de corte y cortocircuito mínimo/máximo.',
@@ -8433,11 +8435,13 @@ function calcularProteccion(input) {
       'Seleccionar diferencial según esquema de tierra, protección requerida y corrientes residuales.'],
     datos_entrada: { intensidad_nominal_a: In, tipo_carga: tipoCarga, tension_v: tension, instalacion },
     magnetotermico: {
-      calibre_a: calibreElegido,
+      calibre_a: null,
+      calibre_candidato_a: calibreElegido,
       curva: curva,
       estado: 'PRESELECCION_DE_CALIBRE',
       descripcion_curva: 'PENDIENTE: el tipo de carga no basta para seleccionar la curva.',
       pregunta_curva: '¿Cuál es la corriente y duración del arranque, el cortocircuito mínimo/máximo y la curva de disparo del fabricante?',
+      pregunta_calibre: '¿Qué cable, sección, aislamiento, método de instalación, temperatura y agrupamiento reales se deben coordinar con la protección?',
       polos: tension >= 400 ? '4P (3F+N)' : '2P (F+N)'
     },
     diferencial: {
@@ -8457,10 +8461,11 @@ function calcularProteccion(input) {
     resultado.coordinacion_cable = {
       seccion_mm2: seccionCable,
       ampacidad_cable_a: Iz,
-      calibre_proteccion_a: calibreElegido,
+      calibre_proteccion_a: null,
+      calibre_candidato_a: calibreElegido,
       cumple: Iz >= calibreElegido,
       alcance: 'Solo comparación de ampacidad tabulada sin factores frente al calibre; no acredita coordinación normativa.',
-      condicion: `Iz (${Iz}A) ${Iz >= calibreElegido ? '≥' : '<'} In (${calibreElegido}A) — ${Iz >= calibreElegido ? 'CUMPLE' : 'NO CUMPLE: cable insuficiente para esta protección'}`
+      condicion: `Iz tabulada (${Iz}A) ${Iz >= calibreElegido ? '≥' : '<'} calibre candidato (${calibreElegido}A). Comparación parcial; no autoriza una selección definitiva.`
     };
     if (Iz < calibreElegido) {
       // Sugerir sección mínima
