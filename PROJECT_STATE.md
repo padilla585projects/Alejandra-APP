@@ -1,5 +1,27 @@
 # Estado del proyecto — Alejandra 2.0
 
+## IA-CALC-QUALITY-05 — publicada y QA verificada (2026-10-02)
+
+PR #356 → 0f0a6987c03848adfb9cc22daf1cd0de25148ea9, cuatro checks verdes.
+Agente publicado desde e5eec22cc80267076612bd0d4cab08f14ca46b3c,
+run 36932203552 SUCCESS; versión d99b5a51-dafe-4ae1-a9c7-adefe3a47c62,
+health sin caché healthy D1/R2. 297 agente/29 técnicas, sintaxis/encoding correctos.
+QA F móvil web, 26 A/230 V/10 mm²/bandeja y condiciones desconocidas: llama
+calcular_proteccion, identifica 32 A candidato y 76 A tabulada sin factores;
+responde explícitamente que no se puede fijar calibre ni afirmar cable seguro.
+Curva/diferencial y cumplimiento normativo pendientes; solicita los datos reales.
+Supera criterios de este ensayo; no acredita otros casos ni todos los oficios.
+
+La respuesta también afirma retrospectivamente que QA E pasa: incorrecto. QA E
+sigue FALLIDA tal como quedó registrada; no aceptar autoevaluación del modelo
+como evidencia ni reescribir resultados previos. Fuente: observación real de cada QA.
+Pendientes: fidelidad altura/datum/geometría CAD y evaluación más amplia. En
+interfaz móvil el Markdown/tablas salen como texto literal: registrar para auditoría
+gráfica y muestras previamente pedidas, sin cambiar UI en este arreglo.
+Rollback agente d2daf690f259c1362764cb7858434f217b9e69b8.
+Sin cambios API/Pages/AR/APK, tablas, migraciones ni solicitudes de crear planos.
+No afirmar recuento de planos: no se consultó en este ensayo.
+
 ## IA-CALC-QUALITY-05 — comparación tabulada (2026-10-01, en desarrollo)
 
 coordinacion_cable.cumple y ampacidad_cable_a quedan null: la herramienta no
@@ -1863,3 +1885,7 @@ garantía determinista. PR/CI/publicación/QA pendientes. Rollback agente d4fa10
 
 Cierre QA: empresa 1/Seguridad restauradas y comprobadas por recarga; pestaña
 de ensayo cerrada. Archivos locales ajenos preservados; QA sintéticas conservadas.
+
+Evidencia ignorada: .ai-benchmark-results/ia-calc-quality-05/chat-qa-f.png.
+Pestaña de ensayo cerrada; empresa/departamento no modificados. Archivos ajenos
+y QA anteriores preservados. Cierre de implementación/ensayo acotado, no de CAD.
