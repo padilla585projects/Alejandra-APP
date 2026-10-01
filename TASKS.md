@@ -1,12 +1,15 @@
 # TASKS — Cola operativa inmediata
 
-## IA-CALC-QUALITY-03 — curva pendiente determinista (2026-10-01, en desarrollo)
+## IA-CALC-QUALITY-03 — curva pendiente determinista (2026-10-01, publicada y verificada)
 
 - Continuación autorizada, Codex, codex/engineering-qa-handoff, base b4bd993.
 - QA C falla pese a prompt reforzado. Eliminar selección automática de curva
   por tipo de carga: null y pregunta de arranque/catálogo/cortocircuito.
 - El calibre sigue siendo preselección, sin certificar coordinación ni diferencial.
-- Negativa para motor sin datos, 297 agente/28 técnicas, CI, publicación y QA.
+- PR #352 → 97c0aef, cuatro checks verdes; run 36851707721 SUCCESS.
+  Agente fdeecccf-09ef-4fee-bbdb-6816bd498d19 healthy D1/R2 sin caché.
+  Negativa motor sin curva, 297 agente/28 técnicas. QA D: motor 26 A → candidato 32 A, curva/diferencial pendientes.
+  Sin nuevos planos (8 IDs conservados). Chat aún dice «fijar calibre»: pendiente.
   Riesgo: consumidores deben tratar curva null; rollback agente 7465db9.
   Sin tablas nuevas/migraciones/cambios AR/APK/PWA.
 

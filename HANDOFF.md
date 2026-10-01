@@ -1,5 +1,22 @@
 # Handoff — Alejandra 2.0
 
+## IA-CALC-QUALITY-03 — publicación y QA (2026-10-01)
+
+PR #352 → 97c0aefae1fe6a882a1d84e14d944da4baf97461, cuatro checks verdes.
+Agente publicado desde 45adbee6cfd40e7dc1b816bd780b46d761fb8d60,
+run 36851707721 SUCCESS; versión fdeecccf-09ef-4fee-bbdb-6816bd498d19,
+health sin caché healthy D1/R2. 297 agente/28 técnicas pasan.
+QA D demo 5: motor 26 A → calibre candidato 32 A; curva y diferencial quedan
+pendientes en herramienta y respuesta. No fija curva D por tipo de carga.
+El chat aún resume «puedes fijar calibre 32A», sobreafirmación sin coordinación
+completa: PENDIENTE. No declarar profesional/definitiva la selección por esta QA.
+Planos conservados [31,30,29,28,27,26,25,21], sin altas durante pruebas de cálculo.
+API 62f451e7, Pages 9.81 y AR/APK conservados. Sin migraciones ni borrados.
+Rollback agente 7465db9d5386f33bb695090076a49742fa7e98ad.
+Siguiente cola: preservar calibre como candidato en explicación/contrato;
+fidelidad altura/datum/geometría y comprobaciones CAD estructuradas.
+Una QA no acredita todos los oficios ni resultados aptos para ejecutar en obra.
+
 ## IA-CALC-QUALITY-02/03 — resultado y refuerzo (2026-10-01)
 
 PR #351 → b4bd993, cuatro checks verdes; publicado desde
@@ -4438,3 +4455,6 @@ conservar límites/supuestos y no convertir referencias generales en decisión.
 IA-CALC-QUALITY-02 corrige contexto de capacidades y exige preservar alcance/null
 antes de llamar justificada una preselección. 297 tests agente pasan; prompt no es
 garantía determinista. PR/CI/publicación/QA pendientes. Rollback agente d4fa10d.
+
+Cierre QA: empresa 1/Seguridad restauradas y comprobadas por recarga; pestaña
+de ensayo cerrada. Archivos locales ajenos preservados; QA sintéticas conservadas.
