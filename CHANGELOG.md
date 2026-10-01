@@ -4,6 +4,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — IA-CALC-QUALITY-05)
+
+- Protección distingue ampacidad y comparación tabuladas sin factores de ampacidad
+  real y coordinación pendiente; sección alternativa etiquetada como candidata.
+
 ### Fixed (2026-10-01 — IA-CALC-QUALITY-04)
 
 - Protección separa calibre candidato y selección definitiva pendiente; comparar

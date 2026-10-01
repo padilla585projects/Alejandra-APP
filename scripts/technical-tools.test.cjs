@@ -86,12 +86,17 @@ test('protection refuses invalid supplied data and leaves differential selection
   assert.equal(motor.diferencial.sensibilidad_ma, null);
   assert.equal(motor.cumple_norma, null);
   const coordination = JSON.parse(calculate({ intensidad_nominal_a: 32, seccion_cable_mm2: 1.5 }));
-  assert.equal(coordination.coordinacion_cable.seccion_minima_mm2, 2.5);
+  assert.equal(coordination.coordinacion_cable.seccion_candidata_tabular_mm2, 2.5);
+  assert.equal(coordination.coordinacion_cable.cumple_comparacion_tabular, false);
+  assert.equal(coordination.coordinacion_cable.cumple, null);
 });
 test('a favourable tabulated comparison cannot turn a candidate into an authorised protection', () => {
   const result = JSON.parse(calculate({ intensidad_nominal_a: 26, seccion_cable_mm2: 10,
     instalacion: 'bandeja', tension_v: 230 }));
-  assert.equal(result.coordinacion_cable.cumple, true);
+  assert.equal(result.coordinacion_cable.cumple, null);
+  assert.equal(result.coordinacion_cable.cumple_comparacion_tabular, true);
+  assert.equal(result.coordinacion_cable.ampacidad_cable_a, null);
+  assert.equal(result.coordinacion_cable.ampacidad_tabla_sin_factores_a, 76);
   assert.equal(result.coordinacion_cable.calibre_candidato_a, 32);
   assert.equal(result.coordinacion_cable.calibre_proteccion_a, null);
   assert.equal(result.magnetotermico.calibre_a, null);

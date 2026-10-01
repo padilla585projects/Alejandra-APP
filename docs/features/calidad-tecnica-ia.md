@@ -323,3 +323,16 @@ sin cambios de empresa/departamento. No se afirma recuento de planos verificado
 en este ensayo. Sin cambios AR/APK/Pages, migraciones ni tablas normativas.
 Rollback agente 45adbee6cfd40e7dc1b816bd780b46d761fb8d60.
 Fidelidad altura/datum/geometría CAD pendiente; ninguna QA acredita perfección.
+
+## IA-CALC-QUALITY-05 — comparación tabulada (2026-10-01, en desarrollo)
+
+coordinacion_cable.cumple y ampacidad_cable_a quedan null: la herramienta no
+conoce las condiciones reales. ampacidad_tabla_sin_factores_a y
+cumple_comparacion_tabular preservan aritmética; supuestos Cu/XLPE explícitos.
+Alternativa de sección se llama seccion_candidata_tabular_mm2, no mínimo real.
+Descripción impide afirmar seguridad/fijar protección/promesa de coordinación
+integral por aportar más datos. 297 agente/29 técnicas pasan, favorable y
+desfavorable sin selección autorizada. Riesgo: consumidores de campos anteriores
+manejan null; ninguna fórmula/tabla nueva, sin migraciones/AR/APK/Pages.
+Rollback agente d2daf690f259c1362764cb7858434f217b9e69b8.
+PR/CI/publicación/QA pendientes; datum/geometría CAD siguen fuera de este arreglo.
