@@ -1,13 +1,26 @@
 # TASKS — Cola operativa inmediata
 
-## IA-CALC-QUALITY-02 — explicación fiel al alcance (2026-10-01, en desarrollo)
+## IA-CALC-QUALITY-03 — curva pendiente determinista (2026-10-01, en desarrollo)
+
+- Continuación autorizada, Codex, codex/engineering-qa-handoff, base b4bd993.
+- QA C falla pese a prompt reforzado. Eliminar selección automática de curva
+  por tipo de carga: null y pregunta de arranque/catálogo/cortocircuito.
+- El calibre sigue siendo preselección, sin certificar coordinación ni diferencial.
+- Negativa para motor sin datos, 297 agente/28 técnicas, CI, publicación y QA.
+  Riesgo: consumidores deben tratar curva null; rollback agente 7465db9.
+  Sin tablas nuevas/migraciones/cambios AR/APK/PWA.
+
+## IA-CALC-QUALITY-02 — explicación fiel al alcance (2026-10-01, publicada; QA no supera rigor)
 
 - Continuación autorizada; Codex, codex/calculator-verification-record, base e1c8358.
 - QA A prueba sobreafirmación de curva D. Contexto de ingeniería aún promete
   diferenciales/selectividad aunque las tools devuelven pendientes.
 - Corregir descripción de capacidades y preservar explícitamente alcance parcial,
   null y datos necesarios; sin nuevas tablas ni decisiones normativas.
-- Pruebas agente/sintaxis, CI y publicación agente con QA posterior.
+- PR #351 → b4bd993, cuatro checks verdes; run 36851058248 SUCCESS.
+  Agente 521b550e-61f6-44c7-8851-2c526596ca10 healthy D1/R2 sin caché.
+  297 pruebas agente/sintaxis/encoding correctos; QA C falla: presenta curva D como fijable sin arranque.
+  Prompt insuficiente; no declarar resuelto.
   Riesgo: prompt no es garantía determinista; medir respuesta real.
   Rollback agente d4fa10df141d95fd0d62ceb984e5bc6fa4d54282.
 

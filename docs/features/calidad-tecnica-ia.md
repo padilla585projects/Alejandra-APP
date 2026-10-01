@@ -251,3 +251,19 @@ conservar límites/supuestos y no convertir referencias generales en decisión.
 IA-CALC-QUALITY-02 corrige contexto de capacidades y exige preservar alcance/null
 antes de llamar justificada una preselección. 297 tests agente pasan; prompt no es
 garantía determinista. PR/CI/publicación/QA pendientes. Rollback agente d4fa10d.
+
+## IA-CALC-QUALITY-02/03 — resultado y refuerzo (2026-10-01)
+
+PR #351 → b4bd993, cuatro checks verdes; publicado desde
+7465db9d5386f33bb695090076a49742fa7e98ad, run 36851058248 SUCCESS,
+agente 521b550e-61f6-44c7-8851-2c526596ca10 healthy D1/R2 sin caché.
+QA C llama protección pero afirma «puedes fijar 32A curva D» sin datos de arranque,
+y luego reconoce que no está verificada. El prompt NO supera el ensayo de rigor.
+
+IA-CALC-QUALITY-03 elimina selección de curva por carga: curva null, pregunta
+por arranque/duración, cortocircuito y fabricante. Calibre es candidato sujeto a
+coordinación. 297 agente/28 técnicas pasan, incluyendo motor sin curva inventada.
+Riesgo: consumidores deben manejar null; no se valida selección final ni normativa.
+Rollback agente 7465db9d5386f33bb695090076a49742fa7e98ad.
+PR/CI/publicación/QA del refuerzo pendientes; dato de altura/datum y geometría
+de planos siguen pendientes. Sin migraciones/cambios AR/APK/Pages.

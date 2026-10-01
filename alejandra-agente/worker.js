@@ -1987,7 +1987,7 @@ const TOOL_CALCULAR_BANDEJA = {
 
 const TOOL_CALCULAR_PROTECCION = {
   name: 'calcular_proteccion',
-  description: 'Preselección de calibre de magnetotérmico hasta 125 A y comparación parcial con tabla de cable. Curva/polos son supuestos preliminares. No verifica selectividad, cortocircuito ni elige diferencial sin datos de la instalación; esos puntos quedan pendientes.',
+  description: 'Preselección de calibre de magnetotérmico hasta 125 A y comparación parcial con tabla de cable. Curva y diferencial quedan pendientes; polos son un supuesto. No verifica selectividad ni cortocircuito con datos incompletos; esos puntos quedan pendientes.',
   input_schema: {
     type: 'object',
     properties: {
@@ -8421,9 +8421,8 @@ function calcularProteccion(input) {
     });
   }
 
-  // Curva según tipo de carga
-  const curvas = { motor: 'D', alumbrado: 'B', tomas: 'C', mixta: 'C' };
-  const curva = curvas[tipoCarga];
+  // El tipo de carga no determina una curva adecuada sin arranque y cortocircuito.
+  const curva = null;
 
   const resultado = {
     estado: 'PRESELECCION_PARCIAL',
@@ -8436,9 +8435,9 @@ function calcularProteccion(input) {
     magnetotermico: {
       calibre_a: calibreElegido,
       curva: curva,
-      descripcion_curva: curva === 'B' ? 'Disparo 3-5×In (cargas resistivas)' :
-                          curva === 'C' ? 'Disparo 5-10×In (cargas mixtas/tomas)' :
-                          'Disparo 10-20×In (motores, transformadores)',
+      estado: 'PRESELECCION_DE_CALIBRE',
+      descripcion_curva: 'PENDIENTE: el tipo de carga no basta para seleccionar la curva.',
+      pregunta_curva: '¿Cuál es la corriente y duración del arranque, el cortocircuito mínimo/máximo y la curva de disparo del fabricante?',
       polos: tension >= 400 ? '4P (3F+N)' : '2P (F+N)'
     },
     diferencial: {
@@ -8470,7 +8469,7 @@ function calcularProteccion(input) {
     }
   }
 
-  resultado.resumen = `Preselección: magnetotérmico ${calibreElegido}A curva ${curva}, polos supuestos ${tension >= 400 ? '4P' : '2P'}. Diferencial pendiente de datos. No acredita cumplimiento normativo.`;
+  resultado.resumen = `Calibre candidato ${calibreElegido}A, sujeto a coordinación. Curva pendiente de datos; polos supuestos ${tension >= 400 ? '4P' : '2P'}. Diferencial pendiente. No acredita selección definitiva ni cumplimiento normativo.`;
 
   return JSON.stringify(resultado, null, 2);
 }

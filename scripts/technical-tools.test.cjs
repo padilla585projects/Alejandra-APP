@@ -79,6 +79,8 @@ test('protection refuses invalid supplied data and leaves differential selection
   }
   const motor = JSON.parse(calculate({ intensidad_nominal_a: 32, tipo_carga: 'motor' }));
   assert.equal(motor.magnetotermico.calibre_a, 32);
+  assert.equal(motor.magnetotermico.curva, null);
+  assert.match(motor.magnetotermico.pregunta_curva, /arranque/);
   assert.equal(motor.diferencial.sensibilidad_ma, null);
   assert.equal(motor.cumple_norma, null);
   const coordination = JSON.parse(calculate({ intensidad_nominal_a: 32, seccion_cable_mm2: 1.5 }));
