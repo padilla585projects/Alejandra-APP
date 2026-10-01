@@ -14,9 +14,8 @@
   boceto explícito y datos confirmados permiten avanzar; negativas y prueba publicada.
 - Riesgo: preguntas adicionales si formato de altura no reconocible; rollback revertir PR
   o agente al SHA sano 158e886. Auditoría integral y verificación geométrica pendientes.
-- **Reanudada por Adrián al pedir «sigue».** Implementación inicial 400f118;
-  agente 295/295 y técnicas 15/15 correctas. Guardar/push para revisión, sin merge/deploy.
-  Ejecutar secuencia de HANDOFF; no afirmar QA publicada corregida antes de comprobarla.
+- **Entregada tras reanudación de Adrián («sigue»).** Implementación inicial 400f118;
+  revisión y publicación completadas, evidencia en HANDOFF/calidad-tecnica-ia.md.
   PR #346 integrada → f9addec; correcciones de reutilización y menciones en 6da23e7,
   297 agente/15 técnicas, cuatro checks verdes. Agente publicado, run 36839880273.
   QA demo: ausencia bloqueada sin guardar; datos humanos → 28; boceto explícito → 29.
@@ -33,7 +32,18 @@
 - XML completo, avisos deterministas, geometría y round-trip CAD siguen pendientes.
 - Implementación preparada: rechazo compartido y prompt estático; 18 regresiones
   técnicas, incluidas generación sin INSERT y edición sin UPDATE. Publicación API
-  y prueba demo pendientes de PR/CI.
+  por PR #347 integrada → 996785d, cuatro checks verdes; run 36841261694 SUCCESS,
+  API healthy D1/R2, versión d1acd691-f13c-4f3f-b1a1-82adbdf36d9a.
+- QA publicada ID 30: XML válido sin código, altura/aviso dentro del archivo y visor
+  comprobado. Control estático entregado; fidelidad global pendiente (ZONA TALLER añadida).
+
+## Continuación de calidad de planos — pendiente
+
+- Validador XML completo y avisos QA obligatorios dentro del archivo: ID 28 demuestra
+  que el chat puede afirmar un aviso ausente. No dar por válido un plano por su respuesta.
+- Después, verificar geometría/unidades/cotas contra datos originales y round-trip CAD.
+- Mantener arquitectura/proveedores actuales; si la solución requiere nueva decisión,
+  documentar propuesta/ADR pendiente de aceptación humana antes de implantarla.
 
 ## IA-QUALITY-01 — controles de calidad profesional (2026-10-01)
 

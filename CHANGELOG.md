@@ -9,6 +9,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Generación y edición IA rechazan scripts, foreignObject y eventos antes de guardar.
   El prompt exige geometría SVG explícita, sin código para dibujar cuadrículas.
   Rechazo sin reparación automática; validador XML completo todavía pendiente.
+- PR #347 integrada con CI verde, API publicada/healthy (run 36841261694),
+  18 pruebas técnicas y 297 agente correctas; evidencia en calidad-tecnica-ia.md.
 
 ### Fixed (2026-10-01 — datos faltantes IA-QUALITY-02)
 
