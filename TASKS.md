@@ -1,5 +1,18 @@
 # TASKS — Cola operativa inmediata
 
+## IA-QUALITY-05 — altura y referencia en SVG (2026-10-02, en desarrollo)
+
+- Continuación/encadenado autorizado por Adrián, Codex, codex/plan-mounting-reference,
+  base c825ac7. IA-QUALITY-04 publicada, ADR-0007 aceptado; sin fase/ADR nuevo.
+- Usar datos humanos ya serializados por agente en descripción (fuente existente);
+  exigir anotación visible altura/unidad/referencia coherente antes de INSERT/UPDATE.
+- Generación y edición comparten contrato; conservan planos legacy sin ese bloque.
+  No garantiza geometría/posición/legibilidad ni modifica dibujos anteriores.
+- Pruebas unidades/referencias/negativas sin escritura; sintaxis/297 agente/técnicas,
+  CI/publicación API y QA. Rollback API 7d7ac10215a796e29df0c24615b102c328ea22ef.
+- Sin migraciones ni cambios frontend/AR/APK/Pages. Después auditar ambigüedad
+  de extracción humana y otras fuentes de geometría dentro del alcance aprobado.
+
 ## IA-CALC-QUALITY-05 — publicada y verificada (2026-10-02)
 
 - Continuación de QA E autorizada; Codex, codex/protection-tabulated-comparison,

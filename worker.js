@@ -29251,6 +29251,30 @@ function _extraerSvgCompleto(texto, contrato = null) {
   return svg;
 }
 
+function _contratoMontajePlano(tipo, descripcion) {
+  const contrato = { tipo };
+  if (tipo !== 'bandejas' || typeof descripcion !== 'string') return contrato;
+  // Bloque ya emitido por el gate humano del agente; no interpretar ejemplos libres.
+  const marca = 'DATOS VERIFICADOS EN TEXTO HUMANO (prevalecen sobre los ejemplos):\n';
+  const inicio = descripcion.lastIndexOf(marca);
+  if (inicio < 0) return contrato; // Compatibilidad legacy; no inventar datos.
+  let datos;
+  try { datos = JSON.parse(descripcion.slice(inicio + marca.length)); }
+  catch (_) { throw new Error('Datos de montaje incompletos. No se ha guardado.'); }
+  if (datos?.ok !== true) throw new Error('Datos de montaje no confirmados. No se ha guardado.');
+  if (datos.modo === 'boceto_preliminar') return contrato;
+  if (datos.modo !== 'borrador_tecnico' || !Number.isFinite(datos.altura_m)
+      || typeof datos.referencia !== 'string'
+      || !/^(?:suelo terminado|pavimento terminado|FFL|cota (?:0|cero) (?:del |de )?proyecto)$/i.test(datos.referencia)) {
+    throw new Error('Datos de montaje invalidos. No se ha guardado.');
+  }
+  contrato.altura_m = datos.altura_m;
+  contrato.referencia = /^(?:FFL|suelo terminado|pavimento terminado)$/i.test(datos.referencia)
+    ? 'suelo terminado' : 'cota 0 del proyecto';
+  contrato.anotacion_montaje = `Altura de montaje: ${datos.altura_m} m sobre ${contrato.referencia}`;
+  return contrato;
+}
+
 function _validarAvisosPlano(svg, contrato = null) {
   const parser = new SaxesParser({ xmlns: true });
   const stack = [];
@@ -29284,6 +29308,17 @@ function _validarAvisosPlano(svg, contrato = null) {
   }
   if (contrato.tipo !== 'gantt' && !texto.includes('NO EJECUTAR EN OBRA')) {
     throw new Error('Plano sin aviso NO EJECUTAR EN OBRA. No se ha guardado.');
+  }
+  if (contrato.anotacion_montaje) {
+    const anotaciones = [...texto.matchAll(/ALTURA DE MONTAJE\s*[:=]\s*([+-]?\d+(?:[.,]\d+)?)\s*(MM|CM|METROS?|M)\s+(?:SOBRE|RESPECTO (?:A|AL)|DESDE)\s+(SUELO TERMINADO|PAVIMENTO TERMINADO|FFL|COTA (?:0|CERO) (?:DEL |DE )?PROYECTO)\b/g)];
+    if (!anotaciones.length) throw new Error('Plano sin anotacion de altura y referencia confirmadas. No se ha guardado.');
+    for (const [, numero, unidad, referencia] of anotaciones) {
+      const altura = Number(numero.replace(',', '.')) / (unidad === 'MM' ? 1000 : unidad === 'CM' ? 100 : 1);
+      const datum = /^(?:FFL|SUELO TERMINADO|PAVIMENTO TERMINADO)$/.test(referencia) ? 'suelo terminado' : 'cota 0 del proyecto';
+      if (Math.abs(altura - contrato.altura_m) > 1e-9 || datum !== contrato.referencia) {
+        throw new Error('Plano con altura o referencia distinta de los datos confirmados. No se ha guardado.');
+      }
+    }
   }
 }
 
@@ -29402,9 +29437,11 @@ async function _obtenerCatalogoBandejas(env, { empresa_id, usuario_id }) {
 }
 
 async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos = [] }) {
+  const contratoPlano = _contratoMontajePlano(tipo, descripcion);
   await _ensurePlanosTable(env);
 
-  const systemPrompt = _prepararPlanoPrompt(tipo, `${titulo || ''} ${descripcion || ''} ${JSON.stringify(circuitos || [])}`);
+  const systemPrompt = _prepararPlanoPrompt(tipo, `${titulo || ''} ${descripcion || ''} ${JSON.stringify(circuitos || [])}`)
+    + (contratoPlano.anotacion_montaje ? `\nIncluye literalmente como texto SVG visible: "${contratoPlano.anotacion_montaje}".` : '');
 
   // ── Para planos de bandejas: enriquecer con catálogo real de la empresa ─────
   // Consulta alejandra_memoria y alejandra_conocimiento buscando entradas de
@@ -29666,7 +29703,7 @@ INSTRUCCIONES FINALES:
   }
   if (!data) throw _errorAnthropicPlano || new Error('No se pudo generar el plano: todos los proveedores de IA fallaron.');
 
-  let svgRaw = _extraerSvgCompleto(data.content?.[0]?.text || '', { tipo });
+  let svgRaw = _extraerSvgCompleto(data.content?.[0]?.text || '', contratoPlano);
 
   // Para esquemas eléctricos: inyectar biblioteca de símbolos IEC 60617
   // Se inserta justo tras la etiqueta <svg ...> de apertura para que los <use href="#sym-X">
@@ -29717,7 +29754,7 @@ INSTRUCCIONES FINALES:
 
   const circuitosJson = (Array.isArray(circuitos) && circuitos.length > 0) ? JSON.stringify(circuitos) : null;
   // Comprobar tambien el resultado final tras inyectar simbolos y normalizar colores.
-  svgRaw = _extraerSvgCompleto(svgRaw, { tipo });
+  svgRaw = _extraerSvgCompleto(svgRaw, contratoPlano);
   const res = await env.DB.prepare(
     'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos, circuitos_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(empresa_id, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos, circuitosJson).run();
@@ -30005,7 +30042,11 @@ async function editarPlanoCircuitosREST(request, env, path) {
   }
   if (idsModificados.length === 0) return err('No se aplico ningun cambio valido (revisa circuito_id/campo/valor)', 400);
 
-  const systemPrompt = _prepararPlanoPrompt(row.tipo, `${row.titulo || ''} ${row.descripcion || ''} ${JSON.stringify(circuitos || [])}`);
+  let contratoPlano;
+  try { contratoPlano = _contratoMontajePlano(row.tipo, row.descripcion); }
+  catch (e) { return err(e.message, 422); }
+  const systemPrompt = _prepararPlanoPrompt(row.tipo, `${row.titulo || ''} ${row.descripcion || ''} ${JSON.stringify(circuitos || [])}`)
+    + (contratoPlano.anotacion_montaje ? `\nConserva literalmente como texto SVG visible: "${contratoPlano.anotacion_montaje}".` : '');
   const bloqueCircuitos = circuitos.map(c => {
     const partes = [];
     if (c.nombre) partes.push(c.nombre);
@@ -30046,7 +30087,7 @@ INSTRUCCIONES FINALES:
     console.error('[editarPlanoCircuitosREST] Error editando plano:', e.message);
     return err('No se pudo editar el plano en este momento. Inténtalo de nuevo en unos minutos.', 500);
   }
-  try { svgRaw = _extraerSvgCompleto(svgRaw, { tipo: row.tipo }); }
+  try { svgRaw = _extraerSvgCompleto(svgRaw, contratoPlano); }
   catch (e) { return err(e.message, 502); }
 
   if (row.tipo === 'electrico') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
@@ -30062,7 +30103,7 @@ INSTRUCCIONES FINALES:
   }
 
   const metadatos = JSON.stringify({ tipo: row.tipo, tokens: Math.round(svgRaw.length / 4), modelo: 'claude-sonnet-4-6', proveedor: 'anthropic', editado: true });
-  try { svgRaw = _extraerSvgCompleto(svgRaw, { tipo: row.tipo }); }
+  try { svgRaw = _extraerSvgCompleto(svgRaw, contratoPlano); }
   catch (e) { return err(e.message, 502); }
   await env.DB.prepare(
     "UPDATE planos SET svg_data=?, circuitos_json=?, metadatos=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?"
