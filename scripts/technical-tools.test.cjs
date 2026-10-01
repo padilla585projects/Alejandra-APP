@@ -18,7 +18,72 @@ function load(file, name, globals = {}) {
 
 warningPolicy = load('worker.js', '_validarAvisosPlano');
 
-const calculate = load('alejandra-agente/worker.js', 'calcularProteccion');
+const calculatorSource = readFileSync(resolve(__dirname, '..', 'alejandra-agente/worker.js'), 'utf8');
+const calculatorContext = vm.createContext({});
+vm.runInContext(calculatorSource.slice(calculatorSource.indexOf('const AMPACIDAD_CU_XLPE ='),
+  calculatorSource.indexOf('function calcularCable(')), calculatorContext);
+const calculatorGlobals = vm.runInContext('({ AMPACIDAD_CU_XLPE, AMPACIDAD_CU_XLPE_ENTERRADO, FACTOR_TEMP_AIRE_XLPE, FACTOR_TEMP_TERRENO_XLPE, _interpolarFactorTemp, _factorAgrupamiento })', calculatorContext);
+const calculate = load('alejandra-agente/worker.js', 'calcularProteccion', calculatorGlobals);
+const cable = input => JSON.parse(load('alejandra-agente/worker.js', 'calcularCable', calculatorGlobals)(input));
+const tray = input => JSON.parse(load('alejandra-agente/worker.js', 'calcularBandeja')(input));
+
+test('cable rejects invalid physical inputs and values outside correction tables', () => {
+  const valid = { potencia_w: 1000, tension_v: 230, longitud_m: 10 };
+  for (const bad of [null, { potencia_w: 0 }, { tension_v: Infinity }, { longitud_m: -1 },
+    { cos_phi: 0 }, { cos_phi: 1.1 }, { max_caida_pct: 0 }, { tipo_cable: 'steel' },
+    { instalacion: 'unknown' }, { circuitos_agrupados: 0 }, { circuitos_agrupados: 21 },
+    { temperatura_ambiente_c: 61 }, { sistema: 'unknown' }]) {
+    assert.ok(cable(bad === null ? null : { ...valid, ...bad }).error, JSON.stringify(bad));
+  }
+});
+
+test('cable respects explicit system and conservative grouping without certifying a complete installation', () => {
+  const input = { potencia_w: 1000, tension_v: 230, longitud_m: 10, cos_phi: 1 };
+  const mono = cable({ ...input, sistema: 'monofasico' });
+  const tri = cable({ ...input, sistema: 'trifasico' });
+  assert.equal(mono.cumple_norma, null);
+  assert.equal(mono.cumple_criterios_calculados, true);
+  assert.equal(tri.sistema_asumido_por_tension, false);
+  assert.equal(calculatorGlobals._factorAgrupamiento(8), 0.7);
+  assert.ok(calculatorGlobals._factorAgrupamiento(8) <= calculatorGlobals._factorAgrupamiento(6));
+  assert.notEqual(mono.resumen, tri.resumen);
+});
+
+test('tray asks for radius and occupancy criterion instead of fabricating manufacturer limits', () => {
+  const input = { ancho_mm: 300, alto_mm: 60, cables_diametro_mm: [10] };
+  const missing = tray(input);
+  assert.equal(missing.radio_minimo_mm, null);
+  assert.equal(missing.desarrollo_curva_mm, null);
+  assert.equal(missing.llenado_ok, null);
+  assert.equal(missing.cumple_norma, null);
+  assert.equal(missing.preguntas.length, 2);
+  assert.equal(tray({ ...input, radio_interior_mm: 300 }).desarrollo_curva_mm, 707);
+  assert.equal(tray({ ...input, tipo: 'curva_vertical', radio_interior_mm: 300 }).desarrollo_curva_mm, 518);
+  assert.equal(tray({ ...input, llenado_maximo_pct: 40 }).llenado_ok, true);
+  assert.equal(tray({ ...input, tipo: 'derivacion_T' }).dimensiones_accesorio, null);
+});
+
+test('tray rejects invalid dimensions, angles, diameters and overflow', () => {
+  const valid = { ancho_mm: 300, alto_mm: 60 };
+  for (const bad of [{ ancho_mm: 0 }, { alto_mm: NaN }, { angulo_grados: 0 },
+    { radio_interior_mm: -1 }, { llenado_maximo_pct: 0 }, { tipo: 'unknown' },
+    { cables_diametro_mm: [0] }, { cables_diametro_mm: '10' }, { ancho_mm: 1e308 }]) {
+    assert.ok(tray({ ...valid, ...bad }).error, JSON.stringify(bad));
+  }
+});
+
+test('protection refuses invalid supplied data and leaves differential selection pending', () => {
+  for (const bad of [{ tension_v: 0 }, { tipo_carga: 'unknown' }, { instalacion: 'unknown' },
+    { seccion_cable_mm2: 0 }, { seccion_cable_mm2: 3 }, { longitud_m: Infinity }]) {
+    assert.ok(JSON.parse(calculate({ intensidad_nominal_a: 32, ...bad })).error);
+  }
+  const motor = JSON.parse(calculate({ intensidad_nominal_a: 32, tipo_carga: 'motor' }));
+  assert.equal(motor.magnetotermico.calibre_a, 32);
+  assert.equal(motor.diferencial.sensibilidad_ma, null);
+  assert.equal(motor.cumple_norma, null);
+  const coordination = JSON.parse(calculate({ intensidad_nominal_a: 32, seccion_cable_mm2: 1.5 }));
+  assert.equal(coordination.coordinacion_cable.seccion_minima_mm2, 2.5);
+});
 test('plan generation rejects truncated or ambiguous SVG instead of fabricating a closure', () => {
   const extract = load('worker.js', '_extraerSvgCompleto');
   assert.equal(extract('```xml\n<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>\n```'), '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>');

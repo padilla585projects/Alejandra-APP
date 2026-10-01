@@ -1941,19 +1941,20 @@ const TOOL_CONSULTAR_BD = {
 
 const TOOL_CALCULAR_CABLE = {
   name: 'calcular_cable',
-  description: 'Calcula sección de cable por intensidad admisible y caída de tensión, con tabla oficial ITC-BT-19 por método de instalación (verificada 26/08/2026) y factores de corrección por temperatura ambiente y agrupamiento de circuitos. Cobre + XLPE con tabla verificada; aluminio con factor aproximado (se avisa en el resultado).',
+  description: 'Estimación preliminar de sección por intensidad y caída de tensión con las tablas disponibles de cobre XLPE. Expone supuestos y criterios parciales; no certifica cumplimiento normativo. Aluminio usa factor aproximado. Pregunta los datos faltantes y no inventes límites admisibles.',
   input_schema: {
     type: 'object',
     properties: {
-      potencia_w:    { type: 'number', description: 'Potencia en vatios (W)' },
-      tension_v:     { type: 'number', description: 'Tensión en voltios (230 monofásico, 400 trifásico)' },
-      longitud_m:    { type: 'number', description: 'Longitud del cable en metros' },
-      cos_phi:       { type: 'number', description: 'Factor de potencia (default 0.85)' },
+      potencia_w:    { type: 'number', exclusiveMinimum: 0, description: 'Potencia en vatios (W)' },
+      tension_v:     { type: 'number', exclusiveMinimum: 0, description: 'Tensión en voltios (230 monofásico, 400 trifásico)' },
+      longitud_m:    { type: 'number', exclusiveMinimum: 0, description: 'Longitud del cable en metros' },
+      cos_phi:       { type: 'number', exclusiveMinimum: 0, maximum: 1, description: 'Factor de potencia (default 0.85)' },
       tipo_cable:    { type: 'string', enum: ['cobre', 'aluminio'], description: 'Material del conductor (default cobre; aluminio usa un factor aproximado, no tabla oficial verificada)' },
       instalacion:   { type: 'string', enum: ['enterrado', 'bandeja', 'tubo', 'aire'], description: 'Tipo de instalación -- bandeja/aire usan el método E (bandeja perforada), tubo usa el método B1 (tubo empotrado), enterrado usa la tabla de enterrado bajo tubo' },
-      max_caida_pct: { type: 'number', description: 'Caída de tensión máxima admisible en % (default 3 alumbrado, 5 fuerza)' },
+      max_caida_pct: { type: 'number', exclusiveMinimum: 0, maximum: 100, description: 'Límite de caída aportado para este circuito; default preliminar 5%, no determina el límite normativo aplicable.' },
+      sistema: { type: 'string', enum: ['monofasico', 'trifasico'], description: 'Sistema real del circuito. Si se omite, la estimación conserva inferencia por tensión y declara ese supuesto.' },
       temperatura_ambiente_c: { type: 'number', description: 'Temperatura ambiente real en °C (default 40 para instalaciones al aire, 25 para enterrado -- son las temperaturas de referencia de la tabla oficial; si la real difiere, se aplica el factor de corrección correspondiente)' },
-      circuitos_agrupados: { type: 'number', description: 'Número de circuitos que discurren juntos y paralelos más de 2m (default 1, sin reducción). Aplica el factor de agrupamiento oficial.' }
+      circuitos_agrupados: { type: 'integer', minimum: 1, maximum: 20, description: 'Número de circuitos que discurren juntos y paralelos más de 2m (default 1, sin reducción). Usa conservadoramente el siguiente grupo tabulado disponible; confirmar método real.' }
     },
     required: ['potencia_w', 'tension_v', 'longitud_m']
   },
@@ -1964,15 +1965,17 @@ const TOOL_CALCULAR_CABLE = {
 
 const TOOL_CALCULAR_BANDEJA = {
   name: 'calcular_bandeja',
-  description: 'Calcula curvas, reducciones y accesorios de bandeja metálica portacables. Radio mínimo, ángulos, desarrollo.',
+  description: 'Calcula ocupación geométrica y desarrollo de curvas de bandeja con radio interior aportado. No determina radio mínimo ni porcentaje de llenado normativo universal; pide radio del fabricante/cable y límite de ocupación del proyecto cuando falten. No dimensiona reducciones/tes/cruces de catálogo.',
   input_schema: {
     type: 'object',
     properties: {
-      ancho_mm:          { type: 'number', description: 'Ancho de la bandeja en mm (100-600)' },
-      alto_mm:           { type: 'number', description: 'Alto de la bandeja en mm (60-150)' },
-      angulo_grados:     { type: 'number', description: 'Ángulo de la curva en grados (default 90)' },
+      ancho_mm:          { type: 'number', exclusiveMinimum: 0, description: 'Ancho de la bandeja en mm (100-600)' },
+      alto_mm:           { type: 'number', exclusiveMinimum: 0, description: 'Alto de la bandeja en mm (60-150)' },
+      angulo_grados:     { type: 'number', exclusiveMinimum: 0, maximum: 180, description: 'Ángulo de la curva en grados (default 90)' },
       tipo:              { type: 'string', enum: ['curva_horizontal', 'curva_vertical', 'reduccion', 'derivacion_T', 'cruce_X'], description: 'Tipo de accesorio' },
-      cables_diametro_mm:{ type: 'array', description: 'Diámetros exteriores de los cables en mm', items: { type: 'number' } }
+      cables_diametro_mm:{ type: 'array', description: 'Diámetros exteriores de los cables en mm', maxItems: 10000, items: { type: 'number', exclusiveMinimum: 0 } },
+      radio_interior_mm: { type: 'number', exclusiveMinimum: 0, description: 'Radio interior confirmado del accesorio en mm; no se deduce del ancho.' },
+      llenado_maximo_pct: { type: 'number', exclusiveMinimum: 0, maximum: 100, description: 'Criterio de ocupación aportado por el proyecto/fabricante; no se inventa un máximo universal.' }
     },
     required: ['ancho_mm', 'alto_mm']
   },
@@ -1983,15 +1986,15 @@ const TOOL_CALCULAR_BANDEJA = {
 
 const TOOL_CALCULAR_PROTECCION = {
   name: 'calcular_proteccion',
-  description: 'Dimensiona protecciones eléctricas: magnetotérmico, diferencial, fusible. Selectividad y coordinación.',
+  description: 'Preselección de calibre de magnetotérmico hasta 125 A y comparación parcial con tabla de cable. Curva/polos son supuestos preliminares. No verifica selectividad, cortocircuito ni elige diferencial sin datos de la instalación; esos puntos quedan pendientes.',
   input_schema: {
     type: 'object',
     properties: {
       intensidad_nominal_a: { type: 'number', exclusiveMinimum: 0, maximum: 125, description: 'Intensidad nominal de la carga en amperios, hasta 125 A (límite de la tabla disponible)' },
       tipo_carga:           { type: 'string', enum: ['motor', 'alumbrado', 'tomas', 'mixta'], description: 'Tipo de carga (default mixta)' },
-      seccion_cable_mm2:    { type: 'number', description: 'Sección del cable en mm² (para verificar coordinación)' },
-      longitud_m:           { type: 'number', description: 'Longitud del circuito en metros' },
-      tension_v:            { type: 'number', description: 'Tensión nominal en voltios (default 230)' },
+      seccion_cable_mm2:    { type: 'number', exclusiveMinimum: 0, description: 'Sección del cable en mm² (para verificar coordinación)' },
+      longitud_m:           { type: 'number', exclusiveMinimum: 0, description: 'Longitud del circuito en metros' },
+      tension_v:            { type: 'number', exclusiveMinimum: 0, description: 'Tensión nominal en voltios (default 230)' },
       instalacion:          { type: 'string', enum: ['bandeja', 'tubo'], description: 'Método de instalación del cable, para la coordinación con la tabla real de ampacidad (default bandeja)' }
     },
     required: ['intensidad_nominal_a']
@@ -8149,8 +8152,8 @@ const FACTOR_TEMP_TERRENO_XLPE = { 10:1.11, 15:1.07, 20:1.04, 25:1.00, 30:0.96, 
 
 // Factor de reducción por agrupamiento de varios circuitos en la misma bandeja/tubo --
 // fila "capa única en bandeja perforada" de la tabla oficial, la disposición más habitual
-// aquí. Se usa el valor del escalón igual o inferior más próximo (la norma no interpola
-// entre número de circuitos, son valores discretos).
+// aquí. Para valores intermedios se toma el siguiente escalon (factor conservador).
+// No extrapolar fuera de la tabla ni declarar verificada una disposicion diferente.
 const FACTOR_AGRUPAMIENTO = { 1:1.00, 2:0.90, 3:0.80, 4:0.75, 6:0.75, 9:0.70, 12:0.70, 16:0.70, 20:0.70 };
 
 function _interpolarFactorTemp(tabla, valor) {
@@ -8169,31 +8172,42 @@ function _interpolarFactorTemp(tabla, valor) {
 
 function _factorAgrupamiento(n) {
   const claves = Object.keys(FACTOR_AGRUPAMIENTO).map(Number).sort((a,b) => a-b);
-  let elegido = claves[0];
-  for (const c of claves) { if (n >= c) elegido = c; }
-  return FACTOR_AGRUPAMIENTO[elegido];
+  const elegido = claves.find(c => c >= n);
+  return elegido === undefined ? null : FACTOR_AGRUPAMIENTO[elegido];
 }
 
 function calcularCable(input) {
+  if (!input || ['potencia_w', 'tension_v', 'longitud_m'].some(k => !Number.isFinite(input[k]) || input[k] <= 0)) {
+    return JSON.stringify({ error: 'ENTRADA_INVALIDA', mensaje: 'Potencia, tensión y longitud deben ser números finitos mayores que cero.' });
+  }
   const P = input.potencia_w;
   const V = input.tension_v;
   const L = input.longitud_m;
-  const cosPhi = input.cos_phi || 0.85;
-  const material = input.tipo_cable || 'cobre';
-  const instalacion = input.instalacion || 'bandeja';
-  const maxCaida = input.max_caida_pct || 5;
+  const cosPhi = input.cos_phi ?? 0.85;
+  const material = input.tipo_cable ?? 'cobre';
+  const instalacion = input.instalacion ?? 'bandeja';
+  const maxCaida = input.max_caida_pct ?? 5;
   const enterrado = instalacion === 'enterrado';
   const tempAmbiente = input.temperatura_ambiente_c != null ? input.temperatura_ambiente_c : (enterrado ? 25 : 40);
-  const numCircuitos = Math.max(1, input.circuitos_agrupados || 1);
+  const numCircuitos = input.circuitos_agrupados ?? 1;
+  if (!Number.isFinite(cosPhi) || cosPhi <= 0 || cosPhi > 1
+      || !Number.isFinite(maxCaida) || maxCaida <= 0 || maxCaida > 100
+      || !['cobre', 'aluminio'].includes(material) || !['enterrado', 'bandeja', 'tubo', 'aire'].includes(instalacion)
+      || !Number.isInteger(numCircuitos) || numCircuitos < 1 || numCircuitos > 20
+      || !Number.isFinite(tempAmbiente) || tempAmbiente < 10 || tempAmbiente > (enterrado ? 50 : 60)
+      || (input.sistema != null && !['monofasico', 'trifasico'].includes(input.sistema))) {
+    return JSON.stringify({ error: 'ENTRADA_INVALIDA', mensaje: 'Comprueba material, instalación, cosφ (0–1), caída, sistema, temperatura (aire10–60/terreno10–50°C) y agrupamiento (1–20 circuitos enteros). Fuera de las tablas disponibles se requiere cálculo específico.' });
+  }
 
   const conductividad = material === 'cobre' ? 56 : 35; // m/(Ω·mm²)
-  const trifasico = V >= 400;
+  const trifasico = input.sistema != null ? input.sistema === 'trifasico' : V >= 400;
   const idxConductores = trifasico ? 1 : 0; // tablas guardadas como [2x, 3x]
 
   // Intensidad
   const I = trifasico
     ? P / (V * Math.sqrt(3) * cosPhi)
     : P / (V * cosPhi);
+  if (!Number.isFinite(I)) return JSON.stringify({ error: 'FUERA_DE_RANGO', mensaje: 'La corriente calculada está fuera del rango numérico admitido.' });
 
   const factorAl = material === 'aluminio' ? 0.78 : 1.0; // aproximado -- sin tabla propia verificada para aluminio
   const factorAgrup = _factorAgrupamiento(numCircuitos);
@@ -8249,6 +8263,12 @@ function calcularCable(input) {
     conductividad_material: conductividad,
     metodo_instalacion: metodoUsado,
     aislamiento_asumido: 'XLPE (90°C) -- si el cable real es PVC (70°C) la ampacidad admisible es algo menor',
+    estado: 'ESTIMACION_PARCIAL',
+    sistema_asumido_por_tension: input.sistema == null,
+    limite_caida_asumido: input.max_caida_pct == null,
+    verificaciones_pendientes: ['Confirmar sistema, cable/aislamiento, método y disposición real de agrupamiento.',
+      'Determinar el límite de caída aplicable al circuito y caída acumulada.',
+      'Verificar protección, cortocircuito, neutro/PE y condiciones del fabricante.'],
     factores_aplicados: {
       temperatura: Math.round(factorTemp * 1000) / 1000,
       agrupamiento: factorAgrup,
@@ -8264,12 +8284,14 @@ function calcularCable(input) {
     resultado.caida_tension_pct = caidaReal;
     resultado.ampacidad_tabla_a = Math.round(ampacidadBase * 10) / 10;
     resultado.ampacidad_corregida_a = ampacidad;
-    resultado.cumple_norma = true;
-    resultado.norma_referencia = 'REBT ITC-BT-19 (tabla oficial por método de instalación, verificada 26/08/2026)';
+    resultado.cumple_norma = null;
+    resultado.cumple_criterios_calculados = true;
+    resultado.norma_referencia = 'REBT ITC-BT-19: referencia de tablas; cumplimiento integral pendiente de verificar.';
     resultado.resumen = `Cable ${material} ${seccionElegida} mm² (${metodoUsado}) — Intensidad: ${Math.round(I*100)/100} A (admisible corregida: ${ampacidad} A, tabla base: ${ampacidadBase} A) — Caída: ${caidaReal}% (máx: ${maxCaida}%)`;
   } else {
     resultado.seccion_recomendada_mm2 = null;
     resultado.cumple_norma = false;
+    resultado.cumple_criterios_calculados = false;
     resultado.error = `No se encontró sección normalizada (hasta 240mm²) que cumpla intensidad (${Math.round(I*100)/100} A, tras factores de corrección) y caída de tensión (máx ${maxCaida}%) para ${L}m.`;
     resultado.sugerencia = 'Considerar: reducir longitud, subir tensión a trifásico, cable en paralelo, reducir circuitos agrupados, o verificar potencia.';
   }
@@ -8278,61 +8300,82 @@ function calcularCable(input) {
 }
 
 function calcularBandeja(input) {
+  if (!input || ['ancho_mm', 'alto_mm'].some(k => !Number.isFinite(input[k]) || input[k] <= 0)) {
+    return JSON.stringify({ error: 'ENTRADA_INVALIDA', mensaje: 'Ancho y alto deben ser números finitos mayores que cero.' });
+  }
   const ancho = input.ancho_mm;
   const alto = input.alto_mm;
-  const angulo = input.angulo_grados || 90;
-  const tipo = input.tipo || 'curva_horizontal';
-  const cables = input.cables_diametro_mm || [];
+  const angulo = input.angulo_grados ?? 90;
+  const tipo = input.tipo ?? 'curva_horizontal';
+  const cables = input.cables_diametro_mm ?? [];
+  const radio = input.radio_interior_mm ?? null;
+  const llenadoMax = input.llenado_maximo_pct ?? null;
+  if (!Number.isFinite(angulo) || angulo <= 0 || angulo > 180
+      || !['curva_horizontal', 'curva_vertical', 'reduccion', 'derivacion_T', 'cruce_X'].includes(tipo)
+      || !Array.isArray(cables) || cables.length > 10000 || cables.some(d => !Number.isFinite(d) || d <= 0)
+      || (radio !== null && (!Number.isFinite(radio) || radio <= 0))
+      || (llenadoMax !== null && (!Number.isFinite(llenadoMax) || llenadoMax <= 0 || llenadoMax > 100))) {
+    return JSON.stringify({ error: 'ENTRADA_INVALIDA', mensaje: 'Comprueba tipo, ángulo (0–180°), diámetros positivos, radio y criterio de ocupación (0–100%).' });
+  }
 
-  // Radio mínimo interior
-  const radioMinimo = 1.5 * ancho;
-  const radioRecomendado = 2 * ancho;
-  const radioMedio = radioRecomendado + ancho / 2;
+  // Geometria de arco con radio aportado; no dimensionamiento normativo de un accesorio.
+  const curva = tipo === 'curva_horizontal' || tipo === 'curva_vertical';
+  const radioMedio = curva && radio !== null ? radio + (tipo === 'curva_vertical' ? alto : ancho) / 2 : null;
 
   // Desarrollo de curva
-  const desarrollo = Math.round((radioMedio * angulo * Math.PI) / 180);
+  const desarrollo = radioMedio === null ? null : Math.round((radioMedio * angulo * Math.PI) / 180);
 
   // Llenado de bandeja
   const areaBandeja = ancho * alto; // mm²
   const areaCables = cables.reduce((sum, d) => sum + Math.PI * (d / 2) * (d / 2), 0);
   const llenado = areaBandeja > 0 ? Math.round((areaCables / areaBandeja) * 10000) / 100 : 0;
-  const llenadoMax = 50; // % máximo recomendado
+  if (![areaBandeja, areaCables, llenado].every(Number.isFinite) || areaBandeja <= 0
+      || (radioMedio !== null && (!Number.isFinite(radioMedio) || !Number.isFinite(desarrollo)))) {
+    return JSON.stringify({ error: 'FUERA_DE_RANGO', mensaje: 'Las dimensiones exceden el rango numérico de este cálculo.' });
+  }
 
   const resultado = {
     datos_entrada: { ancho_mm: ancho, alto_mm: alto, angulo_grados: angulo, tipo, cables_count: cables.length },
-    radio_minimo_mm: radioMinimo,
-    radio_recomendado_mm: radioRecomendado,
+    radio_minimo_mm: null,
+    radio_recomendado_mm: null,
+    radio_interior_aportado_mm: radio,
     radio_medio_mm: radioMedio,
     desarrollo_curva_mm: desarrollo,
     tipo_accesorio: tipo,
+    estado: 'CALCULO_GEOMETRICO_PARCIAL',
+    verificaciones_pendientes: ['Radio mínimo del cable y accesorio según fabricante.', 'Soportes, cargas y disipación térmica.'],
+    preguntas: [],
   };
+  if (curva && radio === null) resultado.preguntas.push('¿Cuál es el radio interior del accesorio confirmado por fabricante/proyecto?');
+  if (!curva) resultado.verificaciones_pendientes.push('Dimensiones de reducción/derivación/cruce según pieza de catálogo.');
 
   if (cables.length > 0) {
     resultado.area_bandeja_mm2 = areaBandeja;
     resultado.area_cables_mm2 = Math.round(areaCables * 100) / 100;
     resultado.llenado_pct = llenado;
     resultado.llenado_maximo_pct = llenadoMax;
-    resultado.llenado_ok = llenado <= llenadoMax;
-    if (llenado > llenadoMax) {
-      resultado.alerta = `Llenado ${llenado}% excede el máximo recomendado (${llenadoMax}%). Considerar bandeja más ancha.`;
+    resultado.llenado_ok = llenadoMax === null ? null : (areaCables / areaBandeja) * 100 <= llenadoMax;
+    if (llenadoMax === null) resultado.preguntas.push('¿Qué límite de ocupación aplica el proyecto/fabricante?');
+    if (llenadoMax !== null && !resultado.llenado_ok) {
+      resultado.alerta = `Llenado ${llenado}% excede el criterio aportado (${llenadoMax}%). Considerar bandeja más ancha.`;
       // Sugerir ancho mínimo
       const anchoNecesario = Math.ceil(areaCables / (alto * (llenadoMax / 100)));
+      if (!Number.isFinite(anchoNecesario)) return JSON.stringify({ error: 'FUERA_DE_RANGO', mensaje: 'El ancho calculado excede el rango numérico disponible.' });
       const anchosStd = [100, 150, 200, 300, 400, 500, 600];
       const anchoSugerido = anchosStd.find(a => a >= anchoNecesario) || anchoNecesario;
       resultado.ancho_sugerido_mm = anchoSugerido;
     }
   }
 
-  resultado.dimensiones_accesorio = {
-    largo_exterior_mm: tipo === 'curva_horizontal' || tipo === 'curva_vertical'
-      ? radioRecomendado + ancho
-      : ancho,
+  resultado.dimensiones_accesorio = curva && radio !== null ? {
+    alcance: 'Envolvente geométrica ideal del arco; no dimensiones de catálogo ni brazos de conexión.',
+    largo_exterior_mm: radio + (tipo === 'curva_vertical' ? alto : ancho),
     ancho_mm: ancho,
     alto_mm: alto
-  };
+  } : null;
 
-  resultado.norma_referencia = 'UNE-EN 61537 / IEC 61537';
-  resultado.resumen = `Bandeja ${ancho}x${alto}mm — ${tipo} ${angulo}° — Radio: ${radioRecomendado}mm — Desarrollo: ${desarrollo}mm${cables.length > 0 ? ` — Llenado: ${llenado}%` : ''}`;
+  resultado.cumple_norma = null;
+  resultado.resumen = `Bandeja ${ancho}x${alto}mm — ${tipo} — Radio interior: ${radio ?? 'PENDIENTE'}mm — Desarrollo: ${desarrollo ?? 'PENDIENTE'}mm${cables.length > 0 ? ` — Ocupación geométrica: ${llenado}%` : ''}`;
 
   return JSON.stringify(resultado, null, 2);
 }
@@ -8342,17 +8385,27 @@ function calcularProteccion(input) {
   if (!Number.isFinite(In) || In <= 0) {
     return JSON.stringify({ error: 'INTENSIDAD_INVALIDA', mensaje: 'La intensidad debe ser un número finito mayor que cero.' });
   }
-  const tipoCarga = input.tipo_carga || 'mixta';
+  const tipoCarga = input.tipo_carga ?? 'mixta';
   const seccionCable = input.seccion_cable_mm2;
   const longitud = input.longitud_m;
-  const tension = input.tension_v || 230;
+  const tension = input.tension_v ?? 230;
+  const instalacion = input.instalacion ?? 'bandeja';
+  if (!Number.isFinite(tension) || tension <= 0 ||
+      !['motor', 'alumbrado', 'tomas', 'mixta'].includes(tipoCarga) ||
+      !['tubo', 'bandeja'].includes(instalacion) ||
+      (seccionCable !== undefined && (!Number.isFinite(seccionCable) || seccionCable <= 0)) ||
+      (longitud !== undefined && (!Number.isFinite(longitud) || longitud <= 0))) {
+    return JSON.stringify({ error: 'ENTRADA_INVALIDA', mensaje: 'Revisar tensión, carga, instalación, sección y longitud: no se sustituyen valores inválidos por supuestos.' });
+  }
+  if (seccionCable !== undefined && !AMPACIDAD_CU_XLPE[instalacion][seccionCable]) {
+    return JSON.stringify({ error: 'FUERA_DE_TABLA', mensaje: 'La sección no figura en la tabla disponible de cobre XLPE.' });
+  }
   const trifasico = tension >= 400;
   // CALC-ITC-BT19-01 (26/08/2026): antes tenía su propia tabla de ampacidad hardcodeada,
   // duplicada de calcularCable con valores DISTINTOS (aproximación genérica, no por
   // método) -- ahora reutiliza la misma tabla verificada (AMPACIDAD_CU_XLPE), evitando
-  // dos fuentes de verdad para lo mismo. Sin instalación explícita en el input de esta
-  // tool todavía, se asume bandeja/aire (método E, el más habitual) para la coordinación.
-  const instalacion = input.instalacion === 'tubo' ? 'tubo' : 'bandeja';
+  // dos fuentes de verdad para lo mismo. Si se omite instalación se asume bandeja;
+  // la comparación tabulada no sustituye una coordinación completa.
   const idxConductores = trifasico ? 1 : 0;
 
   // Calibres normalizados
@@ -8369,13 +8422,15 @@ function calcularProteccion(input) {
 
   // Curva según tipo de carga
   const curvas = { motor: 'D', alumbrado: 'B', tomas: 'C', mixta: 'C' };
-  const curva = curvas[tipoCarga] || 'C';
-
-  // Diferencial
-  const sensibilidadDif = tipoCarga === 'motor' ? 300 : 30; // mA
-  const tipoDif = tipoCarga === 'motor' ? 'Clase A (inmunizado)' : 'Clase AC o A';
+  const curva = curvas[tipoCarga];
 
   const resultado = {
+    estado: 'PRESELECCION_PARCIAL',
+    cumple_norma: null,
+    verificaciones_pendientes: ['Confirmar sistema, neutro y polos; la tensión solo permite un supuesto.',
+      'Verificar corriente de arranque, curva, poder de corte y cortocircuito mínimo/máximo.',
+      'Verificar temperatura, agrupamiento, material, aislamiento y coordinación completa.',
+      'Seleccionar diferencial según esquema de tierra, protección requerida y corrientes residuales.'],
     datos_entrada: { intensidad_nominal_a: In, tipo_carga: tipoCarga, tension_v: tension, instalacion },
     magnetotermico: {
       calibre_a: calibreElegido,
@@ -8386,10 +8441,11 @@ function calcularProteccion(input) {
       polos: tension >= 400 ? '4P (3F+N)' : '2P (F+N)'
     },
     diferencial: {
-      sensibilidad_ma: sensibilidadDif,
-      tipo: tipoDif,
-      calibre_a: calibreElegido,
-      uso: sensibilidadDif === 30 ? 'Protección de personas (contacto directo)' : 'Protección contra incendio'
+      sensibilidad_ma: null,
+      tipo: null,
+      calibre_a: null,
+      estado: 'PENDIENTE',
+      pregunta: '¿Cuál es el esquema de puesta a tierra, la protección requerida y el tipo de corriente residual de los equipos?'
     },
     norma_referencia: 'REBT ITC-BT-22 / ITC-BT-24 / UNE 20460 -- tabla ampacidad ITC-BT-19 (cobre, XLPE, sin factores de corrección de temperatura/agrupamiento en esta coordinación)',
   };
@@ -8403,16 +8459,17 @@ function calcularProteccion(input) {
       ampacidad_cable_a: Iz,
       calibre_proteccion_a: calibreElegido,
       cumple: Iz >= calibreElegido,
+      alcance: 'Solo comparación de ampacidad tabulada sin factores frente al calibre; no acredita coordinación normativa.',
       condicion: `Iz (${Iz}A) ${Iz >= calibreElegido ? '≥' : '<'} In (${calibreElegido}A) — ${Iz >= calibreElegido ? 'CUMPLE' : 'NO CUMPLE: cable insuficiente para esta protección'}`
     };
     if (Iz < calibreElegido) {
       // Sugerir sección mínima
-      const seccionMinima = Object.entries(tabla).find(([s, v]) => v[idxConductores] >= calibreElegido);
+      const seccionMinima = Object.entries(tabla).sort(([a], [b]) => Number(a) - Number(b)).find(([s, v]) => v[idxConductores] >= calibreElegido);
       if (seccionMinima) resultado.coordinacion_cable.seccion_minima_mm2 = parseFloat(seccionMinima[0]);
     }
   }
 
-  resultado.resumen = `Magnetotérmico ${calibreElegido}A curva ${curva} ${tension >= 400 ? '4P' : '2P'} + Diferencial ${sensibilidadDif}mA ${tipoDif}`;
+  resultado.resumen = `Preselección: magnetotérmico ${calibreElegido}A curva ${curva}, polos supuestos ${tension >= 400 ? '4P' : '2P'}. Diferencial pendiente de datos. No acredita cumplimiento normativo.`;
 
   return JSON.stringify(resultado, null, 2);
 }

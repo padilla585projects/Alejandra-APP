@@ -1,6 +1,19 @@
 # TASKS — Cola operativa inmediata
 
-## IA-QUALITY-04 — validar archivo y avisos (2026-10-01, en desarrollo)
+## IA-CALC-QUALITY-01 — entradas y alcance de resultados (2026-10-01, en desarrollo)
+
+- Autorizada continuación técnica por Adrián. Codex, codex/technical-calculator-inputs,
+  base 8c9fea7; dependencia IA-QUALITY-04 integrada/publicada, API healthy.
+- Hallazgos: cero/NaN/negativos y enums inválidos pueden producir resultados aparentes;
+  Cable declara cumple_norma tras intensidad/caída, sin verificar instalación completa.
+- Alcance: validar entradas físicas y dominio de tablas, respetar cero como error
+  en lugar de default; aclarar criterios parciales/supuestos sin certificar norma.
+  Bandeja: cálculo geométrico con radio aportado, no mínimos normativos inventados.
+- Pruebas: negativas, conservación de aritmética válida, cambios de contrato explícitos;
+  suite agente, sintaxis, PR/CI/publicación agente y QA.
+- Rollback agente 7d7ac10; sin migraciones, tablas normativas nuevas ni cambios AR/PWA.
+
+## IA-QUALITY-04 — validar archivo y avisos (2026-10-01, publicada)
 
 - Adrián autoriza continuar sin pausas con calidad profesional de la suite.
 - Codex, rama codex/plan-xml-warning-validation, base main 7255d4d.
@@ -12,6 +25,8 @@
   instalar dependencias del Worker para ejercitar el parser real.
 - Aceptación: negativos de XML/avisos sin INSERT/UPDATE, casos SVG pasivos válidos,
   suite agente/sintaxis/encoding, PR/CI y publicación API verificada.
+- Publicación PR #349: API 62f451e7 healthy, run 36848446973 SUCCESS.
+  QA ID 31 XML/avisos válidos; datum textual pendiente.
 - Riesgo: más rechazos de salidas antes aceptadas. Rollback API 2f1270f o revertir PR.
   Sin datos borrados/reparaciones automáticas. Geometría y elementos inventados después.
 
