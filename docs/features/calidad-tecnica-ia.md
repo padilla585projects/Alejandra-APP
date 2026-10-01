@@ -227,5 +227,27 @@ el límite aplicable ni caída acumulada. No se incorporan nuevas tablas normati
 Campos no determinables devuelven null: consumidores deben tratarlos como pendientes.
 28 pruebas técnicas y 297 agente pasan. Riesgo: clientes que asumían resultados
 completos deben manejar pendientes. Rollback agente 7d7ac10215a796e29df0c24615b102c328ea22ef.
-PR/CI/publicación del agente pendientes; sin migraciones ni cambios AR/APK/Pages.
+Publicación y QA registradas a continuación; sin migraciones ni cambios AR/APK/Pages.
 Roadmap, ADR y registro documental no cambian de fase: continuación de calidad aprobada.
+
+## IA-CALC-QUALITY-01 — publicada y verificada (2026-10-01)
+
+PR #350 → e1c83580fb1eda945e0d2171cb2f493070ce173e, cuatro checks verdes.
+Agente publicado desde d4fa10df141d95fd0d62ceb984e5bc6fa4d54282,
+run 36850334644 SUCCESS; versión 8b9abd62-7aec-4107-884c-6345739669e4,
+health sin caché healthy D1/R2. 297 agente/28 técnicas, sintaxis/encoding/diff pasan.
+QA A demo 5 llama ambas tools: ocupación 0,44%, radio/desarrollo sin inventar,
+preguntas de datos y diferencial pendiente. El chat aún llama curva D «justificada»
+sin datos de arranque: límite del lenguaje registrado, no selección validada.
+API 62f451e7 y Pages 9.81 conservados; sin cambios AR/APK ni migraciones.
+Rollback agente 7d7ac10215a796e29df0c24615b102c328ea22ef.
+Siguiente: fidelidad de datum en planos y evitar sobreafirmaciones en respuestas.
+
+QA B con datos aportados: radio interior 300 mm → radio medio 450 mm/desarrollo
+707 mm, ocupación 0,44% frente a criterio aportado 40%. Cable trifásico explícito
+a 230 V → 2,51 A, caída 0,23%, estado parcial y cumplimiento no acreditado.
+La respuesta aún resume 3%/5% sin todos los casos del REBT: explicación debe
+conservar límites/supuestos y no convertir referencias generales en decisión.
+IA-CALC-QUALITY-02 corrige contexto de capacidades y exige preservar alcance/null
+antes de llamar justificada una preselección. 297 tests agente pasan; prompt no es
+garantía determinista. PR/CI/publicación/QA pendientes. Rollback agente d4fa10d.

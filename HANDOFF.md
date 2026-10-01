@@ -1,5 +1,18 @@
 # Handoff — Alejandra 2.0
 
+## IA-CALC-QUALITY-01 — publicada y verificada (2026-10-01)
+
+PR #350 → e1c83580fb1eda945e0d2171cb2f493070ce173e, cuatro checks verdes.
+Agente publicado desde d4fa10df141d95fd0d62ceb984e5bc6fa4d54282,
+run 36850334644 SUCCESS; versión 8b9abd62-7aec-4107-884c-6345739669e4,
+health sin caché healthy D1/R2. 297 agente/28 técnicas, sintaxis/encoding/diff pasan.
+QA A demo 5 llama ambas tools: ocupación 0,44%, radio/desarrollo sin inventar,
+preguntas de datos y diferencial pendiente. El chat aún llama curva D «justificada»
+sin datos de arranque: límite del lenguaje registrado, no selección validada.
+API 62f451e7 y Pages 9.81 conservados; sin cambios AR/APK ni migraciones.
+Rollback agente 7d7ac10215a796e29df0c24615b102c328ea22ef.
+Siguiente: fidelidad de datum en planos y evitar sobreafirmaciones en respuestas.
+
 ## IA-QUALITY-04 — publicación verificada (2026-10-01)
 
 PR #349 integrada (8c9fea7), cuatro checks verdes. API publicada desde
@@ -4400,3 +4413,12 @@ TABLE`/`CREATE INDEX` ya está activa en `sql_query`/`run_migration` en producci
 - No aceptar nuevas revisiones de ningún ADR por cuenta propia si aparece una contradicción.
 - No ampliar la migración de presentación más allá de P-ARCH-002 hasta su revisión.
 - No publicar el dashboard de trazas con scoping cross-tenant sin decisión del Director sobre si `/api/admin/trazas` debe filtrar por `empresa_id`.
+
+QA B con datos aportados: radio interior 300 mm → radio medio 450 mm/desarrollo
+707 mm, ocupación 0,44% frente a criterio aportado 40%. Cable trifásico explícito
+a 230 V → 2,51 A, caída 0,23%, estado parcial y cumplimiento no acreditado.
+La respuesta aún resume 3%/5% sin todos los casos del REBT: explicación debe
+conservar límites/supuestos y no convertir referencias generales en decisión.
+IA-CALC-QUALITY-02 corrige contexto de capacidades y exige preservar alcance/null
+antes de llamar justificada una preselección. 297 tests agente pasan; prompt no es
+garantía determinista. PR/CI/publicación/QA pendientes. Rollback agente d4fa10d.
