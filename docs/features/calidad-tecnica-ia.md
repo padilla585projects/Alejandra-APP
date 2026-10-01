@@ -299,3 +299,27 @@ por cable, aislamiento, sección, instalación, temperatura y agrupamiento reale
 Riesgo de compatibilidad: consumidores deben manejar null y nuevo campo candidato.
 Rollback agente 45adbee6cfd40e7dc1b816bd780b46d761fb8d60.
 PR/publicación/QA pendientes. Sin nueva fase/ADR, tablas, migraciones ni AR/APK/Pages.
+
+## IA-CALC-QUALITY-04 — publicada, QA parcial (2026-10-01)
+
+PR #354 → e3ce8465574cb2f7f9a7a39b35fa485433accc1d, cuatro checks verdes.
+Publicado desde d2daf690f259c1362764cb7858434f217b9e69b8, run 36931102547 SUCCESS.
+Agente 8c2d0323-4963-4ac8-99aa-2ce4fcb60694, health sin caché healthy D1/R2.
+297 agente/29 técnicas pasan. Contrato separa calibre candidato/definitivo (null)
+y seleccion_definitiva_autorizada=false, incluso con comparación favorable.
+
+QA E en interfaz móvil web publicada: motor 26 A, 230 V, sección 10 mm² en
+bandeja y condiciones reales desconocidas. Chat identifica 32 A como candidato y
+pide aislamiento/temperatura/agrupamiento/arranque/Icc/tierra, pero afirma
+«sin riesgo» con ampacidad sin correcciones y que algo puede fijarse: FALLA
+aceptación completa de rigor. Tampoco acreditar su promesa de selección coordinada:
+la herramienta actual no verifica coordinación integral con esos datos.
+Siguiente: quitar cumple/ampacidad como aprobación de coordinación y separar
+comparación tabular de verificación real, con pruebas y QA de sobreafirmaciones.
+
+Evidencia local ignorada .ai-benchmark-results/ia-calc-quality-04/chat-qa-e.png.
+Sin petición de crear planos ni modificar datos de obra. Pestaña temporal cerrada,
+sin cambios de empresa/departamento. No se afirma recuento de planos verificado
+en este ensayo. Sin cambios AR/APK/Pages, migraciones ni tablas normativas.
+Rollback agente 45adbee6cfd40e7dc1b816bd780b46d761fb8d60.
+Fidelidad altura/datum/geometría CAD pendiente; ninguna QA acredita perfección.
