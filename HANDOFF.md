@@ -1,5 +1,33 @@
 # Handoff — Alejandra 2.0
 
+## IA-COMP-01 — auditoría y medición (2026-10-01)
+
+- Codex, codex/ai-model-benchmark, base 8ccd48a. Solicitud: evaluar novedades OpenAI
+  frente a modelos existentes, primero auditar suite; técnica/planos/CAD/Office antes
+  de voz. Modelos distintos según tarea autorizados para evaluación.
+- Inventario estático de departamentos, perfiles/tools, cálculos, planos/DXF, módulos
+  técnicos, coordinación e interacción Office. Informe en docs/features/comparacion-modelos-ia.md.
+- Piloto aislado: 22 casos sintéticos, 7 modelos, JSON exacto, completitud, fallos
+  críticos, latencia HTTP, tokens y costes con límites conservadores. No datos reales.
+- 7 pruebas del harness y 290 del agente correctas; 12 departamentos sincronizados.
+- Sin credenciales locales. GitHub production tiene los nombres OPENAI_API_KEY y
+  ANTHROPIC_API_KEY. Workflow manual conserva protección; no configura secretos.
+- Implementación 90d9346, controles 57bcb1f, CAD ed348fe. PR #338: cuatro checks verdes.
+- Medición API aún pendiente; no confundir tests con resultados de modelos.
+  Dispatch en rama 404 (workflow ausente en main). Revisión automática rechazó
+  merge --admin + ejecución con credenciales; autorización explícita solicitada.
+  No eludir mediante cambios de protecciones o disparadores. Integrar autorizado o
+  por revisión humana y ejecutar workflow manual conservando entorno protegido.
+- No cambios funcionales/versión/despliegue/ADR. Preservar untracked ajenos, PWA y APK.
+- Hallazgos de código, no exposición reproducida: enriquecimiento planos de bandejas
+  consulta memoria/conocimiento sin empresa; Office puede declarar plan completo tras
+  error; bloque mecánico tiene referencias normativas incorrectas. Priorizar después
+  de la evaluación, con tarea propia y validación negativa donde corresponda.
+- Sondas reales de funciones aisladas: calcularProteccion(200 A) devuelve 125 A;
+  conversor CAD con LINE/CIRCLE/INSERT/DIMENSION omite dos y capas ausentes en SVG.
+  Sin D1, R2, frontend ni llamadas pagadas. Hallazgos pendientes de corrección.
+
+
 ## ANDROID-AR-ESTABILIDAD-01 — prueba física y canvas (2026-10-01)
 
 - Codex, rama codex/android-camera-qa, base 516cea5. Implementación fbff4d8 —

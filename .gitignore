@@ -19,6 +19,7 @@ ota/
 
 # Node
 node_modules/
+.ai-benchmark-results/
 
 # OS
 .DS_Store
