@@ -14,6 +14,10 @@ Cada ítem conserva estado, evidencia, impacto, alternativas y fase/ADR de desti
 
 Estado: Investigación / Pendiente de corrección, no ADR nuevo aceptado.
 Evidencia: docs/features/comparacion-modelos-ia.md, auditoría y sondas locales.
+- IA-FIX-01 implementa correcciones de contexto de bandejas, protección fuera de
+  rango y falso éxito Office; pruebas locales correctas, publicación pendiente.
+  Catálogo compartido requiere definir permisos departamentales y propiedad;
+  hasta entonces el enriquecimiento automático solo usa registros propios.
 - Alto: contexto de planos de bandejas consulta memoria/conocimiento sin filtro de
   empresa. Riesgo observado en código; no exposición real demostrada.
 - Alto: calcularProteccion(200 A) devuelve 125 A fuera de rango; referencias del

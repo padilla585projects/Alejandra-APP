@@ -1,5 +1,23 @@
 # Handoff — Alejandra 2.0
 
+## IA-FIX-01 — implementación validada (2026-10-01)
+
+- Codex; rama codex/technical-tools-corrections; base 7e2ce30, PR #339 ya integrada.
+- Corrección acotada de protección fuera de rango, contexto de bandejas sin scope
+  y falso éxito de planes Office; criterios y exclusiones en TASKS.md.
+- Sin cambios a APK/AR, modelos de producción, datos o secretos. Conservar archivos
+  ajenos no versionados. Implementación 3e709e6 (fix(ai): reject unsafe calculations
+  and isolate plan context). Pruebas 8/8 nuevas, 290/290 agente, 8/8 benchmark y
+  8/8 overlay AR. Sintaxis Workers, encoding, versiones, departamentos e inventarios OK.
+- Las nuevas pruebas ejecutan funciones reales aisladas, SQLite en memoria y DOM
+  simulado. Capturan el prompt sin llamar a proveedores ni usar datos reales.
+- El helper de autenticación es compartido con correo/tareas: identidad interna
+  inválida ya no cae en empresa 1. Identidades válidas conservan el contrato.
+- Catálogo automático solo propio; registros globales/ajenos excluidos, sin migración.
+  La compartición departamental sigue pendiente. Normativa y CAD fuera de este cambio.
+- Siguiente: PR, CI e integración; publicación y lectura autenticada posteriores
+  pendientes. Rollback: revertir la PR, o redesplegar SHA previo si se publica.
+
 ## IA-COMP-01 — auditoría y medición (2026-10-01)
 
 - Codex, codex/ai-model-benchmark, base 8ccd48a. Solicitud: evaluar novedades OpenAI
@@ -26,7 +44,7 @@
 - Resultados y revisión manual completos en el informe. 4o mini dio dos cálculos
   erróneos; 4o siguió una inyección simulada. No herramientas ni datos reales tocados.
   CAD sencillo 2/2 valores para los siete; no acredita motor CAD ni planos constructivos.
-- Siguiente: integrar evidencia con CI verde y discutir prioridades antes de modificar
+- PR #339 integrada → 7e2ce30. Siguiente: corregir hallazgos antes de modificar
   proveedores o implementar propuestas. Sistema/tarea del pool por aclarar.
 - No cambios funcionales/versión/despliegue/ADR. Preservar untracked ajenos, PWA y APK.
 - Hallazgos de código, no exposición reproducida: enriquecimiento planos de bandejas

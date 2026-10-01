@@ -4,6 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — herramientas técnicas y planes Office)
+
+- El calculador de protecciones rechaza intensidades inválidas o superiores a
+  125 A en lugar de proponer un calibre inferior a la carga solicitada.
+- Los planos de bandejas solo incorporan contexto de la empresa y propietario
+  autenticados; el modelo no puede cambiar esa identidad. Se rechaza el tenant
+  interno inválido en el helper compartido con las rutas de correo y tareas.
+- Office detiene el plan ante un error, conserva el progreso ejecutado y no
+  anuncia éxito. Navegación/scroll ausentes y acciones desconocidas dan error.
+- Sin cambio de modelos, AR, APK ni versión publicada; entrega pendiente.
+
 ### Fixed (2026-10-01 — alineamiento AR en pantallas densas)
 
 - Corrige el tamaño CSS del canvas Android: materiales y referencias de planos dejaban

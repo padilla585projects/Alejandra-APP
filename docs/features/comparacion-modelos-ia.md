@@ -1,6 +1,6 @@
 # Comparación de modelos IA y auditoría técnica de la suite
 
-Fecha: 2026-10-01. Estado: auditoría inicial y primer piloto API completados;
+Fecha: 2026-10-01. Estado: auditoría inicial y pilotos API completados;
 segunda medición con respuestas completas y revisión de resultados completada.
 Autorización: Adrián pide comparar/medir modelos y auditar qué ofrece la suite y qué puede
 hacer Alejandra. Prioridad: competencia técnica multidisciplinar, planos y herramientas;
@@ -274,3 +274,28 @@ asume una versión diferente ni disponibilidad de otros modelos por estos result
 
 Validaciones de la corrección: harness 8/8 y cuatro checks CI verdes en 010577f.
 Agente 290/290 en CI. PWA 9.78, APK y Workers desplegados sin cambios.
+
+
+## IA-FIX-01 — correcciones derivadas (2026-10-01)
+
+Implementación 3e709e6, rama codex/technical-tools-corrections. Los hallazgos
+anteriores describen la versión auditada, no el comportamiento corregido:
+
+- calcularProteccion rechaza intensidades no finitas/no positivas y fuera de la
+  tabla disponible (máximo 125 A), sin devolver magnetotérmico ni diferencial.
+  No amplía la tabla ni acredita selectividad o dimensionamiento completo.
+- El contexto de bandejas filtra empresa y propietario de sesión. No incluye
+  registros globales, sin propietario ni de otros usuarios; no existe ACL
+  departamental en estas tablas legacy. Compartición: pendiente de diseño.
+  La tool ignora identidad del modelo; sesión incompleta no genera el plano.
+  El helper interno compartido rechaza tenant inválido, sin fallback a empresa 1.
+- Office detiene el plan fallido, informa del paso y conserva progreso completado.
+  Acciones desconocidas y destinos inexistentes no cuentan como éxito. No prueba
+  la persistencia remota de una operación activada por click.
+
+Validación: 8 regresiones sobre funciones reales aisladas, SQLite en memoria
+con dos empresas/propietarios y captura del prompt; DOM simulado para Office.
+Agente 290/290, benchmark 8/8, overlay AR 8/8; sintaxis/encoding/versiones/
+departamentos/inventarios correctos. Publicación y aceptación autenticada
+pendientes; no cambios a AR/APK ni proveedores, sin migraciones o secretos.
+Rollback: revertir PR; después de publicación, redesplegar SHA anterior.
