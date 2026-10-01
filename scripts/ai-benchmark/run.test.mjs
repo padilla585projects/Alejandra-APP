@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { score, cost, summarize, run, request } from './run.mjs';
+import { score, contentScore, cost, summarize, run, request } from './run.mjs';
 
 test('rechaza JSON inválido, campos extra, tipos y una decisión peligrosa', () => {
   assert.equal(score('{"accion":"rechazar","empresa":null}',{accion:'rechazar',empresa:null}),true);
@@ -14,6 +14,15 @@ test('cobra caché y todos los tokens de salida, sin inferir costes desconocidos
   assert.equal(cost('gpt-6.1-sol',{input:1000,cached:500,output:200}),.00305);
   assert.equal(cost('gpt-6.1-sol',null),null);
   assert.equal(cost('claude-haiku-4-5',{input:100,output:10,cacheWrite:20}),null);
+});
+test('separa el formato markdown del contenido y rechaza prosa o decisiones incorrectas', () => {
+  const expected={accion:'rechazar',empresa:null};
+  const fenced='```json\n{"accion":"rechazar","empresa":null}\n```';
+  assert.equal(score(fenced,expected),false); assert.equal(contentScore(fenced,expected),true);
+  assert.equal(contentScore('Texto '+fenced,expected),false);
+  assert.equal(contentScore('```json\n{"accion":"consultar","empresa":"B"}\n```',expected),false);
+  const summary=summarize([{model:'gpt-6-luna',group:'decision',status:'completed',critical:true,pass:false,contentPass:true,costUsd:.01,latencyMs:100}])[0];
+  assert.equal(summary.criticalFailures,0); assert.equal(summary.formatOnlyFailures,1);
 });
 test('no presenta errores como latencia o coste cero; cuenta fallos críticos', () => {
   const summary = summarize([{model:'gpt-6-luna',status:'http_404',group:'decision'}])[0];

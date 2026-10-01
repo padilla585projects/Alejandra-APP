@@ -18,6 +18,13 @@ export function score(text, expected) {
   try { return isDeepStrictEqual(JSON.parse(text), expected); }
   catch { return false; }
 }
+export function contentScore(text, expected) {
+  // Distinguir valores correctos de un envoltorio markdown. Nunca extraer JSON
+  // de entre instrucciones/prosa arbitraria ni permitir claves extra.
+  const trimmed=text.trim();
+  const fenced=trimmed.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i);
+  return score(fenced ? fenced[1] : trimmed, expected);
+}
 export function cost(model, usage) {
   const rate = models[model];
   if (!usage || !Number.isFinite(usage.input) || !Number.isFinite(usage.output)) return null;
@@ -36,11 +43,14 @@ export function summarize(rows) {
     const items = rows.filter(r => r.model === model);
     const completed = items.filter(r => r.status === 'completed');
     const successful = completed.filter(r => r.pass);
+    const contentSuccessful = completed.filter(r => r.contentPass);
     const billed = items.filter(r => r.status === 'completed' || r.status === 'incomplete');
     const ambiguous = items.some(r => r.status === 'network_or_parse_error');
     const totalCost = !ambiguous && billed.length && billed.every(r => r.costUsd !== null) ? billed.reduce((n,r) => n+r.costUsd,0) : null;
     return { model, attempted: items.length, completed: completed.length, passed: successful.length,
-      criticalFailures: completed.filter(r => r.critical && !r.pass).length,
+      criticalFailures: completed.filter(r => r.critical && !r.contentPass).length,
+      contentPassed: contentSuccessful.length,
+      formatOnlyFailures: completed.filter(r => !r.pass && r.contentPass).length,
       accuracy: completed.length ? successful.length / completed.length : null,
       successPerAttempt: items.length ? successful.length/items.length : null,
       p50Ms: percentile(completed.map(r => r.latencyMs), .5), p95Ms: percentile(completed.map(r => r.latencyMs), .95),
@@ -78,8 +88,8 @@ export async function run({ selected = Object.keys(models), repeats = 1, budget 
     await writeFile(`${outputDir}/results.json`, JSON.stringify(data,null,2)+'\n');
     const format = (v,d=3) => v === null ? 'N/D' : v.toFixed(d);
     await writeFile(`${outputDir}/report.md`, '# Comparación IA — piloto sintético\n\n'+
-      '| Modelo | Completadas/intentos | Exactas | Fallos críticos | p50 s | p95 s | Coste estimado USD |\n|---|---:|---:|---:|---:|---:|---:|\n'+
-      data.summary.map(r => `| ${r.model} | ${r.completed}/${r.attempted} | ${r.passed} | ${r.criticalFailures} | ${format(r.p50Ms===null?null:r.p50Ms/1000)} | ${format(r.p95Ms===null?null:r.p95Ms/1000)} | ${format(r.estimatedCostUsd,6)} |`).join('\n')+
+      '| Modelo | Completadas/intentos | JSON exacto | Contenido | Fallos críticos contenido | p50 s | p95 s | Coste estimado USD |\n|---|---:|---:|---:|---:|---:|---:|---:|\n'+
+      data.summary.map(r => `| ${r.model} | ${r.completed}/${r.attempted} | ${r.passed} | ${r.contentPassed} | ${r.criticalFailures} | ${format(r.p50Ms===null?null:r.p50Ms/1000)} | ${format(r.p95Ms===null?null:r.p95Ms/1000)} | ${format(r.estimatedCostUsd,6)} |`).join('\n')+
       '\n\nPiloto de texto sintético. No acredita calidad de visión, voz, búsqueda real, permisos del backend ni funcionamiento del AR. N/D significa sin medición; no cero. Revisar resultados por grupo y errores antes de comparar.\n');
     return data;
   };
@@ -115,7 +125,7 @@ export async function run({ selected = Object.keys(models), repeats = 1, budget 
           const usage = !u ? null : anthropic ? { input: u.input_tokens+(u.cache_read_input_tokens||0), output:u.output_tokens, cached:u.cache_read_input_tokens||0, cacheWrite:u.cache_creation_input_tokens||0 } : { input:u.input_tokens,output:u.output_tokens,cached:u.input_tokens_details?.cached_tokens||0,reasoning:u.output_tokens_details?.reasoning_tokens||0 };
           const costUsd = cost(model,usage);
           const complete = anthropic ? payload.stop_reason==='end_turn' : payload.status==='completed';
-          rows.push({...base,status:complete?'completed':'incomplete',returnedModel:payload.model,latencyMs:performance.now()-start,usage,costUsd,pass:complete&&score(text,fixture.expected),output:text});
+          rows.push({...base,status:complete?'completed':'incomplete',returnedModel:payload.model,latencyMs:performance.now()-start,usage,costUsd,pass:complete&&score(text,fixture.expected),contentPass:complete&&contentScore(text,fixture.expected),output:text});
           if (costUsd === null) uncertainBilling = true;
           else spent += costUsd;
         }
