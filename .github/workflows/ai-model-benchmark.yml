@@ -32,12 +32,13 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BENCHMARK_REPEATS: ${{ inputs.repeats }}
-          BENCHMARK_BUDGET_USD: '2'
+          BENCHMARK_BUDGET_USD: '1.80'
         run: node scripts/ai-benchmark/run.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ai-model-comparison
           path: .ai-benchmark-results/
+          include-hidden-files: true
           retention-days: 14
           if-no-files-found: ignore

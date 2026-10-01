@@ -1,7 +1,7 @@
 # Comparación de modelos IA y auditoría técnica de la suite
 
-Fecha: 2026-10-01. Estado: auditoría inicial con sondas locales y piloto preparado;
-mediciones remotas pendientes de integración de PR #338.
+Fecha: 2026-10-01. Estado: auditoría inicial y primer piloto API completados;
+corrección de entrega de artefactos y separación de formato/contenido en validación.
 Autorización: Adrián pide comparar/medir modelos y auditar qué ofrece la suite y qué puede
 hacer Alejandra. Prioridad: competencia técnica multidisciplinar, planos y herramientas;
 Office debe ayudar a usuarios en el trabajo diario. Voz secundaria.
@@ -31,6 +31,9 @@ No acepta ADR-0026 ni abre migración de arquitectura.
 | Conocimiento | consultar_conocimiento, buscar_documentos, ver_archivo, buscar_normativa, buscar_procedimientos, memory_read/update | Recuperación, vigencia y aislamiento importan tanto como el modelo. |
 
 Los tres catálogos de departamentos coinciden: 12 (check-departamentos correcto).
+Inventario estático: 122 destinos distintos data-page en Office y 89 declaraciones
+TOOL_ en el agente. No equivalen a 122 flujos verificados ni a 89 tools disponibles
+para todos los usuarios; una tool puede cubrir varias operaciones y viceversa.
 Perfiles reales NEXUS: simple, app, tecnico, web, reflexion, completo e ingenieria;
 las tools están distribuidas por perfil y filtradas por auth. No todas están disponibles
 en todos los mensajes. Ingeniería permite 8.000 tokens de salida; otros perfiles tienen
@@ -86,14 +89,16 @@ GPT-6 usa reasoning low (piloto de coste/latencia, no techo de capacidad).
 Grupos: extracción, cálculo, decisiones, límites, fuentes suministradas, planos,
 mecánicas, control, coordinación, Office y contratos CAD. No se invoca ninguna herramienta real.
 
-Medidas: exactitud JSON/valores, fallos críticos, completitud, tiempo HTTP total
+Medidas: exactitud JSON estricta y contenido (permite únicamente envoltorio markdown
+JSON), fallos críticos de contenido separados del formato, completitud, tiempo HTTP total
 p50/p95, tokens entrada/salida/caché/razonamiento y coste estimado por tarea correcta.
 No medir TTFT con una petición sin streaming. Una repetición no permite afirmar
 fiabilidad; diferencias pequenas requieren repetir y ampliar casos.
 Los casos con fórmulas/contexto entregado miden obediencia y cálculo, NO conocimiento
 profesional completo, calidad normativa o creación de un plano constructivo.
 
-Límite conservador estimado de 2 USD por ejecución; salida máxima 768 tokens por
+Límite conservador estimado de 1,80 USD por ejecución remota (runner admite 2 USD
+por defecto); salida máxima 768 tokens por
 petición, secuencial y sin reintentos pagados. Antes de cada llamada se reserva con
 cota de bytes de entrada + margen. Fallo de red/uso desconocido detiene nuevas
 llamadas. No es un tope de facturación impuesto al proveedor; comprobar consumo real.
@@ -174,17 +179,37 @@ errores de routing y fallos de herramientas. Voz queda fuera de la prioridad act
 Recomendación de proveedor y cambios en producción: PENDIENTE de evidencia.
 Rollback: revertir harness/workflow/documentación; no se cambia el comportamiento desplegado.
 
-## Validación y bloqueo de ejecución
+## Validación y primeras mediciones
 
 - Implementación 90d9346, controles 57bcb1f y requisitos CAD ed348fe; PR #338.
-- Harness 7/7, agente 290/290, catálogos 12/12, encoding/versiones correctos.
+- Harness inicial 7/7, agente 290/290, catálogos 12/12, encoding/versiones correctos.
 - CI ed348fe: cuatro checks verdes (dos ejecuciones), incluido Android.
-- No credenciales locales. Intentar dispatch en rama devolvió 404 porque el nuevo
-  workflow todavía no existe en main. No se hicieron llamadas a modelos.
-- La revisión automática de permisos rechazó integrar con `--admin` y ejecutar
-  después el workflow: considera que la solicitud de comparación no autoriza el
-  bypass del revisor obligatorio. Solicitud de autorización explícita pendiente.
-  No modificar protecciones, secretos ni disparadores para eludir ese bloqueo.
-- Siguiente paso: integración autorizada o revisión/merge humano de #338, después
-  workflow manual repeats=1 con entorno protegido vigente. Registrar completitud,
-  disponibilidad, métricas y costes reales antes de recomendar modelos por tarea.
+- No credenciales locales; el nuevo workflow necesitó integración en main. La
+  revisión automática rechazó el primer merge --admin; Adrián autorizó después
+  explícitamente la excepción y el piloto. PR #338 integrada → 9ff4ac9 con CI verde.
+  Se aprobó el job conforme a esa autorización, sin modificar protecciones/secretos.
+- Primera ejecución: [36794272847](https://github.com/padilla585projects/Alejandra-APP/actions/runs/36794272847),
+  154 respuestas completadas (22 por modelo), sin errores HTTP ni truncamiento.
+  Coste de tokens estimado total 0,1374841 USD. Una repetición; no prueba de producción.
+- El uploader omitió el directorio oculto de resultados; los resúmenes y estado de
+  cada caso se recuperaron del log, pero no las respuestas completas. La calidad
+  estricta inicial penaliza envoltorios/formato: NO interpretar 0/22 de Haiku como
+  incapacidad técnica ni como 8 decisiones peligrosas sin inspeccionar el contenido.
+- Se corrige include-hidden-files, se añade métrica de contenido y una prueba
+  de separación formato/contenido. Segunda ejecución prevista, límite 1,80 USD
+  para mantener ambas mediciones por debajo de los 2 USD autorizados estimados.
+
+| Modelo | JSON exacto /22 | Mediana HTTP s | Coste estimado USD (22 casos) |
+|---|---:|---:|---:|
+| gpt-4o-mini | 17 | 0,900 | 0,000904 |
+| gpt-4o | 7 | 1,090 | 0,016115 |
+| gpt-6-luna | 20 | 1,383 | 0,001066 |
+| gpt-6.1-sol | 21 | 1,997 | 0,013644 |
+| gpt-6-astra | 21 | 1,655 | 0,068170 |
+| claude-haiku-4-5 | 0 | 0,669 | 0,010711 |
+| claude-sonnet-4-6 | 18 | 1,143 | 0,026874 |
+
+Estas cifras mezclan cumplimiento de formato y valores exactos. No son una clasificación
+de conocimiento de instalaciones. Los logs originales permanecen en el run; copias
+locales generadas están ignoradas. La segunda medición debe inspeccionar diferencias
+y decidir qué pruebas técnicas abiertas y CAD reales hacen falta por departamento.

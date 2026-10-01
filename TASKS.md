@@ -10,10 +10,11 @@
 - Estado: auditoría estática inicial y piloto preparado (7 modelos, 22 casos sintéticos).
   Harness 7/7 y agente 290/290. Claves locales ausentes; nombres OpenAI/Anthropic
   confirmados en entorno protegido production de GitHub, sin acceder a sus valores.
-- PR #338, ed348fe: cuatro checks CI verdes. Medición bloqueada: revisión automática
-  rechazó merge --admin y ejecución posterior con credenciales; requiere autorización
-  explícita del usuario o revisión/integración humana. No llamadas a modelos aún.
-- Siguiente: integración autorizada, ejecutar piloto protegido y registrar resultados
+- PR #338 integrada → 9ff4ac9, CI verde; excepción autorizada expresamente por Adrián.
+  Run 36794272847 completó 154 respuestas, coste estimado 0,1374841 USD.
+  Artefacto oculto omitido por uploader: métricas recuperadas del log, faltan salidas.
+- Siguiente: corregir uploader y distinguir formato/contenido, repetir con límite
+  1,80 USD y registrar resultados
   reales; ampliar evaluación por departamentos y flujos completos según auditoría.
 - Hallazgos: referencias mecánicas incorrectas, contexto de bandejas sin filtro de
   empresa, conflictos solo textuales y posible falso «Plan completado» en Office.

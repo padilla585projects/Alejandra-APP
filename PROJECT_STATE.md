@@ -4,8 +4,9 @@
 
 Adrián prioriza competencia técnica multidisciplinar, planos/CAD y uso de herramientas,
 con ayuda diaria en Office; voz secundaria. Auditoría estática inicial y piloto aislado
-preparados, sin cambiar modelos ni aplicaciones desplegadas. Hallazgos y límites en
-docs/features/comparacion-modelos-ia.md. Medición API pendiente; tests no son benchmark.
+completados sin cambiar modelos ni aplicaciones desplegadas. Primer piloto: 154
+respuestas, 0,1374841 USD estimados; corregir entrega de artefactos y distinguir formato
+de contenido antes de recomendar modelos. Hallazgos/límites en el informe de comparación.
 
 
 ## Prueba real Android — 2026-10-01
