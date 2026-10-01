@@ -14,9 +14,8 @@
   boceto explícito y datos confirmados permiten avanzar; negativas y prueba publicada.
 - Riesgo: preguntas adicionales si formato de altura no reconocible; rollback revertir PR
   o agente al SHA sano 158e886. Auditoría integral y verificación geométrica pendientes.
-- **Reanudada por Adrián al pedir «sigue».** Implementación inicial 400f118;
-  agente 295/295 y técnicas 15/15 correctas. Guardar/push para revisión, sin merge/deploy.
-  Ejecutar secuencia de HANDOFF; no afirmar QA publicada corregida antes de comprobarla.
+- **Entregada tras reanudación de Adrián («sigue»).** Implementación inicial 400f118;
+  revisión y publicación completadas, evidencia en HANDOFF/calidad-tecnica-ia.md.
   PR #346 integrada → f9addec; correcciones de reutilización y menciones en 6da23e7,
   297 agente/15 técnicas, cuatro checks verdes. Agente publicado, run 36839880273.
   QA demo: ausencia bloqueada sin guardar; datos humanos → 28; boceto explícito → 29.

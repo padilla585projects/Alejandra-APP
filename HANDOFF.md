@@ -11,6 +11,8 @@
 - QA D publicada → ID 30, SVG HTTP 200/XML válido, cero scripts/eventos/foreignObject,
   altura confirmada y aviso NO EJECUTAR EN OBRA dentro del archivo. Visor/captura
   comprobados. Añade ZONA TALLER no pedida: fidelidad/geométrica siguen pendientes.
+- QA conservados. Al acabar, empresa 1/Seguridad restaurada y comprobada por recarga;
+  pestaña de ensayo cerrada. Archivos ajenos preservados, sin cambios AR/APK/PWA.
 - Siguiente: XML completo y avisos obligatorios deterministas; después geometría y
   unidades CAD. No confundir esta barrera parcial con un sanitizador XML completo.
   Rollback API 158e886; rollback agente 158e886, por workflow/SHA completo.
