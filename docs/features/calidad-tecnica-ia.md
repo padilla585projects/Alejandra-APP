@@ -174,7 +174,7 @@ Visor abierto desde Planos IA, captura local ignorada
 Revisión visual: añade ZONA TALLER no solicitada; por tanto, sigue sin garantizar
 fidelidad completa. No acreditar escala, geometría ni uso en obra por ser XML válido.
 
-## IA-QUALITY-04 — contrato de archivo (en desarrollo)
+## IA-QUALITY-04 — contrato de archivo
 
 Generación y edición IA verifican sintaxis XML con saxes 6.0.0 fijado, namespace SVG
 y avisos de borrador técnico/NO EJECUTAR EN OBRA en nodos text/tspan/textPath.
@@ -194,4 +194,38 @@ Repositorio archivado desde diciembre de 2025: limitación de mantenimiento regi
 revisar sustitución ante nuevos defectos. El ensayo inicial con fast-xml-parser aceptó
 entidad indefinida, `<` en atributo, carácter XML prohibido y prefijo no vinculado;
 se descartó y no quedó en package/lock. Esto es elección de implementación acotada,
-sin cambio de arquitectura/ADR ni de proveedores. Publicación API/QA pendientes.
+sin cambio de arquitectura/ADR ni de proveedores. Publicación registrada a continuación.
+
+## IA-QUALITY-04 — publicación verificada (2026-10-01)
+
+PR #349 integrada (8c9fea7), cuatro checks verdes. API publicada desde
+7d7ac10215a796e29df0c24615b102c328ea22ef, run 36848446973 SUCCESS,
+versión 62f451e7-2c0d-42f9-ba7d-a4cf6d395ede; health sin caché healthy D1/R2.
+QA sintética E, demo 5: reintento de generación, ID 31 HTTP 200, XML válido y
+avisos BORRADOR/NO EJECUTAR EN OBRA presentes. Altura 2,80 m presente, pero no
+texto suelo terminado/FFL: fidelidad del datum pendiente. Sin ZONA TALLER en este
+ensayo; no acredita ausencia general de elementos inventados ni geometría correcta.
+Agente 39559254 y Pages 9.81 conservados. QA preservada, sin reparación/borrado.
+
+## IA-CALC-QUALITY-01 — calculadores preliminares
+
+Cable valida magnitudes finitas positivas, cosφ, enums, sistema explícito, temperatura
+admitida y agrupamiento entero 1–20. Grupos intermedios usan el siguiente grupo
+tabulado; no extrapola. Cumplimiento normativo queda pendiente, mientras indica los
+criterios parciales calculados. Inferencia por tensión y caída por defecto se exponen
+como supuestos. Tablas y aproximación de aluminio existentes se conservan.
+
+Bandeja calcula arco ideal con radio aportado; sin él pregunta. No inventa radio
+mínimo ni máximo universal de ocupación. T/X/reducciones requieren catálogo.
+Protección valida datos y secciones tabuladas; calibre/curva/polos son preselección.
+Diferencial pendiente de esquema de tierra, protección y corrientes residuales,
+sin seleccionar 300/30 mA únicamente por tipo de carga. Coordinación sigue parcial.
+
+[REBT oficial, ITC-BT-19 y 24](https://www.boe.es/buscar/act.php?id=BOE-A-2002-18099):
+ITC-BT-19 distingue límites de caída por instalación/uso. Un default 5% no acredita
+el límite aplicable ni caída acumulada. No se incorporan nuevas tablas normativas.
+Campos no determinables devuelven null: consumidores deben tratarlos como pendientes.
+28 pruebas técnicas y 297 agente pasan. Riesgo: clientes que asumían resultados
+completos deben manejar pendientes. Rollback agente 7d7ac10215a796e29df0c24615b102c328ea22ef.
+PR/CI/publicación del agente pendientes; sin migraciones ni cambios AR/APK/Pages.
+Roadmap, ADR y registro documental no cambian de fase: continuación de calidad aprobada.

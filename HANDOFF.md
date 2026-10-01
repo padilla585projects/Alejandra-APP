@@ -1,6 +1,17 @@
 # Handoff — Alejandra 2.0
 
-## IA-QUALITY-04 — en desarrollo (2026-10-01)
+## IA-QUALITY-04 — publicación verificada (2026-10-01)
+
+PR #349 integrada (8c9fea7), cuatro checks verdes. API publicada desde
+7d7ac10215a796e29df0c24615b102c328ea22ef, run 36848446973 SUCCESS,
+versión 62f451e7-2c0d-42f9-ba7d-a4cf6d395ede; health sin caché healthy D1/R2.
+QA sintética E, demo 5: reintento de generación, ID 31 HTTP 200, XML válido y
+avisos BORRADOR/NO EJECUTAR EN OBRA presentes. Altura 2,80 m presente, pero no
+texto suelo terminado/FFL: fidelidad del datum pendiente. Sin ZONA TALLER en este
+ensayo; no acredita ausencia general de elementos inventados ni geometría correcta.
+Agente 39559254 y Pages 9.81 conservados. QA preservada, sin reparación/borrado.
+
+## IA-QUALITY-04 — historial de implementación (2026-10-01)
 
 - Adrián pide seguir sin pausas; rama codex/plan-xml-warning-validation, base 7255d4d.
 - Parser saxes 6.0.0 fijado en package/lock, sin I/O ni DOM; prueba sintaxis XML

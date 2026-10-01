@@ -4,6 +4,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — IA-CALC-QUALITY-01)
+
+- Cable/bandeja/protección rechazan entradas inválidas y rangos fuera de tablas;
+  separan criterios parciales del cumplimiento normativo.
+- Sistema explícito y agrupamiento conservador; radio/ocupación de bandeja
+  aportados y diferencial pendiente de datos de instalación.
+- API XML/avisos publicada y comprobada, QA ID 31 preservada.
+
+
 ### Fixed (2026-10-01 — integridad de archivo IA-QUALITY-04)
 
 - Generación/edición IA validan sintaxis XML y namespace SVG; rechazan DTD/entidades
