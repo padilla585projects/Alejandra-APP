@@ -316,6 +316,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
    !important para que la clase gane -- sin ellos un estilo inline previo (p.ej. una geometría
    guardada) seguiría ganando y "pantalla completa" no haría nada visible. */
 #alejandraChatPanel.fullscreen{top:0 !important;left:0 !important;right:0 !important;bottom:0 !important;width:100% !important;height:100% !important;max-width:100% !important;max-height:100% !important;border-radius:0 !important}
+/* Por encima de FABs arrastrables y chat equipo, por debajo de modales. */
+#alejandraChatPanel{z-index:810 !important}
 /* SCAN-04c (25/07/2026): el chat interno (CHAT-01) solo se abría desde un botón dentro
    del sidebar — nada flotante, a diferencia de los dos chats de Alejandra. Adrián: "faltaría
    un botón flotante para chat interno no?". Se coloca en la esquina opuesta (izquierda) para
@@ -24179,6 +24181,7 @@ async function _alejandraFabEjecutarAccion(acc) {
     case 'click': {
       const el = document.querySelector(acc.selector);
       if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      if (el.disabled || el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true') throw new Error('El control está deshabilitado');
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.style.boxShadow = '0 0 0 3px #8b5cf6';
       await new Promise(r => setTimeout(r, 300));
@@ -24189,10 +24192,14 @@ async function _alejandraFabEjecutarAccion(acc) {
     case 'rellenar': {
       const el = document.querySelector(acc.selector);
       if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      if (!['INPUT', 'TEXTAREA'].includes(el.tagName) || el.disabled || el.matches(':disabled') || el.readOnly) throw new Error('El campo no es editable');
+      if (['file', 'checkbox', 'radio', 'button', 'submit', 'reset', 'image', 'hidden'].includes(el.type)) throw new Error('Tipo de campo no compatible con rellenar');
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.style.boxShadow = '0 0 0 3px #8b5cf6';
       el.focus();
-      el.value = acc.valor || '';
+      const valor = String(acc.valor ?? '');
+      el.value = valor;
+      if (el.value !== valor) throw new Error('El campo rechazó el valor solicitado');
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
       setTimeout(() => el.style.boxShadow = '', 1000);
@@ -24201,9 +24208,14 @@ async function _alejandraFabEjecutarAccion(acc) {
     case 'seleccionar': {
       const el = document.querySelector(acc.selector);
       if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      if (el.tagName !== 'SELECT' || el.disabled || el.matches(':disabled') || el.multiple) throw new Error('El selector no es editable');
+      const valor = String(acc.valor ?? '');
+      const opcion = Array.from(el.options).find(o => o.value === valor);
+      if (!opcion || opcion.disabled || opcion.parentElement?.disabled) throw new Error('La opción no está disponible');
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.style.boxShadow = '0 0 0 3px #8b5cf6';
-      el.value = acc.valor || '';
+      el.value = valor;
+      if (el.value !== valor) throw new Error('El selector rechazó la opción');
       el.dispatchEvent(new Event('change', { bubbles: true }));
       setTimeout(() => el.style.boxShadow = '', 1000);
       break;
@@ -27667,7 +27679,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.79';
+const PANEL_APP_VERSION = '9.80';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

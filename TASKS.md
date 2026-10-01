@@ -1,5 +1,18 @@
 # TASKS — Cola operativa inmediata
 
+## IA-QUALITY-01 — controles de calidad profesional (2026-10-01)
+
+- Aprobada por Adrián: mejorar los fallos observados en la entrega 9.79.
+- Codex, rama codex/professional-quality-controls, base ef173a2.
+- Alcance: instrucciones técnicas de planos sin datos inventados; rechazo de SVG
+  truncado; controles Office de campos/opciones deshabilitados y valores cero;
+  jerarquía del chat compacto; referencias mecánicas erróneas; cuarto marcador CI.
+- Sin migraciones, secretos, cambio de proveedores, AR/APK ni rediseño gráfico.
+- Aceptación: regresiones negativas, sintaxis y suite agente; PR/CI verdes.
+  La política del prompt no acredita cotas ni CAD: motor geométrico y round-trip pendientes.
+- Riesgo: rechazar generaciones truncadas antes guardadas como éxito. Rollback: revertir PR.
+  Publicación, cuando proceda, por workflows con SHA fijo y verificación posterior.
+
 ## IA-FIX-01-ENTREGA — publicación y verificación (2026-10-01)
 
 - Adrián autoriza publicar y comprobar los arreglos al responder «dale» al orden

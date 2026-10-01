@@ -4,6 +4,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — calidad técnica IA-QUALITY-01)
+
+- Alejandra debe consultar y preguntar por datos críticos faltantes antes de crear
+  planos; los bocetos preliminares solicitados identifican pendientes. Política
+  común de generación/edición: no inventar alturas, cálculos ni aprobación técnica.
+- Generación/edición rechazan SVG sin cierre en lugar de completarlo artificialmente.
+- Office conserva cero y rechaza campos, opciones y controles no editables.
+  Chat compacto queda sobre ambos FAB y el chat de equipo, evitando bloqueo del envío.
+- Corregidas referencias RITE/equipos a presión, ventilación IDA de oficinas y
+  fórmula de carga térmica; la auditoría integral por disciplinas sigue pendiente.
+- CI comprueba también el marcador de versión de Office.
+
 ### Fixed (2026-10-01 — herramientas técnicas y planes Office)
 
 - El calculador de protecciones rechaza intensidades inválidas o superiores a

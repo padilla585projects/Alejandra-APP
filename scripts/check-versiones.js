@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// F-0.2 — Comprueba que los tres marcadores de versión de la app coinciden.
+// F-0.2 — Comprueba que los cuatro marcadores de versión de la app coinciden.
 //
-// `version.json`, `sw.js` (`alejandra-vX.XX`) e `index.html` (`APP_VERSION`) deben ir
+// `version.json`, `sw.js` (`alejandra-vX.XX`), `index.html` (`APP_VERSION`) y
+// `panel.html` (`PANEL_APP_VERSION`) deben ir
 // siempre sincronizados. Desincronizarlos provocó bucles de recarga infinita en
 // producción los días 22/04 y 26/04/2026.
 //
@@ -9,7 +10,7 @@
 // en el momento de desplegar. Aquí se detecta en la PR, que es cuando cuesta barato.
 //
 // Ojo: subir de versión es una decisión de entrega, no un paso de cada edición. Este
-// script NO exige que la versión suba; solo que los tres valores coincidan entre sí.
+// script NO exige que la versión suba; solo que los cuatro valores coincidan entre sí.
 
 const fs = require('fs');
 const path = require('path');
@@ -30,13 +31,14 @@ const versiones = {
   'version.json': JSON.parse(leer('version.json')).v,
   'sw.js': extraer('sw.js', /alejandra-v([^']+)'/, "alejandra-vX.XX"),
   'index.html': extraer('index.html', /APP_VERSION = '([^']+)'/, 'APP_VERSION'),
+  'panel.html': extraer('panel.html', /PANEL_APP_VERSION = '([^']+)'/, 'PANEL_APP_VERSION'),
 };
 
 const distintas = new Set(Object.values(versiones));
 for (const [f, v] of Object.entries(versiones)) console.log(`  ${f.padEnd(14)} ${v}`);
 
 if (distintas.size !== 1) {
-  console.error('\nDESINCRONIZADO. Los tres marcadores deben tener el mismo valor.');
+  console.error('\nDESINCRONIZADO. Los cuatro marcadores deben tener el mismo valor.');
   console.error('Desincronizarlos causó bucles de recarga infinita en producción (22/04 y 26/04/2026).');
   process.exit(1);
 }
