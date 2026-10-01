@@ -1,5 +1,10 @@
 # Estado del proyecto — Alejandra 2.0
 
+IA-QUALITY-04 en desarrollo: validar XML/namespace y avisos del archivo antes de guardar,
+incluido resultado tras símbolos. Rama codex/plan-xml-warning-validation,
+23 pruebas técnicas/297 agente; PR/publicación/verificación pendientes.
+No afirmar corrección geométrica por validar XML; ZONA TALLER sigue pendiente.
+
 ## Calidad técnica — 2026-10-01
 
 IA-QUALITY-02 integrada por PR #346 → f9addec; agente publicado desde 6da23e7

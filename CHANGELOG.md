@@ -4,6 +4,14 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — integridad de archivo IA-QUALITY-04)
+
+- Generación/edición IA validan sintaxis XML y namespace SVG; rechazan DTD/entidades
+  declaradas y archivos mayores de 512 KiB antes de guardar.
+- Los planos técnicos exigen avisos de borrador y NO EJECUTAR EN OBRA como texto SVG;
+  comentarios, metadatos, defs y ocultación directa no cumplen el contrato.
+- El SVG final también se valida después de incorporar símbolos y colores.
+
 ### Fixed (2026-10-01 — SVG estático IA-QUALITY-03)
 
 - Generación y edición IA rechazan scripts, foreignObject y eventos antes de guardar.

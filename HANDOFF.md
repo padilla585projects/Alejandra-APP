@@ -1,5 +1,18 @@
 # Handoff — Alejandra 2.0
 
+## IA-QUALITY-04 — en desarrollo (2026-10-01)
+
+- Adrián pide seguir sin pausas; rama codex/plan-xml-warning-validation, base 7255d4d.
+- Parser saxes 6.0.0 fijado en package/lock, sin I/O ni DOM; prueba sintaxis XML
+  (incluye entidades/atributos/namespaces), namespace SVG y avisos en texto.
+  DTD y >512 KiB rechazados. Validación compartida antes y después de símbolos.
+- 23/23 técnicas y 297/297 agente, sintaxis/encoding/diff correctos. Negativos
+  generación sin INSERT y edición scoped sin UPDATE; datos existentes intactos.
+- CI instala dependencias raíz para ejercitar parser real. PR, publicación API y
+  QA todavía pendientes; no declarar publicado. Rollback API 2f1270f.
+- Después: fidelidad a entradas humanas/geometría; ZONA TALLER inventada sigue pendiente.
+  Sin cambio de arquitectura, proveedores, AR/APK ni despliegue de Pages.
+
 ## IA-QUALITY-03 — publicada (2026-10-01)
 
 - PR #347 integrada → 996785d0fa027e468a033dd0a07a342607ee4aa4, cuatro checks verdes.

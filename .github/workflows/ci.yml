@@ -68,6 +68,8 @@ jobs:
       - name: Install agent test dependencies
         working-directory: alejandra-agente
         run: npm ci
+      - name: Install Worker validation dependencies
+        run: npm ci --ignore-scripts
       - name: Run agent tests
         working-directory: alejandra-agente
         run: npm test

@@ -1,5 +1,20 @@
 # TASKS — Cola operativa inmediata
 
+## IA-QUALITY-04 — validar archivo y avisos (2026-10-01, en desarrollo)
+
+- Adrián autoriza continuar sin pausas con calidad profesional de la suite.
+- Codex, rama codex/plan-xml-warning-validation, base main 7255d4d.
+- Dependencias cerradas: IA-QUALITY-02/03 integradas y publicadas; ADR-0007 aceptado.
+  Continuación operativa, sin nueva arquitectura/ADR, proveedores ni cambios AR/PWA.
+- Objetivo: rechazar XML mal formado y avisos de borrador/NO EJECUTAR ausentes
+  antes de guardar/regenerar un plano. Compartir validación generación/edición.
+- Validador XML JS fijado por versión/lock, sin DOM ni llamadas externas; CI debe
+  instalar dependencias del Worker para ejercitar el parser real.
+- Aceptación: negativos de XML/avisos sin INSERT/UPDATE, casos SVG pasivos válidos,
+  suite agente/sintaxis/encoding, PR/CI y publicación API verificada.
+- Riesgo: más rechazos de salidas antes aceptadas. Rollback API 2f1270f o revertir PR.
+  Sin datos borrados/reparaciones automáticas. Geometría y elementos inventados después.
+
 ## IA-QUALITY-02 — datos necesarios antes de generar (2026-10-01)
 
 - Autorizada por Adrián: preguntar si faltan datos y rigor en todos los oficios.
