@@ -5,7 +5,8 @@
 - Codex, codex/technical-fixes-release, base 33be87e. Publicación autorizada por Adrián.
 - Preparar marcadores 9.79, PR/CI y workflows manuales API/agente/Pages con SHA fijo.
 - Antes: API healthy b3f97ba9, agente healthy 532149a5, Pages 9.78; D1/R2 disponibles.
-  Rollback y aceptación en TASKS. No tocar archivos ajenos ni secretos/DDL/datos.
+  Rollback y aceptación en TASKS. No tocar archivos ajenos ni secretos/DDL/datos reales;
+  el plano y mensaje QA de la comprobación se identifican más abajo.
 - PR #342 integrada → 00517cf; runs API/agente 36798964736/36798967825 correctos
   desde 33be87e, healthy 7c61d5d0/adecb1d8. Pages 36799719605 desde 00517cf sirve 9.79.
 - Verificación manual: health HTTP 200, assets panel/index/sw/repl3d coinciden con
@@ -24,6 +25,8 @@
   vista ampliada permite enviar. Registrar para auditoría gráfica, sin rediseñar aquí.
 - Siguiente: auditoría normativa/cálculos por departamento y CAD con criterios
   medibles antes de sustituir modelos. Modelo local/pool pendiente de aclaración.
+- Tras las pruebas, empresa 1 y filtro Seguridad restaurados y comprobados por UI;
+  pestañas temporales cerradas. Capturas locales de calculador y plano disponibles.
 
 ## IA-FIX-01 — integrada y publicada (2026-10-01)
 

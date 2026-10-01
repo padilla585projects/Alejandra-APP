@@ -5,7 +5,8 @@
 - Adrián autoriza publicar y comprobar los arreglos al responder «dale» al orden
   de entrega. Responsable Codex, rama codex/technical-fixes-release, base 33be87e.
 - Alcance: cuatro marcadores web 9.79, entrega de API/agente/Pages con workflows
-  existentes y verificación posterior registrada. Sin cambios AR/APK/modelos/datos.
+  existentes y verificación posterior registrada. Sin cambios AR/APK/modelos ni
+  migraciones/borrados; pruebas sintéticas en demo autorizadas al pedir comprobar generación.
 - Aceptación: tres workflows correctos, Workers healthy con versión nueva, Pages
   9.79 y lectura autenticada; pruebas de comportamiento claramente separadas de health.
 - Rollback API 0ecaa43 (run 36770433947); agente 609a0ac (run 35401027009).
