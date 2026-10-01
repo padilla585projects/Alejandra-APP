@@ -1,5 +1,25 @@
 # TASKS — Cola operativa inmediata
 
+## IA-QUALITY-02 — datos necesarios antes de generar (2026-10-01)
+
+- Autorizada por Adrián: preguntar si faltan datos y rigor en todos los oficios.
+- Codex, codex/plan-required-data-gate, base 4eeaebc (9.81 integrada/publicada).
+- QA real en demo: agente generó ID 27 sin pedir altura y añadió radio/separación
+  no aportados. La política de prompt de 9.80 no bastó; no declarar resuelto.
+- Alcance: bloqueo de tool bandejas si falta altura/datum verificable en texto humano;
+  heredar contexto humano por chat normal/stream/reintento/ayudante; criterio común
+  técnico de buscar, preguntar, calcular/verificar sin inventar capacidades.
+- Sin arquitectura CAD nueva, proveedores, AR/APK, migraciones ni borrado de QA.
+- Aceptación: datos del modelo no suplen al humano; ausencia no llama a API_WEB;
+  boceto explícito y datos confirmados permiten avanzar; negativas y prueba publicada.
+- Riesgo: preguntas adicionales si formato de altura no reconocible; rollback revertir PR
+  o agente al SHA sano 158e886. Auditoría integral y verificación geométrica pendientes.
+- **Reanudada por Adrián al pedir «sigue».** Implementación inicial 400f118;
+  agente 295/295 y técnicas 15/15 correctas. Guardar/push para revisión, sin merge/deploy.
+  Ejecutar secuencia de HANDOFF; no afirmar QA publicada corregida antes de comprobarla.
+  PR #346 CI verde; revisión detecta reutilización de boceto anterior y mención
+  de boceto sin solicitud. Corregir y probar esos casos antes de integrar/publicar.
+
 ## IA-QUALITY-01 — controles de calidad profesional (2026-10-01)
 
 - Aprobada por Adrián: mejorar los fallos observados en la entrega 9.79.

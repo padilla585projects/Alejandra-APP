@@ -1225,7 +1225,59 @@ function validarEstiloCAD(svgContent) {
   return problemas;
 }
 
+// Solo texto humano original. Excluye respuestas, resúmenes y resultados de tools.
+function extraerFuentesPlanoHumanas(mensaje, historial = []) {
+  const fuentes = historial.slice(-24).flatMap(item => {
+    if (item.rol === 'user' && typeof item.contenido === 'string') return [item.contenido];
+    if (!item.rol && typeof item.mensaje === 'string') return [item.mensaje];
+    return [];
+  });
+  if (typeof mensaje === 'string') fuentes.push(mensaje);
+  // Un cambio explícito de trabajo invalida datos y permiso de boceto anteriores.
+  const inicioNuevo = fuentes.findLastIndex(texto => /\b(?:(?:nueva|otra)\s+(?:obra|instalaci[oó]n|nave)|(?:nuevo|otro)\s+(?:proyecto|plano|caso))\b/i.test(texto));
+  return inicioNuevo >= 0 ? fuentes.slice(inicioNuevo) : fuentes;
+}
+
+// Mínimo verificable para bandejas: el modelo no puede suplir altura/datum.
+// No acredita cálculo de soportes, cargas, geometría o normativa.
+function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
+  if (input?.tipo !== 'bandejas') return { ok: true };
+  const fuentes = fuentesHumanas.filter(t => typeof t === 'string');
+  let preliminar = false;
+  for (const texto of [...fuentes].reverse()) {
+    if (/\b(?:plano de ejecuci[oó]n|plano(?: para)? (?:ejecutar|instalar|montar)|plano final|no(?:\s+\w+){0,3}\s+(?:boceto|esquema preliminar|preliminar)|sin boceto)\b/i.test(texto)) break;
+    if (/\b(?:haz(?:me)?|genera(?:me)?|crea|dibuja|quiero|necesito|pido|solo|solamente)\s+(?:(?:un|el|ese)\s+)?(?:boceto(?: preliminar)?|esquema preliminar)\b/i.test(texto)
+        || /^\s*(?:s[ií][,\s]*)?(?:un\s+)?(?:boceto(?: preliminar)?|esquema preliminar)[.!]?\s*$/i.test(texto)) { preliminar = true; break; }
+  }
+  if (preliminar) return { ok: true, modo: 'boceto_preliminar', nota: 'Boceto preliminar solicitado; identificar datos pendientes. No ejecutar en obra.' };
+  let altura = null, fuenteAltura = null, referencia = null;
+  for (const texto of [...fuentes].reverse()) {
+    if (altura === null) {
+      const match = texto.match(/\b(?:altura(?: de montaje)?\s*(?::|=|de|a)?|cota(?: de montaje)?\s*(?::|=|de|a)?|[hz]\s*=)\s*\+?(\d+(?:[.,]\d+)?)\s*(mm|cm|metros?|m)\b/i);
+      if (match) {
+        altura = Number(match[1].replace(',', '.')) / (match[2].toLowerCase() === 'mm' ? 1000 : match[2].toLowerCase() === 'cm' ? 100 : 1);
+        fuenteAltura = match[0];
+      }
+    }
+    if (referencia === null) {
+      const match = texto.match(/\b(?:suelo terminado|pavimento terminado|FFL|cota (?:0|cero) (?:del |de )?proyecto)\b/i);
+      if (match) referencia = match[0];
+    }
+    if (altura !== null && referencia !== null) break;
+  }
+  const preguntas = [];
+  if (altura === null || !Number.isFinite(altura)) preguntas.push('¿A qué altura se montará la bandeja? Indica el valor y la unidad.');
+  if (referencia === null) preguntas.push('¿Desde qué nivel se mide esa altura: suelo terminado u otra cota del proyecto?');
+  if (preguntas.length) return {
+    ok: false, error: 'DATOS_TECNICOS_FALTANTES', preguntas,
+    mensaje: 'No se ha generado ningún plano. Pregunta estos datos al usuario y espera su respuesta; no los inventes ni reintentes con supuestos.',
+  };
+  return { ok: true, modo: 'borrador_tecnico', altura_m: altura, referencia, fuente_altura: fuenteAltura };
+}
+
 export {
+  extraerFuentesPlanoHumanas,
+  validarDatosPlanoBandejas,
   timingSafeEqual,
   PRECIOS_USD,
   calcularCosteYProveedor,

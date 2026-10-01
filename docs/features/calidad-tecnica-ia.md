@@ -86,3 +86,39 @@ mantienen su estado Idea/Investigación; esta corrección no las acepta como arq
   parte del botón fuera. Seguimiento acotado: ajustar posición visible al restaurar,
   redimensionar y arrastrar, sin sobrescribir preferencia guardada automáticamente.
   15 regresiones pasan, incluidos restauración oculta y viewport estrecho.
+
+## QA de preguntas: fallo observado, no resuelto por prompt
+
+En 9.80, QA IA-QUALITY-01-B en demo 5 generó ID 27 sin preguntar altura/datum,
+y su respuesta añadió radio mínimo 300 mm y separación atribuida a IEC 61537
+sin datos aportados. El primer envío quedó sin respuesta visible al cerrarse la
+pestaña; no se da por validado. Se retienen los planos QA, sin borrar datos.
+
+IA-QUALITY-02 añade un mínimo determinista a generar_plano de bandejas: altura
+con unidad y datum en texto humano original del turno/historial autorizado.
+Respuestas de assistant, resúmenes y valores del tool_input no sirven para suplirlos.
+Si faltan, devolver DATOS_TECNICOS_FALTANTES con preguntas antes de API_WEB.
+Solo un boceto solicitado por el humano permite pendientes. El contexto original
+se hereda por rutas normal/stream/reintento/ayudante, sin bloques sintéticos del modelo.
+Los valores confirmados se adjuntan al generador como fuente prioritaria.
+
+Limitaciones: formatos no reconocidos requieren aclaración; no identifica por sí solo
+si un dato antiguo corresponde a otro proyecto. Solo controla altura/datum en bandejas,
+no selección/cálculo de soportes ni todos los datos necesarios de cada oficio.
+Formulario directo y otros tipos de plano siguen sin esa barrera. La política común
+ahora incluye arquitectura/delineación/oficios y exige buscar fuentes verificables
+cuando haya dudas; no acredita competencia multidisciplinar por modificar un prompt.
+
+## Cierre 2026-10-01
+
+Pages 9.81 desde 95322273271d30557b677f2aef2d8590b4dccf35, run 36803600664:
+correcto. PR #345 integrada → 4eeaebc, cuatro checks verdes. Assets version/panel/
+index/sw/repl3d HTTP 200, hashes normalizados coincidentes con fuente revisada.
+Chrome: viewport 1536×687, FAB original y663,8 ajustado a y627/h56, dentro de ventana.
+Sesión empresa 1/Seguridad restaurada y comprobada; emulación retirada, tab cerrada.
+Captura local ignorada .ai-benchmark-results/release-9.81/viewport-restored.png.
+
+Adrián solicita terminar por hoy. IA-QUALITY-02 implementación 400f118 guardada,
+295/295 agente y 15/15 técnicas; todavía sin merge/despliegue/verificación real.
+La producción conserva la política de 9.80 y su fallo QA observado. Continuar por
+HANDOFF mañana; no presentar esa política como garantía de preguntas resuelta.

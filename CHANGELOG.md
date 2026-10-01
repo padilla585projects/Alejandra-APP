@@ -4,6 +4,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — datos faltantes IA-QUALITY-02)
+
+- Generar bandejas desde chat exige altura con unidad y referencia en texto humano,
+  o un boceto preliminar pedido expresamente. Datos inventados por el modelo no
+  suplen esos requisitos; se devuelven preguntas antes de generar/guardar.
+- Criterio común para ingeniería, arquitectura, delineación/CAD, oficios y Office:
+  consultar, preguntar, buscar fuentes fiables ante dudas y verificar herramientas.
+  Sin cambios de modelos ni acreditación de competencia por el texto del prompt.
+
 ### Fixed (2026-10-01 — calidad técnica IA-QUALITY-01)
 
 - Alejandra debe consultar y preguntar por datos críticos faltantes antes de crear

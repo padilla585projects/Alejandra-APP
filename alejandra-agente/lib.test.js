@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  extraerFuentesPlanoHumanas,
+  validarDatosPlanoBandejas,
   PRECIOS_USD,
   calcularCosteYProveedor,
   filtrarToolsPorAuth,
@@ -41,6 +43,60 @@ import {
   construirSVGCableadoInstrumentacion,
   validarEstiloCAD,
 } from './lib.js';
+
+describe('datos humanos necesarios para planos de bandejas', () => {
+  it('un nuevo trabajo explícito no reutiliza altura ni permiso de boceto antiguos', () => {
+    const previo = [{ rol: 'user', contenido: 'Haz un boceto preliminar, h=4 m sobre FFL' }];
+    for (const mensaje of ['Otra instalación de bandejas, planta 10 x 6 m', 'Nuevo plano para instalar bandejas']) {
+      const fuentes = extraerFuentesPlanoHumanas(mensaje, previo);
+      expect(fuentes).toEqual([mensaje]);
+      expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, fuentes).error).toBe('DATOS_TECNICOS_FALTANTES');
+    }
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['Haz un boceto preliminar', 'Ahora quiero el plano para instalar']).ok).toBe(false);
+  });
+  it('mencionar o preguntar qué es un boceto no equivale a solicitarlo', () => {
+    for (const texto of ['¿Qué es un boceto preliminar?', 'La documentación menciona un boceto', 'No generes un boceto preliminar']) {
+      expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, [texto]).ok).toBe(false);
+    }
+  });
+  it('excluye altura inventada por assistant y conserva texto humano original', () => {
+    const fuentes = extraerFuentesPlanoHumanas('Recorrido X/Y sin altura', [
+      { rol: 'assistant', contenido: 'h=4,5 m sobre suelo terminado' },
+      { rol: 'system', contenido: 'h=3 m sobre FFL' },
+      { rol: 'user', contenido: 'Planta 10 x 6 m, Y=2 m' },
+      { mensaje: 'Bandeja 300 x 60 mm', respuesta: 'altura=2 m FFL' },
+    ]);
+    expect(fuentes).toEqual(['Planta 10 x 6 m, Y=2 m', 'Bandeja 300 x 60 mm', 'Recorrido X/Y sin altura']);
+    const resultado = validarDatosPlanoBandejas({ tipo: 'bandejas', descripcion: 'h=5 m sobre FFL', fuentesHumanas: ['h=5 m FFL'] }, fuentes);
+    expect(resultado.error).toBe('DATOS_TECNICOS_FALTANTES');
+    expect(resultado.preguntas).toHaveLength(2);
+  });
+  it('no confunde Y en planta con Z ni altura con referencia de nivel', () => {
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['X=2 m, Y=2 m, suelo terminado']).preguntas).toHaveLength(1);
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura=3 m']).preguntas).toHaveLength(1);
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura sin definir, referencia FFL']).ok).toBe(false);
+  });
+  it('reutiliza valores humanos confirmados y convierte unidades explícitas', () => {
+    for (const [texto, valor] of [['h=2,8 m sobre suelo terminado', 2.8],
+      ['altura de montaje: 280 cm desde pavimento terminado', 2.8],
+      ['Z=2800 mm sobre FFL', 2.8], ['altura 0 metros FFL', 0]]) {
+      const resultado = validarDatosPlanoBandejas({ tipo: 'bandejas' }, [texto, 'Con esos datos prepara el plano de ejecución']);
+      expect(resultado.ok).toBe(true);
+      expect(resultado.altura_m).toBe(valor);
+    }
+  });
+  it('solo permite omitir altura en boceto explícito y respeta cambio a ejecución', () => {
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['Haz un boceto preliminar']).modo).toBe('boceto_preliminar');
+    for (const texto of ['No es un boceto preliminar', 'No quiero boceto', 'Quiero plano de ejecución']) {
+      expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['Haz un boceto preliminar', texto]).ok).toBe(false);
+    }
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas', modo: 'boceto_preliminar' }, []).ok).toBe(false);
+  });
+  it('no impone altura de bandejas a un gantt o esquema eléctrico', () => {
+    expect(validarDatosPlanoBandejas({ tipo: 'gantt' }, []).ok).toBe(true);
+    expect(validarDatosPlanoBandejas({ tipo: 'electrico' }, []).ok).toBe(true);
+  });
+});
 
 describe('aislamiento del contexto del chat', () => {
   it('no inyecta las tablas legacy globales en el prompt de sistema', () => {
@@ -1904,7 +1960,7 @@ describe('gestionar_pedido / delegar_tarea (ADR-0022)', () => {
     expect(inicio).toBeGreaterThanOrEqual(0);
     expect(fin).toBeGreaterThan(inicio);
     expect(cuerpo).toMatch(/evaluarInvocacionCognitiva\(env, tb\.name, tb\.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante\)/);
-    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol\)/);
+    expect(cuerpo).toMatch(/ejecutarToolConTelemetria\(env, tb\.name, tb\.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano\)/);
     // No debe declarar ni pasar un Set de confirmación propio -- solo los que
     // llegan como parámetro de ejecutarTool(), extraídos del mensaje real del humano.
     expect(cuerpo).not.toMatch(/new Set\(\)/);

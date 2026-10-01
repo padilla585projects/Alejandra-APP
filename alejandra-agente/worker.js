@@ -24,6 +24,8 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 // que cambiar precios, allowlists, o las validaciones IDOR/SSRF, se cambia en
 // lib.js y worker.js lo recibe vía este import.
 import {
+  extraerFuentesPlanoHumanas,
+  validarDatosPlanoBandejas,
   timingSafeEqual,
   PRECIOS_USD,
   calcularCosteYProveedor,
@@ -73,7 +75,13 @@ const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
 const NEXUS_MODULES = {
-  base: `Eres Alejandra, ingeniera técnica autónoma e independiente especializada en instalaciones eléctricas y mecánicas industriales. Creada por Adrián Padilla (superadmin/desarrollador). Respondes siempre en español, directa y profesional. Tienes memoria persistente, búsqueda web en tiempo real, visión de fotos/documentos, acceso a catálogos de fabricantes y voz bidireccional.
+  base: `Eres Alejandra, asistente técnica multidisciplinar de una suite de gestión de obra y oficina. Ayudas en ingeniería, arquitectura, delineación/CAD y oficios: instalaciones eléctricas, mecánicas, telecomunicaciones, obra civil, albañilería, carpintería, pintura y seguridad, además de gestión y trabajo diario de Office. Creada por Adrián Padilla (superadmin/desarrollador). Respondes siempre en español, directa y profesional. Tienes memoria persistente, búsqueda web en tiempo real, visión de fotos/documentos y herramientas autorizadas de la suite.
+
+CRITERIO TECNICO COMUN — APLICA A TODOS LOS OFICIOS:
+- Identifica el objetivo, oficio, entorno y datos necesarios. Consulta los datos autorizados existentes y no repitas preguntas ya contestadas. Si falta un dato que condiciona cálculo, plano o instalación, pregunta de forma concreta y espera; no rellenes con ejemplos o valores habituales. Un boceto preliminar requiere solicitud expresa y pendientes visibles.
+- Si no sabes algo, hay incertidumbre, referencia normativa o dato de fabricante sin verificar, usa las herramientas de búsqueda disponibles. Para normas y materiales prioriza fuentes oficiales, textos consolidados y documentación del fabricante; cita fuente y fecha/versión. Una búsqueda no verificada o memoria antigua no prueba vigencia ni aplicabilidad. Si la búsqueda falla, explica qué dato no se ha podido contrastar.
+- Usa las herramientas de cálculo, planos/CAD y gestión que realmente estén disponibles y permitidas. Comprueba unidades, supuestos, resultados y errores; no atribuyas al dibujo un cálculo que no se ha ejecutado. Distingue dato aportado, medición, estimación y resultado verificado. No afirmes dominar una herramienta, ejecutar un cambio, cumplimiento o firma profesional sin evidencia del resultado.
+- En CAD conserva unidades, geometría, capas e identificadores cuando la herramienta lo soporte; comprueba lo que pueda verificarse y declara pendientes concretos. En Office confirma el resultado real de la acción y ayuda a resolver fallos. Estas reglas prevalecen sobre ejemplos y descripciones de experiencia de los módulos de oficio.
 
 DISCIPLINA DE TRABAJO (ALEJANDRA-FABRICA-01/ESQUEMA-01, 25/08/2026) — trabajas con el
 mismo rigor con el que un buen ingeniero de software revisa su propio trabajo antes de
@@ -2223,10 +2231,10 @@ async function registrarUsoTool(env, { tool, empresaId = null, usuarioId = null,
 // Envuelve executarTool() para capturar success/error sin tocar cada case
 // del switch. Fail-open: si registrarUsoTool falla, el resultado de la tool
 // se devuelve igual (la telemetría nunca debe romper el chat).
-async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento = null, rol = null) {
+async function ejecutarToolConTelemetria(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento = null, rol = null, fuentesPlano = []) {
   let resultado, err;
   try {
-    resultado = await ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol);
+    resultado = await ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano);
   } catch (e) {
     err = e && e.message ? e.message : String(e);
     resultado = JSON.stringify({ ok: false, error: `Error ejecutando "${nombre}": ${err}`, tool: nombre });
@@ -6560,6 +6568,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // comportamiento distinto segun usen streaming o no — 'simple' excluye
     // contexto extra por su naturaleza de charla corta (cascada gratis de OpenRouter).
     const incluirAprendizajes = clas.experto !== 'simple';
+    const fuentesPlano = extraerFuentesPlanoHumanas(mensaje, contexto.historial || []);
     const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto, usuario_label, empresa_id);
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx MAX_ITER iteraciones
@@ -6629,7 +6638,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
-          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
+          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (!clasificarResultadoTool(resultado)) huboFalloEsteTurno = true;
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
@@ -6670,7 +6679,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     }
     const textoFinal = await verificarYReintentarSiNecesario(env, textoRaw, herramientasUsadas, messages, {
       tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
-      send: undefined, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol
+      send: undefined, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano
     });
 
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
@@ -6758,6 +6767,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // ver comentario en procesarConNEXUSStream -- mismo límite, unificado por el mismo motivo.
     const limitHistorial    = clas.experto === 'simple' ? 12 : 24;
     const incluirAprendizajes = clas.experto !== 'simple';
+    const fuentesPlano = extraerFuentesPlanoHumanas(mensaje, contexto.historial || []);
     const messages          = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto, usuario_label, empresa_id);
 
     // PASO 5: Loop Anthropic + tools
@@ -6842,7 +6852,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
         const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
         const resultado = control.permitida
-          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
+          ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (!clasificarResultadoTool(resultado)) huboFalloEsteTurno = true;
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
@@ -6935,7 +6945,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         herramientasUsadas,
         messages,
         { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
-          send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol }
+          send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano }
       );
       await send({ type: 'text', texto: textoFinal });
     } else {
@@ -6961,7 +6971,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
           const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, clas.experto);
           const resultado = control.permitida
-            ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
+            ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano)
             : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
           const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
             ? '(imagen analizada)'
@@ -6985,7 +6995,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           herramientasUsadas,
           messages,
           { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
-            send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol }
+            send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano }
         );
         await send({ type: 'text', texto: textoFinal });
       }
@@ -7003,7 +7013,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     const textoAntesDeVerificar = textoFinal;
     textoFinal = await verificarYReintentarSiNecesario(env, textoFinal, herramientasUsadas, messages,
       { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
-        send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol }
+        send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano }
     );
     if (textoFinal !== textoAntesDeVerificar) {
       await send({ type: 'text', texto: '\n\n' + textoFinal });
@@ -7205,7 +7215,7 @@ async function verificarYReintentarSiNecesario(env, textoOriginal, herramientasU
   if (textoVerificado === textoOriginal) return textoVerificado; // nada que corregir, camino normal
 
   const { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto, send,
-          codigosConfirmados, codigosConfirmadosEnvio, departamento, rol } = ctx;
+          codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano = [] } = ctx;
 
   try {
     messages.push({ role: 'assistant', content: [{ type: 'text', text: textoOriginal }] });
@@ -7226,7 +7236,7 @@ async function verificarYReintentarSiNecesario(env, textoOriginal, herramientasU
       if (send) await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
       const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, tools, usuario_id, empresa_id, authOk, esDevVerificado, experto);
       const resultado = control.permitida
-        ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
+        ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano)
         : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
       if (clasificarResultadoTool(resultado)) algunaEscrituraReal = true;
       const previewText = typeof resultado === 'string' && resultado.startsWith('[{') ? '(imagen analizada)' : String(resultado).substring(0, 200);
@@ -8473,7 +8483,7 @@ function fechaMadridAUTC(fechaHoraStr) {
 // indirecta vía el historial de chat que se le pasa como contexto al modelo.
 // Ahora el default es fail-closed (false); ejecutarReflexion() además pasa
 // los valores explícitos para dejar la intención clara en el código.
-async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false, codigosConfirmados = new Set(), codigosConfirmadosEnvio = new Set(), departamento = null, rol = null) {
+async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false, codigosConfirmados = new Set(), codigosConfirmadosEnvio = new Set(), departamento = null, rol = null, fuentesPlano = []) {
   // Normaliza un posible empresa_id a entero positivo o null. Necesario porque
   // el 'empresa_id' de contexto puede llegar como el string literal 'default'
   // (sentinela de sesion sin empresa asignada, usado en varias partes de este
@@ -10483,6 +10493,9 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!tipo || !titulo || !descripcion) return JSON.stringify({ error: 'tipo, titulo y descripcion son obligatorios' });
         const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt', 'unifilar', 'planta_electrica', 'planta_industrial'];
         if (!tiposValidos.includes(tipo)) return JSON.stringify({ error: 'tipo invalido' });
+        const datosPlano = validarDatosPlanoBandejas(input, fuentesPlano);
+        if (!datosPlano.ok) return JSON.stringify(datosPlano);
+        const descripcionVerificada = tipo === 'bandejas' ? descripcion + '\n\nDATOS VERIFICADOS EN TEXTO HUMANO (prevalecen sobre los ejemplos):\n' + JSON.stringify(datosPlano) : descripcion;
         // Heartbeat SSE cada 5s para mantener la conexion viva durante la generacion SVG (puede tardar 60-90s)
         let _hbTimer = null;
         if (sendSSE) {
@@ -10502,7 +10515,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
             body: JSON.stringify({
-              tipo, titulo, descripcion,
+              tipo, titulo, descripcion: descripcionVerificada,
               circuitos: circuitos || [],
               empresa_id: empresaPlano,
               usuario_id,
@@ -11234,7 +11247,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             }
             const control = await evaluarInvocacionCognitiva(env, tb.name, tb.input, ayudanteTools, usuario_id, empresa_id, authOk, esDevVerificado, modoAyudante);
             let resultado = control.permitida
-              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol)
+              ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, ayudanteTools, sendSSE, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano)
               : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
             // GESTION-AUTO-CORREOS-01 (31/08/2026): fallo real reproducido dos veces en vivo
             // -- el ayudante "correos" se paraba con un texto de transición ("ahora analizo/

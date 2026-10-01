@@ -1,5 +1,54 @@
 # Handoff — Alejandra 2.0
 
+## IA-QUALITY-02 — reanudada (2026-10-01)
+
+- Adrián solicita «sigue». Codex, codex/plan-required-data-gate, PR #346 abierta
+  como borrador, head a9c87b4, cuatro checks verdes; ningún despliegue de esta PR todavía.
+- Revisión: invalidar contexto anterior ante nuevo trabajo explícito; mención de
+  boceto no debe permitir pendientes; plano para instalar cambia a modo ejecución.
+- Sin cambios AR/APK/proveedores/datos destructivos. Rollback agente 158e886.
+- Siguiente: regresiones y CI con corrección, integrar/publicar agente por SHA completo,
+  registrar health y pruebas demo sin altura/con datos/boceto; restaurar sesión al final.
+
+## Cierre del día — IA-QUALITY-02 en pausa (2026-10-01)
+
+- Adrián pide cerrar por hoy, documentar y hacer commit/push; continuar mañana.
+- Rama codex/plan-required-data-gate, base main 4eeaebc. Implementación pendiente
+  400f118 `fix(ai): require human tray height before generating plans`.
+- Local: agente 295/295 y técnicas 15/15; sintaxis Workers, encoding, departamentos,
+  inventarios y diff correctos. Sin migraciones, secretos ni datos borrados.
+- Código de IA-QUALITY-02 guardado para revisión, **sin integrar ni publicar**.
+  No afirmar que el modelo ya pregunta correctamente en producción.
+- Lo publicado: Pages 9.81 (9532227, run 36803600664), API/agente desde 158e886,
+  versiones/health en calidad-tecnica-ia.md. PR #344/#345 integradas y CI verde.
+- Pages 9.81: assets version/panel/index/sw/repl3d HTTP 200 y SHA256 coincidente.
+  Chrome en viewport 1536×687 ajusta FAB de y663,8 a y627: completamente visible.
+  Captura ignorada .ai-benchmark-results/release-9.81/viewport-restored.png.
+- Empresa 1/Seguridad restaurados por UI y comprobados; emulación retirada y pestaña
+  temporal cerrada. Conservar alejandra.apk, tauri/, imágenes no versionadas y .claude ajenos.
+- Mañana: revisar diff 400f118 y CI de PR; comprobar cobertura de fuentes humanas en
+  normal/stream/reintento/ayudante. Integrar solo con CI verde. Publicar únicamente
+  agente por workflow y SHA completo, rollback 158e886; registrar health y versión.
+- Repetir QA sintético en demo 5: sin altura/datum debe preguntar y no crear plano;
+  con datos humanos explícitos debe avanzar; boceto explícito identifica pendientes.
+  No borrar QA existentes. Revisar fuente de cada valor y no acreditar cotas/CAD por SVG.
+- Después: auditoría técnica por oficio (datos, normativa, calculadores, herramientas,
+  casos positivos/negativos); arquitectura CAD sigue Idea/Investigación y requiere
+  decisión revisable. Modelo local/pool y muestras antes de rediseño siguen pendientes.
+
+## IA-QUALITY-02 — implementación guardada (2026-10-01)
+
+- Codex, codex/plan-required-data-gate, base 4eeaebc. Tarea autorizada en TASKS.
+- 9.81 publicada por Pages 36803600664 desde 9532227, PR #345 integrada con CI verde.
+- QA real de preguntas en 9.80 falló: generó ID 27 sin altura/datum y añadió
+  valores no aportados. No declarar resuelto por prompt ni borrar planos QA.
+- Nuevas fuentes originales humanas excluyen assistant/resúmenes/tool_input;
+  gate bandejas devuelve preguntas antes de API_WEB si falta altura/datum.
+  Herencia por chat normal/stream/reintento/ayudante. Otros tipos y formulario
+  directo no cubiertos. Rigor común ampliado a arquitectura/CAD y todos los oficios.
+- Pruebas locales 295/295 y 15/15 correctas. Cierre solicitado: no publicar ahora.
+  Reanudación exacta, estado y verificación 9.81 en el bloque superior.
+
 ## IA-QUALITY-01 — 9.80 publicada; seguimiento viewport (2026-10-01)
 
 - Codex, codex/professional-quality-controls, base ef173a2; alcance y aceptación en TASKS.

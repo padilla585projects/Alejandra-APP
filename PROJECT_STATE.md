@@ -2,12 +2,19 @@
 
 ## Calidad técnica — 2026-10-01
 
+Cierre solicitado por Adrián: Pages 9.81 publicada y verificada, Workers desde 158e886.
+El test real de preguntas falló (plano 27 sin altura/datum). Nueva barrera IA-QUALITY-02
+en rama codex/plan-required-data-gate, commit 400f118: 295 agente/15 técnicas pasan,
+**sin integrar/publicar**. HANDOFF contiene reanudación exacta para mañana.
+Sesión empresa 1/Seguridad restaurada; archivos ajenos y QA preservados.
+
 PR #344 integrada → 2716bff, web 9.80 y Workers publicados con CI verde.
 Health/asset y chat compacto verificados; fuentes y límites en
 docs/features/calidad-tecnica-ia.md. Se refuerzan preguntas por datos faltantes,
 fidelidad de planos, rechazo de SVG truncado, controles Office y referencias mecánicas.
-Esto no acredita CAD ni auditoría normativa completa. Seguimiento en TASKS:
-FAB con posición guardada fuera de viewport, ajuste y verificación de preguntas QA.
+Esto no acredita CAD ni auditoría normativa completa. Ajuste FAB integrado por PR #345
+→ 4eeaebc y publicado 9.81; caso de viewport menor verificado en Chrome. Preguntas QA
+siguen pendientes de publicación y prueba de la nueva barrera.
 AR/APK/modelos de producción conservados. Sin migraciones ni datos borrados.
 
 ## Entrega técnica web 9.79 — 2026-10-01
