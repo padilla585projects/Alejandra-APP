@@ -78,7 +78,9 @@ test('protection refuses invalid supplied data and leaves differential selection
     assert.ok(JSON.parse(calculate({ intensidad_nominal_a: 32, ...bad })).error);
   }
   const motor = JSON.parse(calculate({ intensidad_nominal_a: 32, tipo_carga: 'motor' }));
-  assert.equal(motor.magnetotermico.calibre_a, 32);
+  assert.equal(motor.magnetotermico.calibre_a, null);
+  assert.equal(motor.magnetotermico.calibre_candidato_a, 32);
+  assert.equal(motor.seleccion_definitiva_autorizada, false);
   assert.equal(motor.magnetotermico.curva, null);
   assert.match(motor.magnetotermico.pregunta_curva, /arranque/);
   assert.equal(motor.diferencial.sensibilidad_ma, null);
@@ -86,6 +88,17 @@ test('protection refuses invalid supplied data and leaves differential selection
   const coordination = JSON.parse(calculate({ intensidad_nominal_a: 32, seccion_cable_mm2: 1.5 }));
   assert.equal(coordination.coordinacion_cable.seccion_minima_mm2, 2.5);
 });
+test('a favourable tabulated comparison cannot turn a candidate into an authorised protection', () => {
+  const result = JSON.parse(calculate({ intensidad_nominal_a: 26, seccion_cable_mm2: 10,
+    instalacion: 'bandeja', tension_v: 230 }));
+  assert.equal(result.coordinacion_cable.cumple, true);
+  assert.equal(result.coordinacion_cable.calibre_candidato_a, 32);
+  assert.equal(result.coordinacion_cable.calibre_proteccion_a, null);
+  assert.equal(result.magnetotermico.calibre_a, null);
+  assert.equal(result.seleccion_definitiva_autorizada, false);
+  assert.match(result.decision_permitida, /No fijar/);
+});
+
 test('plan generation rejects truncated or ambiguous SVG instead of fabricating a closure', () => {
   const extract = load('worker.js', '_extraerSvgCompleto');
   assert.equal(extract('```xml\n<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>\n```'), '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>');
@@ -324,7 +337,8 @@ test('Office refuses disabled clicks and unavailable options without changing se
 test('protection never proposes a smaller rating than the requested current', () => {
   for (const current of [0.5, 6, 6.1, 31, 32, 100, 124.9, 125]) {
     const result = JSON.parse(calculate({ intensidad_nominal_a: current }));
-    assert.ok(result.magnetotermico.calibre_a >= current);
+    assert.ok(result.magnetotermico.calibre_candidato_a >= current);
+    assert.equal(result.magnetotermico.calibre_a, null);
   }
   for (const current of [125.1, 126, 200, 1000]) {
     const result = JSON.parse(calculate({ intensidad_nominal_a: current }));

@@ -1,5 +1,17 @@
 # Estado del proyecto — Alejandra 2.0
 
+## IA-CALC-QUALITY-04 — contrato candidato (2026-10-01, en desarrollo)
+
+La herramienta conserva el calibre normalizado como calibre_candidato_a; calibre_a
+y calibre_proteccion_a definitivos quedan null. seleccion_definitiva_autorizada=false
+y decision_permitida limita el resultado a explorar candidato, sin fijar/comprar/instalar.
+Comparación de ampacidad tabulada sigue parcial, aunque resulte favorable. Pregunta
+por cable, aislamiento, sección, instalación, temperatura y agrupamiento reales.
+297 agente/29 técnicas pasan, incluyendo rechazo de autorización con sección aportada.
+Riesgo de compatibilidad: consumidores deben manejar null y nuevo campo candidato.
+Rollback agente 45adbee6cfd40e7dc1b816bd780b46d761fb8d60.
+PR/publicación/QA pendientes. Sin nueva fase/ADR, tablas, migraciones ni AR/APK/Pages.
+
 ## IA-CALC-QUALITY-03 — publicación y QA (2026-10-01)
 
 PR #352 → 97c0aefae1fe6a882a1d84e14d944da4baf97461, cuatro checks verdes.

@@ -4,6 +4,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — IA-CALC-QUALITY-04)
+
+- Protección separa calibre candidato y selección definitiva pendiente; comparar
+  ampacidad tabulada no autoriza fijar/comprar/instalar una protección.
+
 ### Fixed (2026-10-01 — IA-CALC-QUALITY-03)
 
 - Protección devuelve curva pendiente y pide arranque/cortocircuito/fabricante;
