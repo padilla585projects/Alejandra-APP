@@ -1233,7 +1233,9 @@ function extraerFuentesPlanoHumanas(mensaje, historial = []) {
     return [];
   });
   if (typeof mensaje === 'string') fuentes.push(mensaje);
-  return fuentes;
+  // Un cambio explícito de trabajo invalida datos y permiso de boceto anteriores.
+  const inicioNuevo = fuentes.findLastIndex(texto => /\b(?:(?:nueva|otra)\s+(?:obra|instalaci[oó]n|nave)|(?:nuevo|otro)\s+(?:proyecto|plano|caso))\b/i.test(texto));
+  return inicioNuevo >= 0 ? fuentes.slice(inicioNuevo) : fuentes;
 }
 
 // Mínimo verificable para bandejas: el modelo no puede suplir altura/datum.
@@ -1243,8 +1245,9 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
   const fuentes = fuentesHumanas.filter(t => typeof t === 'string');
   let preliminar = false;
   for (const texto of [...fuentes].reverse()) {
-    if (/\b(?:plano de ejecuci[oó]n|no(?:\s+\w+){0,3}\s+(?:boceto|esquema preliminar|preliminar)|sin boceto)\b/i.test(texto)) break;
-    if (/\b(?:boceto(?: preliminar)?|esquema preliminar)\b/i.test(texto)) { preliminar = true; break; }
+    if (/\b(?:plano de ejecuci[oó]n|plano(?: para)? (?:ejecutar|instalar|montar)|plano final|no(?:\s+\w+){0,3}\s+(?:boceto|esquema preliminar|preliminar)|sin boceto)\b/i.test(texto)) break;
+    if (/\b(?:haz(?:me)?|genera(?:me)?|crea|dibuja|quiero|necesito|pido|solo|solamente)\s+(?:(?:un|el|ese)\s+)?(?:boceto(?: preliminar)?|esquema preliminar)\b/i.test(texto)
+        || /^\s*(?:s[ií][,\s]*)?(?:un\s+)?(?:boceto(?: preliminar)?|esquema preliminar)[.!]?\s*$/i.test(texto)) { preliminar = true; break; }
   }
   if (preliminar) return { ok: true, modo: 'boceto_preliminar', nota: 'Boceto preliminar solicitado; identificar datos pendientes. No ejecutar en obra.' };
   let altura = null, fuenteAltura = null, referencia = null;

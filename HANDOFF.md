@@ -1,5 +1,15 @@
 # Handoff — Alejandra 2.0
 
+## IA-QUALITY-02 — reanudada (2026-10-01)
+
+- Adrián solicita «sigue». Codex, codex/plan-required-data-gate, PR #346 abierta
+  como borrador, head a9c87b4, cuatro checks verdes; ningún despliegue de esta PR todavía.
+- Revisión: invalidar contexto anterior ante nuevo trabajo explícito; mención de
+  boceto no debe permitir pendientes; plano para instalar cambia a modo ejecución.
+- Sin cambios AR/APK/proveedores/datos destructivos. Rollback agente 158e886.
+- Siguiente: regresiones y CI con corrección, integrar/publicar agente por SHA completo,
+  registrar health y pruebas demo sin altura/con datos/boceto; restaurar sesión al final.
+
 ## Cierre del día — IA-QUALITY-02 en pausa (2026-10-01)
 
 - Adrián pide cerrar por hoy, documentar y hacer commit/push; continuar mañana.

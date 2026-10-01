@@ -14,9 +14,11 @@
   boceto explícito y datos confirmados permiten avanzar; negativas y prueba publicada.
 - Riesgo: preguntas adicionales si formato de altura no reconocible; rollback revertir PR
   o agente al SHA sano 158e886. Auditoría integral y verificación geométrica pendientes.
-- **En pausa por petición de Adrián al cerrar el día.** Implementación 400f118;
+- **Reanudada por Adrián al pedir «sigue».** Implementación inicial 400f118;
   agente 295/295 y técnicas 15/15 correctas. Guardar/push para revisión, sin merge/deploy.
-  Mañana ejecutar la secuencia exacta de HANDOFF; no afirmar QA publicada corregida.
+  Ejecutar secuencia de HANDOFF; no afirmar QA publicada corregida antes de comprobarla.
+  PR #346 CI verde; revisión detecta reutilización de boceto anterior y mención
+  de boceto sin solicitud. Corregir y probar esos casos antes de integrar/publicar.
 
 ## IA-QUALITY-01 — controles de calidad profesional (2026-10-01)
 

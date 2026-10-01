@@ -45,6 +45,20 @@ import {
 } from './lib.js';
 
 describe('datos humanos necesarios para planos de bandejas', () => {
+  it('un nuevo trabajo explícito no reutiliza altura ni permiso de boceto antiguos', () => {
+    const previo = [{ rol: 'user', contenido: 'Haz un boceto preliminar, h=4 m sobre FFL' }];
+    for (const mensaje of ['Otra instalación de bandejas, planta 10 x 6 m', 'Nuevo plano para instalar bandejas']) {
+      const fuentes = extraerFuentesPlanoHumanas(mensaje, previo);
+      expect(fuentes).toEqual([mensaje]);
+      expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, fuentes).error).toBe('DATOS_TECNICOS_FALTANTES');
+    }
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['Haz un boceto preliminar', 'Ahora quiero el plano para instalar']).ok).toBe(false);
+  });
+  it('mencionar o preguntar qué es un boceto no equivale a solicitarlo', () => {
+    for (const texto of ['¿Qué es un boceto preliminar?', 'La documentación menciona un boceto', 'No generes un boceto preliminar']) {
+      expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, [texto]).ok).toBe(false);
+    }
+  });
   it('excluye altura inventada por assistant y conserva texto humano original', () => {
     const fuentes = extraerFuentesPlanoHumanas('Recorrido X/Y sin altura', [
       { rol: 'assistant', contenido: 'h=4,5 m sobre suelo terminado' },
