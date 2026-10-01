@@ -1,5 +1,17 @@
 # TASKS — Cola operativa inmediata
 
+## IA-FIX-01-ENTREGA — publicación y verificación (2026-10-01)
+
+- Adrián autoriza publicar y comprobar los arreglos al responder «dale» al orden
+  de entrega. Responsable Codex, rama codex/technical-fixes-release, base 33be87e.
+- Alcance: cuatro marcadores web 9.79, entrega de API/agente/Pages con workflows
+  existentes y verificación posterior registrada. Sin cambios AR/APK/modelos/datos.
+- Aceptación: tres workflows correctos, Workers healthy con versión nueva, Pages
+  9.79 y lectura autenticada; pruebas de comportamiento claramente separadas de health.
+- Rollback API 0ecaa43 (run 36770433947); agente 609a0ac (run 35401027009).
+  Pages: localizar SHA de la última publicación 9.78 antes de despachar entrega.
+- En curso: preparar versión/PR; comprobar sesión de navegador sin leer credenciales.
+
 ## IA-FIX-01 — correcciones técnicas tras auditoría (2026-10-01)
 
 - Autorizado por Adrián al solicitar continuar. Responsable: Codex.

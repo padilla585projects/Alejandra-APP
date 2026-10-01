@@ -1,5 +1,14 @@
 # Handoff — Alejandra 2.0
 
+## IA-FIX-01-ENTREGA — en curso (2026-10-01)
+
+- Codex, codex/technical-fixes-release, base 33be87e. Publicación autorizada por Adrián.
+- Preparar marcadores 9.79, PR/CI y workflows manuales API/agente/Pages con SHA fijo.
+- Antes: API healthy b3f97ba9, agente healthy 532149a5, Pages 9.78; D1/R2 disponibles.
+  Rollback y aceptación en TASKS. No tocar archivos ajenos ni secretos/DDL/datos.
+- Siguiente: validar/entregar y registrar salud, assets y prueba autenticada cuando
+  exista sesión. No confundir comprobación de código con flujo real autenticado.
+
 ## IA-FIX-01 — integrada, publicación pendiente (2026-10-01)
 
 - Codex; rama codex/technical-tools-corrections; base 7e2ce30, PR #339 ya integrada.
