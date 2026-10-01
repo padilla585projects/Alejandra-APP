@@ -1987,7 +1987,7 @@ const TOOL_CALCULAR_BANDEJA = {
 
 const TOOL_CALCULAR_PROTECCION = {
   name: 'calcular_proteccion',
-  description: 'Preselección de calibre de magnetotérmico hasta 125 A y comparación parcial con tabla de cable. Curva y diferencial quedan pendientes; polos son un supuesto. No verifica selectividad ni cortocircuito con datos incompletos; esos puntos quedan pendientes.',
+  description: 'Explora calibre candidato hasta 125 A y compara con ampacidad tabulada sin factores. No determina ampacidad real ni coordinación integral: no afirmar que el cable es seguro ni que se puede fijar/comprar/instalar la protección. Curva, diferencial y selección final pendientes; polos supuestos. Obtener más datos no convierte esta herramienta parcial en una verificación integral.',
   input_schema: {
     type: 'object',
     properties: {
@@ -8460,17 +8460,20 @@ function calcularProteccion(input) {
     const Iz = tabla[seccionCable] ? tabla[seccionCable][idxConductores] : 0;
     resultado.coordinacion_cable = {
       seccion_mm2: seccionCable,
-      ampacidad_cable_a: Iz,
+      ampacidad_cable_a: null,
+      ampacidad_tabla_sin_factores_a: Iz,
+      supuestos_tabla: 'Cobre XLPE; sin verificar cable real, temperatura, agrupamiento ni condiciones de servicio.',
       calibre_proteccion_a: null,
       calibre_candidato_a: calibreElegido,
-      cumple: Iz >= calibreElegido,
+      cumple: null,
+      cumple_comparacion_tabular: Iz >= calibreElegido,
       alcance: 'Solo comparación de ampacidad tabulada sin factores frente al calibre; no acredita coordinación normativa.',
       condicion: `Iz tabulada (${Iz}A) ${Iz >= calibreElegido ? '≥' : '<'} calibre candidato (${calibreElegido}A). Comparación parcial; no autoriza una selección definitiva.`
     };
     if (Iz < calibreElegido) {
       // Sugerir sección mínima
       const seccionMinima = Object.entries(tabla).sort(([a], [b]) => Number(a) - Number(b)).find(([s, v]) => v[idxConductores] >= calibreElegido);
-      if (seccionMinima) resultado.coordinacion_cable.seccion_minima_mm2 = parseFloat(seccionMinima[0]);
+      if (seccionMinima) resultado.coordinacion_cable.seccion_candidata_tabular_mm2 = parseFloat(seccionMinima[0]);
     }
   }
 

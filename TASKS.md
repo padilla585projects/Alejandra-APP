@@ -1,5 +1,16 @@
 # TASKS — Cola operativa inmediata
 
+## IA-CALC-QUALITY-05 — comparación tabulada sin aprobación (2026-10-01, en desarrollo)
+
+- Continuación de QA E autorizada; Codex, codex/protection-tabulated-comparison,
+  base 4871ac5. Dependencias #354/#355 integradas, agente healthy; ADR-0007 vigente.
+- Contrato: cumple y ampacidad real null; comparación y ampacidad sin factores
+  en campos explícitos, sección alternativa como candidata tabulada.
+- No afirmar cable seguro ni prometer coordinación integral con esta herramienta.
+- Conservar aritmética/tables; pruebas favorable/desfavorable sin aprobación,
+  297 agente/técnicas, CI, despliegue y QA real. Sin datos/AR/APK/Pages.
+- Riesgo de campos null; rollback agente d2daf690f259c1362764cb7858434f217b9e69b8.
+
 ## IA-CALC-QUALITY-04 — contrato publicado; aceptación conversacional parcial (2026-10-01)
 
 - Continuación autorizada, Codex, codex/protection-candidate-contract, base ed734e0.

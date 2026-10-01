@@ -1,5 +1,18 @@
 # Handoff — Alejandra 2.0
 
+## IA-CALC-QUALITY-05 — comparación tabulada (2026-10-01, en desarrollo)
+
+coordinacion_cable.cumple y ampacidad_cable_a quedan null: la herramienta no
+conoce las condiciones reales. ampacidad_tabla_sin_factores_a y
+cumple_comparacion_tabular preservan aritmética; supuestos Cu/XLPE explícitos.
+Alternativa de sección se llama seccion_candidata_tabular_mm2, no mínimo real.
+Descripción impide afirmar seguridad/fijar protección/promesa de coordinación
+integral por aportar más datos. 297 agente/29 técnicas pasan, favorable y
+desfavorable sin selección autorizada. Riesgo: consumidores de campos anteriores
+manejan null; ninguna fórmula/tabla nueva, sin migraciones/AR/APK/Pages.
+Rollback agente d2daf690f259c1362764cb7858434f217b9e69b8.
+PR/CI/publicación/QA pendientes; datum/geometría CAD siguen fuera de este arreglo.
+
 ## IA-CALC-QUALITY-04 — publicada, QA parcial (2026-10-01)
 
 PR #354 → e3ce8465574cb2f7f9a7a39b35fa485433accc1d, cuatro checks verdes.
