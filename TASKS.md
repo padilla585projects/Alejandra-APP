@@ -1,6 +1,6 @@
 # TASKS — Cola operativa inmediata
 
-## IA-CALC-QUALITY-05 — comparación tabulada sin aprobación (2026-10-01, en desarrollo)
+## IA-CALC-QUALITY-05 — publicada y verificada (2026-10-02)
 
 - Continuación de QA E autorizada; Codex, codex/protection-tabulated-comparison,
   base 4871ac5. Dependencias #354/#355 integradas, agente healthy; ADR-0007 vigente.
