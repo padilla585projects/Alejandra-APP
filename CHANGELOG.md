@@ -1,5 +1,8 @@
 # Changelog
 
+
+- IA-QUALITY-06: pedir aclaración ante ejemplos, dudas o alturas/referencias incompatibles; conservar unidades equivalentes y confirmaciones posteriores.
+
 Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]

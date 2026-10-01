@@ -1,5 +1,19 @@
 # TASKS — Cola operativa inmediata
 
+## IA-QUALITY-06 — ambigüedad de altura humana (2026-10-02, en desarrollo)
+
+- Encadenado autorizado por Adrián; Codex, codex/plan-human-ambiguity, base 742b6ec.
+- Dependencia #358 integrada con cuatro checks verdes y API bd7403c9 healthy;
+  lectura real de inventario sin modificar empresa/departamento ni datos.
+- Reproducciones: ejemplo 2.8 m se acepta como dato; corrección 2.8→3.2 y dos
+  tramos distintos se colapsan al primer valor. Pedir aclaración antes de generar.
+- Alcance lib.js y pruebas del gate existente. Mantener unidades equivalentes,
+  datos confirmados entre turnos y autorización expresa de boceto preliminar.
+- Riesgo: interpretación conservadora pregunta más; no comprensión universal.
+  Rollback agente e5eec22cc80267076612bd0d4cab08f14ca46b3c.
+- Validar negativas/positivas, suite agente, sintaxis y 33 técnicas; PR/CI,
+  publicación agente y verificación posterior. Sin datos, UI/AR/APK/Pages/ADR nuevos.
+
 ## IA-QUALITY-05 — altura y referencia en SVG (2026-10-02, en desarrollo)
 
 - Continuación/encadenado autorizado por Adrián, Codex, codex/plan-mounting-reference,
