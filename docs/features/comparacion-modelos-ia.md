@@ -1,6 +1,7 @@
 # Comparación de modelos IA y auditoría técnica de la suite
 
-Fecha: 2026-10-01. Estado: auditoría estática y piloto preparado; mediciones remotas pendientes.
+Fecha: 2026-10-01. Estado: auditoría inicial con sondas locales y piloto preparado;
+mediciones remotas pendientes de integración de PR #338.
 Autorización: Adrián pide comparar/medir modelos y auditar qué ofrece la suite y qué puede
 hacer Alejandra. Prioridad: competencia técnica multidisciplinar, planos y herramientas;
 Office debe ayudar a usuarios en el trabajo diario. Voz secundaria.
@@ -60,6 +61,12 @@ límites de 600–4.096: medir la ruta completa además del modelo aislado.
    concatena texto y recorta a 2.000 caracteres; no conserva citas estructuradas.
 7. **AR independiente.** PWA acreditada previamente; APK tiene prueba parcial, paredes
    pendientes. Reconocimiento semántico por IA no reemplaza geometría/anclajes métricos.
+8. **Calculador de protección fuera de rango.** Se extrajo y ejecutó localmente la
+   función real calcularProteccion, sin Worker ni datos: solicitud 32 A→32 A;
+   solicitud 200 A→125 A. `find(...) || último calibre` devuelve el máximo
+   disponible aunque quede por debajo de la carga; el schema no limita la entrada
+   a 125 A. Requiere rechazar fuera de rango y validar selección/coordinación;
+   ni el modelo ni el texto del resumen acreditan selectividad real.
 
 Fuentes externas comprobadas:
 - [RITE en BOE](https://www.boe.es/buscar/act.php?id=BOE-A-2007-15820).
@@ -140,6 +147,11 @@ de geometría; NO demuestra que la suite ya tenga ese motor CAD ni opere AutoCAD
 Especificación del flujo y formatos prioritarios: pendiente de diseño, sin inventar
 adopción de DWG/BIM o integración con software externo. No se sustituye por imágenes.
 
+Sonda local ejecutada sobre dxfEntidadesASvg real, aislada del Worker: entrada
+sintética con LINE, CIRCLE, INSERT y DIMENSION en capas ELECTRICO/CONTROL/COTAS;
+4 entidades, 2 sin soporte, línea y círculo presentes, nombres de capas ausentes
+del SVG. Esto acredita el conversor, no el ciclo de importación/exportación en UI.
+
 ### Modelos por tarea, sin sustitución global
 
 Adrián autoriza evaluar varios modelos según tarea. NEXUS ya enruta y combina
@@ -161,3 +173,18 @@ resultado comprobado. Separar calidad del modelo, recuperación de conocimiento,
 errores de routing y fallos de herramientas. Voz queda fuera de la prioridad actual.
 Recomendación de proveedor y cambios en producción: PENDIENTE de evidencia.
 Rollback: revertir harness/workflow/documentación; no se cambia el comportamiento desplegado.
+
+## Validación y bloqueo de ejecución
+
+- Implementación 90d9346, controles 57bcb1f y requisitos CAD ed348fe; PR #338.
+- Harness 7/7, agente 290/290, catálogos 12/12, encoding/versiones correctos.
+- CI ed348fe: cuatro checks verdes (dos ejecuciones), incluido Android.
+- No credenciales locales. Intentar dispatch en rama devolvió 404 porque el nuevo
+  workflow todavía no existe en main. No se hicieron llamadas a modelos.
+- La revisión automática de permisos rechazó integrar con `--admin` y ejecutar
+  después el workflow: considera que la solicitud de comparación no autoriza el
+  bypass del revisor obligatorio. Solicitud de autorización explícita pendiente.
+  No modificar protecciones, secretos ni disparadores para eludir ese bloqueo.
+- Siguiente paso: integración autorizada o revisión/merge humano de #338, después
+  workflow manual repeats=1 con entorno protegido vigente. Registrar completitud,
+  disponibilidad, métricas y costes reales antes de recomendar modelos por tarea.

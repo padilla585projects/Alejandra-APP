@@ -10,11 +10,16 @@
 - Estado: auditoría estática inicial y piloto preparado (7 modelos, 22 casos sintéticos).
   Harness 7/7 y agente 290/290. Claves locales ausentes; nombres OpenAI/Anthropic
   confirmados en entorno protegido production de GitHub, sin acceder a sus valores.
-- Siguiente: integrar con CI verde, ejecutar piloto protegido y registrar resultados
+- PR #338, ed348fe: cuatro checks CI verdes. Medición bloqueada: revisión automática
+  rechazó merge --admin y ejecución posterior con credenciales; requiere autorización
+  explícita del usuario o revisión/integración humana. No llamadas a modelos aún.
+- Siguiente: integración autorizada, ejecutar piloto protegido y registrar resultados
   reales; ampliar evaluación por departamentos y flujos completos según auditoría.
 - Hallazgos: referencias mecánicas incorrectas, contexto de bandejas sin filtro de
   empresa, conflictos solo textuales y posible falso «Plan completado» en Office.
   No se corrigen dentro del piloto. Detalle: docs/features/comparacion-modelos-ia.md.
+- Sondas locales: protección solicitada 200 A devuelve 125 A; CAD de 4 entidades
+  omite 2 (INSERT/DIMENSION) y pierde nombres de capas en SVG. Prioridad técnica.
 
 
 ## Verificación Android en Oppo — 2026-10-01
