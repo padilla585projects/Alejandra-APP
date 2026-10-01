@@ -1,6 +1,9 @@
 # Changelog
 
 
+- CAD-SCOPE-01: empresa de sesión en tools CAD y autenticación común de lectura; rechazo de DXF sin propietario verificable antes de leer contenido.
+
+
 - IA-QUALITY-07: conservar signo de cotas y pedir unidad/formato de medidas nuevas en vez de recuperar una altura obsoleta.
 
 

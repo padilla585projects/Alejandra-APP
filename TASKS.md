@@ -1,6 +1,26 @@
 # TASKS — Cola operativa inmediata
 
-## IA-QUALITY-07 — sustitución de altura sin recuperar valores obsoletos (2026-10-02, en desarrollo)
+## CAD-SCOPE-01 — empresa de sesión en tools y lectura DXF (2026-10-02, en desarrollo)
+
+- Encadenado autorizado; Codex, codex/cad-tenant-scope, base ca44ae8.
+- Dependencia #360 integrada con cuatro checks verdes; agente 3ee1bb37 healthy y QA H
+  registrada (parcial). ADR-0007/0009/0010 aceptados; corrección de rutas existentes.
+- Hallazgos: importar/analizar DXF usan default empresa 1; editar_plano permite
+  empresa del tool_input; getPlano acepta parseInt parcial/default 1; importación
+  admite R2 con propietario desconocido. No ejecutar explotación en producción.
+- Usar validación pura única de ID y empresa exclusiva de sesión en CAD;
+  rechazar empresa/ID mal formados antes de consultas y Service Binding.
+  Rechazar archivo de propietario/empresa desconocidos antes de parsear/insertar.
+- Fuente compartida en lib.js, sin duplicar regla entre Workers. No tablas/ADR,
+  migraciones, asignación de propiedad antigua ni cambios masivos de datos.
+- Negativas con BD/R2 sintéticos: cero lectura/escritura downstream ante scope
+  inválido, otro tenant/propietario desconocido; positivas scoped y sesión normal.
+- Alcance aislamiento por empresa de estas rutas; auditoría detallada de roles,
+  departamentos/propiedad de planos antiguos sigue pendiente, no declarar cierre total.
+- Rollback API 296d4d33a52e6d9b5daa438653814e1336adddfd;
+  agente 037643a5f697ec1b8e7d8fbfc78ead10651b37c2. Publicar/verificar ambos Workers.
+
+## IA-QUALITY-07 — publicada; QA H parcial (2026-10-02)
 
 - Encadenado autorizado; Codex, codex/plan-height-replacement, base 384d265.
 - Dependencia #359 integrada con cuatro checks verdes; agente 785c8348 publicado

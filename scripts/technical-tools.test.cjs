@@ -7,6 +7,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { SaxesParser } = require('saxes');
 let warningPolicy;
 let mountingContract;
+let idPlanoPolicy;
 
 // Exercise the production functions without loading unrelated Worker bindings or UI.
 function load(file, name, globals = {}) {
@@ -14,9 +15,11 @@ function load(file, name, globals = {}) {
   const match = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}`));
   assert.ok(match, `Missing production function ${name}`);
   return vm.runInNewContext(`${match[0]}; ${name}`, { SaxesParser, TextEncoder,
-    _validarAvisosPlano: warningPolicy, _contratoMontajePlano: mountingContract, ...globals });
+    _validarAvisosPlano: warningPolicy, _contratoMontajePlano: mountingContract,
+    normalizarIdPlano: idPlanoPolicy, ...globals });
 }
 
+idPlanoPolicy = load('alejandra-agente/lib.js', 'normalizarIdPlano');
 warningPolicy = load('worker.js', '_validarAvisosPlano');
 mountingContract = load('worker.js', '_contratoMontajePlano');
 
@@ -540,10 +543,143 @@ test('internal plan authentication rejects missing or malformed tenant instead o
   const auth = load('worker.js', '_getAuthPlano');
   const request = { headers: { get: () => 'test-internal-secret' } };
   const env = { AGENT_INTERNAL_SECRET: 'test-internal-secret' };
-  for (const company of [undefined, null, '', 'default', '1junk', 0, -1, 1.5]) {
+  for (const company of [undefined, null, '', 'default', '1junk', '1e0', '0x1', true, [1], 0, -1, 1.5]) {
     assert.equal((await auth(request, env, { empresa_id: company })).empresa_id, null);
   }
   assert.equal((await auth(request, env, { empresa_id: '2', usuario_id: '7' })).empresa_id, 2);
+});
+
+test('CAD read shares strict authentication and never queries a default or foreign tenant', async () => {
+  const queries = [];
+  let sessionCompany = 2;
+  const env = { AGENT_INTERNAL_SECRET: 'test-internal-secret', DB: { prepare(sql) {
+    assert.match(sql, /WHERE id=\? AND empresa_id=\?/);
+    return { bind(id, company) { queries.push([id, company]); return { async first() {
+      return id === 7 && company === 2 ? { id: 7, empresa_id: 2 } : null;
+    } }; } };
+  } } };
+  const auth = load('worker.js', '_getAuthPlano', { getAuth: async () => ({ empresa_id: sessionCompany }) });
+  const read = load('worker.js', 'getPlano', { _getAuthPlano: auth,
+    _ensurePlanosTable: async () => {}, err: (error, status) => ({ error, status }), json: data => data });
+  const request = company => ({ headers: { get: name => name === 'X-Internal-Secret' ? 'test-internal-secret' : company } });
+  for (const company of [null, '', 'default', '1junk', '1e0', '0x1', '0', '-1', '1.5']) {
+    assert.equal((await read(request(company), env, '/planos/7')).status, 401);
+  }
+  assert.equal(queries.length, 0);
+  assert.equal((await read(request('2'), env, '/planos/7')).plano.id, 7);
+  assert.equal((await read(request('2'), env, '/planos/8')).status, 404);
+  assert.deepEqual(queries, [[7, 2], [8, 2]]);
+  queries.length = 0;
+  assert.equal((await read(request('2'), env, '/planos/7junk')).status, 400);
+  const normalRequest = { headers: { get: () => null } };
+  assert.equal((await read(normalRequest, env, '/planos/7')).plano.id, 7);
+  sessionCompany = null;
+  queries.length = 0;
+  assert.equal((await read(normalRequest, env, '/planos/7')).status, 401);
+  assert.equal(queries.length, 0);
+});
+
+test('DXF import authorises metadata before fetching content and refuses unknown or changed ownership', async () => {
+  let headMetadata, bodyMetadata, ownerCompany = 2;
+  let sessionUser = 9;
+  const calls = [], inserts = [];
+  const env = { FILES: {
+    async head() { calls.push('head'); return headMetadata === null ? null : { customMetadata: headMetadata }; },
+    async get() { calls.push('get'); return { customMetadata: bodyMetadata, async text() { calls.push('text'); return 'synthetic DXF'; } }; },
+  }, DB: { prepare(sql) { return { bind(...args) {
+    if (sql.startsWith('SELECT')) return { async first() {
+      calls.push('owner');
+      if (ownerCompany === 'throw') throw new Error('Synthetic D1 unavailable');
+      return { empresa_id: args[0] === 10 ? 1 : ownerCompany };
+    } };
+    return { async run() { inserts.push(args); return { meta: { last_row_id: 10 } }; } };
+  } }; } } };
+  const owner = load('worker.js', '_empresaDeArchivoPlano');
+  const importer = load('worker.js', 'importarDxfREST', {
+    _getAuthPlano: async () => ({ empresa_id: 2, usuario_id: sessionUser }),
+    _empresaDeArchivoPlano: owner, _ensurePlanosTable: async () => {},
+    DxfParser: class { parseSync() { calls.push('parse'); return { entities: [{ type: 'LINE' }] }; } },
+    dxfEntidadesASvg: () => ({ svg: '<svg/>', totalEntidades: 1, sinSoporte: 0 }),
+    _resumenDxf: () => 'synthetic', err: (error, status) => ({ error, status }), json: data => data,
+  });
+  const request = { async json() { return { key: 'synthetic.dxf' }; } };
+  sessionUser = null;
+  assert.equal((await importer(request, env)).status, 401);
+  assert.equal(calls.length, 0);
+  sessionUser = 9;
+  for (const [metadata, company] of [[null, 2], [{}, 2], [{ usuario_id: '9junk' }, 2],
+    [{ usuario_id: true }, 2], [{ usuario_id: '9' }, null], [{ usuario_id: '9' }, '2junk'],
+    [{ usuario_id: '9' }, 'throw'], [{ usuario_id: '9' }, 1]]) {
+    calls.length = 0;
+    headMetadata = metadata;
+    ownerCompany = company;
+    assert.equal((await importer(request, env)).status, 404);
+    assert.ok(!calls.includes('get') && !calls.includes('text') && !calls.includes('parse'));
+    assert.equal(inserts.length, 0);
+  }
+  ownerCompany = 2;
+  headMetadata = { usuario_id: '9', original_name: 'synthetic.dxf' };
+  for (const changedMetadata of [{}, { usuario_id: '9junk' }, { usuario_id: '10' }]) {
+    bodyMetadata = changedMetadata;
+    calls.length = 0;
+    assert.equal((await importer(request, env)).status, 404);
+    assert.ok(!calls.includes('text') && !calls.includes('parse'));
+    assert.equal(inserts.length, 0);
+  }
+  bodyMetadata = headMetadata;
+  calls.length = 0;
+  assert.equal((await importer(request, env)).ok, true);
+  assert.deepEqual(calls, ['head', 'owner', 'get', 'owner', 'text', 'parse']);
+  assert.equal(inserts.length, 1);
+  assert.equal(inserts[0][0], 2);
+  assert.equal(inserts[0][1], 9);
+});
+
+test('DXF tools cannot pick a tenant and refuse invalid scope before any downstream operation', async () => {
+  const source = readFileSync(resolve(__dirname, '../alejandra-agente/worker.js'), 'utf8');
+  for (const [name, next] of [['importar_plano_dxf', 'analizar_plano_dxf'],
+    ['analizar_plano_dxf', 'generar_grafico'], ['editar_plano', 'estado_obra']]) {
+    const start = source.indexOf(`case '${name}':`);
+    const end = source.indexOf(`case '${next}':`, start);
+    assert.ok(start >= 0 && end > start);
+    const sent = [], queried = [];
+    const env = { DB: { prepare(sql) { return { bind(...args) {
+      queried.push({ sql, args }); return { async all() { return { results: [{ id: 7 }] }; } };
+    } }; } }, API_WEB: { async fetch(url, options) {
+      sent.push({ url, options });
+      return { ok: true, async json() { return { ok: true, plano: { origen: 'importado', metadatos: '{}' } }; } };
+    } } };
+    const run = vm.runInNewContext(`async (input, empresa_id, usuario_id) => {
+      const sendSSE = null;
+      switch ('${name}') { ${source.slice(start, end)} }
+    }`, { env, normalizarIdPlano: idPlanoPolicy });
+    const input = { key: 'synthetic.dxf', plano_id: 7, empresa_id: 1, cambios: [{ circuito_id: 'QA', campo: 'nombre', valor: 'Test' }] };
+    for (const company of [null, '', 'default', '1junk', '1e0', true, [1], 0, -1, 1.5]) {
+      assert.ok(JSON.parse(await run(input, company, '9')).error);
+    }
+    assert.ok(JSON.parse(await run(input, 2, null)).error);
+    assert.equal(sent.length, 0);
+    assert.equal(queried.length, 0);
+    assert.equal(JSON.parse(await run(input, 2, '9')).ok, true);
+    if (name === 'analizar_plano_dxf') assert.equal(sent[0].options.headers['X-Empresa-Id'], '2');
+    else {
+      const body = JSON.parse(sent[0].options.body);
+      assert.equal(body.empresa_id, 2);
+      assert.equal(body.usuario_id, '9');
+    }
+    if (name !== 'importar_plano_dxf') {
+      for (const plano_id of ['7junk', '7/../../anything', true, -1, 1.5]) {
+        assert.ok(JSON.parse(await run({ ...input, plano_id }, 2, '9')).error);
+      }
+      assert.equal(sent.length, 1);
+    }
+    if (name === 'editar_plano') {
+      assert.equal(JSON.parse(await run({ ...input, plano_id: undefined, busqueda: 'Test' }, 2, '9')).ok, true);
+      assert.match(queried[0].sql, /empresa_id=\?/);
+      assert.deepEqual(queried[0].args, ['%Test%', 2]);
+      assert.equal(JSON.parse(sent[1].options.body).empresa_id, 2);
+    }
+  }
 });
 
 test('plan generation uses session identity and refuses missing scope before calling the web Worker', async () => {
@@ -555,7 +691,8 @@ test('plan generation uses session identity and refuses missing scope before cal
   const run = vm.runInNewContext(`async (input, empresa_id, usuario_id, fuentesPlano = []) => {
     const sendSSE = null;
     switch ('generar_plano') { ${source.slice(start, end)} }
-  }`, { validarDatosPlanoBandejas: load('alejandra-agente/lib.js', 'validarDatosPlanoBandejas'), env: { API_WEB: { async fetch(url, options) {
+  }`, { normalizarIdPlano: idPlanoPolicy,
+    validarDatosPlanoBandejas: load('alejandra-agente/lib.js', 'validarDatosPlanoBandejas'), env: { API_WEB: { async fetch(url, options) {
     sent.push(JSON.parse(options.body));
     return { ok: true, async json() { return { ok: true }; } };
   } } } });

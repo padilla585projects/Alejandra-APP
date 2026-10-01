@@ -24,6 +24,7 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 // que cambiar precios, allowlists, o las validaciones IDOR/SSRF, se cambia en
 // lib.js y worker.js lo recibe vía este import.
 import {
+  normalizarIdPlano,
   extraerFuentesPlanoHumanas,
   validarDatosPlanoBandejas,
   timingSafeEqual,
@@ -2523,7 +2524,6 @@ const TOOL_EDITAR_PLANO = {
     properties: {
       plano_id: { type: 'integer', description: 'ID del plano a editar, si se conoce' },
       busqueda: { type: 'string', description: 'Texto para buscar el plano por titulo si no se conoce el ID' },
-      empresa_id: { type: 'integer', description: 'ID de empresa (opcional, ayuda a acotar la busqueda)' },
       cambios: {
         type: 'array',
         description: 'Lista de cambios a aplicar a circuitos concretos del plano',
@@ -10551,8 +10551,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const { tipo, titulo, descripcion, circuitos } = input;
         // La identidad procede exclusivamente de la sesión; el modelo no puede
         // elegir empresa/propietario ni una sesión incompleta caer en empresa 1.
-        const empresaPlano = Number(empresa_id);
-        if (!Number.isSafeInteger(empresaPlano) || empresaPlano <= 0 || !usuario_id) {
+        const empresaPlano = normalizarIdPlano(empresa_id);
+        if (!empresaPlano || !usuario_id) {
           return JSON.stringify({ error: 'Sesión sin empresa o usuario válido para generar planos' });
         }
         if (!tipo || !titulo || !descripcion) return JSON.stringify({ error: 'tipo, titulo y descripcion son obligatorios' });
@@ -10582,8 +10582,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             body: JSON.stringify({
               tipo, titulo, descripcion: descripcionVerificada,
               circuitos: circuitos || [],
-              empresa_id: empresaPlano,
-              usuario_id,
+            empresa_id: empresaPlano,
+            usuario_id,
               rol: 'agente_ia'
             })
           });
@@ -10600,6 +10600,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
     case 'importar_plano_dxf': {
       try {
+        const empresaPlano = normalizarIdPlano(empresa_id);
+        if (!empresaPlano || !usuario_id) return JSON.stringify({ error: 'Sesión sin empresa o usuario válido para importar planos' });
         const { key, titulo: tituloDxf } = input;
         if (!key) return JSON.stringify({ error: 'key es obligatorio' });
         const resp = await env.API_WEB.fetch('https://alejandra-app-api.alejandra-app.workers.dev/planos/importar-dxf', {
@@ -10607,8 +10609,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
           body: JSON.stringify({
             key, titulo: tituloDxf || undefined,
-            empresa_id: resolverEid(empresa_id) || 1,
-            usuario_id: usuario_id || null,
+              empresa_id: empresaPlano,
+              usuario_id,
             rol: 'agente_ia'
           })
         });
@@ -10621,11 +10623,14 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
     case 'analizar_plano_dxf': {
       try {
+        const empresaPlano = normalizarIdPlano(empresa_id);
+        if (!empresaPlano || !usuario_id) return JSON.stringify({ error: 'Sesión sin empresa o usuario válido para analizar planos' });
         const { plano_id } = input;
-        if (!plano_id) return JSON.stringify({ error: 'plano_id es obligatorio' });
-        const resp = await env.API_WEB.fetch(`https://alejandra-app-api.alejandra-app.workers.dev/planos/${plano_id}`, {
+        const idPlano = normalizarIdPlano(plano_id);
+        if (!idPlano) return JSON.stringify({ error: 'plano_id debe ser un entero positivo' });
+        const resp = await env.API_WEB.fetch(`https://alejandra-app-api.alejandra-app.workers.dev/planos/${idPlano}`, {
           method: 'GET',
-          headers: { 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '', 'X-Empresa-Id': String(resolverEid(empresa_id) || 1) }
+          headers: { 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '', 'X-Empresa-Id': String(empresaPlano) }
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.plano) return JSON.stringify({ error: data.error || 'Plano no encontrado' });
@@ -10701,15 +10706,17 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
     case 'editar_plano': {
       try {
-        const { plano_id, busqueda, empresa_id: eid_plano, cambios } = input;
+        const _eidPlano = normalizarIdPlano(empresa_id);
+        if (!_eidPlano || !usuario_id) return JSON.stringify({ error: 'Sesión sin empresa o usuario válido para editar planos' });
+        const { plano_id, busqueda, cambios } = input;
         if (!cambios || !Array.isArray(cambios) || cambios.length === 0) return JSON.stringify({ error: 'cambios es obligatorio y debe ser un array no vacio' });
 
         // Localizar el ID del plano (busqueda por titulo si no se dio plano_id
         // directo). Es una simple lectura en D1 -- ambos workers comparten la
         // misma base de datos -- NO se duplica aqui la logica de edicion/
         // regeneracion del SVG, que vive por completo en el worker web.
-        const _eidPlano = resolverEid(eid_plano) || resolverEid(empresa_id) || 1;
-        let idPlano = plano_id ? parseInt(plano_id) : null;
+        let idPlano = normalizarIdPlano(plano_id);
+        if (plano_id != null && !idPlano) return JSON.stringify({ error: 'plano_id debe ser un entero positivo' });
         if (!idPlano) {
           if (!busqueda) return JSON.stringify({ error: 'Debes indicar plano_id o busqueda para localizar el plano a editar' });
           const q = await env.DB.prepare(
