@@ -29231,7 +29231,9 @@ POLITICA DE FIDELIDAD TECNICA — PREVALECE SOBRE EJEMPLOS Y PLANTILLAS ANTERIOR
 // Sintaxis XML y contrato de avisos; no acredita geometria ni cumplimiento normativo.
 function _extraerSvgCompleto(texto, contrato = null) {
   if (typeof texto !== 'string') throw new Error('La IA no devolvio un plano SVG');
-  if (texto.length > 524288) throw new Error('Plano demasiado grande para validar. No se ha guardado.');
+  if (texto.length > 524288 || new TextEncoder().encode(texto).byteLength > 524288) {
+    throw new Error('Plano demasiado grande para validar. No se ha guardado.');
+  }
   if (/<!DOCTYPE\b|<!ENTITY\b/i.test(texto)) throw new Error('Plano con declaraciones XML no permitidas. No se ha guardado.');
   const inicio = texto.search(/<svg\b/i);
   const cierre = inicio < 0 ? null : /<\/svg\s*>/i.exec(texto.slice(inicio));

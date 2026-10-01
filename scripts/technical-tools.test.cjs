@@ -12,7 +12,7 @@ function load(file, name, globals = {}) {
   const source = readFileSync(resolve(__dirname, '..', file), 'utf8');
   const match = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}`));
   assert.ok(match, `Missing production function ${name}`);
-  return vm.runInNewContext(`${match[0]}; ${name}`, { SaxesParser,
+  return vm.runInNewContext(`${match[0]}; ${name}`, { SaxesParser, TextEncoder,
     _validarAvisosPlano: warningPolicy, ...globals });
 }
 
@@ -64,6 +64,7 @@ test('XML validation rejects malformed tags, attributes, entities, characters an
   ]) assert.throws(() => extract(svg), /Plano XML invalido/);
   assert.throws(() => extract('<!DOCTYPE svg><svg/>'), /declaraciones XML/);
   assert.throws(() => extract('x'.repeat(524289)), /demasiado grande/);
+  assert.throws(() => extract(`<svg><text>${'á'.repeat(300000)}</text></svg>`), /demasiado grande/);
 });
 
 test('a technical plan requires draft and execution warnings in SVG text, not hidden metadata', () => {
