@@ -4,14 +4,19 @@ const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 const vm = require('node:vm');
 const { DatabaseSync } = require('node:sqlite');
+const { SaxesParser } = require('saxes');
+let warningPolicy;
 
 // Exercise the production functions without loading unrelated Worker bindings or UI.
 function load(file, name, globals = {}) {
   const source = readFileSync(resolve(__dirname, '..', file), 'utf8');
   const match = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}`));
   assert.ok(match, `Missing production function ${name}`);
-  return vm.runInNewContext(`${match[0]}; ${name}`, globals);
+  return vm.runInNewContext(`${match[0]}; ${name}`, { SaxesParser,
+    _validarAvisosPlano: warningPolicy, ...globals });
 }
+
+warningPolicy = load('worker.js', '_validarAvisosPlano');
 
 const calculate = load('alejandra-agente/worker.js', 'calcularProteccion');
 test('plan generation rejects truncated or ambiguous SVG instead of fabricating a closure', () => {
@@ -49,6 +54,54 @@ test('AI plans reject executable SVG instead of silently stripping dynamic drawi
   assert.equal(extract(passive), passive);
 });
 
+test('XML validation rejects malformed tags, attributes, entities, characters and namespaces', () => {
+  const extract = load('worker.js', '_extraerSvgCompleto');
+  for (const svg of [
+    '<svg><g></svg>', '<svg><text>A & B</text></svg>',
+    '<svg><text>&undefined;</text></svg>', '<svg><g a="<"/></svg>',
+    '<svg><text>bad\u0001</text></svg>', '<svg><g a="1" a="2"/></svg>',
+    '<svg><g disabled/></svg>', '<svg><x:g/></svg>',
+  ]) assert.throws(() => extract(svg), /Plano XML invalido/);
+  assert.throws(() => extract('<!DOCTYPE svg><svg/>'), /declaraciones XML/);
+  assert.throws(() => extract('x'.repeat(524289)), /demasiado grande/);
+});
+
+test('a technical plan requires draft and execution warnings in SVG text, not hidden metadata', () => {
+  const extract = load('worker.js', '_extraerSvgCompleto');
+  const draft = '<text>BORRADOR — pendiente de revisión técnica</text>';
+  const warning = 'NO EJECUTAR EN OBRA';
+  const wrap = inner => `<svg xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+  for (const hidden of [
+    `<!-- ${warning} -->`, `<metadata>${warning}</metadata>`, `<title>${warning}</title>`,
+    `<defs><text>${warning}</text></defs>`, `<text display="none">${warning}</text>`,
+    `<g visibility="hidden"><text>${warning}</text></g>`, `<text style="opacity:0">${warning}</text>`,
+    `<x:text xmlns:x="urn:non-svg">${warning}</x:text>`,
+  ]) assert.throws(() => extract(wrap(draft + hidden), { tipo: 'bandejas' }), /sin aviso NO EJECUTAR/);
+  assert.throws(() => extract(wrap(`<text>${warning}</text>`), { tipo: 'bandejas' }), /sin aviso de borrador/);
+  assert.throws(() => extract(`<svg xmlns="urn:wrong">${draft}<text>${warning}</text></svg>`,
+    { tipo: 'bandejas' }), /Plano XML invalido/);
+  const valid = wrap(draft + '<text>NO <tspan>EJECUTAR</tspan> EN OBRA</text><text>A &amp; B</text>');
+  assert.equal(extract(valid, { tipo: 'bandejas' }), valid);
+  assert.equal(extract(wrap(draft), { tipo: 'gantt' }), wrap(draft));
+});
+
+test('missing warnings or malformed XML cannot persist a generated plan', async () => {
+  for (const svg of [
+    '<svg xmlns="http://www.w3.org/2000/svg"><text>Plan without warning</text></svg>',
+    '<svg><g a="<"/></svg>',
+  ]) {
+    let writes = 0;
+    const generate = load('worker.js', '_generarPlanoInterno', {
+      _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+      _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+      fetch: async () => ({ ok: true, json: async () => ({ content: [{ text: svg }] }) }),
+    });
+    await assert.rejects(generate({ DB: { prepare: () => { writes++; throw new Error('Unexpected write'); } } },
+      { tipo: 'planta', titulo: 'QA', descripcion: 'synthetic', empresa_id: 5, usuario_id: 7 }), /Plano (XML invalido|sin aviso)/);
+    assert.equal(writes, 0);
+  }
+});
+
 test('an executable provider response cannot persist a generated plan', async () => {
   let writes = 0;
   const generate = load('worker.js', '_generarPlanoInterno', {
@@ -82,6 +135,44 @@ test('AI editing rejects executable SVG without replacing the existing tenant-sc
   assert.equal(result.status, 502);
   assert.match(result.message, /Plano no estatico/);
   assert.equal(reads, 1, 'Only the scoped SELECT may run; no UPDATE on rejection');
+});
+
+test('AI editing rejects XML and missing warnings before updating the scoped plan', async () => {
+  for (const svg of ['<svg><text>A & B</text></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><text>BORRADOR — pendiente de revision tecnica</text></svg>']) {
+    let reads = 0;
+    const edit = load('worker.js', 'editarPlanoCircuitosREST', {
+      _getAuthPlano: async () => ({ empresa_id: 5, rol: 'admin' }),
+      _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+      _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+      _llamarAnthropicPlanoStream: async () => svg, err: (message, status) => ({ message, status }),
+    });
+    const result = await edit({ json: async () => ({ cambios: [{ circuito_id: 'C1', campo: 'notas', valor: 'QA' }] }) },
+      { DB: { prepare(sql) {
+        assert.match(sql, /^SELECT \* FROM planos WHERE id=\? AND empresa_id=\?$/); reads++;
+        return { bind(id, company) {
+          assert.equal(id, 28); assert.equal(company, 5);
+          return { first: async () => ({ tipo: 'planta', titulo: 'QA', circuitos_json: '[]' }) };
+        } };
+      } } }, '/planos/28/circuitos');
+    assert.equal(result.status, 502);
+    assert.match(result.message, /Plano (XML invalido|sin aviso)/);
+    assert.equal(reads, 1);
+  }
+});
+
+test('invalid final symbol injection is rejected before storing a generated plan', async () => {
+  let writes = 0;
+  const valid = '<svg xmlns="http://www.w3.org/2000/svg"><text>BORRADOR — pendiente de revision tecnica</text><text>NO EJECUTAR EN OBRA</text></svg>';
+  const generate = load('worker.js', '_generarPlanoInterno', {
+    _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+    _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+    IEC_SYMBOLS_DEFS: '<defs><g>', _normalizarColoresUseSvg: s => s, logAIUsage: () => {},
+    fetch: async () => ({ ok: true, json: async () => ({ content: [{ text: valid }] }) }),
+  });
+  await assert.rejects(generate({ DB: { prepare: () => { writes++; throw new Error('Unexpected write'); } } },
+    { tipo: 'electrico', titulo: 'QA', descripcion: 'synthetic', empresa_id: 5, usuario_id: 7 }), /Plano XML invalido/);
+  assert.equal(writes, 0);
 });
 
 test('an incomplete provider response cannot persist a plan', async () => {

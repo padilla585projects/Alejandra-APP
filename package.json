@@ -4,6 +4,7 @@
   },
   "dependencies": {
     "docx": "^9.7.1",
-    "dxf-parser": "^1.1.2"
+    "dxf-parser": "^1.1.2",
+    "saxes": "6.0.0"
   }
 }

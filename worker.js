@@ -13,6 +13,8 @@ import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, Image
 // lógica de parseo de texto, sin DOM, corre igual dentro del Worker que en el
 // navegador (ver dxfEntidadesASvg/importarDxfREST más abajo).
 import DxfParser from 'dxf-parser';
+// Validacion sintactica de planos; no declara correccion geometrica ni normativa.
+import { SaxesParser } from 'saxes';
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
@@ -29217,6 +29219,7 @@ POLITICA DE FIDELIDAD TECNICA — PREVALECE SOBRE EJEMPLOS Y PLANTILLAS ANTERIOR
 - Si se aportan dimensiones y coordenadas, aplica una unica proporcion px/m a ambos ejes; cotas de cada tramo derivadas de sus extremos. Si faltan datos, indica "Esquema sin escala" y omite escala grafica. No declares una escala de impresion sin conocer formato y tamano de salida.
 - En un esquema unifilar, no inventes caida de tension ni afirmes secciones calculadas o cumplimiento normativo sin un calculo trazable. Los datos faltantes deben figurar como "Pendiente de definir".
 - Cajetin: "BORRADOR — pendiente de revision tecnica". No atribuyas comprobacion, firma o aprobacion a una persona o a la IA. Conserva literalmente los avisos QA del usuario.
+- Incluye como texto SVG, fuera de defs/comentarios, "BORRADOR — pendiente de revision tecnica" y "NO EJECUTAR EN OBRA". Un aviso en metadatos, atributo o comentario no basta.
 - Leyenda solo de elementos presentes. Reserva un area separada para leyenda, notas y cajetin; nunca invadan el dibujo.
 - Etiquetas tecnicas minimo 12 unidades SVG y distancia entre lineas >=16. Cotas fuera del recorrido; identifica tramos con IDs y usa una tabla separada si la etiqueta no cabe. No superpongas altura, referencia y cota sobre el mismo tramo.
 - No anadas notas prescriptivas universales ni atribuyas a una norma valores sin comprobar su aplicabilidad. Indica las comprobaciones pendientes concretas.
@@ -29225,9 +29228,11 @@ POLITICA DE FIDELIDAD TECNICA — PREVALECE SOBRE EJEMPLOS Y PLANTILLAS ANTERIOR
 }
 
 // Control de integridad del contenedor, compartido por generar/editar.
-// No acredita geometria, XML completo, unidades CAD ni cumplimiento normativo.
-function _extraerSvgCompleto(texto) {
+// Sintaxis XML y contrato de avisos; no acredita geometria ni cumplimiento normativo.
+function _extraerSvgCompleto(texto, contrato = null) {
   if (typeof texto !== 'string') throw new Error('La IA no devolvio un plano SVG');
+  if (texto.length > 524288) throw new Error('Plano demasiado grande para validar. No se ha guardado.');
+  if (/<!DOCTYPE\b|<!ENTITY\b/i.test(texto)) throw new Error('Plano con declaraciones XML no permitidas. No se ha guardado.');
   const inicio = texto.search(/<svg\b/i);
   const cierre = inicio < 0 ? null : /<\/svg\s*>/i.exec(texto.slice(inicio));
   if (!cierre) throw new Error('Plano incompleto: falta el cierre SVG. No se ha guardado; vuelve a generar con menos detalle.');
@@ -29240,7 +29245,44 @@ function _extraerSvgCompleto(texto) {
       || /<[^>]*\s(?:[\w.-]+:)?on[a-z]+\s*=/i.test(contenido)) {
     throw new Error('Plano no estatico: contiene codigo ejecutable o contenido interactivo. No se ha guardado; genera un SVG estatico sin scripts ni eventos.');
   }
+  _validarAvisosPlano(svg, contrato);
   return svg;
+}
+
+function _validarAvisosPlano(svg, contrato = null) {
+  const parser = new SaxesParser({ xmlns: true });
+  const stack = [];
+  const textos = [];
+  parser.on('opentag', node => {
+    if (contrato && stack.length === 0 && node.uri !== 'http://www.w3.org/2000/svg') {
+      throw new Error('Namespace SVG incorrecto');
+    }
+    const parent = stack[stack.length - 1];
+    const values = Object.fromEntries(Object.values(node.attributes).map(a => [a.local, a.value]));
+    const oculto = values.display === 'none' || values.visibility === 'hidden' || values.opacity === '0'
+      || /(?:display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\s*;|\s*$))/i.test(values.style || '');
+    stack.push({ texto: parent?.texto || ['text', 'tspan', 'textPath'].includes(node.local),
+      bloqueado: parent?.bloqueado || oculto || node.uri !== 'http://www.w3.org/2000/svg'
+        || ['defs', 'metadata', 'title', 'desc', 'style'].includes(node.local) });
+  });
+  parser.on('closetag', () => { stack.pop(); });
+  const guardarTexto = text => {
+    const state = stack[stack.length - 1];
+    if (state?.texto && !state.bloqueado) textos.push(text);
+  };
+  parser.on('text', guardarTexto);
+  parser.on('cdata', guardarTexto);
+  try { parser.write(svg).close(); }
+  catch (_) { throw new Error('Plano XML invalido. No se ha guardado; vuelve a generar el archivo completo.'); }
+  if (!contrato) return;
+  const texto = textos.join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').toUpperCase();
+  if (!/BORRADOR\s*[—–:-]?\s*PENDIENTE DE REVISION TECNICA/.test(texto)
+      && !/BOCETO\s+NO EJECUTAR/.test(texto)) {
+    throw new Error('Plano sin aviso de borrador tecnico. No se ha guardado.');
+  }
+  if (contrato.tipo !== 'gantt' && !texto.includes('NO EJECUTAR EN OBRA')) {
+    throw new Error('Plano sin aviso NO EJECUTAR EN OBRA. No se ha guardado.');
+  }
 }
 
 // ── Red de seguridad: color por defecto en <use> sin atributo color ────────
@@ -29622,7 +29664,7 @@ INSTRUCCIONES FINALES:
   }
   if (!data) throw _errorAnthropicPlano || new Error('No se pudo generar el plano: todos los proveedores de IA fallaron.');
 
-  let svgRaw = _extraerSvgCompleto(data.content?.[0]?.text || '');
+  let svgRaw = _extraerSvgCompleto(data.content?.[0]?.text || '', { tipo });
 
   // Para esquemas eléctricos: inyectar biblioteca de símbolos IEC 60617
   // Se inserta justo tras la etiqueta <svg ...> de apertura para que los <use href="#sym-X">
@@ -29672,6 +29714,8 @@ INSTRUCCIONES FINALES:
   });
 
   const circuitosJson = (Array.isArray(circuitos) && circuitos.length > 0) ? JSON.stringify(circuitos) : null;
+  // Comprobar tambien el resultado final tras inyectar simbolos y normalizar colores.
+  svgRaw = _extraerSvgCompleto(svgRaw, { tipo });
   const res = await env.DB.prepare(
     'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos, circuitos_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(empresa_id, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos, circuitosJson).run();
@@ -30000,7 +30044,7 @@ INSTRUCCIONES FINALES:
     console.error('[editarPlanoCircuitosREST] Error editando plano:', e.message);
     return err('No se pudo editar el plano en este momento. Inténtalo de nuevo en unos minutos.', 500);
   }
-  try { svgRaw = _extraerSvgCompleto(svgRaw); }
+  try { svgRaw = _extraerSvgCompleto(svgRaw, { tipo: row.tipo }); }
   catch (e) { return err(e.message, 502); }
 
   if (row.tipo === 'electrico') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
@@ -30016,6 +30060,8 @@ INSTRUCCIONES FINALES:
   }
 
   const metadatos = JSON.stringify({ tipo: row.tipo, tokens: Math.round(svgRaw.length / 4), modelo: 'claude-sonnet-4-6', proveedor: 'anthropic', editado: true });
+  try { svgRaw = _extraerSvgCompleto(svgRaw, { tipo: row.tipo }); }
+  catch (e) { return err(e.message, 502); }
   await env.DB.prepare(
     "UPDATE planos SET svg_data=?, circuitos_json=?, metadatos=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?"
   ).bind(svgRaw, JSON.stringify(circuitos), metadatos, id, empresa_id).run();

@@ -173,3 +173,25 @@ Visor abierto desde Planos IA, captura local ignorada
 `.ai-benchmark-results/ia-quality-02/plano-30-estatico.png`.
 Revisión visual: añade ZONA TALLER no solicitada; por tanto, sigue sin garantizar
 fidelidad completa. No acreditar escala, geometría ni uso en obra por ser XML válido.
+
+## IA-QUALITY-04 — contrato de archivo (en desarrollo)
+
+Generación y edición IA verifican sintaxis XML con saxes 6.0.0 fijado, namespace SVG
+y avisos de borrador técnico/NO EJECUTAR EN OBRA en nodos text/tspan/textPath.
+Comentarios, defs, metadata/title/desc y ocultación directa display/visibility/opacity
+no aportan avisos. Gantt exige borrador, sin equipararlo a plano de ejecución.
+Se valida también tras inyectar biblioteca de símbolos. DTD/ENTITY declaradas y
+salidas >512 KiB se rechazan; no se completan ni reparan salidas ambiguas.
+
+23 pruebas técnicas y 297 agente pasan. Rechazos de generación sin INSERT, edición
+sin UPDATE y corrupción tras símbolos cubiertos. CI instala dependencias raíz.
+No valida geometría, cotas, semántica normativa, CSS por clases ni legibilidad/posición
+del aviso; no es un sanitizador universal ni modifica dibujos guardados anteriormente.
+
+Dependencia: [saxes](https://github.com/lddubeau/saxes), parser JS de texto sin DOM/I/O,
+licencia ISC y versión 6.0.0 fijada con xmlchars; npm audit local sin vulnerabilidades.
+Repositorio archivado desde diciembre de 2025: limitación de mantenimiento registrada;
+revisar sustitución ante nuevos defectos. El ensayo inicial con fast-xml-parser aceptó
+entidad indefinida, `<` en atributo, carácter XML prohibido y prefijo no vinculado;
+se descartó y no quedó en package/lock. Esto es elección de implementación acotada,
+sin cambio de arquitectura/ADR ni de proveedores. Publicación API/QA pendientes.
