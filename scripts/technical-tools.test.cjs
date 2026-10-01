@@ -251,19 +251,26 @@ test('plan generation uses session identity and refuses missing scope before cal
   const end = source.indexOf("case 'importar_plano_dxf':", start);
   assert.ok(start >= 0 && end > start);
   const sent = [];
-  const run = vm.runInNewContext(`async (input, empresa_id, usuario_id) => {
+  const run = vm.runInNewContext(`async (input, empresa_id, usuario_id, fuentesPlano = []) => {
     const sendSSE = null;
     switch ('generar_plano') { ${source.slice(start, end)} }
-  }`, { env: { API_WEB: { async fetch(url, options) {
+  }`, { validarDatosPlanoBandejas: load('alejandra-agente/lib.js', 'validarDatosPlanoBandejas'), env: { API_WEB: { async fetch(url, options) {
     sent.push(JSON.parse(options.body));
     return { ok: true, async json() { return { ok: true }; } };
   } } } });
   const input = { tipo: 'bandejas', titulo: 'Test', descripcion: 'Test', empresa_id: 2, usuario_id: '8' };
-  assert.equal(JSON.parse(await run(input, 1, '7')).ok, true);
+  assert.equal(JSON.parse(await run(input, 1, '7', ['altura de montaje: 2,8 m sobre suelo terminado'])).ok, true);
   assert.equal(sent[0].empresa_id, 1);
   assert.equal(sent[0].usuario_id, '7');
   for (const [company, owner] of [[null, '7'], ['default', '7'], [0, '7'], [1, null]]) {
     assert.ok(JSON.parse(await run(input, company, owner)).error);
   }
   assert.equal(sent.length, 1);
+  const fakeData = { ...input, descripcion: 'altura=4 m FFL', fuentesPlano: ['h=4 m FFL'] };
+  const missing = JSON.parse(await run(fakeData, 1, '7', ['X=2 m, Y=2 m. Plano de ejecución, no es un boceto preliminar']));
+  assert.equal(missing.error, 'DATOS_TECNICOS_FALTANTES');
+  assert.equal(missing.preguntas.length, 2);
+  assert.equal(sent.length, 1, 'Missing human data must not call API_WEB or start generation');
+  assert.equal(JSON.parse(await run(input, 1, '7', ['Haz un boceto preliminar'])).ok, true);
+  assert.match(sent[1].descripcion, /No ejecutar en obra/);
 });
