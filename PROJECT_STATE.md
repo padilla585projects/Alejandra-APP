@@ -4,9 +4,11 @@
 
 Adrián prioriza competencia técnica multidisciplinar, planos/CAD y uso de herramientas,
 con ayuda diaria en Office; voz secundaria. Auditoría estática inicial y piloto aislado
-completados sin cambiar modelos ni aplicaciones desplegadas. Primer piloto: 154
-respuestas, 0,1374841 USD estimados; corregir entrega de artefactos y distinguir formato
-de contenido antes de recomendar modelos. Hallazgos/límites en el informe de comparación.
+completados sin cambiar modelos ni aplicaciones desplegadas. Dos pilotos: 308
+respuestas completadas, 0,2768855 USD estimados; segundo artefacto inspeccionado,
+formato/contrato separado de errores técnicos. Luna/Sol candidatos para evaluación
+ampliada, sin decidir sustituciones; CAD sencillo no acredita diseño profesional.
+Hallazgos/límites en el informe; capacidades nuevas y modelo local como investigación.
 
 
 ## Prueba real Android — 2026-10-01

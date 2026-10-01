@@ -4,6 +4,7 @@ Actualizado: 2026-09-30 (cierre de continuidad; no cambia estados de ADR).
 
 | Documento/grupo | Estado | Uso |
 |---|---|---|
+| `docs/ideas/suite-ingenieria-cad-y-modelo-local.md` | Idea / Investigación | Requisitos multidisciplinares/CAD, extensiones de flujos y prueba del modelo local/pool por definir. |
 | `docs/features/comparacion-modelos-ia.md` | Investigación / piloto | Auditoría técnica suite, hallazgos y evaluación reproducible de modelos sin cambios de producción. |
 | `docs/features/android-ota.md` | En validación física | Actualización nativa APK 1.17, seguridad, bootstrap y pruebas del instalador. |
 | `docs/features/android-ar-estabilidad.md` | En validación física | APK 1.16: superficies, paridad visual, pruebas, artefacto y protocolo de verificación en Oppo. |

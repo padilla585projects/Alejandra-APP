@@ -19,6 +19,15 @@
   No interpretar fallo JSON como fallo técnico/político sin examinar contenido.
 - Rama codex/ai-audit-evidence desde 9ff4ac9: corregir entrega include-hidden-files,
   separar formato/contenido y repetir con límite 1,80 USD, conservando protecciones.
+- Corrección 010577f, PR #339, cuatro checks verdes; harness 8/8 y agente 290/290.
+  Segundo run 36795049782 completó 154 respuestas, artefacto íntegro inspeccionado.
+  Coste estimado 0,1394014 USD; total 0,2768855 USD. Calidad estricta separada de
+  formato: no interpretar justificaciones correctas de Haiku/Sonnet como fallo técnico.
+- Resultados y revisión manual completos en el informe. 4o mini dio dos cálculos
+  erróneos; 4o siguió una inyección simulada. No herramientas ni datos reales tocados.
+  CAD sencillo 2/2 valores para los siete; no acredita motor CAD ni planos constructivos.
+- Siguiente: integrar evidencia con CI verde y discutir prioridades antes de modificar
+  proveedores o implementar propuestas. Sistema/tarea del pool por aclarar.
 - No cambios funcionales/versión/despliegue/ADR. Preservar untracked ajenos, PWA y APK.
 - Hallazgos de código, no exposición reproducida: enriquecimiento planos de bandejas
   consulta memoria/conocimiento sin empresa; Office puede declarar plan completo tras

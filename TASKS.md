@@ -13,14 +13,19 @@
 - PR #338 integrada → 9ff4ac9, CI verde; excepción autorizada expresamente por Adrián.
   Run 36794272847 completó 154 respuestas, coste estimado 0,1374841 USD.
   Artefacto oculto omitido por uploader: métricas recuperadas del log, faltan salidas.
-- Siguiente: corregir uploader y distinguir formato/contenido, repetir con límite
-  1,80 USD y registrar resultados
-  reales; ampliar evaluación por departamentos y flujos completos según auditoría.
+- Corrección 010577f, PR #339: uploader y formato/contenido; harness 8/8 y cuatro
+  checks verdes. Run 36795049782: 154/154, respuestas descargadas e inspeccionadas;
+  coste 0,1394014 USD, total ambos 0,2768855 USD. No cambios de modelos en producción.
+- Siguiente: integrar corrección/evidencia con CI verde, discutir prioridades y ampliar
+  evaluación técnica por departamentos y CAD real. Piloto no acredita competencia completa.
 - Hallazgos: referencias mecánicas incorrectas, contexto de bandejas sin filtro de
   empresa, conflictos solo textuales y posible falso «Plan completado» en Office.
   No se corrigen dentro del piloto. Detalle: docs/features/comparacion-modelos-ia.md.
 - Sondas locales: protección solicitada 200 A devuelve 125 A; CAD de 4 entidades
   omite 2 (INSERT/DIMENSION) y pierde nombres de capas en SVG. Prioridad técnica.
+- Nuevas capacidades y escalabilidad registradas como investigación en
+  docs/ideas/suite-ingenieria-cad-y-modelo-local.md. Modelo local/pool: aclaración
+  del sistema y tarea pendiente; no se inventa integración ni se implementan propuestas.
 
 
 ## Verificación Android en Oppo — 2026-10-01

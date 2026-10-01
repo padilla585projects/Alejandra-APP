@@ -10,6 +10,21 @@ Cada ítem conserva estado, evidencia, impacto, alternativas y fase/ADR de desti
 
 ## Ítems abiertos
 
+### IA-COMP-01 — hallazgos técnicos y oportunidades (2026-10-01)
+
+Estado: Investigación / Pendiente de corrección, no ADR nuevo aceptado.
+Evidencia: docs/features/comparacion-modelos-ia.md, auditoría y sondas locales.
+- Alto: contexto de planos de bandejas consulta memoria/conocimiento sin filtro de
+  empresa. Riesgo observado en código; no exposición real demostrada.
+- Alto: calcularProteccion(200 A) devuelve 125 A fuera de rango; referencias del
+  contexto mecánico incorrectas. Requiere validadores y revisión de fuentes.
+- CAD: unidades/capas/bloques/cotas y round-trip no acreditados por conversión SVG.
+- Office: plan puede anunciar completado tras error, sin postcondiciones por paso.
+Propuestas de capacidades escalables y modelo local/pool:
+docs/ideas/suite-ingenieria-cad-y-modelo-local.md. Modelos de producción intactos.
+Siguiente decisión: priorizar correcciones y evaluación técnica ampliada por disciplina;
+no usar los pilotos sintéticos como acreditación profesional de toda la suite.
+
 | ID | Estado | Tema | Impacto | Evidencia / siguiente decisión |
 |---|---|---|---|---|
 | ARC-001 | Cerrado | Modelo de riesgo y aprobación humana | Alto | ADR-0003 fija evaluación obligatoria; faltaban umbrales, responsables y catálogo de acciones. **ADR-0006 aceptado el 2026-08-02**: matriz de cuatro niveles (N0–N3) por reversibilidad y alcance. `run_migration` no se retira del catálogo, pero pasa a capacidad administrativa sujeta a autorización explícita, fuera del alcance autónomo del agente. Desbloquea ADR-0004 y con él F-1.1. |
