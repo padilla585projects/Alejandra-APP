@@ -300,3 +300,34 @@ Agente 290/290, benchmark 8/8, overlay AR 8/8; sintaxis/encoding/versiones/
 departamentos/inventarios correctos. Publicación y aceptación autenticada
 pendientes; no cambios a AR/APK ni proveedores, sin migraciones o secretos.
 Rollback: revertir PR; después de publicación, redesplegar SHA anterior.
+
+
+## Entrega y aceptación concreta — web 9.79 (2026-10-01)
+
+PR #342 integrada → 00517cf. API/agente desde 33be87e, runs 36798964736 /
+36798967825, ambos healthy (7c61d5d0 / adecb1d8), D1/R2 disponibles. Pages
+run 36799719605 desde 00517cf: 9.79. Hashes normalizados de panel/index/sw/
+repl3d publicados coinciden con fuentes revisadas. Motor AR sin cambios.
+
+Chrome con sesión existente, empresa demo 5, sin leer credenciales:
+- GET planos autenticado HTTP 200.
+- Mismo paso inexistente en ejecutor Office: 9.78 muestra Plan completado/100%;
+  9.79 devuelve Error en paso 1/0px, solo toast de error. Invocación de función
+  publicada en DOM real, sin operaciones de negocio ni simulación del modelo.
+- Chat visible ejecuta calcular_proteccion dos veces: 32 A válido, 200 A
+  FUERA_DE_RANGO, sin proponer protección insuficiente. No acredita dimensionamiento
+  normativo completo ni selección general de diferenciales.
+- Generación desde UI de plano QA de bandejas, ID 25, empresa demo 5; guardado y
+  abierto en visor. SVG HTTP 200, raíz svg, viewBox 0 0 1400 900, cero errores XML.
+  Aviso NO EJECUTAR EN OBRA presente. Cotas 6/2 m presentes; altura +2 m no
+  solicitada y etiquetas solapadas observadas. No acreditar CAD profesional.
+
+Plano y mensaje sintéticos retenidos; no borrarlos sin autorización. Capturas
+locales ignoradas en .ai-benchmark-results/release-9.79; no se versionan datos
+ni capturas de producción. Aislamiento entre empresas/usuarios demostrado con
+SQL local y prompt capturado, no con acceso a datos reales ajenos.
+
+Hallazgo UI para auditoría gráfica: FAB chat equipo intercepta envío IA compacto;
+funciona al ampliar chat. No rediseñado en esta entrega. Rollback API 0ecaa43,
+agente 609a0ac, Pages 3990424 mediante workflows aprobados. Próximo: auditoría
+normativa/cálculos y CAD real antes de cambiar proveedores.

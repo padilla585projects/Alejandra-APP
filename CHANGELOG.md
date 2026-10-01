@@ -13,7 +13,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   interno inválido en el helper compartido con las rutas de correo y tareas.
 - Office detiene el plan ante un error, conserva el progreso ejecutado y no
   anuncia éxito. Navegación/scroll ausentes y acciones desconocidas dan error.
-- Sin cambio de modelos, AR, APK ni versión publicada; entrega pendiente.
+- Publicado en web 9.79 y ambos Workers; rango del calculador y error Office
+  comprobados en sesión real. Sin cambio de modelos, AR ni APK.
 
 ### Fixed (2026-10-01 — alineamiento AR en pantallas densas)
 

@@ -1,15 +1,31 @@
 # Handoff — Alejandra 2.0
 
-## IA-FIX-01-ENTREGA — en curso (2026-10-01)
+## IA-FIX-01-ENTREGA — publicada y verificada (2026-10-01)
 
 - Codex, codex/technical-fixes-release, base 33be87e. Publicación autorizada por Adrián.
 - Preparar marcadores 9.79, PR/CI y workflows manuales API/agente/Pages con SHA fijo.
 - Antes: API healthy b3f97ba9, agente healthy 532149a5, Pages 9.78; D1/R2 disponibles.
   Rollback y aceptación en TASKS. No tocar archivos ajenos ni secretos/DDL/datos.
-- Siguiente: validar/entregar y registrar salud, assets y prueba autenticada cuando
-  exista sesión. No confundir comprobación de código con flujo real autenticado.
+- PR #342 integrada → 00517cf; runs API/agente 36798964736/36798967825 correctos
+  desde 33be87e, healthy 7c61d5d0/adecb1d8. Pages 36799719605 desde 00517cf sirve 9.79.
+- Verificación manual: health HTTP 200, assets panel/index/sw/repl3d coinciden con
+  fuentes revisadas; Chrome muestra 9.79. Rollback Pages 3990424, además de Workers.
+- Office real: ejecutar paso click inexistente en 9.78 devolvió Plan completado/100%;
+  mismo caso 9.79 Error en paso 1/0px, solo toast err. Función publicada en DOM real,
+  sin persistencia de negocio. GET planos autenticado HTTP 200.
+- Chat demo 5: dos chips calcular_proteccion y respuesta 32 A válida / 200 A
+  FUERA_DE_RANGO. No acreditar norma o diferencial por esta prueba de rango.
+- Plano QA 25 (empresa demo 5), título NO EJECUTAR EN OBRA, generado/guardado/abierto.
+  GET /planos/25/svg HTTP 200, raíz svg, viewBox 0 0 1400 900, cero parsererror.
+  Cotas 6/2 m presentes, pero altura +2 m no solicitada y etiquetas solapadas;
+  no acreditar diseño profesional ni exactitud completa. No borrar datos de prueba
+  sin autorización. Capturas ignoradas .ai-benchmark-results/release-9.79, sin versionar.
+- Hallazgo UI: FAB chat equipo (z 499) intercepta envío en popup IA compacto;
+  vista ampliada permite enviar. Registrar para auditoría gráfica, sin rediseñar aquí.
+- Siguiente: auditoría normativa/cálculos por departamento y CAD con criterios
+  medibles antes de sustituir modelos. Modelo local/pool pendiente de aclaración.
 
-## IA-FIX-01 — integrada, publicación pendiente (2026-10-01)
+## IA-FIX-01 — integrada y publicada (2026-10-01)
 
 - Codex; rama codex/technical-tools-corrections; base 7e2ce30, PR #339 ya integrada.
 - Corrección acotada de protección fuera de rango, contexto de bandejas sin scope
@@ -25,8 +41,7 @@
 - Catálogo automático solo propio; registros globales/ajenos excluidos, sin migración.
   La compartición departamental sigue pendiente. Normativa y CAD fuera de este cambio.
 - PR #340 integrada → e8c78f4, cuatro checks verdes; merge normal sin excepción.
-- Siguiente: preparar publicación de Workers/Office conforme al runbook CI/CD y
-  verificar lectura autenticada. No hay despliegue ejecutado para esta tarea.
+- Publicación y lecturas autenticadas registradas en IA-FIX-01-ENTREGA.
   Rollback: revertir la PR, o redesplegar SHA previo si se publica.
 
 ## IA-COMP-01 — auditoría y medición (2026-10-01)

@@ -15,7 +15,7 @@ Cada ítem conserva estado, evidencia, impacto, alternativas y fase/ADR de desti
 Estado: Investigación / Pendiente de corrección, no ADR nuevo aceptado.
 Evidencia: docs/features/comparacion-modelos-ia.md, auditoría y sondas locales.
 - IA-FIX-01 integrada (PR #340 → e8c78f4) corrige contexto de bandejas, protección
-  fuera de rango y falso éxito Office; CI verde, publicación pendiente.
+  fuera de rango y falso éxito Office; CI verde, publicada web 9.79/Workers.
   Catálogo compartido requiere definir permisos departamentales y propiedad;
   hasta entonces el enriquecimiento automático solo usa registros propios.
 - Alto: contexto de planos de bandejas consulta memoria/conocimiento sin filtro de
@@ -23,6 +23,10 @@ Evidencia: docs/features/comparacion-modelos-ia.md, auditoría y sondas locales.
 - Alto: calcularProteccion(200 A) devuelve 125 A fuera de rango; referencias del
   contexto mecánico incorrectas. Requiere validadores y revisión de fuentes.
 - CAD: unidades/capas/bloques/cotas y round-trip no acreditados por conversión SVG.
+- Prueba publicada QA 25 en demo: genera/guarda/abre SVG, pero añade altura no
+  solicitada y solapa etiquetas. No considerar el éxito HTTP garantía de plano de obra.
+- Gráfica Office: FAB chat equipo intercepta envío IA en vista compacta; ampliar el
+  chat evita el problema. Incluir en auditoría gráfica con muestras previas.
 - Office: plan puede anunciar completado tras error, sin postcondiciones por paso.
 Propuestas de capacidades escalables y modelo local/pool:
 docs/ideas/suite-ingenieria-cad-y-modelo-local.md. Modelos de producción intactos.

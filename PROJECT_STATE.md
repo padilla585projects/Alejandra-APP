@@ -1,12 +1,24 @@
 # Estado del proyecto — Alejandra 2.0
 
+## Entrega técnica web 9.79 — 2026-10-01
+
+PR #342 integrada → 00517cf. API y agente publicados desde 33be87e por workflows
+36798964736/36798967825: healthy, D1/R2 disponibles, versiones 7c61d5d0/adecb1d8.
+Pages desde 00517cf (run 36799719605), 9.79 y assets revisados verificados.
+Office autenticado: lectura de planos HTTP 200; paso inexistente muestra error sin
+éxito ni progreso completado. Chat llama dos veces al calculador: 32 A correcto,
+200 A FUERA_DE_RANGO. Plano QA 25 generado/guardado/abierto en empresa demo 5,
+SVG HTTP 200 sin errores de parseo. Añade altura no solicitada y etiquetas solapadas;
+no acreditar CAD profesional. AR/APK/modelos sin cambios. Próximo: auditoría normativa
+y CAD con criterios verificables; superposición del chat compacto registrada para gráfica.
+
 ## Correcciones técnicas tras auditoría — 2026-10-01
 
 IA-FIX-01 integrada (PR #340 → e8c78f4, cuatro checks verdes): protección fuera de
 rango rechazada; contexto de bandejas limitado a empresa y propietario de sesión;
 Office no declara éxito tras error. Ocho regresiones nuevas, con SQL SQLite real
-y captura del prompt, y 290 pruebas del agente correctas. Publicación pendiente;
-pruebas aisladas no sustituyen aceptación autenticada en producción.
+y captura del prompt, y 290 pruebas del agente correctas. Publicación realizada,
+con verificaciones concretas en el apartado de entrega; no acredita todos los flujos.
 Sin cambios AR/APK/modelos. Catálogo compartido, normativa mecánica, CAD y evaluación
 ampliada siguen pendientes; no se afirma competencia técnica completa.
 

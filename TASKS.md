@@ -9,8 +9,18 @@
 - Aceptación: tres workflows correctos, Workers healthy con versión nueva, Pages
   9.79 y lectura autenticada; pruebas de comportamiento claramente separadas de health.
 - Rollback API 0ecaa43 (run 36770433947); agente 609a0ac (run 35401027009).
-  Pages: localizar SHA de la última publicación 9.78 antes de despachar entrega.
-- En curso: preparar versión/PR; comprobar sesión de navegador sin leer credenciales.
+  Pages 3990424 (run 35403234780, versión 9.78). Redesplegar por workflow con SHA fijo.
+- PR #342 integrada → 00517cf; API/agente desde 33be87e por runs
+  36798964736/36798967825, healthy 7c61d5d0/adecb1d8. Pages 9.79 desde 00517cf,
+  run 36799719605 correcto; panel/index/sw/repl3d coinciden con fuentes revisadas.
+- Chrome autenticado, empresa demo 5: GET planos HTTP 200; ejecutor Office pasa
+  de falso éxito en 9.78 a Error en paso 1 sin toast ok/progreso en 9.79.
+  Chat ejecuta calcular_proteccion dos veces: 32 A y rechazo FUERA_DE_RANGO de 200 A.
+- Plano QA 25 generado/guardado/abierto; SVG HTTP 200, parseo correcto, aviso
+  NO EJECUTAR EN OBRA. Altura no solicitada y etiquetas solapadas, CAD no acreditado.
+  Datos de prueba retenidos; no borrarlos sin autorización humana.
+- Entrega verificada en esos casos. Siguiente: auditoría de normativa mecánica y
+  cálculos por disciplina, luego CAD/unidades/capas/round-trip y evaluación ampliada.
 
 ## IA-FIX-01 — correcciones técnicas tras auditoría (2026-10-01)
 
@@ -28,9 +38,8 @@
   sintaxis Workers, encoding, versiones 9.78, departamentos y dos inventarios OK.
   SQLite en memoria verifica consultas y prompt; Office usa DOM simulado.
 - PR #340 integrada → e8c78f4, cuatro checks verdes, merge normal sin excepción.
-- Siguiente: preparar entrega de Workers/Office mediante workflows aprobados y
-  verificar lectura autenticada. Publicación/aceptación real pendiente; no afirmar
-  desplegado ni validado todo el flujo CAD/Office. Normativa y CAD, tareas separadas.
+- Publicación y verificaciones específicas registradas en IA-FIX-01-ENTREGA.
+  No afirmar validado todo el flujo CAD/Office. Normativa y CAD, tareas separadas.
 
 ## IA-COMP-01 — auditoría suite y comparación técnica (2026-10-01)
 
