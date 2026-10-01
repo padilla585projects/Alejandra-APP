@@ -4,7 +4,17 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — SVG estático IA-QUALITY-03)
+
+- Generación y edición IA rechazan scripts, foreignObject y eventos antes de guardar.
+  El prompt exige geometría SVG explícita, sin código para dibujar cuadrículas.
+  Rechazo sin reparación automática; validador XML completo todavía pendiente.
+
 ### Fixed (2026-10-01 — datos faltantes IA-QUALITY-02)
+
+- Publicado y comprobado en demo: faltan altura/datum → preguntas sin guardar;
+  datos humanos confirmados y boceto explícito permiten avanzar. PR #346, 297 pruebas
+  agente/15 técnicas, run de publicación 36839880273. Hallazgo SVG de ID 28 pendiente.
 
 - Generar bandejas desde chat exige altura con unidad y referencia en texto humano,
   o un boceto preliminar pedido expresamente. Datos inventados por el modelo no

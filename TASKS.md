@@ -17,8 +17,23 @@
 - **Reanudada por Adrián al pedir «sigue».** Implementación inicial 400f118;
   agente 295/295 y técnicas 15/15 correctas. Guardar/push para revisión, sin merge/deploy.
   Ejecutar secuencia de HANDOFF; no afirmar QA publicada corregida antes de comprobarla.
-  PR #346 CI verde; revisión detecta reutilización de boceto anterior y mención
-  de boceto sin solicitud. Corregir y probar esos casos antes de integrar/publicar.
+  PR #346 integrada → f9addec; correcciones de reutilización y menciones en 6da23e7,
+  297 agente/15 técnicas, cuatro checks verdes. Agente publicado, run 36839880273.
+  QA demo: ausencia bloqueada sin guardar; datos humanos → 28; boceto explícito → 29.
+  Mínimo altura/datum verificado, sin garantía integral de CAD/ejecución.
+
+## IA-QUALITY-03 — SVG estático (2026-10-01)
+
+- Continuación autorizada del rigor de planos: QA 28 incorpora script de cuadrícula
+  con `<` sin escapar, XML inválido; el chat afirma un aviso ausente del archivo.
+- Alcance inmediato: generación/edición IA deben rechazar contenido ejecutable antes
+  de persistir y pedir SVG estático en su prompt común. Pruebas negativas sin escrituras.
+- Riesgo: rechazos adicionales de generaciones dinámicas; rollback revertir cambio API.
+- Sin reparación automática de planos existentes, migraciones, borrados ni cambios AR.
+- XML completo, avisos deterministas, geometría y round-trip CAD siguen pendientes.
+- Implementación preparada: rechazo compartido y prompt estático; 18 regresiones
+  técnicas, incluidas generación sin INSERT y edición sin UPDATE. Publicación API
+  y prueba demo pendientes de PR/CI.
 
 ## IA-QUALITY-01 — controles de calidad profesional (2026-10-01)
 

@@ -1,5 +1,23 @@
 # Handoff — Alejandra 2.0
 
+## IA-QUALITY-02 — publicada y verificada (2026-10-01)
+
+- PR #346 integrada → f9addec; SHA publicado 6da23e76f477e19ac92ead2c8ac8ed792030c0d3,
+  run 36839880273 SUCCESS. Versión real 39559254-382d-4f9d-bf4d-111e4a763915,
+  health sin caché healthy, D1/R2 disponibles. API/Pages sin desplegar.
+- Local 297 agente/15 técnicas; cuatro checks CI verdes. Demo 5: sin altura/datum,
+  DATOS_TECNICOS_FALTANTES y dos preguntas, planos permanecen [27,26,25,21].
+  Datos humanos 2,8 m sobre suelo terminado → ID 28. Boceto nuevo sin altura → ID 29,
+  notas de pendientes y BOCETO NO EJECUTAR, sin heredar 2,8 m.
+- ID 28: XML inválido línea 206 (`x <= viewBoxWidth` dentro de script); contiene
+  JavaScript generado y no conserva aviso literal NO EJECUTAR pese a afirmarlo el chat.
+  ID 29: XML correcto, sin scripts. No acreditar geometría/CAD ni uso en obra.
+- Siguiente continuación autorizada del defecto: exigir SVG estático en generación/
+  edición, rechazar scripts antes de guardar y probar rechazo sin escrituras.
+  Validador XML completo y avisos deterministas continúan pendientes.
+- QA se retienen, sin borrados; archivos ajenos intactos. Rollback agente 158e886.
+  Evidencia ampliada en docs/features/calidad-tecnica-ia.md.
+
 ## IA-QUALITY-02 — reanudada (2026-10-01)
 
 - Adrián solicita «sigue». Codex, codex/plan-required-data-gate, PR #346 abierta

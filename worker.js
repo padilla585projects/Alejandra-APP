@@ -29220,7 +29220,8 @@ POLITICA DE FIDELIDAD TECNICA — PREVALECE SOBRE EJEMPLOS Y PLANTILLAS ANTERIOR
 - Leyenda solo de elementos presentes. Reserva un area separada para leyenda, notas y cajetin; nunca invadan el dibujo.
 - Etiquetas tecnicas minimo 12 unidades SVG y distancia entre lineas >=16. Cotas fuera del recorrido; identifica tramos con IDs y usa una tabla separada si la etiqueta no cabe. No superpongas altura, referencia y cota sobre el mismo tramo.
 - No anadas notas prescriptivas universales ni atribuyas a una norma valores sin comprobar su aplicabilidad. Indica las comprobaciones pendientes concretas.
-- Devuelve un SVG completo. No omitas cierres de elementos para ajustarte al limite de tokens.`;
+- Devuelve un SVG completo. No omitas cierres de elementos para ajustarte al limite de tokens.
+- SVG estatico: representa cuadrículas y geometria con elementos SVG explicitos, nunca con JavaScript, script, manejadores de eventos ni foreignObject. El dibujo debe ser visible sin ejecutar codigo.`;
 }
 
 // Control de integridad del contenedor, compartido por generar/editar.
@@ -29232,6 +29233,13 @@ function _extraerSvgCompleto(texto) {
   if (!cierre) throw new Error('Plano incompleto: falta el cierre SVG. No se ha guardado; vuelve a generar con menos detalle.');
   const svg = texto.slice(inicio, inicio + cierre.index + cierre[0].length);
   if ((svg.match(/<svg\b/gi) || []).length !== 1) throw new Error('Plano ambiguo: varios contenedores SVG');
+  // Rechazar, no eliminar codigo: quitarlo podria dar por valido un dibujo incompleto.
+  // Defensa acotada del contrato estatico; no sustituye un parser/sanitizador XML.
+  const contenido = svg.replace(/<!--[\s\S]*?-->/g, '');
+  if (/<(?:[\w.-]+:)?(?:script|foreignObject)\b/i.test(contenido)
+      || /<[^>]*\s(?:[\w.-]+:)?on[a-z]+\s*=/i.test(contenido)) {
+    throw new Error('Plano no estatico: contiene codigo ejecutable o contenido interactivo. No se ha guardado; genera un SVG estatico sin scripts ni eventos.');
+  }
   return svg;
 }
 
