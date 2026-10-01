@@ -4,6 +4,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-01 — IA-CALC-QUALITY-03)
+
+- Protección devuelve curva pendiente y pide arranque/cortocircuito/fabricante;
+  se elimina la selección automática por tipo de carga tras QA real fallida.
+
 ### Fixed (2026-10-01 — IA-CALC-QUALITY-02)
 
 - Contexto de ingeniería respeta el alcance parcial de calculadores y sus null;
