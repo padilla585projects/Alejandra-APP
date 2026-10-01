@@ -2485,8 +2485,6 @@ El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos)
       tipo:        { type: 'string', enum: ['bandejas', 'electrico', 'unifilar', 'planta_electrica', 'planta_industrial', 'planta', 'mecanico', 'gantt'], description: 'Tipo de plano' },
       titulo:      { type: 'string', description: 'Titulo del plano (ej: "Soportacion Rejiband 300 CPD Getafe")' },
       descripcion: { type: 'string', description: 'Datos aportados o verificados: medidas/unidades, recorrido X/Y, altura Z y datum, especificaciones y referencias confirmadas. Preguntar antes por datos criticos faltantes; para boceto preliminar solicitado, declarar los pendientes. No completar huecos con ejemplos.' },
-      empresa_id:  { type: 'integer', description: 'ID de empresa (si no se conoce, usar 1)' },
-      usuario_id:  { type: 'integer', description: 'ID del usuario (opcional)' },
       circuitos:   {
         type: 'array',
         description: 'Lista OPCIONAL de circuitos/tramos con datos EXACTOS y reales (por ejemplo cuando el usuario te pasa una foto de un esquema unifilar real y te dice los valores de cada automatico). Si se proporciona, para tipo "unifilar" o "electrico" se usan estos valores literalmente en el SVG generado (no inventes otros numeros) y se guardan para poder editarlos despues con la tool editar_plano sin tener que regenerar el plano entero adivinando los datos de nuevo.',
