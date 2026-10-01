@@ -15,6 +15,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Corregidas referencias RITE/equipos a presión, ventilación IDA de oficinas y
   fórmula de carga térmica; la auditoría integral por disciplinas sigue pendiente.
 - CI comprueba también el marcador de versión de Office.
+- Botones flotantes restaurados desde una ventana mayor se ajustan al viewport
+  visible también al redimensionar, manteniendo accesibles sus controles.
 
 ### Fixed (2026-10-01 — herramientas técnicas y planes Office)
 

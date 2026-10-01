@@ -1,13 +1,20 @@
 # Handoff — Alejandra 2.0
 
-## IA-QUALITY-01 — en desarrollo (2026-10-01)
+## IA-QUALITY-01 — 9.80 publicada; seguimiento viewport (2026-10-01)
 
 - Codex, codex/professional-quality-controls, base ef173a2; alcance y aceptación en TASKS.
 - Mejorar causas observadas: prompts exigen completar datos ausentes; SVG truncado
   se cierra artificialmente; Office acepta campos/opciones inválidos y pierde cero;
   chat compacto z498 queda bajo FAB z499. Normativa mecánica cotejada con BOE.
 - Preservar AR/PWA, APK y archivos ajenos. Sin decisiones CAD nuevas ni datos destructivos.
-- Siguiente: implementar y ejecutar regresiones; registrar límites de validación.
+- Implementación 158e886, PR #344 integrada → 2716bff; CI verde. Publicación y
+  health/asset/stack chat registrados en docs/features/calidad-tecnica-ia.md.
+- Rama seguimiento codex/floating-controls-viewport, base 2716bff. Botón IA guardado
+  queda parcialmente fuera de viewport menor; ajuste visible sin borrar preferencias.
+  15 regresiones correctas. Pendiente PR/CI/publicación Pages y comprobar en Chrome.
+- Prompt QA de datos faltantes enviado en demo 5 desde chat compacto, respuesta
+  aún sin verificar tras cierre de pestaña. No afirmar comportamiento del modelo.
+- Siguiente: integrar ajuste de viewport, comprobar respuesta QA y restaurar empresa 1/Seguridad.
 
 ## IA-FIX-01-ENTREGA — publicada y verificada (2026-10-01)
 

@@ -27679,7 +27679,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.80';
+const PANEL_APP_VERSION = '9.81';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;
@@ -45111,6 +45111,25 @@ async function eliminarPlanoId(id, titulo) {
 // el puntero se desplaza más de 4px — un click normal en un botón hijo (sin arrastre)
 // nunca activa esa rama, así que el onclick del botón llega intacto. Es seguro aplicarlo
 // igual que a los demás FABs.
+function _limitarPosicionFlotante(left, top, width, height, viewportWidth, viewportHeight) {
+  const maxLeft = Math.max(0, viewportWidth - width - 4);
+  const maxTop = Math.max(0, viewportHeight - height - 4);
+  return {
+    left: Math.max(Math.min(4, maxLeft), Math.min(maxLeft, left)),
+    top: Math.max(Math.min(4, maxTop), Math.min(maxTop, top)),
+  };
+}
+
+function _ajustarFabViewport(el) {
+  const left = parseFloat(el.style.left), top = parseFloat(el.style.top);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return;
+  const css = getComputedStyle(el);
+  const width = el.offsetWidth || parseFloat(css.width) || 56;
+  const height = el.offsetHeight || parseFloat(css.height) || 56;
+  const pos = _limitarPosicionFlotante(left, top, width, height, window.innerWidth, window.innerHeight);
+  el.style.left = pos.left + 'px'; el.style.top = pos.top + 'px';
+}
+
 function makeDraggable(id) {
   const el = document.getElementById(id);
   if (!el || el._dragInit) return;
@@ -45120,8 +45139,13 @@ function makeDraggable(id) {
     const saved = JSON.parse(localStorage.getItem(key) || 'null');
     if (saved) { el.style.left = saved.left; el.style.top = saved.top; el.style.right = 'auto'; el.style.bottom = 'auto'; }
   } catch {}
+  // Posiciones guardadas en una ventana mayor deben seguir siendo accesibles.
+  // No sobrescribir la preferencia guardada: solo ajustar la posición visible.
+  _ajustarFabViewport(el);
+  window.addEventListener('resize', () => _ajustarFabViewport(el));
   let dragging = false, moved = false, startX, startY, origLeft, origTop;
   const start = e => {
+    _ajustarFabViewport(el);
     const p = e.touches ? e.touches[0] : e;
     dragging = true; moved = false;
     const rect = el.getBoundingClientRect();
@@ -45135,9 +45159,9 @@ function makeDraggable(id) {
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
     if (!moved) return;
     e.preventDefault?.();
-    let newLeft = Math.max(4, Math.min(window.innerWidth - el.offsetWidth - 4, origLeft + dx));
-    let newTop  = Math.max(4, Math.min(window.innerHeight - el.offsetHeight - 4, origTop + dy));
-    el.style.left = newLeft + 'px'; el.style.top = newTop + 'px';
+    const pos = _limitarPosicionFlotante(origLeft + dx, origTop + dy,
+      el.offsetWidth, el.offsetHeight, window.innerWidth, window.innerHeight);
+    el.style.left = pos.left + 'px'; el.style.top = pos.top + 'px';
     el.style.right = 'auto'; el.style.bottom = 'auto';
   };
   const stop = () => {

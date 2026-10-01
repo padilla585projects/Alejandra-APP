@@ -51,6 +51,34 @@ function editable(overrides = {}) {
     style: {}, matches: () => false, getAttribute: () => null, scrollIntoView() {},
     focus() {}, click() {}, dispatchEvent() {}, ...overrides };
 }
+test('floating controls remain accessible after restoring a position from a larger window', () => {
+  const limit = load('panel.html', '_limitarPosicionFlotante');
+  const pos = limit(1464.4, 663.8, 56, 56, 1536, 687);
+  assert.equal(pos.top, 627);
+  assert.equal(pos.left, 1464.4);
+  const portrait = limit(1464, 663, 56, 56, 390, 844);
+  assert.equal(portrait.left, 330);
+  assert.equal(portrait.top, 663);
+  const negative = limit(-20, -5, 56, 56, 390, 844);
+  assert.equal(negative.left, 4);
+  assert.equal(negative.top, 4);
+  const tiny = limit(100, 100, 56, 56, 40, 40);
+  assert.equal(tiny.left, 0);
+  assert.equal(tiny.top, 0);
+});
+test('hidden FAB restoration uses CSS dimensions before it becomes visible', () => {
+  const element = { style: { left: '1464.4px', top: '663.8px' }, offsetWidth: 0, offsetHeight: 0 };
+  const adjust = load('panel.html', '_ajustarFabViewport', {
+    _limitarPosicionFlotante: load('panel.html', '_limitarPosicionFlotante'),
+    getComputedStyle: () => ({ width: '56px', height: '56px' }),
+    window: { innerWidth: 1536, innerHeight: 687 },
+  });
+  adjust(element);
+  assert.equal(element.style.top, '627px');
+  const normal = { style: { left: '', top: '' } };
+  adjust(normal);
+  assert.equal(normal.style.left, '');
+});
 function officeAction(element) {
   return load('panel.html', '_alejandraFabEjecutarAccion', {
     document: { querySelector: () => element }, Event: class {},
