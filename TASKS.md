@@ -12,6 +12,11 @@
   La política del prompt no acredita cotas ni CAD: motor geométrico y round-trip pendientes.
 - Riesgo: rechazar generaciones truncadas antes guardadas como éxito. Rollback: revertir PR.
   Publicación, cuando proceda, por workflows con SHA fijo y verificación posterior.
+- Implementación 158e886, PR #344 integrada → 2716bff con cuatro checks verdes.
+  Publicada web 9.80 y Workers; runs/evidencia en docs/features/calidad-tecnica-ia.md.
+- Seguimiento autorizado de mismo defecto UI: rama codex/floating-controls-viewport,
+  base 2716bff; mantener FAB con posición guardada dentro del viewport al restaurar,
+  redimensionar y arrastrar. Aceptación: regresión del caso y verificación publicada.
 
 ## IA-FIX-01-ENTREGA — publicación y verificación (2026-10-01)
 

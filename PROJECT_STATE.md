@@ -1,5 +1,15 @@
 # Estado del proyecto — Alejandra 2.0
 
+## Calidad técnica — 2026-10-01
+
+PR #344 integrada → 2716bff, web 9.80 y Workers publicados con CI verde.
+Health/asset y chat compacto verificados; fuentes y límites en
+docs/features/calidad-tecnica-ia.md. Se refuerzan preguntas por datos faltantes,
+fidelidad de planos, rechazo de SVG truncado, controles Office y referencias mecánicas.
+Esto no acredita CAD ni auditoría normativa completa. Seguimiento en TASKS:
+FAB con posición guardada fuera de viewport, ajuste y verificación de preguntas QA.
+AR/APK/modelos de producción conservados. Sin migraciones ni datos borrados.
+
 ## Entrega técnica web 9.79 — 2026-10-01
 
 PR #342 integrada → 00517cf. API y agente publicados desde 33be87e por workflows

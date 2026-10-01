@@ -68,3 +68,21 @@ cotas y round-trip; evaluación de preguntas faltantes y fidelidad por modelo;
 auditoría normativa y cálculos por disciplina; postcondiciones Office de negocio;
 muestras previas a rediseño gráfico. Propuestas CAD en suite-ingenieria-cad-y-modelo-local.md
 mantienen su estado Idea/Investigación; esta corrección no las acepta como arquitectura.
+
+## Publicación 9.80 y seguimiento
+
+- Implementación 158e886, PR #344 integrada → 2716bff, cuatro checks verdes.
+- Runs 36802744569/36802746909/36802750034 fallaron en checkout por hash corto;
+  ningún despliegue. Reintentos con SHA completo 158e886a4616501128aca727c05b6fc533418908:
+  API 36802914715, agente 36802917233, Pages 36802919764: correctos.
+- Health manual HTTP 200: API c211748d-362e-4363-a5a1-d76592578b79;
+  agente 153de6f2-e292-40b7-9cb1-36f20c7b920f; D1/R2 disponibles.
+- Assets panel/index/sw/repl3d/version coinciden por SHA256 normalizado con fuentes.
+  Primera lectura index respondió 503 transitorio; segunda HTTP 200 y coincidencia.
+- Chrome demo 5 muestra 9.80. Con ambos chats abiertos, IA z810 frente a equipo z800;
+  elementFromPoint en centro del envío confirma botón alejandrEnviar. Envío compacto
+  de prompt QA vacía input sin ampliar. Resultado de preguntas todavía por registrar.
+- Hallazgo adicional: posición guardada FAB IA y663,8/h56 en viewport h687 deja
+  parte del botón fuera. Seguimiento acotado: ajustar posición visible al restaurar,
+  redimensionar y arrastrar, sin sobrescribir preferencia guardada automáticamente.
+  15 regresiones pasan, incluidos restauración oculta y viewport estrecho.
