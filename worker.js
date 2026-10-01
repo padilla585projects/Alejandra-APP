@@ -28271,14 +28271,11 @@ function _quickChartUrl(config) {
 async function _getAuthPlano(request, env, body) {
   const secreto = request.headers.get('X-Internal-Secret');
   if (secreto && env.AGENT_INTERNAL_SECRET && secreto === env.AGENT_INTERNAL_SECRET) {
-    // Defensa en profundidad: normalizar a entero positivo. El worker agente
-    // maneja internamente el sentinela de string 'default' (sesion sin
-    // empresa asignada) para otras tools -- si por lo que sea llegara sin
-    // filtrar hasta aqui, un "|| 1" simple lo dejaria pasar tal cual (string
-    // truthy) en vez de caer al valor por defecto. parseInt lo evita.
-    const eidNum = parseInt(body && body.empresa_id, 10);
+    // Sin tenant válido no hay acceso: nunca atribuir una sesión incompleta
+    // a la empresa 1 ni aceptar prefijos numéricos como "1otra-empresa".
+    const eidNum = Number(body && body.empresa_id);
     return {
-      empresa_id: (Number.isInteger(eidNum) && eidNum > 0) ? eidNum : 1,
+      empresa_id: (Number.isSafeInteger(eidNum) && eidNum > 0) ? eidNum : null,
       usuario_id: (body && body.usuario_id) || null,
       rol: (body && body.rol) || 'agente_ia'
     };
@@ -29303,6 +29300,30 @@ async function _llamarAnthropicPlanoStream(env, userMsg, systemPrompt, maxTokens
   return safeStr(acumulado).trim();
 }
 
+// Contexto legacy: no hay ACL departamental/compartición en estas tablas.
+// Restringir a registros propios del tenant autenticado, sin incluir globales.
+async function _obtenerCatalogoBandejas(env, { empresa_id, usuario_id }) {
+  if (!empresa_id || !usuario_id) return [];
+  const [memRows, conRows] = await Promise.all([
+    env.DB.prepare(`
+      SELECT titulo, contenido FROM alejandra_memoria
+      WHERE empresa_id = ? AND usuario_id = ?
+      AND (contenido LIKE '%bandeja%' OR contenido LIKE '%Pemsa%'
+           OR contenido LIKE '%Megaband%' OR contenido LIKE '%Rejiband%'
+           OR contenido LIKE '%canaleta%' OR contenido LIKE '%portacables%')
+      AND tipo IN ('hecho', 'aprendizaje', 'contexto')
+      ORDER BY importancia DESC LIMIT 6
+    `).bind(String(empresa_id), String(usuario_id)).all(),
+    env.DB.prepare(`
+      SELECT titulo, descripcion FROM alejandra_conocimiento
+      WHERE empresa_id = ? AND creado_por = ?
+      AND (tags LIKE '%bandeja%' OR tags LIKE '%canalizacion%')
+      AND activo = 1 LIMIT 4
+    `).bind(String(empresa_id), String(usuario_id)).all(),
+  ]);
+  return [...(memRows.results || []), ...(conRows.results || [])];
+}
+
 async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos = [] }) {
   await _ensurePlanosTable(env);
 
@@ -29315,24 +29336,8 @@ async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id
   let catalogoSection = '';
   if (tipo === 'bandejas') {
     try {
-      const [memRows, conRows] = await Promise.all([
-        env.DB.prepare(`
-          SELECT titulo, contenido FROM alejandra_memoria
-          WHERE (contenido LIKE '%bandeja%' OR contenido LIKE '%Pemsa%'
-                 OR contenido LIKE '%Megaband%' OR contenido LIKE '%Rejiband%'
-                 OR contenido LIKE '%canaleta%' OR contenido LIKE '%portacables%')
-          AND tipo IN ('hecho', 'aprendizaje', 'contexto')
-          ORDER BY importancia DESC LIMIT 6
-        `).all(),
-        env.DB.prepare(`
-          SELECT titulo, descripcion FROM alejandra_conocimiento
-          WHERE (tags LIKE '%bandeja%' OR tags LIKE '%canalizacion%')
-          AND activo = 1 LIMIT 4
-        `).all()
-      ]);
-      const items = [];
-      for (const r of memRows.results || []) items.push(`• ${r.titulo}: ${r.contenido}`);
-      for (const r of conRows.results || []) items.push(`• ${r.titulo}: ${r.descripcion}`);
+      const rows = await _obtenerCatalogoBandejas(env, { empresa_id, usuario_id });
+      const items = rows.map(r => `• ${r.titulo}: ${r.contenido ?? r.descripcion}`);
       if (items.length > 0) {
         catalogoSection = `
 

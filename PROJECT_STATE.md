@@ -1,5 +1,15 @@
 # Estado del proyecto — Alejandra 2.0
 
+## Correcciones técnicas tras auditoría — 2026-10-01
+
+IA-FIX-01 implementada en codex/technical-tools-corrections: protección fuera de
+rango rechazada; contexto de bandejas limitado a empresa y propietario de sesión;
+Office no declara éxito tras error. Ocho regresiones nuevas, con SQL SQLite real
+y captura del prompt, y 290 pruebas del agente correctas. Integración/publicación
+pendientes; pruebas aisladas no sustituyen aceptación autenticada en producción.
+Sin cambios AR/APK/modelos. Catálogo compartido, normativa mecánica, CAD y evaluación
+ampliada siguen pendientes; no se afirma competencia técnica completa.
+
 ## Evaluación IA de la suite — 2026-10-01
 
 Adrián prioriza competencia técnica multidisciplinar, planos/CAD y uso de herramientas,

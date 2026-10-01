@@ -24138,17 +24138,19 @@ async function _alejandraFabEjecutarPlan(plan) {
   window._alejandraFabAbortarPlan = () => { abortado = true; };
 
   const total = plan.acciones.length;
+  let pasoFallido = null;
   for (let i = 0; i < total; i++) {
     if (abortado) break;
     const acc = plan.acciones[i];
     const status = document.getElementById('aleFabPlanStatus');
     const progress = document.getElementById('aleFabPlanProgress');
     if (status) status.textContent = `${i+1}/${total}: ${acc.desc || acc.tipo}`;
-    if (progress) progress.style.width = `${((i+1)/total)*100}%`;
 
     try {
       await _alejandraFabEjecutarAccion(acc);
+      if (progress) progress.style.width = `${((i+1)/total)*100}%`;
     } catch (e) {
+      pasoFallido = i + 1;
       toast(`❌ Error en paso ${i+1}: ${e.message}`, 'err');
       break;
     }
@@ -24158,17 +24160,20 @@ async function _alejandraFabEjecutarPlan(plan) {
   const ov = document.getElementById('alejandraFabPlanOverlay');
   if (ov) {
     const st = document.getElementById('aleFabPlanStatus');
-    if (st) st.textContent = abortado ? 'Cancelado' : 'Plan completado';
+    if (st) st.textContent = pasoFallido !== null ? `Error en paso ${pasoFallido}` : abortado ? 'Cancelado' : 'Plan completado';
     setTimeout(() => ov.remove(), 2000);
   }
-  if (!abortado) toast('🤖 Plan completado', 'ok');
+  if (!abortado && pasoFallido === null) toast('🤖 Plan completado', 'ok');
 }
 
 async function _alejandraFabEjecutarAccion(acc) {
   switch (acc.tipo) {
     case 'navegar': {
       const destino = acc.destino || acc.valor;
-      if (destino && typeof navTo === 'function') navTo(destino);
+      if (!destino || typeof navTo !== 'function') throw new Error('Navegación no disponible');
+      const pagina = document.getElementById('page' + destino.charAt(0).toUpperCase() + destino.slice(1));
+      if (!pagina) throw new Error(`No encontré la página: ${destino}`);
+      navTo(destino);
       break;
     }
     case 'click': {
@@ -24207,11 +24212,12 @@ async function _alejandraFabEjecutarAccion(acc) {
       break;
     case 'scroll': {
       const el = document.querySelector(acc.selector);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       break;
     }
     default:
-      break;
+      throw new Error(`Acción no soportada: ${acc.tipo}`);
   }
 }
 

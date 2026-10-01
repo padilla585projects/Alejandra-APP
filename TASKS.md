@@ -1,5 +1,23 @@
 # TASKS — Cola operativa inmediata
 
+## IA-FIX-01 — correcciones técnicas tras auditoría (2026-10-01)
+
+- Autorizado por Adrián al solicitar continuar. Responsable: Codex.
+- Rama codex/technical-tools-corrections, base main 7e2ce30 (PR #339 integrada).
+- Implementación 3e709e6: rechazar protecciones fuera del rango calculable; aislar contexto de
+  bandejas por empresa y propietario; evitar éxito falso en planes de Office.
+- Alcance: Workers, ejecutor Office, pruebas de regresión y documentación.
+  Sin migraciones, secretos, cambio de modelos, APK, AR ni rediseño PWA.
+- Aceptación: 200 A no devuelve 125 A; contexto ajeno no llega al prompt;
+  paso fallido detiene el plan y no anuncia éxito. Pruebas negativas obligatorias.
+- Riesgo: catálogo automático restringido a registros propios mientras no exista
+  política departamental/compartición explícita. Rollback: revertir la PR.
+- Validación: regresiones 8/8, agente 290/290, benchmark 8/8 y overlay AR 8/8;
+  sintaxis Workers, encoding, versiones 9.78, departamentos y dos inventarios OK.
+  SQLite en memoria verifica consultas y prompt; Office usa DOM simulado.
+- Siguiente: abrir PR e integrar solo con CI verde. Publicación/aceptación real
+  pendiente; no afirmar desplegado ni validado todo el flujo CAD/Office.
+
 ## IA-COMP-01 — auditoría suite y comparación técnica (2026-10-01)
 
 - Autorizado por Adrián: auditar capacidades y medir modelos; técnica multidisciplinar,
@@ -16,7 +34,7 @@
 - Corrección 010577f, PR #339: uploader y formato/contenido; harness 8/8 y cuatro
   checks verdes. Run 36795049782: 154/154, respuestas descargadas e inspeccionadas;
   coste 0,1394014 USD, total ambos 0,2768855 USD. No cambios de modelos en producción.
-- Siguiente: integrar corrección/evidencia con CI verde, discutir prioridades y ampliar
+- PR #339 integrada → 7e2ce30, CI verde. Siguiente: corregir hallazgos y ampliar
   evaluación técnica por departamentos y CAD real. Piloto no acredita competencia completa.
 - Hallazgos: referencias mecánicas incorrectas, contexto de bandejas sin filtro de
   empresa, conflictos solo textuales y posible falso «Plan completado» en Office.
