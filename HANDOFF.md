@@ -1,5 +1,39 @@
 # Handoff — Alejandra 2.0
 
+## IA-QUALITY-06 — confirmar antes de elegir alturas (2026-10-02, en revisión)
+
+Codex; codex/plan-human-ambiguity, base 742b6ec, continuación autorizada.
+lib.js examina todas las alturas/referencias de cada mensaje humano. Valores
+incompatibles, ejemplos, preguntas y expresiones de duda/negación reconocidas
+requieren aclaración; una duda reciente impide recuperar el dato antiguo.
+Repeticiones equivalentes m/cm/mm y FFL/suelo/pavimento siguen aceptadas.
+Confirmación clara posterior resuelve ambigüedad; corrección entre turnos actualiza
+altura y conserva datum confirmado. Dos alturas distintas en el mismo mensaje,
+incluso con «corrijo», requieren confirmar una única o detallar tramos; el contrato
+actual es de una altura. El gate sigue antes de API_WEB y no confía en tool_input.
+300 pruebas agente y 33 técnicas pasan, sintaxis y diff correctos. En primera
+prueba «Quizá» escapaba por límite ASCII de palabra: corregido y suite verde.
+Heurística conservadora puede pedir más aclaraciones; no cubre cualquier frase,
+OCR, geometría, múltiples alturas estructuradas ni entradas directas web libres.
+Sin cambios de autenticación/esquemas/AR/APK/UI/Pages ni migraciones.
+Rollback agente e5eec22cc80267076612bd0d4cab08f14ca46b3c.
+Pendientes PR/CI, publicación agente, QA conversacional real y siguiente auditoría
+sobre datos de referencia entre turnos. No declarar perfección ni normativa validada.
+
+## IA-QUALITY-05 — API publicada; lectura real verificada (2026-10-02)
+
+PR #358 → 742b6ec, cuatro checks verdes; implementación
+296d4d33a52e6d9b5daa438653814e1336adddfd. Run 36937099698 SUCCESS,
+API bd7403c9-14bd-4c1e-8484-e78325282016 healthy D1/R2 sin caché.
+Primera lectura mostró versión anterior durante propagación; segunda confirmó
+la publicada. Aplicación móvil: inventario y chat cargan con sesión existente,
+sin cambiar empresa/departamento ni crear/modificar planos. No acredita aún una
+generación real con anotación; 33 pruebas técnicas verifican contrato y rechazo
+sin INSERT/UPDATE. Rollback API 7d7ac10215a796e29df0c24615b102c328ea22ef.
+Encadenado IA-QUALITY-06: ambigüedad de datos humanos; API directa libre y geometría
+siguen pendientes. PWA/AR/APK/Pages conservados.
+
+
 ## IA-QUALITY-05 — altura y referencia en el archivo (2026-10-02, en desarrollo)
 
 La API interpreta únicamente el bloque JSON humano que el agente ya añade a la

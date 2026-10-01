@@ -1251,23 +1251,43 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
   }
   if (preliminar) return { ok: true, modo: 'boceto_preliminar', nota: 'Boceto preliminar solicitado; identificar datos pendientes. No ejecutar en obra.' };
   let altura = null, fuenteAltura = null, referencia = null;
+  let alturaPendiente = false, referenciaPendiente = false;
   for (const texto of [...fuentes].reverse()) {
-    if (altura === null) {
-      const match = texto.match(/\b(?:altura(?: de montaje)?\s*(?::|=|de|a)?|cota(?: de montaje)?\s*(?::|=|de|a)?|[hz]\s*=)\s*\+?(\d+(?:[.,]\d+)?)\s*(mm|cm|metros?|m)\b/i);
-      if (match) {
-        altura = Number(match[1].replace(',', '.')) / (match[2].toLowerCase() === 'mm' ? 1000 : match[2].toLowerCase() === 'cm' ? 100 : 1);
-        fuenteAltura = match[0];
+    const alturas = [...texto.matchAll(/\b(?:altura(?: de montaje)?\s*(?::|=|de|a)?|cota(?: de montaje)?\s*(?::|=|de|a)?|[hz]\s*=)\s*\+?(\d+(?:[.,]\d+)?)\s*(mm|cm|metros?|m)\b/gi)];
+    const referencias = [...texto.matchAll(/\b(?:suelo terminado|pavimento terminado|FFL|cota (?:0|cero) (?:del |de )?proyecto)\b/gi)];
+    // Un ejemplo, una duda o una negación no confirma una medida. La ambigüedad
+    // reciente tampoco autoriza rescatar un valor antiguo como si siguiera vigente.
+    const noConfirmado = /\b(?:ejemplos?|supong\w*|quiz[aá]s?|podr[ií]a|aproximad\w*|pendiente|sin (?:definir|confirmar)|no (?:s[eé]|sabemos|conozco|confirm\w*|es|ser[aá]|usar|uses|utilices)|desconozco)(?=\s|[,.!?;:]|$)|[¿?]/i.test(texto);
+    if (altura === null && !alturaPendiente) {
+      const valores = alturas.map(match => Number(match[1].replace(',', '.')) / (match[2].toLowerCase() === 'mm' ? 1000 : match[2].toLowerCase() === 'cm' ? 100 : 1));
+      if (alturas.length && (noConfirmado || valores.some(valor => Math.abs(valor - valores[0]) > 1e-9))) {
+        alturaPendiente = true;
+      } else if (alturas.length) {
+        altura = valores[0];
+        fuenteAltura = alturas[0][0];
+      } else if (noConfirmado && /\b(?:altura|cota de montaje|[hz]\s*=)\b/i.test(texto)) {
+        alturaPendiente = true;
       }
     }
-    if (referencia === null) {
-      const match = texto.match(/\b(?:suelo terminado|pavimento terminado|FFL|cota (?:0|cero) (?:del |de )?proyecto)\b/i);
-      if (match) referencia = match[0];
+    if (referencia === null && !referenciaPendiente) {
+      const tipos = referencias.map(match => /^cota /i.test(match[0]) ? 'proyecto' : 'suelo');
+      if (referencias.length && (noConfirmado || tipos.some(tipo => tipo !== tipos[0]))) {
+        referenciaPendiente = true;
+      } else if (referencias.length) {
+        referencia = referencias[0][0];
+      } else if (noConfirmado && /\b(?:referencia|nivel|datum)\b/i.test(texto)) {
+        referenciaPendiente = true;
+      }
     }
-    if (altura !== null && referencia !== null) break;
+    if ((altura !== null || alturaPendiente) && (referencia !== null || referenciaPendiente)) break;
   }
   const preguntas = [];
-  if (altura === null || !Number.isFinite(altura)) preguntas.push('¿A qué altura se montará la bandeja? Indica el valor y la unidad.');
-  if (referencia === null) preguntas.push('¿Desde qué nivel se mide esa altura: suelo terminado u otra cota del proyecto?');
+  if (altura === null || !Number.isFinite(altura)) preguntas.push(alturaPendiente
+    ? 'Hay una altura dudosa o varias alturas. Confirma un único valor con unidad, o detalla la altura y referencia de cada tramo; no elegiré la primera.'
+    : '¿A qué altura se montará la bandeja? Indica el valor y la unidad.');
+  if (referencia === null) preguntas.push(referenciaPendiente
+    ? 'La referencia de nivel no está confirmada o hay varias. Confirma desde qué nivel se mide la altura.'
+    : '¿Desde qué nivel se mide esa altura: suelo terminado u otra cota del proyecto?');
   if (preguntas.length) return {
     ok: false, error: 'DATOS_TECNICOS_FALTANTES', preguntas,
     mensaje: 'No se ha generado ningún plano. Pregunta estos datos al usuario y espera su respuesta; no los inventes ni reintentes con supuestos.',

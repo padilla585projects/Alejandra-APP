@@ -45,6 +45,45 @@ import {
 } from './lib.js';
 
 describe('datos humanos necesarios para planos de bandejas', () => {
+  it('pregunta antes de elegir entre correcciones, tramos o referencias distintas', () => {
+    for (const texto of [
+      'Altura de montaje 2.8 m sobre suelo terminado; corrijo: altura de montaje 3.2 m sobre suelo terminado.',
+      'Altura de montaje 2.8 m sobre suelo terminado; otro tramo altura de montaje 3.2 m sobre suelo terminado.',
+      'Altura 2.8 m sobre suelo terminado o cota 0 del proyecto.',
+    ]) {
+      const resultado = validarDatosPlanoBandejas({ tipo: 'bandejas' }, [texto]);
+      expect(resultado.ok).toBe(false);
+      expect(resultado.error).toBe('DATOS_TECNICOS_FALTANTES');
+      expect(resultado.preguntas.length).toBeGreaterThan(0);
+    }
+  });
+  it('ejemplos, preguntas y retirada de confirmación no rescatan valores antiguos', () => {
+    for (const texto of [
+      'No sé la altura; ejemplo: altura de montaje 2.8 m sobre suelo terminado.',
+      '¿Altura 2.8 m sobre FFL?',
+      'Quizá altura 3.2 m sobre suelo terminado.',
+      'La altura está pendiente.',
+      'Altura sin confirmar.',
+      'Referencia pendiente.',
+      'No uses altura 2.8 m sobre FFL.',
+    ]) {
+      const resultado = validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura 4 m sobre FFL', texto]);
+      expect(resultado.ok).toBe(false);
+      expect(resultado).not.toHaveProperty('altura_m');
+    }
+  });
+  it('conserva equivalencias y una nueva confirmación resuelve ambigüedad anterior', () => {
+    const repetida = validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura 2.8 m sobre FFL, altura 280 cm sobre suelo terminado']);
+    expect(repetida.altura_m).toBe(2.8);
+    expect(repetida.ok).toBe(true);
+    const aclarada = validarDatosPlanoBandejas({ tipo: 'bandejas' }, [
+      'Altura 2.8 m sobre FFL; otro tramo altura 3.2 m sobre FFL',
+      'Confirmo altura 3.2 m sobre suelo terminado',
+    ]);
+    expect(aclarada.altura_m).toBe(3.2);
+    expect(aclarada.ok).toBe(true);
+    expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura 2.8 m sobre FFL', 'Corrijo altura 3.2 m']).altura_m).toBe(3.2);
+  });
   it('un nuevo trabajo explícito no reutiliza altura ni permiso de boceto antiguos', () => {
     const previo = [{ rol: 'user', contenido: 'Haz un boceto preliminar, h=4 m sobre FFL' }];
     for (const mensaje of ['Otra instalación de bandejas, planta 10 x 6 m', 'Nuevo plano para instalar bandejas']) {
