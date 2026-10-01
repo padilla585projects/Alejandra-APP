@@ -2,11 +2,11 @@
 
 ## Correcciones técnicas tras auditoría — 2026-10-01
 
-IA-FIX-01 implementada en codex/technical-tools-corrections: protección fuera de
+IA-FIX-01 integrada (PR #340 → e8c78f4, cuatro checks verdes): protección fuera de
 rango rechazada; contexto de bandejas limitado a empresa y propietario de sesión;
 Office no declara éxito tras error. Ocho regresiones nuevas, con SQL SQLite real
-y captura del prompt, y 290 pruebas del agente correctas. Integración/publicación
-pendientes; pruebas aisladas no sustituyen aceptación autenticada en producción.
+y captura del prompt, y 290 pruebas del agente correctas. Publicación pendiente;
+pruebas aisladas no sustituyen aceptación autenticada en producción.
 Sin cambios AR/APK/modelos. Catálogo compartido, normativa mecánica, CAD y evaluación
 ampliada siguen pendientes; no se afirma competencia técnica completa.
 

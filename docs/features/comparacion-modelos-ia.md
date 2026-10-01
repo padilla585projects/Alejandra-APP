@@ -278,7 +278,8 @@ Agente 290/290 en CI. PWA 9.78, APK y Workers desplegados sin cambios.
 
 ## IA-FIX-01 — correcciones derivadas (2026-10-01)
 
-Implementación 3e709e6, rama codex/technical-tools-corrections. Los hallazgos
+Implementación 3e709e6; PR #340 integrada → e8c78f4, cuatro checks verdes.
+Rama codex/technical-tools-corrections. Los hallazgos
 anteriores describen la versión auditada, no el comportamiento corregido:
 
 - calcularProteccion rechaza intensidades no finitas/no positivas y fuera de la

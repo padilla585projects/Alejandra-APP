@@ -15,8 +15,10 @@
 - Validación: regresiones 8/8, agente 290/290, benchmark 8/8 y overlay AR 8/8;
   sintaxis Workers, encoding, versiones 9.78, departamentos y dos inventarios OK.
   SQLite en memoria verifica consultas y prompt; Office usa DOM simulado.
-- Siguiente: abrir PR e integrar solo con CI verde. Publicación/aceptación real
-  pendiente; no afirmar desplegado ni validado todo el flujo CAD/Office.
+- PR #340 integrada → e8c78f4, cuatro checks verdes, merge normal sin excepción.
+- Siguiente: preparar entrega de Workers/Office mediante workflows aprobados y
+  verificar lectura autenticada. Publicación/aceptación real pendiente; no afirmar
+  desplegado ni validado todo el flujo CAD/Office. Normativa y CAD, tareas separadas.
 
 ## IA-COMP-01 — auditoría suite y comparación técnica (2026-10-01)
 

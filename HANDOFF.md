@@ -1,6 +1,6 @@
 # Handoff — Alejandra 2.0
 
-## IA-FIX-01 — implementación validada (2026-10-01)
+## IA-FIX-01 — integrada, publicación pendiente (2026-10-01)
 
 - Codex; rama codex/technical-tools-corrections; base 7e2ce30, PR #339 ya integrada.
 - Corrección acotada de protección fuera de rango, contexto de bandejas sin scope
@@ -15,8 +15,10 @@
   inválida ya no cae en empresa 1. Identidades válidas conservan el contrato.
 - Catálogo automático solo propio; registros globales/ajenos excluidos, sin migración.
   La compartición departamental sigue pendiente. Normativa y CAD fuera de este cambio.
-- Siguiente: PR, CI e integración; publicación y lectura autenticada posteriores
-  pendientes. Rollback: revertir la PR, o redesplegar SHA previo si se publica.
+- PR #340 integrada → e8c78f4, cuatro checks verdes; merge normal sin excepción.
+- Siguiente: preparar publicación de Workers/Office conforme al runbook CI/CD y
+  verificar lectura autenticada. No hay despliegue ejecutado para esta tarea.
+  Rollback: revertir la PR, o redesplegar SHA previo si se publica.
 
 ## IA-COMP-01 — auditoría y medición (2026-10-01)
 
