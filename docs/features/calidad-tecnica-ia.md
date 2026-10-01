@@ -155,3 +155,21 @@ edición con lectura limitada a empresa 5/ID 28 sin UPDATE ante rechazo.
 Esto no es un sanitizador XML completo: enlaces, XML mal formado sin código,
 avisos obligatorios y geometría requieren controles posteriores.
 Sesión de QA restaurada y comprobada por recarga: empresa 1/Seguridad.
+
+## Publicación IA-QUALITY-03 — 2026-10-01
+
+PR #347 integrada → 996785d0fa027e468a033dd0a07a342607ee4aa4, cuatro checks verdes,
+runs CI 36841013188/36841021135. API publicada desde
+2f1270f8683230ef24b9ff84ba1bedaa2858ecaf, run 36841261694 SUCCESS;
+versión d1acd691-f13c-4f3f-b1a1-82adbdf36d9a, health sin caché healthy D1/R2.
+Agente sigue en 39559254-382d-4f9d-bf4d-111e4a763915 healthy; Pages 9.81 conservada.
+No se despliega una APK ni se cambia AR ni proveedor de modelos.
+
+QA D tras publicación: nuevo boceto sintético con altura humana 2,8 m sobre suelo
+terminado → ID 30 (un solo nuevo plano). SVG HTTP 200, parser XML sin errores,
+scripts/eventos/foreignObject=0, viewBox 0 0 1400 900, aviso literal NO EJECUTAR EN
+OBRA y altura confirmada presentes; radios/soportes/cálculo figuran pendientes.
+Visor abierto desde Planos IA, captura local ignorada
+`.ai-benchmark-results/ia-quality-02/plano-30-estatico.png`.
+Revisión visual: añade ZONA TALLER no solicitada; por tanto, sigue sin garantizar
+fidelidad completa. No acreditar escala, geometría ni uso en obra por ser XML válido.

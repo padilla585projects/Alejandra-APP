@@ -10,6 +10,12 @@ boceto explícito permite ID 29 con pendientes, sin heredar la altura anterior.
 Pages 9.81 y API conservados. QA preservados, sin migraciones ni borrados.
 Hallazgo pendiente: ID 28 contiene script de cuadrícula y XML inválido, además de
 omitir aviso literal NO EJECUTAR. No declarar planos profesionales válidos para obra.
+IA-QUALITY-03 integrada por PR #347 → 996785d; API publicada desde 2f1270f
+(run 36841261694), versión d1acd691-f13c-4f3f-b1a1-82adbdf36d9a, healthy D1/R2.
+Generación/edición rechazan scripts, eventos y foreignObject sin guardar; 18 pruebas
+técnicas y 297 agente, cuatro checks verdes. XML completo/avisos siguen pendientes.
+QA publicada → ID 30: XML válido, estático, altura/aviso presentes y visor comprobado.
+Añade ZONA TALLER sin solicitar: control de fidelidad y geometría pendientes.
 
 PR #344 integrada → 2716bff, web 9.80 y Workers publicados con CI verde.
 Health/asset y chat compacto verificados; fuentes y límites en

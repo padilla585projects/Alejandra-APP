@@ -33,7 +33,18 @@
 - XML completo, avisos deterministas, geometría y round-trip CAD siguen pendientes.
 - Implementación preparada: rechazo compartido y prompt estático; 18 regresiones
   técnicas, incluidas generación sin INSERT y edición sin UPDATE. Publicación API
-  y prueba demo pendientes de PR/CI.
+  por PR #347 integrada → 996785d, cuatro checks verdes; run 36841261694 SUCCESS,
+  API healthy D1/R2, versión d1acd691-f13c-4f3f-b1a1-82adbdf36d9a.
+- QA publicada ID 30: XML válido sin código, altura/aviso dentro del archivo y visor
+  comprobado. Control estático entregado; fidelidad global pendiente (ZONA TALLER añadida).
+
+## Continuación de calidad de planos — pendiente
+
+- Validador XML completo y avisos QA obligatorios dentro del archivo: ID 28 demuestra
+  que el chat puede afirmar un aviso ausente. No dar por válido un plano por su respuesta.
+- Después, verificar geometría/unidades/cotas contra datos originales y round-trip CAD.
+- Mantener arquitectura/proveedores actuales; si la solución requiere nueva decisión,
+  documentar propuesta/ADR pendiente de aceptación humana antes de implantarla.
 
 ## IA-QUALITY-01 — controles de calidad profesional (2026-10-01)
 

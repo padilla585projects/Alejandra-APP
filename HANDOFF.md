@@ -1,5 +1,20 @@
 # Handoff — Alejandra 2.0
 
+## IA-QUALITY-03 — publicada (2026-10-01)
+
+- PR #347 integrada → 996785d0fa027e468a033dd0a07a342607ee4aa4, cuatro checks verdes.
+  API publicada desde 2f1270f8683230ef24b9ff84ba1bedaa2858ecaf,
+  run 36841261694 SUCCESS, versión d1acd691-f13c-4f3f-b1a1-82adbdf36d9a,
+  health sin caché healthy D1/R2. Agente sigue en 39559254, Pages 9.81 conservada.
+- 18/18 técnicas y 297/297 agente. Scripts/eventos/foreignObject rechazados antes
+  de INSERT/UPDATE; prompt estático compartido. Sin reparar/borrar QA existentes.
+- QA D publicada → ID 30, SVG HTTP 200/XML válido, cero scripts/eventos/foreignObject,
+  altura confirmada y aviso NO EJECUTAR EN OBRA dentro del archivo. Visor/captura
+  comprobados. Añade ZONA TALLER no pedida: fidelidad/geométrica siguen pendientes.
+- Siguiente: XML completo y avisos obligatorios deterministas; después geometría y
+  unidades CAD. No confundir esta barrera parcial con un sanitizador XML completo.
+  Rollback API 158e886; rollback agente 158e886, por workflow/SHA completo.
+
 ## IA-QUALITY-02 — publicada y verificada (2026-10-01)
 
 - PR #346 integrada → f9addec; SHA publicado 6da23e76f477e19ac92ead2c8ac8ed792030c0d3,
