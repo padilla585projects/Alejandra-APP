@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const { DatabaseSync } = require('node:sqlite');
 const { SaxesParser } = require('saxes');
 let warningPolicy;
+let mountingContract;
 
 // Exercise the production functions without loading unrelated Worker bindings or UI.
 function load(file, name, globals = {}) {
@@ -13,10 +14,11 @@ function load(file, name, globals = {}) {
   const match = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}`));
   assert.ok(match, `Missing production function ${name}`);
   return vm.runInNewContext(`${match[0]}; ${name}`, { SaxesParser, TextEncoder,
-    _validarAvisosPlano: warningPolicy, ...globals });
+    _validarAvisosPlano: warningPolicy, _contratoMontajePlano: mountingContract, ...globals });
 }
 
 warningPolicy = load('worker.js', '_validarAvisosPlano');
+mountingContract = load('worker.js', '_contratoMontajePlano');
 
 const calculatorSource = readFileSync(resolve(__dirname, '..', 'alejandra-agente/worker.js'), 'utf8');
 const calculatorContext = vm.createContext({});
@@ -108,6 +110,52 @@ test('plan generation rejects truncated or ambiguous SVG instead of fabricating 
   const extract = load('worker.js', '_extraerSvgCompleto');
   assert.equal(extract('```xml\n<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>\n```'), '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>');
   for (const text of [null, '', '<svg><path d="M0', '<svg></svgarbage>', '<svg><svg></svg></svg>']) assert.throws(() => extract(text));
+});
+
+const montajeDescripcion = datos => 'QA\n\nDATOS VERIFICADOS EN TEXTO HUMANO (prevalecen sobre los ejemplos):\n' + JSON.stringify(datos);
+const montajeConfirmado = { ok: true, modo: 'borrador_tecnico', altura_m: 2.8, referencia: 'FFL' };
+const montajeSvg = notas => '<svg xmlns="http://www.w3.org/2000/svg"><text>BORRADOR — pendiente de revision tecnica</text><text>NO EJECUTAR EN OBRA</text>' + notas + '</svg>';
+
+test('mounting contract preserves confirmed datum and refuses corrupt metadata without guessing legacy values', () => {
+  const contract = mountingContract('bandejas', montajeDescripcion(montajeConfirmado));
+  assert.equal(contract.altura_m, 2.8);
+  assert.equal(contract.referencia, 'suelo terminado');
+  assert.equal(mountingContract('bandejas', 'Altura 3 m sobre suelo terminado').anotacion_montaje, undefined);
+  assert.equal(mountingContract('bandejas', montajeDescripcion({ ok: true, modo: 'boceto_preliminar' })).anotacion_montaje, undefined);
+  for (const datos of [{ ...montajeConfirmado, ok: false }, { ...montajeConfirmado, altura_m: '2.8' },
+    { ...montajeConfirmado, altura_m: null }, { ...montajeConfirmado, referencia: 'techo' }]) {
+    assert.throws(() => mountingContract('bandejas', montajeDescripcion(datos)), /Datos de montaje/);
+  }
+  assert.throws(() => mountingContract('bandejas', montajeDescripcion(montajeConfirmado).slice(0, -1)), /incompletos/);
+});
+
+test('mounting annotation must retain height and datum together, with equivalent units and visible text', () => {
+  const extract = load('worker.js', '_extraerSvgCompleto');
+  const contract = mountingContract('bandejas', montajeDescripcion(montajeConfirmado));
+  for (const annotation of ['2.8 m sobre suelo terminado', '2,80 metros desde FFL', '280 cm sobre pavimento terminado', '2800 mm sobre suelo terminado']) {
+    const svg = montajeSvg(`<text>Altura de montaje: ${annotation}</text>`);
+    assert.equal(extract(svg, contract), svg);
+  }
+  for (const notes of ['', '<text>Altura de montaje: 2.80 m</text><text>FFL</text>',
+    '<text>Altura de montaje: 3 m sobre FFL</text>', '<text>Altura de montaje: 2.8 mm sobre FFL</text>',
+    '<text>Altura de montaje: 2.8 m sobre cota 0 del proyecto</text>',
+    '<metadata>Altura de montaje: 2.8 m sobre FFL</metadata>',
+    '<text display="none">Altura de montaje: 2.8 m sobre FFL</text>',
+    '<text>Altura de montaje: 2.8 m sobre FFL</text><text>Altura de montaje: 4 m sobre FFL</text>']) {
+    assert.throws(() => extract(montajeSvg(notes), contract), /altura|referencia/);
+  }
+});
+
+test('a provider omitting the confirmed mounting datum cannot insert a plan', async () => {
+  let writes = 0;
+  const generate = load('worker.js', '_generarPlanoInterno', {
+    _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+    _obtenerCatalogoBandejas: async () => [], _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+    fetch: async () => ({ ok: true, json: async () => ({ content: [{ text: montajeSvg('<text>Altura de montaje: 2.80 m</text>') }] }) }),
+  });
+  await assert.rejects(generate({ DB: { prepare: () => { writes++; throw new Error('Unexpected write'); } } },
+    { tipo: 'bandejas', titulo: 'QA', descripcion: montajeDescripcion(montajeConfirmado), empresa_id: 5, usuario_id: 7 }), /sin anotacion/);
+  assert.equal(writes, 0);
 });
 
 test('generation and editing share technical fidelity policy for missing heights and units', () => {
@@ -221,6 +269,31 @@ test('AI editing rejects executable SVG without replacing the existing tenant-sc
   assert.equal(result.status, 502);
   assert.match(result.message, /Plano no estatico/);
   assert.equal(reads, 1, 'Only the scoped SELECT may run; no UPDATE on rejection');
+});
+
+test('editing a confirmed tray plan cannot overwrite it with a missing or changed mounting datum', async () => {
+  for (const annotation of ['Altura de montaje: 2.8 m', 'Altura de montaje: 2.8 m sobre cota 0 del proyecto']) {
+    let reads = 0;
+    const edit = load('worker.js', 'editarPlanoCircuitosREST', {
+      _getAuthPlano: async () => ({ empresa_id: 5, rol: 'admin' }),
+      _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+      _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+      _llamarAnthropicPlanoStream: async () => montajeSvg(`<text>${annotation}</text>`),
+      err: (message, status) => ({ message, status }),
+    });
+    const result = await edit({ json: async () => ({ cambios: [{ circuito_id: 'C1', campo: 'notas', valor: 'QA' }] }) },
+      { DB: { prepare(sql) {
+        assert.match(sql, /^SELECT \* FROM planos WHERE id=\? AND empresa_id=\?$/);
+        reads++;
+        return { bind: (id, company) => {
+          assert.equal(id, 31); assert.equal(company, 5);
+          return { first: async () => ({ tipo: 'bandejas', titulo: 'QA', circuitos_json: '[]', descripcion: montajeDescripcion(montajeConfirmado) }) };
+        } };
+      } } }, '/planos/31/circuitos');
+    assert.equal(result.status, 502);
+    assert.match(result.message, /altura|referencia/);
+    assert.equal(reads, 1, 'No UPDATE after rejection');
+  }
 });
 
 test('AI editing rejects XML and missing warnings before updating the scoped plan', async () => {

@@ -4,6 +4,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-10-02 — IA-QUALITY-05)
+
+- Planos de bandejas con datos humanos serializados exigen anotación coherente de
+  altura/unidad/referencia al generar y editar, antes de guardar el SVG.
+
 ### Fixed (2026-10-01 — IA-CALC-QUALITY-05)
 
 - Protección distingue ampacidad y comparación tabuladas sin factores de ampacidad

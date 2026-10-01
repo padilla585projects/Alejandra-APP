@@ -362,3 +362,22 @@ No afirmar recuento de planos: no se consultó en este ensayo.
 Evidencia ignorada: .ai-benchmark-results/ia-calc-quality-05/chat-qa-f.png.
 Pestaña de ensayo cerrada; empresa/departamento no modificados. Archivos ajenos
 y QA anteriores preservados. Cierre de implementación/ensayo acotado, no de CAD.
+
+## IA-QUALITY-05 — altura y referencia en el archivo (2026-10-02, en desarrollo)
+
+La API interpreta únicamente el bloque JSON humano que el agente ya añade a la
+descripción. No extrae datos de ejemplos libres ni duplica el gate humano. Bloque
+mal formado/inválido se rechaza; legacy sin bloque conserva contrato anterior.
+Generación y edición exigen una anotación de altura/unidad/referencia coherente
+en texto SVG no oculto directamente. Acepta m/cm/mm equivalentes y FFL/suelo
+terminado/pavimento terminado como datum equivalente; distingue cota de proyecto.
+No se inventa ni inserta automáticamente una nota: rechaza respuesta incompleta.
+Se comprueba antes/después de símbolos. 33 técnicas/297 agente pasan; ausencia o
+cambio de datum impide INSERT/UPDATE. El prompt pide literalmente la anotación.
+No garantiza cotas de cada tramo, otros rótulos, geometría ni CSS/legibilidad.
+Bocetos y descripciones legacy no reciben una altura deducida. API directa con
+descripción libre sigue fuera de esta garantía: no confundir compatibilidad con
+validación de todos los canales. Fuente humana verificada sigue siendo lib.js.
+Rollback API 7d7ac10215a796e29df0c24615b102c328ea22ef.
+Sin migraciones/AR/APK/Pages, nuevas tablas ni fase/ADR. PR/publicación/QA pendientes.
+Siguiente encadenado autorizado: auditar ambigüedad/correcciones del gate humano.
