@@ -16219,6 +16219,11 @@ function _irANivelSuperior(destino) {
 function _manejarBotonAtras() {
   const s = getSession();
 
+  // ADR-0027: con la sesión AR del Replanteo (WebXR) o su cartel de escaneo abiertos, atrás
+  // cierra esa sesión de forma limpia en vez de navegar las pantallas que hay debajo
+  // (replArOverlay no está en _CAPAS_ATRAS_IDS a propósito: la gestiona su propio flujo).
+  if (typeof window._replArAtras === 'function' && window._replArAtras()) { resetearIntentoSalida(); return true; }
+
   // Si el chat de Alejandra está abierto, el botón atrás lo cierra (no navega la app)
   const alePanel = document.getElementById('alejandraPanel');
   if (alePanel && alePanel.style.display === 'flex') { alejandraAbrir(false); return true; }
@@ -22208,6 +22213,25 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     return { id: e.id, frames: e.guardados.slice(), instalaciones: e.instalaciones.map(i => ({ tipo: i.tipo, etiqueta: i.etiqueta, veces: i.veces || 1 })), framesIA: e.framesIA };
   }
   window.replArEscaneoListo = replArEscaneoListo; window.replArEscaneoSinIA = replArEscaneoSinIA;
+  // Botón atrás (APK 'backButton' / PWA 'popstate', _manejarBotonAtras) con la sesión AR abierta:
+  // 1) cierra el panel ⚙️/✥ si hay uno desplegado; 2) con un recorrido ya marcado (≥ 2 puntos)
+  // hace lo mismo que ✅ Fin, para no perder el trabajo; 3) si no, como ✖ (cancelar). Devuelve
+  // true si lo ha gestionado. (Si Chrome cierra la sesión inmersiva por su cuenta al pulsar
+  // atrás, el listener 'end' de la sesión ya limpia el overlay.)
+  window._replArAtras = function () {
+    if (!_ar) {
+      const ov = document.getElementById('replArOverlay');
+      if (ov && ov.style.display !== 'none') { _replArLimpiar(); return true; }
+      return false;
+    }
+    const po = document.getElementById('replArPanelOpts'), pm = document.getElementById('replArPanelMod');
+    if (po && po.style.display === 'flex') { _replArToggleOpts(); return true; }
+    if (pm && pm.style.display === 'flex') { _replArToggleMod(); return true; }
+    if (_ar.escaneo && _ar.escaneo.fase !== 'escaneo' && _ar.puntos.length >= 2) { _replLog('Atrás en AR: termina el trazado'); replArTerminar(); return true; }
+    _replLog('Atrás en AR: cancela la sesión');
+    replArCancelar();
+    return true;
+  };
 
   // ── Fondo REAL del informe de un replanteo AR (ADR-0027) ──
   // Fotogramas clave: los que quedaron en memoria (recién hecho) o los guardados en R2.

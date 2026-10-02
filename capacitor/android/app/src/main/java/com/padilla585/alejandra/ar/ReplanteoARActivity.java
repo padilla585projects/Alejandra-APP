@@ -470,6 +470,16 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         setContentView(root);
     }
 
+    // ADR-0027 (paridad con _replArAtras de la PWA): atrás durante el escaneo cancela; con un
+    // recorrido ya marcado (>= 2 puntos) hace lo mismo que ✅ Fin, para no perder el trabajo.
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        if (!faseEscaneo && anchors.size() >= 2 && !finalizando) { pendingFinish = true; return; }
+        setResult(RESULT_CANCELED);
+        finish();
+    }
+
     private Button makeBtn(String text, String bg, String fg, float weight, View.OnClickListener onClick) {
         Button b = new Button(this);
         b.setText(text);
