@@ -360,3 +360,73 @@ export function finalizarPlanoVerificado(svg, contrato = {}) {
   const verificacion = validarPlanoSvg(final, contrato);
   return { svg: final, verificacion };
 }
+
+// Escala un atributo de longitud absoluta (no %) en la misma proporción que el viewBox.
+function escalarLongitud(valor, factor) {
+  const l = parseLongitud(valor);
+  return l && l.n > 0 ? `${num(l.n * factor)}${l.u}` : valor;
+}
+
+// PLANOS-PUT-SVG (03/10/2026): retira el bloque de avisos y los metadatos de alcance
+// que el servidor incrustó, para volver a incrustarlos de forma canónica. Así un usuario
+// que edite, mueva o borre los avisos a mano no puede guardar el plano sin ellos.
+// Si el bloque sigue presente, se recupera también el alto original del viewBox (la
+// franja de avisos empieza justo donde acababa el dibujo) para que no crezca en cada
+// guardado. No valida: el resultado pasa después por finalizarPlanoVerificado.
+export function retirarAvisosPlano(svg) {
+  if (typeof svg !== 'string') fallo('Plano sin contenido SVG.');
+  let out = svg.replace(
+    new RegExp(`<metadata\\b[^>]*\\bid\\s*=\\s*["']${ID_METADATA_ALCANCE}["'][^>]*>[\\s\\S]*?<\\/metadata\\s*>[ \\t]*\\r?\\n?`, 'gi'), '');
+  const reBloque = new RegExp(`<g\\b[^>]*\\bid\\s*=\\s*["']${ID_BLOQUE_AVISOS}["'][^>]*>`, 'i');
+  let yFranja = null;
+  for (let vueltas = 0; vueltas < 5; vueltas++) {
+    const m = reBloque.exec(out);
+    if (!m) break;
+    if (/\/>$/.test(m[0])) { out = out.slice(0, m.index) + out.slice(m.index + m[0].length); continue; }
+    // Cierre del <g> contando anidamiento: un </g> interior no corta el bloque.
+    const reG = /<(\/?)g\b(?:[^>"']|"[^"]*"|'[^']*')*?(\/?)>/gi;
+    reG.lastIndex = m.index + m[0].length;
+    let profundidad = 1, fin = -1, t;
+    while ((t = reG.exec(out))) {
+      if (t[1]) profundidad--; else if (!t[2]) profundidad++;
+      if (profundidad === 0) { fin = t.index + t[0].length; break; }
+    }
+    if (fin < 0) fallo('Plano XML invalido: el bloque de avisos no esta cerrado.');
+    const bloque = out.slice(m.index, fin);
+    const rect = /<rect\b(?:[^>"']|"[^"]*"|'[^']*')*>/i.exec(bloque);
+    const yRect = rect && /\sy\s*=\s*["']\s*([^"']+?)\s*["']/.exec(rect[0]);
+    if (yFranja === null && yRect && NUMERO_PURO.test(yRect[1])) yFranja = Number(yRect[1]);
+    out = out.slice(0, m.index) + out.slice(fin).replace(/^[ \t]*\r?\n?/, '');
+  }
+  if (yFranja === null) return out;
+  const inicio = out.search(/<svg\b/i);
+  const tagM = inicio < 0 ? null : /^<svg\b(?:[^>"']|"[^"]*"|'[^']*')*>/i.exec(out.slice(inicio));
+  if (!tagM) return out;
+  const tag = tagM[0];
+  const vbM = /(\sviewBox\s*=\s*)(["'])([^"']*)\2/.exec(tag);
+  const vb = vbM && parseViewBox(vbM[3]);
+  const altoOriginal = vb ? yFranja - vb.y : 0;
+  if (!vb || !(altoOriginal > 0) || altoOriginal >= vb.h) return out;
+  const factor = altoOriginal / vb.h;
+  let nuevoTag = tag.replace(vbM[0], `${vbM[1]}"${num(vb.x)} ${num(vb.y)} ${num(vb.w)} ${num(altoOriginal)}"`);
+  nuevoTag = nuevoTag.replace(/(\sheight\s*=\s*)(["'])([^"']*)\2/, (_, pre, _q, v) => `${pre}"${escXml(escalarLongitud(v, factor))}"`);
+  return out.slice(0, inicio) + nuevoTag + out.slice(inicio + tag.length);
+}
+
+// PLANOS-PUT-SVG: edición manual desde el panel (PUT /planos/:id). Mismo criterio que la
+// generación: el archivo se valida antes de guardar y los avisos obligatorios se
+// re-incrustan en servidor. Un plano importado (CAD real del usuario, sin avisos de IA)
+// solo pasa la validación estructural.
+export function normalizarPlanoEditadoManual(svg, contrato = {}, opciones = {}) {
+  if (typeof svg !== 'string' || !svg.trim()) fallo('Plano vacio.');
+  if (opciones.estructural) {
+    const verificacion = validarPlanoSvg(svg, null, { estructural: true });
+    return { svg, verificacion };
+  }
+  // XML bien formado ANTES de tocarlo: un <g> sin cerrar haria que el bloque de avisos
+  // quedase anidado y el motivo devuelto al usuario seria confuso.
+  if (/<!DOCTYPE|<!ENTITY/i.test(svg)) fallo('Plano con declaraciones XML no permitidas.');
+  try { new SaxesParser({ xmlns: true }).write(svg).close(); }
+  catch (_) { fallo('Plano XML invalido (etiquetas sin cerrar, caracteres o entidades no validos).'); }
+  return finalizarPlanoVerificado(retirarAvisosPlano(svg), contrato);
+}

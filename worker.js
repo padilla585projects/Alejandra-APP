@@ -18,7 +18,7 @@ import { SaxesParser } from 'saxes';
 // Una sola regla pura de IDs CAD para API y agente; sin I/O ni datos de sesión.
 import { normalizarIdPlano, debeRegistrarTrazaToken } from './alejandra-agente/lib.js';
 // IA-QUALITY-09: validador determinista del archivo SVG y avisos incrustados en el archivo.
-import { finalizarPlanoVerificado, normalizarCotasEntrada, validarPlanoSvg } from './planos-validacion.mjs';
+import { finalizarPlanoVerificado, normalizarCotasEntrada, normalizarPlanoEditadoManual, validarPlanoSvg } from './planos-validacion.mjs';
 
 // D1-ESCRITURAS-01: últimos registros auth_token_no_encontrado por prefijo (por isolate)
 // y memo de getAuth por petición, para que la puerta del router no duplique lecturas.
@@ -30237,16 +30237,40 @@ async function actualizarPlanoSvg(request, env, path) {
   if (!id) return err('ID invalido', 400);
   let body;
   try { body = await request.json(); } catch { return err('JSON invalido', 400); }
-  const { svg_data } = body;
+  const { svg_data } = body || {};
   if (!svg_data || typeof svg_data !== 'string') return err('svg_data requerido', 400);
-  if (!safeStr(svg_data).trim().startsWith('<svg') && !safeStr(svg_data).trim().startsWith('<?xml')) return err('svg_data no es un SVG valido', 400);
   await _ensurePlanosTable(env);
-  const row = await env.DB.prepare('SELECT id FROM planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  const row = await env.DB.prepare('SELECT id, tipo, descripcion, metadatos, origen FROM planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!row) return err('Plano no encontrado', 404);
+  // PLANOS-PUT-SVG (03/10/2026): la edicion manual pasa por el mismo validador que la
+  // generacion (IA-QUALITY-09). Un archivo invalido (XML mal formado, NaN, recursos
+  // externos, codigo) responde 422 con el motivo y no se guarda; los avisos obligatorios
+  // se re-incrustan aqui, asi que borrarlos o editarlos a mano no tiene efecto. Las
+  // cotas registradas al generar se siguen exigiendo. Un CAD importado solo pasa la
+  // validacion estructural (no lleva avisos de IA).
+  let metaPrevio = {};
+  try { metaPrevio = row.metadatos ? JSON.parse(row.metadatos) || {} : {}; } catch (_) { metaPrevio = {}; }
+  if (!metaPrevio || typeof metaPrevio !== 'object' || Array.isArray(metaPrevio)) metaPrevio = {};
+  const importado = row.origen === 'importado';
+  let verificado;
+  try {
+    const contratoPlano = importado ? null : _contratoMontajePlano(row.tipo, row.descripcion);
+    if (contratoPlano) contratoPlano.cotas_entrada = normalizarCotasEntrada(metaPrevio.cotas_entrada);
+    verificado = normalizarPlanoEditadoManual(svg_data, contratoPlano, { estructural: importado });
+  } catch (e) {
+    return err((e && e.message) || 'Plano invalido. No se ha guardado.', 422);
+  }
+  const metadatos = JSON.stringify({ ...metaPrevio, validador: verificado.verificacion.validador, editado_manual: true });
   await env.DB.prepare(
-    "UPDATE planos SET svg_data=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?"
-  ).bind(svg_data, id, empresa_id).run();
-  return json({ ok: true, id });
+    "UPDATE planos SET svg_data=?, metadatos=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?"
+  ).bind(verificado.svg, metadatos, id, empresa_id).run();
+  return json({
+    ok: true,
+    id,
+    svg_data: verificado.svg,
+    verificacion_archivo: verificado.verificacion,
+    avisos_en_archivo: verificado.verificacion.avisos_en_archivo || []
+  });
 }
 
 async function eliminarPlano(request, env, path) {
