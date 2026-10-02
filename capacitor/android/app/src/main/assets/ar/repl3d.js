@@ -197,3 +197,205 @@ function _replInstal3D(THREE, pts, opts) {
   }
   return g;
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// ADR-0027 — Escaneo del entorno + IA de visión en tiempo real (03/10/2026)
+// ══════════════════════════════════════════════════════════════════════════
+// Compartido por el AR WebXR de la PWA (index.html), el overlay del AR nativo de la APK
+// (assets/ar/overlay.html, copia exacta de este archivo) y los informes (index.html y
+// panel.html). Mismo criterio que el resto del archivo: funciones puras, THREE por parámetro,
+// sin estado global. Convención de cámara de un fotograma: `camara.pose` es la matriz de
+// MUNDO de la cámara (column-major, 16 números) y `camara.proj` su proyección -- las mismas
+// matrices con las que se pintó el AR, así que proyectar/desproyectar con ellas encaja con la
+// imagen real capturada en ese instante.
+const REPL_ESCANEO = {
+  intervaloMs: 3000,      // un fotograma a la IA cada 3 s (límite de coste aprobado por Adrián)
+  maxIA: 40,              // tope por sesión; el servidor lo aplica igualmente
+  minFramesIA: 3,         // fotogramas analizados antes de dar el escaneo por bueno
+  minPlanosSinIA: 2,      // sin IA: basta con que ARCore confirme dos superficies
+  maxGuardados: 16,       // fotogramas clave para el fondo del informe
+  ladoImagen: 768,        // lado mayor del JPEG que se envía (coste y latencia)
+  avisoM: 0.25,           // margen para avisar de que se marca sobre una instalación existente
+};
+
+// ¿Se puede dejar de escanear y empezar a marcar? e: { planos, framesIA, iaActiva, segundos }.
+// Nunca bloquea para siempre: el cartel ofrece además "Continuar sin IA" (degradar, no bloquear).
+function _replEscaneoSuficiente(e) {
+  const planos = e.planos | 0, ia = e.framesIA | 0, seg = +e.segundos || 0;
+  if (e.iaActiva) {
+    if (ia >= REPL_ESCANEO.minFramesIA && planos >= 1) return { ok: true, texto: 'Entorno escaneado' };
+    // Paredes lisas: ARCore puede no confirmar ningún plano aunque la IA ya vea la sala.
+    if (ia >= REPL_ESCANEO.minFramesIA + 2 && seg >= 12) return { ok: true, texto: 'Entorno escaneado (pocas superficies confirmadas: marca con cuidado)' };
+    const faltan = [];
+    if (ia < REPL_ESCANEO.minFramesIA) faltan.push(`${REPL_ESCANEO.minFramesIA - ia} fotograma(s) más para la IA`);
+    if (planos < 1) faltan.push('alguna superficie confirmada');
+    return { ok: false, texto: 'Falta: ' + faltan.join(' y ') };
+  }
+  if (planos >= REPL_ESCANEO.minPlanosSinIA) return { ok: true, texto: 'Superficies detectadas (sin IA)' };
+  return { ok: false, texto: `Falta: ${REPL_ESCANEO.minPlanosSinIA - planos} superficie(s) más` };
+}
+
+// Punto del mundo -> imagen del fotograma: { u, v } en 0..1 (v hacia abajo), delante y distancia.
+function _replEscaneoProyectar(THREE, camara, p) {
+  const vista = new THREE.Matrix4().fromArray(camara.pose).invert();
+  const q = new THREE.Vector4(p.x, p.y, p.z, 1).applyMatrix4(vista);
+  const dist = -q.z;
+  q.applyMatrix4(new THREE.Matrix4().fromArray(camara.proj));
+  if (!(q.w > 0) || dist <= 0) return null;
+  return { u: (q.x / q.w) * 0.5 + 0.5, v: 1 - ((q.y / q.w) * 0.5 + 0.5), dist };
+}
+
+// Rayo del mundo que pasa por (u, v) de la imagen de ese fotograma.
+function _replEscaneoRayo(THREE, camara, u, v) {
+  const pose = new THREE.Matrix4().fromArray(camara.pose);
+  const enCamara = new THREE.Vector3(u * 2 - 1, (1 - v) * 2 - 1, 0.5).applyMatrix4(new THREE.Matrix4().fromArray(camara.proj).invert());
+  const origen = new THREE.Vector3().setFromMatrixPosition(pose);
+  const dir = enCamara.applyMatrix4(pose).sub(origen).normalize();
+  return { origen, dir };
+}
+
+// Corta el rayo con los planos detectados ({pos, normal} en metros). Solo cuenta un corte
+// razonablemente cerca del centro del plano (los planos de ARCore/WebXR son parches, no
+// infinitos). Devuelve { pos, plano, t } del corte más cercano por delante, o null.
+function _replEscaneoCortarPlanos(rayo, planos, maxDist) {
+  let mejor = null;
+  (planos || []).forEach(pl => {
+    const den = rayo.dir.dot(pl.normal);
+    if (Math.abs(den) < 1e-4) return;
+    const t = pl.pos.clone().sub(rayo.origen).dot(pl.normal) / den;
+    if (!(t > 0.1) || t > (maxDist || 8)) return;
+    const pos = rayo.origen.clone().add(rayo.dir.clone().multiplyScalar(t));
+    if (pos.distanceTo(pl.pos) > 3.5) return;
+    if (!mejor || t < mejor.t) mejor = { pos, plano: pl, t };
+  });
+  return mejor;
+}
+
+// Instalaciones existentes que la IA vio en un fotograma -> posiciones 3D aproximadas.
+// `distRespaldo` (p. ej. la profundidad del centro) se usa si el rayo no corta ningún plano.
+function _replEscaneoUbicar(THREE, analisis, camara, planos, distRespaldo) {
+  const out = [];
+  ((analisis && analisis.instalaciones) || []).forEach(i => {
+    if (!i.bbox || (i.confianza != null && i.confianza < 0.5)) return;
+    const [x0, y0, x1, y1] = i.bbox;
+    const rayo = _replEscaneoRayo(THREE, camara, (x0 + x1) / 2, (y0 + y1) / 2);
+    const corte = _replEscaneoCortarPlanos(rayo, planos, 8);
+    const t = corte ? corte.t : (distRespaldo > 0 ? distRespaldo : 0);
+    if (!t) return;
+    // Radio a partir del ancho angular de la caja: suficiente para avisar, no para medir.
+    const a = _replEscaneoRayo(THREE, camara, x0, (y0 + y1) / 2).dir, b = _replEscaneoRayo(THREE, camara, x1, (y0 + y1) / 2).dir;
+    const radio = Math.max(0.12, Math.min(1.2, Math.tan(a.angleTo(b) / 2) * t));
+    out.push({ tipo: i.tipo, etiqueta: i.etiqueta, confianza: i.confianza, pos: rayo.origen.clone().add(rayo.dir.clone().multiplyScalar(t)), radio, sobrePlano: !!corte });
+  });
+  return out;
+}
+
+// Une lo nuevo con lo ya conocido: mismo tipo a menos de 0,5 m es la misma instalación vista
+// otra vez (se promedia la posición). Tope para no crecer sin límite en una sesión larga.
+function _replEscaneoFusionar(conocidas, nuevas) {
+  const lista = (conocidas || []).slice();
+  (nuevas || []).forEach(n => {
+    const ya = lista.find(c => c.tipo === n.tipo && c.pos.distanceTo(n.pos) < 0.5);
+    if (ya) { const k = ya.veces || 1; ya.pos.multiplyScalar(k).add(n.pos).multiplyScalar(1 / (k + 1)); ya.radio = Math.max(ya.radio, n.radio); ya.veces = k + 1; }
+    else if (lista.length < 30) lista.push({ ...n, veces: 1 });
+  });
+  return lista;
+}
+
+// Instalación existente sobre la que cae un punto que se va a marcar, o null.
+function _replEscaneoCercana(instalaciones, p, margen) {
+  let mejor = null;
+  (instalaciones || []).forEach(i => {
+    const d = i.pos.distanceTo(p) - i.radio;
+    if (d <= (margen == null ? REPL_ESCANEO.avisoM : margen) && (!mejor || d < mejor.d)) mejor = { inst: i, d };
+  });
+  return mejor ? mejor.inst : null;
+}
+
+// Clase final de un plano: la geometría manda en vertical/horizontal; la IA decide suelo vs
+// techo en los horizontales y puede excluir un plano que en realidad es un mueble/mesa.
+// votos: { pared: n, suelo: n, techo: n, mueble: n, otro: n }.
+function _replEscaneoClasePlano(tipoGeom, votos) {
+  const v = votos || {};
+  const total = Object.keys(v).reduce((s, k) => s + (v[k] || 0), 0);
+  if (!total) return tipoGeom;
+  let mejor = null; Object.keys(v).forEach(k => { if (!mejor || v[k] > v[mejor]) mejor = k; });
+  if ((mejor === 'mueble' || mejor === 'otro') && v[mejor] >= Math.max(1, total * 0.6)) return mejor;
+  if (tipoGeom === 'pared') return 'pared';
+  return (mejor === 'suelo' || mejor === 'techo') ? mejor : tipoGeom;
+}
+
+// Mejor fotograma clave para el informe: el que ve más puntos del recorrido dentro de la
+// imagen; a igualdad, el que los encuadra mejor y el más tardío (al final ya está todo).
+function _replEscaneoMejorFrame(THREE, frames, puntos) {
+  let mejor = null;
+  (frames || []).forEach((f, idx) => {
+    if (!f || !f.camara || !f.camara.pose || !f.camara.proj) return;
+    const vis = [];
+    (puntos || []).forEach(p => { const q = _replEscaneoProyectar(THREE, f.camara, p); if (q && q.u > 0.02 && q.u < 0.98 && q.v > 0.02 && q.v < 0.98) vis.push(q); });
+    let encuadre = 0;
+    if (vis.length >= 2) {
+      const us = vis.map(q => q.u), vs = vis.map(q => q.v);
+      const area = (Math.max(...us) - Math.min(...us)) * (Math.max(...vs) - Math.min(...vs));
+      encuadre = 1 - Math.min(1, Math.abs(area - 0.35) / 0.35);
+    }
+    const score = vis.length * 10 + encuadre * 5 + (f.fase === 'final' ? 2 : 0) + idx * 0.01;
+    if (!mejor || score > mejor.score) mejor = { frame: f, visibles: vis.length, score };
+  });
+  return mejor;
+}
+
+// Pinta `objeto` (instalación en coordenadas de mundo AR) sobre la imagen real del fotograma,
+// con la MISMA cámara con la que se capturó -- así la instalación queda donde se marcó, pegada a
+// la pared/techo real, no "flotando". Marca además las instalaciones existentes que vio la IA.
+// Devuelve un data URL JPEG, o null si no se puede (sin WebGL, imagen corrupta...).
+function _replEscaneoComponer(THREE, objeto, frame, img, opts) {
+  try {
+    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return null;
+    const s = Math.min(1, ((opts && opts.maxAncho) || 1400) / iw);
+    const W = Math.round(iw * s), H = Math.round(ih * s);
+    const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setSize(W, H, false); renderer.setClearColor(0x000000, 0);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x333844, 1.2));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.0); dl.position.set(1.5, 2.5, 1.5); scene.add(dl);
+    scene.add(objeto);
+    const cam = new THREE.PerspectiveCamera();
+    cam.matrixAutoUpdate = false; cam.matrixWorldAutoUpdate = false;
+    cam.matrixWorld.fromArray(frame.camara.pose); cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+    cam.projectionMatrix.fromArray(frame.camara.proj); cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+    renderer.render(scene, cam);
+    const out = document.createElement('canvas'); out.width = W; out.height = H;
+    const c = out.getContext('2d');
+    c.drawImage(img, 0, 0, W, H);
+    c.drawImage(canvas, 0, 0);
+    // Instalaciones existentes detectadas por la IA en ESTE fotograma (cajas discontinuas).
+    c.lineWidth = Math.max(2, W / 500); c.font = `bold ${Math.max(12, Math.round(W / 70))}px sans-serif`; c.textBaseline = 'bottom';
+    (frame.instalaciones || []).forEach(i => {
+      if (!i.bbox || (i.confianza != null && i.confianza < 0.5)) return;
+      const [x0, y0, x1, y1] = i.bbox;
+      c.setLineDash([8, 6]); c.strokeStyle = '#facc15'; c.strokeRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H); c.setLineDash([]);
+      const t = 'Existente: ' + (i.etiqueta || i.tipo);
+      const tw = c.measureText(t).width + 10, th = Math.max(16, Math.round(W / 55));
+      c.fillStyle = 'rgba(0,0,0,.65)'; c.fillRect(x0 * W, Math.max(0, y0 * H - th), tw, th);
+      c.fillStyle = '#facc15'; c.fillText(t, x0 * W + 5, Math.max(th, y0 * H) - 2);
+    });
+    try { renderer.dispose(); } catch (_) {}
+    return out.toDataURL('image/jpeg', 0.9);
+  } catch (e) { return null; }
+}
+
+// Etiqueta flotante (sprite) para el AR en vivo: qué es cada superficie/instalación según la IA.
+function _replEscaneoEtiqueta(THREE, txt, color) {
+  const cv = document.createElement('canvas'); cv.width = 320; cv.height = 64;
+  const c = cv.getContext('2d');
+  c.fillStyle = 'rgba(0,0,0,.72)'; c.fillRect(0, 0, 320, 64);
+  c.fillStyle = color || '#facc15'; c.fillRect(0, 0, 8, 64);
+  c.font = 'bold 30px sans-serif'; c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(String(txt).slice(0, 22), 164, 34);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, transparent: true }));
+  sp.scale.set(0.4, 0.08, 1);
+  return sp;
+}

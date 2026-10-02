@@ -49,6 +49,9 @@
   scene.add(complementosGrupo);
   var planosGrupo = new THREE.Group();
   scene.add(planosGrupo);
+  // ADR-0027: etiquetas de la IA de visión (qué es cada plano, instalaciones existentes).
+  var escaneoGrupo = new THREE.Group();
+  scene.add(escaneoGrupo);
 
   // Retirar un objeto de la escena no libera sus buffers/materiales de GPU.
   function liberarGrupo(grupo, conservarMateriales) {
@@ -184,6 +187,35 @@
       });
     } catch (e) {
       // Igual que actualizarContenido: un JSON mal formado no debe tirar la sesión.
+    }
+  };
+
+  // ADR-0027 (03/10/2026): paridad con _replArEscaneoPintar() de la PWA -- ReplanteoARActivity
+  // manda lo que la IA de visión ha reconocido, ya situado en coordenadas de mundo de ARCore:
+  // { instalaciones: [{x,y,z,radio,etiqueta}], planos: [{x,y,z,texto,excluida}] }.
+  // Las etiquetas son texturas propias de cada sprite: se liberan al rehacerlas.
+  window.actualizarEscaneoIA = function (json) {
+    try {
+      escaneoGrupo.traverse(function (o) { if (o.material && o.material.map) o.material.map.dispose(); });
+      vaciarGrupo(escaneoGrupo, false);
+      var d = JSON.parse(json || '{}');
+      (d.planos || []).forEach(function (p) {
+        var sp = _replEscaneoEtiqueta(THREE, p.texto || '', p.excluida ? '#ef4444' : '#38bdf8');
+        sp.position.set(p.x || 0, p.y || 0, p.z || 0);
+        escaneoGrupo.add(sp);
+      });
+      (d.instalaciones || []).forEach(function (i) {
+        var r = Math.max(0.05, +i.radio || 0.3);
+        var esfera = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 10),
+          new THREE.MeshBasicMaterial({ color: 0xfacc15, wireframe: true, transparent: true, opacity: 0.35 }));
+        esfera.position.set(i.x || 0, i.y || 0, i.z || 0);
+        escaneoGrupo.add(esfera);
+        var sp = _replEscaneoEtiqueta(THREE, '⚠ ' + (i.etiqueta || 'Instalación'), '#facc15');
+        sp.position.set(i.x || 0, (i.y || 0) + r + 0.08, i.z || 0);
+        escaneoGrupo.add(sp);
+      });
+    } catch (e) {
+      // Un dato mal formado no debe tirar la sesión AR.
     }
   };
 })();

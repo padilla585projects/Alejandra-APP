@@ -1,6 +1,43 @@
-# Idea pendiente — escaneo del entorno + IA en tiempo real para el AR del Replanteo
+# Escaneo del entorno + IA en tiempo real para el AR del Replanteo
 
-Estado: **sin implementar, sin ADR, planificar aparte** (decisión explícita de Adrián,
+Estado: **implementado (03/10/2026) — [ADR-0027](../../decisions/ADR-0027-ESCANEO-ENTORNO-IA-REPLANTEO-AR.md),
+aceptado por Adrián en chat**. Pendiente de desplegar (Worker API + Pages + APK) y de
+verificación física en un móvil con ARCore (ver "Verificación" abajo). Lo que sigue tras esta
+sección es la especificación original de Adrián (18/09/2026), que se conserva tal cual.
+
+## Qué se ha implementado
+
+- **Cartel "🔎 Escanea el entorno" antes de marcar** (PWA WebXR y APK nativa): progreso de
+  superficies confirmadas, fotogramas analizados por la IA e instalaciones vistas; "Empezar a
+  marcar" se habilita cuando el escaneo es suficiente; "Continuar sin IA" siempre disponible.
+- **IA de visión en bucle** (Haiku, `claude-haiku-4-5-20251001`): 1 fotograma reducido cada
+  ~3 s, máx. 40 por sesión, límite aplicado en el servidor (también por usuario y día) con
+  escrituras condicionales de R2. Endpoint en `worker.js`: `POST /replanteos/escaneo`,
+  `POST /replanteos/escaneo/<id>/frame`, `GET /replanteos/escaneo/<id>[/frame/<n>]`.
+- **Realimentación en tiempo real**: votos por plano (suelo/techo en WebXR; mesas/muebles
+  descartados para pegar puntos en ambas superficies), instalaciones existentes situadas en 3D
+  con etiqueta y esfera, aviso al apuntar o marcar sobre ellas. Sigue activa durante el marcado.
+- **Fondo real del informe**: fotogramas clave en R2 con las matrices reales de cámara; el
+  informe (`index.html` y `panel.html`) pinta la instalación con esa misma cámara sobre el
+  fotograma que mejor ve el recorrido, y marca las instalaciones existentes detectadas.
+- Lógica compartida en `repl3d.js` (copia exacta en `assets/ar/`) y su espejo Java
+  `EscaneoEntorno.java`. Pruebas: `scripts/replanteo-escaneo.test.cjs`,
+  `EscaneoEntornoTest.java`.
+- **No implementado (fuera de este alcance)**: panorama/mosaico cosido, proyección de fotos
+  sobre los planos, materiales/texturas de catálogo de fabricante (sección de abajo), regla de
+  ciclo de vida de R2 para escaneos abandonados (decisión humana).
+
+## Verificación
+
+Ver el informe de la PR de ADR-0027 y `HANDOFF.md`. Queda explícitamente **sin verificar en
+vivo** con un móvil ARCore real: el pegado real a paredes, la calidad de la clasificación de la
+IA y la alineación del fondo del informe con un recorrido real.
+
+---
+
+# Especificación original (18/09/2026)
+
+Estado original: sin implementar, sin ADR, planificar aparte (decisión explícita de Adrián,
 18/09/2026 noche — ver `TASKS.md`). No confundir con
 `docs/features/replanteo-instalacion-realista/README.md` (esa es sobre que la instalación
 quede PEGADA a la pared en el AR en vivo con lo que WebXR ya detecta; esta es sobre añadir un
@@ -125,8 +162,8 @@ prefirió ir directamente a la opción de escanear el entorno completo, así que
 descartada como pendiente propio, pero documentada aquí porque podría ser un primer paso
 intermedio razonable si el escaneo completo se ve demasiado grande al planificarlo.
 
-## Siguiente paso
+## Siguiente paso (histórico)
 
-Nada implementado todavía. Cuando se retome: decidir con Adrián cuál de las alternativas de
-arriba (o la foto única simple) encaja mejor, y si merece su propio ADR dado que toca el
-esquema de datos del replanteo.
+Resuelto el 03/10/2026 por ADR-0027: escaneo con IA en tiempo real y fondo real del informe
+con el fotograma clave y su cámara real (sin migración D1: sesión y fotogramas en R2,
+`trazado_json.escaneo_id`). El panorama/mosaico y los materiales de catálogo siguen pendientes.

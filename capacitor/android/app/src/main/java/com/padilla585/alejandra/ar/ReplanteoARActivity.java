@@ -173,6 +173,29 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     // cada frame -- el trazado no cambia entre frames salvo que el usuario toque un botón.
     private volatile boolean contenidoSucio = false;
 
+    // ADR-0027: escaneo del entorno + IA de visión (ver el bloque de métodos más abajo).
+    private String departamento = "";
+    private String obraId = "";
+    private volatile boolean faseEscaneo = true;     // cartel "Escanea el entorno": aún no se marca
+    private volatile String escaneoId = null;
+    private volatile boolean iaActiva = false, iaPedida = true;
+    private volatile int framesIA = 0, iaMax = EscaneoEntorno.MAX_IA;
+    private volatile boolean escaneoEnVuelo = false;
+    private long ultimoEnvioEscaneo = 0, ultimaUIEscaneo = 0, inicioEscaneo = 0;
+    private volatile int fallosEscaneo = 0;
+    private volatile String resumenIA = "", motivoSinIA = "";
+    private volatile int planosConfirmados = 0;
+    private final List<float[]> posesGuardadas = new ArrayList<>();
+    private final java.util.IdentityHashMap<Plane, String> planoIds = new java.util.IdentityHashMap<>();
+    private int sigPlanoId = 1;
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, Integer>> votosPlanos = new java.util.concurrent.ConcurrentHashMap<>();
+    private final List<InstalacionIA> instalacionesIA = new ArrayList<>();
+    private volatile boolean finalizando = false, pendingFinishDirecto = false, terminado = false;
+    private volatile String avisoIA = "";
+    private LinearLayout panelEscaneo, bottomStackRef;
+    private TextView escaneoProgreso, escaneoIA;
+    private Button btnEscaneoListo, btnEscaneoSinIA;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -193,6 +216,10 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             String tk = getIntent().getStringExtra("token");
             if (ab != null) apiBase = ab;
             if (tk != null) authToken = tk;
+            String dp = getIntent().getStringExtra("departamento");
+            String ob = getIntent().getStringExtra("obra_id");
+            if (dp != null) departamento = dp;
+            if (ob != null) obraId = ob;
         }
 
         FrameLayout root = new FrameLayout(this);
@@ -262,6 +289,53 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         bottomStack.setOrientation(LinearLayout.VERTICAL);
         FrameLayout.LayoutParams bottomStackLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
         root.addView(bottomStack, bottomStackLp);
+        // ADR-0027: los controles de marcado aparecen cuando termina el escaneo.
+        bottomStackRef = bottomStack;
+        bottomStack.setVisibility(View.GONE);
+        panelEscaneo = new LinearLayout(this);
+        panelEscaneo.setOrientation(LinearLayout.VERTICAL);
+        panelEscaneo.setPadding(28, 22, 28, 28);
+        panelEscaneo.setBackgroundColor(Color.parseColor("#dd080c14"));
+        TextView tituloEscaneo = new TextView(this);
+        tituloEscaneo.setText("🔎 Escanea el entorno");
+        tituloEscaneo.setTextColor(Color.WHITE);
+        tituloEscaneo.setTextSize(18f);
+        panelEscaneo.addView(tituloEscaneo);
+        TextView guiaEscaneo = new TextView(this);
+        guiaEscaneo.setText("Mueve el móvil despacio enfocando paredes, techo y suelo de la zona del recorrido, y las instalaciones que ya haya. La IA va reconociendo qué es cada cosa.");
+        guiaEscaneo.setTextColor(Color.parseColor("#cbd5e1"));
+        guiaEscaneo.setTextSize(13f);
+        panelEscaneo.addView(guiaEscaneo);
+        escaneoProgreso = new TextView(this);
+        escaneoProgreso.setTextColor(Color.WHITE);
+        escaneoProgreso.setTextSize(13f);
+        escaneoProgreso.setPadding(0, 10, 0, 4);
+        panelEscaneo.addView(escaneoProgreso);
+        escaneoIA = new TextView(this);
+        escaneoIA.setTextColor(Color.parseColor("#c4b5fd"));
+        escaneoIA.setTextSize(12.5f);
+        escaneoIA.setPadding(0, 0, 0, 10);
+        panelEscaneo.addView(escaneoIA);
+        LinearLayout filaEscaneo = new LinearLayout(this);
+        filaEscaneo.setOrientation(LinearLayout.HORIZONTAL);
+        panelEscaneo.addView(filaEscaneo, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        btnEscaneoListo = makeBtn("⏳ Escaneando…", "#22c55e", "#ffffff", 2f, v -> escaneoListo());
+        btnEscaneoListo.setEnabled(false);
+        btnEscaneoListo.setAlpha(0.45f);
+        filaEscaneo.addView(btnEscaneoListo);
+        btnEscaneoSinIA = makeBtn("Continuar sin IA", "#334155", "#ffffff", 1.3f, v -> { iaActiva = false; iaPedida = false; motivoSinIA = "IA desactivada a mano."; escaneoListo(); });
+        filaEscaneo.addView(btnEscaneoSinIA);
+        filaEscaneo.addView(makeBtn("✖", "#000000", "#ffffff", 0.6f, v -> { setResult(RESULT_CANCELED); finish(); }));
+        root.addView(panelEscaneo, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+        final int escPadB = 28;
+        ViewCompat.setOnApplyWindowInsetsListener(panelEscaneo, (v, insets) -> {
+            int bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            v.setPadding(28, 22, 28, escPadB + bottom);
+            return insets;
+        });
+        inicioEscaneo = System.currentTimeMillis();
+        if (!apiBase.isEmpty() && !authToken.isEmpty()) redExecutor.execute(this::iniciarEscaneoRed);
+        else motivoSinIA = "Sin sesión de la app: escaneo solo geométrico.";
 
         // REPL-AR-PANEL-MOD-01 (17/09/2026): Adrián -- "no llenes la pantalla de iconos... con
         // un botón flotante que no moleste". Antes cada función nueva (complementos, ajuste
@@ -425,6 +499,8 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     }
 
     private void terminar() {
+        if (terminado) return;
+        terminado = true;
         JSONArray arr = new JSONArray();
         double longitud = 0;
         double[] prev = null;
@@ -473,6 +549,8 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         data.putExtra("complementos", compArr.toString());
         // REPL-AR-FOTO-01: fotos de documentación tomadas con 📸 durante la sesión.
         data.putExtra("fotos", new JSONArray(fotos).toString());
+        // ADR-0027: los fotogramas del escaneo ya están en R2; la web solo necesita el id.
+        if (escaneoId != null) data.putExtra("escaneo_id", escaneoId);
         runOnUiThread(() -> { setResult(RESULT_OK, data); finish(); });
     }
 
@@ -610,7 +688,11 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
 
             // Las listas de anclas pertenecen al hilo GL, también al deshacer/exportar.
             if (pendingUndo) { pendingUndo = false; undo(); }
-            if (pendingFinish) { pendingFinish = false; terminar(); return; }
+            if (pendingFinishDirecto) { pendingFinishDirecto = false; terminar(); return; }
+            boolean pedirFin = false;
+            if (pendingFinish) { pendingFinish = false; pedirFin = true; }   // ADR-0027: antes, último fotograma clave
+            // ADR-0027: durante el escaneo no se marca (los botones están ocultos; por si acaso).
+            if (faseEscaneo) { pendingPoint = false; pendingContact = false; pendingComp = false; }
 
             boolean tracking = camera.getTrackingState() == TrackingState.TRACKING;
             // RENDIMIENTO-AR-CAMARA-01 (17/09/2026): Adrian -- "la camara va a saltos". Antes
@@ -655,6 +737,8 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             camera.getViewMatrix(view, 0);
             camera.getProjectionMatrix(proj, 0, 0.1f, 100f);
             Matrix.multiplyMM(vp, 0, proj, 0, view, 0);
+            if (pedirFin) iniciarFin(view.clone(), proj.clone());
+            tickEscaneo(tracking, view, proj);   // ADR-0027
 
             // REPL-AR-OVERLAY-01: la cámara de Three.js (en threeOverlay) se sincroniza con la
             // MISMA vista/proyección reales de ARCore -- por eso el trazado/complementos 3D que
@@ -704,11 +788,15 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                 int reticleState = OverlayView.RETICLE_NONE;
                 if (tracking) {
                     boolean hayHitReal = false;
+                    float[] hitPos = null;
                     for (HitResult h : frame.hitTest(viewportW / 2f, viewportH / 2f)) {
                         Trackable t = h.getTrackable();
-                        if (t instanceof Plane && aceptaPlano((Plane) t) && ((Plane) t).isPoseInPolygon(h.getHitPose())) { hayHitReal = true; break; }
+                        if (t instanceof Plane && aceptaPlano((Plane) t) && ((Plane) t).isPoseInPolygon(h.getHitPose())) { hayHitReal = true; hitPos = h.getHitPose().getTranslation(); break; }
                     }
                     reticleState = hayHitReal ? OverlayView.RETICLE_HIT : OverlayView.RETICLE_FALLBACK;
+                    // ADR-0027: aviso ANTES de pulsar si el círculo cae sobre una instalación existente.
+                    String sobre = (!faseEscaneo && hitPos != null) ? instalacionCercana(hitPos) : null;
+                    avisoIA = sobre != null ? "⚠ El círculo está sobre una instalación existente: " + sobre : "";
                 }
                 reticleStateCache = reticleState;
             }
@@ -757,6 +845,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     // Una fuente de verdad para filtrar planos al colocar trazado y complementos.
     private boolean aceptaPlano(Plane plane) {
         return plane.getTrackingState() == TrackingState.TRACKING && plane.getSubsumedBy() == null
+                && !planoExcluidoPorIA(plane)   // ADR-0027: la IA dice que es un mueble/mesa
                 && ("auto".equals(superficieObjetivo) || superficieObjetivo.equals(
                     SurfaceGeometry.type(plane.getCenterPose().getYAxis()[1])));
     }
@@ -942,6 +1031,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         }
         anchors.add(a); puntoOffsets.add(new float[]{0f, 0f, 0f}); accionLog.add("punto");
         contenidoSucio = true;
+        avisarSiSobreInstalacion(a);   // ADR-0027
     }
 
     // "Tocar": el móvil está pegado o casi pegado a la superficie -- mismo botón y misma idea
@@ -971,6 +1061,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         complementos.add(new Complemento(a, key));
         accionLog.add("comp");
         contenidoSucio = true;
+        avisarSiSobreInstalacion(a);   // ADR-0027
         final String nombre = ReplComplementosNativo.CATALOGO[idx].nombre;
         final int n = complementos.size();
         runOnUiThread(() -> infoText.setText(nombre + " colocado · " + n + " complemento(s). Sigue marcando o pulsa ✅ Fin."));
@@ -1153,6 +1244,331 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ADR-0027 — Escaneo del entorno + IA de visión en tiempo real (03/10/2026)
+    // ───────────────────────────────────────────────────────────────────────────
+    // Paridad con el AR WebXR de la PWA (index.html, _replArEscaneo*): cartel "Escanea el
+    // entorno" antes de poder marcar; cada ~3 s (máx. 40, también limitado en el servidor) un
+    // fotograma reducido + los planos de ARCore van a POST /replanteos/escaneo/<id>/frame (IA de
+    // visión, Haiku). La respuesta etiqueta planos (y descarta los que son muebles), sitúa las
+    // instalaciones existentes en 3D y avisa al marcar encima. Los fotogramas clave quedan en R2
+    // con las matrices reales de cámara para el fondo real del informe. Sin red o sin IA:
+    // "Continuar sin IA" y escaneo solo geométrico -- nunca bloquea el marcado.
+    private static final class InstalacionIA {
+        float x, y, z, radio; final String tipo; final String etiqueta; int veces = 1;
+        InstalacionIA(float[] p, float radio, String tipo, String etiqueta) { x = p[0]; y = p[1]; z = p[2]; this.radio = radio; this.tipo = tipo; this.etiqueta = etiqueta; }
+    }
+    private static final class PlanoSnap {
+        final String id, tipo; final float[] centro, normal;
+        PlanoSnap(String id, String tipo, float[] centro, float[] normal) { this.id = id; this.tipo = tipo; this.centro = centro; this.normal = normal; }
+    }
+
+    private String idPlano(Plane p) {
+        String id = planoIds.get(p);
+        if (id == null) { id = "P" + (sigPlanoId++); planoIds.put(p, id); }
+        return id;
+    }
+
+    private boolean planoExcluidoPorIA(Plane p) {
+        String id = planoIds.get(p);
+        return id != null && EscaneoEntorno.excluido(votosPlanos.get(id));
+    }
+
+    // Hilo GL: planos confirmados ahora mismo (con su id estable) para contexto/desproyección.
+    private List<PlanoSnap> snapshotPlanos() {
+        List<PlanoSnap> out = new ArrayList<>();
+        if (session == null) return out;
+        int confirmados = 0;
+        for (Plane p : session.getAllTrackables(Plane.class)) {
+            if (p.getTrackingState() != TrackingState.TRACKING || p.getSubsumedBy() != null) continue;
+            String id = idPlano(p);
+            Pose c = p.getCenterPose();
+            boolean excluido = EscaneoEntorno.excluido(votosPlanos.get(id));
+            if (!excluido) confirmados++;
+            if (!excluido && out.size() < 16) out.add(new PlanoSnap(id, SurfaceGeometry.type(c.getYAxis()[1]), c.getTranslation(), c.getYAxis()));
+        }
+        planosConfirmados = confirmados;
+        return out;
+    }
+
+    private boolean esFotogramaClave(float[] pose) {
+        synchronized (posesGuardadas) {
+            if (posesGuardadas.size() >= EscaneoEntorno.MAX_GUARDADOS) return false;
+            for (float[] g : posesGuardadas) {
+                float dx = pose[12] - g[12], dy = pose[13] - g[13], dz = pose[14] - g[14];
+                float dist = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+                // -Z de la cámara (columna 2 negada) = hacia dónde mira
+                float dot = pose[8] * g[8] + pose[9] * g[9] + pose[10] * g[10];
+                if (dist <= 0.4f && dot > Math.cos(0.45)) return false;
+            }
+            return true;
+        }
+    }
+
+    // Hilo GL, cada frame: refresca el cartel y decide si toca capturar/enviar.
+    private void tickEscaneo(boolean tracking, float[] view, float[] proj) {
+        long ahora = System.currentTimeMillis();
+        if (ahora - ultimaUIEscaneo > 500) { ultimaUIEscaneo = ahora; snapshotPlanos(); actualizarUIEscaneo(); }
+        if (!tracking || escaneoEnVuelo || finalizando || escaneoId == null) return;
+        boolean analizar = iaActiva && framesIA < iaMax;
+        long intervalo = analizar ? EscaneoEntorno.INTERVALO_IA_MS : EscaneoEntorno.INTERVALO_CLAVE_MS;
+        if (ahora - ultimoEnvioEscaneo < intervalo) return;
+        ultimoEnvioEscaneo = ahora;
+        float[] pose = new float[16];
+        if (!Matrix.invertM(pose, 0, view, 0)) return;
+        boolean guardar = esFotogramaClave(pose);
+        if (!analizar && !guardar) return;
+        capturarYEnviar(view.clone(), proj.clone(), pose, analizar, guardar, faseEscaneo ? "escaneo" : "marcado", null);
+    }
+
+    private void capturarYEnviar(float[] view, float[] proj, float[] pose, boolean analizar, boolean guardar, String fase, Runnable alTerminar) {
+        if (viewportW <= 1 || viewportH <= 1) { if (alTerminar != null) alTerminar.run(); return; }
+        escaneoEnVuelo = true;
+        final List<PlanoSnap> planos = snapshotPlanos();
+        final int w = viewportW, h = viewportH;
+        runOnUiThread(() -> {
+            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            try {
+                PixelCopy.request(surfaceView, bmp, res -> {
+                    if (res != PixelCopy.SUCCESS) { escaneoEnVuelo = false; if (alTerminar != null) alTerminar.run(); return; }
+                    redExecutor.execute(() -> {
+                        try { enviarFrameEscaneo(bmp, view, proj, pose, planos, analizar, guardar, fase); }
+                        finally { escaneoEnVuelo = false; if (alTerminar != null) alTerminar.run(); }
+                    });
+                }, new Handler(Looper.getMainLooper()));
+            } catch (Exception e) {
+                escaneoEnVuelo = false;
+                if (alTerminar != null) alTerminar.run();
+            }
+        });
+    }
+
+    private static JSONArray jsonArr(float[] a) throws Exception {
+        JSONArray r = new JSONArray();
+        for (float v : a) r.put((double) v);
+        return r;
+    }
+
+    // Hilo de red.
+    private void enviarFrameEscaneo(Bitmap bmp, float[] view, float[] proj, float[] pose, List<PlanoSnap> planos, boolean analizar, boolean guardar, String fase) {
+        try {
+            float s = Math.min(1f, (float) EscaneoEntorno.LADO_IMAGEN / Math.max(bmp.getWidth(), bmp.getHeight()));
+            Bitmap red = s < 1f ? Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * s), Math.round(bmp.getHeight() * s), true) : bmp;
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            red.compress(Bitmap.CompressFormat.JPEG, 72, baos);
+            JSONObject camara = new JSONObject();
+            camara.put("pose", jsonArr(pose)); camara.put("proj", jsonArr(proj));
+            camara.put("w", red.getWidth()); camara.put("h", red.getHeight());
+            JSONArray ctx = new JSONArray();
+            for (PlanoSnap p : planos) {
+                JSONObject o = new JSONObject();
+                o.put("id", p.id); o.put("tipo", p.tipo);
+                float[] q = EscaneoEntorno.proyectar(view, proj, p.centro);
+                if (q != null) { o.put("u", Math.round(q[0] * 100) / 100.0); o.put("v", Math.round(q[1] * 100) / 100.0); o.put("dist_m", Math.round(q[2] * 100) / 100.0); }
+                o.put("altura_rel_m", Math.round((p.centro[1] - pose[13]) * 100) / 100.0);
+                ctx.put(o);
+            }
+            JSONObject body = new JSONObject();
+            body.put("imagen", "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP));
+            body.put("analizar", analizar); body.put("guardar", guardar); body.put("fase", fase);
+            body.put("camara", camara); body.put("planos", ctx);
+            String[] r = httpJson("/replanteos/escaneo/" + escaneoId + "/frame", body);
+            int code = Integer.parseInt(r[0]);
+            JSONObject j = new JSONObject(r[1].isEmpty() ? "{}" : r[1]);
+            if (code < 200 || code >= 300) throw new Exception(j.optString("error", "error " + code));
+            fallosEscaneo = 0;
+            if (!j.isNull("guardado")) synchronized (posesGuardadas) { posesGuardadas.add(pose); }
+            if (j.has("ia_usados")) framesIA = j.optInt("ia_usados", framesIA);
+            JSONObject an = j.optJSONObject("analisis");
+            if (an != null) aplicarAnalisis(an, pose, proj, planos);
+            else if (analizar && !j.isNull("motivo_sin_ia") && j.optString("motivo_sin_ia", "").contains("limite")) {
+                iaActiva = false; motivoSinIA = "Límite de análisis IA alcanzado: sigue sin IA.";
+            }
+        } catch (Exception e) {
+            fallosEscaneo++;
+            android.util.Log.w("AlejandraAR", "Escaneo: fallo enviando fotograma (" + fallosEscaneo + ")");
+            if (fallosEscaneo >= 3 && iaActiva) { iaActiva = false; motivoSinIA = "La IA no responde (red). Continúa sin IA; el escaneo sigue siendo geométrico."; }
+        }
+    }
+
+    private void aplicarAnalisis(JSONObject an, float[] pose, float[] proj, List<PlanoSnap> planos) {
+        JSONArray sup = an.optJSONArray("superficies");
+        for (int i = 0; sup != null && i < sup.length(); i++) {
+            JSONObject s = sup.optJSONObject(i);
+            if (s == null || s.optDouble("confianza", 0.5) < 0.4) continue;
+            votosPlanos.computeIfAbsent(s.optString("id"), k -> new java.util.concurrent.ConcurrentHashMap<>())
+                    .merge(s.optString("clase"), 1, Integer::sum);
+        }
+        JSONArray inst = an.optJSONArray("instalaciones");
+        for (int i = 0; inst != null && i < inst.length(); i++) {
+            JSONObject o = inst.optJSONObject(i);
+            JSONArray b = o == null ? null : o.optJSONArray("bbox");
+            if (b == null || b.length() != 4 || o.optDouble("confianza", 0.5) < 0.5) continue;
+            float x0 = (float) b.optDouble(0), y0 = (float) b.optDouble(1), x1 = (float) b.optDouble(2), y1 = (float) b.optDouble(3);
+            float[] r = EscaneoEntorno.rayo(pose, proj, (x0 + x1) / 2, (y0 + y1) / 2);
+            if (r == null) continue;
+            float mejor = -1;
+            for (PlanoSnap p : planos) {
+                float t = EscaneoEntorno.cortar(r, p.centro, p.normal, 8f);
+                if (t > 0 && (mejor < 0 || t < mejor)) mejor = t;
+            }
+            if (mejor < 0) continue;  // sin superficie que la sitúe: solo se informa en texto
+            float[] ra = EscaneoEntorno.rayo(pose, proj, x0, (y0 + y1) / 2), rb = EscaneoEntorno.rayo(pose, proj, x1, (y0 + y1) / 2);
+            float radio = 0.3f;
+            if (ra != null && rb != null) {
+                double ang = Math.acos(Math.max(-1, Math.min(1, ra[3] * rb[3] + ra[4] * rb[4] + ra[5] * rb[5])));
+                radio = (float) Math.max(0.12, Math.min(1.2, Math.tan(ang / 2) * mejor));
+            }
+            float[] pos = {r[0] + r[3] * mejor, r[1] + r[4] * mejor, r[2] + r[5] * mejor};
+            String tipo = o.optString("tipo", "otro"), etiqueta = o.optString("etiqueta", "Instalación");
+            synchronized (instalacionesIA) {
+                InstalacionIA ya = null;
+                for (InstalacionIA c : instalacionesIA) {
+                    float dx = c.x - pos[0], dy = c.y - pos[1], dz = c.z - pos[2];
+                    if (c.tipo.equals(tipo) && Math.sqrt(dx * dx + dy * dy + dz * dz) < 0.5) { ya = c; break; }
+                }
+                if (ya != null) {
+                    int k = ya.veces;
+                    ya.x = (ya.x * k + pos[0]) / (k + 1); ya.y = (ya.y * k + pos[1]) / (k + 1); ya.z = (ya.z * k + pos[2]) / (k + 1);
+                    ya.radio = Math.max(ya.radio, radio); ya.veces = k + 1;
+                } else if (instalacionesIA.size() < 30) instalacionesIA.add(new InstalacionIA(pos, radio, tipo, etiqueta));
+            }
+        }
+        String res = an.optString("resumen", "");
+        String cal = an.optString("calidad", "buena");
+        resumenIA = ("oscura".equals(cal) ? "Poca luz: " : "borrosa".equals(cal) ? "Imagen movida, ve más despacio. " : "") + res;
+        sincronizarEscaneoOverlay(planos);
+    }
+
+    // Etiquetas de la IA en el overlay 3D (paridad con _replArEscaneoPintar de la PWA).
+    private void sincronizarEscaneoOverlay(List<PlanoSnap> planos) {
+        if (threeOverlay == null || !overlayReady) return;
+        try {
+            JSONObject o = new JSONObject();
+            JSONArray inst = new JSONArray();
+            synchronized (instalacionesIA) {
+                for (InstalacionIA i : instalacionesIA) {
+                    JSONObject x = new JSONObject();
+                    x.put("x", i.x); x.put("y", i.y); x.put("z", i.z); x.put("radio", i.radio); x.put("etiqueta", i.etiqueta);
+                    inst.put(x);
+                }
+            }
+            JSONArray etq = new JSONArray();
+            for (PlanoSnap p : planos) {
+                java.util.Map<String, Integer> v = votosPlanos.get(p.id);
+                if (v == null || v.isEmpty()) continue;
+                boolean excl = EscaneoEntorno.excluido(v);
+                JSONObject x = new JSONObject();
+                x.put("x", p.centro[0] + p.normal[0] * 0.05f); x.put("y", p.centro[1] + p.normal[1] * 0.05f); x.put("z", p.centro[2] + p.normal[2] * 0.05f);
+                x.put("texto", (excl ? "✖ Mueble" : Character.toUpperCase(p.tipo.charAt(0)) + p.tipo.substring(1)));
+                x.put("excluida", excl);
+                etq.put(x);
+            }
+            o.put("instalaciones", inst); o.put("planos", etq);
+            final String js = "typeof actualizarEscaneoIA === 'function' && actualizarEscaneoIA(" + jsStringLit(o.toString()) + ")";
+            runOnUiThread(() -> { try { if (threeOverlay != null) threeOverlay.evaluateJavascript(js, null); } catch (Exception ignored) {} });
+        } catch (Exception ignored) {}
+    }
+
+    private String instalacionCercana(float[] p) {
+        synchronized (instalacionesIA) {
+            for (InstalacionIA i : instalacionesIA) if (EscaneoEntorno.cercana(p, new float[]{i.x, i.y, i.z}, i.radio)) return i.etiqueta;
+        }
+        return null;
+    }
+
+    private void avisarSiSobreInstalacion(Anchor a) {
+        String e = instalacionCercana(a.getPose().getTranslation());
+        if (e != null) estadoSuperficie = "⚠ Marcado sobre una instalación existente (" + e + "). Revisa el recorrido o márcala como obstáculo.";
+    }
+
+    private void actualizarUIEscaneo() {
+        final boolean escaneando = faseEscaneo;
+        final int planos = planosConfirmados, ia = framesIA;
+        final boolean activa = iaActiva;
+        final double seg = (System.currentTimeMillis() - inicioEscaneo) / 1000.0;
+        final boolean ok = EscaneoEntorno.suficiente(planos, ia, activa, seg);
+        final int nInst;
+        synchronized (instalacionesIA) { nInst = instalacionesIA.size(); }
+        final String progreso = "Superficies confirmadas: " + planos + "\nFotogramas analizados por IA: " + ia + (activa ? " / " + iaMax : " (IA desactivada)")
+                + (nInst > 0 ? "\nInstalaciones existentes vistas: " + nInst : "");
+        final String ia2 = !resumenIA.isEmpty() ? "🧠 " + resumenIA : (activa ? "🧠 Esperando el primer análisis…" : motivoSinIA);
+        runOnUiThread(() -> {
+            if (panelEscaneo == null) return;
+            panelEscaneo.setVisibility(escaneando ? View.VISIBLE : View.GONE);
+            if (bottomStackRef != null) bottomStackRef.setVisibility(escaneando ? View.GONE : View.VISIBLE);
+            if (!escaneando) return;
+            escaneoProgreso.setText(progreso);
+            escaneoIA.setText(ia2);
+            btnEscaneoListo.setEnabled(ok);
+            btnEscaneoListo.setAlpha(ok ? 1f : 0.45f);
+            btnEscaneoListo.setText(ok ? "✅ Empezar a marcar" : "⏳ " + EscaneoEntorno.falta(planos, ia, activa));
+            btnEscaneoSinIA.setText(activa ? "Continuar sin IA" : "Continuar solo con geometría");
+        });
+    }
+
+    private void escaneoListo() {
+        faseEscaneo = false;
+        estadoSuperficie = "Escaneo listo. Apunta al primer punto y pulsa Punto." + (iaActiva ? " La IA sigue mirando mientras marcas." : "");
+        android.util.Log.i("AlejandraAR", "Escaneo listo: IA " + framesIA + ", planos " + planosConfirmados);
+        actualizarUIEscaneo();
+    }
+
+    // Hilo de red: abre la sesión de escaneo en el servidor.
+    private void iniciarEscaneoRed() {
+        try {
+            JSONObject b = new JSONObject();
+            b.put("plataforma", "android");
+            if (!departamento.isEmpty()) b.put("departamento", departamento);
+            if (!obraId.isEmpty()) b.put("obra_id", obraId);
+            String[] r = httpJson("/replanteos/escaneo", b);
+            int code = Integer.parseInt(r[0]);
+            JSONObject j = new JSONObject(r[1].isEmpty() ? "{}" : r[1]);
+            if (code >= 200 && code < 300 && j.optString("escaneo_id", "").matches("[a-f0-9]{32}")) {
+                iaMax = j.optInt("max_ia", EscaneoEntorno.MAX_IA);
+                boolean disp = j.optBoolean("ia_disponible", false);
+                iaActiva = disp && iaPedida;
+                if (!disp) motivoSinIA = "La IA de visión no está configurada en el servidor. Escaneo solo geométrico.";
+                escaneoId = j.getString("escaneo_id");
+                android.util.Log.i("AlejandraAR", "Escaneo: sesión abierta, IA " + iaActiva);
+            } else {
+                motivoSinIA = "IA no disponible: " + j.optString("error", "error " + code) + ". Escaneo solo geométrico.";
+                android.util.Log.w("AlejandraAR", "Escaneo: no se pudo abrir sesión (" + code + ")");
+            }
+        } catch (Exception e) {
+            motivoSinIA = "Sin conexión: escaneo solo geométrico. Puedes continuar.";
+            android.util.Log.w("AlejandraAR", "Escaneo: sin conexión al abrir sesión");
+        }
+    }
+
+    private String[] httpJson(String ruta, JSONObject body) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(apiBase + ruta).openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("X-Token", authToken);
+        conn.setDoOutput(true);
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(25000);
+        try (OutputStream os = conn.getOutputStream()) { os.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
+        int code = conn.getResponseCode();
+        java.io.InputStream is = code >= 200 && code < 300 ? conn.getInputStream() : conn.getErrorStream();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096]; int n;
+        while (is != null && (n = is.read(buf)) != -1) out.write(buf, 0, n);
+        return new String[]{String.valueOf(code), out.toString("UTF-8")};
+    }
+
+    // Hilo GL: al pulsar Fin, un último fotograma clave (ve la instalación terminada) antes de
+    // devolver el resultado. Con tope de tiempo: nunca bloquea el cierre.
+    private void iniciarFin(float[] view, float[] proj) {
+        if (finalizando) return;
+        finalizando = true;
+        float[] pose = new float[16];
+        if (escaneoId == null || !Matrix.invertM(pose, 0, view, 0)) { pendingFinishDirecto = true; return; }
+        runOnUiThread(() -> infoText.setText("Guardando el último fotograma del entorno…"));
+        capturarYEnviar(view, proj, pose, false, true, "final", () -> pendingFinishDirecto = true);
+        new Handler(Looper.getMainLooper()).postDelayed(() -> pendingFinishDirecto = true, 6000);
+    }
     private void actualizarInfo(boolean tracking) {
         double longitud = 0;
         float[] prev = null;
@@ -1170,6 +1586,9 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         final String lon = String.format(java.util.Locale.US, "%.2f", longitud).replace('.', ',');
         final String estado = tracking ? resumenPlanos + " · Destino: " + superficieObjetivo + "\n" + estadoSuperficie
                 : "Buscando posición: mueve el móvil despacio y mejora la luz.";
-        runOnUiThread(() -> infoText.setText(estado + "\n" + n + " puntos · " + lon + " m"));
+        // ADR-0027: estado de la IA siempre visible, y el aviso de instalación existente.
+        final String ia = (iaActiva ? "🧠 IA " + framesIA + "/" + iaMax : "🧠 sin IA") + (avisoIA.isEmpty() ? "" : "\n" + avisoIA);
+        if (finalizando) return;
+        runOnUiThread(() -> infoText.setText(estado + "\n" + n + " puntos · " + lon + " m · " + ia));
     }
 }
