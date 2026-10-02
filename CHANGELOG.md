@@ -1,6 +1,8 @@
 # Changelog
 
 
+- IA-QUALITY-08: medidas sin unidad se aclaran sin calificar interpretaciones de probables o imposibles; los planos generados/editados declaran que son borrador y no aptos para ejecución.
+
 - D1-ESCRITURAS-01: 401 ante token de sesión inexistente, trazas de token muerto deduplicadas, last_used y sync_dispositivos sin reescrituras inútiles; la app y el panel paran el sync al caducar la sesión (v9.82).
 
 - CAD-SCOPE-01: empresa de sesión en tools CAD y autenticación común de lectura; rechazo de DXF sin propietario verificable antes de leer contenido.

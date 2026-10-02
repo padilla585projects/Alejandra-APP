@@ -1261,7 +1261,7 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
   }
   if (preliminar) return { ok: true, modo: 'boceto_preliminar', nota: 'Boceto preliminar solicitado; identificar datos pendientes. No ejecutar en obra.' };
   let altura = null, fuenteAltura = null, referencia = null;
-  let alturaPendiente = false, referenciaPendiente = false;
+  let alturaPendiente = false, referenciaPendiente = false, alturaSinUnidad = false;
   for (const texto of [...fuentes].reverse()) {
     const alturas = [...texto.matchAll(/\b(?:altura(?: de montaje)?\s*(?::|=|de|a)?|cota(?: de montaje)?\s*(?::|=|de|a)?|[hz]\s*=)\s*([+-]?\d+(?:[.,]\d+)?)\s*(mm|cm|metros?|m)\b/gi)];
     const medidasIndicadas = [...texto.matchAll(/\b(?:altura(?: de montaje)?|cota(?!\s+(?:0|cero)\s+(?:del|de)\s+proyecto)(?: de montaje)?|[hz]\s*=)\s*(?:(?:[:=]|de|a|es|ser[aá])\s*)?[+-]?\d/gi)];
@@ -1274,6 +1274,7 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
       const valores = alturas.map(match => Number(match[1].replace(',', '.')) / (match[2].toLowerCase() === 'mm' ? 1000 : match[2].toLowerCase() === 'cm' ? 100 : 1));
       if (alturaIncompleta || (alturas.length && (noConfirmado || valores.some(valor => Math.abs(valor - valores[0]) > 1e-9)))) {
         alturaPendiente = true;
+        alturaSinUnidad = alturaIncompleta;
       } else if (alturas.length) {
         altura = valores[0];
         fuenteAltura = alturas[0][0];
@@ -1294,7 +1295,9 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
     if ((altura !== null || alturaPendiente) && (referencia !== null || referenciaPendiente)) break;
   }
   const preguntas = [];
-  if (altura === null || !Number.isFinite(altura)) preguntas.push(alturaPendiente
+  if (altura === null || !Number.isFinite(altura)) preguntas.push(alturaSinUnidad
+    ? 'La altura indicada no tiene una unidad admitida. Confirma el valor con su unidad (m, cm o mm); no supondré cuál es la interpretación más probable ni descartaré ninguna.'
+    : alturaPendiente
     ? 'Hay una altura dudosa o varias alturas. Confirma un único valor con unidad, o detalla la altura y referencia de cada tramo; no elegiré la primera.'
     : '¿A qué altura se montará la bandeja? Indica el valor y la unidad.');
   if (referencia === null) preguntas.push(referenciaPendiente
@@ -1302,7 +1305,7 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
     : '¿Desde qué nivel se mide esa altura: suelo terminado u otra cota del proyecto?');
   if (preguntas.length) return {
     ok: false, error: 'DATOS_TECNICOS_FALTANTES', preguntas,
-    mensaje: 'No se ha generado ningún plano. Pregunta estos datos al usuario y espera su respuesta; no los inventes ni reintentes con supuestos.',
+    mensaje: 'No se ha generado ningún plano. Pregunta estos datos al usuario y espera su respuesta; no los inventes ni reintentes con supuestos. Sin datos del usuario que lo justifiquen, no califiques ninguna interpretación de probable, habitual o imposible: enumérala de forma neutral si ayuda.',
   };
   return { ok: true, modo: 'borrador_tecnico', altura_m: altura, referencia, fuente_altura: fuenteAltura };
 }
@@ -1321,7 +1324,23 @@ function debeRegistrarTrazaToken(vistos, prefijo, ahoraMs, ventanaMs = 10 * 60 *
   return true;
 }
 
+// IA-QUALITY-08 (02/10/2026): QA G prometió un «plano de ejecución real» con tres
+// datos. El motor genera un SVG con IA que no valida geometría, soportes ni norma, así
+// que cada resultado lleva este alcance explícito para que la respuesta no lo exceda.
+function alcancePlanoGenerado(datosPlano = {}) {
+  const preliminar = datosPlano && datosPlano.modo === 'boceto_preliminar';
+  return {
+    tipo_documento: preliminar ? 'boceto_preliminar' : 'borrador_tecnico',
+    apto_para_ejecucion: false,
+    aviso: preliminar
+      ? 'Boceto preliminar con datos pendientes; no usar en obra.'
+      : 'Borrador técnico generado por IA con los datos aportados; no es plano de ejecución ni está validado geométrica ni normativamente. Requiere revisión de un técnico competente antes de usarlo en obra.',
+    instruccion: 'Al presentarlo, no lo llames plano de ejecución, definitivo, final ni apto para obra, ni prometas que lo será con más datos.',
+  };
+}
+
 export {
+  alcancePlanoGenerado,
   debeRegistrarTrazaToken,
   normalizarIdPlano,
   extraerFuentesPlanoHumanas,
