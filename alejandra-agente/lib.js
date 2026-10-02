@@ -1238,6 +1238,16 @@ function extraerFuentesPlanoHumanas(mensaje, historial = []) {
   return inicioNuevo >= 0 ? fuentes.slice(inicioNuevo) : fuentes;
 }
 
+// Contrato numérico de IDs CAD compartido por ambos Workers. No coercionar
+// booleanos/arrays/objetos ni aceptar prefijos, exponentes o un tenant por defecto.
+function normalizarIdPlano(valor) {
+  if (typeof valor === 'string') {
+    if (!/^\d+$/.test(valor.trim())) return null;
+  } else if (typeof valor !== 'number') return null;
+  const numero = Number(valor);
+  return Number.isSafeInteger(numero) && numero > 0 ? numero : null;
+}
+
 // Mínimo verificable para bandejas: el modelo no puede suplir altura/datum.
 // No acredita cálculo de soportes, cargas, geometría o normativa.
 function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
@@ -1298,6 +1308,7 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
 }
 
 export {
+  normalizarIdPlano,
   extraerFuentesPlanoHumanas,
   validarDatosPlanoBandejas,
   timingSafeEqual,

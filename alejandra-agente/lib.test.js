@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  normalizarIdPlano,
   extraerFuentesPlanoHumanas,
   validarDatosPlanoBandejas,
   PRECIOS_USD,
@@ -43,6 +44,15 @@ import {
   construirSVGCableadoInstrumentacion,
   validarEstiloCAD,
 } from './lib.js';
+
+describe('IDs CAD sin coerción ni empresa de reserva', () => {
+  it('rechaza valores mal formados, objetos y tipos que Number coercionaría', () => {
+    for (const valor of [undefined, null, '', 'default', '1otro', '1e0', '0x1', 0, -1, 1.5, true, false, [1], {}, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(normalizarIdPlano(valor)).toBeNull();
+    }
+    for (const valor of [2, '2', ' 2 ', '02']) expect(normalizarIdPlano(valor)).toBe(2);
+  });
+});
 
 describe('datos humanos necesarios para planos de bandejas', () => {
   it('una medida nueva incompleta no recupera la altura antigua ni acepta solo la parte válida', () => {

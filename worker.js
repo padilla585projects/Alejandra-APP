@@ -15,6 +15,8 @@ import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, Image
 import DxfParser from 'dxf-parser';
 // Validacion sintactica de planos; no declara correccion geometrica ni normativa.
 import { SaxesParser } from 'saxes';
+// Una sola regla pura de IDs CAD para API y agente; sin I/O ni datos de sesión.
+import { normalizarIdPlano } from './alejandra-agente/lib.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
@@ -28275,14 +28277,15 @@ async function _getAuthPlano(request, env, body) {
   if (secreto && env.AGENT_INTERNAL_SECRET && secreto === env.AGENT_INTERNAL_SECRET) {
     // Sin tenant válido no hay acceso: nunca atribuir una sesión incompleta
     // a la empresa 1 ni aceptar prefijos numéricos como "1otra-empresa".
-    const eidNum = Number(body && body.empresa_id);
+    const eidNum = normalizarIdPlano(body && body.empresa_id);
     return {
-      empresa_id: (Number.isSafeInteger(eidNum) && eidNum > 0) ? eidNum : null,
+      empresa_id: eidNum,
       usuario_id: (body && body.usuario_id) || null,
       rol: (body && body.rol) || 'agente_ia'
     };
   }
-  return await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  return { ...auth, empresa_id: normalizarIdPlano(auth.empresa_id) };
 }
 
 // ── Biblioteca de símbolos IEC 60617 — inyectada en cada SVG eléctrico ─────────────────
@@ -29898,25 +29901,32 @@ function _resumenDxf(dxfJson) {
 async function _empresaDeArchivoPlano(env, customMetadata) {
   const rawUid = customMetadata && customMetadata.usuario_id;
   if (!rawUid) return null;
-  const uid = parseInt(rawUid, 10);
-  if (!Number.isInteger(uid)) return null;
+  const uid = normalizarIdPlano(rawUid);
+  if (!uid) return null;
   try {
     const row = await env.DB.prepare('SELECT empresa_id FROM usuarios WHERE id = ?').bind(uid).first();
-    return row && row.empresa_id != null ? String(row.empresa_id) : null;
+    const empresa = normalizarIdPlano(row && row.empresa_id);
+    return empresa ? String(empresa) : null;
   } catch (_) { return null; }
 }
 
 async function importarDxfREST(request, env) {
   const body = await request.json().catch(() => ({}));
   const { empresa_id, usuario_id } = await _getAuthPlano(request, env, body);
-  if (!empresa_id) return err('No autorizado', 401);
+  if (!empresa_id || !usuario_id) return err('No autorizado', 401);
   const key = (body.key || '').trim();
   if (!key) return err('key (del archivo ya subido a R2) es obligatorio', 400);
+
+  const metadata = await env.FILES.head(key);
+  if (!metadata) return err('Archivo no encontrado', 404);
+  const empresaArchivo = await _empresaDeArchivoPlano(env, metadata.customMetadata);
+  if (empresaArchivo === null || empresaArchivo !== String(empresa_id)) return err('Archivo no encontrado', 404);
 
   const obj = await env.FILES.get(key);
   if (!obj) return err('Archivo no encontrado', 404);
   const dueña = await _empresaDeArchivoPlano(env, obj.customMetadata);
-  if (dueña !== null && dueña !== String(empresa_id)) return err('Archivo no encontrado', 404); // mismo mensaje que "no existe" -- no revelar que es de otra empresa
+  // Revalidar metadata del cuerpo: el objeto puede cambiar entre head y get.
+  if (dueña === null || dueña !== String(empresa_id)) return err('Archivo no encontrado', 404);
 
   const nombreOriginal = (obj.customMetadata && obj.customMetadata.original_name) || key.split('/').pop() || 'plano.dxf';
   if (!/\.dxf$/i.test(nombreOriginal)) {
@@ -29998,16 +30008,9 @@ async function getPlano(request, env, path) {
   // CAD-IMPORTAR-01: acepta también el secreto interno servidor-a-servidor (mismo
   // criterio que _getAuthPlano), para que la tool analizar_plano_dxf del agente pueda
   // leer un plano sin la sesión real del usuario -- via X-Empresa-Id, no hay body en un GET.
-  const secretoInterno = request.headers.get('X-Internal-Secret');
-  let empresa_id;
-  if (secretoInterno && env.AGENT_INTERNAL_SECRET && secretoInterno === env.AGENT_INTERNAL_SECRET) {
-    const eidNum = parseInt(request.headers.get('X-Empresa-Id'), 10);
-    empresa_id = (Number.isInteger(eidNum) && eidNum > 0) ? eidNum : 1;
-  } else {
-    ({ empresa_id } = await getAuth(request, env));
-  }
+  const { empresa_id } = await _getAuthPlano(request, env, { empresa_id: request.headers.get('X-Empresa-Id') });
   if (!empresa_id) return err('No autorizado', 401);
-  const id = parseInt(path.split('/')[2]);
+  const id = normalizarIdPlano(path.split('/')[2]);
   if (!id) return err('ID invalido', 400);
   await _ensurePlanosTable(env);
   const row = await env.DB.prepare(

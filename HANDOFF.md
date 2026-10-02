@@ -1,5 +1,55 @@
 # Handoff — Alejandra 2.0
 
+## CAD-SCOPE-01 — aislamiento por empresa en CAD (2026-10-02, en revisión)
+
+Codex, codex/cad-tenant-scope, base ca44ae8; dependencias #360 publicada/QA H
+registrada y ADR-0007/0009/0010 aceptados. Fuente única normalizarIdPlano en
+lib.js compartida por ambos Workers: enteros seguros positivos o texto decimal,
+sin coerción de booleanos/arrays ni prefijos/exponentes. Generar/importar/analizar/
+editar toman empresa de sesión; editar ignora empresa_id del input y lo retira del
+esquema. Scope inválido se rechaza antes de BD/API_WEB, ID de plano inválido también.
+getPlano usa _getAuthPlano común sin default empresa 1. Sesión normal conservada.
+
+DXF exige usuario de sesión. R2 head autoriza metadata/empresa del propietario
+antes de get; revalida metadata del cuerpo antes de text/parse por posibles cambios.
+Empresa/propietario desconocidos y D1 indisponible rechazan con 404 genérico sin
+leer cuerpo ni insertar. Metadatos de usuario mal formados ya no usan parseInt.
+Riesgo de compatibilidad: DXF antiguos sin propietario verificable no se importan;
+no reasignar propiedad automáticamente. Añade una lectura de metadata y lookup
+extra por importación admitida. Referencia head/customMetadata: documentación
+oficial https://developers.cloudflare.com/r2/api/workers/workers-api-reference/.
+
+303 pruebas agente y 36 técnicas pasan; negativas de sesión/otro tenant/propiedad
+cambiada/no conocida y positiva de importación scoped, con datos sintéticos.
+Sintaxis, encoding, inventarios de rutas/entorno, departamentos/versiones pasan;
+bundles esbuild API/agente compilan (2.3 MB/949 KB locales, no tamaño comprimido).
+Sin prueba de explotación remota ni uso de datos ajenos. Sin migraciones, datos,
+UI/AR/APK/Pages, secretos o ADR nuevos. Roles/departamentos/propiedad de planos
+existentes aún requieren auditoría propia; no declarar aislamiento integral.
+Rollback API 296d4d33a52e6d9b5daa438653814e1336adddfd;
+agente 037643a5f697ec1b8e7d8fbfc78ead10651b37c2.
+Pendiente PR/CI, publicación y verificación de ambos Workers. Después IA-QUALITY-08:
+corregir sugerencia de cotas probables/imposibles sin datos y promesa de plano de
+ejecución con SVG parcial, con QA conversacional. Contexto heredado sigue pendiente.
+
+
+## IA-QUALITY-07 — publicada; QA H parcial (2026-10-02)
+
+PR #360 → ca44ae8, cuatro checks verdes; implementación 037643a5.
+Run 36938600610 SUCCESS; agente 3ee1bb37-e3eb-4047-9088-1333898750bc
+healthy D1/R2 sin caché. QA H móvil web: altura anterior 4 m FFL, corrección
+320 sin unidad, petición explícita de no guardar. Pregunta por unidad/alcance/datum,
+pero sugiere 3.20 m como probable y descarta 320 mm como imposible sin evidencia.
+QA de rigor global PARCIAL; no aceptar autoevaluación «pasa». También arrastra el
+caso anterior pese a «Otro caso»: seguimiento de contexto/preguntas inducidas pendiente.
+302 agente/33 técnicas pasan y case real rechaza incompletas antes de API_WEB.
+Respuesta dice no tocar borrador; no se midió recuento de planos backend. Evidencia
+local .ai-benchmark-results/ia-quality-07/chat-qa-h.png. Rollback agente 9d31f757.
+Siguiente CAD-SCOPE-01, dependencias cerradas. Después corregir sobrepromesas de
+plano de ejecución y plausibilidad de cotas sin datos, con QA nuevas; sin afirmar
+competencia completa por estos ensayos. API bd7403c9/PWA/AR/APK/Pages conservados.
+
+
 ## IA-QUALITY-07 — altura nueva incompleta y signo (2026-10-02, en revisión)
 
 Codex, codex/plan-height-replacement, base 384d265; continuación autorizada.
