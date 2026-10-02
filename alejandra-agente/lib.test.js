@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  debeRegistrarTrazaToken,
   normalizarIdPlano,
   extraerFuentesPlanoHumanas,
   validarDatosPlanoBandejas,
@@ -2801,5 +2802,34 @@ describe('validarEstiloCAD — ALEJANDRA-ESQUEMA-07', () => {
     expect(worker).toContain('validarEstiloCAD(svgContent)');
     // La condición debe depender de que input.svg_content viniera relleno, no del tipo.
     expect(worker).toMatch(/const esModoBManual = !!svgContent;/);
+  });
+});
+
+// D1-ESCRITURAS-01 (02/10/2026): un móvil con token muerto agotó la cuota diaria de
+// escrituras D1 a base de trazas auth_token_no_encontrado y de 200 vacíos.
+describe('D1-ESCRITURAS-01 trazas de token muerto y puerta 401', () => {
+  it('registra una traza por prefijo y ventana, no una por petición', () => {
+    const vistos = new Map();
+    expect(debeRegistrarTrazaToken(vistos, '6d274557', 0)).toBe(true);
+    for (let t = 5000; t < 600000; t += 5000) expect(debeRegistrarTrazaToken(vistos, '6d274557', t)).toBe(false);
+    expect(debeRegistrarTrazaToken(vistos, 'otro0000', 10000)).toBe(true);
+    expect(debeRegistrarTrazaToken(vistos, '6d274557', 600000)).toBe(true);
+  });
+  it('acota la memoria del isolate y sin Map no suprime nada', () => {
+    const vistos = new Map();
+    for (let i = 0; i < 2000; i++) debeRegistrarTrazaToken(vistos, 'p' + i, i);
+    expect(vistos.size).toBeLessThanOrEqual(500);
+    expect(debeRegistrarTrazaToken(null, 'x', 0)).toBe(true);
+  });
+  it('la API responde 401 ante token inexistente y limita escrituras repetidas', () => {
+    const api = readFileSync(new URL('../worker.js', import.meta.url), 'utf8');
+    const agente = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(api).toContain("if (authPuerta.tokenInvalido) return err('Sesión caducada', 401);");
+    expect(api).toMatch(/tokenInvalido = true;\s*if \(debeRegistrarTrazaToken\(/);
+    expect(api).toContain("WHERE activo=1 AND ultimo_ping < datetime('now', '-60 seconds')");
+    for (const src of [api, agente]) {
+      expect(src).toContain("last_used < datetime('now', '-5 minutes')");
+      expect(src).toContain('debeRegistrarTrazaToken(_trazasTokenVistas');
+    }
   });
 });

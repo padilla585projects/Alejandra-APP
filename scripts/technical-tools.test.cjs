@@ -726,3 +726,31 @@ test('plan generation uses session identity and refuses missing scope before cal
   const bloque = JSON.parse(sent[2].descripcion.split('DATOS VERIFICADOS EN TEXTO HUMANO (prevalecen sobre los ejemplos):\n')[1]);
   assert.equal(bloque.altura_m, -1);
 });
+
+test('D1-ESCRITURAS-01: dead session tokens are flagged once per window, D1 errors are not', async () => {
+  const dedupe = load('alejandra-agente/lib.js', 'debeRegistrarTrazaToken');
+  const traces = [], updates = [];
+  let mode = 'missing';
+  const env = { DB: { prepare(sql) { return { bind(...args) {
+    if (sql.startsWith('UPDATE')) { updates.push(sql); return { run: async () => ({}) }; }
+    return { async first() {
+      if (mode === 'throw') throw new Error('Synthetic D1 unavailable');
+      return mode === 'found' ? { usuario_id: 7, empresa_id: 2, rol: 'operario', departamento: 'electrico' } : null;
+    } };
+  } }; } } };
+  const auth = load('worker.js', '_getAuthSinMemo', {
+    URL, console, timingSafeEqual: () => false, debeRegistrarTrazaToken: dedupe,
+    _trazasTokenVistas: new Map(), registrarTraza: async (_env, t) => { traces.push(t); },
+  });
+  const request = { method: 'GET', url: 'https://api.test/sync/eventos', headers: { get: n => n === 'X-Token' ? 'deadbeef00112233' : null } };
+  for (let i = 0; i < 50; i++) assert.equal((await auth(request, env)).tokenInvalido, true);
+  assert.equal(traces.length, 1);
+  assert.equal(traces[0].detalle.token_prefijo, 'deadbeef');
+  mode = 'throw';
+  assert.equal((await auth(request, env)).tokenInvalido, false);
+  mode = 'found';
+  const ok = await auth(request, env);
+  assert.equal(ok.empresa_id, 2);
+  assert.equal(ok.tokenInvalido, undefined);
+  assert.match(updates[0], /last_used < datetime\('now', '-5 minutes'\)/);
+});

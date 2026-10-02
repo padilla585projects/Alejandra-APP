@@ -1,5 +1,26 @@
 # Handoff — Alejandra 2.0
 
+## D1-ESCRITURAS-01 — cuota diaria de escrituras D1 agotada (2026-10-02, en revisión)
+
+Claude, fix/d1-escrituras-token-invalido, base 3730354. Incidente: la cuenta agotó
+las 100.000 filas/día de D1 (alejandra-db 92.550). d1 insights: 48.370 filas de
+INSERT alejandra_trazas (9.674 × 5 filas: fila + índices), 18.533 UPDATE sesiones
+last_used, 16.236 UPDATE sync_dispositivos activo=0. Trazas: 9.852 tipo
+auth_token_no_encontrado, un único token 6d274557…, 21:46→09:41 UTC; /sync/eventos
+cada 5 s y /sync/ping cada 30 s (proporción 6:1 = móvil index.html/APK). Causa:
+con X-Token inexistente la API caía a modo legacy anónimo y respondía 200 vacío;
+el bucle de sync ignoraba la respuesta, así que nunca cerraba sesión. Bucle real.
+Arreglo: puerta 401 «Sesión caducada» en el router de la API si el token no tiene
+fila (solo lectura correcta sin fila; fallo de D1 no expulsa; rutas auth/verificar/
+health/version/apk/telegram exentas); getAuth memorizado por petición. Una traza
+por prefijo de token cada 10 min por isolate (debeRegistrarTrazaToken en lib.js,
+ambos Workers). last_used solo si han pasado 5 min (ambos Workers). Ping de sync
+solo marca inactivos los activo=1. index.html/panel.html paran el sync y cierran
+sesión ante 401. Versión 9.82 en los cuatro marcadores. 306 agente/37 técnicas.
+Sin datos, migraciones ni secretos. Rollback API 2950f8c (6838fe73), agente
+2950f8c (1bc71b06), Pages 9.81. IA-QUALITY-08 queda en pausa detrás de esto.
+
+
 ## CAD-SCOPE-01 — publicada y verificada (2026-10-02)
 
 PR #361 → 2950f8c, cuatro checks verdes (incluye 4a7a8a9, solo indentación).

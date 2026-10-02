@@ -15747,7 +15747,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '9.81';
+const APP_VERSION = '9.82';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -27283,15 +27283,28 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     rmIniciarSync();
   }
 
+  // D1-ESCRITURAS-01 (02/10/2026): un móvil con la sesión borrada siguió sondeando cada
+  // 5 s toda la noche (~9.800 peticiones) porque este bucle ignoraba la respuesta. Ante
+  // un 401 se para el sync y se cierra la sesión igual que en apiCall.
+  function _rmSesionCaducada() {
+    rmDetenerSync();
+    if (!getSession()) return;
+    localStorage.removeItem('alejandra_session');
+    _limpiarChatAlejandraLocal();
+    alert('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+    location.reload();
+  }
+
   async function _rmHacerPing() {
     try {
       const s = getSession();
       if (!s?.token) return;
-      await fetch(getAPI() + '/sync/ping', {
+      const r = await fetch(getAPI() + '/sync/ping', {
         method: 'POST',
         headers: _rmHeaders(),
         body: JSON.stringify({ tipo: 'app', nombre: s.nombre || 'Móvil' })
       });
+      if (r.status === 401) _rmSesionCaducada();
     } catch (e) { console.error('[rm] ping falló:', e?.message || e); }
   }
 
@@ -27304,6 +27317,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const r = await fetch(getAPI() + '/sync/eventos?desde=' + encodeURIComponent(_rmSyncDesde) + '&excluir_origen=app', {
         headers: _rmHeaders()
       });
+      if (r.status === 401) { _rmSesionCaducada(); return; }
       const d = await r.json();
       if (d.servidor) {
         const servidorMs = Date.parse(d.servidor);

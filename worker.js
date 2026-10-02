@@ -16,7 +16,12 @@ import DxfParser from 'dxf-parser';
 // Validacion sintactica de planos; no declara correccion geometrica ni normativa.
 import { SaxesParser } from 'saxes';
 // Una sola regla pura de IDs CAD para API y agente; sin I/O ni datos de sesión.
-import { normalizarIdPlano } from './alejandra-agente/lib.js';
+import { normalizarIdPlano, debeRegistrarTrazaToken } from './alejandra-agente/lib.js';
+
+// D1-ESCRITURAS-01: últimos registros auth_token_no_encontrado por prefijo (por isolate)
+// y memo de getAuth por petición, para que la puerta del router no duplique lecturas.
+const _trazasTokenVistas = new Map();
+const _authPorPeticion = new WeakMap();
 
 const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
@@ -444,6 +449,14 @@ async function verifyPassword(password, stored) {
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 async function getAuth(request, env) {
+  if (_authPorPeticion.has(request)) return _authPorPeticion.get(request);
+  const auth = await _getAuthSinMemo(request, env);
+  _authPorPeticion.set(request, auth);
+  return auth;
+}
+
+async function _getAuthSinMemo(request, env) {
+  let tokenInvalido = false;
   // 1. Token D1 (sistema nuevo) — acepta también ?token= en URL pero SOLO para GET (imágenes/docs)
   const tokenFromUrl = new URL(request.url).searchParams.get('token');
   const xToken = request.headers.get('X-Token') || (request.method === 'GET' ? tokenFromUrl : null);
@@ -453,7 +466,9 @@ async function getAuth(request, env) {
         "SELECT s.*, u.roles_extra FROM sesiones s LEFT JOIN usuarios u ON s.usuario_id = u.id WHERE s.token = ? AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))"
       ).bind(xToken).first();
       if (sesion) {
-        env.DB.prepare("UPDATE sesiones SET last_used = CURRENT_TIMESTAMP, expires_at = datetime('now', '+30 days') WHERE token = ?").bind(xToken).run();
+        // D1-ESCRITURAS-01: escribir en cada petición eran ~20.000 filas/día; una vez
+        // cada 5 min mantiene igual la caducidad deslizante de 30 días.
+        env.DB.prepare("UPDATE sesiones SET last_used = CURRENT_TIMESTAMP, expires_at = datetime('now', '+30 days') WHERE token = ? AND (last_used IS NULL OR last_used < datetime('now', '-5 minutes'))").bind(xToken).run().catch(() => {});
         const extras = [];
         try { if (sesion.roles_extra) extras.push(...JSON.parse(sesion.roles_extra)); } catch {}
         const roles = [sesion.rol, ...extras].filter(Boolean);
@@ -492,7 +507,10 @@ async function getAuth(request, env) {
       // Adrián dejó de encontrar fila en `sesiones` durante horas sin que quedara ningún
       // rastro consultable después del hecho. Diagnóstico puro, no bloqueante, sin
       // exponer el token completo.
-      registrarTraza(env, {
+      // Solo una lectura correcta sin fila marca el token como muerto; un fallo de D1
+      // (catch de abajo) no debe expulsar a nadie.
+      tokenInvalido = true;
+      if (debeRegistrarTrazaToken(_trazasTokenVistas, xToken.slice(0, 8), Date.now())) registrarTraza(env, {
         tipo: 'auth_token_no_encontrado',
         resumen: 'getAuth: X-Token presente pero sin fila válida en sesiones',
         detalle: { token_prefijo: xToken.slice(0, 8), metodo: request.method, path: new URL(request.url).pathname }
@@ -520,6 +538,7 @@ async function getAuth(request, env) {
   // esos checks bloqueen correctamente.
   const hasLegacyIdentity = isAdmin || !!(usuario && rol);
   return {
+    tokenInvalido,
     isAdmin,
     isSuperadmin,
     isEmpresaAdmin,
@@ -5623,6 +5642,17 @@ export default {
           if (cnt >= 5) return err('Demasiados intentos. Espera 15 minutos.', 429);
         } catch (_) {}
       }
+    }
+
+    // ── D1-ESCRITURAS-01 (02/10/2026): token de sesión inexistente → 401 ────────
+    // Antes caía al modo legacy anónimo y la mayoría de rutas devolvían 200 vacío, así
+    // que el cliente nunca sabía que su sesión había muerto y seguía sondeando sin fin
+    // (un único móvil: ~9.800 peticiones/12 h y la cuota diaria de escrituras D1 agotada).
+    // Rutas de login/OAuth/públicas quedan fuera: pueden llegar con un token viejo.
+    if ((request.headers.get('X-Token') || (method === 'GET' && url.searchParams.get('token')))
+        && !/^\/(?:auth\/|verificar$|health$|version$|apk\/|telegram-webhook$|setup-telegram-webhook$)/.test(path)) {
+      const authPuerta = await getAuth(request, env);
+      if (authPuerta.tokenInvalido) return err('Sesión caducada', 401);
     }
 
     try {
@@ -18299,7 +18329,8 @@ async function syncPing(request, env) {
       }
     });
     // Marcar inactivos los que no pingen en 60s
-    await env.DB.prepare("UPDATE sync_dispositivos SET activo=0 WHERE ultimo_ping < datetime('now', '-60 seconds')").run();
+    // D1-ESCRITURAS-01: sin "activo=1" reescribía en cada ping las filas ya inactivas.
+    await env.DB.prepare("UPDATE sync_dispositivos SET activo=0 WHERE activo=1 AND ultimo_ping < datetime('now', '-60 seconds')").run();
     // SYNC-DISPOSITIVOS-01 (10/08/2026): "empresa_id = ? OR usuario_id = ?" devolvía TODOS
     // los dispositivos activos de la empresa entera, no solo los del usuario que pregunta —
     // el indicador "📱 Móvil conectado" de escaneo remoto (pensado como emparejamiento 1:1

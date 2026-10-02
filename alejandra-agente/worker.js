@@ -17,6 +17,8 @@
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const OPENAI_API    = 'https://api.openai.com/v1/responses';
 const MODEL_ROUTER  = 'claude-haiku-4-5';
+// D1-ESCRITURAS-01: últimos registros auth_token_no_encontrado por prefijo (por isolate).
+const _trazasTokenVistas = new Map();
 const MODEL_EXPERTO = 'claude-sonnet-4-6';
 
 // Funciones/constantes puras (sin I/O) extraídas a lib.js para poder testearlas
@@ -24,6 +26,7 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 // que cambiar precios, allowlists, o las validaciones IDOR/SSRF, se cambia en
 // lib.js y worker.js lo recibe vía este import.
 import {
+  debeRegistrarTrazaToken,
   normalizarIdPlano,
   extraerFuentesPlanoHumanas,
   validarDatosPlanoBandejas,
@@ -5445,7 +5448,8 @@ export default {
           ).bind(token).first();
           if (sesion) {
             // Actualizar last_used (no bloquear si falla)
-            environment.DB.prepare(`UPDATE sesiones SET last_used = datetime('now') WHERE token = ?`)
+            // D1-ESCRITURAS-01: como mucho una escritura cada 5 min por sesión.
+            environment.DB.prepare(`UPDATE sesiones SET last_used = datetime('now') WHERE token = ? AND (last_used IS NULL OR last_used < datetime('now', '-5 minutes'))`)
               .bind(token).run().catch(() => {});
             return {
               usuario_id: String(sesion.usuario_id),
@@ -5468,7 +5472,7 @@ export default {
           // hay lectura previa de logs"). Se registra aquí, sin bloquear ni exponer el
           // token completo (solo un prefijo para poder correlacionar manualmente contra
           // `sesiones` si hiciera falta).
-          registrarTraza(environment, {
+          if (debeRegistrarTrazaToken(_trazasTokenVistas, token.slice(0, 8), Date.now())) registrarTraza(environment, {
             tipo: 'auth_token_no_encontrado',
             resumen: 'getAuth: token presente pero sin fila en sesiones',
             detalle: { token_prefijo: token.slice(0, 8), metodo: request.method, path: new URL(request.url).pathname }
