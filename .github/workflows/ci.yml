@@ -81,6 +81,8 @@ jobs:
         run: node --test scripts/cuadrantes-turnos.test.cjs
       - name: Check native Android AR overlay
         run: node --test scripts/android-ar-overlay.test.cjs
+      - name: Check Android/PWA back button hierarchy
+        run: node --test scripts/android-atras.test.cjs
       # F-1.2/F-1.3: nucleo-cognitivo v2 dividido en dos subcarpetas.
       - name: Check nucleo-cognitivo syntax
         run: |
