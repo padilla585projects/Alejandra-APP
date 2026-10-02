@@ -61,6 +61,11 @@ public class ReplanteoARPlugin extends Plugin {
         String token = call.getString("token");
         if (apiBase != null) intent.putExtra("api_base", apiBase);
         if (token != null) intent.putExtra("token", token);
+        // ADR-0027: el escaneo del entorno se abre en el departamento/obra del replanteo.
+        String departamento = call.getString("departamento");
+        String obraId = call.getString("obra_id");
+        if (departamento != null) intent.putExtra("departamento", departamento);
+        if (obraId != null) intent.putExtra("obra_id", obraId);
         startActivityForResult(call, intent, "arResultado");
     }
 
@@ -82,6 +87,9 @@ public class ReplanteoARPlugin extends Plugin {
             // (data URLs base64) -- mismo formato que _ar.fotosDoc en el camino WebXR.
             try { ret.put("fotos", new JSArray(data.getStringExtra("fotos") != null ? data.getStringExtra("fotos") : "[]")); }
             catch (Exception e) { ret.put("fotos", new JSArray()); }
+            // ADR-0027: id de la sesión de escaneo del entorno (fotogramas clave en R2).
+            String escaneoId = data.getStringExtra("escaneo_id");
+            if (escaneoId != null) ret.put("escaneo_id", escaneoId);
         } else {
             ret.put("ok", false);
             if (data != null && data.getStringExtra("error") != null) ret.put("error", data.getStringExtra("error"));

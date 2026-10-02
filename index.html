@@ -2278,6 +2278,20 @@ select option{background:var(--surface2);color:var(--text)}
          que se despliega solo al pulsar ⚙️. Así la cámara queda casi entera para ver el AR. -->
     <div id="replArEstado" style="position:absolute;top:calc(10px + env(safe-area-inset-top, 0px));left:10px;right:10px;background:rgba(0,0,0,.55);color:#fff;padding:7px 10px;border-radius:10px;font-size:12px;line-height:1.3;max-height:15vh;overflow:auto"></div>
     <div id="replArAviso" style="display:none;position:absolute;top:calc(64px + env(safe-area-inset-top, 0px));left:10px;right:10px;background:rgba(250,204,21,.94);color:#111;padding:7px 10px;border-radius:10px;font-size:12px;font-weight:700;line-height:1.25;max-height:16vh;overflow:auto"></div>
+    <!-- ADR-0027: fase de escaneo obligatoria antes de marcar. El cartel deja ver la cámara
+         (abajo, translúcido) y muestra el progreso; "Continuar sin IA" degrada sin bloquear. -->
+    <div id="replArEscaneo" style="display:none;position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom, 0px));background:rgba(8,12,20,.86);border:1px solid rgba(139,92,246,.7);color:#fff;padding:12px;border-radius:14px;pointer-events:auto;font-size:12.5px;line-height:1.4">
+      <div style="font-weight:800;font-size:15px;margin-bottom:4px">🔎 Escanea el entorno</div>
+      <div style="color:#cbd5e1;margin-bottom:6px">Mueve el móvil despacio enfocando paredes, techo y suelo de la zona del recorrido, y las instalaciones que ya haya. La IA va reconociendo qué es cada cosa.</div>
+      <div id="replArEscaneoProgreso" style="margin-bottom:4px"></div>
+      <div id="replArEscaneoIA" style="color:#c4b5fd;font-size:12px;min-height:16px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:6px">
+        <button id="btnReplArEscaneoListo" onclick="replArEscaneoListo()" disabled style="flex:2;background:#22c55e;border:none;color:#fff;font-size:13px;font-weight:800;padding:10px 6px;border-radius:10px;font-family:inherit;opacity:.45">⏳ Escaneando…</button>
+        <button id="btnReplArEscaneoSinIA" onclick="replArEscaneoSinIA()" style="flex:1.2;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:12px;font-weight:700;padding:10px 6px;border-radius:10px;font-family:inherit">Continuar sin IA</button>
+        <button onclick="replArCancelar()" title="Cancelar" style="width:44px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:13px;border-radius:10px;font-family:inherit">✖</button>
+      </div>
+    </div>
+    <div id="replArIAChip" style="display:none;position:absolute;right:12px;bottom:142px;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:rgba(139,92,246,.9)"></div>
 
     <!-- Panel de material y ajustes: oculto por defecto, se abre con ⚙️ -->
     <div id="replArPanelOpts" style="display:none;position:absolute;left:8px;right:8px;bottom:92px;background:rgba(0,0,0,.82);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:8px">
@@ -2328,8 +2342,8 @@ select option{background:var(--surface2);color:var(--text)}
     <!-- Botón flotante de modificación: aparece solo cuando hay algo colocado -->
     <button id="btnReplArMod" onclick="_replArToggleMod()" title="Mover / girar lo último" style="display:none;position:absolute;right:12px;bottom:92px;width:42px;height:42px;align-items:center;justify-content:center;border-radius:50%;background:rgba(168,85,247,.95);border:2px solid rgba(255,255,255,.55);color:#fff;font-size:18px;pointer-events:auto;box-shadow:0 3px 10px rgba(0,0,0,.45)">✥</button>
 
-    <!-- Barra inferior compacta (siempre visible) -->
-    <div style="position:absolute;bottom:calc(8px + env(safe-area-inset-bottom, 0px));left:8px;right:8px;display:flex;flex-direction:column;gap:6px;pointer-events:auto">
+    <!-- Barra inferior compacta (visible en cuanto termina el escaneo, ADR-0027) -->
+    <div id="replArBarraMarcado" style="position:absolute;bottom:calc(8px + env(safe-area-inset-bottom, 0px));left:8px;right:8px;display:flex;flex-direction:column;gap:6px;pointer-events:auto">
       <div style="display:flex;gap:6px">
         <button onclick="replArPunto()" style="flex:1;background:#f97316;border:none;color:#fff;font-size:13px;font-weight:800;padding:9px;border-radius:10px;font-family:inherit">📍 Punto</button>
         <button id="btnReplArOpts" onclick="_replArToggleOpts()" title="Material y ajustes" style="width:44px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;font-size:16px;font-weight:800;padding:9px 0;border-radius:10px;font-family:inherit">⚙️</button>
@@ -16205,6 +16219,11 @@ function _irANivelSuperior(destino) {
 function _manejarBotonAtras() {
   const s = getSession();
 
+  // ADR-0027: con la sesión AR del Replanteo (WebXR) o su cartel de escaneo abiertos, atrás
+  // cierra esa sesión de forma limpia en vez de navegar las pantallas que hay debajo
+  // (replArOverlay no está en _CAPAS_ATRAS_IDS a propósito: la gestiona su propio flujo).
+  if (typeof window._replArAtras === 'function' && window._replArAtras()) { resetearIntentoSalida(); return true; }
+
   // Si el chat de Alejandra está abierto, el botón atrás lo cierra (no navega la app)
   const alePanel = document.getElementById('alejandraPanel');
   if (alePanel && alePanel.style.display === 'flex') { alejandraAbrir(false); return true; }
@@ -19869,6 +19888,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         calc: r.material?.length ? { longitud_m: r.longitud_m, material: r.material, reglas: r.reglas, giros: null } : null,
         origen: r.origen || 'foto', puntos_3d: Array.isArray(tr.puntos_3d) ? tr.puntos_3d : null,
         complementos: Array.isArray(tr.complementos) ? tr.complementos : [],
+        escaneo: tr.escaneo_id ? { id: tr.escaneo_id } : null,   // ADR-0027
         fotosDoc: [], fotosN: (() => { try { return JSON.parse(r.fotos_json || '[]').length; } catch { return 0; } })(),
         estado: r.estado || 'borrador', modo: 'trazar', cambiado: false, notas: r.notas || '',
         creado_por: r.creado_por, creado_en: r.creado_en,
@@ -21094,7 +21114,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         if (dept) fd.append('departamento', dept);
         fd.append('elemento_key', _repl.elemento_key);
         fd.append('elemento_json', JSON.stringify(_repl.params));
-        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined }));
+        // ADR-0027: escaneo_id (el servidor lo valida y lo vincula). complementos: al crear se
+        // perdían los colocados en AR hasta el siguiente guardado (el PATCH sí los mandaba).
+        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined, complementos: _repl.complementos || undefined, escaneo_id: _repl.escaneo?.id || undefined }));
         fd.append('origen', _repl.origen === 'ar' ? 'ar' : 'foto');
         if (_repl.escala_px_m && !_repl.longitud_manual_m) fd.append('escala_px_m', _repl.escala_px_m);
         if (_repl.longitud_manual_m) fd.append('longitud_manual_m', _repl.longitud_manual_m);
@@ -21217,6 +21239,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       <h1>📐 ${_escHtml(_repl.titulo)}</h1>
       <div class="meta">${_escHtml(s?.obra_nombre || '')}${s?.departamento ? ' · ' + _escHtml(s.departamento) : ''} · ${_escHtml(_replNombreElemento({ elemento_key: _repl.elemento_key, elemento: _repl.params }))} · <b>${calc ? _replNum(calc.longitud_m) + ' m' : 'sin calcular'}</b> · ${new Date().toLocaleDateString('es-ES')}${_repl.creado_por ? ' · ' + _escHtml(_repl.creado_por) : ''}${_repl.id ? ' · REPL-' + _repl.id : ''}</div>
       <img class="foto" src="${imgSrc}">
+      ${foto3d && _replInformeNotaEscaneo ? `<div class="meta" style="margin-top:-10px">${_escHtml(_replInformeNotaEscaneo)}</div>` : ''}
       <h2>Material</h2>
       <table><thead><tr><th>Concepto</th><th style="text-align:right">Cantidad</th><th>Detalle</th></tr></thead>
       <tbody>${filas || '<tr><td colspan="3">Sin material calculado (falta trazado o escala)</td></tr>'}</tbody></table>
@@ -21415,15 +21438,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       _ar = { THREE, session, renderer, scene, camera, reticle, hitSource: null, refSpace: null, puntos: [], normales: [], obstaculos: [], complementos: [], fotosDoc: [], grupo: new THREE.Group(),
               color: el.color || '#f97316', anchoM, titulo, elemento: el, params, hit: null, tieneDepth: false, ultimoAviso: 0,
               // REPLANTEO-05
-              metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false, guiaHasta: 0 };
-      scene.add(_ar.grupo);
+              metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false, guiaHasta: 0,
+              // ADR-0027: escaneo previo + IA; etiquetas de la IA en su propio grupo (no se
+              // borran al redibujar el trazado)
+              escaneo: _replArEscaneoNuevo(), grupoIA: new THREE.Group(), capturas: [] };
+      scene.add(_ar.grupo); scene.add(_ar.grupoIA);
       session.addEventListener('end', _replArLimpiar);
       await renderer.xr.setSession(session);
       const viewer = await session.requestReferenceSpace('viewer');
       _ar.hitSource = await session.requestHitTestSource({ space: viewer });
-      _replArEstado('Apunta al techo o a la pared. Con el anillo naranja sobre el punto, pulsa 📍 Punto. Si la superficie es lisa y no aparece el anillo, acerca el móvil al punto y pulsa 📱 Tocar.');
+      _replArEstado('Primero escanea el entorno: mueve el móvil despacio por paredes, techo y suelo. Después podrás marcar con 📍 Punto (o 📱 Tocar en superficies lisas).');
       _replArLlenarComplementos(); _replArLlenarMaterial();
+      _replArEscaneoUI();
       renderer.setAnimationLoop((t, frame) => _replArFrame(t, frame));
+      _replArEscaneoArrancar();
       _replLog('AR iniciar: sesión WebXR arrancada del todo');
     } catch (e) {
       _replLog(`AR iniciar: EXCEPCIÓN -- ${e.message || e}`);
@@ -21475,10 +21503,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           const oq = pp.transform.orientation;
           const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(new THREE.Quaternion(oq.x, oq.y, oq.z, oq.w));
           const y = pos.y;
-          let tipo;
-          if (pl.orientation === 'vertical') tipo = 'pared';
-          else { tipo = (_ar.camPos && y > _ar.camPos.y + 0.3) ? 'techo' : 'suelo'; if (tipo === 'suelo') floorY = floorY == null ? y : Math.min(floorY, y); else ceilY = ceilY == null ? y : Math.max(ceilY, y); }
-          sup.push({ tipo, y, x: pos.x, z: pos.z, pos, normal });
+          const tipoGeom = pl.orientation === 'vertical' ? 'pared' : ((_ar.camPos && y > _ar.camPos.y + 0.3) ? 'techo' : 'suelo');
+          // ADR-0027: la IA de visión corrige la clasificación geométrica (suelo vs techo) y
+          // descarta planos que en realidad son un mueble/mesa: esos ya no sirven para pegar.
+          const id = _replArEscaneoIdPlano(pl);
+          const clase = _replEscaneoClasePlano(tipoGeom, _ar.escaneo && _ar.escaneo.votos[id]);
+          const excluida = clase === 'mueble' || clase === 'otro';
+          const tipo = excluida ? tipoGeom : clase;
+          if (!excluida && tipo === 'suelo') floorY = floorY == null ? y : Math.min(floorY, y);
+          else if (!excluida && tipo === 'techo') ceilY = ceilY == null ? y : Math.max(ceilY, y);
+          sup.push({ tipo, tipoGeom, id, excluida, y, x: pos.x, z: pos.z, pos, normal });
         });
         _ar.superficies = sup;
         _ar.alturaLibre = (floorY != null && ceilY != null) ? +(ceilY - floorY).toFixed(2) : null;
@@ -21498,7 +21532,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         // recalcula más abajo), tan tolerable como el resto de respaldos de esta función.
         const puntoRef = _ar.hit || _ar.depthPos;
         if (puntoRef && sup.length) {
-          let best = null; for (const s of sup) { const d = s.tipo === 'pared' ? Math.hypot(puntoRef.x - s.x, puntoRef.z - s.z) : Math.abs(puntoRef.y - s.y); if (!best || d < best.d) best = { tipo: s.tipo, d, s }; }
+          let best = null; for (const s of sup) { if (s.excluida) continue; const d = s.tipo === 'pared' ? Math.hypot(puntoRef.x - s.x, puntoRef.z - s.z) : Math.abs(puntoRef.y - s.y); if (!best || d < best.d) best = { tipo: s.tipo, d, s }; }
           _ar.superficieHit = best ? best.tipo : null;
           const dPlano = best ? Math.abs(puntoRef.clone().sub(best.s.pos).dot(best.s.normal)) : Infinity;
           _ar.planoHit = (best && dPlano < 0.15) ? best.s : null;
@@ -21587,6 +21621,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (_ar.guiaMostrada) { _ar.guiaMostrada = false; _replArAviso(null); }
     }
     renderer.render(scene, camera);
+    // Después del render: la imagen de cámara solo es válida dentro de este callback, y leerla
+    // antes del render podía dejar a three.js con el framebuffer equivocado en caché.
+    _replArCapturasPendientes(frame);
+    try { _replArEscaneoTick(t, frame); } catch (e) { _replLog('Escaneo: EXCEPCIÓN en tick -- ' + (e.message || e)); }
   }
 
   // REPLANTEO-05: de dónde sale el punto al pulsar 📍 Punto — superficie reconocida primero,
@@ -21709,6 +21747,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     _ar.normales.push(a.normal || null);
     _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = false;
     _replArRedibujar(); _replArEstadoResumen();
+    _replArEscaneoAvisoPunto(a.pos);   // ADR-0027
   }
   // Anclaje por contacto: el punto se marca donde está el móvil. No necesita reconocer la
   // superficie, solo el seguimiento de posición, que sí funciona en una pared blanca mientras
@@ -21771,6 +21810,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (_ar.hit && _ar.reticle.visible) quat.setFromRotationMatrix(_ar.reticle.matrix);            // pegado a la superficie
     else if (_ar.camDir) quat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _ar.camDir.clone().negate().normalize());
     _ar.complementos.push({ key, pos: a.pos.clone(), quat: { x: quat.x, y: quat.y, z: quat.z, w: quat.w } });
+    _replArEscaneoAvisoPunto(a.pos);   // ADR-0027
     _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = true;   // mover/girar afectan a este complemento
     _replArRedibujar();
     const nom = (REPL_COMPLEMENTOS.find(x => x.key === key) || {}).nombre || 'complemento';
@@ -21878,8 +21918,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!res.ok) throw new Error(d.error || 'IA no disponible');
     return d;
   }
-  // Lee la imagen de la cámara del frame WebXR (raw camera access) a un data URL, o null.
-  function _replArCapturaCamara(frame) {
+  // Lee la imagen de la cámara del frame WebXR (raw camera access) y las matrices REALES de esa
+  // vista (pose de mundo + proyección), o null. ADR-0027: con `maxLado` se reduce (para la IA y
+  // el informe). Solo vale DENTRO del callback del frame: fuera, getViewerPose lanza
+  // InvalidStateError -- por eso "¿qué es esto?"/"📸" ahora piden la captura al siguiente frame
+  // (_replArCapturaEnFrame) en vez de usar _ar.lastFrame desde el clic, que fallaba siempre.
+  function _replArCapturaVista(frame, maxLado) {
     try {
       const refSpace = _ar.renderer.xr.getReferenceSpace();
       const vp = frame.getViewerPose(refSpace); if (!vp) return null;
@@ -21889,24 +21933,43 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const tex = binding && binding.getCameraImage && binding.getCameraImage(view.camera);
       if (!tex) return null;
       const w = view.camera.width, h = view.camera.height; if (!w || !h) return null;
+      // Se restaura el framebuffer que tenía three.js (su caché de estado no sabe de este cambio).
+      const previo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
       const fb = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
       const px = new Uint8Array(w * h * 4);
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(fb);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, previo); gl.deleteFramebuffer(fb);
       const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d');
       const id = c.createImageData(w, h); id.data.set(px); c.putImageData(id, 0, 0);
+      let W = w, H = h;
+      if (maxLado && Math.max(w, h) > maxLado) { const s = maxLado / Math.max(w, h); W = Math.round(w * s); H = Math.round(h * s); }
       // WebGL es bottom-up: volteamos en vertical
-      const cv2 = document.createElement('canvas'); cv2.width = w; cv2.height = h; const c2 = cv2.getContext('2d');
-      c2.translate(0, h); c2.scale(1, -1); c2.drawImage(cv, 0, 0);
-      return cv2.toDataURL('image/jpeg', 0.7);
+      const cv2 = document.createElement('canvas'); cv2.width = W; cv2.height = H; const c2 = cv2.getContext('2d');
+      c2.translate(0, H); c2.scale(1, -1); c2.drawImage(cv, 0, 0, W, H);
+      return { dataUrl: cv2.toDataURL('image/jpeg', maxLado ? 0.72 : 0.7),
+               camara: { pose: Array.from(view.transform.matrix), proj: Array.from(view.projectionMatrix), w: W, h: H } };
     } catch (e) { return null; }
+  }
+  function _replArCapturaCamara(frame) { const c = _replArCapturaVista(frame, 0); return c ? c.dataUrl : null; }
+  // Pide una captura al próximo frame XR (resuelve null si no llega en 1,5 s).
+  function _replArCapturaEnFrame(maxLado) {
+    if (!_ar) return Promise.resolve(null);
+    return Promise.race([
+      new Promise(r => _ar.capturas.push({ maxLado, r })),
+      new Promise(r => setTimeout(() => r(null), 1500)),
+    ]);
+  }
+  function _replArCapturasPendientes(frame) {
+    if (!_ar || !_ar.capturas || !_ar.capturas.length) return;
+    _ar.capturas.splice(0).forEach(c => c.r(_replArCapturaVista(frame, c.maxLado)));
   }
   async function replArIdentificar() {
     if (!_ar) return;
     _replArEstado('🔍 Identificando con IA…');
-    const dataUrl = _ar.lastFrame ? _replArCapturaCamara(_ar.lastFrame) : null;
+    const dataUrl = ((await _replArCapturaEnFrame(0)) || {}).dataUrl || null;
+    if (!_ar) return;
     if (!dataUrl) { _replArEstado('No pude capturar la cámara aquí (este móvil no da acceso a la imagen en AR). Prueba "¿qué es?" desde la Cámara en directo.'); return; }
     try {
       const d = await _replIdentificarIA(dataUrl);
@@ -21925,13 +21988,296 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       _replArEstado(`🔍 ${d.etiqueta}${d.tipo ? ' (' + d.tipo + ')' : ''}${d.detalle ? ' · ' + d.detalle : ''}${d.accion_sugerida ? ' · sugiero: ' + d.accion_sugerida : ''}`);
     } catch (e) { _replArEstado('🔍 ' + (e.message || 'no se pudo identificar')); }
   }
-  function replArFoto() {
+  async function replArFoto() {
     if (!_ar) return;
-    const dataUrl = _ar.lastFrame ? _replArCapturaCamara(_ar.lastFrame) : null;
+    const dataUrl = ((await _replArCapturaEnFrame(0)) || {}).dataUrl || null;
+    if (!_ar) return;
     if (!dataUrl) { _replArEstado('No pude capturar la foto aquí (este móvil no da acceso a la imagen en AR).'); return; }
     _ar.fotosDoc.push(dataUrl);
     _replArEstado(`📸 Foto ${_ar.fotosDoc.length} guardada (documentación). Se subirán al terminar y guardar.`);
   }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ADR-0027 — Escaneo del entorno + IA de visión en tiempo real (03/10/2026)
+  // ───────────────────────────────────────────────────────────────────────────
+  // Adrián: al abrir el Replanteo en AR, primero un cartel "Escanea el entorno"; solo cuando el
+  // escaneo es suficiente aparecen los controles de marcado. Mientras se escanea Y mientras se
+  // marca, cada ~3 s (máx. 40 por sesión, también limitado en el servidor) un fotograma reducido
+  // va a la IA de visión (POST /replanteos/escaneo/<id>/frame, Haiku) con los planos que ve
+  // WebXR; la respuesta realimenta al AR: etiqueta los planos (pared/suelo/techo o "mueble",
+  // que deja de servir para pegar puntos), sitúa en 3D las instalaciones existentes y avisa si
+  // se va a marcar encima de una. Los fotogramas clave (imagen + matrices de cámara reales) se
+  // guardan en R2 y son el fondo REAL del informe (_replImagen3DInforme). Sin red o sin IA el
+  // flujo degrada: "Continuar sin IA" y escaneo solo geométrico; nunca bloquea el marcado.
+  // La lógica compartida con el AR nativo y los informes vive en repl3d.js (REPL_ESCANEO...).
+  function _replArEscaneoNuevo() {
+    return { fase: 'escaneo', id: null, iaActiva: false, iaPedida: true, framesIA: 0, iaMax: REPL_ESCANEO.maxIA, enVuelo: false,
+             ultimoEnvio: 0, ultimaUI: 0, ultimaIAUI: 0, inicio: 0, fallos: 0, ids: new Map(), sigId: 1, votos: {},
+             instalaciones: [], guardados: [], resumen: '', capturaFinal: null, sinCamara: false };
+  }
+  function _replArEscaneoUI() {
+    const e = _ar && _ar.escaneo; if (!e) return;
+    const card = document.getElementById('replArEscaneo');
+    const barra = document.getElementById('replArBarraMarcado');
+    const chip = document.getElementById('replArIAChip');
+    const escaneando = e.fase === 'escaneo';
+    if (card) card.style.display = escaneando ? '' : 'none';
+    if (barra) barra.style.display = escaneando ? 'none' : 'flex';
+    if (chip) {
+      chip.style.display = escaneando ? 'none' : '';
+      chip.textContent = e.iaActiva ? `🧠 IA ${e.framesIA}/${e.iaMax}` : '🧠 sin IA';
+      chip.style.background = e.iaActiva ? 'rgba(139,92,246,.9)' : 'rgba(0,0,0,.55)';
+    }
+    if (!escaneando) return;
+    const sup = _ar.superficies || [];
+    const n = t => sup.filter(s => s.tipo === t && !s.excluida).length;
+    const seg = e.inicio ? (performance.now() - e.inicio) / 1000 : 0;
+    const est = _replEscaneoSuficiente({ planos: sup.filter(s => !s.excluida).length, framesIA: e.framesIA, iaActiva: e.iaActiva, segundos: seg });
+    const prog = document.getElementById('replArEscaneoProgreso');
+    if (prog) prog.innerHTML = `Superficies: pared <b>${n('pared')}</b> · suelo <b>${n('suelo')}</b> · techo <b>${n('techo')}</b>` +
+      (sup.some(s => s.excluida) ? ` · descartadas <b>${sup.filter(s => s.excluida).length}</b>` : '') +
+      `<br>Fotogramas analizados por IA: <b>${e.framesIA}</b>${e.iaActiva ? ' / ' + e.iaMax : ' (IA desactivada)'}` +
+      (e.instalaciones.length ? `<br>Instalaciones existentes vistas: <b>${e.instalaciones.length}</b>` : '');
+    const ia = document.getElementById('replArEscaneoIA');
+    if (ia) ia.textContent = e.resumen ? '🧠 ' + e.resumen : (e.iaActiva ? '🧠 Esperando el primer análisis…' : (e.motivo || ''));
+    const btn = document.getElementById('btnReplArEscaneoListo');
+    if (btn) { btn.disabled = !est.ok; btn.style.opacity = est.ok ? '1' : '.45'; btn.textContent = est.ok ? '✅ Empezar a marcar' : '⏳ ' + est.texto; }
+    const sinIA = document.getElementById('btnReplArEscaneoSinIA');
+    if (sinIA) sinIA.textContent = e.iaActiva ? 'Continuar sin IA' : 'Continuar solo con geometría';
+  }
+  async function _replArEscaneoArrancar() {
+    const e = _ar && _ar.escaneo; if (!e) return;
+    e.inicio = performance.now();
+    try {
+      const s = getSession();
+      const res = await apiCall('/replanteos/escaneo', { method: 'POST', body: JSON.stringify({ departamento: _replCatalogoDept || undefined, obra_id: s?.obra_id || undefined, plataforma: 'webxr' }) });
+      const d = await res.json().catch(() => ({}));
+      if (!_ar || _ar.escaneo !== e) return;
+      if (!res.ok || !d.escaneo_id) { e.motivo = 'IA no disponible: ' + (d.error || ('error ' + res.status)) + '. Escaneo solo geométrico.'; _replLog('Escaneo: no se pudo abrir sesión -- ' + e.motivo); return; }
+      e.id = d.escaneo_id; e.iaMax = d.max_ia || REPL_ESCANEO.maxIA;
+      e.iaActiva = !!d.ia_disponible && e.iaPedida;
+      if (!d.ia_disponible) e.motivo = 'La IA de visión no está configurada en el servidor. Escaneo solo geométrico.';
+      _replLog(`Escaneo: sesión ${e.id.slice(0, 8)} abierta, ia=${e.iaActiva}`);
+    } catch (err) {
+      if (_ar && _ar.escaneo === e) e.motivo = 'Sin conexión: escaneo solo geométrico. Puedes continuar.';
+      _replLog('Escaneo: EXCEPCIÓN al abrir sesión -- ' + (err.message || err));
+    }
+    _replArEscaneoUI();
+  }
+  function replArEscaneoListo() {
+    const e = _ar && _ar.escaneo; if (!e) return;
+    e.fase = 'marcado';
+    _replArEscaneoUI();
+    _replArEstado('Escaneo listo. Apunta al primer punto del recorrido y pulsa 📍 Punto.' + (e.iaActiva ? ' La IA sigue mirando mientras marcas.' : ''));
+    _replLog(`Escaneo: listo (${e.framesIA} IA, ${(_ar.superficies || []).length} planos)`);
+  }
+  function replArEscaneoSinIA() {
+    const e = _ar && _ar.escaneo; if (!e) return;
+    e.iaActiva = false; e.iaPedida = false; e.motivo = 'IA desactivada a mano.';
+    replArEscaneoListo();
+  }
+  // Id estable por plano (el objeto XRPlane persiste entre frames mientras se rastrea).
+  function _replArEscaneoIdPlano(pl) {
+    const e = _ar.escaneo; if (!e) return null;
+    let id = e.ids.get(pl);
+    if (!id) { id = 'P' + (e.sigId++); e.ids.set(pl, id); }
+    return id;
+  }
+  // ¿Merece la pena guardar este fotograma como clave? Si la cámara se ha movido o girado
+  // bastante respecto a los ya guardados (para cubrir el entorno, no repetir el mismo ángulo).
+  function _replArEscaneoEsClave(pose) {
+    const e = _ar.escaneo;
+    if (e.guardados.length >= REPL_ESCANEO.maxGuardados) return false;
+    const THREE = _ar.THREE;
+    const m = new THREE.Matrix4().fromArray(pose);
+    const p = new THREE.Vector3().setFromMatrixPosition(m), d = new THREE.Vector3(0, 0, -1).transformDirection(m);
+    return e.guardados.every(g => {
+      const mg = new THREE.Matrix4().fromArray(g.camara.pose);
+      return p.distanceTo(new THREE.Vector3().setFromMatrixPosition(mg)) > 0.4 || d.angleTo(new THREE.Vector3(0, 0, -1).transformDirection(mg)) > 0.45;
+    });
+  }
+  // Llamado desde _replArFrame: decide si toca capturar y enviar, y refresca el cartel.
+  function _replArEscaneoTick(t, frame) {
+    const e = _ar && _ar.escaneo; if (!e) return;
+    if (e.capturaFinal) {                      // replArTerminar pide un último fotograma clave
+      const cap = _replArCapturaVista(frame, REPL_ESCANEO.ladoImagen);
+      const res = e.capturaFinal; e.capturaFinal = null; res(cap);
+    }
+    if (t - e.ultimaUI > 500) { e.ultimaUI = t; _replArEscaneoUI(); _replArEscaneoAvisoRetic(); }
+    if (t - e.ultimaIAUI > 1000) { e.ultimaIAUI = t; _replArEscaneoPintar(); }
+    if (e.enVuelo || e.sinCamara) return;
+    const analizar = e.iaActiva && e.id && e.framesIA < e.iaMax;
+    // Sin IA (o agotada) se siguen guardando fotogramas clave para el informe, más espaciados.
+    const intervalo = analizar ? REPL_ESCANEO.intervaloMs : 6000;
+    if (t - e.ultimoEnvio < intervalo) return;
+    if (!analizar && e.guardados.length >= REPL_ESCANEO.maxGuardados) return;
+    e.ultimoEnvio = t;
+    const cap = _replArCapturaVista(frame, REPL_ESCANEO.ladoImagen);
+    if (!cap) { e.sinCamara = true; e.iaActiva = false; e.motivo = 'Este móvil no da acceso a la imagen de la cámara en AR: escaneo solo geométrico.'; _replLog('Escaneo: sin camera-access'); return; }
+    const guardar = _replArEscaneoEsClave(cap.camara.pose);
+    if (!analizar && !guardar) return;
+    _replArEscaneoEnviar(cap, { analizar, guardar, fase: e.fase });
+  }
+  function _replArEscaneoPlanosCtx(camara) {
+    const THREE = _ar.THREE;
+    return (_ar.superficies || []).filter(s => s.id).slice(0, 16).map(s => {
+      const q = _replEscaneoProyectar(THREE, camara, s.pos);
+      return { id: s.id, tipo: s.tipoGeom || s.tipo, u: q ? +q.u.toFixed(2) : null, v: q ? +q.v.toFixed(2) : null, dist_m: q ? +q.dist.toFixed(2) : null,
+               altura_rel_m: _ar.camPos ? +(s.y - _ar.camPos.y).toFixed(2) : null };
+    });
+  }
+  async function _replArEscaneoEnviar(cap, { analizar, guardar, fase }) {
+    const e = _ar && _ar.escaneo; if (!e) return null;
+    // Copia de los planos de ESTE instante: la respuesta llega 1-3 s después y hay que
+    // desproyectar con la cámara y los planos del momento de la captura, no los actuales.
+    const planosSnap = (_ar.superficies || []).filter(s => !s.excluida).map(s => ({ pos: s.pos.clone(), normal: s.normal.clone() }));
+    const local = guardar ? { camara: cap.camara, dataUrl: cap.dataUrl, fase, instalaciones: [] } : null;
+    if (local) e.guardados.push(local);      // el informe funciona aunque la subida falle
+    if (!e.id) return null;
+    e.enVuelo = true;
+    try {
+      const res = await apiCall(`/replanteos/escaneo/${e.id}/frame`, { method: 'POST', body: JSON.stringify({
+        imagen: cap.dataUrl, analizar, guardar, fase, camara: cap.camara, planos: _replArEscaneoPlanosCtx(cap.camara) }) });
+      const d = await res.json().catch(() => ({}));
+      if (!_ar || _ar.escaneo !== e) return d;
+      if (!res.ok) throw new Error(d.error || ('error ' + res.status));
+      e.fallos = 0;
+      if (local && d.guardado != null) local.n = d.guardado;
+      if (d.ia_usados != null) e.framesIA = d.ia_usados;
+      if (d.analisis) _replArEscaneoAplicar(d.analisis, cap.camara, planosSnap, local);
+      else if (analizar && d.motivo_sin_ia) {
+        if (/limite/.test(d.motivo_sin_ia)) { e.iaActiva = false; e.motivo = 'Límite de análisis IA alcanzado: sigue sin IA.'; }
+        _replLog('Escaneo: sin IA en este fotograma -- ' + d.motivo_sin_ia);
+      }
+      return d;
+    } catch (err) {
+      if (_ar && _ar.escaneo === e) {
+        e.fallos++;
+        _replLog(`Escaneo: fallo enviando fotograma (${e.fallos}) -- ${err.message || err}`);
+        if (e.fallos >= 3 && e.iaActiva) { e.iaActiva = false; e.motivo = 'La IA no responde (red). Continúa sin IA; el escaneo sigue siendo geométrico.'; }
+      }
+      return null;
+    } finally { if (e) e.enVuelo = false; }
+  }
+  function _replArEscaneoAplicar(an, camara, planosSnap, local) {
+    const e = _ar.escaneo, THREE = _ar.THREE;
+    an.superficies.forEach(s => { const v = e.votos[s.id] || (e.votos[s.id] = {}); if (s.confianza >= 0.4) v[s.clase] = (v[s.clase] || 0) + 1; });
+    const nuevas = _replEscaneoUbicar(THREE, an, camara, planosSnap, _ar.ultimaProfundidadValida || 0);
+    e.instalaciones = _replEscaneoFusionar(e.instalaciones, nuevas);
+    if (local) local.instalaciones = an.instalaciones;
+    e.resumen = an.resumen || '';
+    if (an.calidad === 'oscura') e.resumen = 'Poca luz: ' + e.resumen;
+    else if (an.calidad === 'borrosa') e.resumen = 'Imagen movida, ve más despacio. ' + e.resumen;
+    _replArEscaneoPintar();
+  }
+  // Etiquetas de la IA en el AR: qué es cada plano y dónde están las instalaciones existentes.
+  function _replArEscaneoPintar() {
+    if (!_ar || !_ar.grupoIA) return;
+    const THREE = _ar.THREE, g = _ar.grupoIA, e = _ar.escaneo;
+    while (g.children.length) { const c = g.children.pop(); c.geometry?.dispose?.(); c.material?.map?.dispose?.(); c.material?.dispose?.(); }
+    if (!e) return;
+    (_ar.superficies || []).forEach(s => {
+      if (!s.id || !e.votos[s.id]) return;
+      const sp = _replEscaneoEtiqueta(THREE, (s.excluida ? '✖ ' : '') + s.tipo.charAt(0).toUpperCase() + s.tipo.slice(1), s.excluida ? '#ef4444' : '#38bdf8');
+      sp.position.copy(s.pos).add(s.normal.clone().multiplyScalar(0.05)); g.add(sp);
+    });
+    e.instalaciones.forEach(i => {
+      const anillo = new THREE.Mesh(new THREE.SphereGeometry(i.radio, 16, 10), new THREE.MeshBasicMaterial({ color: 0xfacc15, wireframe: true, transparent: true, opacity: 0.35 }));
+      anillo.position.copy(i.pos); g.add(anillo);
+      const sp = _replEscaneoEtiqueta(THREE, '⚠ ' + i.etiqueta, '#facc15');
+      sp.position.copy(i.pos).add(new THREE.Vector3(0, i.radio + 0.08, 0)); g.add(sp);
+    });
+  }
+  // Aviso ANTES de pulsar: el anillo apunta a una instalación existente que vio la IA.
+  function _replArEscaneoAvisoRetic() {
+    const e = _ar && _ar.escaneo; if (!e || e.fase !== 'marcado' || !e.instalaciones.length) return;
+    const ref = _ar.hit || _ar.depthPos; if (!ref) return;
+    const inst = _replEscaneoCercana(e.instalaciones, ref);
+    if (inst) { _replArAviso(`⚠️ El anillo está sobre una instalación existente: ${inst.etiqueta}. Si tu recorrido la cruza, márcala con ⚠️ Obstáculo.`); _ar.guiaHasta = performance.now() + 2500; }
+  }
+  // Tras colocar un punto/complemento: avisar si ha caído sobre una instalación existente.
+  function _replArEscaneoAvisoPunto(pos) {
+    const e = _ar && _ar.escaneo; if (!e || !e.instalaciones.length) return;
+    const inst = _replEscaneoCercana(e.instalaciones, pos);
+    if (inst) { _replArAviso(`⚠️ Has marcado sobre una instalación existente (${inst.etiqueta}). Revisa que el recorrido no choque con ella o márcala con ⚠️ Obstáculo.`); _ar.guiaHasta = performance.now() + 5000; }
+  }
+  // Cierre: un último fotograma clave (el que ve la instalación terminada) y entrega a _repl.
+  async function _replArEscaneoCerrar() {
+    const e = _ar && _ar.escaneo; if (!e) return null;
+    if (!e.sinCamara) {
+      try {
+        const cap = await Promise.race([new Promise(r => { e.capturaFinal = r; }), new Promise(r => setTimeout(() => r(null), 1500))]);
+        e.capturaFinal = null;
+        if (cap) await Promise.race([_replArEscaneoEnviar(cap, { analizar: false, guardar: true, fase: 'final' }), new Promise(r => setTimeout(r, 5000))]);
+      } catch (_) {}
+    }
+    return { id: e.id, frames: e.guardados.slice(), instalaciones: e.instalaciones.map(i => ({ tipo: i.tipo, etiqueta: i.etiqueta, veces: i.veces || 1 })), framesIA: e.framesIA };
+  }
+  window.replArEscaneoListo = replArEscaneoListo; window.replArEscaneoSinIA = replArEscaneoSinIA;
+  // Botón atrás (APK 'backButton' / PWA 'popstate', _manejarBotonAtras) con la sesión AR abierta:
+  // 1) cierra el panel ⚙️/✥ si hay uno desplegado; 2) con un recorrido ya marcado (≥ 2 puntos)
+  // hace lo mismo que ✅ Fin, para no perder el trabajo; 3) si no, como ✖ (cancelar). Devuelve
+  // true si lo ha gestionado. (Si Chrome cierra la sesión inmersiva por su cuenta al pulsar
+  // atrás, el listener 'end' de la sesión ya limpia el overlay.)
+  window._replArAtras = function () {
+    if (!_ar) {
+      const ov = document.getElementById('replArOverlay');
+      if (ov && ov.style.display !== 'none') { _replArLimpiar(); return true; }
+      return false;
+    }
+    const po = document.getElementById('replArPanelOpts'), pm = document.getElementById('replArPanelMod');
+    if (po && po.style.display === 'flex') { _replArToggleOpts(); return true; }
+    if (pm && pm.style.display === 'flex') { _replArToggleMod(); return true; }
+    if (_ar.escaneo && _ar.escaneo.fase !== 'escaneo' && _ar.puntos.length >= 2) { _replLog('Atrás en AR: termina el trazado'); replArTerminar(); return true; }
+    _replLog('Atrás en AR: cancela la sesión');
+    replArCancelar();
+    return true;
+  };
+
+  // ── Fondo REAL del informe de un replanteo AR (ADR-0027) ──
+  // Fotogramas clave: los que quedaron en memoria (recién hecho) o los guardados en R2.
+  async function _replEscaneoFramesParaInforme() {
+    const esc = _repl && _repl.escaneo; if (!esc) return null;
+    if (Array.isArray(esc.frames) && esc.frames.some(f => f.dataUrl || f.img)) return { frames: esc.frames, meta: esc };
+    if (!esc.id) return null;
+    if (!esc.meta) {
+      const r = await apiCall(`/replanteos/escaneo/${esc.id}`);
+      if (!r.ok) return null;
+      esc.meta = (await r.json().catch(() => ({}))).escaneo || null;
+    }
+    if (!esc.meta || !(esc.meta.frames || []).length) return null;
+    return { frames: esc.meta.frames, meta: esc.meta, remoto: true };
+  }
+  async function _replEscaneoCargarImg(f, remoto) {
+    if (f.img) return f.img;
+    let src = f.dataUrl;
+    if (!src && remoto) {
+      const r = await apiCall(`/replanteos/escaneo/${_repl.escaneo.id}/frame/${f.n}`);
+      if (!r.ok) return null;
+      src = URL.createObjectURL(await r.blob());
+    }
+    if (!src) return null;
+    f.img = await _replCargarImagen(src, false);
+    return f.img;
+  }
+  async function _replImagenSobreEscaneo(THREE, path) {
+    const datos = await _replEscaneoFramesParaInforme().catch(() => null);
+    if (!datos) return null;
+    const puntos = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
+    (_repl.complementos || []).forEach(c => puntos.push(new THREE.Vector3(c.x || 0, c.y || 0, c.z || 0)));
+    const mejor = _replEscaneoMejorFrame(THREE, datos.frames, puntos);
+    if (!mejor || mejor.visibles < 1) return null;
+    const img = await _replEscaneoCargarImg(mejor.frame, datos.remoto).catch(() => null);
+    if (!img) return null;
+    const url = _replEscaneoComponer(THREE, _repl3DBuild(THREE, path), mejor.frame, img, { maxAncho: 1400 });
+    if (!url) return null;
+    const inst = (datos.meta.instalaciones || []).map(i => i.etiqueta + (i.veces > 1 ? ` (×${i.veces})` : ''));
+    _replInformeNotaEscaneo = `Fondo: fotograma real del escaneo del entorno (${datos.frames.length} fotograma(s) clave` +
+      `${datos.meta.framesIA || datos.meta.n_ia ? `, ${datos.meta.framesIA || datos.meta.n_ia} analizados por IA` : ''}).` +
+      (inst.length ? ` Instalaciones existentes detectadas por IA (orientativo, revisar en obra): ${inst.join(', ')}.` : '');
+    return url;
+  }
+  let _replInformeNotaEscaneo = '';
+
   function replArCancelar() { if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
   function _replArLimpiar() {
     const overlay = document.getElementById('replArOverlay');
@@ -21995,7 +22341,10 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       });
       const longitud3d = +_replArLongitud().toFixed(2);
       const plano = _replArPlano(puntos, obstaculos);
-      try { await _ar.session.end(); } catch { _replArLimpiar(); }
+      // ADR-0027: antes de cerrar la sesión, un último fotograma clave (ve la instalación
+      // terminada) para el fondo real del informe. Tiene tope de tiempo: nunca bloquea el cierre.
+      const escaneoAr = await _replArEscaneoCerrar().catch(() => null);
+      try { if (_ar) await _ar.session.end(); } catch { _replArLimpiar(); }
       const blob = await new Promise(r => plano.cv.toBlob(r, 'image/jpeg', 0.9));
       _replLog(`AR terminar: plano.cv.toBlob -> ${blob ? blob.size + 'B' : 'NULL'}`);
       if (!blob) throw new Error('No se pudo generar la imagen del plano (canvas vacío)');
@@ -22006,7 +22355,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
         referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
         complementos: complementosAr.map(c => ({ key: c.key, x: +c.pos.x.toFixed(3), y: +c.pos.y.toFixed(3), z: +c.pos.z.toFixed(3), q: c.quat })),
-        fotosDoc: fotosDocAr,
+        fotosDoc: fotosDocAr, escaneo: escaneoAr,
         calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
       };
       // BUG-REPL-GUARDAR-AR-01 (16/09/2026): Adrián -- "termino de replantear y le doy a
@@ -22052,7 +22401,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       // llamar a POST /replanteos/identificar igual que hace apiCall() aquí en la web -- la
       // Activity nativa no tiene acceso a getAPI()/getSession().
       const s = getSession();
-      const resultado = await window.Capacitor.Plugins.ReplanteoAR.abrirAR({ elemento_key: el.key, elemento_params: JSON.stringify(params), api_base: getAPI(), token: (s && s.token) || '' });
+      const resultado = await window.Capacitor.Plugins.ReplanteoAR.abrirAR({ elemento_key: el.key, elemento_params: JSON.stringify(params), api_base: getAPI(), token: (s && s.token) || '',
+        departamento: _replCatalogoDept || '', obra_id: s?.obra_id ? String(s.obra_id) : '' });   // ADR-0027: escaneo del entorno
       _replLog(`AR nativo: abrirAR -> ok=${!!resultado?.ok} cancelado=${!!resultado?.cancelado} puntos=${(resultado?.puntos || []).length}`);
       if (!resultado?.ok) {
         if (!resultado?.cancelado) toast('❌ AR: ' + (resultado?.error || 'no se pudo medir'), 'error');
@@ -22108,6 +22458,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       // mismo array/formato (data URLs) que _ar.fotosDoc en el camino WebXR, se suben igual al
       // guardar (ver el bucle de fotosDoc más arriba en este archivo).
       complementos, fotosDoc: Array.isArray(resultado.fotos) ? resultado.fotos : [],
+      // ADR-0027: el escaneo lo hizo la Activity nativa y sus fotogramas ya están en R2.
+      escaneo: resultado.escaneo_id ? { id: resultado.escaneo_id } : null,
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
     };
     // BUG-REPL-GUARDAR-AR-01: ver comentario en el camino WebXR -- mismo motivo.
@@ -22206,10 +22558,18 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // quedaría colocado" en el sitio real. En AR no hay foto real del entorno todavía, así que
   // se mantiene el suelo de referencia con rejilla.
   async function _replImagen3DInforme() {
+    _replInformeNotaEscaneo = '';
     try {
       const path = _repl3DPath();
       if (!path) return null;
       const THREE = await _replCargarThree();
+      // ADR-0027: un replanteo AR con escaneo del entorno se pinta sobre su fotograma real,
+      // con la cámara real con la que se tomó (no "flotando en el aire"). Si no hay escaneo o
+      // ningún fotograma ve el recorrido, se sigue con el render genérico de abajo.
+      if (_repl.origen === 'ar' && _repl.escaneo) {
+        const real = await _replImagenSobreEscaneo(THREE, path).catch(e => { _replLog('Informe: fondo real falló -- ' + (e.message || e)); return null; });
+        if (real) return real;
+      }
       const W = 1400, H = 1000;
       const fondoFoto = (_repl.origen !== 'ar' && _repl.img) ? _repl.img : null;
       const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;

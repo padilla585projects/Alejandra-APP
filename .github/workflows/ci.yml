@@ -83,6 +83,10 @@ jobs:
         run: node --test scripts/android-ar-overlay.test.cjs
       - name: Check Android/PWA back button hierarchy
         run: node --test scripts/android-atras.test.cjs
+      # ADR-0027: escaneo del entorno + IA (geometría compartida, límites de coste en el
+      # servidor con R2 simulado y aislamiento por empresa/departamento).
+      - name: Check AR environment scan and vision AI limits
+        run: node --test scripts/replanteo-escaneo.test.cjs
       # F-1.2/F-1.3: nucleo-cognitivo v2 dividido en dos subcarpetas.
       - name: Check nucleo-cognitivo syntax
         run: |

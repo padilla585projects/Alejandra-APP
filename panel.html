@@ -15463,6 +15463,10 @@ async function replOfficeAbrir(id, yInforme) {
   try { img = await _replOfficeCargarImagen(_replOfficeFotoUrl(rep.id)); }
   catch { aviso = 'No se pudo cargar la foto del replanteo.'; }
   _replOffice.det = { rep, elemento, img, puedeEditar: !!data.puede_editar };
+  // ADR-0027: el fondo real del escaneo se prepara en segundo plano (no retrasa el detalle).
+  _replOffice.det.fondoReal = rep.trazado?.escaneo_id
+    ? _replOfficeFondoReal(rep).catch(e => { panelLog('warn', 'Replanteo: fondo real del escaneo no disponible', e.message || ''); return null; })
+    : null;
 
   document.getElementById('replOfficeDetTitulo').textContent = `📐 ${rep.titulo || 'Replanteo'} · REPL-${rep.id}`;
   const [etq, cls] = REPL_OFFICE_ESTADOS[rep.estado] || [rep.estado, 'badge-info'];
@@ -15473,7 +15477,8 @@ async function replOfficeAbrir(id, yInforme) {
     <span>${escHtml(_replOfficeNombreElemento(rep, catalogo))}</span>
     <span>➡️ <b style="color:var(--text)">${rep.longitud_m ? _replOfficeNum(rep.longitud_m) + ' m' : 'sin calcular'}</b></span>
     <span>👤 ${escHtml(rep.creado_por || '—')} · ${escHtml((rep.actualizado_en || rep.creado_en || '').slice(0, 16).replace('T', ' '))}</span>
-    ${rep.pedido_ids?.length ? `<span>📥 pedidos: ${rep.pedido_ids.map(n => '#' + n).join(', ')}</span>` : ''}`;
+    ${rep.pedido_ids?.length ? `<span>📥 pedidos: ${rep.pedido_ids.map(n => '#' + n).join(', ')}</span>` : ''}
+    ${rep.trazado?.escaneo_id ? '<span>🧠 entorno escaneado (el informe usa el fondo real)</span>' : ''}`;
   const cv = document.getElementById('replOfficeDetCanvas');
   const avisoEl = document.getElementById('replOfficeDetAviso');
   if (img) {
@@ -15520,22 +15525,80 @@ async function replOfficeAbrir(id, yInforme) {
   document.getElementById('replOfficeDetBtnRenombrar').style.display = puedeEditar ? '' : 'none';
   document.getElementById('replOfficeDetBtnBorrar').style.display = puedeEditar ? '' : 'none';
   document.getElementById('modalReplOfficeDetalle').style.display = 'flex';
-  if (yInforme) replOfficeInforme();
+  if (yInforme) {
+    // El informe abre su pestaña al instante; el fondo real se espera dentro (ADR-0027).
+    replOfficeInforme();
+  }
 }
 function replOfficeCerrarDetalle() {
   document.getElementById('modalReplOfficeDetalle').style.display = 'none';
   _replOffice.det = null;
 }
 
+// ADR-0027 (03/10/2026): informe de un replanteo AR sobre el FONDO REAL del escaneo del entorno,
+// igual que index.html (_replImagenSobreEscaneo) -- mismo motor compartido repl3d.js
+// (_replEscaneoMejorFrame/_replEscaneoComponer/_replInstal3D), que el panel carga solo cuando
+// hace falta (three.js desde cdnjs, como la PWA). Sin escaneo, o si ningún fotograma ve el
+// recorrido, el informe sigue con la imagen de siempre.
+let _replOfficeCarga3D = null;
+function _replOfficeScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar ' + src)); document.head.appendChild(s); });
+}
+function _replOfficeCargar3D() {
+  if (window.THREE && typeof _replEscaneoComponer === 'function') return Promise.resolve(window.THREE);
+  if (!_replOfficeCarga3D) {
+    _replOfficeCarga3D = (async () => {
+      if (!window.THREE) await _replOfficeScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/0.158.0/three.min.js');
+      if (typeof _replEscaneoComponer !== 'function') await _replOfficeScript('repl3d.js');
+      return window.THREE;
+    })().catch(e => { _replOfficeCarga3D = null; throw e; });
+  }
+  return _replOfficeCarga3D;
+}
+async function _replOfficeFondoReal(rep) {
+  const sid = rep?.trazado?.escaneo_id;
+  const p3 = rep?.trazado?.puntos_3d;
+  if (rep?.origen !== 'ar' || !sid || !Array.isArray(p3) || p3.length < 2) return null;
+  const meta = await api('/replanteos/escaneo/' + sid);
+  const esc = meta && meta.ok ? meta.escaneo : null;
+  if (!esc || !(esc.frames || []).length) return null;
+  const THREE = await _replOfficeCargar3D();
+  const pts = p3.map(p => new THREE.Vector3(+p.x || 0, +p.y || 0, +p.z || 0));
+  const comps = Array.isArray(rep.trazado.complementos) ? rep.trazado.complementos : [];
+  const mejor = _replEscaneoMejorFrame(THREE, esc.frames, pts.concat(comps.map(c => new THREE.Vector3(c.x || 0, c.y || 0, c.z || 0))));
+  if (!mejor || mejor.visibles < 1) return null;
+  const r = await apiRaw(`/replanteos/escaneo/${sid}/frame/${mejor.frame.n}`);
+  if (!r.ok) return null;
+  const img = await _replOfficeCargarImagen(URL.createObjectURL(await r.blob()));
+  const params = rep.elemento || {};
+  const w = params.ancho_mm ? Math.max(0.03, params.ancho_mm / 1000) : (params.diametro_mm ? Math.max(0.012, params.diametro_mm / 1000) : 0.2);
+  const normales = p3.map(p => (p.nx != null ? new THREE.Vector3(p.nx, p.ny, p.nz) : null));
+  const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(rep.elemento_key, params), w, opacity: 1, obstaculos: rep.trazado.obstaculos || [], normales });
+  comps.forEach(c => { const o = _replComplemento3D(THREE, c.key); o.position.set(c.x || 0, c.y || 0, c.z || 0); if (c.q) o.quaternion.set(c.q.x, c.q.y, c.q.z, c.q.w); g.add(o); });
+  const url = _replEscaneoComponer(THREE, g, mejor.frame, img, { maxAncho: 1600 });
+  if (!url) return null;
+  const inst = (esc.instalaciones || []).map(i => i.etiqueta + (i.veces > 1 ? ` (×${i.veces})` : ''));
+  const nota = `Fondo: fotograma real del escaneo del entorno (${esc.frames.length} fotograma(s) clave${esc.n_ia ? `, ${esc.n_ia} analizados por IA` : ''}).` +
+    (inst.length ? ` Instalaciones existentes detectadas por IA (orientativo, revisar en obra): ${inst.join(', ')}.` : '');
+  return { url, nota };
+}
+
 // Informe imprimible, mismo patrón que cpdOfficeGenerarInforme (pestaña nueva + print).
-function replOfficeInforme() {
+async function replOfficeInforme() {
   const st = _replOffice.det;
   if (!st) return;
   const { rep, elemento, img } = st;
+  // La pestaña se abre ANTES de cualquier await: si no, el navegador la bloquea como emergente.
   const w = window.open('', '_blank');
   if (!w) { toast('Permite las ventanas emergentes para abrir el informe', 'err'); return; }
-  let foto = _replOfficeFotoUrl(rep.id);
-  if (img) {
+  let foto = _replOfficeFotoUrl(rep.id), notaEscaneo = '';
+  let real = null;
+  if (st.fondoReal) {
+    try { w.document.write('<body style="font-family:Arial,sans-serif;color:#5b6472;text-align:center;padding-top:80px">Generando informe…</body>'); } catch {}
+    real = await st.fondoReal.catch(() => null);
+  }
+  if (real) { foto = real.url; notaEscaneo = real.nota; }
+  else if (img) {
     try {
       const maxW = 1600, s = Math.min(1, maxW / img.naturalWidth);
       const cv = document.createElement('canvas');
@@ -15567,6 +15630,7 @@ function replOfficeInforme() {
     <h1>📐 ${escHtml(rep.titulo || '')}</h1>
     <div class="meta">${escHtml(_replOfficeObraNombre(rep.obra_id))} · ${escHtml(_replOfficeDeptNombre(rep.departamento))} · ${escHtml(_replOfficeNombreElemento(rep, catalogo))} · <b>${rep.longitud_m ? _replOfficeNum(rep.longitud_m) + ' m' : 'sin calcular'}</b> · ${new Date().toLocaleDateString('es-ES')}${rep.creado_por ? ' · ' + escHtml(rep.creado_por) : ''} · REPL-${rep.id}</div>
     <img class="foto" src="${foto}">
+    ${notaEscaneo ? `<div class="meta" style="margin-top:-10px">${escHtml(notaEscaneo)}</div>` : ''}
     <h2>Material</h2>
     <table><thead><tr><th>Concepto</th><th style="text-align:right">Cantidad</th><th>Detalle</th></tr></thead>
     <tbody>${filas || '<tr><td colspan="3">Sin material calculado (falta trazado o escala)</td></tr>'}</tbody></table>
