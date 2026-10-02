@@ -76,6 +76,8 @@ import { decidirInvocacionPilotoN0, decidirInvocacionN1, decidirInvocacionN2N3, 
 import { solicitarRevisionHumanaAsincrona } from '../nucleo-cognitivo/packages/cognitive-core/src/verifier.js';
 // Nexo v1 (ADR-0021): registro de fuentes externas para validar y consultar metadato.
 import { obtenerFuente } from './nexo-fuentes.js';
+// IA-QUALITY-09: cotas declaradas verificadas contra texto humano y avisos tomados del archivo.
+import { verificarCotasDeclaradas, resultadoPlanoVerificado, errorPlanoNoGuardado } from './planos-cotas.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -645,7 +647,7 @@ Cuando te pidan un cálculo, MUESTRA siempre: datos de entrada, fórmulas aplica
 Conserva el alcance devuelto por la herramienta: ESTIMACION_PARCIAL, CALCULO_GEOMETRICO_PARCIAL o PRESELECCION_PARCIAL no acreditan una instalación. Un null significa pendiente, nunca aprobado ni cero. Una curva/polos sugeridos no están justificados solo por tipo de carga o tensión: exige datos de arranque, sistema y comprobaciones aplicables antes de llamarlos adecuados, correctos o validados. No conviertas una referencia normativa en cumplimiento ni completes verificaciones con conocimiento general. Expón los supuestos y pregunta los datos faltantes concretos.
 Cuando analices una foto, describe: elementos visibles, estado, posibles problemas, recomendaciones.
 Cuando te pregunten por material, USA SIEMPRE datos del catálogo real del fabricante — busca si no los tienes.
-- generar_plano: Genera un borrador técnico de plano SVG mediante la tool cuando dispongas de los datos necesarios. Nunca lo presentes ni lo prometas como plano de ejecución, definitivo, final o apto para obra, tampoco antes de generarlo ni a cambio de más datos: no valida geometría, soportes ni normativa y requiere revisión técnica. Respeta el campo "alcance" que devuelve la tool. ANTES de llamarla, consulta los datos autorizados ya disponibles y pregunta al usuario por los faltantes que condicionan el resultado: medidas/unidades, recorrido y altura de montaje/datum en bandejas; cargas, alimentacion, longitudes y condiciones de instalacion para dimensionar circuitos. Agrupa preguntas concretas y explica para que necesitas cada dato; no vuelvas a pedir datos ya confirmados ni completes huecos con ejemplos. Si el usuario pide expresamente un boceto preliminar, puedes generarlo marcando datos pendientes, sin presentarlo como plano de ejecucion. Distingue X/Y en planta de altura Z. La descripcion debe contener solo datos aportados/verificados, sin marcas, equipos, alturas ni calculos inventados. Para unifilar/electrico usa "circuitos" con los datos reales disponibles para permitir edicion posterior. No declares cumplimiento, dimensionado validado ni firma profesional sin evidencia.
+- generar_plano: Genera un borrador técnico de plano SVG mediante la tool cuando dispongas de los datos necesarios. Nunca lo presentes ni lo prometas como plano de ejecución, definitivo, final o apto para obra, tampoco antes de generarlo ni a cambio de más datos: no valida geometría, soportes ni normativa y requiere revisión técnica. Respeta el campo "alcance" que devuelve la tool. Sobre el contenido del archivo, afirma solo los avisos que la tool devuelve en "avisos_en_archivo" (comprobados en el SVG guardado); si un aviso no figura ahí, di que el archivo no lo contiene. Si la tool devuelve error, no se ha guardado ningún plano. Pasa en "cotas" solo las medidas que el usuario escribió con su unidad. ANTES de llamarla, consulta los datos autorizados ya disponibles y pregunta al usuario por los faltantes que condicionan el resultado: medidas/unidades, recorrido y altura de montaje/datum en bandejas; cargas, alimentacion, longitudes y condiciones de instalacion para dimensionar circuitos. Agrupa preguntas concretas y explica para que necesitas cada dato; no vuelvas a pedir datos ya confirmados ni completes huecos con ejemplos. Si el usuario pide expresamente un boceto preliminar, puedes generarlo marcando datos pendientes, sin presentarlo como plano de ejecucion. Distingue X/Y en planta de altura Z. La descripcion debe contener solo datos aportados/verificados, sin marcas, equipos, alturas ni calculos inventados. Para unifilar/electrico usa "circuitos" con los datos reales disponibles para permitir edicion posterior. No declares cumplimiento, dimensionado validado ni firma profesional sin evidencia.
 - editar_plano: modifica circuitos/automaticos de un plano ya generado (nombre, proteccion, cable, amperaje) y regenera el SVG sin describir todo de nuevo. Usalo cuando el usuario pida cambiar un dato de un plano existente en vez de crear uno nuevo.`,
 
   capacidades_avanzadas: `CAPACIDADES AVANZADAS — Herramientas nuevas disponibles:
@@ -2490,6 +2492,19 @@ El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos)
       tipo:        { type: 'string', enum: ['bandejas', 'electrico', 'unifilar', 'planta_electrica', 'planta_industrial', 'planta', 'mecanico', 'gantt'], description: 'Tipo de plano' },
       titulo:      { type: 'string', description: 'Titulo del plano (ej: "Soportacion Rejiband 300 CPD Getafe")' },
       descripcion: { type: 'string', description: 'Datos aportados o verificados: medidas/unidades, recorrido X/Y, altura Z y datum, especificaciones y referencias confirmadas. Preguntar antes por datos criticos faltantes; para boceto preliminar solicitado, declarar los pendientes. No completar huecos con ejemplos.' },
+      cotas: {
+        type: 'array',
+        description: 'Medidas que el usuario ha escrito con su unidad y que el plano debe mostrar como cota visible (ej: largo de nave 40 m, tramo 12,5 m). Solo valores escritos por el usuario: se comprueban contra su texto y despues dentro del archivo SVG; no incluyas supuestos ni conversiones de unidad dudosas.',
+        items: {
+          type: 'object',
+          properties: {
+            etiqueta: { type: 'string', description: 'Que mide (ej: "largo nave", "tramo T1")' },
+            valor:    { type: 'number', description: 'Valor numerico tal como lo dio el usuario' },
+            unidad:   { type: 'string', enum: ['mm', 'cm', 'm'] }
+          },
+          required: ['valor', 'unidad']
+        }
+      },
       circuitos:   {
         type: 'array',
         description: 'Lista OPCIONAL de circuitos/tramos con datos EXACTOS y reales (por ejemplo cuando el usuario te pasa una foto de un esquema unifilar real y te dice los valores de cada automatico). Si se proporciona, para tipo "unifilar" o "electrico" se usan estos valores literalmente en el SVG generado (no inventes otros numeros) y se guardan para poder editarlos despues con la tool editar_plano sin tener que regenerar el plano entero adivinando los datos de nuevo.',
@@ -10564,6 +10579,9 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!tiposValidos.includes(tipo)) return JSON.stringify({ error: 'tipo invalido' });
         const datosPlano = validarDatosPlanoBandejas(input, fuentesPlano);
         if (!datosPlano.ok) return JSON.stringify(datosPlano);
+        // IA-QUALITY-09: una cota obligatoria del plano debe venir del texto humano.
+        const cotasPlano = verificarCotasDeclaradas(input.cotas, fuentesPlano);
+        if (!cotasPlano.ok) return JSON.stringify(cotasPlano);
         const descripcionVerificada = tipo === 'bandejas' ? descripcion + '\n\nDATOS VERIFICADOS EN TEXTO HUMANO (prevalecen sobre los ejemplos):\n' + JSON.stringify(datosPlano) : descripcion;
         // Heartbeat SSE cada 5s para mantener la conexion viva durante la generacion SVG (puede tardar 60-90s)
         let _hbTimer = null;
@@ -10586,13 +10604,15 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             body: JSON.stringify({
               tipo, titulo, descripcion: descripcionVerificada,
               circuitos: circuitos || [],
+              cotas_entrada: cotasPlano.cotas_entrada,
               empresa_id: empresaPlano,
               usuario_id,
               rol: 'agente_ia'
             })
           });
           const data = await resp.json().catch(() => ({}));
-          result = (!resp.ok || data.error) ? { error: data.error || `Error generando plano (HTTP ${resp.status})` } : { ...data, alcance: alcancePlanoGenerado(datosPlano) };
+          // Los avisos que el chat puede citar salen del archivo validado por la API.
+          result = (!resp.ok || data.error) ? errorPlanoNoGuardado(data.error || `Error generando plano (HTTP ${resp.status})`) : resultadoPlanoVerificado({ ...data, alcance: alcancePlanoGenerado(datosPlano) });
         } finally {
           if (_hbTimer) clearInterval(_hbTimer);
         }
@@ -10752,7 +10772,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             body: JSON.stringify({ cambios, empresa_id: _eidPlano, usuario_id, rol: 'agente_ia' })
           });
           const data = await resp.json().catch(() => ({}));
-          result = (!resp.ok || data.error) ? { error: data.error || `Error editando plano (HTTP ${resp.status})` } : { ...data, alcance: alcancePlanoGenerado() };
+          result = (!resp.ok || data.error) ? errorPlanoNoGuardado(data.error || `Error editando plano (HTTP ${resp.status})`) : resultadoPlanoVerificado({ ...data, alcance: alcancePlanoGenerado() });
         } finally {
           if (_hbTimer) clearInterval(_hbTimer);
         }
