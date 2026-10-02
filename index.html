@@ -113,6 +113,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:c
 .header-logo.es-nativo .logo-svg{outline:2px solid #10b981;outline-offset:2px;border-radius:10px}
 .header-logo.rol-superadmin .logo-svg{outline:2px solid #f97316;outline-offset:2px;border-radius:10px}
 .header-logo.rol-desarrollador .logo-svg{outline:2px solid #a855f7;outline-offset:2px;border-radius:10px}
+/* MARCA-APK-PWA-01 (03/10/2026): Adrián (14/09/2026) -- "diferenciar visualmente APK y PWA".
+   El anillo verde .es-nativo de arriba no basta: un superadmin (Adrián) lo ve tapado por su
+   anillo de rol naranja, así que en la práctica nunca distinguía una de otra. Chip de texto
+   independiente del rol, pegado bajo el logo: APP (verde) en la APK Capacitor, WEB (gris) en
+   PWA/navegador. Mismo chip en línea en Ajustes → Acerca de, con el detalle y la versión nativa. */
+.plataforma-chip{position:absolute;left:50%;bottom:-4px;transform:translateX(-50%);font-family:'Montserrat',sans-serif;font-weight:900;font-size:7px;letter-spacing:.5px;line-height:1;padding:1px 3px;border-radius:4px;background:#475569;color:#f1f5f9;pointer-events:none;white-space:nowrap}
+.plataforma-chip[data-plataforma="app"]{background:#10b981;color:#04120a}
+.plataforma-chip.plataforma-chip-inline{position:static;transform:none;display:inline-block;font-size:9.5px;padding:2px 6px;vertical-align:middle;margin-right:6px}
 .header-center{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;gap:clamp(2px,1vw,4px);overflow:hidden}
 /* HEADER-COMPACTO-01 (25/07/2026): Adrián probando en su HTC real: "la barra superior
    está muy compactada, apenas se ven bien los iconos o letras". El header ya usaba
@@ -696,6 +704,7 @@ select option{background:var(--surface2);color:var(--text)}
       <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
       <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
     </svg>
+    <span class="plataforma-chip" id="plataformaChip" aria-hidden="true"></span>
   </div>
   <div class="header-center" id="headerCenter">
     <div class="dept-pill" id="deptPill" style="display:none" onclick="volverSelectorDepto()">
@@ -4719,6 +4728,7 @@ select option{background:var(--surface2);color:var(--text)}
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
           <div class="settings-row"><span>Versión</span><strong id="versionAjustes">v4.42</strong></div>
           <div class="settings-row" id="filaVersionNativa" style="display:none"><span>Versión app (Android)</span><strong id="versionNativaAjustes">—</strong></div>
+          <div class="settings-row"><span>Plataforma</span><strong><span class="plataforma-chip plataforma-chip-inline" id="plataformaChipAjustes"></span><span id="plataformaAjustes">—</span></strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -7247,6 +7257,10 @@ function _initNativo() {
         var span = document.getElementById('versionNativaAjustes');
         if (span) span.textContent = 'v' + info.version + ' (build ' + info.build + ')';
         if (fila) fila.style.display = 'flex';
+        // MARCA-APK-PWA-01: se guarda porque getInfo() puede resolver antes de que se haya
+        // parseado el <script> que define _pintarMarcaPlataforma; esa lo recoge al pintar.
+        window._infoNativa = info;
+        try { _pintarMarcaPlataforma(info); } catch (_) {}
         // DESCARGA-APK-MANUAL-01: en la app instalada, la sección "App para Android" de
         // Ajustes pasa del texto de "instálala" (pensado para quien la ve desde la PWA) al
         // de "esta es tu vía de rescate si la actualización automática no cuaja", con la
@@ -15756,7 +15770,37 @@ let _actualizando = false;
   const a = document.getElementById('versionAjustes');
   if (b) b.textContent = 'v' + APP_VERSION;
   if (a) a.textContent = 'v' + APP_VERSION;
+  _pintarMarcaPlataforma();
 })();
+
+// MARCA-APK-PWA-01 (03/10/2026): ¿dónde corre esta copia de index.html? La APK Capacitor
+// carga la misma URL de Pages que la PWA, así que el único criterio fiable es el puente
+// nativo (_esNativo → Capacitor.isNativePlatform()), no la URL ni el user-agent. Dentro de
+// "WEB" se distingue además PWA instalada (display-mode standalone) de pestaña de navegador.
+// infoNativa (opcional) es el resultado de App.getInfo(): versión real del binario Android.
+function _plataformaActual(infoNativa) {
+  if (_esNativo()) {
+    const vNat = infoNativa && infoNativa.version ? ' v' + infoNativa.version + ' (build ' + infoNativa.build + ')' : '';
+    return { chip: 'APP', detalle: 'App Android (APK)' + vNat };
+  }
+  let standalone = false;
+  try { standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; } catch (_) {}
+  return { chip: 'WEB', detalle: standalone ? 'Web · PWA instalada' : 'Web · navegador' };
+}
+
+function _pintarMarcaPlataforma(infoNativa) {
+  const p = _plataformaActual(infoNativa || window._infoNativa);
+  const titulo = p.detalle + ' · web v' + APP_VERSION;
+  ['plataformaChip', 'plataformaChipAjustes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = p.chip;
+    el.dataset.plataforma = p.chip.toLowerCase();
+    el.title = titulo;
+  });
+  const det = document.getElementById('plataformaAjustes');
+  if (det) det.textContent = p.detalle;
+}
 
 function mostrarBannerActualizacion(v) {
   const banner = document.getElementById('updateBanner');
@@ -16007,36 +16051,159 @@ document.addEventListener('visibilitychange', () => {
 // de navegación (gestos o botones) o el fabricante -- es el mecanismo correcto en
 // nativo. 'popstate' se conserva tal cual solo para la PWA/navegador, donde sigue siendo
 // el único mecanismo disponible (no existe Capacitor.Plugins.App fuera de la app).
-// PARIDAD-APK-PWA-ICONO-01 / BACKBUTTON-JERARQUIA-01 (17/09/2026): Adrián (14/09/2026) --
-// "el último nivel antes de salir de la app debe ser el selector de empresa (superadmin) o el
-// de departamento (empresa_admin)". navTo('home') y compañía saltan directo a la pantalla
-// destino con _applyScreen() (no showScreen()) y vacían _navHistory -- así, en cuanto un
-// superadmin o empresa_admin llegaba a su home ya elegida, "atrás" pasaba de largo el selector
-// y salía de la app directamente. En vez de tocar cada sitio que navega a una pantalla raíz (son
-// muchos, ver navTo()), se calcula el nivel superior AL PULSAR atrás según el rol y la pantalla
-// activa -- más robusto que intentar mantener _navHistory sincronizado en cada salto.
+// ANDROID-ATRAS-02 (03/10/2026): Adrián (14/09/2026, confirmado hoy) -- el atrás debe recorrer
+// la jerarquía entera: cerrar el modal/panel abierto → pantalla anterior → menú del
+// departamento → selector de departamento → selector de empresa (según rol), y solo en la
+// raíz pedir la doble pulsación para salir. Lo anterior (BUG-ATRAS-01/BACKBUTTON-JERARQUIA-01)
+// ya enganchaba el evento nativo, pero tenía tres huecos: (1) con un modal abierto el atrás
+// cambiaba la pantalla de debajo y dejaba el modal flotando encima; (2) las pantallas a las
+// que se llega por navTo() vacían _navHistory (Ajustes, Pedidos...), así que un encargado
+// en Ajustes salía de la app en vez de volver a su menú; (3) desde un selector con historial
+// (p. ej. el selector de depto abierto con la píldora) volvía a una pantalla de un depto que
+// ya no estaba elegido. Mismo stack para la APK (App 'backButton') y la PWA ('popstate').
+
+// Capas flotantes que no usan .modal-overlay pero tapan la pantalla entera. NO se incluyen a
+// propósito: replArOverlay (sesión AR, la gestiona su propio flujo), wizardOverlay (onboarding)
+// ni appResetOverlay (reseteo de contraseña obligatorio).
+const _CAPAS_ATRAS_IDS = ['chatPanel', 'almacenFiltroDeptModal', 'docsUploadSheet', 'appRecuperarOverlay',
+  'segModalNuevo', 'segHerrModal', 'segHerrNuevoModal', 'segRecModal', 'segDocModal', 'segPermModal',
+  'segInspModal', 'segRegDetallePanel', 'segRegModal', 'segInfModal', 'segInfFotoExtraModal', 'segInfCierreModal'];
+
+function _capaVisible(el) {
+  if (!el || !el.isConnected) return false;
+  const cs = getComputedStyle(el);
+  if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+  return el.getClientRects().length > 0; // dentro de una pantalla oculta no tiene cajas
+}
+
+// La capa abierta más alta: mayor z-index y, a igualdad, la posterior en el documento.
+function _capaSuperiorAbierta() {
+  const candidatas = [...document.querySelectorAll('.modal-overlay')];
+  _CAPAS_ATRAS_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !candidatas.includes(el)) candidatas.push(el);
+  });
+  let mejor = null, mejorZ = -Infinity;
+  candidatas.forEach(el => {
+    if (!_capaVisible(el)) return;
+    const z = parseInt(getComputedStyle(el).zIndex, 10) || 0;
+    if (!mejor || z > mejorZ || (z === mejorZ && (mejor.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING))) {
+      mejor = el; mejorZ = z;
+    }
+  });
+  return mejor;
+}
+
+// Cerrar una capa con SU propia lógica de cierre (paradas de cámara, limpieza de estado...):
+// 1) igual que tocar el fondo -- casi todos los modales llevan onclick="if(event.target===this)…";
+// 2) su botón de cierre explícito (✕/×/Cancelar/aria-label Cerrar, o el que se oculta a sí
+//    mismo). Nunca se pulsa un botón por el nombre de su función: "cerrarIncidencia" o
+//    "Cerrar parte" son acciones de negocio, no de cerrar la ventana;
+// 3) último recurso, ocultarla sin más.
+function _cerrarCapa(el) {
+  if (el.hasAttribute('onclick')) {
+    try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (_) {}
+    if (!_capaVisible(el)) return;
+  }
+  const esCierre = b => {
+    const txt = (b.textContent || '').trim();
+    const etiqueta = ((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '')).trim();
+    const oc = b.getAttribute('onclick') || '';
+    return /^(✕|×|✖|✗|Cancelar)$/i.test(txt) || /^(Cerrar|Volver)$/i.test(etiqueta)
+      || /closest\(['"]\.modal-overlay['"]\)|this\.closest\([^)]*\)\.(remove\(\)|style\.display\s*=\s*['"]none)/.test(oc);
+  };
+  const boton = [...el.querySelectorAll('button, [onclick]')].find(b => b !== el && _capaVisible(b) && esCierre(b));
+  if (boton) {
+    try { boton.click(); } catch (_) {}
+    if (!_capaVisible(el)) return;
+  }
+  el.classList.remove('show');
+  el.style.display = 'none';
+}
+
+function _pantallaActiva() {
+  const activa = document.querySelector('.screen.active');
+  if (!activa) return null;
+  if (activa.id === 'screenIA') return 'ia';
+  const raw = activa.id.replace(/^screen/, '');
+  return raw.charAt(0).toLowerCase() + raw.slice(1);
+}
+
+// Subniveles internos de una pantalla (no pasan por _navHistory): carpeta de Docs,
+// pestaña de Seguridad, panel de Personal. Atrás vuelve primero a su menú.
+function _volverSubnivelPantalla() {
+  const actual = _pantallaActiva();
+  if (actual === 'docs') {
+    const btn = document.getElementById('docsVolverBtn');
+    if (btn && _capaVisible(btn)) { btn.click(); return true; }
+  }
+  if (actual === 'seguridad' && typeof segSelTab === 'function') {
+    const home = document.getElementById('segPanelHome');
+    if (home && home.style.display === 'none') { segSelTab('home'); return true; }
+  }
+  if (actual === 'personal' && typeof personalSelTab === 'function') {
+    const home = document.getElementById('perPanelHome');
+    if (home && home.style.display === 'none') { personalSelTab(-1); return true; }
+  }
+  return false;
+}
+
+// Menú del departamento elegido: Seguridad y Personal tienen pantalla propia en vez de 'home'.
+function _pantallaInicioDepto(s) {
+  if (!s || !s.departamento) return null;
+  if (s.departamento === 'seguridad') return 'seguridad';
+  if (s.departamento === 'personal') return 'personal';
+  return 'home';
+}
+
+// PARIDAD-APK-PWA-ICONO-01 / BACKBUTTON-JERARQUIA-01 (17/09/2026): "el último nivel antes de
+// salir de la app debe ser el selector de empresa (superadmin) o el de departamento
+// (empresa_admin)". Se calcula AL PULSAR atrás según rol y pantalla activa -- más robusto que
+// mantener _navHistory sincronizado en cada salto de navTo(). Devuelve null en la raíz:
+//   superadmin:    pantalla → menú depto → selector depto → selector empresa (raíz)
+//   empresa_admin: pantalla → menú depto → selector depto (raíz)
+//   resto:         pantalla → menú de su depto fijo (raíz)
 function _pantallaSuperiorJerarquia() {
   const s = getSession();
   if (!s) return null;
-  const activa = document.querySelector('.screen.active');
-  if (!activa) return null;
-  const raw = activa.id.replace(/^screen/, '');
-  const actual = raw.charAt(0).toLowerCase() + raw.slice(1);
-  if (s.rol === 'superadmin') {
-    if (actual === 'empresaSel') return null;              // ya está en la cima
-    if (actual === 'dept') return 'empresaSel';
-    return s.empresa_id ? 'dept' : 'empresaSel';
+  const actual = _pantallaActiva();
+  if (!actual) return null;
+  const esSA = s.rol === 'superadmin';
+  const esEA = s.rol === 'empresa_admin';
+  if (actual === 'empresaSel') return null;
+  if (actual === 'dept') return esSA ? 'empresaSel' : null;
+  if (actual === 'obraSel') {
+    // Sin depto pendiente se llegó desde el selector de empresa (seleccionarObraVisual).
+    if (esSA && !_pendingDept) return 'empresaSel';
+    return (esSA || esEA) ? 'dept' : null;
   }
-  if (s.rol === 'empresa_admin') {
-    if (actual === 'dept') return null;                    // ya está en la cima
-    return 'dept';
+  const inicio = _pantallaInicioDepto(s);
+  if (inicio && actual !== inicio) return inicio;
+  if (esSA) return s.empresa_id ? 'dept' : 'empresaSel';
+  if (esEA) return 'dept';
+  return null; // resto de roles: su menú fijo ya es la cima
+}
+
+function _irANivelSuperior(destino) {
+  resetearIntentoSalida();
+  _navHistory = [];
+  const s = getSession();
+  // Subir a un selector deja el departamento sin elegir, igual que volverSelectorDepto()
+  // (la píldora de la cabecera) -- si no, la cabecera seguiría mostrando el depto anterior.
+  if ((destino === 'dept' || destino === 'empresaSel') && s && s.departamento) {
+    s.departamento = null;
+    setSession(s);
   }
-  return null; // resto de roles: su pantalla fija ya es la cima, no hay selector que mostrar
+  _applyScreen(destino);
+  if (destino === 'home') {
+    try { setupHomeModules(); } catch (_) {}
+    try { cargarStatsHome(); } catch (_) {}
+  }
+  try { renderHeader(); } catch (_) {}
 }
 
 function _manejarBotonAtras() {
   const s = getSession();
-  if (!s) return true;
 
   // Si el chat de Alejandra está abierto, el botón atrás lo cierra (no navega la app)
   const alePanel = document.getElementById('alejandraPanel');
@@ -16046,14 +16213,25 @@ function _manejarBotonAtras() {
   const zoomedImg = document.querySelector('img[data-zoomed="1"]');
   if (zoomedImg) { abrirFotoSug(zoomedImg); return true; }
 
-  if (_navHistory.length > 0) { irAtras(); return true; } // hay historial: navegar atrás dentro de la app
+  // Modal, hoja o panel flotante abierto: cerrarlo y quedarse en la misma pantalla.
+  const capa = _capaSuperiorAbierta();
+  if (capa) { resetearIntentoSalida(); _cerrarCapa(capa); return true; }
 
-  // Sin historial de la pantalla actual: subir un nivel en la jerarquía empresa/departamento
-  // antes de dejar que las dos pulsaciones de salida entren en juego.
-  const superior = _pantallaSuperiorJerarquia();
-  if (superior) { resetearIntentoSalida(); _applyScreen(superior); return true; }
+  if (s) {
+    if (_volverSubnivelPantalla()) { resetearIntentoSalida(); return true; }
 
-  // Sin historial ni nivel superior: estamos en una pantalla raíz de verdad
+    // En un selector (empresa/depto/obra) se sube de nivel aunque haya historial: volver a
+    // la pantalla de un depto que ya se ha "soltado" la dejaría sin departamento elegido.
+    const actual = _pantallaActiva();
+    const enSelector = actual === 'dept' || actual === 'empresaSel' || actual === 'obraSel';
+    if (!enSelector && _navHistory.length > 0) { irAtras(); return true; } // historial: pantalla anterior
+
+    // Sin historial: subir un nivel en la jerarquía depto/empresa antes de la salida.
+    const superior = _pantallaSuperiorJerarquia();
+    if (superior) { _irANivelSuperior(superior); return true; }
+  }
+
+  // Sin historial ni nivel superior (o en el login): raíz de verdad
   if (_backPressedOnce) {
     // Segunda pulsación en <2.5s: pedir la salida.
     clearTimeout(_backPressTimer);
