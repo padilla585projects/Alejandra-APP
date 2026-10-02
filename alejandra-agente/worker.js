@@ -10580,8 +10580,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             body: JSON.stringify({
               tipo, titulo, descripcion: descripcionVerificada,
               circuitos: circuitos || [],
-            empresa_id: empresaPlano,
-            usuario_id,
+              empresa_id: empresaPlano,
+              usuario_id,
               rol: 'agente_ia'
             })
           });
@@ -10607,8 +10607,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.AGENT_INTERNAL_SECRET || '' },
           body: JSON.stringify({
             key, titulo: tituloDxf || undefined,
-              empresa_id: empresaPlano,
-              usuario_id,
+            empresa_id: empresaPlano,
+            usuario_id,
             rol: 'agente_ia'
           })
         });
