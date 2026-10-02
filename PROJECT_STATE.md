@@ -1,6 +1,6 @@
 # Estado del proyecto — Alejandra 2.0
 
-## D1-ESCRITURAS-01 — cuota diaria de escrituras D1 agotada (2026-10-02, en revisión)
+## D1-ESCRITURAS-01 — cuota diaria de escrituras D1 agotada (2026-10-02, publicada)
 
 Claude, fix/d1-escrituras-token-invalido, base 3730354. Incidente: la cuenta agotó
 las 100.000 filas/día de D1 (alejandra-db 92.550). d1 insights: 48.370 filas de
@@ -19,6 +19,11 @@ solo marca inactivos los activo=1. index.html/panel.html paran el sync y cierran
 sesión ante 401. Versión 9.82 en los cuatro marcadores. 306 agente/37 técnicas.
 Sin datos, migraciones ni secretos. Rollback API 2950f8c (6838fe73), agente
 2950f8c (1bc71b06), Pages 9.81. IA-QUALITY-08 queda en pausa detrás de esto.
+Publicada: PR #363 → 3a7f5f1. API run 37034215957 → c06cb56a; agente 37034288026
+→ 9d04aac2; Pages 37034382360 sirve 9.82. Verificado: X-Token inventado → 401 en
+/sync/eventos y /pemp; rutas exentas sin 401; sin token /pemp sigue 200 [] (sin
+datos). Pendiente: d1 insights tras el reinicio de cuota (00:00 UTC) para confirmar
+la bajada de escrituras.
 
 
 ## CAD-SCOPE-01 — publicada y verificada (2026-10-02)

@@ -1,11 +1,11 @@
 # TASKS — Cola operativa inmediata
 
-## D1-ESCRITURAS-01 — reducir escrituras D1 tras agotar la cuota (2026-10-02, en revisión)
+## D1-ESCRITURAS-01 — reducir escrituras D1 tras agotar la cuota (2026-10-02, publicada; medir mañana)
 
 - Pedido por Adrián en chat. Ver HANDOFF. Publicar API, agente y Pages 9.82; verificar
   mañana con d1 insights que alejandra_trazas/sesiones/sync_dispositivos bajan.
 
-## IA-QUALITY-08 — plausibilidad de cotas y sobrepromesa de plano (en pausa por D1-ESCRITURAS-01)
+## IA-QUALITY-08 — plausibilidad de cotas y sobrepromesa de plano (siguiente, aprobada)
 
 - Dependencia CAD-SCOPE-01 publicada y verificada (API 6838fe73, agente 1bc71b06).
 - QA H: sugiere 3.20 m como probable y descarta 320 mm como imposible sin evidencia;
