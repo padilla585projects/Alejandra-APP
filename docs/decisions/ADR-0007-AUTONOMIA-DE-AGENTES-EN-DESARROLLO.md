@@ -86,6 +86,26 @@ ADR-0002 y ADR-0004— sigue requiriendo al Director. La enmienda desbloquea las
 Esto es deliberado: si el agente pudiera aceptar los ADR de los que depende para avanzar,
 la condición 2 no sería una condición, sería un trámite que él mismo se firma.
 
+### Enmienda 2 (2026-10-03) — aprobación del entorno `production` por el agente
+
+Aceptada expresamente por el Director en chat (03/10/2026, respuesta «Sí, y como regla
+fija» a la pregunta de si el agente puede aprobar el entorno `production`). Precedente:
+CAD-SCOPE-01 (02/10/2026), donde el Director pidió lo mismo para una única entrega.
+
+**El agente puede aprobar la protección del entorno GitHub `production`** de los
+workflows de despliegue de Workers y de Pages que él mismo inicie, si:
+
+1. El commit desplegado está fusionado en `main` con el CI en verde.
+2. Hay un rollback registrado (SHA o versión anterior) en `HANDOFF.md` antes de aprobar.
+3. Tras el despliegue verifica en vivo (`/health`, versión servida o la ruta afectada) y lo
+   deja registrado.
+
+**Lo que esta enmienda NO cambia:** la aprobación sigue siendo humana para cualquier
+workflow que ejecute **migraciones D1**, toque **secretos** o **borre** datos (D1 o R2).
+Esas acciones mantienen la tabla «Requiere decisión humana» de arriba sin excepción. ARC-014
+queda actualizado: la barrera de entorno pasa a ser un control del agente para despliegues
+de código, no una aprobación humana.
+
 ## Alternativas consideradas
 
 | Alternativa | Motivo |
