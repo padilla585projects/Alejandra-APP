@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  alcancePlanoGenerado,
   debeRegistrarTrazaToken,
   normalizarIdPlano,
   extraerFuentesPlanoHumanas,
@@ -2831,5 +2832,33 @@ describe('D1-ESCRITURAS-01 trazas de token muerto y puerta 401', () => {
       expect(src).toContain("last_used < datetime('now', '-5 minutes')");
       expect(src).toContain('debeRegistrarTrazaToken(_trazasTokenVistas');
     }
+  });
+});
+
+// IA-QUALITY-08 (02/10/2026): QA H calificó 3.20 m de «probable» y 320 mm de
+// «imposible» sin datos; QA G prometió un «plano de ejecución real».
+describe('IA-QUALITY-08 plausibilidad neutral y alcance del plano', () => {
+  it('una altura sin unidad pide la unidad sin ordenar interpretaciones', () => {
+    const r = validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['altura 4 m sobre FFL', 'Corrijo: altura 320']);
+    expect(r.ok).toBe(false);
+    expect(r.preguntas[0]).toMatch(/unidad/);
+    expect(r.preguntas[0]).toMatch(/no supondré/);
+    expect(r.mensaje).toMatch(/no califiques ninguna interpretación de probable/);
+  });
+  it('todo plano generado o editado declara que no es apto para ejecución', () => {
+    for (const datos of [undefined, {}, { ok: true, modo: 'borrador_tecnico' }, { ok: true, modo: 'boceto_preliminar' }]) {
+      const a = alcancePlanoGenerado(datos);
+      expect(a.apto_para_ejecucion).toBe(false);
+      expect(a.instruccion).toMatch(/no lo llames plano de ejecución/);
+    }
+    expect(alcancePlanoGenerado({ modo: 'boceto_preliminar' }).tipo_documento).toBe('boceto_preliminar');
+    expect(alcancePlanoGenerado({ modo: 'borrador_tecnico' }).tipo_documento).toBe('borrador_tecnico');
+  });
+  it('el prompt ya no anuncia un plano real y prohíbe calificar sin datos', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    expect(src).not.toContain('Genera el plano SVG real');
+    expect(src).toContain('Nunca lo presentes ni lo prometas como plano de ejecución');
+    expect(src).toContain('no califiques ninguna interpretación de probable, habitual, lógica o imposible');
+    expect(src.match(/alcance: alcancePlanoGenerado\(/g)).toHaveLength(2);
   });
 });

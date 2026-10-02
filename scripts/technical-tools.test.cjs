@@ -652,7 +652,7 @@ test('DXF tools cannot pick a tenant and refuse invalid scope before any downstr
     const run = vm.runInNewContext(`async (input, empresa_id, usuario_id) => {
       const sendSSE = null;
       switch ('${name}') { ${source.slice(start, end)} }
-    }`, { env, normalizarIdPlano: idPlanoPolicy });
+    }`, { env, normalizarIdPlano: idPlanoPolicy, alcancePlanoGenerado: load('alejandra-agente/lib.js', 'alcancePlanoGenerado') });
     const input = { key: 'synthetic.dxf', plano_id: 7, empresa_id: 1, cambios: [{ circuito_id: 'QA', campo: 'nombre', valor: 'Test' }] };
     for (const company of [null, '', 'default', '1junk', '1e0', true, [1], 0, -1, 1.5]) {
       assert.ok(JSON.parse(await run(input, company, '9')).error);
@@ -691,13 +691,19 @@ test('plan generation uses session identity and refuses missing scope before cal
   const run = vm.runInNewContext(`async (input, empresa_id, usuario_id, fuentesPlano = []) => {
     const sendSSE = null;
     switch ('generar_plano') { ${source.slice(start, end)} }
-  }`, { normalizarIdPlano: idPlanoPolicy,
+  }`, { normalizarIdPlano: idPlanoPolicy, alcancePlanoGenerado: load('alejandra-agente/lib.js', 'alcancePlanoGenerado'),
     validarDatosPlanoBandejas: load('alejandra-agente/lib.js', 'validarDatosPlanoBandejas'), env: { API_WEB: { async fetch(url, options) {
     sent.push(JSON.parse(options.body));
     return { ok: true, async json() { return { ok: true }; } };
   } } } });
   const input = { tipo: 'bandejas', titulo: 'Test', descripcion: 'Test', empresa_id: 2, usuario_id: '8' };
   assert.equal(JSON.parse(await run(input, 1, '7', ['altura de montaje: 2,8 m sobre suelo terminado'])).ok, true);
+  // IA-QUALITY-08: todo plano generado declara que no es apto para ejecución.
+  const alcance = JSON.parse(await run(input, 1, '7', ['altura de montaje: 2,8 m sobre suelo terminado'])).alcance;
+  assert.equal(alcance.apto_para_ejecucion, false);
+  assert.equal(alcance.tipo_documento, 'borrador_tecnico');
+  assert.equal(JSON.parse(await run(input, 1, '7', ['Haz un boceto preliminar'])).alcance.tipo_documento, 'boceto_preliminar');
+  sent.length = sent.length - 2; // descartar las dos llamadas extra de esta comprobación
   assert.equal(sent[0].empresa_id, 1);
   assert.equal(sent[0].usuario_id, '7');
   for (const [company, owner] of [[null, '7'], ['default', '7'], [0, '7'], [1, null]]) {

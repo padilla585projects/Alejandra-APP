@@ -1,5 +1,21 @@
 # Estado del proyecto — Alejandra 2.0
 
+## IA-QUALITY-08 — plausibilidad neutral y alcance del plano (2026-10-02, en revisión)
+
+Claude, fix/agent-plan-plausibility-overpromise, base aed06cc. QA H: calificó 3.20 m
+de probable y 320 mm de imposible sin datos; QA G: prometió «plano de ejecución real».
+lib.js: altura sin unidad admitida → pregunta propia que pide unidad sin suponer la
+interpretación más probable; el mensaje del gate prohíbe calificar probable/habitual/
+imposible sin datos. alcancePlanoGenerado añade a cada resultado de generar_plano y
+editar_plano {tipo_documento borrador_tecnico|boceto_preliminar, apto_para_ejecucion
+false, aviso, instruccion}. Prompt: regla común de medidas ambiguas neutrales;
+generar_plano pasa de «plano SVG real» a borrador técnico y prohíbe prometer plano de
+ejecución antes o después de generar. 309 agente/37 técnicas. Solo agente.
+Riesgo: el modelo puede seguir excediéndose; no hay filtro de salida. Sin QA
+conversacional real todavía (requiere sesión de Adrián en móvil/panel): PENDIENTE.
+Contexto arrastrado entre casos sigue fuera de alcance. Rollback agente 3a7f5f1.
+
+
 ## D1-ESCRITURAS-01 — cuota diaria de escrituras D1 agotada (2026-10-02, publicada)
 
 Claude, fix/d1-escrituras-token-invalido, base 3730354. Incidente: la cuenta agotó

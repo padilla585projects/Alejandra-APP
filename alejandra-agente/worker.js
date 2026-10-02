@@ -26,6 +26,7 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 // que cambiar precios, allowlists, o las validaciones IDOR/SSRF, se cambia en
 // lib.js y worker.js lo recibe vía este import.
 import {
+  alcancePlanoGenerado,
   debeRegistrarTrazaToken,
   normalizarIdPlano,
   extraerFuentesPlanoHumanas,
@@ -83,6 +84,7 @@ const NEXUS_MODULES = {
 
 CRITERIO TECNICO COMUN — APLICA A TODOS LOS OFICIOS:
 - Identifica el objetivo, oficio, entorno y datos necesarios. Consulta los datos autorizados existentes y no repitas preguntas ya contestadas. Si falta un dato que condiciona cálculo, plano o instalación, pregunta de forma concreta y espera; no rellenes con ejemplos o valores habituales. Un boceto preliminar requiere solicitud expresa y pendientes visibles.
+- Ante una medida sin unidad o ambigua, pide la unidad o la aclaración. Sin datos del usuario que lo justifiquen, no califiques ninguna interpretación de probable, habitual, lógica o imposible ni sugieras un valor: si enumeras opciones, hazlo de forma neutral.
 - Si no sabes algo, hay incertidumbre, referencia normativa o dato de fabricante sin verificar, usa las herramientas de búsqueda disponibles. Para normas y materiales prioriza fuentes oficiales, textos consolidados y documentación del fabricante; cita fuente y fecha/versión. Una búsqueda no verificada o memoria antigua no prueba vigencia ni aplicabilidad. Si la búsqueda falla, explica qué dato no se ha podido contrastar.
 - Usa las herramientas de cálculo, planos/CAD y gestión que realmente estén disponibles y permitidas. Comprueba unidades, supuestos, resultados y errores; no atribuyas al dibujo un cálculo que no se ha ejecutado. Distingue dato aportado, medición, estimación y resultado verificado. No afirmes dominar una herramienta, ejecutar un cambio, cumplimiento o firma profesional sin evidencia del resultado.
 - En CAD conserva unidades, geometría, capas e identificadores cuando la herramienta lo soporte; comprueba lo que pueda verificarse y declara pendientes concretos. En Office confirma el resultado real de la acción y ayuda a resolver fallos. Estas reglas prevalecen sobre ejemplos y descripciones de experiencia de los módulos de oficio.
@@ -643,7 +645,7 @@ Cuando te pidan un cálculo, MUESTRA siempre: datos de entrada, fórmulas aplica
 Conserva el alcance devuelto por la herramienta: ESTIMACION_PARCIAL, CALCULO_GEOMETRICO_PARCIAL o PRESELECCION_PARCIAL no acreditan una instalación. Un null significa pendiente, nunca aprobado ni cero. Una curva/polos sugeridos no están justificados solo por tipo de carga o tensión: exige datos de arranque, sistema y comprobaciones aplicables antes de llamarlos adecuados, correctos o validados. No conviertas una referencia normativa en cumplimiento ni completes verificaciones con conocimiento general. Expón los supuestos y pregunta los datos faltantes concretos.
 Cuando analices una foto, describe: elementos visibles, estado, posibles problemas, recomendaciones.
 Cuando te pregunten por material, USA SIEMPRE datos del catálogo real del fabricante — busca si no los tienes.
-- generar_plano: Genera el plano SVG real mediante la tool cuando dispongas de los datos necesarios. ANTES de llamarla, consulta los datos autorizados ya disponibles y pregunta al usuario por los faltantes que condicionan el resultado: medidas/unidades, recorrido y altura de montaje/datum en bandejas; cargas, alimentacion, longitudes y condiciones de instalacion para dimensionar circuitos. Agrupa preguntas concretas y explica para que necesitas cada dato; no vuelvas a pedir datos ya confirmados ni completes huecos con ejemplos. Si el usuario pide expresamente un boceto preliminar, puedes generarlo marcando datos pendientes, sin presentarlo como plano de ejecucion. Distingue X/Y en planta de altura Z. La descripcion debe contener solo datos aportados/verificados, sin marcas, equipos, alturas ni calculos inventados. Para unifilar/electrico usa "circuitos" con los datos reales disponibles para permitir edicion posterior. No declares cumplimiento, dimensionado validado ni firma profesional sin evidencia.
+- generar_plano: Genera un borrador técnico de plano SVG mediante la tool cuando dispongas de los datos necesarios. Nunca lo presentes ni lo prometas como plano de ejecución, definitivo, final o apto para obra, tampoco antes de generarlo ni a cambio de más datos: no valida geometría, soportes ni normativa y requiere revisión técnica. Respeta el campo "alcance" que devuelve la tool. ANTES de llamarla, consulta los datos autorizados ya disponibles y pregunta al usuario por los faltantes que condicionan el resultado: medidas/unidades, recorrido y altura de montaje/datum en bandejas; cargas, alimentacion, longitudes y condiciones de instalacion para dimensionar circuitos. Agrupa preguntas concretas y explica para que necesitas cada dato; no vuelvas a pedir datos ya confirmados ni completes huecos con ejemplos. Si el usuario pide expresamente un boceto preliminar, puedes generarlo marcando datos pendientes, sin presentarlo como plano de ejecucion. Distingue X/Y en planta de altura Z. La descripcion debe contener solo datos aportados/verificados, sin marcas, equipos, alturas ni calculos inventados. Para unifilar/electrico usa "circuitos" con los datos reales disponibles para permitir edicion posterior. No declares cumplimiento, dimensionado validado ni firma profesional sin evidencia.
 - editar_plano: modifica circuitos/automaticos de un plano ya generado (nombre, proteccion, cable, amperaje) y regenera el SVG sin describir todo de nuevo. Usalo cuando el usuario pida cambiar un dato de un plano existente en vez de crear uno nuevo.`,
 
   capacidades_avanzadas: `CAPACIDADES AVANZADAS — Herramientas nuevas disponibles:
@@ -10590,7 +10592,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             })
           });
           const data = await resp.json().catch(() => ({}));
-          result = (!resp.ok || data.error) ? { error: data.error || `Error generando plano (HTTP ${resp.status})` } : data;
+          result = (!resp.ok || data.error) ? { error: data.error || `Error generando plano (HTTP ${resp.status})` } : { ...data, alcance: alcancePlanoGenerado(datosPlano) };
         } finally {
           if (_hbTimer) clearInterval(_hbTimer);
         }
@@ -10750,7 +10752,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             body: JSON.stringify({ cambios, empresa_id: _eidPlano, usuario_id, rol: 'agente_ia' })
           });
           const data = await resp.json().catch(() => ({}));
-          result = (!resp.ok || data.error) ? { error: data.error || `Error editando plano (HTTP ${resp.status})` } : data;
+          result = (!resp.ok || data.error) ? { error: data.error || `Error editando plano (HTTP ${resp.status})` } : { ...data, alcance: alcancePlanoGenerado() };
         } finally {
           if (_hbTimer) clearInterval(_hbTimer);
         }
