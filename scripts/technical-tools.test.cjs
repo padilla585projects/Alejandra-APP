@@ -5,7 +5,11 @@ const { resolve } = require('node:path');
 const vm = require('node:vm');
 const { DatabaseSync } = require('node:sqlite');
 const { SaxesParser } = require('saxes');
+// IA-QUALITY-09: módulos ESM puros, cargados con require(esm) (Node >= 22.12).
+const planosValidacion = require('../planos-validacion.mjs');
+const planosCotas = require('../alejandra-agente/planos-cotas.js');
 let warningPolicy;
+let validationTag;
 let mountingContract;
 let idPlanoPolicy;
 
@@ -16,10 +20,15 @@ function load(file, name, globals = {}) {
   assert.ok(match, `Missing production function ${name}`);
   return vm.runInNewContext(`${match[0]}; ${name}`, { SaxesParser, TextEncoder,
     _validarAvisosPlano: warningPolicy, _contratoMontajePlano: mountingContract,
-    normalizarIdPlano: idPlanoPolicy, ...globals });
+    normalizarIdPlano: idPlanoPolicy, _validacionPlano: validationTag,
+    finalizarPlanoVerificado: planosValidacion.finalizarPlanoVerificado,
+    normalizarCotasEntrada: planosValidacion.normalizarCotasEntrada,
+    validarPlanoSvg: planosValidacion.validarPlanoSvg,
+    _instruccionCotasPlano: () => '', ...globals });
 }
 
 idPlanoPolicy = load('alejandra-agente/lib.js', 'normalizarIdPlano');
+validationTag = load('worker.js', '_validacionPlano');
 warningPolicy = load('worker.js', '_validarAvisosPlano');
 mountingContract = load('worker.js', '_contratoMontajePlano');
 
@@ -599,7 +608,8 @@ test('DXF import authorises metadata before fetching content and refuses unknown
     _getAuthPlano: async () => ({ empresa_id: 2, usuario_id: sessionUser }),
     _empresaDeArchivoPlano: owner, _ensurePlanosTable: async () => {},
     DxfParser: class { parseSync() { calls.push('parse'); return { entities: [{ type: 'LINE' }] }; } },
-    dxfEntidadesASvg: () => ({ svg: '<svg/>', totalEntidades: 1, sinSoporte: 0 }),
+    // IA-QUALITY-09: el SVG importado pasa ahora la validación estructural antes del INSERT.
+    dxfEntidadesASvg: () => ({ svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><line x1="0" y1="0" x2="1" y2="1"/></svg>', totalEntidades: 1, sinSoporte: 0 }),
     _resumenDxf: () => 'synthetic', err: (error, status) => ({ error, status }), json: data => data,
   });
   const request = { async json() { return { key: 'synthetic.dxf' }; } };
@@ -652,7 +662,8 @@ test('DXF tools cannot pick a tenant and refuse invalid scope before any downstr
     const run = vm.runInNewContext(`async (input, empresa_id, usuario_id) => {
       const sendSSE = null;
       switch ('${name}') { ${source.slice(start, end)} }
-    }`, { env, normalizarIdPlano: idPlanoPolicy, alcancePlanoGenerado: load('alejandra-agente/lib.js', 'alcancePlanoGenerado') });
+    }`, { env, normalizarIdPlano: idPlanoPolicy, alcancePlanoGenerado: load('alejandra-agente/lib.js', 'alcancePlanoGenerado'),
+      resultadoPlanoVerificado: planosCotas.resultadoPlanoVerificado, errorPlanoNoGuardado: planosCotas.errorPlanoNoGuardado });
     const input = { key: 'synthetic.dxf', plano_id: 7, empresa_id: 1, cambios: [{ circuito_id: 'QA', campo: 'nombre', valor: 'Test' }] };
     for (const company of [null, '', 'default', '1junk', '1e0', true, [1], 0, -1, 1.5]) {
       assert.ok(JSON.parse(await run(input, company, '9')).error);
@@ -692,7 +703,9 @@ test('plan generation uses session identity and refuses missing scope before cal
     const sendSSE = null;
     switch ('generar_plano') { ${source.slice(start, end)} }
   }`, { normalizarIdPlano: idPlanoPolicy, alcancePlanoGenerado: load('alejandra-agente/lib.js', 'alcancePlanoGenerado'),
-    validarDatosPlanoBandejas: load('alejandra-agente/lib.js', 'validarDatosPlanoBandejas'), env: { API_WEB: { async fetch(url, options) {
+    validarDatosPlanoBandejas: load('alejandra-agente/lib.js', 'validarDatosPlanoBandejas'),
+    verificarCotasDeclaradas: planosCotas.verificarCotasDeclaradas, resultadoPlanoVerificado: planosCotas.resultadoPlanoVerificado,
+    errorPlanoNoGuardado: planosCotas.errorPlanoNoGuardado, env: { API_WEB: { async fetch(url, options) {
     sent.push(JSON.parse(options.body));
     return { ok: true, async json() { return { ok: true }; } };
   } } } });
@@ -759,4 +772,273 @@ test('D1-ESCRITURAS-01: dead session tokens are flagged once per window, D1 erro
   assert.equal(ok.empresa_id, 2);
   assert.equal(ok.tokenInvalido, undefined);
   assert.match(updates[0], /last_used < datetime\('now', '-5 minutes'\)/);
+});
+
+// ── IA-QUALITY-09: validador XML/SVG determinista y avisos dentro del archivo ──
+// QA ID 28: el chat afirmó un aviso QA que no estaba en el archivo. El archivo es la
+// fuente: se valida antes de guardar y la tool devuelve solo los avisos presentes.
+const V9 = planosValidacion;
+const svg9 = (inner, attrs = 'viewBox="0 0 1400 900" width="1400" height="900"') =>
+  `<svg xmlns="http://www.w3.org/2000/svg" ${attrs}><text x="10" y="20">BORRADOR — pendiente de revision tecnica</text><text x="10" y="40">NO EJECUTAR EN OBRA</text>${inner}</svg>`;
+const conCota = svg9('<text x="10" y="60">Largo 40 m</text><line x1="0" y1="0" x2="100" y2="0" stroke="#000"/>');
+
+test('IA-QUALITY-09: a valid plan gets the mandatory warnings embedded and the result lists exactly what the file contains', () => {
+  const { svg, verificacion } = V9.finalizarPlanoVerificado(conCota, { tipo: 'planta', modo: 'borrador_tecnico' });
+  assert.deepEqual(verificacion.avisos_en_archivo, V9.avisosObligatoriosPlano({ tipo: 'planta' }).map(a => a.texto));
+  assert.ok(verificacion.avisos_en_archivo.some(t => /Apto para ejecución: NO/.test(t)));
+  assert.deepEqual(verificacion.alcance_en_archivo, { tipo_documento: 'borrador_tecnico', apto_para_ejecucion: false });
+  assert.match(svg, /viewBox="0 0 1400 [\d.]+"/);
+  assert.ok(!/viewBox="0 0 1400 900"/.test(svg), 'The warning strip extends the viewBox instead of covering the drawing');
+  // Re-validating the stored file is deterministic and independent of the chat.
+  assert.deepEqual(V9.validarPlanoSvg(svg, { tipo: 'planta' }).avisos_en_archivo, verificacion.avisos_en_archivo);
+  assert.equal(V9.finalizarPlanoVerificado(conCota, { tipo: 'planta' }).svg, svg);
+  // Height attribute grows with the viewBox so the drawing is not distorted.
+  const h = Number(/ height="([\d.]+)"/.exec(svg)[1]);
+  const vb = /viewBox="0 0 1400 ([\d.]+)"/.exec(svg)[1];
+  assert.ok(Math.abs(h - Number(vb)) < 0.01);
+});
+
+test('IA-QUALITY-09: a stored file without one mandatory warning or with an executable scope is rejected', () => {
+  const { svg } = V9.finalizarPlanoVerificado(conCota, { tipo: 'planta' });
+  const sinAlcance = svg.replace(/<text[^>]*data-aviso="alcance"[^>]*>[^<]*<\/text>/, '');
+  assert.throws(() => V9.validarPlanoSvg(sinAlcance, { tipo: 'planta' }), /sin avisos obligatorios.*Apto para ejecución/);
+  const oculto = svg.replace('<g id="alejandra-avisos-qa"', '<g id="alejandra-avisos-qa" display="none"');
+  assert.throws(() => V9.validarPlanoSvg(oculto, { tipo: 'planta' }), /sin avisos obligatorios/);
+  const apto = svg.replace('&quot;apto_para_ejecucion&quot;:false', '&quot;apto_para_ejecucion&quot;:true');
+  assert.throws(() => V9.validarPlanoSvg(apto, { tipo: 'planta' }), /apto_para_ejecucion=false/);
+  assert.throws(() => V9.validarPlanoSvg(conCota, { tipo: 'planta' }), /sin bloque de avisos/);
+  // A model cannot pre-fill the reserved block to fake the warnings.
+  assert.throws(() => V9.incrustarAvisosPlano(svg9('<g id="alejandra-avisos-qa"><text>NO EJECUTAR EN OBRA</text></g><text>1 m</text>'), { tipo: 'planta' }), /reservados/);
+});
+
+test('IA-QUALITY-09: draft sketch, Gantt and mounting datum warnings are embedded by contract', () => {
+  const boceto = V9.finalizarPlanoVerificado(svg9('<text>Esquema sin escala</text>'), { tipo: 'bandejas', modo: 'boceto_preliminar' }).verificacion;
+  assert.ok(boceto.avisos_en_archivo.includes('BOCETO PRELIMINAR — datos pendientes'));
+  assert.equal(boceto.alcance_en_archivo.tipo_documento, 'boceto_preliminar');
+  const gantt = V9.finalizarPlanoVerificado(svg9('<rect x="0" y="0" width="10" height="5"/>'), { tipo: 'gantt' }).verificacion;
+  assert.ok(!gantt.avisos_en_archivo.includes('NO EJECUTAR EN OBRA'));
+  const contract = mountingContract('bandejas', montajeDescripcion(montajeConfirmado));
+  assert.equal(contract.modo, 'borrador_tecnico');
+  const tray = V9.finalizarPlanoVerificado(svg9('<text>Altura de montaje: 2.8 m sobre suelo terminado</text>'), contract).verificacion;
+  assert.ok(tray.avisos_en_archivo.includes('Altura de montaje: 2.8 m sobre suelo terminado'));
+});
+
+test('IA-QUALITY-09: NaN, Infinity, empty or negative coordinates and broken geometry are rejected', () => {
+  for (const inner of [
+    '<line x1="NaN" y1="0" x2="1" y2="1"/>', '<rect x="0" y="0" width="Infinity" height="1"/>',
+    '<circle cx="" cy="1" r="2"/>', '<rect x="0" y="0" width="-5" height="1"/>',
+    '<circle cx="1" cy="1" r="undefined"/>', '<polyline points="0,0 10"/>', '<polygon points="0,0 NaN,1"/>',
+    '<path d="M0 0 L NaN 5"/>', '<path d=""/>', '<path d="L 1 1"/>', '<g transform="translate(undefined, 2)"/>',
+    '<text x="1,NaN" y="2">1 m</text>', '<text x="0" y="0">Cota: NaN m</text>', '<line x1="1e999x" y1="0" x2="1" y2="1"/>',
+  ]) assert.throws(() => V9.finalizarPlanoVerificado(svg9('<text>1 m</text>' + inner), { tipo: 'planta' }), /Plano con|Plano no/, inner);
+});
+
+test('IA-QUALITY-09: viewBox must be finite, positive and not declared distorted', () => {
+  for (const attrs of ['viewBox="0 0 0 900"', 'viewBox="0 0 1400"', 'viewBox="0 0 NaN 900"', 'viewBox="a b c d"', '', 'width="100%" height="100%"']) {
+    assert.throws(() => V9.finalizarPlanoVerificado(svg9('<text>1 m</text>', attrs), { tipo: 'planta' }), /viewBox|encuadre/, attrs);
+  }
+  assert.throws(() => V9.finalizarPlanoVerificado(svg9('<text>1 m</text>', 'viewBox="0 0 1400 900" width="1400" height="1400" preserveAspectRatio="none"'), { tipo: 'planta' }), /deformado/);
+  // Numeric width/height without viewBox is enough to derive the frame.
+  assert.match(V9.finalizarPlanoVerificado(svg9('<text>1 m</text>', 'width="800" height="600"'), { tipo: 'planta' }).svg, /viewBox="0 0 800 /);
+});
+
+test('IA-QUALITY-09: unexpected elements, external resources and dangling symbols are rejected', () => {
+  for (const [inner, motivo] of [
+    ['<a href="https://example.test"><text>1 m</text></a>', /elemento no esperado/],
+    ['<iframe/>', /elemento no esperado/],
+    ['<x:g xmlns:x="urn:other"/>', /elemento no esperado/],
+    ['<image href="https://example.test/p.png" width="1" height="1"/>', /imagen externa/],
+    ['<use href="https://example.test/s.svg#a"/>', /referencia externa/],
+    ['<use href="#sym-inexistente"/>', /simbolo inexistente/],
+    ['<style>@import url(https://example.test/a.css);</style>', /recursos externos/],
+    ['<rect x="0" y="0" width="1" height="1" fill="url(https://example.test/p)"/>', /recursos externos/],
+    ['<g onclick="x()"/>', /no estatico/],
+    ['<g id="s"/><g id="s"/><use href="#s"/>', /duplicado/],
+  ]) assert.throws(() => V9.finalizarPlanoVerificado(svg9('<text>1 m</text>' + inner), { tipo: 'planta' }), motivo, inner);
+  // The real IEC symbol libraries injected by the API pass the validator.
+  const source = readFileSync(resolve(__dirname, '..', 'worker.js'), 'utf8');
+  const lib = ['IEC_SYMBOLS_DEFS', 'IEC_BANDEJA_DEFS', 'IEC_INSTALACION_DEFS', 'IEC_INDUSTRIAL_DEFS'].map(n => {
+    const i = source.indexOf(`const ${n} = \``);
+    return source.slice(source.indexOf('`', i) + 1, source.indexOf('`;', i));
+  }).join('\n');
+  assert.ok(V9.finalizarPlanoVerificado(svg9(lib + '<use href="#sym-cgp" x="5" y="5" color="#000"/><text>3 m</text>'), { tipo: 'planta_industrial' }).verificacion.valido);
+});
+
+test('IA-QUALITY-09: dimensional plans need a dimension text or an explicit no-scale statement', () => {
+  assert.throws(() => V9.finalizarPlanoVerificado(svg9('<text>Zona A</text>'), { tipo: 'planta' }), /sin textos de cota/);
+  assert.throws(() => V9.finalizarPlanoVerificado(svg9('<text>Cable 2,5 mm2</text>'), { tipo: 'bandejas' }), /sin textos de cota/);
+  assert.ok(V9.finalizarPlanoVerificado(svg9('<text>Esquema sin escala</text>'), { tipo: 'planta' }).verificacion.valido);
+  assert.ok(V9.finalizarPlanoVerificado(svg9('<text>Q1</text>'), { tipo: 'unifilar' }).verificacion.valido);
+});
+
+test('IA-QUALITY-09: user dimensions must appear in the file with an equivalent unit, within tolerance', () => {
+  const cotas = V9.normalizarCotasEntrada([{ etiqueta: 'largo', valor_m: 40 }, { etiqueta: 'tramo', valor_m: 2.8 }]);
+  for (const ok of ['<text>40 m</text><text>2800 mm</text>', '<text>40x20 m</text><text>2,80 m</text>', '<text>4000 cm</text><text>280 cm</text>']) {
+    assert.ok(V9.finalizarPlanoVerificado(svg9(ok), { tipo: 'planta', cotas_entrada: cotas }).verificacion.valido, ok);
+  }
+  for (const bad of ['<text>40 m</text><text>2800 m</text>', '<text>40 mm</text><text>2.8 m</text>', '<text>40 m</text>',
+    '<text>40 m</text><defs><text>2.8 m</text></defs>', '<text>40 m</text><text>2.9 m</text>']) {
+    assert.throws(() => V9.finalizarPlanoVerificado(svg9(bad), { tipo: 'planta', cotas_entrada: cotas }), /cotas aportadas/, bad);
+  }
+  for (const bad of [[{ valor_m: 0 }], [{ valor_m: NaN }], [{ valor_m: '3' }], 'x', new Array(41).fill({ valor_m: 1 })]) {
+    assert.throws(() => V9.normalizarCotasEntrada(bad), /Cotas de entrada invalidas/);
+  }
+});
+
+const genEnv9 = () => {
+  const writes = [];
+  return { writes, env: { DB: { prepare(sql) { return { bind(...args) { return { async run() { writes.push({ sql, args }); return { meta: { last_row_id: 77 } }; } }; } }; } } } };
+};
+const generate9 = text => load('worker.js', '_generarPlanoInterno', {
+  _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+  _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'), logAIUsage: () => {},
+  _instruccionCotasPlano: load('worker.js', '_instruccionCotasPlano'),
+  fetch: async () => ({ ok: true, json: async () => ({ content: [{ text }] }) }),
+});
+
+test('IA-QUALITY-09: generation stores the verified file and returns the warnings read from that file', async () => {
+  const { writes, env } = genEnv9();
+  const result = await generate9(conCota)(env, { tipo: 'planta', titulo: 'QA', descripcion: 'synthetic', empresa_id: 5, usuario_id: 7,
+    cotas_entrada: [{ etiqueta: 'largo', valor_m: 40 }] });
+  assert.equal(writes.length, 1);
+  const stored = writes[0].args[5];
+  assert.match(stored, /id="alejandra-avisos-qa"/);
+  assert.deepEqual(result.avisos_en_archivo, V9.validarPlanoSvg(stored, { tipo: 'planta' }).avisos_en_archivo);
+  assert.equal(JSON.parse(writes[0].args[6]).cotas_entrada[0].valor_m, 40);
+  // The agent result exposes only the warnings present in the file (ID 28 regression).
+  const tool = planosCotas.resultadoPlanoVerificado({ ...result, alcance: {} });
+  assert.deepEqual(tool.avisos_en_archivo, result.avisos_en_archivo);
+  assert.ok(!tool.avisos_en_archivo.some(t => /QA/.test(t)));
+  assert.match(tool.instruccion_avisos, /Solo puedes afirmar/);
+});
+
+test('IA-QUALITY-09: a file failing validation is not stored and the REST error explains why', async () => {
+  for (const [text, cotas, motivo] of [
+    [svg9('<text>Zona A</text>'), null, /sin textos de cota/],
+    [conCota, [{ valor_m: 12 }], /cotas aportadas/],
+    [svg9('<text>1 m</text><line x1="NaN" y1="0" x2="1" y2="1"/>'), null, /valor no numerico/],
+  ]) {
+    const { writes, env } = genEnv9();
+    await assert.rejects(generate9(text)(env, { tipo: 'planta', titulo: 'QA', descripcion: 'synthetic', empresa_id: 5, usuario_id: 7, cotas_entrada: cotas }),
+      e => e.validacionPlano === true && motivo.test(e.message) && /No se ha guardado/.test(e.message));
+    assert.equal(writes.length, 0);
+  }
+  const rest = load('worker.js', 'generarPlanoREST', {
+    _getAuthPlano: async () => ({ empresa_id: 5, usuario_id: 7, rol: 'admin' }),
+    _generarPlanoInterno: async () => { const e = new Error('Plano sin textos de cota. No se ha guardado.'); e.validacionPlano = true; throw e; },
+    json: (data, status = 200) => ({ data, status }), err: (error, status) => ({ data: { error }, status }), console: { error() {} },
+  });
+  const r = await rest({ json: async () => ({ tipo: 'planta', titulo: 'QA', descripcion: 'x' }) }, {});
+  assert.equal(r.status, 422);
+  assert.equal(r.data.plano_guardado, false);
+  assert.match(r.data.error, /sin textos de cota/);
+  const hidden = load('worker.js', 'generarPlanoREST', {
+    _getAuthPlano: async () => ({ empresa_id: 5, usuario_id: 7, rol: 'admin' }),
+    _generarPlanoInterno: async () => { throw new Error('Anthropic 529 overloaded'); },
+    json: (data, status = 200) => ({ data, status }), err: (error, status) => ({ data: { error }, status }), console: { error() {} },
+  });
+  const r2 = await hidden({ json: async () => ({ tipo: 'planta', titulo: 'QA', descripcion: 'x' }) }, {});
+  assert.equal(r2.status, 500);
+  assert.ok(!/Anthropic/.test(r2.data.error), 'Provider failures stay hidden (ERROR-IA-OCULTO-01)');
+});
+
+test('IA-QUALITY-09: editing re-applies stored user dimensions and only updates a verified file', async () => {
+  for (const [svg, expectUpdate] of [[conCota, true], [svg9('<text>12 m</text>'), false]]) {
+    const updates = [];
+    const edit = load('worker.js', 'editarPlanoCircuitosREST', {
+      _getAuthPlano: async () => ({ empresa_id: 5, rol: 'admin' }),
+      _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+      _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+      _instruccionCotasPlano: load('worker.js', '_instruccionCotasPlano'),
+      _llamarAnthropicPlanoStream: async () => svg,
+      err: (message, status) => ({ message, status }), json: data => data,
+    });
+    const result = await edit({ json: async () => ({ cambios: [{ circuito_id: 'C1', campo: 'notas', valor: 'QA' }] }) },
+      { DB: { prepare(sql) { return { bind(...args) {
+        if (sql.startsWith('UPDATE')) return { run: async () => { updates.push(args); } };
+        return { first: async () => ({ tipo: 'planta', titulo: 'QA', circuitos_json: '[]', metadatos: JSON.stringify({ cotas_entrada: [{ etiqueta: 'largo', valor_m: 40 }] }) }) };
+      } }; } } }, '/planos/28/circuitos');
+    if (expectUpdate) {
+      assert.equal(updates.length, 1);
+      assert.match(updates[0][0], /alejandra-avisos-qa/);
+      assert.deepEqual(result.avisos_en_archivo, V9.validarPlanoSvg(updates[0][0], { tipo: 'planta' }).avisos_en_archivo);
+      assert.equal(JSON.parse(updates[0][2]).cotas_entrada[0].valor_m, 40);
+    } else {
+      assert.equal(result.status, 502);
+      assert.match(result.message, /cotas aportadas/);
+      assert.equal(updates.length, 0);
+    }
+  }
+});
+
+test('IA-QUALITY-09: the agent only forwards dimensions the human wrote, with equivalent units', () => {
+  const v = planosCotas.verificarCotasDeclaradas;
+  const fuentes = ['Nave de 40x20 m, tramo de 2,8 m', 'cable de 2,5 mm2'];
+  assert.deepEqual(v(undefined, fuentes), { ok: true, cotas_entrada: [] });
+  const ok = v([{ etiqueta: 'largo', valor: 40, unidad: 'm' }, { etiqueta: 'tramo', valor: 2800, unidad: 'mm' }, { valor: 20, unidad: 'm' }], fuentes);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.cotas_entrada.map(c => c.valor_m), [40, 2.8, 20]);
+  for (const bad of [[{ valor: 2.5, unidad: 'mm' }], [{ valor: 28, unidad: 'm' }], [{ valor: 4, unidad: 'm' }]]) {
+    assert.equal(v(bad, fuentes).error, 'COTAS_NO_APORTADAS', JSON.stringify(bad));
+  }
+  for (const bad of [[{ valor: 40 }], [{ valor: -1, unidad: 'm' }], [{ valor: 'x', unidad: 'm' }], 'x']) {
+    assert.equal(v(bad, fuentes).error, 'COTAS_INVALIDAS');
+  }
+  const sinVerificacion = planosCotas.resultadoPlanoVerificado({ ok: true, id: 3 });
+  assert.deepEqual(sinVerificacion.avisos_en_archivo, []);
+  assert.match(sinVerificacion.instruccion_avisos, /no afirmes/);
+  assert.equal(planosCotas.errorPlanoNoGuardado('x').plano_guardado, false);
+});
+
+test('IA-QUALITY-09: agent generation refuses invented dimensions before calling the web Worker', async () => {
+  const source = readFileSync(resolve(__dirname, '../alejandra-agente/worker.js'), 'utf8');
+  const start = source.indexOf("case 'generar_plano':");
+  const end = source.indexOf("case 'importar_plano_dxf':", start);
+  const sent = [];
+  let reply = { ok: true, id: 9, verificacion_archivo: { avisos_en_archivo: ['NO EJECUTAR EN OBRA'] } };
+  const run = vm.runInNewContext(`async (input, empresa_id, usuario_id, fuentesPlano = []) => {
+    const sendSSE = null;
+    switch ('generar_plano') { ${source.slice(start, end)} }
+  }`, { normalizarIdPlano: idPlanoPolicy, alcancePlanoGenerado: load('alejandra-agente/lib.js', 'alcancePlanoGenerado'),
+    validarDatosPlanoBandejas: load('alejandra-agente/lib.js', 'validarDatosPlanoBandejas'), ...planosCotas,
+    env: { API_WEB: { async fetch(url, options) { sent.push(JSON.parse(options.body));
+      return { ok: !reply.error, status: reply.error ? 422 : 200, async json() { return reply; } }; } } } });
+  const input = { tipo: 'planta', titulo: 'QA', descripcion: 'Nave', cotas: [{ etiqueta: 'largo', valor: 45, unidad: 'm' }] };
+  assert.equal(JSON.parse(await run(input, 1, '7', ['Nave de 40 m'])).error, 'COTAS_NO_APORTADAS');
+  assert.equal(sent.length, 0);
+  const ok = JSON.parse(await run({ ...input, cotas: [{ etiqueta: 'largo', valor: 40, unidad: 'm' }] }, 1, '7', ['Nave de 40 m']));
+  assert.deepEqual(sent[0].cotas_entrada, [{ etiqueta: 'largo', valor_m: 40 }]);
+  assert.deepEqual(ok.avisos_en_archivo, ['NO EJECUTAR EN OBRA']);
+  reply = { ok: false, error: 'Plano sin textos de cota. No se ha guardado.', validacion_fallida: true };
+  const failed = JSON.parse(await run({ ...input, cotas: undefined }, 1, '7', ['Nave']));
+  assert.equal(failed.plano_guardado, false);
+  assert.match(failed.error, /No se ha guardado/);
+  assert.equal(failed.avisos_en_archivo, undefined);
+});
+
+test('IA-QUALITY-09: DXF import keeps real dimensions and never writes NaN geometry', () => {
+  const DxfParser = require('dxf-parser');
+  const dxf = ['0', 'SECTION', '2', 'ENTITIES',
+    '0', 'LINE', '8', '0', '10', '0', '20', '0', '30', '0', '11', '5000', '21', '0', '31', '0',
+    '0', 'LINE', '8', '0', '10', '0', '20', '0', '30', '0', '11', '0', '21', '3000', '31', '0',
+    '0', 'CIRCLE', '8', '0', '10', '2500', '20', '1500', '30', '0', '40', '250',
+    '0', 'ENDSEC', '0', 'EOF'].join('\n');
+  const parsed = new DxfParser().parseSync(dxf);
+  const toSvg = load('worker.js', 'dxfEntidadesASvg', { _dxfEscXml: load('worker.js', '_dxfEscXml') });
+  const { svg, sinSoporte } = toSvg(parsed);
+  assert.equal(sinSoporte, 0);
+  const check = V9.validarPlanoSvg(svg, null, { estructural: true });
+  assert.ok(check.valido);
+  const lines = [...svg.matchAll(/<line x1="([^"]+)" y1="([^"]+)" x2="([^"]+)" y2="([^"]+)"/g)].map(m => m.slice(1).map(Number));
+  const len = ([x1, y1, x2, y2]) => Math.hypot(x2 - x1, y2 - y1);
+  assert.deepEqual(lines.map(len).sort((a, b) => a - b), [3000, 5000]);
+  assert.equal(Number(/<circle [^>]*r="([^"]+)"/.exec(svg)[1]), 250);
+  // Y axis flip keeps the vertical line pointing up in SVG (y decreases).
+  const vertical = lines.find(l => l[0] === l[2]);
+  assert.ok(vertical[3] < vertical[1]);
+  const broken = toSvg({ entities: [...parsed.entities, { type: 'LINE', vertices: [{ x: 0, y: 0 }, { x: undefined, y: 1 }] },
+    { type: 'CIRCLE', center: { x: 1, y: 1 } }, { type: 'TEXT', startPoint: { x: NaN, y: 0 }, text: 'A' }] });
+  assert.equal(broken.sinSoporte, 3);
+  assert.ok(!/NaN/.test(broken.svg));
+  assert.ok(V9.validarPlanoSvg(broken.svg, null, { estructural: true }).valido);
 });

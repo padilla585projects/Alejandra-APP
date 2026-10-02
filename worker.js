@@ -17,6 +17,8 @@ import DxfParser from 'dxf-parser';
 import { SaxesParser } from 'saxes';
 // Una sola regla pura de IDs CAD para API y agente; sin I/O ni datos de sesión.
 import { normalizarIdPlano, debeRegistrarTrazaToken } from './alejandra-agente/lib.js';
+// IA-QUALITY-09: validador determinista del archivo SVG y avisos incrustados en el archivo.
+import { finalizarPlanoVerificado, normalizarCotasEntrada, validarPlanoSvg } from './planos-validacion.mjs';
 
 // D1-ESCRITURAS-01: últimos registros auth_token_no_encontrado por prefijo (por isolate)
 // y memo de getAuth por petición, para que la puerta del router no duplique lecturas.
@@ -1429,7 +1431,7 @@ const AI_TOOLS = [
     // SVG vía IA; no hay borrado ni escritura amplia -> N1.
     acceso: 'dev_verificado', cron: 'permitido', nivel_riesgo: 'N1',
     name: 'generar_plano',
-    description: 'Genera un plano tecnico profesional en formato SVG editable, listo para descargar y editar desde el panel. El usuario NUNCA tiene por que conocer los tipos internos ni pedirlos por su nombre tecnico: a partir de lo que describa en lenguaje normal (que tipo de instalacion es, que quiere ver reflejado, para que sirve), elige tu mismo el "tipo" que mejor encaja usando las pistas de la lista de abajo. Si lo que pide es ambiguo entre dos tipos, o si faltan datos importantes para poder generarlo bien (por ejemplo: no se sabe la ubicacion/nave, cuantos circuitos o cuadros hay, las potencias, si hay generador/SAI, cuantas plantas, etc.), NO inventes esos datos ni generes el plano a medias: pregunta primero al usuario con palabras sencillas y cotidianas (nunca menciones nombres de tipos, tools ni parametros internos), y genera el plano solo cuando tengas lo necesario.',
+    description: 'Genera un plano tecnico profesional en formato SVG editable, listo para descargar y editar desde el panel. El usuario NUNCA tiene por que conocer los tipos internos ni pedirlos por su nombre tecnico: a partir de lo que describa en lenguaje normal (que tipo de instalacion es, que quiere ver reflejado, para que sirve), elige tu mismo el "tipo" que mejor encaja usando las pistas de la lista de abajo. Si lo que pide es ambiguo entre dos tipos, o si faltan datos importantes para poder generarlo bien (por ejemplo: no se sabe la ubicacion/nave, cuantos circuitos o cuadros hay, las potencias, si hay generador/SAI, cuantas plantas, etc.), NO inventes esos datos ni generes el plano a medias: pregunta primero al usuario con palabras sencillas y cotidianas (nunca menciones nombres de tipos, tools ni parametros internos), y genera el plano solo cuando tengas lo necesario. Es un borrador tecnico, nunca un plano de ejecucion. Sobre avisos del archivo, cita solo los que devuelve verificacion_archivo.avisos_en_archivo; si la tool falla, no se ha guardado ningun plano.',
     input_schema: {
       type: 'object',
       properties: {
@@ -29286,7 +29288,7 @@ function _extraerSvgCompleto(texto, contrato = null) {
 }
 
 function _contratoMontajePlano(tipo, descripcion) {
-  const contrato = { tipo };
+  const contrato = { tipo, modo: 'borrador_tecnico' };
   if (tipo !== 'bandejas' || typeof descripcion !== 'string') return contrato;
   // Bloque ya emitido por el gate humano del agente; no interpretar ejemplos libres.
   const marca = 'DATOS VERIFICADOS EN TEXTO HUMANO (prevalecen sobre los ejemplos):\n';
@@ -29296,7 +29298,7 @@ function _contratoMontajePlano(tipo, descripcion) {
   try { datos = JSON.parse(descripcion.slice(inicio + marca.length)); }
   catch (_) { throw new Error('Datos de montaje incompletos. No se ha guardado.'); }
   if (datos?.ok !== true) throw new Error('Datos de montaje no confirmados. No se ha guardado.');
-  if (datos.modo === 'boceto_preliminar') return contrato;
+  if (datos.modo === 'boceto_preliminar') return { ...contrato, modo: 'boceto_preliminar' };
   if (datos.modo !== 'borrador_tecnico' || !Number.isFinite(datos.altura_m)
       || typeof datos.referencia !== 'string'
       || !/^(?:suelo terminado|pavimento terminado|FFL|cota (?:0|cero) (?:del |de )?proyecto)$/i.test(datos.referencia)) {
@@ -29470,12 +29472,28 @@ async function _obtenerCatalogoBandejas(env, { empresa_id, usuario_id }) {
   return [...(memRows.results || []), ...(conRows.results || [])];
 }
 
-async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos = [] }) {
-  const contratoPlano = _contratoMontajePlano(tipo, descripcion);
+// IA-QUALITY-09: los fallos de contenido del plano (XML, avisos, cotas) son
+// explicativos y seguros para el usuario; se marcan para no ocultarlos como un
+// fallo del proveedor (ERROR-IA-OCULTO-01 sigue aplicando a errores de proveedor).
+function _validacionPlano(fn) {
+  try { return fn(); }
+  catch (e) { if (e && typeof e === 'object') e.validacionPlano = true; throw e; }
+}
+
+// Cotas aportadas por el usuario que el SVG debe mostrar con su unidad.
+function _instruccionCotasPlano(cotas) {
+  if (!cotas || !cotas.length) return '';
+  return `\nCOTAS APORTADAS POR EL USUARIO (obligatorias como texto SVG visible con su unidad, misma magnitud; se comprueban en el archivo antes de guardar): ${cotas.map(c => `${c.etiqueta ? c.etiqueta + ' = ' : ''}${c.valor_m} m`).join('; ')}.`;
+}
+
+async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos = [], cotas_entrada = null }) {
+  const contratoPlano = _validacionPlano(() => _contratoMontajePlano(tipo, descripcion));
+  contratoPlano.cotas_entrada = _validacionPlano(() => normalizarCotasEntrada(cotas_entrada));
   await _ensurePlanosTable(env);
 
   const systemPrompt = _prepararPlanoPrompt(tipo, `${titulo || ''} ${descripcion || ''} ${JSON.stringify(circuitos || [])}`)
-    + (contratoPlano.anotacion_montaje ? `\nIncluye literalmente como texto SVG visible: "${contratoPlano.anotacion_montaje}".` : '');
+    + (contratoPlano.anotacion_montaje ? `\nIncluye literalmente como texto SVG visible: "${contratoPlano.anotacion_montaje}".` : '')
+    + _instruccionCotasPlano(contratoPlano.cotas_entrada);
 
   // ── Para planos de bandejas: enriquecer con catálogo real de la empresa ─────
   // Consulta alejandra_memoria y alejandra_conocimiento buscando entradas de
@@ -29737,7 +29755,7 @@ INSTRUCCIONES FINALES:
   }
   if (!data) throw _errorAnthropicPlano || new Error('No se pudo generar el plano: todos los proveedores de IA fallaron.');
 
-  let svgRaw = _extraerSvgCompleto(data.content?.[0]?.text || '', contratoPlano);
+  let svgRaw = _validacionPlano(() => _extraerSvgCompleto(data.content?.[0]?.text || '', contratoPlano));
 
   // Para esquemas eléctricos: inyectar biblioteca de símbolos IEC 60617
   // Se inserta justo tras la etiqueta <svg ...> de apertura para que los <use href="#sym-X">
@@ -29779,16 +29797,21 @@ INSTRUCCIONES FINALES:
     output_tokens: data.usage?.output_tokens || 0
   });
 
+  const circuitosJson = (Array.isArray(circuitos) && circuitos.length > 0) ? JSON.stringify(circuitos) : null;
+  // Comprobar tambien el resultado final tras inyectar simbolos y normalizar colores.
+  svgRaw = _validacionPlano(() => _extraerSvgCompleto(svgRaw, contratoPlano));
+  // IA-QUALITY-09: avisos obligatorios incrustados en el archivo y validacion completa
+  // del archivo que se guarda; si falla, no hay INSERT.
+  const verificado = _validacionPlano(() => finalizarPlanoVerificado(svgRaw, contratoPlano));
+  svgRaw = verificado.svg;
   const metadatos = JSON.stringify({
     tipo,
     tokens_usados: data.usage?.output_tokens || 0,
     modelo: _planoModelo,
-    proveedor: _planoProveedor
+    proveedor: _planoProveedor,
+    cotas_entrada: contratoPlano.cotas_entrada,
+    validador: verificado.verificacion.validador
   });
-
-  const circuitosJson = (Array.isArray(circuitos) && circuitos.length > 0) ? JSON.stringify(circuitos) : null;
-  // Comprobar tambien el resultado final tras inyectar simbolos y normalizar colores.
-  svgRaw = _extraerSvgCompleto(svgRaw, contratoPlano);
   const res = await env.DB.prepare(
     'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos, circuitos_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(empresa_id, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos, circuitosJson).run();
@@ -29799,7 +29822,9 @@ INSTRUCCIONES FINALES:
     id,
     tipo,
     titulo,
-    mensaje: `Plano "${titulo}" (${tipo}) generado correctamente con ID ${id}. Accede a el en el panel, seccion Planos, o descargalo desde /planos/${id}/svg`
+    verificacion_archivo: verificado.verificacion,
+    avisos_en_archivo: verificado.verificacion.avisos_en_archivo,
+    mensaje: `Plano "${titulo}" (${tipo}) generado con ID ${id} y validado como archivo SVG (no como diseño). Accede a el en el panel, seccion Planos, o descargalo desde /planos/${id}/svg`
   };
 }
 
@@ -29860,8 +29885,14 @@ function dxfEntidadesASvg(dxfJson) {
 
   const partes = [];
   let sinSoporte = 0;
+  // IA-QUALITY-09: una entidad con coordenadas no finitas se cuenta como no representada
+  // en vez de escribir "NaN" en el SVG (el validador estructural lo rechazaria).
+  const finito = (...v) => v.every(n => typeof n === 'number' && Number.isFinite(n));
+  const puntosFinitos = vs => Array.isArray(vs) && vs.every(v => v && finito(v.x, v.y));
   for (const e of entities) {
     try {
+      if ((e.type === 'LINE' || e.type === 'LWPOLYLINE' || e.type === 'POLYLINE') && !puntosFinitos(e.vertices)) { sinSoporte++; continue; }
+      if ((e.type === 'CIRCLE' || e.type === 'ARC') && !(e.center && finito(e.center.x, e.center.y, e.radius) && e.radius > 0)) { sinSoporte++; continue; }
       if (e.type === 'LINE' && e.vertices && e.vertices.length >= 2) {
         const [p1, p2] = e.vertices;
         partes.push(`<line x1="${fx(p1.x)}" y1="${fy(p1.y)}" x2="${fx(p2.x)}" y2="${fy(p2.y)}" stroke="#111" stroke-width="1"/>`);
@@ -29885,7 +29916,8 @@ function dxfEntidadesASvg(dxfJson) {
         partes.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="#111" stroke-width="1"/>`);
       } else if ((e.type === 'TEXT' || e.type === 'MTEXT') && (e.startPoint || e.position)) {
         const p = e.startPoint || e.position;
-        const fs = e.textHeight || e.height || 10;
+        const fs = (finito(e.textHeight) && e.textHeight > 0) ? e.textHeight : (finito(e.height) && e.height > 0) ? e.height : 10;
+        if (!finito(p.x, p.y)) { sinSoporte++; continue; }
         const txt = _dxfEscXml(e.text || '');
         if (txt) partes.push(`<text x="${fx(p.x)}" y="${fy(p.y)}" font-size="${fs.toFixed(1)}" fill="#111">${txt}</text>`);
       } else {
@@ -29979,6 +30011,10 @@ async function importarDxfREST(request, env) {
   }
 
   const { svg, totalEntidades, sinSoporte } = dxfEntidadesASvg(dxfJson);
+  // IA-QUALITY-09: validacion estructural del SVG resultante antes de guardarlo
+  // (sin avisos de IA: es un CAD real del usuario, no un borrador generado).
+  try { validarPlanoSvg(svg, null, { estructural: true }); }
+  catch (e) { return err('El DXF no produjo un dibujo valido: ' + e.message, 400); }
   const resumen = _resumenDxf(dxfJson);
   const titulo = (body.titulo || nombreOriginal.replace(/\.dxf$/i, '')).trim();
   const metadatos = JSON.stringify({
@@ -30023,9 +30059,13 @@ async function generarPlanoREST(request, env) {
   const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt', 'unifilar', 'planta_electrica', 'planta_industrial'];
   if (!tiposValidos.includes(tipo)) return err('tipo invalido. Valores permitidos: ' + tiposValidos.join(', '), 400);
   try {
-    const result = await _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos: circuitos || [] });
+    const result = await _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos: circuitos || [], cotas_entrada: body.cotas_entrada });
     return json(result);
   } catch (e) {
+    // IA-QUALITY-09: un archivo que no supera la validacion no se guarda y se explica.
+    if (e && e.validacionPlano) {
+      return json({ ok: false, error: e.message, validacion_fallida: true, plano_guardado: false }, 422);
+    }
     // ERROR-IA-OCULTO-01 (26/08/2026): Adrian -- "cuando de fallos de IA no quiero que
     // diga el porque al usuario... nadie tiene que saber porque". El motivo tecnico real
     // (saldo insuficiente, proveedor caido, etc.) queda solo en los logs del Worker
@@ -30077,10 +30117,17 @@ async function editarPlanoCircuitosREST(request, env, path) {
   if (idsModificados.length === 0) return err('No se aplico ningun cambio valido (revisa circuito_id/campo/valor)', 400);
 
   let contratoPlano;
-  try { contratoPlano = _contratoMontajePlano(row.tipo, row.descripcion); }
+  let metaPrevio = {};
+  try { metaPrevio = row.metadatos ? JSON.parse(row.metadatos) || {} : {}; } catch (_) { metaPrevio = {}; }
+  try {
+    contratoPlano = _contratoMontajePlano(row.tipo, row.descripcion);
+    // Las cotas confirmadas al generar se siguen exigiendo al regenerar.
+    contratoPlano.cotas_entrada = normalizarCotasEntrada(metaPrevio.cotas_entrada);
+  }
   catch (e) { return err(e.message, 422); }
   const systemPrompt = _prepararPlanoPrompt(row.tipo, `${row.titulo || ''} ${row.descripcion || ''} ${JSON.stringify(circuitos || [])}`)
-    + (contratoPlano.anotacion_montaje ? `\nConserva literalmente como texto SVG visible: "${contratoPlano.anotacion_montaje}".` : '');
+    + (contratoPlano.anotacion_montaje ? `\nConserva literalmente como texto SVG visible: "${contratoPlano.anotacion_montaje}".` : '')
+    + _instruccionCotasPlano(contratoPlano.cotas_entrada);
   const bloqueCircuitos = circuitos.map(c => {
     const partes = [];
     if (c.nombre) partes.push(c.nombre);
@@ -30136,9 +30183,16 @@ INSTRUCCIONES FINALES:
     svgRaw = _normalizarColoresUseSvg(svgRaw, row.tipo);
   }
 
-  const metadatos = JSON.stringify({ tipo: row.tipo, tokens: Math.round(svgRaw.length / 4), modelo: 'claude-sonnet-4-6', proveedor: 'anthropic', editado: true });
-  try { svgRaw = _extraerSvgCompleto(svgRaw, contratoPlano); }
+  let verificado;
+  try {
+    svgRaw = _extraerSvgCompleto(svgRaw, contratoPlano);
+    // IA-QUALITY-09: mismo paso final que la generacion; sin UPDATE si falla.
+    verificado = finalizarPlanoVerificado(svgRaw, contratoPlano);
+    svgRaw = verificado.svg;
+  }
   catch (e) { return err(e.message, 502); }
+  const metadatos = JSON.stringify({ tipo: row.tipo, tokens: Math.round(svgRaw.length / 4), modelo: 'claude-sonnet-4-6', proveedor: 'anthropic', editado: true,
+    cotas_entrada: contratoPlano.cotas_entrada, validador: verificado.verificacion.validador });
   await env.DB.prepare(
     "UPDATE planos SET svg_data=?, circuitos_json=?, metadatos=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?"
   ).bind(svgRaw, JSON.stringify(circuitos), metadatos, id, empresa_id).run();
@@ -30149,6 +30203,8 @@ INSTRUCCIONES FINALES:
     tipo: row.tipo,
     titulo: row.titulo,
     circuitos_modificados: idsModificados,
+    verificacion_archivo: verificado.verificacion,
+    avisos_en_archivo: verificado.verificacion.avisos_en_archivo,
     mensaje: `Plano "${row.titulo}" actualizado (circuitos: ${idsModificados.join(', ')}). Disponible en el panel -> Planos, o directamente en /planos/${id}/svg`
   });
 }
