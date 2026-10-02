@@ -642,17 +642,11 @@ function initChat() {
     <div class="chat-wrap" style="height:100%">
       <div class="chat-toolbar">
         <span style="font-size:11px;color:var(--muted)">Como</span>
-        <input class="chat-uid" id="chatUid" value="${chatUserId}" onchange="chatUserId=this.value;localStorage.setItem('alej_uid',this.value)">
+        <input class="chat-uid" id="chatUid" value="${chatUserId}" onchange="chatUserId=this.value;localStorage.setItem('alej_uid',this.value);_recargarHistorialChat()">
         <button id="vozAutoBtn" onclick="toggleVozAuto()" title="Voz de Alejandra"
           style="margin-left:auto;background:var(--surf2);border:1px solid var(--border);border-radius:50%;width:30px;height:30px;font-size:14px;line-height:1">🔇</button>
       </div>
-      <div id="chatMsgs" class="chat-msgs">
-        <div style="text-align:center;color:var(--muted);font-size:13px;padding:40px 0">
-          <div style="font-size:32px;margin-bottom:10px">🤖</div>
-          <div style="font-weight:600;color:var(--text)">Alejandra lista</div>
-          <div style="font-size:12px;margin-top:4px">Puedo escribir código, buscar en la web y recordar contexto</div>
-        </div>
-      </div>
+      <div id="chatMsgs" class="chat-msgs">${_chatBienvenidaHTML()}</div>
       <div id="vozStatus" class="voz-status">🎙️ Escuchando...</div>
       <div id="chatAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border);background:var(--surf)"></div>
       <div class="chat-input-bar">
@@ -666,9 +660,18 @@ function initChat() {
         <button class="chat-btn chat-btn-send" onclick="enviarChat()">⚡</button>
       </div>
     </div>`;
+  _chatEnviadosDesdeCarga = [];
   _restaurarHistorialChat();
   _restaurarBorrador();
   _revisarAdjPendientes();
+}
+
+function _chatBienvenidaHTML() {
+  return `<div id="chatBienvenida" style="text-align:center;color:var(--muted);font-size:13px;padding:40px 0">
+          <div style="font-size:32px;margin-bottom:10px">🤖</div>
+          <div style="font-weight:600;color:var(--text)">Alejandra lista</div>
+          <div style="font-size:12px;margin-top:4px">Puedo escribir código, buscar en la web y recordar contexto</div>
+        </div>`;
 }
 
 // PARIDAD-CHAT-APK-01 (16/09/2026): mismo fix que index.html (BUG-CAJON-APK-01) -- aquí el
@@ -723,22 +726,49 @@ async function _fetchHistorialConReintento(intento = 1) {
     return null;
   }
 }
+// HISTORIAL-CARRERA-01 (03/10/2026): la carga del historial puede tardar varios segundos
+// (3 intentos con espera creciente). Antes, al llegar, hacía msgs.innerHTML = '' -- si el
+// usuario ya había enviado un mensaje en ese intervalo, se borraban su burbuja y el bloque
+// de streaming (la respuesta se seguía pintando en un nodo ya fuera del DOM, invisible), y
+// el historial podía traer además ese mismo mensaje ya guardado en servidor (duplicado).
+// Ahora el historial se inserta ANTES de lo enviado en vivo, se recorta en el primer mensaje
+// enviado en esta carga, y una respuesta obsoleta (otra carga posterior o cambio de
+// identidad en el campo "Como") se descarta.
+let _chatEnviadosDesdeCarga = [];
+let _histGen = 0;
+function _recargarHistorialChat() {
+  const msgs = document.getElementById('chatMsgs');
+  if (!msgs) return;
+  if (_chatBusy) return; // no tirar una respuesta en curso; se verá al volver al chat
+  msgs.innerHTML = _chatBienvenidaHTML();
+  _chatEnviadosDesdeCarga = [];
+  _restaurarHistorialChat();
+}
 async function _restaurarHistorialChat() {
   const msgs = document.getElementById('chatMsgs');
   if (!msgs || !chatUserId) return;
+  const gen = ++_histGen;
+  msgs.querySelector('.chat-hist-aviso')?.remove();
   try {
     const data = await _fetchHistorialConReintento();
+    if (gen !== _histGen || !msgs.isConnected) return;
     if (!data) {
-      msgs.insertAdjacentHTML('beforeend', `<div style="text-align:center;font-size:11px;color:#d97706;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:8px 12px;margin:8px 12px">
+      msgs.insertAdjacentHTML('beforeend', `<div class="chat-hist-aviso" style="text-align:center;font-size:11px;color:#d97706;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:8px 12px;margin:8px 12px">
         ⚠️ No se pudo cargar el historial de conversación
         <span onclick="_restaurarHistorialChat()" style="display:block;margin-top:4px;font-weight:700;text-decoration:underline;cursor:pointer">🔄 Reintentar</span>
       </div>`);
       return;
     }
     if (!data?.ok || !data.mensajes || data.mensajes.length === 0) return;
-    msgs.innerHTML = '';
-    for (const m of data.mensajes) {
-      if (m.rol !== 'user' && m.rol !== 'assistant') continue;
+    let filas = data.mensajes.filter(m => m.rol === 'user' || m.rol === 'assistant');
+    if (_chatEnviadosDesdeCarga.length) {
+      const corte = filas.findIndex(m => m.rol === 'user' && m.contenido === _chatEnviadosDesdeCarga[0]);
+      if (corte !== -1) filas = filas.slice(0, corte);
+    }
+    if (!filas.length) return;
+    msgs.querySelector('#chatBienvenida')?.remove();
+    const frag = document.createDocumentFragment();
+    for (const m of filas) {
       const div = document.createElement('div');
       if (m.rol === 'user') {
         div.className = 'msg-u';
@@ -748,8 +778,9 @@ async function _restaurarHistorialChat() {
         div.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b">${renderMd(m.contenido)}</div>`;
         addCopyBtns(div);
       }
-      msgs.appendChild(div);
+      frag.appendChild(div);
     }
+    msgs.insertBefore(frag, msgs.firstChild);
     msgs.scrollTop = msgs.scrollHeight;
   } catch (e) {
     console.warn('[Alejandra] historial: fallo de red', e.message);
@@ -917,8 +948,10 @@ async function enviarChat() {
   const mu = document.createElement('div');
   mu.className = 'msg-u';
   mu.innerHTML = `<div class="bub-u">${esc(msg)}</div>`;
+  msgs.querySelector('#chatBienvenida')?.remove();
   msgs.appendChild(mu);
   msgs.scrollTop = msgs.scrollHeight;
+  _chatEnviadosDesdeCarga.push(msg);
 
   // Bloque de respuesta streaming
   const block = document.createElement('div');
