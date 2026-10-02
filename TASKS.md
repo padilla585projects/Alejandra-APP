@@ -5,7 +5,7 @@
 - Pedido por Adrián en chat. Ver HANDOFF. Publicar API, agente y Pages 9.82; verificar
   mañana con d1 insights que alejandra_trazas/sesiones/sync_dispositivos bajan.
 
-## IA-QUALITY-08 — plausibilidad de cotas y sobrepromesa de plano (en revisión; QA real pendiente)
+## IA-QUALITY-08 — plausibilidad de cotas y sobrepromesa de plano (publicada, agente db28ccbf; QA real pendiente)
 
 - Dependencia CAD-SCOPE-01 publicada y verificada (API 6838fe73, agente 1bc71b06).
 - QA H: sugiere 3.20 m como probable y descarta 320 mm como imposible sin evidencia;
