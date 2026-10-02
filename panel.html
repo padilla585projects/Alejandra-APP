@@ -44611,24 +44611,42 @@ function cancelarEdicionPlano(silencioso) {
 
 async function guardarPlanoEditado() {
   if (!_visorPlanoId) return;
-  const svg = _getSvgActual();
+  _deseleccionarEl();
+  // PLANOS-PUT-SVG: XMLSerializer (no outerHTML) para enviar XML bien formado: outerHTML
+  // serializa como HTML (&nbsp;, prefijos sin declarar) y el servidor valida el archivo.
+  const svgEl = document.getElementById('svgEditable');
+  let svg = '';
+  try { svg = svgEl ? new XMLSerializer().serializeToString(svgEl) : _getSvgActual(); }
+  catch (_) { svg = _getSvgActual(); }
   if (!svg) { toast('No hay SVG para guardar', 'err'); return; }
+  const btn = document.getElementById('btnGuardarPlano');
+  const status = document.getElementById('editorStatus');
   try {
-    const btn = document.getElementById('btnGuardarPlano');
     btn.textContent = '⏳ Guardando...'; btn.disabled = true;
     const res = await apiRaw('/planos/' + _visorPlanoId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ svg_data: svg })
     });
-    const d = await res.json();
+    const d = await res.json().catch(() => ({}));
     btn.textContent = '💾 Guardar'; btn.disabled = false;
-    if (!res.ok) throw new Error(d.error || 'Error');
-    _visorSvgData = svg;
-    toast('Plano guardado correctamente', 'ok');
+    if (!res.ok) {
+      // 422: el servidor ha rechazado el archivo (XML, coordenadas, recursos externos,
+      // cotas...). Se muestra el motivo de forma persistente y se sigue en edicion.
+      const motivo = d.error || ('Error ' + res.status);
+      if (res.status === 422) {
+        if (status) status.textContent = '⛔ No se ha guardado: ' + motivo;
+        throw new Error('No se ha guardado el plano. ' + motivo);
+      }
+      throw new Error(motivo);
+    }
+    // El servidor devuelve el archivo normalizado (avisos obligatorios re-incrustados).
+    _visorSvgData = d.svg_data || svg;
+    toast('Plano guardado y validado', 'ok');
     cancelarEdicionPlano(true);
+    _inyectarSvgEnVisor(_visorSvgData);
     cargarPlanos();
-  } catch(e) { toast('Error guardando: ' + e.message, 'err'); document.getElementById('btnGuardarPlano').textContent = '💾 Guardar'; document.getElementById('btnGuardarPlano').disabled = false; }
+  } catch(e) { toast('Error guardando: ' + e.message, 'err'); btn.textContent = '💾 Guardar'; btn.disabled = false; }
 }
 
 function setEditorTool(tool) {

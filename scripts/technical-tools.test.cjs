@@ -1042,3 +1042,134 @@ test('IA-QUALITY-09: DXF import keeps real dimensions and never writes NaN geome
   assert.ok(!/NaN/.test(broken.svg));
   assert.ok(V9.validarPlanoSvg(broken.svg, null, { estructural: true }).valido);
 });
+
+// ── PLANOS-PUT-SVG: la edición manual del panel (PUT /planos/:id) pasa por el validador ──
+// Antes guardaba cualquier SVG: mal formado, con NaN, recursos externos o sin avisos.
+function putPlano({ row, svg, rol = 'admin' }) {
+  const updates = [];
+  const selects = [];
+  const actualizar = load('worker.js', 'actualizarPlanoSvg', {
+    getAuth: async () => ({ empresa_id: 5, rol }),
+    _ensurePlanosTable: async () => {},
+    normalizarPlanoEditadoManual: V9.normalizarPlanoEditadoManual,
+    err: (message, status) => ({ message, status }), json: data => data,
+  });
+  const env = { DB: { prepare(sql) { return { bind(...args) {
+    if (sql.startsWith('UPDATE')) {
+      assert.match(sql, /WHERE id=\? AND empresa_id=\?$/);
+      return { run: async () => { updates.push(args); } };
+    }
+    assert.match(sql, /^SELECT .* FROM planos WHERE id=\? AND empresa_id=\?$/);
+    selects.push(args);
+    return { first: async () => row };
+  } }; } } };
+  return actualizar({ json: async () => ({ svg_data: svg }) }, env, '/planos/28')
+    .then(result => ({ result, updates, selects }));
+}
+const filaPlano = (extra = {}) => ({ id: 28, tipo: 'planta', descripcion: 'QA', origen: null,
+  metadatos: JSON.stringify({ tipo: 'planta', cotas_entrada: [{ etiqueta: 'largo', valor_m: 40 }] }), ...extra });
+
+test('PLANOS-PUT-SVG: a valid manual edit is stored normalised, with the warnings and stored dimensions', async () => {
+  const guardado = V9.finalizarPlanoVerificado(conCota, { tipo: 'planta', cotas_entrada: [{ etiqueta: 'largo', valor_m: 40 }] }).svg;
+  // El usuario añade un texto y vuelve a guardar el archivo que ya llevaba avisos.
+  const editado = guardado.replace('</svg>', '<text x="50" y="80">Nota manual</text></svg>');
+  const { result, updates, selects } = await putPlano({ row: filaPlano(), svg: editado });
+  assert.equal(result.ok, true);
+  assert.deepEqual(selects[0], [28, 5]);
+  assert.equal(updates.length, 1);
+  const [svgGuardado, meta, id, empresa] = updates[0];
+  assert.equal(id, 28); assert.equal(empresa, 5);
+  assert.equal(svgGuardado, result.svg_data);
+  assert.match(svgGuardado, /Nota manual/);
+  assert.equal((svgGuardado.match(/id="alejandra-avisos-qa"/g) || []).length, 1, 'Exactly one warnings block');
+  assert.equal((svgGuardado.match(/id="alejandra-alcance-plano"/g) || []).length, 1);
+  // El viewBox no crece en cada guardado: se recupera el alto original antes de re-incrustar.
+  assert.equal(/viewBox="([^"]+)"/.exec(svgGuardado)[1], /viewBox="([^"]+)"/.exec(guardado)[1]);
+  assert.deepEqual(result.avisos_en_archivo, V9.avisosObligatoriosPlano({ tipo: 'planta' }).map(a => a.texto));
+  const metadatos = JSON.parse(meta);
+  assert.equal(metadatos.cotas_entrada[0].valor_m, 40, 'Stored dimensions are preserved');
+  assert.equal(metadatos.editado_manual, true);
+  assert.equal(metadatos.validador, V9.VERSION_VALIDADOR);
+  // Guardar dos veces el mismo archivo da el mismo resultado (idempotente).
+  const segunda = await putPlano({ row: filaPlano(), svg: svgGuardado });
+  assert.equal(segunda.updates[0][0], svgGuardado);
+});
+
+test('PLANOS-PUT-SVG: malformed XML, NaN and external resources answer 422 without UPDATE', async () => {
+  const casos = [
+    [conCota.replace('</svg>', '<g></svg>'), /XML invalido/],
+    [conCota.replace('</svg>', '<text x="1" y="2">A & B</text></svg>'), /XML invalido/],
+    [conCota.replace('x2="100"', 'x2="NaN"'), /no numerico/],
+    [conCota.replace('</svg>', '<image href="https://evil.example/x.png" x="0" y="0" width="10" height="10"/></svg>'), /imagen externa/],
+    [conCota.replace('</svg>', '<rect x="0" y="0" width="5" height="5" fill="url(https://evil.example/p)"/></svg>'), /recursos externos/],
+    [conCota.replace('</svg>', '<style>@import url(https://evil.example/a.css);</style></svg>'), /recursos externos/],
+    [conCota.replace('</svg>', '<script>alert(1)</script></svg>'), /no esperado/],
+    [conCota.replace('<line ', '<line onclick="x()" '), /no estatico/],
+    ['no es un svg', /XML invalido|sin contenedor|raiz/],
+  ];
+  for (const [svg, motivo] of casos) {
+    const { result, updates } = await putPlano({ row: filaPlano(), svg });
+    assert.equal(result.status, 422, `422 expected for ${svg.slice(-80)}`);
+    assert.match(result.message, motivo);
+    assert.match(result.message, /No se ha guardado/);
+    assert.equal(updates.length, 0, 'Nothing is stored on rejection');
+  }
+});
+
+test('PLANOS-PUT-SVG: warnings deleted or tampered by hand are restored by the server', async () => {
+  const guardado = V9.finalizarPlanoVerificado(conCota, { tipo: 'planta' }).svg;
+  const sinBloque = guardado
+    .replace(/<metadata id="alejandra-alcance-plano">[\s\S]*?<\/metadata>/, '')
+    .replace(/<g id="alejandra-avisos-qa"[\s\S]*?<\/g>/, '');
+  assert.ok(!/alejandra-avisos-qa/.test(sinBloque));
+  const manipulado = guardado.replace('NO EJECUTAR EN OBRA</text>\n<text', 'APTO PARA OBRA</text>\n<text')
+    .replace('Apto para ejecución: NO', 'Apto para ejecución: SI');
+  assert.notEqual(manipulado, guardado);
+  const sinAvisosDibujo = sinBloque.replace(/<text x="10" y="(20|40)">[^<]*<\/text>/g, '');
+  for (const svg of [sinBloque, manipulado, sinAvisosDibujo]) {
+    const { result, updates } = await putPlano({ row: filaPlano({ metadatos: '{}' }), svg });
+    assert.equal(result.ok, true, result.message);
+    assert.equal(updates.length, 1);
+    const check = V9.validarPlanoSvg(updates[0][0], { tipo: 'planta' });
+    assert.deepEqual(check.avisos_en_archivo, V9.avisosObligatoriosPlano({ tipo: 'planta' }).map(a => a.texto));
+    assert.deepEqual(check.alcance_en_archivo, { tipo_documento: 'borrador_tecnico', apto_para_ejecucion: false });
+    assert.ok(!/APTO PARA OBRA|Apto para ejecución: SI/.test(updates[0][0]));
+  }
+  // Un plano anterior a IA-QUALITY-09 (sin bloque) recibe los avisos al guardarse.
+  const { updates } = await putPlano({ row: filaPlano({ metadatos: null }), svg: conCota });
+  assert.match(updates[0][0], /id="alejandra-avisos-qa"/);
+});
+
+test('PLANOS-PUT-SVG: removing a stored dimension, reserved ids or a confirmed datum is rejected', async () => {
+  const sinCota = svg9('<text x="10" y="60">Largo 12 m</text>');
+  let r = await putPlano({ row: filaPlano(), svg: sinCota });
+  assert.equal(r.result.status, 422);
+  assert.match(r.result.message, /cotas aportadas/);
+  assert.equal(r.updates.length, 0);
+  r = await putPlano({ row: filaPlano({ metadatos: '{}' }), svg: conCota.replace('</svg>', '<text id="alejandra-avisos-qa" x="1" y="1">x</text></svg>') });
+  assert.equal(r.result.status, 422);
+  assert.equal(r.updates.length, 0);
+  r = await putPlano({ row: filaPlano({ tipo: 'bandejas', metadatos: '{}', descripcion: montajeDescripcion(montajeConfirmado) }), svg: conCota });
+  assert.equal(r.result.ok, true, 'The confirmed mounting datum is re-embedded by the server');
+  assert.match(r.updates[0][0], /Altura de montaje: 2\.8 m sobre suelo terminado/);
+  r = await putPlano({ row: filaPlano({ tipo: 'bandejas', metadatos: '{}', descripcion: montajeDescripcion({ ok: false }) }), svg: conCota });
+  assert.equal(r.result.status, 422);
+  assert.equal(r.updates.length, 0);
+});
+
+test('PLANOS-PUT-SVG: imported CAD is validated structurally, and auth/tenant checks are unchanged', async () => {
+  const cad = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><line x1="0" y1="0" x2="100" y2="0" stroke="#000"/></svg>';
+  let r = await putPlano({ row: filaPlano({ origen: 'importado', metadatos: '{"nombre_original":"a.dxf"}' }), svg: cad });
+  assert.equal(r.result.ok, true);
+  assert.equal(r.updates[0][0], cad, 'Imported CAD keeps the user file without AI warnings');
+  assert.equal(JSON.parse(r.updates[0][1]).nombre_original, 'a.dxf');
+  r = await putPlano({ row: filaPlano({ origen: 'importado' }), svg: cad.replace('x2="100"', 'x2="Infinity"') });
+  assert.equal(r.result.status, 422);
+  assert.equal(r.updates.length, 0);
+  r = await putPlano({ row: filaPlano(), svg: conCota, rol: 'operario' });
+  assert.equal(r.result.status, 403);
+  assert.equal(r.selects.length + r.updates.length, 0);
+  r = await putPlano({ row: null, svg: conCota });
+  assert.equal(r.result.status, 404);
+  assert.equal(r.updates.length, 0);
+});
