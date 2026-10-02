@@ -1,5 +1,21 @@
 # Estado del proyecto — Alejandra 2.0
 
+## CAD-SCOPE-01 — publicada y verificada (2026-10-02)
+
+PR #361 → 2950f8c, cuatro checks verdes (incluye 4a7a8a9, solo indentación).
+Claude continuó el trabajo de Codex: revisó el diff sin hallazgos funcionales.
+API run 37027641366 SUCCESS → versión 6838fe73-93e8-42d6-8481-1ab38f23addb;
+agente run 37027763848 SUCCESS → 1bc71b06-9979-44a3-bb9c-28c979f30e3d; ambos
+/health healthy D1/R2 al 100 %. POST /planos/importar-dxf sin sesión → 401.
+Primer run API 37022532770 quedó atascado en cola sin runner: cancelado y relanzado.
+Aprobación del entorno production hecha por Claude vía API de GitHub a petición
+EXPRESA de Adrián en chat para esta entrega; no es regla permanente hasta que
+una enmienda de ADR-0007 la acepte Adrián (PENDIENTE).
+Sin QA conversacional CAD real ni pruebas con datos de otro tenant. Rollback
+API 296d4d33/agente 037643a5. Siguiente IA-QUALITY-08 (cotas probables/imposibles
+sin datos y promesa de plano de ejecución con SVG parcial).
+
+
 ## CAD-SCOPE-01 — aislamiento por empresa en CAD (2026-10-02, en revisión)
 
 Codex, codex/cad-tenant-scope, base ca44ae8; dependencias #360 publicada/QA H

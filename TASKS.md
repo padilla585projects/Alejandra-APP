@@ -1,6 +1,13 @@
 # TASKS — Cola operativa inmediata
 
-## CAD-SCOPE-01 — empresa de sesión en tools y lectura DXF (2026-10-02, en desarrollo)
+## IA-QUALITY-08 — plausibilidad de cotas y sobrepromesa de plano (siguiente, aprobada)
+
+- Dependencia CAD-SCOPE-01 publicada y verificada (API 6838fe73, agente 1bc71b06).
+- QA H: sugiere 3.20 m como probable y descarta 320 mm como imposible sin evidencia;
+  QA G: promete «plano de ejecución real» con SVG parcial. Corregir ambos con QA nueva.
+- Contexto arrastrado entre casos («Otro caso») sigue pendiente de tarea propia.
+
+## CAD-SCOPE-01 — empresa de sesión en tools y lectura DXF (2026-10-02, publicada y verificada)
 
 - Encadenado autorizado; Codex, codex/cad-tenant-scope, base ca44ae8.
 - Dependencia #360 integrada con cuatro checks verdes; agente 3ee1bb37 healthy y QA H
