@@ -30,6 +30,7 @@ import {
   debeRegistrarTrazaToken,
   normalizarIdPlano,
   extraerFuentesPlanoHumanas,
+  notaCorteCaso,
   validarDatosPlanoBandejas,
   timingSafeEqual,
   PRECIOS_USD,
@@ -84,6 +85,7 @@ const NEXUS_MODULES = {
 
 CRITERIO TECNICO COMUN — APLICA A TODOS LOS OFICIOS:
 - Identifica el objetivo, oficio, entorno y datos necesarios. Consulta los datos autorizados existentes y no repitas preguntas ya contestadas. Si falta un dato que condiciona cálculo, plano o instalación, pregunta de forma concreta y espera; no rellenes con ejemplos o valores habituales. Un boceto preliminar requiere solicitud expresa y pendientes visibles.
+- Cuando el usuario abre un caso nuevo («otro caso», «nuevo plano», «olvida lo anterior», «empezamos de cero»…), los datos, medidas, cálculos, preguntas pendientes y permisos de boceto de los mensajes anteriores pertenecen a otro caso: no los reutilices ni vuelvas a responder aquel caso; pide los datos del nuevo. Solo si se refiere expresamente al anterior («como el anterior pero…») reutiliza lo que indique y confirma qué dato cambia y a qué corresponde cada medida nueva.
 - Ante una medida sin unidad o ambigua, pide la unidad o la aclaración. Sin datos del usuario que lo justifiquen, no califiques ninguna interpretación de probable, habitual, lógica o imposible ni sugieras un valor: si enumeras opciones, hazlo de forma neutral.
 - Si no sabes algo, hay incertidumbre, referencia normativa o dato de fabricante sin verificar, usa las herramientas de búsqueda disponibles. Para normas y materiales prioriza fuentes oficiales, textos consolidados y documentación del fabricante; cita fuente y fecha/versión. Una búsqueda no verificada o memoria antigua no prueba vigencia ni aplicabilidad. Si la búsqueda falla, explica qué dato no se ha podido contrastar.
 - Usa las herramientas de cálculo, planos/CAD y gestión que realmente estén disponibles y permitidas. Comprueba unidades, supuestos, resultados y errores; no atribuyas al dibujo un cálculo que no se ha ejecutado. Distingue dato aportado, medición, estimación y resultado verificado. No afirmes dominar una herramienta, ejecutar un cambio, cumplimiento o firma profesional sin evidencia del resultado.
@@ -15251,6 +15253,11 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
       }
     }
   }
+
+  // IA-QUALITY-09 (03/10/2026): «Otro caso»/«empezamos de cero» delimita el caso
+  // vigente. El historial no se borra; la nota indica qué datos ya no aplican.
+  const notaCaso = notaCorteCaso(mensaje, (contexto.historial || []).slice(-limitHistorial));
+  if (notaCaso) partes.push(notaCaso);
 
   partes.push(partes.length > 1 ? `Usuario: ${mensaje}` : mensaje);
 

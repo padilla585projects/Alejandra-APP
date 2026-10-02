@@ -1225,17 +1225,76 @@ function validarEstiloCAD(svgContent) {
   return problemas;
 }
 
-// Solo texto humano original. Excluye respuestas, resúmenes y resultados de tools.
-function extraerFuentesPlanoHumanas(mensaje, historial = []) {
-  const fuentes = historial.slice(-24).flatMap(item => {
-    if (item.rol === 'user' && typeof item.contenido === 'string') return [item.contenido];
-    if (!item.rol && typeof item.mensaje === 'string') return [item.mensaje];
+// IA-QUALITY-09 (03/10/2026): QA G/H arrastraban datos de un caso anterior pese a
+// «Otro caso». Corte de contexto determinista: el mensaje humano que abre un caso nuevo
+// separa los datos confirmados antes de él. No borra historial; solo decide qué texto
+// humano alimenta los gates y qué aviso recibe el modelo.
+const RE_CASO_NUEVO = new RegExp([
+  '\\b(?:nueva|otra)\\s+(?:obra|instalaci[oó]n|nave)\\b',
+  '\\b(?:nuevo|otro)\\s+(?:proyecto|plano|caso|c[aá]lculo|ejercicio|supuesto|trabajo)\\b',
+  '\\b(?:caso|plano|proyecto|c[aá]lculo|ejercicio|supuesto)\\s+(?:nuevo|distinto|diferente)\\b',
+  '\\bolv[ií]d(?:a|ate|ad|emos|ar)\\s+(?:de\\s+)?(?:todo\\s+)?(?:lo\\s+|el\\s+|la\\s+|los\\s+|las\\s+)?(?:anterior(?:es)?|de antes|previ[oa]s?|caso anterior|datos anteriores)',
+  '\\b(?:empezamos|empecemos|empezar|empiezo|empieza|volvemos a empezar|vamos|partimos|partir|arrancamos|arrancar)\\s+(?:de|desde)\\s+cero\\b',
+  '\\bborr[oó]n y cuenta nueva\\b',
+  '\\bcambi(?:o|amos|ando)\\s+de\\s+(?:caso|tema|proyecto|obra)\\b',
+  '\\bnada que ver con (?:lo |el |la )?(?:anterior|de antes)',
+].join('|'), 'i');
+// Referencia explícita al caso anterior: hereda sus datos humanos confirmados.
+const RE_HEREDA_CASO = /\b(?:como|igual\w*|mism[oa]s?|usa(?:ndo|r)?|reutiliz\w*|mant[eé]n(?:er|iendo)?|conserv(?:a|ar|ando)|aprovech(?:a|ar|ando)|basad[oa]s?\s+en|a partir de|partiendo de|cop(?:ia|iar|iando)|duplic(?:a|ar|ando))(?:\s+[\wáéíóúñ]+){0,4}?\s+(?:anterior(?:es)?|de antes|previ[oa]s?)\b/i;
+const RE_NO_HEREDA = /\bno\s+(?:\w+\s+){0,2}(?:uses|utilices|reutilices|mantengas|conserves|aproveches|copies|como|igual)\b|\bolv[ií]d/i;
+
+function esInicioCasoNuevo(texto) {
+  return typeof texto === 'string' && RE_CASO_NUEVO.test(texto);
+}
+
+function heredaCasoAnterior(texto) {
+  return typeof texto === 'string' && RE_HEREDA_CASO.test(texto) && !RE_NO_HEREDA.test(texto);
+}
+
+// Posición del corte vigente en una lista de textos humanos (o -1). Si el inicio de
+// caso, o un mensaje posterior del mismo caso, se refiere expresamente al anterior,
+// ese corte no aplica y se busca el previo. La referencia solo alcanza un caso atrás.
+function indiceCorteCaso(textos) {
+  let hereda = false;
+  for (let i = textos.length - 1; i >= 0; i--) {
+    const refiereAnterior = heredaCasoAnterior(textos[i]);
+    if (esInicioCasoNuevo(textos[i])) {
+      if (hereda || refiereAnterior) { hereda = false; continue; }
+      return i;
+    }
+    if (refiereAnterior) hereda = true;
+  }
+  return -1;
+}
+
+function textosHumanosHistorial(historial = []) {
+  return (Array.isArray(historial) ? historial : []).slice(-24).flatMap(item => {
+    if (item?.rol === 'user' && typeof item.contenido === 'string') return [item.contenido];
+    if (!item?.rol && typeof item?.mensaje === 'string') return [item.mensaje];
     return [];
   });
+}
+
+// Solo texto humano original. Excluye respuestas, resúmenes y resultados de tools.
+function extraerFuentesPlanoHumanas(mensaje, historial = []) {
+  const fuentes = textosHumanosHistorial(historial);
   if (typeof mensaje === 'string') fuentes.push(mensaje);
-  // Un cambio explícito de trabajo invalida datos y permiso de boceto anteriores.
-  const inicioNuevo = fuentes.findLastIndex(texto => /\b(?:(?:nueva|otra)\s+(?:obra|instalaci[oó]n|nave)|(?:nuevo|otro)\s+(?:proyecto|plano|caso))\b/i.test(texto));
+  // Un cambio explícito de trabajo invalida datos y permiso de boceto anteriores,
+  // salvo referencia explícita al caso anterior («como el anterior pero…»).
+  const inicioNuevo = indiceCorteCaso(fuentes);
   return inicioNuevo >= 0 ? fuentes.slice(inicioNuevo) : fuentes;
+}
+
+// Aviso para el modelo cuando el caso vigente empezó dentro de la ventana de historial.
+// El historial sigue visible; la nota delimita qué datos pertenecen al caso actual.
+function notaCorteCaso(mensaje, historial = []) {
+  const textos = textosHumanosHistorial(historial);
+  if (typeof mensaje === 'string') textos.push(mensaje);
+  const corte = indiceCorteCaso(textos);
+  if (corte < 0) return null;
+  const actual = corte === textos.length - 1;
+  const inicio = String(textos[corte]).replace(/\s+/g, ' ').trim().slice(0, 120);
+  return `[INSTRUCCIÓN — CASO NUEVO: ${actual ? 'este mensaje del usuario abre' : `el mensaje del usuario «${inicio}» abrió`} un caso nuevo. Las medidas, alturas, tramos, unidades, referencias, cálculos y permisos de boceto de mensajes anteriores a ese punto pertenecen a otro caso: no los reutilices, no los des por confirmados ni respondas preguntas de aquel caso. Pide de nuevo los datos que falten. Solo si el usuario se refiere expresamente al caso anterior (p. ej. «como el anterior pero…») puedes reutilizar lo que indique y debes confirmar qué dato cambia.]`;
 }
 
 // Contrato numérico de IDs CAD compartido por ambos Workers. No coercionar
@@ -1261,18 +1320,25 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
   }
   if (preliminar) return { ok: true, modo: 'boceto_preliminar', nota: 'Boceto preliminar solicitado; identificar datos pendientes. No ejecutar en obra.' };
   let altura = null, fuenteAltura = null, referencia = null;
-  let alturaPendiente = false, referenciaPendiente = false, alturaSinUnidad = false;
+  let alturaPendiente = false, referenciaPendiente = false, alturaSinUnidad = false, alturaCambioSinCampo = false;
   for (const texto of [...fuentes].reverse()) {
     const alturas = [...texto.matchAll(/\b(?:altura(?: de montaje)?\s*(?::|=|de|a)?|cota(?: de montaje)?\s*(?::|=|de|a)?|[hz]\s*=)\s*([+-]?\d+(?:[.,]\d+)?)\s*(mm|cm|metros?|m)\b/gi)];
     const medidasIndicadas = [...texto.matchAll(/\b(?:altura(?: de montaje)?|cota(?!\s+(?:0|cero)\s+(?:del|de)\s+proyecto)(?: de montaje)?|[hz]\s*=)\s*(?:(?:[:=]|de|a|es|ser[aá])\s*)?[+-]?\d/gi)];
     const alturaIncompleta = medidasIndicadas.length > alturas.length;
+    // «como el anterior pero con 3 m»: una medida modificada sin decir a qué dato
+    // corresponde no puede dejar vigente la altura heredada ni reinterpretarse.
+    const cambioSinCampo = !alturas.length && !medidasIndicadas.length
+      && /\b(?:pero|salvo|excepto|cambiando|cambia)\b(?:\s+(?!(?:ancho|anchura|bandejas?|secci[oó]n|longitud|largo|recorrido|tramos?)\b)[\wáéíóúñ]+){0,3}?\s+\d+(?:[.,]\d+)?\s*(?:mm|cm|metros?|m)\b/i.test(texto);
     const referencias = [...texto.matchAll(/\b(?:suelo terminado|pavimento terminado|FFL|cota (?:0|cero) (?:del |de )?proyecto)\b/gi)];
     // Un ejemplo, una duda o una negación no confirma una medida. La ambigüedad
     // reciente tampoco autoriza rescatar un valor antiguo como si siguiera vigente.
     const noConfirmado = /\b(?:ejemplos?|supong\w*|quiz[aá]s?|podr[ií]a|aproximad\w*|pendiente|sin (?:definir|confirmar|unidad)|por (?:medir|definir|confirmar)|no (?:s[eé]|sabemos|conozco|confirm\w*|es|ser[aá]|usar|uses|utilices)|desconozco)(?=\s|[,.!?;:]|$)|[¿?]/i.test(texto);
     if (altura === null && !alturaPendiente) {
       const valores = alturas.map(match => Number(match[1].replace(',', '.')) / (match[2].toLowerCase() === 'mm' ? 1000 : match[2].toLowerCase() === 'cm' ? 100 : 1));
-      if (alturaIncompleta || (alturas.length && (noConfirmado || valores.some(valor => Math.abs(valor - valores[0]) > 1e-9)))) {
+      if (cambioSinCampo) {
+        alturaPendiente = true;
+        alturaCambioSinCampo = true;
+      } else if (alturaIncompleta || (alturas.length && (noConfirmado || valores.some(valor => Math.abs(valor - valores[0]) > 1e-9)))) {
         alturaPendiente = true;
         alturaSinUnidad = alturaIncompleta;
       } else if (alturas.length) {
@@ -1295,7 +1361,9 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
     if ((altura !== null || alturaPendiente) && (referencia !== null || referenciaPendiente)) break;
   }
   const preguntas = [];
-  if (altura === null || !Number.isFinite(altura)) preguntas.push(alturaSinUnidad
+  if (altura === null || !Number.isFinite(altura)) preguntas.push(alturaCambioSinCampo
+    ? 'Indicas una medida nueva sin precisar a qué dato corresponde. Confirma la altura de montaje con su unidad (m, cm o mm); no reutilizaré la del caso anterior ni supondré que esa medida es la altura.'
+    : alturaSinUnidad
     ? 'La altura indicada no tiene una unidad admitida. Confirma el valor con su unidad (m, cm o mm); no supondré cuál es la interpretación más probable ni descartaré ninguna.'
     : alturaPendiente
     ? 'Hay una altura dudosa o varias alturas. Confirma un único valor con unidad, o detalla la altura y referencia de cada tramo; no elegiré la primera.'
@@ -1340,6 +1408,9 @@ function alcancePlanoGenerado(datosPlano = {}) {
 }
 
 export {
+  esInicioCasoNuevo,
+  heredaCasoAnterior,
+  notaCorteCaso,
   alcancePlanoGenerado,
   debeRegistrarTrazaToken,
   normalizarIdPlano,
