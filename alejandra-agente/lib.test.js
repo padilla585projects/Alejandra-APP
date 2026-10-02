@@ -5,6 +5,9 @@ import {
   debeRegistrarTrazaToken,
   normalizarIdPlano,
   extraerFuentesPlanoHumanas,
+  esInicioCasoNuevo,
+  heredaCasoAnterior,
+  notaCorteCaso,
   validarDatosPlanoBandejas,
   PRECIOS_USD,
   calcularCosteYProveedor,
@@ -125,6 +128,105 @@ describe('datos humanos necesarios para planos de bandejas', () => {
       expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, fuentes).error).toBe('DATOS_TECNICOS_FALTANTES');
     }
     expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, ['Haz un boceto preliminar', 'Ahora quiero el plano para instalar']).ok).toBe(false);
+  });
+  describe('IA-QUALITY-09 — corte de contexto entre casos', () => {
+    const casoAnterior = [
+      { rol: 'user', contenido: 'Bandejas en nave A, altura 4 m sobre FFL' },
+      { rol: 'assistant', contenido: 'Entendido: 4 m sobre FFL.' },
+      { rol: 'user', contenido: 'Tramo de 12 m, bandeja 300 x 60 mm' },
+    ];
+    it('detecta las fórmulas de caso nuevo y no confunde frases normales', () => {
+      for (const texto of ['Otro caso: bandejas en nave B', 'Nuevo caso', 'Ahora otro plano de bandejas',
+        'Olvida lo anterior, tengo otra nave', 'Olvídate de todo lo de antes', 'Empezamos de cero',
+        'Vamos desde cero con esto', 'Un caso distinto: oficina', 'Otro cálculo de sección', 'Cambio de tema',
+        'Borrón y cuenta nueva', 'Otra obra en Getafe', 'nada que ver con lo anterior']) {
+        expect(esInicioCasoNuevo(texto)).toBe(true);
+      }
+      for (const texto of ['Altura 3 m sobre FFL', 'La cota cero del proyecto es el FFL', 'En este caso, el tramo mide 6 m',
+        'Del plano anterior cambia solo el título', 'Otra bandeja paralela de 200 mm', 'Vale', 'Corrijo altura 3.2 m']) {
+        expect(esInicioCasoNuevo(texto)).toBe(false);
+      }
+    });
+    it('un caso nuevo no recupera la altura de 4 m ni la referencia del caso anterior', () => {
+      for (const mensaje of ['Otro caso: bandejas en nave B, planta 20 x 8 m', 'Olvida lo anterior. Bandejas en sala técnica',
+        'Empezamos de cero: recorrido de 15 m', 'Ahora otro plano de bandejas para oficinas', 'Caso nuevo, nave C']) {
+        const fuentes = extraerFuentesPlanoHumanas(mensaje, casoAnterior);
+        expect(fuentes).toEqual([mensaje]);
+        const resultado = validarDatosPlanoBandejas({ tipo: 'bandejas', descripcion: 'h=4 m sobre FFL' }, fuentes);
+        expect(resultado.ok).toBe(false);
+        expect(resultado.error).toBe('DATOS_TECNICOS_FALTANTES');
+        expect(resultado).not.toHaveProperty('altura_m');
+        expect(resultado.preguntas).toHaveLength(2);
+      }
+    });
+    it('el corte persiste en turnos posteriores del caso nuevo y admite datos nuevos', () => {
+      const historial = [...casoAnterior, { rol: 'user', contenido: 'Otro caso: nave B' }, { rol: 'assistant', contenido: '¿Altura?' }];
+      const sinDatos = extraerFuentesPlanoHumanas('Recorrido de 10 m por el pasillo', historial);
+      expect(sinDatos).toEqual(['Otro caso: nave B', 'Recorrido de 10 m por el pasillo']);
+      expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, sinDatos).ok).toBe(false);
+      const conDatos = validarDatosPlanoBandejas({ tipo: 'bandejas' }, extraerFuentesPlanoHumanas('Altura 3 m sobre suelo terminado', historial));
+      expect(conDatos.ok).toBe(true);
+      expect(conDatos.altura_m).toBe(3);
+    });
+    it('un caso nuevo invalida el permiso de boceto del caso anterior', () => {
+      const historial = [{ rol: 'user', contenido: 'Haz un boceto preliminar de bandejas' }];
+      const fuentes = extraerFuentesPlanoHumanas('Empezamos de cero, otra nave', historial);
+      expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, fuentes).ok).toBe(false);
+    });
+    it('la referencia explícita al caso anterior conserva sus datos', () => {
+      expect(heredaCasoAnterior('Otro caso como el anterior pero altura 3 m')).toBe(true);
+      expect(heredaCasoAnterior('Otro plano igual que el anterior')).toBe(true);
+      expect(heredaCasoAnterior('Nuevo caso, usa los mismos datos del caso anterior')).toBe(true);
+      const igual = validarDatosPlanoBandejas({ tipo: 'bandejas' }, extraerFuentesPlanoHumanas('Otro plano igual que el anterior, en la nave B', casoAnterior));
+      expect(igual.ok).toBe(true);
+      expect(igual.altura_m).toBe(4);
+      const cambiaAltura = validarDatosPlanoBandejas({ tipo: 'bandejas' }, extraerFuentesPlanoHumanas('Otro caso como el anterior pero altura 3 m', casoAnterior));
+      expect(cambiaAltura.ok).toBe(true);
+      expect(cambiaAltura.altura_m).toBe(3);
+      expect(cambiaAltura.referencia).toBe('FFL');
+    });
+    it('la referencia puede llegar en el turno siguiente al corte y solo alcanza un caso atrás', () => {
+      const historial = [...casoAnterior, { rol: 'user', contenido: 'Otro caso: nave B' }];
+      const hereda = validarDatosPlanoBandejas({ tipo: 'bandejas' }, extraerFuentesPlanoHumanas('Usa la misma altura que el caso anterior', historial));
+      expect(hereda.ok).toBe(true);
+      expect(hereda.altura_m).toBe(4);
+      const dosCasos = [{ rol: 'user', contenido: 'Altura 5 m sobre FFL' }, { rol: 'user', contenido: 'Otro caso, nave A' }, ...casoAnterior,
+        { rol: 'user', contenido: 'Otro caso como el anterior' }];
+      const fuentes = extraerFuentesPlanoHumanas('Altura 3 m sobre FFL', dosCasos);
+      expect(fuentes[0]).toBe('Otro caso, nave A');
+      expect(fuentes).not.toContain('Altura 5 m sobre FFL');
+    });
+    it('«como el anterior pero con 3 m» no reutiliza 4 m ni supone que 3 m sea la altura', () => {
+      const resultado = validarDatosPlanoBandejas({ tipo: 'bandejas' }, extraerFuentesPlanoHumanas('Otro caso como el anterior pero con 3 m', casoAnterior));
+      expect(resultado.ok).toBe(false);
+      expect(resultado).not.toHaveProperty('altura_m');
+      expect(resultado.preguntas).toHaveLength(1);
+      expect(resultado.preguntas[0]).toMatch(/no reutilizaré/);
+      const ancho = validarDatosPlanoBandejas({ tipo: 'bandejas' }, extraerFuentesPlanoHumanas('Otro caso como el anterior pero con bandeja de 200 mm', casoAnterior));
+      expect(ancho.ok).toBe(true);
+      expect(ancho.altura_m).toBe(4);
+    });
+    it('una negación u «olvida» no se interpreta como referencia al anterior', () => {
+      for (const texto of ['Otro caso, no uses los datos del anterior', 'Otro caso, olvida lo anterior aunque sea igual']) {
+        expect(heredaCasoAnterior(texto)).toBe(false);
+        expect(validarDatosPlanoBandejas({ tipo: 'bandejas' }, extraerFuentesPlanoHumanas(texto, casoAnterior)).ok).toBe(false);
+      }
+    });
+    it('notaCorteCaso avisa al modelo sin borrar historial y calla sin corte o con herencia', () => {
+      const actual = notaCorteCaso('Otro caso: nave B', casoAnterior);
+      expect(actual).toMatch(/CASO NUEVO: este mensaje del usuario abre/);
+      expect(actual).toMatch(/no los reutilices/);
+      const previa = notaCorteCaso('Altura 3 m', [...casoAnterior, { rol: 'user', contenido: 'Empezamos de cero' }]);
+      expect(previa).toMatch(/«Empezamos de cero» abrió/);
+      expect(notaCorteCaso('Altura 3 m sobre FFL', casoAnterior)).toBeNull();
+      expect(notaCorteCaso('Otro caso como el anterior pero altura 3 m', casoAnterior)).toBeNull();
+      expect(notaCorteCaso('Otro caso', [{ rol: 'assistant', contenido: 'Otro caso' }])).toMatch(/este mensaje/);
+    });
+    it('el worker inyecta la nota y el prompt declara la regla coherente', () => {
+      const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+      expect(src).toMatch(/notaCorteCaso\(mensaje, \(contexto\.historial \|\| \[\]\)\.slice\(-limitHistorial\)\)/);
+      expect(src).toMatch(/Cuando el usuario abre un caso nuevo/);
+    });
   });
   it('mencionar o preguntar qué es un boceto no equivale a solicitarlo', () => {
     for (const texto of ['¿Qué es un boceto preliminar?', 'La documentación menciona un boceto', 'No generes un boceto preliminar']) {
