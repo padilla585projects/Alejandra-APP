@@ -106,8 +106,9 @@ Todo despliegue autónomo exige **verificación posterior registrada**.
 > confirmación exacta y superar la protección del entorno GitHub `production`.
 >
 > ADR-0007 permite que un agente **inicie** ese workflow por su cuenta, porque desplegar es
-> reversible. Lo que **no** cambia es la aprobación del entorno: sigue siendo humana. Es la
-> última barrera real y ARC-014 ya la señala como debilitada.
+> reversible, y desde la **enmienda 2 (03/10/2026)** también que **apruebe** el entorno
+> `production` en despliegues de código (CI verde, rollback registrado, verificación en vivo).
+> Nunca para workflows con migraciones D1, secretos o borrados: ahí sigue siendo humana.
 >
 > Ver `docs/decisions/ADR-0001-ENTREGA-DELIBERADA.md`,
 > `docs/decisions/ADR-0007-AUTONOMIA-DE-AGENTES-EN-DESARROLLO.md` y
