@@ -27234,6 +27234,8 @@ async function _registrarPushDeveloper() {
         headers: _rsApiHeaders(),
         body: JSON.stringify({ tipo: 'office', nombre: 'Alejandra Office' })
       });
+      // D1-ESCRITURAS-01: sesión borrada → parar el sync en vez de sondear sin fin.
+      if (r.status === 401) { rsDetenerSync(); if (TOKEN) _panelSesionCaducada(); return []; }
       const d = await r.json();
       _rsDispositivos = d.dispositivos || [];
       _rsActualizarFab();
@@ -27270,6 +27272,7 @@ async function _registrarPushDeveloper() {
       const r = await fetch(API + '/sync/eventos?desde=' + encodeURIComponent(_rsSyncDesde) + '&excluir_origen=office', {
         headers: _rsApiHeaders()
       });
+      if (r.status === 401) { rsDetenerSync(); if (TOKEN) _panelSesionCaducada(); return; }
       const d = await r.json();
       if (d.servidor) {
         const servidorMs = Date.parse(d.servidor);
@@ -27679,7 +27682,7 @@ async function _registrarPushDeveloper() {
 
 // La versión queda embebida en Office para detectar incluso una primera carga servida
 // desde caché. version.json es la fuente remota y el parámetro de recarga evita la caché HTTP.
-const PANEL_APP_VERSION = '9.81';
+const PANEL_APP_VERSION = '9.82';
 let _panelActualizando = false;
 async function _checkPanelVersion() {
   if (_panelActualizando) return;

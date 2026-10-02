@@ -1307,7 +1307,22 @@ function validarDatosPlanoBandejas(input, fuentesHumanas = []) {
   return { ok: true, modo: 'borrador_tecnico', altura_m: altura, referencia, fuente_altura: fuenteAltura };
 }
 
+// D1-ESCRITURAS-01 (02/10/2026): un dispositivo con token muerto sondeando cada 5 s
+// generó ~9.800 trazas auth_token_no_encontrado en 12 h y agotó la cuota diaria de
+// escrituras D1. Una traza por prefijo de token y ventana basta para diagnosticar.
+// Pura: el llamador aporta el Map (vive por isolate) y el reloj.
+function debeRegistrarTrazaToken(vistos, prefijo, ahoraMs, ventanaMs = 10 * 60 * 1000) {
+  if (!vistos || typeof vistos.get !== 'function' || typeof vistos.set !== 'function') return true;
+  const clave = String(prefijo || '');
+  const ultimo = vistos.get(clave);
+  if (ultimo !== undefined && ahoraMs - ultimo < ventanaMs) return false;
+  if (vistos.size >= 500) vistos.clear();
+  vistos.set(clave, ahoraMs);
+  return true;
+}
+
 export {
+  debeRegistrarTrazaToken,
   normalizarIdPlano,
   extraerFuentesPlanoHumanas,
   validarDatosPlanoBandejas,
