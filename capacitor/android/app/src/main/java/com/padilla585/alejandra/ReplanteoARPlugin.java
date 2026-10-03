@@ -90,6 +90,11 @@ public class ReplanteoARPlugin extends Plugin {
             // ADR-0027: id de la sesión de escaneo del entorno (fotogramas clave en R2).
             String escaneoId = data.getStringExtra("escaneo_id");
             if (escaneoId != null) ret.put("escaneo_id", escaneoId);
+            // REPL-PARALELOS-01 (03/10/2026): líneas en paralelo elegidas en el AR ({ n, hueco_m }).
+            String paralelos = data.getStringExtra("paralelos");
+            if (paralelos != null) {
+                try { ret.put("paralelos", new JSObject(paralelos)); } catch (Exception ignored) {}
+            }
         } else {
             ret.put("ok", false);
             if (data != null && data.getStringExtra("error") != null) ret.put("error", data.getStringExtra("error"));

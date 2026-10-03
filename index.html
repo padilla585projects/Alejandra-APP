@@ -2052,6 +2052,20 @@ select option{background:var(--surface2);color:var(--text)}
       <select id="replCajaTipo" class="repl-input" style="flex:1;padding:7px 8px" onchange="replCambiarCaja()"></select>
       <select id="replCajaMed" class="repl-input" style="width:120px;padding:7px 8px" onchange="replCambiarCaja()"></select>
     </div>
+    <!-- REPL-PARALELOS-01 (03/10/2026, prioridad 3): varios tubos/bandejas en paralelo por el mismo
+         recorrido (mismos giros, separación regular). Se guarda en trazado_json.paralelos (sin
+         migración) y el servidor multiplica el material por el número de líneas. -->
+    <div id="replParalelosRow" style="padding:0 12px 8px;display:flex;gap:6px;align-items:center">
+      <span style="font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap">⫴ Líneas</span>
+      <select id="replParalelosN" class="repl-input" style="flex:1;padding:7px 8px" onchange="replCambiarParalelos()"></select>
+      <select id="replParalelosHueco" class="repl-input" style="width:132px;padding:7px 8px" onchange="replCambiarParalelos()"></select>
+    </div>
+    <!-- REPL-ANGULO-RECTO-01 (03/10/2026, prioridad 2): un trazado AR se dibuja y se mide en ángulo
+         recto respecto a las superficies reales; aquí se puede volver a la diagonal real por tramo. -->
+    <div id="replTramosRow" style="padding:0 12px 8px;display:none;gap:6px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap" title="⟂ = en ángulo recto (sube por la pared, gira en la esquina, sigue por el techo) · ⟋ = diagonal real, tal cual se marcó">📐 Tramos</span>
+      <span id="replTramosChips" style="display:flex;gap:5px;flex-wrap:wrap"></span>
+    </div>
     <div id="replCanvasWrap" style="position:relative;background:#0b0f14;height:50vh;min-height:230px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none">
       <canvas id="replCanvas" style="display:block;width:100%;height:100%"></canvas>
       <div id="replHint" style="position:absolute;left:8px;right:8px;bottom:8px;font-size:11px;color:#fff;background:rgba(0,0,0,.55);padding:6px 8px;border-radius:8px;pointer-events:none;line-height:1.35"></div>
@@ -2268,6 +2282,21 @@ select option{background:var(--surface2);color:var(--text)}
     </div>
   </div>
 
+  <!-- GIRO-PANTALLA-AR-01 (03/10/2026): en horizontal la pantalla tiene ~360 px de alto y los paneles
+       del AR (pensados en vertical) tapaban casi toda la cámara. Con el móvil girado se compactan a
+       un lado y respetan el área segura lateral (muesca/barra de navegación). -->
+  <style>
+    @media (orientation: landscape) and (max-height: 560px) {
+      #replArEstado, #replArAviso { right: auto !important; width: min(560px, 58vw); left: calc(10px + env(safe-area-inset-left, 0px)) !important; max-height: 22vh !important; }
+      #replArAviso { top: calc(52px + env(safe-area-inset-top, 0px)) !important; }
+      #replArEscaneo { right: auto !important; width: min(460px, 62vw); left: calc(10px + env(safe-area-inset-left, 0px)) !important; max-height: calc(100vh - 24px); overflow: auto; }
+      #replArBarraMarcado { left: auto !important; width: min(470px, 62vw); right: calc(8px + env(safe-area-inset-right, 0px)) !important; }
+      #replArPanelOpts, #replArPanelPunto { left: auto !important; width: min(470px, 62vw); right: calc(8px + env(safe-area-inset-right, 0px)) !important; max-height: calc(100vh - 112px); overflow: auto; }
+      #replArPanelMod { right: calc(60px + env(safe-area-inset-right, 0px)) !important; bottom: 92px !important; max-height: calc(100vh - 112px); overflow: auto; }
+      #btnReplArMod, #replArIAChip { right: calc(12px + env(safe-area-inset-right, 0px)) !important; }
+      #replArSupChip { left: auto !important; right: calc(12px + env(safe-area-inset-right, 0px)) !important; bottom: 172px !important; }
+    }
+  </style>
   <!-- REPLANTEO-02: capa DOM sobre la sesión AR (WebXR dom-overlay). Solo visible durante la sesión. -->
   <div id="replArOverlay" style="display:none;position:fixed;inset:0;z-index:10000;pointer-events:none;font-family:'Montserrat',sans-serif">
     <!-- REPL-AR-UI-01: en el móvil de Adrián el texto se comía bajo la barra de estado — el
@@ -2292,6 +2321,8 @@ select option{background:var(--surface2);color:var(--text)}
       </div>
     </div>
     <div id="replArIAChip" style="display:none;position:absolute;right:12px;bottom:142px;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:rgba(139,92,246,.9)"></div>
+    <!-- REPL-SUPERFICIE-FORZADA-01: recuerda que el tramo está forzado a un plano (y si ya lo fijó). -->
+    <div id="replArSupChip" style="display:none;position:absolute;left:12px;bottom:142px;color:#111;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:rgba(250,204,21,.95)"></div>
 
     <!-- Panel de material y ajustes: oculto por defecto, se abre con ⚙️ -->
     <div id="replArPanelOpts" style="display:none;position:absolute;left:8px;right:8px;bottom:92px;background:rgba(0,0,0,.82);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:8px">
@@ -2308,6 +2339,18 @@ select option{background:var(--surface2);color:var(--text)}
       <div id="replArColgadoWrap" style="display:none;gap:8px;align-items:stretch">
         <select id="replArVarilla" onchange="replArCambiarVarilla()" style="flex:1;min-width:0;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"><option value="M10">Varilla M10</option><option value="M8">Varilla M8</option></select>
         <label style="display:flex;align-items:center;gap:6px;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:0 12px"><input type="checkbox" id="replArCarrilTecho" onchange="replArToggleCarrilTecho()" style="width:17px;height:17px">Carril techo</label>
+      </div>
+      <!-- REPL-SUPERFICIE-FORZADA-01 (prioridad 4): Techo/Pared/Suelo fija el plano del primer punto
+           del tramo y fuerza los siguientes a él. REPL-PARALELOS-01 (prioridad 3): líneas en paralelo. -->
+      <select id="replArSuperficie" onchange="replArCambiarSuperficie()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(250,204,21,.6);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700">
+        <option value="auto">Superficie del tramo: automática</option>
+        <option value="techo">🔒 Forzar techo (fija el plano del 1.er punto)</option>
+        <option value="pared">🔒 Forzar pared (fija el plano del 1.er punto)</option>
+        <option value="suelo">🔒 Forzar suelo (fija el plano del 1.er punto)</option>
+      </select>
+      <div style="display:flex;gap:8px">
+        <select id="replArParalelos" onchange="replArCambiarParalelos()" style="flex:1;min-width:0;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
+        <select id="replArHueco" onchange="replArCambiarParalelos()" style="display:none;flex:1;min-width:0;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
       </div>
       <div style="display:flex;gap:8px">
         <select id="replArComp" style="flex:1;min-width:0;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:10px;font-family:inherit;font-size:12.5px;font-weight:700"></select>
@@ -2337,6 +2380,25 @@ select option{background:var(--surface2);color:var(--text)}
       <div style="display:flex;gap:6px">
         <button onclick="replArNudgeProfundidad(-1)" style="flex:1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:12px;font-weight:800;padding:11px 4px;border-radius:9px;font-family:inherit">⏪ Acercar</button>
         <button onclick="replArNudgeProfundidad(1)" style="flex:1;background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:12px;font-weight:800;padding:11px 4px;border-radius:9px;font-family:inherit">⏩ Alejar</button>
+      </div>
+      <button onclick="replArEditarPuntos()" style="background:rgba(250,204,21,.95);border:none;color:#111;font-size:12.5px;font-weight:800;padding:10px;border-radius:10px;font-family:inherit">✏️ Editar cualquier punto</button>
+    </div>
+    <!-- REPL-EDITAR-PUNTO-01 (prioridad 4): acción sobre CUALQUIER punto ya colocado, no solo el
+         último. Se abre tocando el punto en la pantalla (o con ✏️ y ◀ ▶). -->
+    <div id="replArPanelPunto" style="display:none;position:absolute;left:8px;right:8px;bottom:92px;background:rgba(0,0,0,.86);border:1px solid rgba(250,204,21,.75);border-radius:14px;padding:10px;pointer-events:auto;flex-direction:column;gap:7px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="replArPuntoNav(-1)" title="Punto anterior" style="width:40px;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px 0;border-radius:9px;font-family:inherit">◀</button>
+        <div id="replArPuntoTitulo" style="flex:1;color:#fff;font-size:12.5px;font-weight:800;text-align:center">Punto</div>
+        <button onclick="replArPuntoNav(1)" title="Punto siguiente" style="width:40px;background:rgba(255,255,255,.9);border:none;color:#111;font-weight:800;padding:8px 0;border-radius:9px;font-family:inherit">▶</button>
+        <button onclick="replArPuntoCerrar()" title="Cerrar" style="width:40px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;padding:8px 0;border-radius:9px;font-family:inherit">✖</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <button onclick="replArPuntoAccion('techo')" style="background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:12px;font-weight:800;padding:9px 4px;border-radius:9px;font-family:inherit">📌 Pegar a techo</button>
+        <button onclick="replArPuntoAccion('pared')" style="background:rgba(56,189,248,.95);border:none;color:#062a3d;font-size:12px;font-weight:800;padding:9px 4px;border-radius:9px;font-family:inherit">🧱 Pegar a pared</button>
+        <button onclick="replArPuntoAccion('mover')" style="background:#f97316;border:none;color:#fff;font-size:12px;font-weight:800;padding:9px 4px;border-radius:9px;font-family:inherit">🎯 Mover al anillo</button>
+        <button onclick="replArPuntoAccion('esquivar')" style="background:rgba(250,204,21,.95);border:none;color:#111;font-size:12px;font-weight:800;padding:9px 4px;border-radius:9px;font-family:inherit">↪ Esquivar instalación</button>
+        <button id="btnReplArPuntoDiag" onclick="replArPuntoAccion('diagonal')" style="background:rgba(255,255,255,.9);border:none;color:#111;font-size:11.5px;font-weight:800;padding:9px 4px;border-radius:9px;font-family:inherit">⟂ Tramo en ángulo recto</button>
+        <button onclick="replArPuntoAccion('borrar')" style="background:#ef4444;border:none;color:#fff;font-size:12px;font-weight:800;padding:9px 4px;border-radius:9px;font-family:inherit">🗑 Borrar punto</button>
       </div>
     </div>
     <!-- Botón flotante de modificación: aparece solo cuando hay algo colocado -->
@@ -19889,6 +19951,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         origen: r.origen || 'foto', puntos_3d: Array.isArray(tr.puntos_3d) ? tr.puntos_3d : null,
         complementos: Array.isArray(tr.complementos) ? tr.complementos : [],
         escaneo: tr.escaneo_id ? { id: tr.escaneo_id } : null,   // ADR-0027
+        paralelos: (tr.paralelos && +tr.paralelos.n > 1) ? tr.paralelos : null,   // REPL-PARALELOS-01
         fotosDoc: [], fotosN: (() => { try { return JSON.parse(r.fotos_json || '[]').length; } catch { return 0; } })(),
         estado: r.estado || 'borrador', modo: 'trazar', cambiado: false, notas: r.notas || '',
         creado_por: r.creado_por, creado_en: r.creado_en,
@@ -19905,6 +19968,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const selE = document.getElementById('replElemento');
     selE.innerHTML = _replCatalogo.map(e => `<option value="${e.key}" ${e.key === _repl.elemento_key ? 'selected' : ''}>${e.icono || ''} ${_escHtml(e.nombre)}</option>`).join('');
     _replRenderOpciones();
+    _replRenderParalelos(); _replRenderTramos();
     replModo('trazar');
     _replAplicarPermisos();
     if (!_replEventosListos) { _replBindCanvas(); _replEventosListos = true; }
@@ -19921,6 +19985,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('replOpcion').disabled = ro;
     document.getElementById('replCajaTipo').disabled = ro;
     document.getElementById('replCajaMed').disabled = ro;
+    document.getElementById('replParalelosN').disabled = ro;
+    document.getElementById('replParalelosHueco').disabled = ro;
     document.getElementById('btnReplGuardar').disabled = ro;
     const bp = document.getElementById('btnReplPedido');
     bp.disabled = ro || !_repl?.id || !(_repl?.calc?.material?.length);
@@ -19963,6 +20029,68 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     replMarcarCambio();
     replDibujar();
   }
+  // ── REPL-PARALELOS-01 (03/10/2026, prioridad 3): líneas en paralelo por el mismo recorrido ──
+  // Se guarda en trazado_json.paralelos = { n, hueco_m } (sin migración). Mismas opciones en el
+  // editor y dentro del AR (WebXR); el AR nativo tiene su propio selector con los mismos valores.
+  const _REPL_HUECOS_M = [0, 0.01, 0.02, 0.03, 0.05, 0.08, 0.1, 0.15, 0.2];
+  function _replOpcionesParalelosHtml(n) {
+    let h = '';
+    for (let k = 1; k <= 8; k++) h += `<option value="${k}" ${k === n ? 'selected' : ''}>${k === 1 ? '1 línea' : k + ' en paralelo'}</option>`;
+    return h;
+  }
+  function _replOpcionesHuecoHtml(hueco) {
+    const h0 = (hueco != null && Number.isFinite(+hueco)) ? +hueco : REPL_TRAZADO.huecoParaleloM;
+    return _REPL_HUECOS_M.map(v => `<option value="${v}" ${Math.abs(v - h0) < 1e-6 ? 'selected' : ''}>hueco ${Math.round(v * 100)} cm</option>`).join('');
+  }
+  function _replRenderParalelos() {
+    const p = (_repl && _repl.paralelos) || {};
+    const sn = document.getElementById('replParalelosN'), sh = document.getElementById('replParalelosHueco');
+    if (sn) sn.innerHTML = _replOpcionesParalelosHtml(+p.n || 1);
+    if (sh) { sh.innerHTML = _replOpcionesHuecoHtml(p.hueco_m); sh.style.display = (+p.n > 1) ? '' : 'none'; }
+  }
+  function replCambiarParalelos() {
+    if (!_repl) return;
+    const n = +document.getElementById('replParalelosN').value || 1;
+    const h = +document.getElementById('replParalelosHueco').value;
+    _repl.paralelos = n > 1 ? { n, hueco_m: Number.isFinite(h) ? h : REPL_TRAZADO.huecoParaleloM } : null;
+    _replRenderParalelos();
+    replMarcarCambio();
+    replDibujar(); replActualizarInfo();
+  }
+  // ── REPL-ANGULO-RECTO-01 (03/10/2026, prioridad 2): diagonal real por tramo ──
+  // Un trazado AR (puntos_3d con normales reales) se dibuja y se mide en ángulo recto; el chip de
+  // cada tramo lo devuelve a la diagonal tal cual se marcó (puntos_3d[i].d = 1).
+  function _replRenderTramos() {
+    const row = document.getElementById('replTramosRow'), chips = document.getElementById('replTramosChips');
+    if (!row || !chips || !_repl) return;
+    const p3 = Array.isArray(_repl.puntos_3d) ? _repl.puntos_3d : [];
+    if (p3.length < 2 || !p3.some(p => p && p.nx != null)) { row.style.display = 'none'; return; }
+    row.style.display = 'flex';
+    const ro = _replSoloLectura();
+    chips.innerHTML = p3.slice(0, -1).map((p, i) => `<button class="repl-btn" ${ro ? 'disabled' : ''} onclick="replToggleTramoDiagonal(${i})" title="${p && p.d ? 'Diagonal real: toca para volver al ángulo recto' : 'En ángulo recto: toca si este tramo va de verdad en diagonal'}" style="padding:4px 9px;font-size:11px">${p && p.d ? '⟋' : '⟂'} T${i + 1}</button>`).join('');
+  }
+  async function replToggleTramoDiagonal(i) {
+    if (!_repl || _replSoloLectura() || !Array.isArray(_repl.puntos_3d) || !_repl.puntos_3d[i]) return;
+    let antes = null;
+    try { antes = await _replLongitudAR(); } catch (_) {}
+    const p = _repl.puntos_3d[i];
+    if (p.d) delete p.d; else p.d = 1;
+    // La longitud de un trazado AR es la del recorrido rectificado: si sigue siendo la medida
+    // automática (nadie la ha cambiado a mano), se actualiza con el tramo cambiado.
+    try {
+      const despues = await _replLongitudAR();
+      if (antes != null && despues != null && _repl.longitud_manual_m && Math.abs(_repl.longitud_manual_m - antes) < 0.011) _repl.longitud_manual_m = +despues.toFixed(2);
+    } catch (_) {}
+    _replRenderTramos(); replMarcarCambio(); replActualizarInfo();
+  }
+  // Longitud del recorrido AR rectificado (repl3d.js). null si no es un trazado AR en 3D.
+  async function _replLongitudAR() {
+    const path = Array.isArray(_repl?.puntos_3d) && _repl.puntos_3d.length >= 2 ? _repl3DPath() : null;
+    if (!path) return null;
+    const THREE = await _replCargarThree();
+    return _replLongitudTrazado(THREE, path.map(p => new THREE.Vector3(p.x, p.y, p.z)), _repl3DOpciones(THREE, path));
+  }
+  window.replCambiarParalelos = replCambiarParalelos; window.replToggleTramoDiagonal = replToggleTramoDiagonal;
   function replCambiarElemento() {
     const key = document.getElementById('replElemento').value;
     const el = _replCatalogo.find(e => e.key === key);
@@ -20951,7 +21079,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     return {
       departamento: _repl.departamento || _replCatalogoDept || undefined, // REPL-DEPT-POST-01
       elemento_key: _repl.elemento_key, elemento_params: _repl.params,
-      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined, complementos: _repl.complementos || undefined },
+      trazado: { puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined, complementos: _repl.complementos || undefined, paralelos: _repl.paralelos || undefined },
       escala_px_m: _repl.longitud_manual_m ? null : _repl.escala_px_m,
       longitud_manual_m: _repl.longitud_manual_m || null,
     };
@@ -20991,6 +21119,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       partes.push(`<span>➡️ <b>${_replNum(L)} m</b>${_repl.calc ? '' : ' (calculando…)'}</span>`);
     }
     if (_repl.obstaculos.length) partes.push(`<span>⚠️ <b>${_repl.obstaculos.length}</b> obstáculo(s)</span>`);
+    if (_repl.paralelos && +_repl.paralelos.n > 1) partes.push(`<span>⫴ <b>${_repl.paralelos.n}</b> líneas en paralelo (material ×${_repl.paralelos.n})</span>`);
     if (_repl.calc?.giros != null) partes.push(`<span>↪️ ${_repl.calc.giros} giro(s)</span>`);
     if (_repl.calc?.material?.length) partes.push(`<span>🧮 <b>${_repl.calc.material.length}</b> líneas de material</span>`);
     if (_repl.cambiado && _repl.id) partes.push(`<span style="color:#f97316">● sin guardar</span>`);
@@ -21116,7 +21245,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         fd.append('elemento_json', JSON.stringify(_repl.params));
         // ADR-0027: escaneo_id (el servidor lo valida y lo vincula). complementos: al crear se
         // perdían los colocados en AR hasta el siguiente guardado (el PATCH sí los mandaba).
-        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined, complementos: _repl.complementos || undefined, escaneo_id: _repl.escaneo?.id || undefined }));
+        fd.append('trazado_json', JSON.stringify({ puntos: _repl.puntos, obstaculos: _repl.obstaculos, referencia: _repl.referencia, planos: _replPlanosParaGuardar(), tramos_plano: _replTramosPlanoParaGuardar(), puntos_3d: _repl.puntos_3d || undefined, complementos: _repl.complementos || undefined, paralelos: _repl.paralelos || undefined, escaneo_id: _repl.escaneo?.id || undefined }));
         fd.append('origen', _repl.origen === 'ar' ? 'ar' : 'foto');
         if (_repl.escala_px_m && !_repl.longitud_manual_m) fd.append('escala_px_m', _repl.escala_px_m);
         if (_repl.longitud_manual_m) fd.append('longitud_manual_m', _repl.longitud_manual_m);
@@ -21441,14 +21570,31 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
               metodos: [], camPos: null, camDir: null, depthPos: null, sinAnclajeDesde: 0, guiaMostrada: false, guiaHasta: 0,
               // ADR-0027: escaneo previo + IA; etiquetas de la IA en su propio grupo (no se
               // borran al redibujar el trazado)
-              escaneo: _replArEscaneoNuevo(), grupoIA: new THREE.Group(), capturas: [] };
+              escaneo: _replArEscaneoNuevo(), grupoIA: new THREE.Group(), capturas: [],
+              // Prioridades 2-4 (03/10/2026): diagonal real por tramo, superficie del punto,
+              // superficie forzada del tramo (y su plano fijado), líneas en paralelo y punto en edición.
+              diagonales: [], supPunto: [], superficieForzada: 'auto', planoFijo: null, paralelos: null, sel: -1 };
       scene.add(_ar.grupo); scene.add(_ar.grupoIA);
-      session.addEventListener('end', _replArLimpiar);
+      // GIRO-PANTALLA-AR-01: si la sesión se cierra sola (no por ✖/✅), _replArFinSesion conserva
+      // el trazado. 'select' = toque en la pantalla fuera de los botones: elige el punto tocado.
+      session.addEventListener('end', _replArFinSesion);
+      session.addEventListener('select', _replArSelect);
+      overlay.addEventListener('beforexrselect', _replArAntesDeSelect);
       await renderer.xr.setSession(session);
+      // GIRO-PANTALLA-AR-01 (03/10/2026): la PWA instalada va fija en vertical (manifest), así que
+      // girar el móvil durante el AR no hacía nada o dejaba la vista a medias. Con la sesión
+      // inmersiva (pantalla completa) se permite cualquier orientación mientras dura; al cerrar,
+      // unlock() la devuelve a la del manifest. En una pestaña normal lock() falla sin más.
+      try {
+        if (screen.orientation && typeof screen.orientation.lock === 'function')
+          screen.orientation.lock('any').then(() => _replLog('AR: giro de pantalla permitido'), e => _replLog('AR: giro no desbloqueado (' + ((e && e.name) || e) + ')'));
+      } catch (_) {}
+      window.addEventListener('resize', _replArAlGirar);
+      try { screen.orientation && screen.orientation.addEventListener && screen.orientation.addEventListener('change', _replArAlGirar); } catch (_) {}
       const viewer = await session.requestReferenceSpace('viewer');
       _ar.hitSource = await session.requestHitTestSource({ space: viewer });
       _replArEstado('Primero escanea el entorno: mueve el móvil despacio por paredes, techo y suelo. Después podrás marcar con 📍 Punto (o 📱 Tocar en superficies lisas).');
-      _replArLlenarComplementos(); _replArLlenarMaterial();
+      _replArLlenarComplementos(); _replArLlenarMaterial(); _replArLlenarTrazado();
       _replArEscaneoUI();
       renderer.setAnimationLoop((t, frame) => _replArFrame(t, frame));
       _replArEscaneoArrancar();
@@ -21463,6 +21609,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function _replArFrame(t, frame) {
     if (!_ar || !frame) return;
     _ar.lastFrame = frame;   // para "¿qué es esto?" (captura de cámara con camera-access)
+    _replArAjustarTamano();  // GIRO-PANTALLA-AR-01
     const { renderer, scene, camera, reticle } = _ar;
     const refSpace = renderer.xr.getReferenceSpace();
     _ar.refSpace = refSpace;
@@ -21647,7 +21794,192 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
     return { pos: base.p.clone(), metodo: base.metodo };
   }
-  const REPL_AR_METODO_TXT = { hit: 'sobre la superficie', depth: 'por profundidad', contacto: 'tocando con el móvil' };
+  const REPL_AR_METODO_TXT = { hit: 'sobre la superficie', depth: 'por profundidad', contacto: 'tocando con el móvil', forzado: 'forzado al plano del tramo' };
+
+  // ── GIRO-PANTALLA-AR-01 (03/10/2026): girar vertical↔horizontal sin perder sesión ni puntos ──
+  // three.js r158 dimensiona su destino XR una sola vez, al empezar la sesión, con el tamaño del
+  // búfer de la capa (framebufferWidth/Height). Si Chrome redimensiona ese búfer al girar, el
+  // destino se quedaba con las medidas viejas. Se actualizan solo sus dimensiones (sin setSize,
+  // que liberaría el framebuffer opaco de la sesión); la proyección y el viewport de cada vista
+  // ya llegan nuevos en cada fotograma de WebXR. Después se recolocan los paneles (CSS horizontal).
+  function _replArAlGirar() {
+    if (!_ar) return;
+    _ar.giroPendiente = true;
+    _replLog(`AR: giro de pantalla -> ${window.innerWidth}x${window.innerHeight} ${(screen.orientation && screen.orientation.type) || ''}`);
+  }
+  function _replArAjustarTamano() {
+    const r = _ar.renderer;
+    let capa = null;
+    try { capa = r.xr.getBaseLayer && r.xr.getBaseLayer(); } catch (_) { capa = null; }
+    const rt = r.getRenderTarget && r.getRenderTarget();
+    if (capa && rt && capa.framebufferWidth > 0 && capa.framebufferHeight > 0 && (rt.width !== capa.framebufferWidth || rt.height !== capa.framebufferHeight)) {
+      const w = capa.framebufferWidth, h = capa.framebufferHeight;
+      _replLog(`AR: búfer XR ${rt.width}x${rt.height} -> ${w}x${h}`);
+      rt.width = w; rt.height = h; rt.viewport.set(0, 0, w, h); rt.scissor.set(0, 0, w, h);
+      if (rt.texture && rt.texture.image) { rt.texture.image.width = w; rt.texture.image.height = h; }
+    }
+    if (_ar.giroPendiente) {
+      _ar.giroPendiente = false;
+      _replArEscaneoUI(); _replArActualizarMod(); _replArPuntoUI(); _replArSupChip();
+    }
+  }
+  // Si la sesión inmersiva termina sin que el usuario la cierre (algunos Chrome la cierran al girar
+  // o al pasar a segundo plano), con un recorrido ya marcado se entrega al editor como ✅ Fin.
+  function _replArFinSesion() {
+    if (_ar && !_ar.cerrando && _ar.escaneo && _ar.escaneo.fase !== 'escaneo' && _ar.puntos.length >= 2) {
+      _replLog(`AR: la sesión terminó sola con ${_ar.puntos.length} puntos -- se conserva el trazado`);
+      _ar.sesionTerminada = true;
+      toast('⚠️ La sesión AR se cerró sola: se conserva el trazado marcado');
+      replArTerminar();
+      return;
+    }
+    _replArLimpiar();
+  }
+  // Un toque sobre los botones/paneles del overlay no es un toque "en el mundo": sin esto, pulsar
+  // un botón elegía además el punto que hubiera detrás.
+  function _replArAntesDeSelect(ev) {
+    const t = ev.target;
+    if (t && t !== ev.currentTarget && t.closest && t.closest('button,select,input,label,#replArPanelOpts,#replArPanelMod,#replArPanelPunto,#replArEscaneo,#replArBarraMarcado')) ev.preventDefault();
+  }
+  // REPL-EDITAR-PUNTO-01: tocar la pantalla cerca de un punto ya colocado lo selecciona.
+  function _replArSelect(ev) {
+    if (!_ar || !_ar.escaneo || _ar.escaneo.fase === 'escaneo' || !_ar.puntos.length) return;
+    try {
+      const pose = ev.frame.getPose(ev.inputSource.targetRaySpace, _ar.refSpace || _ar.renderer.xr.getReferenceSpace());
+      if (!pose) return;
+      const THREE = _ar.THREE, o = pose.transform.position, q = pose.transform.orientation;
+      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(q.x, q.y, q.z, q.w));
+      const i = _replPuntoMasCercano(THREE, _ar.puntos, new THREE.Vector3(o.x, o.y, o.z), dir, 0.12);
+      if (i >= 0) replArPuntoSel(i);
+    } catch (e) { _replLog('AR: toque sin rayo -- ' + (e.message || e)); }
+  }
+
+  // ── REPL-SUPERFICIE-FORZADA-01 (03/10/2026, prioridad 4) ──
+  // Adrián, en obra: "la bandeja no detecta el techo... baja por debajo de instalaciones". En modo
+  // Techo/Pared/Suelo el primer punto confirmado del tramo fija el plano (el detectado de ese tipo
+  // si lo hay; si no, el del propio punto) y los siguientes se fuerzan a él aunque el anillo caiga
+  // en otra cosa. Con el plano ya fijado, sin hit ni profundidad basta el rayo central.
+  function _replArAnclajeForzado() {
+    const a = _replArAnclaje();
+    const tipo = _ar.superficieForzada;
+    if (!tipo || tipo === 'auto') return a;
+    const THREE = _ar.THREE;
+    if (!_ar.planoFijo) {
+      if (!a) return null;
+      const det = _replPegarASuperficie(THREE, a.pos, _replArPlanosDetectados(), tipo, 0.6);
+      _ar.planoFijo = det ? { tipo, pos: det.pos.clone(), normal: det.normal.clone() } : _replPlanoForzado(THREE, tipo, a.pos, a.normal, _ar.camDir);
+      if (!_ar.planoFijo) return a;
+      _replLog(`AR: plano de ${tipo} fijado (${det ? 'plano detectado' : 'desde el punto'})`);
+      _replArSupChip();
+    }
+    const cand = a ? a.pos : ((_ar.camPos && _ar.camDir) ? _ar.camPos.clone().add(_ar.camDir) : null);
+    const pos = _replForzarAPlano(THREE, _ar.planoFijo, cand, _ar.camPos);
+    if (!pos) return null;
+    return { pos, metodo: a ? a.metodo : 'forzado', normal: _ar.planoFijo.normal.clone(), sup: tipo };
+  }
+  function _replArPlanosDetectados() { return (_ar.superficies || []).filter(s => !s.excluida).map(s => ({ pos: s.pos, normal: s.normal, tipo: s.tipo })); }
+  function replArCambiarSuperficie() {
+    if (!_ar) return;
+    _ar.superficieForzada = (document.getElementById('replArSuperficie') || {}).value || 'auto';
+    _ar.planoFijo = null;   // nuevo tramo: el plano lo fija su primer punto
+    _replArSupChip();
+    _replArEstado(_ar.superficieForzada === 'auto'
+      ? 'Superficie automática: cada punto se pega a lo que se detecte bajo el anillo.'
+      : `🔒 Tramo en ${_ar.superficieForzada}: el primer punto que marques fija el plano y los siguientes se fuerzan a él.`);
+  }
+  function _replArSupChip() {
+    const c = document.getElementById('replArSupChip'); if (!c || !_ar) return;
+    const t = _ar.superficieForzada;
+    if (!t || t === 'auto' || (_ar.escaneo && _ar.escaneo.fase === 'escaneo')) { c.style.display = 'none'; return; }
+    c.style.display = '';
+    c.textContent = _ar.planoFijo ? `🔒 ${t} fijado` : `🔒 ${t}: marca el 1.er punto`;
+  }
+  // ── REPL-PARALELOS-01 dentro del AR ──
+  function _replArLlenarTrazado() {
+    const ss = document.getElementById('replArSuperficie'); if (ss) ss.value = _ar.superficieForzada || 'auto';
+    const sn = document.getElementById('replArParalelos'); if (sn) sn.innerHTML = _replOpcionesParalelosHtml((_ar.paralelos && _ar.paralelos.n) || 1);
+    const sh = document.getElementById('replArHueco');
+    if (sh) { sh.innerHTML = _replOpcionesHuecoHtml(_ar.paralelos ? _ar.paralelos.hueco_m : null); sh.style.display = (_ar.paralelos && _ar.paralelos.n > 1) ? '' : 'none'; }
+  }
+  function replArCambiarParalelos() {
+    if (!_ar) return;
+    const n = +(document.getElementById('replArParalelos') || {}).value || 1;
+    const h = +(document.getElementById('replArHueco') || {}).value;
+    _ar.paralelos = n > 1 ? { n, hueco_m: Number.isFinite(h) ? h : REPL_TRAZADO.huecoParaleloM } : null;
+    const sh = document.getElementById('replArHueco'); if (sh) sh.style.display = n > 1 ? '' : 'none';
+    _replArRedibujar();
+  }
+  function _replArOpciones3D() { return { normales: _ar.normales || [], diagonales: _ar.diagonales || [], paralelos: _ar.paralelos || null }; }
+
+  // ── REPL-EDITAR-PUNTO-01 (03/10/2026, prioridad 4): acción sobre CUALQUIER punto ya colocado ──
+  function replArPuntoSel(i) {
+    if (!_ar || !_ar.puntos.length) return;
+    _ar.sel = Math.max(0, Math.min(_ar.puntos.length - 1, i));
+    const po = document.getElementById('replArPanelOpts'); if (po && po.style.display === 'flex') _replArToggleOpts();
+    const pm = document.getElementById('replArPanelMod'); if (pm) pm.style.display = 'none';
+    _replArPuntoUI(); _replArRedibujar();
+  }
+  function replArEditarPuntos() {
+    if (!_ar || !_ar.puntos.length) { if (_ar) _replArEstado('Aún no hay puntos que editar.'); return; }
+    replArPuntoSel(_ar.sel >= 0 ? _ar.sel : _ar.puntos.length - 1);
+  }
+  function replArPuntoNav(d) { if (_ar && _ar.sel >= 0 && _ar.puntos.length) replArPuntoSel((_ar.sel + d + _ar.puntos.length) % _ar.puntos.length); }
+  function replArPuntoCerrar() { if (!_ar) return; _ar.sel = -1; _replArPuntoUI(); _replArRedibujar(); }
+  function _replArPuntoUI() {
+    const p = document.getElementById('replArPanelPunto'); if (!p) return;
+    const i = _ar ? _ar.sel : -1;
+    if (!_ar || i < 0 || i >= _ar.puntos.length) { p.style.display = 'none'; if (_ar) _ar.sel = -1; return; }
+    p.style.display = 'flex';
+    const n = _ar.normales[i];
+    const t = document.getElementById('replArPuntoTitulo');
+    if (t) t.textContent = `✏️ Punto ${i + 1} de ${_ar.puntos.length} · ${n ? _replClaseNormal(n) : 'sin superficie'}`;
+    const bd = document.getElementById('btnReplArPuntoDiag');
+    if (bd) {
+      const ultimo = i >= _ar.puntos.length - 1;
+      bd.disabled = ultimo; bd.style.opacity = ultimo ? '.45' : '1';
+      bd.textContent = ultimo ? '⟂ (último: sin tramo)' : (_ar.diagonales[i] ? `⟋ Tramo ${i + 1}→${i + 2}: diagonal` : `⟂ Tramo ${i + 1}→${i + 2}: recto`);
+    }
+  }
+  function replArPuntoAccion(accion) {
+    if (!_ar || _ar.sel < 0 || _ar.sel >= _ar.puntos.length) return;
+    const THREE = _ar.THREE, i = _ar.sel, p = _ar.puntos[i];
+    let msg = '';
+    if (accion === 'borrar') {
+      _ar.puntos.splice(i, 1); _ar.metodos.splice(i, 1); _ar.normales.splice(i, 1); _ar.diagonales.splice(i, 1); _ar.supPunto.splice(i, 1);
+      // Los obstáculos de los dos tramos que tocaban el punto ya no están sobre el recorrido.
+      _ar.obstaculos = _ar.obstaculos.filter(o => o.seg !== i && o.seg !== i - 1).map(o => (o.seg > i ? { ...o, seg: o.seg - 1 } : o));
+      _ar.sel = _ar.puntos.length ? Math.min(i, _ar.puntos.length - 1) : -1;
+      _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = false;
+      msg = `🗑 Punto ${i + 1} borrado.`;
+    } else if (accion === 'diagonal') {
+      if (i >= _ar.puntos.length - 1) return;
+      _ar.diagonales[i] = !_ar.diagonales[i];
+      msg = _ar.diagonales[i] ? `⟋ El tramo ${i + 1}→${i + 2} respeta la diagonal tal cual se marcó.` : `⟂ El tramo ${i + 1}→${i + 2} vuelve al ángulo recto.`;
+    } else if (accion === 'techo' || accion === 'pared') {
+      let r = _replPegarASuperficie(THREE, p, _replArPlanosDetectados(), accion);
+      if (!r && _ar.planoFijo && _ar.planoFijo.tipo === accion) r = { pos: _replForzarAPlano(THREE, _ar.planoFijo, p, null), normal: _ar.planoFijo.normal.clone() };
+      if (!r) { _replArEstado(`No hay ${accion} detectado a menos de ${String(REPL_TRAZADO.maxPegarM).replace('.', ',')} m de este punto. Enfoca el ${accion} unos segundos y vuelve a intentarlo.`); return; }
+      const d = p.distanceTo(r.pos);
+      _ar.puntos[i] = r.pos; _ar.normales[i] = r.normal; _ar.supPunto[i] = accion;
+      msg = `📌 Punto ${i + 1} pegado al ${accion} (se ha movido ${Math.round(d * 100)} cm).`;
+    } else if (accion === 'mover') {
+      const a = _replArAnclajeForzado();
+      if (!a) { _replArEstado('Apunta con el anillo a donde debe ir el punto y vuelve a pulsar 🎯.'); return; }
+      _ar.puntos[i] = a.pos; _ar.normales[i] = a.normal || null; _ar.metodos[i] = a.metodo; _ar.supPunto[i] = a.sup || null;
+      msg = `🎯 Punto ${i + 1} movido al anillo.`;
+    } else if (accion === 'esquivar') {
+      const inst = (_ar.escaneo && _ar.escaneo.instalaciones) || [];
+      const r = _replEsquivarInstalacion(THREE, p, _ar.normales[i], inst, 0.05);
+      if (!r) { _replArEstado(inst.length ? 'Este punto no toca ninguna instalación existente detectada por la IA.' : 'La IA no ha situado instalaciones existentes en esta sesión: no hay nada que esquivar.'); return; }
+      _ar.puntos[i] = r.pos;
+      msg = `↪ Punto ${i + 1} apartado ${Math.round(p.distanceTo(r.pos) * 100)} cm de: ${r.instalaciones.map(x => x.etiqueta).join(', ')} (sigue sobre su superficie).`;
+    } else return;
+    _replArRedibujar(); _replArEstadoResumen(); _replArPuntoUI();
+    _replArEstado(msg);
+  }
+  window.replArPuntoSel = replArPuntoSel; window.replArEditarPuntos = replArEditarPuntos; window.replArPuntoNav = replArPuntoNav;
+  window.replArPuntoCerrar = replArPuntoCerrar; window.replArPuntoAccion = replArPuntoAccion;
+  window.replArCambiarSuperficie = replArCambiarSuperficie; window.replArCambiarParalelos = replArCambiarParalelos;
 
   function _replArTexto(txt) {
     const THREE = _ar.THREE;
@@ -21663,14 +21995,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function _replArRedibujar() {
     const { THREE, grupo, puntos, obstaculos, color, anchoM } = _ar;
     while (grupo.children.length) { const c = grupo.children.pop(); c.geometry?.dispose?.(); c.material?.map?.dispose?.(); c.material?.dispose?.(); }
-    const mat = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
-    const matBorde = new THREE.MeshBasicMaterial({ color });
+    const opts3d = _replArOpciones3D();
     puntos.forEach((p, i) => {
       // REPLANTEO-05: los puntos marcados por contacto o por profundidad se ven distintos
       // (anillo azul alrededor), para que se sepa de un vistazo cuales no vienen del
       // hit-test si luego una medida no cuadra.
       const met = (_ar.metodos || [])[i] || 'hit';
-      const s = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 16), new THREE.MeshBasicMaterial({ color: i === 0 ? 0x22c55e : (i === puntos.length - 1 ? 0xef4444 : 0xffffff) }));
+      // REPL-EDITAR-PUNTO-01: el punto en edición, más grande y en amarillo.
+      const sel = i === _ar.sel;
+      const s = new THREE.Mesh(new THREE.SphereGeometry(sel ? 0.045 : 0.03, 16, 16), new THREE.MeshBasicMaterial({ color: sel ? 0xfacc15 : (i === 0 ? 0x22c55e : (i === puntos.length - 1 ? 0xef4444 : 0xffffff)) }));
       s.position.copy(p); grupo.add(s);
       if (met !== 'hit') {
         const halo = new THREE.Mesh(new THREE.SphereGeometry(0.038, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4 }));
@@ -21684,10 +22017,14 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const obst = (obstaculos || []).map(o => ({ seg: o.seg, t: o.t, accion: o.accion || 'debajo', dimension_m: o.dimension_m || 0.3 }));
       // PLANO-SNAP-01: normales por punto (cuando el plano detectado las dio) para que ya en
       // el propio AR en vivo se vea pegado a la pared/techo, no solo luego en "Ver en 3D".
-      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6, obstaculos: obst, normales: _ar.normales || [] }));
+      // REPL-ANGULO-RECTO-01 / REPL-PARALELOS-01: en ángulo recto respecto a las superficies
+      // reales (salvo tramos marcados como diagonal) y con las líneas en paralelo elegidas.
+      grupo.add(_replInstal3D(THREE, puntos, { tipo, w: anchoM, opacity: 0.6, obstaculos: obst, ...opts3d }));
     }
-    for (let i = 1; i < puntos.length; i++) {                 // cotas por tramo
-      const a = puntos[i - 1], b = puntos[i]; const len = a.distanceTo(b); if (len < 0.01) continue;
+    // Cotas por tramo del recorrido RECTIFICADO (lo que de verdad se instala y se mide).
+    const eje = puntos.length >= 2 ? _replTrazadoPreparado(THREE, puntos, { ...opts3d, paralelos: null, obstaculos: null }).centro.pts : [];
+    for (let i = 1; i < eje.length; i++) {
+      const a = eje[i - 1], b = eje[i]; const len = a.distanceTo(b); if (len < 0.01) continue;
       const mid = a.clone().add(b).multiplyScalar(0.5);
       const lbl = _replArTexto(len.toFixed(2).replace('.', ',') + ' m');
       lbl.position.copy(mid).add(new THREE.Vector3(0, 0.12, 0)); grupo.add(lbl);
@@ -21707,16 +22044,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     });
     // Cota total del recorrido, junto al último punto.
     if (puntos.length >= 2) {
-      const L = puntos.reduce((s, p, i) => i ? s + puntos[i - 1].distanceTo(p) : 0, 0);
-      const tot = _replArTexto('Σ ' + L.toFixed(2).replace('.', ',') + ' m');
+      const L = _replArLongitud();
+      const nl = _ar.paralelos && _ar.paralelos.n > 1 ? ` ×${_ar.paralelos.n}` : '';
+      const tot = _replArTexto('Σ ' + L.toFixed(2).replace('.', ',') + ' m' + nl);
       tot.scale.set(0.4, 0.1, 1); tot.position.copy(puntos[puntos.length - 1]).add(new THREE.Vector3(0, 0.22, 0)); grupo.add(tot);
     }
   }
-  function _replArLongitud() { let L = 0; for (let i = 1; i < _ar.puntos.length; i++) L += _ar.puntos[i - 1].distanceTo(_ar.puntos[i]); return L; }
+  // REPL-ANGULO-RECTO-01: lo medido es el recorrido rectificado (sube, gira en la esquina, sigue),
+  // no la diagonal entre los puntos marcados.
+  function _replArLongitud() { return _ar.puntos.length < 2 ? 0 : _replLongitudTrazado(_ar.THREE, _ar.puntos, _replArOpciones3D()); }
   // Cuántos puntos se marcaron con cada método: si luego la medida no cuadra con la cinta,
   // esto dice por dónde mirar.
   function _replArResumenMetodos() {
-    const c = { hit: 0, depth: 0, contacto: 0 };
+    const c = { hit: 0, depth: 0, contacto: 0, forzado: 0 };
     (_ar.metodos || []).forEach(m => { if (c[m] != null) c[m]++; });
     const partes = Object.entries(c).filter(([, n]) => n > 0).map(([m, n]) => `${n} ${REPL_AR_METODO_TXT[m]}`);
     return partes.length > 1 ? ` · ${partes.join(', ')}` : '';
@@ -21735,7 +22075,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   function replArPunto() {
     if (!_ar) return;
-    const a = _replArAnclaje();
+    const a = _replArAnclajeForzado();   // REPL-SUPERFICIE-FORZADA-01 (en automático, igual que antes)
     if (!a) {
       _replArEstado(_ar.tieneDepth
         ? 'Ni superficie ni profundidad aquí. Apunta a una esquina o moldura, o acerca el móvil al punto y pulsa 📱 Tocar.'
@@ -21745,8 +22085,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     _ar.puntos.push(a.pos);
     _ar.metodos.push(a.metodo);
     _ar.normales.push(a.normal || null);
+    _ar.diagonales.push(false); _ar.supPunto.push(a.sup || null);
     _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = false;
-    _replArRedibujar(); _replArEstadoResumen();
+    _replArRedibujar(); _replArEstadoResumen(); _replArSupChip();
     _replArEscaneoAvisoPunto(a.pos);   // ADR-0027
   }
   // Anclaje por contacto: el punto se marca donde está el móvil. No necesita reconocer la
@@ -21756,10 +22097,18 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!_ar) return;
     if (!_ar.camPos) { _replArEstado('El móvil aún no se ha situado. Muévelo despacio un segundo y vuelve a intentarlo.'); return; }
     // Unos milímetros hacia delante: la cámara está dentro de la carcasa, no en su cara.
-    const pos = _ar.camDir ? _ar.camPos.clone().add(_ar.camDir.clone().multiplyScalar(REPL_AR_OFFSET_CONTACTO)) : _ar.camPos.clone();
+    let pos = _ar.camDir ? _ar.camPos.clone().add(_ar.camDir.clone().multiplyScalar(REPL_AR_OFFSET_CONTACTO)) : _ar.camPos.clone();
+    let normal = null;   // el anclaje por contacto no viene de un plano detectado...
+    // ...salvo en un tramo con superficie forzada: el contacto fija o sigue su plano.
+    const tipo = _ar.superficieForzada;
+    if (tipo && tipo !== 'auto') {
+      if (!_ar.planoFijo) { _ar.planoFijo = _replPlanoForzado(_ar.THREE, tipo, pos, null, _ar.camDir); if (_ar.planoFijo) _replLog(`AR: plano de ${tipo} fijado por contacto`); }
+      if (_ar.planoFijo) { pos = _replForzarAPlano(_ar.THREE, _ar.planoFijo, pos, null); normal = _ar.planoFijo.normal.clone(); }
+    }
     _ar.puntos.push(pos);
     _ar.metodos.push('contacto');
-    _ar.normales.push(null);   // el anclaje por contacto no viene de un plano detectado
+    _ar.normales.push(normal);
+    _ar.diagonales.push(false); _ar.supPunto.push(normal ? tipo : null);
     _ar.ultimoFueObstaculo = false; _ar.ultimoFueComp = false;
     _replArRedibujar(); _replArEstadoResumen();
   }
@@ -21787,8 +22136,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!_ar) return;
     if (_ar.ultimoFueComp && _ar.complementos.length) { _ar.complementos.pop(); _ar.ultimoFueComp = false; }
     else if (_ar.obstaculos.length && (!_ar.puntos.length || _ar.ultimoFueObstaculo)) _ar.obstaculos.pop();
-    else { _ar.puntos.pop(); _ar.metodos.pop(); _ar.normales.pop(); _ar.obstaculos = _ar.obstaculos.filter(o => o.seg < _ar.puntos.length - 1); }
-    _replArRedibujar(); _replArEstadoResumen();
+    else { _ar.puntos.pop(); _ar.metodos.pop(); _ar.normales.pop(); _ar.diagonales.pop(); _ar.supPunto.pop(); _ar.obstaculos = _ar.obstaculos.filter(o => o.seg < _ar.puntos.length - 1); }
+    if (_ar.sel >= _ar.puntos.length) _ar.sel = -1;
+    _replArRedibujar(); _replArEstadoResumen(); _replArPuntoUI();
   }
   // ── Complementos colocables en el AR (mecanismos Legrand/Simon, cajas, cuadro, luminarias) ──
   // Familias representativas (no cada referencia); dimensiones aproximadas en metros. La marca
@@ -21874,6 +22224,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   // ── Mover / rotar lo último colocado (punto del recorrido o complemento) ──
   function _replArUltimo() {
+    // REPL-EDITAR-PUNTO-01: con un punto en edición, ⬅⬆⬇➡ y ⏪⏩ ajustan ESE punto.
+    if (_ar.sel >= 0 && _ar.sel < _ar.puntos.length) return { tipo: 'punto', idx: _ar.sel };
     if (_ar.ultimoFueComp && _ar.complementos.length) return { tipo: 'comp', obj: _ar.complementos[_ar.complementos.length - 1] };
     if (_ar.puntos.length) return { tipo: 'punto', idx: _ar.puntos.length - 1 };
     return null;
@@ -22066,7 +22418,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function replArEscaneoListo() {
     const e = _ar && _ar.escaneo; if (!e) return;
     e.fase = 'marcado';
-    _replArEscaneoUI();
+    _replArEscaneoUI(); _replArSupChip();
     _replArEstado('Escaneo listo. Apunta al primer punto del recorrido y pulsa 📍 Punto.' + (e.iaActiva ? ' La IA sigue mirando mientras marcas.' : ''));
     _replLog(`Escaneo: listo (${e.framesIA} IA, ${(_ar.superficies || []).length} planos)`);
   }
@@ -22203,7 +22555,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // Cierre: un último fotograma clave (el que ve la instalación terminada) y entrega a _repl.
   async function _replArEscaneoCerrar() {
     const e = _ar && _ar.escaneo; if (!e) return null;
-    if (!e.sinCamara) {
+    // Con la sesión ya cerrada (GIRO-PANTALLA-AR-01) no llega ningún fotograma más que esperar.
+    if (!e.sinCamara && !_ar.sesionTerminada) {
       try {
         const cap = await Promise.race([new Promise(r => { e.capturaFinal = r; }), new Promise(r => setTimeout(() => r(null), 1500))]);
         e.capturaFinal = null;
@@ -22225,6 +22578,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       return false;
     }
     const po = document.getElementById('replArPanelOpts'), pm = document.getElementById('replArPanelMod');
+    const pp = document.getElementById('replArPanelPunto');
+    if (pp && pp.style.display === 'flex') { replArPuntoCerrar(); return true; }
     if (po && po.style.display === 'flex') { _replArToggleOpts(); return true; }
     if (pm && pm.style.display === 'flex') { _replArToggleMod(); return true; }
     if (_ar.escaneo && _ar.escaneo.fase !== 'escaneo' && _ar.puntos.length >= 2) { _replLog('Atrás en AR: termina el trazado'); replArTerminar(); return true; }
@@ -22278,10 +22633,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
   let _replInformeNotaEscaneo = '';
 
-  function replArCancelar() { if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
+  function replArCancelar() { if (_ar) _ar.cerrando = true; if (_ar?.session) _ar.session.end().catch(() => _replArLimpiar()); else _replArLimpiar(); }
   function _replArLimpiar() {
     const overlay = document.getElementById('replArOverlay');
-    if (overlay) overlay.style.display = 'none';
+    if (overlay) { overlay.style.display = 'none'; overlay.removeEventListener('beforexrselect', _replArAntesDeSelect); }
+    const pp = document.getElementById('replArPanelPunto'); if (pp) pp.style.display = 'none';
+    const sc = document.getElementById('replArSupChip'); if (sc) sc.style.display = 'none';
+    // GIRO-PANTALLA-AR-01: fuera del AR, la orientación vuelve a la del manifest.
+    window.removeEventListener('resize', _replArAlGirar);
+    try { screen.orientation && screen.orientation.removeEventListener && screen.orientation.removeEventListener('change', _replArAlGirar); } catch (_) {}
+    try { if (_ar && screen.orientation && typeof screen.orientation.unlock === 'function') screen.orientation.unlock(); } catch (_) {}
     if (_ar?.renderer) { try { _ar.renderer.setAnimationLoop(null); _ar.renderer.dispose(); } catch {} }
     _ar = null;
   }
@@ -22311,6 +22672,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   async function replArTerminar() {
     if (!_ar) return;
     if (_ar.puntos.length < 2) { _replArEstado('Marca al menos dos puntos antes de terminar.'); return; }
+    if (_ar.terminando) return;
+    _ar.cerrando = true; _ar.terminando = true;   // el 'end' de la sesión ya no es inesperado
     _replLog(`AR terminar: ${_ar.puntos.length} puntos, ${(_ar.complementos || []).length} complementos, ${(_ar.obstaculos || []).length} obstáculos`);
     // REGISTRO-TECNICO-REPL-01: esta función no tenía try/catch -- si algo de lo de abajo
     // (toBlob, cargar imagen...) lanzaba, la promesa quedaba rechazada sin que nadie la
@@ -22334,17 +22697,22 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       // (normalDeQuat en _replArTerminarNativo) -- así repl3d.js (PARED-NORMAL-REAL-01) puede
       // orientar el ancho/grosor de la instalación contra la pared/techo real también aquí.
       const normalesAr = _ar.normales || [];
+      const diagonalesAr = _ar.diagonales || [], supAr = _ar.supPunto || [], paralelosAr = _ar.paralelos || null;
       const puntos3d = puntos.map((p, i) => {
         const n = normalesAr[i];
         const base = { x: +p.x.toFixed(3), y: +p.y.toFixed(3), z: +p.z.toFixed(3), m: metodos[i] || 'hit' };
+        // REPL-ANGULO-RECTO-01: d = 1 → el tramo que empieza aquí va en diagonal real.
+        // REPL-SUPERFICIE-FORZADA-01: s = superficie forzada con la que se marcó (informativo).
+        if (diagonalesAr[i]) base.d = 1;
+        if (supAr[i]) base.s = supAr[i];
         return n ? { ...base, nx: +n.x.toFixed(3), ny: +n.y.toFixed(3), nz: +n.z.toFixed(3) } : base;
       });
-      const longitud3d = +_replArLongitud().toFixed(2);
+      const longitud3d = +_replArLongitud().toFixed(2);   // recorrido rectificado en ángulo recto
       const plano = _replArPlano(puntos, obstaculos);
       // ADR-0027: antes de cerrar la sesión, un último fotograma clave (ve la instalación
       // terminada) para el fondo real del informe. Tiene tope de tiempo: nunca bloquea el cierre.
       const escaneoAr = await _replArEscaneoCerrar().catch(() => null);
-      try { if (_ar) await _ar.session.end(); } catch { _replArLimpiar(); }
+      try { if (_ar && !_ar.sesionTerminada) await _ar.session.end(); else _replArLimpiar(); } catch { _replArLimpiar(); }
       const blob = await new Promise(r => plano.cv.toBlob(r, 'image/jpeg', 0.9));
       _replLog(`AR terminar: plano.cv.toBlob -> ${blob ? blob.size + 'B' : 'NULL'}`);
       if (!blob) throw new Error('No se pudo generar la imagen del plano (canvas vacío)');
@@ -22355,7 +22723,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         puntos: plano.puntosPx, obstaculos: plano.obstPx.map(o => ({ ...o, tipo: 'otro', accion: 'debajo', dimension_m: 0.3, nota: 'Marcado en AR: revisar tipo, acción y dimensión' })),
         referencia: null, escala_px_m: null, longitud_manual_m: longitud3d, puntos_3d: puntos3d, origen: 'ar',
         complementos: complementosAr.map(c => ({ key: c.key, x: +c.pos.x.toFixed(3), y: +c.pos.y.toFixed(3), z: +c.pos.z.toFixed(3), q: c.quat })),
-        fotosDoc: fotosDocAr, escaneo: escaneoAr,
+        fotosDoc: fotosDocAr, escaneo: escaneoAr, paralelos: paralelosAr,
         calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
       };
       // BUG-REPL-GUARDAR-AR-01 (16/09/2026): Adrián -- "termino de replantear y le doy a
@@ -22376,6 +22744,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       _replProgramarCalculo();
     } catch (e) {
       _replLog(`AR terminar: EXCEPCIÓN -- ${e.message || e}`);
+      if (_ar) { _ar.terminando = false; _ar.cerrando = false; }   // se puede volver a intentar
       toast('❌ AR: no se pudo cerrar el trazado -- ' + (e.message || 'error desconocido'), 'error');
     }
   }
@@ -22434,9 +22803,24 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     const puntos3d = puntosNativos.map(p => {
       const n = normalDeQuat(p);
       const base = { x: +(+p.x).toFixed(3), y: +(+p.y).toFixed(3), z: +(+p.z).toFixed(3), m: 'hit' };
+      // Paridad con WebXR: diagonal real por tramo (d) y superficie forzada del punto (s).
+      if (p.d) base.d = 1;
+      if (p.s && ['techo', 'pared', 'suelo'].includes(String(p.s))) base.s = String(p.s);
       return n ? { ...base, nx: +n.nx.toFixed(3), ny: +n.ny.toFixed(3), nz: +n.nz.toFixed(3) } : base;
     });
-    const longitud3d = +(+resultado.longitud || 0).toFixed(2);
+    let longitud3d = +(+resultado.longitud || 0).toFixed(2);
+    // REPL-ANGULO-RECTO-01: la APK mide la recta entre anclas; la longitud que se guarda es la del
+    // recorrido rectificado, con el mismo repl3d.js que la PWA (sin three.js -sin red- se queda la
+    // de la APK, que nunca es mayor que la real).
+    try {
+      const THREE = await _replCargarThree();
+      const L = _replLongitudTrazado(THREE, puntos3d.map(p => new THREE.Vector3(p.x, p.y, p.z)),
+        { normales: puntos3d.map(p => (p.nx != null ? new THREE.Vector3(p.nx, p.ny, p.nz) : null)), diagonales: puntos3d.map(p => !!p.d) });
+      if (L > 0) longitud3d = +L.toFixed(2);
+    } catch (e) { _replLog('AR nativo: longitud rectificada no disponible -- ' + (e.message || e)); }
+    const parN = resultado.paralelos ? Math.round(+resultado.paralelos.n || 1) : 1;
+    const paralelosNat = parN > 1 ? { n: Math.min(REPL_TRAZADO.maxParalelos, parN),
+      hueco_m: Number.isFinite(+resultado.paralelos.hueco_m) && +resultado.paralelos.hueco_m >= 0 ? +resultado.paralelos.hueco_m : REPL_TRAZADO.huecoParaleloM } : null;
     // REPL-AR-NATIVO-COMP-01 (17/09/2026): el AR nativo ya puede colocar complementos (cajas,
     // mecanismos...) con su propio CubeRenderer -- mismo formato de campos que puntos_3d
     // (x/y/z/qx/qy/qz/qw + key), se traduce aquí al {key,x,y,z,q:{x,y,z,w}} que ya usa
@@ -22460,6 +22844,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       complementos, fotosDoc: Array.isArray(resultado.fotos) ? resultado.fotos : [],
       // ADR-0027: el escaneo lo hizo la Activity nativa y sus fotogramas ya están en R2.
       escaneo: resultado.escaneo_id ? { id: resultado.escaneo_id } : null,
+      paralelos: paralelosNat,   // REPL-PARALELOS-01
       calc: null, estado: 'borrador', modo: 'trazar', cambiado: true,
     };
     // BUG-REPL-GUARDAR-AR-01: ver comentario en el camino WebXR -- mismo motivo.
@@ -22525,7 +22910,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     // PARED-NORMAL-REAL-01 (17/09/2026): antes se descartaban nx/ny/nz aquí aunque puntos_3d ya
     // las traía (calculadas en _replArTerminarNativo/replArTerminar) -- por eso _repl3DBuild
     // nunca podía orientar la instalación contra la pared real, ni en AR ni en el informe.
-    if (Array.isArray(_repl.puntos_3d) && _repl.puntos_3d.length >= 2) return _repl.puntos_3d.map(p => ({ x: +p.x || 0, y: +p.y || 0, z: +p.z || 0, nx: p.nx, ny: p.ny, nz: p.nz }));
+    if (Array.isArray(_repl.puntos_3d) && _repl.puntos_3d.length >= 2) return _repl.puntos_3d.map(p => ({ x: +p.x || 0, y: +p.y || 0, z: +p.z || 0, nx: p.nx, ny: p.ny, nz: p.nz, d: !!p.d }));
     const pts = _repl.puntos || []; if (pts.length < 2) return null;
     let esc = (typeof _replEscalaActual === 'function' && _replEscalaActual()) || _repl.escala_px_m || 0;
     const aprox = !(esc > 0); if (aprox) esc = 200;   // sin escala: forma orientativa
@@ -22536,12 +22921,17 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // FASE-B-AR-01 (17/09/2026): _replTipoRender/_replConDesvios/_replInstal3D se movieron a
   // repl3d.js (cargado en <head>) -- misma lógica, sin cambios. Quedan aquí porque leen
   // directamente el estado global _repl de esta página.
+  function _repl3DOpciones(THREE, path) {
+    return { normales: path.map(p => (p.nx != null ? new THREE.Vector3(p.nx, p.ny, p.nz) : null)),
+             diagonales: path.map(p => !!p.d), paralelos: _repl.paralelos || null };
+  }
   function _repl3DBuild(THREE, path) {
     const pts = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
     // PARED-NORMAL-REAL-01: normal real por punto (viene del quaternion del ancla AR, ver
     // _repl3DPath) cuando existe -- null en los puntos de un plano 2D de foto, que no la tienen.
-    const normales = path.map(p => (p.nx != null ? new THREE.Vector3(p.nx, p.ny, p.nz) : null));
-    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1, obstaculos: _repl.obstaculos || [], normales });
+    // REPL-ANGULO-RECTO-01 / REPL-PARALELOS-01: ángulo recto (salvo tramos en diagonal real) y
+    // líneas en paralelo, igual que en el AR en vivo y en el informe (repl3d.js).
+    const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(_repl.elemento_key, _repl.params), w: _repl3DAncho(), opacity: 1, obstaculos: _repl.obstaculos || [], ..._repl3DOpciones(THREE, path) });
     (_repl.complementos || []).forEach(comp => { const o = _replComplemento3D(THREE, comp.key); o.position.set(comp.x || 0, comp.y || 0, comp.z || 0); if (comp.q) o.quaternion.set(comp.q.x, comp.q.y, comp.q.z, comp.q.w); g.add(o); });
     return g;
   }

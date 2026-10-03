@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.opengl.GLES20;
@@ -14,6 +15,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.PixelCopy;
 import android.view.View;
 import android.view.ViewGroup;
@@ -27,6 +29,7 @@ import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
@@ -96,6 +99,30 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     private Spinner compSpinner;
     private volatile int compSeleccionado = 0;
     private volatile String superficieObjetivo = "auto";
+    // REPL-SUPERFICIE-FORZADA-01 (03/10/2026, prioridad 4): con Techo/Pared/Suelo el primer punto
+    // del tramo fija el plano y los siguientes se fuerzan a él (TrazadoGeometria; paridad con
+    // _replArAnclajeForzado de la PWA). Solo se tocan en el hilo GL; cambiar el selector lo suelta.
+    private volatile boolean soltarPlanoFijo = false;
+    private float[] planoFijoPos = null, planoFijoNormal = null;
+    // REPL-ANGULO-RECTO-01 / REPL-PARALELOS-01: diagonal real por tramo y superficie forzada de
+    // cada punto (paralelas a `anchors` por índice), líneas en paralelo, y la longitud del
+    // recorrido rectificado que devuelve el overlay (repl3d.js); -1 mientras no la haya calculado.
+    private final List<Boolean> tramoDiagonal = new ArrayList<>();
+    private final List<String> puntoSuperficie = new ArrayList<>();
+    private volatile int paralelosN = 1;
+    private volatile float huecoParaleloM = 0.03f;
+    private volatile double longitudRectificadaM = -1;
+    // REPL-EDITAR-PUNTO-01: punto en edición (-1 = ninguno), acción pendiente para el hilo GL y lo
+    // que el panel necesita saber de cada punto (se copia en el hilo GL al sincronizar el overlay).
+    private volatile int selPunto = -1, nPuntos = 0;
+    private volatile String pendingAccionPunto = null;
+    private volatile String[] etiquetasPuntos = new String[0];
+    private volatile boolean[] diagonalesPuntos = new boolean[0];
+    private LinearLayout panelPunto;
+    private TextView tituloPunto;
+    private Button btnDiagonal;
+    private FrameLayout.LayoutParams panelEscaneoLp;
+    private interface AlElegir { void elegir(int posicion); }
     private String estadoSuperficie = "Explora suelo, techo y paredes moviendo el móvil despacio.";
     private String resumenPlanos = "Sin planos confirmados";
     private final BackgroundRenderer background = new BackgroundRenderer();
@@ -271,6 +298,20 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
 
         overlay = new OverlayView(this);
         root.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // REPL-EDITAR-PUNTO-01 (03/10/2026, prioridad 4): tocar un punto ya colocado (no solo el
+        // último) lo selecciona para pegarlo a techo/pared, moverlo, esquivar o borrarlo. Los
+        // botones están encima y reciben sus toques antes que esta capa.
+        final float radioToque = 36 * getResources().getDisplayMetrics().density;
+        overlay.setOnTouchListener((v, ev) -> {
+            if (ev.getActionMasked() == MotionEvent.ACTION_UP) {
+                v.performClick();
+                if (!faseEscaneo) {
+                    int i = TrazadoGeometria.puntoMasCercano(overlay.getPuntos(), ev.getX(), ev.getY(), radioToque);
+                    if (i >= 0) seleccionarPunto(i);
+                }
+            }
+            return true;
+        });
 
         infoText = new TextView(this);
         infoText.setTextColor(Color.WHITE);
@@ -326,11 +367,12 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         btnEscaneoSinIA = makeBtn("Continuar sin IA", "#334155", "#ffffff", 1.3f, v -> { iaActiva = false; iaPedida = false; motivoSinIA = "IA desactivada a mano."; escaneoListo(); });
         filaEscaneo.addView(btnEscaneoSinIA);
         filaEscaneo.addView(makeBtn("✖", "#000000", "#ffffff", 0.6f, v -> { setResult(RESULT_CANCELED); finish(); }));
-        root.addView(panelEscaneo, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+        panelEscaneoLp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        root.addView(panelEscaneo, panelEscaneoLp);
         final int escPadB = 28;
         ViewCompat.setOnApplyWindowInsetsListener(panelEscaneo, (v, insets) -> {
-            int bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
-            v.setPadding(28, 22, 28, escPadB + bottom);
+            androidx.core.graphics.Insets in = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(28 + in.left, 22, 28 + in.right, escPadB + in.bottom);
             return insets;
         });
         inicioEscaneo = System.currentTimeMillis();
@@ -348,20 +390,42 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         panelMod.setPadding(20, 10, 20, 10);
         panelMod.setBackgroundColor(Color.parseColor("#d9000000"));
         panelMod.setVisibility(View.GONE);
-        bottomStack.addView(panelMod, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        Spinner superficieSpinner = new Spinner(this);
-        ArrayAdapter<String> superficiesAdapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, new String[]{"Superficie: automática", "Pared", "Suelo", "Techo"});
-        superficiesAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        superficieSpinner.setAdapter(superficiesAdapter);
-        superficieSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                superficieObjetivo = new String[]{"auto", "pared", "suelo", "techo"}[position];
+        // GIRO-PANTALLA-AR-01 (03/10/2026): en horizontal el panel ✥ (ahora con más filas) no cabe
+        // en ~360 dp de alto y empujaba la barra fuera de la pantalla: se desplaza dentro de un
+        // máximo del 45 % del alto en vez de crecer sin límite.
+        ScrollView scrollMod = new ScrollView(this) {
+            @Override protected void onMeasure(int anchoSpec, int altoSpec) {
+                int max = (int) (getResources().getDisplayMetrics().heightPixels * 0.45f);
+                super.onMeasure(anchoSpec, MeasureSpec.makeMeasureSpec(max, MeasureSpec.AT_MOST));
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        };
+        scrollMod.addView(panelMod, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        bottomStack.addView(scrollMod, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // REPL-SUPERFICIE-FORZADA-01: antes solo filtraba planos; ahora además el primer punto del
+        // tramo fija el plano y los siguientes se fuerzan a él. Cambiarlo empieza un tramo nuevo.
+        Spinner superficieSpinner = crearSpinner(new String[]{"Superficie del tramo: automática",
+                "🔒 Forzar pared (fija el plano del 1.er punto)", "🔒 Forzar suelo (fija el plano del 1.er punto)",
+                "🔒 Forzar techo (fija el plano del 1.er punto)"}, posicion -> {
+            superficieObjetivo = new String[]{"auto", "pared", "suelo", "techo"}[posicion];
+            soltarPlanoFijo = true;
         });
         panelMod.addView(superficieSpinner);
+
+        // REPL-PARALELOS-01 (prioridad 3): mismas opciones que el ⚙️ de la PWA.
+        LinearLayout parRow = new LinearLayout(this);
+        parRow.setOrientation(LinearLayout.HORIZONTAL);
+        panelMod.addView(parRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        String[] nombresPar = new String[8];
+        for (int k = 1; k <= 8; k++) nombresPar[k - 1] = k == 1 ? "1 línea" : k + " en paralelo";
+        final float[] huecos = {0f, 0.01f, 0.02f, 0.03f, 0.05f, 0.08f, 0.1f, 0.15f, 0.2f};
+        String[] nombresHueco = new String[huecos.length];
+        for (int k = 0; k < huecos.length; k++) nombresHueco[k] = "hueco " + Math.round(huecos[k] * 100) + " cm";
+        Spinner parSpinner = crearSpinner(nombresPar, posicion -> { paralelosN = posicion + 1; contenidoSucio = true; });
+        Spinner huecoSpinner = crearSpinner(nombresHueco, posicion -> { huecoParaleloM = huecos[posicion]; contenidoSucio = true; });
+        huecoSpinner.setSelection(3);
+        parRow.addView(parSpinner, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        parRow.addView(huecoSpinner, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         LinearLayout compRow = new LinearLayout(this);
         compRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -410,6 +474,46 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         panelMod.addView(utilRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         utilRow.addView(makeBtn("📸 Foto", "#ffffff", "#111111", 1f, v -> tomarFoto()));
         utilRow.addView(makeBtn("🔍 Identificar", "#8b5cf6", "#ffffff", 1f, v -> identificarIA()));
+        LinearLayout editRow = new LinearLayout(this);
+        editRow.setOrientation(LinearLayout.HORIZONTAL);
+        editRow.setPadding(0, 8, 0, 0);
+        panelMod.addView(editRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        editRow.addView(makeBtn("✏️ Editar cualquier punto", "#facc15", "#111111", 1f, v -> editarPuntos()));
+
+        // REPL-EDITAR-PUNTO-01: panel del punto en edición (se abre tocándolo o con ✏️).
+        panelPunto = new LinearLayout(this);
+        panelPunto.setOrientation(LinearLayout.VERTICAL);
+        panelPunto.setPadding(20, 10, 20, 10);
+        panelPunto.setBackgroundColor(Color.parseColor("#e6000000"));
+        panelPunto.setVisibility(View.GONE);
+        bottomStack.addView(panelPunto, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout filaTitulo = new LinearLayout(this);
+        filaTitulo.setOrientation(LinearLayout.HORIZONTAL);
+        filaTitulo.setGravity(Gravity.CENTER_VERTICAL);
+        panelPunto.addView(filaTitulo, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        filaTitulo.addView(makeBtn("◀", "#ffffff", "#111111", 0.7f, v -> navegarPunto(-1)));
+        tituloPunto = new TextView(this);
+        tituloPunto.setTextColor(Color.WHITE);
+        tituloPunto.setTextSize(13f);
+        tituloPunto.setGravity(Gravity.CENTER);
+        filaTitulo.addView(tituloPunto, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 2.6f));
+        filaTitulo.addView(makeBtn("▶", "#ffffff", "#111111", 0.7f, v -> navegarPunto(1)));
+        filaTitulo.addView(makeBtn("✖", "#000000", "#ffffff", 0.7f, v -> seleccionarPunto(-1)));
+        LinearLayout filaA = new LinearLayout(this);
+        filaA.setOrientation(LinearLayout.HORIZONTAL);
+        filaA.setPadding(0, 8, 0, 0);
+        panelPunto.addView(filaA, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        filaA.addView(makeBtn("📌 Techo", "#38bdf8", "#062a3d", 1f, v -> accionPunto("techo")));
+        filaA.addView(makeBtn("🧱 Pared", "#38bdf8", "#062a3d", 1f, v -> accionPunto("pared")));
+        filaA.addView(makeBtn("🎯 Mover", "#f97316", "#ffffff", 1f, v -> accionPunto("mover")));
+        LinearLayout filaB = new LinearLayout(this);
+        filaB.setOrientation(LinearLayout.HORIZONTAL);
+        filaB.setPadding(0, 8, 0, 0);
+        panelPunto.addView(filaB, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        filaB.addView(makeBtn("↪ Esquivar", "#facc15", "#111111", 1f, v -> accionPunto("esquivar")));
+        btnDiagonal = makeBtn("⟂ Recto", "#ffffff", "#111111", 1f, v -> accionPunto("diagonal"));
+        filaB.addView(btnDiagonal);
+        filaB.addView(makeBtn("🗑 Borrar", "#ef4444", "#ffffff", 1f, v -> accionPunto("borrar")));
 
         // Botón flotante que abre/cierra el panel de arriba -- una sola fila siempre visible en
         // vez de las 4 de antes.
@@ -454,20 +558,56 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         // barra de navegación (gestos/botones) tapaba o dejaba casi sin margen la fila de
         // botones de abajo. Se añade el inset real de systemBars() al padding fijo que ya
         // tenía cada vista, en vez de sustituirlo -- así se conserva el aire visual original.
+        // GIRO-PANTALLA-AR-01: en horizontal la barra de navegación y la muesca quedan a un lado;
+        // se suman también los insets laterales (antes solo arriba/abajo).
         final int infoPadL = 28, infoPadT = 40, infoPadR = 28, infoPadB = 20;
         ViewCompat.setOnApplyWindowInsetsListener(infoText, (v, insets) -> {
-            int top = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top;
-            v.setPadding(infoPadL, infoPadT + top, infoPadR, infoPadB);
+            androidx.core.graphics.Insets in = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(infoPadL + in.left, infoPadT + in.top, infoPadR + in.right, infoPadB);
             return insets;
         });
         final int barPadL = 20, barPadT = 16, barPadR = 20, barPadB = 40;
         ViewCompat.setOnApplyWindowInsetsListener(bar, (v, insets) -> {
-            int bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
-            v.setPadding(barPadL, barPadT, barPadR, barPadB + bottom);
+            androidx.core.graphics.Insets in = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            v.setPadding(barPadL + in.left, barPadT, barPadR + in.right, barPadB + in.bottom);
             return insets;
         });
 
         setContentView(root);
+        ajustarDisposicion(getResources().getConfiguration());
+    }
+
+    // GIRO-PANTALLA-AR-01 (03/10/2026): la Activity declara configChanges de orientación/tamaño en
+    // el manifest, así que girar NO la recrea: la sesión ARCore, las anclas y el overlay siguen
+    // vivos (onSurfaceChanged + setDisplayGeometry en onDrawFrame reajustan cámara y proyección; el
+    // WebView recibe 'resize'). Aquí solo se recolocan los paneles para la nueva orientación.
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration nueva) {
+        super.onConfigurationChanged(nueva);
+        android.util.Log.i("AlejandraAR", "Giro de pantalla: " + (nueva.orientation == Configuration.ORIENTATION_LANDSCAPE ? "horizontal" : "vertical"));
+        ajustarDisposicion(nueva);
+        contenidoSucio = true;
+    }
+
+    private void ajustarDisposicion(Configuration c) {
+        if (panelEscaneo == null || panelEscaneoLp == null) return;
+        boolean horizontal = c.orientation == Configuration.ORIENTATION_LANDSCAPE;
+        // En horizontal el cartel de escaneo ocupa el lado izquierdo, no toda la anchura.
+        panelEscaneoLp.width = horizontal ? (int) (getResources().getDisplayMetrics().widthPixels * 0.62f) : ViewGroup.LayoutParams.MATCH_PARENT;
+        panelEscaneoLp.gravity = horizontal ? (Gravity.BOTTOM | Gravity.START) : Gravity.BOTTOM;
+        panelEscaneo.setLayoutParams(panelEscaneoLp);
+    }
+
+    private Spinner crearSpinner(String[] opciones, AlElegir alElegir) {
+        Spinner s = new Spinner(this);
+        ArrayAdapter<String> ad = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, opciones);
+        ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        s.setAdapter(ad);
+        s.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) { alElegir.elegir(position); }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        return s;
     }
 
     // ADR-0027 (paridad con _replArAtras de la PWA): atrás durante el escaneo cancela; con un
@@ -475,6 +615,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
+        if (selPunto >= 0) { seleccionarPunto(-1); return; }   // REPL-EDITAR-PUNTO-01: primero cierra el panel
         if (!faseEscaneo && anchors.size() >= 2 && !finalizando) { pendingFinish = true; return; }
         setResult(RESULT_CANCELED);
         finish();
@@ -504,6 +645,9 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         } else if (!anchors.isEmpty()) {
             anchors.remove(anchors.size() - 1).detach();
             if (!puntoOffsets.isEmpty()) puntoOffsets.remove(puntoOffsets.size() - 1);
+            if (!tramoDiagonal.isEmpty()) tramoDiagonal.remove(tramoDiagonal.size() - 1);
+            if (!puntoSuperficie.isEmpty()) puntoSuperficie.remove(puntoSuperficie.size() - 1);
+            if (selPunto >= anchors.size()) { selPunto = -1; runOnUiThread(this::actualizarPanelPunto); }
         }
         contenidoSucio = true;
     }
@@ -527,6 +671,10 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                 // para que index.html pueda orientar la instalacion segun la superficie real.
                 o.put("qx", round3(p.qx())); o.put("qy", round3(p.qy()));
                 o.put("qz", round3(p.qz())); o.put("qw", round3(p.qw()));
+                // REPL-ANGULO-RECTO-01: d = el tramo que empieza aquí va en diagonal real.
+                // REPL-SUPERFICIE-FORZADA-01: s = superficie forzada con la que se marcó.
+                if (i < tramoDiagonal.size() && tramoDiagonal.get(i)) o.put("d", true);
+                if (i < puntoSuperficie.size() && puntoSuperficie.get(i) != null) o.put("s", puntoSuperficie.get(i));
                 arr.put(o);
             } catch (Exception ignored) {}
             if (prev != null) {
@@ -561,6 +709,14 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
         data.putExtra("fotos", new JSONArray(fotos).toString());
         // ADR-0027: los fotogramas del escaneo ya están en R2; la web solo necesita el id.
         if (escaneoId != null) data.putExtra("escaneo_id", escaneoId);
+        // REPL-PARALELOS-01: líneas en paralelo elegidas en el panel ✥.
+        if (paralelosN > 1) {
+            try {
+                JSONObject par = new JSONObject();
+                par.put("n", paralelosN); par.put("hueco_m", (double) huecoParaleloM);
+                data.putExtra("paralelos", par.toString());
+            } catch (Exception ignored) {}
+        }
         runOnUiThread(() -> { setResult(RESULT_OK, data); finish(); });
     }
 
@@ -703,6 +859,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             if (pendingFinish) { pendingFinish = false; pedirFin = true; }   // ADR-0027: antes, último fotograma clave
             // ADR-0027: durante el escaneo no se marca (los botones están ocultos; por si acaso).
             if (faseEscaneo) { pendingPoint = false; pendingContact = false; pendingComp = false; }
+            if (soltarPlanoFijo) { soltarPlanoFijo = false; planoFijoPos = null; planoFijoNormal = null; }
 
             boolean tracking = camera.getTrackingState() == TrackingState.TRACKING;
             // RENDIMIENTO-AR-CAMARA-01 (17/09/2026): Adrian -- "la camara va a saltos". Antes
@@ -740,6 +897,11 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             if (pendingRotar) {
                 pendingRotar = false;
                 aplicarRotar();
+            }
+            if (pendingAccionPunto != null) {
+                String accion = pendingAccionPunto;
+                pendingAccionPunto = null;
+                aplicarAccionPunto(frame, accion, tracking);
             }
 
             // Proyección de los anclajes a coordenadas de pantalla
@@ -784,6 +946,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                 screen[i * 2] = (ndcx * 0.5f + 0.5f) * viewportW;
                 screen[i * 2 + 1] = (1f - (ndcy * 0.5f + 0.5f)) * viewportH;
             }
+            nPuntos = anchors.size();
             overlay.setPoints(screen);
             // FASE-A-AR-PAREDES-LISAS-01: retículo de tres estados (ver OverlayView) -- naranja
             // solo cuando hay plano/punto confirmado bajo el círculo, azul cuando eso falla pero
@@ -966,8 +1129,29 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
                 // esto solo se mandaba al terminar, nunca durante la vista previa en vivo -- lo
                 // que se veía en el AR y lo que salía en el informe no coincidía.
                 o.put("qx", p.qx()); o.put("qy", p.qy()); o.put("qz", p.qz()); o.put("qw", p.qw());
+                if (i < tramoDiagonal.size() && tramoDiagonal.get(i)) o.put("d", true);   // REPL-ANGULO-RECTO-01
             } catch (Exception ignored) {}
             path.put(o);
+        }
+        // REPL-EDITAR-PUNTO-01: lo que muestra el panel del punto, copiado aquí (hilo GL, dueño de
+        // las anclas) para leerlo sin carreras desde el hilo de UI.
+        String[] etiquetas = new String[anchors.size()];
+        boolean[] diagonales = new boolean[anchors.size()];
+        for (int i = 0; i < anchors.size(); i++) {
+            etiquetas[i] = SurfaceGeometry.type(anchors.get(i).getPose().getYAxis()[1]);
+            diagonales[i] = i < tramoDiagonal.size() && tramoDiagonal.get(i);
+        }
+        etiquetasPuntos = etiquetas;
+        diagonalesPuntos = diagonales;
+        runOnUiThread(this::actualizarPanelPunto);
+        // REPL-PARALELOS-01: opciones de render (mismo formato que trazado_json.paralelos).
+        JSONObject opciones = new JSONObject();
+        if (paralelosN > 1) {
+            try {
+                JSONObject par = new JSONObject();
+                par.put("n", paralelosN); par.put("hueco_m", (double) huecoParaleloM);
+                opciones.put("paralelos", par);
+            } catch (Exception ignored) {}
         }
         JSONArray comps = new JSONArray();
         for (Complemento c : complementos) {
@@ -984,8 +1168,17 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             comps.put(o);
         }
         final String js = "actualizarContenido(" + jsStringLit(path.toString()) + "," + jsStringLit(elementoKey) + ","
-                + jsStringLit(elementoParamsJson) + "," + jsStringLit("[]") + "," + jsStringLit(comps.toString()) + ")";
-        runOnUiThread(() -> { try { threeOverlay.evaluateJavascript(js, null); } catch (Exception ignored) {} });
+                + jsStringLit(elementoParamsJson) + "," + jsStringLit("[]") + "," + jsStringLit(comps.toString()) + ","
+                + jsStringLit(opciones.toString()) + ")";
+        // REPL-ANGULO-RECTO-01: el overlay devuelve la longitud del recorrido rectificado (repl3d.js),
+        // la misma que guardará la PWA -- la APK no duplica en Java la geometría compartida.
+        runOnUiThread(() -> {
+            try {
+                if (threeOverlay != null) threeOverlay.evaluateJavascript(js, valor -> {
+                    try { longitudRectificadaM = Double.parseDouble(valor); } catch (Exception e) { longitudRectificadaM = -1; }
+                });
+            } catch (Exception ignored) {}
+        });
     }
 
     // REFERENCIA-PLANOS-AR-01: manda los planos detectados (posición/orientación real +
@@ -1034,26 +1227,208 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     }
 
     private void colocarEnReticulo(Frame frame) {
-        Anchor a = resolverAnclaje(frame, false);
+        Anchor a = superficieForzada(frame, resolverAnclaje(frame, false), false);
         if (a == null) {
-            runOnUiThread(() -> infoText.setText("Sin superficie ni profundidad bajo el círculo. Acerca el móvil al punto y pulsa 📱 Tocar."));
+            final String tipo = superficieObjetivo;
+            final String msg = !"auto".equals(tipo) && planoFijoPos == null
+                    ? "Tramo forzado a " + tipo + ": apunta a un " + tipo + " ya confirmado (o pulsa 📱 Tocar pegado a él) para fijar su plano."
+                    : "Sin superficie ni profundidad bajo el círculo. Acerca el móvil al punto y pulsa 📱 Tocar.";
+            estadoSuperficie = msg;
             return;
         }
-        anchors.add(a); puntoOffsets.add(new float[]{0f, 0f, 0f}); accionLog.add("punto");
-        contenidoSucio = true;
+        agregarPunto(a);
         avisarSiSobreInstalacion(a);   // ADR-0027
+    }
+
+    private void agregarPunto(Anchor a) {
+        anchors.add(a); puntoOffsets.add(new float[]{0f, 0f, 0f}); accionLog.add("punto");
+        tramoDiagonal.add(false);
+        puntoSuperficie.add("auto".equals(superficieObjetivo) ? null : superficieObjetivo);
+        contenidoSucio = true;
+    }
+
+    // REPL-SUPERFICIE-FORZADA-01: con superficie forzada, el primer punto del tramo fija el plano y
+    // los siguientes se llevan a él (rayo cámara→punto; sin hit ni profundidad, el rayo central).
+    // Paridad con _replArAnclajeForzado (index.html). Hilo GL.
+    private Anchor superficieForzada(Frame frame, Anchor a, boolean contacto) {
+        String tipo = superficieObjetivo;
+        if ("auto".equals(tipo)) return a;
+        Pose cam = frame.getCamera().getPose();
+        float[] camPos = cam.getTranslation(), z = cam.getZAxis();
+        float[] fwd = {-z[0], -z[1], -z[2]};
+        if (planoFijoPos == null) {
+            if (a == null) return null;
+            Pose p = a.getPose();
+            float[] n = TrazadoGeometria.normalDeTipo(tipo, contacto ? null : p.getYAxis(), fwd);
+            if (n == null) return a;
+            planoFijoPos = p.getTranslation(); planoFijoNormal = n;
+            android.util.Log.i("AlejandraAR", "Plano de " + tipo + " fijado" + (contacto ? " por contacto" : ""));
+        }
+        float[] cand = a != null ? a.getPose().getTranslation() : new float[]{camPos[0] + fwd[0], camPos[1] + fwd[1], camPos[2] + fwd[2]};
+        float[] q = TrazadoGeometria.forzarAPlano(planoFijoPos, planoFijoNormal, cand, contacto ? null : camPos);
+        if (q == null) return a;
+        if (a != null) {
+            float[] t = a.getPose().getTranslation(), y = a.getPose().getYAxis();
+            float dx = t[0] - q[0], dy = t[1] - q[1], dz = t[2] - q[2];
+            boolean mismaSuperficie = y[0] * planoFijoNormal[0] + y[1] * planoFijoNormal[1] + y[2] * planoFijoNormal[2] > 0.95f;
+            if (dx * dx + dy * dy + dz * dz < 0.005f * 0.005f && mismaSuperficie) {
+                estadoSuperficie = "🔒 " + tipo + " fijado · punto pegado al plano del tramo";
+                return a;   // ya está sobre el plano: se conserva su ancla (sigue el refinado de ARCore)
+            }
+            a.detach();
+        }
+        estadoSuperficie = "🔒 Punto forzado al " + tipo + " del tramo";
+        return session.createAnchor(new Pose(q, TrazadoGeometria.quatDesdeNormal(planoFijoNormal)));
     }
 
     // "Tocar": el móvil está pegado o casi pegado a la superficie -- mismo botón y misma idea
     // que "📱 Tocar con el móvil (pared lisa)" en la PWA (WebXR), para paredes/techos lisos
     // donde ni el hit-test ni una estimación de profundidad a distancia normal enganchan.
     private void colocarPorContacto(Frame frame) {
-        Anchor a = resolverAnclaje(frame, true);
+        Anchor a = superficieForzada(frame, resolverAnclaje(frame, true), true);
         if (a == null) {
-            runOnUiThread(() -> infoText.setText("No se pudo anclar por contacto. Prueba de nuevo, bien pegado a la superficie."));
+            estadoSuperficie = "No se pudo anclar por contacto. Prueba de nuevo, bien pegado a la superficie.";
             return;
         }
-        anchors.add(a); puntoOffsets.add(new float[]{0f, 0f, 0f}); accionLog.add("punto");
+        agregarPunto(a);
+    }
+
+    // ── REPL-EDITAR-PUNTO-01 (03/10/2026, prioridad 4): acción sobre CUALQUIER punto colocado ──
+    // Paridad con replArPuntoAccion (index.html). La selección vive en el hilo de UI; la acción se
+    // resuelve en el hilo GL (dueño de las anclas), igual que Punto/Tocar/Deshacer.
+    private void seleccionarPunto(int i) {
+        selPunto = (i >= 0 && i < nPuntos) ? i : -1;
+        actualizarPanelPunto();
+    }
+    private void navegarPunto(int d) {
+        int n = nPuntos;
+        if (n == 0) return;
+        seleccionarPunto(selPunto < 0 ? n - 1 : ((selPunto + d) % n + n) % n);
+    }
+    private void editarPuntos() {
+        if (nPuntos == 0) { estadoSuperficie = "Aún no hay puntos que editar."; return; }
+        seleccionarPunto(selPunto >= 0 ? selPunto : nPuntos - 1);
+    }
+    private void accionPunto(String accion) { if (selPunto >= 0) pendingAccionPunto = accion; }
+
+    // Hilo de UI.
+    private void actualizarPanelPunto() {
+        if (panelPunto == null) return;
+        int i = selPunto, n = nPuntos;
+        String[] etiquetas = etiquetasPuntos;
+        boolean[] diagonales = diagonalesPuntos;
+        if (i < 0 || i >= n) {
+            if (i >= n) selPunto = -1;
+            panelPunto.setVisibility(View.GONE);
+            overlay.setSeleccion(-1);
+            return;
+        }
+        overlay.setSeleccion(i);
+        panelPunto.setVisibility(View.VISIBLE);
+        tituloPunto.setText("✏️ Punto " + (i + 1) + " de " + n + (i < etiquetas.length ? " · " + etiquetas[i] : ""));
+        boolean ultimo = i >= n - 1;
+        btnDiagonal.setEnabled(!ultimo);
+        btnDiagonal.setAlpha(ultimo ? 0.45f : 1f);
+        btnDiagonal.setText(ultimo ? "⟂ —" : (i < diagonales.length && diagonales[i] ? "⟋ Diagonal" : "⟂ Recto"));
+    }
+
+    private float[] posPunto(int i) {
+        Pose p = anchors.get(i).getPose();
+        float[] off = puntoOffsets.get(i);
+        return new float[]{p.tx() + off[0], p.ty() + off[1], p.tz() + off[2]};
+    }
+
+    private void reemplazarAncla(int i, Anchor nueva, String superficie) {
+        anchors.get(i).detach();
+        anchors.set(i, nueva);
+        puntoOffsets.set(i, new float[]{0f, 0f, 0f});
+        puntoSuperficie.set(i, superficie);
+    }
+
+    private void borrarPunto(int i) {
+        anchors.remove(i).detach();
+        puntoOffsets.remove(i);
+        tramoDiagonal.remove(i);
+        puntoSuperficie.remove(i);
+        int k = accionLog.lastIndexOf("punto");
+        if (k >= 0) accionLog.remove(k);
+    }
+
+    // "Pegar a techo/pared": el plano confirmado de ese tipo más cercano (hasta 1,5 m); si no hay,
+    // el plano fijado del tramo si es de ese tipo. Hilo GL.
+    private Anchor pegarA(float[] p, String tipo) {
+        Plane mejor = null;
+        float[] mejorQ = null;
+        for (Plane pl : session.getAllTrackables(Plane.class)) {
+            if (pl.getTrackingState() != TrackingState.TRACKING || pl.getSubsumedBy() != null || planoExcluidoPorIA(pl)) continue;
+            Pose c = pl.getCenterPose();
+            if (!tipo.equals(SurfaceGeometry.type(c.getYAxis()[1]))) continue;
+            float[] r = TrazadoGeometria.pegar(p, c.getTranslation(), c.getYAxis(), TrazadoGeometria.MAX_PEGAR_M);
+            if (r != null && (mejorQ == null || r[3] < mejorQ[3])) { mejor = pl; mejorQ = r; }
+        }
+        if (mejor != null) return mejor.createAnchor(new Pose(new float[]{mejorQ[0], mejorQ[1], mejorQ[2]}, mejor.getCenterPose().getRotationQuaternion()));
+        if (planoFijoPos != null && tipo.equals(SurfaceGeometry.type(planoFijoNormal[1]))) {
+            return session.createAnchor(new Pose(TrazadoGeometria.proyectar(p, planoFijoPos, planoFijoNormal), TrazadoGeometria.quatDesdeNormal(planoFijoNormal)));
+        }
+        return null;
+    }
+
+    private void aplicarAccionPunto(Frame frame, String accion, boolean tracking) {
+        int i = selPunto;
+        if (i < 0 || i >= anchors.size()) return;
+        float[] p = posPunto(i);
+        String n1 = String.valueOf(i + 1);
+        switch (accion) {
+            case "borrar":
+                borrarPunto(i);
+                selPunto = anchors.isEmpty() ? -1 : Math.min(i, anchors.size() - 1);
+                estadoSuperficie = "🗑 Punto " + n1 + " borrado.";
+                break;
+            case "diagonal":
+                if (i >= anchors.size() - 1) return;
+                boolean d = !tramoDiagonal.get(i);
+                tramoDiagonal.set(i, d);
+                estadoSuperficie = d ? "⟋ El tramo " + n1 + "→" + (i + 2) + " respeta la diagonal tal cual se marcó."
+                        : "⟂ El tramo " + n1 + "→" + (i + 2) + " vuelve al ángulo recto.";
+                break;
+            case "techo":
+            case "pared": {
+                Anchor a = pegarA(p, accion);
+                if (a == null) { estadoSuperficie = "No hay " + accion + " confirmado a menos de 1,5 m de este punto. Enfoca el " + accion + " y vuelve a intentarlo."; return; }
+                float[] t = a.getPose().getTranslation();
+                double cm = Math.sqrt((t[0] - p[0]) * (t[0] - p[0]) + (t[1] - p[1]) * (t[1] - p[1]) + (t[2] - p[2]) * (t[2] - p[2])) * 100;
+                reemplazarAncla(i, a, accion);
+                estadoSuperficie = "📌 Punto " + n1 + " pegado al " + accion + " (se ha movido " + Math.round(cm) + " cm).";
+                break;
+            }
+            case "mover": {
+                if (!tracking) { estadoSuperficie = "Mueve el móvil despacio para que la cámara se sitúe y vuelve a pulsar 🎯."; return; }
+                Anchor a = superficieForzada(frame, resolverAnclaje(frame, false), false);
+                if (a == null) { estadoSuperficie = "Apunta con el círculo a donde debe ir el punto y vuelve a pulsar 🎯."; return; }
+                reemplazarAncla(i, a, "auto".equals(superficieObjetivo) ? null : superficieObjetivo);
+                estadoSuperficie = "🎯 Punto " + n1 + " movido al círculo.";
+                break;
+            }
+            case "esquivar": {
+                float[][] centros; float[] radios; String[] nombres;
+                synchronized (instalacionesIA) {
+                    int m = instalacionesIA.size();
+                    centros = new float[m][]; radios = new float[m]; nombres = new String[m];
+                    for (int k = 0; k < m; k++) { InstalacionIA x = instalacionesIA.get(k); centros[k] = new float[]{x.x, x.y, x.z}; radios[k] = x.radio; nombres[k] = x.etiqueta; }
+                }
+                if (centros.length == 0) { estadoSuperficie = "La IA no ha situado instalaciones existentes en esta sesión: no hay nada que esquivar."; return; }
+                float[] q = TrazadoGeometria.esquivar(p, anchors.get(i).getPose().getYAxis(), centros, radios, TrazadoGeometria.MARGEN_ESQUIVAR_M);
+                if (q == null) { estadoSuperficie = "Este punto no toca ninguna instalación existente detectada por la IA."; return; }
+                Anchor a = session.createAnchor(new Pose(q, anchors.get(i).getPose().getRotationQuaternion()));
+                double cm = Math.sqrt((q[0] - p[0]) * (q[0] - p[0]) + (q[1] - p[1]) * (q[1] - p[1]) + (q[2] - p[2]) * (q[2] - p[2])) * 100;
+                reemplazarAncla(i, a, puntoSuperficie.get(i));
+                estadoSuperficie = "↪ Punto " + n1 + " apartado " + Math.round(cm) + " cm de la instalación existente (sigue sobre su superficie).";
+                break;
+            }
+            default:
+                return;
+        }
+        nPuntos = anchors.size();
         contenidoSucio = true;
     }
 
@@ -1099,8 +1474,10 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
     // profundidad automática puede fallar del todo en superficies lisas (ver el porqué junto a
     // puntoOffsets) y sin esto no había manera de corregirlo.
     private void aplicarNudge(Camera camera, int dx, int dy, int depthDir) {
-        boolean hayComp = !accionLog.isEmpty() && "comp".equals(accionLog.get(accionLog.size() - 1)) && !complementos.isEmpty();
-        boolean hayPunto = !accionLog.isEmpty() && "punto".equals(accionLog.get(accionLog.size() - 1)) && !puntoOffsets.isEmpty();
+        // REPL-EDITAR-PUNTO-01: con un punto en edición, ⬅⬆⬇➡ y ⏪⏩ ajustan ESE punto.
+        int idxPunto = (selPunto >= 0 && selPunto < puntoOffsets.size()) ? selPunto : -1;
+        boolean hayComp = idxPunto < 0 && !accionLog.isEmpty() && "comp".equals(accionLog.get(accionLog.size() - 1)) && !complementos.isEmpty();
+        boolean hayPunto = idxPunto >= 0 || (!accionLog.isEmpty() && "punto".equals(accionLog.get(accionLog.size() - 1)) && !puntoOffsets.isEmpty());
         if (!hayComp && !hayPunto) {
             runOnUiThread(() -> infoText.setText("Nada que ajustar todavía -- coloca antes un punto o un complemento."));
             return;
@@ -1128,7 +1505,7 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             Complemento c = complementos.get(complementos.size() - 1);
             c.ox += ox; c.oy += oy; c.oz += oz;
         } else {
-            float[] off = puntoOffsets.get(puntoOffsets.size() - 1);
+            float[] off = puntoOffsets.get(idxPunto >= 0 ? idxPunto : puntoOffsets.size() - 1);
             off[0] += ox; off[1] += oy; off[2] += oz;
         }
         contenidoSucio = true;
@@ -1593,7 +1970,12 @@ public class ReplanteoARActivity extends Activity implements GLSurfaceView.Rende
             prev = pos;
         }
         final int n = anchors.size();
-        final String lon = String.format(java.util.Locale.US, "%.2f", longitud).replace('.', ',');
+        // REPL-ANGULO-RECTO-01: lo medido es el recorrido rectificado que calcula el overlay
+        // (sube por la pared, gira en la esquina, sigue por el techo); sin overlay, la recta.
+        final double lonRect = longitudRectificadaM;
+        final boolean rect = overlayReady && n >= 2 && lonRect >= 0;
+        final String lon = String.format(java.util.Locale.US, "%.2f", rect ? lonRect : longitud).replace('.', ',')
+                + (paralelosN > 1 ? " ×" + paralelosN : "");
         final String estado = tracking ? resumenPlanos + " · Destino: " + superficieObjetivo + "\n" + estadoSuperficie
                 : "Buscando posición: mueve el móvil despacio y mejora la luz.";
         // ADR-0027: estado de la IA siempre visible, y el aviso de instalación existente.

@@ -139,3 +139,21 @@ test('el asset nativo produce bases de rotación válidas en tramos paralelos a 
     assert.ok(Math.abs(segment.matrix.determinant() - 1) < 1e-6, 'Base no invertible');
   });
 });
+
+// Prioridades 2-3 (03/10/2026): la APK pinta y MIDE con el mismo repl3d.js que la PWA.
+test('el overlay nativo rectifica en ángulo recto, pinta las paralelas y devuelve la longitud real', () => {
+  const o = overlay();
+  const h = Math.SQRT1_2;
+  // Pared en z = -3 (ancla con +Y hacia +Z) y techo a 2,5 m (+Y hacia abajo).
+  const tramo = JSON.stringify([{ x: 0, y: 1, z: -3, qx: h, qy: 0, qz: 0, qw: h }, { x: 0.05, y: 2.5, z: -2, qx: 1, qy: 0, qz: 0, qw: 0 }]);
+  const L = o.window.actualizarContenido(tramo, 'tubo_rigido', '{"diametro_mm":25}', '[]', '[]', '{"paralelos":{"n":3,"hueco_m":0.02}}');
+  assert.ok(Math.abs(L - 2.5) < 1e-6, 'sube 1,5 m y sigue 1 m por el techo, no la diagonal: ' + L);
+  const inst = o.scene.children.filter(c => c.type === 'Group').at(-1);
+  assert.equal(inst.userData.trazado.lineas, 3);
+  assert.equal(inst.children.filter(c => c.type === 'Group').length, 3 * 2, '3 tubos × 2 tramos (vertical + techo)');
+  const diag = JSON.stringify([{ x: 0, y: 1, z: -3, qx: h, qy: 0, qz: 0, qw: h, d: true }, { x: 0.05, y: 2.5, z: -2, qx: 1, qy: 0, qz: 0, qw: 0 }]);
+  const Ld = o.window.actualizarContenido(diag, 'tubo_rigido', '{"diametro_mm":25}', '[]', '[]');
+  assert.ok(Math.abs(Ld - Math.hypot(0.05, 1.5, 1)) < 1e-6, 'tramo en diagonal real: se respeta');
+  assert.equal(o.window.actualizarContenido('no es json', 'tubo_rigido', '{}', '[]', '[]'), -1, 'un dato roto no tira la sesión');
+  assert.equal(typeof o.events.orientationchange, 'function', 'también reajusta con orientationchange');
+});

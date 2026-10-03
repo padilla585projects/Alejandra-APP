@@ -31474,7 +31474,18 @@ function calcularMaterialReplanteo({ elemento, elemento_params = {}, trazado = {
       }
     }
   }
-  return { longitud_m: r1(longitud), longitud_base_m: r1(longitudBase), escala_px_m: escala, giros,
+  // REPL-PARALELOS-01 (03/10/2026): N tubos/bandejas en paralelo por el mismo recorrido
+  // (trazado_json.paralelos = { n, hueco_m }, sin migración). Cada línea lleva su material
+  // completo (tramos, codos, uniones, soportes, cajas): si en obra comparten soporte, se ajusta en
+  // la lista. longitud_m sigue siendo la de UNA línea (la del recorrido).
+  const nParalelos = Math.max(1, Math.min(12, Math.round(Number(trazado?.paralelos?.n) || 1)));
+  if (nParalelos > 1) {
+    for (const m of material) {
+      m.cantidad = m.unidad === 'ud' ? m.cantidad * nParalelos : r1(m.cantidad * nParalelos);
+      m.detalle = (m.detalle ? m.detalle + ' · ' : '') + `×${nParalelos} líneas en paralelo`;
+    }
+  }
+  return { longitud_m: r1(longitud), longitud_base_m: r1(longitudBase), escala_px_m: escala, giros, paralelos: nParalelos,
            // REPLANTEO-04: segmentos_m son los metros REALES de cada tramo (con el plano
            // rectificado no se pueden deducir de los pixeles y una escala unica).
            segmentos_m: segM.map(m => Math.round(m * 100) / 100), plano_ok: usadoPlano,

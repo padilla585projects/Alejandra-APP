@@ -15478,7 +15478,8 @@ async function replOfficeAbrir(id, yInforme) {
     <span>➡️ <b style="color:var(--text)">${rep.longitud_m ? _replOfficeNum(rep.longitud_m) + ' m' : 'sin calcular'}</b></span>
     <span>👤 ${escHtml(rep.creado_por || '—')} · ${escHtml((rep.actualizado_en || rep.creado_en || '').slice(0, 16).replace('T', ' '))}</span>
     ${rep.pedido_ids?.length ? `<span>📥 pedidos: ${rep.pedido_ids.map(n => '#' + n).join(', ')}</span>` : ''}
-    ${rep.trazado?.escaneo_id ? '<span>🧠 entorno escaneado (el informe usa el fondo real)</span>' : ''}`;
+    ${rep.trazado?.escaneo_id ? '<span>🧠 entorno escaneado (el informe usa el fondo real)</span>' : ''}
+    ${+rep.trazado?.paralelos?.n > 1 ? `<span>⫴ ${Math.round(+rep.trazado.paralelos.n)} líneas en paralelo (material ×${Math.round(+rep.trazado.paralelos.n)})</span>` : ''}`;
   const cv = document.getElementById('replOfficeDetCanvas');
   const avisoEl = document.getElementById('replOfficeDetAviso');
   if (img) {
@@ -15573,7 +15574,9 @@ async function _replOfficeFondoReal(rep) {
   const params = rep.elemento || {};
   const w = params.ancho_mm ? Math.max(0.03, params.ancho_mm / 1000) : (params.diametro_mm ? Math.max(0.012, params.diametro_mm / 1000) : 0.2);
   const normales = p3.map(p => (p.nx != null ? new THREE.Vector3(p.nx, p.ny, p.nz) : null));
-  const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(rep.elemento_key, params), w, opacity: 1, obstaculos: rep.trazado.obstaculos || [], normales });
+  // REPL-ANGULO-RECTO-01 / REPL-PARALELOS-01 (03/10/2026): mismo recorrido en ángulo recto (salvo
+  // tramos en diagonal real) y mismas líneas en paralelo que la PWA y el AR (repl3d.js).
+  const g = _replInstal3D(THREE, pts, { tipo: _replTipoRender(rep.elemento_key, params), w, opacity: 1, obstaculos: rep.trazado.obstaculos || [], normales, ..._replOpcionesTrazado(rep.trazado) });
   comps.forEach(c => { const o = _replComplemento3D(THREE, c.key); o.position.set(c.x || 0, c.y || 0, c.z || 0); if (c.q) o.quaternion.set(c.q.x, c.q.y, c.q.z, c.q.w); g.add(o); });
   const url = _replEscaneoComponer(THREE, g, mejor.frame, img, { maxAncho: 1600 });
   if (!url) return null;
