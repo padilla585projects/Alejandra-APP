@@ -24,8 +24,15 @@ sección es la especificación original de Adrián (18/09/2026), que se conserva
   `EscaneoEntorno.java`. Pruebas: `scripts/replanteo-escaneo.test.cjs`,
   `EscaneoEntornoTest.java`.
 - **No implementado (fuera de este alcance)**: panorama/mosaico cosido, proyección de fotos
-  sobre los planos, materiales/texturas de catálogo de fabricante (sección de abajo), regla de
-  ciclo de vida de R2 para escaneos abandonados (decisión humana).
+  sobre los planos y materiales/texturas de catálogo de fabricante (sección de abajo).
+- **Caducidad de 30 días** (autorizada por Adrián en chat, 03/10/2026). Los escaneos **sin
+  replanteo** se borran de R2 cuando llevan más de 30 días sin actividad, junto con los
+  contadores `_cuota/` de más de 30 días. Los vinculados a un replanteo guardado **no caducan**:
+  son el fondo del informe. La limpieza no usa una regla de ciclo de vida de R2, que no
+  distinguiría vinculados de sueltos. La hace `caducarEscaneosReplanteo` (`worker.js`) en el
+  cron existente de las 18:00 UTC, con topes por ejecución y una sola fila de resumen en `logs`.
+  Comprueba la vinculación en `sesion.json` y además en `replanteos.trazado_json`, con una
+  consulta D1 de solo lectura. Detalle en ADR-0027, "Retención de escaneos sin replanteo".
 
 ## Verificación
 

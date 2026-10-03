@@ -118,10 +118,7 @@ el entorno" **antes** de poder marcar; la IA de visión analiza lo escaneado y r
 - Las imágenes se envían a Anthropic (Haiku) solo para clasificar el fotograma; no se guardan
   allí más allá de su política de API. Es el mismo tipo de envío que ya hacía "¿qué es
   esto?" a Gemini.
-- Retención: los escaneos abandonados (AR cancelado sin guardar) quedan en R2 bajo
-  `replanteo-escaneo/`. **Pendiente (decisión humana):** configurar una regla de ciclo de
-  vida de R2 para ese prefijo, por ejemplo 30 días si `replanteo_id` es null. No se aplica
-  sin autorización porque es un borrado en R2.
+- Retención: ver "Retención de escaneos sin replanteo (30 días)" en Consecuencias.
 
 ## Alternativas consideradas
 
@@ -157,6 +154,36 @@ el entorno" **antes** de poder marcar; la IA de visión analiza lo escaneado y r
   - en WebXR el fondo del informe exige que el móvil dé `camera-access`; sin él no hay
     fotogramas y se usa el respaldo.
 
+### Retención de escaneos sin replanteo (30 días)
+
+- **Autorizado por Adrián en chat el 03/10/2026** («caducidad de 30 días en R2»). Es un
+  borrado en R2, por eso necesitaba decisión humana (ADR-0007).
+- Los escaneos **sin replanteo** (AR cancelado o nunca guardado) se borran enteros
+  (`sesion.json` y fotogramas) cuando su última actividad tiene **más de 30 días**. Los
+  contadores diarios `e<empresa>/replanteo-escaneo/_cuota/…` se borran también a los 30 días.
+- Los escaneos **vinculados a un replanteo guardado no caducan nunca**: son el fondo del
+  informe. Se borran solo con su replanteo (`_escaneoBorrarDeReplanteo`), como hasta ahora.
+- **No es una regla de ciclo de vida de R2.** Vinculados y sin vincular comparten el prefijo
+  `e<empresa>/replanteo-escaneo/<id>/`, así que una regla por prefijo borraría también el
+  fondo de los informes. La limpieza la hace `caducarEscaneosReplanteo` en `worker.js`,
+  dentro del cron ya existente de las 18:00 UTC (no se añade ningún trigger).
+- Una sesión solo se borra si se cumplen las tres condiciones:
+  1. su `sesion.json` se lee bien, es de esa empresa y tiene `replanteo_id` nulo;
+  2. ningún replanteo de la empresa menciona su id en `trazado_json` (consulta D1 de solo
+     lectura). Si D1 falla, esa noche no se borra ninguna sesión;
+  3. su última actividad tiene más de 30 días. Cuenta la fecha más reciente entre los
+     objetos de R2, la creación, el último análisis IA y los fotogramas.
+
+  Ante cualquier duda (`sesion.json` ilegible o ausente, otra empresa) se conserva.
+- Límites por ejecución: 30 listados de R2, 40 lecturas de `sesion.json`, 20 sesiones
+  borradas y 500 contadores. Cada sesión se borra con un solo `delete` por lotes. Lo que no
+  cabe se hace la noche siguiente: el punto de inicio del listado y el orden de empresas
+  rotan cada día. Una sesión que el tope de listado deja a medias no se toca.
+- Trazabilidad: **una sola fila** en `logs` por ejecución (`origen = 'escaneo-caducidad'`)
+  con el resumen. Nunca se escribe una fila por objeto (D1-ESCRITURAS-01).
+- La política de decisión es pura y tiene pruebas en `scripts/replanteo-escaneo.test.cjs`
+  con R2 simulado.
+
 ## Despliegue y rollback
 
 - Despliegues necesarios, todos manuales según el runbook:
@@ -171,6 +198,7 @@ el entorno" **antes** de poder marcar; la IA de visión analiza lo escaneado y r
   Worker nuevo no usa nada de esto.
 - Rollback: revertir el commit y redesplegar Worker y Pages. La APK anterior (1.17) sigue
   funcionando contra un Worker con o sin estos endpoints. Los objetos ya subidos a R2 quedan
-  huérfanos pero aislados por empresa. Si se quiere retirarlos, es un borrado en R2 y
-  requiere decisión humana. Los replanteos guardados con `escaneo_id` siguen abriéndose: el
+  huérfanos pero aislados por empresa. Mientras el Worker siga desplegado, los que no tengan
+  replanteo caducan a los 30 días (ver Retención). Cualquier otro borrado en R2 requiere
+  decisión humana. Los replanteos guardados con `escaneo_id` siguen abriéndose: el
   campo se ignora si no hay endpoint.

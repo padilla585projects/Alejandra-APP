@@ -7182,6 +7182,10 @@ export default {
       // sincronizan de forma incremental). Antes colgaba de un cron 0 23 que
       // nunca estuvo registrado en wrangler.toml (tope de 5 crons/cuenta).
       ctx.waitUntil(syncRRHH(env)); // ~20 subrequests; ~30 total en este slot, < 50
+      // ESCANEO-CADUCIDAD-01 (ADR-0027): borra escaneos del AR sin replanteo de más de 30 días y
+      // contadores _cuota viejos. Solo usa R2/D1 (subpeticiones a servicios internos, límite
+      // aparte de 1000), sin fetch externo; acotado a ~100 operaciones por ejecución.
+      ctx.waitUntil(caducarEscaneosReplanteo(env));
     } else if (event.cron === '0 7 * * *') {
       // Recordatorio matutino: fixes pendientes > 12h
       ctx.waitUntil(recordatorioFixesPendientes(env));
@@ -32118,6 +32122,189 @@ async function _escaneoBorrarDeReplanteo(env, empresaId, sid, replanteoId) {
   if (!cur || cur.data.replanteo_id !== replanteoId) return;
   const lista = await env.FILES.list({ prefix: pref });
   for (const o of (lista.objects || [])) await env.FILES.delete(o.key).catch(() => {});
+}
+
+// ── Caducidad de 30 días de los escaneos sin replanteo (ESCANEO-CADUCIDAD-01) ──────────────
+// Autorizado por Adrián en chat el 03/10/2026: «caducidad de 30 días en R2». NO es una regla
+// de ciclo de vida de R2 por prefijo, porque los escaneos vinculados a un replanteo guardado
+// viven en el mismo prefijo y NO deben caducar (son el fondo del informe). Se ejecuta en el
+// cron de las 18:00 UTC y solo borra una sesión completa si: (1) su sesion.json se lee bien,
+// es de esa empresa y no tiene replanteo_id; (2) ningún replanteo de la empresa menciona su id
+// en trazado_json (D1 de solo lectura; si D1 falla, no se borra ninguna sesión); y (3) su
+// última actividad (objetos R2 y fechas internas) tiene más de 30 días. También borra los
+// contadores diarios `_cuota/` de más de 30 días. Todo acotado por ejecución: lo que no cabe
+// se hace la noche siguiente (el punto de inicio del listado rota cada día).
+const ESCANEO_CADUCIDAD_MS = 30 * 86400000;
+// Coste máximo por ejecución: <= 30 listados + 40 lecturas + 1 consulta D1 por empresa con
+// candidatas + 20 borrados de sesión + 1 borrado de cuotas por empresa (lotes <= 500 claves,
+// el binding de R2 admite hasta 1000 por llamada) + 1 INSERT de resumen. Muy por debajo del
+// límite de 1000 subpeticiones a servicios de Cloudflare del plan gratuito.
+const ESCANEO_CADUCIDAD_LIMITES = { paginas: 30, lecturas: 40, sesiones: 20, cuotas: 500 };
+const _ESCANEO_CLAVE_SESION_RE = /^e(\d+)\/replanteo-escaneo\/([a-f0-9]{32})\/[A-Za-z0-9._-]+$/;
+const _ESCANEO_CLAVE_CUOTA_RE = /^e(\d+)\/replanteo-escaneo\/_cuota\/[A-Za-z0-9_]+\/(\d{4}-\d{2}-\d{2})\.json$/;
+
+function _escaneoMs(x) {
+  if (x == null || x === '' || x === 0) return NaN;
+  const n = typeof x === 'number' ? x : +new Date(x);
+  return Number.isFinite(n) && n > 0 ? n : NaN;
+}
+// Última actividad = la más reciente entre los objetos de R2 y las fechas de dentro de la sesión.
+function _escaneoUltimaActividad(sesion, objetos) {
+  const ts = (objetos || []).map(o => _escaneoMs(o && o.uploaded));
+  if (sesion && typeof sesion === 'object') {
+    ts.push(_escaneoMs(sesion.creado), _escaneoMs(sesion.ultimo_ia));
+    (Array.isArray(sesion.frames) ? sesion.frames : []).forEach(f => ts.push(_escaneoMs(f && f.ts)));
+  }
+  const validos = ts.filter(Number.isFinite);
+  return validos.length ? Math.max(...validos) : NaN;
+}
+// Política pura (probada en scripts/replanteo-escaneo.test.cjs). Ante cualquier duda: NO borrar.
+function _escaneoCaducidadSesion({ empresaId, sid, sesion, errorLectura, objetos, vinculadosD1 }, ahora) {
+  if (!_ESCANEO_ID_RE.test(String(sid || ''))) return { borrar: false, motivo: 'id_invalido' };
+  if (errorLectura || !sesion || typeof sesion !== 'object') return { borrar: false, motivo: 'sesion_ilegible' };
+  if (sesion.id !== sid || sesion.empresa_id !== empresaId) return { borrar: false, motivo: 'sesion_no_coincide' };
+  if (sesion.replanteo_id) return { borrar: false, motivo: 'vinculada' };
+  if (!(vinculadosD1 instanceof Set)) return { borrar: false, motivo: 'd1_no_disponible' };
+  if (vinculadosD1.has(sid)) return { borrar: false, motivo: 'vinculada_d1' };
+  const ultima = _escaneoUltimaActividad(sesion, objetos);
+  if (!Number.isFinite(ultima) || ahora - ultima <= ESCANEO_CADUCIDAD_MS) return { borrar: false, motivo: 'reciente' };
+  return { borrar: true, motivo: 'caducada' };
+}
+function _escaneoCaducidadCuota(key, ahora) {
+  const m = _ESCANEO_CLAVE_CUOTA_RE.exec(String(key || ''));
+  if (!m) return false;
+  const dia = Date.parse(m[2] + 'T00:00:00Z');
+  return Number.isFinite(dia) && ahora - dia > ESCANEO_CADUCIDAD_MS;
+}
+// Ids de escaneo que aparezcan en cualquier trazado_json (conservador: cualquier hex de 32).
+function _escaneoIdsEnTrazados(filas) {
+  const ids = new Set();
+  (filas || []).forEach(f => { (String((f && f.trazado_json) || '').match(/[a-f0-9]{32}/g) || []).forEach(x => ids.add(x)); });
+  return ids;
+}
+// Plan puro a partir del listado de UNA empresa: sesiones candidatas (por fechas de R2 y fuera
+// de los vinculados de D1, con rotación diaria y tope de lecturas) y cuotas viejas (con tope).
+function _escaneoCaducidadPlan(empresaId, objetos, vinculadosD1, ahora, limites, rotacion = 0) {
+  const grupos = new Map(); const cuotas = [];
+  (objetos || []).forEach(o => {
+    const key = String((o && o.key) || '');
+    const ms = _ESCANEO_CLAVE_SESION_RE.exec(key);
+    if (ms && +ms[1] === empresaId) {
+      if (!grupos.has(ms[2])) grupos.set(ms[2], []);
+      grupos.get(ms[2]).push({ key, uploaded: o.uploaded });
+      return;
+    }
+    const mc = _ESCANEO_CLAVE_CUOTA_RE.exec(key);
+    if (mc && +mc[1] === empresaId && _escaneoCaducidadCuota(key, ahora)) cuotas.push(key);
+  });
+  let candidatas = [...grupos].map(([sid, objs]) => ({ sid, objetos: objs, ultima: _escaneoUltimaActividad(null, objs) }))
+    .filter(c => Number.isFinite(c.ultima) && ahora - c.ultima > ESCANEO_CADUCIDAD_MS && !(vinculadosD1 instanceof Set && vinculadosD1.has(c.sid)));
+  if (candidatas.length) { const r = Math.abs(rotacion | 0) % candidatas.length; candidatas = candidatas.slice(r).concat(candidatas.slice(0, r)); }
+  return { candidatas: candidatas.slice(0, Math.max(0, limites.lecturas)), cuotas: cuotas.slice(0, Math.max(0, limites.cuotas)) };
+}
+
+// Lista el prefijo de una empresa empezando en un punto que rota cada día (`inicio`, 2 hex) y
+// dando la vuelta, para que un tope de páginas no deje siempre fuera las mismas sesiones.
+// Si el presupuesto corta a mitad de una sesión, esa sesión se descarta (listado incompleto).
+async function _escaneoListarEmpresa(env, prefix, inicio, presupuesto) {
+  const objetos = []; let cortado = false;
+  const corte = prefix + inicio;
+  for (const fase of ['desde_inicio', 'vuelta']) {
+    let cursor = null;
+    for (;;) {
+      if (presupuesto.paginas <= 0) { cortado = true; break; }
+      presupuesto.paginas--;
+      const opts = { prefix };
+      if (cursor) opts.cursor = cursor; else if (fase === 'desde_inicio') opts.startAfter = corte;
+      const r = await env.FILES.list(opts);
+      let parar = false;
+      for (const o of (r.objects || [])) {
+        if (fase === 'vuelta' && o.key > corte) { parar = true; break; }
+        objetos.push({ key: o.key, uploaded: o.uploaded });
+      }
+      if (parar || !r.truncated || !r.cursor) break;
+      cursor = r.cursor;
+    }
+    if (cortado) break;
+  }
+  if (cortado && objetos.length) {
+    const m = _ESCANEO_CLAVE_SESION_RE.exec(objetos[objetos.length - 1].key);
+    if (m) return { objetos: objetos.filter(o => !o.key.includes('/' + m[2] + '/')), cortado };
+  }
+  return { objetos, cortado };
+}
+
+async function caducarEscaneosReplanteo(env, ahora = Date.now(), limites = ESCANEO_CADUCIDAD_LIMITES) {
+  const res = { empresas: 0, sesiones_borradas: 0, objetos_borrados: 0, cuotas_borradas: 0, conservadas: {}, errores: [], limite: false };
+  if (!env.FILES) return res;
+  const presupuesto = { ...limites };
+  const dia = Math.floor(ahora / 86400000);
+  try {
+    // Empresas = carpetas `e<id>/` de la raíz del bucket (sin gastar lecturas de D1 en esto).
+    const empresas = []; let cursor = null;
+    do {
+      if (presupuesto.paginas <= 0) { res.limite = true; break; }
+      presupuesto.paginas--;
+      const r = await env.FILES.list(cursor ? { delimiter: '/', cursor } : { delimiter: '/' });
+      (r.delimitedPrefixes || []).forEach(p => { const m = /^e(\d+)\/$/.exec(p); if (m) empresas.push(+m[1]); });
+      cursor = r.truncated ? r.cursor : null;
+    } while (cursor);
+    const rot = empresas.length ? dia % empresas.length : 0;
+    const orden = empresas.slice(rot).concat(empresas.slice(0, rot));
+    const inicio = ((dia * 37) % 256).toString(16).padStart(2, '0');
+    for (const empresaId of orden) {
+      if (presupuesto.paginas <= 0) { res.limite = true; break; }
+      res.empresas++;
+      const prefix = `e${empresaId}/replanteo-escaneo/`;
+      const lista = await _escaneoListarEmpresa(env, prefix, inicio, presupuesto);
+      if (lista.cortado) res.limite = true;
+      if (!lista.objetos.length) continue;
+      // D1 solo lectura, y solo si hay alguna sesión vieja que comprobar (ahorra lecturas).
+      const pre = _escaneoCaducidadPlan(empresaId, lista.objetos, null, ahora, presupuesto, dia);
+      let vinculados = null;
+      if (pre.candidatas.length) {
+        try {
+          const { results } = await env.DB.prepare(
+            "SELECT trazado_json FROM replanteos WHERE empresa_id = ? AND trazado_json LIKE '%escaneo_id%'"
+          ).bind(empresaId).all();
+          vinculados = _escaneoIdsEnTrazados(results);
+        } catch (e) { res.errores.push(`e${empresaId}: D1 ${String((e && e.message) || e).slice(0, 80)}`); }
+      }
+      const plan = _escaneoCaducidadPlan(empresaId, lista.objetos, vinculados, ahora, presupuesto, dia);
+      if (plan.cuotas.length) {
+        await env.FILES.delete(plan.cuotas);
+        presupuesto.cuotas -= plan.cuotas.length;
+        res.cuotas_borradas += plan.cuotas.length;
+      }
+      for (const c of plan.candidatas) {
+        if (presupuesto.lecturas <= 0 || presupuesto.sesiones <= 0) { res.limite = true; break; }
+        presupuesto.lecturas--;
+        let sesion = null, errorLectura = false;
+        try {
+          const o = await env.FILES.get(`${prefix}${c.sid}/sesion.json`);
+          if (o) sesion = await o.json(); else errorLectura = true;
+        } catch { errorLectura = true; }
+        const d = _escaneoCaducidadSesion({ empresaId, sid: c.sid, sesion, errorLectura, objetos: c.objetos, vinculadosD1: vinculados }, ahora);
+        if (!d.borrar) { res.conservadas[d.motivo] = (res.conservadas[d.motivo] || 0) + 1; continue; }
+        const claves = c.objetos.map(o => o.key).filter(k => k.startsWith(`${prefix}${c.sid}/`));
+        await env.FILES.delete(claves);
+        presupuesto.sesiones--;
+        res.sesiones_borradas++;
+        res.objetos_borrados += claves.length;
+      }
+    }
+  } catch (e) {
+    res.errores.push(String((e && e.message) || e).slice(0, 160));
+  }
+  console.log('Caducidad escaneos replanteo:', JSON.stringify(res));
+  // Una sola escritura en D1 por ejecución (D1-ESCRITURAS-01: nunca una fila por objeto).
+  try {
+    await env.DB.prepare('INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)')
+      .bind(res.errores.length ? 'warn' : 'info', 'escaneo-caducidad',
+        `Caducidad escaneos: ${res.sesiones_borradas} sesiones (${res.objetos_borrados} objetos) y ${res.cuotas_borradas} cuotas borradas${res.limite ? ', límite alcanzado' : ''}`,
+        JSON.stringify(res).slice(0, 2000)).run();
+  } catch (_) {}
+  return res;
 }
 
 async function enviarReplanteoAPedidos(request, env, path, ctx) {
