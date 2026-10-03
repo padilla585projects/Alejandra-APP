@@ -62,7 +62,8 @@ const EUR_A_USD = 1.08;
 // las estadísticas de coste/proveedor en alejandra_token_uso.
 function calcularCosteYProveedor(modelo, tokensEntrada, tokensSalida) {
   // ADR-0028: el pool de IA propio se registra como 'ai_pool:<modelo>' y no cuesta nada
-  // por token. Va antes que el resto porque sus nombres ('qwen3.6:35b-a3b') no encajan en
+  // por token (<modelo> = el modelo REAL que respondió, p. ej. 'ai_pool:qwen3.6:35b-a3b' cuando
+  // el alias 'alejandra:1.0' resuelve a qwen). Va antes que el resto porque esos nombres no encajan en
   // ninguna otra regla y caerían en el defecto 'anthropic' con precio de Haiku.
   if (String(modelo).startsWith('ai_pool:')) return { proveedor: 'ai_pool', coste: 0 };
   let proveedor;

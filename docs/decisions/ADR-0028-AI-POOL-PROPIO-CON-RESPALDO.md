@@ -7,7 +7,9 @@
 - Depende de: ADR-0007 (autonomía de agentes), ADR-0010 (catálogo de tools), regla «dos
   cerebros» de `CLAUDE.md`
 - Implementación: `alejandra-agente/ai-pool.js` (cliente único para los dos workers),
-  `alejandra-agente/ai-pool.test.js`, `scripts/ai-benchmark/pool.mjs`
+  `alejandra-agente/ai-pool.test.js`, `scripts/ai-benchmark/pool.mjs`; banco de casos
+  `scripts/ai-benchmark/casos-alejandra.json` (+ `banco-alejandra.mjs`,
+  `herramientas-agente.mjs`, `banco-alejandra.test.mjs`)
 
 ## Contexto
 
@@ -49,9 +51,9 @@ hasta que él configure el secreto**.
 
 | Uso | Antes | Ahora (si hay clave) | Dónde |
 |---|---|---|---|
-| a) Router de intención del agente | Haiku | pool `prisma:1.0` (JSON) → Haiku | `clasificarConHaiku` |
-| a) Router NEXUS (Telegram) | Haiku | pool `prisma:1.0` (JSON) → Haiku | `nexusRoute` en `worker.js` |
-| b) Experto «simple» | OpenRouter gratis → Haiku | pool `qwen3.6` (con tools) → OpenRouter → Haiku | `llamarExperto` |
+| a) Router de intención del agente | Haiku | pool `alejandra:1.0` (JSON) → Haiku | `clasificarConHaiku` |
+| a) Router NEXUS (Telegram) | Haiku | pool `alejandra:1.0` (JSON) → Haiku | `nexusRoute` en `worker.js` |
+| b) Experto «simple» | OpenRouter gratis → Haiku | pool `alejandra:1.0` (con tools) → OpenRouter → Haiku | `llamarExperto` |
 | b) Cron modo normal | Haiku | pool → Haiku | `scheduled` del agente |
 | b) Crons de destilación y compactación | OpenRouter → Haiku | pool → OpenRouter → Haiku | `llamarTextoGratisConFallbackHaiku` |
 | b) Resumen de conversación | Haiku | pool → Haiku | resumen en segundo plano del agente |
@@ -61,6 +63,34 @@ hasta que él configure el secreto**.
 
 Con el experto «simple», si el pool ya dio el texto final sin tools, el streaming de cierre
 no vuelve a llamar a Haiku (esa segunda llamada anularía el ahorro).
+
+Todos los usos de chat del pool de la tabla (router, router NEXUS, experto simple, crons,
+resumen, cadena de respaldo y reescritura de la consulta de búsqueda) piden el **mismo modelo**,
+`alejandra:1.0` (ver la sección siguiente).
+
+### Modelo `alejandra:1.0` (03/10/2026)
+
+La sesión del pool ha creado un modelo propio, `alejandra:1.0`: un **alias** que aparece en
+`/openai/v1/models` con `"resolves_to"`. Hoy resuelve a `qwen3.6:35b-a3b` (maneja tools); si
+ese no está cargado, a `prisma:1.0` (rápido en JSON, pero **no** devuelve `tool_calls`).
+
+- **Un solo nombre en el código**: la constante `AI_POOL_MODELO = 'alejandra:1.0'` de
+  `ai-pool.js`, y `modeloPool(env)` la aplica a todos los usos. Override opcional sin desplegar:
+  variable de texto `AI_POOL_MODEL` en el panel de cada worker (un valor con caracteres raros
+  se ignora). Qué hay detrás del alias lo decide el pool con los datos del banco de casos
+  (§Medición), sin tocar código aquí. Un test impide que los workers vuelvan a fijar a mano un
+  modelo concreto (`prisma:1.0`, `qwen3.6:35b-a3b`, `gemma4:e4b`).
+- **Modelo real**: la cabecera de respuesta `X-AI-Pool-Model` dice qué modelo respondió de
+  verdad; manda sobre el campo `model` del cuerpo (que puede repetir el alias). Se registra en
+  la métrica (`modeloReal`) y en `alejandra_token_uso` (`ai_pool:<modelo real>`).
+- **Tolerancia a un alias sin tools**: si una petición lleva tools, el alias resolvió a un
+  modelo sin tools (cabecera `prisma…`) y la respuesta no trae `tool_calls`, se descarta →
+  respaldo, motivo `modelo_real_sin_tools` (ese texto no ha podido consultar nada y podría
+  inventar datos). No cuenta para el circuito: el pool sí respondió. Si se pide
+  explícitamente un modelo sin tools con tools, ni se llama (`modelo_sin_tools`). Los usos sin
+  tools (routers, crons, resumen, reescritura) aceptan cualquier modelo real.
+- `/no_think` se añade para `qwen3*` y para el alias (que hoy es qwen3.6); si resuelve a prisma
+  es una línea inocua más del prompt.
 
 **No pasa al pool:** los expertos Sonnet con tools, el experto `asistente` de Telegram
 (Haiku con tools de notificación y red; `worker.js` no tiene conversión de tools
@@ -76,7 +106,8 @@ Común: `Authorization: Bearer <AI_POOL_KEY>`, `Content-Type: application/json`.
 - `POST /openai/v1/chat/completions` — compatible OpenAI, **sin streaming** (`stream:true` →
   400), cuerpo ≤ 2 MB. `response_format: {"type":"json_object"}` soportado (qwen3.6 ~2,5 s,
   prisma ~0,7 s). Tools formato OpenAI **solo con `qwen3.6:35b-a3b`** (prisma devuelve
-  `tool_calls: null`). El cliente manda `model`, `messages`, `max_tokens` y, según el caso,
+  `tool_calls: null`). `model` = `alejandra:1.0` (alias); cabecera de respuesta
+  `X-AI-Pool-Model` = modelo real. El cliente manda `model`, `messages`, `max_tokens` y, según el caso,
   `temperature`, `response_format`, `tools` (nunca `stream` ni `tool_choice`). Con qwen3 se
   añade `/no_think` al prompt de sistema y se quita cualquier `<think>…</think>` de la
   respuesta (a confirmar si el gateway ya desactiva el razonamiento; es inocuo si sí).
@@ -102,7 +133,8 @@ cerebros: `buscarWebOpenAI` del agente —tool `buscar_web` y prefetch `query_we
 y `web_search` de Telegram):
 
 1. Si la petición ya es corta (≤6 palabras y sin muletillas) se usa tal cual, sin IA.
-2. Si no, `prisma:1.0` con `response_format: json_object` y timeout de 4 s la convierte en
+2. Si no, el modelo del pool (`alejandra:1.0`; antes `prisma:1.0`) con
+   `response_format: json_object` y timeout de 4 s la convierte en
    `{"query": "...", "since": null|"day"|"week"|"month"|"year"}` (inglés para temas técnicos,
    software y normas internacionales; español para temas locales: empresas, normativa
    española, precios en España). La salida se valida estrictamente (solo esas dos claves,
@@ -153,16 +185,18 @@ Adrián (03/10/2026): «probaremos todo con el pool y compararemos rendimiento y
 **En producción, sin filas D1 nuevas por petición** (incidente D1-ESCRITURAS-01):
 
 1. Cada uso del pool emite una línea `AIPOOL_METRICA {"uso","proveedor":"ai_pool","modelo",
-   "resultado":"ok|respaldo|omitido","motivo","ms"}`. Verla con
+   "modeloReal","resultado":"ok|respaldo|omitido","motivo","ms"}` (`modelo` = lo pedido, el
+   alias; `modeloReal` = cabecera `X-AI-Pool-Model`, `null` si el pool no respondió). Verla con
    `npx wrangler tail alejandra-agente --format json | findstr AIPOOL_METRICA` (o en Workers
    Logs). `resultado=respaldo` = se usó el camino de antes; `motivo` dice por qué (`timeout`,
    `model_unavailable`, `request_too_long_for_devices`, `http_429`, `formato_invalido`,
-   `sin_resultados`, …); `omitido` = circuito abierto.
-2. Agregados por isolate en `GET /api/admin/metrics/ai-pool` del agente (token admin): por
-   uso, `ok/respaldo/omitido`, `tasaExito`, `motivosRespaldo`, `msMedioOk`, `p50MsOk`,
-   `p95MsOk`, y el estado del circuito. Es una muestra (un isolate), no el total.
+   `sin_resultados`, `modelo_real_sin_tools`, …); `omitido` = circuito abierto.
+2. Agregados por isolate en `GET /api/admin/metrics/ai-pool` del agente (token admin): el
+   `modelo` pedido y, por uso, `ok/respaldo/omitido`, `tasaExito`, `motivosRespaldo`,
+   `msMedioOk`, `p50MsOk`, `p95MsOk`, `modelosReales` (cuántas respuestas dio cada modelo
+   real), y el estado del circuito. Es una muestra (un isolate), no el total.
 3. Coste y volumen: las llamadas del agente que ya registraban tokens en
-   `alejandra_token_uso` ahora registran `modelo='ai_pool:<modelo>'` con `proveedor='ai_pool'`
+   `alejandra_token_uso` ahora registran `modelo='ai_pool:<modelo real>'` con `proveedor='ai_pool'`
    y `coste_usd=0` **en la misma fila** que antes escribía Haiku/gpt-4o-mini (no se añaden
    filas). Comparar `SUM(coste_usd)` y `COUNT(*)` por `proveedor` antes/después de activar.
 
@@ -172,10 +206,83 @@ lo de hoy, con el **mismo cliente y los mismos timeouts** que producción.
 
 | Tarea | Pool | Contra | Acierto = |
 |---|---|---|---|
-| router | `prisma:1.0` y `qwen3.6` | Haiku | etiqueta == esperada (14 casos etiquetados, mismo prompt de producción vía `lib.js`) |
-| simple | `qwen3.6` | Haiku | respuesta en español que cumple el patrón del caso, ≤ 1200 car., sin tokens de tool fugados |
+| router | `alejandra:1.0`, `prisma:1.0` y `qwen3.6` | Haiku | etiqueta == esperada (14 casos etiquetados, mismo prompt de producción vía `lib.js`) |
+| simple | `alejandra:1.0` y `qwen3.6` | Haiku | respuesta en español que cumple el patrón del caso, ≤ 1200 car., sin tokens de tool fugados |
 | buscar_web | `/v1/tools/search` | gpt-4o-mini web, Tavily | resultados contienen la fuente/término esperado |
-| respaldo | `qwen3.6` con tools | Grok-4, gpt-4o | llama a la tool correcta, o responde texto sin tool cuando toca |
+| respaldo | `alejandra:1.0` y `qwen3.6` con tools | Grok-4, gpt-4o | llama a la tool correcta, o responde texto sin tool cuando toca |
+| banco | `alejandra:1.0`, `qwen3.6` y `prisma:1.0` | Haiku, gpt-4o | reglas del banco de casos (abajo) |
+
+Cada fila del pool guarda `modeloReal` (cabecera `X-AI-Pool-Model`) y el informe muestra, por
+candidato, qué modelos reales respondieron: así se ve a qué resolvió el alias en cada pasada.
+`BENCHMARK_TAREAS=banco` (o `router,banco`…) limita las tareas.
+
+### Banco de casos de Alejandra (`scripts/ai-benchmark/casos-alejandra.json`)
+
+60 casos en el formato pedido por la sesión del pool para elegir con datos qué modelo hay
+detrás de `alejandra:1.0`: 21 de **router** (las 7 etiquetas de
+`ETIQUETAS_CLASIFICADOR_INTENCION`, con casos difíciles: saludos, imperativos y enclíticos,
+hechos que implican registrar datos, correo → `app` y no `web`, electricidad/REBT/PLC →
+`ingenieria`, `web`, `tecnico`, `reflexion`, `completo`), 8 de **experto simple** (charla y
+preguntas generales, algunos con tools a mano que NO deben usarse) y 31 de **experto con tools**
+(partes y fichajes, cuadrantes, bobinas, materiales, albaranes, pedidos —vía `delegar_tarea`
+al ayudante de pedidos—, obras y tareas, incidencias, replanteos, memoria, planos —solo
+selección de `generar_plano` + `tipo`, sin SVG—, cálculo, normativa, `buscar_web`, correo y
+recordatorios).
+
+```json
+[{ "id": "tools-18-replanteo-detalle", "tipo": "experto_tools",
+   "mensajes": [{ "role": "system", "content": "…" }, { "role": "user", "content": "Enséñame el detalle del replanteo 7" }],
+   "tools": [ /* esquemas OpenAI function reales: consultar_replanteos, comparar_replanteo_pedido, consultar_bd */ ],
+   "esperado": { "herramienta": "consultar_replanteos", "argumentos": { "replanteo_id": 7 } } }]
+```
+
+- **Conversación completa**: cada caso lleva su `system`. Los de router usan el prompt REAL del
+  clasificador (`SYSTEM_CLASIFICADOR_INTENCION` + el sufijo JSON del cliente del pool); los de
+  experto, un prompt de sistema condensado (el de producción ocupa decenas de miles de
+  caracteres) con el contexto de la empresa demo.
+- **Tools reales**: los esquemas salen de `alejandra-agente/worker.js` (`const TOOL_X`,
+  convertidos a formato OpenAI como hace `_anthropicToolsToOpenAI`), solo las relevantes en cada
+  caso (≤ 8, con distractores plausibles), nunca el catálogo entero. Tras cambiar una tool:
+  `node scripts/ai-benchmark/herramientas-agente.mjs --refrescar`. El test falla si una tool
+  del banco ya no existe o cambian sus campos obligatorios.
+- **Evaluación** (`banco-alejandra.mjs`, igual para el pool y para cualquier proveedor):
+  `etiqueta` exacta; `respuesta_contiene` = texto sin tool_calls ni sintaxis de tools fugada que
+  contiene cada elemento (alternativas con `|`, sin mayúsculas ni tildes); `herramienta` = la
+  primera tool llamada, y cada clave de `argumentos` presente: números/booleanos iguales, textos
+  «contiene», lista de textos = todos (p. ej. la SQL de `consultar_bd` debe nombrar la tabla y
+  filtrar por `empresa_id`). Las claves no listadas son libres.
+- **Anonimizado**: contexto realista de la empresa demo (Constructora Demo S.L., `empresa_id`
+  5, obra «Nave Industrial Demo», `obra_id` 14), con personas y proveedores inventados
+  («Encargado Ficticio», «Mario Ficticio», «Suministros Ficticios»). Ningún nombre, teléfono,
+  DNI, email ni dirección real; el test lo comprueba con patrones.
+- **Validación en CI** (`banco-alejandra.test.mjs`): ids únicos, tipos válidos, 30–60 casos con
+  los tres tipos y las 7 etiquetas, la tool esperada está en `tools` del caso, cada argumento
+  esperado existe en el esquema y encaja con su tipo/enum, y el evaluador (aciertos y fallos).
+
+**Ampliar el banco en el futuro con turnos buenos del historial (no implementado, solo
+descrito).** Dónde están hoy los turnos:
+
+- `alejandra_historial` (D1 compartida): pares `user`/`assistant` con `canal`, `contenido`
+  (≤ 4000 car.), `usuario_id` y `created_at`; el agente los escribe en `guardarMensajeChat`
+  (`alejandra-agente/worker.js`) y recorta a los 200 últimos por usuario; `worker.js` escribe
+  ahí los turnos de Telegram y de su canal `web`, sin `usuario_id`. No guarda qué tools se llamaron
+  ni con qué argumentos, ni `empresa_id` (se deduce del usuario).
+- `alejandra_trazas` (`registrarTraza`, ADR-0014): una traza `feature_usage` por tool ejecutada
+  (`tool`, `ok`, error recortado) y trazas `decision`, con `empresa_id`, `usuario_id`,
+  `trace_id` y `resumen`/`detalle_json` **ya redactados** (sin emails/teléfonos ni cuerpo de la
+  conversación).
+- `alejandra_token_uso`: modelo/proveedor/tokens por llamada, sin contenido.
+- `chat_mensajes` es el chat de equipo entre personas de la app, **no** el historial de
+  Alejandra: no se usa.
+
+Un exportador futuro (con autorización del Director, solo lectura de D1 y solo de la empresa
+demo o de turnos con consentimiento) emparejaría cada mensaje `user` de `alejandra_historial`
+con la primera traza `feature_usage` con `ok=1` del mismo `usuario_id` en los segundos
+siguientes (tool correcta = «turno bueno»), reconstruiría los argumentos a mano o desde la
+respuesta, y **anonimizaría antes de escribir nada en el repo**: nombres de personas y
+proveedores por ficticios, sin emails, teléfonos, DNI, matrículas ni direcciones, ids de
+empresa/obra reales sustituidos por los de la empresa demo, y revisión humana caso por caso.
+Nunca se copia contenido real de otra empresa al repositorio.
 
 Sin `AI_POOL_KEY` el pool sale como `omitido_sin_clave` (no es fallo); igual cada proveedor
 sin su secreto. Resultado en el artefacto `ai-model-comparison`, carpeta `pool/`:
@@ -223,8 +330,11 @@ sin su secreto. Resultado en el artefacto `ai-model-comparison`, carpeta `pool/`
 - **Pruebas**: `alejandra-agente/ai-pool.test.js` (sin clave → 0 llamadas; pool OK → se usa;
   503 `model_unavailable`/`request_too_long_for_devices`, 429/401/422/502 → respaldo
   inmediato; timeout → respaldo; respuesta mal formada → respaldo; circuito abierto tras 3
-  fallos; métricas sin contenido; coste 0; los dos workers importan el mismo cliente) y
-  `scripts/ai-benchmark/pool.test.mjs`. Ninguna llamada real.
+  fallos; métricas sin contenido; coste 0; los dos workers importan el mismo cliente; alias
+  `alejandra:1.0` en todos los usos, override `AI_POOL_MODEL`, modelo real por cabecera en
+  registro y métrica, alias resuelto a prisma con tools → respaldo `modelo_real_sin_tools` sin
+  abrir el circuito), `scripts/ai-benchmark/pool.test.mjs` (incluido el banco con un pool
+  simulado) y `scripts/ai-benchmark/banco-alejandra.test.mjs`. Ninguna llamada real.
 
 ## Activación y rollback
 
@@ -242,6 +352,8 @@ existentes no cambian).
 **Rollback** (cualquiera de los tres, sin desplegar código):
 
 - Apagado inmediato: variable de texto `AI_POOL_ENABLED = 0` en el panel de cada worker.
+- Cambiar de modelo sin desplegar: variable de texto `AI_POOL_MODEL` (p. ej.
+  `qwen3.6:35b-a3b`) en el panel de cada worker; quitarla vuelve al alias `alejandra:1.0`.
 - Total: `npx wrangler secret delete AI_POOL_KEY --name <worker>` → todo vuelve exactamente a
   como estaba antes de este ADR (cero llamadas al pool).
 - Código: revertir el PR; no hay migraciones ni datos que deshacer.

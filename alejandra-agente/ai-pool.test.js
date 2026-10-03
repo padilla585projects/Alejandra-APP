@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  AI_POOL_MODELO, AI_POOL_MODELO_ROUTER, AI_POOL_URL_DEFECTO, AI_POOL_CIRCUITO,
+  AI_POOL_MODELO, AI_POOL_URL_DEFECTO, AI_POOL_CIRCUITO, AI_POOL_CABECERA_MODELO, modeloPool, modeloPoolSinTools,
   poolConfigurado, urlBasePool, limpiarClavePool, poolChat, poolTexto, poolClasificar,
   poolRouterNexus, poolBuscar, poolLeer, normalizarEtiquetaRouter, parsearRouterNexus,
   normalizarResultadosBusqueda, formatearBusquedaPool, quitarRazonamiento,
@@ -17,6 +17,11 @@ const ENV = { AI_POOL_KEY: 'clave-de-prueba' };
 function respuesta(status, cuerpo) {
   const texto = typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo);
   return { ok: status >= 200 && status < 300, status, text: async () => texto };
+}
+// Respuesta con la cabecera X-AI-Pool-Model (modelo REAL detrás del alias alejandra:1.0).
+function respuestaConModelo(modeloReal, cuerpo, status = 200) {
+  const texto = JSON.stringify(cuerpo);
+  return { ok: status >= 200 && status < 300, status, headers: new Headers({ [AI_POOL_CABECERA_MODELO]: modeloReal }), text: async () => texto };
 }
 function chatOk(content, extra = {}) {
   return respuesta(200, { model: AI_POOL_MODELO, choices: [{ message: { role: 'assistant', content, ...extra }, finish_reason: 'stop' }], usage: { prompt_tokens: 11, completion_tokens: 3 } });
@@ -97,8 +102,8 @@ describe('ADR-0028: con clave y pool sano se usa el pool', () => {
     expect(url).toBe(AI_POOL_URL_DEFECTO + '/openai/v1/chat/completions');
     expect(init.headers.Authorization).toBe('Bearer clave-de-prueba');
     expect(Object.keys(body).sort()).toEqual(['max_tokens', 'messages', 'model']);
-    expect(body.model).toBe(AI_POOL_MODELO);
-    // Interruptor suave de razonamiento solo para qwen3
+    expect(body.model).toBe('alejandra:1.0');
+    // Interruptor suave de razonamiento para qwen3 y para el alias (hoy resuelve a qwen3.6)
     expect(body.messages[0].content.endsWith('/no_think')).toBe(true);
   });
 
@@ -108,16 +113,16 @@ describe('ADR-0028: con clave y pool sano se usa el pool', () => {
     expect(quitarRazonamiento('a</think> b')).toBe('b');
   });
 
-  it('router del agente: prisma:1.0 + json_object y etiqueta válida', async () => {
+  it('router del agente: alejandra:1.0 + json_object y etiqueta válida', async () => {
     const f = fetchQueDevuelve(chatOk('{"experto":"ingenieria"}'));
     const r = await poolClasificar(ENV, SYSTEM_CLASIFICADOR_INTENCION, 'calcula la sección del cable', ETIQUETAS_CLASIFICADOR_INTENCION, {}, { fetch: f });
     expect(r.etiqueta).toBe('ingenieria');
     const body = f.llamadas[0].body;
-    expect(body.model).toBe(AI_POOL_MODELO_ROUTER);
+    expect(body.model).toBe(AI_POOL_MODELO);
     expect(body.response_format).toEqual({ type: 'json_object' });
     expect(body.temperature).toBe(0);
     expect(body.messages[0].content).toContain('JSON');
-    expect(body.messages[0].content.endsWith('/no_think')).toBe(false); // prisma no es qwen3
+    expect(body.messages[0].content.endsWith('/no_think')).toBe(true); // el alias hoy es qwen3.6
   });
 
   it('router NEXUS de worker.js: JSON con experto válido', async () => {
@@ -126,7 +131,7 @@ describe('ADR-0028: con clave y pool sano se usa el pool', () => {
     expect(r).toMatchObject({ expert: 'analista', compress_history: true });
   });
 
-  it('chat con tools solo con qwen3.6; con prisma ni se intenta', async () => {
+  it('chat con tools con el alias; con prisma pedido explícitamente ni se intenta', async () => {
     const tools = [{ type: 'function', function: { name: 'consultar_inventario', parameters: { type: 'object', properties: {} } } }];
     const f = fetchQueDevuelve(chatOk(null, { tool_calls: [{ id: 't1', type: 'function', function: { name: 'consultar_inventario', arguments: '{}' } }] }));
     const r = await poolChat(ENV, { messages: [{ role: 'user', content: 'stock?' }], tools }, { fetch: f });
@@ -274,6 +279,84 @@ describe('ADR-0028: circuito abierto por isolate', () => {
   });
 });
 
+describe('ADR-0028: modelo alejandra:1.0 y modelo real (X-AI-Pool-Model)', () => {
+  const tools = [{ type: 'function', function: { name: 'consultar_inventario', parameters: { type: 'object', properties: {} } } }];
+
+  it('alias por defecto y override AI_POOL_MODEL validado', () => {
+    expect(AI_POOL_MODELO).toBe('alejandra:1.0');
+    expect(modeloPool(ENV)).toBe('alejandra:1.0');
+    expect(modeloPool({ ...ENV, AI_POOL_MODEL: ' qwen3.6:35b-a3b ' })).toBe('qwen3.6:35b-a3b');
+    expect(modeloPool({ ...ENV, AI_POOL_MODEL: '' })).toBe('alejandra:1.0');
+    expect(modeloPool({ ...ENV, AI_POOL_MODEL: 'x y; rm' })).toBe('alejandra:1.0');
+    expect(modeloPoolSinTools('prisma:1.0')).toBe(true);
+    expect(modeloPoolSinTools('qwen3.6:35b-a3b')).toBe(false);
+    expect(modeloPoolSinTools('alejandra:1.0')).toBe(false);
+  });
+
+  it('todos los usos piden el mismo modelo (router, nexus, texto, chat, reescritura)', async () => {
+    const f = fetchQueDevuelve(
+      chatOk('{"experto":"app"}'), chatOk('{"expert":"asistente"}'), chatOk('hola'), chatOk('hola'),
+      chatOk('{"query":"Node.js latest LTS version","since":"year"}')
+    );
+    await poolClasificar(ENV, 's', 'u', ['app'], {}, { fetch: f });
+    await poolRouterNexus(ENV, 'p', ['asistente'], {}, { fetch: f });
+    await poolTexto(ENV, 's', 'u', {}, { fetch: f });
+    await poolChat(ENV, { messages: [{ role: 'user', content: 'x' }], tools }, { fetch: f });
+    await prepararConsultaBusqueda(ENV, 'Busca en internet cuál es la última versión estable de Node.js y dime solo el número.', {}, { fetch: f });
+    expect(f.llamadas.map(l => l.body.model)).toEqual(Array(5).fill('alejandra:1.0'));
+    const f2 = fetchQueDevuelve(chatOk('hola'));
+    await poolTexto({ ...ENV, AI_POOL_MODEL: 'gemma4:e4b' }, 's', 'u', {}, { fetch: f2 });
+    expect(f2.llamadas[0].body.model).toBe('gemma4:e4b');
+  });
+
+  it('la cabecera X-AI-Pool-Model manda sobre el campo model: registro y métrica con el modelo real', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const f = fetchQueDevuelve(respuestaConModelo('qwen3.6:35b-a3b', { model: 'alejandra:1.0', choices: [{ message: { role: 'assistant', content: 'hola' } }] }));
+    const r = await poolTexto(ENV, 's', 'u', { uso: 'cron_normal' }, { fetch: f });
+    expect(r.modelo).toBe('qwen3.6:35b-a3b');
+    expect(r.modeloRegistro).toBe('ai_pool:qwen3.6:35b-a3b');
+    const linea = log.mock.calls.map(c => c.join(' ')).find(l => l.startsWith('AIPOOL_METRICA'));
+    expect(JSON.parse(linea.slice('AIPOOL_METRICA '.length))).toMatchObject({ uso: 'cron_normal', modelo: 'alejandra:1.0', modeloReal: 'qwen3.6:35b-a3b', resultado: 'ok' });
+    expect(metricasPool().usos.cron_normal.modelosReales).toEqual({ 'qwen3.6:35b-a3b': 1 });
+    // Sin cabecera: el campo model de la respuesta; sin ninguno, el pedido
+    const r2 = await poolTexto(ENV, 's', 'u', {}, { fetch: fetchQueDevuelve(respuesta(200, { choices: [{ message: { role: 'assistant', content: 'hola' } }] })) });
+    expect(r2.modeloRegistro).toBe('ai_pool:alejandra:1.0');
+  });
+
+  it('el alias resolvió a prisma (sin tools) en una petición CON tools y sin tool_calls → respaldo sin abrir el circuito', async () => {
+    const f = fetchQueDevuelve(respuestaConModelo('prisma:1.0', { model: 'alejandra:1.0', choices: [{ message: { role: 'assistant', content: 'Quedan 12 bobinas.', tool_calls: null } }] }));
+    for (let i = 0; i < AI_POOL_CIRCUITO.umbralFallos + 1; i++) {
+      const r = await poolChat(ENV, { messages: [{ role: 'user', content: 'stock?' }], tools, uso: 'experto_simple' }, { fetch: f });
+      expect(r.ok).toBe(false);
+      expect(r.motivo).toBe('modelo_real_sin_tools');
+      expect(r.modeloReal).toBe('prisma:1.0');
+    }
+    expect(circuitoPoolAbierto()).toBe(false);
+    expect(metricasPool().usos.experto_simple).toMatchObject({ respaldo: AI_POOL_CIRCUITO.umbralFallos + 1, motivosRespaldo: { modelo_real_sin_tools: AI_POOL_CIRCUITO.umbralFallos + 1 }, modelosReales: { 'prisma:1.0': AI_POOL_CIRCUITO.umbralFallos + 1 } });
+  });
+
+  it('prisma SIN tools (router, texto) sí vale; qwen con tools que contesta en texto también', async () => {
+    const r = await poolClasificar(ENV, 's', 'u', ['app', 'web'], {}, { fetch: fetchQueDevuelve(respuestaConModelo('prisma:1.0', { choices: [{ message: { role: 'assistant', content: '{"experto":"web"}' } }] })) });
+    expect(r).toMatchObject({ etiqueta: 'web', modeloRegistro: 'ai_pool:prisma:1.0' });
+    const r2 = await poolChat(ENV, { messages: [{ role: 'user', content: '¿qué es un diferencial?' }], tools }, { fetch: fetchQueDevuelve(respuestaConModelo('qwen3.6:35b-a3b', { choices: [{ message: { role: 'assistant', content: 'Un dispositivo de protección.' } }] })) });
+    expect(r2.ok).toBe(true);
+    expect(r2.toolCalls).toEqual([]);
+  });
+
+  it('un fallo HTTP con cabecera también registra el modelo real en la métrica', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await poolTexto(ENV, 's', 'u', {}, { fetch: fetchQueDevuelve(respuestaConModelo('qwen3.6:35b-a3b', { error: { code: 'request_too_long_for_devices' } }, 503)) });
+    const linea = log.mock.calls.map(c => c.join(' ')).find(l => l.startsWith('AIPOOL_METRICA'));
+    expect(JSON.parse(linea.slice('AIPOOL_METRICA '.length))).toMatchObject({ resultado: 'respaldo', motivo: 'request_too_long_for_devices', modeloReal: 'qwen3.6:35b-a3b' });
+  });
+
+  it('ningún worker fija a mano un modelo concreto del pool', () => {
+    const agente = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const web = readFileSync(new URL('../worker.js', import.meta.url), 'utf8');
+    for (const src of [agente, web]) expect(src).not.toMatch(/['"`](prisma:1\.0|qwen3\.6:35b-a3b|gemma4:e4b)['"`]/);
+  });
+});
+
 describe('ADR-0028: medición sin D1 y coste 0', () => {
   it('metricasPool agrega ok/respaldo, motivos y latencias por uso', async () => {
     await poolTexto(ENV, 's', 'u', { uso: 'cron_normal' }, { fetch: fetchQueDevuelve(chatOk('SIN_ACCION')) });
@@ -333,7 +416,7 @@ describe('03/10/2026: consulta corta para /v1/tools/search', () => {
     // Petición de reescritura: modelo router, modo JSON, cuerpo mínimo
     const pet = f.llamadas[0];
     expect(pet.url).toBe(AI_POOL_URL_DEFECTO + '/openai/v1/chat/completions');
-    expect(pet.body.model).toBe(AI_POOL_MODELO_ROUTER);
+    expect(pet.body.model).toBe(AI_POOL_MODELO);
     expect(pet.body.response_format).toEqual({ type: 'json_object' });
     expect(Object.keys(pet.body).sort()).toEqual(['max_tokens', 'messages', 'model', 'response_format', 'temperature']);
     expect(pet.body.messages[1].content).toBe(FRASE);

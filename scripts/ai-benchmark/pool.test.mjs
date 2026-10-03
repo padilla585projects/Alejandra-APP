@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run, resumir, costeEstimado, candidatos } from './pool.mjs';
 import { casosRouter } from './pool-cases.mjs';
+import { cargarBancoAlejandra } from './banco-alejandra.mjs';
 
 const silencio = () => { const orig = console.log; console.log = () => {}; return () => { console.log = orig; }; };
 const json = (cuerpo, status = 200) => ({ ok: status < 300, status, text: async () => JSON.stringify(cuerpo), json: async () => cuerpo });
@@ -44,6 +45,7 @@ test('solo con AI_POOL_KEY: mide el pool, omite el resto y calcula acierto/laten
     const datos = await run({ outputDir: dir, env: { AI_POOL_KEY: 'k' }, fetchImpl });
     assert.ok(urls.length > 0 && urls.every(u => u.startsWith('https://pve1.tail2c5046.ts.net/')));
     const r = Object.fromEntries(datos.resumen.map(x => [x.tarea + '|' + x.candidato, x]));
+    assert.equal(r['router|ai_pool:alejandra:1.0'].acierto, 1);
     assert.equal(r['router|ai_pool:prisma:1.0'].acierto, 1);
     assert.equal(r['router|ai_pool:prisma:1.0'].costeUsd, 0);
     assert.equal(r['router|claude-haiku-4-5'].medidos, 0);
@@ -51,6 +53,61 @@ test('solo con AI_POOL_KEY: mide el pool, omite el resto y calcula acierto/laten
     // respaldo: f01 acierta (tool correcta), f02 falla (tool equivocada), f03 falla (debía ser texto)
     assert.equal(r['respaldo|ai_pool:qwen3.6:35b-a3b'].aciertos, 1);
     assert.ok(r['simple|ai_pool:qwen3.6:35b-a3b'].p50Ms !== null);
+  } finally { restaurar(); }
+});
+
+// Respuesta «perfecta» del pool para un caso del banco, con la cabecera X-AI-Pool-Model.
+function respuestaPerfecta(caso, modeloReal) {
+  const e = caso.esperado;
+  const primera = f => String(f).split('|')[0];
+  let message;
+  if (e.etiqueta) message = { role: 'assistant', content: JSON.stringify({ experto: e.etiqueta }) };
+  else if (e.respuesta_contiene) message = { role: 'assistant', content: e.respuesta_contiene.map(primera).join(' ') + '.' };
+  else {
+    const args = Object.fromEntries(Object.entries(e.argumentos).map(([k, v]) => [k, Array.isArray(v) ? v.map(primera).join(' ') : typeof v === 'string' ? primera(v) : v]));
+    message = { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: e.herramienta, arguments: JSON.stringify(args) } }] };
+  }
+  const cuerpo = { model: 'alejandra:1.0', choices: [{ message }], usage: { prompt_tokens: 10, completion_tokens: 2 } };
+  return { ok: true, status: 200, headers: new Headers({ 'X-AI-Pool-Model': modeloReal }), text: async () => JSON.stringify(cuerpo), json: async () => cuerpo };
+}
+
+test('banco casos-alejandra.json: el pool perfecto acierta todo y se registra el modelo real', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pool-bench-'));
+  const banco = cargarBancoAlejandra();
+  const porMensaje = new Map(banco.map(c => [c.mensajes.at(-1).content, c]));
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body);
+    return respuestaPerfecta(porMensaje.get(body.messages.at(-1).content), body.model === 'alejandra:1.0' ? 'qwen3.6:35b-a3b' : body.model);
+  };
+  const restaurar = silencio();
+  try {
+    const datos = await run({ tareas: ['banco'], outputDir: dir, env: { AI_POOL_KEY: 'k' }, fetchImpl });
+    const r = Object.fromEntries(datos.resumen.map(x => [x.candidato, x]));
+    assert.equal(r['ai_pool:alejandra:1.0'].medidos, banco.length);
+    assert.equal(r['ai_pool:alejandra:1.0'].acierto, 1);
+    assert.deepEqual(r['ai_pool:alejandra:1.0'].modelosReales, { 'qwen3.6:35b-a3b': banco.length });
+    // prisma no recibe tools: los casos con tools salen «respaldo», el resto se mide
+    const conTools = banco.filter(c => c.tools.length).length;
+    assert.equal(r['ai_pool:prisma:1.0'].motivosFallo.respaldo, conTools);
+    assert.equal(r['ai_pool:prisma:1.0'].aciertos, banco.length - conTools);
+    assert.equal(r['claude-haiku-4-5'].medidos, 0);
+    assert.match(await readFile(join(dir, 'report.md'), 'utf8'), /qwen3\.6:35b-a3b×/);
+  } finally { restaurar(); }
+});
+
+test('banco: si el alias resuelve a prisma en un caso con tools, cuenta como respaldo (modelo_real_sin_tools)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pool-bench-'));
+  const banco = cargarBancoAlejandra();
+  const fetchImpl = async () => {
+    const cuerpo = { model: 'alejandra:1.0', choices: [{ message: { role: 'assistant', content: '{"experto":"app"}' } }] };
+    return { ok: true, status: 200, headers: new Headers({ 'X-AI-Pool-Model': 'prisma:1.0' }), text: async () => JSON.stringify(cuerpo), json: async () => cuerpo };
+  };
+  const restaurar = silencio();
+  try {
+    const datos = await run({ tareas: ['banco'], outputDir: dir, env: { AI_POOL_KEY: 'k' }, fetchImpl });
+    const filas = datos.filas.filter(f => f.candidato === 'ai_pool:alejandra:1.0' && f.tipo === 'experto_tools');
+    assert.equal(filas.length, banco.filter(c => c.tipo === 'experto_tools').length);
+    assert.ok(filas.every(f => f.status === 'respaldo' && f.motivo === 'modelo_real_sin_tools' && f.modeloReal === 'prisma:1.0'));
   } finally { restaurar(); }
 });
 

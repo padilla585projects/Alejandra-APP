@@ -27,14 +27,39 @@
 // no se toca la configuración actual de ningún worker.
 export const AI_POOL_URL_DEFECTO = 'https://pve1.tail2c5046.ts.net';
 
-// Modelos disponibles en el pool (03/10/2026). qwen3.6:35b-a3b es el mejor y el ÚNICO que
-// soporta tools formato OpenAI (prisma:1.0 devuelve tool_calls null). prisma:1.0 es el más
-// rápido con response_format json_object (~0,7 s frente a ~2,5 s de qwen) → se usa para los
-// routers, que solo devuelven una etiqueta. gemma4:e4b queda como alternativa medible en el
-// benchmark. qwen2.5:1.5b/0.5b existen pero son pequeños y lentos: no se usan.
-export const AI_POOL_MODELO = 'qwen3.6:35b-a3b';
-export const AI_POOL_MODELO_ROUTER = 'prisma:1.0';
-export const AI_POOL_MODELOS_ALTERNATIVOS = ['prisma:1.0', 'gemma4:e4b'];
+// Modelo del pool (03/10/2026): `alejandra:1.0`, un ALIAS propio que mantiene la sesión del
+// pool y que aparece en /openai/v1/models con "resolves_to". Hoy resuelve a qwen3.6:35b-a3b
+// (maneja tools formato OpenAI); si ese no está cargado, a prisma:1.0 (rápido y bueno en JSON,
+// pero NO devuelve tool_calls). Todos los usos (router, experto simple, crons, resumen,
+// respaldo de Anthropic, reescritura de la consulta de búsqueda) piden este alias: qué hay
+// detrás lo decide el pool con los datos del banco de casos (scripts/ai-benchmark/
+// casos-alejandra.json), sin tocar código aquí. La cabecera de respuesta X-AI-Pool-Model dice
+// qué modelo REAL respondió; se registra en la métrica y en alejandra_token_uso.
+// Override opcional `env.AI_POOL_MODEL` (variable de texto del panel, no secreto) para fijar
+// otro modelo sin desplegar; un valor con caracteres raros se ignora (se usa el alias).
+export const AI_POOL_MODELO = 'alejandra:1.0';
+// Modelos concretos medibles directamente en el benchmark (no se usan en producción).
+export const AI_POOL_MODELOS_ALTERNATIVOS = ['qwen3.6:35b-a3b', 'prisma:1.0', 'gemma4:e4b'];
+// Cabecera con el modelo real que respondió (la pone el gateway del pool).
+export const AI_POOL_CABECERA_MODELO = 'X-AI-Pool-Model';
+
+export function modeloPool(env) {
+  const v = env && typeof env.AI_POOL_MODEL === 'string' ? env.AI_POOL_MODEL.trim() : '';
+  return /^[A-Za-z0-9][A-Za-z0-9._:\/-]{0,79}$/.test(v) ? v : AI_POOL_MODELO;
+}
+
+// Modelos del pool que NO devuelven tool_calls (prisma:1.0 los ignora). Con uno de ellos no se
+// mandan tools, y si el alias resolvió a uno de ellos (cabecera X-AI-Pool-Model) en una
+// petición con tools y no hay tool_calls, la respuesta no vale → respaldo.
+export function modeloPoolSinTools(nombre) {
+  return /^prisma[:\-]/i.test(String(nombre || ''));
+}
+
+// Interruptor suave de razonamiento de Qwen3: para qwen3* y para el alias (que hoy resuelve a
+// qwen3.6). Si resuelve a prisma, el «/no_think» final es una línea inocua más del prompt.
+function _admiteNoThink(nombre) {
+  return /^(qwen3|alejandra)/i.test(String(nombre || ''));
+}
 
 // Timeouts por uso (ms). Cortos donde hay un usuario esperando; el respaldo entra al
 // momento si el pool no contesta a tiempo. Ojo: con carga en frío o GPU prestada la
@@ -102,19 +127,22 @@ function _registrarFallo(ahora = Date.now()) {
 let _metricasDesde = new Date().toISOString();
 const _metricas = new Map();
 
-export function registrarMetricaPool({ uso = 'desconocido', resultado, motivo = '', ms = null, modelo = '' } = {}) {
+// `modelo` = lo que se pidió (el alias), `modeloReal` = lo que respondió según la cabecera
+// X-AI-Pool-Model (o el campo `model` de la respuesta). null si no hubo respuesta del pool.
+export function registrarMetricaPool({ uso = 'desconocido', resultado, motivo = '', ms = null, modelo = '', modeloReal = '' } = {}) {
   const res = resultado === 'ok' ? 'ok' : resultado === 'omitido' ? 'omitido' : 'respaldo';
-  if (!_metricas.has(uso)) _metricas.set(uso, { ok: 0, respaldo: 0, omitido: 0, motivos: {}, msOk: [], msTotalOk: 0 });
+  if (!_metricas.has(uso)) _metricas.set(uso, { ok: 0, respaldo: 0, omitido: 0, motivos: {}, msOk: [], msTotalOk: 0, modelosReales: {} });
   const m = _metricas.get(uso);
   m[res]++;
   if (res !== 'ok' && motivo) m.motivos[motivo] = (m.motivos[motivo] || 0) + 1;
+  if (modeloReal) m.modelosReales[modeloReal] = (m.modelosReales[modeloReal] || 0) + 1;
   if (res === 'ok' && Number.isFinite(ms)) {
     m.msTotalOk += ms;
     m.msOk.push(ms);
     if (m.msOk.length > 200) m.msOk.shift(); // ventana para percentiles, memoria acotada
   }
   try {
-    console.log('AIPOOL_METRICA ' + JSON.stringify({ uso, proveedor: 'ai_pool', modelo: modelo || AI_POOL_MODELO, resultado: res, motivo: motivo || null, ms: Number.isFinite(ms) ? Math.round(ms) : null }));
+    console.log('AIPOOL_METRICA ' + JSON.stringify({ uso, proveedor: 'ai_pool', modelo: modelo || AI_POOL_MODELO, modeloReal: modeloReal || null, resultado: res, motivo: motivo || null, ms: Number.isFinite(ms) ? Math.round(ms) : null }));
   } catch (_) {}
 }
 
@@ -133,7 +161,8 @@ export function metricasPool() {
       tasaExito: total ? m.ok / total : null,
       motivosRespaldo: { ...m.motivos },
       msMedioOk: m.ok ? Math.round(m.msTotalOk / m.ok) : null,
-      p50MsOk: _percentil(m.msOk, 0.5), p95MsOk: _percentil(m.msOk, 0.95)
+      p50MsOk: _percentil(m.msOk, 0.5), p95MsOk: _percentil(m.msOk, 0.95),
+      modelosReales: { ...m.modelosReales }
     };
   }
   return { desde: _metricasDesde, alcance: 'isolate', circuito: estadoCircuitoPool(), usos };
@@ -172,6 +201,15 @@ export function poolDisponible(env, ahora = Date.now()) {
   return poolConfigurado(env) && !circuitoPoolAbierto(ahora);
 }
 
+// Modelo real según la cabecera X-AI-Pool-Model ('' si no viene o no hay cabeceras).
+function _modeloDeCabecera(resp) {
+  try {
+    const h = resp && resp.headers;
+    const v = h && typeof h.get === 'function' ? h.get(AI_POOL_CABECERA_MODELO) : '';
+    return normalizarNombreModeloPool(v || '');
+  } catch (_) { return ''; }
+}
+
 function _fetchDe(opts) {
   if (opts && typeof opts.fetch === 'function') return opts.fetch;
   return (...args) => fetch(...args);
@@ -190,7 +228,8 @@ function _codigoError(data) {
 }
 
 // POST JSON al pool con timeout (AbortController), sin lanzar nunca.
-// Devuelve { ok:true, data, ms } o { ok:false, motivo, ms?, status?, codigo?, omitido? }.
+// Devuelve { ok:true, data, ms, modeloCabecera } o
+// { ok:false, motivo, ms?, status?, codigo?, omitido?, modeloCabecera? }.
 async function _postPool(env, ruta, body, timeoutMs, opts = {}) {
   if (!poolConfigurado(env)) return { ok: false, motivo: 'no_configurado', omitido: true };
   if (circuitoPoolAbierto()) return { ok: false, motivo: 'circuito_abierto', omitido: true };
@@ -210,16 +249,17 @@ async function _postPool(env, ruta, body, timeoutMs, opts = {}) {
     try { crudo = await resp.text(); } catch (_) { crudo = ''; }
     try { data = crudo ? JSON.parse(crudo) : null; } catch (_) { data = null; }
     const ms = Date.now() - t0;
+    const modeloCabecera = _modeloDeCabecera(resp);
     if (!resp.ok) {
       const codigo = _codigoError(data);
       _registrarFallo();
-      return { ok: false, motivo: AI_POOL_ERRORES_RAPIDOS.has(codigo) ? codigo : 'http_' + resp.status, status: resp.status, codigo, ms };
+      return { ok: false, motivo: AI_POOL_ERRORES_RAPIDOS.has(codigo) ? codigo : 'http_' + resp.status, status: resp.status, codigo, ms, modeloCabecera };
     }
     if (!data || typeof data !== 'object') {
       _registrarFallo();
-      return { ok: false, motivo: 'json_invalido', ms };
+      return { ok: false, motivo: 'json_invalido', ms, modeloCabecera };
     }
-    return { ok: true, data, ms };
+    return { ok: true, data, ms, modeloCabecera };
   } catch (e) {
     _registrarFallo();
     return { ok: false, motivo: e && e.name === 'AbortError' ? 'timeout' : 'red', ms: Date.now() - t0 };
@@ -230,9 +270,13 @@ async function _postPool(env, ruta, body, timeoutMs, opts = {}) {
 
 // Emite la métrica de un intento. Los «no configurado» no se registran: con el pool
 // apagado no hay ni una línea de log nueva.
+// `modelo` = lo pedido; el modelo real sale del resultado (cabecera o campo `model`).
 function _metrica(uso, r, modelo) {
   if (r.motivo === 'no_configurado' || r.motivo === 'sin_mensajes') return;
-  registrarMetricaPool({ uso, resultado: r.ok ? 'ok' : (r.omitido ? 'omitido' : 'respaldo'), motivo: r.ok ? '' : r.motivo, ms: r.ms, modelo });
+  registrarMetricaPool({
+    uso, resultado: r.ok ? 'ok' : (r.omitido ? 'omitido' : 'respaldo'), motivo: r.ok ? '' : r.motivo, ms: r.ms,
+    modelo: modelo || r.modeloPedido || '', modeloReal: r.modeloReal || r.modeloCabecera || ''
+  });
 }
 
 // El campo `model` de la respuesta es el NOMBRE del modelo («prisma:1.0») desde el 03/10/2026;
@@ -257,13 +301,15 @@ export function quitarRazonamiento(texto) {
   return texto.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*?<\/think>/i, '').trim();
 }
 
-// Chat compatible OpenAI sin métrica (la emite quien lo llama).
-async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs = AI_POOL_TIMEOUTS.simple, sinRazonamiento = true, temperature, modelo = AI_POOL_MODELO, json = false } = {}, opts = {}) {
-  if (!Array.isArray(messages) || !messages.length) return { ok: false, motivo: 'sin_mensajes', omitido: true };
+// Chat compatible OpenAI sin métrica (la emite quien lo llama). Sin `modelo` explícito se
+// pide modeloPool(env) (el alias alejandra:1.0 o el override AI_POOL_MODEL).
+async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs = AI_POOL_TIMEOUTS.simple, sinRazonamiento = true, temperature, modelo, json = false } = {}, opts = {}) {
+  const modeloPedido = (typeof modelo === 'string' && modelo.trim()) ? modelo.trim() : modeloPool(env);
+  if (!Array.isArray(messages) || !messages.length) return { ok: false, motivo: 'sin_mensajes', omitido: true, modeloPedido };
   let msgs = messages;
   // Interruptor suave de Qwen3 para no gastar tokens/latencia en razonamiento (a confirmar
   // con la sesión del pool: si el gateway ya lo desactiva, es inocuo).
-  if (sinRazonamiento && /^qwen3/i.test(modelo)) {
+  if (sinRazonamiento && _admiteNoThink(modeloPedido)) {
     const i = msgs.findIndex(m => m && m.role === 'system');
     if (i >= 0 && typeof msgs[i].content === 'string') {
       msgs = msgs.slice();
@@ -272,31 +318,39 @@ async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs
   }
   // Cuerpo mínimo: el pool rechaza campos desconocidos (422) y no admite streaming
   // (stream:true → 400), así que no se manda `stream` ni `tool_choice` (auto por defecto).
-  const body = { model: modelo, messages: msgs, max_tokens: maxTokens };
+  const body = { model: modeloPedido, messages: msgs, max_tokens: maxTokens };
   if (typeof temperature === 'number') body.temperature = temperature;
   if (json) body.response_format = { type: 'json_object' };
-  if (Array.isArray(tools) && tools.length) {
-    // Solo qwen3.6 soporta tools en el pool: con otro modelo no se intenta (respaldo).
-    if (!/^qwen3/i.test(modelo)) return { ok: false, motivo: 'modelo_sin_tools', omitido: true };
+  const conTools = Array.isArray(tools) && tools.length > 0;
+  if (conTools) {
+    // Un modelo que se sabe sin tools (prisma) ni se intenta: respaldo directo.
+    if (modeloPoolSinTools(modeloPedido)) return { ok: false, motivo: 'modelo_sin_tools', omitido: true, modeloPedido };
     body.tools = tools;
   }
   const r = await _postPool(env, '/openai/v1/chat/completions', body, timeoutMs, opts);
-  if (!r.ok) return r;
+  if (!r.ok) return { ...r, modeloPedido, modeloReal: r.modeloCabecera || '' };
   const data = r.data;
+  // Modelo REAL: la cabecera X-AI-Pool-Model manda (el campo `model` puede repetir el alias).
+  const modeloReal = r.modeloCabecera || normalizarNombreModeloPool(data.model) || modeloPedido;
   if (data.error) {
     _registrarFallo();
     const codigo = _codigoError(data);
-    return { ok: false, motivo: AI_POOL_ERRORES_RAPIDOS.has(codigo) ? codigo : 'error_en_cuerpo', codigo, ms: r.ms };
+    return { ok: false, motivo: AI_POOL_ERRORES_RAPIDOS.has(codigo) ? codigo : 'error_en_cuerpo', codigo, ms: r.ms, modeloPedido, modeloReal };
   }
   const mensaje = data.choices && data.choices[0] && data.choices[0].message;
   const texto = quitarRazonamiento(mensaje && mensaje.content);
   const toolCalls = mensaje && Array.isArray(mensaje.tool_calls) ? mensaje.tool_calls.filter(tc => tc && tc.function && tc.function.name) : [];
   if (!mensaje || (!texto && !toolCalls.length)) {
     _registrarFallo();
-    return { ok: false, motivo: 'respuesta_vacia', ms: r.ms };
+    return { ok: false, motivo: 'respuesta_vacia', ms: r.ms, modeloPedido, modeloReal };
+  }
+  // El alias resolvió a un modelo sin tools (p. ej. prisma:1.0) en una petición CON tools y no
+  // hay tool_calls: su texto no ha podido consultar nada (riesgo de inventar datos) → respaldo.
+  // El pool sí respondió, así que no cuenta para el circuito.
+  if (conTools && !toolCalls.length && modeloPoolSinTools(modeloReal)) {
+    return { ok: false, motivo: 'modelo_real_sin_tools', ms: r.ms, modeloPedido, modeloReal };
   }
   _registrarExito();
-  const modeloReal = normalizarNombreModeloPool(data.model) || modelo;
   return {
     ok: true,
     ms: r.ms,
@@ -304,6 +358,8 @@ async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs
     texto,
     toolCalls,
     modelo: modeloReal,
+    modeloPedido,
+    modeloReal,
     modeloRegistro: AI_POOL_PREFIJO_MODELO + modeloReal,
     finishReason: data.choices[0].finish_reason || null,
     usage: {
@@ -318,7 +374,7 @@ async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs
 // { ok:false, motivo }. Una respuesta sin texto ni tool_calls cuenta como inválida.
 export async function poolChat(env, params = {}, opts = {}) {
   const r = await _poolChatCrudo(env, params, opts);
-  _metrica(params.uso || 'chat', r, r.modelo);
+  _metrica(params.uso || 'chat', r, r.modeloPedido);
   return r;
 }
 
@@ -357,7 +413,7 @@ export function normalizarEtiquetaRouter(texto, validos) {
 export const SUFIJO_ROUTER_JSON = '\nDevuelve SOLO un objeto JSON con la forma {"experto":"<una de las palabras anteriores>"}.';
 
 // Router de intención del agente: una etiqueta de `validos` o null (→ Haiku).
-export async function poolClasificar(env, systemPrompt, mensaje, validos, { timeoutMs = AI_POOL_TIMEOUTS.router, maxTokens = 24, uso = 'router', modelo = AI_POOL_MODELO_ROUTER } = {}, opts = {}) {
+export async function poolClasificar(env, systemPrompt, mensaje, validos, { timeoutMs = AI_POOL_TIMEOUTS.router, maxTokens = 24, uso = 'router', modelo } = {}, opts = {}) {
   if (!poolConfigurado(env)) return null;
   const r = await _poolChatCrudo(env, {
     messages: [{ role: 'system', content: String(systemPrompt) + SUFIJO_ROUTER_JSON }, { role: 'user', content: String(mensaje || '') }],
@@ -367,10 +423,10 @@ export async function poolClasificar(env, systemPrompt, mensaje, validos, { time
   const etiqueta = normalizarEtiquetaRouter(r.texto, validos);
   if (!etiqueta) {
     _registrarFallo();
-    _metrica(uso, { ok: false, motivo: 'formato_invalido', ms: r.ms }, r.modelo);
+    _metrica(uso, { ok: false, motivo: 'formato_invalido', ms: r.ms, modeloPedido: r.modeloPedido, modeloReal: r.modeloReal });
     return null;
   }
-  _metrica(uso, r, r.modelo);
+  _metrica(uso, r);
   return { etiqueta, modelo: r.modelo, modeloRegistro: r.modeloRegistro, usage: r.usage, ms: r.ms };
 }
 
@@ -385,7 +441,7 @@ export function parsearRouterNexus(texto, expertosValidos) {
   return { expert: obj.expert, compress_history: obj.compress_history === true };
 }
 
-export async function poolRouterNexus(env, prompt, expertosValidos, { timeoutMs = AI_POOL_TIMEOUTS.router, maxTokens = 64, uso = 'router_nexus', modelo = AI_POOL_MODELO_ROUTER } = {}, opts = {}) {
+export async function poolRouterNexus(env, prompt, expertosValidos, { timeoutMs = AI_POOL_TIMEOUTS.router, maxTokens = 64, uso = 'router_nexus', modelo } = {}, opts = {}) {
   if (!poolConfigurado(env)) return null;
   const r = await _poolChatCrudo(env, {
     messages: [{ role: 'system', content: 'Devuelve SOLO el objeto JSON pedido, sin texto adicional.' }, { role: 'user', content: String(prompt) }],
@@ -395,10 +451,10 @@ export async function poolRouterNexus(env, prompt, expertosValidos, { timeoutMs 
   const parsed = parsearRouterNexus(r.texto, expertosValidos);
   if (!parsed) {
     _registrarFallo();
-    _metrica(uso, { ok: false, motivo: 'formato_invalido', ms: r.ms }, r.modelo);
+    _metrica(uso, { ok: false, motivo: 'formato_invalido', ms: r.ms, modeloPedido: r.modeloPedido, modeloReal: r.modeloReal });
     return null;
   }
-  _metrica(uso, r, r.modelo);
+  _metrica(uso, r);
   return { ...parsed, modelo: r.modelo, modeloRegistro: r.modeloRegistro, usage: r.usage, ms: r.ms };
 }
 
@@ -476,7 +532,7 @@ export async function poolBuscar(env, query, { maxResultados = 5, timeoutMs = AI
 // número.» se mandaba ENTERA como query (el router pone query_web = el mensaje recortado y el
 // modelo a veces pasa la frase tal cual) y DuckDuckGo devolvía una versión obsoleta. Con
 // «Node.js latest LTS version» el primer resultado es el correcto. Antes de buscar en el pool
-// se convierte la petición en palabras clave (prisma:1.0 en modo JSON, timeout corto) y se
+// se convierte la petición en palabras clave (modelo del pool en modo JSON, timeout corto) y se
 // decide el filtro de fecha `since`; si la reescritura falla, respaldo determinista sin IA.
 // Solo afecta a la búsqueda del POOL: los respaldos (gpt-4o-mini, Tavily) reciben la petición
 // original (ver los llamadores).
@@ -621,23 +677,23 @@ export async function prepararConsultaBusqueda(env, texto, { timeoutMs = AI_POOL
   const original = typeof texto === 'string' ? texto.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
   if (!original) return { query: '', since: null, fuente: 'original' };
   if (!consultaNecesitaReescritura(original)) {
-    if (poolConfigurado(env)) registrarMetricaPool({ uso, resultado: 'omitido', motivo: 'consulta_corta', modelo: AI_POOL_MODELO_ROUTER });
+    if (poolConfigurado(env)) registrarMetricaPool({ uso, resultado: 'omitido', motivo: 'consulta_corta', modelo: modeloPool(env) });
     return { query: original, since: sinceHeuristico(original, { ahora }), fuente: 'original' };
   }
   const heuristica = { ...consultaBusquedaHeuristica(original, { ahora }), fuente: 'heuristica' };
   if (!poolConfigurado(env)) return heuristica;
   const r = await _poolChatCrudo(env, {
     messages: [{ role: 'system', content: systemConsultaBusqueda(ahora) }, { role: 'user', content: original }],
-    maxTokens: 60, timeoutMs, temperature: 0, modelo: AI_POOL_MODELO_ROUTER, json: true
+    maxTokens: 60, timeoutMs, temperature: 0, json: true
   }, opts);
-  if (!r.ok) { _metrica(uso, r, AI_POOL_MODELO_ROUTER); return heuristica; }
+  if (!r.ok) { _metrica(uso, r); return heuristica; }
   const valida = validarConsultaReescrita(r.texto);
   if (!valida) {
     // El pool respondió (no se abre el circuito): solo la salida no sirve.
-    _metrica(uso, { ok: false, motivo: 'formato_invalido', ms: r.ms }, r.modelo);
+    _metrica(uso, { ok: false, motivo: 'formato_invalido', ms: r.ms, modeloPedido: r.modeloPedido, modeloReal: r.modeloReal });
     return heuristica;
   }
-  _metrica(uso, r, r.modelo);
+  _metrica(uso, r);
   return { ...valida, fuente: 'ai_pool' };
 }
 
