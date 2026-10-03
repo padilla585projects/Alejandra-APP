@@ -8,7 +8,8 @@ import {
   normalizarResultadosBusqueda, formatearBusquedaPool, quitarRazonamiento,
   circuitoPoolAbierto, _reiniciarCircuitoPool, metricasPool, _reiniciarMetricasPool,
   prepararConsultaBusqueda, consultaBusquedaHeuristica, consultaNecesitaReescritura,
-  validarConsultaReescrita, sinceHeuristico, normalizarNombreModeloPool, AI_POOL_SINCE_VALIDOS
+  validarConsultaReescrita, sinceHeuristico, normalizarNombreModeloPool, AI_POOL_SINCE_VALIDOS,
+  poolLeerDocumento, tipoDocumentoPool, nombreDocumentoPool, AI_POOL_DOCUMENTO_MAX_BYTES
 } from './ai-pool.js';
 import { calcularCosteYProveedor, ETIQUETAS_CLASIFICADOR_INTENCION, SYSTEM_CLASIFICADOR_INTENCION } from './lib.js';
 
@@ -537,5 +538,180 @@ describe('03/10/2026: consulta corta para /v1/tools/search', () => {
     expect(web).toMatch(/prepararConsultaBusqueda\(env, String\(query\)\)[\s\S]{0,200}poolBuscar\(env, consultaPool\.query, \{[^}]*since: consultaPool\.since/);
     expect(agente).toMatch(/input: query \}\)/);
     expect(web).toMatch(/api_key: env\.TAVILY_API_KEY, query, /);
+  });
+});
+
+// ── POOL-DOCUMENTOS-01: /v1/tools/document con respaldo (Gemini / heurística) ──────────
+describe('03/10/2026: lectura de documentos con /v1/tools/document', () => {
+  const PDF = new TextEncoder().encode('%PDF-1.7 contenido de prueba');
+  const docOk = (extra = {}) => respuesta(200, {
+    type: 'pdf', pages: 2, text: '| Ref | Cant |\n|---|---|\n| RZ1-K 3x2,5 | 120 m |\nAlbarán 5051217424', tables: [{ page: 1, rows: [['Ref', 'Cant']] }],
+    sheets: [], needs_ocr: [], truncated: false, chars: 64, took_s: 0.3, ...extra
+  });
+  // Mismo patrón que usan los puntos de extracción del agente: pool primero y, si devuelve
+  // null, el camino de siempre (aquí, un Gemini simulado).
+  async function leerComoElAgente(env, params, gemini, opts) {
+    const d = await poolLeerDocumento(env, params, opts);
+    return d ? { fuente: 'pool', texto: d.texto } : { fuente: 'gemini', texto: await gemini() };
+  }
+
+  it('PDF con texto → pool: cuerpo estricto, solo el nombre del fichero y sin llamar a Gemini', async () => {
+    const f = fetchQueDevuelve(docOk());
+    const gemini = vi.fn(async () => 'texto de Gemini');
+    const r = await leerComoElAgente(ENV, { filename: 'chat_files/42/1700_albaran.pdf', mime: 'application/pdf', bytes: PDF, maxChars: 40000 }, gemini, { fetch: f });
+    expect(r.fuente).toBe('pool');
+    expect(r.texto).toMatch(/RZ1-K 3x2,5/);
+    expect(gemini).not.toHaveBeenCalled();
+    expect(f).toHaveBeenCalledTimes(1);
+    const { url, init, body } = f.llamadas[0];
+    expect(url).toBe(AI_POOL_URL_DEFECTO + '/v1/tools/document');
+    expect(init.headers.Authorization).toBe('Bearer clave-de-prueba');
+    expect(Object.keys(body).sort()).toEqual(['data', 'filename', 'max_chars']);
+    expect(body.filename).toBe('1700_albaran.pdf'); // nunca la ruta R2 con ids
+    expect(atob(body.data)).toBe('%PDF-1.7 contenido de prueba');
+    expect(body.max_chars).toBe(40000);
+    expect(metricasPool().usos.documento.ok).toBe(1);
+  });
+
+  it('devuelve tablas, hojas, páginas y marca truncado; max_chars se acota a 1000–200000', async () => {
+    const f = fetchQueDevuelve(docOk({ truncated: true, chars: 250000 }));
+    const d = await poolLeerDocumento(ENV, { filename: 'pedido.xlsx', mime: 'application/octet-stream', bytes: PDF, maxChars: 10 }, { fetch: f });
+    expect(f.llamadas[0].body.max_chars).toBe(1000);
+    expect(f.llamadas[0].body.filename).toBe('pedido.xlsx');
+    expect(d).toMatchObject({ paginas: 2, truncado: true, caracteres: 250000 });
+    expect(d.tablas).toHaveLength(1);
+    const f2 = fetchQueDevuelve(docOk());
+    await poolLeerDocumento(ENV, { filename: 'x.pdf', bytes: PDF, maxChars: 9e9 }, { fetch: f2 });
+    expect(f2.llamadas[0].body.max_chars).toBe(200000);
+  });
+
+  it('acepta base64 en lugar de bytes y añade la extensión si la key no la lleva', async () => {
+    const f = fetchQueDevuelve(docOk());
+    const d = await poolLeerDocumento(ENV, { filename: 'e1/escaneos/sin_extension', mime: 'application/pdf', base64: btoa('%PDF hola') }, { fetch: f });
+    expect(d).not.toBeNull();
+    expect(f.llamadas[0].body.filename).toBe('sin_extension.pdf');
+    expect(f.llamadas[0].body.data).toBe(btoa('%PDF hola'));
+  });
+
+  it('needs_ocr (todas o parte de las páginas escaneadas) → documento entero a Gemini, sin abrir el circuito', async () => {
+    for (const needs of [[1, 2], [3]]) {
+      const f = fetchQueDevuelve(docOk({ needs_ocr: needs }));
+      const gemini = vi.fn(async () => 'texto OCR de Gemini');
+      const r = await leerComoElAgente(ENV, { filename: 'parte.pdf', mime: 'application/pdf', bytes: PDF }, gemini, { fetch: f });
+      expect(r).toEqual({ fuente: 'gemini', texto: 'texto OCR de Gemini' });
+      expect(f).toHaveBeenCalledTimes(1);
+      expect(gemini).toHaveBeenCalledTimes(1);
+    }
+    // Un tercer escaneo seguido tampoco abre el circuito: el pool funcionó, el PDF era una foto.
+    await poolLeerDocumento(ENV, { filename: 'p.pdf', bytes: PDF }, { fetch: fetchQueDevuelve(docOk({ needs_ocr: [1] })) });
+    expect(circuitoPoolAbierto()).toBe(false);
+    expect(metricasPool().usos.documento.motivosRespaldo.needs_ocr).toBe(3);
+  });
+
+  it('texto vacío o corto → respaldo', async () => {
+    for (const text of ['', '   ', 'Pág. 1']) {
+      const gemini = vi.fn(async () => 'g');
+      const r = await leerComoElAgente(ENV, { filename: 'a.pdf', bytes: PDF }, gemini, { fetch: fetchQueDevuelve(docOk({ text, needs_ocr: [] })) });
+      expect(r.fuente).toBe('gemini');
+    }
+    const m = metricasPool().usos.documento.motivosRespaldo;
+    expect(m.sin_texto).toBe(2);
+    expect(m.texto_corto).toBe(1);
+  });
+
+  it('422 → respaldo sin contar para el circuito; 5xx y timeout → respaldo y sí cuentan', async () => {
+    const f422 = fetchQueDevuelve(respuesta(422, { detail: 'unsupported_format' }));
+    for (let i = 0; i < 4; i++) {
+      const gemini = vi.fn(async () => 'g');
+      expect((await leerComoElAgente(ENV, { filename: 'a.pdf', bytes: PDF }, gemini, { fetch: f422 })).fuente).toBe('gemini');
+      expect(gemini).toHaveBeenCalledTimes(1);
+    }
+    expect(circuitoPoolAbierto()).toBe(false);
+    expect(metricasPool().usos.documento.motivosRespaldo.http_422).toBe(4);
+
+    const gemini = vi.fn(async () => 'g');
+    const r = await leerComoElAgente(ENV, { filename: 'a.pdf', bytes: PDF, timeoutMs: 20 }, gemini, { fetch: fetchColgado() });
+    expect(r.fuente).toBe('gemini');
+    expect(metricasPool().usos.documento.motivosRespaldo.timeout).toBe(1);
+    await poolLeerDocumento(ENV, { filename: 'a.pdf', bytes: PDF }, { fetch: fetchQueDevuelve(respuesta(502, { detail: 'x' })) });
+    await poolLeerDocumento(ENV, { filename: 'a.pdf', bytes: PDF }, { fetch: fetchQueDevuelve(respuesta(500, 'roto')) });
+    expect(circuitoPoolAbierto()).toBe(true);
+    // Con el circuito abierto ni se intenta.
+    const f = fetchQueDevuelve(docOk());
+    expect(await poolLeerDocumento(ENV, { filename: 'a.pdf', bytes: PDF }, { fetch: f })).toBeNull();
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('sin AI_POOL_KEY (o apagado) → cero llamadas y ninguna métrica', async () => {
+    const f = fetchQueDevuelve(docOk());
+    for (const env of [{}, { AI_POOL_KEY: '' }, { AI_POOL_KEY: 'x', AI_POOL_ENABLED: '0' }]) {
+      const gemini = vi.fn(async () => 'g');
+      expect((await leerComoElAgente(env, { filename: 'a.pdf', mime: 'application/pdf', bytes: PDF }, gemini, { fetch: f })).fuente).toBe('gemini');
+    }
+    expect(f).not.toHaveBeenCalled();
+    expect(metricasPool().usos).toEqual({});
+  });
+
+  it('imágenes (fotos de albaranes, partes, matrículas) NUNCA van al pool', async () => {
+    const f = fetchQueDevuelve(docOk());
+    const casos = [
+      ['albaran.jpg', 'image/jpeg'], ['parte.png', 'image/png'], ['matricula.heic', 'image/heic'],
+      ['foto.jpg', 'application/octet-stream'], ['scan.pdf', 'image/jpeg'], ['raro.webp', 'application/pdf'],
+      ['sin_tipo', ''], ['viejo.xls', 'application/vnd.ms-excel'], ['plano.dxf', 'application/octet-stream']
+    ];
+    for (const [filename, mime] of casos) {
+      expect(tipoDocumentoPool(filename, mime)).toBeNull();
+      expect(await poolLeerDocumento(ENV, { filename, mime, bytes: PDF }, { fetch: f })).toBeNull();
+    }
+    expect(f).not.toHaveBeenCalled();
+    expect(tipoDocumentoPool('a.pdf', 'application/pdf')).toBe('pdf');
+    expect(tipoDocumentoPool('k', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe('xlsx');
+    expect(tipoDocumentoPool('informe.docx', 'application/octet-stream')).toBe('docx');
+    expect(tipoDocumentoPool('datos.csv', 'text/csv; charset=utf-8')).toBe('csv');
+  });
+
+  it('más de 20 MB → directo al respaldo sin llamar (métrica omitido)', async () => {
+    const f = fetchQueDevuelve(docOk());
+    const grande = new Uint8Array(AI_POOL_DOCUMENTO_MAX_BYTES + 1);
+    const gemini = vi.fn(async () => 'g');
+    expect((await leerComoElAgente(ENV, { filename: 'enorme.pdf', mime: 'application/pdf', bytes: grande }, gemini, { fetch: f })).fuente).toBe('gemini');
+    expect(f).not.toHaveBeenCalled();
+    expect(metricasPool().usos.documento).toMatchObject({ omitido: 1, motivosRespaldo: { demasiado_grande: 1 } });
+    // Justo en el límite sí se intenta.
+    const f2 = fetchQueDevuelve(docOk());
+    await poolLeerDocumento(ENV, { filename: 'justo.pdf', bytes: new Uint8Array(AI_POOL_DOCUMENTO_MAX_BYTES) }, { fetch: f2 });
+    expect(f2).toHaveBeenCalledTimes(1);
+  });
+
+  it('la métrica no lleva contenido del documento ni el nombre', async () => {
+    const log = vi.spyOn(console, 'log');
+    await poolLeerDocumento(ENV, { filename: 'nominas_secretas.pdf', bytes: PDF }, { fetch: fetchQueDevuelve(docOk()) });
+    const lineas = log.mock.calls.map(c => String(c[0])).filter(l => l.startsWith('AIPOOL_METRICA'));
+    expect(lineas).toHaveLength(1);
+    expect(lineas[0]).toMatch(/"uso":"documento"/);
+    expect(lineas[0]).not.toMatch(/RZ1-K|5051217424|nominas/);
+  });
+
+  it('nombreDocumentoPool: solo el último segmento, caracteres seguros', () => {
+    expect(nombreDocumentoPool('chat_files/7/1_Albarán nº 3.PDF', 'pdf')).toBe('1_Albar_n_n_3.PDF');
+    expect(nombreDocumentoPool('', 'docx')).toBe('documento.docx');
+    expect(nombreDocumentoPool('..\\..\\x.xlsx', 'xlsx')).toBe('x.xlsx');
+  });
+
+  it('el agente usa el pool antes que Gemini/heurística y no lo usa en las imágenes', () => {
+    const agente = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    // Adjuntos del chat: PDF grande y Excel → pool → Gemini.
+    expect(agente).toMatch(/poolLeerDocumento\(env, \{ filename: key, mime: ct, bytes, maxChars: MAX_CHARS_ADJUNTO_POOL \}\)\)\) \{[\s\S]{0,900}\} else if \(env\.GEMINI_API_KEY\) \{[\s\S]{0,200}analizarArchivoConGemini\(env, base64, 'application\/pdf'/);
+    expect(agente).toMatch(/poolLeerDocumento\(env, \{ filename: key, mime: ct, bytes, maxChars: MAX_CHARS_ADJUNTO_POOL \}\)\)\) \{[\s\S]{0,400}\} else if \(env\.GEMINI_API_KEY && bytes\.length <= 20 \* 1024 \* 1024\)/);
+    // ver_archivo: pool → heurística, mismo formato de salida.
+    expect(agente).toMatch(/if \(docPool\) return `Archivo PDF: \$\{input\.key\} \(\$\{sizeKB\} KB\)\\n\\nTexto extraído:\\n/);
+    // Los PDF pequeños siguen yendo nativos a Claude antes que al pool.
+    expect(agente).toMatch(/bytes\.length <= 4\.5 \* 1024 \* 1024\) \{[\s\S]{0,700}type: 'document'[\s\S]{0,200}poolLeerDocumento/);
+    // Fotos (análisis y escaneo) no llaman al pool.
+    for (const fn of ['async function analizarFotoConGemini', 'async function procesarScanConGemini']) {
+      const i = agente.indexOf(fn);
+      expect(i).toBeGreaterThan(0);
+      expect(agente.slice(i, i + 1500)).not.toMatch(/poolLeerDocumento/);
+    }
   });
 });
