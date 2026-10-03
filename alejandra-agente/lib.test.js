@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  reEspanol,
   alcancePlanoGenerado,
   debeRegistrarTrazaToken,
   normalizarIdPlano,
@@ -2611,7 +2612,7 @@ describe('routing de replanteos (REPL-ROUTING-01)', () => {
     const reglas = [];
     for (const linea of cuerpo.split('\n')) {
       const m = linea.match(/^\s*\{\s*re:\s*\/(.*)\/([a-z]*)\s*,\s*expert:\s*'([a-z]+)'/);
-      if (m) reglas.push({ re: new RegExp(m[1], m[2]), expert: m[3] });
+      if (m) reglas.push({ re: reEspanol(new RegExp(m[1], m[2])), expert: m[3] });
     }
     return reglas;
   }
@@ -2629,6 +2630,29 @@ describe('routing de replanteos (REPL-ROUTING-01)', () => {
     expect(linea).toBeTruthy();
     return linea;
   }
+
+  it('ROUTER-ENCLITICO-01: la regla de enclíticos solo captura imperativos al inicio', () => {
+    for (const f of ['Pásamelo por correo', 'déjalo así', 'Ponlos en la obra 2', 'Dime cuántos hay', 'hazlo ya', '¿Mándamelos hoy?', 'Corrígeles el nombre']) {
+      expect([f, expertoDe(f)]).toEqual([f, 'app']);
+    }
+    // Antes iban todas a 'app' por la regla de enclíticos; ahora decide el clasificador
+    // (o 'simple' para el saludo exacto).
+    for (const f of ['Hola Alejandra, ¿qué tal? Responde en una frase.', 'Busca en internet cuál es la última versión estable de Node.js y dime solo el número.',
+      'La escuela tiene una tabla nueva', 'cuál es la capital de Francia']) {
+      expect([f, expertoDe(f)]).not.toEqual([f, 'app']);
+    }
+    expect(expertoDe('hola')).toBe('simple');
+  });
+
+  it('ROUTER-ENCLITICO-01: las reglas casan palabras que empiezan o acaban con tilde', () => {
+    expect(expertoDe('¿cuál es la última versión de Node?')).toBe('web');
+    expect(expertoDe('qué hay en el almacén')).toBe('app');
+    expect(expertoDe('ha llegado el albarán')).toBe('app');
+    expect(expertoDe('¿quién eres?')).not.toBeNull();
+    // y no inventa coincidencias dentro de palabras
+    expect(reEspanol(/\b(obra)\b/i).test('maniobra')).toBe(false);
+    expect(reEspanol(/\b(obra)\b/i).test('la obra')).toBe(true);
+  });
 
   it('el array se parsea de verdad (si no, el resto de este describe no probaria nada)', () => {
     const reglas = reglasDeRouting();
