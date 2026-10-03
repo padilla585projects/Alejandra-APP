@@ -84,7 +84,7 @@ import { obtenerFuente } from './nexo-fuentes.js';
 import { verificarCotasDeclaradas, resultadoPlanoVerificado, errorPlanoNoGuardado } from './planos-cotas.js';
 // ADR-0028: pool de IA propio con respaldo obligatorio. Mismo módulo que importa worker.js
 // (los dos cerebros). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
-import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool } from './ai-pool.js';
+import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda } from './ai-pool.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -15235,7 +15235,14 @@ function busquedaWebDisponible(env) {
 async function buscarWebOpenAI(env, query) {
   // ADR-0028: primero el pool propio (/v1/tools/search, coste 0). Si los resultados no
   // traen texto, se lee la primera página con /v1/tools/read. Cualquier fallo → gpt-4o-mini.
-  const busquedaPool = await poolBuscar(env, query, { uso: 'buscar_web' });
+  // 03/10/2026: el buscador del pool (DuckDuckGo) necesita palabras clave, no la frase del
+  // usuario: se reescribe a una consulta corta + filtro de fecha `since` (pool prisma:1.0 con
+  // respaldo determinista). Cubre a la vez la tool buscar_web y el prefetch del router
+  // (query_web), que entran los dos por aquí. gpt-4o-mini recibe la petición ORIGINAL: es un
+  // modelo con búsqueda que entiende la pregunta entera y usa sus matices («dime solo el
+  // número»), y así el respaldo se comporta exactamente como antes del pool.
+  const consulta = poolConfigurado(env) ? await prepararConsultaBusqueda(env, String(query || '')) : null;
+  const busquedaPool = consulta ? await poolBuscar(env, consulta.query, { uso: 'buscar_web', since: consulta.since }) : null;
   if (busquedaPool) {
     let lectura = null;
     if (!busquedaPool.answer && !busquedaPool.resultados.some(r => r.content) && busquedaPool.resultados[0]) {

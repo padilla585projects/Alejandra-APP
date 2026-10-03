@@ -235,6 +235,22 @@ function _metrica(uso, r, modelo) {
   registrarMetricaPool({ uso, resultado: r.ok ? 'ok' : (r.omitido ? 'omitido' : 'respaldo'), motivo: r.ok ? '' : r.motivo, ms: r.ms, modelo });
 }
 
+// El campo `model` de la respuesta es el NOMBRE del modelo («prisma:1.0») desde el 03/10/2026;
+// antes el gateway podía devolver una ruta de fichero. Se acepta cualquiera de las dos formas:
+// de una ruta («/models/prisma-1.0.gguf», «C:\\m\\x.gguf») se queda el último segmento sin la
+// extensión .gguf; un nombre normal (con «:» o «/» de organización, p. ej. «org/modelo») se
+// deja tal cual salvo que empiece por «/» o lleve «\\». Vacío o no-texto → '' (usa el pedido).
+export function normalizarNombreModeloPool(valor) {
+  if (typeof valor !== 'string') return '';
+  let m = valor.trim();
+  if (!m) return '';
+  if (m.startsWith('/') || m.includes('\\') || /\.gguf$/i.test(m)) {
+    const partes = m.split(/[\\/]+/).filter(Boolean);
+    m = (partes.length ? partes[partes.length - 1] : '').replace(/\.gguf$/i, '');
+  }
+  return m.slice(0, 80);
+}
+
 // qwen3 puede devolver su razonamiento entre <think>…</think> dentro de content.
 export function quitarRazonamiento(texto) {
   if (typeof texto !== 'string') return '';
@@ -280,7 +296,7 @@ async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs
     return { ok: false, motivo: 'respuesta_vacia', ms: r.ms };
   }
   _registrarExito();
-  const modeloReal = typeof data.model === 'string' && data.model ? data.model : modelo;
+  const modeloReal = normalizarNombreModeloPool(data.model) || modelo;
   return {
     ok: true,
     ms: r.ms,
@@ -388,8 +404,10 @@ export async function poolRouterNexus(env, prompt, expertosValidos, { timeoutMs 
 
 // ── Herramientas del pool (contrato confirmado por la sesión del pool, 03/10/2026) ────
 // Cuerpos ESTRICTOS (un campo desconocido → 422):
-// POST /v1/tools/search {"query": 2–300 car., "results": 1–10, "read": 0–5, "question"}
+// POST /v1/tools/search {"query": 2–300 car., "results": 1–10, "read": 0–5, "question",
+//   "since": "day"|"week"|"month"|"year" (opcional, filtro de fecha de DuckDuckGo, 03/10/2026)}
 //   → 200 {"query","results":[{"title","url","snippet",…}],"devices","took_s"}
+//   El cliente solo manda {query, results} y, si hay filtro válido, `since`.
 //   results [] = sin resultados (200, no error) → aquí se trata como respaldo.
 //   502 {"detail"} tras 3 intentos. read>0 tarda de decenas de s a 1–2 min: NO se usa.
 // POST /v1/tools/read {"url": http(s) 8–2000, "question", "summarize": bool}
@@ -428,11 +446,14 @@ export function normalizarResultadosBusqueda(data, maxResultados = 5) {
   return { answer, resultados };
 }
 
-export async function poolBuscar(env, query, { maxResultados = 5, timeoutMs = AI_POOL_TIMEOUTS.search, uso = 'search' } = {}, opts = {}) {
+export async function poolBuscar(env, query, { maxResultados = 5, timeoutMs = AI_POOL_TIMEOUTS.search, uso = 'search', since = null } = {}, opts = {}) {
   const q = typeof query === 'string' ? query.trim().slice(0, 300).trim() : '';
   if (q.length < 2 || !poolConfigurado(env)) return null;
   const n = Math.min(10, Math.max(1, Math.trunc(maxResultados) || 5));
-  const r = await _postPool(env, '/v1/tools/search', { query: q, results: n }, timeoutMs, opts);
+  // Cuerpo estricto: `since` solo si es uno de los valores del contrato (si no, ni se manda).
+  const cuerpo = { query: q, results: n };
+  if (AI_POOL_SINCE_VALIDOS.includes(since)) cuerpo.since = since;
+  const r = await _postPool(env, '/v1/tools/search', cuerpo, timeoutMs, opts);
   if (!r.ok) { _metrica(uso, r); return null; }
   if (r.data && r.data.error) {
     _registrarFallo();
@@ -448,6 +469,176 @@ export async function poolBuscar(env, query, { maxResultados = 5, timeoutMs = AI
   _registrarExito();
   _metrica(uso, r, 'tools/search');
   return { ...norm, ms: r.ms };
+}
+
+// ── Consulta corta para /v1/tools/search (03/10/2026) ────────────────────────────────
+// QA real: «Busca en internet cuál es la última versión estable de Node.js y dime solo el
+// número.» se mandaba ENTERA como query (el router pone query_web = el mensaje recortado y el
+// modelo a veces pasa la frase tal cual) y DuckDuckGo devolvía una versión obsoleta. Con
+// «Node.js latest LTS version» el primer resultado es el correcto. Antes de buscar en el pool
+// se convierte la petición en palabras clave (prisma:1.0 en modo JSON, timeout corto) y se
+// decide el filtro de fecha `since`; si la reescritura falla, respaldo determinista sin IA.
+// Solo afecta a la búsqueda del POOL: los respaldos (gpt-4o-mini, Tavily) reciben la petición
+// original (ver los llamadores).
+export const AI_POOL_SINCE_VALIDOS = ['day', 'week', 'month', 'year'];
+export const AI_POOL_TIMEOUT_CONSULTA = 4000;
+const _CONSULTA_MAX_PALABRAS = 10;      // respaldo determinista
+const _CONSULTA_CORTA_PALABRAS = 6;     // ≤6 palabras y sin muletillas → no se reescribe
+const _CONSULTA_IA_MAX_PALABRAS = 12;   // validación de la salida del modelo
+const _CONSULTA_IA_MAX_CHARS = 120;
+
+function _plegar(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+// Frases de petición que no aportan nada a un buscador (comparadas sin tildes ni mayúsculas).
+// Se quitan primero las más largas.
+const _MULETILLAS = [
+  'busca en internet', 'buscar en internet', 'buscame en internet', 'busca en la web',
+  'busca en google', 'busca por internet', 'mira en internet', 'consulta en internet',
+  'dime solo el numero', 'dime solo la version', 'dime solo', 'solo el numero',
+  'me puedes decir', 'puedes decirme', 'podrias decirme', 'me podrias decir', 'me dices',
+  'quiero saber', 'necesito saber', 'me gustaria saber', 'por favor',
+  'en internet', 'en la web', 'en google',
+  'cual es', 'cuales son', 'que es', 'cual', 'cuales',
+  'buscame', 'busca', 'buscar', 'busques', 'investiga', 'averigua', 'dime', 'dimelo',
+  'puedes', 'podrias', 'sabes', 'porfa', 'gracias', 'oye', 'hola', 'alejandra'
+].map(f => f.split(' ')).sort((a, b) => b.length - a.length);
+
+const _VACIAS = new Set(['el', 'la', 'los', 'las', 'lo', 'un', 'una', 'unos', 'unas', 'de', 'del',
+  'al', 'a', 'y', 'o', 'e', 'u', 'en', 'con', 'por', 'para', 'me', 'te', 'se', 'mi', 'tu', 'su',
+  'que', 'es', 'son', 'solo', 'ahora', 'dice', 'dicen', 'sobre', 'como', 'the', 'of', 'and', 'please', 'tell', 'me', 'search', 'for']);
+
+function _tokensConsulta(texto) {
+  return String(texto || '')
+    .replace(/[¿?¡!"«»“”‘’()[\]{}:;,]/g, ' ')
+    .split(/\s+/)
+    .map(w => w.replace(/^[.'`´\-]+|[.'`´]+$/g, ''))
+    .filter(Boolean);
+}
+
+// Quita las muletillas de una lista de tokens. Devuelve { tokens, quitadas }.
+function _quitarMuletillas(tokens) {
+  const plegados = tokens.map(_plegar);
+  const fuera = new Array(tokens.length).fill(false);
+  let quitadas = 0;
+  for (const frase of _MULETILLAS) {
+    for (let i = 0; i + frase.length <= tokens.length; i++) {
+      if (fuera[i]) continue;
+      let coincide = true;
+      for (let j = 0; j < frase.length; j++) {
+        if (fuera[i + j] || plegados[i + j] !== frase[j]) { coincide = false; break; }
+      }
+      if (coincide) {
+        for (let j = 0; j < frase.length; j++) fuera[i + j] = true;
+        quitadas++;
+      }
+    }
+  }
+  return { tokens: tokens.filter((_, i) => !fuera[i]), quitadas };
+}
+
+// Heurística de `since` por palabras clave (sin IA). null si la petición no es temporal.
+export function sinceHeuristico(texto, { ahora = new Date() } = {}) {
+  const t = ' ' + _plegar(texto).replace(/[^a-z0-9ñ.\s-]/g, ' ').replace(/\s+/g, ' ') + ' ';
+  const hay = (lista) => lista.some(p => t.includes(' ' + p + ' '));
+  if (hay(['noticias', 'noticia', 'hoy', 'ayer', 'esta semana', 'ultima hora', 'news', 'today', 'yesterday', 'this week'])) return 'month';
+  if (hay(['ultima version', 'ultimas versiones', 'ultimo', 'ultima', 'ultimos', 'ultimas', 'actual',
+    'actuales', 'actualmente', 'vigente', 'vigentes', 'precio', 'precios', 'cuesta', 'cuestan',
+    'reciente', 'recientes', 'latest', 'current', 'newest', 'price', 'prices'])) return 'year';
+  const anio = (ahora instanceof Date && !isNaN(ahora)) ? ahora.getFullYear() : new Date().getFullYear();
+  const anios = (t.match(/\b(19|20)\d{2}\b/g) || []).map(Number);
+  if (anios.some(a => a >= anio)) return 'year';
+  return null;
+}
+
+// ¿Merece la pena reescribirla? Más de 6 palabras o con muletillas de petición.
+export function consultaNecesitaReescritura(texto) {
+  const tokens = _tokensConsulta(texto);
+  if (!tokens.length) return false;
+  if (tokens.length > _CONSULTA_CORTA_PALABRAS) return true;
+  return _quitarMuletillas(tokens).quitadas > 0;
+}
+
+// Respaldo determinista sin IA: sin muletillas ni signos, sin palabras vacías, ≤10 palabras.
+// Conserva el idioma original (no traduce). Si no queda nada útil, devuelve el texto tal cual.
+export function consultaBusquedaHeuristica(texto, { ahora = new Date() } = {}) {
+  const original = String(texto || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  const { tokens } = _quitarMuletillas(_tokensConsulta(original));
+  const utiles = tokens.filter(w => !_VACIAS.has(_plegar(w)));
+  let query = utiles.slice(0, _CONSULTA_MAX_PALABRAS).join(' ').trim();
+  if (query.length < 2) query = original;
+  return { query, since: sinceHeuristico(original, { ahora }) };
+}
+
+// Validación ESTRICTA de la salida del modelo: un objeto JSON con `query` (texto de 2–120
+// caracteres, ≤12 palabras, una línea) y `since` opcional (null o uno de los valores del
+// contrato). Cualquier otra clave, tipo o valor → null (respaldo determinista).
+export function validarConsultaReescrita(texto) {
+  const crudo = quitarRazonamiento(texto);
+  if (!/^\s*\{[\s\S]*\}\s*$/.test(crudo)) return null;
+  let obj;
+  try { obj = JSON.parse(crudo); } catch (_) { return null; }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const claves = Object.keys(obj);
+  if (!claves.includes('query') || claves.some(c => c !== 'query' && c !== 'since')) return null;
+  if (typeof obj.query !== 'string' || /[\r\n]/.test(obj.query)) return null;
+  const query = obj.query.replace(/\s+/g, ' ').replace(/[¿?¡!]+/g, '').trim();
+  if (query.length < 2 || query.length > _CONSULTA_IA_MAX_CHARS) return null;
+  if (query.split(' ').length > _CONSULTA_IA_MAX_PALABRAS) return null;
+  const s = obj.since;
+  let since = null;
+  if (s === null || s === undefined) since = null;
+  else if (typeof s === 'string' && AI_POOL_SINCE_VALIDOS.includes(s)) since = s;
+  else return null;
+  return { query, since };
+}
+
+export function systemConsultaBusqueda(ahora = new Date()) {
+  const hoy = (ahora instanceof Date && !isNaN(ahora) ? ahora : new Date()).toISOString().slice(0, 10);
+  return [
+    'Conviertes la petición de un usuario en UNA consulta corta para un buscador web (DuckDuckGo).',
+    'Reglas:',
+    '- Entre 2 y 8 palabras clave. Sin muletillas («busca en internet», «dime», «por favor»), sin signos de pregunta.',
+    '- En INGLÉS si el tema es técnico: software, versiones, programación, hardware, normas internacionales (IEC, ISO, IEEE).',
+    '- En ESPAÑOL si el tema es local de España: empresas, normativa española (REBT, ITC-BT, BOE, CTE), precios en España, organismos, lugares.',
+    '- Conserva tal cual nombres propios, códigos, referencias y números.',
+    '- "since": "year" si pide lo último, lo actual, lo vigente, un precio o una versión; "month" si pide noticias, algo de hoy o de esta semana; null si no es temporal.',
+    `Fecha de hoy: ${hoy}.`,
+    'Ejemplo: «Busca en internet cuál es la última versión estable de Node.js y dime solo el número.» → {"query":"Node.js latest LTS version","since":"year"}',
+    'Ejemplo: «¿Qué dice la ITC-BT-19 sobre la caída de tensión?» → {"query":"ITC-BT-19 caída de tensión","since":null}',
+    'Devuelve SOLO un objeto JSON con la forma {"query":"...","since":null}, sin ninguna otra clave.'
+  ].join('\n');
+}
+
+// Prepara la consulta para /v1/tools/search. Nunca lanza. Devuelve
+// { query, since, fuente: 'original' | 'ai_pool' | 'heuristica' }.
+// - Consulta ya corta (≤6 palabras, sin muletillas) → se usa tal cual, sin llamar al pool
+//   (el `since` sale de la heurística: «precio cobre hoy» sigue llevando filtro).
+// - Pool no disponible, timeout, error o salida inválida → heurística determinista.
+// Métrica: uso 'buscar_web_consulta' (ok / respaldo + motivo / omitido, ms). Nunca contenido.
+export async function prepararConsultaBusqueda(env, texto, { timeoutMs = AI_POOL_TIMEOUT_CONSULTA, uso = 'buscar_web_consulta', ahora = new Date() } = {}, opts = {}) {
+  const original = typeof texto === 'string' ? texto.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
+  if (!original) return { query: '', since: null, fuente: 'original' };
+  if (!consultaNecesitaReescritura(original)) {
+    if (poolConfigurado(env)) registrarMetricaPool({ uso, resultado: 'omitido', motivo: 'consulta_corta', modelo: AI_POOL_MODELO_ROUTER });
+    return { query: original, since: sinceHeuristico(original, { ahora }), fuente: 'original' };
+  }
+  const heuristica = { ...consultaBusquedaHeuristica(original, { ahora }), fuente: 'heuristica' };
+  if (!poolConfigurado(env)) return heuristica;
+  const r = await _poolChatCrudo(env, {
+    messages: [{ role: 'system', content: systemConsultaBusqueda(ahora) }, { role: 'user', content: original }],
+    maxTokens: 60, timeoutMs, temperature: 0, modelo: AI_POOL_MODELO_ROUTER, json: true
+  }, opts);
+  if (!r.ok) { _metrica(uso, r, AI_POOL_MODELO_ROUTER); return heuristica; }
+  const valida = validarConsultaReescrita(r.texto);
+  if (!valida) {
+    // El pool respondió (no se abre el circuito): solo la salida no sirve.
+    _metrica(uso, { ok: false, motivo: 'formato_invalido', ms: r.ms }, r.modelo);
+    return heuristica;
+  }
+  _metrica(uso, r, r.modelo);
+  return { ...valida, fuente: 'ai_pool' };
 }
 
 export async function poolLeer(env, url, { maxChars = 4000, timeoutMs = AI_POOL_TIMEOUTS.read, uso = 'read' } = {}, opts = {}) {

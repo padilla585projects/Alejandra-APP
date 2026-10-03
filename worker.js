@@ -19,7 +19,7 @@ import { SaxesParser } from 'saxes';
 import { normalizarIdPlano, debeRegistrarTrazaToken } from './alejandra-agente/lib.js';
 // ADR-0028: pool de IA propio con respaldo obligatorio. MISMO módulo que usa
 // alejandra-agente (regla «dos cerebros»). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
-import { poolRouterNexus, poolBuscar, poolConfigurado } from './alejandra-agente/ai-pool.js';
+import { poolRouterNexus, poolBuscar, poolConfigurado, prepararConsultaBusqueda } from './alejandra-agente/ai-pool.js';
 // IA-QUALITY-09: validador determinista del archivo SVG y avisos incrustados en el archivo.
 import { finalizarPlanoVerificado, normalizarCotasEntrada, normalizarPlanoEditadoManual, validarPlanoSvg } from './planos-validacion.mjs';
 
@@ -1697,9 +1697,14 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
       if (!query || !String(query).trim()) return JSON.stringify({ ok: false, error: 'Falta el parametro query (texto de busqueda)' });
       // ADR-0028: primero el pool propio (/v1/tools/search, coste 0); Tavily de respaldo.
       // Misma forma de resultado que Tavily para que el modelo no note la diferencia.
-      const busquedaPool = await poolBuscar(env, String(query), { maxResultados: 5, uso: 'web_search_dev' });
+      // 03/10/2026: el pool busca en DuckDuckGo, que necesita palabras clave: se reescribe la
+      // petición a una consulta corta + `since` (mismo cliente que el agente). Tavily recibe
+      // la query ORIGINAL: es una API pensada para consultas en lenguaje natural de agentes
+      // (include_answer) y así el respaldo queda exactamente como antes del pool.
+      const consultaPool = poolConfigurado(env) ? await prepararConsultaBusqueda(env, String(query)) : null;
+      const busquedaPool = consultaPool ? await poolBuscar(env, consultaPool.query, { maxResultados: 5, uso: 'web_search_dev', since: consultaPool.since }) : null;
       if (busquedaPool) {
-        return JSON.stringify({ ok: true, query, answer: busquedaPool.answer || null, results: busquedaPool.resultados, fuente: 'ai_pool' });
+        return JSON.stringify({ ok: true, query, query_buscador: consultaPool.query, answer: busquedaPool.answer || null, results: busquedaPool.resultados, fuente: 'ai_pool' });
       }
       if (!env.TAVILY_API_KEY) return JSON.stringify({ ok: false, error: poolConfigurado(env) ? 'web_search no disponible: el pool no respondio y falta TAVILY_API_KEY' : 'web_search no disponible: falta TAVILY_API_KEY en el entorno' });
       try {
