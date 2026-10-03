@@ -72,7 +72,8 @@ export const AI_POOL_TIMEOUTS = {
   cron: 120000,    // crons: nadie espera en pantalla, se absorbe la carga en frío
   fallback: 25000, // cadena de respaldo cuando cae Anthropic (prompt grande)
   search: 10000,   // /v1/tools/search con read=0 (read>0 tarda decenas de s: nunca en vivo)
-  read: 15000      // /v1/tools/read de una sola página
+  read: 15000,     // /v1/tools/read de una sola página
+  documento: 15000 // /v1/tools/document (0,2–0,5 s en CPU; margen para PDF grandes)
 };
 
 // Circuito abierto simple, por isolate: tras N fallos SEGUIDOS se deja de llamar al pool
@@ -254,6 +255,8 @@ function _codigoError(data) {
 // POST JSON al pool con timeout (AbortController), sin lanzar nunca.
 // Devuelve { ok:true, data, ms, modeloCabecera } o
 // { ok:false, motivo, ms?, status?, codigo?, omitido?, modeloCabecera? }.
+// `opts.estadosSinFallo`: estados HTTP que NO cuentan para el circuito (p. ej. 422 de
+// /v1/tools/document = el pool funciona, el que no vale es el fichero).
 async function _postPool(env, ruta, body, timeoutMs, opts = {}) {
   if (!poolConfigurado(env)) return { ok: false, motivo: 'no_configurado', omitido: true };
   if (circuitoPoolAbierto()) return { ok: false, motivo: 'circuito_abierto', omitido: true };
@@ -276,7 +279,8 @@ async function _postPool(env, ruta, body, timeoutMs, opts = {}) {
     const modeloCabecera = _modeloDeCabecera(resp);
     if (!resp.ok) {
       const codigo = _codigoError(data);
-      _registrarFallo();
+      const sinFallo = Array.isArray(opts.estadosSinFallo) && opts.estadosSinFallo.includes(resp.status);
+      if (!sinFallo) _registrarFallo();
       return { ok: false, motivo: AI_POOL_ERRORES_RAPIDOS.has(codigo) ? codigo : 'http_' + resp.status, status: resp.status, codigo, ms, modeloCabecera };
     }
     if (!data || typeof data !== 'object') {
@@ -737,6 +741,128 @@ export async function poolLeer(env, url, { maxChars = 4000, timeoutMs = AI_POOL_
   _registrarExito();
   _metrica(uso, r, 'tools/read');
   return { url: u, titulo: _primerTexto(d, ['title', 'name']).slice(0, 200), texto: texto.slice(0, maxChars), ms: r.ms };
+}
+
+// ── Lectura de documentos: POST /v1/tools/document (POOL-DOCUMENTOS-01, 03/10/2026) ─────
+// Contrato de la sesión del pool (cuerpo ESTRICTO, campo desconocido → 422):
+//   {"filename":"albaran.pdf","data":"<base64>"} (≤20 MB) o {"object_id":"obj_…"};
+//   "max_chars" opcional (1000–200000). Formatos: PDF con texto, .xlsx (valores), .docx, CSV
+//   y texto. Respuesta {"type","pages","text" (Markdown con tablas),"tables":[{"page","rows"}],
+//   "sheets":[{"name","rows"}],"needs_ocr":[páginas escaneadas sin texto],"truncated","chars",
+//   "took_s"}; 0,2–0,5 s en CPU; 422 con motivo ante error.
+// El pool NO hace OCR. Regla (ADR-0028 §Documentos):
+//   - Imágenes (fotos de albaranes, partes, matrículas…) NUNCA pasan por aquí: siguen con
+//     Gemini/Cloud Vision como siempre (tipoDocumentoPool devuelve null, cero llamadas).
+//   - Si la respuesta trae `needs_ocr` no vacío (alguna o todas las páginas escaneadas) o el
+//     texto sale vacío/corto, se devuelve null y el llamador manda EL DOCUMENTO ENTERO por el
+//     camino de siempre (Gemini…). No se trocea por páginas: los Workers no tienen librería
+//     para partir un PDF y un documento mezclado leído por dos vías daría un texto con huecos
+//     o duplicado; lo sencillo y correcto es todo o nada.
+//   - >20 MB → directo al respaldo, sin llamar.
+// Métrica AIPOOL_METRICA uso 'documento' (ok / respaldo + motivo / omitido), sin contenido.
+// El cliente solo usa la variante `data` (base64): `object_id` exigiría subir antes el fichero
+// al almacén del pool, que hoy no se usa.
+export const AI_POOL_DOCUMENTO_MAX_BYTES = 20 * 1024 * 1024;
+export const AI_POOL_DOCUMENTO_MIN_CHARS = 20;          // menos texto útil que esto = «corto»
+export const AI_POOL_DOCUMENTO_MAX_CHARS = [1000, 200000];
+const _EXT_IMAGEN = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif', 'bmp', 'tif', 'tiff', 'svg']);
+const _MIME_DOCUMENTO = {
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'text/csv': 'csv',
+  'text/plain': 'txt'
+};
+const _EXT_DOCUMENTO = { pdf: 'pdf', xlsx: 'xlsx', docx: 'docx', csv: 'csv', txt: 'txt' };
+
+// ¿Puede leerlo el pool? Devuelve 'pdf'|'xlsx'|'docx'|'csv'|'txt' o null. Cualquier imagen
+// (por MIME o por extensión), vídeo o audio → null. .xls (binario antiguo) → null.
+export function tipoDocumentoPool(filename, mime) {
+  const m = String(mime || '').toLowerCase().split(';')[0].trim();
+  if (/^(image|video|audio)\//.test(m)) return null;
+  const nombre = String(filename || '').toLowerCase();
+  const ext = (nombre.match(/\.([a-z0-9]{1,5})$/) || [])[1] || '';
+  if (_EXT_IMAGEN.has(ext)) return null;
+  if (_MIME_DOCUMENTO[m]) return _MIME_DOCUMENTO[m];
+  return _EXT_DOCUMENTO[ext] || null;
+}
+
+// Nombre que se manda al pool: solo el último segmento de la ruta (nunca la ruta R2 con el
+// id de usuario/empresa), caracteres seguros y con la extensión del tipo para que el pool
+// detecte el formato aunque la key no la lleve.
+export function nombreDocumentoPool(filename, tipo) {
+  const base = String(filename || '').split(/[\\/]+/).filter(Boolean).pop() || 'documento';
+  let n = base.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+/, '').slice(-120) || 'documento';
+  if (tipo && !n.toLowerCase().endsWith('.' + tipo)) n = n.slice(0, 115) + '.' + tipo;
+  return n;
+}
+
+function _bytesABase64(u8) {
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+function _bytesDeBase64(b64) {
+  const limpio = b64.replace(/\s+/g, '');
+  const relleno = limpio.endsWith('==') ? 2 : limpio.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor(limpio.length * 3 / 4) - relleno);
+}
+
+// Lee un documento con el pool. `bytes` (Uint8Array/ArrayBuffer) o `base64`. Devuelve
+// { tipo, paginas, texto, tablas, hojas, truncado, caracteres, ms } o null (= respaldo).
+// Nunca lanza.
+export async function poolLeerDocumento(env, { filename = '', mime = '', bytes = null, base64 = null, maxChars = 50000, timeoutMs = AI_POOL_TIMEOUTS.documento, uso = 'documento' } = {}, opts = {}) {
+  try {
+    const tipo = tipoDocumentoPool(filename, mime);
+    if (!tipo || !poolConfigurado(env)) return null;
+    let u8 = null;
+    if (bytes instanceof Uint8Array) u8 = bytes;
+    else if (bytes instanceof ArrayBuffer) u8 = new Uint8Array(bytes);
+    const b64 = !u8 && typeof base64 === 'string' ? base64 : null;
+    const tamano = u8 ? u8.length : b64 ? _bytesDeBase64(b64) : 0;
+    if (!tamano) return null;
+    if (tamano > AI_POOL_DOCUMENTO_MAX_BYTES) {
+      registrarMetricaPool({ uso, resultado: 'omitido', motivo: 'demasiado_grande', modelo: 'tools/document' });
+      return null;
+    }
+    const [minC, maxC] = AI_POOL_DOCUMENTO_MAX_CHARS;
+    const max = Math.min(maxC, Math.max(minC, Math.trunc(Number(maxChars)) || 50000));
+    const cuerpo = { filename: nombreDocumentoPool(filename, tipo), data: u8 ? _bytesABase64(u8) : b64.replace(/\s+/g, ''), max_chars: max };
+    const r = await _postPool(env, '/v1/tools/document', cuerpo, timeoutMs, { ...opts, estadosSinFallo: [422] });
+    if (!r.ok) { _metrica(uso, r, 'tools/document'); return null; }
+    const d = r.data || {};
+    if (d.error) {
+      _registrarFallo();
+      _metrica(uso, { ok: false, motivo: _codigoError(d) || 'error_en_cuerpo', ms: r.ms }, 'tools/document');
+      return null;
+    }
+    // A partir de aquí el pool HA respondido bien: un escaneo o un documento vacío no es un
+    // fallo del pool (no abre el circuito), solo un documento que necesita otra vía.
+    _registrarExito();
+    const texto = typeof d.text === 'string' ? d.text.trim() : '';
+    if (Array.isArray(d.needs_ocr) && d.needs_ocr.length) {
+      _metrica(uso, { ok: false, motivo: 'needs_ocr', ms: r.ms }, 'tools/document');
+      return null;
+    }
+    if (texto.replace(/\s+/g, '').length < AI_POOL_DOCUMENTO_MIN_CHARS) {
+      _metrica(uso, { ok: false, motivo: texto ? 'texto_corto' : 'sin_texto', ms: r.ms }, 'tools/document');
+      return null;
+    }
+    _metrica(uso, r, 'tools/document');
+    return {
+      tipo: typeof d.type === 'string' && d.type ? d.type : tipo,
+      paginas: Number.isFinite(d.pages) ? d.pages : null,
+      texto: texto.slice(0, max),
+      tablas: Array.isArray(d.tables) ? d.tables : [],
+      hojas: Array.isArray(d.sheets) ? d.sheets : [],
+      truncado: d.truncated === true || texto.length > max,
+      caracteres: Number.isFinite(d.chars) ? d.chars : texto.length,
+      ms: r.ms
+    };
+  } catch (_) {
+    return null;
+  }
 }
 
 // Texto compacto para inyectar como contexto (mismo papel que el resumen de gpt-4o-mini).
