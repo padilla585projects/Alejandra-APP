@@ -28864,7 +28864,7 @@ DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.
 
 REQUISITOS TECNICOS:
 - viewBox="0 0 1200 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
-- Fondo: fill="#fafafa", cuadricula tenue de fondo (lines cada 20px, stroke="#e8e8e8" stroke-width="0.4")
+- Fondo: fill="#fafafa", cuadricula tenue de fondo cada 20px (stroke="#e8e8e8" stroke-width="0.4") con un unico <pattern id="patron-cuadricula" width="20" height="20" patternUnits="userSpaceOnUse"> aplicado mediante <rect fill="url(#patron-cuadricula)"/>
 - Cables de potencia: SOLO lineas ortogonales (horizontal/vertical). stroke-width="2.5", color segun fase
 - Cables de control/maniobra: stroke-width="1.2" stroke="#333333", lineas ortogonales
 - Nodos de conexion (empalmes): circle r="4" fill=color-fase (SOLO donde hay derivacion real)
@@ -28874,7 +28874,7 @@ REQUISITOS TECNICOS:
 - REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta, comprueba mentalmente que su caja de texto (segun longitud del texto y font-size) no se solapa con ningun simbolo, linea u otra etiqueta cercana. Deja siempre un margen minimo de 4-6px libre alrededor de cada texto. Si dos etiquetas quedarian demasiado juntas o superpuestas, separalas (desplaza una, o usa una linea guia corta hacia el elemento). Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos entre si o sobre simbolos/lineas.
 
 SIMBOLOS IEC 60617 — USO OBLIGATORIO:
-NO definas <defs> ni <symbol> propios. El renderizador inyecta la libreria IEC 60617 automaticamente.
+NO definas <defs> ni <symbol> propios. El renderizador inyecta la libreria IEC 60617 automaticamente. Unica excepcion: un <defs> propio que contenga solo <pattern> (ids "patron-...") para repeticiones regulares como la cuadricula.
 DEBES usar <use href="#sym-X"/> para TODOS los componentes. NO dibujes shapes ad-hoc.
 Sintaxis OBLIGATORIA (los 5 atributos son necesarios en TODOS los <use>, sin excepcion): <use href="#sym-X" x="X" y="Y" width="W" height="H" color="COLOR"/>
 El atributo color="" es OBLIGATORIO y define el color del simbolo (hereda via currentColor). NUNCA generes un <use> sin color="" -- un simbolo sin color se renderiza en negro/gris y se considera un error de generacion.
@@ -28952,7 +28952,7 @@ DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.
 REQUISITOS TECNICOS:
 - viewBox="0 0 1400 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
 - Fondo blanco fill="#ffffff"
-- Cuadricula tenue de referencia (lineas cada 50px, stroke="#eeeeee" stroke-width="0.3")
+- Cuadricula tenue de referencia cada 50px (stroke="#eeeeee" stroke-width="0.3") con un unico <pattern id="patron-cuadricula" width="50" height="50" patternUnits="userSpaceOnUse"> aplicado mediante <rect fill="url(#patron-cuadricula)"/>; no la generes linea a linea ni con codigo
 - Nave: contorno exterior stroke="#1a1a1a" stroke-width="5" fill="none", muros perimetrales fill="#d8d8d0" ancho 8px
 - Ejes estructurales: lineas discontinuas largas stroke="#999999" stroke-width="0.7" stroke-dasharray="20,6,3,6"
 - Referencias de ejes alfanumericas: columnas A,B,C... filas 1,2,3... font-size="11" fill="#555555"
@@ -28962,7 +28962,7 @@ REQUISITOS TECNICOS:
 CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical):
 - Bandeja principal (BAN 200x100 o mayor):
     Dibujar como DOS lineas paralelas separadas 16px, stroke="#0a0a5a" stroke-width="2.5"
-    Refuerzos transversales cada 80px: line stroke="#0a0a5a" stroke-width="0.8" opacity="0.5"
+    Refuerzos transversales cada 80px: cada uno como <line> explicita stroke="#0a0a5a" stroke-width="0.8" opacity="0.5" (o un <pattern> "patron-refuerzo" aplicado a un <rect> del ancho de la bandeja); nunca con un bucle de codigo
     Etiqueta centrada sobre el tramo: font-size="9" fill="#0a0a5a" (ej. "BAN 200x100")
     Altura de montaje junto al tramo: font-size="8" fill="#0a0a5a" (ej. "h=+4,50 m")
 - Bandeja secundaria (BAN 100x60):
@@ -28973,7 +28973,7 @@ CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical)
     Etiqueta: font-size="7" fill="#0047b3"
 - Tubo / conduit libre: linea discontinua unica stroke="#666666" stroke-width="1.5" stroke-dasharray="6,3"
 
-SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente la libreria de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente la libreria de simbolos. Unica excepcion: un <defs> propio que contenga solo <pattern> (ids "patron-...") para repeticiones regulares como la cuadricula. Para simbolos solo usa <use href="#sym-X"/> con estos IDs:
   #sym-cgp              width="40" height="50" → Caja General de Proteccion
   #sym-cs               width="30" height="40" → Cuadro Secundario de distribucion
   #sym-scss             width="22" height="30" → Sub-cuadro / cuadro local de maquina
@@ -29043,7 +29043,7 @@ REQUISITOS TECNICOS:
 - REGLA DE DISPOSICION (OBLIGATORIO): cada tramo lleva varias etiquetas (proteccion, cable, instalacion, longitud, potencia, caida de tension) — apilalas en columna con separacion vertical suficiente (linea de texto propia, sin solapar entre ellas ni con el rectangulo del cuadro, el simbolo de proteccion o la linea del tramo siguiente). Deja siempre 4-6px libres alrededor de cada texto. Nunca coloques dos etiquetas en las mismas coordenadas ni parcialmente superpuestas.
 - Cada cuadro se dibuja como un rectangulo (usa los simbolos indicados abajo) con su nombre/referencia debajo (ej. "CS-1 Planta Baja", "SCSS Taller")
 
-SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Unica excepcion: un <defs> propio que contenga solo <pattern> (ids "patron-...") para repeticiones regulares como la cuadricula. Para simbolos solo usa <use href="#sym-X"/> con estos IDs:
 Sintaxis OBLIGATORIA (los 5 atributos son necesarios en TODOS los <use>, sin excepcion): <use href="#sym-X" x="X" y="Y" width="W" height="H" color="COLOR"/>
 {{SIMBOLOS}}
 El atributo color="" es OBLIGATORIO en TODOS los <use> sin excepcion -- NUNCA lo omitas. Un simbolo sin color se renderiza en negro/gris y se considera un error de generacion.
@@ -29079,7 +29079,7 @@ REQUISITOS TECNICOS:
 - REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en referencias de circuito, cotas o numeros de circuito junto a simbolos. Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para: la etiqueta de estancia (font-size="11", ver arriba), el titulo "LEYENDA" y el bloque de titulo/cajetin (texto sobre fondo de color solido). El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
 - REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta (estancia, circuito, cota, numero junto a simbolo), comprueba que su caja de texto no se solape con paredes, simbolos, canalizaciones u otras etiquetas cercanas. Deja siempre 4-6px libres alrededor de cada texto; si dos etiquetas quedarian demasiado juntas, separalas. Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos.
 
-SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Unica excepcion: un <defs> propio que contenga solo <pattern> (ids "patron-...") para repeticiones regulares como la cuadricula. Para simbolos solo usa <use href="#sym-X"/> con estos IDs:
 {{SIMBOLOS}}
 
 CONEXIONADO INTERRUPTOR -> LUZ (OBLIGATORIO): cada interruptor debe unirse mediante una linea curva o discontinua fina (stroke="#666666" stroke-width="0.8" stroke-dasharray="3,2", fill="none", path curvo tipo arco) al/los punto(s) de luz que gobierna, para que se vea claramente la relacion mando-carga sin confundirse con la canalizacion de potencia.
@@ -29108,14 +29108,14 @@ DOS CONTEXTOS POSIBLES (usa el que corresponda segun lo que describa el usuario,
 
 REQUISITOS TECNICOS:
 - viewBox="0 0 1400 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
-- Fondo blanco fill="#ffffff", cuadricula tenue de referencia (lineas cada 50px, stroke="#eeeeee" stroke-width="0.3")
+- Fondo blanco fill="#ffffff", cuadricula tenue de referencia cada 50px (stroke="#eeeeee" stroke-width="0.3") con un unico <pattern id="patron-cuadricula" width="50" height="50" patternUnits="userSpaceOnUse"> aplicado mediante <rect fill="url(#patron-cuadricula)"/>
 - Nave/edificio: contorno exterior stroke="#1a1a1a" stroke-width="5" fill="none", muros perimetrales fill="#d8d8d0" ancho 8px, ejes estructurales discontinuos stroke="#999999" stroke-dasharray="20,6,3,6" cada 6-12m acotados
 - Canalizacion de potencia: SOLO bandejas (recorrido ortogonal, dos lineas paralelas separadas 16px stroke="#0a0a5a" stroke-width="2.5", igual convencion que un plano de bandejas), NUNCA tubo empotrado tipo vivienda
 - Doble ruta A/B (si aplica a CPD): ruta A en azul stroke="#0033cc", ruta B en un color distinto stroke="#a35300", ambas SIEMPRE fisicamente separadas (nunca comparten bandeja) y etiquetadas "RUTA A" / "RUTA B" en la leyenda
 - REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en etiquetas de cuadro/CT/CGBT, tramos de bandeja, SAI/generador, filas/numeros de rack o cotas. Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para el bloque de titulo/cajetin (texto sobre fondo de color solido) y el titulo "LEYENDA". El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
 - REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta (cuadro, CT/CGBT, bandeja, SAI/generador, rack, cota), comprueba que su caja de texto no se solape con muros, equipos, bandejas u otras etiquetas cercanas. Deja siempre 4-6px libres alrededor de cada texto; en zonas densas (filas de racks, salas tecnicas) prioriza claridad sobre densidad. Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos.
 
-SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs (combina las 3 librerias segun necesites):
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Unica excepcion: un <defs> propio que contenga solo <pattern> (ids "patron-...") para repeticiones regulares como la cuadricula. Para simbolos solo usa <use href="#sym-X"/> con estos IDs (combina las 3 librerias segun necesites):
 {{SIMBOLOS}}
 
 DISPOSICION DE RACKS (si aplica a CPD): filas de racks (usa <use href="#sym-rack"/> repetido) con pasillo frio entre dos filas enfrentadas y pasillo caliente en la parte trasera opuesta; etiqueta cada fila (ej. "FILA A1-A8") y cada rack individual con numero pequeño (font-size="7"). PDU pegada a cada rack en la parte trasera.
@@ -29269,7 +29269,8 @@ POLITICA DE FIDELIDAD TECNICA — PREVALECE SOBRE EJEMPLOS Y PLANTILLAS ANTERIOR
 - Etiquetas tecnicas minimo 12 unidades SVG y distancia entre lineas >=16. Cotas fuera del recorrido; identifica tramos con IDs y usa una tabla separada si la etiqueta no cabe. No superpongas altura, referencia y cota sobre el mismo tramo.
 - No anadas notas prescriptivas universales ni atribuyas a una norma valores sin comprobar su aplicabilidad. Indica las comprobaciones pendientes concretas.
 - Devuelve un SVG completo. No omitas cierres de elementos para ajustarte al limite de tokens.
-- SVG estatico: representa cuadrículas y geometria con elementos SVG explicitos, nunca con JavaScript, script, manejadores de eventos ni foreignObject. El dibujo debe ser visible sin ejecutar codigo.`;
+- SVG estatico: representa cuadrículas y geometria con elementos SVG explicitos, nunca con JavaScript, script, manejadores de eventos ni foreignObject. El dibujo debe ser visible sin ejecutar codigo.
+- Repeticiones SIN codigo: cuadriculas, perforaciones, rayados y refuerzos regulares con un <pattern> (id "patron-...") aplicado a un <rect fill="url(#patron-...)">; simbolos repetidos con <use href="#sym-..."/> de la libreria inyectada; soportes, ejes y tramos como elementos <line>/<rect>/<path> explicitos, uno por elemento. Cualquier <script>, atributo on...= o <foreignObject> INVALIDA el plano entero y no se guarda.`;
 }
 
 // Control de integridad del contenedor, compartido por generar/editar.
@@ -29298,6 +29299,20 @@ function _extraerSvgCompleto(texto, contrato = null) {
   }
   _validarAvisosPlano(svg, contrato);
   return svg;
+}
+
+// FIX-PLANO-SCRIPT-01 (03/10/2026): el modelo metia un <script> para generar
+// repeticiones (cuadricula, refuerzos) y el plano de bandejas fallaba siempre.
+// El filtro estatico NO se relaja: se pide UNA reescritura al mismo proveedor.
+function _esRechazoPlanoNoEstatico(e) {
+  return /^Plano no estatico\b/.test(String(e?.message || ''));
+}
+
+function _correccionPlanoNoEstatico(mensajeError) {
+  const frag = (/«([^»]{1,90})»/.exec(String(mensajeError || '')) || [])[1] || '<script';
+  return `
+
+CORRECCION OBLIGATORIA: tu SVG anterior fue RECHAZADO y no se ha guardado porque no era estatico (contenia «${frag}»). Cualquier <script>, atributo on...= o <foreignObject> invalida el plano entero. Reescribelo COMPLETO como SVG estatico, sin ningun codigo: repeticiones regulares (cuadricula, perforaciones, rayados, refuerzos) con <pattern id="patron-..."> dentro de <defs> aplicado mediante <rect fill="url(#patron-...)">; simbolos con <use href="#sym-..."/>; soportes, ejes y tramos como elementos <line>/<rect>/<path> explicitos. Conserva todo el contenido tecnico pedido y los avisos obligatorios.`;
 }
 
 function _contratoMontajePlano(tipo, descripcion) {
@@ -29576,6 +29591,10 @@ INSTRUCCIONES FINALES:
   let data = null;
   let _planoProveedor = 'anthropic';
   let _planoModelo = 'claude-sonnet-4-6';
+  // Datos para repetir la llamada al MISMO proveedor si el SVG no es estatico.
+  let _planoViaStream = false;
+  let _planoGeminiKey = null;
+  let _planoORPedido = null;
 
   // planta_industrial combina muchos mas elementos (CT+GE+ATS+CGBT+racks+
   // CRAC+doble ruta+leyenda+cajetin) que el resto de tipos -- con 16000
@@ -29599,6 +29618,7 @@ INSTRUCCIONES FINALES:
         data = { content: [{ type: 'text', text: streamText }], usage: { input_tokens: 0, output_tokens: Math.round(streamText.length / 4) } };
         _planoProveedor = 'anthropic';
         _planoModelo = 'claude-sonnet-4-6';
+        _planoViaStream = true;
       }
     } catch (_) { /* si falla, cae a la cascada normal como red de seguridad */ }
   }
@@ -29607,6 +29627,20 @@ INSTRUCCIONES FINALES:
   //                    — 2.5-flash segundo (thinking mode: a veces 480 tokens SVG, a veces 7K)
   // Minimo 3000 chars SVG para descartar respuestas truncadas por thinking budget agotado.
   const _SVG_MIN_CHARS = 3000;
+  function _pedirGeminiPlano(modelo, clave, msgUsuario) {
+    return fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${clave}`,
+      {
+        signal: AbortSignal.timeout(55000), // 55s — 2.0-flash-lite ~5s, 2.5-flash hasta ~50s
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: systemPrompt + '\n\n' + msgUsuario }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: _maxTokensPlano }
+        })
+      }
+    );
+  }
   if (env.GEMINI_API_KEY && !data) {
     const _cleanGKey = k => k ? k.replace(/[ï»¿​\r\n\t ]+/g, '').trim() : k;
     const _gemKeys = [
@@ -29619,18 +29653,7 @@ INSTRUCCIONES FINALES:
     for (const _gModel of _gemModels) {
       for (const _gKey of _gemKeys) {
         try {
-          const _gr = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${_gModel}:generateContent?key=${_gKey}`,
-            {
-              signal: AbortSignal.timeout(55000), // 55s — 2.0-flash-lite ~5s, 2.5-flash hasta ~50s
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: systemPrompt + '\n\n' + userMsg }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: _maxTokensPlano }
-              })
-            }
-          );
+          const _gr = await _pedirGeminiPlano(_gModel, _gKey, userMsg);
           if (!_gr.ok) {
             const _gErrTxt = await _gr.text().catch(() => '');
             console.error(`[_generarPlanoInterno] Gemini ${_gModel} HTTP ${_gr.status}: ${_gErrTxt.slice(0,200)}`);
@@ -29658,6 +29681,7 @@ INSTRUCCIONES FINALES:
             };
             _planoProveedor = 'gemini';
             _planoModelo = _gModel;
+            _planoGeminiKey = _gKey;
             break gemLoop;
           } else if (_gText) {
             console.error(`[_generarPlanoInterno] Gemini ${_gModel} devolvió texto pero no pasó la validación (svg=${_gText.includes('<svg')}, len=${_gText.length}, use=${_tieneUso})`);
@@ -29679,7 +29703,7 @@ INSTRUCCIONES FINALES:
   // BOM/espacios al leerla (mismo problema ya conocido y arreglado para GEMINI_API_KEY,
   // ver callGemini arriba, y para OPENROUTER_API_KEY en alejandra-agente/worker.js).
   const _orKeyPlano = env.OPENROUTER_API_KEY ? String(env.OPENROUTER_API_KEY).replace(/[﻿​\r\n\t ]+/g, '').trim() : '';
-  async function _intentarOpenRouterPlano(modelo, timeoutMs) {
+  async function _intentarOpenRouterPlano(modelo, timeoutMs, msgUsuario = userMsg) {
     try {
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         signal: AbortSignal.timeout(timeoutMs),
@@ -29695,7 +29719,7 @@ INSTRUCCIONES FINALES:
           max_tokens: 8000,
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMsg }
+            { role: 'user', content: msgUsuario }
           ]
         })
       });
@@ -29722,28 +29746,31 @@ INSTRUCCIONES FINALES:
     for (const modelo of _ORModelosPlano) {
       _ORModelosProbados.add(modelo);
       const r = await _intentarOpenRouterPlano(modelo, 10000); // 10s por modelo -- segundo intento rapido
-      if (r) { data = { content: r.content, usage: r.usage }; _planoProveedor = 'openrouter'; _planoModelo = r._modelo; break; }
+      if (r) { data = { content: r.content, usage: r.usage }; _planoProveedor = 'openrouter'; _planoModelo = r._modelo; _planoORPedido = modelo; break; }
     }
   }
 
   // 2º Fallback: Anthropic (cuando OpenRouter no está disponible o ningún modelo gratis dio un SVG válido)
   let _errorAnthropicPlano = null;
+  function _pedirAnthropicPlano(msgs) {
+    return fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: _maxTokensPlano,
+        system: systemPrompt,
+        messages: msgs
+      })
+    });
+  }
   if (!data) {
     try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: _maxTokensPlano,
-          system: systemPrompt,
-          messages: _planoMsgs
-        })
-      });
+      const resp = await _pedirAnthropicPlano(_planoMsgs);
       if (!resp.ok) {
         const errText = await resp.text().catch(() => resp.statusText);
         _errorAnthropicPlano = (resp.status === 400 && errText.includes('credit'))
@@ -29763,12 +29790,66 @@ INSTRUCCIONES FINALES:
       if (_ORModelosProbados.has(modelo)) continue;
       _ORModelosProbados.add(modelo);
       const r = await _intentarOpenRouterPlano(modelo, 25000); // último intento, más margen
-      if (r) { data = { content: r.content, usage: r.usage }; _planoProveedor = 'openrouter'; _planoModelo = r._modelo; break; }
+      if (r) { data = { content: r.content, usage: r.usage }; _planoProveedor = 'openrouter'; _planoModelo = r._modelo; _planoORPedido = modelo; break; }
     }
   }
   if (!data) throw _errorAnthropicPlano || new Error('No se pudo generar el plano: todos los proveedores de IA fallaron.');
 
-  let svgRaw = _validacionPlano(() => _extraerSvgCompleto(data.content?.[0]?.text || '', contratoPlano));
+  const _registrarUsoPlano = d => logAIUsage(env, {
+    empresa_id,
+    proveedor: _planoProveedor,
+    modelo: _planoModelo,
+    endpoint: 'generar_plano',
+    input_tokens: d?.usage?.input_tokens || 0,
+    output_tokens: d?.usage?.output_tokens || 0
+  });
+  // Repite UNA vez la llamada al proveedor que respondio, con la correccion.
+  // Devuelve null si el proveedor no responde: entonces manda el error original.
+  async function _reintentarPlanoMismoProveedor(msgUsuario) {
+    try {
+      if (_planoProveedor === 'anthropic' && _planoViaStream) {
+        const t = await _llamarAnthropicPlanoStream(env, msgUsuario, systemPrompt, _maxTokensPlano);
+        return t ? { content: [{ type: 'text', text: t }], usage: { input_tokens: 0, output_tokens: Math.round(t.length / 4) } } : null;
+      }
+      if (_planoProveedor === 'anthropic') {
+        const resp = await _pedirAnthropicPlano([{ role: 'user', content: msgUsuario }]);
+        return resp.ok ? await resp.json() : null;
+      }
+      if (_planoProveedor === 'gemini' && _planoGeminiKey) {
+        const gr = await _pedirGeminiPlano(_planoModelo, _planoGeminiKey, msgUsuario);
+        if (!gr.ok) return null;
+        const gd = await gr.json();
+        const parts = gd.candidates?.[0]?.content?.parts || [];
+        const text = parts.find(p => p.text?.includes('<svg'))?.text || parts.map(p => p.text || '').join('');
+        return { content: [{ type: 'text', text }], usage: {
+          input_tokens: gd.usageMetadata?.promptTokenCount || 0,
+          output_tokens: gd.usageMetadata?.candidatesTokenCount || 0 } };
+      }
+      if (_planoProveedor === 'openrouter' && _planoORPedido) {
+        const r = await _intentarOpenRouterPlano(_planoORPedido, 25000, msgUsuario);
+        return r ? { content: r.content, usage: r.usage } : null;
+      }
+    } catch (e) { console.error(`[_generarPlanoInterno] reintento ${_planoProveedor} excepción: ${e.message}`); }
+    return null;
+  }
+
+  let svgRaw;
+  let _usoPlanoRegistrado = false;
+  try {
+    svgRaw = _validacionPlano(() => _extraerSvgCompleto(data.content?.[0]?.text || '', contratoPlano));
+  } catch (e) {
+    if (!_esRechazoPlanoNoEstatico(e)) throw e;
+    // El intento rechazado tambien consumio tokens: se registran los dos.
+    _registrarUsoPlano(data);
+    _usoPlanoRegistrado = true;
+    console.warn(`[_generarPlanoInterno] SVG no estatico de ${_planoProveedor}/${_planoModelo}; reintento unico`);
+    const reintento = await _reintentarPlanoMismoProveedor(userMsg + _correccionPlanoNoEstatico(e.message));
+    if (!reintento) throw e;
+    data = reintento;
+    _registrarUsoPlano(data);
+    // Si el reintento tambien falla, se mantiene el error actual (sin INSERT).
+    svgRaw = _validacionPlano(() => _extraerSvgCompleto(data.content?.[0]?.text || '', contratoPlano));
+  }
 
   // Para esquemas eléctricos: inyectar biblioteca de símbolos IEC 60617
   // Se inserta justo tras la etiqueta <svg ...> de apertura para que los <use href="#sym-X">
@@ -29800,15 +29881,8 @@ INSTRUCCIONES FINALES:
     svgRaw = _normalizarColoresUseSvg(svgRaw, tipo);
   }
 
-  // Registrar uso de IA (proveedor y modelo reales)
-  logAIUsage(env, {
-    empresa_id,
-    proveedor: _planoProveedor,
-    modelo: _planoModelo,
-    endpoint: 'generar_plano',
-    input_tokens: data.usage?.input_tokens || 0,
-    output_tokens: data.usage?.output_tokens || 0
-  });
+  // Registrar uso de IA (proveedor y modelo reales); el reintento ya lo registro.
+  if (!_usoPlanoRegistrado) _registrarUsoPlano(data);
 
   const circuitosJson = (Array.isArray(circuitos) && circuitos.length > 0) ? JSON.stringify(circuitos) : null;
   // Comprobar tambien el resultado final tras inyectar simbolos y normalizar colores.
@@ -30182,7 +30256,18 @@ INSTRUCCIONES FINALES:
     return err('No se pudo editar el plano en este momento. Inténtalo de nuevo en unos minutos.', 500);
   }
   try { svgRaw = _extraerSvgCompleto(svgRaw, contratoPlano); }
-  catch (e) { return err(e.message, 502); }
+  catch (e) {
+    if (!_esRechazoPlanoNoEstatico(e)) return err(e.message, 502);
+    // FIX-PLANO-SCRIPT-01: una sola reescritura; si vuelve a fallar, mismo error y sin UPDATE.
+    let reintento;
+    try { reintento = await _llamarAnthropicPlanoStream(env, userMsg + _correccionPlanoNoEstatico(e.message), systemPrompt, _maxTokensEdicion); }
+    catch (e2) {
+      console.error('[editarPlanoCircuitosREST] Reintento tras SVG no estatico fallido:', e2.message);
+      return err(e.message, 502);
+    }
+    try { svgRaw = _extraerSvgCompleto(reintento, contratoPlano); }
+    catch (e3) { return err(e3.message, 502); }
+  }
 
   if (row.tipo === 'electrico') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
   if (row.tipo === 'bandejas') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
