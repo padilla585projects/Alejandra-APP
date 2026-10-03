@@ -1,6 +1,8 @@
 # Changelog
 
 
+- 9.83 (03/10/2026): escaneo del entorno + IA en el AR del Replanteo con fondo real del informe (ADR-0027); botón atrás jerárquico y chip APP/WEB; validador de planos con avisos dentro del archivo y editor del panel validado; corte de contexto entre casos en Alejandra; historial de alejandra-panel.html sin borrar lo enviado.
+
 - IA-QUALITY-08: medidas sin unidad se aclaran sin calificar interpretaciones de probables o imposibles; los planos generados/editados declaran que son borrador y no aptos para ejecución.
 
 - D1-ESCRITURAS-01: 401 ante token de sesión inexistente, trazas de token muerto deduplicadas, last_used y sync_dispositivos sin reescrituras inútiles; la app y el panel paran el sync al caducar la sesión (v9.82).
