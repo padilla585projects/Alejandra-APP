@@ -80,10 +80,43 @@ Común: `Authorization: Bearer <AI_POOL_KEY>`, `Content-Type: application/json`.
   `temperature`, `response_format`, `tools` (nunca `stream` ni `tool_choice`). Con qwen3 se
   añade `/no_think` al prompt de sistema y se quita cualquier `<think>…</think>` de la
   respuesta (a confirmar si el gateway ya desactiva el razonamiento; es inocuo si sí).
-- `POST /v1/tools/search` — `{"query": 2–300 car., "results": 1–10}` (también admite `read`
-  0–5 y `question`, que **no** se usan: `read>0` tarda de decenas de segundos a 1–2 min).
-  Respuesta `{"query","results":[{"title","url","snippet",…}],"devices","took_s"}`.
-  `results: []` → se trata como respaldo. 502 `{"detail"}` tras 3 intentos → respaldo.
+- `POST /v1/tools/search` — `{"query": 2–300 car., "results": 1–10, "since"?}` (también
+  admite `read` 0–5 y `question`, que **no** se usan: `read>0` tarda de decenas de segundos a
+  1–2 min). `since` (opcional, añadido por la sesión del pool el 03/10/2026) es el filtro de
+  fecha de DuckDuckGo: `"day"|"week"|"month"|"year"`; el cliente solo lo manda si es uno de
+  esos cuatro valores (cualquier otro valor ni se envía). Respuesta
+  `{"query","results":[{"title","url","snippet",…}],"devices","took_s"}`. `results: []` → se
+  trata como respaldo. 502 `{"detail"}` tras 3 intentos → respaldo.
+- Campo `model` de la respuesta de chat: desde el 03/10/2026 es el **nombre** del modelo
+  (`"prisma:1.0"`), no una ruta de fichero. El cliente acepta las dos formas
+  (`normalizarNombreModeloPool`: de una ruta se queda el último segmento sin `.gguf`), y es lo
+  que se registra como `ai_pool:<modelo>`.
+
+### Consulta corta para la búsqueda (03/10/2026)
+
+QA real: a «Busca en internet cuál es la última versión estable de Node.js y dime solo el
+número.» se mandó esa frase entera como `query` y DuckDuckGo devolvió Node 22.11 (obsoleto);
+con «Node.js latest LTS version» el primer resultado es el correcto (24.11.0). Por eso, antes
+de `/v1/tools/search`, `prepararConsultaBusqueda` (en `ai-pool.js`, usado por los dos
+cerebros: `buscarWebOpenAI` del agente —tool `buscar_web` y prefetch `query_web` del router—
+y `web_search` de Telegram):
+
+1. Si la petición ya es corta (≤6 palabras y sin muletillas) se usa tal cual, sin IA.
+2. Si no, `prisma:1.0` con `response_format: json_object` y timeout de 4 s la convierte en
+   `{"query": "...", "since": null|"day"|"week"|"month"|"year"}` (inglés para temas técnicos,
+   software y normas internacionales; español para temas locales: empresas, normativa
+   española, precios en España). La salida se valida estrictamente (solo esas dos claves,
+   2–120 caracteres, ≤12 palabras, `since` del contrato).
+3. Si el pool falla o la salida no vale: respaldo determinista sin IA (quita muletillas como
+   «busca en internet», «dime», «por favor», signos y palabras vacías, recorta a 10 palabras,
+   `since` por palabras clave: «última versión», «actual», «vigente», «precio», año actual →
+   `year`; «noticias», «hoy», «esta semana» → `month`).
+
+Los respaldos de pago (gpt-4o-mini `web_search_preview`, Tavily) reciben la petición
+**original**: los dos entienden lenguaje natural (gpt-4o-mini es un modelo que además usa los
+matices como «dime solo el número»; Tavily está pensado para consultas de agentes) y así se
+comportan exactamente igual que antes del pool. Métrica: uso `buscar_web_consulta`
+(`ok`/`respaldo`+motivo/`omitido` por consulta corta o circuito, `ms`), sin contenido.
 - `POST /v1/tools/read` — `{"url": http(s) 8–2000, "summarize": false}`. Respuesta
   `{"url","final_url","status","title","text","device","summary","took_s"}`; si no pudo
   bajarla, 200 `{"url","error","device","took_s"}` sin `text` → fallo.
@@ -100,9 +133,17 @@ un servidor doméstico expuesto a internet por Tailscale Funnel.
 - **Minimizar datos**: el pool recibe exactamente lo que ya recibía el proveedor de pago al
   que sustituye, nunca más; no se le manda nada con imágenes ni nada de las rutas excluidas.
 - **Sin registrar contenido**: en el Worker solo se registran uso, modelo, resultado, motivo,
-  latencia y tokens (test que lo comprueba). **Pendiente del lado del pool**: confirmar que el
-  gateway tampoco guarda prompts ni respuestas en disco/log, y que el Funnel solo expone el
-  gateway (no la interfaz de Proxmox).
+  latencia y tokens (test que lo comprueba).
+- **Lado del pool — confirmado por la sesión del pool el 03/10/2026**:
+  - la pasarela no registra las peticiones;
+  - el Core guarda solo metadatos (proyecto, modelo, equipo, tiempos, tokens), no contenido;
+  - el panel del pool ya no guarda el texto de las búsquedas;
+  - la lectura de páginas (`/v1/tools/read`) anota solo el dominio;
+  - **DuckDuckGo sí ve la consulta** de búsqueda (es el buscador): por eso se le manda una
+    consulta corta de palabras clave, no la frase entera del usuario;
+  - Tailscale Funnel solo publica el puerto 443 hacia la pasarela, con las rutas de cliente y
+    clave obligatoria; Proxmox y las interfaces de administración no son accesibles desde
+    internet.
 - La clave vive solo como secreto de Cloudflare (`AI_POOL_KEY`), nunca en el repositorio.
 
 ## Medición (cómo comparar rendimiento y eficacia)

@@ -6,7 +6,9 @@ import {
   poolConfigurado, urlBasePool, limpiarClavePool, poolChat, poolTexto, poolClasificar,
   poolRouterNexus, poolBuscar, poolLeer, normalizarEtiquetaRouter, parsearRouterNexus,
   normalizarResultadosBusqueda, formatearBusquedaPool, quitarRazonamiento,
-  circuitoPoolAbierto, _reiniciarCircuitoPool, metricasPool, _reiniciarMetricasPool
+  circuitoPoolAbierto, _reiniciarCircuitoPool, metricasPool, _reiniciarMetricasPool,
+  prepararConsultaBusqueda, consultaBusquedaHeuristica, consultaNecesitaReescritura,
+  validarConsultaReescrita, sinceHeuristico, normalizarNombreModeloPool, AI_POOL_SINCE_VALIDOS
 } from './ai-pool.js';
 import { calcularCosteYProveedor, ETIQUETAS_CLASIFICADOR_INTENCION, SYSTEM_CLASIFICADOR_INTENCION } from './lib.js';
 
@@ -310,9 +312,147 @@ describe('ADR-0028: regla «dos cerebros»', () => {
     // router del agente → Haiku; router NEXUS → Haiku; web_search → Tavily; buscar_web → gpt-4o-mini
     expect(agente).toMatch(/poolClasificar\([\s\S]{0,900}CAPA 2b: Haiku/);
     expect(web).toMatch(/poolRouterNexus\([\s\S]{0,200}if \(rutaPool\)[\s\S]{0,200}api\.anthropic\.com/);
-    expect(web).toMatch(/poolBuscar\([\s\S]{0,600}api\.tavily\.com/);
+    expect(web).toMatch(/poolBuscar\([\s\S]{0,900}api\.tavily\.com/);
     expect(agente).toMatch(/poolBuscar\([\s\S]{0,1200}gpt-4o-mini/);
     // cadena cuando cae Anthropic: pool → Grok → OpenRouter → gpt-4o
     expect(agente).toMatch(/'respaldo_anthropic'\)[\s\S]{0,800}_intentarGrokFallback/);
+  });
+});
+describe('03/10/2026: consulta corta para /v1/tools/search', () => {
+  const FRASE = 'Busca en internet cuál es la última versión estable de Node.js y dime solo el número.';
+  const HOY = new Date('2026-10-03T10:00:00Z');
+  const CAMPOS_SEARCH = ['query', 'results', 'since'];
+
+  it('frase larga → reescrita por el pool (prisma JSON) y con since=year', async () => {
+    const f = fetchQueDevuelve(
+      respuesta(200, { model: 'prisma:1.0', choices: [{ message: { role: 'assistant', content: '{"query":"Node.js latest LTS version","since":"year"}' }, finish_reason: 'stop' }] }),
+      respuesta(200, { query: 'Node.js latest LTS version', results: [{ title: 'Node.js', url: 'https://nodejs.org/en', snippet: '24.11.0 LTS' }] })
+    );
+    const c = await prepararConsultaBusqueda(ENV, FRASE, { ahora: HOY }, { fetch: f });
+    expect(c).toEqual({ query: 'Node.js latest LTS version', since: 'year', fuente: 'ai_pool' });
+    // Petición de reescritura: modelo router, modo JSON, cuerpo mínimo
+    const pet = f.llamadas[0];
+    expect(pet.url).toBe(AI_POOL_URL_DEFECTO + '/openai/v1/chat/completions');
+    expect(pet.body.model).toBe(AI_POOL_MODELO_ROUTER);
+    expect(pet.body.response_format).toEqual({ type: 'json_object' });
+    expect(Object.keys(pet.body).sort()).toEqual(['max_tokens', 'messages', 'model', 'response_format', 'temperature']);
+    expect(pet.body.messages[1].content).toBe(FRASE);
+    // La búsqueda lleva la consulta corta y el filtro
+    await poolBuscar(ENV, c.query, { since: c.since }, { fetch: f });
+    expect(f.llamadas[1].body).toEqual({ query: 'Node.js latest LTS version', results: 5, since: 'year' });
+    const u = metricasPool().usos;
+    expect(u.buscar_web_consulta.ok).toBe(1);
+  });
+
+  it('query corta (≤6 palabras, sin muletillas) → sin llamada de reescritura', async () => {
+    const f = fetchQueDevuelve(chatOk('{"query":"x","since":null}'));
+    const c = await prepararConsultaBusqueda(ENV, 'Node.js latest LTS version', { ahora: HOY }, { fetch: f });
+    expect(f).not.toHaveBeenCalled();
+    expect(c).toEqual({ query: 'Node.js latest LTS version', since: 'year', fuente: 'original' });
+    expect(metricasPool().usos.buscar_web_consulta).toMatchObject({ omitido: 1, ok: 0 });
+    const c2 = await prepararConsultaBusqueda(ENV, 'ITC-BT-19 caída de tensión', { ahora: HOY }, { fetch: f });
+    expect(c2).toEqual({ query: 'ITC-BT-19 caída de tensión', since: null, fuente: 'original' });
+    expect(f).not.toHaveBeenCalled();
+    // Corta pero con muletilla → sí se reescribe
+    expect(consultaNecesitaReescritura('busca precio cobre')).toBe(true);
+    expect(consultaNecesitaReescritura('precio cobre hoy')).toBe(false);
+  });
+
+  it('pool de reescritura caído (timeout, HTTP, JSON inválido) → heurística determinista', async () => {
+    vi.useFakeTimers();
+    try {
+      const pend = prepararConsultaBusqueda(ENV, FRASE, { ahora: HOY }, { fetch: fetchColgado() });
+      await vi.advanceTimersByTimeAsync(4001);
+      expect(await pend).toEqual({ query: 'última versión estable Node.js', since: 'year', fuente: 'heuristica' });
+    } finally { vi.useRealTimers(); }
+    const c503 = await prepararConsultaBusqueda(ENV, FRASE, { ahora: HOY }, { fetch: fetchQueDevuelve(respuesta(503, { error: { code: 'model_unavailable' } })) });
+    expect(c503.fuente).toBe('heuristica');
+    // Salida con campo extra, since inventado o texto libre → inválida
+    for (const salida of ['{"query":"Node.js latest","since":"year","extra":1}', '{"query":"Node.js latest","since":"decade"}', 'Node.js latest version', '{"since":"year"}']) {
+      const c = await prepararConsultaBusqueda(ENV, FRASE, { ahora: HOY }, { fetch: fetchQueDevuelve(chatOk(salida)) });
+      expect(c).toEqual({ query: 'última versión estable Node.js', since: 'year', fuente: 'heuristica' });
+    }
+    const u = metricasPool().usos.buscar_web_consulta;
+    expect(u.ok).toBe(0);
+    expect(u.motivosRespaldo).toMatchObject({ timeout: 1, model_unavailable: 1, formato_invalido: 4 });
+  });
+
+  it('sin AI_POOL_KEY: ni reescritura ni métrica (apagado por defecto)', async () => {
+    const f = fetchQueDevuelve(chatOk('{"query":"x","since":null}'));
+    const c = await prepararConsultaBusqueda({}, FRASE, { ahora: HOY }, { fetch: f });
+    expect(c.fuente).toBe('heuristica');
+    expect(f).not.toHaveBeenCalled();
+    expect(metricasPool().usos).toEqual({});
+  });
+
+  it('heurística: quita muletillas, signos y palabras vacías; ≤10 palabras; since por palabras clave', () => {
+    expect(consultaBusquedaHeuristica('¿Me puedes decir por favor el precio del cobre en España hoy?', { ahora: HOY }))
+      .toEqual({ query: 'precio cobre España hoy', since: 'month' });
+    const larga = consultaBusquedaHeuristica('uno dos tres cuatro cinco seis siete ocho nueve diez once doce');
+    expect(larga.query.split(' ')).toHaveLength(10);
+    expect(consultaBusquedaHeuristica('busca en internet').query).toBe('busca en internet');
+    expect(sinceHeuristico('noticias del sector eléctrico')).toBe('month');
+    expect(sinceHeuristico('normativa vigente de baja tensión')).toBe('year');
+    expect(sinceHeuristico('subvenciones autoconsumo 2026', { ahora: HOY })).toBe('year');
+    expect(sinceHeuristico('reglamento baja tensión 2002', { ahora: HOY })).toBeNull();
+    expect(sinceHeuristico('ITC-BT-19 caída de tensión')).toBeNull();
+  });
+
+  it('validación estricta de la salida del modelo', () => {
+    expect(validarConsultaReescrita('{"query":"Node.js latest LTS version","since":"year"}')).toEqual({ query: 'Node.js latest LTS version', since: 'year' });
+    expect(validarConsultaReescrita('{"query":"ITC-BT-19 caída de tensión","since":null}')).toEqual({ query: 'ITC-BT-19 caída de tensión', since: null });
+    expect(validarConsultaReescrita('{"query":"ITC-BT-19"}')).toEqual({ query: 'ITC-BT-19', since: null });
+    expect(validarConsultaReescrita('{"query":"x"}')).toBeNull();
+    expect(validarConsultaReescrita('{"query":"' + 'palabra '.repeat(13).trim() + '"}')).toBeNull();
+    expect(validarConsultaReescrita('{"query":"a\\nb c"}')).toBeNull();
+    expect(validarConsultaReescrita('{"query":123}')).toBeNull();
+    expect(validarConsultaReescrita('["Node.js"]')).toBeNull();
+  });
+
+  it('nunca se envían a /v1/tools/search campos fuera del contrato {query, results, since}', async () => {
+    const f = fetchQueDevuelve(respuesta(200, { results: [{ url: 'https://a.es', snippet: 's' }] }));
+    await poolBuscar(ENV, 'Node.js latest LTS version', { since: 'year', maxResultados: 3 }, { fetch: f });
+    await poolBuscar(ENV, 'ITC-BT-19', { since: 'decade' }, { fetch: f });
+    await poolBuscar(ENV, 'ITC-BT-19', { since: null }, { fetch: f });
+    await poolBuscar(ENV, 'ITC-BT-19', { since: { $ne: 1 }, read: 3, question: 'q' }, { fetch: f });
+    for (const ll of f.llamadas) {
+      expect(ll.url).toBe(AI_POOL_URL_DEFECTO + '/v1/tools/search');
+      for (const k of Object.keys(ll.body)) expect(CAMPOS_SEARCH).toContain(k);
+      if ('since' in ll.body) expect(AI_POOL_SINCE_VALIDOS).toContain(ll.body.since);
+    }
+    expect(f.llamadas[0].body).toEqual({ query: 'Node.js latest LTS version', results: 3, since: 'year' });
+    expect(f.llamadas[1].body).toEqual({ query: 'ITC-BT-19', results: 5 });
+    expect(f.llamadas[3].body).toEqual({ query: 'ITC-BT-19', results: 5 });
+  });
+
+  it('la métrica de la reescritura no incluye la consulta ni la respuesta', async () => {
+    const log = console.log;
+    await prepararConsultaBusqueda(ENV, FRASE, { ahora: HOY }, { fetch: fetchQueDevuelve(chatOk('{"query":"Node.js latest LTS version","since":"year"}')) });
+    const lineas = log.mock.calls.map(c => c.join(' ')).filter(l => l.startsWith('AIPOOL_METRICA'));
+    expect(lineas).toHaveLength(1);
+    expect(lineas[0]).not.toMatch(/Node|versi|internet/i);
+    expect(JSON.parse(lineas[0].slice('AIPOOL_METRICA '.length))).toMatchObject({ uso: 'buscar_web_consulta', resultado: 'ok' });
+  });
+
+  it('campo model de la respuesta: nombre («prisma:1.0») o ruta, los dos tolerados', async () => {
+    expect(normalizarNombreModeloPool('prisma:1.0')).toBe('prisma:1.0');
+    expect(normalizarNombreModeloPool('qwen3.6:35b-a3b')).toBe('qwen3.6:35b-a3b');
+    expect(normalizarNombreModeloPool('/models/prisma-1.0.gguf')).toBe('prisma-1.0');
+    expect(normalizarNombreModeloPool('C:\\pool\\modelos\\gemma4-e4b.gguf')).toBe('gemma4-e4b');
+    expect(normalizarNombreModeloPool('')).toBe('');
+    expect(normalizarNombreModeloPool(null)).toBe('');
+    const r = await poolChat(ENV, { messages: [{ role: 'user', content: 'x' }] }, { fetch: fetchQueDevuelve(respuesta(200, { model: '/models/qwen3.6-35b.gguf', choices: [{ message: { role: 'assistant', content: 'hola' } }] })) });
+    expect(r.modeloRegistro).toBe('ai_pool:qwen3.6-35b');
+    const r2 = await poolChat(ENV, { messages: [{ role: 'user', content: 'x' }] }, { fetch: fetchQueDevuelve(respuesta(200, { model: 'prisma:1.0', choices: [{ message: { role: 'assistant', content: 'hola' } }] })) });
+    expect(r2.modeloRegistro).toBe('ai_pool:prisma:1.0');
+  });
+
+  it('los dos workers reescriben antes de buscar en el pool y el respaldo recibe la query original', () => {
+    const agente = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const web = readFileSync(new URL('../worker.js', import.meta.url), 'utf8');
+    expect(agente).toMatch(/prepararConsultaBusqueda\(env, String\(query[\s\S]{0,200}poolBuscar\(env, consulta\.query, \{[^}]*since: consulta\.since/);
+    expect(web).toMatch(/prepararConsultaBusqueda\(env, String\(query\)\)[\s\S]{0,200}poolBuscar\(env, consultaPool\.query, \{[^}]*since: consultaPool\.since/);
+    expect(agente).toMatch(/input: query \}\)/);
+    expect(web).toMatch(/api_key: env\.TAVILY_API_KEY, query, /);
   });
 });
