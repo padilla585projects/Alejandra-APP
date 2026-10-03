@@ -1707,7 +1707,7 @@ Siguiente acción exacta:
 - **Login de prueba permanente, a petición explícita de Adrián** ("dejalo usas esto para hacer
   pruebas" — no se borra): usuario id `357`, nombre "Prueba TEMP F6.1", rol `empresa_admin`,
   empresa `Constructora Demo S.L.` (empresa_id=5), login por email
-  `temp-f61-test@example.invalid` / contraseña `TempF61Pass_92xQ!` (panel.html usa
+  `temp-f61-test@example.invalid` / contraseña `<contraseña retirada del repo>` (panel.html usa
   email+contraseña, no código, para roles de oficina). Quedan también 3 pedidos de prueba en
   esa empresa (#8, #9, #10) — datos de prueba deliberados, no limpiar sin pedir antes.
 - Prioridad: Media

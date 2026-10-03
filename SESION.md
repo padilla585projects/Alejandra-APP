@@ -762,7 +762,7 @@ Revisando el flujo de aprobación de altas por Google (`worker.js:3837`), se con
 
 **Hallazgo sobre el acceso a Office:** no hacía falta ningún cambio de rol ni de código. El rol `encargado` ya está en `rolesPermitidos` de `doLogin()` (`panel.html` ~9748) y el login del panel es email + contraseña, que la cuenta 46 ya tenía. La 51 no podía entrar simplemente porque no tiene email. El histórico de `sesiones` confirma que la 46 ya había entrado en Office (varias sesiones con `rol='oficina'`).
 
-**Decisiones de Adrián (vía AskUserQuestion):** mantener el código `Manolete2026` de la cuenta 46 (no mover el `98765` de la 51) y no tocar la contraseña existente.
+**Decisiones de Adrián (vía AskUserQuestion):** mantener el código `<código retirado del repo>` de la cuenta 46 (no mover el `98765` de la 51) y no tocar la contraseña existente.
 
 **Cambios aplicados en D1 (con backup previo de las filas afectadas en el scratchpad de la sesión):**
 - `DELETE FROM sesiones WHERE usuario_id=51` — 2 sesiones, ambas caducadas desde junio.
@@ -772,7 +772,7 @@ Revisando el flujo de aprobación de altas por Google (`worker.js:3837`), se con
 
 **Sin cambios de código:** es limpieza de datos pura. No toca seguridad/tools/permisos/barreras, así que no aplica la regla "UNA Alejandra, DOS cerebros"; no requiere deploy ni subida de versión.
 
-**Verificación:** consulta final sobre `usuarios` confirma una única cuenta activa de Alberto (id 46, `Manolete2026`, `amartinezc@levitec.es`, rol encargado, obra 1, dept electrico) y las otras 4 con `activo=0` y código `_del_*`.
+**Verificación:** consulta final sobre `usuarios` confirma una única cuenta activa de Alberto (id 46, `<código retirado del repo>`, `amartinezc@levitec.es`, rol encargado, obra 1, dept electrico) y las otras 4 con `activo=0` y código `_del_*`.
 
 **Pendiente relacionado:** que Alberto confirme en uso real que entra en Office con `amartinezc@levitec.es` y su contraseña actual (no se ha podido probar el login porque la contraseña no está en manos de esta sesión, y no debe estarlo).
 

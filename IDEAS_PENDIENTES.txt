@@ -555,8 +555,8 @@ LEYENDA DE ESTADO:
       Ninguna de las dos cuentas reales tenía fichajes, carnets, EPIs, turnos, chat ni
       memoria de Alejandra colgando — solo sesiones y sync_dispositivos.
     · Cuenta canónica elegida: 46 (Alberto Martínez, amartinezc@levitec.es, código
-      Manolete2026, contraseña ya establecida). Decisión de Adrián: mantener su código
-      Manolete2026 y NO tocar la contraseña existente.
+      <código retirado del repo>, contraseña ya establecida). Decisión de Adrián: mantener su código
+      <código retirado del repo> y NO tocar la contraseña existente.
     · Acceso a Office: no hacía falta ningún cambio de rol — 'encargado' ya está en
       rolesPermitidos de doLogin() (panel.html ~9748) y el login del panel es email +
       contraseña, que la 46 ya tiene. La 51 no podía entrar simplemente porque no tenía
