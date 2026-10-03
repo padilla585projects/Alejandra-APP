@@ -18,7 +18,14 @@
 //   - Texto: { respuesta_contiene: ['fuga|corriente residual|30 ?ma'], respuesta_no_contiene: ['rueda'] }.
 //     Son EXPRESIONES REGULARES: todas las de contiene deben aparecer y ninguna de no_contiene.
 //     Además (más exigente que el evaluador del pool) la respuesta tiene que ser texto, sin
-//     tool_calls y sin fugas de sintaxis de tools.
+//     tool_calls y sin fugas de sintaxis de tools: así se expresa «NO debe usar herramientas»
+//     (el formato del pool aún no tiene {"sin_herramienta": true}; propuesto en ADR-0028).
+//     Vale para experto_simple y para experto_tools (p. ej. responder con el dato que ya
+//     devolvió una herramienta, o preguntar ante una petición ambigua).
+// Banco v3 (03/10/2026): conversaciones de VARIOS TURNOS en formato OpenAI: mensajes
+// { role: 'assistant', content: '', tool_calls: [{ id, type: 'function', function: { name,
+// arguments } }] } seguidos de { role: 'tool', tool_call_id, content } con el resultado (o el
+// error real) de la herramienta. El último mensaje puede ser del usuario o de una tool.
 // Todo con datos FICTICIOS (empresa demo, nombres inventados): nunca datos personales reales.
 import { readFileSync } from 'node:fs';
 
@@ -145,6 +152,40 @@ function validarArgumentos(err, f, nombre, argumentos) {
   }
 }
 
+// Turnos con herramientas (formato OpenAI): cada assistant con tool_calls bien formados, de
+// tools que el caso ofrece y con argumentos JSON; cada mensaje tool responde a una llamada
+// anterior aún sin respuesta (tool_call_id). Devuelve la lista de errores.
+export function validarTurnosConTools(mensajes, nombresTools) {
+  const errores = [];
+  const pendientes = new Set();
+  const vistos = new Set();
+  for (const m of mensajes) {
+    if (!m || typeof m !== 'object') continue;
+    if (m.role === 'assistant' && 'tool_calls' in m) {
+      if (!Array.isArray(m.tool_calls) || !m.tool_calls.length) { errores.push('tool_calls vacío o no es un array'); continue; }
+      for (const tc of m.tool_calls) {
+        const f = tc && tc.function;
+        if (!tc || typeof tc.id !== 'string' || !tc.id || tc.type !== 'function' || !f || typeof f.name !== 'string' || typeof f.arguments !== 'string') { errores.push('tool_call mal formado'); continue; }
+        if (vistos.has(tc.id)) errores.push('tool_call id repetido ' + tc.id);
+        vistos.add(tc.id);
+        if (!nombresTools.has(f.name)) errores.push(`tool_call a ${f.name}, que no está en tools`);
+        try { JSON.parse(f.arguments); } catch (_) { errores.push(`argumentos de ${f.name} no son JSON`); }
+        pendientes.add(tc.id);
+      }
+    } else if ('tool_calls' in m) {
+      errores.push('tool_calls solo en mensajes assistant');
+    }
+    if (m.role === 'tool') {
+      if (typeof m.tool_call_id !== 'string' || !pendientes.has(m.tool_call_id)) errores.push('mensaje tool sin una llamada previa que responder');
+      else pendientes.delete(m.tool_call_id);
+    } else if ('tool_call_id' in m) {
+      errores.push('tool_call_id solo en mensajes tool');
+    }
+  }
+  if (pendientes.size) errores.push('llamada a tool sin su mensaje tool de respuesta');
+  return errores;
+}
+
 // Valida el banco entero. Devuelve la lista de errores (vacía = válido).
 export function validarBanco(casos, { etiquetas = null } = {}) {
   const errores = [];
@@ -157,12 +198,14 @@ export function validarBanco(casos, { etiquetas = null } = {}) {
     if (ids.has(id)) err('id duplicado');
     ids.add(id);
     if (!TIPOS_BANCO.includes(c.tipo)) err('tipo inválido');
+    if (!Array.isArray(c.tools)) { err('tools no es un array'); continue; }
+    const nombresTools = new Set(c.tools.map(t => t && t.function && t.function.name));
     if (!Array.isArray(c.mensajes) || !c.mensajes.length) err('sin mensajes');
     else {
       if (c.mensajes.some(m => !m || !['system', 'user', 'assistant', 'tool'].includes(m.role) || typeof m.content !== 'string')) err('mensaje mal formado');
-      if (c.mensajes[c.mensajes.length - 1].role !== 'user') err('el último mensaje no es del usuario');
+      if (!['user', 'tool'].includes(c.mensajes[c.mensajes.length - 1].role)) err('el último mensaje no es del usuario ni de una tool');
+      for (const e of validarTurnosConTools(c.mensajes, nombresTools)) err(e);
     }
-    if (!Array.isArray(c.tools)) { err('tools no es un array'); continue; }
     const porNombre = {};
     for (const t of c.tools) {
       const f = t && t.function;
@@ -176,14 +219,15 @@ export function validarBanco(casos, { etiquetas = null } = {}) {
       if (claves !== 'etiqueta') err('router debe esperar {etiqueta}');
       else if (etiquetas && !etiquetas.includes(e.etiqueta)) err('etiqueta desconocida ' + e.etiqueta);
       if (c.tools.length) err('router sin tools');
-    } else if (c.tipo === 'experto_simple') {
+    } else if (c.tipo === 'experto_simple' || (c.tipo === 'experto_tools' && 'respuesta_contiene' in e)) {
       if (!['respuesta_contiene', 'respuesta_contiene,respuesta_no_contiene'].includes(claves) || !listaDeTextos(e.respuesta_contiene) || !e.respuesta_contiene.length) {
-        err('experto_simple debe esperar {respuesta_contiene: [regex], respuesta_no_contiene?: [regex]}');
+        err(`${c.tipo} debe esperar {respuesta_contiene: [regex], respuesta_no_contiene?: [regex]}`);
         continue;
       }
       if ('respuesta_no_contiene' in e && (!listaDeTextos(e.respuesta_no_contiene) || !e.respuesta_no_contiene.length)) err('respuesta_no_contiene debe ser una lista de textos no vacía');
       const malos = patronesInvalidos([...e.respuesta_contiene, ...(e.respuesta_no_contiene || [])]);
       if (malos.length) err('expresión regular inválida: ' + malos.join(', '));
+      if (c.tipo === 'experto_tools' && !c.tools.length) err('experto_tools sin tools: usa experto_simple');
     } else if (c.tipo === 'experto_tools') {
       const h = e.herramienta;
       const formaH = typeof h === 'string' ? !!h : listaDeTextos(h) && h.length >= 2 && new Set(h).size === h.length;

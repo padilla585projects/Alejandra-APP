@@ -129,10 +129,40 @@ async function chatOpenAICompat(fetchImpl, url, clave, modelo, messages, tools) 
   return { status: 'ok', texto: m.content || '', toolCalls: m.tool_calls || [], usage: d.usage ? { input: d.usage.prompt_tokens, output: d.usage.completion_tokens } : null };
 }
 
+// Conversación del banco (formato OpenAI, con turnos de tools) → formato Anthropic:
+// assistant+tool_calls → bloques tool_use; mensajes tool → tool_result en un turno user
+// (los consecutivos se agrupan, y un user que sigue a resultados se añade al mismo turno).
+export function mensajesOpenAIaAnthropic(mensajes) {
+  const system = mensajes.filter(m => m.role === 'system').map(m => m.content).join('\n');
+  const out = [];
+  const anadir = (role, bloques) => {
+    const ultimo = out[out.length - 1];
+    if (ultimo && ultimo.role === role) ultimo.content.push(...bloques);
+    else out.push({ role, content: bloques });
+  };
+  for (const m of mensajes) {
+    if (m.role === 'system') continue;
+    if (m.role === 'assistant') {
+      const bloques = [];
+      if (m.content) bloques.push({ type: 'text', text: m.content });
+      for (const tc of m.tool_calls || []) {
+        let input = {};
+        try { input = JSON.parse(tc.function.arguments || '{}') || {}; } catch (_) { input = {}; }
+        bloques.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input });
+      }
+      anadir('assistant', bloques.length ? bloques : [{ type: 'text', text: '' }]);
+    } else if (m.role === 'tool') {
+      anadir('user', [{ type: 'tool_result', tool_use_id: m.tool_call_id, content: m.content }]);
+    } else {
+      anadir('user', [{ type: 'text', text: m.content }]);
+    }
+  }
+  return { system, messages: out };
+}
+
 // Anthropic con conversación y tools en formato OpenAI (para el banco).
 async function anthropicConTools(fetchImpl, mensajes, tools, maxTokens) {
-  const system = mensajes.filter(m => m.role === 'system').map(m => m.content).join('\n');
-  const messages = mensajes.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+  const { system, messages } = mensajesOpenAIaAnthropic(mensajes);
   const toolsA = (tools || []).map(t => ({ name: t.function.name, description: t.function.description || '', input_schema: t.function.parameters }));
   const r = await fetchImpl('https://api.anthropic.com/v1/messages', {
     method: 'POST', signal: AbortSignal.timeout(60000),

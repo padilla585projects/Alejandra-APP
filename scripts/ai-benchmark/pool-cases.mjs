@@ -1,6 +1,8 @@
 // ADR-0028 — casos sintéticos para comparar el pool de IA propio con los proveedores
 // actuales en las cuatro tareas que el pool asume (a router, b experto simple,
 // c buscar_web, d respaldo cuando cae Anthropic). Sin datos reales de ninguna empresa.
+// POOL-GLOSARIO-01: los prompts de sistema llevan el mismo contexto del oficio que producción.
+import { CONTEXTO_DOMINIO_INSTALADORA } from '../../alejandra-agente/lib.js';
 
 // a) Router de intención: mensaje → etiqueta esperada (criterio del prompt de producción).
 export const casosRouter = [
@@ -22,7 +24,7 @@ export const casosRouter = [
 
 // b) Experto «simple»: charla breve en español, sin tools. `debe` = regex que la respuesta
 // tiene que cumplir; nunca debe fugar tokens de tool-call ni pasar de 1200 caracteres.
-export const sistemaSimple = 'Eres Alejandra, asistente de una empresa de instalaciones eléctricas. Responde en español, breve y cordial. No inventes datos de la empresa.';
+export const sistemaSimple = 'Eres Alejandra, asistente de una empresa de instalaciones eléctricas. Responde en español, breve y cordial. No inventes datos de la empresa.' + '\n' + CONTEXTO_DOMINIO_INSTALADORA;
 export const casosSimple = [
   { id: 's01', mensaje: 'Hola, ¿qué tal estás?', debe: /\b(hola|bien|buen[oa]s?)\b/i },
   { id: 's02', mensaje: 'Gracias por la ayuda de antes', debe: /(de nada|a ti|un placer|gracias|encantad)/i },
@@ -39,7 +41,7 @@ export const casosBusqueda = [
 
 // d) Respaldo cuando cae Anthropic: chat con tools. Se espera la tool correcta o un texto
 // sin llamar a ninguna tool, según el caso.
-export const sistemaRespaldo = 'Eres Alejandra, asistente de una empresa de instalaciones eléctricas. Usa las herramientas cuando el usuario pida datos de la empresa; para preguntas generales responde directamente en español.';
+export const sistemaRespaldo = 'Eres Alejandra, asistente de una empresa de instalaciones eléctricas. Usa las herramientas cuando el usuario pida datos de la empresa; para preguntas generales responde directamente en español.' + '\n' + CONTEXTO_DOMINIO_INSTALADORA;
 export const toolsRespaldo = [
   { type: 'function', function: { name: 'consultar_inventario', description: 'Consulta el stock del almacén de la empresa por material.', parameters: { type: 'object', properties: { material: { type: 'string' } }, required: ['material'] } } },
   { type: 'function', function: { name: 'consultar_personal', description: 'Consulta quién está fichado hoy en una obra.', parameters: { type: 'object', properties: { obra: { type: 'string' } } } } }
