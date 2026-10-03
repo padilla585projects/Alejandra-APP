@@ -72,6 +72,7 @@ import {
   construirQueryAprendizajesEmpresa,
   construirSVGCableadoInstrumentacion,
   validarEstiloCAD,
+  esClaveDatasetPrivada,
 } from './lib.js';
 // Cerebro v2 (F-1.3/ADR-0020): nucleo-cognitivo dividido en subcarpetas locales.
 // Wrangler bundlea el import directamente — no requiere npm.
@@ -86,6 +87,8 @@ import { verificarCotasDeclaradas, resultadoPlanoVerificado, errorPlanoNoGuardad
 // ADR-0028: pool de IA propio con respaldo obligatorio. Mismo módulo que importa worker.js
 // (los dos cerebros). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
 import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda, modeloPool, fijarSumideroMetricasPool } from './ai-pool.js';
+// ADR-0029: dataset de entrenamiento privado en R2 (apagado sin DATASET_ENTRENAMIENTO=1).
+import { datasetActivo, procesarTurnoDataset, resolverPendienteDataset, promoverPendientesCaducados } from './dataset-entrenamiento.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -4719,6 +4722,9 @@ export default {
         const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rolVerificado, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado, departamentoUsuario);
 
         await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat, adjuntos);
+        // ADR-0029: este canal no captura turnos (no lleva traza), pero su mensaje sí decide
+        // si el turno pendiente anterior era bueno o el usuario lo estaba corrigiendo.
+        if (datasetActivo(env)) ctx.waitUntil(resolverPendienteDataset(env, { empresa, usuario_id, mensaje }).catch(e => console.warn('[dataset] resolver:', e.message)));
         if (respuesta.acciones?.length > 0) ctx.waitUntil(autoLearnChat(env, usuario_id, empresa, respuesta));
         if (canal === 'telegram' && token_telegram) ctx.waitUntil(enviarPorTelegram(token_telegram, respuesta.texto));
         ctx.waitUntil(actualizarResumenSiNecesario(env, usuario_id, canalChat));
@@ -4817,6 +4823,11 @@ export default {
             const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rolVerificado, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado, () => clienteDesconectado, departamentoUsuario);
             respFinal = resp;
             await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal, adjuntos);
+            // ADR-0029: dataset privado. Sin DATASET_ENTRENAMIENTO=1 no hace ninguna operación.
+            if (datasetActivo(env)) {
+              ctx.waitUntil(procesarTurnoDataset(env, { empresa, usuario_id, mensaje, authOk, esCron: esInvocacionCron(usuario_id, empresa), adjuntos, usuarioLabel, resp })
+                .catch(e => console.warn('[dataset] turno:', e.message)));
+            }
             // actualizarResumen no bloquea — fire-and-forget dentro del waitUntil
             actualizarResumenSiNecesario(env, usuario_id, canalReal).catch(()=>{});
             await send({ type: 'done', experto: resp.experto, modelo: resp.modelo, busqueda_web: resp.busqueda_web });
@@ -5681,6 +5692,8 @@ export default {
         const sesion = await getAuth(req, env);
         if (!sesion) return json({ error: 'No autorizado' }, 401);
         const key = decodeURIComponent(path.replace('/files/', ''));
+        // ADR-0029: el dataset privado solo se exporta con wrangler, nunca por HTTP.
+        if (esClaveDatasetPrivada(key)) return new Response('No encontrado', { status: 404 });
         const obj = await env.FILES.get(key);
         if (!obj) return new Response('No encontrado', { status: 404 });
         // Aislamiento por empresa (ver puedeAccederArchivo más arriba). 404 en vez
@@ -5872,6 +5885,12 @@ export default {
       // no es una acción de cara al usuario, solo mantenimiento interno.
       if (hora === 5) {
         ctx.waitUntil(refrescarCascadaModelosGratis(env).catch(e => console.error('[CascadaGratis] error en cron:', e.message)));
+      }
+
+      // ADR-0029: promover a «bueno» los turnos pendientes sin siguiente mensaje en 6 h.
+      // Solo R2 (listado + lectura + escritura), nunca D1 ni borrados.
+      if (datasetActivo(env)) {
+        ctx.waitUntil(promoverPendientesCaducados(env).then(r => console.log(`[dataset] promovidos: ${r.promovidos}`)).catch(e => console.error('[dataset] cron:', e.message)));
       }
 
       // No molestar entre 23:00 y 7:00
@@ -6877,6 +6896,14 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let MAX_ITER = esAdmin ? 12 : 8;
     if (esCanalMovilProc) MAX_ITER = Math.min(MAX_ITER, esAdmin ? 8 : 4);
     const herramientasUsadas = [];
+    // ADR-0029: traza del turno para el dataset privado. Solo se lee fuera de aquí si
+    // DATASET_ENTRENAMIENTO=1; no cambia nada del flujo del chat.
+    const trazaDataset = { pasos: [], cortado: false, verificacionCorrigio: false, busquedaPrevia: !!resultadoWeb, tools };
+    const verificarDataset = async (envV, texto, ...resto) => {
+      const r = await verificarYReintentarSiNecesario(envV, texto, ...resto);
+      if (r !== texto) trazaDataset.verificacionCorrigio = true;
+      return r;
+    };
     // Códigos de confirmación tecleados por el HUMANO en su mensaje real (barrera
     // anti-borrado de escribir_bd). Se extraen del mensaje, nunca del tool_input.
     const codigosConfirmados = extraerCodigosConfirmacion(mensaje);
@@ -6900,6 +6927,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       if (!toolBlocks.length) break;
       messages.push({ role: 'assistant', content: respAPI.content });
       const toolResults = [];
+      const pasoDataset = { texto: (respAPI.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim(), llamadas: [] };
+      trazaDataset.pasos.push(pasoDataset);
       let huboFalloEsteTurno = false;
 
       for (const tb of toolBlocks) {
@@ -6911,6 +6940,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           ? await ejecutarToolConTelemetria(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano)
           : JSON.stringify({ ok: false, error: `Tool "${tb.name}" rechazada: no está disponible para esta sesión.` });
         if (!clasificarResultadoTool(resultado)) huboFalloEsteTurno = true;
+        pasoDataset.llamadas.push({ nombre: tb.name, input: tb.input, resultado: typeof resultado === 'string' ? resultado : JSON.stringify(resultado), permitida: control.permitida, ok: control.permitida && clasificarResultadoTool(resultado) });
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // Para SSE preview, extraer solo texto (no base64 de imágenes)
         const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
@@ -6996,7 +7026,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       // ALEJANDRA-ESQUEMA-02: verificar ANTES de enviar -- esta rama manda el texto de
       // una vez (no token a token), así que aún se puede corregir antes de que el
       // usuario lo vea, a diferencia del streaming real de la rama de abajo.
-      textoFinal = await verificarYReintentarSiNecesario(env,
+      textoFinal = await verificarDataset(env,
         respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(),
         herramientasUsadas,
         messages,
@@ -7013,7 +7043,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       respAPI.stop_reason !== 'tool_use' &&
       (respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '')
     ) {
-      textoFinal = await verificarYReintentarSiNecesario(env,
+      textoFinal = await verificarDataset(env,
         respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(),
         herramientasUsadas,
         messages,
@@ -7052,6 +7082,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           await send({ type: 'tool_end', nombre: tb.name, preview: previewText, duracion_ms: Date.now() - t0 });
           const content = parseToolResultContent(resultado);
           messages.push({ role: 'assistant', content: [tb] });
+          trazaDataset.pasos.push({ texto: '', llamadas: [{ nombre: tb.name, input: tb.input, resultado: typeof resultado === 'string' ? resultado : JSON.stringify(resultado), permitida: control.permitida, ok: control.permitida && clasificarResultadoTool(resultado) }] });
           messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: tb.id, content }] });
           streamResult = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
             await send({ type: 'token', texto: token });
@@ -7063,7 +7094,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         // Fallback: usar respuesta ya obtenida si el stream falla
         // ALEJANDRA-ESQUEMA-02: mismo motivo que la rama de arriba -- se envía de una
         // vez, así que verificar antes de mandarlo sí evita que el usuario lo vea.
-        textoFinal = await verificarYReintentarSiNecesario(env,
+        textoFinal = await verificarDataset(env,
           respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta',
           herramientasUsadas,
           messages,
@@ -7084,7 +7115,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // el usuario ve el texto original sin corregir seguido del resultado real (o, si el
     // reintento también falla, el mismo aviso honesto de siempre.
     const textoAntesDeVerificar = textoFinal;
-    textoFinal = await verificarYReintentarSiNecesario(env, textoFinal, herramientasUsadas, messages,
+    textoFinal = await verificarDataset(env, textoFinal, herramientasUsadas, messages,
       { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
         send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano }
     );
@@ -7123,7 +7154,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       });
     }
 
-    return { texto: textoFinal, herramientas_usadas: herramientasUsadas, modelo: expert.model, experto: clas.experto, busqueda_web: usoBusquedaWeb };
+    return { texto: textoFinal, herramientas_usadas: herramientasUsadas, modelo: expert.model, experto: clas.experto, busqueda_web: usoBusquedaWeb,
+      _dataset: { ...trazaDataset, cortado: cortadoPorTimeout } };
 
   } catch(err) {
     console.error('ERROR NEXUS STREAM:', err.message);
@@ -8638,6 +8670,12 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
     }
   }
 
+  // ADR-0029: el dataset privado no es accesible desde el chat (ni para el desarrollador:
+  // se exporta a mano con scripts/ai-benchmark/exportar-dataset.mjs).
+  if (input && typeof input === 'object' && [input.key, input.prefix, input.r2_key, input.archivo_key].some(esClaveDatasetPrivada)) {
+    return JSON.stringify({ ok: false, error: 'Archivo no encontrado.' });
+  }
+
   // Defensa en profundidad: repetir aquí el gating por identidad VERIFICADA
   // (no solo confiar en que el tool no estuviera en la lista ofrecida a Claude).
   // Ver TOOLS_SOLO_DEV_VERIFICADO / TOOLS_REQUIEREN_SESION más arriba.
@@ -8938,6 +8976,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         // listaba TODO el bucket cross-empresa con solo cambiar el prefix.
         const visibles = [];
         for (const obj of listed.objects) {
+          if (esClaveDatasetPrivada(obj.key)) continue; // ADR-0029
           if (await puedeAccederArchivo(env, obj.customMetadata, empresa_id, esDevVerificado)) visibles.push(obj);
         }
         if (visibles.length === 0) return `No se encontraron archivos accesibles con prefijo "${prefix}".`;

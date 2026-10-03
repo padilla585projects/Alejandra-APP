@@ -1897,6 +1897,323 @@ GLOSARIO:
 const SYSTEM_CLASIFICADOR_INTENCION = 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Reglas, una por etiqueta: simple = SOLO saludos, despedidas, agradecimientos, charla casual o una duda general breve que no toca datos de la app (ej: "buenos días", "gracias"). app = datos y gestión del día a día (personal, fichajes, bobinas, material, pedidos, obras, incidencias, tareas, replanteos), problemas/errores/urgencias al usar la app, órdenes de acción (imperativo o enclítico: "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") y HECHOS que implican registrar datos aunque sean un aviso ("Dani faltó hoy", "han venido todos", "ya llegó el pedido", "se ha averiado la carretilla") → app, NUNCA simple. Leer, revisar o resumir su correo/email/Gmail → app, NUNCA web. tecnico = el código y la infraestructura de la propia Alejandra/app: código fuente, workers, deploy, wrangler, GitHub, commits, endpoints, qué tools tiene cada experto (ej: "revisa el código del worker", "¿cómo se despliega el worker?"). web = necesita información actual de internet: precios de mercado, cotizaciones, noticias, webs externas (ej: "¿a cuánto está hoy el cobre?"). reflexion = Alejandra pensando sobre sí misma: autoevaluarse, sus errores, qué aprender, cómo mejorar o evolucionar su forma de trabajar o responder (ej: "analízate", "¿qué podrías mejorar?"). ingenieria = electricidad y control: esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos de cable o protecciones, instalaciones (ej: "calcula la sección para 22 kW"). completo = preguntas sobre quién es Alejandra y todo lo que sabe hacer, o peticiones amplias que mezclan varias áreas a la vez (ej: "¿quién eres y qué sabes hacer?", "cuéntame tus capacidades").';
 const ETIQUETAS_CLASIFICADOR_INTENCION = ['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo'];
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ADR-0029 — Dataset de entrenamiento privado. Funciones PURAS: anonimización
+// determinista, heurística de corrección del usuario, criterio de «turno apto» y
+// construcción del registro JSONL estilo OpenAI. La E/S (R2, cron) vive en
+// dataset-entrenamiento.js. Nada de esto toca D1 ni la red.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Prefijos R2 del dataset. Ninguna ruta de la app los sirve (ver esClaveDatasetPrivada):
+// solo se leen con `wrangler r2 object get` desde scripts/ai-benchmark/exportar-dataset.mjs.
+const DATASET_PREFIJOS = Object.freeze(['dataset/', 'dataset-bueno/', 'dataset-cuota/']);
+
+function esClaveDatasetPrivada(key) {
+  if (typeof key !== 'string') return false;
+  const k = key.trim().replace(/^\/+/, '').toLowerCase();
+  if (!k) return false;
+  return DATASET_PREFIJOS.some(p => k.startsWith(p)) || /^dataset(?:-[a-z]+)?\/?$/.test(k);
+}
+
+// Quita tildes y pasa a minúsculas (para comparar sin depender de la ortografía).
+function normalizarSinTildes(texto) {
+  return String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// ── Heurística «el siguiente mensaje corrige a Alejandra» ────────────────────
+// Conservadora a propósito: un falso positivo solo pierde un ejemplo; un falso negativo
+// mete en el dataset una respuesta que el usuario rechazó.
+const PATRONES_CORRECCION_INICIO = /^\s*[¡!¿]*\s*(?:no|nop|nope|noo+|mal|error|incorrecto|incorrecta|falso|mentira|tampoco|para|frena|espera)\b/;
+const PATRONES_CORRECCION = [
+  /\beso no\b/, /\bno es (?:asi|eso|correcto|cierto|verdad|lo que)\b/, /\bno era (?:eso|asi)\b/,
+  /\bte has equivocado\b/, /\bte equivoc/, /\bequivocad[oa]\b/, /\bestas equivocad/,
+  /\bcorrige\b/, /\bcorrigel[oa]\b/, /\bcorregir\b/, /\brectifica/,
+  /\besta mal\b/, /\bestan mal\b/, /\bmal hecho\b/, /\bhas fallado\b/, /\bfallaste\b/,
+  /\bno funciona\b/, /\bno me sirve\b/, /\bno sirve\b/, /\bno has (?:hecho|guardado|creado|enviado|mirado|entendido)\b/,
+  /\bno lo has\b/, /\bno te he pedido\b/, /\bno te pedi\b/, /\bno es lo que\b/, /\bno tiene sentido\b/,
+  /\bte lo has inventado\b/, /\bte has inventado\b/, /\binventad[oa]s?\b/, /\bno existe\b/,
+  /\bvuelve a (?:intentarlo|hacerlo|mirarlo|probar)\b/, /\botra vez mal\b/, /\bsigue mal\b/,
+  /\bno entiendes\b/, /\bno me has entendido\b/, /\bque no\b/,
+];
+function esCorreccionUsuario(mensaje) {
+  const t = normalizarSinTildes(mensaje).replace(/\s+/g, ' ').trim();
+  if (!t) return false;
+  if (PATRONES_CORRECCION_INICIO.test(t)) return true;
+  return PATRONES_CORRECCION.some(re => re.test(t));
+}
+
+// Resultado de tool que deja una barrera de confirmación humana pendiente
+// (CONFIRMO BORRADO / CONFIRMO ENVIO / revisión N2). Ese turno no se guarda.
+function esBarreraConfirmacion(resultado) {
+  const t = typeof resultado === 'string' ? resultado : (() => { try { return JSON.stringify(resultado); } catch { return ''; } })();
+  return /OPERACI[ÓO]N BLOQUEADA|PENDIENTE DE CONFIRMACI[ÓO]N|requiere confirmaci[óo]n humana|CONFIRMO (?:BORRADO|ENVIO|MIGRACION)|pendiente de aprobaci[óo]n/i.test(t || '');
+}
+
+// ── Anonimización ────────────────────────────────────────────────────────────
+// Claves JSON cuyo valor es el nombre de una persona, una obra o una empresa. Se usan
+// para (1) aprender los nombres que aparecen en argumentos/resultados de tools y (2)
+// sustituir esos valores directamente.
+const CLAVES_PERSONA = /^(?:nombre_completo|nombre_usuario|usuario_nombre|apellidos?|operario|operarios|encargado|responsable|trabajador|empleado|tecnico|jefe|jefe_de_obra|jefe_obra|contacto|persona|creado_por|asignado_a|autor|destinatario_nombre|remitente_nombre|solicitante|conductor|firmante|revisado_por|aprobado_por)$/i;
+const CLAVES_OBRA = /^(?:obra|obra_nombre|nombre_obra|proyecto|proyecto_nombre|centro_trabajo)$/i;
+const CLAVES_EMPRESA = /^(?:empresa|empresa_nombre|nombre_empresa|razon_social|cliente|cliente_nombre|proveedor|proveedor_nombre|subcontrata)$/i;
+// `nombre` a secas solo es una persona si el mismo objeto tiene campos de persona.
+const CLAVES_HERMANAS_PERSONA = /^(?:apellidos?|dni|nie|telefono|movil|email|correo|rol|cargo|puesto|categoria_profesional|fecha_nacimiento)$/i;
+
+const PALABRAS_NO_NOMBRE = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'san', 'santa', 'sr', 'sra', 'don', 'dona', 'null', 'undefined', 'true', 'false', 'admin', 'system', 'anon', 'default', 'cron']);
+
+const RE_TEXTO_PERSONA = /\b(?:[Nn]ombre|[Oo]perario|[Ee]ncargad[oa]|[Rr]esponsable|[Tt]rabajador|[Tt][eé]cnico|[Jj]efe de obra|[Cc]ontacto|[Ss]olicitante|[Ff]irmado por|[Aa]signad[oa] a)\s*:\s*([A-ZÁÉÍÓÚÑ][a-záéíóúñü]+(?:\s+(?:de\s+(?:la\s+)?|del\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñü]+){0,3})/g;
+const RE_TEXTO_OBRA = /\b[Oo]bra\s*:\s*([A-ZÁÉÍÓÚÑ0-9][\wÁÉÍÓÚÑáéíóúñü.-]*(?:\s+[A-ZÁÉÍÓÚÑ0-9][\wÁÉÍÓÚÑáéíóúñü.-]*){0,4})/g;
+
+function crearContextoAnonimizacion({ personas = [], obras = [], empresas = [] } = {}) {
+  const ctx = { personas: [], obras: [], empresas: [], _cache: null };
+  for (const p of personas) registrarEntidad(ctx, 'personas', p);
+  for (const o of obras) registrarEntidad(ctx, 'obras', o);
+  for (const e of empresas) registrarEntidad(ctx, 'empresas', e);
+  return ctx;
+}
+
+function registrarEntidad(ctx, tipo, valor) {
+  if (typeof valor !== 'string') return;
+  const limpio = valor.replace(/\s+/g, ' ').trim();
+  if (limpio.length < 3 || limpio.length > 80) return;
+  if (/^<[A-Z_0-9]+>$/.test(limpio)) return; // ya es un marcador
+  if (/^[\d\s.,:/-]+$/.test(limpio)) return;  // números/fechas: no son nombres
+  if (PALABRAS_NO_NOMBRE.has(normalizarSinTildes(limpio))) return;
+  const norm = normalizarSinTildes(limpio);
+  const lista = ctx[tipo];
+  if (lista.some(e => e.norm === norm)) return;
+  lista.push({ texto: limpio, norm, n: lista.length + 1 });
+  ctx._cache = null;
+}
+
+// Recorre un valor (objeto/array/JSON en texto) y aprende nombres por la clave en la
+// que aparecen. También mira patrones «Operario: Nombre Apellido» en texto plano.
+function aprenderEntidades(valor, ctx, profundidad = 0) {
+  if (profundidad > 8 || valor == null) return;
+  if (typeof valor === 'string') {
+    const s = valor.trim();
+    if ((s.startsWith('{') || s.startsWith('[')) && s.length < 200000) {
+      try { aprenderEntidades(JSON.parse(s), ctx, profundidad + 1); } catch { /* texto normal */ }
+    }
+    for (const m of s.matchAll(RE_TEXTO_PERSONA)) registrarEntidad(ctx, 'personas', m[1]);
+    for (const m of s.matchAll(RE_TEXTO_OBRA)) registrarEntidad(ctx, 'obras', m[1]);
+    return;
+  }
+  if (Array.isArray(valor)) { for (const v of valor.slice(0, 500)) aprenderEntidades(v, ctx, profundidad + 1); return; }
+  if (typeof valor !== 'object') return;
+  const claves = Object.keys(valor);
+  const esObjetoPersona = claves.some(k => CLAVES_HERMANAS_PERSONA.test(k));
+  for (const k of claves) {
+    const v = valor[k];
+    if (typeof v === 'string') {
+      if (CLAVES_PERSONA.test(k) || (esObjetoPersona && /^nombre$/i.test(k))) registrarEntidad(ctx, 'personas', v);
+      else if (CLAVES_OBRA.test(k)) registrarEntidad(ctx, 'obras', v);
+      else if (CLAVES_EMPRESA.test(k)) registrarEntidad(ctx, 'empresas', v);
+    }
+    aprenderEntidades(v, ctx, profundidad + 1);
+  }
+}
+
+function escaparRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// Patrón que casa una palabra con o sin tildes, sin distinguir mayúsculas.
+function patronSinTildes(palabra) {
+  const mapa = { a: '[aáàä]', e: '[eéèë]', i: '[iíìï]', o: '[oóòö]', u: '[uúùü]', n: '[nñ]' };
+  return normalizarSinTildes(palabra).split('').map(c => mapa[c] || escaparRegex(c)).join('');
+}
+const LETRA_NOMBRE = '[A-Za-z0-9_áéíóúüñÁÉÍÓÚÜÑàèìòùÀÈÌÒÙäëïöÄËÏÖ]';
+
+// Reglas de sustitución por patrón, en este orden (las más específicas primero).
+const REGLAS_ANONIMIZACION = [
+  // Imágenes/binarios en línea
+  [/data:[\w/+.-]+;base64,[A-Za-z0-9+/=]{16,}/g, '<BINARIO>'],
+  // URLs completas (firmadas o no): pueden llevar tokens, nombres o rutas privadas
+  [/\b(?:https?|wss?|ftp):\/\/[^\s"'<>`)\]}]+/gi, '<URL>'],
+  // Credenciales y tokens
+  [/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/g, 'Bearer <TOKEN>'],
+  [/\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, '<TOKEN>'],
+  [/\b(?:sk|pk|rk)[-_](?:live[-_]|test[-_]|ant[-_]|proj[-_])?[A-Za-z0-9_-]{12,}/g, '<TOKEN>'],
+  [/\b(?:ghp|gho|ghu|ghs|github_pat|xox[abpr]|AIza|ya29)[A-Za-z0-9_.-]{10,}/g, '<TOKEN>'],
+  [/\b(?:token|clave|password|contrase[ñn]a|api[_-]?key|secret|secreto)\s*[:=]\s*["']?[^\s"',;]{6,}/gi, '<TOKEN>'],
+  [/\b[a-f0-9]{32,}\b/gi, '<TOKEN>'],
+  [/\b(?=[A-Za-z0-9+/_-]*\d)(?=[A-Za-z0-9+/_-]*[a-z])(?=[A-Za-z0-9+/_-]*[A-Z])[A-Za-z0-9+/_-]{40,}={0,2}/g, '<TOKEN>'],
+  // Rutas de ficheros del bucket (llevan nombres de usuario y de obra)
+  [/\b(?:chat_files|uploads?|fotos?|esquemas|informes|documentos|exports?|e\d+)\/[^\s"'<>`,;)]+/g, '<ARCHIVO>'],
+  // Correo electrónico
+  [/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '<EMAIL>'],
+  // IBAN (antes que teléfonos y tarjetas: contiene secuencias de dígitos)
+  [/\b[A-Z]{2}\d{2}(?:[ -]?[A-Z0-9]{4}){3,7}(?:[ -]?[A-Z0-9]{1,3})?\b/g, '<IBAN>'],
+  // Tarjeta (16 dígitos en 4 grupos)
+  [/\b\d{4}(?:[ -]?\d{4}){3}\b/g, '<TARJETA>'],
+  // DNI (8 dígitos + letra) y NIE (X/Y/Z + 7 dígitos + letra)
+  [/\b\d{8}[ -]?[TRWAGMYFPDXBNJZSQVHLCKE]\b/g, '<DNI>'],
+  [/\b[XYZ][ -]?\d{7}[ -]?[TRWAGMYFPDXBNJZSQVHLCKE]\b/g, '<DNI>'],
+  // CIF de empresa
+  [/\b[ABCDEFGHJNPQRSUVW][ -]?\d{7}[ -]?[0-9A-J]\b/g, '<CIF>'],
+  // Teléfonos españoles: +34/0034 opcional y 9 dígitos que empiezan por 6, 7, 8 o 9,
+  // con o sin espacios, puntos o guiones entre cifras.
+  [/(?<![\w+])(?:(?:\+|00)\s?34[\s.-]?)?[6789](?:[\s.-]?\d){8}(?![\w])/g, '<TELEFONO>'],
+  // Matrículas: actual (1234 BCD, sin vocales) y antigua provincial (M-1234-AB)
+  [/\b\d{4}[ -]?[BCDFGHJKLMNPRSTVWXYZ]{3}\b/g, '<MATRICULA>'],
+  [/\b[A-Z]{1,2}-\d{4}-[A-Z]{1,2}\b/g, '<MATRICULA>'],
+  // Direcciones: tipo de vía + nombre + número
+  [/(?<![\wÁÉÍÓÚÑáéíóúñ])(?:c\/|calle|avda\.?|av\.|avenida|plaza|pza\.?|paseo|p[º°]\.?|camino|ctra\.?|carretera|ronda|traves[ií]a|glorieta|urbanizaci[oó]n|urb\.|pol[ií]gono(?:\s+industrial)?|pol\.\s*ind\.?)\s*(?:(?:de|del|la|las|los|el|y)\s+)*[A-Za-zÁÉÍÓÚÑáéíóúñü][\wÁÉÍÓÚÑáéíóúñü.'-]*(?:\s+(?:(?:de|del|la|las|los|el|y)\s+)*[A-Za-zÁÉÍÓÚÑáéíóúñü][\wÁÉÍÓÚÑáéíóúñü.'-]*){0,4},?\s*(?:(?:n[º°o]\.?\s*|n[uú]m(?:ero)?\.?\s*)?\d{1,4}(?:\s?[A-Za-z](?![\wáéíóúñ]))?|s\/n)(?=[\s,.;:)]|$)/gi, '<DIRECCION>'],
+];
+
+// Construye (y cachea) las sustituciones por nombre conocido. Cada nombre completo y cada
+// palabra suelta de ≥3 letras de un nombre de persona se sustituyen por el mismo marcador.
+function reglasDeEntidades(ctx) {
+  if (ctx._cache) return ctx._cache;
+  const pares = [];
+  const agregar = (texto, marcador) => {
+    const t = texto.trim();
+    if (t.length < 3 || PALABRAS_NO_NOMBRE.has(normalizarSinTildes(t))) return;
+    pares.push({ len: t.length, marcador, re: new RegExp(`(?<!${LETRA_NOMBRE})${t.split(/\s+/).map(patronSinTildes).join('\\s+')}(?!${LETRA_NOMBRE})`, 'gi') });
+  };
+  for (const p of ctx.personas) {
+    const m = `<PERSONA_${p.n}>`;
+    agregar(p.texto, m);
+    for (const w of p.texto.split(/\s+/)) if (w.length >= 3) agregar(w, m);
+  }
+  for (const o of ctx.obras) agregar(o.texto, `<OBRA_${o.n}>`);
+  for (const e of ctx.empresas) agregar(e.texto, '<EMPRESA>');
+  pares.sort((a, b) => b.len - a.len); // nombres largos antes que sus palabras sueltas
+  ctx._cache = pares;
+  return pares;
+}
+
+function anonimizarTexto(texto, ctx = crearContextoAnonimizacion()) {
+  if (texto == null) return texto;
+  let s = String(texto);
+  for (const [re, sustituto] of REGLAS_ANONIMIZACION) s = s.replace(re, sustituto);
+  for (const { re, marcador } of reglasDeEntidades(ctx)) s = s.replace(re, marcador);
+  return s;
+}
+
+// Anonimiza un valor estructurado (argumentos o resultado de tool). Los valores de
+// claves de persona/obra/empresa se sustituyen enteros por su marcador.
+function anonimizarValor(valor, ctx, profundidad = 0) {
+  if (valor == null || profundidad > 10) return valor;
+  if (typeof valor === 'string') return anonimizarTexto(valor, ctx);
+  if (typeof valor === 'number' || typeof valor === 'boolean') return valor;
+  if (Array.isArray(valor)) return valor.map(v => anonimizarValor(v, ctx, profundidad + 1));
+  if (typeof valor !== 'object') return undefined;
+  const out = {};
+  for (const [k, v] of Object.entries(valor)) {
+    if (/^(?:token|password|contrase[ñn]a|api_?key|secret|authorization|refresh_token|access_token|firma|signature)$/i.test(k)) { out[k] = '<TOKEN>'; continue; }
+    if (/^(?:adjuntos?|imagen(?:es)?|image|images|foto(?:s)?_base64|base64|archivo_base64|data_url)$/i.test(k)) { out[k] = '<ADJUNTO_ELIMINADO>'; continue; }
+    out[k] = anonimizarValor(v, ctx, profundidad + 1);
+  }
+  return out;
+}
+
+// ── Criterio de «turno apto» ─────────────────────────────────────────────────
+// traza = { authOk, esCron, adjuntos, experto, modelo, texto_final, cortado,
+//           verificacionCorrigio, pasos: [{ texto, llamadas: [{ nombre, input, resultado, ok, permitida }] }] }
+function evaluarTurnoDataset(traza) {
+  if (!traza || typeof traza !== 'object') return { apto: false, motivo: 'sin_traza' };
+  if (!traza.authOk) return { apto: false, motivo: 'sin_sesion' };
+  if (traza.esCron) return { apto: false, motivo: 'cron' };
+  if (traza.adjuntos > 0) return { apto: false, motivo: 'adjuntos' };
+  if (traza.modelo === 'instant') return { apto: false, motivo: 'saludo_instantaneo' };
+  const final = String(traza.texto_final || '').trim();
+  if (!final) return { apto: false, motivo: 'texto_vacio' };
+  if (/^Error[:\s]/.test(final) || /^No pude generar una respuesta/.test(final)) return { apto: false, motivo: 'texto_error' };
+  if (traza.cortado) return { apto: false, motivo: 'cortado_timeout' };
+  if (traza.verificacionCorrigio) return { apto: false, motivo: 'verificacion_corrigio' };
+  // La búsqueda web previa al bucle no es una tool_call: sin ella la respuesta parecería
+  // salir de la nada y enseñaría a inventar.
+  if (traza.busquedaPrevia) return { apto: false, motivo: 'busqueda_web_previa' };
+  for (const paso of traza.pasos || []) {
+    for (const ll of paso.llamadas || []) {
+      if (ll.permitida === false) return { apto: false, motivo: 'tool_rechazada' };
+      if (!ll.ok || !clasificarResultadoTool(typeof ll.resultado === 'string' ? ll.resultado : JSON.stringify(ll.resultado ?? ''))) return { apto: false, motivo: 'tool_error' };
+      if (esBarreraConfirmacion(ll.resultado)) return { apto: false, motivo: 'barrera_confirmacion' };
+      if (typeof ll.resultado === 'string' && /^\s*\[\s*\{\s*"type"\s*:\s*"image"/.test(ll.resultado)) return { apto: false, motivo: 'imagen_en_tool' };
+    }
+  }
+  if (esBarreraConfirmacion(final) && /CONFIRMO (?:BORRADO|ENVIO)/.test(final)) return { apto: false, motivo: 'barrera_confirmacion' };
+  return { apto: true, motivo: 'ok' };
+}
+
+const DATASET_LIMITES = Object.freeze({ usuario: 4000, asistente: 6000, resultadoTool: 2000, argumento: 2000, registro: 64 * 1024 });
+
+function recortar(texto, max) {
+  const s = String(texto ?? '');
+  return s.length > max ? s.slice(0, max) + ' …[recortado]' : s;
+}
+function recortarValor(valor, max, profundidad = 0) {
+  if (typeof valor === 'string') return recortar(valor, max);
+  if (Array.isArray(valor)) return valor.slice(0, 50).map(v => recortarValor(v, max, profundidad + 1));
+  if (valor && typeof valor === 'object' && profundidad < 10) {
+    const out = {};
+    for (const [k, v] of Object.entries(valor)) out[k] = recortarValor(v, max, profundidad + 1);
+    return out;
+  }
+  return valor;
+}
+
+// System resumido y SIN datos de sesión (ni usuario, ni empresa, ni fecha, ni pantalla).
+function systemDataset(experto) {
+  return `Eres Alejandra, la asistente de una empresa instaladora (eléctrica, mecánica, telecomunicaciones y control) que trabaja en obra. Experto: ${String(experto || 'app').replace(/[^\w-]/g, '').slice(0, 30)}. Responde en español, claro y directo, y usa las herramientas para consultar datos reales en vez de inventarlos.`;
+}
+
+function toolsOpenAIDataset(toolsDisponibles, nombresUsados) {
+  const usados = new Set(nombresUsados);
+  return (toolsDisponibles || [])
+    .filter(t => t && usados.has(t.name))
+    .map(t => ({ type: 'function', function: { name: t.name, description: String(t.description || '').slice(0, 1500), parameters: t.input_schema || { type: 'object', properties: {} } } }));
+}
+
+// Construye el registro (una línea JSONL) ya anonimizado. Devuelve null si no cabe.
+// `personas` son los nombres conocidos de la sesión (p. ej. el nombre del usuario).
+function construirRegistroDataset({ traza, mensaje, toolsDisponibles = [], personas = [], obras = [], empresas = [], empresaHash, fecha }) {
+  const ctx = crearContextoAnonimizacion({ personas, obras, empresas });
+  // Aprender primero de TODO el turno, para que un nombre que solo sale en un resultado
+  // de tool se sustituya también en el mensaje del usuario y en la respuesta final.
+  for (const paso of traza.pasos || []) {
+    for (const ll of paso.llamadas || []) { aprenderEntidades(ll.input, ctx); aprenderEntidades(ll.resultado, ctx); }
+  }
+  const messages = [{ role: 'system', content: systemDataset(traza.experto) }];
+  messages.push({ role: 'user', content: recortar(anonimizarTexto(mensaje, ctx), DATASET_LIMITES.usuario) });
+  let nLlamada = 0;
+  const nombresUsados = [];
+  for (const paso of traza.pasos || []) {
+    const llamadas = paso.llamadas || [];
+    if (!llamadas.length) continue;
+    const ids = llamadas.map(() => `call_${++nLlamada}`);
+    messages.push({
+      role: 'assistant',
+      content: paso.texto ? recortar(anonimizarTexto(paso.texto, ctx), DATASET_LIMITES.asistente) : null,
+      tool_calls: llamadas.map((ll, i) => ({
+        id: ids[i], type: 'function',
+        function: { name: ll.nombre, arguments: JSON.stringify(recortarValor(anonimizarValor(ll.input ?? {}, ctx), DATASET_LIMITES.argumento)) },
+      })),
+    });
+    llamadas.forEach((ll, i) => {
+      nombresUsados.push(ll.nombre);
+      let contenido = ll.resultado;
+      if (typeof contenido !== 'string') { try { contenido = JSON.stringify(contenido); } catch { contenido = ''; } }
+      let anon;
+      try { anon = JSON.stringify(anonimizarValor(JSON.parse(contenido), ctx)); } catch { anon = anonimizarTexto(contenido, ctx); }
+      messages.push({ role: 'tool', tool_call_id: ids[i], content: recortar(anon, DATASET_LIMITES.resultadoTool) });
+    });
+  }
+  messages.push({ role: 'assistant', content: recortar(anonimizarTexto(traza.texto_final, ctx), DATASET_LIMITES.asistente) });
+  const registro = {
+    messages,
+    tools: toolsOpenAIDataset(toolsDisponibles, nombresUsados),
+    meta: {
+      experto: String(traza.experto || ''),
+      modelo: String(traza.modelo || ''),
+      empresa_hash: String(empresaHash || ''),
+      fecha: String(fecha || '').slice(0, 10),
+      n_tools: nombresUsados.length,
+      version: 1,
+    },
+  };
+  return JSON.stringify(registro).length <= DATASET_LIMITES.registro ? registro : null;
+}
+
 // ROUTER-ENCLITICO-01 (03/10/2026): \b de JavaScript solo conoce [A-Za-z0-9_], así que en
 // las reglas de enrutado una palabra que empieza o acaba en vocal con tilde nunca casaba
 // («última versión», «almacén», «albarán», «replanteó»...). reEspanol reescribe cada \b como
@@ -1909,6 +2226,17 @@ function reEspanol(re) {
 }
 
 export {
+  DATASET_PREFIJOS,
+  DATASET_LIMITES,
+  esClaveDatasetPrivada,
+  esCorreccionUsuario,
+  esBarreraConfirmacion,
+  crearContextoAnonimizacion,
+  aprenderEntidades,
+  anonimizarTexto,
+  anonimizarValor,
+  evaluarTurnoDataset,
+  construirRegistroDataset,
   reEspanol,
   CONTEXTO_DOMINIO_INSTALADORA,
   SYSTEM_CLASIFICADOR_INTENCION,
