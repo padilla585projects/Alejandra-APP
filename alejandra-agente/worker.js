@@ -27,6 +27,7 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 // lib.js y worker.js lo recibe vía este import.
 import {
   reEspanol,
+  CONTEXTO_DOMINIO_INSTALADORA,
   SYSTEM_CLASIFICADOR_INTENCION,
   ETIQUETAS_CLASIFICADOR_INTENCION,
   alcancePlanoGenerado,
@@ -84,7 +85,7 @@ import { obtenerFuente } from './nexo-fuentes.js';
 import { verificarCotasDeclaradas, resultadoPlanoVerificado, errorPlanoNoGuardado } from './planos-cotas.js';
 // ADR-0028: pool de IA propio con respaldo obligatorio. Mismo módulo que importa worker.js
 // (los dos cerebros). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
-import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda, modeloPool } from './ai-pool.js';
+import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda, modeloPool, fijarSumideroMetricasPool } from './ai-pool.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -216,6 +217,9 @@ actual no lo necesitaba; si de verdad se trata de una consulta PRL que no se det
 ("esto es una consulta de seguridad, dame un segundo") y dependerá del siguiente turno.
 
 INFORMES Y COMUNICACIONES: Dispones de tres herramientas de comunicación: generar_informe (crea un informe HTML profesional con datos reales de la BD, lo guarda en R2 y devuelve la clave), enviar_email (envía por correo usando Resend, puede adjuntar el informe), enviar_telegram_informe (manda el informe al grupo de Telegram como documento). Úsalas cuando el usuario pida informes, resúmenes, o comunicaciones formales.`,
+
+  // POOL-GLOSARIO-01: contexto del oficio + glosario (lib.js). En L0 (cacheado) y en todos los expertos.
+  dominio: CONTEXTO_DOMINIO_INSTALADORA,
 
   app: `APP ALEJANDRA: gestiona bobinas de cable, equipos (PEMP, carretillas), personal, fichajes, documentos, incidencias, pedidos y módulo PRL completo — sector eléctrico/mecánico, multi-empresa.
 Roles: operario (lectura) · encargado (su depto) · empresa_admin (su empresa) · superadmin (todo) · desarrollador (solo Adrián).
@@ -1713,22 +1717,22 @@ const NEXUS_EXPERTS = {
   // la cascada gratis falla entera. `model` aquí es solo la etiqueta de coste usada
   // cuando cae al fallback de Haiku (ver llamarExperto/registrarTokenUso) — por eso
   // es MODEL_ROUTER y no MODEL_EXPERTO, para no registrar coste de Sonnet por error.
-  simple:   { model: MODEL_ROUTER, maxTokens: 600,  modules: ['base', 'contexto_sesion', 'formato'], gratisPrimero: true },
+  simple:   { model: MODEL_ROUTER, maxTokens: 600,  modules: ['base', 'dominio', 'contexto_sesion', 'formato'], gratisPrimero: true },
   // subtemasElectrica: true (INGENIERIA-SUBTEMAS-01) marca los expertos que antes
   // cargaban 'ingenieria_electrica' entero siempre — ahora reciben solo los ie_* que
   // detectarSubtemasIngenieriaElectrica() considere relevantes para el mensaje actual
   // (ver procesarConNEXUS/Stream).
-  app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'], subtemasElectrica: true },
-  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'reflexion', 'decision', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'web', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  ingenieria: { model: MODEL_EXPERTO, maxTokens: 8000, modules: ['base', 'app', 'ingenieria', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'], subtemasElectrica: true }
+  app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'dominio', 'app', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'], subtemasElectrica: true },
+  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'dominio', 'app', 'tecnica', 'nexus', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'dominio', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'dominio', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'reflexion', 'decision', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'dominio', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'web', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  ingenieria: { model: MODEL_EXPERTO, maxTokens: 8000, modules: ['base', 'dominio', 'app', 'ingenieria', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'], subtemasElectrica: true }
 };
 // Nota: el módulo inteligencia_negocio ya incluye instrucciones de fases_obra y diario_obra (v6.48+)
 
 // Módulos estáticos (L0) — se cachean siempre, nunca cambian entre turnos
-const L0_MODULES = ['base', 'formato'];
+const L0_MODULES = ['base', 'dominio', 'formato'];
 
 function buildSystemPrompt(modulos) {
   return modulos.map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
@@ -2892,7 +2896,7 @@ const AYUDANTES = {
     // "replanteo -> pedido" -- antes de crear líneas a mano puede mirar si ya hay un
     // replanteo que las calcula, y comparar lo pedido con lo replanteado.
     tools: [TOOL_GESTIONAR_PEDIDO, TOOL_BUSCAR_WEB, TOOL_CONSULTAR_REPLANTEOS, TOOL_COMPARAR_REPLANTEO_PEDIDO, TOOL_GENERAR_PEDIDO_REPLANTEO],
-    systemPrompt: 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Los proveedores habituales son Hilti (fijación y anclajes), Pemsa (bandejas portacables) y Würth (tornillería y fijaciones) -- si te piden un material y no conoces la referencia exacta, usa buscar_web (prioriza hilti.es, pemsa-rejiband.com o wurth.es en la búsqueda) para encontrar la referencia y descripción reales antes de crear el pedido. Si la búsqueda no encuentra nada fiable, crea igualmente el pedido con la descripción que te haya dado el humano -- nunca inventes un código de referencia que parezca oficial sin haberlo verificado; en ese caso dilo explícitamente en la descripción/notas. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.\n\nREPLANTEOS (REPLANTEO-08): parte del material de obra no se pide a ojo, sale de un replanteo hecho con la cámara (el encargado fotografía el techo o la pared, traza el recorrido y la app calcula el material). Si te piden material que suena a un recorrido medido (bandeja, tubo, canaleta, "lo del pasillo", "lo que replanteó Fulano"), mira primero con consultar_replanteos si ya existe ese replanteo en vez de crear líneas a mano: sus cantidades son medidas, las tuyas serían inventadas. Para pasar un replanteo a Pedidos usa generar_pedido_replanteo (equivale al botón "A Pedidos" de la app), NUNCA gestionar_pedido línea a línea: así queda la referencia REPL-<id> que enlaza pedido y replanteo, y sin ella la comparación posterior no funciona. Antes de generarlo, enséñale al usuario el material que va a pedir y espera su confirmación; y si ya se generó, la tool te lo dirá -- no insistas. Si preguntan si un pedido cubre lo replanteado, o por qué no cuadra, usa comparar_replanteo_pedido y cuéntale el resultado tal cual, sin redondear a "está todo bien".',
+    systemPrompt: CONTEXTO_DOMINIO_INSTALADORA + '\n\n' + 'Eres el ayudante de Pedidos de Alejandra, especializado en gestionar pedidos de material de obra. Usa gestionar_pedido para crear, listar, actualizar o eliminar pedidos. Los proveedores habituales son Hilti (fijación y anclajes), Pemsa (bandejas portacables) y Würth (tornillería y fijaciones) -- si te piden un material y no conoces la referencia exacta, usa buscar_web (prioriza hilti.es, pemsa-rejiband.com o wurth.es en la búsqueda) para encontrar la referencia y descripción reales antes de crear el pedido. Si la búsqueda no encuentra nada fiable, crea igualmente el pedido con la descripción que te haya dado el humano -- nunca inventes un código de referencia que parezca oficial sin haberlo verificado; en ese caso dilo explícitamente en la descripción/notas. Responde de forma breve y concreta con el resultado de la acción. Si falta un dato imprescindible (p.ej. la descripción para crear un pedido), pídelo en vez de inventarlo.\n\nREPLANTEOS (REPLANTEO-08): parte del material de obra no se pide a ojo, sale de un replanteo hecho con la cámara (el encargado fotografía el techo o la pared, traza el recorrido y la app calcula el material). Si te piden material que suena a un recorrido medido (bandeja, tubo, canaleta, "lo del pasillo", "lo que replanteó Fulano"), mira primero con consultar_replanteos si ya existe ese replanteo en vez de crear líneas a mano: sus cantidades son medidas, las tuyas serían inventadas. Para pasar un replanteo a Pedidos usa generar_pedido_replanteo (equivale al botón "A Pedidos" de la app), NUNCA gestionar_pedido línea a línea: así queda la referencia REPL-<id> que enlaza pedido y replanteo, y sin ella la comparación posterior no funciona. Antes de generarlo, enséñale al usuario el material que va a pedir y espera su confirmación; y si ya se generó, la tool te lo dirá -- no insistas. Si preguntan si un pedido cubre lo replanteado, o por qué no cuadra, usa comparar_replanteo_pedido y cuéntale el resultado tal cual, sin redondear a "está todo bien".',
   },
   correos: {
     tools: [TOOL_LEER_GMAIL, TOOL_ENVIAR_GMAIL, TOOL_CATEGORIZAR_CORREOS, TOOL_PROGRAMAR_CORREO],
@@ -4370,6 +4374,9 @@ async function resolverNombreUsuario(env, userId) {
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
 export default {
   async fetch(req, env, ctx) {
+    // ADR-0028 §Medición: binding opcional de Analytics Engine para las métricas del pool
+    // (sin filas D1). Sin el binding no hace nada.
+    fijarSumideroMetricasPool(env.AI_POOL_AE, 'alejandra-agente');
     const url  = new URL(req.url);
     const path = url.pathname;
 
@@ -5833,6 +5840,7 @@ export default {
   },
   // ── Cron: Alejandra despierta cada hora y decide si actuar ──────────────
   async scheduled(event, env, ctx) {
+    fijarSumideroMetricasPool(env.AI_POOL_AE, 'alejandra-agente');
     // TAREAS-PROGRAMADAS-01 (01/09/2026): cron nuevo de precisión fina (cada 5 min, ver
     // wrangler.toml) para ejecutar tareas_programadas a su hora real -- DEBE despacharse
     // por event.cron explícitamente y salir aquí, antes de la lógica por horas de abajo
@@ -13643,7 +13651,7 @@ ${pares.slice(-10).join('\n---\n')}
 Memoria actual:
 ${(memoria.results||[]).map(m=>`[${m.tipo}] ${m.titulo}`).join('\n')}${preguntasTexto}`;
 
-    const reflexionPrompt = buildSystemPrompt(['base','tecnica','nexus','evolucion','reflexion','formato']);
+    const reflexionPrompt = buildSystemPrompt(['base','dominio','tecnica','nexus','evolucion','reflexion','formato']);
 
     const messages = [{
       role: 'user',
