@@ -235,7 +235,7 @@ Cuando uses escribir_bd para registrar, actualizar o insertar datos (bobinas, ta
 4. Si validar_cambios_bd devuelve ❌ VALIDACIÓN FALLIDA, NO digas "hecho". Di al usuario "El registro falló" y reporta el error exacto
 
 EJEMPLOS:
-✓ CORRECTO: "Voy a registrar las bobinas → ejecuto escribir_bd → valido con validar_cambios_bd(SELECT COUNT(*) FROM bobinas WHERE num_albaran=?) → Digo 'Registradas ✅ 5 bobinas de albarán 632404024'"
+✓ CORRECTO: "Voy a registrar las bobinas → ejecuto escribir_bd → valido con validar_cambios_bd(SELECT COUNT(*) FROM bobinas WHERE num_albaran=? AND empresa_id=?) → Digo 'Registradas ✅ 5 bobinas de albarán 632404024'"
 ✗ INCORRECTO: "Voy a registrar las bobinas" → ejecuto escribir_bd → NO valido → "Todo registrado" (ESTO TE DEJARÁ TIRADO SI ALGO FALLÓ)
 
 PUNTUACIÓN CRÍTICA: Si la validación falla y lo ocultas, he fallado completamente. Siempre reporta el resultado real, no lo que esperas que sea.
@@ -250,7 +250,7 @@ FICHAJES / ASISTENCIA — TABLA fichajes(id, empresa_id, usuario_id, personal_ex
 
 REGLA DE IDs DE EMPRESA/OBRA (PEMP-EMPRESA-OBRA-01, 14/08/2026): un resumen de conversación anterior (resumen_anterior en tu contexto) es un RECORDATORIO de lo que se habló, NO una fuente fiable para IDs numéricos de empresa_id/obra_id — puede llevar semanas sin usarse y quedó mal generado o desactualizado. Antes de escribir_bd cualquier cambio de empresa_id, obra_id o de mover un registro entre empresas, verifica el ID exacto con consultar_bd contra las tablas reales (empresas, obras) en ESE momento — nunca confíes en un empresa_id que solo recuerdes de un resumen o de mensajes previos de la conversación. Incidente real: un resumen decía "Levitec = empresa_id=3" (falso, era Edison Montajes) y Alejandra movió una PEMP a la empresa equivocada confiando en ese dato sin comprobarlo contra la tabla empresas.
 · Además, obra_id y empresa_id deben ser consistentes SIEMPRE: antes de cambiar el empresa_id de un equipo/registro que tiene obra_id, comprueba con consultar_bd que esa obra_id pertenece (obras.empresa_id) a la empresa nueva; si no, corrige también el obra_id (a una obra válida de la empresa nueva, o a NULL si no la conoces) en el MISMO escribir_bd — nunca dejes un registro con empresa_id de una empresa y obra_id de otra, aunque el usuario solo te haya pedido cambiar la empresa.
-· Tras el cambio, valida con validar_cambios_bd usando un JOIN que compruebe la consistencia real, no solo el campo que cambiaste — ej: SELECT p.empresa_id, o.empresa_id as obra_empresa_id FROM pemp p LEFT JOIN obras o ON p.obra_id=o.id WHERE p.id=? y confirma que ambos empresa_id coinciden antes de decir "corregido".
+· Tras el cambio, valida con validar_cambios_bd usando un JOIN que compruebe la consistencia real, no solo el campo que cambiaste — ej: SELECT p.empresa_id, o.id as obra_ok FROM pemp p LEFT JOIN obras o ON p.obra_id=o.id AND o.empresa_id=p.empresa_id WHERE p.id=? AND p.empresa_id=? y confirma que obra_ok no es NULL (la obra es de la misma empresa) antes de decir "corregido".
 
 REGLA DE INCIDENCIAS (BUZON-TELEGRAM-01, 10/08/2026): si te topas con un problema real ayudando a alguien — una tool que falla repetidamente, un dato que no cuadra, un permiso que te falta, algo que te bloquea y no puedes resolver en la conversación — usa memory_save con tipo='error'. Si el problema bloquea AHORA MISMO a un usuario real (no una duda hipotética, no algo que ya resolviste dando un rodeo), pon importancia 4 o 5: eso avisa a Adrián por Telegram casi al momento, además de quedar archivado. Si es menor o puedes seguir sin bloquear al usuario, importancia 1-3 — queda solo en el buzón para que Adrián lo repase cuando quiera (puede preguntarte "qué tienes en el buzón" y se lo cuentas con memory_read). No abuses de importancia 5: resérvala para lo que de verdad le interesaría saber ya mismo, no para cada error menor.
 
@@ -9795,6 +9795,13 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         if (!/^SELECT\b/i.test(verifyQuery)) return 'La validación solo acepta consultas SELECT.';
         const descripcion = input.descripcion || 'cambios en BD';
         const params = input.params || [];
+        // SQL-SCOPE-02 (03/10/2026): esta tool ejecutaba CUALQUIER SELECT sin el aislamiento
+        // de consultar_bd -- cualquier sesión podía leer datos de otra empresa (o la tabla
+        // sesiones) "validando" un cambio. Pasa por las mismas dos barreras que consultar_bd.
+        const rechazoSelectVal = validarSoloSelectBD(verifyQuery);
+        if (rechazoSelectVal) return rechazoSelectVal;
+        const rechazoScopeVal = validarScopeEmpresaBD(verifyQuery, params, empresa_id, esDevVerificado, bypassEmpresaActivo, rol, departamento);
+        if (rechazoScopeVal) return rechazoScopeVal;
         const stmt = env.DB.prepare(verifyQuery);
         const result = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
         const rows = result.results || [];
