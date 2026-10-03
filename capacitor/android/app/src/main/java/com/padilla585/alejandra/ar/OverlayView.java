@@ -21,15 +21,22 @@ public class OverlayView extends View {
     // profundidad, no sobre una superficie confirmada, antes de que el usuario pulse.
     public static final int RETICLE_NONE = 0, RETICLE_HIT = 1, RETICLE_FALLBACK = 2;
     private int reticleState = RETICLE_NONE;
+    // REPL-EDITAR-PUNTO-01 (03/10/2026): punto en edición, más grande y en amarillo (-1 = ninguno).
+    private int seleccion = -1;
+    private final Paint selPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public OverlayView(Context c) {
         super(c);
         dotPaint.setColor(Color.parseColor("#f97316"));
         dotBorder.setColor(Color.WHITE); dotBorder.setStyle(Paint.Style.STROKE); dotBorder.setStrokeWidth(4f);
         reticlePaint.setColor(Color.WHITE); reticlePaint.setStyle(Paint.Style.STROKE); reticlePaint.setStrokeWidth(4f);
+        selPaint.setColor(Color.parseColor("#facc15"));
     }
 
     public void setPoints(float[] screenPts) { this.pts = screenPts != null ? screenPts : new float[0]; postInvalidate(); }
+    /** Coordenadas de pantalla actuales de los puntos (x0,y0,x1,y1...; NaN = no visible). */
+    public float[] getPuntos() { return pts; }
+    public void setSeleccion(int i) { this.seleccion = i; postInvalidate(); }
     public void setReticleState(int state) { this.reticleState = state; postInvalidate(); }
 
     @Override
@@ -50,8 +57,9 @@ public class OverlayView extends View {
         for (int i = 0; i + 1 < pts.length; i += 2) {
             float x = pts[i], y = pts[i + 1];
             if (Float.isNaN(x)) continue;
-            canvas.drawCircle(x, y, 14f, dotPaint);
-            canvas.drawCircle(x, y, 14f, dotBorder);
+            boolean sel = i / 2 == seleccion;
+            canvas.drawCircle(x, y, sel ? 22f : 14f, sel ? selPaint : dotPaint);
+            canvas.drawCircle(x, y, sel ? 22f : 14f, dotBorder);
         }
     }
 }

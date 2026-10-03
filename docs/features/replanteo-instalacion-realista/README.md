@@ -39,6 +39,38 @@ ver [pruebas y límites](../android-ar-estabilidad.md). Incluye selección de ti
 superficie, pero no implementa aún bloqueo de un plano para todo el tramo ni edición
 de cualquier punto de la prioridad 4. Validación física final pendiente por ADB offline.
 
+## Prioridades 2-4 + giro de pantalla — implementado el 03/10 (rama feat/replanteo-ar-giro-y-prioridades)
+
+Todo en `repl3d.js` (copia exacta en `assets/ar/`), así que vale a la vez para la vista 3D, el
+informe (index.html y panel.html), el AR WebXR y el AR nativo. **SIN VERIFICAR EN VIVO** con un
+móvil ARCore real moviéndose: solo pruebas Node/Java y arranque/giro en el emulador ARCore.
+
+- **Ángulo recto (P2)**: `_replOrtogonalizar` usa las normales guardadas por punto. Pared→techo:
+  sube perpendicular a la arista, gira en ella y sigue por el techo; desplazamiento a lo largo de
+  la arista → la recorre; desvío ≤ 12 cm y < 25° → imprecisión, se endereza. En pared el tramo
+  horizontal va por arriba; en techo/suelo usa los ejes de una pared del trazado (sin pared no
+  inventa orientación). El trazado guardado no cambia: se rectifica al pintar y medir.
+  Diagonal real por tramo: `puntos_3d[i].d = 1` (chips "📐 Tramos" del editor, panel ✏️ del AR).
+  La longitud AR guardada es la del recorrido rectificado. El codo queda a 3 cm de las DOS
+  superficies (vuelo por vértice, no por tramo).
+- **Paralelas (P3)**: `trazado_json.paralelos = { n, hueco_m }` (1-8, hueco 0-20 cm), con
+  inglete en cada codo. El servidor multiplica TODO el material por n (**PENDIENTE de decidir**
+  si en obra comparten soporte y hay que descontarlo).
+- **Superficie forzada (P4)**: Techo/Pared/Suelo por tramo; el primer punto confirmado (o un
+  📱 Tocar) fija el plano y los siguientes se cortan con él por el rayo de la cámara, aunque la
+  profundidad caiga sobre una instalación existente o no haya dato.
+- **Editar cualquier punto (P4)**: tocarlo en pantalla (o ✏️ y ◀ ▶): pegar a techo/pared (plano
+  detectado ≤ 1,5 m), mover al anillo, esquivar instalación de la IA (se aparta sobre su
+  superficie), diagonal/recto, borrar.
+- **Giro vertical↔horizontal**: PWA desbloquea la orientación durante la sesión inmersiva,
+  reajusta el destino XR de three.js si cambia el búfer y compacta los paneles (CSS horizontal);
+  si Chrome cierra la sesión sola con ≥ 2 puntos, el trazado pasa al editor. APK: la Activity no
+  se recrea (configChanges), insets laterales y panel ✥ con scroll.
+
+Limitaciones: los codos que añade el ángulo recto entre pared y techo no se cuentan en el
+material (el servidor cuenta giros en la planta 2D); la caja automática en el cambio de plano
+sigue sin decidir (abajo).
+
 ## Notas sueltas de las fotos
 
 - `ref-01-sensores-cpd-pared.jpg`: sondas de temperatura/humedad en CPD — tubo individual

@@ -68,12 +68,19 @@ function _replTipoRender(key, params) {
 // vuelve a subir (pasa por debajo); 'esquivar' se desvía d en horizontal; 'sujetar' no desvía.
 function _replConDesvios(THREE, pts, obst) {
   if (!obst || !obst.length) return pts;
+  return _replDesviosSeg(THREE, pts, [], obst).pts;
+}
+// Igual que _replConDesvios, pero arrastrando la normal real de cada tramo (nSeg[i] = normal del
+// tramo i→i+1, o null) a los puntos del quiebro. Resuelve la antigua LIMITACIÓN CONOCIDA de
+// _replInstal3D: antes las normales seguían alineadas a los puntos ORIGINALES y en los quiebros
+// se caía al "arriba" genérico.
+function _replDesviosSeg(THREE, pts, nSeg, obst) {
   const up = new THREE.Vector3(0, 1, 0), bySeg = {};
-  obst.forEach(o => { if (o && o.seg != null && o.t != null) (bySeg[o.seg] = bySeg[o.seg] || []).push(o); });
+  (obst || []).forEach(o => { if (o && o.seg != null && o.t != null) (bySeg[o.seg] = bySeg[o.seg] || []).push(o); });
   Object.values(bySeg).forEach(a => a.sort((x, y) => x.t - y.t));
-  const out = [pts[0].clone()];
+  const out = [pts[0].clone()], nOut = [];
   for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1], b = pts[i], segObst = bySeg[i - 1] || [];
+    const a = pts[i - 1], b = pts[i], segObst = bySeg[i - 1] || [], n = (nSeg && nSeg[i - 1]) || null;
     const dir = b.clone().sub(a), len = dir.length() || 1, u = dir.clone().normalize();
     const right = new THREE.Vector3().crossVectors(u, up).normalize();
     let ultimo = -Infinity;                           // agrupa obstáculos casi en el mismo punto
@@ -87,114 +94,390 @@ function _replConDesvios(THREE, pts, obst) {
       const off = o.accion === 'esquivar' ? right.clone().multiplyScalar(d) : up.clone().multiplyScalar(-d);
       const p1 = q.clone().addScaledVector(u, -hw), p2 = q.clone().addScaledVector(u, hw);
       out.push(p1, p1.clone().add(off), p2.clone().add(off), p2);
+      nOut.push(n, n, n, n);
     }
-    out.push(b.clone());
+    out.push(b.clone()); nOut.push(n);
   }
+  return { pts: out, nSeg: nOut };
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Trazado realista (03/10/2026): ángulos rectos, líneas en paralelo y superficie forzada
+// ══════════════════════════════════════════════════════════════════════════
+// Prioridades 2-4 de docs/features/replanteo-instalacion-realista/README.md. Mismo criterio que
+// el resto del archivo: funciones puras (THREE por parámetro), usadas a la vez por la vista 3D,
+// el informe (index.html y panel.html), el AR WebXR y el overlay del AR nativo (copia exacta en
+// assets/ar). El trazado GUARDADO no cambia: se rectifica al pintar y al medir, así que un
+// replanteo antiguo también se ve en ángulo recto y se puede volver a la diagonal por tramo.
+const REPL_TRAZADO = {
+  snapM: 0.12,                                  // desvío lateral que se toma como imprecisión de la mano
+  snapTan: Math.tan(25 * Math.PI / 180),        // ...siempre que el ángulo también sea pequeño
+  separacionPared: 0.03,                        // vuelo de abrazadera/soporte respecto a la superficie
+  huecoParaleloM: 0.03,                         // hueco por defecto entre líneas en paralelo
+  maxParalelos: 12,
+  maxPegarM: 1.5,                               // "pegar a techo/pared": no saltar a un plano más lejano
+};
+
+function _replN(n) { return (n && typeof n.lengthSq === 'function' && n.lengthSq() > 0.25) ? n.clone().normalize() : null; }
+// Clase de superficie por su normal EXTERIOR (misma regla que SurfaceGeometry.type en Java).
+function _replClaseNormal(n) { if (!n) return null; return n.y > 0.7 ? 'suelo' : (n.y < -0.7 ? 'techo' : 'pared'); }
+
+// Ejes de trabajo de una superficie: en pared, horizontal (e1) y vertical (e2); en techo/suelo,
+// los ejes de la sala sacados de una pared del propio trazado (sin pared conocida: null, no se
+// inventa una orientación de la sala).
+function _replEjesPlano(THREE, n, ejeSala) {
+  const up = new THREE.Vector3(0, 1, 0);
+  if (Math.abs(n.y) <= 0.7) {
+    const v = up.clone().addScaledVector(n, -n.dot(up)).normalize();
+    return { e1: new THREE.Vector3().crossVectors(v, n).normalize(), e2: v, pared: true };
+  }
+  if (!ejeSala) return null;
+  const e1 = ejeSala.clone().addScaledVector(n, -n.dot(ejeSala));
+  if (e1.lengthSq() < 1e-6) return null;
+  e1.normalize();
+  return { e1, e2: new THREE.Vector3().crossVectors(n, e1).normalize(), pared: false };
+}
+
+// Tramo a→b sobre UNA superficie (normal n): recto si la desviación es imprecisión de la mano,
+// en L si de verdad cambia de eje. En pared sube primero o baja al final (el tramo horizontal va
+// siempre por arriba, como se instala); en techo/suelo va primero el tramo más largo. Devuelve
+// los puntos que siguen a `a`; el último sustituye a `b` (puede moverse <= snapM al enderezar).
+function _replTramoEnPlano(THREE, a, b, n, ejes) {
+  const d = b.clone().sub(a);
+  const u = d.dot(ejes.e1), v = d.dot(ejes.e2), fuera = d.dot(n);
+  const au = Math.abs(u), av = Math.abs(v), mayor = Math.max(au, av), menor = Math.min(au, av);
+  if (mayor < 1e-3) return [b.clone()];
+  const ejeU = ejes.e1.clone().multiplyScalar(u), ejeV = ejes.e2.clone().multiplyScalar(v);
+  if (menor <= REPL_TRAZADO.snapM && menor <= mayor * REPL_TRAZADO.snapTan)
+    return [a.clone().add(au >= av ? ejeU : ejeV).addScaledVector(n, fuera)];
+  const primero = ejes.pared ? (v > 0 ? ejeV : ejeU) : (au >= av ? ejeU : ejeV);
+  return [a.clone().add(primero), b.clone()];
+}
+
+// Tramo a→b entre DOS superficies que se cortan (pared→techo, suelo→pared, pared→pared en una
+// esquina): sube/avanza perpendicular a la arista común, gira 90° justo en ella y sigue por la
+// otra superficie. Si además hay desplazamiento a lo largo de la arista, la recorre (sin
+// diagonales); si es pequeño, es imprecisión y se endereza. null si no aplica.
+function _replTramoEntrePlanos(THREE, a, na, b, nb) {
+  const c = na.dot(nb);
+  if (Math.abs(c) > 0.5) return null;
+  const l = new THREE.Vector3().crossVectors(na, nb);
+  if (l.lengthSq() < 1e-6) return null;
+  l.normalize();
+  const d1 = na.dot(a), d2 = nb.dot(b), det = 1 - c * c;
+  const p0 = na.clone().multiplyScalar((d1 - d2 * c) / det).add(nb.clone().multiplyScalar((d2 - d1 * c) / det));
+  const c1 = p0.clone().addScaledVector(l, a.clone().sub(p0).dot(l));
+  const c2 = p0.clone().addScaledVector(l, b.clone().sub(p0).dot(l));
+  const L = a.distanceTo(b);
+  // Una arista lejísimos significa un plano mal detectado: mejor la diagonal que un disparate.
+  if (a.distanceTo(c1) > 2 * L + 1 || b.distanceTo(c2) > 2 * L + 1) return null;
+  if (c1.distanceTo(c2) <= REPL_TRAZADO.snapM) return { pts: [c1, b.clone().add(c1.clone().sub(c2))], nSeg: [na, nb] };
+  return { pts: [c1, c2, b.clone()], nSeg: [na, nb, nb] };
+}
+
+// Ortogonaliza un trazado con las normales REALES guardadas por punto (null donde no se sabe).
+// opts.diagonales[i] = true respeta tal cual el tramo i (diagonal real pedida por el usuario).
+// Devuelve { pts, nSeg (normal por tramo), origen (tramo original de cada tramo), rectificados }.
+function _replOrtogonalizar(THREE, pts, normales, opts) {
+  opts = opts || {};
+  const diag = opts.diagonales || [], ns = (normales || []).map(_replN);
+  let ejeSala = null;
+  for (const n of ns) {
+    if (n && Math.abs(n.y) <= 0.7) { const h = new THREE.Vector3(n.x, 0, n.z); if (h.lengthSq() > 1e-4) { ejeSala = h.normalize(); break; } }
+  }
+  const out = [pts[0].clone()], nSeg = [], origen = [];
+  let rectificados = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = out[out.length - 1], b = pts[i], na = ns[i - 1] || null, nb = ns[i] || null;
+    let tramo = null;
+    if (!diag[i - 1]) {
+      if (na && nb && na.dot(nb) < 0.9) tramo = _replTramoEntrePlanos(THREE, a, na, b, nb);
+      else if (na || nb) {
+        const n = na || nb, ejes = _replEjesPlano(THREE, n, ejeSala);
+        if (ejes) { const p = _replTramoEnPlano(THREE, a, b, n, ejes); tramo = { pts: p, nSeg: p.map(() => n) }; }
+      }
+    }
+    if (!tramo) tramo = { pts: [b.clone()], nSeg: [na || nb] };
+    else if (tramo.pts.length > 1 || tramo.pts[0].distanceTo(b) > 1e-3) rectificados++;
+    tramo.pts.forEach((p, k) => {
+      if (p.distanceTo(out[out.length - 1]) < 1e-3) { out[out.length - 1] = p; return; }
+      out.push(p); nSeg.push(tramo.nSeg[k] || null); origen.push(i - 1);
+    });
+  }
+  return { pts: out, nSeg, origen, rectificados };
+}
+
+// Los obstáculos se guardan sobre el tramo ORIGINAL (seg, t); tras rectificar, ese tramo puede
+// ser varios: se recoloca en el mismo punto a lo largo del recorrido.
+function _replRemapObstaculos(orto, obst) {
+  const out = [];
+  (obst || []).forEach(o => {
+    if (!o || o.seg == null || o.t == null) return;
+    const idx = [];
+    orto.origen.forEach((s, k) => { if (s === o.seg) idx.push(k); });
+    if (!idx.length) return;
+    const lens = idx.map(k => orto.pts[k].distanceTo(orto.pts[k + 1]));
+    let resto = Math.max(0, Math.min(1, +o.t)) * lens.reduce((s, x) => s + x, 0), j = 0;
+    while (j < idx.length - 1 && resto > lens[j]) { resto -= lens[j]; j++; }
+    out.push({ ...o, seg: idx[j], t: lens[j] > 0 ? Math.min(1, resto / lens[j]) : 0.5 });
+  });
   return out;
 }
+
+// Base local de un tramo: X a lo largo, Y hacia fuera de la superficie (normal real si se
+// conoce), Z el ancho (en el plano de la superficie).
+// REJIBAND-DE-CARA-01 (17/09/2026): Adrián, probando en AR con un tramo casi vertical --
+// "el rejiband se ha colocado mirando hacia la cámara... perpendicular a la pared". Antes se
+// orientaba cada tramo con setFromUnitVectors(X, dir) -- da la rotación MÍNIMA de +X a la
+// dirección del tramo, pero no dice nada de en qué ángulo queda el "ancho" (eje local Z, donde
+// van los railes/paredes de rejiband, escalera, chapa, canal) alrededor de ese eje: para un
+// tramo casi vertical esa rotación mínima resulta -- por pura geometría del giro más corto --
+// en que el ancho acaba apuntando hacia la cámara/profundidad en vez de a lo largo de la
+// pared. Se construye la base a mano con una referencia "arriba" estable.
+//
+// PARED-NORMAL-REAL-01 (17/09/2026): Adrián, después -- "no queda pegada a la pared como una
+// instalación real". La normal real de la superficie (eje Y de la pose del ancla en el AR nativo,
+// plano detectado en WebXR; null si no se conoce) es la referencia cuando existe -- así el ancho
+// (Z local) cae en el plano de la pared de verdad, y el alto/grosor (Y local) apunta hacia fuera
+// de la pared. Sin normal (plano 2D de una foto) se mantiene el respaldo de "arriba".
+//
+// GEOMETRIA-DEGENERADA-NORMAL-01 (18/09/2026): si el tramo va casi paralelo a la normal (dos
+// puntos pegados a paredes distintas cerca de una esquina), cross(dirN, normal) sale casi nulo y
+// la base se degenera (instalación invisible). Se exige |dot| < 0.98 para usar la normal real;
+// si no, respaldo genérico SOLO para ese tramo.
+function _replBaseTramo(THREE, a, b, normalReal) {
+  const dir = new THREE.Vector3().subVectors(b, a), len = dir.length();
+  const dirN = len > 0 ? dir.clone().divideScalar(len) : new THREE.Vector3(1, 0, 0);
+  const arribaMundo = new THREE.Vector3(0, 1, 0);
+  let arriba = null, usaNormalReal = false;
+  if (normalReal && normalReal.lengthSq() > 0.25) {
+    const nr = normalReal.clone().normalize();
+    if (Math.abs(dirN.dot(nr)) < 0.98) { arriba = nr; usaNormalReal = true; }
+  }
+  if (!usaNormalReal) arriba = Math.abs(dirN.dot(arribaMundo)) > 0.999 ? new THREE.Vector3(0, 0, 1) : arribaMundo;
+  const zAxis = new THREE.Vector3().crossVectors(dirN, arriba).normalize();
+  const yAxis = new THREE.Vector3().crossVectors(zAxis, dirN).normalize();
+  return { len, dirN, yAxis, zAxis, usaNormalReal, normal: usaNormalReal ? arriba : null };
+}
+
+// Geometría final del trazado, sin mallas (se prueba en Node): rectifica en ángulo recto,
+// recoloca obstáculos, inserta quiebros, separa de la superficie y reparte las líneas paralelas.
+// opts: { normales (por punto), diagonales (por tramo original), ortogonal (false = tal cual se
+//         marcó), obstaculos, paralelos: { n, hueco_m }, w (ancho/diámetro en m) }.
+// Devuelve { centro: { pts, nSeg } (eje rectificado SIN quiebros: para medir y acotar),
+//            lineas: [{ pts, nSeg }] (una por tubo/bandeja), nLineas, sepCentros, rectificados }.
+function _replTrazadoPreparado(THREE, pts, opts) {
+  opts = opts || {};
+  const w = opts.w || 0.2, normales = opts.normales || [];
+  let P = (pts || []).map(p => p.clone()), nSeg, obst = opts.obstaculos, rectificados = 0;
+  if (P.length < 2) return { centro: { pts: P, nSeg: [] }, lineas: [], nLineas: 0, sepCentros: 0, rectificados: 0 };
+  if (opts.ortogonal !== false && normales.some(n => n)) {
+    const o = _replOrtogonalizar(THREE, P, normales, { diagonales: opts.diagonales });
+    if (obst && obst.length) obst = _replRemapObstaculos(o, obst);
+    P = o.pts; nSeg = o.nSeg; rectificados = o.rectificados;
+  } else {
+    nSeg = [];
+    for (let i = 1; i < P.length; i++) nSeg.push(_replN(normales[i - 1]) || _replN(normales[i]));
+  }
+  const centro = { pts: P.map(p => p.clone()), nSeg: nSeg.slice() };
+  if (obst && obst.length) { const d = _replDesviosSeg(THREE, P, nSeg, obst); P = d.pts; nSeg = d.nSeg; }
+  // Fuera tramos de longitud nula: rompen la base local y el inglete de las paralelas.
+  const Q = [P[0]], nQ = [];
+  for (let i = 1; i < P.length; i++) { if (P[i].distanceTo(Q[Q.length - 1]) < 1e-3) continue; Q.push(P[i]); nQ.push(nSeg[i - 1] || null); }
+  if (Q.length < 2) return { centro, lineas: [], nLineas: 0, sepCentros: 0, rectificados };
+  const bases = [];
+  for (let i = 1; i < Q.length; i++) bases.push(_replBaseTramo(THREE, Q[i - 1], Q[i], nQ[i - 1]));
+  // Vuelo respecto a la superficie POR VÉRTICE (suma de las normales distintas de sus tramos): en
+  // la esquina pared/techo el codo queda a 3 cm de las dos superficies y los dos tramos siguen en
+  // ángulo recto, en vez de abrirse un hueco entre ellos como al desplazar cada tramo por su lado.
+  const V = Q.map((q, j) => {
+    const ns = [];
+    [bases[j - 1], bases[j]].forEach(bs => { if (bs && bs.usaNormalReal && !ns.some(m => m.dot(bs.normal) > 0.95)) ns.push(bs.normal); });
+    const p = q.clone(); ns.forEach(m => p.addScaledVector(m, REPL_TRAZADO.separacionPared)); return p;
+  });
+  // Líneas en paralelo: el mismo recorrido desplazado en el ancho (Z local), con inglete en cada
+  // vértice para que todas giren a la vez sin abrirse ni cruzarse (mismos codos, misma separación).
+  const par = opts.paralelos || {};
+  const n = Math.max(1, Math.min(REPL_TRAZADO.maxParalelos, Math.round(+par.n || 1)));
+  const hueco = (par.hueco_m != null && Number.isFinite(+par.hueco_m) && +par.hueco_m >= 0) ? +par.hueco_m : REPL_TRAZADO.huecoParaleloM;
+  const sep = w + hueco;
+  const lat = V.map((_, j) => {
+    const za = bases[j - 1] ? bases[j - 1].zAxis : null, zb = bases[j] ? bases[j].zAxis : null;
+    if (!za || !zb) return (za || zb).clone();
+    const c = za.dot(zb);
+    return c > -0.6 ? za.clone().add(zb).divideScalar(1 + c) : za.clone();
+  });
+  const lineas = [];
+  for (let k = 0; k < n; k++) {
+    const off = (k - (n - 1) / 2) * sep;
+    lineas.push({ pts: V.map((p, j) => p.clone().addScaledVector(lat[j], off)), nSeg: nQ.slice() });
+  }
+  return { centro, lineas, nLineas: n, sepCentros: n > 1 ? sep : 0, rectificados };
+}
+
+// Longitud REAL del recorrido (rectificado en ángulo recto, sin quiebros de obstáculos, que el
+// cálculo de material ya suma aparte): la que se mide en AR y se guarda como longitud_manual_m.
+function _replLongitudTrazado(THREE, pts, opts) {
+  const c = _replTrazadoPreparado(THREE, pts, { ...(opts || {}), obstaculos: null, paralelos: null }).centro.pts;
+  let L = 0;
+  for (let i = 1; i < c.length; i++) L += c[i - 1].distanceTo(c[i]);
+  return L;
+}
+
+// Opciones de render guardadas en trazado_json (sin migración): `paralelos` { n, hueco_m } y, en
+// cada punto de `puntos_3d`, `d: 1` si el tramo que EMPIEZA en él respeta la diagonal real.
+function _replOpcionesTrazado(trazado) {
+  const tr = trazado || {}, p3 = Array.isArray(tr.puntos_3d) ? tr.puntos_3d : [];
+  const pr = tr.paralelos;
+  const par = (pr && +pr.n > 1) ? { n: Math.min(REPL_TRAZADO.maxParalelos, Math.round(+pr.n)),
+    hueco_m: (pr.hueco_m != null && Number.isFinite(+pr.hueco_m) && +pr.hueco_m >= 0) ? +pr.hueco_m : REPL_TRAZADO.huecoParaleloM } : null;
+  return { diagonales: p3.map(p => !!(p && p.d)), paralelos: par };
+}
+
+// ── Superficie forzada por tramo y edición de puntos (prioridad 4) ──
+// Adrián (18/09/2026, en obra): "la bandeja no detecta el techo... baja por debajo de
+// instalaciones". El primer punto confirmado de un tramo en modo Techo/Pared/Suelo fija su
+// plano; los siguientes se FUERZAN a él aunque el hit-test o la profundidad de ese fotograma den
+// un dato raro (p. ej. la profundidad cae sobre una instalación existente bajo el techo).
+function _replPlanoForzado(THREE, tipo, pos, normalDetectada, camDir) {
+  const nd = _replN(normalDetectada);
+  let n = null;
+  if (nd && _replClaseNormal(nd) === tipo) n = nd;
+  else if (tipo === 'techo') n = new THREE.Vector3(0, -1, 0);
+  else if (tipo === 'suelo') n = new THREE.Vector3(0, 1, 0);
+  else if (tipo === 'pared' && camDir) { const h = new THREE.Vector3(-camDir.x, 0, -camDir.z); if (h.lengthSq() > 1e-4) n = h.normalize(); }
+  return (n && pos) ? { tipo, pos: pos.clone(), normal: n } : null;
+}
+// Lleva un punto candidato (hit/profundidad, o cualquier punto del rayo central) al plano fijado:
+// corta el rayo cámara→punto con ese plano (donde apuntaba el usuario sobre ESA superficie); si
+// el rayo es casi paralelo o queda detrás, proyección perpendicular.
+function _replForzarAPlano(THREE, plano, p, camPos) {
+  if (!plano) return p ? p.clone() : null;
+  const n = plano.normal;
+  if (camPos && p) {
+    const dir = p.clone().sub(camPos), L = dir.length();
+    if (L > 1e-4) {
+      dir.divideScalar(L);
+      const den = dir.dot(n);
+      if (Math.abs(den) > 0.15) {
+        const t = plano.pos.clone().sub(camPos).dot(n) / den;
+        if (t > 0.05 && t < 15) return camPos.clone().addScaledVector(dir, t);
+      }
+    }
+  }
+  if (!p) return null;
+  return p.clone().addScaledVector(n, -p.clone().sub(plano.pos).dot(n));
+}
+// "Pegar a techo/pared/suelo" un punto ya colocado: el plano detectado de ese tipo más cercano
+// (proyección perpendicular, hasta maxDist). planos: [{ pos, normal, tipo?, excluida? }].
+function _replPegarASuperficie(THREE, p, planos, tipo, maxDist) {
+  const lim = maxDist == null ? REPL_TRAZADO.maxPegarM : maxDist;
+  let mejor = null;
+  (planos || []).forEach(pl => {
+    if (!pl || pl.excluida) return;
+    const n = _replN(pl.normal);
+    if (!n || (pl.tipo || _replClaseNormal(n)) !== tipo) return;
+    const d = p.clone().sub(pl.pos).dot(n);
+    if (Math.abs(d) > lim) return;
+    const q = p.clone().addScaledVector(n, -d);
+    // Los planos son parches, no infinitos: penaliza el que queda lejos de su centro.
+    const score = Math.abs(d) + 0.25 * Math.max(0, q.distanceTo(pl.pos) - 1.5);
+    if (!mejor || score < mejor.score) mejor = { pos: q, normal: n, score };
+  });
+  return mejor ? { pos: mejor.pos, normal: mejor.normal } : null;
+}
+// "Esquivar instalación": desplaza el punto SOBRE su superficie (sin despegarlo) hasta quedar
+// fuera de las instalaciones existentes que situó la IA del escaneo (radio + margen).
+// instalaciones: [{ pos, radio, etiqueta }]. null si el punto no toca ninguna.
+function _replEsquivarInstalacion(THREE, p, normal, instalaciones, margen) {
+  const m = margen == null ? 0.05 : margen, n = _replN(normal);
+  let q = p.clone();
+  const tocadas = [];
+  for (let it = 0; it < 4; it++) {
+    let peor = null;
+    (instalaciones || []).forEach(i => { const d = i.pos.distanceTo(q) - i.radio; if (d < m - 1e-4 && (!peor || d < peor.d)) peor = { i, d }; });
+    if (!peor) break;
+    const c = peor.i.pos, R = peor.i.radio + m;
+    let h = 0, base = c.clone();
+    if (n) { h = c.clone().sub(q).dot(n); base = c.clone().addScaledVector(n, -h); }
+    const r = Math.sqrt(Math.max(0, R * R - h * h));
+    const v = q.clone().sub(base);
+    if (n) v.addScaledVector(n, -v.dot(n));
+    if (v.lengthSq() < 1e-8) {
+      if (n) v.crossVectors(n, Math.abs(n.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0));
+      else v.set(1, 0, 0);
+    }
+    q = base.addScaledVector(v.normalize(), r + 1e-3);
+    if (!tocadas.includes(peor.i)) tocadas.push(peor.i);
+  }
+  return tocadas.length ? { pos: q, instalaciones: tocadas } : null;
+}
+// Punto colocado al que apunta un toque en pantalla (rayo origen+dir): índice, o -1 si ninguno
+// cae dentro de `maxAng` radianes (por defecto ~7°).
+function _replPuntoMasCercano(THREE, puntos, origen, dir, maxAng) {
+  let mejor = -1, mejorAng = maxAng == null ? 0.12 : maxAng;
+  const d = dir.clone().normalize();
+  (puntos || []).forEach((p, i) => {
+    const v = p.clone().sub(origen);
+    if (v.lengthSq() < 1e-6) return;
+    const ang = v.angleTo(d);
+    if (ang < mejorAng) { mejorAng = ang; mejor = i; }
+  });
+  return mejor;
+}
+
 function _replInstal3D(THREE, pts, opts) {
   opts = opts || {}; const tipo = opts.tipo || 'tubo', w = opts.w || 0.2, op = opts.opacity != null ? opts.opacity : 1;
-  // LIMITACIÓN CONOCIDA: si hay obstáculos, _replConDesvios inserta puntos nuevos (los del
-  // quiebro) y desplaza los índices -- opts.normales (abajo) sigue alineado a los puntos
-  // ORIGINALES, así que en los tramos de quiebro se cae al respaldo de "arriba" genérico en vez
-  // de la normal real. No pasa nada grave (no rompe, solo pierde precisión ahí) -- pero si algún
-  // día se necesita perfecto también en los quiebros, _replConDesvios tendría que propagar la
-  // normal del punto de origen a cada punto que inserta.
-  if (opts.obstaculos) pts = _replConDesvios(THREE, pts, opts.obstaculos);
+  // Ángulos rectos, obstáculos, vuelo de la superficie y paralelas: _replTrazadoPreparado.
+  const prep = _replTrazadoPreparado(THREE, pts, opts);
   const g = new THREE.Group();
   const M = (c, met, ro) => new THREE.MeshStandardMaterial({ color: c, metalness: met, roughness: ro, transparent: op < 1, opacity: op, side: THREE.DoubleSide });
   const matTubo = M(0xcdd4dd, .12, .7), matMetal = M(0x9aa7b6, .75, .45), matAcc = M(0x3b424d, .4, .6);
   const rTubo = Math.max(0.008, w / 2);
-  // REJIBAND-DE-CARA-01 (17/09/2026): Adrián, probando en AR con un tramo casi vertical --
-  // "el rejiband se ha colocado mirando hacia la cámara... perpendicular a la pared". Antes se
-  // orientaba cada tramo con setFromUnitVectors(X, dir) -- da la rotación MÍNIMA de +X a la
-  // dirección del tramo, pero no dice nada de en qué ángulo queda el "ancho" (eje local Z, donde
-  // van los railes/paredes de rejiband, escalera, chapa, canal) alrededor de ese eje: para un
-  // tramo casi vertical esa rotación mínima resulta -- por pura geometría del giro más corto --
-  // en que el ancho acaba apuntando hacia la cámara/profundidad en vez de a lo largo de la
-  // pared. Se construye la base a mano con una referencia "arriba" estable en vez de esa
-  // rotación mínima.
-  //
-  // PARED-NORMAL-REAL-01 (17/09/2026): Adrián, después -- "no queda pegada a la pared como una
-  // instalación real". El motivo: esta función solo recibía puntos (x,y,z), nunca la orientación
-  // real de la superficie en cada uno -- así que no había forma de saber hacia qué lado cae la
-  // pared, y el ancho/grosor se construían con una referencia "arriba del mundo" genérica, sin
-  // relación con la pared física. opts.normales (opcional, un THREE.Vector3 por punto de pts, o
-  // null si no se conoce -- el AR nativo SÍ la tiene, viene del eje Y de la pose de cada ancla de
-  // ARCore, igual convención que normalDeQuat() en index.html) es la referencia real cuando existe
-  // -- así el ancho (Z local) cae en el plano de la pared de verdad, y el alto/grosor (Y local)
-  // apunta hacia fuera de la pared en vez de "hacia arriba" genérico. Sin normal (plano 2D de una
-  // foto, o el propio AR antes de tener el dato) se mantiene el respaldo de arriba, que ya es
-  // mejor que la rotación mínima de antes.
-  const arribaMundo = new THREE.Vector3(0, 1, 0);
-  const normales = opts.normales || [];
-  // Separación de la pared para que el material no quede enterrado en ella ni flotando -- mismo
-  // criterio que una abrazadera/soporte real (unos pocos cm de vuelo), no pegado a piel.
-  const separacionPared = 0.03;
-  for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1], b = pts[i], dir = new THREE.Vector3().subVectors(b, a), len = dir.length(); if (len < 1e-3) continue;
-    const dirN = dir.clone().normalize();
-    const normalReal = normales[i - 1] || normales[i];
-    // GEOMETRIA-DEGENERADA-NORMAL-01 (18/09/2026): Adrián, probando en vivo tras PLANO-SNAP-01
-    // en una esquina real -- solo se veían los puntos, el tubo entero desaparecía. Causa: si el
-    // tramo va casi paralelo a la normal real (dos puntos pegados a paredes distintas cerca de
-    // una esquina, o cualquier tramo casi perpendicular a su propia pared), cross(dirN, arriba)
-    // sale casi nulo -- normalize() de un vector casi-cero amplifica el error numérico y la base
-    // local (zAxis/yAxis/quaternion) sale degenerada, con la instalación entera fuera de sitio o
-    // invisible. Se exige que dirN y la normal no sean casi paralelos (|dot| < 0.98) antes de
-    // usar la normal real; si no, se cae al respaldo genérico SOLO para este tramo, igual que ya
-    // se hacía cuando no había normal.
-    let arriba = null, usaNormalReal = false;
-    if (normalReal && normalReal.lengthSq() > 0.25) {
-      const nr = normalReal.clone().normalize();
-      if (Math.abs(dirN.dot(nr)) < 0.98) { arriba = nr; usaNormalReal = true; }
+  prep.lineas.forEach(linea => {
+    const L = linea.pts;
+    for (let i = 1; i < L.length; i++) {
+      const bs = _replBaseTramo(THREE, L[i - 1], L[i], linea.nSeg[i - 1]), len = bs.len;
+      if (len < 1e-3) continue;
+      const sub = new THREE.Group();
+      sub.position.copy(L[i - 1]).add(L[i]).multiplyScalar(0.5);
+      sub.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(bs.dirN, bs.yAxis, bs.zAxis));
+      g.add(sub);
+      if (tipo === 'tubo') {
+        sub.add(new THREE.Mesh(new THREE.CylinderGeometry(rTubo, rTubo, len, 20, 1, true).rotateZ(Math.PI / 2), matTubo));
+        const n = Math.max(1, Math.floor(len / 0.6));                                   // grapas cada ~0,6 m
+        for (let k = 1; k < n; k++) { const t = new THREE.Mesh(new THREE.TorusGeometry(rTubo * 1.2, rTubo * 0.22, 8, 14), matAcc); t.rotation.y = Math.PI / 2; t.position.x = -len / 2 + k * (len / n); sub.add(t); }
+      } else if (tipo === 'rejiband') {
+        const rr = 0.004;
+        for (const zf of [-0.5, -0.17, 0.17, 0.5]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, len, 6).rotateZ(Math.PI / 2), matMetal); l.position.z = zf * w; sub.add(l); }
+        const nt = Math.max(1, Math.floor(len / 0.1));
+        for (let k = 0; k <= nt; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, w, 6).rotateX(Math.PI / 2), matMetal); c.position.x = -len / 2 + k * (len / nt); sub.add(c); }
+        for (const zf of [-0.5, 0.5]) { const e = new THREE.Mesh(new THREE.CylinderGeometry(rr * 1.5, rr * 1.5, len, 8).rotateZ(Math.PI / 2), matMetal); e.position.set(0, 0.03, zf * w); sub.add(e); }
+      } else if (tipo === 'escalera') {
+        for (const zf of [-0.5, 0.5]) { const rl = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.02), matMetal); rl.position.z = zf * w; sub.add(rl); }
+        const nt = Math.max(1, Math.floor(len / 0.28));
+        for (let k = 0; k <= nt; k++) { const rung = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.015, w), matMetal); rung.position.x = -len / 2 + k * (len / nt); sub.add(rung); }
+      } else if (tipo === 'chapa') {
+        sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.006, w), matMetal));
+        for (const zf of [-0.5, 0.5]) { const wall = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.006), matMetal); wall.position.set(0, 0.025, zf * w); sub.add(wall); }
+      } else if (tipo === 'canal') {
+        sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, w * 0.7, w), M(0xeef1f5, .1, .7)));
+      } else { sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, w), matMetal)); }
+      if (tipo !== 'tubo' && tipo !== 'canal') { const ns = Math.floor(len / 1.5); for (let k = 1; k <= ns; k++) { const br = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, w * 1.1), matAcc); br.position.set(-len / 2 + k * (len / (ns + 1)), -0.03, 0); sub.add(br); } }
     }
-    if (!usaNormalReal) {
-      // Sin normal real (foto 2D, o tramo casi vertical con arriba degenerado): referencia fija.
-      arriba = Math.abs(dirN.dot(arribaMundo)) > 0.999 ? new THREE.Vector3(0, 0, 1) : arribaMundo;
+    // CODO-SIN-CAJA-AUTO-01 (17/09/2026): Adrián -- "en cada punto pone una caja y no es así
+    // siempre, las cajas las marco yo luego. El tiene que poner curvas." caja_cada_m en las reglas
+    // del catálogo (worker.js) es una cuenta para la LISTA DE MATERIAL, no una orden de "dibuja
+    // una caja en cada vértice". Las cajas de registro/mecanismo son complementos que el usuario
+    // coloca a mano (_replComplemento3D). En un codo de tubo solo se ve el propio tubo doblando:
+    // una esfera algo más ancha que el tubo, como el bulto real de un accesorio de curva.
+    for (let i = 1; i < L.length - 1; i++) {
+      const p = L[i];
+      if (tipo === 'tubo') { const codo = new THREE.Mesh(new THREE.SphereGeometry(rTubo * 1.15, 16, 16), matTubo); codo.position.copy(p); g.add(codo); }
+      else { const codo = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, w), matMetal); codo.position.copy(p); g.add(codo); }
     }
-    const zAxis = new THREE.Vector3().crossVectors(dirN, arriba).normalize();
-    const yAxis = new THREE.Vector3().crossVectors(zAxis, dirN).normalize();
-    const sub = new THREE.Group();
-    sub.position.copy(a).addScaledVector(dir, 0.5);
-    if (usaNormalReal) sub.position.addScaledVector(yAxis, separacionPared);
-    sub.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(dirN, yAxis, zAxis));
-    g.add(sub);
-    if (tipo === 'tubo') {
-      sub.add(new THREE.Mesh(new THREE.CylinderGeometry(rTubo, rTubo, len, 20, 1, true).rotateZ(Math.PI / 2), matTubo));
-      const n = Math.max(1, Math.floor(len / 0.6));                                   // grapas cada ~0,6 m
-      for (let k = 1; k < n; k++) { const t = new THREE.Mesh(new THREE.TorusGeometry(rTubo * 1.2, rTubo * 0.22, 8, 14), matAcc); t.rotation.y = Math.PI / 2; t.position.x = -len / 2 + k * (len / n); sub.add(t); }
-    } else if (tipo === 'rejiband') {
-      const rr = 0.004;
-      for (const zf of [-0.5, -0.17, 0.17, 0.5]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, len, 6).rotateZ(Math.PI / 2), matMetal); l.position.z = zf * w; sub.add(l); }
-      const nt = Math.max(1, Math.floor(len / 0.1));
-      for (let k = 0; k <= nt; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, w, 6).rotateX(Math.PI / 2), matMetal); c.position.x = -len / 2 + k * (len / nt); sub.add(c); }
-      for (const zf of [-0.5, 0.5]) { const e = new THREE.Mesh(new THREE.CylinderGeometry(rr * 1.5, rr * 1.5, len, 8).rotateZ(Math.PI / 2), matMetal); e.position.set(0, 0.03, zf * w); sub.add(e); }
-    } else if (tipo === 'escalera') {
-      for (const zf of [-0.5, 0.5]) { const rl = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.02), matMetal); rl.position.z = zf * w; sub.add(rl); }
-      const nt = Math.max(1, Math.floor(len / 0.28));
-      for (let k = 0; k <= nt; k++) { const rung = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.015, w), matMetal); rung.position.x = -len / 2 + k * (len / nt); sub.add(rung); }
-    } else if (tipo === 'chapa') {
-      sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.006, w), matMetal));
-      for (const zf of [-0.5, 0.5]) { const wall = new THREE.Mesh(new THREE.BoxGeometry(len, 0.05, 0.006), matMetal); wall.position.set(0, 0.025, zf * w); sub.add(wall); }
-    } else if (tipo === 'canal') {
-      sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, w * 0.7, w), M(0xeef1f5, .1, .7)));
-    } else { sub.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, w), matMetal)); }
-    if (tipo !== 'tubo' && tipo !== 'canal') { const ns = Math.floor(len / 1.5); for (let k = 1; k <= ns; k++) { const br = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.04, w * 1.1), matAcc); br.position.set(-len / 2 + k * (len / (ns + 1)), -0.03, 0); sub.add(br); } }
-  }
-  // CODO-SIN-CAJA-AUTO-01 (17/09/2026): Adrián -- "en cada punto pone una caja y no es así
-  // siempre, las cajas las marco yo luego. El tiene que poner curvas." caja_cada_m en las reglas
-  // del catálogo (worker.js) es una cuenta para la LISTA DE MATERIAL (cuántas cajas de registro
-  // hacen falta cada 15 m o en los giros), no una orden de "dibuja una caja en cada vértice" --
-  // aquí se estaba confundiendo ambas cosas. Las cajas de registro/mecanismo ya son complementos
-  // que el usuario coloca a mano donde tocan de verdad (_replComplemento3D, 'caja_registro'/
-  // 'caja_mecanismo'). En un codo de tubo solo debe verse el propio tubo doblando -- una esfera
-  // algo más ancha que el tubo, como el bulto real de un accesorio de curva/codo atornillado.
-  for (let i = 1; i < pts.length - 1; i++) {
-    const p = pts[i];
-    if (tipo === 'tubo') { const codo = new THREE.Mesh(new THREE.SphereGeometry(rTubo * 1.15, 16, 16), matTubo); codo.position.copy(p); g.add(codo); }
-    else { const codo = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, w), matMetal); codo.position.copy(p); g.add(codo); }
-  }
+  });
+  g.userData.trazado = { lineas: prep.nLineas, rectificados: prep.rectificados };
   return g;
 }
 

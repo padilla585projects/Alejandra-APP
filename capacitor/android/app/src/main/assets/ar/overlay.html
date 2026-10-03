@@ -78,6 +78,9 @@
     // La proyección pertenece a ARCore; un resize solo cambia el canvas.
   }
   window.addEventListener('resize', resize);
+  // GIRO-PANTALLA-AR-01: al girar, la Activity no se recrea (configChanges) y el WebView recibe
+  // 'resize'; algunos WebView solo avisan con orientationchange, así que se escuchan los dos.
+  window.addEventListener('orientationchange', function () { setTimeout(resize, 120); });
   resize();
 
   // Llamado por ReplanteoARActivity en cada frame (throttled) con las matrices reales de
@@ -119,18 +122,28 @@
   // elementoKey/paramsJson son los mismos que maneja el catálogo de la web (ver
   // _replArIniciarNativo en index.html), para no duplicar en Java la lógica de qué tipo de
   // render / ancho corresponde a cada elemento -- se resuelve aquí, igual que hace la PWA.
-  window.actualizarContenido = function (pathJson, elementoKey, paramsJson, obstaculosJson, complementosJson) {
+  // REPL-ANGULO-RECTO-01 / REPL-PARALELOS-01 (03/10/2026): cada punto puede traer `d: true` (el
+  // tramo que empieza en él respeta la diagonal real) y opcionesJson = { paralelos: { n, hueco_m } }.
+  // Devuelve la longitud del recorrido rectificado en ángulo recto (la que se mide de verdad), que
+  // ReplanteoARActivity muestra en pantalla -- así la APK no duplica en Java la geometría de la PWA.
+  window.actualizarContenido = function (pathJson, elementoKey, paramsJson, obstaculosJson, complementosJson, opcionesJson) {
+    var longitud = -1;
     try {
       if (grupoInstalacion) { scene.remove(grupoInstalacion); liberarGrupo(grupoInstalacion, false); }
       var path = JSON.parse(pathJson || '[]');
       var params = JSON.parse(paramsJson || '{}');
+      var opciones = JSON.parse(opcionesJson || '{}') || {};
       if (path.length >= 2) {
         var pts = path.map(function (p) { return new THREE.Vector3(p.x, p.y, p.z); });
         var normales = path.map(function (p) { return normalDeQuat(p.qx, p.qy, p.qz, p.qw); });
+        var diagonales = path.map(function (p) { return !!p.d; });
         var obstaculos = JSON.parse(obstaculosJson || '[]');
         var tipo = _replTipoRender(elementoKey, params);
-        grupoInstalacion = _replInstal3D(THREE, pts, { tipo: tipo, w: anchoDeParams(params), opacity: 1, obstaculos: obstaculos, normales: normales });
+        var opts = { tipo: tipo, w: anchoDeParams(params), opacity: 1, obstaculos: obstaculos, normales: normales,
+                     diagonales: diagonales, paralelos: opciones.paralelos || null };
+        grupoInstalacion = _replInstal3D(THREE, pts, opts);
         scene.add(grupoInstalacion);
+        longitud = _replLongitudTrazado(THREE, pts, { normales: normales, diagonales: diagonales });
       } else {
         grupoInstalacion = null;
       }
@@ -145,6 +158,7 @@
     } catch (e) {
       // No tirar la sesión AR por un dato mal formado -- se reintenta en el próximo cambio.
     }
+    return longitud;
   };
 
   // REFERENCIA-PLANOS-AR-01 (17/09/2026): Adrián -- "no detecta bien las paredes... debería
