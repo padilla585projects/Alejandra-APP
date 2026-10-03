@@ -17,6 +17,9 @@ import DxfParser from 'dxf-parser';
 import { SaxesParser } from 'saxes';
 // Una sola regla pura de IDs CAD para API y agente; sin I/O ni datos de sesión.
 import { normalizarIdPlano, debeRegistrarTrazaToken } from './alejandra-agente/lib.js';
+// ADR-0028: pool de IA propio con respaldo obligatorio. MISMO módulo que usa
+// alejandra-agente (regla «dos cerebros»). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
+import { poolRouterNexus, poolBuscar, poolConfigurado } from './alejandra-agente/ai-pool.js';
 // IA-QUALITY-09: validador determinista del archivo SVG y avisos incrustados en el archivo.
 import { finalizarPlanoVerificado, normalizarCotasEntrada, normalizarPlanoEditadoManual, validarPlanoSvg } from './planos-validacion.mjs';
 
@@ -1692,7 +1695,13 @@ async function executeAITool(env, toolName, toolInput, ctx = {}) {
     case 'web_search': {
       const { query, depth = 'basic' } = toolInput;
       if (!query || !String(query).trim()) return JSON.stringify({ ok: false, error: 'Falta el parametro query (texto de busqueda)' });
-      if (!env.TAVILY_API_KEY) return JSON.stringify({ ok: false, error: 'web_search no disponible: falta TAVILY_API_KEY en el entorno' });
+      // ADR-0028: primero el pool propio (/v1/tools/search, coste 0); Tavily de respaldo.
+      // Misma forma de resultado que Tavily para que el modelo no note la diferencia.
+      const busquedaPool = await poolBuscar(env, String(query), { maxResultados: 5, uso: 'web_search_dev' });
+      if (busquedaPool) {
+        return JSON.stringify({ ok: true, query, answer: busquedaPool.answer || null, results: busquedaPool.resultados, fuente: 'ai_pool' });
+      }
+      if (!env.TAVILY_API_KEY) return JSON.stringify({ ok: false, error: poolConfigurado(env) ? 'web_search no disponible: el pool no respondio y falta TAVILY_API_KEY' : 'web_search no disponible: falta TAVILY_API_KEY en el entorno' });
       try {
         const res = await fetch('https://api.tavily.com/search', {
           method: 'POST',
@@ -3838,6 +3847,12 @@ async function nexusRoute(env, message) {
 Expertos: asistente (preguntas simples, estado, saludos, conversación), gestor_app (usuarios, accesos, permisos, configuración de empresa, aprobaciones), desarrollador (código, bugs, fixes, deploy, git, worker.js, html, red de agentes, Jarvis, domótica, fetch URL, APIs externas), analista (informes, SQL, estadísticas, datos, conteos, resúmenes).
 Mensaje: "${txt.slice(0, 400)}"
 JSON requerido: {"expert":"<nombre>","compress_history":<bool>}`;
+
+    // ADR-0028: pool propio primero (coste 0). Solo se acepta un JSON con un experto
+    // válido; cualquier otra cosa (timeout, 503, JSON roto, experto inventado) → Haiku.
+    // Sin registro D1: la llamada a Haiku de este router tampoco lo tenía.
+    const rutaPool = await poolRouterNexus(env, routerPrompt, Object.keys(NEXUS_EXPERTS), { uso: 'router_nexus' });
+    if (rutaPool) return { expert: rutaPool.expert, compress_history: rutaPool.compress_history };
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

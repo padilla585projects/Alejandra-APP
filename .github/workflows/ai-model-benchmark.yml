@@ -8,6 +8,11 @@ on:
         required: true
         type: choice
         options: ['1', '2', '3']
+      pool:
+        description: 'Comparar también el pool propio (ADR-0028) en router, experto simple, buscar_web y respaldo'
+        default: true
+        required: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -26,7 +31,9 @@ jobs:
         with:
           node-version: '22'
       - name: Verify measurement harness
-        run: node --test scripts/ai-benchmark/run.test.mjs
+        run: |
+          node --test scripts/ai-benchmark/run.test.mjs
+          node --test scripts/ai-benchmark/pool.test.mjs
       - name: Compare synthetic tasks (no production data or tools)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -34,6 +41,21 @@ jobs:
           BENCHMARK_REPEATS: ${{ inputs.repeats }}
           BENCHMARK_BUDGET_USD: '1.80'
         run: node scripts/ai-benchmark/run.mjs
+      # ADR-0028: pool propio vs Haiku / gpt-4o-mini / Tavily / Grok / gpt-4o. Sin
+      # AI_POOL_KEY el pool se omite limpiamente (omitido_sin_clave); igual cada proveedor
+      # sin su secreto. Resultados en .ai-benchmark-results/pool/ (mismo artefacto).
+      - name: Compare own AI pool against current providers (ADR-0028)
+        if: ${{ always() && inputs.pool }}
+        env:
+          AI_POOL_KEY: ${{ secrets.AI_POOL_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          BENCHMARK_REPEATS: ${{ inputs.repeats }}
+          BENCHMARK_BUDGET_USD: '0.60'
+          BENCHMARK_OUTPUT: .ai-benchmark-results/pool
+        run: node scripts/ai-benchmark/pool.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

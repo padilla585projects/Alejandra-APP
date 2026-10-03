@@ -61,6 +61,10 @@ const EUR_A_USD = 1.08;
 // antes cualquier modelo que no empezara por "gpt" se etiquetaba "anthropic" a ciegas, corrompiendo
 // las estadísticas de coste/proveedor en alejandra_token_uso.
 function calcularCosteYProveedor(modelo, tokensEntrada, tokensSalida) {
+  // ADR-0028: el pool de IA propio se registra como 'ai_pool:<modelo>' y no cuesta nada
+  // por token. Va antes que el resto porque sus nombres ('qwen3.6:35b-a3b') no encajan en
+  // ninguna otra regla y caerían en el defecto 'anthropic' con precio de Haiku.
+  if (String(modelo).startsWith('ai_pool:')) return { proveedor: 'ai_pool', coste: 0 };
   let proveedor;
   if (modelo.startsWith('claude')) proveedor = 'anthropic';
   else if (modelo.includes('/') || modelo.endsWith(':free')) proveedor = 'openrouter';
@@ -1407,7 +1411,15 @@ function alcancePlanoGenerado(datosPlano = {}) {
   };
 }
 
+// Prompt y etiquetas del clasificador de intención del agente (clasificarConHaiku en
+// worker.js). Viven aquí para que el benchmark (scripts/ai-benchmark/pool.mjs, ADR-0028)
+// mida el pool propio y Haiku con EXACTAMENTE el mismo prompt que producción.
+const SYSTEM_CLASIFICADOR_INTENCION = 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app. Si es un HECHO que implica registrar o actualizar datos de la app aunque esté en forma de aviso/declaración, no de orden (alguien ha faltado/llegado/fichado, un pedido ha llegado, se ha usado material, un equipo se ha averiado, etc. — ej: "Dani faltó hoy", "han venido todos", "ya llegó el pedido") → app, NUNCA simple. "simple" es SOLO para saludos, charla casual o preguntas que no requieren tocar la base de datos. Si habla de electricidad, esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos eléctricos, instalaciones, ingeniería electrónica o de control → ingenieria. Si pide leer, revisar o resumir su correo/email/Gmail/bandeja de entrada → app, NUNCA web (el correo se gestiona con una tool de la app, no es una búsqueda en internet).';
+const ETIQUETAS_CLASIFICADOR_INTENCION = ['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo'];
+
 export {
+  SYSTEM_CLASIFICADOR_INTENCION,
+  ETIQUETAS_CLASIFICADOR_INTENCION,
   esInicioCasoNuevo,
   heredaCasoAnterior,
   notaCorteCaso,

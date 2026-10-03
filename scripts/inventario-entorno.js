@@ -49,9 +49,11 @@ function bindingsDe(toml) {
 }
 
 const declarados = declaradosEnEjemplo();
+// `extras`: módulos importados por el worker que también leen `env.X` (ADR-0028: el
+// cliente del pool de IA lo comparten los dos workers).
 const workers = [
-  { nombre: 'alejandra-app-api', codigo: 'worker.js', toml: 'wrangler.toml' },
-  { nombre: 'alejandra-agente', codigo: 'alejandra-agente/worker.js', toml: 'alejandra-agente/wrangler.toml' },
+  { nombre: 'alejandra-app-api', codigo: 'worker.js', toml: 'wrangler.toml', extras: ['alejandra-agente/ai-pool.js'] },
+  { nombre: 'alejandra-agente', codigo: 'alejandra-agente/worker.js', toml: 'alejandra-agente/wrangler.toml', extras: ['alejandra-agente/ai-pool.js'] },
 ];
 
 let problemas = 0;
@@ -59,6 +61,7 @@ const usadosTotal = new Set();
 
 for (const w of workers) {
   const usados = usadosEnCodigo(w.codigo);
+  for (const extra of w.extras || []) for (const v of usadosEnCodigo(extra)) usados.add(v);
   const bindings = bindingsDe(w.toml);
   const secretosUsados = [...usados].filter(v => !BINDINGS.has(v) && !FALSOS.has(v));
   secretosUsados.forEach(s => usadosTotal.add(s));
