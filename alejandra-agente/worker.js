@@ -26,6 +26,8 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 // que cambiar precios, allowlists, o las validaciones IDOR/SSRF, se cambia en
 // lib.js y worker.js lo recibe vía este import.
 import {
+  SYSTEM_CLASIFICADOR_INTENCION,
+  ETIQUETAS_CLASIFICADOR_INTENCION,
   alcancePlanoGenerado,
   debeRegistrarTrazaToken,
   normalizarIdPlano,
@@ -79,6 +81,9 @@ import { solicitarRevisionHumanaAsincrona } from '../nucleo-cognitivo/packages/c
 import { obtenerFuente } from './nexo-fuentes.js';
 // IA-QUALITY-09: cotas declaradas verificadas contra texto humano y avisos tomados del archivo.
 import { verificarCotasDeclaradas, resultadoPlanoVerificado, errorPlanoNoGuardado } from './planos-cotas.js';
+// ADR-0028: pool de IA propio con respaldo obligatorio. Mismo módulo que importa worker.js
+// (los dos cerebros). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
+import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool } from './ai-pool.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -5255,6 +5260,13 @@ export default {
         // No escanea todo KV (no hay list de keys en KV); devuelve el counter de
         // la key explícita pedida, o el top-N de la traza feature_usage en D1
         // para una visión agregada. Fail-closed: sin empresa_id, error 400.
+        // ADR-0028 §Medición: agregados del pool de IA propio en ESTE isolate (sin D1:
+        // contadores en memoria). Para el histórico completo, las líneas AIPOOL_METRICA
+        // de Workers Logs / `wrangler tail`. Sin pool configurado devuelve usos vacíos.
+        if (path === '/api/admin/metrics/ai-pool' && req.method === 'GET') {
+          return json({ configurado: poolConfigurado(env), ...metricasPool() });
+        }
+
         if (path === '/api/admin/metrics/tools' && req.method === 'GET') {
           const empresa = url.searchParams.get('empresa_id');
           const tool = url.searchParams.get('tool');
@@ -6311,19 +6323,27 @@ REGLAS GENERALES:
       } else {
         // Modo normal → Haiku directo (sin router, sin NEXUS, ~67% más barato)
         const systemCron = `Eres Alejandra, ingeniera técnica autónoma. Analiza los datos del cron y decide si hay algo que requiera acción. Si hay alertas urgentes, responde con el mensaje a enviar. Si no hay nada relevante, responde exactamente "SIN_ACCION".`;
-        const haikusResp = await fetch(ANTHROPIC_API, {
-          method: 'POST',
-          headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model: MODEL_ROUTER, max_tokens: 500,
-            system: systemCron,
-            messages: [{ role: 'user', content: prompt }]
-          })
-        });
-        const haikusData = haikusResp.ok ? await haikusResp.json() : null;
-        const textoHaiku = haikusData?.content?.[0]?.text?.trim() || 'SIN_ACCION';
-        if (haikusData?.usage) await registrarTokenUso(env, MODEL_ROUTER, 'cron_normal', haikusData.usage.input_tokens||0, haikusData.usage.output_tokens||0, 'system');
-        respuesta = { texto: textoHaiku };
+        // ADR-0028: pool propio primero (coste 0); Haiku de respaldo si no hay pool,
+        // está apagado, el circuito está abierto o no responde bien a tiempo.
+        const poolCron = await poolTexto(env, systemCron, prompt, { maxTokens: 500, timeoutMs: AI_POOL_TIMEOUTS.cron, uso: 'cron_normal' });
+        if (poolCron) {
+          await registrarTokenUso(env, poolCron.modeloRegistro, 'cron_normal', poolCron.usage.input_tokens || 0, poolCron.usage.output_tokens || 0, 'system');
+          respuesta = { texto: poolCron.texto };
+        } else {
+          const haikusResp = await fetch(ANTHROPIC_API, {
+            method: 'POST',
+            headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: MODEL_ROUTER, max_tokens: 500,
+              system: systemCron,
+              messages: [{ role: 'user', content: prompt }]
+            })
+          });
+          const haikusData = haikusResp.ok ? await haikusResp.json() : null;
+          const textoHaiku = haikusData?.content?.[0]?.text?.trim() || 'SIN_ACCION';
+          if (haikusData?.usage) await registrarTokenUso(env, MODEL_ROUTER, 'cron_normal', haikusData.usage.input_tokens||0, haikusData.usage.output_tokens||0, 'system');
+          respuesta = { texto: textoHaiku };
+        }
       }
 
       // Si respondió algo que no sea SIN_ACCION, loguear
@@ -6549,7 +6569,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // PASO 2: Búsqueda web previa si Haiku lo decidió (evita una iteración extra)
     let resultadoWeb = null;
     let usoBusquedaWeb = false;
-    if (clas.buscar_web && env.OPENAI_API_KEY) {
+    if (clas.buscar_web && busquedaWebDisponible(env)) {
       try {
         resultadoWeb   = await buscarWebOpenAI(env, clas.query_web || mensaje);
         usoBusquedaWeb = true;
@@ -6767,7 +6787,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
 
     // PASO 2: Búsqueda web previa
     let resultadoWeb = null, usoBusquedaWeb = false;
-    if (clas.buscar_web && env.OPENAI_API_KEY) {
+    if (clas.buscar_web && busquedaWebDisponible(env)) {
       const t0 = Date.now();
       try {
         await send({ type: 'tool_start', nombre: 'buscar_web', input: { query: clas.query_web || mensaje } });
@@ -6965,6 +6985,23 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       // ALEJANDRA-ESQUEMA-02: verificar ANTES de enviar -- esta rama manda el texto de
       // una vez (no token a token), así que aún se puede corregir antes de que el
       // usuario lo vea, a diferencia del streaming real de la rama de abajo.
+      textoFinal = await verificarYReintentarSiNecesario(env,
+        respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(),
+        herramientasUsadas,
+        messages,
+        { tools, expert, systemPrompt, usuario_id, empresa_id, authOk, esDevVerificado, experto: clas.experto,
+          send, codigosConfirmados, codigosConfirmadosEnvio, departamento, rol, fuentesPlano }
+      );
+      await send({ type: 'text', texto: textoFinal });
+    } else if (
+      // ADR-0028: si la respuesta ya vino del pool propio (experto «simple») con texto
+      // final y sin tool_use, la llamada de streaming de abajo repetiría el turno con
+      // expert.model (Haiku) — justo el gasto que el pool quiere ahorrar. Se envía de una
+      // vez, como la rama anterior, verificada antes de mostrarla.
+      respAPI.proveedor_real === 'ai_pool' &&
+      respAPI.stop_reason !== 'tool_use' &&
+      (respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '')
+    ) {
       textoFinal = await verificarYReintentarSiNecesario(env,
         respAPI.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(),
         herramientasUsadas,
@@ -8661,7 +8698,7 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
     }
 
     case 'buscar_web':
-      return env.OPENAI_API_KEY
+      return busquedaWebDisponible(env)
         ? await buscarWebOpenAI(env, input.query)
         : 'OPENAI_API_KEY no configurada — búsqueda web no disponible.';
 
@@ -13872,7 +13909,19 @@ async function clasificarConHaiku(env, mensaje) {
     }
   }
 
-  // ── CAPA 2: Haiku LLM — solo si regex no matchea (~10 tokens output) ───
+  // ── CAPA 2a: pool de IA propio (ADR-0028) — coste 0 ──────────────────
+  // Solo si AI_POOL_KEY existe y el circuito está cerrado. La salida tiene que ser
+  // EXACTAMENTE una de las etiquetas válidas; cualquier otra cosa (frase, dos etiquetas,
+  // vacío, timeout, 503 model_unavailable...) devuelve null y se sigue con Haiku.
+  const clasPool = await poolClasificar(env, SYSTEM_CLASIFICADOR_INTENCION, msg.substring(0, 800), ETIQUETAS_CLASIFICADOR_INTENCION, { uso: 'router' });
+  if (clasPool) {
+    // Sustituye a la fila que habría escrito Haiku: no añade escrituras D1.
+    await registrarTokenUso(env, clasPool.modeloRegistro, 'clasificacion', clasPool.usage.input_tokens || 0, clasPool.usage.output_tokens || 0, null);
+    const webPool = clasPool.etiqueta === 'web';
+    return { experto: clasPool.etiqueta, buscar_web: webPool, query_web: webPool ? msg.substring(0, 100) : null, source: 'ai_pool' };
+  }
+
+  // ── CAPA 2b: Haiku LLM — respaldo del pool, o único si no hay pool ─────
   try {
     const resp = await fetch(ANTHROPIC_API, {
       method: 'POST',
@@ -13880,7 +13929,7 @@ async function clasificarConHaiku(env, mensaje) {
       body: JSON.stringify({
         model: MODEL_ROUTER,
         max_tokens: 30,
-        system: 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app. Si es un HECHO que implica registrar o actualizar datos de la app aunque esté en forma de aviso/declaración, no de orden (alguien ha faltado/llegado/fichado, un pedido ha llegado, se ha usado material, un equipo se ha averiado, etc. — ej: "Dani faltó hoy", "han venido todos", "ya llegó el pedido") → app, NUNCA simple. "simple" es SOLO para saludos, charla casual o preguntas que no requieren tocar la base de datos. Si habla de electricidad, esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos eléctricos, instalaciones, ingeniería electrónica o de control → ingenieria. Si pide leer, revisar o resumir su correo/email/Gmail/bandeja de entrada → app, NUNCA web (el correo se gestiona con una tool de la app, no es una búsqueda en internet).',
+        system: SYSTEM_CLASIFICADOR_INTENCION,
         messages: [{ role: 'user', content: msg.substring(0, 800) }]
       })
     });
@@ -13888,8 +13937,7 @@ async function clasificarConHaiku(env, mensaje) {
     const data = await resp.json();
     if (data.usage) await registrarTokenUso(env, MODEL_ROUTER, 'clasificacion', data.usage.input_tokens||0, data.usage.output_tokens||0, null);
     const texto = (data.content?.[0]?.text || '').trim().toLowerCase();
-    const validos = ['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo'];
-    const experto = validos.find(v => texto.includes(v)) || 'app';
+    const experto = ETIQUETAS_CLASIFICADOR_INTENCION.find(v => texto.includes(v)) || 'app';
     const needsWeb = texto.includes('web');
     return { experto, buscar_web: needsWeb, query_web: needsWeb ? msg.substring(0, 100) : null, source: 'haiku' };
   } catch (err) {
@@ -14571,6 +14619,13 @@ async function obtenerCascadaModelosGratis(env) {
 }
 
 async function llamarTextoGratisConFallbackHaiku(env, systemPrompt, userText, maxTokens, tipoUso, usuario_id = 'system') {
+  // ADR-0028: pool de IA propio como primer intento; si no está o falla, la cadena de
+  // siempre (OpenRouter gratis → Haiku) sin ningún cambio.
+  const poolRes = await poolTexto(env, systemPrompt, userText, { maxTokens: maxTokens || 500, timeoutMs: AI_POOL_TIMEOUTS.cron, uso: tipoUso || 'texto_interno' });
+  if (poolRes) {
+    await registrarTokenUso(env, poolRes.modeloRegistro, tipoUso, poolRes.usage.input_tokens || 0, poolRes.usage.output_tokens || 0, usuario_id);
+    return poolRes.texto;
+  }
   const _orKey = env.OPENROUTER_API_KEY ? String(env.OPENROUTER_API_KEY).replace(new RegExp('^' + String.fromCharCode(0xFEFF)), '').trim() : '';
   if (_orKey) {
     const cascada = await obtenerCascadaModelosGratis(env);
@@ -14830,6 +14885,36 @@ async function _intentarGeminiVisionFallback(env, messages, systemPrompt, maxTok
   return null;
 }
 
+// ── Pool de IA propio (ADR-0028) con la misma forma de respuesta que Anthropic ──
+// Reutiliza los conversores Anthropic↔OpenAI de Grok/OpenRouter. Devuelve null (nunca
+// lanza) si el pool no está configurado, el circuito está abierto, hay imágenes (los
+// modelos del pool no se usan para visión), o la respuesta no es válida → el llamador
+// sigue con su cadena de siempre.
+async function _intentarPoolChat(env, messages, systemPrompt, maxTokens, tools, timeoutMs, uso) {
+  if (!poolConfigurado(env)) return null;
+  const tieneImagenes = messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'image'));
+  if (tieneImagenes) return null;
+  try {
+    const toolsOpenAI = _anthropicToolsToOpenAI(tools);
+    const msgs = _agenteMsgsToOpenAI(messages, systemPrompt, false);
+    const r = await poolChat(env, { messages: msgs, maxTokens: maxTokens || 1024, tools: toolsOpenAI || undefined, timeoutMs, uso });
+    if (!r.ok) return null;
+    const content = _openAIToolCallsToAnthropicContent(r.mensaje, tools);
+    if (!content.length) return null;
+    const esToolUse = content.some(b => b.type === 'tool_use');
+    return {
+      content,
+      stop_reason: esToolUse ? 'tool_use' : 'end_turn',
+      usage: r.usage,
+      modelo_real: r.modeloRegistro,
+      proveedor_real: 'ai_pool'
+    };
+  } catch (e) {
+    console.log(`[AIPool] EXCEPCION convirtiendo respuesta: ${e.message}`);
+    return null;
+  }
+}
+
 // Grok (xAI) — API compatible con OpenAI, reutiliza los mismos conversores que
 // ya existen para GPT-4o/OpenRouter. Solo se intenta si XAI_API_KEY está
 // configurada; cualquier fallo cae de vuelta a GPT-4o sin romper el flujo.
@@ -14876,6 +14961,11 @@ async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools
     const gemini = await _intentarGeminiVisionFallback(env, messages, systemPrompt, maxTokens, tools);
     if (gemini) return gemini;
   }
+
+  // ── 0º bis (ADR-0028): pool de IA propio, coste 0. Solo texto (sin imágenes) y
+  // solo si AI_POOL_KEY existe; ante timeout/error/respuesta inválida sigue a Grok.
+  const pool = await _intentarPoolChat(env, messages, systemPrompt, maxTokens, tools, AI_POOL_TIMEOUTS.fallback, 'respaldo_anthropic');
+  if (pool) return pool;
 
   // ── 1º INTENTO: Grok (xAI, de pago pero más barato que GPT-4o) — antes que la
   // cascada gratis a petición de Adrián. Solo si hay clave configurada; si falla
@@ -14992,6 +15082,9 @@ async function llamarExperto(env, messages, tools, expert, systemPrompt, usuario
   if (!expert.gratisPrimero) {
     return await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
   }
+  // ADR-0028: pool de IA propio delante de la cascada gratis de OpenRouter.
+  const pool = await _intentarPoolChat(env, messages, systemPrompt, expert.maxTokens, tools, AI_POOL_TIMEOUTS.simple, 'experto_simple');
+  if (pool) return pool;
   const gratis = await _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, expert.maxTokens, tools);
   if (gratis) return gratis;
   console.log('[Experto] Cascada gratis agotada, fallback a Haiku');
@@ -15119,7 +15212,25 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
 }
 
 // ── OpenAI búsqueda web ───────────────────────────────────────────────────────
+// Búsqueda web disponible si hay pool configurado (ADR-0028) o clave de OpenAI.
+function busquedaWebDisponible(env) {
+  return poolConfigurado(env) || !!env.OPENAI_API_KEY;
+}
+
 async function buscarWebOpenAI(env, query) {
+  // ADR-0028: primero el pool propio (/v1/tools/search, coste 0). Si los resultados no
+  // traen texto, se lee la primera página con /v1/tools/read. Cualquier fallo → gpt-4o-mini.
+  const busquedaPool = await poolBuscar(env, query, { uso: 'buscar_web' });
+  if (busquedaPool) {
+    let lectura = null;
+    if (!busquedaPool.answer && !busquedaPool.resultados.some(r => r.content) && busquedaPool.resultados[0]) {
+      lectura = await poolLeer(env, busquedaPool.resultados[0].url, { maxChars: 1500, uso: 'buscar_web_leer' });
+    }
+    // Sustituye a la fila de gpt-4o-mini (no añade escrituras D1).
+    await registrarTokenUso(env, 'ai_pool:tools/search', 'web_search', 0, 0, null);
+    return formatearBusquedaPool(query, busquedaPool, lectura);
+  }
+  if (!env.OPENAI_API_KEY) return `Sin resultados para: "${query}" (búsqueda web no disponible ahora mismo).`;
   try {
     const resp = await fetch(OPENAI_API, {
       method: 'POST',
@@ -15397,9 +15508,18 @@ async function actualizarResumenSiNecesario(env, usuario_id, canal) {
     const sistema = `Eres un asistente que resume conversaciones largas en español. Devuelve SOLO JSON válido con esta forma:
 {"tema":"frase corta (máx 60 caracteres) que resuma el tema principal — ej 'Cálculo cuadro nave 3 — Empresa Norte'","resumen":"Tema principal: ... Puntos clave: ... Decisiones tomadas: ... Contexto a recordar: ..."}`;
 
-    const respAPI = await llamarAnthropic(env, [{ role: 'user', content: `Resume esta conversación previa (${items.length} mensajes):\n\n${transcript}` }], [], MODEL_ROUTER, 600, sistema);
-    if (respAPI.usage) await registrarTokenUso(env, MODEL_ROUTER, 'resumen_conversacion', respAPI.usage.input_tokens || 0, respAPI.usage.output_tokens || 0, usuario_id);
-    const texto = respAPI.content?.find(b => b.type === 'text')?.text?.trim() || '';
+    const pideResumen = `Resume esta conversación previa (${items.length} mensajes):\n\n${transcript}`;
+    // ADR-0028: pool propio primero (coste 0), Haiku de respaldo.
+    const poolResumen = await poolTexto(env, sistema, pideResumen, { maxTokens: 600, timeoutMs: AI_POOL_TIMEOUTS.fondo, uso: 'resumen_conversacion' });
+    let texto;
+    if (poolResumen) {
+      await registrarTokenUso(env, poolResumen.modeloRegistro, 'resumen_conversacion', poolResumen.usage.input_tokens || 0, poolResumen.usage.output_tokens || 0, usuario_id);
+      texto = poolResumen.texto;
+    } else {
+      const respAPI = await llamarAnthropic(env, [{ role: 'user', content: pideResumen }], [], MODEL_ROUTER, 600, sistema);
+      if (respAPI.usage) await registrarTokenUso(env, MODEL_ROUTER, 'resumen_conversacion', respAPI.usage.input_tokens || 0, respAPI.usage.output_tokens || 0, usuario_id);
+      texto = respAPI.content?.find(b => b.type === 'text')?.text?.trim() || '';
+    }
     const match = texto.match(/\{[\s\S]*\}/);
     let tema = null, resumen = texto.substring(0, 2000);
     if (match) {
