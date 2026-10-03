@@ -62,6 +62,10 @@ hasta que él configure el secreto**.
 | c) `buscar_web` del agente | gpt-4o-mini | pool `/v1/tools/search` (+ `/v1/tools/read` si no hay extractos) → gpt-4o-mini | `buscarWebOpenAI` |
 | c) `web_search` de Telegram | Tavily | pool `/v1/tools/search` → Tavily | `executeAITool` en `worker.js` |
 | d) Cadena cuando cae Anthropic | (Gemini si hay imagen) → Grok → OpenRouter → gpt-4o | (Gemini si hay imagen) → **pool** → Grok → OpenRouter → gpt-4o | `llamarGPT4oFallback` |
+| e) Adjunto PDF > 4,5 MB del chat | Gemini | pool `/v1/tools/document` → Gemini | `buildUserContentWithAdjuntos` del agente |
+| e) Adjunto Excel (.xlsx) del chat | Gemini | pool `/v1/tools/document` → Gemini | `buildUserContentWithAdjuntos` del agente |
+| e) Adjunto Word (.docx) del chat | aviso «[Archivo adjunto…]» | pool `/v1/tools/document` → el mismo aviso | `buildUserContentWithAdjuntos` del agente |
+| e) Tool `ver_archivo` (PDF, .xlsx, .docx) | heurística de cadenas del PDF / solo metadatos | pool `/v1/tools/document` → lo mismo de antes | `ver_archivo` del agente |
 
 Con el experto «simple», si el pool ya dio el texto final sin tools, el streaming de cierre
 no vuelve a llamar a Haiku (esa segunda llamada anularía el ahorro).
@@ -178,6 +182,51 @@ comportan exactamente igual que antes del pool. Métrica: uso `buscar_web_consul
 - `POST /v1/tools/read` — `{"url": http(s) 8–2000, "summarize": false}`. Respuesta
   `{"url","final_url","status","title","text","device","summary","took_s"}`; si no pudo
   bajarla, 200 `{"url","error","device","took_s"}` sin `text` → fallo.
+- `POST /v1/tools/document` (servicio nuevo de la sesión del pool, 03/10/2026) —
+  `{"filename":"albaran.pdf","data":"<base64>"}` (≤ 20 MB) o `{"object_id":"obj_…"}`, más
+  `"max_chars"` opcional (1000–200000). Formatos: PDF con texto, `.xlsx` (valores), `.docx`,
+  CSV y texto. Respuesta `{"type","pages","text" (Markdown con tablas),"tables":[{"page","rows"}],
+  "sheets":[{"name","rows"}],"needs_ocr":[páginas escaneadas sin texto],"truncated","chars","took_s"}`,
+  0,2–0,5 s en CPU; 422 con motivo ante error. **No hace OCR.** El cliente
+  (`poolLeerDocumento` en `ai-pool.js`) manda solo `filename` (último segmento de la key, sin
+  la ruta R2 con ids), `data` y `max_chars`; nunca usa `object_id`. Timeout 15 s.
+
+### Documentos (POOL-DOCUMENTOS-01, 03/10/2026)
+
+Reglas de `poolLeerDocumento` (devuelve `null` = camino de siempre):
+
+1. **Imágenes nunca**: fotos de albaranes, partes semanales, matrículas, escaneos remotos y
+   análisis de fotos siguen con Gemini/Cloud Vision. Un MIME `image/*` (o vídeo/audio) o una
+   extensión de imagen → `null` sin llamar; también `.xls` binario y cualquier formato fuera
+   del contrato.
+2. **Solo documentos con texto**: si la respuesta trae `needs_ocr` no vacío (todas **o parte**
+   de las páginas escaneadas) o el texto útil tiene menos de 20 caracteres, el **documento
+   entero** va por el camino de siempre. No se trocea por páginas: los Workers no tienen con
+   qué partir un PDF y mezclar dos vías daría huecos o duplicados; todo o nada es lo sencillo y
+   correcto. Estos casos no abren el circuito (el pool respondió bien).
+3. **> 20 MB** → directo al respaldo, sin llamar (métrica `omitido`, motivo `demasiado_grande`).
+4. **422** (fichero que el pool no puede leer) → respaldo **sin** contar para el circuito;
+   timeout, 5xx o red → respaldo y sí cuentan.
+5. Métrica `AIPOOL_METRICA` uso `documento` (ok / respaldo + motivo `needs_ocr`,
+   `texto_corto`, `sin_texto`, `http_422`, `timeout`… / omitido), sin contenido ni nombre.
+
+Dónde se usa (solo en `alejandra-agente/worker.js`; ver la tabla de Alcance, fila e):
+
+- Adjuntos del chat (`buildUserContentWithAdjuntos`): PDF > 4,5 MB y `.xlsx` → pool → Gemini;
+  `.docx` → pool → aviso de siempre. Los **PDF ≤ 4,5 MB siguen yendo nativos a Claude**
+  (bloque `document`): Claude ve también dibujos, planos vectoriales y páginas escaneadas,
+  cosa que el texto del pool no da; cambiar eso sería otra decisión, medida antes.
+- Tool `ver_archivo`: PDF → pool → heurística de cadenas de siempre; `.xlsx`/`.docx` → pool →
+  el mensaje de siempre. El formato del texto devuelto por la tool no cambia (mismas
+  cabeceras y recortes de 6 000 / 8 000 caracteres).
+- **No** pasan por el pool: `analizar_archivo` y `marcar_plano` (piden a Gemini que *analice*
+  o responda una pregunta sobre el fichero, no que extraiga texto), CSV/texto (se leen tal
+  cual, sin IA) y todos los escaneos de imagen.
+- `worker.js` (Telegram, «el otro cerebro»): revisado y **no aplica** — no extrae texto de
+  documentos (el webhook solo trata texto, voz y fotos; `/scan-parte`, `/scan-bobinas`,
+  `/scan-devolucion-bobinas`, el escaneo remoto, el OCR de matrículas y la identificación del
+  replanteo son todos de imagen). Si algún día lee PDF/Excel, debe usar el mismo
+  `poolLeerDocumento` del módulo compartido.
 
 El cliente sigue siendo tolerante con la *forma de la respuesta* (`snippet`/`content`/`text`,
 `results`/`data`/array raíz, `{"error"}` o `{"detail"}`) por si el gateway evoluciona.
@@ -197,6 +246,11 @@ un servidor doméstico expuesto a internet por Tailscale Funnel.
   - el Core guarda solo metadatos (proyecto, modelo, equipo, tiempos, tokens), no contenido;
   - el panel del pool ya no guarda el texto de las búsquedas;
   - la lectura de páginas (`/v1/tools/read`) anota solo el dominio;
+  - los documentos (`/v1/tools/document`) reciben el mismo fichero que antes iba a Gemini,
+    nunca imágenes. **Excepción consciente**: en `ver_archivo` el PDF/Excel/Word antes se leía
+    solo dentro del Worker y ahora viaja al pool (mismo nivel de confianza que el resto de usos
+    del pool; quitar `AI_POOL_KEY` lo revierte). Se manda solo el nombre del fichero (sin la
+    ruta R2) y la métrica no lleva ni nombre ni contenido;
   - **DuckDuckGo sí ve la consulta** de búsqueda (es el buscador): por eso se le manda una
     consulta corta de palabras clave, no la frase entera del usuario;
   - Tailscale Funnel solo publica el puerto 443 hacia la pasarela, con las rutas de cliente y

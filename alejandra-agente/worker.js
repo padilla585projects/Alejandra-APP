@@ -86,7 +86,7 @@ import { obtenerFuente } from './nexo-fuentes.js';
 import { verificarCotasDeclaradas, resultadoPlanoVerificado, errorPlanoNoGuardado } from './planos-cotas.js';
 // ADR-0028: pool de IA propio con respaldo obligatorio. Mismo módulo que importa worker.js
 // (los dos cerebros). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
-import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda, modeloPool, fijarSumideroMetricasPool } from './ai-pool.js';
+import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda, modeloPool, fijarSumideroMetricasPool, poolLeerDocumento } from './ai-pool.js';
 // ADR-0029: dataset de entrenamiento privado en R2 (apagado sin DATASET_ENTRENAMIENTO=1).
 import { datasetActivo, procesarTurnoDataset, resolverPendienteDataset, promoverPendientesCaducados } from './dataset-entrenamiento.js';
 const EUR_RATE = 0.92;
@@ -7392,6 +7392,7 @@ function uint8ToBase64(bytes) {
 // ── Construir content blocks con adjuntos (imágenes inline) ──────────────────
 async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
   const contentBlocks = [];
+  let docPool = null;
 
   // Cargar cada adjunto de R2 y añadir como imagen si es posible
   for (const key of adjuntos) {
@@ -7417,6 +7418,7 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
         else if (lower.endsWith('.json')) ct = 'application/json';
         else if (lower.endsWith('.xlsx')) ct = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
         else if (lower.endsWith('.xls')) ct = 'application/vnd.ms-excel';
+        else if (lower.endsWith('.docx')) ct = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       }
       if (ct.startsWith('image/')) {
         const buf = await obj.arrayBuffer();
@@ -7459,6 +7461,13 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
             type: 'document',
             source: { type: 'base64', media_type: 'application/pdf', data: base64 }
           });
+        } else if ((docPool = await poolLeerDocumento(env, { filename: key, mime: ct, bytes, maxChars: MAX_CHARS_ADJUNTO_POOL }))) {
+          // POOL-DOCUMENTOS-01 (ADR-0028): PDF grande CON texto → pool (/v1/tools/document,
+          // sin coste) en vez de Gemini. Escaneado (needs_ocr), sin texto, >20 MB, error o
+          // sin AI_POOL_KEY → null y sigue por Gemini exactamente como antes. Los PDF
+          // ≤4,5 MB siguen yendo nativos a Claude (ve también dibujos y escaneos).
+          contentBlocks.push({ type: 'text', text: `[Adjunto: key="${key}"]` });
+          contentBlocks.push({ type: 'text', text: `Contenido del PDF (${key}, ${(bytes.length/1024/1024).toFixed(1)}MB, texto extraído):\n${docPool.texto}${notaTruncadoPool(docPool, key)}` });
         } else if (env.GEMINI_API_KEY) {
           try {
             const base64 = uint8ToBase64(bytes);
@@ -7474,7 +7483,11 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
       } else if (ct.includes('spreadsheet') || ct.includes('excel')) {
         const buf = await obj.arrayBuffer();
         const bytes = new Uint8Array(buf);
-        if (env.GEMINI_API_KEY && bytes.length <= 20 * 1024 * 1024) {
+        // POOL-DOCUMENTOS-01: .xlsx → pool primero (valores de todas las hojas); .xls
+        // binario, error o sin clave → Gemini como antes.
+        if ((docPool = await poolLeerDocumento(env, { filename: key, mime: ct, bytes, maxChars: MAX_CHARS_ADJUNTO_POOL }))) {
+          contentBlocks.push({ type: 'text', text: `Contenido del Excel (${key}, texto extraído):\n${docPool.texto}${notaTruncadoPool(docPool, key)}` });
+        } else if (env.GEMINI_API_KEY && bytes.length <= 20 * 1024 * 1024) {
           try {
             const base64 = uint8ToBase64(bytes);
             const texto = await analizarArchivoConGemini(env, base64, ct,
@@ -7489,6 +7502,9 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
       } else if (ct.startsWith('text/') || ct === 'application/json') {
         const text = await obj.text();
         contentBlocks.push({ type: 'text', text: `Archivo adjunto (${key}):\n${text.substring(0, 4000)}` });
+      } else if (ct.includes('wordprocessingml') && (docPool = await poolLeerDocumento(env, { filename: key, mime: ct, bytes: new Uint8Array(await obj.arrayBuffer()), maxChars: MAX_CHARS_ADJUNTO_POOL }))) {
+        // POOL-DOCUMENTOS-01: .docx → pool; sin pool queda el aviso genérico de siempre.
+        contentBlocks.push({ type: 'text', text: `Contenido del Word (${key}, texto extraído):\n${docPool.texto}${notaTruncadoPool(docPool, key)}` });
       } else {
         contentBlocks.push({ type: 'text', text: `[Archivo adjunto: ${key} (${ct})]` });
       }
@@ -7503,6 +7519,15 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
   }
 
   return contentBlocks;
+}
+
+// POOL-DOCUMENTOS-01 (ADR-0028): tope de texto de un adjunto leído por el pool en el chat
+// (~10k tokens, del orden de lo que devolvía Gemini) y aviso si el pool lo recortó.
+const MAX_CHARS_ADJUNTO_POOL = 40000;
+function notaTruncadoPool(doc, key) {
+  return doc && doc.truncado
+    ? `\n\n[... truncado: el documento tiene ${doc.caracteres} caracteres. Pide al usuario la parte que le interesa o usa analizar_archivo con key="${key}".]`
+    : '';
 }
 
 // ── Gemini Vision — analizar foto con IA de visión ──────────────────────────
@@ -9031,6 +9056,10 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         if (contentType === 'application/pdf') {
           const arrayBuf = await obj.arrayBuffer();
           const bytes = new Uint8Array(arrayBuf);
+          // POOL-DOCUMENTOS-01 (ADR-0028): pool primero (texto real con tablas en Markdown);
+          // escaneado (needs_ocr), sin texto, error o sin AI_POOL_KEY → heurística de siempre.
+          const docPool = await poolLeerDocumento(env, { filename: input.key, mime: contentType, bytes, maxChars: 8000 });
+          if (docPool) return `Archivo PDF: ${input.key} (${sizeKB} KB)\n\nTexto extraído:\n${docPool.texto.substring(0, 6000)}`;
           // Extraer strings legibles del PDF (heurística básica)
           let text = '';
           let inParen = false;
@@ -9050,8 +9079,19 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           return `Archivo PDF: ${input.key} (${sizeKB} KB)\n\nTexto extraído:\n${text.substring(0, 6000)}`;
         }
 
-        // Excel — metadatos solamente (no hay librería XLSX en Workers)
-        if (contentType.includes('spreadsheet') || contentType.includes('excel')) {
+        // Excel/Word — POOL-DOCUMENTOS-01: el pool lee .xlsx y .docx; sin pool (o .xls
+        // binario) solo metadatos, como antes (no hay librería XLSX en Workers).
+        const esExcel = contentType.includes('spreadsheet') || contentType.includes('excel');
+        const esWord = contentType.includes('wordprocessingml');
+        if (esExcel || esWord) {
+          const docPool = await poolLeerDocumento(env, { filename: input.key, mime: contentType, bytes: new Uint8Array(await obj.arrayBuffer()), maxChars: 9000 });
+          if (docPool) {
+            const t = docPool.texto;
+            const preview = t.length > 8000 || docPool.truncado ? t.substring(0, 8000) + '\n\n[... truncado, archivo completo tiene ' + docPool.caracteres + ' caracteres]' : t;
+            return `Archivo ${esExcel ? 'Excel' : 'Word'}: ${input.key} (${sizeKB} KB, ${contentType})\n\nContenido:\n${preview}`;
+          }
+        }
+        if (esExcel) {
           return `Archivo Excel: ${input.key} (${sizeKB} KB, ${contentType}). Para analizar su contenido, pide al usuario que lo exporte como CSV.`;
         }
 
