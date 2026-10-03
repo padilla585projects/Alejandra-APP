@@ -2492,7 +2492,7 @@ const TOOL_GENERAR_PLANO = {
 - planta_industrial: Plano de planta con la instalacion electrica de una NAVE INDUSTRIAL, CPD/datacenter u obra de gran envergadura: CT, generador+ATS, CGBT, canalizacion por BANDEJAS (no tubo empotrado), sub-cuadros de planta, y para CPD ademas racks en filas con pasillo frio/caliente, PDU, SAI/UPS y climatizacion CRAC/CRAH con doble ruta A/B redundante. USAR cuando el usuario pida un plano de electricidad de nave, CPD, datacenter, sala tecnica/servidores, o instalacion industrial de gran tamaño (por defecto, si no especifica vivienda/local pequeño, usar este tipo).
 - planta: Plano de planta/obra generico (distribuccion espacios, estructura, cotas) SIN instalacion electrica -- por defecto orientado a nave industrial/obra grande salvo que se pida vivienda.
 - mecanico: Plano mecanico industrial (vistas, cotas, materiales).
-- gantt: Diagrama de Gantt de fases de obra.
+- gantt: Diagrama de Gantt (cronograma o planning visual en barras) con las fases de la obra. USAR cuando el usuario pida un diagrama de Gantt, un cronograma o una planificacion visual de fases; NO usar gestionar_tarea para eso (gestionar_tarea crea, actualiza o lista tareas sueltas y no dibuja nada). Si las fases no estan en la conversacion, recuperarlas antes con estado_obra.
 El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos). Para tipo unifilar/electrico se puede (y se debe, si el usuario da datos reales) pasar tambien "circuitos" para que el resultado quede editable despues sin tener que regenerar el plano entero.`,
   input_schema: {
     type: 'object',
@@ -2597,7 +2597,7 @@ const TOOL_ESTADO_OBRA = {
 // patrón de nombre (ver marcar_plano más abajo, que pese al nombre es N0).
 const TOOL_GESTIONAR_TAREA = {
   name: 'gestionar_tarea',
-  description: 'CAMPOS OBLIGATORIOS POR ACCIÓN (ALEJANDRA-CONTROLFLOW-03): accion="crear" exige titulo. accion="actualizar"/"completar"/"eliminar" exige tarea_id. Si no los tienes, pregúntalos antes de llamar. Crea, actualiza o lista tareas de obra (tipo Fieldwire). Cada tarea tiene título, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), responsable, fecha límite y ubicación. Úsalo cuando el usuario quiera crear una tarea, asignar trabajo, ver qué está pendiente, o marcar algo como completado.',
+  description: 'CAMPOS OBLIGATORIOS POR ACCIÓN (ALEJANDRA-CONTROLFLOW-03): accion="crear" exige titulo. accion="actualizar"/"completar"/"eliminar" exige tarea_id. Si no los tienes, pregúntalos antes de llamar. Crea, actualiza o lista tareas de obra (tipo Fieldwire). Cada tarea tiene título, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), responsable, fecha límite y ubicación. Úsalo cuando el usuario quiera crear una tarea, asignar trabajo, ver qué está pendiente, o marcar algo como completado. NO dibuja diagramas: un diagrama de Gantt, cronograma o planning visual de fases es generar_plano con tipo="gantt".',
   input_schema: {
     type: 'object',
     properties: {
