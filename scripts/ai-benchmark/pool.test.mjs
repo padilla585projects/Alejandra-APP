@@ -59,13 +59,16 @@ test('solo con AI_POOL_KEY: mide el pool, omite el resto y calcula acierto/laten
 // Respuesta «perfecta» del pool para un caso del banco, con la cabecera X-AI-Pool-Model.
 function respuestaPerfecta(caso, modeloReal) {
   const e = caso.esperado;
+  // Primera alternativa de una regex del banco (todas empiezan por una palabra literal).
   const primera = f => String(f).split('|')[0];
   let message;
   if (e.etiqueta) message = { role: 'assistant', content: JSON.stringify({ experto: e.etiqueta }) };
   else if (e.respuesta_contiene) message = { role: 'assistant', content: e.respuesta_contiene.map(primera).join(' ') + '.' };
   else {
-    const args = Object.fromEntries(Object.entries(e.argumentos).map(([k, v]) => [k, Array.isArray(v) ? v.map(primera).join(' ') : typeof v === 'string' ? primera(v) : v]));
-    message = { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: e.herramienta, arguments: JSON.stringify(args) } }] };
+    const nombre = Array.isArray(e.herramienta) ? e.herramienta[0] : e.herramienta;
+    const exigidos = Array.isArray(e.herramienta) ? (e.argumentos[nombre] || {}) : e.argumentos;
+    const args = Object.fromEntries(Object.entries(exigidos).map(([k, v]) => [k, Array.isArray(v) ? v.join(' ') : v]));
+    message = { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: nombre, arguments: JSON.stringify(args) } }] };
   }
   const cuerpo = { model: 'alejandra:1.0', choices: [{ message }], usage: { prompt_tokens: 10, completion_tokens: 2 } };
   return { ok: true, status: 200, headers: new Headers({ 'X-AI-Pool-Model': modeloReal }), text: async () => JSON.stringify(cuerpo), json: async () => cuerpo };

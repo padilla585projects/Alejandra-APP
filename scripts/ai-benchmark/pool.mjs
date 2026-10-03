@@ -25,7 +25,7 @@ import {
 } from '../../alejandra-agente/ai-pool.js';
 import { SYSTEM_CLASIFICADOR_INTENCION, ETIQUETAS_CLASIFICADOR_INTENCION } from '../../alejandra-agente/lib.js';
 import { casosRouter, casosSimple, sistemaSimple, casosBusqueda, casosRespaldo, sistemaRespaldo, toolsRespaldo } from './pool-cases.mjs';
-import { cargarBancoAlejandra, evaluarCasoBanco } from './banco-alejandra.mjs';
+import { cargarBancoAlejandra, evaluarCasoBanco, etiquetaRouterBanco } from './banco-alejandra.mjs';
 
 // Modelos concretos del pool que se miden además del alias (el alias puede resolver a ellos).
 const POOL_QWEN = 'ai_pool:qwen3.6:35b-a3b';
@@ -204,7 +204,8 @@ async function ejecutarCaso(tarea, candidato, caso, { fetchImpl, envPool, poolTi
       const timeout = poolTimeout ?? (esRouter ? AI_POOL_TIMEOUTS.router : caso.tipo === 'experto_simple' ? AI_POOL_TIMEOUTS.simple : AI_POOL_TIMEOUTS.fallback);
       const r = await poolChat(envPool, { messages: caso.mensajes, tools, json: esRouter, ...(esRouter ? { temperature: 0 } : {}), maxTokens, timeoutMs: timeout, modelo: modeloPool, uso: 'benchmark_banco' }, opts);
       if (!r.ok) return fin({ status: r.motivo === 'timeout' ? 'timeout' : 'respaldo', pass: false, motivo: r.motivo, modeloReal: r.modeloReal || null });
-      const etiqueta = esRouter ? normalizarEtiquetaRouter(r.texto, ETIQUETAS_CLASIFICADOR_INTENCION) : undefined;
+      // Misma lectura que bench_alejandra.py del pool: {"experto"} o la primera palabra.
+      const etiqueta = esRouter ? etiquetaRouterBanco(r.texto) : undefined;
       return fin({ ...evaluar(r, etiqueta), modeloReal: r.modeloReal || null, salida: salidaCorta(r), usage: { input: r.usage.input_tokens, output: r.usage.output_tokens } });
     }
     const r = candidato === 'claude-haiku-4-5'

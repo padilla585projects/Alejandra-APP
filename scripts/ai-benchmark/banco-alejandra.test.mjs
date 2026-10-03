@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { cargarBancoAlejandra, validarBanco, evaluarCasoBanco, argumentoCoincide, TIPOS_BANCO, RUTA_BANCO } from './banco-alejandra.mjs';
+import { cargarBancoAlejandra, validarBanco, evaluarCasoBanco, argumentoCoincide, etiquetaRouterBanco, patronCoincide, herramientasValidas, TIPOS_BANCO, RUTA_BANCO } from './banco-alejandra.mjs';
 import { toolsPorNombre } from './herramientas-agente.mjs';
 import { ETIQUETAS_CLASIFICADOR_INTENCION, SYSTEM_CLASIFICADOR_INTENCION } from '../../alejandra-agente/lib.js';
 
@@ -17,7 +17,7 @@ test('tamaño y cobertura: 30–60 casos, los tres tipos y las 7 etiquetas del r
   for (const t of TIPOS_BANCO) assert.ok(banco.some(c => c.tipo === t), 'falta el tipo ' + t);
   const etiquetas = new Set(banco.filter(c => c.tipo === 'router').map(c => c.esperado.etiqueta));
   assert.deepEqual([...etiquetas].sort(), [...ETIQUETAS_CLASIFICADOR_INTENCION].sort());
-  const herramientas = new Set(banco.filter(c => c.tipo === 'experto_tools').map(c => c.esperado.herramienta));
+  const herramientas = new Set(banco.filter(c => c.tipo === 'experto_tools').flatMap(c => herramientasValidas(c.esperado)));
   for (const h of ['consultar_bd', 'consultar_replanteos', 'memory_save', 'memory_read', 'generar_plano', 'buscar_web', 'delegar_tarea', 'estado_obra']) {
     assert.ok(herramientas.has(h), 'sin casos de ' + h);
   }
@@ -59,6 +59,7 @@ test('evaluador: aciertos y fallos de cada tipo', () => {
   assert.equal(evaluarCasoBanco(router, { etiqueta: 'web' }).motivo, 'etiqueta_distinta');
   const simple = { esperado: { respuesta_contiene: ['diferencial', 'magnetot'] } };
   assert.equal(evaluarCasoBanco(simple, { texto: 'El Magnetotérmico protege… el diferencial también.' }).pass, true);
+  assert.equal(evaluarCasoBanco(router, { etiqueta: 'APP' }).pass, true);
   assert.equal(evaluarCasoBanco(simple, { texto: 'El diferencial.' }).motivo, 'falta_contenido');
   assert.equal(evaluarCasoBanco(simple, { texto: 'x', toolCalls: [{ name: 'consultar_bd' }] }).motivo, 'tool_innecesaria');
   assert.equal(evaluarCasoBanco(simple, { texto: '<|tool_call|> diferencial magnetot' }).motivo, 'fuga_sintaxis_tool');
@@ -73,15 +74,81 @@ test('evaluador: aciertos y fallos de cada tipo', () => {
   assert.equal(evaluarCasoBanco(tools, { toolCalls: [{ name: 'consultar_bd', arguments: { query: 'select 1 from FICHAJES where empresa_id=5' } }] }).pass, true);
 });
 
-test('evaluador: comparación de argumentos', () => {
-  assert.equal(argumentoCoincide(14, '14'), true);
+test('evaluador: comparación de argumentos (mismas reglas que bench_alejandra.py del pool)', () => {
+  // otro tipo = igualdad estricta (un 14 no es el texto "14")
+  assert.equal(argumentoCoincide(14, 14), true);
+  assert.equal(argumentoCoincide(14, '14'), false);
   assert.equal(argumentoCoincide(14, 15), false);
+  assert.equal(argumentoCoincide(true, true), true);
+  // texto = subcadena, sin mayúsculas ni tildes; en argumentos «|» NO es alternativa
   assert.equal(argumentoCoincide('bandejas', 'bandejas'), true);
   assert.equal(argumentoCoincide('tension', 'caída de TENSIÓN'), true);
-  assert.equal(argumentoCoincide('cierre|horario', 'horario de la nave'), true);
+  assert.equal(argumentoCoincide('caída de tensión', 'CAIDA DE TENSION en el tramo'), true);
+  assert.equal(argumentoCoincide('cierre|horario', 'horario de la nave'), false);
+  // lista = deben aparecer todos los fragmentos
   assert.equal(argumentoCoincide(['viernes', '15'], 'Viernes cierre a las 15:00'), true);
   assert.equal(argumentoCoincide(['viernes', '15'], 'viernes'), false);
+  assert.equal(argumentoCoincide(['partes_trabajo', 'empresa_id'], 'SELECT * FROM partes_trabajo WHERE obra_id = 14'), false);
   assert.equal(argumentoCoincide('x', undefined), false);
+});
+
+test('evaluador: varios primeros pasos válidos con argumentos por herramienta', () => {
+  const caso = { esperado: { herramienta: ['memory_read', 'memory_update'], argumentos: { memory_update: { slug: 'horario-nave' } } } };
+  const tc = (name, args) => [{ type: 'function', function: { name, arguments: JSON.stringify(args) } }];
+  assert.equal(evaluarCasoBanco(caso, { toolCalls: tc('memory_read', { query: 'lo que sea' }) }).pass, true); // sin entrada: no exige nada
+  assert.equal(evaluarCasoBanco(caso, { toolCalls: tc('memory_update', { slug: 'Horario-Nave', contenido: 'x' }) }).pass, true);
+  assert.equal(evaluarCasoBanco(caso, { toolCalls: tc('memory_update', { slug: 'otra-nota' }) }).motivo, 'argumento_slug');
+  assert.equal(evaluarCasoBanco(caso, { toolCalls: tc('memory_save', { contenido: 'x' }) }).motivo, 'tool_distinta');
+  // solo cuenta la PRIMERA llamada
+  assert.equal(evaluarCasoBanco(caso, { toolCalls: [...tc('memory_save', {}), ...tc('memory_read', {})] }).motivo, 'tool_distinta');
+  // lista de herramientas con argumentos planos: se aplican a la elegida (como el pool)
+  const plano = { esperado: { herramienta: ['generar_plano', 'estado_obra'], argumentos: { tipo: 'gantt' } } };
+  assert.equal(evaluarCasoBanco(plano, { toolCalls: tc('generar_plano', { tipo: 'gantt' }) }).pass, true);
+  assert.equal(evaluarCasoBanco(plano, { toolCalls: tc('generar_plano', { tipo: 'bandejas' }) }).motivo, 'argumento_tipo');
+});
+
+test('evaluador: respuesta_contiene / respuesta_no_contiene son regex sin mayúsculas ni tildes', () => {
+  const caso = { esperado: { respuesta_contiene: ['diferencial', 'fuga|corriente residual|30 ?ma'], respuesta_no_contiene: ['rueda', 'temperatura'] } };
+  assert.equal(evaluarCasoBanco(caso, { texto: 'El DIFERENCIAL corta si detecta una corriente residual (fuga) de 30 mA.' }).pass, true);
+  assert.equal(evaluarCasoBanco(caso, { texto: 'El diferencial salta con 30mA.' }).pass, true);
+  assert.equal(evaluarCasoBanco(caso, { texto: 'El diferencial protege la instalación.' }).motivo, 'falta_contenido');
+  assert.equal(evaluarCasoBanco(caso, { texto: 'El diferencial detecta fugas y la temperatura.' }).motivo, 'contenido_prohibido');
+  assert.equal(evaluarCasoBanco(caso, { texto: 'El diferencial y las ruedas: fuga.' }).motivo, 'contenido_prohibido');
+  assert.equal(patronCoincide('caída de tensión', 'la CAIDA DE TENSION máxima'), true);
+  assert.equal(patronCoincide('caida de tension', 'la caída de tensión máxima'), true);
+  assert.equal(patronCoincide('magnetot', 'Magnetotérmico'), true);
+});
+
+test('evaluador: etiqueta del router como el pool ({"experto"} o la primera palabra)', () => {
+  assert.equal(etiquetaRouterBanco('{"experto":"tecnico"}'), 'tecnico');
+  assert.equal(etiquetaRouterBanco('{"experto": "Reflexion"}'), 'reflexion');
+  assert.equal(etiquetaRouterBanco('completo, porque pregunta por ti'), 'completo');
+  assert.equal(etiquetaRouterBanco('  App.'), 'app');
+  assert.equal(etiquetaRouterBanco(''), '');
+});
+
+test('el banco usa las formas exigentes: pasos alternativos, regex técnicas y lo que no debe decir', () => {
+  const porId = Object.fromEntries(banco.map(c => [c.id, c]));
+  assert.deepEqual(porId['tools-20-replanteo-pedido'].esperado.herramienta, ['generar_pedido_replanteo', 'consultar_replanteos']);
+  assert.deepEqual(porId['tools-23-memoria-actualizar'].esperado.herramienta, ['memory_update', 'memory_read']);
+  assert.equal(porId['tools-23-memoria-actualizar'].esperado.argumentos.memory_update.slug, 'horario-nave');
+  // tools-25: Gantt = generar_plano tipo gantt (o recuperar antes las fases con estado_obra), nunca gestionar_tarea
+  const t25 = porId['tools-25-plano-gantt'].esperado;
+  assert.deepEqual(t25.herramienta, ['generar_plano', 'estado_obra']);
+  assert.equal(t25.argumentos.generar_plano.tipo, 'gantt');
+  assert.ok(!t25.herramienta.includes('gestionar_tarea'));
+  // tools-24: con la política de pedir datos críticos, el mensaje ya trae tipo/ancho de bandeja y referencia de altura
+  const t24 = porId['tools-24-plano-bandejas'];
+  assert.match(t24.mensajes.at(-1).content, /300x60/);
+  assert.match(t24.mensajes.at(-1).content, /suelo terminado/);
+  assert.equal(t24.esperado.herramienta, 'generar_plano');
+  // técnicos: términos concretos y lo que NO debe aparecer
+  const dif = porId['simple-03-diferencial'].esperado;
+  assert.ok(dif.respuesta_contiene.some(p => /fuga/.test(p) && /corriente residual/.test(p) && /30 \?ma/.test(p)));
+  assert.ok(dif.respuesta_no_contiene.includes('rueda') && dif.respuesta_no_contiene.includes('temperatura'));
+  const mag = porId['simple-04-magneto-vs-diferencial'].esperado;
+  assert.ok(mag.respuesta_contiene.some(p => /sobrecarga/.test(p) && /cortocircuito/.test(p)));
+  assert.ok(mag.respuesta_no_contiene.includes('rueda'));
 });
 
 test('validarBanco detecta errores típicos', () => {
@@ -96,4 +163,14 @@ test('validarBanco detecta errores típicos', () => {
   assert.ok(validarBanco(tipoMalo).some(e => e.includes('tipo inválido')));
   const r = banco.find(c => c.tipo === 'router');
   assert.ok(validarBanco([{ ...r, esperado: { etiqueta: 'inventada' } }], { etiquetas: ETIQUETAS_CLASIFICADOR_INTENCION }).some(e => e.includes('etiqueta desconocida')));
+  const s = banco.find(c => c.tipo === 'experto_simple');
+  assert.ok(validarBanco([{ ...s, esperado: { respuesta_contiene: ['(sin cerrar'] } }]).some(e => e.includes('expresión regular inválida')));
+  assert.ok(validarBanco([{ ...s, esperado: { respuesta_contiene: ['x'], respuesta_no_contiene: [] } }]).some(e => e.includes('respuesta_no_contiene')));
+  assert.ok(validarBanco([{ ...s, esperado: { respuesta_contiene: ['x'], otra: 1 } }]).some(e => e.includes('experto_simple debe esperar')));
+  const multi = banco.find(c => c.id === 'tools-23-memoria-actualizar');
+  assert.deepEqual(validarBanco([multi]), []);
+  assert.ok(validarBanco([{ ...multi, esperado: { ...multi.esperado, argumentos: { slug: 'horario-nave' } } }]).some(e => e.includes('se indexa por herramienta')));
+  assert.ok(validarBanco([{ ...multi, esperado: { ...multi.esperado, herramienta: ['memory_update', 'no_existe'] } }]).some(e => e.includes('no está en tools: no_existe')));
+  assert.ok(validarBanco([{ ...multi, esperado: { ...multi.esperado, argumentos: { memory_update: { no_existe: 'x' } } } }]).some(e => e.includes('no existe en el esquema de memory_update')));
+  assert.ok(validarBanco([{ ...multi, esperado: { ...multi.esperado, herramienta: ['memory_update'] } }]).some(e => e.includes('experto_tools debe esperar')));
 });

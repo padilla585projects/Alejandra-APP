@@ -536,120 +536,575 @@ function extraerTablasQuery(query) {
 // auditado en alejandra_logs. Default = true para no cambiar el comportamiento
 // de quien no pase este argumento (todos los call sites existentes lo pasan ya,
 // pero mantenemos el default por si se añade alguno nuevo sin pensarlo).
+//
+// SQL-SCOPE-02 (03/10/2026): la versión anterior solo buscaba UNA aparición de
+// `empresa_id = X` en cualquier sitio del texto, así que se podía saltar con
+// `WHERE empresa_id = 1 OR 1=1`, con un UNION a otra tabla o empresa, con una
+// subconsulta sin filtro, con un JOIN `ON 1=1` a otra tabla, con un `FROM a, sesiones`
+// (la tabla tras la coma no se veía) o con un INSERT de varias filas (solo miraba la
+// primera). Detectado al revisar el banco del pool (tools-02: qwen escribió una SQL sin
+// empresa_id; esa en concreto sí se rechazaba). Ahora se analiza la estructura:
+//   - cada SELECT (también subconsultas) exige que CADA tabla quede acotada a la empresa
+//     de la sesión con una condición `[alias.]empresa_id = <tu empresa>` unida por AND al
+//     WHERE (o al ON de un JOIN interno), o enlazada `a.empresa_id = b.empresa_id` con otra
+//     tabla ya acotada. Un OR suelto en el WHERE anula la prueba (hay que ponerlo entre
+//     paréntesis);
+//   - cualquier `empresa_id = <otro valor>` en cualquier sitio se rechaza;
+//   - UNION/INTERSECT/EXCEPT, WITH, comentarios, varias sentencias, parámetros con
+//     nombre y REPLACE/ON CONFLICT (pisarían filas de otra empresa) se rechazan;
+//   - el departamento (REPL-DEPT-01) usa la misma maquinaria, solo en lecturas.
+// Ante cualquier cosa que no sepa analizar, rechaza (cierra en falso, nunca abre).
 function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypassEmpresaActivo = true, rolSesion = null, departamentoSesion = null) {
   if (esDevVerificado && bypassEmpresaActivo) return null;
   if (COLUMNA_BLOQUEADA_BD.test(query)) {
     return 'Consulta rechazada: no se permite acceder a columnas sensibles (password_hash) sin sesión de desarrollador verificada.';
   }
-  const tablas = extraerTablasQuery(query);
-  if (tablas.length === 0) {
+  if (!/^\d+$/.test(String(empresaId ?? '').trim())) {
+    return 'Consulta rechazada: no se puede determinar tu empresa para acotar la consulta.';
+  }
+  const lex = tokenizarSqlScope(query);
+  if (lex.error) return `Consulta rechazada: ${lex.error}. Reescríbela como una única sentencia sencilla.`;
+  const tokens = lex.tokens;
+  const arbol = arbolSqlScope(tokens);
+  if (!arbol) return 'Consulta rechazada: paréntesis desequilibrados.';
+  const primero = arbol[0];
+  const tipo = primero && primero.t === 'id' && !primero.q ? primero.u : '';
+  if (tipo === 'WITH') return 'Consulta rechazada: no se admiten consultas WITH (CTE); usa subconsultas o consultas separadas.';
+  if (!['SELECT', 'INSERT', 'REPLACE', 'UPDATE', 'DELETE'].includes(tipo)) {
     return 'Consulta rechazada: no se pudo determinar la tabla de la consulta.';
   }
-  for (const t of tablas) {
+
+  // Red de seguridad: las tablas que ve la regex de siempre (sobre el texto sin cadenas)
+  // también tienen que estar permitidas, aunque el analizador no las hubiera visto.
+  const textoSinCadenas = tokens.map(t => t.t === 'str' ? "''" : t.t === 'param' ? '?' : t.v).join(' ');
+  const tablasRegex = extraerTablasQuery(textoSinCadenas);
+
+  const ctx = {
+    empresa: parseInt(String(empresaId).trim(), 10),
+    params: params || [],
+    tablas: new Set(tablasRegex),
+    exigirDept: false,
+    dept: departamentoSesion,
+  };
+
+  // 1) Ningún `empresa_id = <otro valor>` en ningún sitio (incluido un OR o un SET).
+  const rechazoValores = revisarValoresColumnaSql(tokens, 'empresa_id', ctx, (v) => valorNumericoSql(v) === ctx.empresa, {
+    literal: 'Consulta rechazada: el filtro empresa_id no coincide con tu empresa.',
+    param: 'Consulta rechazada: el valor pasado en params para empresa_id no coincide con tu empresa (o falta).',
+  });
+  if (rechazoValores) return rechazoValores;
+
+  // REPL-DEPT-01 (09/09/2026): además del aislamiento por empresa, exigir el filtro por
+  // departamento en las tablas que lo tienen, para los roles que NO ven todos los
+  // departamentos. Mismo criterio que el REST (isDeptPrivileged) y que el resto de tools
+  // del agente (puedeVerTodosLosDepartamentos, DEPT-AGENTE-01): superadmin / empresa_admin
+  // / desarrollador / seguridad ven todo; el resto solo su departamento. Solo se aplica a
+  // SELECT (el hueco confirmado es de LECTURA vía consultar_bd); las escrituras ya pasan
+  // por otras barreras (confirmación humana en DELETE/UPDATE masivo). Retrocompatibilidad:
+  // si no se pasan datos de sesión (rol y departamento ambos null) no se exige departamento.
+  const hayInfoSesion = rolSesion !== null || departamentoSesion !== null;
+  ctx.exigirDept = hayInfoSesion && tipo === 'SELECT' && !puedeVerTodosLosDepartamentos(rolSesion, departamentoSesion);
+
+  if (ctx.exigirDept && departamentoSesion) {
+    const rechazoDept = revisarValoresColumnaSql(tokens, 'departamento', ctx,
+      (v) => v !== undefined && v !== null && String(v).toLowerCase() === String(departamentoSesion).toLowerCase(), {
+        literal: 'Consulta rechazada: el filtro departamento no coincide con tu departamento.',
+        param: 'Consulta rechazada: el valor pasado en params para departamento no coincide con tu departamento (o falta).',
+      });
+    if (rechazoDept) return rechazoDept;
+  }
+
+  let rechazo = null;
+  if (tipo === 'SELECT') rechazo = analizarSelectSql(arbol, ctx, { empresa_id: new Set(), departamento: new Set() });
+  else if (tipo === 'INSERT' || tipo === 'REPLACE') rechazo = analizarInsertSql(arbol, ctx);
+  else if (tipo === 'UPDATE') rechazo = analizarUpdateDeleteSql(arbol, ctx, 'UPDATE');
+  else rechazo = analizarUpdateDeleteSql(arbol, ctx, 'DELETE');
+  if (rechazo) return rechazo;
+
+  if (ctx.tablas.size === 0) return 'Consulta rechazada: no se pudo determinar la tabla de la consulta.';
+  for (const t of ctx.tablas) {
     if (!TABLAS_EMPRESA_PERMITIDAS.has(t)) {
       return `Consulta rechazada: la tabla "${t}" no está permitida sin sesión de desarrollador verificada.`;
     }
   }
-  // REPL-DEPT-01 (09/09/2026): además del aislamiento por empresa (abajo), exigir el
-  // filtro por departamento en las tablas que lo tienen, para los roles que NO ven todos
-  // los departamentos. Mismo criterio que el REST (isDeptPrivileged) y que el resto de
-  // tools del agente (puedeVerTodosLosDepartamentos, DEPT-AGENTE-01): superadmin /
-  // empresa_admin / desarrollador / seguridad ven todo; el resto solo su departamento.
-  // Solo se aplica a SELECT (el hueco confirmado es de LECTURA vía consultar_bd); las
-  // escrituras ya pasan por otras barreras (confirmación humana en DELETE/UPDATE masivo).
-  // Retrocompatibilidad: si no se pasan datos de sesión (rol y departamento ambos null,
-  // p. ej. call sites internos o los tests antiguos) se mantiene el comportamiento previo
-  // y no se exige departamento — igual que el default de bypassEmpresaActivo. Los call
-  // sites reales de consultar_bd SÍ pasan el rol y el departamento verificados de la sesión.
-  const hayInfoSesion = rolSesion !== null || departamentoSesion !== null;
-  const validarDepartamento = () => {
-    if (!hayInfoSesion) return null;
-    if (!/^\s*SELECT\b/i.test(query)) return null;
-    if (puedeVerTodosLosDepartamentos(rolSesion, departamentoSesion)) return null;
-    const tablasDept = tablas.filter(t => TABLAS_CON_DEPARTAMENTO.has(t));
-    if (tablasDept.length === 0) return null;
-    if (!departamentoSesion) {
-      return 'Consulta rechazada: no se puede determinar tu departamento para filtrar esta tabla.';
-    }
-    // Literal: departamento = 'electrico' (admite prefijo de tabla: u.departamento = '...')
-    const lit = query.match(/\b(?:[a-z_]\w*\.)?departamento\s*=\s*'([^']*)'/i);
-    if (lit) {
-      if (lit[1].toLowerCase() !== String(departamentoSesion).toLowerCase()) {
-        return 'Consulta rechazada: el filtro departamento no coincide con tu departamento.';
+  return null;
+}
+
+// ── Analizador mínimo de SQL para validarScopeEmpresaBD (SQL-SCOPE-02) ──────────
+// No es un parser completo de SQLite: reconoce lo que escribe el modelo para leer y
+// registrar datos de la app y rechaza todo lo demás.
+const PALABRAS_NO_ALIAS_SQL = new Set([
+  'JOIN', 'LEFT', 'RIGHT', 'FULL', 'INNER', 'CROSS', 'NATURAL', 'OUTER', 'ON', 'USING', 'WHERE',
+  'GROUP', 'ORDER', 'LIMIT', 'HAVING', 'WINDOW', 'INDEXED', 'NOT', 'RETURNING', 'SET', 'FROM',
+  'UNION', 'INTERSECT', 'EXCEPT', 'VALUES', 'AS', 'OFFSET', 'DEFAULT', 'SELECT',
+]);
+const FIN_FUENTES_SQL = new Set(['WHERE', 'GROUP', 'ORDER', 'LIMIT', 'HAVING', 'WINDOW', 'RETURNING', 'UNION', 'INTERSECT', 'EXCEPT']);
+
+const RE_ID_SQL = /[A-Za-z_][A-Za-z0-9_]*/y;
+const RE_NUM_SQL = /(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
+const RE_OP_SQL = /(?:<=|>=|<>|!=|==|\|\||<<|>>|[(),=<>*+\-/%.&|~])/y;
+function leerSql(re, q, i) {
+  re.lastIndex = i;
+  const m = re.exec(q);
+  return m ? m[0] : null;
+}
+
+function tokenizarSqlScope(query) {
+  const q = String(query || '');
+  const crudos = [];
+  let nParams = 0;
+  let i = 0;
+  while (i < q.length) {
+    const c = q[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === "'") {
+      let j = i + 1;
+      let valor = '';
+      for (;;) {
+        if (j >= q.length) return { error: 'hay una cadena sin cerrar' };
+        if (q[j] === "'") {
+          if (q[j + 1] === "'") { valor += "'"; j += 2; continue; }
+          break;
+        }
+        valor += q[j];
+        j++;
       }
-      return null;
+      crudos.push({ t: 'str', v: valor });
+      i = j + 1;
+      continue;
     }
-    // Placeholder: departamento = ?
-    const posDept = query.search(/\b(?:[a-z_]\w*\.)?departamento\s*=\s*\?/i);
-    if (posDept !== -1) {
-      const idx = (query.slice(0, posDept).match(/\?/g) || []).length;
-      const valor = (params || [])[idx];
-      if (valor === undefined || String(valor).toLowerCase() !== String(departamentoSesion).toLowerCase()) {
-        return 'Consulta rechazada: el valor pasado en params para departamento no coincide con tu departamento (o falta).';
-      }
-      return null;
+    if (c === '"') {
+      const j = q.indexOf('"', i + 1);
+      if (j === -1) return { error: 'hay unas comillas dobles sin cerrar' };
+      const valor = q.slice(i + 1, j);
+      // "x" es un identificador en SQLite (o una cadena si no existe esa columna): para
+      // analizar la estructura se trata como identificador si lo parece.
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(valor)) crudos.push({ t: 'id', v: valor, u: valor.toUpperCase() });
+      else crudos.push({ t: 'str', v: valor });
+      i = j + 1;
+      continue;
     }
-    return `Consulta rechazada: para la tabla "${tablasDept[0]}" debes filtrar por tu departamento (ej. AND departamento = '${departamentoSesion}').`;
-  };
-  // INSERT-SCOPE-01 (10/08/2026): un INSERT no tiene WHERE — empresa_id se declara en la
-  // lista de columnas ("INSERT INTO t (empresa_id, ...) VALUES (?, ...)"), nunca como
-  // "empresa_id = ?". La lógica de abajo está pensada para SELECT/UPDATE/DELETE (con WHERE)
-  // y, sin este caso aparte, rechazaba SIEMPRE cualquier INSERT legítimo con empresa_id como
-  // columna — bloqueando de raíz cualquier alta nueva vía escribir_bd para usuarios reales
-  // (no dev verificado). Reportado por Katherine (usuario_id=45): no podía crear un Permiso
-  // de Trabajo desde el chat del panel, "restricción de seguridad en escrituras sin WHERE
-  // previo" — exactamente este bug. Sin test previo (los existentes de esta función solo
-  // cubren SELECT con WHERE).
-  if (/^\s*(INSERT|REPLACE)\b/i.test(query)) {
-    const colMatch = query.match(/INTO\s+\S+\s*\(([^)]*)\)/i);
-    if (!colMatch) {
-      return 'Consulta rechazada: no se pudo determinar las columnas del INSERT.';
+    if ((c === '-' && q[i + 1] === '-') || (c === '/' && q[i + 1] === '*')) return { error: 'no se admiten comentarios en la consulta' };
+    if (c === '`' || c === '[') return { error: 'no se admiten identificadores entre ` ` o [ ]' };
+    if (c === ';') {
+      if (q.slice(i + 1).trim()) return { error: 'no se admiten varias sentencias' };
+      break;
     }
-    const columnas = colMatch[1].split(',').map(c => c.trim());
-    const idxCol = columnas.findIndex(c => /^empresa_id$/i.test(c));
-    if (idxCol === -1) {
-      return 'Consulta rechazada: el INSERT debe incluir la columna empresa_id.';
+    if (c === '?') {
+      if (/\d/.test(q[i + 1] || '')) return { error: 'no se admiten parámetros numerados (?1); usa ? sin número' };
+      crudos.push({ t: 'param', idx: nParams++ });
+      i++;
+      continue;
     }
-    const valuesMatch = query.match(/VALUES\s*\(([^)]*)\)/i);
-    if (!valuesMatch) {
-      return 'Consulta rechazada: no se pudo determinar los valores del INSERT.';
+    if (c === ':' || c === '@' || c === '$') return { error: 'no se admiten parámetros con nombre; usa ?' };
+    let m = leerSql(RE_ID_SQL, q, i);
+    if (m) { crudos.push({ t: 'id', v: m, u: m.toUpperCase() }); i += m.length; continue; }
+    m = leerSql(RE_NUM_SQL, q, i);
+    if (m) { crudos.push({ t: 'num', v: m }); i += m.length; continue; }
+    m = leerSql(RE_OP_SQL, q, i);
+    if (m) { crudos.push({ t: 'op', v: m }); i += m.length; continue; }
+    return { error: `carácter no admitido «${c}»` };
+  }
+  // Une alias.columna en un solo token con q (calificador) y col (columna).
+  const tokens = [];
+  for (let k = 0; k < crudos.length; k++) {
+    const a = crudos[k];
+    if (a.t === 'id' && crudos[k + 1] && crudos[k + 1].t === 'op' && crudos[k + 1].v === '.' && crudos[k + 2] && crudos[k + 2].t === 'id') {
+      const b = crudos[k + 2];
+      tokens.push({ t: 'id', v: `${a.v}.${b.v}`, u: b.u, q: a.v.toLowerCase(), col: b.v.toLowerCase() });
+      k += 2;
+      continue;
     }
-    const valores = valuesMatch[1].split(',').map(v => v.trim());
-    if (valores.length !== columnas.length) {
-      return 'Consulta rechazada: el número de valores no coincide con las columnas del INSERT.';
-    }
-    const valorEmpresaRaw = valores[idxCol];
-    let valorEmpresa;
-    if (valorEmpresaRaw === '?') {
-      const idxParam = valores.slice(0, idxCol).filter(v => v === '?').length;
-      valorEmpresa = (params || [])[idxParam];
+    if (a.t === 'id') tokens.push({ ...a, q: null, col: a.v.toLowerCase() });
+    else tokens.push(a);
+  }
+  return { tokens };
+}
+
+function arbolSqlScope(tokens) {
+  const raiz = [];
+  const pila = [raiz];
+  for (const tk of tokens) {
+    if (tk.t === 'op' && tk.v === '(') {
+      const nodo = { t: 'grupo', items: [] };
+      pila[pila.length - 1].push(nodo);
+      pila.push(nodo.items);
+    } else if (tk.t === 'op' && tk.v === ')') {
+      if (pila.length === 1) return null;
+      pila.pop();
     } else {
-      const litMatch = valorEmpresaRaw.match(/^'?(\d+)'?$/);
-      valorEmpresa = litMatch ? litMatch[1] : undefined;
+      pila[pila.length - 1].push(tk);
     }
-    if (valorEmpresa === undefined || String(parseInt(valorEmpresa, 10)) !== String(parseInt(empresaId, 10))) {
+  }
+  return pila.length === 1 ? raiz : null;
+}
+
+const esPalabraSql = (tk, ...palabras) => !!tk && tk.t === 'id' && !tk.q && palabras.includes(tk.u);
+const esGrupoSelect = (tk) => !!tk && tk.t === 'grupo' && esPalabraSql(tk.items[0], 'SELECT');
+const esValorSql = (tk) => !!tk && (tk.t === 'num' || tk.t === 'str' || tk.t === 'param');
+const esIgualSql = (tk) => !!tk && tk.t === 'op' && (tk.v === '=' || tk.v === '==');
+
+function valorDeTokenSql(tk, ctx) {
+  if (tk.t === 'param') return ctx.params[tk.idx];
+  return tk.v;
+}
+
+function valorNumericoSql(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return /^\d+$/.test(s) ? parseInt(s, 10) : null;
+}
+
+// Cualquier `col = valor` (o `valor = col`) de toda la sentencia tiene que cumplir `esValido`.
+function revisarValoresColumnaSql(tokens, columna, ctx, esValido, mensajes) {
+  for (let i = 0; i < tokens.length; i++) {
+    const tk = tokens[i];
+    if (!(tk.t === 'id' && tk.col === columna)) continue;
+    const pares = [];
+    if (esIgualSql(tokens[i + 1]) && esValorSql(tokens[i + 2])) pares.push(tokens[i + 2]);
+    if (esIgualSql(tokens[i - 1]) && esValorSql(tokens[i - 2])) pares.push(tokens[i - 2]);
+    for (const v of pares) {
+      if (!esValido(valorDeTokenSql(v, ctx))) return v.t === 'param' ? mensajes.param : mensajes.literal;
+    }
+  }
+  return null;
+}
+
+// Divide una expresión en sus términos unidos por AND al nivel superior. Devuelve null si
+// hay un OR a ese nivel (la expresión deja de ser una conjunción y no prueba nada).
+function conjuncionesSql(items) {
+  const out = [];
+  let actual = [];
+  let profCase = 0;
+  let betweenPendiente = false;
+  for (const it of items) {
+    if (esPalabraSql(it, 'CASE')) profCase++;
+    else if (esPalabraSql(it, 'END') && profCase) profCase--;
+    if (profCase === 0) {
+      if (esPalabraSql(it, 'OR')) return null;
+      if (esPalabraSql(it, 'BETWEEN')) betweenPendiente = true;
+      if (esPalabraSql(it, 'AND')) {
+        if (betweenPendiente) { betweenPendiente = false; actual.push(it); continue; }
+        out.push(actual);
+        actual = [];
+        continue;
+      }
+    }
+    actual.push(it);
+  }
+  out.push(actual);
+  // (a AND b) entre paréntesis sigue siendo conjunción: se aplana.
+  const plano = [];
+  for (const c of out) {
+    if (c.length === 1 && c[0].t === 'grupo' && !esGrupoSelect(c[0])) {
+      const dentro = conjuncionesSql(c[0].items);
+      if (dentro) { plano.push(...dentro); continue; }
+    }
+    plano.push(c);
+  }
+  return plano;
+}
+
+// Pruebas de acotamiento de una columna en una lista de términos: fijos ([q, ok]) y enlaces ([qa, qb]).
+function pruebasColumnaSql(conjunciones, columna, ctx, esValido) {
+  const fijos = [];
+  const enlaces = [];
+  for (const c of conjunciones || []) {
+    if (c.length !== 3 || !esIgualSql(c[1])) continue;
+    const [a, , b] = c;
+    const esCol = tk => tk.t === 'id' && tk.col === columna;
+    if (esCol(a) && esCol(b)) { if (a.q && b.q) enlaces.push([a.q, b.q]); continue; }
+    const col = esCol(a) ? a : esCol(b) ? b : null;
+    const val = col === a ? b : a;
+    if (!col || !esValorSql(val)) continue;
+    if (esValido(valorDeTokenSql(val, ctx))) fijos.push(col.q);
+  }
+  return { fijos, enlaces };
+}
+
+// Lee la lista de fuentes de un FROM (tablas, subconsultas, JOINs).
+function fuentesSql(items, desde, hasta) {
+  const fuentes = [];
+  const ons = [];
+  let k = desde;
+  let esperaFuente = true;
+  let tipoJoin = 'inner';
+  while (k < hasta) {
+    const tk = items[k];
+    if (esperaFuente) {
+      let fuente;
+      if (tk && tk.t === 'grupo') {
+        if (!esGrupoSelect(tk)) return { error: 'no se admiten JOINs entre paréntesis en el FROM' };
+        fuente = { tabla: null, derivada: true };
+        k++;
+      } else if (tk && tk.t === 'id' && !PALABRAS_NO_ALIAS_SQL.has(tk.u)) {
+        if (tk.q) return { error: `no se admiten tablas con esquema («${tk.v}»)` };
+        fuente = { tabla: tk.col, derivada: false };
+        k++;
+        if (items[k] && items[k].t === 'grupo') return { error: `la tabla "${tk.col}" no está permitida sin sesión de desarrollador verificada` };
+      } else {
+        return { error: 'no se pudo analizar el FROM' };
+      }
+      if (esPalabraSql(items[k], 'AS')) k++;
+      if (k < hasta && items[k] && items[k].t === 'id' && !items[k].q && !PALABRAS_NO_ALIAS_SQL.has(items[k].u)) {
+        fuente.alias = items[k].col;
+        k++;
+      }
+      if (esPalabraSql(items[k], 'INDEXED')) k += 3;
+      else if (esPalabraSql(items[k], 'NOT') && esPalabraSql(items[k + 1], 'INDEXED')) k += 2;
+      fuente.clave = fuente.alias || fuente.tabla;
+      fuente.join = tipoJoin;
+      if (!fuente.clave) return { error: 'cada subconsulta del FROM necesita un alias' };
+      fuentes.push(fuente);
+      esperaFuente = false;
+      continue;
+    }
+    if (tk && tk.t === 'op' && tk.v === ',') { esperaFuente = true; tipoJoin = 'inner'; k++; continue; }
+    if (esPalabraSql(tk, 'JOIN', 'LEFT', 'RIGHT', 'FULL', 'INNER', 'CROSS', 'NATURAL', 'OUTER')) {
+      const palabras = [];
+      while (k < hasta && esPalabraSql(items[k], 'LEFT', 'RIGHT', 'FULL', 'INNER', 'CROSS', 'NATURAL', 'OUTER')) palabras.push(items[k++].u);
+      if (!esPalabraSql(items[k], 'JOIN')) return { error: 'no se pudo analizar el JOIN' };
+      k++;
+      if (palabras.includes('RIGHT') || palabras.includes('FULL')) return { error: 'no se admiten RIGHT/FULL JOIN; usa LEFT JOIN' };
+      tipoJoin = palabras.includes('LEFT') ? 'left' : 'inner';
+      esperaFuente = true;
+      continue;
+    }
+    if (esPalabraSql(tk, 'ON')) {
+      k++;
+      const expr = [];
+      while (k < hasta && !(items[k].t === 'op' && items[k].v === ',') && !esPalabraSql(items[k], 'JOIN', 'LEFT', 'RIGHT', 'FULL', 'INNER', 'CROSS', 'NATURAL')) expr.push(items[k++]);
+      const ultima = fuentes[fuentes.length - 1];
+      ons.push({ expr, soloClave: ultima.join === 'left' ? ultima.clave : null });
+      continue;
+    }
+    if (esPalabraSql(tk, 'USING')) { k += 2; continue; }
+    return { error: 'no se pudo analizar el FROM' };
+  }
+  if (esperaFuente && fuentes.length) return { error: 'el FROM termina sin tabla' };
+  return { fuentes, ons };
+}
+
+// ¿Quedan acotadas todas las fuentes por `columna`? Devuelve la clave de la primera que no, o null.
+function fuenteSinAcotarSql(fuentes, conjWhere, ons, columna, ctx, esValido, aplica, exteriores) {
+  const claves = new Set(fuentes.map(f => f.clave));
+  // Un alias interior que se llama igual que uno exterior lo tapa: no hereda su acotamiento.
+  const acotadas = new Set([...exteriores].filter(c => !claves.has(c)));
+  for (const f of fuentes) if (f.derivada || !aplica(f.tabla)) acotadas.add(f.clave);
+  const pw = pruebasColumnaSql(conjWhere, columna, ctx, esValido);
+  for (const q of pw.fijos) {
+    if (q === null) { if (fuentes.length === 1) acotadas.add(fuentes[0].clave); }
+    else if (claves.has(q)) acotadas.add(q);
+  }
+  const enlaces = pw.enlaces.map(([a, b]) => ({ a, b, solo: null }));
+  for (const on of ons) {
+    const p = pruebasColumnaSql(conjuncionesSql(on.expr), columna, ctx, esValido);
+    for (const q of p.fijos) if (q && claves.has(q) && (!on.soloClave || q === on.soloClave)) acotadas.add(q);
+    for (const [a, b] of p.enlaces) enlaces.push({ a, b, solo: on.soloClave });
+  }
+  let cambio = true;
+  while (cambio) {
+    cambio = false;
+    for (const e of enlaces) {
+      for (const [x, y] of [[e.a, e.b], [e.b, e.a]]) {
+        if (acotadas.has(x) && !acotadas.has(y) && claves.has(y) && (!e.solo || y === e.solo)) { acotadas.add(y); cambio = true; }
+      }
+    }
+  }
+  const falta = fuentes.find(f => !acotadas.has(f.clave));
+  return { falta: falta || null, acotadas };
+}
+
+function mensajeFaltaEmpresaSql(fuentes, falta, ctx, hayOr) {
+  const nota = hayOr ? ' Las condiciones con OR van entre paréntesis: WHERE empresa_id = ? AND (a OR b).' : '';
+  if (fuentes.length === 1) return `Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).${nota}`;
+  return `Consulta rechazada: debes filtrar explícitamente por empresa_id en cada tabla de la consulta; falta en "${falta.clave}" (ej. AND ${falta.clave}.empresa_id = ${ctx.empresa}, o ${falta.clave}.empresa_id = <otra>.empresa_id en el ON).${nota}`;
+}
+
+function mensajeFaltaDeptSql(fuentes, falta, ctx) {
+  const pref = fuentes.length === 1 ? '' : `${falta.clave}.`;
+  return `Consulta rechazada: para la tabla "${falta.tabla}" debes filtrar por tu departamento (ej. AND ${pref}departamento = '${ctx.dept}').`;
+}
+
+// Comprueba un ámbito con sus fuentes y su WHERE para empresa (siempre) y departamento (si toca).
+function comprobarAmbitoSql(fuentes, whereItems, ons, ctx, exteriores) {
+  const conjWhere = whereItems ? conjuncionesSql(whereItems) : [];
+  const hayOr = whereItems && conjWhere === null;
+  const emp = fuenteSinAcotarSql(fuentes, conjWhere, ons, 'empresa_id', ctx, (v) => valorNumericoSql(v) === ctx.empresa,
+    () => true, exteriores.empresa_id);
+  if (emp.falta) return { error: mensajeFaltaEmpresaSql(fuentes, emp.falta, ctx, hayOr) };
+  let deptAcotadas = new Set(exteriores.departamento);
+  if (ctx.exigirDept) {
+    const dep = fuentes.filter(f => !f.derivada && TABLAS_CON_DEPARTAMENTO.has(f.tabla));
+    if (dep.length && !ctx.dept) return { error: 'Consulta rechazada: no se puede determinar tu departamento para filtrar esta tabla.' };
+    const d = fuenteSinAcotarSql(fuentes, conjWhere, ons, 'departamento', ctx,
+      (v) => v !== undefined && v !== null && String(v).toLowerCase() === String(ctx.dept).toLowerCase(),
+      (t) => TABLAS_CON_DEPARTAMENTO.has(t), exteriores.departamento);
+    if (d.falta) return { error: mensajeFaltaDeptSql(fuentes, d.falta, ctx) };
+    deptAcotadas = d.acotadas;
+  }
+  return { acotadas: { empresa_id: emp.acotadas, departamento: deptAcotadas } };
+}
+
+// Recorre una lista de items buscando subconsultas (SELECT entre paréntesis) y las valida.
+function recorrerSubconsultasSql(items, ctx, exteriores) {
+  for (const it of items) {
+    if (it.t !== 'grupo') continue;
+    const r = esGrupoSelect(it) ? analizarSelectSql(it.items, ctx, exteriores) : recorrerSubconsultasSql(it.items, ctx, exteriores);
+    if (r) return r;
+  }
+  return null;
+}
+
+function analizarSelectSql(items, ctx, exteriores) {
+  if (items.some(it => esPalabraSql(it, 'UNION', 'INTERSECT', 'EXCEPT'))) {
+    return 'Consulta rechazada: no se admiten UNION/INTERSECT/EXCEPT; haz consultas separadas, cada una filtrada por tu empresa.';
+  }
+  const iFrom = items.findIndex(it => esPalabraSql(it, 'FROM'));
+  let fuentes = [];
+  let ons = [];
+  let whereItems = null;
+  if (iFrom !== -1) {
+    let fin = items.findIndex((it, k) => k > iFrom && esPalabraSql(it, ...FIN_FUENTES_SQL));
+    if (fin === -1) fin = items.length;
+    const f = fuentesSql(items, iFrom + 1, fin);
+    if (f.error) return `Consulta rechazada: ${f.error}.`;
+    fuentes = f.fuentes;
+    ons = f.ons;
+    if (esPalabraSql(items[fin], 'WHERE')) {
+      let finWhere = items.findIndex((it, k) => k > fin && esPalabraSql(it, 'GROUP', 'ORDER', 'LIMIT', 'HAVING', 'WINDOW', 'RETURNING'));
+      if (finWhere === -1) finWhere = items.length;
+      whereItems = items.slice(fin + 1, finWhere);
+    }
+  }
+  for (const f of fuentes) if (f.tabla) ctx.tablas.add(f.tabla);
+  let acotadas = exteriores;
+  if (fuentes.length) {
+    const r = comprobarAmbitoSql(fuentes, whereItems, ons, ctx, exteriores);
+    if (r.error) return r.error;
+    acotadas = r.acotadas;
+  }
+  return recorrerSubconsultasSql(items, ctx, acotadas);
+}
+
+function analizarUpdateDeleteSql(items, ctx, tipo) {
+  let k = 1;
+  if (tipo === 'UPDATE' && esPalabraSql(items[k], 'OR')) {
+    if (esPalabraSql(items[k + 1], 'REPLACE')) return 'Consulta rechazada: no se admite UPDATE OR REPLACE.';
+    k += 2;
+  }
+  if (tipo === 'DELETE') {
+    if (!esPalabraSql(items[k], 'FROM')) return 'Consulta rechazada: no se pudo determinar la tabla de la consulta.';
+    k++;
+  }
+  const tk = items[k];
+  if (!tk || tk.t !== 'id' || tk.q || PALABRAS_NO_ALIAS_SQL.has(tk.u)) return 'Consulta rechazada: no se pudo determinar la tabla de la consulta.';
+  const objetivo = { tabla: tk.col, derivada: false, join: 'inner' };
+  k++;
+  if (esPalabraSql(items[k], 'AS')) k++;
+  if (items[k] && items[k].t === 'id' && !items[k].q && !PALABRAS_NO_ALIAS_SQL.has(items[k].u)) { objetivo.alias = items[k].col; k++; }
+  objetivo.clave = objetivo.alias || objetivo.tabla;
+  ctx.tablas.add(objetivo.tabla);
+  let fuentes = [objetivo];
+  let ons = [];
+  if (tipo === 'UPDATE') {
+    if (!esPalabraSql(items[k], 'SET')) return 'Consulta rechazada: no se pudo analizar el UPDATE.';
+    let finSet = items.findIndex((it, j) => j > k && esPalabraSql(it, 'FROM', 'WHERE', 'RETURNING', 'ORDER', 'LIMIT'));
+    if (finSet === -1) finSet = items.length;
+    // SET empresa_id = ... solo si es exactamente tu empresa (no se mueven filas a otra).
+    const asignaciones = [];
+    let actual = [];
+    for (const it of items.slice(k + 1, finSet)) {
+      if (it.t === 'op' && it.v === ',') { asignaciones.push(actual); actual = []; } else actual.push(it);
+    }
+    asignaciones.push(actual);
+    for (const a of asignaciones) {
+      if (a[0] && a[0].t === 'id' && a[0].col === 'empresa_id') {
+        if (!(a.length === 3 && esIgualSql(a[1]) && esValorSql(a[2]) && valorNumericoSql(valorDeTokenSql(a[2], ctx)) === ctx.empresa)) {
+          return 'Consulta rechazada: no puedes cambiar empresa_id a otra empresa.';
+        }
+      }
+    }
+    k = finSet;
+    if (esPalabraSql(items[k], 'FROM')) {
+      let fin = items.findIndex((it, j) => j > k && esPalabraSql(it, ...FIN_FUENTES_SQL));
+      if (fin === -1) fin = items.length;
+      const f = fuentesSql(items, k + 1, fin);
+      if (f.error) return `Consulta rechazada: ${f.error}.`;
+      for (const x of f.fuentes) if (x.tabla) ctx.tablas.add(x.tabla);
+      fuentes = fuentes.concat(f.fuentes);
+      ons = f.ons;
+      k = fin;
+    }
+  }
+  if (!esPalabraSql(items[k], 'WHERE')) {
+    return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
+  }
+  let finWhere = items.findIndex((it, j) => j > k && esPalabraSql(it, 'RETURNING', 'ORDER', 'LIMIT'));
+  if (finWhere === -1) finWhere = items.length;
+  const r = comprobarAmbitoSql(fuentes, items.slice(k + 1, finWhere), ons, ctx, { empresa_id: new Set(), departamento: new Set() });
+  if (r.error) return r.error;
+  return recorrerSubconsultasSql(items, ctx, r.acotadas);
+}
+
+// INSERT-SCOPE-01 (10/08/2026): un INSERT no tiene WHERE — empresa_id se declara en la
+// lista de columnas ("INSERT INTO t (empresa_id, ...) VALUES (?, ...)"), nunca como
+// "empresa_id = ?". Reportado por Katherine (usuario_id=45): no podía crear un Permiso de
+// Trabajo desde el chat del panel. SQL-SCOPE-02: se comprueban TODAS las filas de VALUES
+// (antes solo la primera) y se rechazan REPLACE / INSERT OR REPLACE / ON CONFLICT, que
+// pueden pisar o borrar la fila de otra empresa con la misma clave.
+function analizarInsertSql(items, ctx) {
+  if (esPalabraSql(items[0], 'REPLACE') || (esPalabraSql(items[1], 'OR') && esPalabraSql(items[2], 'REPLACE'))) {
+    return 'Consulta rechazada: no se admite REPLACE (puede pisar filas de otra empresa); usa INSERT, o UPDATE con WHERE empresa_id.';
+  }
+  if (items.some(it => esPalabraSql(it, 'CONFLICT'))) {
+    return 'Consulta rechazada: no se admite ON CONFLICT (puede modificar filas de otra empresa); usa INSERT, o UPDATE con WHERE empresa_id.';
+  }
+  let k = 1;
+  if (esPalabraSql(items[k], 'OR')) k += 2;
+  if (!esPalabraSql(items[k], 'INTO')) return 'Consulta rechazada: no se pudo determinar la tabla de la consulta.';
+  k++;
+  const tk = items[k];
+  if (!tk || tk.t !== 'id' || tk.q) return 'Consulta rechazada: no se pudo determinar la tabla de la consulta.';
+  ctx.tablas.add(tk.col);
+  k++;
+  if (esPalabraSql(items[k], 'AS')) k += 2;
+  const grupoCols = items[k];
+  if (!grupoCols || grupoCols.t !== 'grupo') return 'Consulta rechazada: no se pudo determinar las columnas del INSERT.';
+  const columnas = [];
+  for (const it of grupoCols.items) {
+    if (it.t === 'op' && it.v === ',') continue;
+    if (it.t !== 'id') return 'Consulta rechazada: no se pudo determinar las columnas del INSERT.';
+    columnas.push(it.col);
+  }
+  const idxCol = columnas.indexOf('empresa_id');
+  if (idxCol === -1) return 'Consulta rechazada: el INSERT debe incluir la columna empresa_id.';
+  k++;
+  if (!esPalabraSql(items[k], 'VALUES')) return 'Consulta rechazada: no se pudo determinar los valores del INSERT (usa VALUES, no INSERT … SELECT).';
+  k++;
+  let filas = 0;
+  while (k < items.length) {
+    const g = items[k];
+    if (!g || g.t !== 'grupo') break;
+    const valores = [];
+    let actual = [];
+    for (const it of g.items) {
+      if (it.t === 'op' && it.v === ',') { valores.push(actual); actual = []; } else actual.push(it);
+    }
+    valores.push(actual);
+    if (valores.length !== columnas.length) return 'Consulta rechazada: el número de valores no coincide con las columnas del INSERT.';
+    const v = valores[idxCol];
+    if (!(v.length === 1 && esValorSql(v[0]) && valorNumericoSql(valorDeTokenSql(v[0], ctx)) === ctx.empresa)) {
       return 'Consulta rechazada: el valor de empresa_id en el INSERT no coincide con tu empresa (o falta).';
     }
-    return null;
+    filas++;
+    k++;
+    if (items[k] && items[k].t === 'op' && items[k].v === ',') k++;
+    else break;
   }
-
-  const literal = query.match(/\bempresa_id\s*=\s*'?(\d+)'?/i);
-  if (literal) {
-    if (String(parseInt(literal[1], 10)) !== String(parseInt(empresaId, 10))) {
-      return 'Consulta rechazada: el filtro empresa_id no coincide con tu empresa.';
-    }
-    return validarDepartamento();
-  }
-  const posPlaceholder = query.search(/\bempresa_id\s*=\s*\?/i);
-  if (posPlaceholder !== -1) {
-    const idx = (query.slice(0, posPlaceholder).match(/\?/g) || []).length;
-    const valor = (params || [])[idx];
-    if (valor === undefined || String(parseInt(valor, 10)) !== String(parseInt(empresaId, 10))) {
-      return 'Consulta rechazada: el valor pasado en params para empresa_id no coincide con tu empresa (o falta).';
-    }
-    return validarDepartamento();
-  }
-  return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
+  if (!filas) return 'Consulta rechazada: no se pudo determinar los valores del INSERT.';
+  if (k < items.length && !esPalabraSql(items[k], 'RETURNING')) return 'Consulta rechazada: no se pudo analizar el final del INSERT.';
+  return recorrerSubconsultasSql(items, ctx, { empresa_id: new Set(), departamento: new Set() });
 }
 
 // ── Consulta de memoria_gobernada (ARC-008 §8, tool memoria_consultar) ──────
@@ -1415,7 +1870,7 @@ function alcancePlanoGenerado(datosPlano = {}) {
 // Prompt y etiquetas del clasificador de intención del agente (clasificarConHaiku en
 // worker.js). Viven aquí para que el benchmark (scripts/ai-benchmark/pool.mjs, ADR-0028)
 // mida el pool propio y Haiku con EXACTAMENTE el mismo prompt que producción.
-const SYSTEM_CLASIFICADOR_INTENCION = 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app. Si es un HECHO que implica registrar o actualizar datos de la app aunque esté en forma de aviso/declaración, no de orden (alguien ha faltado/llegado/fichado, un pedido ha llegado, se ha usado material, un equipo se ha averiado, etc. — ej: "Dani faltó hoy", "han venido todos", "ya llegó el pedido") → app, NUNCA simple. "simple" es SOLO para saludos, charla casual o preguntas que no requieren tocar la base de datos. Si habla de electricidad, esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos eléctricos, instalaciones, ingeniería electrónica o de control → ingenieria. Si pide leer, revisar o resumir su correo/email/Gmail/bandeja de entrada → app, NUNCA web (el correo se gestiona con una tool de la app, no es una búsqueda en internet).';
+const SYSTEM_CLASIFICADOR_INTENCION = 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Reglas, una por etiqueta: simple = SOLO saludos, despedidas, agradecimientos, charla casual o una duda general breve que no toca datos de la app (ej: "buenos días", "gracias"). app = datos y gestión del día a día (personal, fichajes, bobinas, material, pedidos, obras, incidencias, tareas, replanteos), problemas/errores/urgencias al usar la app, órdenes de acción (imperativo o enclítico: "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") y HECHOS que implican registrar datos aunque sean un aviso ("Dani faltó hoy", "han venido todos", "ya llegó el pedido", "se ha averiado la carretilla") → app, NUNCA simple. Leer, revisar o resumir su correo/email/Gmail → app, NUNCA web. tecnico = el código y la infraestructura de la propia Alejandra/app: código fuente, workers, deploy, wrangler, GitHub, commits, endpoints, qué tools tiene cada experto (ej: "revisa el código del worker", "¿cómo se despliega el worker?"). web = necesita información actual de internet: precios de mercado, cotizaciones, noticias, webs externas (ej: "¿a cuánto está hoy el cobre?"). reflexion = Alejandra pensando sobre sí misma: autoevaluarse, sus errores, qué aprender, cómo mejorar o evolucionar su forma de trabajar o responder (ej: "analízate", "¿qué podrías mejorar?"). ingenieria = electricidad y control: esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos de cable o protecciones, instalaciones (ej: "calcula la sección para 22 kW"). completo = preguntas sobre quién es Alejandra y todo lo que sabe hacer, o peticiones amplias que mezclan varias áreas a la vez (ej: "¿quién eres y qué sabes hacer?", "cuéntame tus capacidades").';
 const ETIQUETAS_CLASIFICADOR_INTENCION = ['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo'];
 
 // ROUTER-ENCLITICO-01 (03/10/2026): \b de JavaScript solo conoce [A-Za-z0-9_], así que en

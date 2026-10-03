@@ -1024,14 +1024,14 @@ describe('validarScopeEmpresaBD', () => {
       expect(r).toBeNull();
     });
 
-    it('REPLACE INTO se valida igual que INSERT', () => {
+    it('REPLACE INTO se rechaza (SQL-SCOPE-02: puede pisar la fila de otra empresa con la misma clave)', () => {
       const r = validarScopeEmpresaBD(
         'REPLACE INTO permisos_trabajo (empresa_id, obra_id) VALUES (?, ?)',
         [1, 5],
         1,
         false
       );
-      expect(r).toBeNull();
+      expect(r).toMatch(/no se admite REPLACE/);
     });
   });
 
@@ -1064,8 +1064,24 @@ describe('validarScopeEmpresaBD', () => {
     });
 
     it('acepta el departamento propio aunque venga con prefijo de tabla (JOIN)', () => {
-      const r = enc("SELECT * FROM fichajes f JOIN usuarios u ON u.id=f.usuario_id WHERE f.empresa_id = 1 AND f.departamento = 'electrico'");
+      // SQL-SCOPE-02: cada tabla del JOIN tiene que quedar acotada (aquí, enlazada en el ON).
+      const r = enc("SELECT * FROM fichajes f JOIN usuarios u ON u.id=f.usuario_id AND u.empresa_id=f.empresa_id AND u.departamento=f.departamento WHERE f.empresa_id = 1 AND f.departamento = 'electrico'");
       expect(r).toBeNull();
+    });
+
+    it('rechaza un JOIN cuya segunda tabla no queda acotada por empresa (antes se aceptaba)', () => {
+      const r = enc("SELECT * FROM fichajes f JOIN usuarios u ON u.id=f.usuario_id WHERE f.empresa_id = 1 AND f.departamento = 'electrico'");
+      expect(r).toMatch(/falta en "u"/);
+    });
+
+    it('rechaza un JOIN cuya segunda tabla no queda acotada por departamento', () => {
+      const r = enc("SELECT * FROM fichajes f JOIN usuarios u ON u.id=f.usuario_id AND u.empresa_id=f.empresa_id WHERE f.empresa_id = 1 AND f.departamento = 'electrico'");
+      expect(r).toMatch(/tabla "usuarios" debes filtrar por tu departamento/);
+    });
+
+    it('rechaza un departamento ajeno escondido en un OR o una subconsulta', () => {
+      expect(enc("SELECT * FROM pedidos WHERE empresa_id = 1 AND (departamento = 'electrico' OR departamento = 'telecom')")).toMatch(/departamento no coincide/);
+      expect(enc("SELECT * FROM obras WHERE empresa_id = 1 AND id IN (SELECT obra_id FROM pedidos WHERE empresa_id = 1)")).toMatch(/debes filtrar por tu departamento/);
     });
 
     it('acepta el departamento propio por placeholder ?', () => {
@@ -2986,5 +3002,198 @@ describe('IA-QUALITY-08 plausibilidad neutral y alcance del plano', () => {
     expect(src).toContain('Nunca lo presentes ni lo prometas como plano de ejecución');
     expect(src).toContain('no califiques ninguna interpretación de probable, habitual, lógica o imposible');
     expect(src.match(/alcance: alcancePlanoGenerado\(/g)).toHaveLength(2);
+  });
+});
+
+// ── SQL-SCOPE-02 (03/10/2026): el filtro por empresa se impone por estructura, no por texto ──
+// La versión anterior aceptaba cualquier SQL que contuviera UNA vez `empresa_id = <tu empresa>`
+// en cualquier sitio: se saltaba con OR, UNION, subconsultas, JOIN ON 1=1, `FROM a, b`...
+// Disparado por el banco del pool (tools-02-partes-ayer: qwen generó una SQL sin empresa_id).
+describe('validarScopeEmpresaBD — SQL-SCOPE-02 (pruebas negativas de autorización)', () => {
+  const v = (q, params = [], emp = 1) => validarScopeEmpresaBD(q, params, emp, false);
+
+  it('la SQL del caso tools-02 (partes_trabajo sin empresa_id) se rechaza', () => {
+    expect(v("SELECT COUNT(*) FROM partes_trabajo WHERE obra_id = 14 AND fecha = date('now','-1 day')", [], 5)).toMatch(/debes filtrar explícitamente/);
+  });
+
+  it('la misma SQL con el filtro de su empresa se acepta', () => {
+    expect(v("SELECT COUNT(*) FROM partes_trabajo WHERE empresa_id = 5 AND obra_id = 14 AND fecha = date('now','-1 day')", [], 5)).toBeNull();
+  });
+
+  it('rechaza el filtro anulado con OR', () => {
+    expect(v('SELECT * FROM obras WHERE empresa_id = 1 OR 1=1')).toMatch(/debes filtrar explícitamente.*OR van entre paréntesis/);
+    expect(v('SELECT * FROM obras WHERE (empresa_id = 1) OR activo = 1')).toMatch(/debes filtrar explícitamente/);
+    expect(v('SELECT * FROM obras WHERE activo = 1 AND empresa_id = 1 OR activo = 0')).toMatch(/debes filtrar explícitamente/);
+  });
+
+  it('rechaza un OR hacia otra empresa', () => {
+    expect(v('SELECT * FROM obras WHERE empresa_id = 1 OR empresa_id = 2')).toMatch(/no coincide con tu empresa/);
+  });
+
+  it('rechaza UNION (a otra empresa, a otra tabla o a la misma)', () => {
+    expect(v('SELECT nombre FROM obras WHERE empresa_id = 1 UNION SELECT nombre FROM obras WHERE empresa_id = 2')).toMatch(/no coincide con tu empresa/);
+    expect(v('SELECT nombre FROM obras WHERE empresa_id = 1 UNION SELECT token FROM sesiones')).toMatch(/UNION/);
+    expect(v('SELECT nombre FROM obras WHERE empresa_id = 1 UNION ALL SELECT nombre FROM obras WHERE empresa_id = 1')).toMatch(/UNION/);
+  });
+
+  it('rechaza subconsultas a otra empresa o sin filtro', () => {
+    expect(v('SELECT * FROM obras WHERE empresa_id = 1 AND id IN (SELECT obra_id FROM fichajes WHERE empresa_id = 2)')).toMatch(/no coincide con tu empresa/);
+    expect(v('SELECT * FROM obras WHERE empresa_id = 1 AND id IN (SELECT obra_id FROM fichajes)')).toMatch(/debes filtrar explícitamente/);
+    expect(v('SELECT (SELECT nombre FROM usuarios LIMIT 1) AS n FROM obras WHERE empresa_id = 1')).toMatch(/debes filtrar explícitamente/);
+    expect(v('SELECT (SELECT token FROM sesiones LIMIT 1) AS t FROM obras WHERE empresa_id = 1')).toMatch(/debes filtrar|no está permitida/);
+  });
+
+  it('rechaza empresa_id distinta (literal, cadena o params)', () => {
+    expect(v("SELECT * FROM obras WHERE empresa_id = '2'")).toMatch(/no coincide con tu empresa/);
+    expect(v('SELECT * FROM obras WHERE empresa_id = ?', ['2'])).toMatch(/no coincide con tu empresa/);
+    expect(v('SELECT * FROM obras WHERE 2 = empresa_id')).toMatch(/no coincide con tu empresa/);
+  });
+
+  it('rechaza JOIN ON 1=1 y tablas tras una coma sin acotar', () => {
+    expect(v('SELECT u.* FROM fichajes f JOIN usuarios u ON 1=1 WHERE f.empresa_id = 1')).toMatch(/falta en "u"/);
+    expect(v('SELECT * FROM obras o, usuarios u WHERE o.empresa_id = 1')).toMatch(/falta en "u"/);
+    expect(v('SELECT * FROM obras o, sesiones s WHERE o.empresa_id = 1 AND s.empresa_id = 1')).toMatch(/"sesiones" no está permitida/);
+    expect(v('SELECT * FROM obras o, "sesiones" s WHERE o.empresa_id = 1 AND s.empresa_id = 1')).toMatch(/"sesiones" no está permitida/);
+  });
+
+  it('rechaza acotar en el ON de un LEFT JOIN la tabla de la izquierda (no filtra sus filas)', () => {
+    expect(v('SELECT * FROM obras o LEFT JOIN fichajes f ON f.obra_id = o.id AND o.empresa_id = 1 AND f.empresa_id = 1')).toMatch(/falta en "o"/);
+  });
+
+  it('rechaza un alias interior que tapa a uno exterior acotado', () => {
+    expect(v('SELECT * FROM fichajes f WHERE f.empresa_id = 1 AND f.usuario_id IN (SELECT id FROM usuarios f)')).toMatch(/debes filtrar explícitamente/);
+  });
+
+  it('rechaza trucos de precedencia con CASE y BETWEEN', () => {
+    expect(v('SELECT * FROM obras WHERE CASE WHEN 1 THEN 1 AND empresa_id = 1 ELSE 1 END')).toMatch(/debes filtrar explícitamente/);
+    expect(v('SELECT * FROM obras WHERE id BETWEEN 0 AND empresa_id = 1')).toMatch(/debes filtrar explícitamente/);
+    expect(v('SELECT * FROM obras WHERE NOT (empresa_id = 1 AND activo = 0)')).toMatch(/debes filtrar explícitamente/);
+  });
+
+  it('rechaza comentarios, varias sentencias, WITH, parámetros con nombre y esquemas', () => {
+    expect(v('SELECT * FROM obras WHERE empresa_id = 1 -- y más')).toMatch(/comentarios/);
+    expect(v('SELECT * FROM obras /* x */ WHERE empresa_id = 1')).toMatch(/comentarios/);
+    expect(v('SELECT * FROM obras WHERE empresa_id = 1; DELETE FROM obras')).toMatch(/varias sentencias/);
+    expect(v('WITH x AS (SELECT * FROM sesiones) SELECT * FROM x')).toMatch(/WITH/);
+    expect(v('SELECT * FROM obras WHERE empresa_id = :e')).toMatch(/parámetros con nombre/);
+    expect(v('SELECT * FROM obras WHERE empresa_id = ?2', [1, 1])).toMatch(/numerados/);
+    expect(v('SELECT * FROM main.sesiones WHERE empresa_id = 1')).toMatch(/esquema/);
+    expect(v("SELECT * FROM obras WHERE empresa_id = 1 AND id IN (SELECT cid FROM pragma_table_info('obras'))")).toMatch(/no está permitida/);
+    expect(v('SELECT * FROM fichajes f RIGHT JOIN usuarios u ON u.id = f.usuario_id WHERE f.empresa_id = 1 AND u.empresa_id = 1')).toMatch(/RIGHT\/FULL/);
+  });
+
+  it('rechaza si la empresa de la sesión no es un id numérico (no compara NaN con NaN)', () => {
+    expect(validarScopeEmpresaBD('SELECT * FROM obras WHERE empresa_id = ?', ['x'], 'default', false)).toMatch(/no se puede determinar tu empresa/);
+  });
+
+  it('INSERT: rechaza filas de otra empresa en un INSERT múltiple, INSERT … SELECT y ON CONFLICT', () => {
+    expect(v("INSERT INTO incidencias (empresa_id, titulo) VALUES (1, 'a'), (2, 'b')")).toMatch(/no coincide con tu empresa/);
+    expect(v("INSERT INTO incidencias (empresa_id, titulo) SELECT empresa_id, titulo FROM incidencias")).toMatch(/VALUES/);
+    expect(v("INSERT OR REPLACE INTO incidencias (empresa_id, titulo) VALUES (1, 'a')")).toMatch(/REPLACE/);
+    expect(v("INSERT INTO incidencias (id, empresa_id, titulo) VALUES (3, 1, 'a') ON CONFLICT(id) DO UPDATE SET titulo = 'b'")).toMatch(/ON CONFLICT/);
+    expect(v("INSERT INTO incidencias (empresa_id, titulo) VALUES (1, (SELECT token FROM sesiones LIMIT 1))")).toMatch(/no está permitida|debes filtrar/);
+  });
+
+  it('INSERT: acepta varias filas de su empresa y comas dentro de cadenas', () => {
+    expect(v("INSERT INTO incidencias (empresa_id, titulo) VALUES (1, 'fuga, junto al cuadro')")).toBeNull();
+    expect(v("INSERT INTO incidencias (empresa_id, titulo) VALUES (1, 'a'), (?, 'b')", [1])).toBeNull();
+  });
+
+  it('UPDATE/DELETE: rechaza OR, mover filas a otra empresa y la falta de WHERE', () => {
+    expect(v('UPDATE obras SET nombre = ? WHERE empresa_id = 1 OR 1=1', ['x'])).toMatch(/debes filtrar explícitamente/);
+    expect(v('UPDATE obras SET empresa_id = 2 WHERE empresa_id = 1')).toMatch(/no coincide con tu empresa|no puedes cambiar/);
+    expect(v('UPDATE obras SET empresa_id = empresa_id + 1 WHERE empresa_id = 1')).toMatch(/no puedes cambiar empresa_id/);
+    expect(v('DELETE FROM obras')).toMatch(/debes filtrar explícitamente/);
+    expect(v('DELETE FROM obras WHERE id = 3')).toMatch(/debes filtrar explícitamente/);
+    expect(v('UPDATE obras SET nombre = (SELECT nombre FROM obras WHERE empresa_id = 2) WHERE empresa_id = 1')).toMatch(/no coincide con tu empresa/);
+  });
+
+  it('UPDATE/DELETE de su empresa se aceptan', () => {
+    expect(v("UPDATE incidencias SET estado = 'cerrada' WHERE id = 9 AND empresa_id = 1")).toBeNull();
+    expect(v('DELETE FROM incidencias WHERE empresa_id = ? AND id = ?', [1, 9])).toBeNull();
+  });
+
+  it('acepta las formas legítimas habituales del modelo', () => {
+    expect(v("SELECT * FROM incidencias WHERE empresa_id = 1 AND (estado = 'abierta' OR estado = 'en_curso')")).toBeNull();
+    expect(v('SELECT * FROM obras WHERE (empresa_id = 1 AND activo = 1)')).toBeNull();
+    expect(v('SELECT f.fecha, u.nombre FROM fichajes f JOIN usuarios u ON u.id = f.usuario_id AND u.empresa_id = f.empresa_id WHERE f.empresa_id = ?', [1])).toBeNull();
+    expect(v('SELECT f.fecha, u.nombre FROM fichajes f, usuarios u WHERE u.id = f.usuario_id AND f.empresa_id = 1 AND u.empresa_id = 1')).toBeNull();
+    expect(v('SELECT o.nombre, COUNT(f.id) FROM obras o LEFT JOIN fichajes f ON f.obra_id = o.id AND f.empresa_id = o.empresa_id WHERE o.empresa_id = 1 GROUP BY o.id')).toBeNull();
+    expect(v('SELECT u.nombre, (SELECT COUNT(*) FROM fichajes x WHERE x.usuario_id = u.id AND x.empresa_id = u.empresa_id) AS n FROM usuarios u WHERE u.empresa_id = 1')).toBeNull();
+    expect(v('SELECT t.estado, t.n FROM (SELECT estado, COUNT(*) AS n FROM incidencias WHERE empresa_id = 1 GROUP BY estado) t ORDER BY t.n DESC')).toBeNull();
+    expect(v("SELECT * FROM fichajes WHERE fecha BETWEEN '2026-10-01' AND '2026-10-03' AND empresa_id = 1")).toBeNull();
+    expect(v("SELECT * FROM obras WHERE empresa_id = 1 AND nombre = 'a -- b; c' LIMIT 5;")).toBeNull();
+    expect(v('SELECT * FROM obras WHERE empresa_id = "1"')).toBeNull();
+    expect(v('SELECT * FROM obras WHERE empresa_id = 1 AND id IN (SELECT obra_id FROM fichajes WHERE empresa_id = 1)')).toBeNull();
+  });
+
+  it('dev verificado con bypass activo puede cruzar empresas (política existente, sin cambios)', () => {
+    expect(validarScopeEmpresaBD('SELECT nombre FROM obras UNION SELECT nombre FROM obras', [], 1, true, true)).toBeNull();
+    expect(validarScopeEmpresaBD('SELECT * FROM obras WHERE empresa_id = 1 OR 1=1', [], 1, true, false)).toMatch(/debes filtrar explícitamente/);
+  });
+});
+
+describe('validar_cambios_bd pasa por el mismo aislamiento que consultar_bd (SQL-SCOPE-02)', () => {
+  it('el handler de worker.js llama a validarSoloSelectBD y validarScopeEmpresaBD antes de ejecutar', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const ini = src.indexOf("case 'validar_cambios_bd': {");
+    expect(ini).toBeGreaterThan(-1);
+    const bloque = src.slice(ini, src.indexOf("case 'enviar_push':", ini));
+    const iScope = bloque.indexOf('validarScopeEmpresaBD(verifyQuery, params, empresa_id, esDevVerificado, bypassEmpresaActivo, rol, departamento)');
+    const iSelect = bloque.indexOf('validarSoloSelectBD(verifyQuery)');
+    const iPrepare = bloque.indexOf('env.DB.prepare(verifyQuery)');
+    expect(iScope).toBeGreaterThan(-1);
+    expect(iSelect).toBeGreaterThan(-1);
+    expect(iScope).toBeLessThan(iPrepare);
+    expect(iSelect).toBeLessThan(iPrepare);
+  });
+
+  it('consultar_bd, escribir_bd y la exportación custom siguen pasando por validarScopeEmpresaBD', () => {
+    const src = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    for (const caso of ["case 'consultar_bd': {", "case 'escribir_bd': {"]) {
+      const ini = src.indexOf(caso);
+      const bloque = src.slice(ini, src.indexOf('env.DB.prepare(query)', ini));
+      expect(bloque).toContain('validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo, rol, departamento)');
+    }
+    expect(src).toContain('validarScopeEmpresaBD(sqlCustom, [], empresa_id, esDevVerificado, bypassEmpresaActivo, rol, departamento)');
+  });
+});
+
+// ── ROUTER-PROMPT-01 (03/10/2026): una regla y un ejemplo para cada una de las 7 etiquetas ──
+// El banco del pool (prisma/gemma/qwen) fallaba tecnico, reflexion y completo porque el
+// prompt solo definía simple/app/web/ingenieria. Haiku usa el mismo prompt como respaldo.
+describe('SYSTEM_CLASIFICADOR_INTENCION (ROUTER-PROMPT-01)', () => {
+  it('define con regla propia cada una de las 7 etiquetas del clasificador', async () => {
+    const { SYSTEM_CLASIFICADOR_INTENCION: p, ETIQUETAS_CLASIFICADOR_INTENCION: etiquetas } = await import('./lib.js');
+    expect(etiquetas).toEqual(['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo']);
+    for (const e of etiquetas) {
+      expect(p, e).toContain(`${e} = `);
+      // cada regla trae un ejemplo entre comillas antes de la siguiente etiqueta
+      const desde = p.indexOf(`${e} = `);
+      const siguiente = etiquetas.map(x => p.indexOf(`${x} = `)).filter(i => i > desde).sort((a, b) => a - b)[0] ?? p.length;
+      expect(p.slice(desde, siguiente), e).toMatch(/"[^"]+"/);
+    }
+  });
+
+  it('cubre la redacción de los casos que fallaban en el banco (router-17…22)', async () => {
+    const { SYSTEM_CLASIFICADOR_INTENCION: p } = await import('./lib.js');
+    const regla = e => p.slice(p.indexOf(`${e} = `), p.indexOf(' = ', p.indexOf(`${e} = `) + e.length + 3));
+    expect(regla('tecnico')).toMatch(/wrangler/);           // router-17: despliegue con wrangler
+    expect(regla('tecnico')).toMatch(/código/);             // router-18: revisa el código del worker
+    expect(regla('tecnico')).toMatch(/tools tiene cada experto/);
+    expect(regla('reflexion')).toMatch(/mejorar/);          // router-19: qué podrías mejorar
+    expect(regla('reflexion')).toMatch(/errores/);          // router-20: analízate, errores
+    expect(regla('reflexion')).toMatch(/evolucionar/);
+    expect(regla('completo')).toMatch(/quién es Alejandra/); // router-21: quién eres
+    expect(regla('completo')).toMatch(/capacidades/);       // router-22: todas tus capacidades
+  });
+
+  it('mantiene las reglas de siempre: correo → app NUNCA web, hechos → app NUNCA simple, enclíticos', async () => {
+    const { SYSTEM_CLASIFICADOR_INTENCION: p } = await import('./lib.js');
+    expect(p).toMatch(/correo\/email\/Gmail → app, NUNCA web/);
+    expect(p).toMatch(/→ app, NUNCA simple/);
+    expect(p).toMatch(/enclítico/);
+    expect(p.startsWith('Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo.')).toBe(true);
+    expect(p.length).toBeLessThan(2000); // va en cada mensaje: que no crezca sin control
   });
 });
