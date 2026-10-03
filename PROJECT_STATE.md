@@ -1,5 +1,40 @@
 # Estado del proyecto — Alejandra 2.0
 
+## NOCHE-03-10 — cierre nocturno de pendientes (2026-10-03, publicada; verificación real pendiente)
+
+Claude como coordinador con agentes en worktrees. Autorizaciones de Adrián en chat
+(03/10 ~01:00): enmienda 2 de ADR-0007 aceptada como regla fija (el agente aprueba
+production en despliegues de código; nunca D1/secretos/borrados), ADR-0027 aceptado,
+migraciones solo aditivas (no hizo falta ninguna), Android atrás + marca APK/PWA,
+IA de escaneo ≤1 fotograma/3 s, Haiku. Oppo excluido por Adrián; emulador único.
+- #366 docs IA-QUALITY-08 → 8093990. #367 ADR-0007 enmienda 2.
+- #369 IA-QUALITY-09 corte de contexto entre casos (lib.js agente; 319 tests).
+- #370 validador XML/SVG de planos + avisos dentro del archivo + cotas verificadas
+  (planos-validacion.mjs, planos-cotas.js; 323 agente/51 técnicas). Fallo → 422 sin guardar.
+- #371 PUT /planos/:id (editor del panel) validado; avisos re-incrustados en servidor;
+  panel.html envía con XMLSerializer y muestra el motivo del 422.
+- #368 HISTORIAL-CARRERA-01: alejandra-panel.html ya no borra lo enviado mientras carga el
+  historial (admin.html ya no tiene chat desde #283).
+- #372 ANDROID-ATRAS-02 + MARCA-APK-PWA-01: atrás jerárquico único APK/PWA y chip APP/WEB.
+  Verificado con APK debug local en emulador Pixel_4 y J5 real, sin sesión real.
+- #373 ADR-0027 escaneo del entorno + IA (Haiku, 40/sesión, 2,5 s, 12 sesiones y 300/día
+  por usuario en servidor) en PWA y APK; fondo real del informe (index.html y panel.html);
+  atrás cierra la sesión AR. Sin migración: R2 e<empresa>/replanteo-escaneo/ +
+  trazado_json.escaneo_id. Arregla «¿qué es esto?»/📸 de la PWA y complementos perdidos.
+- #374 versión 9.83 en los cuatro marcadores.
+Despliegues (aprobados por Claude): agente a72c255b (#369) → b191f4f5 (#370), runs
+37077511252/37078241297; API dc6f7286 (#370) → 878db46b (9.83), runs 37078179728/
+37080161603; Pages 9.83 run 37080227524, version.json sirve 9.83. /health healthy.
+Rollback: agente db28ccbf (7c5fe4a), API c06cb56a (3a7f5f1), Pages 9.82.
+APK candidata 1.18 (escaneo) compilada en el scratchpad, SHA-256 6e606e4c…, SIN publicar;
+versionCode del repo sigue en 17. Emulador ARCore_API33_escaneo: cartel, llamada y
+degradación sin IA correctos; no se pudo mover la cámara virtual.
+SIN VERIFICAR EN VIVO: IA real del escaneo, clasificación, pegado a paredes, fondo del
+informe en recorrido real, WebXR en móvil; QA conversacional de #369/#370; editor de planos
+del panel; atrás con sesión real. PENDIENTE decisión de Adrián: caducidad en R2 de escaneos
+sin replanteo (sería borrado). En curso: giro de pantalla y prioridades 2–4 del AR.
+
+
 ## IA-QUALITY-08 — plausibilidad neutral y alcance del plano (2026-10-02, publicada; QA real pendiente)
 
 Claude, fix/agent-plan-plausibility-overpromise, base aed06cc. QA H: calificó 3.20 m

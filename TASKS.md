@@ -1,5 +1,15 @@
 # TASKS — Cola operativa inmediata
 
+## NOCHE-03-10 — pendientes tras el cierre nocturno (2026-10-03)
+
+- Adrián: probar en móvil con ARCore el escaneo (#373) y la APK candidata 1.18; QA
+  conversacional de casos nuevos (#369) y planos (#370/#371); atrás/chip con sesión real.
+- Decidir caducidad R2 de replanteo-escaneo/ (borrado: humano).
+- Publicar APK 1.18 estable solo tras la prueba física (subir versionCode en el repo).
+- En curso: giro de pantalla + prioridades 2–4 del AR (rama feat/replanteo-ar-giro-y-prioridades).
+- D1-ESCRITURAS-01: medir d1 insights tras el reinicio de cuota (programado 03/10 08:57).
+
+
 ## D1-ESCRITURAS-01 — reducir escrituras D1 tras agotar la cuota (2026-10-02, publicada; medir mañana)
 
 - Pedido por Adrián en chat. Ver HANDOFF. Publicar API, agente y Pages 9.82; verificar
