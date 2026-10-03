@@ -23,6 +23,10 @@ const leer = f => fs.readFileSync(path.join(RAIZ, f), 'utf8');
 
 // Nombres que `env.X` puede tener sin ser secreto: son bindings declarados en wrangler.
 const BINDINGS = new Set(['DB', 'FILES', 'API_WEB', 'RATE_LIMIT_KV', 'ASSETS', 'CF_VERSION_METADATA']);
+// Bindings OPCIONALES: el código funciona igual sin ellos (comprueba si existen antes de
+// usarlos). ADR-0028 §Medición: AI_POOL_AE (Analytics Engine de las métricas del pool) está
+// comentado en alejandra-agente/wrangler.toml hasta que Adrián lo active.
+const BINDINGS_OPCIONALES = new Set(['AI_POOL_AE']);
 
 // Referencias en código que no son variables de entorno reales.
 const FALSOS = new Set(['env', 'ctx', 'request']);
@@ -63,7 +67,7 @@ for (const w of workers) {
   const usados = usadosEnCodigo(w.codigo);
   for (const extra of w.extras || []) for (const v of usadosEnCodigo(extra)) usados.add(v);
   const bindings = bindingsDe(w.toml);
-  const secretosUsados = [...usados].filter(v => !BINDINGS.has(v) && !FALSOS.has(v));
+  const secretosUsados = [...usados].filter(v => !BINDINGS.has(v) && !BINDINGS_OPCIONALES.has(v) && !FALSOS.has(v));
   secretosUsados.forEach(s => usadosTotal.add(s));
 
   console.log(`\n═══ ${w.nombre} ═══`);

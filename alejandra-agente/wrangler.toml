@@ -37,6 +37,19 @@ service = "alejandra-app-api"
 binding = "RATE_LIMIT_KV"
 id = "4c9ebd2899d74bb7961786b70f25519c"
 
+# ADR-0028 §Medición — métricas del pool de IA en Workers Analytics Engine (NO es D1: no
+# cuenta para el límite de filas escritas de D1, incidente D1-ESCRITURAS-01). DESACTIVADO:
+# el código (ai-pool.js, fijarSumideroMetricasPool) ya escribe un punto por uso del pool si
+# existe env.AI_POOL_AE, sin contenido de mensajes. Para activarlo, Adrián descomenta estas
+# tres líneas y despliega por el workflow habitual (el dataset se crea solo con el primer
+# punto). Se deja comentado porque no está verificado que la cuenta (Workers Free) tenga
+# Analytics Engine habilitado: un binding no disponible haría fallar el despliegue.
+# Lectura: node scripts/ai-benchmark/metricas-produccion.mjs --fuente ae (necesita un token de
+# API con permiso Account > Account Analytics > Read en CF_API_TOKEN; no lo crea ningún agente).
+# [[analytics_engine_datasets]]
+# binding = "AI_POOL_AE"
+# dataset = "alejandra_ai_pool"
+
 # Cron: Alejandra despierta 6 veces al día (ahorro ~65% vs cada hora)
 # UTC 5=7h, 8=10h, 11=13h, 14=16h, 17=19h, 19=21h (hora España)
 # TAREAS-PROGRAMADAS-01 (01/09/2026): "*/5 * * * *" ejecuta tareas_programadas vencidas

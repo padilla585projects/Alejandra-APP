@@ -2,9 +2,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { cargarBancoAlejandra, validarBanco, evaluarCasoBanco, argumentoCoincide, etiquetaRouterBanco, patronCoincide, herramientasValidas, TIPOS_BANCO, RUTA_BANCO } from './banco-alejandra.mjs';
+import { cargarBancoAlejandra, validarBanco, validarTurnosConTools, evaluarCasoBanco, argumentoCoincide, etiquetaRouterBanco, patronCoincide, herramientasValidas, TIPOS_BANCO, RUTA_BANCO } from './banco-alejandra.mjs';
 import { toolsPorNombre } from './herramientas-agente.mjs';
-import { ETIQUETAS_CLASIFICADOR_INTENCION, SYSTEM_CLASIFICADOR_INTENCION } from '../../alejandra-agente/lib.js';
+import { ETIQUETAS_CLASIFICADOR_INTENCION, SYSTEM_CLASIFICADOR_INTENCION, CONTEXTO_DOMINIO_INSTALADORA, validarScopeEmpresaBD } from '../../alejandra-agente/lib.js';
+import { mensajesOpenAIaAnthropic } from './pool.mjs';
 
 const banco = cargarBancoAlejandra();
 
@@ -12,8 +13,8 @@ test('el banco cumple el esquema: ids únicos, tipos válidos, tool esperada pre
   assert.deepEqual(validarBanco(banco, { etiquetas: ETIQUETAS_CLASIFICADOR_INTENCION }), []);
 });
 
-test('tamaño y cobertura: 30–60 casos, los tres tipos y las 7 etiquetas del router', () => {
-  assert.ok(banco.length >= 30 && banco.length <= 60, `casos: ${banco.length}`);
+test('tamaño y cobertura: 60–100 casos, los tres tipos y las 7 etiquetas del router', () => {
+  assert.ok(banco.length >= 60 && banco.length <= 100, `casos: ${banco.length}`);
   for (const t of TIPOS_BANCO) assert.ok(banco.some(c => c.tipo === t), 'falta el tipo ' + t);
   const etiquetas = new Set(banco.filter(c => c.tipo === 'router').map(c => c.esperado.etiqueta));
   assert.deepEqual([...etiquetas].sort(), [...ETIQUETAS_CLASIFICADOR_INTENCION].sort());
@@ -50,7 +51,7 @@ test('anonimizado: sin emails, teléfonos ni DNI; solo la empresa demo', () => {
   assert.doesNotMatch(propio, /\b\d{8}[A-HJ-NP-TV-Z]\b|\b[XYZ]\d{7}[A-Z]\b/, 'DNI/NIE');
   assert.match(propio, /Constructora Demo S\.L\./);
   assert.match(propio, /empresa_id 5/);
-  assert.ok(texto.length < 400000, 'el banco no debe crecer sin control');
+  assert.ok(texto.length < 800000, 'el banco no debe crecer sin control');
 });
 
 test('evaluador: aciertos y fallos de cada tipo', () => {
@@ -173,4 +174,101 @@ test('validarBanco detecta errores típicos', () => {
   assert.ok(validarBanco([{ ...multi, esperado: { ...multi.esperado, herramienta: ['memory_update', 'no_existe'] } }]).some(e => e.includes('no está en tools: no_existe')));
   assert.ok(validarBanco([{ ...multi, esperado: { ...multi.esperado, argumentos: { memory_update: { no_existe: 'x' } } } }]).some(e => e.includes('no existe en el esquema de memory_update')));
   assert.ok(validarBanco([{ ...multi, esperado: { ...multi.esperado, herramienta: ['memory_update'] } }]).some(e => e.includes('experto_tools debe esperar')));
+});
+
+// ── Banco v3 (03/10/2026): glosario, varios turnos, errores, ambiguas y sin herramientas ──
+const porId = Object.fromEntries(banco.map(c => [c.id, c]));
+const deCategoria = p => banco.filter(c => c.id.startsWith(p));
+
+test('v3: todos los casos de experto llevan el contexto del oficio y el glosario de producción', () => {
+  for (const c of banco.filter(c => c.tipo !== 'router')) {
+    assert.ok(c.mensajes[0].role === 'system' && c.mensajes[0].content.includes(CONTEXTO_DOMINIO_INSTALADORA), c.id);
+  }
+  // el router no: va con el prompt exacto del clasificador
+  for (const c of banco.filter(c => c.tipo === 'router')) assert.ok(!c.mensajes[0].content.includes(CONTEXTO_DOMINIO_INSTALADORA), c.id);
+});
+
+test('v3: 25–35 casos nuevos repartidos en las cuatro categorías', () => {
+  const n = { multi: deCategoria('multi-').length, error: deCategoria('error-').length, ambigua: deCategoria('ambigua-').length, sinTool: deCategoria('sin-tool-').length };
+  assert.ok(n.multi >= 8 && n.error >= 5 && n.ambigua >= 5 && n.sinTool >= 5, JSON.stringify(n));
+  const total = n.multi + n.error + n.ambigua + n.sinTool;
+  assert.ok(total >= 25 && total <= 35, 'nuevos: ' + total);
+});
+
+test('v3: varios turnos en formato OpenAI con el resultado de la herramienta ya devuelto', () => {
+  for (const c of [...deCategoria('multi-'), ...deCategoria('error-')]) {
+    const roles = c.mensajes.map(m => m.role);
+    assert.deepEqual(roles.slice(-3), ['user', 'assistant', 'tool'], c.id);
+    const asis = c.mensajes.at(-2);
+    assert.equal(asis.tool_calls.length, 1, c.id);
+    assert.equal(c.mensajes.at(-1).tool_call_id, asis.tool_calls[0].id, c.id);
+  }
+  // segunda llamada correcta tras el primer resultado
+  assert.equal(porId['multi-03-replanteo-comparar'].esperado.herramienta, 'comparar_replanteo_pedido');
+  assert.equal(porId['multi-03-replanteo-comparar'].esperado.argumentos.replanteo_id, 12);
+  // responder usando el dato devuelto
+  assert.deepEqual(porId['multi-02-bobina-metros'].esperado.respuesta_contiene, ['137']);
+});
+
+test('v3: los errores de herramienta son los mensajes REALES del agente', () => {
+  for (const id of ['error-01-falta-empresa-id', 'error-02-falta-departamento', 'error-03-empresa-equivocada']) {
+    const c = porId[id];
+    const q = JSON.parse(c.mensajes.at(-2).tool_calls[0].function.arguments).query;
+    assert.equal(c.mensajes.at(-1).content, validarScopeEmpresaBD(q, [], 5, false, true, 'encargado', 'electrico'), id);
+  }
+  assert.match(porId['error-01-falta-empresa-id'].mensajes.at(-1).content, /debes filtrar explícitamente por empresa_id/);
+  assert.equal(porId['error-04-sin-resultados'].mensajes.at(-1).content, 'Consulta ejecutada correctamente. Sin resultados.');
+  assert.match(porId['error-07-barrera-borrado'].mensajes.at(-1).content, /OPERACIÓN BLOQUEADA .*CONFIRMO BORRADO [0-9A-F]{6}/);
+});
+
+test('v3: ambiguas → preguntar sin herramienta; sin-tool → responder sin herramienta aunque haya tools', () => {
+  for (const c of deCategoria('ambigua-')) {
+    assert.ok(c.tools.length > 0, c.id);
+    assert.ok(c.esperado.respuesta_contiene.includes('¿'), c.id);
+    assert.ok(!('herramienta' in c.esperado), c.id);
+  }
+  for (const c of deCategoria('sin-tool-')) {
+    assert.equal(c.tipo, 'experto_simple', c.id);
+    assert.ok(c.tools.length > 0, c.id);
+  }
+  // nuestro runner suspende si llama a una herramienta cuando se espera texto
+  const c = porId['ambigua-02-seccion-sin-datos'];
+  const tc = [{ type: 'function', function: { name: 'calcular_cable', arguments: '{"potencia_w":15000}' } }];
+  assert.equal(evaluarCasoBanco(c, { toolCalls: tc }).motivo, 'tool_innecesaria');
+  assert.equal(evaluarCasoBanco(c, { texto: '¿Qué potencia tiene el motor y qué longitud tiene la línea?' }).pass, true);
+  assert.equal(evaluarCasoBanco(c, { texto: '¿Te vale 6 mm² para la potencia del motor?' }).motivo, 'contenido_prohibido');
+  // el glosario es lo que se mide en los sin-tool
+  const sel = porId['sin-tool-01-selectividad'];
+  assert.equal(evaluarCasoBanco(sel, { texto: 'La selectividad hace que solo dispare la protección más cercana al defecto.' }).pass, true);
+  assert.equal(evaluarCasoBanco(sel, { texto: 'La selectividad del cambio del coche…' }).pass, false);
+});
+
+test('v3: el último mensaje de cada caso es único (el pool simulado del test identifica el caso por él)', () => {
+  const ultimos = banco.map(c => c.mensajes.at(-1).content);
+  assert.equal(new Set(ultimos).size, ultimos.length);
+});
+
+test('validarTurnosConTools detecta turnos mal formados', () => {
+  const nombres = new Set(['consultar_bd']);
+  const ok = [{ role: 'user', content: 'x' }, { role: 'assistant', content: '', tool_calls: [{ id: 'a', type: 'function', function: { name: 'consultar_bd', arguments: '{}' } }] }, { role: 'tool', tool_call_id: 'a', content: 'r' }];
+  assert.deepEqual(validarTurnosConTools(ok, nombres), []);
+  assert.ok(validarTurnosConTools(ok, new Set()).some(e => e.includes('no está en tools')));
+  assert.ok(validarTurnosConTools([ok[0], ok[1]], nombres).some(e => e.includes('sin su mensaje tool')));
+  assert.ok(validarTurnosConTools([ok[0], { role: 'tool', tool_call_id: 'zz', content: 'r' }], nombres).some(e => e.includes('sin una llamada previa')));
+  assert.ok(validarTurnosConTools([{ role: 'assistant', content: '', tool_calls: [{ id: 'a', type: 'function', function: { name: 'consultar_bd', arguments: '{roto' } }] }, ok[2]], nombres).some(e => e.includes('no son JSON')));
+  const base = porId['multi-01-fichajes-dato'];
+  assert.ok(validarBanco([{ ...base, mensajes: base.mensajes.slice(0, -1) }]).some(e => e.includes('último mensaje') || e.includes('sin su mensaje tool')));
+});
+
+test('runner local: la conversación OpenAI con tools se convierte bien a Anthropic', () => {
+  const c = porId['multi-03-replanteo-comparar'];
+  const { system, messages } = mensajesOpenAIaAnthropic(c.mensajes);
+  assert.ok(system.includes(CONTEXTO_DOMINIO_INSTALADORA));
+  assert.deepEqual(messages.map(m => m.role), ['user', 'assistant', 'user']);
+  const uso = messages[1].content.find(b => b.type === 'tool_use');
+  assert.equal(uso.name, 'consultar_replanteos');
+  assert.equal(messages[2].content[0].type, 'tool_result');
+  assert.equal(messages[2].content[0].tool_use_id, uso.id);
+  // un caso de un solo turno sigue siendo [user]
+  assert.deepEqual(mensajesOpenAIaAnthropic(porId['ambigua-01-pedir-cable'].mensajes).messages.map(m => m.role), ['user']);
 });

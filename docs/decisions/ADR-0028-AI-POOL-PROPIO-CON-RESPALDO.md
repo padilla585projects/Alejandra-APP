@@ -9,7 +9,9 @@
 - Implementación: `alejandra-agente/ai-pool.js` (cliente único para los dos workers),
   `alejandra-agente/ai-pool.test.js`, `scripts/ai-benchmark/pool.mjs`; banco de casos
   `scripts/ai-benchmark/casos-alejandra.json` (+ `banco-alejandra.mjs`,
-  `herramientas-agente.mjs`, `banco-alejandra.test.mjs`)
+  `herramientas-agente.mjs`, `banco-alejandra.test.mjs`); contexto del oficio
+  `CONTEXTO_DOMINIO_INSTALADORA` en `alejandra-agente/lib.js` (+ `alejandra-agente/dominio.test.js`);
+  métricas de producción `scripts/ai-benchmark/metricas-produccion.mjs` (+ `.test.mjs`)
 
 ## Contexto
 
@@ -97,6 +99,30 @@ ese no está cargado, a `prisma:1.0` (rápido en JSON, pero **no** devuelve `too
 Anthropic↔OpenAI y el canal dev es el de mayor privilegio), planos SVG, Gemini (OCR, partes,
 albaranes, matrículas), notas de voz, Cloud Vision, el escaneo AR (visión, ADR-0027) y
 cualquier llamada con imágenes.
+
+### Contexto del oficio y glosario en todos los prompts (POOL-GLOSARIO-01, 03/10/2026)
+
+En el banco `c01d880` (router/simple/tools: qwen3.6 21/7/30, gemma4 20/8/18, prisma 21/3/23)
+qwen3.6 y prisma explicaron el **diferencial como el de un coche**: el prompt del experto simple
+(y el del banco) decía «gestión de obra de Constructora Demo» pero no que la empresa es una
+instaladora. Desde ahora una constante única, `CONTEXTO_DOMINIO_INSTALADORA` (`lib.js`), con una
+línea de contexto («empresa instaladora —eléctrica, mecánica, telecomunicaciones y control— en
+obra; nunca automoción») y un **glosario de 15 términos** (diferencial 30/300 mA, magnetotérmico,
+selectividad, REBT/ITC-BT, cuadro eléctrico, acometida/CGP, sección y caída de tensión, bobina,
+bandeja portacables, IP/IK, replanteo, parte de trabajo, albarán, PEMP, EPI), va en:
+
+- **agente**: módulo NEXUS `dominio`, dentro de `L0_MODULES` (el bloque con `cache_control`, que
+  no cambia entre turnos) y en los **7 expertos** (`simple` incluido, que es lo que se manda al
+  pool y a la cadena de respaldo), el prompt de reflexión del cron y el ayudante de pedidos;
+- **Telegram** (`worker.js`): `buildNexusPrompt` lo inserta tras `base` en los 5 expertos, en el
+  bloque cacheado;
+- **banco**: en el `system` de todos los casos `experto_simple` y `experto_tools` (no en el
+  router, que usa el prompt exacto del clasificador), y en `sistemaSimple`/`sistemaRespaldo`.
+
+Coste: **1 461 caracteres** (~400 tokens) más por mensaje, en la parte cacheada del prompt de
+Anthropic (lectura de caché) y sin coste en el pool. El router no lo lleva (clasifica, no
+explica). `alejandra-agente/dominio.test.js` comprueba que todos los expertos de los dos
+cerebros lo cargan, que está en L0 y que no pasa de 1 600 caracteres.
 
 ### Contrato del pool (confirmado por la sesión del pool, 03/10/2026)
 
@@ -199,6 +225,29 @@ Adrián (03/10/2026): «probaremos todo con el pool y compararemos rendimiento y
    `alejandra_token_uso` ahora registran `modelo='ai_pool:<modelo real>'` con `proveedor='ai_pool'`
    y `coste_usd=0` **en la misma fila** que antes escribía Haiku/gpt-4o-mini (no se añaden
    filas). Comparar `SUM(coste_usd)` y `COUNT(*)` por `proveedor` antes/después de activar.
+4. **Workers Analytics Engine (opcional, no es D1)**: si el worker tiene el binding
+   `AI_POOL_AE`, cada uso del pool escribe además un punto (`fijarSumideroMetricasPool`, en
+   `ai-pool.js`; los dos workers lo fijan en `fetch` y `scheduled`) con solo metadatos:
+   `blobs = [uso, resultado, motivo, modelo pedido, modelo real, worker]`,
+   `doubles = [ms (-1 sin dato), 1]`, `indexes = [uso]`. Da los **motivos de respaldo con
+   histórico**, que D1 no tiene. El binding está **comentado** en `alejandra-agente/wrangler.toml`:
+   no está verificado que la cuenta (Workers Free) tenga Analytics Engine y un binding no
+   disponible haría fallar el despliegue. Sin binding no se escribe nada (test).
+   `scripts/inventario-entorno.js` lo trata como binding opcional.
+
+#### Cómo leer las métricas: `scripts/ai-benchmark/metricas-produccion.mjs`
+
+Solo lectura; nunca imprime contenido de mensajes (ni lo pide: de D1 solo agrega `tipo`,
+`proveedor`, `modelo`, recuentos, tokens y coste; de tail y AE, solo los campos de la métrica).
+
+| Fuente | Comando | Qué da | Qué necesita |
+|---|---|---|---|
+| `d1` (defecto) | `node scripts/ai-benchmark/metricas-produccion.mjs --horas 48` (o `--desde "2026-10-04 08:00"`) | Turnos resueltos por el pool por uso (`tipo` → uso) y modelo real (`ai_pool:<modelo>`); llamadas a Haiku del router en la misma ventana = **proxy de respaldo** (cada clasificación por Haiku es un mensaje que el pool no clasificó: respaldo, circuito abierto o pool apagado; los resueltos por regex no escriben fila); Sonnet/gpt aparte; coste | `wrangler login` y la autorización de lectura de D1 de `CLAUDE.md`. Un único `SELECT … GROUP BY` sobre `alejandra_token_uso` |
+| `tail` | `… --fuente tail --minutos 15` | ok/respaldo/omitido, **motivos**, modelos reales y p50/p95 por uso, de las líneas `AIPOOL_METRICA` mientras escucha | `wrangler login` |
+| `ae` | `… --fuente ae --horas 168` | Lo mismo que tail pero histórico (ponderado por `_sample_interval`) | Binding `AI_POOL_AE` activado y desplegado + `CF_API_TOKEN` con permiso *Account → Account Analytics → Read* (lo crea Adrián; ningún agente) |
+
+`--json` devuelve el agregado en JSON. `chat_stream` mezcla expertos: en esa fila, `pool` = experto
+simple resuelto por el pool, `haiku` = simple por su respaldo y `otros` = expertos Sonnet.
 
 **Benchmark controlado** (workflow manual «Compare AI models (synthetic pilot)», opción
 `pool`, o `node scripts/ai-benchmark/pool.mjs`): mismos casos sintéticos para el pool y para
@@ -218,8 +267,8 @@ candidato, qué modelos reales respondieron: así se ve a qué resolvió el alia
 
 ### Banco de casos de Alejandra (`scripts/ai-benchmark/casos-alejandra.json`)
 
-60 casos en el formato pedido por la sesión del pool para elegir con datos qué modelo hay
-detrás de `alejandra:1.0`: 21 de **router** (las 7 etiquetas de
+92 casos (v3, 03/10/2026; 60 hasta v2) en el formato pedido por la sesión del pool para elegir
+con datos qué modelo hay detrás de `alejandra:1.0`: 21 de **router** (las 7 etiquetas de
 `ETIQUETAS_CLASIFICADOR_INTENCION`, con casos difíciles: saludos, imperativos y enclíticos,
 hechos que implican registrar datos, correo → `app` y no `web`, electricidad/REBT/PLC →
 `ingenieria`, `web`, `tecnico`, `reflexion`, `completo`), 8 de **experto simple** (charla y
@@ -236,6 +285,30 @@ recordatorios).
    "esperado": { "herramienta": "consultar_replanteos", "argumentos": { "replanteo_id": 7 } } }]
 ```
 
+- **Banco v3 (03/10/2026): 32 casos más difíciles**, todos sintéticos:
+  - `multi-*` (10): **varios turnos** con el resultado de una herramienta ya devuelto, en formato
+    OpenAI — `{"role":"assistant","content":"","tool_calls":[{"id","type":"function","function":
+    {"name","arguments"}}]}` y `{"role":"tool","tool_call_id","content"}` —; el modelo debe hacer la
+    **segunda llamada correcta** (p. ej. `consultar_replanteos` → `comparar_replanteo_pedido` con
+    `replanteo_id` 12; `consultar_personal` → `consultar_bd` de `partes_trabajo`; `consultar_bd` →
+    `escribir_bd` UPDATE de la incidencia 88) o **responder con el dato** (`respuesta_contiene` con
+    el valor devuelto: 12 fichajes, 137 m de bobina, 63 % de avance, 15:00 del viernes…), o
+    preguntar si el resultado es ambiguo (dos «Mario»).
+  - `error-*` (7): **errores de herramienta y recuperación**, con los mensajes REALES del agente
+    (generados con `validarScopeEmpresaBD`: falta `empresa_id`, falta `departamento`, empresa
+    equivocada; «Sin resultados»; placeholders de D1; búsqueda caída; barrera `CONFIRMO BORRADO`):
+    se espera reintentar bien, decir que no hay datos sin inventarlos o mostrar el código sin dar
+    la acción por hecha.
+  - `ambigua-*` (7): lo correcto es **preguntar** (`respuesta_contiene` con «¿» y los términos de
+    la pregunta; a veces `respuesta_no_contiene` para no sugerir valores), con herramientas a mano.
+  - `sin-tool-*` (8): **no debe usar herramientas** aunque las tenga; miden el glosario
+    (selectividad, IP65, PEMP, CGP, bandeja portacables, caída de tensión, parte vs albarán).
+- **«No usar herramientas»**: el formato del pool no tiene campo para eso; se expresa con
+  `{"respuesta_contiene": [...]}` (y `respuesta_no_contiene`). **Nuestro runner además suspende si
+  la respuesta llama a una herramienta** (`tool_innecesaria`), igual que si fuga sintaxis de tools;
+  el evaluador del pool solo mira el texto. **Propuesta a la sesión del pool**: añadir
+  `{"sin_herramienta": true}` a `esperado` (combinable con `respuesta_contiene`) para que
+  `bench_alejandra.py` puntúe igual que el nuestro.
 - **Conversación completa**: cada caso lleva su `system`. Los de router usan el prompt REAL del
   clasificador (`SYSTEM_CLASIFICADOR_INTENCION` + el sufijo JSON del cliente del pool); los de
   experto, un prompt de sistema condensado (el de producción ocupa decenas de miles de
@@ -255,9 +328,14 @@ recordatorios).
   5, obra «Nave Industrial Demo», `obra_id` 14), con personas y proveedores inventados
   («Encargado Ficticio», «Mario Ficticio», «Suministros Ficticios»). Ningún nombre, teléfono,
   DNI, email ni dirección real; el test lo comprueba con patrones.
-- **Validación en CI** (`banco-alejandra.test.mjs`): ids únicos, tipos válidos, 30–60 casos con
+- **Validación en CI** (`banco-alejandra.test.mjs`): ids únicos, tipos válidos, 60–100 casos con
   los tres tipos y las 7 etiquetas, la tool esperada está en `tools` del caso, cada argumento
   esperado existe en el esquema y encaja con su tipo/enum, y el evaluador (aciertos y fallos).
+  v3: glosario en todos los `system` de experto, turnos con tools bien formados
+  (`validarTurnosConTools`: ids únicos, cada `tool` responde a una llamada previa de una tool del
+  caso con argumentos JSON; el último mensaje es del usuario o de una tool), errores = mensajes
+  reales, último mensaje único por caso, y la conversión a Anthropic del runner local
+  (`mensajesOpenAIaAnthropic`: `tool_calls` → `tool_use`, `tool` → `tool_result`) para Haiku.
 
 **Ampliar el banco en el futuro con turnos buenos del historial (no implementado, solo
 descrito).** Dónde están hoy los turnos:
@@ -334,7 +412,11 @@ sin su secreto. Resultado en el artefacto `ai-model-comparison`, carpeta `pool/`
   `alejandra:1.0` en todos los usos, override `AI_POOL_MODEL`, modelo real por cabecera en
   registro y métrica, alias resuelto a prisma con tools → respaldo `modelo_real_sin_tools` sin
   abrir el circuito), `scripts/ai-benchmark/pool.test.mjs` (incluido el banco con un pool
-  simulado) y `scripts/ai-benchmark/banco-alejandra.test.mjs`. Ninguna llamada real.
+  simulado), `scripts/ai-benchmark/banco-alejandra.test.mjs`,
+  `alejandra-agente/dominio.test.js` (glosario en todos los expertos de los dos cerebros;
+  sumidero de Analytics Engine sin contenido y sin efecto sin binding) y
+  `scripts/ai-benchmark/metricas-produccion.test.mjs` (solo `SELECT` agregado sin columnas
+  personales, tail solo con campos de métrica, AE sin token = sin llamadas). Ninguna llamada real.
 
 ## Activación y rollback
 
@@ -346,7 +428,13 @@ npx wrangler secret put AI_POOL_KEY --name alejandra-app-api
 ```
 
 Para el benchmark del workflow, el mismo secreto `AI_POOL_KEY` en el entorno GitHub
-`production`. Desplegar ambos workers por el workflow manual habitual (los secretos ya
+`production`.
+
+Métricas históricas con motivos (opcional, Adrián): descomentar el bloque
+`[[analytics_engine_datasets]]` (`AI_POOL_AE` → `alejandra_ai_pool`) de
+`alejandra-agente/wrangler.toml` y desplegar; crear un token de API con *Account → Account
+Analytics → Read* y usarlo como `CF_API_TOKEN` al ejecutar `metricas-produccion.mjs --fuente ae`.
+Si el despliegue falla por el binding, volver a comentarlo (tail y D1 siguen funcionando). Desplegar ambos workers por el workflow manual habitual (los secretos ya
 existentes no cambian).
 
 **Rollback** (cualquiera de los tres, sin desplegar código):

@@ -127,6 +127,29 @@ function _registrarFallo(ahora = Date.now()) {
 let _metricasDesde = new Date().toISOString();
 const _metricas = new Map();
 
+// (3) Opcional: Workers Analytics Engine (NO es D1). Si el worker tiene el binding
+// `AI_POOL_AE` (ver alejandra-agente/wrangler.toml), cada uso del pool escribe un punto con
+// SOLO metadatos: blobs = [uso, resultado, motivo, modelo pedido, modelo real, worker],
+// doubles = [ms (-1 si no hay), 1], indexes = [uso]. Sin binding no hace nada. Se lee con
+// scripts/ai-benchmark/metricas-produccion.mjs --fuente ae (SQL API de Analytics Engine).
+let _sumideroAE = null;
+let _sumideroWorker = '';
+export function fijarSumideroMetricasPool(dataset, worker = '') {
+  _sumideroAE = dataset && typeof dataset.writeDataPoint === 'function' ? dataset : null;
+  _sumideroWorker = String(worker || '').slice(0, 40);
+}
+
+function _escribirPuntoAE({ uso, resultado, motivo, modelo, modeloReal, ms }) {
+  if (!_sumideroAE) return;
+  try {
+    _sumideroAE.writeDataPoint({
+      blobs: [uso, resultado, motivo || '', modelo || '', modeloReal || '', _sumideroWorker].map(x => String(x).slice(0, 80)),
+      doubles: [Number.isFinite(ms) ? Math.round(ms) : -1, 1],
+      indexes: [String(uso).slice(0, 32)],
+    });
+  } catch (_) { /* las métricas nunca rompen una petición */ }
+}
+
 // `modelo` = lo que se pidió (el alias), `modeloReal` = lo que respondió según la cabecera
 // X-AI-Pool-Model (o el campo `model` de la respuesta). null si no hubo respuesta del pool.
 export function registrarMetricaPool({ uso = 'desconocido', resultado, motivo = '', ms = null, modelo = '', modeloReal = '' } = {}) {
@@ -144,6 +167,7 @@ export function registrarMetricaPool({ uso = 'desconocido', resultado, motivo = 
   try {
     console.log('AIPOOL_METRICA ' + JSON.stringify({ uso, proveedor: 'ai_pool', modelo: modelo || AI_POOL_MODELO, modeloReal: modeloReal || null, resultado: res, motivo: motivo || null, ms: Number.isFinite(ms) ? Math.round(ms) : null }));
   } catch (_) {}
+  _escribirPuntoAE({ uso, resultado: res, motivo: res !== 'ok' ? motivo : '', modelo: modelo || AI_POOL_MODELO, modeloReal, ms });
 }
 
 function _percentil(valores, p) {

@@ -1867,6 +1867,30 @@ function alcancePlanoGenerado(datosPlano = {}) {
   };
 }
 
+// POOL-GLOSARIO-01 (03/10/2026): contexto del oficio y glosario corto en TODOS los prompts de
+// sistema de los expertos (los dos cerebros: NEXUS_MODULES.dominio del agente, buildNexusPrompt
+// de Telegram) y en los casos del banco (scripts/ai-benchmark/casos-alejandra.json). En el banco
+// del pool (c01d880) qwen3.6 y prisma explicaron el diferencial como el de un coche: el prompt
+// decía «gestión de obra» pero no que la empresa es una instaladora. Va en la parte CACHEADA del
+// prompt (L0): no cambia entre turnos. Mantenerlo corto: viaja en cada mensaje.
+const CONTEXTO_DOMINIO_INSTALADORA = `CONTEXTO DEL OFICIO: la empresa usuaria es una instaladora (eléctrica, mecánica, telecomunicaciones y control) que trabaja en obra. Interpreta cada término en ese sentido, nunca como de automoción u otro sector.
+GLOSARIO:
+- Diferencial: interruptor diferencial; corta ante fugas a tierra (corriente residual). Sensibilidad 30 mA protege personas; 300 mA, instalaciones.
+- Magnetotérmico (PIA): protege los cables contra sobrecargas y cortocircuitos.
+- Selectividad: que dispare solo la protección más cercana al defecto, no la de cabecera.
+- REBT / ITC-BT: Reglamento Electrotécnico para Baja Tensión y sus instrucciones técnicas.
+- Cuadro eléctrico: envolvente con las protecciones y la aparamenta.
+- Acometida / CGP: enlace con la red de la distribuidora / caja general de protección.
+- Sección de cable (mm²) y caída de tensión (%): se dimensionan por intensidad admisible y caída máxima.
+- Bobina: carrete de cable; se controla en metros.
+- Bandeja portacables: soporte (rejilla, perforada o ciega) por el que se tiende el cable.
+- IP / IK: protección de una envolvente frente a polvo y agua / frente a impactos.
+- Replanteo: medir y marcar en obra recorridos y posiciones antes de instalar.
+- Parte de trabajo: registro diario de horas y tareas de cada operario.
+- Albarán: documento de entrega de material del proveedor.
+- PEMP: plataforma elevadora móvil de personal (tijera, brazo).
+- EPI: equipo de protección individual (casco, arnés, guantes, gafas).`;
+
 // Prompt y etiquetas del clasificador de intención del agente (clasificarConHaiku en
 // worker.js). Viven aquí para que el benchmark (scripts/ai-benchmark/pool.mjs, ADR-0028)
 // mida el pool propio y Haiku con EXACTAMENTE el mismo prompt que producción.
@@ -1886,6 +1910,7 @@ function reEspanol(re) {
 
 export {
   reEspanol,
+  CONTEXTO_DOMINIO_INSTALADORA,
   SYSTEM_CLASIFICADOR_INTENCION,
   ETIQUETAS_CLASIFICADOR_INTENCION,
   esInicioCasoNuevo,

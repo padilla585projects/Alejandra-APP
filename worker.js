@@ -16,10 +16,10 @@ import DxfParser from 'dxf-parser';
 // Validacion sintactica de planos; no declara correccion geometrica ni normativa.
 import { SaxesParser } from 'saxes';
 // Una sola regla pura de IDs CAD para API y agente; sin I/O ni datos de sesión.
-import { normalizarIdPlano, debeRegistrarTrazaToken } from './alejandra-agente/lib.js';
+import { normalizarIdPlano, debeRegistrarTrazaToken, CONTEXTO_DOMINIO_INSTALADORA } from './alejandra-agente/lib.js';
 // ADR-0028: pool de IA propio con respaldo obligatorio. MISMO módulo que usa
 // alejandra-agente (regla «dos cerebros»). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
-import { poolRouterNexus, poolBuscar, poolConfigurado, prepararConsultaBusqueda } from './alejandra-agente/ai-pool.js';
+import { poolRouterNexus, poolBuscar, poolConfigurado, prepararConsultaBusqueda, fijarSumideroMetricasPool } from './alejandra-agente/ai-pool.js';
 // IA-QUALITY-09: validador determinista del archivo SVG y avisos incrustados en el archivo.
 import { finalizarPlanoVerificado, normalizarCotasEntrada, normalizarPlanoEditadoManual, validarPlanoSvg } from './planos-validacion.mjs';
 
@@ -3882,7 +3882,10 @@ function buildNexusPrompt(expertName, canal = 'telegram') {
   const canalNote = canal === 'web'
     ? ' Puedes usar HTML básico (<b>, <i>, <code>, <br>, <ul>, <li>) — el chat web lo renderiza.'
     : ' Estamos en Telegram: sin markdown complejo (evita # y **), usa emojis con moderación.';
-  return expert.modules.map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n') + canalNote;
+  // POOL-GLOSARIO-01 (03/10/2026): el contexto del oficio y el glosario (los mismos que el
+  // agente, desde lib.js) van justo detrás de `base`, dentro del bloque cacheado.
+  return expert.modules.flatMap(m => m === 'base' ? [NEXUS_MODULES.base, CONTEXTO_DOMINIO_INSTALADORA] : [NEXUS_MODULES[m]])
+    .filter(Boolean).join('\n\n') + canalNote;
 }
 
 // ── Filtra tools según el experto (null = todas) ─────────────────────────────
@@ -5589,6 +5592,8 @@ async function bobinasBatch(request, env, ctx) {
 
 export default {
   async fetch(request, env, ctx) {
+    // ADR-0028 §Medición: Analytics Engine opcional para las métricas del pool (sin D1).
+    fijarSumideroMetricasPool(env.AI_POOL_AE, 'alejandra-app-api');
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
     }
@@ -7190,6 +7195,7 @@ export default {
   // ── Cron diario: alertas + cierre jornada ────────────────────────────────
 
   async scheduled(event, env, ctx) {
+    fijarSumideroMetricasPool(env.AI_POOL_AE, 'alejandra-app-api');
     // Healthcheck en TODOS los crons: Alejandra se autodiagnostica y se autorrepara
     ctx.waitUntil(checkChatHealth(env));
     // Sync con la red de agentes en cada cron (2x/día: 7:00, 18:00 UTC)

@@ -82,6 +82,10 @@ jobs:
       # anonimización y evaluador). Sin llamadas a ningún modelo.
       - name: Check Alejandra case bank for the AI pool
         run: node --test scripts/ai-benchmark/banco-alejandra.test.mjs
+      # ADR-0028 §Medición: lector de métricas de producción del pool (solo lectura, sin D1
+      # ni Cloudflare en la prueba).
+      - name: Check AI pool production metrics reader
+        run: node --test scripts/ai-benchmark/metricas-produccion.test.mjs
       - name: Check technical tools and Office plan failures
         run: node --test scripts/technical-tools.test.cjs
       - name: Check shift calendars and weekly rotation
