@@ -3158,3 +3158,42 @@ describe('validar_cambios_bd pasa por el mismo aislamiento que consultar_bd (SQL
     expect(src).toContain('validarScopeEmpresaBD(sqlCustom, [], empresa_id, esDevVerificado, bypassEmpresaActivo, rol, departamento)');
   });
 });
+
+// ── ROUTER-PROMPT-01 (03/10/2026): una regla y un ejemplo para cada una de las 7 etiquetas ──
+// El banco del pool (prisma/gemma/qwen) fallaba tecnico, reflexion y completo porque el
+// prompt solo definía simple/app/web/ingenieria. Haiku usa el mismo prompt como respaldo.
+describe('SYSTEM_CLASIFICADOR_INTENCION (ROUTER-PROMPT-01)', () => {
+  it('define con regla propia cada una de las 7 etiquetas del clasificador', async () => {
+    const { SYSTEM_CLASIFICADOR_INTENCION: p, ETIQUETAS_CLASIFICADOR_INTENCION: etiquetas } = await import('./lib.js');
+    expect(etiquetas).toEqual(['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo']);
+    for (const e of etiquetas) {
+      expect(p, e).toContain(`${e} = `);
+      // cada regla trae un ejemplo entre comillas antes de la siguiente etiqueta
+      const desde = p.indexOf(`${e} = `);
+      const siguiente = etiquetas.map(x => p.indexOf(`${x} = `)).filter(i => i > desde).sort((a, b) => a - b)[0] ?? p.length;
+      expect(p.slice(desde, siguiente), e).toMatch(/"[^"]+"/);
+    }
+  });
+
+  it('cubre la redacción de los casos que fallaban en el banco (router-17…22)', async () => {
+    const { SYSTEM_CLASIFICADOR_INTENCION: p } = await import('./lib.js');
+    const regla = e => p.slice(p.indexOf(`${e} = `), p.indexOf(' = ', p.indexOf(`${e} = `) + e.length + 3));
+    expect(regla('tecnico')).toMatch(/wrangler/);           // router-17: despliegue con wrangler
+    expect(regla('tecnico')).toMatch(/código/);             // router-18: revisa el código del worker
+    expect(regla('tecnico')).toMatch(/tools tiene cada experto/);
+    expect(regla('reflexion')).toMatch(/mejorar/);          // router-19: qué podrías mejorar
+    expect(regla('reflexion')).toMatch(/errores/);          // router-20: analízate, errores
+    expect(regla('reflexion')).toMatch(/evolucionar/);
+    expect(regla('completo')).toMatch(/quién es Alejandra/); // router-21: quién eres
+    expect(regla('completo')).toMatch(/capacidades/);       // router-22: todas tus capacidades
+  });
+
+  it('mantiene las reglas de siempre: correo → app NUNCA web, hechos → app NUNCA simple, enclíticos', async () => {
+    const { SYSTEM_CLASIFICADOR_INTENCION: p } = await import('./lib.js');
+    expect(p).toMatch(/correo\/email\/Gmail → app, NUNCA web/);
+    expect(p).toMatch(/→ app, NUNCA simple/);
+    expect(p).toMatch(/enclítico/);
+    expect(p.startsWith('Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo.')).toBe(true);
+    expect(p.length).toBeLessThan(2000); // va en cada mensaje: que no crezca sin control
+  });
+});
