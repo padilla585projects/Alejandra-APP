@@ -3121,7 +3121,7 @@ arreglar". Cuatro fixes independientes, cada uno encontrado navegando la pantall
 - **Login de prueba creado y dejado en pie a petición de Adrián** ("dejalo usas esto para
   hacer pruebas"): usuario id `357` ("Prueba TEMP F6.1"), rol `empresa_admin`, empresa
   `Constructora Demo S.L.` (empresa_id=5, obra "Nave Industrial Demo", obra_id=14). Login por
-  email+contraseña (`temp-f61-test@example.invalid` / `TempF61Pass_92xQ!`) — panel.html usa
+  email+contraseña (`temp-f61-test@example.invalid` / `<contraseña retirada del repo>`) — panel.html usa
   email+contraseña para roles de oficina, no código de obra (eso es solo para index.html).
 - **Prueba en vivo con el navegador integrado (Chrome, sesión real)**: se le pidió a Alejandra
   delegar la creación de un pedido en el ayudante de Pedidos. Confirmado contra D1 real:

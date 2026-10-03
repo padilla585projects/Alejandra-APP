@@ -74,7 +74,7 @@ Write-Host "`n=== TEST 1: Login Alberto (encargado + oficina) ===" -ForegroundCo
 $respAlberto = Invoke-ApiCall -Method POST -Endpoint "/verificar" `
     -Body @{
         email    = "alberto@test.local"
-        password = "Manolete2026"
+        password = $env:TEST_SEG_PASS_1
     }
 
 if ($respAlberto.token) {
@@ -123,7 +123,7 @@ Write-Host "`n=== TEST 3: Login María (oficina) ===" -ForegroundColor Cyan
 $respMaria = Invoke-ApiCall -Method POST -Endpoint "/verificar" `
     -Body @{
         email    = "maria@test.local"
-        password = "Maria2026"
+        password = $env:TEST_SEG_PASS_2
     }
 
 if ($respMaria.token) {
@@ -167,7 +167,7 @@ Write-Host "`n=== TEST 5: Login Carlos (oficina, seguridad) ===" -ForegroundColo
 $respCarlos = Invoke-ApiCall -Method POST -Endpoint "/verificar" `
     -Body @{
         email    = "carlos@test.local"
-        password = "Carlos2026"
+        password = $env:TEST_SEG_PASS_3
     }
 
 if ($respCarlos.token) {
