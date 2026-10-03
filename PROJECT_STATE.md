@@ -1,5 +1,46 @@
 # Estado del proyecto — Alejandra 2.0
 
+## D1-ESCRITURAS-01 — medición tras el reinicio de cuota (2026-10-03 06:57 UTC, verificada)
+
+d1 insights 6 h (00:57–06:57 UTC): 292 filas escritas en total; la cuota vuelve a aceptar
+escrituras (INSERT sync_dispositivos 198/99, alejandra_historial 40, token_uso 28, trazas 20).
+Ritmo extrapolado ≈1.200 filas/día frente al límite de 100.000 (≈1 %). Línea base del 02/10
+(24 h): trazas 46.370, sync_dispositivos activo=0 15.708, last_used 13.482. En las 6 h: sin
+INSERT de trazas de token muerto, sin UPDATE masivo de sync_dispositivos y el UPDATE
+condicional de last_used (1.606 ejecuciones) no escribe filas. d1 info: rows_written_24h
+25.758, casi todo de antes del arreglo. No hizo falta ningún cambio ni despliegue; la
+autorización puntual de aprobar production para esta comprobación no se usó.
+Observado sin arreglar: `ALTER TABLE escaneos_remotos ADD COLUMN archivo_nombre` se ejecuta
+43 veces en 6 h (DDL en caliente que falla porque la columna ya existe; sin escrituras).
+
+
+## NOCHE-03-10 (2ª parte) — QA real, planos, AR, caducidad R2 y AI Pool (2026-10-03, publicada)
+
+QA con la sesión de Adrián (superadmin, panel cambiado a Constructora Demo, empresa 5):
+- generar_plano de bandejas fallaba 3/3 («<script>» del generador). #376 añade el fragmento
+  al error (API 52aa6e7d); #379 pide <pattern>/<use> y reintenta una vez → plano ID 32 OK,
+  avisos verificados dentro del archivo, «Otro caso» sin arrastrar datos.
+- QA H sigue sin superarse: califica 320 mm «inusual»/320 cm «habitual» pese al gate.
+- Alejandra guardó dos memory_save de error y avisó a Adrián por Telegram al fallar el plano.
+#377 caducidad 30 días de escaneos AR SIN replanteo (autorizada por Adrián): cron 18:00 UTC,
+comprueba sesion.json y trazado_json en D1 (solo lectura), topes por noche, una fila de
+resumen en logs (escaneo-caducidad). Revisar la primera ejecución.
+#378 AR: giro de pantalla, ángulo recto (P2), paralelos (P3, material ×n: decidir soporte
+compartido), superficie forzada y edición de puntos (P4). APK candidata 1.19 sin publicar.
+SIN VERIFICAR EN VIVO. #380 versión 9.84.
+#381 AI Pool (ADR-0028, aceptado por Adrián): router, experto simple, crons, buscar_web y
+respaldo de Anthropic al pool de casa con timeout, circuito y respaldo a lo actual.
+AI_POOL_KEY puesto por Adrián en ambos Workers. #383 consulta corta + since para la búsqueda.
+#382 ROUTER-ENCLITICO-01: la regla de enclíticos mandaba casi todo a Sonnet sin clasificador
+ni búsqueda web, y \b no casaba palabras con tilde (13 reglas); reEspanol en lib.js.
+Medidas reales del pool: router prisma 1,0–2,0 s ok; búsqueda 3,4 s ok (antes de #383 con
+resultado obsoleto). Privacidad del pool confirmada por su sesión (sin registro de contenido).
+Versiones: agente 502cf160, API d97a02cc, Pages 9.84. Rollback: agente 9f2a3e83, API 06225169.
+Pendiente: AI_POOL_KEY en GitHub env production para el benchmark comparativo; QA de la
+búsqueda tras #383 (Chrome de Adrián congelado por inactividad); devolver su panel a
+Levitec/Seguridad; QA H; prueba física del AR (9.84 y APK 1.19).
+
+
 ## NOCHE-03-10 — cierre nocturno de pendientes (2026-10-03, publicada; verificación real pendiente)
 
 Claude como coordinador con agentes en worktrees. Autorizaciones de Adrián en chat
