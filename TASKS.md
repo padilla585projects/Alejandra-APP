@@ -1,5 +1,16 @@
 # TASKS — Cola operativa inmediata
 
+## NOCHE-03-10 (2ª parte) — pendientes (2026-10-03)
+
+- Adrián: `gh secret set AI_POOL_KEY --env production` para el benchmark pool vs actual.
+- Benchmark del pool (router, simple, buscar_web, respaldo) y decidir por uso.
+- QA H (medidas sin unidad) sigue calificando: nueva tarea de calidad del agente.
+- Revisar la primera ejecución de escaneo-caducidad (logs, 18:00 UTC).
+- Decidir si las bandejas paralelas comparten soporte (material ×n de #378).
+- Prueba física del AR 9.84 y APK 1.19/1.18; publicar APK solo tras ella.
+- DDL en caliente `ALTER TABLE escaneos_remotos ADD COLUMN archivo_nombre` repetido (43/6 h).
+
+
 ## NOCHE-03-10 — pendientes tras el cierre nocturno (2026-10-03)
 
 - Adrián: probar en móvil con ARCore el escaneo (#373) y la APK candidata 1.18; QA
