@@ -57,7 +57,7 @@ const declarados = declaradosEnEjemplo();
 // cliente del pool de IA lo comparten los dos workers).
 const workers = [
   { nombre: 'alejandra-app-api', codigo: 'worker.js', toml: 'wrangler.toml', extras: ['alejandra-agente/ai-pool.js'] },
-  { nombre: 'alejandra-agente', codigo: 'alejandra-agente/worker.js', toml: 'alejandra-agente/wrangler.toml', extras: ['alejandra-agente/ai-pool.js'] },
+  { nombre: 'alejandra-agente', codigo: 'alejandra-agente/worker.js', toml: 'alejandra-agente/wrangler.toml', extras: ['alejandra-agente/ai-pool.js', 'alejandra-agente/dataset-entrenamiento.js'] },
 ];
 
 let problemas = 0;

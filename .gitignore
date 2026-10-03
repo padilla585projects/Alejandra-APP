@@ -55,3 +55,9 @@ SECRETOS_LOCALES.txt
 *.env
 .env*
 backups/
+
+# ADR-0029 - exportaciones del dataset privado de entrenamiento: NUNCA en el repo publico.
+# exportar-dataset.mjs escribe fuera del repo (%TEMP%), esto es solo por si acaso.
+dataset-alejandra*.jsonl
+*.dataset.jsonl
+dataset-export/
