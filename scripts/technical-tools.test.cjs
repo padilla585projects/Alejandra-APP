@@ -12,6 +12,8 @@ let warningPolicy;
 let validationTag;
 let mountingContract;
 let idPlanoPolicy;
+let staticRejection;
+let staticCorrection;
 
 // Exercise the production functions without loading unrelated Worker bindings or UI.
 function load(file, name, globals = {}) {
@@ -24,13 +26,16 @@ function load(file, name, globals = {}) {
     finalizarPlanoVerificado: planosValidacion.finalizarPlanoVerificado,
     normalizarCotasEntrada: planosValidacion.normalizarCotasEntrada,
     validarPlanoSvg: planosValidacion.validarPlanoSvg,
-    _instruccionCotasPlano: () => '', ...globals });
+    _instruccionCotasPlano: () => '', _esRechazoPlanoNoEstatico: staticRejection,
+    _correccionPlanoNoEstatico: staticCorrection, logAIUsage: () => {}, ...globals });
 }
 
 idPlanoPolicy = load('alejandra-agente/lib.js', 'normalizarIdPlano');
 validationTag = load('worker.js', '_validacionPlano');
 warningPolicy = load('worker.js', '_validarAvisosPlano');
 mountingContract = load('worker.js', '_contratoMontajePlano');
+staticRejection = load('worker.js', '_esRechazoPlanoNoEstatico');
+staticCorrection = load('worker.js', '_correccionPlanoNoEstatico');
 
 const calculatorSource = readFileSync(resolve(__dirname, '..', 'alejandra-agente/worker.js'), 'utf8');
 const calculatorContext = vm.createContext({});
@@ -910,6 +915,101 @@ test('IA-QUALITY-09: generation stores the verified file and returns the warning
   assert.deepEqual(tool.avisos_en_archivo, result.avisos_en_archivo);
   assert.ok(!tool.avisos_en_archivo.some(t => /QA/.test(t)));
   assert.match(tool.instruccion_avisos, /Solo puedes afirmar/);
+});
+
+// FIX-PLANO-SCRIPT-01 (QA 03/10/2026): bandejas fallaba siempre porque el modelo
+// dibujaba repeticiones con <script>. El filtro no se relaja: UNA reescritura pedida.
+const scriptSvg = svg9('<text x="10" y="60">Largo 40 m</text><script>for(let x=0;x<=1400;x+=50){draw(x)}</script>');
+const generateTray = (responses, calls, usage = []) => load('worker.js', '_generarPlanoInterno', {
+  _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+  _obtenerCatalogoBandejas: async () => [], IEC_BANDEJA_DEFS: '', _normalizarColoresUseSvg: s => s,
+  _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'), console: { warn() {}, error() {} },
+  logAIUsage: (_, entry) => usage.push(entry),
+  fetch: async (url, options) => {
+    assert.match(url, /api\.anthropic\.com/);
+    calls.push(JSON.parse(options.body).messages);
+    const text = responses[Math.min(calls.length - 1, responses.length - 1)];
+    return { ok: true, json: async () => ({ content: [{ text }], usage: { input_tokens: 100, output_tokens: 50 * calls.length } }) };
+  },
+});
+const trayInput = { tipo: 'bandejas', titulo: 'QA bandejas', descripcion: 'synthetic', empresa_id: 5, usuario_id: 7 };
+
+test('FIX-PLANO-SCRIPT-01: a tray plan with <script> is rewritten once by the same provider and then stored', async () => {
+  const { writes, env } = genEnv9();
+  const calls = []; const usage = [];
+  const result = await generateTray([scriptSvg, conCota], calls, usage)(env, trayInput);
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 2, 'Exactly one retry');
+  assert.doesNotMatch(calls[0][0].content, /CORRECCION OBLIGATORIA/);
+  assert.match(calls[1][0].content, /CORRECCION OBLIGATORIA[^]*<script[^]*<pattern[^]*<use href="#sym-/);
+  assert.equal(writes.length, 1);
+  assert.doesNotMatch(writes[0].args[5], /<script/i);
+  assert.deepEqual(usage.map(u => [u.endpoint, u.proveedor, u.output_tokens]),
+    [['generar_plano', 'anthropic', 50], ['generar_plano', 'anthropic', 100]], 'Both attempts are billed');
+});
+
+test('FIX-PLANO-SCRIPT-01: when the retry also contains <script> the current error stands and nothing is inserted', async () => {
+  const { writes, env } = genEnv9();
+  const calls = []; const usage = [];
+  await assert.rejects(generateTray([scriptSvg, scriptSvg, conCota], calls, usage)(env, trayInput),
+    e => e.validacionPlano === true && /Plano no estatico[^]*No se ha guardado/.test(e.message));
+  assert.equal(calls.length, 2, 'No second retry');
+  assert.equal(writes.length, 0);
+  assert.equal(usage.length, 2);
+});
+
+test('FIX-PLANO-SCRIPT-01: a clean first response is stored without any retry', async () => {
+  const { writes, env } = genEnv9();
+  const calls = []; const usage = [];
+  await generateTray([conCota, scriptSvg], calls, usage)(env, trayInput);
+  assert.equal(calls.length, 1);
+  assert.equal(writes.length, 1);
+  assert.equal(usage.length, 1);
+});
+
+test('FIX-PLANO-SCRIPT-01: other validation failures are not retried', async () => {
+  const { writes, env } = genEnv9();
+  const calls = [];
+  await assert.rejects(generateTray([svg9('<text>Zona A</text>'), conCota], calls)(env, trayInput), /sin textos de cota/);
+  assert.equal(calls.length, 1);
+  assert.equal(writes.length, 0);
+});
+
+test('FIX-PLANO-SCRIPT-01: AI editing retries once after <script> and only updates with the static rewrite', async () => {
+  for (const [responses, updates, status] of [[[scriptSvg, conCota], 1, undefined], [[scriptSvg, scriptSvg, conCota], 0, 502]]) {
+    const prompts = []; let updated = 0;
+    const edit = load('worker.js', 'editarPlanoCircuitosREST', {
+      _getAuthPlano: async () => ({ empresa_id: 5, rol: 'admin' }),
+      _ensurePlanosTable: async () => {}, _prepararPlanoPrompt: () => 'test',
+      _extraerSvgCompleto: load('worker.js', '_extraerSvgCompleto'),
+      IEC_BANDEJA_DEFS: '', _normalizarColoresUseSvg: s => s,
+      _llamarAnthropicPlanoStream: async (_, msg) => { prompts.push(msg); return responses[prompts.length - 1]; },
+      err: (message, code) => ({ message, status: code }), json: data => data,
+    });
+    const result = await edit({ json: async () => ({ cambios: [{ circuito_id: 'C1', campo: 'notas', valor: 'QA' }] }) },
+      { DB: { prepare(sql) {
+        if (/^UPDATE planos/.test(sql)) return { bind: () => ({ run: async () => { updated++; } }) };
+        return { bind: () => ({ first: async () => ({ tipo: 'bandejas', titulo: 'QA', circuitos_json: '[]', descripcion: 'synthetic' }) }) };
+      } } }, '/planos/28/circuitos');
+    assert.equal(prompts.length, 2);
+    assert.match(prompts[1], /CORRECCION OBLIGATORIA/);
+    assert.equal(updated, updates);
+    assert.equal(result.status, status);
+    if (status) assert.match(result.message, /Plano no estatico/);
+  }
+});
+
+test('FIX-PLANO-SCRIPT-01: prompts teach code-free repetition and keep the static rule', () => {
+  const source = readFileSync(resolve(__dirname, '..', 'worker.js'), 'utf8');
+  const tray = source.slice(source.indexOf('  bandejas: `'), source.indexOf('  unifilar: `'));
+  assert.match(tray, /<pattern id="patron-cuadricula"/);
+  assert.doesNotMatch(tray, /lineas cada 50px/);
+  assert.match(tray, /nunca con un bucle de codigo/);
+  const prepare = load('worker.js', '_prepararPlanoPrompt', { _PLANO_PROMPTS: { planta: 'x', bandejas: 'tray' }, _bloqueSimbolosDinamico: () => '' });
+  assert.match(prepare('bandejas', ''), /Repeticiones SIN codigo[^]*<pattern[^]*<use href="#sym-[^]*INVALIDA el plano/);
+  assert.equal(staticRejection(new Error('Plano no estatico: x')), true);
+  assert.equal(staticRejection(new Error('Plano sin textos de cota')), false);
+  assert.match(staticCorrection('Plano no estatico: contiene («<script»). No se ha guardado'), /contenia «<script»/);
 });
 
 test('IA-QUALITY-09: a file failing validation is not stored and the REST error explains why', async () => {
