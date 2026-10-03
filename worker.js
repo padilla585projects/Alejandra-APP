@@ -29284,9 +29284,13 @@ function _extraerSvgCompleto(texto, contrato = null) {
   // Rechazar, no eliminar codigo: quitarlo podria dar por valido un dibujo incompleto.
   // Defensa acotada del contrato estatico; no sustituye un parser/sanitizador XML.
   const contenido = svg.replace(/<!--[\s\S]*?-->/g, '');
-  if (/<(?:[\w.-]+:)?(?:script|foreignObject)\b/i.test(contenido)
-      || /<[^>]*\s(?:[\w.-]+:)?on[a-z]+\s*=/i.test(contenido)) {
-    throw new Error('Plano no estatico: contiene codigo ejecutable o contenido interactivo. No se ha guardado; genera un SVG estatico sin scripts ni eventos.');
+  const _mEstatico = /<(?:[\w.-]+:)?(?:script|foreignObject)\b/i.exec(contenido)
+    || /<[^>]*\s(?:[\w.-]+:)?on[a-z]+\s*=/i.exec(contenido);
+  if (_mEstatico) {
+    // Final de la coincidencia, para diagnosticar falsos positivos del filtro.
+    const frag = _mEstatico[0].slice(-90).replace(/\s+/g, ' ');
+    console.warn('[planos] rechazo no estatico:', frag);
+    throw new Error(`Plano no estatico: contiene codigo ejecutable o contenido interactivo («${frag}»). No se ha guardado; genera un SVG estatico sin scripts ni eventos.`);
   }
   _validarAvisosPlano(svg, contrato);
   return svg;
