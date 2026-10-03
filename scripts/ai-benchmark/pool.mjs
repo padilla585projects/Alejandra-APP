@@ -1,9 +1,14 @@
 // ADR-0028 §Medición — compara el pool de IA propio con lo que usa hoy producción en las
-// cuatro tareas que el pool asume, midiendo latencia, acierto y coste estimado:
-//   a) router de intención   pool prisma:1.0 / qwen3.6  vs  claude-haiku-4-5
-//   b) experto «simple»      pool qwen3.6               vs  claude-haiku-4-5
+// tareas que el pool asume, midiendo latencia, acierto y coste estimado. En el pool se mide
+// el alias de producción `alejandra:1.0` y, aparte, los modelos concretos que puede tener
+// detrás (qwen3.6, prisma), para decidir con datos a qué debe resolver el alias:
+//   a) router de intención   pool alejandra:1.0 / prisma:1.0 / qwen3.6  vs  claude-haiku-4-5
+//   b) experto «simple»      pool alejandra:1.0 / qwen3.6               vs  claude-haiku-4-5
 //   c) buscar_web            pool /v1/tools/search      vs  gpt-4o-mini (web_search_preview) y Tavily
-//   d) respaldo (tools)      pool qwen3.6               vs  grok-4 y gpt-4o
+//   d) respaldo (tools)      pool alejandra:1.0 / qwen3.6               vs  grok-4 y gpt-4o
+//   e) banco                 casos-alejandra.json (router, experto simple y experto con las tools
+//                            REALES del agente) con los mismos candidatos de pool + Haiku y gpt-4o
+// En las filas del pool se guarda `modeloReal` (cabecera X-AI-Pool-Model): qué respondió de verdad.
 // Las llamadas al pool usan EL MISMO cliente que producción (alejandra-agente/ai-pool.js),
 // con sus timeouts reales, así que un timeout aquí es un respaldo allí.
 // Sin AI_POOL_KEY el pool se omite limpiamente (status omitido_sin_clave, no es fallo);
@@ -11,15 +16,21 @@
 //
 //   node scripts/ai-benchmark/pool.mjs   (vars: AI_POOL_KEY, AI_POOL_URL, ANTHROPIC_API_KEY,
 //   OPENAI_API_KEY, TAVILY_API_KEY, XAI_API_KEY, BENCHMARK_REPEATS, BENCHMARK_BUDGET_USD,
-//   BENCHMARK_OUTPUT, BENCHMARK_POOL_TIMEOUT_MS)
+//   BENCHMARK_OUTPUT, BENCHMARK_POOL_TIMEOUT_MS, BENCHMARK_TAREAS=router,banco,...)
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
-  AI_POOL_MODELO, AI_POOL_MODELO_ROUTER, AI_POOL_TIMEOUTS, poolConfigurado, poolChat,
-  poolClasificar, poolBuscar, _reiniciarCircuitoPool
+  AI_POOL_MODELO, AI_POOL_TIMEOUTS, poolConfigurado, poolChat,
+  poolClasificar, poolBuscar, _reiniciarCircuitoPool, normalizarEtiquetaRouter
 } from '../../alejandra-agente/ai-pool.js';
 import { SYSTEM_CLASIFICADOR_INTENCION, ETIQUETAS_CLASIFICADOR_INTENCION } from '../../alejandra-agente/lib.js';
 import { casosRouter, casosSimple, sistemaSimple, casosBusqueda, casosRespaldo, sistemaRespaldo, toolsRespaldo } from './pool-cases.mjs';
+import { cargarBancoAlejandra, evaluarCasoBanco } from './banco-alejandra.mjs';
+
+// Modelos concretos del pool que se miden además del alias (el alias puede resolver a ellos).
+const POOL_QWEN = 'ai_pool:qwen3.6:35b-a3b';
+const POOL_PRISMA = 'ai_pool:prisma:1.0';
+const POOL_ALIAS = 'ai_pool:' + AI_POOL_MODELO;
 
 // USD/MTok y USD por llamada de herramienta. El pool cuesta 0 por token (no incluye la
 // electricidad de casa). Tarifas de herramienta de búsqueda: estimación a verificar en la
@@ -34,10 +45,12 @@ export const tarifas = {
 };
 
 export const candidatos = {
-  router: ['ai_pool:' + AI_POOL_MODELO_ROUTER, 'ai_pool:' + AI_POOL_MODELO, 'claude-haiku-4-5'],
-  simple: ['ai_pool:' + AI_POOL_MODELO, 'claude-haiku-4-5'],
+  router: [POOL_ALIAS, POOL_PRISMA, POOL_QWEN, 'claude-haiku-4-5'],
+  simple: [POOL_ALIAS, POOL_QWEN, 'claude-haiku-4-5'],
   buscar_web: ['ai_pool:tools/search', 'gpt-4o-mini-web', 'tavily'],
-  respaldo: ['ai_pool:' + AI_POOL_MODELO, 'grok-4', 'gpt-4o']
+  respaldo: [POOL_ALIAS, POOL_QWEN, 'grok-4', 'gpt-4o'],
+  // prisma no maneja tools: en los casos con tools su fila sale «respaldo» (igual que en producción).
+  banco: [POOL_ALIAS, POOL_QWEN, POOL_PRISMA, 'claude-haiku-4-5', 'gpt-4o']
 };
 
 const credencial = c => c.startsWith('ai_pool:') ? 'AI_POOL_KEY'
@@ -76,13 +89,18 @@ export function resumir(filas) {
     const coste = costes.length && costes.every(c => c !== null) ? costes.reduce((a, b) => a + b, 0) : null;
     const motivos = {};
     for (const f of medidas.filter(f => f.status !== 'ok')) motivos[f.status] = (motivos[f.status] || 0) + 1;
+    // Qué modelo real respondió (cabecera X-AI-Pool-Model) y por qué fallaron los casos medidos.
+    const modelosReales = {};
+    for (const f of medidas) if (f.modeloReal) modelosReales[f.modeloReal] = (modelosReales[f.modeloReal] || 0) + 1;
+    const motivosError = {};
+    for (const f of medidas) if (f.status === 'ok' && !f.pass && f.motivo) motivosError[f.motivo] = (motivosError[f.motivo] || 0) + 1;
     return {
       tarea, candidato, intentos: items.length, medidos: medidas.length, omitidos: items.length - medidas.length,
       completados: completas.length, aciertos: aciertos.length,
       acierto: medidas.length ? aciertos.length / medidas.length : null,
       p50Ms: percentil(completas.map(f => f.latencyMs), .5), p95Ms: percentil(completas.map(f => f.latencyMs), .95),
       costeUsd: coste, costePorAciertoUsd: coste !== null && aciertos.length ? coste / aciertos.length : null,
-      motivosFallo: motivos
+      motivosFallo: motivos, motivosError, modelosReales
     };
   });
 }
@@ -109,6 +127,27 @@ async function chatOpenAICompat(fetchImpl, url, clave, modelo, messages, tools) 
   const d = await r.json();
   const m = d.choices?.[0]?.message || {};
   return { status: 'ok', texto: m.content || '', toolCalls: m.tool_calls || [], usage: d.usage ? { input: d.usage.prompt_tokens, output: d.usage.completion_tokens } : null };
+}
+
+// Anthropic con conversación y tools en formato OpenAI (para el banco).
+async function anthropicConTools(fetchImpl, mensajes, tools, maxTokens) {
+  const system = mensajes.filter(m => m.role === 'system').map(m => m.content).join('\n');
+  const messages = mensajes.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+  const toolsA = (tools || []).map(t => ({ name: t.function.name, description: t.function.description || '', input_schema: t.function.parameters }));
+  const r = await fetchImpl('https://api.anthropic.com/v1/messages', {
+    method: 'POST', signal: AbortSignal.timeout(60000),
+    headers: { 'content-type': 'application/json', 'anthropic-version': '2023-06-01', 'x-api-key': process.env.ANTHROPIC_API_KEY },
+    body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: maxTokens, system, messages, ...(toolsA.length ? { tools: toolsA } : {}) })
+  });
+  if (!r.ok) return { status: 'http_' + r.status };
+  const d = await r.json();
+  const bloques = d.content || [];
+  return {
+    status: 'ok',
+    texto: bloques.filter(b => b.type === 'text').map(b => b.text).join(''),
+    toolCalls: bloques.filter(b => b.type === 'tool_use').map(b => ({ name: b.name, arguments: b.input || {} })),
+    usage: d.usage ? { input: d.usage.input_tokens, output: d.usage.output_tokens } : null
+  };
 }
 
 function etiquetaHaikuProduccion(texto) {
@@ -152,6 +191,30 @@ async function ejecutarCaso(tarea, candidato, caso, { fetchImpl, envPool, poolTi
     return fin({ status: 'ok', pass: validar(r.texto), salida: r.texto.slice(0, 300), usage: r.usage });
   }
 
+  if (tarea === 'banco') {
+    const esRouter = caso.tipo === 'router';
+    const tools = caso.tools && caso.tools.length ? caso.tools : undefined;
+    const maxTokens = esRouter ? 24 : 600;
+    const evaluar = (r, etiqueta) => {
+      const ev = evaluarCasoBanco(caso, { etiqueta, texto: r.texto, toolCalls: r.toolCalls });
+      return { status: 'ok', pass: ev.pass, motivo: ev.motivo || null };
+    };
+    const salidaCorta = r => ((r.toolCalls || []).map(t => t.function?.name || t.name).join(',') || r.texto || '').slice(0, 300);
+    if (esPool) {
+      const timeout = poolTimeout ?? (esRouter ? AI_POOL_TIMEOUTS.router : caso.tipo === 'experto_simple' ? AI_POOL_TIMEOUTS.simple : AI_POOL_TIMEOUTS.fallback);
+      const r = await poolChat(envPool, { messages: caso.mensajes, tools, json: esRouter, ...(esRouter ? { temperature: 0 } : {}), maxTokens, timeoutMs: timeout, modelo: modeloPool, uso: 'benchmark_banco' }, opts);
+      if (!r.ok) return fin({ status: r.motivo === 'timeout' ? 'timeout' : 'respaldo', pass: false, motivo: r.motivo, modeloReal: r.modeloReal || null });
+      const etiqueta = esRouter ? normalizarEtiquetaRouter(r.texto, ETIQUETAS_CLASIFICADOR_INTENCION) : undefined;
+      return fin({ ...evaluar(r, etiqueta), modeloReal: r.modeloReal || null, salida: salidaCorta(r), usage: { input: r.usage.input_tokens, output: r.usage.output_tokens } });
+    }
+    const r = candidato === 'claude-haiku-4-5'
+      ? await anthropicConTools(fetchImpl, caso.mensajes, tools, maxTokens)
+      : await chatOpenAICompat(fetchImpl, 'https://api.openai.com/v1/chat/completions', process.env.OPENAI_API_KEY, candidato, caso.mensajes, tools);
+    if (r.status !== 'ok') return fin(r);
+    const etiqueta = esRouter ? (normalizarEtiquetaRouter(r.texto, ETIQUETAS_CLASIFICADOR_INTENCION) || etiquetaHaikuProduccion(r.texto)) : undefined;
+    return fin({ ...evaluar(r, etiqueta), salida: salidaCorta(r), usage: r.usage });
+  }
+
   if (tarea === 'buscar_web') {
     if (esPool) {
       const r = await poolBuscar(envPool, caso.query, { maxResultados: 5, timeoutMs: poolTimeout ?? AI_POOL_TIMEOUTS.search, uso: 'benchmark_search' }, opts);
@@ -188,8 +251,8 @@ async function ejecutarCaso(tarea, candidato, caso, { fetchImpl, envPool, poolTi
   };
   if (esPool) {
     const r = await poolChat(envPool, { messages, tools: toolsRespaldo, maxTokens: 512, timeoutMs: poolTimeout ?? AI_POOL_TIMEOUTS.fallback, modelo: modeloPool, uso: 'benchmark_respaldo' }, opts);
-    if (!r.ok) return fin({ status: r.motivo === 'timeout' ? 'timeout' : 'respaldo', pass: false });
-    return fin({ status: 'ok', pass: validar(r.texto, r.toolCalls), salida: (r.toolCalls.map(t => t.function.name).join(',') || r.texto).slice(0, 300), usage: { input: r.usage.input_tokens, output: r.usage.output_tokens } });
+    if (!r.ok) return fin({ status: r.motivo === 'timeout' ? 'timeout' : 'respaldo', pass: false, motivo: r.motivo, modeloReal: r.modeloReal || null });
+    return fin({ status: 'ok', pass: validar(r.texto, r.toolCalls), modeloReal: r.modeloReal || null, salida: (r.toolCalls.map(t => t.function.name).join(',') || r.texto).slice(0, 300), usage: { input: r.usage.input_tokens, output: r.usage.output_tokens } });
   }
   const [url, clave] = candidato === 'grok-4'
     ? ['https://api.x.ai/v1/chat/completions', process.env.XAI_API_KEY]
@@ -199,7 +262,7 @@ async function ejecutarCaso(tarea, candidato, caso, { fetchImpl, envPool, poolTi
   return fin({ status: 'ok', pass: validar(r.texto, r.toolCalls), salida: ((r.toolCalls || []).map(t => t.function?.name).join(',') || r.texto || '').slice(0, 300), usage: r.usage });
 }
 
-const casosPorTarea = { router: casosRouter, simple: casosSimple, buscar_web: casosBusqueda, respaldo: casosRespaldo };
+const casosPorTarea = { router: casosRouter, simple: casosSimple, buscar_web: casosBusqueda, respaldo: casosRespaldo, banco: cargarBancoAlejandra() };
 
 export async function run({ tareas = Object.keys(candidatos), repeats = 1, budget = 1, outputDir = '.ai-benchmark-results/pool', fetchImpl = fetch, env = process.env } = {}) {
   if (!Number.isInteger(repeats) || repeats < 1 || repeats > 3 || !Number.isFinite(budget) || budget < 0 || budget > 5) throw new Error('Invalid limits');
@@ -222,17 +285,18 @@ export async function run({ tareas = Object.keys(candidatos), repeats = 1, budge
       // Una llamada de pago fallida puede haberse facturado igual: se reserva su cota.
       const costUsd = r.status === 'ok' ? costeEstimado(candidato, r.usage) : (candidato.startsWith('ai_pool:') ? 0 : null);
       gastado += costUsd ?? reserva(candidato);
-      filas.push({ ...base, status: r.status, pass: !!r.pass, latencyMs: r.latencyMs ?? null, usage: r.usage ?? null, costUsd, salida: r.salida ?? null });
+      filas.push({ ...base, ...(caso.tipo ? { tipo: caso.tipo } : {}), status: r.status, pass: !!r.pass, motivo: r.motivo ?? null, modeloReal: r.modeloReal ?? null, latencyMs: r.latencyMs ?? null, usage: r.usage ?? null, costUsd, salida: r.salida ?? null });
       console.log(`${tarea} ${candidato} ${caso.id}: ${r.status}, acierto=${!!r.pass}`);
     }
   }
   const resumen = resumir(filas);
   const datos = {
-    fecha: new Date().toISOString(), fixture: 'pool-adr0028-v1', repeats, presupuestoUsd: budget,
+    fecha: new Date().toISOString(), fixture: 'pool-adr0028-v2', repeats, presupuestoUsd: budget,
     poolConfigurado: poolConfigurado(envPool),
     timeoutsPool: poolTimeout ? { todos: poolTimeout } : AI_POOL_TIMEOUTS,
     limitaciones: [
       'Casos sintéticos: no son prompts completos de producción ni datos de empresas',
+      'Banco casos-alejandra.json: prompts de sistema condensados y datos ficticios de la empresa demo; tools con los esquemas reales del agente',
       'Latencia HTTP total sin streaming; el pool con carga en frío puede tardar 20–120 s la primera vez',
       'Coste estimado por tarifa; el pool cuenta 0 por token (no incluye electricidad)',
       'Búsqueda web real: los resultados cambian con el tiempo'
@@ -242,8 +306,8 @@ export async function run({ tareas = Object.keys(candidatos), repeats = 1, budge
   await writeFile(`${outputDir}/results.json`, JSON.stringify(datos, null, 2) + '\n');
   const f = (v, d = 3) => v === null || v === undefined ? 'N/D' : Number(v).toFixed(d);
   await writeFile(`${outputDir}/report.md`, '# Pool propio vs proveedores actuales (ADR-0028)\n\n' +
-    '| Tarea | Candidato | Medidos/intentos | Aciertos | % acierto | p50 s | p95 s | Coste USD | USD/acierto | Fallos |\n|---|---|---:|---:|---:|---:|---:|---:|---:|---|\n' +
-    resumen.map(r => `| ${r.tarea} | ${r.candidato} | ${r.medidos}/${r.intentos} | ${r.aciertos} | ${f(r.acierto === null ? null : r.acierto * 100, 0)} | ${f(r.p50Ms === null ? null : r.p50Ms / 1000, 2)} | ${f(r.p95Ms === null ? null : r.p95Ms / 1000, 2)} | ${f(r.costeUsd, 5)} | ${f(r.costePorAciertoUsd, 5)} | ${Object.entries(r.motivosFallo).map(([k, v]) => `${k}×${v}`).join(', ') || '—'} |`).join('\n') +
+    '| Tarea | Candidato | Medidos/intentos | Aciertos | % acierto | p50 s | p95 s | Coste USD | USD/acierto | Fallos | Modelo real |\n|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|\n' +
+    resumen.map(r => `| ${r.tarea} | ${r.candidato} | ${r.medidos}/${r.intentos} | ${r.aciertos} | ${f(r.acierto === null ? null : r.acierto * 100, 0)} | ${f(r.p50Ms === null ? null : r.p50Ms / 1000, 2)} | ${f(r.p95Ms === null ? null : r.p95Ms / 1000, 2)} | ${f(r.costeUsd, 5)} | ${f(r.costePorAciertoUsd, 5)} | ${Object.entries({ ...r.motivosFallo, ...r.motivosError }).map(([k, v]) => `${k}×${v}`).join(', ') || '—'} | ${Object.entries(r.modelosReales).map(([k, v]) => `${k}×${v}`).join(', ') || '—'} |`).join('\n') +
     '\n\nN/D = sin medición (no es cero). «omitido_*» no cuenta como fallo. Cómo leerlo: docs/decisions/ADR-0028-AI-POOL-PROPIO-CON-RESPALDO.md §Medición.\n');
   console.log(JSON.stringify(resumen, null, 2));
   return datos;
@@ -251,7 +315,9 @@ export async function run({ tareas = Object.keys(candidatos), repeats = 1, budge
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
+    const tareas = process.env.BENCHMARK_TAREAS ? process.env.BENCHMARK_TAREAS.split(',').map(s => s.trim()).filter(t => candidatos[t]) : undefined;
     await run({
+      ...(tareas && tareas.length ? { tareas } : {}),
       repeats: Number(process.env.BENCHMARK_REPEATS || 1),
       budget: Number(process.env.BENCHMARK_BUDGET_USD || 1),
       outputDir: process.env.BENCHMARK_OUTPUT || '.ai-benchmark-results/pool'

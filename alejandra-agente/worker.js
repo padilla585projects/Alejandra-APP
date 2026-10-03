@@ -84,7 +84,7 @@ import { obtenerFuente } from './nexo-fuentes.js';
 import { verificarCotasDeclaradas, resultadoPlanoVerificado, errorPlanoNoGuardado } from './planos-cotas.js';
 // ADR-0028: pool de IA propio con respaldo obligatorio. Mismo módulo que importa worker.js
 // (los dos cerebros). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
-import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda } from './ai-pool.js';
+import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda, modeloPool } from './ai-pool.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -5264,8 +5264,10 @@ export default {
         // ADR-0028 §Medición: agregados del pool de IA propio en ESTE isolate (sin D1:
         // contadores en memoria). Para el histórico completo, las líneas AIPOOL_METRICA
         // de Workers Logs / `wrangler tail`. Sin pool configurado devuelve usos vacíos.
+        // `modelo` = lo que se pide (alias alejandra:1.0 u override AI_POOL_MODEL);
+        // `usos.<uso>.modelosReales` = qué modelo real respondió (cabecera X-AI-Pool-Model).
         if (path === '/api/admin/metrics/ai-pool' && req.method === 'GET') {
-          return json({ configurado: poolConfigurado(env), ...metricasPool() });
+          return json({ configurado: poolConfigurado(env), modelo: modeloPool(env), ...metricasPool() });
         }
 
         if (path === '/api/admin/metrics/tools' && req.method === 'GET') {
@@ -15236,8 +15238,8 @@ async function buscarWebOpenAI(env, query) {
   // ADR-0028: primero el pool propio (/v1/tools/search, coste 0). Si los resultados no
   // traen texto, se lee la primera página con /v1/tools/read. Cualquier fallo → gpt-4o-mini.
   // 03/10/2026: el buscador del pool (DuckDuckGo) necesita palabras clave, no la frase del
-  // usuario: se reescribe a una consulta corta + filtro de fecha `since` (pool prisma:1.0 con
-  // respaldo determinista). Cubre a la vez la tool buscar_web y el prefetch del router
+  // usuario: se reescribe a una consulta corta + filtro de fecha `since` (modelo del pool en
+  // modo JSON, con respaldo determinista). Cubre a la vez la tool buscar_web y el prefetch del router
   // (query_web), que entran los dos por aquí. gpt-4o-mini recibe la petición ORIGINAL: es un
   // modelo con búsqueda que entiende la pregunta entera y usa sus matices («dime solo el
   // número»), y así el respaldo se comporta exactamente como antes del pool.

@@ -78,6 +78,10 @@ jobs:
       # ADR-0028: arnés de comparación del pool propio (fetch simulado, sin llamadas reales).
       - name: Check own AI pool benchmark harness
         run: node --test scripts/ai-benchmark/pool.test.mjs
+      # ADR-0028 §Medición: banco de casos de Alejandra (esquema, tools reales del agente,
+      # anonimización y evaluador). Sin llamadas a ningún modelo.
+      - name: Check Alejandra case bank for the AI pool
+        run: node --test scripts/ai-benchmark/banco-alejandra.test.mjs
       - name: Check technical tools and Office plan failures
         run: node --test scripts/technical-tools.test.cjs
       - name: Check shift calendars and weekly rotation
