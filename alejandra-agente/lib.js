@@ -1417,7 +1417,19 @@ function alcancePlanoGenerado(datosPlano = {}) {
 const SYSTEM_CLASIFICADOR_INTENCION = 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app. Si es un HECHO que implica registrar o actualizar datos de la app aunque esté en forma de aviso/declaración, no de orden (alguien ha faltado/llegado/fichado, un pedido ha llegado, se ha usado material, un equipo se ha averiado, etc. — ej: "Dani faltó hoy", "han venido todos", "ya llegó el pedido") → app, NUNCA simple. "simple" es SOLO para saludos, charla casual o preguntas que no requieren tocar la base de datos. Si habla de electricidad, esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos eléctricos, instalaciones, ingeniería electrónica o de control → ingenieria. Si pide leer, revisar o resumir su correo/email/Gmail/bandeja de entrada → app, NUNCA web (el correo se gestiona con una tool de la app, no es una búsqueda en internet).';
 const ETIQUETAS_CLASIFICADOR_INTENCION = ['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo'];
 
+// ROUTER-ENCLITICO-01 (03/10/2026): \b de JavaScript solo conoce [A-Za-z0-9_], así que en
+// las reglas de enrutado una palabra que empieza o acaba en vocal con tilde nunca casaba
+// («última versión», «almacén», «albarán», «replanteó»...). reEspanol reescribe cada \b como
+// un límite de palabra que sí cuenta las letras españolas. Lo usan REGEX_ROUTES (worker.js)
+// y su test, para que ambos evalúen exactamente lo mismo.
+const LETRA_ES = '[A-Za-z0-9_áéíóúüñÁÉÍÓÚÜÑ]';
+const LIMITE_ES = `(?:(?<!${LETRA_ES})(?=${LETRA_ES})|(?<=${LETRA_ES})(?!${LETRA_ES}))`;
+function reEspanol(re) {
+  return new RegExp(re.source.replace(/\\b/g, LIMITE_ES), re.flags);
+}
+
 export {
+  reEspanol,
   SYSTEM_CLASIFICADOR_INTENCION,
   ETIQUETAS_CLASIFICADOR_INTENCION,
   esInicioCasoNuevo,

@@ -26,6 +26,7 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 // que cambiar precios, allowlists, o las validaciones IDOR/SSRF, se cambia en
 // lib.js y worker.js lo recibe vía este import.
 import {
+  reEspanol,
   SYSTEM_CLASIFICADOR_INTENCION,
   ETIQUETAS_CLASIFICADOR_INTENCION,
   alcancePlanoGenerado,
@@ -13708,7 +13709,7 @@ const REGEX_ROUTES = [
   // la tool. Va DESPUÉS de las reglas de ingeniería a propósito: "replanteo de bandeja" o
   // "qué sección sale del replanteo" siguen yendo a 'ingenieria', que también tiene las tres
   // tools y además las de cálculo; lo que aquí se rescata es el replanteo "a secas".
-  { re: /\b(replanteo|replanteos|replantear|replanteé|replanteó|replanteado|replanteada)\b/i, expert: 'app', web: false },
+  { re: /\b(replanteo|replanteos|replantear|replanteé|replanteó|replanteado|replanteada)(?![\wáéíóúüñ])/i, expert: 'app', web: false },
   // Saludos/confirmaciones cortas PRIMERO (match exacto ^...$): deben ganar siempre a la regla
   // de enclíticos de abajo. Bug detectado 07/07/2026: "hola" contiene "la" al final y
   // \w+(la) lo capturaba como enclítico → nunca llegaba a "simple". Iban aquí después,
@@ -13716,8 +13717,14 @@ const REGEX_ROUTES = [
   // colisionar con frases imperativas reales (esas nunca son SOLO un saludo/confirmación).
   { re: /^(hola|hey|buenas|buenos días|buenas tardes|buenas noches|qué tal|cómo estás|ok|vale|sí|no|gracias|perfecto|genial|entendido)[\s!?.]*$/i, expert: 'simple', web: false },
   // Pronombres enclíticos pegados a verbo → imperativo de acción → siempre "app"
-  // Cubre: ponlos, mételos, déjalo, pásalas, aplícamelos, corrígeles, etc. sin enumerar verbos
-  { re: /\w+(lo|la|los|las|me|te|nos|les|selo|sela|selos|selas)\b/i, expert: 'app', web: false },
+  // Cubre: ponlos, mételos, déjalo, pásalas, aplícamelos, corrígeles, dime, hazlo...
+  // ROUTER-ENCLITICO-01 (03/10/2026): la versión anterior (/\w+(lo|la|...|me|...)\b/) capturaba
+  // casi cualquier frase ("Hola Alejandra...", "...y dime solo...", "escuela", "esta tabla"):
+  // todo iba a 'app' (Sonnet) sin pasar por el clasificador, y las búsquedas web nunca
+  // activaban 'web' (Alejandra se inventaba datos). Ahora solo cuenta si es la PRIMERA palabra
+  // y es un imperativo reconocible: palabra con tilde (pásalo, déjamelos) o raíz monosílaba
+  // (dime, dame, hazlo, ponlos, tenlo, sal-te...). Lo demás lo decide el clasificador.
+  { re: /^[\s¡¿"«]*(?:[a-záéíóúüñ]*[áéíóú][a-záéíóúüñ]*|pon|haz|di|da|ten|ven|sal|ve)(?:selos|selas|selo|sela|los|las|lo|la|les|me|te|nos)(?![a-záéíóúüñ])/i, expert: 'app', web: false },
   { re: /\b(no funciona|no puedo|error|falla|se cuelga|pantalla en blanco|no carga|no responde|se ha caído|no me deja|problema|avería|roto|bloqueado|urgente)\b/i, expert: 'app', web: false },
   { re: /\b(bobina|equipo|carretilla|PEMP|fichaje|fichar|entrada|salida|operario|encargado|personal|incidencia|pedido|albarán|obra|almacén|stock)\b/i, expert: 'app', web: false },
   { re: /\b(cuánt[oa]s|quién fichó|lista de|muéstrame|dame los datos|informe|resumen del|estado de)\b/i, expert: 'app', web: false },
@@ -13899,12 +13906,20 @@ async function obtenerNotasRelacionadas(env, ids) {
   return mapa;
 }
 
+// ROUTER-ENCLITICO-01: límites de palabra que cuentan tildes (ver reEspanol en lib.js).
+const _reEsCache = new WeakMap();
+function reEspanolCache(re) {
+  let r = _reEsCache.get(re);
+  if (!r) { r = reEspanol(re); _reEsCache.set(re, r); }
+  return r;
+}
+
 async function clasificarConHaiku(env, mensaje) {
   const msg = mensaje.trim();
 
   // ── CAPA 1: Regex — 0 tokens, instantáneo ──────────────────────────────
   for (const route of REGEX_ROUTES) {
-    if (route.re.test(msg)) {
+    if (reEspanolCache(route.re).test(msg)) {
       return { experto: route.expert, buscar_web: route.web, query_web: null, source: 'regex' };
     }
   }
