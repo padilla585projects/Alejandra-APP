@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { run, resumir, costeEstimado, candidatos } from './pool.mjs';
+import { run, resumir, costeEstimado, candidatos, diagnosticoRespuesta, DIAGNOSTICO_MAX_TEXTO } from './pool.mjs';
 import { casosRouter } from './pool-cases.mjs';
 import { cargarBancoAlejandra } from './banco-alejandra.mjs';
 
@@ -111,6 +111,55 @@ test('banco: si el alias resuelve a prisma en un caso con tools, cuenta como res
     const filas = datos.filas.filter(f => f.candidato === 'ai_pool:alejandra:1.0' && f.tipo === 'experto_tools');
     assert.equal(filas.length, banco.filter(c => c.tipo === 'experto_tools').length);
     assert.ok(filas.every(f => f.status === 'respaldo' && f.motivo === 'modelo_real_sin_tools' && f.modeloReal === 'prisma:1.0'));
+  } finally { restaurar(); }
+});
+
+// POOL-TOOLS-CONFUSAS-01 (04/10/2026): diagnóstico por caso para los «vacíos».
+test('diagnosticoRespuesta: finish_reason, si hubo texto (recortado) y tool_calls, sin la respuesta entera', () => {
+  const largo = 'x'.repeat(DIAGNOSTICO_MAX_TEXTO + 50);
+  const d = diagnosticoRespuesta({ finishReason: 'stop', texto: largo, toolCalls: [] });
+  assert.equal(d.finishReason, 'stop');
+  assert.equal(d.conTexto, true);
+  assert.equal(d.caracteresTexto, largo.length);
+  assert.equal(d.textoInicio.length, DIAGNOSTICO_MAX_TEXTO + 1); // recortado + «…»
+  assert.equal(d.toolCalls, 0);
+  const t = diagnosticoRespuesta({ finishReason: 'tool_calls', texto: '  ', toolCalls: [
+    { type: 'function', function: { name: 'programar_recordatorio', arguments: '{"fecha_hora":"2026-10-06 10:00"}' } },
+    { name: 'calcular_cable', arguments: { potencia_w: 40000 } }
+  ] });
+  assert.deepEqual(t, { finishReason: 'tool_calls', conTexto: false, caracteresTexto: 2, textoInicio: null, toolCalls: 2, herramientas: ['programar_recordatorio', 'calcular_cable'], argumentosJson: true });
+  assert.equal(diagnosticoRespuesta({ toolCalls: [{ function: { name: 'consultar_bd', arguments: '{roto' } }] }).argumentosJson, false);
+  assert.equal(diagnosticoRespuesta({ detalle: 'tool_no_ofrecida' }).detalle, 'tool_no_ofrecida');
+});
+
+test('banco: cada fila del pool guarda el diagnóstico (vacía → respaldo respuesta_vacia con finish_reason; tool_call válida → herramientas)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pool-bench-'));
+  const banco = cargarBancoAlejandra();
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body);
+    const nombre = body.tools && body.tools[0].function.name;
+    const message = nombre
+      ? { role: 'assistant', content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: nombre, arguments: '{}' } }] }
+      : { role: 'assistant', content: '   ' };
+    const cuerpo = { model: 'alejandra:1.0', choices: [{ message, finish_reason: nombre ? 'tool_calls' : 'length' }], usage: { prompt_tokens: 1, completion_tokens: 1 } };
+    return { ok: true, status: 200, headers: new Headers({ 'X-AI-Pool-Model': 'qwen3.6:35b-a3b' }), text: async () => JSON.stringify(cuerpo), json: async () => cuerpo };
+  };
+  const restaurar = silencio();
+  try {
+    const datos = await run({ tareas: ['banco'], outputDir: dir, env: { AI_POOL_KEY: 'k' }, fetchImpl });
+    const filas = datos.filas.filter(f => f.candidato === 'ai_pool:alejandra:1.0');
+    assert.equal(filas.length, banco.length);
+    for (const f of filas) assert.ok(f.diagnostico, f.caso);
+    const vacia = filas.find(f => f.tipo === 'router');
+    assert.equal(vacia.motivo, 'respuesta_vacia');
+    assert.deepEqual({ fr: vacia.diagnostico.finishReason, t: vacia.diagnostico.conTexto }, { fr: 'length', t: false });
+    const conTool = filas.find(f => f.tipo === 'experto_tools');
+    assert.equal(conTool.status, 'ok');
+    assert.equal(conTool.diagnostico.finishReason, 'tool_calls');
+    assert.equal(conTool.diagnostico.toolCalls, 1);
+    assert.equal(conTool.diagnostico.conTexto, false);
+    const guardado = JSON.parse(await readFile(join(dir, 'results.json'), 'utf8'));
+    assert.ok(guardado.filas.filter(f => f.candidato === 'ai_pool:alejandra:1.0').every(f => f.diagnostico));
   } finally { restaurar(); }
 });
 

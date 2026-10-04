@@ -128,7 +128,7 @@ async function chatOpenAICompat(fetchImpl, url, clave, modelo, messages, tools) 
   if (!r.ok) return { status: 'http_' + r.status };
   const d = await r.json();
   const m = d.choices?.[0]?.message || {};
-  return { status: 'ok', texto: m.content || '', toolCalls: m.tool_calls || [], usage: d.usage ? { input: d.usage.prompt_tokens, output: d.usage.completion_tokens } : null };
+  return { status: 'ok', texto: m.content || '', toolCalls: m.tool_calls || [], finishReason: d.choices?.[0]?.finish_reason || null, usage: d.usage ? { input: d.usage.prompt_tokens, output: d.usage.completion_tokens } : null };
 }
 
 // Conversación del banco (formato OpenAI, con turnos de tools) → formato Anthropic:
@@ -178,7 +178,34 @@ async function anthropicConTools(fetchImpl, mensajes, tools, maxTokens) {
     status: 'ok',
     texto: bloques.filter(b => b.type === 'text').map(b => b.text).join(''),
     toolCalls: bloques.filter(b => b.type === 'tool_use').map(b => ({ name: b.name, arguments: b.input || {} })),
+    finishReason: d.stop_reason || null,
     usage: d.usage ? { input: d.usage.input_tokens, output: d.usage.output_tokens } : null
+  };
+}
+
+// POOL-TOOLS-CONFUSAS-01 (04/10/2026): para diagnosticar los «vacíos» del banco sin guardar
+// respuestas enteras. finish_reason, si hubo texto (y su principio, recortado), cuántas
+// tool_calls y de qué tools, y si sus argumentos eran JSON. `detalle` = el de ai-pool.js
+// cuando el pool devolvió tool_calls inválidas.
+export const DIAGNOSTICO_MAX_TEXTO = 160;
+export function diagnosticoRespuesta({ finishReason = null, texto = '', toolCalls = [], detalle = null } = {}) {
+  const t = typeof texto === 'string' ? texto : '';
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  const argsOk = tc => {
+    const a = tc && (tc.arguments ?? (tc.function && tc.function.arguments));
+    if (a === undefined || a === null || (typeof a === 'string' && !a.trim())) return true;
+    if (typeof a === 'object') return !Array.isArray(a);
+    try { const v = JSON.parse(a); return !!v && typeof v === 'object' && !Array.isArray(v); } catch (_) { return false; }
+  };
+  return {
+    finishReason: finishReason || null,
+    conTexto: !!t.trim(),
+    caracteresTexto: t.length,
+    textoInicio: t.trim() ? t.trim().slice(0, DIAGNOSTICO_MAX_TEXTO) + (t.trim().length > DIAGNOSTICO_MAX_TEXTO ? '…' : '') : null,
+    toolCalls: calls.length,
+    herramientas: calls.map(tc => (tc && (tc.name || (tc.function && tc.function.name))) || null),
+    argumentosJson: calls.every(argsOk),
+    ...(detalle ? { detalle } : {})
   };
 }
 
@@ -235,17 +262,18 @@ async function ejecutarCaso(tarea, candidato, caso, { fetchImpl, envPool, poolTi
     if (esPool) {
       const timeout = poolTimeout ?? (esRouter ? AI_POOL_TIMEOUTS.router : caso.tipo === 'experto_simple' ? AI_POOL_TIMEOUTS.simple : AI_POOL_TIMEOUTS.fallback);
       const r = await poolChat(envPool, { messages: caso.mensajes, tools, json: esRouter, ...(esRouter ? { temperature: 0 } : {}), maxTokens, timeoutMs: timeout, modelo: modeloPool, uso: 'benchmark_banco' }, opts);
-      if (!r.ok) return fin({ status: r.motivo === 'timeout' ? 'timeout' : 'respaldo', pass: false, motivo: r.motivo, modeloReal: r.modeloReal || null });
+      if (!r.ok) return fin({ status: r.motivo === 'timeout' ? 'timeout' : 'respaldo', pass: false, motivo: r.motivo, modeloReal: r.modeloReal || null,
+        diagnostico: diagnosticoRespuesta({ finishReason: r.finishReason, detalle: r.detalle }) });
       // Misma lectura que bench_alejandra.py del pool: {"experto"} o la primera palabra.
       const etiqueta = esRouter ? etiquetaRouterBanco(r.texto) : undefined;
-      return fin({ ...evaluar(r, etiqueta), modeloReal: r.modeloReal || null, salida: salidaCorta(r), usage: { input: r.usage.input_tokens, output: r.usage.output_tokens } });
+      return fin({ ...evaluar(r, etiqueta), modeloReal: r.modeloReal || null, salida: salidaCorta(r), diagnostico: diagnosticoRespuesta(r), usage: { input: r.usage.input_tokens, output: r.usage.output_tokens } });
     }
     const r = candidato === 'claude-haiku-4-5'
       ? await anthropicConTools(fetchImpl, caso.mensajes, tools, maxTokens)
       : await chatOpenAICompat(fetchImpl, 'https://api.openai.com/v1/chat/completions', process.env.OPENAI_API_KEY, candidato, caso.mensajes, tools);
     if (r.status !== 'ok') return fin(r);
     const etiqueta = esRouter ? (normalizarEtiquetaRouter(r.texto, ETIQUETAS_CLASIFICADOR_INTENCION) || etiquetaHaikuProduccion(r.texto)) : undefined;
-    return fin({ ...evaluar(r, etiqueta), salida: salidaCorta(r), usage: r.usage });
+    return fin({ ...evaluar(r, etiqueta), salida: salidaCorta(r), diagnostico: diagnosticoRespuesta(r), usage: r.usage });
   }
 
   if (tarea === 'buscar_web') {
@@ -322,7 +350,7 @@ export async function run({ tareas = Object.keys(candidatos), repeats = 1, budge
       // Una llamada de pago fallida puede haberse facturado igual: se reserva su cota.
       const costUsd = r.status === 'ok' ? costeEstimado(candidato, r.usage) : (candidato.startsWith('ai_pool:') ? 0 : null);
       gastado += costUsd ?? reserva(candidato);
-      filas.push({ ...base, ...(caso.tipo ? { tipo: caso.tipo } : {}), status: r.status, pass: !!r.pass, motivo: r.motivo ?? null, modeloReal: r.modeloReal ?? null, latencyMs: r.latencyMs ?? null, usage: r.usage ?? null, costUsd, salida: r.salida ?? null });
+      filas.push({ ...base, ...(caso.tipo ? { tipo: caso.tipo } : {}), status: r.status, pass: !!r.pass, motivo: r.motivo ?? null, modeloReal: r.modeloReal ?? null, latencyMs: r.latencyMs ?? null, usage: r.usage ?? null, costUsd, salida: r.salida ?? null, ...(r.diagnostico ? { diagnostico: r.diagnostico } : {}) });
       console.log(`${tarea} ${candidato} ${caso.id}: ${r.status}, acierto=${!!r.pass}`);
     }
   }
