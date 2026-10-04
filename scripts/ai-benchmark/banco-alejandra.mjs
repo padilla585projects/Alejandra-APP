@@ -18,16 +18,36 @@
 //   - Texto: { respuesta_contiene: ['fuga|corriente residual|30 ?ma'], respuesta_no_contiene: ['rueda'] }.
 //     Son EXPRESIONES REGULARES: todas las de contiene deben aparecer y ninguna de no_contiene.
 //     Además (más exigente que el evaluador del pool) la respuesta tiene que ser texto, sin
-//     tool_calls y sin fugas de sintaxis de tools: así se expresa «NO debe usar herramientas»
-//     (el formato del pool aún no tiene {"sin_herramienta": true}; propuesto en ADR-0028).
-//     Vale para experto_simple y para experto_tools (p. ej. responder con el dato que ya
-//     devolvió una herramienta, o preguntar ante una petición ambigua).
+//     tool_calls y sin fugas de sintaxis de tools. Vale para experto_simple y para experto_tools
+//     (p. ej. responder con el dato que ya devolvió una herramienta, o preguntar ante una
+//     petición ambigua).
+//   - Sin herramientas: { sin_herramienta: true } (04/10/2026; el evaluador del pool ya lo
+//     acepta), solo o con respuesta_contiene / respuesta_no_contiene: suspende si hay
+//     tool_calls. Aquí, además, exige texto no vacío y sin fugas. Lo llevan los sin-tool-*.
 // Banco v3 (03/10/2026): conversaciones de VARIOS TURNOS en formato OpenAI: mensajes
 // { role: 'assistant', content: '', tool_calls: [{ id, type: 'function', function: { name,
 // arguments } }] } seguidos de { role: 'tool', tool_call_id, content } con el resultado (o el
 // error real) de la herramienta. El último mensaje puede ser del usuario o de una tool.
 // Todo con datos FICTICIOS (empresa demo, nombres inventados): nunca datos personales reales.
-import { readFileSync } from 'node:fs';
+//
+// Banco AGRUPADO por experto (POOL-PREFIJO-01, ADR-0028 §Velocidad): agruparBancoPorExperto()
+// mide el caso real de producción, en el que todas las peticiones de un experto llevan el
+// MISMO system y la MISMA lista completa de tools (así llama.cpp reutiliza el prefijo y no
+// relee 1.000–4.500 tokens en cada caso). Los datos de sesión del system (usuario, obra,
+// empresa, fecha) pasan al principio del último mensaje del usuario, bajo la misma cabecera
+// que producción. Cómo pasárselo al pool:
+//   node scripts/ai-benchmark/banco-alejandra.mjs --agrupar [--tools agente] [--salida <ruta>]
+//   BENCH_CASES=<ruta> python tools/bench_alejandra.py alejandra:1.0      (repo ai-pool)
+// Por defecto escribe .ai-benchmark-results/casos-alejandra-agrupado.json (ignorado por git).
+// --tools union (defecto): las tools de todos los casos del grupo, por nombre. --tools agente:
+// el juego real del experto en TOOLS_POR_EXPERTO (simple → simple, experto_tools → app) más
+// las que pidan los casos y no estén. En el arnés local: BENCHMARK_BANCO=agrupado (o
+// agrupado-agente) con node scripts/ai-benchmark/pool.mjs.
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { CABECERA_CONTEXTO_POOL } from '../../alejandra-agente/ai-pool.js';
+import { toolsPorExperto, toolsPorNombre, aOpenAI } from './herramientas-agente.mjs';
 
 export const RUTA_BANCO = new URL('./casos-alejandra.json', import.meta.url);
 export const TIPOS_BANCO = ['router', 'experto_simple', 'experto_tools'];
@@ -102,12 +122,12 @@ export function evaluarCasoBanco(caso, salida = {}) {
   if ('etiqueta' in e) {
     return plegar(salida.etiqueta) === plegar(e.etiqueta) ? { pass: true } : { pass: false, motivo: 'etiqueta_distinta' };
   }
-  if ('respuesta_contiene' in e) {
+  if ('respuesta_contiene' in e || e.sin_herramienta === true) {
     if (toolCalls.length) return { pass: false, motivo: 'tool_innecesaria' };
     const texto = salida.texto || '';
     if (!texto.trim()) return { pass: false, motivo: 'sin_texto' };
     if (!sinFuga(texto)) return { pass: false, motivo: 'fuga_sintaxis_tool' };
-    if (!e.respuesta_contiene.every(p => patronCoincide(p, texto))) return { pass: false, motivo: 'falta_contenido' };
+    if (!(e.respuesta_contiene || []).every(p => patronCoincide(p, texto))) return { pass: false, motivo: 'falta_contenido' };
     if ((e.respuesta_no_contiene || []).some(p => patronCoincide(p, texto))) return { pass: false, motivo: 'contenido_prohibido' };
     return { pass: true };
   }
@@ -219,13 +239,17 @@ export function validarBanco(casos, { etiquetas = null } = {}) {
       if (claves !== 'etiqueta') err('router debe esperar {etiqueta}');
       else if (etiquetas && !etiquetas.includes(e.etiqueta)) err('etiqueta desconocida ' + e.etiqueta);
       if (c.tools.length) err('router sin tools');
-    } else if (c.tipo === 'experto_simple' || (c.tipo === 'experto_tools' && 'respuesta_contiene' in e)) {
-      if (!['respuesta_contiene', 'respuesta_contiene,respuesta_no_contiene'].includes(claves) || !listaDeTextos(e.respuesta_contiene) || !e.respuesta_contiene.length) {
-        err(`${c.tipo} debe esperar {respuesta_contiene: [regex], respuesta_no_contiene?: [regex]}`);
+    } else if (c.tipo === 'experto_simple' || (c.tipo === 'experto_tools' && ('respuesta_contiene' in e || 'sin_herramienta' in e))) {
+      const formas = ['respuesta_contiene', 'respuesta_contiene,respuesta_no_contiene', 'respuesta_contiene,sin_herramienta',
+        'respuesta_contiene,respuesta_no_contiene,sin_herramienta', 'sin_herramienta', 'respuesta_no_contiene,sin_herramienta'];
+      const contieneOk = !('respuesta_contiene' in e) || (listaDeTextos(e.respuesta_contiene) && e.respuesta_contiene.length > 0);
+      if (!formas.includes(claves) || !contieneOk) {
+        err(`${c.tipo} debe esperar {respuesta_contiene: [regex], respuesta_no_contiene?: [regex], sin_herramienta?: true}`);
         continue;
       }
+      if ('sin_herramienta' in e && e.sin_herramienta !== true) err('sin_herramienta solo admite true');
       if ('respuesta_no_contiene' in e && (!listaDeTextos(e.respuesta_no_contiene) || !e.respuesta_no_contiene.length)) err('respuesta_no_contiene debe ser una lista de textos no vacía');
-      const malos = patronesInvalidos([...e.respuesta_contiene, ...(e.respuesta_no_contiene || [])]);
+      const malos = patronesInvalidos([...(e.respuesta_contiene || []), ...(e.respuesta_no_contiene || [])]);
       if (malos.length) err('expresión regular inválida: ' + malos.join(', '));
       if (c.tipo === 'experto_tools' && !c.tools.length) err('experto_tools sin tools: usa experto_simple');
     } else if (c.tipo === 'experto_tools') {
@@ -248,4 +272,92 @@ export function validarBanco(casos, { etiquetas = null } = {}) {
     }
   }
   return errores;
+}
+
+// ── Banco agrupado por experto (POOL-PREFIJO-01) ─────────────────────────────────────
+// Líneas del system de los casos que son datos de sesión: en producción no van en el system
+// (sería distinto en cada petición) sino al principio del mensaje del usuario del turno.
+const RE_LINEA_SESION = /^(Sesión:|Fecha y hora actual:|En consultar_bd y escribir_bd filtra)/;
+const RE_EMPRESA_ID = /\s*\(empresa_id (\d+)\)/;
+
+// Separa un system del banco en { sistema (fijo), contexto (datos de sesión) }.
+export function separarSistemaVariable(sistema) {
+  const fijas = [];
+  const variables = [];
+  let empresa = '';
+  for (const linea of String(sistema || '').split('\n')) {
+    if (RE_LINEA_SESION.test(linea)) { variables.push(linea); continue; }
+    const m = RE_EMPRESA_ID.exec(linea);
+    if (m) { empresa = `Empresa activa: empresa_id ${m[1]}.`; fijas.push(linea.replace(RE_EMPRESA_ID, '')); continue; }
+    fijas.push(linea);
+  }
+  if (empresa) variables.unshift(empresa);
+  return { sistema: fijas.join('\n'), contexto: variables.join('\n') };
+}
+
+// Contexto al principio del ÚLTIMO mensaje del usuario (como insertarContextoEnTurno del pool).
+function conContexto(mensajes, contexto) {
+  if (!contexto) return mensajes;
+  const i = mensajes.map(m => m.role).lastIndexOf('user');
+  if (i < 0) return mensajes;
+  const copia = mensajes.slice();
+  copia[i] = { ...mensajes[i], content: `${CABECERA_CONTEXTO_POOL}\n${contexto}\n\n${mensajes[i].content}` };
+  return copia;
+}
+
+const EXPERTO_DEL_GRUPO = { experto_simple: 'simple', experto_tools: 'app' };
+
+// Lista fija de tools de cada grupo: 'union' = todas las de los casos del grupo, por nombre;
+// 'agente' = TOOLS_POR_EXPERTO del agente (en su orden) + las de los casos que falten.
+function toolsDelGrupo(casos, modo, src) {
+  const porNombre = new Map();
+  for (const c of casos) for (const t of c.tools || []) if (!porNombre.has(t.function.name)) porNombre.set(t.function.name, t);
+  const union = [...porNombre.keys()].sort().map(n => porNombre.get(n));
+  if (modo !== 'agente') return union;
+  const experto = EXPERTO_DEL_GRUPO[casos[0] && casos[0].tipo];
+  const nombres = (toolsPorExperto(src)[experto] || []);
+  const actuales = toolsPorNombre(src);
+  const lista = nombres.filter(n => actuales[n]).map(n => aOpenAI(actuales[n]));
+  const vistos = new Set(lista.map(t => t.function.name));
+  return [...lista, ...union.filter(t => !vistos.has(t.function.name))];
+}
+
+// Devuelve el banco agrupado: router, experto_simple y experto_tools seguidos (para que las
+// peticiones de un mismo experto vayan juntas), con el MISMO system y la MISMA lista de tools
+// dentro de cada grupo de expertos. Los casos de router no cambian (su system ya es fijo).
+export function agruparBancoPorExperto(casos, { tools = 'union', src } = {}) {
+  const salida = [];
+  for (const tipo of TIPOS_BANCO) {
+    const grupo = casos.filter(c => c.tipo === tipo);
+    if (!grupo.length) continue;
+    if (tipo === 'router') { salida.push(...grupo); continue; }
+    const lista = toolsDelGrupo(grupo, tools, src);
+    for (const c of grupo) {
+      const sistemas = c.mensajes.filter(m => m.role === 'system').map(m => m.content).join('\n');
+      const { sistema, contexto } = separarSistemaVariable(sistemas);
+      const resto = conContexto(c.mensajes.filter(m => m.role !== 'system'), contexto);
+      salida.push({ ...c, mensajes: [{ role: 'system', content: sistema }, ...resto], tools: lista });
+    }
+  }
+  return salida;
+}
+
+// Banco según el modo del arnés: '' (tal cual), 'agrupado' o 'agrupado-agente'.
+export function bancoSegunModo(modo = '', casos = cargarBancoAlejandra()) {
+  if (modo === 'agrupado') return agruparBancoPorExperto(casos);
+  if (modo === 'agrupado-agente') return agruparBancoPorExperto(casos, { tools: 'agente' });
+  return casos;
+}
+
+// CLI: node scripts/ai-benchmark/banco-alejandra.mjs --agrupar [--tools agente] [--salida <ruta>]
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url) && process.argv.includes('--agrupar')) {
+  const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
+  const modoTools = arg('--tools') === 'agente' ? 'agente' : 'union';
+  const destino = resolve(arg('--salida') || fileURLToPath(new URL('../../.ai-benchmark-results/casos-alejandra-agrupado.json', import.meta.url)));
+  const agrupado = agruparBancoPorExperto(cargarBancoAlejandra(), { tools: modoTools });
+  const errores = validarBanco(agrupado);
+  if (errores.length) { console.error('banco agrupado inválido:\n' + errores.join('\n')); process.exit(1); }
+  mkdirSync(dirname(destino), { recursive: true });
+  writeFileSync(destino, JSON.stringify(agrupado, null, 2) + '\n', 'utf8');
+  console.log(`banco agrupado (${agrupado.length} casos, tools ${modoTools}) → ${destino}`);
 }

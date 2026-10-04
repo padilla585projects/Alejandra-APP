@@ -114,6 +114,39 @@ test('banco: si el alias resuelve a prisma en un caso con tools, cuenta como res
   } finally { restaurar(); }
 });
 
+test('BENCHMARK_BANCO=agrupado: cada grupo de expertos manda el MISMO system y las MISMAS tools (prefijo estable)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pool-bench-'));
+  const banco = cargarBancoAlejandra();
+  // En el modo agrupado el contexto de sesión va delante del último mensaje del usuario:
+  // el caso se identifica por cómo TERMINA el último mensaje.
+  const originales = banco.map(c => [c.mensajes.at(-1).content, c]);
+  const enviados = [];
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.model === 'alejandra:1.0') enviados.push(body);
+    const ultimo = body.messages.at(-1).content;
+    const caso = originales.filter(([fin]) => ultimo.endsWith(fin)).sort((a, b) => b[0].length - a[0].length)[0][1];
+    return respuestaPerfecta(caso, 'qwen3.6:35b-a3b');
+  };
+  const restaurar = silencio();
+  try {
+    const datos = await run({ tareas: ['banco'], outputDir: dir, env: { AI_POOL_KEY: 'k', BENCHMARK_BANCO: 'agrupado' }, fetchImpl });
+    assert.equal(datos.banco, 'agrupado');
+    const alias = datos.resumen.find(x => x.candidato === 'ai_pool:alejandra:1.0');
+    assert.equal(alias.medidos, banco.length);
+    assert.equal(alias.acierto, 1);
+    // Orden del banco agrupado: router (sin tools), experto_simple y experto_tools.
+    const conTools = enviados.filter(b => b.tools);
+    const nSimple = banco.filter(c => c.tipo === 'experto_simple').length;
+    assert.equal(conTools.length, nSimple + banco.filter(c => c.tipo === 'experto_tools').length);
+    for (const tipo of ['experto_simple', 'experto_tools']) {
+      const deTipo = tipo === 'experto_simple' ? conTools.slice(0, nSimple) : conTools.slice(nSimple);
+      assert.equal(new Set(deTipo.map(b => b.messages[0].content)).size, 1, tipo + ': system distinto');
+      assert.equal(new Set(deTipo.map(b => JSON.stringify(b.tools))).size, 1, tipo + ': tools distintas');
+    }
+  } finally { restaurar(); }
+});
+
 test('pool caído (503 model_unavailable) cuenta como respaldo, no rompe el benchmark', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'pool-bench-'));
   const restaurar = silencio();

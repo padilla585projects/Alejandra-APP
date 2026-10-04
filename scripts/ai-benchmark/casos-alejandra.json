@@ -8309,7 +8309,8 @@
         "rueda",
         "coche",
         "motor del vehiculo"
-      ]
+      ],
+      "sin_herramienta": true
     }
   },
   {
@@ -8385,7 +8386,8 @@
       "respuesta_no_contiene": [
         "direccion ip",
         "protocolo"
-      ]
+      ],
+      "sin_herramienta": true
     }
   },
   {
@@ -8457,7 +8459,8 @@
       "respuesta_contiene": [
         "plataforma",
         "elevad"
-      ]
+      ],
+      "sin_herramienta": true
     }
   },
   {
@@ -8528,7 +8531,8 @@
     "esperado": {
       "respuesta_contiene": [
         "caja general de proteccion"
-      ]
+      ],
+      "sin_herramienta": true
     }
   },
   {
@@ -8605,7 +8609,8 @@
         "cocina",
         "bandeja de entrada",
         "comida"
-      ]
+      ],
+      "sin_herramienta": true
     }
   },
   {
@@ -8676,7 +8681,8 @@
     "esperado": {
       "respuesta_contiene": [
         "1500|1[ .]500|mil quinientos"
-      ]
+      ],
+      "sin_herramienta": true
     }
   },
   {
@@ -8748,7 +8754,8 @@
       "respuesta_contiene": [
         "horas|operario|tarea|trabajo realizado",
         "material|proveedor|entrega|mercancia"
-      ]
+      ],
+      "sin_herramienta": true
     }
   },
   {
@@ -8824,7 +8831,8 @@
       "respuesta_no_contiene": [
         "presion arterial",
         "tension muscular"
-      ]
+      ],
+      "sin_herramienta": true
     }
   }
 ]

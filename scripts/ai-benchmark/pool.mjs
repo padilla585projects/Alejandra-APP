@@ -16,7 +16,9 @@
 //
 //   node scripts/ai-benchmark/pool.mjs   (vars: AI_POOL_KEY, AI_POOL_URL, ANTHROPIC_API_KEY,
 //   OPENAI_API_KEY, TAVILY_API_KEY, XAI_API_KEY, BENCHMARK_REPEATS, BENCHMARK_BUDGET_USD,
-//   BENCHMARK_OUTPUT, BENCHMARK_POOL_TIMEOUT_MS, BENCHMARK_TAREAS=router,banco,...)
+//   BENCHMARK_OUTPUT, BENCHMARK_POOL_TIMEOUT_MS, BENCHMARK_TAREAS=router,banco,...,
+//   BENCHMARK_BANCO=agrupado|agrupado-agente para medir el banco con el MISMO system y la
+//   MISMA lista completa de tools por experto, como producción — ver banco-alejandra.mjs)
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
@@ -25,7 +27,7 @@ import {
 } from '../../alejandra-agente/ai-pool.js';
 import { SYSTEM_CLASIFICADOR_INTENCION, ETIQUETAS_CLASIFICADOR_INTENCION } from '../../alejandra-agente/lib.js';
 import { casosRouter, casosSimple, sistemaSimple, casosBusqueda, casosRespaldo, sistemaRespaldo, toolsRespaldo } from './pool-cases.mjs';
-import { cargarBancoAlejandra, evaluarCasoBanco, etiquetaRouterBanco } from './banco-alejandra.mjs';
+import { evaluarCasoBanco, etiquetaRouterBanco, bancoSegunModo } from './banco-alejandra.mjs';
 
 // Modelos concretos del pool que se miden además del alias (el alias puede resolver a ellos).
 const POOL_QWEN = 'ai_pool:qwen3.6:35b-a3b';
@@ -293,16 +295,20 @@ async function ejecutarCaso(tarea, candidato, caso, { fetchImpl, envPool, poolTi
   return fin({ status: 'ok', pass: validar(r.texto, r.toolCalls), salida: ((r.toolCalls || []).map(t => t.function?.name).join(',') || r.texto || '').slice(0, 300), usage: r.usage });
 }
 
-const casosPorTarea = { router: casosRouter, simple: casosSimple, buscar_web: casosBusqueda, respaldo: casosRespaldo, banco: cargarBancoAlejandra() };
+const casosPorTarea = { router: casosRouter, simple: casosSimple, buscar_web: casosBusqueda, respaldo: casosRespaldo };
 
 export async function run({ tareas = Object.keys(candidatos), repeats = 1, budget = 1, outputDir = '.ai-benchmark-results/pool', fetchImpl = fetch, env = process.env } = {}) {
   if (!Number.isInteger(repeats) || repeats < 1 || repeats > 3 || !Number.isFinite(budget) || budget < 0 || budget > 5) throw new Error('Invalid limits');
   await mkdir(outputDir, { recursive: true });
   const envPool = { AI_POOL_KEY: env.AI_POOL_KEY, AI_POOL_URL: env.AI_POOL_URL };
   const poolTimeout = env.BENCHMARK_POOL_TIMEOUT_MS ? Number(env.BENCHMARK_POOL_TIMEOUT_MS) : undefined;
+  // POOL-PREFIJO-01: BENCHMARK_BANCO=agrupado mide el banco agrupado por experto (mismo system
+  // y mismas tools en todo el grupo, como producción); sin la variable, el banco tal cual.
+  const modoBanco = ['agrupado', 'agrupado-agente'].includes(env.BENCHMARK_BANCO) ? env.BENCHMARK_BANCO : '';
+  const casosDe = tarea => tarea === 'banco' ? bancoSegunModo(modoBanco) : casosPorTarea[tarea];
   const filas = [];
   let gastado = 0;
-  for (let rep = 0; rep < repeats; rep++) for (const tarea of tareas) for (const caso of casosPorTarea[tarea]) {
+  for (let rep = 0; rep < repeats; rep++) for (const tarea of tareas) for (const caso of casosDe(tarea)) {
     for (const candidato of candidatos[tarea]) {
       const base = { tarea, candidato, caso: caso.id, repeat: rep };
       if (candidato.startsWith('ai_pool:') ? !poolConfigurado(envPool) : !env[credencial(candidato)]) {
@@ -323,6 +329,7 @@ export async function run({ tareas = Object.keys(candidatos), repeats = 1, budge
   const resumen = resumir(filas);
   const datos = {
     fecha: new Date().toISOString(), fixture: 'pool-adr0028-v2', repeats, presupuestoUsd: budget,
+    banco: modoBanco || 'tal_cual',
     poolConfigurado: poolConfigurado(envPool),
     timeoutsPool: poolTimeout ? { todos: poolTimeout } : AI_POOL_TIMEOUTS,
     limitaciones: [
