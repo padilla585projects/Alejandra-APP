@@ -1,5 +1,32 @@
 # Handoff — Alejandra 2.0
 
+## AI-POOL-03/04-10 — alias, banco, seguridad SQL, documentos, dataset y prefijo estable (2026-10-03/04, publicada)
+
+Coordinado con la sesión del pool («Cambios nuevos de ChatGPT Codex»). Aprobaciones de production
+por Claude (ADR-0007 enm. 2).
+- #385 alias `alejandra:1.0` (resuelve qwen3.6 → gemma4 → prisma) en todos los usos del pool; modelo
+  real por X-AI-Pool-Model; banco scripts/ai-benchmark/casos-alejandra.json (60 casos).
+- #386 SQL-SCOPE-02: FUGA REAL cerrada — validar_cambios_bd ejecutaba SELECT sin aislamiento de
+  empresa (otras empresas y tabla sesiones). validarScopeEmpresaBD pasa a análisis estructural (OR,
+  UNION, coma, JOIN ON 1=1, INSERT múltiple…). Prompt del router con las 7 etiquetas (router 16→21/21).
+- #387 glosario de instaladora (15 términos) en los 7 expertos del agente y 5 de Telegram; banco v3
+  (92 casos); scripts/ai-benchmark/metricas-produccion.mjs (solo lectura).
+- #388 POOL-DOCUMENTOS-01: PDF >4,5 MB, xlsx y docx del chat y ver_archivo → /v1/tools/document con
+  respaldo Gemini; imágenes nunca al pool.
+- #389 ADR-0029 dataset de entrenamiento privado en R2, APAGADO hasta DATASET_ENTRENAMIENTO=1 y
+  revisión RGPD de Adrián (PENDIENTE).
+- #390 credenciales retiradas de HEAD (usuario 357, código de Alberto id 46, test_seguridad.ps1).
+  ROTACIÓN PENDIENTE de Adrián: token Telegram, Resend, clave Anthropic antigua, Alberto, 357.
+- #391 POOL-PREFIJO-01: system idéntico por uso y tools completas en orden fijo hacia el pool;
+  calentamiento en /api/chat/history; banco con sin_herramienta y modo agrupado.
+Medidas del pool (banco v3, qwen3.6 sin contención): router 21/21 (p95 1,56 s), simple 16/16,
+tools 47/55 con 17,6 s de mediana por lectura de prompt (≈100 tok/s) — motivo de #391.
+Versiones: agente 5891147d, API 62d02a73, Pages 9.84. Rollback: agente 397e0772, API 9c2dd6d6.
+Repo PÚBLICO: no privatizar aún (Pages, OTA por releases de GitHub, OAuth/CORS en github.io);
+plan: frontend a Cloudflare, APK en R2, APK puente. Avatar: cara ilustrada aprobada por Adrián,
+pendiente de descargar a 1024 px y registrar; voz cuando el pool tenga TTS.
+
+
 ## D1-ESCRITURAS-01 — medición tras el reinicio de cuota (2026-10-03 06:57 UTC, verificada)
 
 d1 insights 6 h (00:57–06:57 UTC): 292 filas escritas en total; la cuota vuelve a aceptar
