@@ -11,7 +11,8 @@
   `scripts/ai-benchmark/casos-alejandra.json` (+ `banco-alejandra.mjs`,
   `herramientas-agente.mjs`, `banco-alejandra.test.mjs`); contexto del oficio
   `CONTEXTO_DOMINIO_INSTALADORA` en `alejandra-agente/lib.js` (+ `alejandra-agente/dominio.test.js`);
-  métricas de producción `scripts/ai-benchmark/metricas-produccion.mjs` (+ `.test.mjs`)
+  métricas de producción `scripts/ai-benchmark/metricas-produccion.mjs` (+ `.test.mjs`);
+  prefijo estable y calentamiento `alejandra-agente/prefijo-pool.test.js` (§Velocidad)
 
 ## Contexto
 
@@ -66,6 +67,7 @@ hasta que él configure el secreto**.
 | e) Adjunto Excel (.xlsx) del chat | Gemini | pool `/v1/tools/document` → Gemini | `buildUserContentWithAdjuntos` del agente |
 | e) Adjunto Word (.docx) del chat | aviso «[Archivo adjunto…]» | pool `/v1/tools/document` → el mismo aviso | `buildUserContentWithAdjuntos` del agente |
 | e) Tool `ver_archivo` (PDF, .xlsx, .docx) | heurística de cadenas del PDF / solo metadatos | pool `/v1/tools/document` → lo mismo de antes | `ver_archivo` del agente |
+| f) Calentamiento al abrir el chat (§Velocidad) | — | pool, `max_tokens` 1, en segundo plano; sin respaldo (no responde a nadie) | `GET /api/chat/history` del agente → `calentarPoolExpertoSimple` |
 
 Con el experto «simple», si el pool ya dio el texto final sin tools, el streaming de cierre
 no vuelve a llamar a Haiku (esa segunda llamada anularía el ahorro).
@@ -231,6 +233,73 @@ Dónde se usa (solo en `alejandra-agente/worker.js`; ver la tabla de Alcance, fi
 El cliente sigue siendo tolerante con la *forma de la respuesta* (`snippet`/`content`/`text`,
 `results`/`data`/array raíz, `{"error"}` o `{"detail"}`) por si el gateway evoluciona.
 
+### Velocidad / prefijo estable (POOL-PREFIJO-01, 04/10/2026)
+
+Medido por la sesión del pool (banco v3 `c44c1da`, qwen3.6 sin contención): router 21/21 (1,03 s
+de mediana, 1,56 s p95), simple 16/16, tools 47/55 pero **17,6 s de mediana**. La causa es la
+**lectura del prompt**: en el ASUS qwen3.6 lee ~100 tokens/s y cada petición distinta relee
+1.000–4.500 tokens (10–42 s). llama.cpp reutiliza el prefijo cuando el principio del prompt
+coincide con una petición anterior (entonces lee 20–30 tokens y responde en 1–2 s). Reglas para
+**todo** lo que va al pool (router, router NEXUS, experto simple, crons, resumen, respaldo de
+Anthropic con o sin tools, reescritura de la búsqueda):
+
+1. **System idéntico byte a byte** entre peticiones del mismo uso/experto, glosario incluido. Ni
+   fecha, ni hora, ni usuario, empresa, departamento, pantalla, memoria recuperada, contexto de
+   sesión ni módulos que dependan del mensaje. Un test compara el system de dos peticiones con
+   usuarios, fechas y mensajes distintos para cada uso (`prefijo-pool.test.js`).
+2. **Lo variable va después**, al principio del mensaje del usuario del **turno actual** (el
+   último `user` que no es un resultado de tool), bajo la cabecera `[CONTEXTO DE ESTA PETICIÓN]`
+   (`insertarContextoEnTurno`). Así system + tools + historial quedan como prefijo y, dentro del
+   bucle de tools, el contexto no se mueve. No se pierde información: solo cambia de sitio.
+3. **Tools: siempre el juego completo del experto**, en el mismo orden y con el mismo texto (los
+   mismos objetos `TOOL_X`, convertidos igual), nunca recortado ni reordenado por mensaje. Si una
+   vuelta no pide tools (última iteración del bucle o cierre), al pool se le mandan igual para no
+   romper el prefijo y una respuesta con `tool_use` se descarta → respaldo (`toolsForzadas`). El
+   filtro por **clase de sesión** (sin sesión / con sesión / desarrollador / cron) se mantiene por
+   seguridad: da un juego fijo por clase, no por mensaje (hoy, para el experto simple, dos juegos:
+   con y sin sesión).
+4. **El camino de Anthropic no cambia**: sus dos bloques de system (L0+L1 con `cache_control`;
+   fecha + catálogo de tools sin caché) son exactamente los de antes (test). Ya era estable salvo
+   un detalle previo que no se toca aquí: los módulos dinámicos (`prl_seguridad`, `ie_*`,
+   `dep_*`) van dentro del bloque cacheado, así que cambian su caché cuando cambian; moverlos al
+   bloque sin caché sería otra decisión, medida antes.
+
+Dónde se aplica:
+
+| Uso | Antes (variable en el system) | Ahora |
+|---|---|---|
+| Experto simple y respaldo de Anthropic (`_intentarPoolChat`) | fecha/hora (`l4Fecha`) y módulos dinámicos dentro del system | `componerSistemaNexus` (`ai-pool.js`) marca los bloques con un system fijo (módulos del experto + catálogo de tools) y un contexto (fecha + módulos dinámicos); `peticionPoolEstable` lo aplica. Usuario, empresa, canal, rol, pantalla, memoria y resumen ya iban en los mensajes (`construirMessages`) |
+| Reescritura de la consulta de búsqueda | `Fecha de hoy` en el system | `mensajeConsultaBusqueda`: `Fecha de hoy: AAAA-MM-DD.\nPetición: …` en el user |
+| Router NEXUS (`worker.js`) | system genérico + instrucciones y mensaje juntos en el user | instrucciones fijas (`NEXUS_ROUTER_INSTRUCCIONES` + formato) en el system; solo `Mensaje: "…"` en el user. Haiku recibe el mismo prompt de siempre |
+| Router del agente, crons (normal, destilación, compactación), resumen, ayudante, reflexión | ya eran constantes | sin cambios (tests de que no llevan interpolaciones) |
+
+**Calentamiento** (`poolCalentar`): al cargar el historial del chat (`GET /api/chat/history`, que
+abren index.html, panel.html, alejandra-panel.html, admin.html y la app) el agente lanza con
+`ctx.waitUntil` —sin bloquear la respuesta— una petición `max_tokens: 1` con el **mismo system y
+las mismas tools** que mandaría el experto simple de una sesión autenticada (el único experto del
+chat que va primero al pool). Límites: solo si el pool está configurado y el circuito cerrado, solo
+para el propio usuario, **1 por usuario cada 10 minutos por isolate**, timeout de fondo (25 s), sus
+fallos **no cuentan para el circuito** (un modelo cargándose en frío no debe dejar sin pool a los
+mensajes reales) y solo deja la métrica de siempre (uso `calentamiento`, sin contenido). No calienta
+el router (prompt pequeño y constante) ni los expertos Sonnet (no van al pool).
+
+**Banco agrupado** (`agruparBancoPorExperto` en `banco-alejandra.mjs`): mide el caso real, con el
+mismo system y la misma lista completa de tools en cada grupo de expertos y los datos de sesión de
+los casos (empresa, usuario, obra, fecha) movidos al último mensaje del usuario. Para el pool:
+`node scripts/ai-benchmark/banco-alejandra.mjs --agrupar [--tools agente] [--salida <ruta>]` (por
+defecto `.ai-benchmark-results/casos-alejandra-agrupado.json`) y
+`BENCH_CASES=<ruta> python tools/bench_alejandra.py alejandra:1.0` en el repo del pool (manda los
+casos en orden: router, simple y tools seguidos). `--tools union` (defecto) usa todas las tools de
+los casos del grupo (~37 000 caracteres en experto_tools); `--tools agente`, el juego real de
+`TOOLS_POR_EXPERTO` (simple → simple, experto_tools → `app`, ~76 000 caracteres), que es lo que
+recibiría el pool en el respaldo de Anthropic del experto `app`. En el arnés local:
+`BENCHMARK_BANCO=agrupado` (o `agrupado-agente`) con `node scripts/ai-benchmark/pool.mjs`.
+
+Límite conocido (lado del pool, no de este repo): llama.cpp guarda el prefijo por *slot*; si el
+router y el experto comparten un único slot sin caché de prompts en RAM, cada uno puede desalojar
+el prefijo del otro. Lo decide la configuración del pool (`--cache-reuse`, varios slots o caché de
+prompts en RAM), y se ve en la mediana del banco agrupado.
+
 ## Privacidad
 
 Datos de empresa (mensajes de chat, historial para resumir, datos de crons) pasan a viajar a
@@ -357,12 +426,18 @@ recordatorios).
     la pregunta; a veces `respuesta_no_contiene` para no sugerir valores), con herramientas a mano.
   - `sin-tool-*` (8): **no debe usar herramientas** aunque las tenga; miden el glosario
     (selectividad, IP65, PEMP, CGP, bandeja portacables, caída de tensión, parte vs albarán).
-- **«No usar herramientas»**: el formato del pool no tiene campo para eso; se expresa con
-  `{"respuesta_contiene": [...]}` (y `respuesta_no_contiene`). **Nuestro runner además suspende si
-  la respuesta llama a una herramienta** (`tool_innecesaria`), igual que si fuga sintaxis de tools;
-  el evaluador del pool solo mira el texto. **Propuesta a la sesión del pool**: añadir
-  `{"sin_herramienta": true}` a `esperado` (combinable con `respuesta_contiene`) para que
-  `bench_alejandra.py` puntúe igual que el nuestro.
+- **«No usar herramientas»**: desde el 04/10/2026 los 8 `sin-tool-*` llevan
+  `{"sin_herramienta": true}` en `esperado` (combinado con `respuesta_contiene`/`no_contiene`),
+  que `bench_alejandra.py` del pool ya acepta: suspende si hay `tool_calls`. Nuestro runner hace lo
+  mismo con cualquier `respuesta_contiene` (`tool_innecesaria`, también si fuga sintaxis de tools)
+  y, con `sin_herramienta`, exige además texto no vacío.
+- **Revisión 04/10/2026** de los casos que fallaban con qwen3.6: `multi-10-dos-marios` (respuesta
+  vacía) está bien formado —mismo formato que el resto de `multi-*`— y su esperado (preguntar cuál
+  de los dos Mario) es el correcto; lo más probable es que el modelo gastara los `max_tokens: 300`
+  del evaluador del pool razonando (su script no añade `/no_think`). `ambigua-04` (recordatorio sin
+  hora: `fecha_hora` es obligatoria), `ambigua-05` («Hazme el plano»: ninguna tool da el tipo de
+  plano; `generar_plano` pide preguntar los datos críticos) y `tools-24` (bandejas con tipo, ancho,
+  altura y referencia ya dados) son justos con la política de preguntar datos. No se cambian.
 - **Conversación completa**: cada caso lleva su `system`. Los de router usan el prompt REAL del
   clasificador (`SYSTEM_CLASIFICADOR_INTENCION` + el sufijo JSON del cliente del pool); los de
   experto, un prompt de sistema condensado (el de producción ocupa decenas de miles de
