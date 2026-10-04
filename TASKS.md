@@ -1,5 +1,17 @@
 # TASKS — Cola operativa inmediata
 
+## AI-POOL — pendientes (2026-10-04)
+
+- Adrián: rotar token de Telegram, clave de Resend, revocar Anthropic antigua, código de Alberto
+  (id 46) y contraseña del usuario 357; cerrar las 3 alertas de Secret Scanning.
+- Decidir migración del frontend a Cloudflare + APK en R2 para poder privatizar el repo.
+- Avatar: descargar la cara de Canva a resolución completa y registrarla (sesión del pool).
+- ADR-0029: revisión RGPD y, si procede, DATASET_ENTRENAMIENTO=1.
+- AI_POOL_KEY en GitHub env production para el benchmark propio.
+- Medir el banco agrupado (#391) en el pool y verificar AIPOOL_METRICA (calentamiento, p50 simple).
+- QA con encargado de consultar_bd/validar_cambios_bd tras SQL-SCOPE-02.
+
+
 ## NOCHE-03-10 (2ª parte) — pendientes (2026-10-03)
 
 - Adrián: `gh secret set AI_POOL_KEY --env production` para el benchmark pool vs actual.
