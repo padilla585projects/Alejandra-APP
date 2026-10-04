@@ -2,8 +2,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { cargarBancoAlejandra, validarBanco, validarTurnosConTools, evaluarCasoBanco, argumentoCoincide, etiquetaRouterBanco, patronCoincide, herramientasValidas, TIPOS_BANCO, RUTA_BANCO } from './banco-alejandra.mjs';
-import { toolsPorNombre } from './herramientas-agente.mjs';
+import { cargarBancoAlejandra, validarBanco, validarTurnosConTools, evaluarCasoBanco, argumentoCoincide, etiquetaRouterBanco, patronCoincide, herramientasValidas, TIPOS_BANCO, RUTA_BANCO, agruparBancoPorExperto, separarSistemaVariable, bancoSegunModo } from './banco-alejandra.mjs';
+import { toolsPorNombre, toolsPorExperto } from './herramientas-agente.mjs';
+import { CABECERA_CONTEXTO_POOL } from '../../alejandra-agente/ai-pool.js';
 import { ETIQUETAS_CLASIFICADOR_INTENCION, SYSTEM_CLASIFICADOR_INTENCION, CONTEXTO_DOMINIO_INSTALADORA, validarScopeEmpresaBD } from '../../alejandra-agente/lib.js';
 import { mensajesOpenAIaAnthropic } from './pool.mjs';
 
@@ -230,7 +231,10 @@ test('v3: ambiguas → preguntar sin herramienta; sin-tool → responder sin her
   for (const c of deCategoria('sin-tool-')) {
     assert.equal(c.tipo, 'experto_simple', c.id);
     assert.ok(c.tools.length > 0, c.id);
+    // 04/10/2026: «no debe usar herramientas» explícito, con el formato del evaluador del pool
+    assert.equal(c.esperado.sin_herramienta, true, c.id);
   }
+  assert.equal(banco.filter(c => c.esperado.sin_herramienta === true).length, 8);
   // nuestro runner suspende si llama a una herramienta cuando se espera texto
   const c = porId['ambigua-02-seccion-sin-datos'];
   const tc = [{ type: 'function', function: { name: 'calcular_cable', arguments: '{"potencia_w":15000}' } }];
@@ -271,4 +275,77 @@ test('runner local: la conversación OpenAI con tools se convierte bien a Anthro
   assert.equal(messages[2].content[0].tool_use_id, uso.id);
   // un caso de un solo turno sigue siendo [user]
   assert.deepEqual(mensajesOpenAIaAnthropic(porId['ambigua-01-pedir-cable'].mensajes).messages.map(m => m.role), ['user']);
+});
+
+// ── sin_herramienta (04/10/2026) ─────────────────────────────────────────────────────
+test('sin_herramienta: solo o combinado con respuesta_contiene; suspende con tool_calls o sin texto', () => {
+  const tc = [{ type: 'function', function: { name: 'consultar_bd', arguments: '{}' } }];
+  const solo = { esperado: { sin_herramienta: true } };
+  assert.equal(evaluarCasoBanco(solo, { texto: 'Claro, te lo explico.' }).pass, true);
+  assert.equal(evaluarCasoBanco(solo, { texto: 'x', toolCalls: tc }).motivo, 'tool_innecesaria');
+  assert.equal(evaluarCasoBanco(solo, { texto: '  ' }).motivo, 'sin_texto');
+  const comb = porId['sin-tool-04-cgp'];
+  assert.equal(evaluarCasoBanco(comb, { texto: 'La CGP es la caja general de protección.' }).pass, true);
+  assert.equal(evaluarCasoBanco(comb, { toolCalls: tc }).motivo, 'tool_innecesaria');
+  // validación del esquema
+  const s = banco.find(c => c.id === 'sin-tool-04-cgp');
+  assert.deepEqual(validarBanco([{ ...s, esperado: { sin_herramienta: true } }]), []);
+  assert.ok(validarBanco([{ ...s, esperado: { respuesta_contiene: ['x'], sin_herramienta: false } }]).some(e => e.includes('sin_herramienta solo admite true')));
+  assert.ok(validarBanco([{ ...s, esperado: { sin_herramienta: true, otra: 1 } }]).some(e => e.includes('debe esperar')));
+  const t = banco.find(c => c.tipo === 'experto_tools' && 'respuesta_contiene' in c.esperado);
+  assert.deepEqual(validarBanco([{ ...t, esperado: { ...t.esperado, sin_herramienta: true } }]), []);
+});
+
+// ── Banco agrupado por experto (POOL-PREFIJO-01, ADR-0028 §Velocidad) ────────────────
+test('agrupado: un único system y una única lista de tools por grupo de expertos, sin datos de sesión en el system', () => {
+  for (const modo of ['union', 'agente']) {
+    const ag = agruparBancoPorExperto(banco, { tools: modo });
+    assert.deepEqual(validarBanco(ag, { etiquetas: ETIQUETAS_CLASIFICADOR_INTENCION }), [], modo);
+    assert.deepEqual(ag.map(c => c.id).sort(), banco.map(c => c.id).sort());
+    // los grupos van seguidos: router, experto_simple, experto_tools
+    assert.deepEqual([...new Set(ag.map(c => c.tipo))], TIPOS_BANCO);
+    for (const tipo of ['experto_simple', 'experto_tools']) {
+      const g = ag.filter(c => c.tipo === tipo);
+      assert.equal(new Set(g.map(c => c.mensajes[0].content)).size, 1, `${modo}/${tipo}: system distinto`);
+      assert.equal(new Set(g.map(c => JSON.stringify(c.tools))).size, 1, `${modo}/${tipo}: tools distintas`);
+      const sistema = g[0].mensajes[0].content;
+      assert.ok(sistema.includes(CONTEXTO_DOMINIO_INSTALADORA), 'el glosario sigue en el system');
+      assert.doesNotMatch(sistema, /Sesión:|Fecha y hora actual|empresa_id|2026-10-05/);
+    }
+    // router: tal cual
+    assert.deepEqual(ag.filter(c => c.tipo === 'router'), banco.filter(c => c.tipo === 'router'));
+  }
+});
+
+test('agrupado: los datos de sesión no se pierden, van al principio del último mensaje del usuario', () => {
+  const ag = Object.fromEntries(agruparBancoPorExperto(banco).map(c => [c.id, c]));
+  const original = porId['multi-08-incidencia-cerrar'];
+  const { contexto } = separarSistemaVariable(original.mensajes[0].content);
+  assert.match(contexto, /^Empresa activa: empresa_id 5\./);
+  assert.match(contexto, /Sesión: usuario «Encargado Ficticio»/);
+  assert.match(contexto, /Fecha y hora actual: lunes 2026-10-05 09:30/);
+  assert.match(contexto, /filtra SIEMPRE por empresa_id = 5/);
+  const c = ag['multi-08-incidencia-cerrar'];
+  const usuario = c.mensajes.filter(m => m.role === 'user').at(-1).content;
+  assert.equal(usuario, `${CABECERA_CONTEXTO_POOL}\n${contexto}\n\nCierra la incidencia de la carretilla, ya está arreglada`);
+  // el resultado de la tool (último mensaje) no cambia
+  assert.deepEqual(c.mensajes.at(-1), original.mensajes.at(-1));
+  // experto_simple: su system no tiene datos de sesión → mensaje intacto
+  assert.equal(ag['sin-tool-04-cgp'].mensajes.at(-1).content, porId['sin-tool-04-cgp'].mensajes.at(-1).content);
+});
+
+test('agrupado: con --tools agente, la lista empieza por el juego real del experto (TOOLS_POR_EXPERTO)', () => {
+  const ag = agruparBancoPorExperto(banco, { tools: 'agente' });
+  const reales = toolsPorExperto();
+  const simple = ag.find(c => c.tipo === 'experto_simple').tools.map(t => t.function.name);
+  assert.deepEqual(simple.slice(0, reales.simple.length), reales.simple);
+  const app = ag.find(c => c.tipo === 'experto_tools').tools.map(t => t.function.name);
+  assert.deepEqual(app.slice(0, reales.app.length), reales.app);
+  // los esquemas son los actuales del agente
+  const actuales = toolsPorNombre();
+  const t = ag.find(c => c.tipo === 'experto_tools').tools.find(x => x.function.name === 'consultar_bd');
+  assert.equal(t.function.description, actuales.consultar_bd.description);
+  // modos del arnés
+  assert.equal(bancoSegunModo('', banco), banco);
+  assert.equal(new Set(bancoSegunModo('agrupado', banco).filter(c => c.tipo === 'experto_tools').map(c => JSON.stringify(c.tools))).size, 1);
 });

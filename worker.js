@@ -3833,6 +3833,14 @@ const NEXUS_EXPERTS = {
 };
 
 // ── Router NEXUS: elige experto en <1s con Haiku + fallback algorítmico ───────
+// POOL-PREFIJO-01 (04/10/2026, ADR-0028 §Velocidad): las instrucciones son fijas y el mensaje
+// variable. Para el pool van separadas —instrucciones en el system, idéntico en cada petición
+// (prefijo reutilizable por llama.cpp), y solo el mensaje en el user—; para Haiku se monta el
+// mismo prompt de siempre con las mismas piezas.
+const NEXUS_ROUTER_INSTRUCCIONES = `Clasifica este mensaje en uno de estos expertos y devuelve SOLO JSON válido sin texto adicional.
+Expertos: asistente (preguntas simples, estado, saludos, conversación), gestor_app (usuarios, accesos, permisos, configuración de empresa, aprobaciones), desarrollador (código, bugs, fixes, deploy, git, worker.js, html, red de agentes, Jarvis, domótica, fetch URL, APIs externas), analista (informes, SQL, estadísticas, datos, conteos, resúmenes).`;
+const NEXUS_ROUTER_FORMATO = 'JSON requerido: {"expert":"<nombre>","compress_history":<bool>}';
+
 async function nexusRoute(env, message) {
   const txt = (typeof message === 'string' ? message : JSON.stringify(message)).toLowerCase();
 
@@ -3848,15 +3856,14 @@ async function nexusRoute(env, message) {
   };
 
   try {
-    const routerPrompt = `Clasifica este mensaje en uno de estos expertos y devuelve SOLO JSON válido sin texto adicional.
-Expertos: asistente (preguntas simples, estado, saludos, conversación), gestor_app (usuarios, accesos, permisos, configuración de empresa, aprobaciones), desarrollador (código, bugs, fixes, deploy, git, worker.js, html, red de agentes, Jarvis, domótica, fetch URL, APIs externas), analista (informes, SQL, estadísticas, datos, conteos, resúmenes).
-Mensaje: "${txt.slice(0, 400)}"
-JSON requerido: {"expert":"<nombre>","compress_history":<bool>}`;
+    const lineaMensaje = `Mensaje: "${txt.slice(0, 400)}"`;
+    const routerPrompt = `${NEXUS_ROUTER_INSTRUCCIONES}\n${lineaMensaje}\n${NEXUS_ROUTER_FORMATO}`;
 
     // ADR-0028: pool propio primero (coste 0). Solo se acepta un JSON con un experto
     // válido; cualquier otra cosa (timeout, 503, JSON roto, experto inventado) → Haiku.
     // Sin registro D1: la llamada a Haiku de este router tampoco lo tenía.
-    const rutaPool = await poolRouterNexus(env, routerPrompt, Object.keys(NEXUS_EXPERTS), { uso: 'router_nexus' });
+    // POOL-PREFIJO-01: system fijo (instrucciones + formato) y el mensaje solo en el user.
+    const rutaPool = await poolRouterNexus(env, { sistema: `${NEXUS_ROUTER_INSTRUCCIONES}\n${NEXUS_ROUTER_FORMATO}`, mensaje: lineaMensaje }, Object.keys(NEXUS_EXPERTS), { uso: 'router_nexus' });
     if (rutaPool) return { expert: rutaPool.expert, compress_history: rutaPool.compress_history };
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {

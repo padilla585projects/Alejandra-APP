@@ -420,7 +420,9 @@ describe('03/10/2026: consulta corta para /v1/tools/search', () => {
     expect(pet.body.model).toBe(AI_POOL_MODELO);
     expect(pet.body.response_format).toEqual({ type: 'json_object' });
     expect(Object.keys(pet.body).sort()).toEqual(['max_tokens', 'messages', 'model', 'response_format', 'temperature']);
-    expect(pet.body.messages[1].content).toBe(FRASE);
+    // POOL-PREFIJO-01: system fijo; la fecha (dato variable) va en el mensaje, delante.
+    expect(pet.body.messages[1].content).toBe(`Fecha de hoy: 2026-10-03.\nPetición: ${FRASE}`);
+    expect(pet.body.messages[0].content).not.toMatch(/2026-10-03/);
     // La búsqueda lleva la consulta corta y el filtro
     await poolBuscar(ENV, c.query, { since: c.since }, { fetch: f });
     expect(f.llamadas[1].body).toEqual({ query: 'Node.js latest LTS version', results: 5, since: 'year' });
