@@ -309,4 +309,10 @@ describe('cableado en los workers (regla «dos cerebros»)', () => {
     expect(fn).toMatch(/poolCalentar\(env,/);
   });
 
+  it('consultar_bd deja explícito que es SOLO lectura y a qué tools ir para modificar', () => {
+    const def = agente.slice(agente.indexOf("name: 'consultar_bd',"), agente.indexOf('const TOOL_CALCULAR_CABLE'));
+    expect(def).toMatch(/SOLO LECTURA/);
+    expect(def).toMatch(/cerrar o modificar incidencias, pedidos/);
+    expect(def).toMatch(/escribir_bd/);
+  });
 });

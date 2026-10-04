@@ -1940,7 +1940,9 @@ const TOOL_TOMAR_DECISION = {
 
 const TOOL_CONSULTAR_BD = {
   name: 'consultar_bd',
-  description: 'Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.',
+  // POOL-PREFIJO-01 / multi-08 del banco: qwen intentó cerrar una incidencia con un UPDATE por
+  // aquí (el backend ya lo rechaza con validarSoloSelectBD); la descripción lo deja explícito.
+  description: 'Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.',
   input_schema: {
     type: 'object',
     properties: {

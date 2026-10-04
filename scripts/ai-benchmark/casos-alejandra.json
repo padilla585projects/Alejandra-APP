@@ -533,7 +533,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -607,7 +607,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -680,7 +680,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -755,7 +755,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -861,7 +861,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1011,7 +1011,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1121,7 +1121,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1205,7 +1205,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1253,7 +1253,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1359,7 +1359,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1547,7 +1547,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1666,7 +1666,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1836,7 +1836,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -1884,7 +1884,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -2018,7 +2018,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -2214,7 +2214,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -2263,7 +2263,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -2408,7 +2408,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -2575,7 +2575,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -2722,7 +2722,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -3203,7 +3203,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -4538,7 +4538,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -4782,7 +4782,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -4903,7 +4903,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -5099,7 +5099,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -5166,7 +5166,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -5383,7 +5383,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -5468,7 +5468,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -5728,7 +5728,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -5878,7 +5878,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -6070,7 +6070,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -6137,7 +6137,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -6275,7 +6275,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -6393,7 +6393,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -6518,7 +6518,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -6656,7 +6656,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -6927,7 +6927,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -7108,7 +7108,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -7455,7 +7455,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8022,7 +8022,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8277,7 +8277,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8354,7 +8354,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8430,7 +8430,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8502,7 +8502,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8573,7 +8573,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8650,7 +8650,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8721,7 +8721,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -8793,7 +8793,7 @@
         "type": "function",
         "function": {
           "name": "consultar_bd",
-          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT.",
+          "description": "Consulta la base de datos de la app (bobinas, equipos, personal, fichajes, documentos, incidencias). Usa SQL SELECT. Es SOLO LECTURA: nunca la uses para crear, cerrar, modificar ni borrar nada (rechaza INSERT, UPDATE y DELETE). Para cerrar o modificar incidencias, pedidos, tareas, etc. usa sus herramientas específicas (gestionar_tarea, gestionar_oc, gestionar_rfi…) o, si no hay una específica, escribir_bd; si no tienes ninguna de escritura disponible, dile al usuario que desde aquí no puedes hacer ese cambio.",
           "parameters": {
             "type": "object",
             "properties": {
