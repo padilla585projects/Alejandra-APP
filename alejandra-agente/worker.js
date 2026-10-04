@@ -86,7 +86,7 @@ import { obtenerFuente } from './nexo-fuentes.js';
 import { verificarCotasDeclaradas, resultadoPlanoVerificado, errorPlanoNoGuardado } from './planos-cotas.js';
 // ADR-0028: pool de IA propio con respaldo obligatorio. Mismo módulo que importa worker.js
 // (los dos cerebros). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
-import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda, modeloPool, fijarSumideroMetricasPool, poolLeerDocumento } from './ai-pool.js';
+import { AI_POOL_TIMEOUTS, poolConfigurado, poolChat, poolTexto, poolClasificar, poolBuscar, poolLeer, formatearBusquedaPool, metricasPool, prepararConsultaBusqueda, modeloPool, fijarSumideroMetricasPool, poolLeerDocumento, componerSistemaNexus, peticionPoolEstable, poolCalentar } from './ai-pool.js';
 // ADR-0029: dataset de entrenamiento privado en R2 (apagado sin DATASET_ENTRENAMIENTO=1).
 import { datasetActivo, procesarTurnoDataset, resolverPendienteDataset, promoverPendientesCaducados } from './dataset-entrenamiento.js';
 const EUR_RATE = 0.92;
@@ -1748,11 +1748,13 @@ function buildSystemPrompt(modulos) {
 // L3: Estado live del sistema (salud, usuarios activos)
 // L4: Catálogo de tools visibles para este experto
 
-async function buildAnthropicSystemBlocks(modulos, tools, env) {
-  // L0 + L1: estáticos → cacheados
-  const l0 = L0_MODULES.filter(m => modulos.includes(m)).map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
-  const l1 = modulos.filter(m => !L0_MODULES.includes(m)).map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
-  const staticPart = [l0, l1].filter(Boolean).join('\n\n');
+// POOL-PREFIJO-01 (04/10/2026): `modulosVariables` = los módulos que dependen del mensaje, la
+// pantalla o el departamento (calcularModulosDinamicos). Para Anthropic no cambia nada (mismos
+// dos bloques de siempre); para el pool, componerSistemaNexus (ai-pool.js) marca además una
+// versión con el system FIJO del experto y deja la fecha y esos módulos como contexto del turno
+// (ADR-0028 §Velocidad / prefijo estable).
+async function buildAnthropicSystemBlocks(modulos, tools, env, modulosVariables = []) {
+  // L0 + L1: estáticos → cacheados (los compone componerSistemaNexus, abajo)
 
   // L2/L3: desactivados de forma fail-closed. Las fuentes legacy eran globales y
   // no recibían empresa ni usuario, así que no se pueden incorporar al prompt de
@@ -1770,21 +1772,12 @@ async function buildAnthropicSystemBlocks(modulos, tools, env) {
   // calculen bien la fecha/hora absoluta. Va en dynamicPart (sin cache_control, como l4)
   // porque cambia en cada turno -- meterlo en el bloque cacheado rompería el caché de
   // prompts (mismo motivo que BUGFIX-CACHE-PROMPT-01, ver comentario en delegar_tarea).
-  const ahora = new Date();
-  const l4Fecha = `FECHA Y HORA ACTUAL (real, del servidor): ${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })} (hora de España). En ISO: ${ahora.toISOString().slice(0, 16).replace('T', ' ')} UTC. Usa esto como "ahora" para cualquier cálculo de fecha relativa ("mañana", "en 2 horas", "a las 17:00", "la semana que viene") -- nunca asumas la fecha por tu conocimiento de entrenamiento.`;
-
-  // L4: Catálogo de tools visibles
-  let l4 = '';
-  if (tools && tools.length > 0) {
-    l4 = `HERRAMIENTAS DISPONIBLES (${tools.length}):\n${tools.map(t => `- ${t.name}: ${(t.description || '').split('.')[0]}`).join('\n')}`;
-  }
-
-  const dynamicPart = [l4Fecha, l4].filter(Boolean).join('\n\n');
-
-  const blocks = [];
-  if (staticPart) blocks.push({ type: 'text', text: staticPart, cache_control: { type: 'ephemeral' } });
-  if (dynamicPart) blocks.push({ type: 'text', text: dynamicPart });
-  return blocks;
+  // La línea de fecha (textoFechaActual) y el catálogo L4 de tools visibles los compone
+  // componerSistemaNexus en ai-pool.js, con el mismo texto de siempre.
+  return componerSistemaNexus({
+    modulos, modulosVariables, modulosL0: L0_MODULES,
+    textoModulo: m => NEXUS_MODULES[m] || '', tools: tools || [], ahora: new Date()
+  });
 }
 
 // ── Tools disponibles ─────────────────────────────────────────────────────────
@@ -4465,6 +4458,12 @@ export default {
         if (!esDev && String(usuario_id_q).toLowerCase() !== String(sesion.usuario_id).toLowerCase()) {
           return json({ error: 'No puedes ver el historial de otro usuario' }, 403);
         }
+        // POOL-PREFIJO-01 (ADR-0028 §Velocidad): abrir el chat carga el historial — se aprovecha
+        // para calentar en segundo plano el prefijo (system + tools) del experto «simple» en el
+        // pool, sin bloquear esta respuesta. Solo para el propio usuario, limitado por isolate.
+        if (poolConfigurado(env) && ctx && String(usuario_id_q).toLowerCase() === String(sesion.usuario_id).toLowerCase()) {
+          ctx.waitUntil(calentarPoolExpertoSimple(env, sesion.usuario_id, esDev).catch(() => {}));
+        }
         const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
         const offset = parseInt(url.searchParams.get('offset') || '0');
         // HISTORIAL-UNIFICADO-01 (16/09/2026): este endpoint no filtraba por canal, a
@@ -6614,11 +6613,13 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // no se carga (ni se paga en tokens) en el chat normal de un usuario autenticado.
     // PRL-SEGURIDAD-01/INGENIERIA-SUBTEMAS-01: prl_seguridad e ie_* solo si el mensaje
     // (o la pantalla) los necesita -- ver calcularModulosDinamicos.
+    const modulosDinamicos = calcularModulosDinamicos(clas, expert, mensaje, pantalla, departamento);
     const modulosFinal = [
       ...(authOk ? expert.modules : [...expert.modules, 'seguridad_no_auth']),
-      ...calcularModulosDinamicos(clas, expert, mensaje, pantalla, departamento)
+      ...modulosDinamicos
     ];
-    const systemPrompt = await buildAnthropicSystemBlocks(modulosFinal, tools, env);
+    // POOL-PREFIJO-01: los módulos dinámicos van al contexto del turno en el camino del pool.
+    const systemPrompt = await buildAnthropicSystemBlocks(modulosFinal, tools, env, modulosDinamicos);
 
     // PASO 4: Historial dinámico
     // ALEJANDRA-CONTEXTO-01 (25/08/2026): estos límites (3/6) no coincidían de verdad
@@ -6833,11 +6834,13 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // PASO 3-4: System + historial
     // ALERTA-ATAQUE-01: mismo criterio que procesarConNEXUS — solo sin sesión.
     // PRL-SEGURIDAD-01/INGENIERIA-SUBTEMAS-01: mismo criterio que procesarConNEXUS.
+    const modulosDinamicos   = calcularModulosDinamicos(clas, expert, mensaje, pantalla, departamento);
     const modulosFinal       = [
       ...(authOk ? expert.modules : [...expert.modules, 'seguridad_no_auth']),
-      ...calcularModulosDinamicos(clas, expert, mensaje, pantalla, departamento)
+      ...modulosDinamicos
     ];
-    const systemPrompt      = await buildAnthropicSystemBlocks(modulosFinal, tools, env);
+    // POOL-PREFIJO-01: los módulos dinámicos van al contexto del turno en el camino del pool.
+    const systemPrompt      = await buildAnthropicSystemBlocks(modulosFinal, tools, env, modulosDinamicos);
     // BUG-CONTEXTO-ADJUNTO-CORTO-01 (15/09/2026) / BUG-CONTEXTO-FOTO-SIMPLE-01 (16/09/2026):
     // ver comentario en procesarConNEXUSStream -- mismo límite, unificado por el mismo motivo.
     const limitHistorial    = clas.experto === 'simple' ? 12 : 24;
@@ -15001,17 +15004,27 @@ async function _intentarGeminiVisionFallback(env, messages, systemPrompt, maxTok
 // lanza) si el pool no está configurado, el circuito está abierto, hay imágenes (los
 // modelos del pool no se usan para visión), o la respuesta no es válida → el llamador
 // sigue con su cadena de siempre.
+// POOL-PREFIJO-01 (04/10/2026, ADR-0028 §Velocidad): peticionPoolEstable deja el system
+// IDÉNTICO entre peticiones del experto (fecha y módulos dinámicos pasan al principio del
+// mensaje del turno) y manda SIEMPRE el juego completo de tools del turno, aunque esta vuelta
+// no pida tools (última iteración / cierre): entonces una respuesta con tool_use se descarta y
+// se sigue por la cadena de siempre.
 async function _intentarPoolChat(env, messages, systemPrompt, maxTokens, tools, timeoutMs, uso) {
   if (!poolConfigurado(env)) return null;
   const tieneImagenes = messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'image'));
   if (tieneImagenes) return null;
   try {
-    const toolsOpenAI = _anthropicToolsToOpenAI(tools);
-    const msgs = _agenteMsgsToOpenAI(messages, systemPrompt, false);
+    const pet = peticionPoolEstable(systemPrompt, messages, tools);
+    const toolsOpenAI = _anthropicToolsToOpenAI(pet.tools);
+    const msgs = _agenteMsgsToOpenAI(pet.messages, pet.sistema, false);
     const r = await poolChat(env, { messages: msgs, maxTokens: maxTokens || 1024, tools: toolsOpenAI || undefined, timeoutMs, uso });
     if (!r.ok) return null;
-    const content = _openAIToolCallsToAnthropicContent(r.mensaje, tools);
+    const content = _openAIToolCallsToAnthropicContent(r.mensaje, pet.tools);
     if (!content.length) return null;
+    if (pet.toolsForzadas && content.some(b => b.type === 'tool_use')) {
+      console.log(`[AIPool] ${uso}: tool_use en una vuelta sin tools — se descarta y sigue el respaldo`);
+      return null;
+    }
     const esToolUse = content.some(b => b.type === 'tool_use');
     return {
       content,
@@ -15063,6 +15076,23 @@ async function _intentarGrokFallback(env, messages, systemPrompt, maxTokens, too
     console.log(`[Fallback] Grok EXCEPCION: ${e.message}`);
     return null;
   }
+}
+
+// POOL-PREFIJO-01: petición de calentamiento (max_tokens 1) con el MISMO system fijo y las
+// MISMAS tools que mandaría el experto «simple» de una sesión autenticada (el único experto del
+// chat que va primero al pool). poolCalentar limita a 1 por usuario cada 10 min por isolate,
+// respeta el circuito sin contar para él y no registra contenido.
+async function calentarPoolExpertoSimple(env, usuarioId, esDevVerificado) {
+  const expert = NEXUS_EXPERTS.simple;
+  if (!expert) return null;
+  const tools = filtrarToolsPorAuth(TOOLS_POR_EXPERTO.simple || [], true, !!esDevVerificado);
+  const systemPrompt = await buildAnthropicSystemBlocks(expert.modules, tools, env, []);
+  const pet = peticionPoolEstable(systemPrompt, [{ role: 'user', content: 'Hola' }], tools);
+  return await poolCalentar(env, {
+    clave: 'usuario:' + String(usuarioId || ''),
+    messages: _agenteMsgsToOpenAI(pet.messages, pet.sistema, false),
+    tools: _anthropicToolsToOpenAI(pet.tools)
+  });
 }
 
 async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools) {

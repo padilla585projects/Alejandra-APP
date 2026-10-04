@@ -257,7 +257,10 @@ function _codigoError(data) {
 // { ok:false, motivo, ms?, status?, codigo?, omitido?, modeloCabecera? }.
 // `opts.estadosSinFallo`: estados HTTP que NO cuentan para el circuito (p. ej. 422 de
 // /v1/tools/document = el pool funciona, el que no vale es el fichero).
+// `opts.sinCircuito`: ningún fallo cuenta para el circuito (calentamiento en segundo plano:
+// un modelo cargándose en frío no debe dejar sin pool a los mensajes reales).
 async function _postPool(env, ruta, body, timeoutMs, opts = {}) {
+  const fallo = () => { if (!opts.sinCircuito) _registrarFallo(); };
   if (!poolConfigurado(env)) return { ok: false, motivo: 'no_configurado', omitido: true };
   if (circuitoPoolAbierto()) return { ok: false, motivo: 'circuito_abierto', omitido: true };
   const url = urlBasePool(env) + ruta;
@@ -280,16 +283,16 @@ async function _postPool(env, ruta, body, timeoutMs, opts = {}) {
     if (!resp.ok) {
       const codigo = _codigoError(data);
       const sinFallo = Array.isArray(opts.estadosSinFallo) && opts.estadosSinFallo.includes(resp.status);
-      if (!sinFallo) _registrarFallo();
+      if (!sinFallo) fallo();
       return { ok: false, motivo: AI_POOL_ERRORES_RAPIDOS.has(codigo) ? codigo : 'http_' + resp.status, status: resp.status, codigo, ms, modeloCabecera };
     }
     if (!data || typeof data !== 'object') {
-      _registrarFallo();
+      fallo();
       return { ok: false, motivo: 'json_invalido', ms, modeloCabecera };
     }
     return { ok: true, data, ms, modeloCabecera };
   } catch (e) {
-    _registrarFallo();
+    fallo();
     return { ok: false, motivo: e && e.name === 'AbortError' ? 'timeout' : 'red', ms: Date.now() - t0 };
   } finally {
     clearTimeout(timer);
@@ -329,9 +332,11 @@ export function quitarRazonamiento(texto) {
   return texto.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*?<\/think>/i, '').trim();
 }
 
-// Chat compatible OpenAI sin métrica (la emite quien lo llama). Sin `modelo` explícito se
-// pide modeloPool(env) (el alias alejandra:1.0 o el override AI_POOL_MODEL).
-async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs = AI_POOL_TIMEOUTS.simple, sinRazonamiento = true, temperature, modelo, json = false } = {}, opts = {}) {
+// Cuerpo de /openai/v1/chat/completions. Lo comparten el chat (_poolChatCrudo) y el
+// calentamiento (poolCalentar): así el system (con su «/no_think») y las tools que se mandan
+// al calentar son EXACTAMENTE los de la petición real (prefijo reutilizable, ADR-0028 §Velocidad).
+// Devuelve { ok:true, body, modeloPedido, conTools } o { ok:false, motivo, omitido:true, modeloPedido }.
+function _cuerpoChatPool(env, { messages, maxTokens = 512, tools, sinRazonamiento = true, temperature, modelo, json = false } = {}) {
   const modeloPedido = (typeof modelo === 'string' && modelo.trim()) ? modelo.trim() : modeloPool(env);
   if (!Array.isArray(messages) || !messages.length) return { ok: false, motivo: 'sin_mensajes', omitido: true, modeloPedido };
   let msgs = messages;
@@ -355,6 +360,15 @@ async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs
     if (modeloPoolSinTools(modeloPedido)) return { ok: false, motivo: 'modelo_sin_tools', omitido: true, modeloPedido };
     body.tools = tools;
   }
+  return { ok: true, body, modeloPedido, conTools };
+}
+
+// Chat compatible OpenAI sin métrica (la emite quien lo llama). Sin `modelo` explícito se
+// pide modeloPool(env) (el alias alejandra:1.0 o el override AI_POOL_MODEL).
+async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs = AI_POOL_TIMEOUTS.simple, sinRazonamiento = true, temperature, modelo, json = false } = {}, opts = {}) {
+  const c = _cuerpoChatPool(env, { messages, maxTokens, tools, sinRazonamiento, temperature, modelo, json });
+  if (!c.ok) return c;
+  const { body, modeloPedido, conTools } = c;
   const r = await _postPool(env, '/openai/v1/chat/completions', body, timeoutMs, opts);
   if (!r.ok) return { ...r, modeloPedido, modeloReal: r.modeloCabecera || '' };
   const data = r.data;
@@ -469,10 +483,16 @@ export function parsearRouterNexus(texto, expertosValidos) {
   return { expert: obj.expert, compress_history: obj.compress_history === true };
 }
 
+// `prompt`: { sistema, mensaje } (POOL-PREFIJO-01: instrucciones fijas en el system, idéntico
+// en cada petición; solo el mensaje del usuario en el user) o, por compatibilidad, un texto
+// con todo junto (entonces va entero en el user con un system genérico).
 export async function poolRouterNexus(env, prompt, expertosValidos, { timeoutMs = AI_POOL_TIMEOUTS.router, maxTokens = 64, uso = 'router_nexus', modelo } = {}, opts = {}) {
   if (!poolConfigurado(env)) return null;
+  const esObjeto = !!prompt && typeof prompt === 'object';
+  const sistema = esObjeto ? String(prompt.sistema || '') : 'Devuelve SOLO el objeto JSON pedido, sin texto adicional.';
+  const usuario = esObjeto ? String(prompt.mensaje || '') : String(prompt);
   const r = await _poolChatCrudo(env, {
-    messages: [{ role: 'system', content: 'Devuelve SOLO el objeto JSON pedido, sin texto adicional.' }, { role: 'user', content: String(prompt) }],
+    messages: [{ role: 'system', content: sistema }, { role: 'user', content: usuario }],
     maxTokens, timeoutMs, temperature: 0, modelo, json: true
   }, opts);
   if (!r.ok) { _metrica(uso, r); return null; }
@@ -484,6 +504,166 @@ export async function poolRouterNexus(env, prompt, expertosValidos, { timeoutMs 
   }
   _metrica(uso, r);
   return { ...parsed, modelo: r.modelo, modeloRegistro: r.modeloRegistro, usage: r.usage, ms: r.ms };
+}
+
+// ── PREFIJO ESTABLE (POOL-PREFIJO-01, 04/10/2026; ADR-0028 §Velocidad) ─────────────────
+// Medido por la sesión del pool (banco v3 c44c1da, qwen3.6 sin contención): router 1,03 s de
+// mediana y simple 16/16, pero el experto con tools 17,6 s de mediana. La causa es LEER EL
+// PROMPT: en el ASUS qwen3.6 lee ~100 tokens/s y cada petición distinta relee 1.000–4.500
+// tokens (10–42 s). llama.cpp reutiliza el prefijo cuando el principio del prompt coincide con
+// una petición anterior (entonces solo lee 20–30 tokens y responde en 1–2 s). Reglas para todo
+// lo que va al pool:
+//   1. El `system` es IDÉNTICO byte a byte entre peticiones del mismo uso/experto (glosario
+//      incluido): ni fecha, ni hora, ni usuario, empresa, departamento, pantalla, memoria
+//      recuperada ni módulos que dependan del mensaje.
+//   2. Todo dato variable va DESPUÉS: al principio del mensaje del usuario del turno actual,
+//      bajo CABECERA_CONTEXTO_POOL (no se pierde nada, solo cambia de sitio).
+//   3. Tools: el juego completo del experto para esa sesión, siempre en el mismo orden y con el
+//      mismo texto (los mismos objetos, convertidos igual); nunca recortado ni reordenado por
+//      mensaje. El filtro por sesión (sin sesión / con sesión / desarrollador / cron) se
+//      mantiene por seguridad: da un juego fijo por clase de sesión, no por mensaje.
+// El camino de Anthropic no cambia: sus bloques (con cache_control) siguen siendo los de antes.
+export const CABECERA_CONTEXTO_POOL = '[CONTEXTO DE ESTA PETICIÓN]';
+
+const _PREFIJO_POOL = Symbol.for('alejandra.prefijoPool');
+
+// Marca unos bloques de system (formato Anthropic) con su versión para el pool. Propiedad NO
+// enumerable con clave Symbol: JSON.stringify no la ve, así que nunca viaja a Anthropic.
+export function marcarPrefijoPool(bloques, { sistema = '', contexto = '', tools = [] } = {}) {
+  if (!Array.isArray(bloques)) return bloques;
+  Object.defineProperty(bloques, _PREFIJO_POOL, {
+    value: { sistema: String(sistema), contexto: String(contexto || ''), tools: Array.isArray(tools) ? tools : [] },
+    enumerable: false, configurable: true
+  });
+  return bloques;
+}
+
+export function prefijoPoolDe(systemPrompt) {
+  return (Array.isArray(systemPrompt) && systemPrompt[_PREFIJO_POOL]) || null;
+}
+
+// Texto plano de un system (string o bloques Anthropic), como lo une el conversor del agente.
+export function textoSistema(systemPrompt) {
+  if (!systemPrompt) return '';
+  return Array.isArray(systemPrompt)
+    ? systemPrompt.filter(b => b && b.text).map(b => b.text).join('\n\n')
+    : String(systemPrompt);
+}
+
+function _esTurnoHumano(m) {
+  if (!m || m.role !== 'user') return false;
+  if (typeof m.content === 'string') return true;
+  return Array.isArray(m.content) && !m.content.some(b => b && b.type === 'tool_result');
+}
+
+// Pone `contexto` al principio del ÚLTIMO mensaje del usuario que no sea un resultado de tool
+// (el turno actual): system + tools + historial quedan como prefijo reutilizable y, dentro del
+// bucle de tools, el contexto no se mueve de sitio. No muta `messages` (lo comparte el camino
+// de Anthropic).
+export function insertarContextoEnTurno(messages, contexto) {
+  const lista = Array.isArray(messages) ? messages : [];
+  const ctx = String(contexto || '').trim();
+  if (!ctx) return lista;
+  const texto = CABECERA_CONTEXTO_POOL + '\n' + ctx;
+  for (let i = lista.length - 1; i >= 0; i--) {
+    const m = lista[i];
+    if (!_esTurnoHumano(m)) continue;
+    const copia = lista.slice();
+    copia[i] = typeof m.content === 'string'
+      ? { ...m, content: texto + '\n\n' + m.content }
+      : { ...m, content: [{ type: 'text', text: texto }, ...m.content] };
+    return copia;
+  }
+  return [{ role: 'user', content: texto }, ...lista];
+}
+
+// Petición para el pool a partir de lo que recibe el camino de Anthropic (system, messages y
+// tools en formato Anthropic). Devuelve { sistema, messages, tools, toolsForzadas }:
+// - system marcado (componerSistemaNexus): sistema fijo, contexto variable en el turno actual
+//   y SIEMPRE el juego completo de tools del experto. Si el llamador no pedía tools (última
+//   vuelta del bucle o cierre sin herramientas) se mandan igual —para no romper el prefijo— y
+//   toolsForzadas=true: el llamador descarta una respuesta con tool_calls (→ respaldo).
+// - sin marca (crons, ayudantes, reflexión: system constante): todo tal cual.
+export function peticionPoolEstable(systemPrompt, messages, tools) {
+  const pedidas = Array.isArray(tools) ? tools : [];
+  const p = prefijoPoolDe(systemPrompt);
+  if (!p) return { sistema: textoSistema(systemPrompt), messages: Array.isArray(messages) ? messages : [], tools: pedidas, toolsForzadas: false };
+  const completas = p.tools;
+  const nombres = new Set(completas.map(t => t && t.name));
+  let toolsPool = pedidas;
+  let toolsForzadas = false;
+  // Solo se amplía a lo que el propio turno ya tenía permitido (nunca tools de fuera).
+  if (completas.length && pedidas.every(t => t && nombres.has(t.name))) {
+    toolsPool = completas;
+    toolsForzadas = pedidas.length === 0;
+  }
+  return { sistema: p.sistema, messages: insertarContextoEnTurno(messages, p.contexto), tools: toolsPool, toolsForzadas };
+}
+
+// Línea de fecha y hora real que el agente da al modelo (TAREAS-PROGRAMADAS-01).
+export function textoFechaActual(ahora = new Date()) {
+  return `FECHA Y HORA ACTUAL (real, del servidor): ${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })} (hora de España). En ISO: ${ahora.toISOString().slice(0, 16).replace('T', ' ')} UTC. Usa esto como "ahora" para cualquier cálculo de fecha relativa ("mañana", "en 2 horas", "a las 17:00", "la semana que viene") -- nunca asumas la fecha por tu conocimiento de entrenamiento.`;
+}
+
+// Bloques de system del agente (NEXUS) para Anthropic y, marcada, su versión para el pool.
+// `textoModulo(m)` da el texto de un módulo; `modulosL0`, los de cabecera; `modulosVariables`,
+// los que dependen del mensaje, la pantalla o el departamento (prl_seguridad, ie_*, dep_*).
+// - Anthropic, EXACTAMENTE como antes: [L0+L1 con cache_control] + [fecha + catálogo de tools].
+// - Pool: sistema = módulos fijos + catálogo de tools (idéntico entre peticiones del experto
+//   y la misma clase de sesión); contexto = fecha/hora + módulos variables.
+export function componerSistemaNexus({ modulos = [], modulosVariables = [], modulosL0 = [], textoModulo = () => '', tools = [], ahora = new Date() } = {}) {
+  const unir = lista => lista.map(m => textoModulo(m) || '').filter(Boolean).join('\n\n');
+  const capas = lista => [unir(modulosL0.filter(m => lista.includes(m))), unir(lista.filter(m => !modulosL0.includes(m)))].filter(Boolean).join('\n\n');
+  const lista = Array.isArray(tools) ? tools : [];
+  const staticPart = capas(modulos);
+  const fecha = textoFechaActual(ahora);
+  const catalogo = lista.length ? `HERRAMIENTAS DISPONIBLES (${lista.length}):\n${lista.map(t => `- ${t.name}: ${(t.description || '').split('.')[0]}`).join('\n')}` : '';
+  const dynamicPart = [fecha, catalogo].filter(Boolean).join('\n\n');
+  const blocks = [];
+  if (staticPart) blocks.push({ type: 'text', text: staticPart, cache_control: { type: 'ephemeral' } });
+  if (dynamicPart) blocks.push({ type: 'text', text: dynamicPart });
+  const variables = new Set(modulosVariables || []);
+  return marcarPrefijoPool(blocks, {
+    sistema: [capas(modulos.filter(m => !variables.has(m))), catalogo].filter(Boolean).join('\n\n'),
+    contexto: [fecha, unir(modulos.filter(m => variables.has(m)))].filter(Boolean).join('\n\n'),
+    tools: lista
+  });
+}
+
+// ── CALENTAMIENTO (POOL-PREFIJO-01) ───────────────────────────────────────────────────
+// Al abrir el chat (carga del historial) el agente manda en segundo plano una petición con
+// max_tokens 1 y el MISMO system + tools del experto que va al pool, para que la primera
+// pregunta real ya encuentre el prefijo leído. Best effort: limitado a 1 por clave (usuario)
+// cada `intervaloMs` por isolate, respeta el circuito pero NO cuenta para él (un modelo en frío
+// no debe dejar sin pool a los mensajes reales) y solo deja la métrica de siempre (uso
+// 'calentamiento', sin contenido). Nunca lanza.
+export const AI_POOL_CALENTAMIENTO = { intervaloMs: 10 * 60 * 1000, maxClaves: 1000 };
+const _calentados = new Map();
+
+export function _reiniciarCalentamientoPool() {
+  _calentados.clear();
+}
+
+export async function poolCalentar(env, { clave = '', messages, tools, uso = 'calentamiento', ahora = Date.now(), timeoutMs = AI_POOL_TIMEOUTS.fondo } = {}, opts = {}) {
+  try {
+    if (!poolDisponible(env, ahora)) return { ok: false, motivo: 'no_disponible', omitido: true };
+    const k = String(clave || '').slice(0, 120);
+    if (!k) return { ok: false, motivo: 'sin_clave', omitido: true };
+    const previo = _calentados.get(k);
+    if (previo !== undefined && ahora - previo < AI_POOL_CALENTAMIENTO.intervaloMs) return { ok: false, motivo: 'limitado', omitido: true };
+    if (_calentados.size >= AI_POOL_CALENTAMIENTO.maxClaves) {
+      for (const [c, t] of _calentados) if (ahora - t >= AI_POOL_CALENTAMIENTO.intervaloMs) _calentados.delete(c);
+      if (_calentados.size >= AI_POOL_CALENTAMIENTO.maxClaves) _calentados.delete(_calentados.keys().next().value);
+    }
+    _calentados.set(k, ahora);
+    const c = _cuerpoChatPool(env, { messages, maxTokens: 1, tools });
+    if (!c.ok) return { ok: false, motivo: c.motivo, omitido: true };
+    const r = await _postPool(env, '/openai/v1/chat/completions', c.body, timeoutMs, { ...opts, sinCircuito: true });
+    registrarMetricaPool({ uso, resultado: r.ok ? 'ok' : (r.omitido ? 'omitido' : 'respaldo'), motivo: r.ok ? '' : r.motivo, ms: r.ms, modelo: c.modeloPedido, modeloReal: r.modeloCabecera || '' });
+    return { ok: !!r.ok, motivo: r.ok ? '' : r.motivo, ms: r.ms };
+  } catch (_) {
+    return { ok: false, motivo: 'excepcion' };
+  }
 }
 
 // ── Herramientas del pool (contrato confirmado por la sesión del pool, 03/10/2026) ────
@@ -678,21 +858,28 @@ export function validarConsultaReescrita(texto) {
   return { query, since };
 }
 
-export function systemConsultaBusqueda(ahora = new Date()) {
-  const hoy = (ahora instanceof Date && !isNaN(ahora) ? ahora : new Date()).toISOString().slice(0, 10);
+// System FIJO (POOL-PREFIJO-01): sin la fecha, que va en el mensaje (mensajeConsultaBusqueda).
+// Idéntico byte a byte en cada petición para que el pool reutilice el prefijo.
+export function systemConsultaBusqueda() {
   return [
     'Conviertes la petición de un usuario en UNA consulta corta para un buscador web (DuckDuckGo).',
+    'El mensaje trae en la primera línea la fecha de hoy y después, tras «Petición:», lo que pide el usuario.',
     'Reglas:',
     '- Entre 2 y 8 palabras clave. Sin muletillas («busca en internet», «dime», «por favor»), sin signos de pregunta.',
     '- En INGLÉS si el tema es técnico: software, versiones, programación, hardware, normas internacionales (IEC, ISO, IEEE).',
     '- En ESPAÑOL si el tema es local de España: empresas, normativa española (REBT, ITC-BT, BOE, CTE), precios en España, organismos, lugares.',
     '- Conserva tal cual nombres propios, códigos, referencias y números.',
     '- "since": "year" si pide lo último, lo actual, lo vigente, un precio o una versión; "month" si pide noticias, algo de hoy o de esta semana; null si no es temporal.',
-    `Fecha de hoy: ${hoy}.`,
     'Ejemplo: «Busca en internet cuál es la última versión estable de Node.js y dime solo el número.» → {"query":"Node.js latest LTS version","since":"year"}',
     'Ejemplo: «¿Qué dice la ITC-BT-19 sobre la caída de tensión?» → {"query":"ITC-BT-19 caída de tensión","since":null}',
     'Devuelve SOLO un objeto JSON con la forma {"query":"...","since":null}, sin ninguna otra clave.'
   ].join('\n');
+}
+
+// Mensaje del usuario para la reescritura: la fecha (dato variable) delante de la petición.
+export function mensajeConsultaBusqueda(peticion, ahora = new Date()) {
+  const hoy = (ahora instanceof Date && !isNaN(ahora) ? ahora : new Date()).toISOString().slice(0, 10);
+  return `Fecha de hoy: ${hoy}.\nPetición: ${String(peticion || '')}`;
 }
 
 // Prepara la consulta para /v1/tools/search. Nunca lanza. Devuelve
@@ -711,7 +898,7 @@ export async function prepararConsultaBusqueda(env, texto, { timeoutMs = AI_POOL
   const heuristica = { ...consultaBusquedaHeuristica(original, { ahora }), fuente: 'heuristica' };
   if (!poolConfigurado(env)) return heuristica;
   const r = await _poolChatCrudo(env, {
-    messages: [{ role: 'system', content: systemConsultaBusqueda(ahora) }, { role: 'user', content: original }],
+    messages: [{ role: 'system', content: systemConsultaBusqueda() }, { role: 'user', content: mensajeConsultaBusqueda(original, ahora) }],
     maxTokens: 60, timeoutMs, temperature: 0, json: true
   }, opts);
   if (!r.ok) { _metrica(uso, r); return heuristica; }
