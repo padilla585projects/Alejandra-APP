@@ -1891,6 +1891,90 @@ GLOSARIO:
 - PEMP: plataforma elevadora móvil de personal (tijera, brazo).
 - EPI: equipo de protección individual (casco, arnés, guantes, gafas).`;
 
+// POOL-DATOS-FALTANTES-01 (04/10/2026): en el banco agrupado del pool (alejandra:1.0 =
+// qwen3.6) cuatro casos ambiguos no preguntaron: llamaron a la tool SUPONIENDO el dato que
+// faltaba (recordatorio a las 10:00 inventado, caída de tensión con kW supuestos, tarea «Mario
+// ha faltado» con un Mario elegido de dos, buscar al destinatario de un correo sin saber qué
+// decir). Regla breve para la parte FIJA (cacheada) del prompt de los expertos de los DOS
+// cerebros (NEXUS_MODULES.dominio del agente y buildNexusPrompt de Telegram) y del banco.
+// Mantenerla corta: viaja en cada mensaje. El backend la refuerza donde es barato
+// (programar_recordatorio, calcular_cable, asignado_a de gestionar_tarea): ver abajo.
+const REGLA_DATOS_OBLIGATORIOS = 'DATOS OBLIGATORIOS: si para una acción o un cálculo falta un dato obligatorio (fecha/hora, destinatario, contenido de un mensaje, unidad de una medida, o a qué persona o elemento te refieres cuando hay varios que encajan), pregúntalo en una frase ANTES de llamar a ninguna herramienta. No inventes ni supongas valores (horas por defecto, unidades, la primera persona de una lista).';
+
+// Textos humanos recientes en los que el backend busca el dato (los últimos `n` de
+// extraerFuentesPlanoHumanas: el mensaje actual y las respuestas a lo que se preguntó).
+function textosHumanosRecientes(fuentes, n = 3) {
+  return (Array.isArray(fuentes) ? fuentes : []).filter(t => typeof t === 'string').slice(-n);
+}
+
+const _plegarTexto = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// ¿Dice el humano CUÁNDO? Hora («a las 9», «17:30», «10h»), plazo relativo («en 2 horas»,
+// «dentro de 20 minutos») o fecha («mañana», «el viernes», «el 12», «12/10», «3 de
+// noviembre», «esta tarde»). Conservador: ante la duda de si hay fecha, cuenta como que sí.
+const RE_CUANDO = new RegExp([
+  '\\b\\d{1,2}[:.]\\d{2}\\b',
+  '\\ba las? \\d{1,2}\\b',
+  '\\b\\d{1,2} ?(?:h|hrs?|horas?)\\b',
+  '\\ba (?:la una|mediodia|medianoche)\\b',
+  '\\b(?:en|dentro de) (?:un|una|media|unos|unas|\\d+) (?:minutos?|min|horas?|dias?|semanas?|meses?)\\b',
+  '\\b(?:hoy|manana|pasado manana|esta (?:manana|tarde|noche)|por la (?:manana|tarde|noche)|mediodia|medianoche)\\b',
+  '\\b(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)\\b',
+  '\\b(?:semana|mes) (?:que viene|proxim[oa])\\b|\\bproxim[oa] (?:semana|mes)\\b',
+  '\\b\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b',
+  '\\b\\d{4}-\\d{2}-\\d{2}\\b',
+  '\\b(?:el|dia) \\d{1,2}\\b',
+  '\\b\\d{1,2} de (?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\\b',
+].join('|'));
+
+function textoIndicaCuando(texto) {
+  return RE_CUANDO.test(_plegarTexto(texto));
+}
+
+// programar_recordatorio: el modelo no puede poner una fecha_hora que el humano no ha dado.
+// Devuelve null si vale, o el mensaje para el modelo. Sin textos humanos (cron, llamada
+// interna) no se comprueba: no hay de dónde sacarlo.
+function validarCuandoRecordatorio(fuentes) {
+  const textos = textosHumanosRecientes(fuentes);
+  if (!textos.length) return null;
+  if (textos.some(textoIndicaCuando)) return null;
+  return '❌ No programado: el usuario no ha dicho cuándo. No inventes la fecha ni la hora: pregúntale para qué día y a qué hora quiere el recordatorio y vuelve a llamar con lo que te diga.';
+}
+
+// calcular_cable: potencia y longitud tienen que venir con su unidad en el texto humano.
+// Potencia: W/kW/MW/kVA/vatios/CV/HP, o una intensidad en A (el modelo la convierte).
+// Longitud: m/metros/km. «40 con 16 de sección» no dice si 40 son metros o kW → preguntar.
+const RE_UNIDAD_POTENCIA = /\d\s*(?:[km]?w|kva|vatios?|kilovatios?|cv|hp)\b|\d\s*amp(?:erios?|s)?\b/i;
+const RE_UNIDAD_INTENSIDAD = /\d\s*A\b/;
+const RE_UNIDAD_LONGITUD = /\d\s*(?:m|mts?|metros?|km|kil[oó]metros?)\b/i;
+
+function validarUnidadesCalculoCable(input, fuentes) {
+  const textos = textosHumanosRecientes(fuentes);
+  if (!textos.length) return null;
+  const faltan = [];
+  if (input && input.potencia_w !== undefined && !textos.some(t => RE_UNIDAD_POTENCIA.test(t) || RE_UNIDAD_INTENSIDAD.test(t))) faltan.push('la potencia (en W/kW) o la intensidad (en A)');
+  if (input && input.longitud_m !== undefined && !textos.some(t => RE_UNIDAD_LONGITUD.test(t))) faltan.push('la longitud de la línea en metros');
+  if (!faltan.length) return null;
+  return `❌ Cálculo no hecho: el usuario no ha dado ${faltan.join(' ni ')} con su unidad. No supongas unidades ni valores: pregúntale el dato con su unidad y vuelve a calcular con lo que te diga.`;
+}
+
+// Personas: ¿el nombre que el modelo ha elegido (asignado_a…) lo dijo el humano entero, o
+// solo una parte («Mario»)? Devuelve { completo, tokens } con las palabras del nombre que sí
+// aparecen en el texto humano. Si no aparece ninguna, el nombre salió de otro sitio y no se
+// comprueba aquí.
+function tokensPersonaMencionados(nombre, fuentes) {
+  const texto = ' ' + _plegarTexto(textosHumanosRecientes(fuentes).join(' ')).replace(/[^a-z0-9ñ]+/g, ' ') + ' ';
+  const palabras = _plegarTexto(nombre).replace(/[^a-z0-9ñ]+/g, ' ').trim().split(' ').filter(p => p.length >= 3);
+  const tokens = palabras.filter(p => texto.includes(' ' + p + ' '));
+  return { completo: palabras.length > 0 && tokens.length === palabras.length, tokens };
+}
+
+// Mensaje para el modelo cuando lo que dijo el humano encaja con varias personas.
+function mensajeAmbiguedadPersona(mencion, filas) {
+  const nombres = (filas || []).map(f => `${f.nombre || ''} ${f.apellidos || ''}`.trim()).filter(Boolean);
+  return `❌ No hecho: «${mencion}» coincide con ${nombres.length} personas (${nombres.slice(0, 6).join(', ')}). No elijas tú: pregúntale al usuario a cuál se refiere y vuelve a llamar con el nombre completo.`;
+}
+
 // Prompt y etiquetas del clasificador de intención del agente (clasificarConHaiku en
 // worker.js). Viven aquí para que el benchmark (scripts/ai-benchmark/pool.mjs, ADR-0028)
 // mida el pool propio y Haiku con EXACTAMENTE el mismo prompt que producción.
@@ -2239,6 +2323,12 @@ export {
   construirRegistroDataset,
   reEspanol,
   CONTEXTO_DOMINIO_INSTALADORA,
+  REGLA_DATOS_OBLIGATORIOS,
+  textoIndicaCuando,
+  validarCuandoRecordatorio,
+  validarUnidadesCalculoCable,
+  tokensPersonaMencionados,
+  mensajeAmbiguedadPersona,
   SYSTEM_CLASIFICADOR_INTENCION,
   ETIQUETAS_CLASIFICADOR_INTENCION,
   esInicioCasoNuevo,

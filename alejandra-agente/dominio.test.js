@@ -40,7 +40,8 @@ describe('contexto del oficio y glosario', () => {
 
 describe('alejandra-agente: todos los expertos llevan el glosario en la parte cacheada', () => {
   it('NEXUS_MODULES.dominio es el texto compartido de lib.js', () => {
-    expect(agente).toMatch(/^\s+dominio: CONTEXTO_DOMINIO_INSTALADORA,$/m);
+    // POOL-DATOS-FALTANTES-01: dominio lleva además la regla de datos obligatorios (lib.js).
+    expect(agente).toMatch(/^\s+dominio: CONTEXTO_DOMINIO_INSTALADORA \+ '\\n\\n' \+ REGLA_DATOS_OBLIGATORIOS,$/m);
     expect(agente).toMatch(/import \{\s*reEspanol,\s*CONTEXTO_DOMINIO_INSTALADORA,/);
   });
 
@@ -68,7 +69,7 @@ describe('worker.js (Telegram): el otro cerebro también lo lleva', () => {
     expect(web).toMatch(/import \{[^}]*CONTEXTO_DOMINIO_INSTALADORA[^}]*\} from '\.\/alejandra-agente\/lib\.js'/);
     const ini = web.indexOf('function buildNexusPrompt(');
     const fn = web.slice(ini, web.indexOf('\n}', ini));
-    expect(fn).toContain("m === 'base' ? [NEXUS_MODULES.base, CONTEXTO_DOMINIO_INSTALADORA]");
+    expect(fn).toContain("m === 'base' ? [NEXUS_MODULES.base, CONTEXTO_DOMINIO_INSTALADORA, REGLA_DATOS_OBLIGATORIOS]");
     const b = bloque(web, 'NEXUS_EXPERTS');
     const modulos = [...b.matchAll(/modules: \[([^\]]*)\]/g)].map(m => m[1]);
     expect(modulos.length).toBeGreaterThanOrEqual(5);
